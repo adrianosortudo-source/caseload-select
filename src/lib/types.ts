@@ -1,4 +1,5 @@
-import type { Band, ReferralSource, Urgency } from "./cpi";
+import type { Band, ReferralSource } from "./cpi";
+import type { Urgency, Source, PriorityBand } from "./scoring";
 import type { LeadState } from "./state";
 
 export type Stage =
@@ -33,15 +34,33 @@ export interface Lead {
   law_firm_id: string | null;
   created_at: string;
   updated_at: string;
-  // CPI engine
-  fit_score: number | null;
-  value_score: number | null;
+
+  // Legacy CPI (kept for backward compat)
   cpi_score: number | null;
   band: Band | null;
+
+  // Phase 2 — Priority Scoring Engine
+  fit_score: number | null;
+  value_score: number | null;
+  geo_score: number | null;
+  contactability_score: number | null;
+  legitimacy_score: number | null;
+  complexity_score: number | null;
+  urgency_score: number | null;
+  strategic_score: number | null;
+  fee_score: number | null;
+  priority_index: number | null;
+  priority_band: PriorityBand | null;
+
+  // Intake fields
   referral_source: ReferralSource | null;
   urgency: Urgency | null;
   timeline: string | null;
   city: string | null;
+  location: string | null;
+  source: Source | null;
+  referral: boolean | null;
+  multi_practice: boolean | null;
   lead_state: LeadState | null;
 }
 

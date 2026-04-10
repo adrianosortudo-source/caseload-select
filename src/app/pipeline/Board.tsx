@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 import { STAGES, type Lead, type Stage, type LawFirm } from "@/lib/types";
-import { BAND_COLORS } from "@/lib/cpi";
+import { PRIORITY_BAND_COLORS, type PriorityBand } from "@/lib/scoring";
+import { BAND_COLORS } from "@/lib/cpi"; // legacy fallback
 import { LEAD_STATES, STATE_STYLES, type LeadState } from "@/lib/state";
 
 function daysSince(iso: string) {
@@ -58,8 +59,12 @@ export default function Board({ leads: initial, firms }: { leads: Lead[]; firms:
             </div>
             <div className="space-y-2 min-h-20">
               {items.map((l) => {
-                const band = l.band ?? null;
-                const bc = band ? BAND_COLORS[band] : null;
+                // Prefer priority_band (Phase 2), fall back to legacy band
+                const band = (l.priority_band ?? l.band) as PriorityBand | null;
+                const bc = band
+                  ? (PRIORITY_BAND_COLORS[band] ?? BAND_COLORS[band as keyof typeof BAND_COLORS])
+                  : null;
+                const pi = l.priority_index ?? l.cpi_score ?? 0;
                 const ls = l.lead_state ?? "problem_aware";
                 const ss = STATE_STYLES[ls];
                 return (
@@ -69,25 +74,32 @@ export default function Board({ leads: initial, firms }: { leads: Lead[]; firms:
                     onDragStart={() => setDragId(l.id)}
                     className="card p-3 cursor-grab active:cursor-grabbing"
                   >
+                    {/* Name + band badge */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="font-medium text-sm">{l.name}</div>
                       {bc ? (
                         <span className={`badge ${bc.bg} ${bc.text}`} title={bc.label}>
-                          {band} · {l.cpi_score ?? 0}
+                          {band} · {pi}
                         </span>
                       ) : (
                         <span className="badge bg-black/5">—</span>
                       )}
                     </div>
+
+                    {/* Firm */}
                     <div className="text-xs text-black/60 mt-1">
                       {l.law_firm_id ? firmById[l.law_firm_id] ?? "—" : "No firm"}
                     </div>
+
+                    {/* Case type + value */}
                     <div className="flex items-center justify-between mt-2 text-xs">
                       <span className="capitalize text-black/60">{l.case_type ?? "—"}</span>
                       <span className="font-medium">
                         ${Number(l.estimated_value ?? 0).toLocaleString()}
                       </span>
                     </div>
+
+                    {/* State badge + select */}
                     <div className="flex items-center justify-between mt-2 gap-2">
                       <span
                         className={`badge ${ss.bg} ${ss.text} truncate`}
@@ -104,15 +116,27 @@ export default function Board({ leads: initial, firms }: { leads: Lead[]; firms:
                         className="text-[11px] bg-transparent border border-black/10 rounded px-1 py-0.5"
                       >
                         {LEAD_STATES.map((s) => (
-                          <option key={s.value} value={s.value}>
-                            {s.label}
-                          </option>
+                          <option key={s.value} value={s.value}>{s.label}</option>
                         ))}
                       </select>
                     </div>
-                    <div className="flex items-center justify-between mt-2 text-[11px] text-black/50">
-                      <span>Fit {l.fit_score ?? 0}/40 · Val {l.value_score ?? 0}/60</span>
-                      <span>{daysSince(l.updated_at)}d</span>
+
+                    {/* Score breakdown: Fit / Val / PI */}
+                    <div className="grid grid-cols-3 mt-2 text-[11px] text-black/50 text-center border-t border-black/5 pt-2">
+                      <span title="Fit score (max 30)">
+                        <span className="text-black/30">Fit </span>{l.fit_score ?? 0}<span className="text-black/20">/30</span>
+                      </span>
+                      <span title="Value score (max 70)">
+                        <span className="text-black/30">Val </span>{l.value_score ?? 0}<span className="text-black/20">/70</span>
+                      </span>
+                      <span title="Priority index (max 100)">
+                        <span className="text-black/30">PI </span><span className="font-medium text-black/70">{pi}</span>
+                      </span>
+                    </div>
+
+                    {/* Days since last update */}
+                    <div className="text-right text-[11px] text-black/30 mt-1">
+                      {daysSince(l.updated_at)}d ago
                     </div>
                   </div>
                 );
