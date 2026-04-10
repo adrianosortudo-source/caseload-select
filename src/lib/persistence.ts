@@ -1,99 +1,16 @@
 /**
  * WF-03 — Persistence Engine
  *
- * 8-step follow-up sequence over 11 days.
  * Triggered when a lead sits in new_lead/qualified with no movement for 30+ minutes.
- * Exits on engagement (stage change), Day 11 auto-close, or manual pause.
+ * Reads email steps from sequence_steps table via the no_engagement sequence template.
+ * Exits on engagement (stage change), all steps sent, or Day 11 auto-close.
  */
 
 import { supabase } from "./supabase";
 import { sendEmail } from "./email";
+import { getEmailContent } from "./sequence-engine";
 
-// ── Step schedule ─────────────────────────────────────────────────────────
-// Minutes from persistence_started_at when each step becomes due.
-
-export const STEP_DELAYS_MINUTES = [
-  120,    // Step 1: +2h   (Day 0)
-  1560,   // Step 2: +26h  (Day 1 morning)
-  3000,   // Step 3: +50h  (Day 2 afternoon)
-  4440,   // Step 4: +74h  (Day 3 morning)
-  7320,   // Step 5: +122h (Day 5 morning)
-  7500,   // Step 6: +125h (Day 5 noon)
-  10200,  // Step 7: +170h (Day 7 morning)
-  14460,  // Step 8: +241h (Day 10 morning)
-] as const;
-
-export const EXIT_DELAY_MINUTES = 15840; // Day 11 (+264h) → auto-close
-
-// ── Email templates ───────────────────────────────────────────────────────
-
-function fmt(caseType: string | null) {
-  if (!caseType) return "legal";
-  return caseType.charAt(0).toUpperCase() + caseType.slice(1);
-}
-
-interface EmailTemplate {
-  subject: string;
-  html: string;
-}
-
-export function getStepTemplate(
-  step: number,
-  name: string,
-  caseType: string | null,
-): EmailTemplate {
-  const ct = fmt(caseType);
-  const templates: EmailTemplate[] = [
-    {
-      subject: "Following up on your inquiry",
-      html: `<p>Hi ${name},</p>
-<p>I wanted to follow up on your ${ct} inquiry. We have helped many clients in similar situations.</p>
-<p>Would you like to schedule a quick call to discuss your options?</p>`,
-    },
-    {
-      subject: `The cost of waiting on your ${ct} matter`,
-      html: `<p>Hi ${name},</p>
-<p>In ${ct} cases, delays can affect outcomes. I wanted to make sure you have the information you need to move forward when you're ready.</p>
-<p>Is there anything specific you'd like to know?</p>`,
-    },
-    {
-      subject: "Checking in",
-      html: `<p>Hi ${name},</p>
-<p>Just checking in to see if you still need assistance with your ${ct} matter. Happy to answer any questions.</p>`,
-    },
-    {
-      subject: "Still here if you need us",
-      html: `<p>Hi ${name},</p>
-<p>I know decisions like this take time. We're still here when you're ready to discuss your ${ct} situation.</p>`,
-    },
-    {
-      subject: "Do you still need help with your case?",
-      html: `<p>Hi ${name},</p>
-<p>I wanted to reach out one more time about your ${ct} inquiry. Are you still looking for legal assistance?</p>`,
-    },
-    {
-      subject: "Quick question",
-      html: `<p>Hi ${name},</p>
-<p>One quick question — is there anything that's been holding you back from moving forward? We may be able to help.</p>`,
-    },
-    {
-      subject: "Should I close your file?",
-      html: `<p>Hi ${name},</p>
-<p>I haven't heard back from you regarding your ${ct} matter. I want to respect your time — should I close your file, or would you still like to connect?</p>`,
-    },
-    {
-      subject: "Closing your file",
-      html: `<p>Hi ${name},</p>
-<p>Since I haven't heard back, I'll be closing your file for now. If you ever need legal assistance in the future, don't hesitate to reach out.</p>
-<p>Wishing you all the best.</p>`,
-    },
-  ];
-
-  const idx = Math.max(0, Math.min(step - 1, templates.length - 1));
-  return templates[idx];
-}
-
-// ── Lead shape (minimal — only what persistence needs) ────────────────────
+export const EXIT_DELAY_MINUTES = 15840; // Day 11 (+264h)
 
 interface PersistenceLead {
   id: string;
@@ -107,8 +24,6 @@ interface PersistenceLead {
   persistence_last_action_at: string | null;
   persistence_status: string;
 }
-
-// ── Engine ────────────────────────────────────────────────────────────────
 
 export interface RunResult {
   activated: number;
@@ -129,7 +44,23 @@ export async function runPersistenceEngine(): Promise<RunResult> {
 
   const now = new Date();
 
-  // ── 1. Fetch all non-inactive persistence leads + eligible inactive ones ─
+  // Fetch active sequence template for no_engagement
+  const { data: template } = await supabase
+    .from("sequence_templates")
+    .select("id")
+    .eq("trigger_event", "no_engagement")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  // Fetch all steps for this template ordered by step_number
+  const steps = template ? (await supabase
+    .from("sequence_steps")
+    .select("id, step_number, delay_hours, channels")
+    .eq("sequence_id", template.id)
+    .eq("is_active", true)
+    .order("step_number", { ascending: true })).data ?? [] : [];
+
+  // Fetch leads eligible for persistence
   const { data: leads, error } = await supabase
     .from("leads")
     .select(
@@ -148,7 +79,7 @@ export async function runPersistenceEngine(): Promise<RunResult> {
 
   for (const lead of leads as unknown as PersistenceLead[]) {
     try {
-      await processLead(lead, now, result);
+      await processLead(lead, now, steps, result);
     } catch (e) {
       result.errors.push(`Lead ${lead.id}: ${(e as Error).message}`);
     }
@@ -160,9 +91,11 @@ export async function runPersistenceEngine(): Promise<RunResult> {
 async function processLead(
   lead: PersistenceLead,
   now: Date,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  steps: { step_number: number; delay_hours: number; channels: any }[],
   result: RunResult,
 ): Promise<void> {
-  // ── Pause check: stage moved out of new_lead/qualified ──────────────────
+  // Pause if stage moved out of new_lead/qualified
   if (!["new_lead", "qualified"].includes(lead.stage)) {
     if (lead.persistence_status === "active") {
       const exitReason =
@@ -178,7 +111,7 @@ async function processLead(
     return;
   }
 
-  // ── Activate fresh lead ──────────────────────────────────────────────────
+  // Activate fresh lead
   let startedAt: Date;
   if (lead.persistence_status === "inactive") {
     startedAt = now;
@@ -192,7 +125,6 @@ async function processLead(
       .eq("id", lead.id);
     if (error) throw new Error(error.message);
     result.activated++;
-    // Refresh local state
     lead.persistence_status = "active";
     lead.persistence_started_at = startedAt.toISOString();
     lead.persistence_step = 0;
@@ -202,7 +134,7 @@ async function processLead(
 
   const minutesSinceStart = (now.getTime() - startedAt.getTime()) / 60_000;
 
-  // ── Day 11 exit ──────────────────────────────────────────────────────────
+  // Day 11 exit
   if (minutesSinceStart >= EXIT_DELAY_MINUTES) {
     await supabase
       .from("leads")
@@ -217,28 +149,27 @@ async function processLead(
     return;
   }
 
-  // ── Determine next step due ──────────────────────────────────────────────
+  // Determine next step due
   const currentStep = lead.persistence_step ?? 0;
   const nextStep = currentStep + 1;
+  const stepRow = steps.find((s) => s.step_number === nextStep);
+  if (!stepRow) return; // no more steps
 
-  if (nextStep > STEP_DELAYS_MINUTES.length) return; // all steps done
+  const delayMinutes = stepRow.delay_hours * 60;
+  if (minutesSinceStart < delayMinutes) return; // not yet due
 
-  const delayForNextStep = STEP_DELAYS_MINUTES[nextStep - 1];
-  if (minutesSinceStart < delayForNextStep) return; // not yet due
+  // Get email content from sequence step
+  const emailContent = getEmailContent(stepRow.channels, lead.name, lead.case_type);
 
-  // ── Fire email ───────────────────────────────────────────────────────────
-  const template = getStepTemplate(nextStep, lead.name, lead.case_type);
-
-  if (lead.email) {
+  if (lead.email && emailContent) {
     try {
-      await sendEmail(lead.email, template.subject, template.html);
+      await sendEmail(lead.email, emailContent.subject, emailContent.html);
     } catch (e) {
-      // Log but don't abort — still advance the step
       console.error(`P-EM-0${nextStep} send error for ${lead.id}:`, e);
     }
   }
 
-  // ── Advance persistence state ────────────────────────────────────────────
+  // Advance persistence state
   await supabase
     .from("leads")
     .update({
