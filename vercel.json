@@ -1,12 +1,7 @@
 {
   "crons": [
-    {
-      "path": "/api/cron/persistence",
-      "schedule": "*/30 * * * *"
-    },
-    {
-      "path": "/api/cron/no-show",
-      "schedule": "*/30 * * * *"
-    }
+    { "path": "/api/cron/persistence", "schedule": "*/30 * * * *" },
+    { "path": "/api/cron/no-show", "schedule": "*/30 * * * *" },
+    { "path": "/api/cron/stalled-retainer", "schedule": "*/30 * * * *" }
   ]
 }
