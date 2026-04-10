@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { computeScore } from "@/lib/scoring";
 import { intentToState } from "@/lib/state";
 import { sendEmail } from "@/lib/email";
+import { triggerSequence } from "@/lib/sequence-engine";
 
 export async function POST(req: Request) {
   const body = await req.json();
@@ -78,32 +79,43 @@ export async function POST(req: Request) {
     new_state: lead.lead_state,
   });
 
-  // WF-05 — 3-step email sequence
-  const now = Date.now();
-  await supabase.from("email_sequences").insert([
-    { lead_id: lead.id, status: "scheduled", step_number: 1, scheduled_at: new Date(now).toISOString() },
-    { lead_id: lead.id, status: "scheduled", step_number: 2, scheduled_at: new Date(now + 24 * 3600 * 1000).toISOString() },
-    { lead_id: lead.id, status: "scheduled", step_number: 3, scheduled_at: new Date(now + 72 * 3600 * 1000).toISOString() },
-  ]);
+  // WF-05 — trigger Welcome Sequence from sequence builder
+  const seqResult = await triggerSequence(lead.id, "new_lead");
 
-  if (lead.email) {
+  // Fire step 1 immediately if it was scheduled at delay 0
+  if (!seqResult.skipped && lead.email && seqResult.steps_scheduled > 0) {
     try {
-      const result = await sendEmail(
-        lead.email,
-        "Thanks for reaching out to CaseLoad Select",
-        `<p>Hi ${lead.name},</p><p>Thanks for submitting your case. Our team will review it shortly.</p>`
-      );
-      if (!result.skipped) {
-        await supabase
-          .from("email_sequences")
-          .update({ status: "sent", sent_at: new Date().toISOString() })
-          .eq("lead_id", lead.id)
-          .eq("step_number", 1);
+      // Find the step-1 row and send it
+      const { data: step1 } = await supabase
+        .from("email_sequences")
+        .select("id, sequence_step_id")
+        .eq("lead_id", lead.id)
+        .eq("step_number", 1)
+        .maybeSingle();
+
+      if (step1?.sequence_step_id) {
+        const { data: tmpl } = await supabase
+          .from("sequence_steps")
+          .select("subject, body")
+          .eq("id", step1.sequence_step_id)
+          .maybeSingle();
+
+        if (tmpl) {
+          const subject = tmpl.subject.replace(/\{name\}/g, lead.name).replace(/\{case_type\}/g, lead.case_type ?? "legal");
+          const html = tmpl.body.replace(/\{name\}/g, lead.name).replace(/\{case_type\}/g, lead.case_type ?? "legal").replace(/\n/g, "<br>");
+          const result = await sendEmail(lead.email, subject, `<p>${html}</p>`);
+          if (!result.skipped) {
+            await supabase
+              .from("email_sequences")
+              .update({ status: "sent", sent_at: new Date().toISOString() })
+              .eq("id", step1.id);
+          }
+        }
       }
     } catch (e) {
       console.error("sendEmail step 1", e);
     }
   }
 
-  return NextResponse.json({ lead, score: s });
+  return NextResponse.json({ lead, score: s, sequence: seqResult });
 }
