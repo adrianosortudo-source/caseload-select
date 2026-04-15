@@ -320,7 +320,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels }: Props) {
                 action: "Open WhatsApp",
                 href: "/demo/whatsapp",
               },
-            ].map(({ icon, title, desc, action, onClick, href, external }) => (
+            ].map(({ icon, title, desc, action, onClick, href }) => (
               <div key={title} className="border border-gray-200 rounded-2xl p-6 flex flex-col gap-4 hover:shadow-md transition">
                 <div className="text-4xl">{icon}</div>
                 <div>
@@ -328,7 +328,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels }: Props) {
                   <p className="text-xs text-gray-500 leading-relaxed">{desc}</p>
                 </div>
                 {href ? (
-                  <a href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined}
+                  <a href={href}
                     className="mt-auto text-sm font-semibold text-center py-2.5 rounded-lg transition hover:opacity-90 text-white"
                     style={{ backgroundColor: NAVY }}>
                     {action}
