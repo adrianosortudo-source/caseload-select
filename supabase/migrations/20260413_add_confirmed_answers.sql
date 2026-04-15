@@ -1,0 +1,4 @@
+-- NOTE: This migration is NO LONGER NEEDED.
+-- confirmed_answers is stored inside the existing scoring JSONB column
+-- under the _confirmed key: scoring._confirmed = { questionId: value, ... }
+-- This avoids requiring a schema change while preserving full functionality.

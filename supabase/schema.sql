@@ -1,0 +1,196 @@
+-- CaseLoad Select — Locked Schema
+-- Last updated: 2026-04-14 (Sessions S7–S9, Sessions 4–5, Journey completion, Conflict check)
+--
+-- This file is the authoritative schema reference. It documents the current
+-- state of the Supabase database. All future schema changes must:
+--   1. Add a dated migration file to supabase/migrations/
+--   2. Update this file to reflect the new state
+--   3. Be applied manually via Supabase SQL Editor
+--
+-- Do NOT run this file against a live database — it will fail on existing tables.
+-- It is a reference document, not an executable migration.
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- law_firm_clients
+-- ─────────────────────────────────────────────────────────────────────────────
+-- id            uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- name          text NOT NULL
+-- location      text
+-- status        text DEFAULT 'active'
+-- contact_email text
+-- created_at    timestamptz DEFAULT now()
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- leads
+-- ─────────────────────────────────────────────────────────────────────────────
+-- id                     uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- law_firm_id            uuid REFERENCES law_firm_clients(id)
+-- name                   text
+-- email                  text
+-- phone                  text
+-- case_type              text
+-- estimated_value        numeric
+-- language               text
+-- description            text
+-- stage                  text DEFAULT 'new_lead'
+-- score                  integer
+-- fit_score              integer
+-- value_score            integer
+-- cpi_score              integer
+-- band                   text
+-- referral_source        text
+-- urgency                text
+-- timeline               text
+-- city                   text
+-- location               text
+-- lead_state             text
+-- source                 text
+-- referral               text
+-- multi_practice         boolean
+-- geo_score              integer
+-- contactability_score   integer
+-- legitimacy_score       integer
+-- complexity_score       integer
+-- urgency_score          integer
+-- strategic_score        integer
+-- fee_score              integer
+-- priority_index         integer
+-- priority_band          text
+-- persistence_step         integer
+-- persistence_started_at   timestamptz
+-- persistence_last_action_at timestamptz
+-- persistence_status       text
+-- persistence_exit_reason  text
+-- no_show_step             integer
+-- no_show_started_at       timestamptz
+-- no_show_last_action_at   timestamptz
+-- no_show_status           text
+-- stalled_step             integer
+-- stalled_started_at       timestamptz
+-- stalled_last_action_at   timestamptz
+-- stalled_status           text
+-- created_at             timestamptz DEFAULT now()
+-- updated_at             timestamptz DEFAULT now()
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- intake_firms
+-- ─────────────────────────────────────────────────────────────────────────────
+-- id                  uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- name                text NOT NULL
+-- practice_areas      jsonb        -- array of { id, label, tier }
+-- question_sets       jsonb        -- map of practice_area_id -> { questions[] }
+-- geographic_config   jsonb        -- { primary_region, secondary_regions, excluded }
+-- branding            jsonb        -- { logo_url, primary_color, firm_name }
+-- ghl_webhook_url     text
+-- ghl_api_key         text
+-- resend_sender       text
+-- custom_instructions text
+-- created_at          timestamptz DEFAULT now()
+-- updated_at          timestamptz DEFAULT now()
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- intake_sessions
+-- ─────────────────────────────────────────────────────────────────────────────
+-- id                  uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- firm_id             uuid REFERENCES intake_firms(id)
+-- channel             text         -- 'widget' | 'whatsapp' | 'chat' | 'email' | 'phone'
+-- status              text         -- 'in_progress' | 'complete' | 'expired'
+-- conversation        jsonb        -- array of { role, content } GPT message history
+-- scoring             jsonb        -- CpiBreakdown + _confirmed sub-key for confirmed answers
+--                                  -- scoring._confirmed = { [questionId]: value } (S7 design)
+-- contact             jsonb        -- { first_name, last_name, email, phone }
+-- extracted_entities  jsonb        -- GPT-inferred key-value pairs (scoring inference only)
+-- practice_area       text
+-- band                text         -- 'A' | 'B' | 'C' | 'D' | 'E'
+-- otp_code            text
+-- otp_expires_at      timestamptz
+-- otp_verified        boolean DEFAULT false
+-- crm_synced          boolean DEFAULT false
+-- situation_summary   text
+-- created_at          timestamptz DEFAULT now()
+-- updated_at          timestamptz DEFAULT now()
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- sequence_templates
+-- ─────────────────────────────────────────────────────────────────────────────
+-- id            uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- name          text NOT NULL
+-- trigger_event text         -- new_lead | no_engagement | client_won | no_show | stalled_retainer
+--                            -- incomplete_intake | spoke_no_book | consulted_no_sign
+--                            -- retainer_awaiting | consultation_scheduled | review_request
+--                            -- matter_active | re_engagement | relationship_milestone | long_term_nurture
+-- description   text
+-- is_active     boolean DEFAULT true
+-- created_at    timestamptz DEFAULT now()
+-- updated_at    timestamptz DEFAULT now()
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- sequence_steps
+-- ─────────────────────────────────────────────────────────────────────────────
+-- id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- sequence_id     uuid REFERENCES sequence_templates(id)
+-- step_number     integer
+-- delay_hours     integer
+-- channels        jsonb   -- array of channel config objects
+-- is_active       boolean DEFAULT true
+-- created_at      timestamptz DEFAULT now()
+-- updated_at      timestamptz DEFAULT now()
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- email_sequences
+-- ─────────────────────────────────────────────────────────────────────────────
+-- id               uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- lead_id          uuid REFERENCES leads(id)
+-- sequence_step_id uuid REFERENCES sequence_steps(id)
+-- step_number      integer
+-- status           text   -- 'pending' | 'sent' | 'failed' | 'skipped'
+-- scheduled_at     timestamptz
+-- sent_at          timestamptz
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- review_requests
+-- ─────────────────────────────────────────────────────────────────────────────
+-- id           uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- lead_id      uuid REFERENCES leads(id)
+-- law_firm_id  uuid REFERENCES law_firm_clients(id)
+-- status       text   -- 'pending' | 'sent' | 'opened' | 'completed'
+-- created_at   timestamptz DEFAULT now()
+-- sent_at      timestamptz
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- intake_firms (additions from S8, S9)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- clio_config   jsonb   -- { access_token, refresh_token, expires_at } (migration: 20260414_portal_clio.sql)
+-- custom_domain text UNIQUE  -- e.g. intake.sakurabalaw.ca   (migration: 20260414_custom_domain.sql)
+-- firm_name     text    -- canonical name used in portal + sequence interpolation
+-- geo_config    jsonb   -- geographic boundaries (primary_region, secondary, excluded)
+-- scoring_weights jsonb -- custom CPI weight overrides per firm
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- conflict_register                             (migration: 20260414_conflict_check.sql)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- law_firm_id     uuid REFERENCES law_firm_clients(id) ON DELETE CASCADE
+-- client_name     text NOT NULL
+-- opposing_party  text
+-- matter_type     text
+-- email           text
+-- phone           text
+-- source          text   -- 'caseload_select' | 'csv_import' | 'clio_sync'
+-- clio_matter_id  text
+-- created_at      timestamptz DEFAULT now()
+-- INDEX: (law_firm_id), (law_firm_id, email), (law_firm_id, phone)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- conflict_checks                               (migration: 20260414_conflict_check.sql)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- lead_id         uuid REFERENCES leads(id) ON DELETE CASCADE
+-- law_firm_id     uuid REFERENCES law_firm_clients(id) ON DELETE CASCADE
+-- result          text   -- 'clear' | 'potential_conflict' | 'confirmed_conflict'
+-- matches         jsonb  -- array of ConflictMatch objects
+-- checked_via     text   -- 'clio' | 'register' | 'none'
+-- checked_at      timestamptz DEFAULT now()
+-- override_reason text   -- set when potential_conflict is manually overridden
+-- reviewed_by     text
+-- INDEX: (lead_id, checked_at DESC)

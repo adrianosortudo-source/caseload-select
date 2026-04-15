@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body { height: 100%; background: #f7f6f3; color: #1c1a18; }
+* { box-sizing: border-box; }
+
+.card { @apply bg-white rounded-xl border border-black/5 shadow-sm; }
+.btn-gold { @apply bg-gold hover:bg-gold-2 text-white font-medium rounded-lg px-4 py-2 transition; }
+.btn-ghost { @apply border border-black/10 hover:bg-black/5 rounded-lg px-4 py-2 transition; }
+.input { @apply w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm focus:outline-none focus:border-gold; }
+.label { @apply text-xs font-medium text-black/60 mb-1 block; }
+.badge { @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium; }
