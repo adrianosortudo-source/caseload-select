@@ -397,11 +397,22 @@ export default function WhatsAppChat({ firmId }: { firmId: string }) {
                     Band {band}
                   </div>
                   <p className="text-xs text-gray-500 mb-4 leading-relaxed">{cta}</p>
-                  <a href="/demo"
-                    className="inline-block px-4 py-2 rounded-xl text-white text-xs font-semibold"
-                    style={{ backgroundColor: WA_DARK }}>
-                    Back to Demo
-                  </a>
+                  <div className="flex flex-col gap-2">
+                    {sessionId && (
+                      <a href={`/demo/result?session=${sessionId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block px-4 py-2.5 rounded-xl text-white text-xs font-semibold text-center"
+                        style={{ backgroundColor: bandColor[band] ?? WA_DARK }}>
+                        View your case record →
+                      </a>
+                    )}
+                    <a href="/demo"
+                      className="block px-4 py-2 rounded-xl text-xs font-semibold text-center border"
+                      style={{ borderColor: WA_DARK, color: WA_DARK }}>
+                      Back to Demo
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>

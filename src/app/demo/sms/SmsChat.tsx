@@ -366,11 +366,22 @@ export default function SmsChat({ firmId }: { firmId: string }) {
                     {msgCount.outbound} outbound + {msgCount.inbound} inbound = {msgCount.outbound + msgCount.inbound} messages total
                   </div>
                   <p className="text-xs text-gray-500 mb-4 leading-relaxed">{cta}</p>
-                  <a href="/demo"
-                    className="inline-block px-4 py-2 rounded-xl text-white text-xs font-semibold"
-                    style={{ backgroundColor: BLUE }}>
-                    Back to Demo
-                  </a>
+                  <div className="flex flex-col gap-2">
+                    {sessionId && (
+                      <a href={`/demo/result?session=${sessionId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block px-4 py-2.5 rounded-xl text-white text-xs font-semibold text-center"
+                        style={{ backgroundColor: bandColor[band] ?? BLUE }}>
+                        View your case record →
+                      </a>
+                    )}
+                    <a href="/demo"
+                      className="block px-4 py-2 rounded-xl text-xs font-semibold text-center border"
+                      style={{ borderColor: BLUE, color: BLUE }}>
+                      Back to Demo
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>

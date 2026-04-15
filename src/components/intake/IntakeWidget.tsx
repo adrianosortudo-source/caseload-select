@@ -683,6 +683,18 @@ export function IntakeWidget({ firmId, firmName, accentColor = "#1a3a5c" }: Inta
                 );
               })()}
 
+              {sessionId && (
+                <a
+                  href={`/demo/result?session=${sessionId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 rounded-xl text-sm font-semibold text-white text-center block transition-all hover:opacity-90 active:scale-[0.98]"
+                  style={{ backgroundColor: accentColor }}
+                >
+                  View your case record →
+                </a>
+              )}
+
               <button
                 onClick={reset}
                 className="w-full py-2.5 rounded-xl text-xs font-medium text-gray-500 border border-gray-200 hover:bg-gray-50 transition-all"
