@@ -1,44 +1,4 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/incomplete-intake",
-      "schedule": "0 * * * *"
-    },
-    {
-      "path": "/api/cron/session-expiry",
-      "schedule": "0 */2 * * *"
-    },
-    {
-      "path": "/api/cron/persistence",
-      "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/cron/no-show",
-      "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/api/cron/stalled-retainer",
-      "schedule": "0 15 * * *"
-    },
-    {
-      "path": "/api/cron/recovery-a",
-      "schedule": "0 16 * * *"
-    },
-    {
-      "path": "/api/cron/recovery-b",
-      "schedule": "0 17 * * *"
-    },
-    {
-      "path": "/api/cron/retainer-followup",
-      "schedule": "0 */2 * * *"
-    },
-    {
-      "path": "/api/cron/data-retention",
-      "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/cron/send-sequences",
-      "schedule": "*/15 * * * *"
-    }
-  ]
+  "buildCommand": "next build",
+  "outputDirectory": ".next"
 }
