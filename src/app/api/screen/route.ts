@@ -275,6 +275,63 @@ export async function POST(req: Request) {
     const conversation = (session.conversation as Array<{ role: string; content: string }>) ?? [];
     conversation.push({ role: "user", content: userContent });
 
+    // ── Fast path: skip GPT for contact submission when band is already set ──
+    // After widget question answers are confirmed, the practice area and initial
+    // band are already known. Sending contact to GPT risks mis-classification
+    // (GPT re-reads the full conversation and can return a wrong practice area).
+    // When a band is already assigned, finalize using the stored scoring.
+    const existingBand = session.band as string | null;
+    const existingCpiForContact = (session.scoring as CpiBreakdown & { _confirmed?: Record<string, unknown> }) ?? {} as CpiBreakdown;
+    if (
+      channel === "widget" &&
+      message_type === "contact" &&
+      structured_data &&
+      session.practice_area &&
+      existingBand &&
+      ["A", "B", "C", "D", "E"].includes(existingBand)
+    ) {
+      // Persist contact + finalize
+      const existingContact = (session.contact as Record<string, unknown>) ?? {};
+      const contact: Record<string, unknown> = { ...existingContact };
+      if (structured_data.first_name !== undefined) contact.first_name = structured_data.first_name;
+      if (structured_data.last_name !== undefined) contact.last_name = structured_data.last_name;
+      if (structured_data.email !== undefined) contact.email = structured_data.email;
+      if (structured_data.phone !== undefined) contact.phone = structured_data.phone;
+
+      await supabase
+        .from("intake_sessions")
+        .update({ contact, status: "complete" })
+        .eq("id", session.id);
+
+      const bandToCta: Record<string, string> = {
+        A: "A lawyer from our team will contact you shortly. Book a same-day consultation.",
+        B: "We'll call you within the hour. Pick a consultation time.",
+        C: "Book a consultation at your convenience.",
+        D: "Here is information relevant to your situation. We'll follow up within the week.",
+        E: "Based on what you've shared, this may fall outside our practice areas. Here are other resources that may help.",
+      };
+
+      return NextResponse.json({
+        session_id: session.id,
+        practice_area: session.practice_area,
+        practice_area_confidence: "high",
+        next_question: null,
+        next_questions: null,
+        cpi: existingCpiForContact,
+        response_text: bandToCta[existingBand] ?? "",
+        finalize: true,
+        collect_identity: false,
+        situation_summary: (session.situation_summary as string) ?? null,
+        extracted_entities: (session.extracted_entities as Record<string, unknown>) ?? {},
+        questions_answered: Object.keys(updatedConfirmed),
+        complexity_indicators: (session.complexity_indicators as Record<string, unknown>) ?? null,
+        value_tier: (session.value_tier as string) ?? null,
+        prior_experience: (session.prior_experience as string) ?? null,
+        flags: (session.flags as string[]) ?? [],
+        cta: bandToCta[existingBand] ?? null,
+      });
+    }
+
     // ── Fast path: skip GPT for structured widget answers ────────────
     // Once the practice area is classified, button-tap answers don't need GPT.
     // The server-side queue already knows which questions remain. GPT is only
@@ -502,12 +559,28 @@ export async function POST(req: Request) {
     // Remove situation_summary if GPT accidentally placed it inside extracted_entities
     delete updatedEntities.situation_summary;
 
+    // ── Persist contact details when provided ────────────────────────
+    // structured_data for message_type "contact" carries first_name, last_name,
+    // email, phone. These must be written to intake_sessions.contact explicitly —
+    // GPT only sees them as conversation text and does not write them back.
+    const contactUpdate: Record<string, unknown> = {};
+    if (message_type === "contact" && structured_data) {
+      const existingContact = (session.contact as Record<string, unknown>) ?? {};
+      const merged: Record<string, unknown> = { ...existingContact };
+      if (structured_data.first_name !== undefined) merged.first_name = structured_data.first_name;
+      if (structured_data.last_name !== undefined) merged.last_name = structured_data.last_name;
+      if (structured_data.email !== undefined) merged.email = structured_data.email;
+      if (structured_data.phone !== undefined) merged.phone = structured_data.phone;
+      contactUpdate.contact = merged;
+    }
+
     const sessionUpdate: Record<string, unknown> = {
       conversation,
       scoring: { ...gptResponse.cpi, _confirmed: updatedConfirmed },
       extracted_entities: updatedEntities,
       practice_area: gptResponse.practice_area,
       band: gptResponse.cpi.band,
+      ...contactUpdate,
       ...(gptResponse.situation_summary ? { situation_summary: gptResponse.situation_summary } : {}),
       ...(gptResponse.complexity_indicators ? { complexity_indicators: gptResponse.complexity_indicators } : {}),
       ...(gptResponse.value_tier ? { value_tier: gptResponse.value_tier } : {}),
