@@ -488,7 +488,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
       </footer>
 
       {/* ── FLOATING CHAT BUBBLE ── */}
-      <ChatBubble firmId={firmId} />
+      <ChatBubble firmId={firmId} firmName="Hartwell Law PC" branding={branding} />
 
       {/* ── MOBILE STICKY CALL BAR ── */}
       <div className="fixed bottom-0 left-0 right-0 sm:hidden z-30 border-t border-gray-200 bg-white flex"

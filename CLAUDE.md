@@ -223,6 +223,22 @@ Conflict gate: `qualified` → `consultation_scheduled` (hard block until check 
 
 Routes: `/api/portal/generate`, `/api/portal/login`, `/api/portal/[firmId]/leads`, `/api/portal/[firmId]/metrics`.
 
+### Client Dashboard (3-Tier, inside portal)
+
+Three tabs within the portal. Data from Supabase, polled on page load + every 5 minutes.
+
+**Tier 1 — Partner Dashboard** (`/portal/[firmId]/dashboard`): 6 KPI tiles (inquiries MTD, qualified leads, signed cases, CPSC, avg response time, pipeline value). Each tile: number + delta vs prior month + 6-week sparkline. Reuses admin KPI tile component.
+
+**Tier 2 — Pipeline View** (`/portal/[firmId]/pipeline`): Read-only kanban. Mirrors admin pipeline, strip drag-drop. Filterable by practice area and date range. Cards show first name + last initial, practice area, CPI band badge, days in stage.
+
+**Tier 3 — FACT Phases** (`/portal/[firmId]/phases`): Four cards (Filter, Authority, Capture, Target). Filter card: band distribution bar + SLA gauge. Authority/Capture/Target: placeholder until BrightLocal/GA4/Google Ads API wired. Placeholder text: "Connecting [Phase] data. Your weekly report covers this phase until the live feed is active."
+
+New API routes: `/api/portal/[firmId]/dashboard` (Tier 1 metrics), `/api/portal/[firmId]/pipeline` (Tier 2 pipeline state), `/api/portal/[firmId]/phases` (Tier 3 FACT metrics).
+
+Access: firm_owner and firm_admin see all tiers. No client sees raw CPI scores or AI screening rationale (operator-only). Row-level security on Supabase enforces tenant isolation.
+
+Full spec: CRM Bible v3.0, Section 9.
+
 ## Custom Domains (S9)
 
 `src/middleware.ts` (edge runtime) — hostname detection, Supabase REST lookup, rewrites traffic to `/portal/[firmId]` or `/widget/[firmId]`.
@@ -362,27 +378,4 @@ All CaseLoad Select logo files are served from `/brand/logos/` (public folder). 
 |---|---|
 | Dark header / navy background | `/brand/logos/lockup-horizontal-dark-transparent.png` |
 | Light header / white or parchment background | `/brand/logos/lockup-horizontal-light-transparent.png` |
-| With tagline "SIGN BETTER CASES" on light bg | `/brand/logos/lockup-horizontal-tagline-light-transparent.png` |
-| Favicon / small square mark | `/brand/logos/icon-light-transparent.png` |
-| Email header (self-contained) | `/brand/logos/lockup-horizontal-light-bg.png` |
-| Wordmark only (no icon) | `/brand/logos/wordmark-light-transparent.png` |
-
-### Rules
-
-- Always pull from `/brand/logos/`. Never reconstruct the wordmark or icon in CSS/SVG.
-- Source of record: `01_Brand/Logos/CaseLoadSelect/` in the master operations folder.
-- On dark backgrounds (navy `#1E2F58`, black `#0D1520`): use the `-dark-transparent` variants.
-- On light backgrounds (parchment `#F4F3EF`, white): use the `-light-transparent` variants.
-- Only use `-bg` variants in contexts where you cannot control the background (e.g., email clients, PDF headers).
-
-## Related Files (outside this repo)
-
-- CRM Bible v2: `04_Playbooks/01_Filter/Strategy/CaseLoad_Select_CRM_Bible_v2.html`
-- Product Doc v2: `05_Product/CaseLoad_Select_Product_Doc_v2.html`
-- CaseLoad Screen spec: `05_Product/CaseLoad_Screen_ProductSpec_v1.html`
-- Brand Book v2: `01_Brand/BrandBook/CaseLoad_Select_BrandBook_v2.html`
-- Scoring config (per-client): `04_Playbooks/01_Filter/ClientDeployments/example_law/CRM_Deployment/03_Scoring_Config.md`
-- Nurture sequences: `04_Playbooks/01_Filter/ClientDeployments/example_law/CRM_Deployment/08_Nurture_Sequences.md`
-- AI intake strategy: `05_Product/AI_Intake/CaseLoad_Select_AI_Intake_v2_Strategy.md`
-- ROI Scorecard spec: `08_Reporting/CaseLoad_Select_ROI_Scorecard_Spec.md`
-- Weekly reporting spec: `08_Reporting/CaseLoad_Select_Weekly_Reporting_System_Spec_v1.md`
+| With tagline "

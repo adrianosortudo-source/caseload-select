@@ -2,18 +2,21 @@
 
 import { useState } from "react";
 import { IntakeWidget } from "@/components/intake/IntakeWidget";
-
-const ACCENT = "#1B3A6B";
-const PHONE = "+14165552847";
-const WHATSAPP_NUMBER = "14165552847";
+import type { DemoFirmBranding } from "./provision-demo-firm";
 
 type View = "menu" | "sms" | "chat" | "whatsapp";
 
 interface ChatBubbleProps {
   firmId: string;
+  firmName: string;
+  branding: DemoFirmBranding;
 }
 
-export default function ChatBubble({ firmId }: ChatBubbleProps) {
+export default function ChatBubble({ firmId, firmName, branding }: ChatBubbleProps) {
+  const ACCENT = branding.accent_color || "#1B3A6B";
+  const PHONE = branding.phone_tel || "";
+  const PHONE_DISPLAY = branding.phone_number || "";
+  const ASSISTANT_NAME = branding.assistant_name || "Alex";
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<View>("menu");
   const [smsForm, setSmsForm] = useState({ name: "", phone: "", message: "" });
@@ -57,12 +60,16 @@ export default function ChatBubble({ firmId }: ChatBubbleProps) {
 
           {/* Header */}
           <div className="flex items-center gap-3 px-4 py-3 text-white" style={{ backgroundColor: ACCENT }}>
-            <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0 text-sm font-bold">
-              H
+            <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0 overflow-hidden">
+              <img
+                src="/brand/logos/icon-light-transparent.png"
+                alt="CaseLoad Select"
+                className="w-6 h-6 object-contain"
+              />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-semibold text-sm">Hartwell Law PC</div>
-              <div className="text-xs text-white/70">How can I help?</div>
+              <div className="font-semibold text-sm">{firmName}</div>
+              <div className="text-xs text-white/70">{ASSISTANT_NAME} · How can I help?</div>
             </div>
             <button onClick={close} className="text-white/70 hover:text-white transition p-1">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -108,14 +115,16 @@ export default function ChatBubble({ firmId }: ChatBubbleProps) {
                   </div>
                 </a>
 
-                <a href={`tel:${PHONE}`}
-                  className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition">
-                  <span className="text-2xl">📞</span>
-                  <div>
-                    <div className="font-semibold text-sm text-gray-800">Call Us Now</div>
-                    <div className="text-xs text-gray-500">(416) 555-2847 — Mon–Fri 8am–6pm</div>
-                  </div>
-                </a>
+                {PHONE && (
+                  <a href={`tel:${PHONE}`}
+                    className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition">
+                    <span className="text-2xl">📞</span>
+                    <div>
+                      <div className="font-semibold text-sm text-gray-800">Call Us Now</div>
+                      <div className="text-xs text-gray-500">{PHONE_DISPLAY} — Mon–Fri 8am–6pm</div>
+                    </div>
+                  </a>
+                )}
               </div>
             )}
 
@@ -179,8 +188,14 @@ export default function ChatBubble({ firmId }: ChatBubbleProps) {
                 </button>
                 <IntakeWidget
                   firmId={firmId}
-                  firmName="Hartwell Law PC"
+                  firmName={firmName}
                   accentColor={ACCENT}
+                  assistantName={ASSISTANT_NAME}
+                  assistantAvatar="/brand/logos/icon-light-transparent.png"
+                  firmPhone={PHONE_DISPLAY}
+                  firmPhoneTel={PHONE}
+                  firmBookingUrl={branding.booking_url || undefined}
+                  firmPrivacyUrl={branding.privacy_policy_url || undefined}
                 />
               </div>
             )}

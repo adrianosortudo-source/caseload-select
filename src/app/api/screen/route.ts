@@ -100,6 +100,27 @@ interface GptResponse {
 }
 
 // ─────────────────────────────────────────────
+// Per-practice-area CPI floor maps
+// Prevents GPT from scoring 0 on first message when data is sparse.
+// fee_score: out of 10  |  complexity_score: out of 25
+// ─────────────────────────────────────────────
+const FEE_FLOOR: Record<string, number> = {
+  fam: 6, pi: 6, emp: 6, crim: 6, real: 6, corp: 6, est: 5, llt: 5,
+  civ: 6, imm: 6, ip: 5, tax: 5, admin: 5, ins: 6, const: 6, bank: 6,
+  priv: 5, fran: 5, env: 5, prov: 4, condo: 5, hr: 5, edu: 4, health: 5,
+  debt: 4, nfp: 4, defam: 5, socben: 4, gig: 5, sec: 7, elder: 5,
+  str: 4, crypto: 5, ecom: 4, animal: 5,
+};
+
+const COMPLEXITY_FLOOR: Record<string, number> = {
+  fam: 6, pi: 6, emp: 5, crim: 7, real: 5, corp: 5, est: 4, llt: 5,
+  civ: 5, imm: 7, ip: 6, tax: 7, admin: 6, ins: 6, const: 6, bank: 5,
+  priv: 5, fran: 5, env: 7, prov: 4, condo: 5, hr: 6, edu: 5, health: 6,
+  debt: 4, nfp: 4, defam: 5, socben: 4, gig: 5, sec: 7, elder: 5,
+  str: 4, crypto: 5, ecom: 4, animal: 4,
+};
+
+// ─────────────────────────────────────────────
 // Scoring validator — trust components, verify sums
 // ─────────────────────────────────────────────
 function validateAndFixScoring(cpi: CpiBreakdown): CpiBreakdown {
@@ -592,6 +613,23 @@ export async function POST(req: Request) {
           a.label.toLowerCase().replace(/[\s_-]+/g, "") === rawNorm
       );
       if (pa) gptResponse.practice_area = pa.id;
+    }
+
+    // ── Apply per-area CPI floors ─────────────────────────────────────
+    // GPT under-scores fee and complexity on the first message when it has
+    // limited data. Floors ensure Band assignments are meaningful from turn 1.
+    // Urgency floor (2) prevents any identified matter from scoring Band E purely
+    // due to a zero urgency default. Geo default (5) when no location is known.
+    if (gptResponse.practice_area) {
+      const pa = gptResponse.practice_area;
+      const feeFloor = FEE_FLOOR[pa] ?? 5;
+      const complexityFloor = COMPLEXITY_FLOOR[pa] ?? 5;
+      if (gptResponse.cpi.fee_score < feeFloor) gptResponse.cpi.fee_score = feeFloor;
+      if (gptResponse.cpi.complexity_score < complexityFloor) gptResponse.cpi.complexity_score = complexityFloor;
+      if (gptResponse.cpi.urgency_score < 2) gptResponse.cpi.urgency_score = 2;
+      if (gptResponse.cpi.geo_score === 0) gptResponse.cpi.geo_score = 5;
+      // Recompute totals after floor adjustments
+      gptResponse.cpi = validateAndFixScoring(gptResponse.cpi);
     }
 
     // ── Out-of-scope gate ─────────────────────────────────────────────
