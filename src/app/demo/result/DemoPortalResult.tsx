@@ -466,12 +466,13 @@ export default function DemoPortalResult({ session }: { session: Record<string, 
   const channel          = (session.channel ?? "widget") as string;
   const createdAt        = (session.created_at ?? new Date().toISOString()) as string;
 
-  // Contact
-  const firstName = String(entities.first_name ?? "");
-  const lastName  = String(entities.last_name  ?? "");
+  // Contact — prefer session.contact (set by screen API), fall back to extracted_entities
+  const contactRecord = (session.contact ?? {}) as Record<string, unknown>;
+  const firstName = String(contactRecord.first_name ?? entities.first_name ?? "");
+  const lastName  = String(contactRecord.last_name  ?? entities.last_name  ?? "");
   const fullName  = [firstName, lastName].filter(Boolean).join(" ") || "Anonymous";
-  const email     = (entities.email ?? null) as string | null;
-  const phone     = (entities.phone ?? null) as string | null;
+  const email     = (contactRecord.email ?? entities.email ?? null) as string | null;
+  const phone     = (contactRecord.phone ?? entities.phone ?? null) as string | null;
 
   // Case data chips (strip contact + summary keys)
   const skipKeys = new Set(["first_name", "last_name", "email", "phone", "situation_summary"]);
