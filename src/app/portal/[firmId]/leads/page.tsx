@@ -42,8 +42,6 @@ type LeadRow = {
   stage: string;
   band: string | null;
   priority_band: string | null;
-  priority_index: number | null;
-  cpi_score: number | null;
   urgency: string | null;
   created_at: string;
 };
@@ -65,7 +63,7 @@ export default async function PortalLeadsPage({
 
   let query = supabase
     .from("leads")
-    .select("id, name, case_type, stage, band, priority_band, priority_index, cpi_score, urgency, created_at")
+    .select("id, name, case_type, stage, band, priority_band, urgency, created_at")
     .eq("law_firm_id", firmId)
     .order("created_at", { ascending: false });
 
@@ -157,14 +155,12 @@ export default async function PortalLeadsPage({
                 <th className="text-left px-4 py-3 font-medium">Case type</th>
                 <th className="text-left px-4 py-3 font-medium">Band</th>
                 <th className="text-left px-4 py-3 font-medium">Stage</th>
-                <th className="text-left px-4 py-3 font-medium">CPI</th>
                 <th className="text-left px-4 py-3 font-medium">Added</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
               {leads.map((lead) => {
                 const band = lead.priority_band ?? lead.band;
-                const cpi = lead.priority_index ?? lead.cpi_score ?? 0;
                 return (
                   <tr key={lead.id} className="hover:bg-black/[0.01]">
                     <td className="px-4 py-3 font-medium text-black/80">{lead.name}</td>
@@ -182,9 +178,6 @@ export default async function PortalLeadsPage({
                     </td>
                     <td className="px-4 py-3 text-xs text-black/60">
                       {STAGE_LABEL[lead.stage] ?? lead.stage}
-                    </td>
-                    <td className="px-4 py-3 text-xs font-medium text-black/70">
-                      {cpi > 0 ? cpi : <span className="text-black/20">—</span>}
                     </td>
                     <td className="px-4 py-3 text-xs text-black/50">
                       {new Date(lead.created_at).toLocaleDateString("en-CA")}

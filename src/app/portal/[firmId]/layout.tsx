@@ -9,6 +9,7 @@
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
 import { supabase } from "@/lib/supabase";
+import PortalTabNav from "@/components/portal/PortalTabNav";
 
 interface Branding {
   firm_name?: string;
@@ -52,7 +53,7 @@ export default async function PortalLayout({
           )}
           <div>
             <div className="text-white font-semibold text-sm">{firmName}</div>
-            <div className="text-white/50 text-xs">Intake Dashboard</div>
+            <div className="text-white/50 text-xs">Client Dashboard</div>
           </div>
         </div>
         <form action={`/api/portal/logout?firm_id=${firmId}`} method="POST">
@@ -64,6 +65,9 @@ export default async function PortalLayout({
           </button>
         </form>
       </header>
+
+      <PortalTabNav firmId={firmId} />
+
       <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8">{children}</main>
       <footer className="text-center text-xs text-black/30 py-6 shrink-0">
         Powered by CaseLoad Select

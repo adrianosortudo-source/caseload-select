@@ -227,17 +227,19 @@ Routes: `/api/portal/generate`, `/api/portal/login`, `/api/portal/[firmId]/leads
 
 Three tabs within the portal. Data from Supabase, polled on page load + every 5 minutes.
 
-**Tier 1 — Partner Dashboard** (`/portal/[firmId]/dashboard`): 6 KPI tiles (inquiries MTD, qualified leads, signed cases, CPSC, avg response time, pipeline value). Each tile: number + delta vs prior month + 6-week sparkline. Reuses admin KPI tile component.
+**Tier 1 — Partner Dashboard** (`/portal/[firmId]/dashboard`): Hero metrics row (3 tiles, 40pt, configured per firm via `intake_firms.hero_metrics` JSONB) + 7 standard KPI tiles (inquiries MTD, qualified leads, signed cases, CPSC, median response time, pipeline value, funnel conversion rate). Each tile: number + delta vs prior month + 6-week sparkline + benchmark indicator (green/amber/red dot). YoY sparkline comparison where 12+ months of data exist. Collapsible "Since Engagement Start" panel below tiles showing cumulative metrics (total leads, qualified, signed cases, pipeline value, response time improvement, CPSC trajectory). Reuses admin KPI tile component with benchmark extension.
 
-**Tier 2 — Pipeline View** (`/portal/[firmId]/pipeline`): Read-only kanban. Mirrors admin pipeline, strip drag-drop. Filterable by practice area and date range. Cards show first name + last initial, practice area, CPI band badge, days in stage.
+**Tier 2 — Pipeline View** (`/portal/[firmId]/pipeline`): Funnel conversion bar at top showing stage-to-stage conversion rates (>40% drop-off = red flag). Read-only kanban below. Mirrors admin pipeline, strip drag-drop. Filterable by practice area and date range. Cards show first name + last initial, practice area, CPI band badge, days in stage.
 
 **Tier 3 — FACT Phases** (`/portal/[firmId]/phases`): Four cards (Filter, Authority, Capture, Target). Filter card: band distribution bar + SLA gauge. Authority/Capture/Target: placeholder until BrightLocal/GA4/Google Ads API wired. Placeholder text: "Connecting [Phase] data. Your weekly report covers this phase until the live feed is active."
 
-New API routes: `/api/portal/[firmId]/dashboard` (Tier 1 metrics), `/api/portal/[firmId]/pipeline` (Tier 2 pipeline state), `/api/portal/[firmId]/phases` (Tier 3 FACT metrics).
+New API routes: `/api/portal/[firmId]/dashboard` (Tier 1 metrics + hero config + benchmarks + cumulative data), `/api/portal/[firmId]/pipeline` (Tier 2 pipeline state + conversion rates), `/api/portal/[firmId]/phases` (Tier 3 FACT metrics).
+
+New schema columns: `intake_firms.hero_metrics` (JSONB, default `["signed_cases","cpsc","median_response_time"]`), `intake_firms.metric_definitions` (JSONB, client-agreed definitions from onboarding). New table: `industry_benchmarks` (static reference data for benchmark comparisons).
 
 Access: firm_owner and firm_admin see all tiers. No client sees raw CPI scores or AI screening rationale (operator-only). Row-level security on Supabase enforces tenant isolation.
 
-Full spec: CRM Bible v3.0, Section 9.
+Full spec: CRM Bible v3.0, Section 9. Build prompt: `05_Product/prompts/PROMPT_Client_Dashboard_Build_v2.md`.
 
 ## Custom Domains (S9)
 

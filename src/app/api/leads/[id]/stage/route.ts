@@ -21,9 +21,28 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
   }
 
+  const now = new Date().toISOString();
+  const stageUpdate: Record<string, unknown> = {
+    stage,
+    updated_at: now,
+    stage_changed_at: now,
+  };
+
+  // Populate first_contact_at once — only when transitioning new_lead → contacted
+  if (stage === "contacted") {
+    const { data: existing } = await supabase
+      .from("leads")
+      .select("stage, first_contact_at")
+      .eq("id", id)
+      .single();
+    if (existing?.stage === "new_lead" && !existing?.first_contact_at) {
+      stageUpdate.first_contact_at = now;
+    }
+  }
+
   const { data: lead, error } = await supabase
     .from("leads")
-    .update({ stage, updated_at: new Date().toISOString() })
+    .update(stageUpdate)
     .eq("id", id)
     .select()
     .single();
