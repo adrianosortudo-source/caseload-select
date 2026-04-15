@@ -579,13 +579,17 @@ export async function POST(req: Request) {
     gptResponse.cpi = validateAndFixScoring(gptResponse.cpi);
 
     // ── Normalize practice_area to canonical short ID ─────────────────
-    // GPT returns the human label ("Family Law"). Normalize to the ID ("fam")
-    // used in question_sets keys, GHL tags, and test assertions.
+    // GPT may return: the label ("Family Law"), a slug ("family_law"),
+    // or already the short ID ("fam"). Normalize all to the short ID.
     if (gptResponse.practice_area) {
+      const raw = gptResponse.practice_area;
+      const rawNorm = raw.toLowerCase().replace(/[\s_-]+/g, "");
       const pa = firmConfig.practice_areas.find(
         a =>
-          a.id === gptResponse.practice_area ||
-          a.label.toLowerCase() === (gptResponse.practice_area ?? "").toLowerCase()
+          a.id === raw ||
+          a.id.toLowerCase() === raw.toLowerCase() ||
+          a.label.toLowerCase() === raw.toLowerCase() ||
+          a.label.toLowerCase().replace(/[\s_-]+/g, "") === rawNorm
       );
       if (pa) gptResponse.practice_area = pa.id;
     }

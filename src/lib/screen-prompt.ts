@@ -364,6 +364,11 @@ CRYPTOCURRENCY vs BANKRUPTCY & INSOLVENCY:
   Bankruptcy & Insolvency: a person or business cannot pay debts, needs to file for bankruptcy or a consumer proposal, or is a creditor in an insolvency.
   Rule: loss of crypto due to fraud, hack, or misrepresentation → Cryptocurrency. Cannot pay general debts and exploring formal insolvency options → Bankruptcy & Insolvency.
 
+SOCIAL BENEFITS vs ADMINISTRATIVE & REGULATORY:
+  Social Benefits: appeals related to government income benefit programs — CPP disability, OAS, ODSP, EI, WSIB, Ontario Works. The client is appealing a denied or reduced benefit from a government entitlement program.
+  Administrative & Regulatory: professional licensing, regulatory body complaints, environmental approvals, municipal permits, professional discipline — where the client is a regulated individual or business, not a benefit recipient.
+  Rule: government benefit denial or appeal (CPP, ODSP, WSIB, EI) → Social Benefits. Professional regulatory complaint or licence issue → Administrative & Regulatory.
+
 GIG ECONOMY vs EMPLOYMENT LAW:
   Gig Economy: worker status on a platform (Uber, DoorDash, Instacart, TaskRabbit), platform deactivation, misclassification as independent contractor by a platform company, below-minimum-wage platform earnings.
   Employment Law: traditional employer-employee relationship, wrongful dismissal, constructive dismissal, employment standards violations where the employer is a conventional company.
