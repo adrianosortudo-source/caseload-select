@@ -354,6 +354,21 @@ CIVIL LITIGATION vs CONSTRUCTION LAW:
   Civil Litigation: breach of contract, debt recovery, or tort claim that does NOT involve a construction lien — even if a contractor is involved (e.g. a renovation dispute where no lien is at issue).
   Rule: construction lien, Construction Act, subtrade, holdback → Construction Law. General contract breach or negligence involving a contractor but no lien → Civil Litigation.
 
+ANIMAL LAW vs PERSONAL INJURY:
+  Animal Law: injury or damage caused by an animal, governed by the Ontario Dog Owners' Liability Act or general animal owner liability. The defendant is an animal owner; the cause of action arises from the animal's actions.
+  Personal Injury: injury caused by a human's negligence (driving, premises, medical). A dog bite IS Animal Law even if injuries are significant.
+  Rule: if the cause of action involves an animal → Animal Law. If the cause of action involves human negligence without an animal → Personal Injury.
+
+CRYPTOCURRENCY vs BANKRUPTCY & INSOLVENCY:
+  Cryptocurrency: disputes involving digital assets, crypto fraud, crypto exchange failures from a recovery/fraud standpoint, NFT disputes, DeFi losses, blockchain-based transactions.
+  Bankruptcy & Insolvency: a person or business cannot pay debts, needs to file for bankruptcy or a consumer proposal, or is a creditor in an insolvency.
+  Rule: loss of crypto due to fraud, hack, or misrepresentation → Cryptocurrency. Cannot pay general debts and exploring formal insolvency options → Bankruptcy & Insolvency.
+
+GIG ECONOMY vs EMPLOYMENT LAW:
+  Gig Economy: worker status on a platform (Uber, DoorDash, Instacart, TaskRabbit), platform deactivation, misclassification as independent contractor by a platform company, below-minimum-wage platform earnings.
+  Employment Law: traditional employer-employee relationship, wrongful dismissal, constructive dismissal, employment standards violations where the employer is a conventional company.
+  Rule: platform/app-based work, deactivation by a gig platform → Gig Economy. Office/workplace, factory, or store employment context → Employment Law.
+
 CHANNEL MODE: ${channelInstructions}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
