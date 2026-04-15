@@ -50,6 +50,12 @@ export interface FirmConfig {
   question_sets: Record<string, QuestionSet>; // keyed by practice_area_id
   geographic_config: GeographicConfig;
   custom_instructions?: string;
+  /** Display name for the AI assistant, e.g. "Alex". Used in channel introductions. */
+  assistant_name?: string;
+  /** Human-readable phone number for the escape hatch CTA */
+  phone_number?: string;
+  /** Booking page URL for the escape hatch CTA */
+  booking_url?: string;
 }
 
 export function buildSystemPrompt(firm: FirmConfig, channel: string, options?: { includeQuestionSets?: boolean }): string {
@@ -73,15 +79,20 @@ export function buildSystemPrompt(firm: FirmConfig, channel: string, options?: {
     return `${header}${scoringContext ? `\n${scoringContext}` : ""}\n${qLines}`;
   }).join("\n\n");
 
+  const assistantName = firm.assistant_name ?? "the intake assistant";
+  const phoneRef = firm.phone_number ? ` Call ${firm.phone_number} to speak with someone directly.` : "";
+  const bookingRef = firm.booking_url ? ` You can also book a time online.` : "";
+  const humanCta = `${phoneRef}${bookingRef}`.trim();
+
   const channelInstructions = {
     widget: "WIDGET MODE — CRITICAL: You MUST return all remaining unanswered questions in the next_questions array. next_question MUST be null. Do NOT return next_question — it is ignored by the widget. Return next_questions: [] (empty array) only when collect_identity=true or finalize=true, not as an intermediate step. The widget renders all questions simultaneously as chip cards. Keep response_text brief (1–2 sentences max).",
-    whatsapp: "WhatsApp mode: ask ONE question at a time. Use plain conversational text. No markdown. Keep responses under 160 characters when possible.",
+    whatsapp: `WhatsApp mode: ask ONE question at a time. Use plain conversational text. No markdown. Keep responses under 160 characters when possible. FIRST TURN ONLY: Before your first question, open with exactly this consent notice (do not alter it): "Hi, I'm ${assistantName}, an automated intake assistant for ${firm.name}. Your replies are stored securely and used only to assess your matter. Reply STOP at any time to opt out." Then ask your first question on a new line.`,
     chat: "Chat mode: ask ONE question at a time. You may use *bold* sparingly. Keep responses concise.",
     email: "Email mode: formal tone. You may ask 2–3 questions at once in a numbered list. Use complete sentences.",
-    phone: "Phone mode: you are processing a full call transcript. Extract ALL answerable data points from the transcript in a single pass. Set finalize=true immediately if sufficient data exists. Do not ask follow-up questions.",
+    phone: `Phone mode: you are processing a full call transcript. Extract ALL answerable data points from the transcript in a single pass. Set finalize=true immediately if sufficient data exists. Do not ask follow-up questions. When introducing yourself at the start of a call, use this format: "Thank you for calling ${firm.name}. My name is ${assistantName}. This call may be recorded for quality and training purposes. How can I help you today?"`,
   }[channel] ?? "Ask one question at a time.";
 
-  return `You are the intake screening system for ${firm.name}, ${firm.description}, located in ${firm.location}.
+  return `You are ${assistantName}, the intake screening assistant for ${firm.name}, ${firm.description}, located in ${firm.location}. ${humanCta ? `If a client asks to speak with a person or indicates they want to stop the automated process, respond with: "${humanCta}" and set collect_identity=false, finalize=false, next_questions=null, next_question=null.` : ""}
 
 Your job is to screen potential clients, extract structured case data, calculate a Case Priority Index (CPI), and determine when enough information has been collected to route the lead to the firm's CRM.
 
@@ -307,6 +318,41 @@ BEHAVIOR RULES
     GENERAL:
     - "I spoke to a lawyer / I consulted a lawyer / I had a consultation" → prior_experience = yes
     - "I was at the tribunal / I filed a complaint before / I had a case before" → prior_experience = prior_litigation
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DISAMBIGUATION RULES FOR CLOSE-CALL AREAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+These pairs share surface-level language. Use the tie-breaking rule when ambiguous.
+
+INSURANCE LAW vs PERSONAL INJURY:
+  Insurance Law: the dispute is with the client's OWN insurer (SABS benefits, income replacement, treatment plan denials, accident benefits). Keywords: FSRA, accident benefits, income replacement, LAT, insurer disputes treatment.
+  Personal Injury: the client wants to SUE the at-fault party or their insurer for damages (tort claim). Keywords: suing the driver, pain and suffering, general damages, MVA lawsuit.
+  Rule: If the adversary is the client's OWN insurance company disputing benefits → Insurance Law. If suing a third party for damages → Personal Injury.
+
+HUMAN RIGHTS vs EMPLOYMENT LAW:
+  Human Rights: client explicitly wants to file with the Human Rights Tribunal (HRTO), or the claim centers on a protected ground (disability, race, gender, religion, sexual orientation) applied to housing, services, or employment. Keywords: HRTO, human rights application, Code, accommodation, discrimination.
+  Employment Law: wrongful dismissal, severance, constructive dismissal, non-compete, employment standards — even if discrimination is mentioned as context.
+  Rule: If the client's primary remedy is an HRTO application or the protected ground is the central issue → Human Rights. If the primary remedy is damages for dismissal or severance → Employment Law.
+
+ELDER LAW vs WILLS & ESTATES:
+  Elder Law: the client is a family member of a vulnerable senior dealing with capacity, guardianship, financial exploitation, elder abuse, substitute decision-making, or POA challenges in context of cognitive decline.
+  Wills & Estates: the client is making or updating their own will, administering an estate, acting as executor, or dealing with estate litigation — without a capacity/exploitation angle.
+  Rule: capacity, guardianship, financial exploitation of an elderly person → Elder Law. Own will, executor duties, estate administration → Wills & Estates.
+
+SHORT-TERM RENTAL vs CONDOMINIUM LAW:
+  Short-Term Rental: client wants to list a property on Airbnb/VRBO, is dealing with city bylaw licensing/registration for short-term rentals, or received a municipal enforcement notice about STR rules.
+  Condominium Law: client has a dispute with a condo board or condo corporation (special assessments, rules, governance, declaration disputes) — regardless of whether they mention Airbnb.
+  Rule: municipal STR bylaw, city registration, platform listing → Short-Term Rental. Condo board dispute, declaration, governance → Condominium Law.
+
+ADMINISTRATIVE & REGULATORY vs HEALTHCARE & MEDICAL REGULATORY:
+  Healthcare & Medical Regulatory: the client is a regulated health professional (physician, nurse, pharmacist, physiotherapist, dentist, chiropractor) facing a complaint at their health college (CPSO, CNO, OCP, RCDSO).
+  Administrative & Regulatory: the client is a regulated professional from any OTHER sector (real estate, law, engineering, trades, insurance, securities) facing a regulatory body complaint, license review, or disciplinary process.
+  Rule: health college + health profession → Healthcare & Medical Regulatory. Any other regulated profession → Administrative & Regulatory.
+
+CIVIL LITIGATION vs CONSTRUCTION LAW:
+  Construction Law: dispute involves a construction project, construction lien, holdback under the Construction Act, subtrade or general contractor relationship, or a lien registration deadline.
+  Civil Litigation: breach of contract, debt recovery, or tort claim that does NOT involve a construction lien — even if a contractor is involved (e.g. a renovation dispute where no lien is at issue).
+  Rule: construction lien, Construction Act, subtrade, holdback → Construction Law. General contract breach or negligence involving a contractor but no lien → Civil Litigation.
 
 CHANNEL MODE: ${channelInstructions}
 

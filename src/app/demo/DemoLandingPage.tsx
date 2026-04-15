@@ -3,20 +3,22 @@
 import { useState, useRef } from "react";
 import { IntakeWidget } from "@/components/intake/IntakeWidget";
 import ChatBubble from "./ChatBubble";
+import type { DemoFirmBranding } from "./provision-demo-firm";
 
 const NAVY = "#1B3A6B";
 const GOLD = "#C4A45A";
-const PHONE_DISPLAY = "(416) 555-2847";
-const PHONE_TEL = "tel:+14165552847";
 const EMAIL = "contact@hartwelllaw.ca";
 const ADDRESS = "100 King Street West, Suite 5400\nToronto, ON M5X 1C7";
 
 interface Props {
   firmId: string;
   practiceAreaLabels: string[];
+  branding: DemoFirmBranding;
 }
 
-export default function DemoLandingPage({ firmId, practiceAreaLabels }: Props) {
+export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }: Props) {
+  const PHONE_DISPLAY = branding.phone_number;
+  const PHONE_TEL = branding.phone_tel;
   const widgetRef = useRef<HTMLDivElement>(null);
   const contactRef = useRef<HTMLDivElement>(null);
   const [contactForm, setContactForm] = useState({ name: "", email: "", message: "" });
@@ -174,7 +176,13 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels }: Props) {
                 <IntakeWidget
                   firmId={firmId}
                   firmName="Hartwell Law PC"
-                  accentColor={NAVY}
+                  accentColor={branding.accent_color}
+                  assistantName={branding.assistant_name}
+                  firmPhone={branding.phone_number}
+                  firmPhoneTel={branding.phone_tel}
+                  firmBookingUrl={branding.booking_url}
+                  firmPrivacyUrl={branding.privacy_policy_url}
+                  assistantAvatar="/brand/logos/icon-light-transparent.png"
                 />
               </div>
             </div>

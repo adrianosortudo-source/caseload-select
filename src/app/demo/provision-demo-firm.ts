@@ -56,16 +56,41 @@ const GEO_CONFIG = {
   national_practice_areas: ["imm", "tax", "ip", "sec"],
 };
 
+export interface DemoFirmBranding {
+  accent_color: string;
+  firm_description: string;
+  tagline: string;
+  assistant_name: string;
+  phone_number: string;
+  phone_tel: string;
+  booking_url: string;
+  privacy_policy_url: string;
+}
+
 /**
- * Returns the demo firm ID. Creates the firm if it doesn't exist,
+ * Returns the demo firm ID and branding config. Creates the firm if it doesn't exist,
  * and always refreshes question_sets from DEFAULT_QUESTION_MODULES.
  */
-export async function provisionDemoFirm(): Promise<{ firmId: string } | { error: string }> {
-  const { data: existing } = await supabase
+export async function provisionDemoFirm(): Promise<{ firmId: string; branding: DemoFirmBranding } | { error: string }> {
+  const { data: existingRows } = await supabase
     .from("intake_firms")
-    .select("id, question_sets")
+    .select("id, question_sets, branding")
     .eq("name", DEMO_FIRM_NAME)
-    .maybeSingle();
+    .limit(1);
+
+  const existing = existingRows?.[0] ?? null;
+
+  const DEMO_BRANDING: DemoFirmBranding = {
+    accent_color: "#1B3A6B",
+    firm_description:
+      "a full-service Ontario law firm serving individuals and businesses across the Greater Toronto Area",
+    tagline: "Strategic Legal Counsel. Better Cases.",
+    assistant_name: "Alex",
+    phone_number: "(416) 555-2847",
+    phone_tel: "tel:+14165552847",
+    booking_url: "https://calendly.com/hartwelllaw/consultation",
+    privacy_policy_url: "/privacy",
+  };
 
   if (!existing) {
     const { data: created, error } = await supabase
@@ -76,12 +101,7 @@ export async function provisionDemoFirm(): Promise<{ firmId: string } | { error:
         practice_areas: ALL_PRACTICE_AREAS,
         geographic_config: GEO_CONFIG,
         question_sets: DEFAULT_QUESTION_MODULES,
-        branding: {
-          accent_color: "#1B3A6B",
-          firm_description:
-            "a full-service Ontario law firm serving individuals and businesses across the Greater Toronto Area",
-          tagline: "Strategic Legal Counsel. Better Cases.",
-        },
+        branding: DEMO_BRANDING,
       })
       .select("id")
       .single();
@@ -89,14 +109,18 @@ export async function provisionDemoFirm(): Promise<{ firmId: string } | { error:
     if (error || !created) {
       return { error: error?.message ?? "Insert returned no data" };
     }
-    return { firmId: created.id };
+    return { firmId: created.id, branding: DEMO_BRANDING };
   }
 
-  // Always refresh question sets so module fixes auto-apply
+  // Always refresh question sets and branding so fixes auto-apply
   await supabase
     .from("intake_firms")
-    .update({ question_sets: DEFAULT_QUESTION_MODULES })
+    .update({ question_sets: DEFAULT_QUESTION_MODULES, branding: DEMO_BRANDING })
     .eq("id", existing.id);
 
-  return { firmId: existing.id };
+  // Stored record wins for any overrides Adriano may have set manually
+  const storedBranding = (existing.branding as Partial<DemoFirmBranding>) ?? {};
+  const mergedBranding: DemoFirmBranding = { ...DEMO_BRANDING, ...storedBranding };
+
+  return { firmId: existing.id, branding: mergedBranding };
 }

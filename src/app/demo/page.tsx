@@ -31,6 +31,7 @@ export default async function DemoPage() {
     <DemoLandingPage
       firmId={result.firmId}
       practiceAreaLabels={ALL_PRACTICE_AREAS.map((a) => a.label)}
+      branding={result.branding}
     />
   );
 }

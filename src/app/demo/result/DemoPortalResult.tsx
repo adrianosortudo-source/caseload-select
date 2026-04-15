@@ -462,7 +462,7 @@ export default function DemoPortalResult({ session }: { session: Record<string, 
 
   const practiceArea     = (session.practice_area    ?? null) as string | null;
   const situationSummary = (session.situation_summary ?? null) as string | null;
-  const flags            = (session.flags ?? [])   as string[];
+  const flags            = ((session.scoring?._flags ?? session.flags ?? []) as string[]);
   const channel          = (session.channel ?? "widget") as string;
   const createdAt        = (session.created_at ?? new Date().toISOString()) as string;
 

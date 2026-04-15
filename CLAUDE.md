@@ -342,6 +342,39 @@ Triggered after OTP verification on Band A/B intake sessions.
 
 `CLIO_CLIENT_ID` · `CLIO_CLIENT_SECRET` · `CLIO_REDIRECT_URI` · `VERCEL_API_TOKEN` · `VERCEL_PROJECT_ID` · `DOCUGENERATE_API_KEY` · `DOCUGENERATE_TEMPLATE_ID` · `DOCUSEAL_API_KEY` · `DOCUSEAL_TEMPLATE_ID` · `DOCUSEAL_WEBHOOK_SECRET`
 
+## Brand Assets
+
+All CaseLoad Select logo files are served from `/brand/logos/` (public folder). Use these — never recreate logos in code.
+
+### Naming convention
+
+`{variant}-{theme}-{background}.png`
+
+| Segment | Options |
+|---|---|
+| variant | `icon`, `wordmark`, `wordmark-tagline`, `lockup-horizontal`, `lockup-horizontal-tagline`, `lockup-stacked` |
+| theme | `light` (navy/gold on transparent or white bg), `dark` (white/gold on dark bg) |
+| background | `transparent` (use on coloured backgrounds), `bg` (has its own white/dark background baked in) |
+
+### Quick reference
+
+| Use case | File |
+|---|---|
+| Dark header / navy background | `/brand/logos/lockup-horizontal-dark-transparent.png` |
+| Light header / white or parchment background | `/brand/logos/lockup-horizontal-light-transparent.png` |
+| With tagline "SIGN BETTER CASES" on light bg | `/brand/logos/lockup-horizontal-tagline-light-transparent.png` |
+| Favicon / small square mark | `/brand/logos/icon-light-transparent.png` |
+| Email header (self-contained) | `/brand/logos/lockup-horizontal-light-bg.png` |
+| Wordmark only (no icon) | `/brand/logos/wordmark-light-transparent.png` |
+
+### Rules
+
+- Always pull from `/brand/logos/`. Never reconstruct the wordmark or icon in CSS/SVG.
+- Source of record: `01_Brand/Logos/CaseLoadSelect/` in the master operations folder.
+- On dark backgrounds (navy `#1E2F58`, black `#0D1520`): use the `-dark-transparent` variants.
+- On light backgrounds (parchment `#F4F3EF`, white): use the `-light-transparent` variants.
+- Only use `-bg` variants in contexts where you cannot control the background (e.g., email clients, PDF headers).
+
 ## Related Files (outside this repo)
 
 - CRM Bible v2: `04_Playbooks/01_Filter/Strategy/CaseLoad_Select_CRM_Bible_v2.html`

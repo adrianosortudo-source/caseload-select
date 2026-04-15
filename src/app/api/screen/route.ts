@@ -34,7 +34,12 @@ interface ScreenRequest {
   message: string;
   message_type?: "text" | "answer" | "contact" | "context";
   structured_data?: Record<string, unknown>;
+  /** UTM params and page path from the widget's origin page, e.g. "utm_source:google, utm_medium:cpc, page:/services" */
+  source_hint?: string;
 }
+
+// Keywords that trigger an escape to human contact before GPT is called
+const ESCAPE_HATCH_RE = /^\s*(call|human|0|stop|speak|agent|operator|talk to someone|i want to speak|connect me|real person)\s*$/i;
 
 interface CpiBreakdown {
   fit_score: number;
@@ -217,7 +222,7 @@ async function sendToGHL(session: Record<string, unknown>, ghlWebhookUrl: string
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as ScreenRequest;
-    const { session_id, firm_id, channel, message, message_type = "text", structured_data } = body;
+    const { session_id, firm_id, channel, message, message_type = "text", structured_data, source_hint } = body;
 
     if (!firm_id) {
       return NextResponse.json({ error: "firm_id required" }, { status: 400 });
@@ -246,6 +251,8 @@ export async function POST(req: Request) {
     const firm = firmResult.data;
     const session = sessionResult.data as Record<string, unknown>;
 
+    const firmBranding = (firm.branding as Record<string, string | undefined>) ?? {};
+
     const firmConfig: FirmConfig = {
       name: firm.name,
       description: firm.description ?? "",
@@ -254,7 +261,40 @@ export async function POST(req: Request) {
       question_sets: firm.question_sets,
       geographic_config: firm.geographic_config,
       custom_instructions: firm.custom_instructions ?? undefined,
+      assistant_name: firmBranding.assistant_name ?? undefined,
+      phone_number: firmBranding.phone_number ?? undefined,
+      booking_url: firmBranding.booking_url ?? undefined,
     };
+
+    // ── Escape hatch — intercept human-contact keywords before GPT ───
+    // Matches: CALL, HUMAN, 0, STOP, and natural-language equivalents.
+    // Returns a phone/booking CTA without spending a GPT token.
+    if (channel === "widget" && message_type === "text" && ESCAPE_HATCH_RE.test(message)) {
+      const phonePart = firmBranding.phone_number ? `Call ${firmBranding.phone_number}.` : "";
+      const bookPart = firmBranding.booking_url ? ` Or book a time online.` : "";
+      const escapeText = [phonePart, bookPart].filter(Boolean).join("") ||
+        "Please contact the firm directly to speak with someone.";
+
+      return NextResponse.json({
+        session_id: session.id,
+        practice_area: (session.practice_area as string) ?? null,
+        practice_area_confidence: "unknown",
+        next_question: null,
+        next_questions: null,
+        cpi: (session.scoring as CpiBreakdown) ?? { total: 0, band: null, band_locked: false, fit_score: 0, geo_score: 0, practice_score: 0, legitimacy_score: 0, referral_score: 0, value_score: 0, urgency_score: 0, complexity_score: 0, multi_practice_score: 0, fee_score: 0 } as unknown as CpiBreakdown,
+        response_text: escapeText,
+        finalize: false,
+        collect_identity: false,
+        situation_summary: null,
+        extracted_entities: {},
+        questions_answered: [],
+        complexity_indicators: null,
+        value_tier: null,
+        prior_experience: null,
+        flags: ["escape_hatch"],
+        cta: null,
+      });
+    }
 
     // ── Accumulate confirmed answers (widget structured_data, keyed by question ID) ──
     // These are authoritative — stored separately from GPT-extracted entities so
@@ -311,6 +351,8 @@ export async function POST(req: Request) {
         E: "Based on what you've shared, this may fall outside our practice areas. Here are other resources that may help.",
       };
 
+      const existingScoringForContact = (session.scoring as Record<string, unknown>) ?? {};
+      const existingEntitiesForContact = (session.extracted_entities as Record<string, unknown>) ?? {};
       return NextResponse.json({
         session_id: session.id,
         practice_area: session.practice_area,
@@ -322,21 +364,30 @@ export async function POST(req: Request) {
         finalize: true,
         collect_identity: false,
         situation_summary: (session.situation_summary as string) ?? null,
-        extracted_entities: (session.extracted_entities as Record<string, unknown>) ?? {},
+        extracted_entities: existingEntitiesForContact,
         questions_answered: Object.keys(updatedConfirmed),
-        complexity_indicators: (session.complexity_indicators as Record<string, unknown>) ?? null,
-        value_tier: (session.value_tier as string) ?? null,
-        prior_experience: (session.prior_experience as string) ?? null,
-        flags: (session.flags as string[]) ?? [],
+        complexity_indicators: (existingScoringForContact._complexity_indicators as Record<string, unknown>) ?? null,
+        value_tier: (existingEntitiesForContact.value_tier as string) ?? null,
+        prior_experience: (existingEntitiesForContact.prior_experience as string) ?? null,
+        flags: (existingScoringForContact._flags as string[]) ?? [],
         cta: bandToCta[existingBand] ?? null,
       });
     }
 
     // ── Fast path: skip GPT for structured widget answers ────────────
-    // Once the practice area is classified, button-tap answers don't need GPT.
-    // The server-side queue already knows which questions remain. GPT is only
-    // needed for: (1) first message (classification), (2) free-text input,
-    // (3) contact/finalization. This eliminates ~80% of GPT calls in the widget.
+    // Three-phase question strategy:
+    //
+    // Phase 2 — Core Qualification (first 6 questions, indices 0–5)
+    //   Ordered by CPI impact: urgency → merit → value → complexity.
+    //   Served to every lead regardless of initial band.
+    //
+    // Phase 3 — Signal Refinement (questions 7–8, indices 6–7)
+    //   Served only when Phase 2 is complete AND band is B or C (40–79).
+    //   Band A leads go straight to identity — no refinement needed.
+    //   Band D/E leads go straight to identity — more questions won't help.
+    //
+    // Phase 4 — Identity
+    //   Name, email, phone. Always last.
     if (
       channel === "widget" &&
       message_type === "answer" &&
@@ -354,27 +405,58 @@ export async function POST(req: Request) {
         null;
 
       if (questionSet != null) {
-        const remaining = questionSet.questions.filter(q => !(q.id in updatedConfirmed));
-        const collectIdentity = remaining.length === 0;
         const existingCpi = (session.scoring as CpiBreakdown & { _confirmed?: Record<string, unknown> }) ?? {} as CpiBreakdown;
 
-        // Save confirmed answers only — no conversation update, no GPT
+        // Split questions into Phase 2 (first 6) and Phase 3 (remaining)
+        const phase2Questions = questionSet.questions.slice(0, 6);
+        const phase3Questions = questionSet.questions.slice(6);
+
+        const phase2Remaining = phase2Questions.filter(q => !(q.id in updatedConfirmed));
+        const phase3Remaining = phase3Questions.filter(q => !(q.id in updatedConfirmed));
+
+        // Save confirmed answers
         await supabase
           .from("intake_sessions")
           .update({ scoring: { ...existingCpi, _confirmed: updatedConfirmed } })
           .eq("id", session.id);
+
+        // Determine what to serve next
+        let nextQuestions: typeof phase2Questions | null = null;
+        let collectIdentity = false;
+
+        if (phase2Remaining.length > 0) {
+          // Phase 2 in progress — keep serving Phase 2 questions
+          nextQuestions = phase2Remaining;
+        } else {
+          // Phase 2 complete — route based on current band
+          const currentBand = (session.band as string) ?? existingCpi.band ?? "C";
+
+          if (["A", "D", "E"].includes(currentBand)) {
+            // Band A: already high-value, no refinement needed
+            // Band D/E: low-value, more questions won't change routing
+            collectIdentity = true;
+          } else if (phase3Remaining.length > 0) {
+            // Band B or C: serve Phase 3 refinement questions
+            nextQuestions = phase3Remaining;
+          } else {
+            // Phase 3 also complete — go to identity
+            collectIdentity = true;
+          }
+        }
+
+        const shapeQ = (q: typeof phase2Questions[number]) => ({
+          id: q.id,
+          text: q.text,
+          options: q.options.map(o => ({ label: o.label, value: o.value })),
+          allow_free_text: q.allow_free_text ?? false,
+        });
 
         return NextResponse.json({
           session_id: session.id,
           practice_area: session.practice_area,
           practice_area_confidence: "high",
           next_question: null,
-          next_questions: collectIdentity ? null : remaining.map(q => ({
-            id: q.id,
-            text: q.text,
-            options: q.options.map(o => ({ label: o.label, value: o.value })),
-            allow_free_text: q.allow_free_text ?? false,
-          })),
+          next_questions: nextQuestions ? nextQuestions.map(shapeQ) : null,
           cpi: existingCpi,
           response_text: "",
           finalize: false,
@@ -382,10 +464,10 @@ export async function POST(req: Request) {
           situation_summary: (session.situation_summary as string) ?? null,
           extracted_entities: (session.extracted_entities as Record<string, unknown>) ?? {},
           questions_answered: Object.keys(updatedConfirmed),
-          complexity_indicators: (session.complexity_indicators as Record<string, unknown>) ?? null,
-          value_tier: (session.value_tier as string) ?? null,
-          prior_experience: (session.prior_experience as string) ?? null,
-          flags: (session.flags as string[]) ?? [],
+          complexity_indicators: ((existingCpi as unknown as Record<string, unknown>)._complexity_indicators as Record<string, unknown>) ?? null,
+          value_tier: ((session.extracted_entities as Record<string, unknown>)?.value_tier as string) ?? null,
+          prior_experience: ((session.extracted_entities as Record<string, unknown>)?.prior_experience as string) ?? null,
+          flags: ((existingCpi as unknown as Record<string, unknown>)._flags as string[]) ?? [],
           cta: null,
         });
       }
@@ -414,6 +496,18 @@ export async function POST(req: Request) {
     }
 
     let systemPrompt = buildSystemPrompt(promptFirmConfig, channel, { includeQuestionSets });
+
+    // Inject source context so GPT can factor in the lead's entry point
+    if (source_hint) {
+      systemPrompt +=
+        `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
+        `\nSOURCE CONTEXT\n` +
+        `The client arrived via: ${source_hint}\n` +
+        `Use this to inform referral_score inference if no explicit referral is stated.` +
+        ` utm_source:google with utm_medium:cpc = paid ads (referral_score 3).` +
+        ` utm_medium:organic or direct = organic search (referral_score 4).` +
+        ` utm_source:facebook = social media (referral_score 2).`;
+    }
 
     // Inject confirmed answers into system prompt so GPT never re-asks.
     // Uses question IDs from structured_data (100% reliable) merged with GPT-extracted entities.
@@ -484,6 +578,18 @@ export async function POST(req: Request) {
     // ── Validate + fix scoring ────────────────────────────────────────
     gptResponse.cpi = validateAndFixScoring(gptResponse.cpi);
 
+    // ── Normalize practice_area to canonical short ID ─────────────────
+    // GPT returns the human label ("Family Law"). Normalize to the ID ("fam")
+    // used in question_sets keys, GHL tags, and test assertions.
+    if (gptResponse.practice_area) {
+      const pa = firmConfig.practice_areas.find(
+        a =>
+          a.id === gptResponse.practice_area ||
+          a.label.toLowerCase() === (gptResponse.practice_area ?? "").toLowerCase()
+      );
+      if (pa) gptResponse.practice_area = pa.id;
+    }
+
     // ── Out-of-scope gate ─────────────────────────────────────────────
     // If the identified practice area is marked out_of_scope in the firm config,
     // finalize immediately with Band E — do not collect identity or ask questions.
@@ -521,10 +627,15 @@ export async function POST(req: Request) {
         ) ?? null;
       }
       if (questionSet) {
-        // Filter out questions that are already in confirmed_answers
-        const remaining = questionSet.questions.filter(q => !(q.id in updatedConfirmed));
-        if (remaining.length > 0) {
-          gptResponse.next_questions = remaining.map(q => ({
+        // Phase 2/3 question routing — same strategy as the answer fast path.
+        // On first classification call, GPT has just assigned an initial band.
+        // Serve Phase 2 questions (first 6). Phase 3 questions are held back
+        // and only served after Phase 2 is confirmed complete (in the answer fast path).
+        const phase2Questions = questionSet.questions.slice(0, 6);
+        const phase2Remaining = phase2Questions.filter(q => !(q.id in updatedConfirmed));
+
+        if (phase2Remaining.length > 0) {
+          gptResponse.next_questions = phase2Remaining.map(q => ({
             id: q.id,
             text: q.text,
             options: q.options.map(o => ({ label: o.label, value: o.value })),
@@ -532,11 +643,24 @@ export async function POST(req: Request) {
           }));
           gptResponse.next_question = null;
         } else {
-          // All questions answered — move to identity collection
-          gptResponse.next_questions = null;
-          gptResponse.next_question = null;
-          if (!gptResponse.collect_identity) {
+          // Phase 2 complete on first call (rare — all answers pre-filled from free text)
+          // Apply Phase 3 routing based on GPT's initial band
+          const phase3Questions = questionSet.questions.slice(6);
+          const phase3Remaining = phase3Questions.filter(q => !(q.id in updatedConfirmed));
+          const gpBand = gptResponse.cpi.band ?? "C";
+
+          if (["A", "D", "E"].includes(gpBand) || phase3Remaining.length === 0) {
+            gptResponse.next_questions = null;
+            gptResponse.next_question = null;
             gptResponse.collect_identity = true;
+          } else {
+            gptResponse.next_questions = phase3Remaining.map(q => ({
+              id: q.id,
+              text: q.text,
+              options: q.options.map(o => ({ label: o.label, value: o.value })),
+              allow_free_text: q.allow_free_text ?? false,
+            }));
+            gptResponse.next_question = null;
           }
         }
       } else if (gptResponse.next_question) {
@@ -552,12 +676,16 @@ export async function POST(req: Request) {
     // ── Build updated session state ──────────────────────────────────
     // extracted_entities: structured key-value pairs only (question IDs + values)
     // situation_summary is stored separately at the session level, not merged here
+    // value_tier and prior_experience are stored inside extracted_entities JSONB
+    // (not as top-level session columns — those don't exist in the schema)
     const updatedEntities = {
       ...(session.extracted_entities as Record<string, unknown> ?? {}),
       ...gptResponse.extracted_entities,
+      ...(gptResponse.value_tier ? { value_tier: gptResponse.value_tier } : {}),
+      ...(gptResponse.prior_experience ? { prior_experience: gptResponse.prior_experience } : {}),
     };
     // Remove situation_summary if GPT accidentally placed it inside extracted_entities
-    delete updatedEntities.situation_summary;
+    delete (updatedEntities as Record<string, unknown>).situation_summary;
 
     // ── Persist contact details when provided ────────────────────────
     // structured_data for message_type "contact" carries first_name, last_name,
@@ -574,18 +702,23 @@ export async function POST(req: Request) {
       contactUpdate.contact = merged;
     }
 
+    // complexity_indicators and flags are stored inside the scoring JSONB column
+    // (not as top-level columns — those don't exist in the schema and cause PGRST204)
+    const scoringPayload: Record<string, unknown> = {
+      ...gptResponse.cpi,
+      _confirmed: updatedConfirmed,
+      ...(gptResponse.complexity_indicators ? { _complexity_indicators: gptResponse.complexity_indicators } : {}),
+      ...(gptResponse.flags?.length ? { _flags: gptResponse.flags } : {}),
+    };
+
     const sessionUpdate: Record<string, unknown> = {
       conversation,
-      scoring: { ...gptResponse.cpi, _confirmed: updatedConfirmed },
+      scoring: scoringPayload,
       extracted_entities: updatedEntities,
       practice_area: gptResponse.practice_area,
       band: gptResponse.cpi.band,
       ...contactUpdate,
       ...(gptResponse.situation_summary ? { situation_summary: gptResponse.situation_summary } : {}),
-      ...(gptResponse.complexity_indicators ? { complexity_indicators: gptResponse.complexity_indicators } : {}),
-      ...(gptResponse.value_tier ? { value_tier: gptResponse.value_tier } : {}),
-      ...(gptResponse.prior_experience ? { prior_experience: gptResponse.prior_experience } : {}),
-      ...(gptResponse.flags?.length ? { flags: gptResponse.flags } : {}),
     };
 
     if (gptResponse.finalize) {
@@ -593,10 +726,14 @@ export async function POST(req: Request) {
     }
 
     // ── Persist to Supabase ───────────────────────────────────────────
-    await supabase
+    const { error: updateError } = await supabase
       .from("intake_sessions")
       .update(sessionUpdate)
       .eq("id", session.id);
+
+    if (updateError) {
+      console.error("[screen] Session update failed:", updateError.code, updateError.message, { session_id: session.id, keys: Object.keys(sessionUpdate) });
+    }
 
     // ── GHL delivery on finalize ──────────────────────────────────────
     if (gptResponse.finalize && firm.ghl_webhook_url) {
@@ -637,10 +774,10 @@ export async function POST(req: Request) {
       situation_summary: gptResponse.situation_summary,
       extracted_entities: updatedEntities,
       questions_answered: gptResponse.questions_answered,
-      complexity_indicators: gptResponse.complexity_indicators,
-      value_tier: gptResponse.value_tier,
-      prior_experience: gptResponse.prior_experience,
-      flags: gptResponse.flags,
+      complexity_indicators: gptResponse.complexity_indicators ?? null,
+      value_tier: gptResponse.value_tier ?? null,
+      prior_experience: gptResponse.prior_experience ?? null,
+      flags: gptResponse.flags ?? [],
       cta,
     });
   } catch (err) {
