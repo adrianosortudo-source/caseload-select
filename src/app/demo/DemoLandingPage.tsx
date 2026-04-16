@@ -5,6 +5,40 @@ import { IntakeWidget } from "@/components/intake/IntakeWidget";
 import ChatBubble from "./ChatBubble";
 import type { DemoFirmBranding } from "./provision-demo-firm";
 
+// ── Scenario launcher data ────────────────────────────────────────────────
+
+const DEMO_SCENARIOS = [
+  {
+    id: "pi_strong",
+    label: "Strong case",
+    pa: "Personal injury",
+    message:
+      "I was in a car accident on the 401 three weeks ago. The other driver ran a red light. I'm still getting treatment for a back injury and missed three weeks of work.",
+    band: "A",
+    bandStyle: "bg-emerald-100 text-emerald-700",
+  },
+  {
+    id: "emp_mid",
+    label: "Borderline case",
+    pa: "Employment dispute",
+    message:
+      "My employer terminated me last Friday. I was there for 4 years. They gave me 2 weeks severance and said it was restructuring.",
+    band: "C",
+    bandStyle: "bg-amber-100 text-amber-700",
+  },
+  {
+    id: "small_claims",
+    label: "Outside scope",
+    pa: "Small claims",
+    message:
+      "I want to sue my contractor for $8,000. He didn't finish the job and won't return my calls.",
+    band: "E",
+    bandStyle: "bg-gray-100 text-gray-500",
+  },
+] as const;
+
+type ScenarioId = (typeof DEMO_SCENARIOS)[number]["id"];
+
 const NAVY = "#1B3A6B";
 const GOLD = "#C4A45A";
 const EMAIL = "contact@hartwelllaw.ca";
@@ -23,7 +57,9 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
   const contactRef = useRef<HTMLDivElement>(null);
   const [contactForm, setContactForm] = useState({ name: "", email: "", message: "" });
   const [contactSent, setContactSent] = useState(false);
+  const [contactSending, setContactSending] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeScenario, setActiveScenario] = useState<ScenarioId | null>(null);
 
   function scrollToWidget() {
     widgetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -32,13 +68,43 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
     contactRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function handleContactSubmit(e: React.FormEvent) {
+  async function handleContactSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setContactSending(true);
+    try {
+      await fetch("/api/demo/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(contactForm),
+      });
+    } catch {
+      // Silent — show confirmation regardless
+    }
+    setContactSending(false);
     setContactSent(true);
   }
 
   return (
     <div className="min-h-screen font-sans antialiased text-gray-900 bg-white">
+
+      {/* ── DEMO BANNER ── */}
+      <div className="w-full text-center py-2.5 px-4 text-xs font-medium flex flex-wrap items-center justify-center gap-x-4 gap-y-1"
+        style={{ backgroundColor: GOLD, color: "#1a1a2e" }}>
+        <span>
+          🎯 <strong>Live Demo</strong> — Hartwell Law PC is a fictional firm built to show CaseLoad Select in action.
+          Try submitting a case inquiry using the widget below.
+        </span>
+        <span className="hidden sm:inline text-black/30">·</span>
+        <span className="flex items-center gap-3">
+          <a href="/demo/sms" className="underline underline-offset-2 hover:opacity-70 transition">
+            Try SMS intake
+          </a>
+          <span className="text-black/30">·</span>
+          <a href="/demo/whatsapp" className="underline underline-offset-2 hover:opacity-70 transition">
+            Try WhatsApp
+          </a>
+        </span>
+      </div>
 
       {/* ── STICKY HEADER ── */}
       <header className="sticky top-0 z-40 border-b border-white/10 shadow-sm"
@@ -163,17 +229,66 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
                   style={{ borderColor: NAVY, color: NAVY }}>
                   📞 {PHONE_DISPLAY}
                 </a>
-                <a href={`/demo/whatsapp`}                   className="px-6 py-3 rounded-xl font-semibold text-sm transition hover:opacity-90 flex items-center gap-2"
+                <a href="/demo/whatsapp"
+                  className="px-6 py-3 rounded-xl font-semibold text-sm transition hover:opacity-90 flex items-center gap-2"
                   style={{ backgroundColor: "#25D366", color: "white" }}>
                   <span>📲</span> WhatsApp
+                </a>
+                <a href="/demo/sms"
+                  className="px-6 py-3 rounded-xl font-semibold text-sm transition hover:opacity-90 flex items-center gap-2 border-2"
+                  style={{ borderColor: "#6b7280", color: "#374151" }}>
+                  <span>💬</span> SMS
                 </a>
               </div>
             </div>
 
-            {/* Right: AI widget */}
-            <div ref={widgetRef} className="flex justify-center lg:justify-end">
+            {/* Right: scenario picker + AI widget */}
+            <div ref={widgetRef} className="flex flex-col items-center lg:items-end gap-4">
+
+              {/* Scenario launcher chips */}
+              <div className="w-full max-w-md">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2.5 text-center lg:text-left">
+                  Try a scenario
+                </p>
+                <div className="flex flex-wrap gap-2 justify-center lg:justify-start">
+                  {DEMO_SCENARIOS.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        setActiveScenario(s.id);
+                        setTimeout(() => widgetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                        activeScenario === s.id
+                          ? "border-[#1B3A6B] bg-[#1B3A6B] text-white shadow-sm"
+                          : "border-gray-200 bg-white text-gray-600 hover:border-[#1B3A6B]/40 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className={`w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center flex-shrink-0 ${
+                        activeScenario === s.id ? "bg-white/20 text-white" : s.bandStyle
+                      }`}>
+                        {s.band}
+                      </span>
+                      {s.label}
+                      <span className={`text-[10px] ${activeScenario === s.id ? "text-white/60" : "text-gray-400"}`}>
+                        · {s.pa}
+                      </span>
+                    </button>
+                  ))}
+                  {activeScenario && (
+                    <button
+                      onClick={() => setActiveScenario(null)}
+                      className="px-3 py-1.5 rounded-full text-xs text-gray-400 hover:text-gray-600 border border-dashed border-gray-200 hover:border-gray-300 transition-all"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div className="w-full max-w-md">
                 <IntakeWidget
+                  key={activeScenario ?? "free"}
                   firmId={firmId}
                   firmName="Hartwell Law PC"
                   accentColor={branding.accent_color}
@@ -183,6 +298,8 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
                   firmBookingUrl={branding.booking_url}
                   firmPrivacyUrl={branding.privacy_policy_url}
                   assistantAvatar="/brand/logos/icon-light-transparent.png"
+                  demoMode={true}
+                  demoScenario={activeScenario ?? undefined}
                 />
               </div>
             </div>
@@ -449,10 +566,10 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
                     This form is for general enquiries only. For an immediate case assessment, use the AI intake above.
                     Nothing submitted here constitutes legal advice or a retainer agreement.
                   </p>
-                  <button type="submit"
-                    className="w-full py-3 rounded-xl text-white font-semibold text-sm transition hover:opacity-90"
+                  <button type="submit" disabled={contactSending}
+                    className="w-full py-3 rounded-xl text-white font-semibold text-sm transition hover:opacity-90 disabled:opacity-60"
                     style={{ backgroundColor: NAVY }}>
-                    Send Message
+                    {contactSending ? "Sending…" : "Send Message"}
                   </button>
                 </form>
               )}

@@ -900,11 +900,66 @@ export default function DemoPortalResult({ session }: { session: Record<string, 
                   Action buttons trigger GHL automations in the live portal.
                 </p>
               </div>
-            </div>
 
+              {/* Live portal CTA */}
+              <div className="mt-4 pt-4 border-t border-black/5">
+                <p className="text-xs text-gray-500 mb-3">
+                  This lead is now live in the partner dashboard. See the full view:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href="/demo/portal/dashboard"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition hover:opacity-90"
+                    style={{ backgroundColor: NAVY }}
+                  >
+                    <span>📊</span> Open Partner Dashboard
+                  </Link>
+                  <Link
+                    href="/demo/portal/pipeline"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition hover:bg-black/5"
+                    style={{ borderColor: NAVY, color: NAVY }}
+                  >
+                    <span>📋</span> View Pipeline
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* ── Conversion CTA ── */}
+      <section className="mt-6 mb-2 mx-4 sm:mx-6 rounded-2xl overflow-hidden"
+        style={{ backgroundColor: NAVY }}>
+        <div className="max-w-6xl mx-auto px-6 py-10 sm:py-12 flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="text-center sm:text-left">
+            <p className="text-xs font-semibold uppercase tracking-widest mb-2"
+              style={{ color: GOLD }}>
+              What you just saw
+            </p>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-white leading-snug mb-2">
+              This happens for every inquiry — automatically.
+            </h2>
+            <p className="text-sm text-white/60 max-w-md">
+              Band scoring, SLA routing, CRM entry, and follow-up sequences fire
+              within 90 seconds of submission. No one touches it manually.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+            <a
+              href="mailto:hello@caseloadselect.ca?subject=CaseLoad%20Select%20%E2%80%94%20Book%20a%20Call"
+              className="px-6 py-3 rounded-xl text-sm font-bold text-center transition hover:opacity-90 whitespace-nowrap"
+              style={{ backgroundColor: GOLD, color: "#1a1a2e" }}>
+              Book a 15-Minute Call
+            </a>
+            <Link
+              href="/demo"
+              className="px-6 py-3 rounded-xl text-sm font-semibold text-center border border-white/20 text-white hover:bg-white/5 transition whitespace-nowrap">
+              ← Run Demo Again
+            </Link>
+          </div>
+        </div>
+      </section>
 
       {/* ── Footer ── */}
       <footer className="py-6 mt-4 border-t border-black/5">

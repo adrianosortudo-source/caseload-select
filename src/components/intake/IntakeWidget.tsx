@@ -17,7 +17,8 @@
  * Channels: always uses "widget" mode (GPT returns all questions at once).
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import LawyerViewPanel, { type FullCpi } from "@/components/demo/LawyerViewPanel";
 
 // ─────────────────────────────────────────────
 // Types
@@ -36,13 +37,7 @@ interface ScreenResponse {
   practice_area_confidence: string;
   next_question: Question | null;
   next_questions: Question[] | null;
-  cpi: {
-    total: number;
-    band: "A" | "B" | "C" | "D" | "E" | null;
-    band_locked: boolean;
-    fit_score: number;
-    value_score: number;
-  };
+  cpi: FullCpi & { band_locked: boolean };
   response_text: string;
   finalize: boolean;
   collect_identity: boolean;
@@ -260,7 +255,28 @@ interface IntakeWidgetProps {
   firmBookingUrl?: string;
   /** Privacy policy URL shown in the consent footer */
   firmPrivacyUrl?: string;
+  /**
+   * Demo mode — skips OTP, suppresses GHL delivery, shows LawyerViewPanel
+   * after finalization. Set by the /demo scenario launcher and DemoLandingPage.
+   */
+  demoMode?: boolean;
+  /**
+   * Pre-loaded scenario ID. When set, the widget auto-sends the scenario's
+   * first message on mount. Scenario messages are defined in DemoLandingPage.
+   * The widget page decodes the ?scenario= URL param and passes it here.
+   */
+  demoScenario?: string;
 }
+
+// Pre-loaded scenario messages (mirrors DEMO_SCENARIOS in DemoLandingPage.tsx)
+const SCENARIO_MESSAGES: Record<string, string> = {
+  pi_strong:
+    "I was in a car accident on the 401 three weeks ago. The other driver ran a red light. I'm still getting treatment for a back injury and missed three weeks of work.",
+  emp_mid:
+    "My employer terminated me last Friday. I was there for 4 years. They gave me 2 weeks severance and said it was restructuring.",
+  small_claims:
+    "I want to sue my contractor for $8,000. He didn't finish the job and won't return my calls.",
+};
 
 export function IntakeWidget({
   firmId,
@@ -272,6 +288,8 @@ export function IntakeWidget({
   firmPhoneTel,
   firmBookingUrl,
   firmPrivacyUrl,
+  demoMode = false,
+  demoScenario,
 }: IntakeWidgetProps) {
   const LS_KEY = `cls_session_${firmId}`;
 
@@ -302,6 +320,10 @@ export function IntakeWidget({
   const [pendingResult, setPendingResult] = useState<ScreenResponse | null>(null);
   const [identityCollected, setIdentityCollected] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+
+  // Demo mode state
+  const [showLawyerPanel, setShowLawyerPanel] = useState(false);
+  const autoSentRef = useRef(false);
 
   // ── Welcome back: check localStorage on mount ─────────────────────
   useEffect(() => {
@@ -341,6 +363,42 @@ export function IntakeWidget({
     }
   }, [sessionId, LS_KEY]);
 
+  // ── Demo auto-send: pre-load scenario message and submit immediately ──
+  // Fires once per mount when demoScenario is set. Skips the intent + intro
+  // steps and goes straight to screening so the prospect sees the engine work.
+  useEffect(() => {
+    if (!demoMode || !demoScenario || autoSentRef.current) return;
+    const msg = SCENARIO_MESSAGES[demoScenario];
+    if (!msg) return;
+    autoSentRef.current = true;
+
+    const delay = setTimeout(async () => {
+      setStep("submitting");
+      try {
+        const data = await fetch("/api/screen", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firm_id: firmId,
+            channel: "widget",
+            message: msg,
+            message_type: "text",
+            demo: true,
+          }),
+        }).then(r => r.json()) as ScreenResponse;
+        if (!data.session_id) throw new Error("No session");
+        setSessionId(data.session_id);
+        applyResponse(data, "identity");
+      } catch (err) {
+        setApiError(String(err instanceof Error ? err.message : err));
+        setStep("intro");
+      }
+    }, 400);
+
+    return () => clearTimeout(delay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demoMode, demoScenario, firmId]);
+
   // ── API call helper ───────────────────────────────────────────────
   const callScreen = useCallback(
     async (payload: {
@@ -356,6 +414,7 @@ export function IntakeWidget({
           firm_id: firmId,
           channel: "widget",
           ...(sourceHint ? { source_hint: sourceHint } : {}),
+          ...(demoMode ? { demo: true } : {}),
           ...payload,
         }),
       });
@@ -378,6 +437,10 @@ export function IntakeWidget({
     } else if (data.finalize) {
       setResult(data);
       setStep("result");
+      // In demo mode, show the lawyer panel 1.2s after the result renders
+      if (demoMode) {
+        setTimeout(() => setShowLawyerPanel(true), 1200);
+      }
     } else if (data.collect_identity) {
       setStep("identity");
     } else if (data.next_questions?.length) {
@@ -501,7 +564,8 @@ export function IntakeWidget({
         const data = await callScreen(screenPayload);
         if (!sessionId && data.session_id) setSessionId(data.session_id);
         const resultData = pendingResult ?? data;
-        if (email && sessionId) {
+        // Demo mode: skip OTP, go straight to result
+        if (email && sessionId && !demoMode) {
           await sendOtp(sessionId, email);
           setOtpCode("");
           setOtpAttempts(0);
@@ -510,12 +574,14 @@ export function IntakeWidget({
         } else {
           setResult(resultData);
           setStep("result");
+          if (demoMode) setTimeout(() => setShowLawyerPanel(true), 1200);
         }
       } else {
         await callScreen(screenPayload).catch(() => {
           /* non-fatal */
         });
-        if (email && sessionId) {
+        // Demo mode: skip OTP, go straight to result
+        if (email && sessionId && !demoMode) {
           await sendOtp(sessionId, email);
           setOtpCode("");
           setOtpAttempts(0);
@@ -524,6 +590,7 @@ export function IntakeWidget({
         } else {
           setResult(pendingResult);
           setStep("result");
+          if (demoMode) setTimeout(() => setShowLawyerPanel(true), 1200);
         }
       }
     } catch (err) {
@@ -676,8 +743,11 @@ export function IntakeWidget({
                   <p className="text-base font-semibold text-gray-800">
                     Hi, I&apos;m {assistantName}
                   </p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    I&apos;ll help qualify your case in about 2 minutes.
+                  <p className="text-xs text-gray-500 mt-1.5 leading-relaxed max-w-[260px] mx-auto">
+                    Let me get a few details from you so your lawyer comes better prepared to speak with you.
+                  </p>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Automated assistant, not a lawyer.
                   </p>
                 </div>
               </div>
@@ -981,12 +1051,17 @@ export function IntakeWidget({
                 </div>
               )}
 
-              {/* CTA */}
-              {result.cta &&
-                (() => {
-                  const style = BAND_CTA_STYLE[result.cpi.band ?? "E"] ?? BAND_CTA_STYLE["E"];
-                  return (
-                    <div className={`rounded-xl border px-4 py-3.5 flex items-start gap-3 ${style.border}`}>
+              {/* CTA — band-differentiated */}
+              {result.cta && (() => {
+                const band = result.cpi.band ?? "E";
+                const style = BAND_CTA_STYLE[band] ?? BAND_CTA_STYLE["E"];
+                const isBookingBand = band === "A" || band === "B";
+                const isResourceBand = band === "E";
+
+                return (
+                  <div className={`rounded-xl border px-4 py-3.5 space-y-3 ${style.border}`}>
+                    {/* Message row */}
+                    <div className="flex items-start gap-3">
                       <svg
                         className={`w-5 h-5 mt-0.5 flex-shrink-0 ${style.icon}`}
                         fill="none"
@@ -994,18 +1069,72 @@ export function IntakeWidget({
                         stroke="currentColor"
                         strokeWidth={2}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                        />
+                        {isBookingBand ? (
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        ) : isResourceBand ? (
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        ) : (
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        )}
                       </svg>
                       <p className="text-sm font-medium text-gray-800">{result.cta}</p>
                     </div>
-                  );
-                })()}
 
-              {sessionId && (
+                    {/* Booking button — Band A and B only */}
+                    {isBookingBand && firmBookingUrl && (
+                      <a
+                        href={firmBookingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]"
+                        style={{ backgroundColor: accentColor }}
+                      >
+                        Book your consultation
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                        </svg>
+                      </a>
+                    )}
+
+                    {/* External resources — Band E only */}
+                    {isResourceBand && (
+                      <div className="flex flex-col gap-1.5 pt-1">
+                        <a href="https://www.legalaid.on.ca" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                          Legal Aid Ontario
+                        </a>
+                        <a href="https://www.lawhelpontario.org" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                          LawHelpOntario.ca
+                        </a>
+                        {/* Demo: reframe E-band as a feature, not a dead end */}
+                        {demoMode && (
+                          <p className="text-[10px] text-gray-400 mt-1 pt-1 border-t border-gray-100">
+                            In production, this inquiry is filtered here. 0 minutes of your lawyer&apos;s time.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Demo: see what the lawyer receives */}
+              {demoMode && result && (
+                <button
+                  onClick={() => setShowLawyerPanel(true)}
+                  className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98] flex items-center justify-center gap-2"
+                  style={{ backgroundColor: accentColor }}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  See what landed in your pipeline
+                </button>
+              )}
+
+              {!demoMode && sessionId && (
                 <a
                   href={`/demo/result?session=${sessionId}`}
                   target="_blank"
@@ -1047,6 +1176,19 @@ export function IntakeWidget({
 
         </div>
       </div>
+
+      {/* Demo: Lawyer View Panel — post-finalization overlay */}
+      {demoMode && result && (
+        <LawyerViewPanel
+          open={showLawyerPanel}
+          onClose={() => setShowLawyerPanel(false)}
+          band={result.cpi.band}
+          cpi={result.cpi}
+          situationSummary={result.situation_summary}
+          practiceArea={result.practice_area}
+          contactName={contact.name.trim() || "Demo Lead"}
+        />
+      )}
     </div>
   );
 }

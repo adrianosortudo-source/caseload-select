@@ -19,6 +19,16 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { supabase } from "@/lib/supabase";
 import { buildSystemPrompt, type FirmConfig } from "@/lib/screen-prompt";
+import { getSlotSchema } from "@/lib/slot-schema";
+import { selectNextQuestions } from "@/lib/question-selector";
+import {
+  type CpiBreakdown,
+  FEE_FLOOR,
+  COMPLEXITY_FLOOR,
+  validateAndFixScoring,
+  computeCpiPartial,
+} from "@/lib/cpi-calculator";
+import { autoConfirmFromContext } from "@/lib/auto-confirm";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
@@ -36,26 +46,12 @@ interface ScreenRequest {
   structured_data?: Record<string, unknown>;
   /** UTM params and page path from the widget's origin page, e.g. "utm_source:google, utm_medium:cpc, page:/services" */
   source_hint?: string;
+  /** When true, skip GHL webhook delivery. Used by the /demo route to prevent test sessions polluting the CRM. */
+  demo?: boolean;
 }
 
 // Keywords that trigger an escape to human contact before GPT is called
 const ESCAPE_HATCH_RE = /^\s*(call|human|0|stop|speak|agent|operator|talk to someone|i want to speak|connect me|real person)\s*$/i;
-
-interface CpiBreakdown {
-  fit_score: number;
-  geo_score: number;
-  practice_score: number;
-  legitimacy_score: number;
-  referral_score: number;
-  value_score: number;
-  urgency_score: number;
-  complexity_score: number;
-  multi_practice_score: number;
-  fee_score: number;
-  total: number;
-  band: "A" | "B" | "C" | "D" | "E" | null;
-  band_locked: boolean;
-}
 
 interface ComplexityIndicators {
   contestation_level?: number | null;
@@ -97,62 +93,13 @@ interface GptResponse {
   finalize: boolean;
   collect_identity: boolean;
   situation_summary: string | null;
+  /** Slot IDs GPT extracted from free text, mapped to the matching option value. */
+  filled_slots?: Record<string, string>;
+  /** Confidence level for each filled slot. Only "high" and "medium" are auto-confirmed. */
+  slot_confidence?: Record<string, "high" | "medium" | "low">;
 }
 
-// ─────────────────────────────────────────────
-// Per-practice-area CPI floor maps
-// Prevents GPT from scoring 0 on first message when data is sparse.
-// fee_score: out of 10  |  complexity_score: out of 25
-// ─────────────────────────────────────────────
-const FEE_FLOOR: Record<string, number> = {
-  fam: 6, pi: 6, emp: 6, crim: 6, real: 6, corp: 6, est: 5, llt: 5,
-  civ: 6, imm: 6, ip: 5, tax: 5, admin: 5, ins: 6, const: 6, bank: 6,
-  priv: 5, fran: 5, env: 5, prov: 4, condo: 5, hr: 5, edu: 4, health: 5,
-  debt: 4, nfp: 4, defam: 5, socben: 4, gig: 5, sec: 7, elder: 5,
-  str: 4, crypto: 5, ecom: 4, animal: 5,
-};
-
-const COMPLEXITY_FLOOR: Record<string, number> = {
-  fam: 6, pi: 6, emp: 5, crim: 7, real: 5, corp: 5, est: 4, llt: 5,
-  civ: 5, imm: 7, ip: 6, tax: 7, admin: 6, ins: 6, const: 6, bank: 5,
-  priv: 5, fran: 5, env: 7, prov: 4, condo: 5, hr: 6, edu: 5, health: 6,
-  debt: 4, nfp: 4, defam: 5, socben: 4, gig: 5, sec: 7, elder: 5,
-  str: 4, crypto: 5, ecom: 4, animal: 4,
-};
-
-// ─────────────────────────────────────────────
-// Scoring validator — trust components, verify sums
-// ─────────────────────────────────────────────
-function validateAndFixScoring(cpi: CpiBreakdown): CpiBreakdown {
-  // Clamp all components to valid ranges
-  cpi.geo_score = Math.min(10, Math.max(0, Math.round(cpi.geo_score ?? 0)));
-  cpi.practice_score = Math.min(10, Math.max(0, Math.round(cpi.practice_score ?? 0)));
-  cpi.legitimacy_score = Math.min(10, Math.max(0, Math.round(cpi.legitimacy_score ?? 0)));
-  cpi.referral_score = Math.min(10, Math.max(0, Math.round(cpi.referral_score ?? 0)));
-  cpi.urgency_score = Math.min(20, Math.max(0, Math.round(cpi.urgency_score ?? 0)));
-  cpi.complexity_score = Math.min(25, Math.max(0, Math.round(cpi.complexity_score ?? 0)));
-  cpi.multi_practice_score = Math.min(5, Math.max(0, Math.round(cpi.multi_practice_score ?? 0)));
-  cpi.fee_score = Math.min(10, Math.max(0, Math.round(cpi.fee_score ?? 0)));
-
-  // Warn if value score is all-zero despite a detected practice area (likely a scoring miss)
-  if (cpi.practice_score > 0 && cpi.complexity_score === 0 && cpi.fee_score === 0) {
-    console.warn("[screen] Value score suspiciously low — GPT may not have applied inference scoring. complexity:", cpi.complexity_score, "fee:", cpi.fee_score);
-  }
-
-  // Recompute sums from components
-  cpi.fit_score = cpi.geo_score + cpi.practice_score + cpi.legitimacy_score + cpi.referral_score;
-  cpi.value_score = cpi.urgency_score + cpi.complexity_score + cpi.multi_practice_score + cpi.fee_score;
-  cpi.total = cpi.fit_score + cpi.value_score;
-
-  // Assign band
-  if (cpi.total >= 80) cpi.band = "A";
-  else if (cpi.total >= 60) cpi.band = "B";
-  else if (cpi.total >= 40) cpi.band = "C";
-  else if (cpi.total >= 20) cpi.band = "D";
-  else cpi.band = "E";
-
-  return cpi;
-}
+// autoConfirmFromContext and AUTO_RULES_BY_PA are imported from @/lib/auto-confirm
 
 // ─────────────────────────────────────────────
 // GHL webhook delivery
@@ -163,11 +110,11 @@ async function sendToGHL(session: Record<string, unknown>, ghlWebhookUrl: string
   const entities = (session.extracted_entities as Record<string, unknown>) ?? {};
 
   const bandToCta: Record<string, string> = {
-    A: "A lawyer from our team will contact you shortly. Book a same-day consultation.",
-    B: "We'll call you within the hour. Pick a consultation time.",
-    C: "Book a consultation at your convenience.",
-    D: "Here is information relevant to your situation. We'll follow up within the week.",
-    E: "Based on what you've shared, this may fall outside our practice areas. Here are other resources that may help.",
+    A: "A lawyer will contact you within 30 minutes. Book a same-day consultation to secure your spot.",
+    B: "We'll review your case and reach out within the hour. Pick a time to speak with a lawyer.",
+    C: "Your intake is complete. A member of our team will personally review your situation and be in touch as soon as possible.",
+    D: "We've received everything. A member of our team will take a careful look and follow up with you.",
+    E: "Based on what you've shared, this matter may fall outside our practice areas. We encourage you to seek appropriate legal help.",
   };
 
   const bandToLeadState: Record<string, string> = {
@@ -243,7 +190,7 @@ async function sendToGHL(session: Record<string, unknown>, ghlWebhookUrl: string
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as ScreenRequest;
-    const { session_id, firm_id, channel, message, message_type = "text", structured_data, source_hint } = body;
+    const { session_id, firm_id, channel, message, message_type = "text", structured_data, source_hint, demo } = body;
 
     if (!firm_id) {
       return NextResponse.json({ error: "firm_id required" }, { status: 400 });
@@ -296,13 +243,15 @@ export async function POST(req: Request) {
       const escapeText = [phonePart, bookPart].filter(Boolean).join("") ||
         "Please contact the firm directly to speak with someone.";
 
+      const escapeCpi = (session.scoring as CpiBreakdown) ?? { total: 0, band: null, band_locked: false, fit_score: 0, geo_score: 0, practice_score: 0, legitimacy_score: 0, referral_score: 0, value_score: 0, urgency_score: 0, complexity_score: 0, multi_practice_score: 0, fee_score: 0 } as unknown as CpiBreakdown;
       return NextResponse.json({
         session_id: session.id,
         practice_area: (session.practice_area as string) ?? null,
         practice_area_confidence: "unknown",
         next_question: null,
         next_questions: null,
-        cpi: (session.scoring as CpiBreakdown) ?? { total: 0, band: null, band_locked: false, fit_score: 0, geo_score: 0, practice_score: 0, legitimacy_score: 0, referral_score: 0, value_score: 0, urgency_score: 0, complexity_score: 0, multi_practice_score: 0, fee_score: 0 } as unknown as CpiBreakdown,
+        cpi: escapeCpi,
+        cpi_partial: computeCpiPartial(escapeCpi, false),
         response_text: escapeText,
         finalize: false,
         collect_identity: false,
@@ -325,6 +274,24 @@ export async function POST(req: Request) {
     const updatedConfirmed: Record<string, unknown> = { ...existingConfirmed };
     if (message_type === "answer" && structured_data) {
       Object.assign(updatedConfirmed, structured_data);
+    }
+
+    // ── Context-aware auto-skip: pre-answer questions from free-text situation ──
+    // Extract the first user message (the situation description) from conversation
+    // history and match regex patterns to auto-confirm question answers. This
+    // eliminates redundant questions like "were you a pedestrian?" when the user
+    // already said "car accident on the 401."
+    const existingConversation = (session.conversation as Array<{ role: string; content: string }>) ?? [];
+    const situationText = existingConversation.length > 0
+      ? existingConversation.find(m => m.role === "user")?.content ?? message
+      : message;
+    if (session.practice_area) {
+      const autoConfirmed = autoConfirmFromContext(
+        session.practice_area as string,
+        situationText,
+        updatedConfirmed,
+      );
+      Object.assign(updatedConfirmed, autoConfirmed);
     }
 
     // ── Build message content for GPT ────────────────────────────────
@@ -381,6 +348,7 @@ export async function POST(req: Request) {
         next_question: null,
         next_questions: null,
         cpi: existingCpiForContact,
+        cpi_partial: computeCpiPartial(existingCpiForContact, true),
         response_text: bandToCta[existingBand] ?? "",
         finalize: true,
         collect_identity: false,
@@ -428,49 +396,25 @@ export async function POST(req: Request) {
       if (questionSet != null) {
         const existingCpi = (session.scoring as CpiBreakdown & { _confirmed?: Record<string, unknown> }) ?? {} as CpiBreakdown;
 
-        // Split questions into Phase 2 (first 6) and Phase 3 (remaining)
-        const phase2Questions = questionSet.questions.slice(0, 6);
-        const phase3Questions = questionSet.questions.slice(6);
-
-        const phase2Remaining = phase2Questions.filter(q => !(q.id in updatedConfirmed));
-        const phase3Remaining = phase3Questions.filter(q => !(q.id in updatedConfirmed));
-
         // Save confirmed answers
         await supabase
           .from("intake_sessions")
           .update({ scoring: { ...existingCpi, _confirmed: updatedConfirmed } })
           .eq("id", session.id);
 
-        // Determine what to serve next
-        let nextQuestions: typeof phase2Questions | null = null;
-        let collectIdentity = false;
+        // Dynamic question selection — S10.3
+        // Priority-based: replaces hard-coded slice(0,6)/slice(6) Phase 2/3 split.
+        // band_locked (S10.4): if band is already locked, skip straight to identity.
+        const currentBand = (session.band as string) ?? existingCpi.band ?? "C";
+        const bandLocked = !!(existingCpi as unknown as Record<string, unknown>).band_locked;
+        const batch = bandLocked
+          ? { questions: [], phase: "identity" as const }
+          : selectNextQuestions(questionSet.questions, paId, updatedConfirmed, currentBand);
 
-        if (phase2Remaining.length > 0) {
-          // Phase 2 in progress — keep serving Phase 2 questions
-          nextQuestions = phase2Remaining;
-        } else {
-          // Phase 2 complete — route based on current band
-          const currentBand = (session.band as string) ?? existingCpi.band ?? "C";
+        const nextQuestions = batch.phase !== "identity" ? batch.questions : null;
+        const collectIdentity = batch.phase === "identity";
 
-          if (["A", "D", "E"].includes(currentBand)) {
-            // Band A: already high-value, no refinement needed
-            // Band D/E: low-value, more questions won't change routing
-            collectIdentity = true;
-          } else if (phase3Remaining.length > 0) {
-            // Band B or C: serve Phase 3 refinement questions
-            nextQuestions = phase3Remaining;
-          } else {
-            // Phase 3 also complete — go to identity
-            collectIdentity = true;
-          }
-        }
-
-        const shapeQ = (q: typeof phase2Questions[number]) => ({
-          id: q.id,
-          text: q.text,
-          options: q.options.map(o => ({ label: o.label, value: o.value })),
-          allow_free_text: q.allow_free_text ?? false,
-        });
+        const shapeQ = (q: typeof batch.questions[number]) => q; // already shaped by selectNextQuestions
 
         return NextResponse.json({
           session_id: session.id,
@@ -479,6 +423,7 @@ export async function POST(req: Request) {
           next_question: null,
           next_questions: nextQuestions ? nextQuestions.map(shapeQ) : null,
           cpi: existingCpi,
+          cpi_partial: computeCpiPartial(existingCpi, collectIdentity && bandLocked),
           response_text: "",
           finalize: false,
           collect_identity: collectIdentity,
@@ -545,6 +490,52 @@ export async function POST(req: Request) {
         `\n\nThese are the client's confirmed answers for this session. Do NOT include any question whose id or subject matches a key above in next_question or next_questions. Apply all scoring deltas for these values immediately.`;
     }
 
+    // ── Slot Extraction Block — S10.2 ────────────────────────────────────────────
+    // When a practice area is known, inject high-priority unfilled slots with their
+    // option values and extraction_hints. GPT scans the full message history and
+    // returns filled_slots + slot_confidence. Only high/medium confidence slots are
+    // auto-confirmed (merged into updatedConfirmed after the GPT response is parsed).
+    if (sessionPracticeArea) {
+      const slotSchema = getSlotSchema(sessionPracticeArea);
+      const questionSet =
+        firmConfig.question_sets[sessionPracticeArea] ??
+        Object.values(firmConfig.question_sets).find(qs => qs.practice_area_id === sessionPracticeArea) ??
+        null;
+
+      if (questionSet && Object.keys(slotSchema).length > 0) {
+        // Build a lookup: question ID → question definition
+        const questionById = new Map(questionSet.questions.map(q => [q.id, q]));
+
+        // Filter: priority >= 4, not already confirmed, question exists in set
+        const slotsToExtract = Object.entries(slotSchema)
+          .filter(([qId, meta]) => meta.priority >= 4 && !(qId in allCollected) && questionById.has(qId))
+          .sort(([, a], [, b]) => b.priority - a.priority); // highest priority first
+
+        if (slotsToExtract.length > 0) {
+          const slotLines = slotsToExtract.map(([qId, meta]) => {
+            const q = questionById.get(qId)!;
+            const optValues = q.options.map(o => o.value).join(" | ");
+            const hints = meta.extraction_hints.slice(0, 6).join(", ");
+            return `  ${qId} — "${q.text}"\n    options: ${optValues}\n    scan for: ${hints}`;
+          }).join("\n\n");
+
+          systemPrompt +=
+            `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
+            `\nSLOT EXTRACTION — Scan ALL client messages for pre-filled answers\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `For each slot below, check if the client's free text already contains the answer.\n` +
+            `Return the exact option value (not a paraphrase) in filled_slots.\n` +
+            `Include slot_confidence: "high" (clear match), "medium" (strongly implied), "low" (guessed).\n` +
+            `CRITICAL: Only include HIGH and MEDIUM confidence slots — never guess.\n\n` +
+            slotLines +
+            `\n\nReturn at top level:\n` +
+            `  "filled_slots": { "question_id": "option_value" }\n` +
+            `  "slot_confidence": { "question_id": "high" | "medium" | "low" }\n` +
+            `If nothing can be extracted with confidence, return filled_slots: {} and slot_confidence: {}.`;
+        }
+      }
+    }
+
     // ── For conversational channels: tell GPT exactly which question to ask next ──
     // This prevents GPT from picking questions arbitrarily and eliminates repeats.
     if (channel !== "widget" && sessionPracticeArea) {
@@ -573,6 +564,29 @@ export async function POST(req: Request) {
       }
     }
 
+    // ── First-turn compact slot extraction — S10.5 ───────────────────────────────
+    // On turn 1, sessionPracticeArea is null so the full SLOT EXTRACTION block above
+    // never fires. Inject a compact schema for the 6 most common practice areas so GPT
+    // does classification AND extraction in a single call.
+    // Only injected when: (a) no practice area is known yet, AND (b) channel is widget.
+    // (~300 tokens, covers ~85% of intake volume, enables turn-1 extraction.)
+    if (channel === "widget" && !sessionPracticeArea) {
+      systemPrompt +=
+        `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
+        `\nFIRST-TURN SLOT EXTRACTION\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `After classifying practice_area, scan the client's FIRST message and extract any clearly answerable slots.\n` +
+        `Return filled_slots using ONLY the exact option values listed below for the classified area.\n` +
+        `Only include HIGH or MEDIUM confidence matches. When in doubt, omit the slot.\n\n` +
+        `PI: pi_q1=driver|passenger|pedestrian|cyclist  pi_q16=today_week|within_month|1_6mo|6mo_2yr|over_2yr  pi_q17=immediate|within_week|delayed|not_yet|no_injuries  pi_q31=rear_end|side_impact|head_on|pedestrian|other  pi_q32=yes|no|unsure  pi_q2=yes|no|unsure\n` +
+        `EMP: emp_q1=yes|no  emp_q2=without_cause|constructive|cause|mutual|layoff|unsure  emp_q16=under_3mo|3_6mo|6_12mo|1_2yr|over_2yr  emp_q17=no_notice|working_notice|paid_lieu|unsure  emp_q31=no_reason|performance|misconduct|restructuring|discrimination|unsure  emp_q47=under_1yr|1_3yr|3_5yr|5_10yr|10_15yr|over_15yr\n` +
+        `FAM: fam_q1=yes|no  fam_q2=yes|no  fam_q29=under_1yr|1_5yr|5_15yr|over_15yr|unknown  fam_q55=separation|adultery|cruelty|unsure  fam_q82=none|one|two_three|four_plus\n` +
+        `CRIM: crim_q1=yes|no  crim_q19=under_3mo|3_6mo|6_12mo|1_2yr|over_2yr  crim_q34=over_80|refuse|drugs|impaired|other  crim_q35=provided|refused|unsure\n` +
+        `REAL: real_q1=buying|selling|both  real_q2=house|condo|commercial|other  real_q14=under_2wk|2_4wk|1_3mo|over_3mo|unknown\n` +
+        `LLT: llt_q1=landlord|tenant  llt_q18=0|1_2mo|3_6mo|over_6mo  llt_q19=yes|no\n\n` +
+        `Return at top level: "filled_slots": { "question_id": "option_value" } and "slot_confidence": { "question_id": "high"|"medium" }`;
+    }
+
     // ── Call GPT ──────────────────────────────────────────────────────
     const completion = await openai.chat.completions.create({
       model: MODEL,
@@ -596,12 +610,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "GPT returned invalid JSON", raw: rawResponse }, { status: 500 });
     }
 
-    // ── Validate + fix scoring ────────────────────────────────────────
-    gptResponse.cpi = validateAndFixScoring(gptResponse.cpi);
+    // ── Merge GPT-extracted slots into confirmed answers — S10.2 ─────────────────
+    // GPT returns filled_slots (question_id → option_value) from scanning free text.
+    // Only high and medium confidence extractions are auto-confirmed.
+    // Low confidence slots are discarded — better to ask than to guess.
+    if (gptResponse.filled_slots && Object.keys(gptResponse.filled_slots).length > 0) {
+      const confidence = gptResponse.slot_confidence ?? {};
+      for (const [slotId, slotValue] of Object.entries(gptResponse.filled_slots)) {
+        const conf = confidence[slotId] ?? "medium"; // default to medium if not specified
+        if (conf === "high" || conf === "medium") {
+          updatedConfirmed[slotId] = slotValue;
+        }
+      }
+    }
 
     // ── Normalize practice_area to canonical short ID ─────────────────
     // GPT may return: the label ("Family Law"), a slug ("family_law"),
     // or already the short ID ("fam"). Normalize all to the short ID.
+    // Must run BEFORE floor application so FEE_FLOOR/COMPLEXITY_FLOOR keys match.
     if (gptResponse.practice_area) {
       const raw = gptResponse.practice_area;
       const rawNorm = raw.toLowerCase().replace(/[\s_-]+/g, "");
@@ -616,10 +642,10 @@ export async function POST(req: Request) {
     }
 
     // ── Apply per-area CPI floors ─────────────────────────────────────
-    // GPT under-scores fee and complexity on the first message when it has
-    // limited data. Floors ensure Band assignments are meaningful from turn 1.
-    // Urgency floor (2) prevents any identified matter from scoring Band E purely
-    // due to a zero urgency default. Geo default (5) when no location is known.
+    // GPT under-scores fee and complexity on the first message when data is
+    // sparse. Floors ensure Band assignments are meaningful from turn 1.
+    // Urgency floor (2) prevents any identified matter from scoring Band E
+    // purely due to a zero urgency default. Geo default (5) when no location known.
     if (gptResponse.practice_area) {
       const pa = gptResponse.practice_area;
       const feeFloor = FEE_FLOOR[pa] ?? 5;
@@ -628,8 +654,14 @@ export async function POST(req: Request) {
       if (gptResponse.cpi.complexity_score < complexityFloor) gptResponse.cpi.complexity_score = complexityFloor;
       if (gptResponse.cpi.urgency_score < 2) gptResponse.cpi.urgency_score = 2;
       if (gptResponse.cpi.geo_score === 0) gptResponse.cpi.geo_score = 5;
-      // Recompute totals after floor adjustments
-      gptResponse.cpi = validateAndFixScoring(gptResponse.cpi);
+    }
+
+    // ── Validate + fix scoring (single pass, after all adjustments) ───
+    gptResponse.cpi = validateAndFixScoring(gptResponse.cpi);
+
+    // Warn only after floors are applied — a zero here is a genuine miss.
+    if (gptResponse.cpi.practice_score > 0 && gptResponse.cpi.complexity_score === 0 && gptResponse.cpi.fee_score === 0) {
+      console.warn("[cpi] Floors applied but value score still zero — check GPT scoring for PA:", gptResponse.practice_area);
     }
 
     // ── Out-of-scope gate ─────────────────────────────────────────────
@@ -669,41 +701,31 @@ export async function POST(req: Request) {
         ) ?? null;
       }
       if (questionSet) {
-        // Phase 2/3 question routing — same strategy as the answer fast path.
-        // On first classification call, GPT has just assigned an initial band.
-        // Serve Phase 2 questions (first 6). Phase 3 questions are held back
-        // and only served after Phase 2 is confirmed complete (in the answer fast path).
-        const phase2Questions = questionSet.questions.slice(0, 6);
-        const phase2Remaining = phase2Questions.filter(q => !(q.id in updatedConfirmed));
+        // Auto-skip from context: on first classification, GPT just assigned a
+        // practice area that may not have been known before. Run auto-confirm
+        // again with the new PA to catch any free-text matches.
+        if (paId && !session.practice_area) {
+          const postClassAutoConfirmed = autoConfirmFromContext(paId, situationText, updatedConfirmed);
+          Object.assign(updatedConfirmed, postClassAutoConfirmed);
+        }
 
-        if (phase2Remaining.length > 0) {
-          gptResponse.next_questions = phase2Remaining.map(q => ({
-            id: q.id,
-            text: q.text,
-            options: q.options.map(o => ({ label: o.label, value: o.value })),
-            allow_free_text: q.allow_free_text ?? false,
-          }));
+        // Dynamic question selection — S10.3 + band_locked short-circuit — S10.4
+        // On first classification, GPT has just assigned an initial band.
+        // Priority-based selection replaces hard-coded slice(0,6)/slice(6).
+        // If band_locked=true, skip all questions and go straight to identity.
+        const gpBand = gptResponse.cpi.band ?? "C";
+        const gpBandLocked = gptResponse.cpi.band_locked ?? false;
+        const postGptBatch = gpBandLocked
+          ? { questions: [], phase: "identity" as const }
+          : selectNextQuestions(questionSet.questions, paId ?? "", updatedConfirmed, gpBand);
+
+        if (postGptBatch.phase !== "identity") {
+          gptResponse.next_questions = postGptBatch.questions;
           gptResponse.next_question = null;
         } else {
-          // Phase 2 complete on first call (rare — all answers pre-filled from free text)
-          // Apply Phase 3 routing based on GPT's initial band
-          const phase3Questions = questionSet.questions.slice(6);
-          const phase3Remaining = phase3Questions.filter(q => !(q.id in updatedConfirmed));
-          const gpBand = gptResponse.cpi.band ?? "C";
-
-          if (["A", "D", "E"].includes(gpBand) || phase3Remaining.length === 0) {
-            gptResponse.next_questions = null;
-            gptResponse.next_question = null;
-            gptResponse.collect_identity = true;
-          } else {
-            gptResponse.next_questions = phase3Remaining.map(q => ({
-              id: q.id,
-              text: q.text,
-              options: q.options.map(o => ({ label: o.label, value: o.value })),
-              allow_free_text: q.allow_free_text ?? false,
-            }));
-            gptResponse.next_question = null;
-          }
+          gptResponse.next_questions = null;
+          gptResponse.next_question = null;
+          gptResponse.collect_identity = true;
         }
       } else if (gptResponse.next_question) {
         // Fallback: promote single next_question to next_questions array
@@ -778,7 +800,8 @@ export async function POST(req: Request) {
     }
 
     // ── GHL delivery on finalize ──────────────────────────────────────
-    if (gptResponse.finalize && firm.ghl_webhook_url) {
+    // Skipped when demo=true so test sessions never reach the production CRM.
+    if (gptResponse.finalize && firm.ghl_webhook_url && !demo) {
       const finalSession = { ...session, ...sessionUpdate };
       try {
         await sendToGHL(finalSession, firm.ghl_webhook_url);
@@ -793,12 +816,13 @@ export async function POST(req: Request) {
     }
 
     // ── Compute CTA from band (returned on finalize) ─────────────────
+    // A/B: booking call to action. C/D: warm follow-up, no timeline. E: external resources.
     const bandToCta: Record<string, string> = {
-      A: "A lawyer from our team will contact you shortly. Book a same-day consultation.",
-      B: "We'll call you within the hour. Pick a consultation time.",
-      C: "Book a consultation at your convenience.",
-      D: "Here is information relevant to your situation. We'll follow up within the week.",
-      E: "Based on what you've shared, this may fall outside our practice areas. Here are other resources that may help.",
+      A: "A lawyer will contact you within 30 minutes. Book a same-day consultation to secure your spot.",
+      B: "We'll review your case and reach out within the hour. Pick a time to speak with a lawyer.",
+      C: "Your intake is complete. A member of our team will personally review your situation and be in touch as soon as possible.",
+      D: "We've received everything. A member of our team will take a careful look and follow up with you.",
+      E: "Based on what you've shared, this matter may fall outside our practice areas. We encourage you to seek appropriate legal help.",
     };
     const cta = gptResponse.finalize ? (bandToCta[gptResponse.cpi.band ?? "E"] ?? null) : null;
 
@@ -810,6 +834,7 @@ export async function POST(req: Request) {
       next_question: gptResponse.next_question,
       next_questions: gptResponse.next_questions,
       cpi: gptResponse.cpi,
+      cpi_partial: computeCpiPartial(gptResponse.cpi, gptResponse.finalize),
       response_text: gptResponse.response_text,
       finalize: gptResponse.finalize,
       collect_identity: gptResponse.collect_identity,

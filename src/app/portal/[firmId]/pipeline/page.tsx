@@ -4,6 +4,9 @@
  * Read-only kanban board. Nine stage columns. Filterable by practice area
  * and date range. No drag-drop, no mutations, no raw CPI scores.
  *
+ * v2: FunnelBar above kanban shows stage-to-stage conversion rates.
+ * Drop-offs > 40% pulse red to flag bottlenecks.
+ *
  * Auth verified by parent layout.
  */
 
@@ -11,6 +14,7 @@ import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
 import { supabase } from "@/lib/supabase";
 import PipelineBoard from "./PipelineBoard";
+import FunnelBar from "./FunnelBar";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +28,13 @@ const PIPELINE_STAGES = [
   { key: "client_won",             label: "Retained"       },
   { key: "no_show",                label: "No Show"        },
   { key: "client_lost",            label: "Closed-Lost"    },
+];
+
+// Funnel stages only (excludes exits)
+const FUNNEL_STAGE_KEYS = [
+  "new_lead", "contacted", "qualified",
+  "consultation_scheduled", "consultation_held",
+  "proposal_sent", "client_won",
 ];
 
 function obfuscateName(fullName: string): string {
@@ -82,7 +93,18 @@ export default async function PipelinePage({
   const { data } = await query;
   const leads = data ?? [];
 
-  // Group into columns (strip PII, no numeric CPI)
+  // ── Funnel counts: snapshot of where each lead currently sits.
+  // new_lead bucket = everyone who hasn't exited (client_lost / no_show) —
+  // this makes it the true top-of-funnel denominator.
+  const funnelCounts: Record<string, number> = {};
+  for (const key of FUNNEL_STAGE_KEYS) {
+    funnelCounts[key] = leads.filter(l => l.stage === key).length;
+  }
+  funnelCounts["new_lead"] = leads.filter(
+    l => !["client_lost", "no_show"].includes(l.stage as string)
+  ).length;
+
+  // Group into kanban columns
   const columns = PIPELINE_STAGES.map(({ key, label }) => ({
     stage: key,
     label,
@@ -90,7 +112,7 @@ export default async function PipelinePage({
       .filter(l => l.stage === key)
       .map(l => ({
         id: l.id as string,
-        name: obfuscateName(l.name as string ?? ""),
+        name: obfuscateName((l.name as string) ?? ""),
         practice_area: (l.case_type as string | null) ?? null,
         band: ((l.priority_band ?? l.band) as string | null) ?? null,
         days_in_stage: daysSince(l.stage_changed_at as string | null),
@@ -145,6 +167,9 @@ export default async function PipelinePage({
           </a>
         )}
       </form>
+
+      {/* Funnel conversion bar */}
+      <FunnelBar counts={funnelCounts} />
 
       <PipelineBoard columns={columns} />
     </div>

@@ -183,6 +183,11 @@ export async function GET(
     return sum + (v ?? 0);
   }, 0);
 
+  // 7. Funnel conversion: qualified leads → signed (Band A+B → client_won)
+  const funnelConversion = qualifiedNow > 0
+    ? Math.round((signedNow / qualifiedNow) * 100)
+    : null;
+
   // ── Sparkline aggregation helper ─────────────────────────────────
   function bucketByWeek<T extends { created_at?: string; updated_at?: string }>(
     rows: T[],
@@ -236,6 +241,11 @@ export async function GET(
       },
       pipelineValue: {
         value: pipelineValue,
+        delta: null,
+        sparkline: null,
+      },
+      funnelConversion: {
+        value: funnelConversion,
         delta: null,
         sparkline: null,
       },

@@ -11,17 +11,11 @@ const WA_IN     = "#FFFFFF";   // incoming bubble
 const WA_OUT    = "#DCF8C6";   // outgoing bubble
 
 // ── Types ─────────────────────────────────────────────────────────────────
-interface QuickReply {
-  label: string;
-  value: string;
-}
-
 interface Message {
   id: string;
   role: "in" | "out";
   text: string;
   time: string;
-  quickReplies?: QuickReply[];
   delivered?: boolean;
 }
 
@@ -66,7 +60,6 @@ export default function WhatsAppChat({ firmId }: { firmId: string }) {
   const [contact, setContact]       = useState<ContactForm>({ name: "", email: "", phone: "" });
   const [band, setBand]             = useState<string | null>(null);
   const [cta, setCta]               = useState<string | null>(null);
-  const [repliedIds, setRepliedIds] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLInputElement>(null);
   const started   = useRef(false);
@@ -77,9 +70,9 @@ export default function WhatsAppChat({ firmId }: { firmId: string }) {
   }, [messages, phase]);
 
   // Append an incoming bubble
-  const addIn = useCallback((text: string, quickReplies?: QuickReply[]) => {
+  const addIn = useCallback((text: string) => {
     setMessages(prev => [...prev, {
-      id: uid(), role: "in", text, time: now(), quickReplies, delivered: false,
+      id: uid(), role: "in", text, time: now(), delivered: false,
     }]);
   }, []);
 
@@ -123,23 +116,25 @@ export default function WhatsAppChat({ firmId }: { firmId: string }) {
     if (data.session_id) setSessionId(data.session_id);
 
     const responseText = data.response_text?.trim();
+    const hasQuestion = !!data.next_question?.text && !data.collect_identity && !data.finalize;
 
     if (responseText) {
-      const quickReplies = data.next_question?.options?.map(o => ({
-        label: o.label,
-        value: o.label,
-      }));
-      addIn(responseText, quickReplies);
+      addIn(responseText);
+      // If the question isn't already embedded in response_text, surface it as a follow-up bubble.
+      // This is the safety net for when GPT returns an acknowledgment without ending on the question.
+      if (hasQuestion && data.next_question) {
+        const questionText = data.next_question.text.trim();
+        const alreadyAsked = responseText.includes(questionText) || responseText.trimEnd().endsWith("?");
+        if (!alreadyAsked) {
+          setTimeout(() => addIn(questionText), 700);
+        }
+      }
     } else if (!data.collect_identity && !data.finalize) {
       // Fallback: GPT returned no text — ask the question directly
       if (data.next_question) {
-        const quickReplies = data.next_question.options?.map(o => ({
-          label: o.label,
-          value: o.label,
-        }));
-        addIn(data.next_question.text, quickReplies);
+        addIn(data.next_question.text);
       } else {
-        addIn("Thank you. Let me gather a few more details.");
+        addIn("Let me gather a few more details.");
       }
     }
 
@@ -167,10 +162,10 @@ export default function WhatsAppChat({ firmId }: { firmId: string }) {
     started.current = true;
 
     setTimeout(() => {
-      addIn("Hi! 👋 I'm the Hartwell Law intake assistant.");
+      addIn("This is the Hartwell Law intake system. An automated assistant, not a lawyer.");
     }, 400);
     setTimeout(() => {
-      addIn("Please describe your legal situation in a few sentences and I'll help assess your case. Everything you share is confidential.");
+      addIn("A few questions before your consultation, so your lawyer comes prepared. Briefly describe your situation and we'll take it from there. Everything you share is confidential.");
     }, 1000);
   }, [addIn]);
 
@@ -191,13 +186,6 @@ export default function WhatsAppChat({ firmId }: { firmId: string }) {
     } finally {
       setLoading(false);
     }
-  }
-
-  // Tap a quick-reply chip
-  function tapReply(msgId: string, label: string) {
-    if (repliedIds.has(msgId)) return;
-    setRepliedIds(prev => new Set(prev).add(msgId));
-    send(label);
   }
 
   // Submit identity form
@@ -314,27 +302,6 @@ export default function WhatsAppChat({ firmId }: { firmId: string }) {
                 </div>
               </div>
 
-              {/* Quick-reply chips */}
-              {msg.role === "in" && msg.quickReplies && !repliedIds.has(msg.id) && (
-                <div className="flex flex-wrap gap-1.5 mt-1.5 max-w-[85%]">
-                  {msg.quickReplies.map((qr) => (
-                    <button key={qr.value}
-                      onClick={() => tapReply(msg.id, qr.label)}
-                      className="px-3 py-1 rounded-full text-xs font-medium border transition hover:text-white"
-                      style={{ borderColor: WA_MID, color: WA_MID, backgroundColor: "white" }}
-                      onMouseEnter={e => {
-                        (e.currentTarget as HTMLElement).style.backgroundColor = WA_MID;
-                        (e.currentTarget as HTMLElement).style.color = "white";
-                      }}
-                      onMouseLeave={e => {
-                        (e.currentTarget as HTMLElement).style.backgroundColor = "white";
-                        (e.currentTarget as HTMLElement).style.color = WA_MID;
-                      }}>
-                      {qr.label}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
           ))}
 

@@ -1,0 +1,435 @@
+/**
+ * Slot Schema Layer — S10.1
+ *
+ * Defines priority weights and extraction hints for every question across all
+ * 35 practice area modules. This is the intelligence layer: questions are no
+ * longer static UI cards but structured slots that GPT fills from free text.
+ *
+ * Priority scale:
+ *   5 = Critical — determines band placement, always ask if not extracted
+ *   4 = High     — significant CPI impact, ask in first question batch
+ *   3 = Moderate — refines accuracy, ask in second batch (Band B/C only)
+ *   2 = Low      — nice to have, skip for Band A/D/E
+ *   1 = Minimal  — documentation / admin, only needed pre-finalize
+ *
+ * extraction_hints: keywords and phrases that indicate this slot is answerable
+ * from the user's free text. GPT checks these when building filled_slots.
+ *
+ * requires: prerequisite slot IDs. Question not served until all prerequisites
+ * are filled. Enforces conditional branching server-side.
+ */
+
+export interface SlotMeta {
+  priority: number;
+  extraction_hints: string[];
+  requires?: string[];
+}
+
+/** Full slot schema: practice_area_id → question_id → SlotMeta */
+export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
+
+  // ── Personal Injury ─────────────────────────────────────────────────────────
+  pi: {
+    pi_q1:  { priority: 5, extraction_hints: ["driving", "driver", "my car", "behind the wheel", "passenger", "passenger seat", "pedestrian", "walking", "crosswalk", "cyclist", "cycling", "bike", "bicycle", "on foot"] },
+    pi_q2:  { priority: 4, extraction_hints: ["insured", "insurance", "policy", "have insurance", "no insurance", "uninsured"] },
+    pi_q16: { priority: 5, extraction_hints: ["today", "yesterday", "last week", "this week", "just happened", "an hour ago", "this morning", "last month", "months ago", "years ago", "a year ago", "two years ago"] },
+    pi_q17: { priority: 4, extraction_hints: ["hospital", "emergency", "ER", "doctor", "treatment", "medical", "ambulance", "x-ray", "scan", "MRI", "physio", "no treatment", "haven't seen a doctor", "not yet treated"] },
+    pi_q31: { priority: 5, extraction_hints: ["rear-ended", "hit from behind", "side impact", "t-boned", "intersection", "ran a red", "red light", "head-on", "pedestrian struck", "cyclist struck", "ran into me"] },
+    pi_q32: { priority: 4, extraction_hints: ["witness", "witnesses", "bystander", "saw it happen", "saw the accident", "no witnesses", "nobody saw", "someone saw"] },
+    pi_q46: { priority: 3, extraction_hints: ["two cars", "three cars", "multiple vehicles", "pileup", "multi-car", "one other car", "several cars"] },
+    pi_q47: { priority: 3, extraction_hints: ["police", "police report", "filed a report", "officer", "OPP", "Toronto Police", "no report", "didn't call police"] },
+  },
+
+  // ── Employment Law ───────────────────────────────────────────────────────────
+  emp: {
+    emp_q1:  { priority: 4, extraction_hints: ["employee", "employed", "worked there", "on payroll", "staff", "contractor", "freelancer", "self-employed", "gig worker"] },
+    emp_q2:  { priority: 5, extraction_hints: ["fired", "terminated", "let go", "dismissed", "laid off", "without cause", "no reason", "no explanation", "they didn't say why", "wrongful dismissal"] },
+    emp_q16: { priority: 5, extraction_hints: ["fired today", "fired yesterday", "fired last week", "fired this week", "fired last month", "months ago", "a year ago", "recently fired", "just got fired", "just got let go"] },
+    emp_q17: { priority: 4, extraction_hints: ["notice period", "no notice", "immediate", "effective immediately", "working notice", "paid in lieu", "no working notice", "walked out the same day"] },
+    emp_q31: { priority: 5, extraction_hints: ["no reason", "without cause", "performance", "misconduct", "restructuring", "downsizing", "position eliminated", "just cause", "discrimination", "harassment"] },
+    emp_q32: { priority: 4, extraction_hints: ["valid reason", "legitimate reason", "deserved it", "my fault", "didn't deserve it", "wrongful", "no grounds"] },
+    emp_q46: { priority: 3, extraction_hints: ["manager", "director", "VP", "executive", "C-suite", "CEO", "CFO", "entry level", "junior", "senior", "specialist"] },
+    emp_q47: { priority: 5, extraction_hints: ["years", "year", "months", "12 years", "5 years", "long time", "short time", "recently started", "been there for", "worked there for"] },
+  },
+
+  // ── Family Law ───────────────────────────────────────────────────────────────
+  fam: {
+    fam_q1:  { priority: 5, extraction_hints: ["married", "legal marriage", "not married", "common-law", "common law partner", "not legally married"] },
+    fam_q2:  { priority: 4, extraction_hints: ["Ontario", "lived in Ontario", "moved to Ontario", "years in Ontario", "based in Ontario"] },
+    fam_q29: { priority: 4, extraction_hints: ["separated", "separation", "separated for", "been apart for", "living apart", "moved out", "left home", "months separated", "years separated"] },
+    fam_q30: { priority: 4, extraction_hints: ["deadline", "urgent", "pension", "remarriage", "time limit", "court date", "order expires"] },
+    fam_q55: { priority: 5, extraction_hints: ["one year separation", "adultery", "cheating", "affair", "cruelty", "abuse", "physical abuse", "mental cruelty"] },
+    fam_q56: { priority: 3, extraction_hints: ["agreed on separation date", "dispute separation date", "disagree when we separated", "both agree"] },
+    fam_q82: { priority: 3, extraction_hints: ["children", "kids", "child", "no children", "no kids", "daughter", "son", "minor children", "young children"] },
+    fam_q83: { priority: 3, extraction_hints: ["house", "home", "property", "cottage", "condo", "real estate", "no property", "rent", "renting"] },
+  },
+
+  // ── Criminal Defence ─────────────────────────────────────────────────────────
+  crim: {
+    crim_q1:  { priority: 5, extraction_hints: ["driving", "was driving", "drove", "behind the wheel", "DUI", "impaired driving"] },
+    crim_q2:  { priority: 4, extraction_hints: ["in the car", "in the vehicle", "care and control", "sitting in the car", "keys in the ignition", "asleep in the car"] },
+    crim_q19: { priority: 5, extraction_hints: ["last night", "last week", "yesterday", "this weekend", "last month", "a few months ago", "a year ago", "recently charged"] },
+    crim_q20: { priority: 4, extraction_hints: ["arrested", "charged", "police charged me", "got a court date", "received charges", "summons"] },
+    crim_q34: { priority: 5, extraction_hints: ["impaired driving", "over 80", "over 80mg", "breathalyzer", "refused breathalyzer", "drug impairment", "drug recognition", "DRE"] },
+    crim_q35: { priority: 5, extraction_hints: ["blew", "breath sample", "blood sample", "breathalyzer", "refused to blow", "refused breath test", "provided sample"] },
+    crim_q52: { priority: 4, extraction_hints: ["accident", "collision", "crash", "property damage", "hit something", "no accident", "no damage", "fender bender"] },
+    crim_q53: { priority: 4, extraction_hints: ["injured", "hurt", "someone got hurt", "injuries", "nobody hurt", "no injuries", "pedestrian", "passenger injured"] },
+  },
+
+  // ── Immigration ──────────────────────────────────────────────────────────────
+  imm: {
+    imm_q1:  { priority: 5, extraction_hints: ["permanent residence", "PR", "immigration", "immigrate", "come to Canada", "move to Canada", "live in Canada"] },
+    imm_q2:  { priority: 4, extraction_hints: ["passport", "travel document", "valid passport", "expired passport", "no passport"] },
+    imm_q25: { priority: 4, extraction_hints: ["Express Entry", "express entry profile", "CRS", "created profile", "EE profile"] },
+    imm_q26: { priority: 4, extraction_hints: ["CRS score", "points", "CRS", "comprehensive ranking", "score of", "my score is"] },
+    imm_q55: { priority: 5, extraction_hints: ["language test", "IELTS", "CELPIP", "CLB", "language requirements", "English test", "French test", "language score"] },
+    imm_q56: { priority: 4, extraction_hints: ["degree", "diploma", "education", "WES", "credential assessment", "university", "college", "bachelor", "master"] },
+    imm_q85: { priority: 2, extraction_hints: ["multiple countries", "lived in", "country of origin", "different countries", "third country"] },
+    imm_q86: { priority: 3, extraction_hints: ["employment gap", "gaps", "unemployed for", "didn't work", "time off work", "out of work for"] },
+  },
+
+  // ── Real Estate ──────────────────────────────────────────────────────────────
+  real: {
+    real_q1:  { priority: 5, extraction_hints: ["buying", "selling", "purchased", "sale", "purchase", "buyer", "seller", "buying a house", "selling a house", "both buying and selling"] },
+    real_q2:  { priority: 4, extraction_hints: ["house", "condo", "apartment", "commercial", "multi-unit", "townhouse", "semi-detached", "detached"] },
+    real_q13: { priority: 4, extraction_hints: ["signed the agreement", "agreement of purchase", "APS", "offer accepted", "conditional offer", "firm offer", "not signed yet"] },
+    real_q14: { priority: 5, extraction_hints: ["closing date", "closes in", "closing in", "close next month", "closing next week", "completion date"] },
+    real_q25: { priority: 3, extraction_hints: ["price", "purchase price", "sale price", "$", "million", "hundred thousand", "asking price", "selling for"] },
+    real_q26: { priority: 2, extraction_hints: ["address", "legal description", "property address", "located at"] },
+    real_q37: { priority: 3, extraction_hints: ["condo fees", "maintenance fees", "special assessment", "status certificate", "condo corporation"] },
+    real_q38: { priority: 3, extraction_hints: ["co-owner", "joint ownership", "shared ownership", "multiple owners", "with my spouse", "with my partner", "partner on title"] },
+  },
+
+  // ── Wills & Estates ──────────────────────────────────────────────────────────
+  est: {
+    est_q1:  { priority: 5, extraction_hints: ["will", "create a will", "update my will", "new will", "no will", "estate planning"] },
+    est_q2:  { priority: 4, extraction_hints: ["full mental capacity", "sound mind", "mental clarity", "cognitive", "dementia", "not for myself"] },
+    est_q13: { priority: 4, extraction_hints: ["urgent", "health issue", "sick", "travelling", "surgery", "time sensitive", "imminent", "soon"] },
+    est_q14: { priority: 4, extraction_hints: ["health concern", "diagnosis", "illness", "cancer", "hospital", "medical", "health"] },
+    est_q24: { priority: 3, extraction_hints: ["home", "property", "investments", "RRSP", "TFSA", "savings", "business", "assets"] },
+    est_q25: { priority: 3, extraction_hints: ["children", "dependents", "minor children", "kids", "beneficiaries", "no children"] },
+    est_q36: { priority: 3, extraction_hints: ["business", "corporation", "professional practice", "firm", "company"] },
+    est_q37: { priority: 2, extraction_hints: ["tax", "estate tax", "capital gains", "income splitting", "tax planning"] },
+  },
+
+  // ── Landlord-Tenant ──────────────────────────────────────────────────────────
+  llt: {
+    llt_q1:  { priority: 5, extraction_hints: ["landlord", "property owner", "I own", "my property", "my unit", "property manager", "registered owner"] },
+    llt_q2:  { priority: 4, extraction_hints: ["lease", "rental agreement", "written lease", "verbal agreement", "month-to-month", "no lease"] },
+    llt_q18: { priority: 5, extraction_hints: ["months behind", "arrears", "hasn't paid", "not paying rent", "missed payments", "behind on rent", "owes rent"] },
+    llt_q19: { priority: 4, extraction_hints: ["served notice", "N4", "N5", "notice to terminate", "eviction notice", "filed notice", "haven't served"] },
+    llt_q36: { priority: 4, extraction_hints: ["documented", "arrears documented", "receipts", "bank records", "disputed amount", "tenant disputes"] },
+    llt_q37: { priority: 3, extraction_hints: ["partial payment", "paid some", "voided cheques", "partial rent"] },
+    llt_q56: { priority: 4, extraction_hints: ["maintenance", "repairs needed", "repair issue", "counterclaim", "section 82", "s.82", "repair and maintenance"] },
+    llt_q57: { priority: 4, extraction_hints: ["section 82", "s.82 defense", "counterclaim", "filed against me", "cross-application"] },
+  },
+
+  // ── Civil Litigation ─────────────────────────────────────────────────────────
+  civ: {
+    civ_q1:  { priority: 5, extraction_hints: ["party to the contract", "I signed", "we signed", "agreement between us", "contract with", "I was assigned"] },
+    civ_q2:  { priority: 4, extraction_hints: ["enforce", "damages", "breach of contract", "they breached", "didn't pay", "didn't deliver", "specific performance"] },
+    civ_q21: { priority: 4, extraction_hints: ["signed", "agreed", "date of contract", "contract dated", "last year", "two years ago"] },
+    civ_q22: { priority: 4, extraction_hints: ["due date", "deadline", "overdue", "past due", "should have been completed", "performance date"] },
+    civ_q46: { priority: 5, extraction_hints: ["written contract", "signed contract", "formal agreement", "verbal agreement", "no written contract", "email agreement"] },
+    civ_q47: { priority: 3, extraction_hints: ["value", "contract value", "how much", "$", "thousand", "million", "amount owed"] },
+    civ_q70: { priority: 2, extraction_hints: ["standard terms", "limitation clause", "warranty disclaimer", "exclusion clause", "liability limit"] },
+    civ_q71: { priority: 2, extraction_hints: ["arbitration", "mediation clause", "arbitration clause", "dispute resolution clause"] },
+  },
+
+  // ── Intellectual Property ────────────────────────────────────────────────────
+  ip: {
+    ip_q1:  { priority: 5, extraction_hints: ["trademark owner", "registered mark", "my trademark", "licensed to use", "exclusive licensee"] },
+    ip_q2:  { priority: 5, extraction_hints: ["confusingly similar", "using my mark", "copying my brand", "same name", "similar logo", "trademark infringement"] },
+    ip_q17: { priority: 4, extraction_hints: ["first used", "registered", "years ago", "established mark", "long-standing brand"] },
+    ip_q18: { priority: 4, extraction_hints: ["infringement started", "recently discovered", "just found out", "months ago", "years ago"] },
+    ip_q36: { priority: 5, extraction_hints: ["CIPO", "registered at CIPO", "trademark registration", "TMA", "not registered", "using in commerce"] },
+    ip_q37: { priority: 3, extraction_hints: ["goods", "services", "class", "NICE class", "products", "type of business"] },
+    ip_q56: { priority: 3, extraction_hints: ["well-known", "famous mark", "nationally recognized", "widely recognized"] },
+    ip_q57: { priority: 2, extraction_hints: ["multiple competitors", "several others", "many similar marks", "wide infringement"] },
+  },
+
+  // ── Tax Law ──────────────────────────────────────────────────────────────────
+  tax: {
+    tax_q1:  { priority: 5, extraction_hints: ["CRA", "reassessment", "audit", "tax audit", "audit notice", "received a letter from CRA", "CRA assessed"] },
+    tax_q2:  { priority: 4, extraction_hints: ["my tax year", "business tax", "corporate tax", "personal taxes", "covers my return"] },
+    tax_q17: { priority: 5, extraction_hints: ["received the notice", "got the letter", "when CRA sent", "last month", "recently", "90 days ago"] },
+    tax_q18: { priority: 5, extraction_hints: ["deadline", "objection deadline", "days left", "90 days", "time to object", "filing an objection"] },
+    tax_q36: { priority: 4, extraction_hints: ["income", "deductions", "credits", "transfer pricing", "offshore", "unreported income", "disallowed expenses"] },
+    tax_q37: { priority: 4, extraction_hints: ["documentation", "records", "receipts", "proof", "no records", "incomplete records"] },
+    tax_q56: { priority: 3, extraction_hints: ["complex transactions", "restructuring", "offshore", "related party", "transfer pricing"] },
+    tax_q57: { priority: 2, extraction_hints: ["cross-border", "international", "foreign income", "foreign assets"] },
+  },
+
+  // ── Administrative / Regulatory ──────────────────────────────────────────────
+  admin: {
+    admin_q1:  { priority: 5, extraction_hints: ["doctor", "physician", "lawyer", "accountant", "engineer", "licensed professional", "regulated professional", "CPSO", "LSUC", "CPA"] },
+    admin_q2:  { priority: 5, extraction_hints: ["complaint filed", "complaint against me", "my regulator", "regulatory complaint", "someone complained"] },
+    admin_q17: { priority: 4, extraction_hints: ["when filed", "complaint date", "filed last month", "filed recently", "filed a year ago"] },
+    admin_q18: { priority: 5, extraction_hints: ["ICRC notice", "notice from CPSO", "notice from regulator", "received notice", "deadline to respond"] },
+    admin_q37: { priority: 5, extraction_hints: ["misconduct", "incompetence", "ethics violation", "conflict of interest", "sexual abuse", "boundary violation", "fraud"] },
+    admin_q38: { priority: 4, extraction_hints: ["breached standards", "violated code", "below standard", "professional conduct"] },
+    admin_q57: { priority: 4, extraction_hints: ["patient harm", "client harm", "someone was hurt", "injury caused", "harm resulted"] },
+    admin_q58: { priority: 3, extraction_hints: ["criminal", "police", "charged", "criminal investigation", "criminal matter", "ethical violation only"] },
+  },
+
+  // ── Insurance (AB/SABS) ──────────────────────────────────────────────────────
+  ins: {
+    ins_q1:  { priority: 5, extraction_hints: ["car accident", "auto accident", "motor vehicle", "MVA", "injured in a collision", "accident in Ontario"] },
+    ins_q2:  { priority: 4, extraction_hints: ["insured", "car insurance", "auto insurance", "insurance policy", "no insurance"] },
+    ins_q17: { priority: 5, extraction_hints: ["today", "yesterday", "last week", "this week", "recently", "months ago", "years ago", "last year", "just happened"] },
+    ins_q18: { priority: 4, extraction_hints: ["reported to insurer", "filed a claim", "called insurance", "claim submitted", "haven't reported yet"] },
+    ins_q35: { priority: 5, extraction_hints: ["soft tissue", "whiplash", "fracture", "broken bone", "head injury", "concussion", "brain injury", "spinal", "neck injury", "back injury", "PTSD", "psychological"] },
+    ins_q36: { priority: 4, extraction_hints: ["catastrophic", "catastrophic impairment", "CAT", "threshold", "serious injuries"] },
+    ins_q55: { priority: 4, extraction_hints: ["insurer disputing", "insurer denying", "insurer rejected", "disputes CAT", "IME"] },
+    ins_q56: { priority: 3, extraction_hints: ["multiple injuries", "various injuries", "several conditions", "ongoing treatment"] },
+  },
+
+  // ── Construction Lien ────────────────────────────────────────────────────────
+  const: {
+    const_q1:  { priority: 5, extraction_hints: ["contractor", "subcontractor", "general contractor", "GC", "sub", "supplier", "material supplier", "worker", "tradesperson", "construction"] },
+    const_q2:  { priority: 5, extraction_hints: ["performed work", "supplied materials", "did work on", "worked on a project", "construction project", "Ontario project"] },
+    const_q17: { priority: 5, extraction_hints: ["last worked", "last supplied", "last on site", "finished work", "last delivery", "most recent work"] },
+    const_q18: { priority: 5, extraction_hints: ["days ago", "weeks ago", "last week", "10 days", "30 days", "30-day window", "lien deadline"] },
+    const_q39: { priority: 4, extraction_hints: ["claim amount", "owed", "unpaid", "$", "total claim", "invoice", "outstanding"] },
+    const_q40: { priority: 4, extraction_hints: ["payment withheld", "haven't paid", "refusing to pay", "payment denied", "no payment received"] },
+    const_q81: { priority: 3, extraction_hints: ["written contract", "signed contract", "no contract", "verbal agreement", "purchase order"] },
+    const_q82: { priority: 3, extraction_hints: ["invoices", "receipts", "delivery slips", "timesheets", "records", "documentation"] },
+  },
+
+  // ── Bankruptcy & Insolvency ──────────────────────────────────────────────────
+  bank: {
+    bank_q1:  { priority: 5, extraction_hints: ["individual", "personal bankruptcy", "consumer", "not a company", "personal debts", "sole proprietor"] },
+    bank_q2:  { priority: 5, extraction_hints: ["insolvent", "can't pay debts", "more debt than assets", "$250,000", "consumer proposal", "bankruptcy"] },
+    bank_q13: { priority: 4, extraction_hints: ["financial difficulties", "when trouble started", "job loss", "divorce", "pandemic", "recently", "years ago"] },
+    bank_q14: { priority: 5, extraction_hints: ["garnishment", "wage garnishment", "bank seizure", "court order", "enforcement", "collection action", "sheriff"] },
+    bank_q30: { priority: 4, extraction_hints: ["total debt", "how much owe", "debt amount", "$", "credit card debt", "line of credit", "loans"] },
+    bank_q31: { priority: 4, extraction_hints: ["income vs expenses", "monthly income", "monthly expenses", "surplus", "deficit", "can't cover expenses"] },
+    bank_q67: { priority: 2, extraction_hints: ["financial statement", "income statement", "budget", "records prepared"] },
+    bank_q68: { priority: 2, extraction_hints: ["pay stubs", "tax returns", "T4", "income documentation", "proof of income"] },
+  },
+
+  // ── Privacy / Data Protection ────────────────────────────────────────────────
+  priv: {
+    priv_q1:  { priority: 5, extraction_hints: ["personal information", "my data", "data breach", "privacy violation", "mishandled my information", "disclosed my data"] },
+    priv_q2:  { priority: 4, extraction_hints: ["private company", "organization", "PIPEDA", "private sector", "business", "not a government body"] },
+    priv_q11: { priority: 5, extraction_hints: ["discovered", "found out", "learned about", "noticed", "when I found out", "recently discovered"] },
+    priv_q12: { priority: 4, extraction_hints: ["happened", "occurred", "when it happened", "how long ago", "months ago", "years ago"] },
+    priv_q23: { priority: 5, extraction_hints: ["unauthorized collection", "disclosed without consent", "shared my data", "inaccurate information", "data breach", "hacked", "security breach"] },
+    priv_q24: { priority: 4, extraction_hints: ["health information", "medical data", "financial information", "SIN", "social insurance", "identity documents", "biometric"] },
+    priv_q52: { priority: 2, extraction_hints: ["OPC complaint", "filed with OPC", "complaint ready", "complaint drafted"] },
+    priv_q53: { priority: 2, extraction_hints: ["privacy policy", "consent form", "documentation", "terms of service"] },
+  },
+
+  // ── Franchise Law ────────────────────────────────────────────────────────────
+  fran: {
+    fran_q1:  { priority: 5, extraction_hints: ["franchise", "purchased a franchise", "bought a franchise", "franchisee", "Ontario franchise"] },
+    fran_q2:  { priority: 4, extraction_hints: ["sold", "transferred", "within two years", "new owner", "still operating"] },
+    fran_q10: { priority: 5, extraction_hints: ["signed the agreement", "when I signed", "agreement signed", "executed agreement", "60 days", "2 years ago"] },
+    fran_q11: { priority: 5, extraction_hints: ["disclosure document", "14 days", "received before signing", "after signing", "never received", "disclosure"] },
+    fran_q22: { priority: 5, extraction_hints: ["received disclosure", "no disclosure given", "disclosure provided", "missing disclosure"] },
+    fran_q23: { priority: 4, extraction_hints: ["misleading", "deficient disclosure", "inaccurate financials", "false projections", "material deficiency"] },
+    fran_q49: { priority: 2, extraction_hints: ["have the disclosure document", "copy of disclosure", "no copy", "can't find it"] },
+    fran_q50: { priority: 2, extraction_hints: ["signed agreement", "copy of franchise agreement", "have the contract"] },
+  },
+
+  // ── Environmental Law ────────────────────────────────────────────────────────
+  env: {
+    env_q1:  { priority: 5, extraction_hints: ["EPA order", "environmental order", "Ministry order", "Director's order", "Environmental Protection Act"] },
+    env_q2:  { priority: 5, extraction_hints: ["preventive order", "remedial order", "Ministry issued", "order against me", "compliance order"] },
+    env_q13: { priority: 4, extraction_hints: ["order issued", "when issued", "received the order", "last month", "recently received"] },
+    env_q14: { priority: 5, extraction_hints: ["compliance deadline", "deadline", "30 days", "90 days", "must comply by", "by when"] },
+    env_q29: { priority: 4, extraction_hints: ["contamination", "soil contamination", "groundwater", "air emissions", "odour", "waste", "spill", "chemical"] },
+    env_q30: { priority: 4, extraction_hints: ["remediation", "clean up", "assessment required", "containment", "monitoring", "full remediation"] },
+    env_q67: { priority: 2, extraction_hints: ["have the order", "copy of order", "order document", "terms of order"] },
+    env_q68: { priority: 2, extraction_hints: ["ESA", "environmental site assessment", "Phase 1", "Phase 2", "contamination report"] },
+  },
+
+  // ── Provincial Offences (HTA) ────────────────────────────────────────────────
+  prov: {
+    prov_q1:  { priority: 5, extraction_hints: ["speeding ticket", "HTA", "highway traffic", "careless driving", "stunt driving", "traffic ticket", "traffic offence"] },
+    prov_q2:  { priority: 4, extraction_hints: ["Ontario", "public road", "highway", "in Ontario", "on the 400", "on the 401"] },
+    prov_q16: { priority: 5, extraction_hints: ["happened last month", "happened last week", "offence date", "when it happened", "date of the offence"] },
+    prov_q17: { priority: 4, extraction_hints: ["ticket issued", "court date", "trial date", "received the ticket", "got a ticket", "charged"] },
+    prov_q33: { priority: 5, extraction_hints: ["speeding", "stunt driving", "careless driving", "50 over", "50 km over", "30 over", "ring of fire", "street racing"] },
+    prov_q34: { priority: 4, extraction_hints: ["how fast", "km over", "kilometers over", "speed", "alleged speed", "clocked at"] },
+    prov_q74: { priority: 2, extraction_hints: ["have the ticket", "ticket in hand", "copy of ticket", "ticket number"] },
+    prov_q75: { priority: 2, extraction_hints: ["police notes", "officer notes", "incident report", "accident report"] },
+  },
+
+  // ── Condominium Law ──────────────────────────────────────────────────────────
+  condo: {
+    condo_q1:  { priority: 5, extraction_hints: ["unit owner", "own a condo", "condo owner", "registered owner", "mortgagee"] },
+    condo_q2:  { priority: 4, extraction_hints: ["directly affected", "my unit", "my parking", "my locker", "service charge against me", "rule applies to me"] },
+    condo_q3:  { priority: 4, extraction_hints: ["corporation", "board", "condo board", "board member personally", "property manager", "condominium corporation"] },
+    condo_q4:  { priority: 4, extraction_hints: ["board refused", "board denied", "conditions imposed", "restrictions placed", "board decision"] },
+    condo_q17: { priority: 4, extraction_hints: ["violation reported", "when discovered", "recently", "months ago", "years ago", "recently noticed"] },
+    condo_q18: { priority: 4, extraction_hints: ["ongoing for", "been happening for", "months", "years", "long time", "how long going on"] },
+    condo_q21: { priority: 2, extraction_hints: ["declaration", "bylaws", "rules", "condo documents", "have the bylaws"] },
+    condo_q22: { priority: 2, extraction_hints: ["board decision", "minutes", "enforcement notice", "written decision", "meeting minutes"] },
+  },
+
+  // ── Human Rights ────────────────────────────────────────────────────────────
+  hr: {
+    hr_q1:  { priority: 5, extraction_hints: ["employee", "job applicant", "former employee", "applied for a job", "denied employment", "was employed"] },
+    hr_q2:  { priority: 5, extraction_hints: ["disability", "race", "gender", "sexual orientation", "age", "religion", "creed", "discrimination", "protected ground", "family status"] },
+    hr_q3:  { priority: 4, extraction_hints: ["employer knew", "visible disability", "disclosed to employer", "told HR", "employer was aware", "perceived"] },
+    hr_q4:  { priority: 4, extraction_hints: ["housing", "rental", "landlord", "denied housing", "tenant discrimination", "refused to rent"] },
+    hr_q5:  { priority: 4, extraction_hints: ["race", "disability", "family status", "public assistance", "social assistance", "Ontario Works", "housing ground"] },
+    hr_q6:  { priority: 4, extraction_hints: ["landlord knew", "visible to landlord", "disclosed to landlord", "landlord aware"] },
+    hr_q26: { priority: 3, extraction_hints: ["emails", "texts", "written proof", "communications", "evidence", "screenshots"] },
+    hr_q27: { priority: 3, extraction_hints: ["witnesses", "coworkers saw", "other employees", "supervisor witnessed", "witness statement"] },
+  },
+
+  // ── Education Law ────────────────────────────────────────────────────────────
+  edu: {
+    edu_q1: { priority: 5, extraction_hints: ["school board", "Ontario school", "public school", "Catholic school", "school within board"] },
+    edu_q2: { priority: 5, extraction_hints: ["identified", "exceptionality", "special education", "IPRC", "IEP", "learning disability", "autism", "ASD"] },
+    edu_q3: { priority: 4, extraction_hints: ["grade", "age", "kindergarten", "elementary", "secondary", "high school", "transition age"] },
+    edu_q4: { priority: 4, extraction_hints: ["learning disability", "LD", "dyslexia", "autism", "ASD", "intellectual disability", "physical disability", "communication"] },
+    edu_q5: { priority: 4, extraction_hints: ["IPRC", "IPRC hearing", "formally identified", "identification hearing", "exceptionality determination"] },
+    edu_q6: { priority: 3, extraction_hints: ["diagnostic tools", "board assessment", "assessment methodology", "psychoeducational assessment"] },
+    edu_q7: { priority: 2, extraction_hints: ["notice given", "notified before", "informed before assessment"] },
+    edu_q8: { priority: 2, extraction_hints: ["independent assessment", "private assessment", "own psychologist", "own assessment"] },
+  },
+
+  // ── Healthcare & Medical Regulatory ─────────────────────────────────────────
+  health: {
+    health_q1: { priority: 5, extraction_hints: ["patient", "was a patient", "under his care", "under her care", "my doctor", "the physician"] },
+    health_q2: { priority: 4, extraction_hints: ["direct knowledge", "I was there", "I experienced it", "happened to me", "I witnessed"] },
+    health_q3: { priority: 4, extraction_hints: ["my experience", "I experienced", "third party", "family member", "someone told me", "on behalf of"] },
+    health_q4: { priority: 5, extraction_hints: ["CPSO", "RHPA", "professional misconduct", "College of Physicians", "regulated health professional"] },
+    health_q5: { priority: 5, extraction_hints: ["wrong diagnosis", "misdiagnosis", "inadequate treatment", "wrong treatment", "standard of care", "below standard"] },
+    health_q6: { priority: 5, extraction_hints: ["sexual abuse", "sexual contact", "inappropriate touching", "boundary violation", "sexual assault by doctor"] },
+    health_q7: { priority: 4, extraction_hints: ["conflict of interest", "dual relationship", "boundary violation", "inappropriate relationship"] },
+    health_q8: { priority: 4, extraction_hints: ["impaired", "under influence", "drunk", "substance abuse", "impairment", "unsafe practice"] },
+  },
+
+  // ── Debt Collection ──────────────────────────────────────────────────────────
+  debt: {
+    debt_q1: { priority: 5, extraction_hints: ["consumer", "individual", "personal debt", "not a business", "consumer debt", "collection agency"] },
+    debt_q2: { priority: 4, extraction_hints: ["original debtor", "guarantor", "dispute the debt", "don't owe this", "already paid", "not my debt"] },
+    debt_q3: { priority: 4, extraction_hints: ["credit card", "loan", "retail purchase", "utility bill", "telecom", "consumer purchase"] },
+    debt_q4: { priority: 4, extraction_hints: ["individual", "person", "not a corporation", "sole proprietor", "business entity"] },
+    debt_q5: { priority: 5, extraction_hints: ["identified themselves", "didn't identify", "false name", "misleading", "identified improperly"] },
+    debt_q6: { priority: 4, extraction_hints: ["notice", "required notice", "debt notice", "amount owed notice", "creditor notice"] },
+    debt_q21: { priority: 3, extraction_hints: ["recordings", "screenshots", "messages", "written messages", "calls recorded", "evidence"] },
+    debt_q22: { priority: 3, extraction_hints: ["witnesses", "someone heard", "family member heard", "coworker heard"] },
+  },
+
+  // ── NFP / Charity ────────────────────────────────────────────────────────────
+  nfp: {
+    nfp_q1: { priority: 5, extraction_hints: ["Ontario not-for-profit", "ONCA", "incorporated not-for-profit", "nonprofit corporation", "not-for-profit organization"] },
+    nfp_q2: { priority: 4, extraction_hints: ["federal corporation", "CNCA", "Canada not-for-profit", "federal NFP"] },
+    nfp_q3: { priority: 4, extraction_hints: ["charitable status", "registered charity", "CRA charity number", "charitable organization"] },
+    nfp_q4: { priority: 3, extraction_hints: ["incorporated", "how long established", "years ago", "recently incorporated", "old organization"] },
+    nfp_q5: { priority: 3, extraction_hints: ["bylaws on file", "filed bylaws", "registered bylaws", "corporate records"] },
+    nfp_q6: { priority: 3, extraction_hints: ["bylaws amended", "member approval", "bylaw amendment", "changed bylaws"] },
+    nfp_q7: { priority: 2, extraction_hints: ["statutory requirements", "comply with ONCA", "legal requirements"] },
+    nfp_q8: { priority: 2, extraction_hints: ["consistently applied", "documented application", "bylaws enforced"] },
+  },
+
+  // ── Defamation ───────────────────────────────────────────────────────────────
+  defam: {
+    defam_q1:   { priority: 5, extraction_hints: ["private individual", "public figure", "company", "politician", "business owner", "professional"] },
+    defam_q2:   { priority: 4, extraction_hints: ["profession", "lawyer", "doctor", "business owner", "no public profile", "private person"] },
+    defam_q3:   { priority: 4, extraction_hints: ["reputation", "good reputation", "well-known", "respected", "local community", "professional reputation"] },
+    defam_q4:   { priority: 3, extraction_hints: ["prior allegations", "previous complaints", "defamed before", "clean record", "prior defamation"] },
+    defam_q5:   { priority: 5, extraction_hints: ["criminal conduct", "dishonest", "incompetent", "sexual impropriety", "insulted", "called me a", "accused of", "said I was"] },
+    defam_q6:   { priority: 4, extraction_hints: ["stated as fact", "presented as fact", "opinion", "could be opinion", "implied", "read as"] },
+    defam_q140: { priority: 3, extraction_hints: ["screenshots", "photos", "messages saved", "captured", "evidence saved"] },
+    defam_q141: { priority: 3, extraction_hints: ["timestamps", "pattern", "platform records", "history", "repeated posts"] },
+  },
+
+  // ── Social Benefits ──────────────────────────────────────────────────────────
+  socben: {
+    socben_q1: { priority: 5, extraction_hints: ["ODSP", "Ontario Disability Support", "disability support", "receiving ODSP", "denied ODSP", "applied for ODSP"] },
+    socben_q2: { priority: 5, extraction_hints: ["Ontario Works", "OW", "receiving Ontario Works", "denied Ontario Works", "welfare", "income support"] },
+    socben_q3: { priority: 4, extraction_hints: ["unemployed", "not working", "no income", "part-time", "full-time employed", "self-employed"] },
+    socben_q4: { priority: 4, extraction_hints: ["citizen", "permanent resident", "protected person", "refugee", "PR", "Canadian citizen"] },
+    socben_q5: { priority: 5, extraction_hints: ["disability determination", "found disabled", "denied disability", "severe disability", "prolonged disability"] },
+    socben_q6: { priority: 4, extraction_hints: ["medical documentation", "doctor's letter", "physician report", "disability certificate", "no documentation"] },
+    socben_q7: { priority: 3, extraction_hints: ["functional assessment", "Ministry assessed", "assessment completed", "assessment disputed"] },
+    socben_q8: { priority: 3, extraction_hints: ["disputed severity", "dispute permanence", "ongoing dispute", "not accepted"] },
+  },
+
+  // ── Gig Economy ──────────────────────────────────────────────────────────────
+  gig: {
+    gig_q1:  { priority: 5, extraction_hints: ["Uber", "DoorDash", "Lyft", "Instacart", "Fiverr", "Upwork", "TaskRabbit", "gig worker", "platform worker", "delivery driver", "ride-share"] },
+    gig_q2:  { priority: 4, extraction_hints: ["platform records", "earnings history", "account history", "how long on platform", "tenure on platform"] },
+    gig_q3:  { priority: 3, extraction_hints: ["account history", "work history", "assignments", "jobs completed", "trip history"] },
+    gig_q4:  { priority: 4, extraction_hints: ["primary income", "main income", "rely on it", "only income", "majority of income", "full-time gig"] },
+    gig_q21: { priority: 5, extraction_hints: ["deactivated", "removed", "account suspended", "removed last month", "removed recently", "months ago", "just happened"] },
+    gig_q22: { priority: 4, extraction_hints: ["still deactivated", "account restored", "back on platform", "income restored", "still blocked"] },
+    gig_q24: { priority: 2, extraction_hints: ["screenshots", "earnings data", "account export", "payment records", "earnings statements"] },
+    gig_q25: { priority: 2, extraction_hints: ["emails from platform", "messages from app", "removal notice", "deactivation email"] },
+  },
+
+  // ── Securities Law ───────────────────────────────────────────────────────────
+  sec: {
+    sec_q1: { priority: 5, extraction_hints: ["director", "officer", "C-suite", "CEO", "CFO", "employee with access", "insider", "significant shareholder", "10 percent"] },
+    sec_q2: { priority: 5, extraction_hints: ["fiduciary duty", "statutory insider", "OSC rules", "insider trading rules", "reporting issuer"] },
+  },
+
+  // ── Elder Law ────────────────────────────────────────────────────────────────
+  elder: {
+    elder_q1: { priority: 5, extraction_hints: ["elderly parent", "aging parent", "my mother", "my father", "loved one", "capacity concern", "cognitive decline", "dementia"] },
+    elder_q2: { priority: 5, extraction_hints: ["power of attorney", "POA", "attorney for property", "attorney for personal care", "substitute decision-maker"] },
+    elder_q3: { priority: 4, extraction_hints: ["best interests", "acting in their interest", "protecting them", "their welfare"] },
+    elder_q4: { priority: 4, extraction_hints: ["no conflict of interest", "financially stable", "not financially motivated", "conflict"] },
+    elder_q5: { priority: 5, extraction_hints: ["grantor", "gave power of attorney", "authorized attorney", "beneficiary under POA", "acting as attorney"] },
+    elder_q6: { priority: 4, extraction_hints: ["heir", "beneficiary", "named in will", "estate beneficiary", "challenging the estate"] },
+  },
+
+  // ── Short-Term Rental ────────────────────────────────────────────────────────
+  str: {
+    str_q1: { priority: 5, extraction_hints: ["Airbnb", "VRBO", "short-term rental", "STR", "vacation rental", "owner-occupied", "renting out", "hosting"] },
+    str_q2: { priority: 5, extraction_hints: ["municipal bylaw", "STR bylaw", "city bylaw", "STR restrictions", "prohibited", "zoning", "permit denied"] },
+  },
+
+  // ── Cryptocurrency ───────────────────────────────────────────────────────────
+  crypto: {
+    crypto_q1: { priority: 5, extraction_hints: ["cryptocurrency", "Bitcoin", "Ethereum", "crypto", "exchange", "wallet", "NFT", "blockchain", "tokens"] },
+    crypto_q2: { priority: 5, extraction_hints: ["fraud", "scam", "misrepresentation", "rug pull", "lost crypto", "hacked", "exchange collapsed", "FTX", "exchange froze funds"] },
+  },
+
+  // ── E-Commerce ───────────────────────────────────────────────────────────────
+  ecom: {
+    ecom_q1: { priority: 5, extraction_hints: ["online seller", "Shopify", "Amazon seller", "eBay", "WooCommerce", "e-commerce", "online store", "ecommerce business"] },
+    ecom_q2: { priority: 5, extraction_hints: ["chargeback", "dispute", "buyer dispute", "PayPal dispute", "credit card dispute", "reversal", "fraud claim"] },
+    ecom_q5: { priority: 5, extraction_hints: ["fraud", "item not received", "not as described", "chargeback code", "unauthorized transaction", "reason for chargeback"] },
+  },
+
+  // ── Animal Law ───────────────────────────────────────────────────────────────
+  animal: {
+    animal_q1: { priority: 5, extraction_hints: ["dog bite", "animal attack", "my dog bit someone", "my pet injured", "dog attacked", "animal incident"] },
+    animal_q2: { priority: 5, extraction_hints: ["first incident", "never happened before", "prior bite", "history of biting", "known dangerous"] },
+  },
+};
+
+/**
+ * Enrich a question with its slot schema metadata (priority, extraction_hints, requires).
+ * Returns the question unchanged if no schema entry exists for this PA + question ID.
+ */
+export function enrichQuestion<T extends { id: string; priority?: number; extraction_hints?: string[]; requires?: string[] }>(
+  practiceAreaId: string,
+  question: T
+): T {
+  const paMeta = SLOT_SCHEMA[practiceAreaId];
+  if (!paMeta) return question;
+  const meta = paMeta[question.id];
+  if (!meta) return question;
+  return {
+    ...question,
+    priority: question.priority ?? meta.priority,
+    extraction_hints: question.extraction_hints ?? meta.extraction_hints,
+    requires: question.requires ?? meta.requires,
+  };
+}
+
+/**
+ * Get the slot schema for a given practice area.
+ * Returns an empty record if no schema is defined.
+ */
+export function getSlotSchema(practiceAreaId: string): Record<string, SlotMeta> {
+  return SLOT_SCHEMA[practiceAreaId] ?? {};
+}

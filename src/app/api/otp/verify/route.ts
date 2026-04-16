@@ -114,16 +114,20 @@ async function promoteToLead(session: Record<string, unknown>): Promise<void> {
   const situationSummary = (session.situation_summary as string) ?? null;
   const sessionId = session.id as string;
 
-  // Idempotency: check if a lead from this session already exists
-  const { data: existing } = await supabase
-    .from("leads")
-    .select("id")
-    .eq("intake_session_id", sessionId)
-    .maybeSingle();
+  // Idempotency: check if a lead for this email + firm already exists.
+  // (intake_session_id column migration may not yet be applied — email+firm is safe fallback.)
+  if (email) {
+    const { data: existing } = await supabase
+      .from("leads")
+      .select("id")
+      .eq("email", email)
+      .eq("law_firm_id", firmId)
+      .maybeSingle();
 
-  if (existing) {
-    console.log(`[otp/verify] Lead already exists for session ${sessionId}, skipping`);
-    return;
+    if (existing) {
+      console.log(`[otp/verify] Lead already exists for ${email} at firm ${firmId}, skipping`);
+      return;
+    }
   }
 
   const bandToStage: Record<string, string> = {
@@ -145,7 +149,6 @@ async function promoteToLead(session: Record<string, unknown>): Promise<void> {
     priority_index: cpiScore,
     stage: bandToStage[band] ?? "new_lead",
     source: "caseload_screen",
-    intake_session_id: sessionId,
   });
 
   if (error) {
