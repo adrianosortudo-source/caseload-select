@@ -284,6 +284,155 @@ const SCENARIO_MESSAGES: Record<string, string> = {
     "I want to sue my contractor for $8,000. He didn't finish the job and won't return my calls.",
 };
 
+// ── Pre-recorded fixture responses for guided tour ────────────────────────
+// Replaces real API calls during guided tour so transitions are instant.
+// Each array has one entry per question round, ending with a finalize response.
+
+const EMPTY_TOUR_CPI: FullCpi & { band_locked: boolean } = {
+  total: 0, band: null, fit_score: 0, value_score: 0, band_locked: false,
+  geo_score: 0, practice_score: 0, legitimacy_score: 0, referral_score: 0,
+  urgency_score: 0, complexity_score: 0, multi_practice_score: 0, fee_score: 0,
+};
+
+const TOUR_FIXTURES: Record<string, ScreenResponse[]> = {
+  pi_strong: [
+    // Round 1 questions
+    {
+      session_id: "demo-pi", practice_area: "Personal Injury",
+      practice_area_confidence: "high", next_question: null,
+      next_questions: [
+        { id: "timing", text: "When did the accident happen?", allow_free_text: false, options: [
+          { label: "Within the past week", value: "within_week" },
+          { label: "Within the past month", value: "within_month" },
+          { label: "1 to 6 months ago", value: "1_6_months" },
+          { label: "Over 6 months ago", value: "over_6_months" },
+        ]},
+        { id: "treatment", text: "Are you currently receiving medical treatment?", allow_free_text: false, options: [
+          { label: "Yes, ongoing treatment", value: "yes_ongoing" },
+          { label: "Treated and discharged", value: "discharged" },
+          { label: "Haven't sought treatment yet", value: "no_treatment" },
+        ]},
+        { id: "police_report", text: "Was a police report filed at the scene?", allow_free_text: false, options: [
+          { label: "Yes", value: "yes" },
+          { label: "No", value: "no" },
+          { label: "I'm not sure", value: "unsure" },
+        ]},
+      ],
+      cpi: EMPTY_TOUR_CPI, response_text: "I'm sorry to hear about your accident. Let me ask a few more questions to assess your claim.",
+      finalize: false, collect_identity: false, situation_summary: null, cta: null,
+      flags: [], value_tier: null, prior_experience: null,
+    },
+    // Round 2 questions
+    {
+      session_id: "demo-pi", practice_area: "Personal Injury",
+      practice_area_confidence: "high", next_question: null,
+      next_questions: [
+        { id: "work_loss", text: "Have you missed work or lost income because of your injuries?", allow_free_text: false, options: [
+          { label: "Yes, significant time off", value: "yes_significant" },
+          { label: "Yes, a few days", value: "yes_minor" },
+          { label: "No income impact", value: "no" },
+        ]},
+        { id: "other_insured", text: "Is the other driver insured, to your knowledge?", allow_free_text: false, options: [
+          { label: "Yes, they were insured", value: "yes" },
+          { label: "Likely, but not certain", value: "likely" },
+          { label: "No or unknown", value: "no" },
+        ]},
+      ],
+      cpi: EMPTY_TOUR_CPI, response_text: "Thank you. Two more questions and the assessment will be complete.",
+      finalize: false, collect_identity: false, situation_summary: null, cta: null,
+      flags: [], value_tier: null, prior_experience: null,
+    },
+    // Finalize — Band A
+    {
+      session_id: "demo-pi", practice_area: "Personal Injury",
+      practice_area_confidence: "high", next_question: null, next_questions: null,
+      cpi: { total: 87, band: "A", fit_score: 37, value_score: 50, band_locked: true,
+        geo_score: 10, practice_score: 10, legitimacy_score: 9, referral_score: 8,
+        urgency_score: 18, complexity_score: 22, multi_practice_score: 3, fee_score: 7 },
+      response_text: "Your case presents strong indicators across liability, injury severity, and financial damages.",
+      finalize: true, collect_identity: false,
+      situation_summary: "Client was rear-ended on the 401 approximately three weeks ago by a driver who ran a red light. A police report was filed. Ongoing medical treatment is in progress and significant work income was lost. Clear liability with documented injuries — strong personal injury claim.",
+      cta: "Your case has been rated Band A — priority. A lawyer will contact you within 24 hours to discuss your options and next steps.",
+      flags: ["strong_liability", "documented_injuries", "income_loss"],
+      value_tier: "high", prior_experience: null,
+    },
+  ],
+
+  emp_mid: [
+    // Round 1 questions
+    {
+      session_id: "demo-emp", practice_area: "Employment Law",
+      practice_area_confidence: "high", next_question: null,
+      next_questions: [
+        { id: "cause", text: "Were you given a written reason for the termination?", allow_free_text: false, options: [
+          { label: "Restructuring or economic", value: "restructuring" },
+          { label: "Performance or conduct", value: "performance" },
+          { label: "No clear reason given", value: "no_reason" },
+        ]},
+        { id: "severance", text: "What notice or severance were you offered?", allow_free_text: false, options: [
+          { label: "2 weeks or less", value: "statutory_or_less" },
+          { label: "More than 2 weeks", value: "above_statutory" },
+          { label: "Nothing at all", value: "none" },
+        ]},
+        { id: "contract", text: "Do you have a written employment contract?", allow_free_text: false, options: [
+          { label: "Yes, written contract", value: "yes" },
+          { label: "Verbal agreement only", value: "verbal" },
+          { label: "Not sure", value: "unsure" },
+        ]},
+      ],
+      cpi: EMPTY_TOUR_CPI, response_text: "I can look into this for you. A few quick questions to understand the full picture.",
+      finalize: false, collect_identity: false, situation_summary: null, cta: null,
+      flags: [], value_tier: null, prior_experience: null,
+    },
+    // Finalize — Band C
+    {
+      session_id: "demo-emp", practice_area: "Employment Law",
+      practice_area_confidence: "high", next_question: null, next_questions: null,
+      cpi: { total: 54, band: "C", fit_score: 28, value_score: 26, band_locked: true,
+        geo_score: 8, practice_score: 9, legitimacy_score: 7, referral_score: 4,
+        urgency_score: 10, complexity_score: 12, multi_practice_score: 2, fee_score: 2 },
+      response_text: "Your situation falls in a borderline range. The claim may have merit but limited recoverable damages affect the overall priority.",
+      finalize: true, collect_identity: false,
+      situation_summary: "Client was terminated without stated cause after four years of employment and offered two weeks of severance — the statutory minimum. No written employment contract confirmed. Potential wrongful dismissal claim exists but limited damages given tenure and lack of negotiated terms.",
+      cta: "Your inquiry has been reviewed. A team member will follow up within a few business days to discuss whether and how we can assist.",
+      flags: ["potential_wrongful_dismissal", "statutory_minimum_severance"],
+      value_tier: "medium_low", prior_experience: null,
+    },
+  ],
+
+  small_claims: [
+    // Round 1 — one question
+    {
+      session_id: "demo-sc", practice_area: "Small Claims",
+      practice_area_confidence: "high", next_question: null,
+      next_questions: [
+        { id: "amount", text: "What is the total amount of the dispute?", allow_free_text: false, options: [
+          { label: "Under $5,000", value: "under_5k" },
+          { label: "$5,000 to $10,000", value: "5k_10k" },
+          { label: "Over $10,000", value: "over_10k" },
+        ]},
+      ],
+      cpi: EMPTY_TOUR_CPI, response_text: "I see. One quick question before completing your assessment.",
+      finalize: false, collect_identity: false, situation_summary: null, cta: null,
+      flags: [], value_tier: null, prior_experience: null,
+    },
+    // Finalize — Band E
+    {
+      session_id: "demo-sc", practice_area: "Small Claims",
+      practice_area_confidence: "high", next_question: null, next_questions: null,
+      cpi: { total: 12, band: "E", fit_score: 8, value_score: 4, band_locked: true,
+        geo_score: 4, practice_score: 2, legitimacy_score: 1, referral_score: 1,
+        urgency_score: 2, complexity_score: 2, multi_practice_score: 0, fee_score: 0 },
+      response_text: "Based on your inquiry, this matter falls outside the firm's caseload for cases of this type and size.",
+      finalize: true, collect_identity: false,
+      situation_summary: "Client seeks $8,000 from a contractor for incomplete work. This is a small claims matter outside the firm's civil litigation scope for disputes at this amount.",
+      cta: "This type of dispute is handled most efficiently through Ontario Small Claims Court, where you can self-represent. See the resources below.",
+      flags: ["small_claims_only"],
+      value_tier: "low", prior_experience: null,
+    },
+  ],
+};
+
 export function IntakeWidget({
   firmId,
   firmName,
@@ -341,6 +490,8 @@ export function IntakeWidget({
   const [tourAction, setTourAction] = useState<"show-answers" | "submit-answers" | null>(null);
   // intakeTrail accumulates Q&A pairs across all question rounds
   const [intakeTrail, setIntakeTrail] = useState<Array<{ question: string; answer: string }>>([]);
+  // tracks which fixture index to use next in the guided tour
+  const tourFixtureStepRef = useRef(0);
 
   // ── Welcome back: check localStorage on mount ─────────────────────
   useEffect(() => {
@@ -462,29 +613,19 @@ export function IntakeWidget({
           const t = setTimeout(typeNext, charMs);
           tourTimeoutsRef.current.push(t);
         } else {
-          // Typing complete — pause then submit
-          addT(async () => {
+          // Typing complete — brief pause then use pre-recorded fixture (instant)
+          addT(() => {
             if (isSkippedRef.current) return;
             setStep("submitting");
-            try {
-              const data = await fetch("/api/screen", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  firm_id: firmId,
-                  channel: "widget",
-                  message: msg,
-                  message_type: "text",
-                  demo: true,
-                }),
-              }).then(r => r.json()) as ScreenResponse;
-              if (!data.session_id) throw new Error("No session");
+            setTimeout(() => {
+              if (isSkippedRef.current) return;
+              const fixtures = TOUR_FIXTURES[demoScenario ?? ""];
+              const data = fixtures?.[tourFixtureStepRef.current];
+              if (!data) return;
+              tourFixtureStepRef.current++;
               setSessionId(data.session_id);
               applyResponse(data, "identity");
-            } catch (err) {
-              setApiError(String(err instanceof Error ? err.message : err));
-              setStep("intro");
-            }
+            }, 500);
           }, 650);
         }
       }
@@ -853,7 +994,26 @@ export function IntakeWidget({
 
     if (tourAction === "submit-answers") {
       setTourAction(null);
-      handleQuestionsSubmit();
+      // Accumulate Q&A trail from this round
+      const trailItems = questions
+        .filter(q => answerLabels[q.id] || answers[q.id])
+        .map(q => ({ question: q.text, answer: answerLabels[q.id] ?? answers[q.id] ?? "" }));
+      if (trailItems.length > 0) setIntakeTrail(prev => [...prev, ...trailItems]);
+
+      setStep("submitting");
+      // Use pre-recorded fixture for instant response
+      const fixtures = demoScenario ? TOUR_FIXTURES[demoScenario] : null;
+      const nextFixture = fixtures?.[tourFixtureStepRef.current];
+      if (nextFixture) {
+        tourFixtureStepRef.current++;
+        setTimeout(() => {
+          if (isSkippedRef.current) return;
+          applyResponse(nextFixture, "identity");
+        }, 500);
+      } else {
+        // Fallback to real API if fixtures exhausted
+        handleQuestionsSubmit();
+      }
     }
   }
 
@@ -864,35 +1024,22 @@ export function IntakeWidget({
     setIsSkipped(true);
     setTourAction(null);
 
-    const msg = demoScenario ? SCENARIO_MESSAGES[demoScenario] : null;
-    if (!msg || step === "submitting" || step === "result") return;
+    if (step === "result") return;
 
-    setSituation(msg);
-    setStep("submitting");
+    // Use the final fixture (finalize entry) for an instant skip-to-result
+    const fixtures = demoScenario ? TOUR_FIXTURES[demoScenario] : null;
+    const finalFixture = fixtures?.[fixtures.length - 1];
+    if (finalFixture?.finalize) {
+      setSessionId(finalFixture.session_id);
+      setResult(finalFixture);
+      setStep("result");
+      setTimeout(() => setShowLawyerPanel(true), 400);
+      return;
+    }
 
-    fetch("/api/screen", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        firm_id: firmId,
-        channel: "widget",
-        message: msg,
-        message_type: "text",
-        demo: true,
-      }),
-    })
-      .then(r => r.json())
-      .then((data: ScreenResponse) => {
-        if (!data.session_id) throw new Error("No session");
-        setSessionId(data.session_id);
-        setResult(data);
-        setStep("result");
-        setTimeout(() => setShowLawyerPanel(true), 800);
-      })
-      .catch(err => {
-        setApiError(String(err instanceof Error ? err.message : err));
-        setStep("intro");
-      });
+    // Fallback: show result without data (edge case)
+    setStep("result");
+    setTimeout(() => setShowLawyerPanel(true), 400);
   }
 
   function reset() {
@@ -901,6 +1048,7 @@ export function IntakeWidget({
     tourTimeoutsRef.current = [];
     isSkippedRef.current = false;
     tourStartedRef.current = false;
+    tourFixtureStepRef.current = 0;
     setIsSkipped(false);
     setTourAction(null);
     setIntakeTrail([]);
