@@ -266,6 +266,12 @@ interface IntakeWidgetProps {
    * The widget page decodes the ?scenario= URL param and passes it here.
    */
   demoScenario?: string;
+  /**
+   * Guided tour mode — when true, the widget plays through the scenario with
+   * phantom typing and auto-advancing, simulating a real user session.
+   * Used by the DemoLandingPage scenario chips. Requires demoScenario to be set.
+   */
+  guidedTour?: boolean;
 }
 
 // Pre-loaded scenario messages (mirrors DEMO_SCENARIOS in DemoLandingPage.tsx)
@@ -290,6 +296,7 @@ export function IntakeWidget({
   firmPrivacyUrl,
   demoMode = false,
   demoScenario,
+  guidedTour = false,
 }: IntakeWidgetProps) {
   const LS_KEY = `cls_session_${firmId}`;
 
@@ -324,6 +331,12 @@ export function IntakeWidget({
   // Demo mode state
   const [showLawyerPanel, setShowLawyerPanel] = useState(false);
   const autoSentRef = useRef(false);
+
+  // Guided tour state
+  const tourTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const isSkippedRef = useRef(false);
+  const tourStartedRef = useRef(false);
+  const [isSkipped, setIsSkipped] = useState(false);
 
   // ── Welcome back: check localStorage on mount ─────────────────────
   useEffect(() => {
@@ -363,11 +376,20 @@ export function IntakeWidget({
     }
   }, [sessionId, LS_KEY]);
 
+  // ── Cleanup tour timeouts on unmount ──────────────────────────────
+  useEffect(() => {
+    return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      tourTimeoutsRef.current.forEach(clearTimeout);
+    };
+  }, []);
+
   // ── Demo auto-send: pre-load scenario message and submit immediately ──
   // Fires once per mount when demoScenario is set. Skips the intent + intro
   // steps and goes straight to screening so the prospect sees the engine work.
+  // Skipped when guidedTour is true — guided tour handles its own sequencing.
   useEffect(() => {
-    if (!demoMode || !demoScenario || autoSentRef.current) return;
+    if (!demoMode || !demoScenario || autoSentRef.current || guidedTour) return;
     const msg = SCENARIO_MESSAGES[demoScenario];
     if (!msg) return;
     autoSentRef.current = true;
@@ -398,6 +420,106 @@ export function IntakeWidget({
     return () => clearTimeout(delay);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoMode, demoScenario, firmId]);
+
+  // Derived state — declared early so guided tour useEffects can reference allAnswered
+  const allAnswered = questions.length > 0 && questions.every(q => !!answers[q.id]);
+
+  // ── Guided tour: phantom typing + auto-advance through the flow ───
+  useEffect(() => {
+    if (!guidedTour || !demoScenario || tourStartedRef.current) return;
+    const msg = SCENARIO_MESSAGES[demoScenario];
+    if (!msg) return;
+    tourStartedRef.current = true;
+
+    const addT = (fn: () => void, ms: number) => {
+      const t = setTimeout(fn, ms);
+      tourTimeoutsRef.current.push(t);
+      return t;
+    };
+
+    // Step 1: pause at intent step, then advance to intro
+    addT(() => {
+      if (isSkippedRef.current) return;
+      setStep("intro");
+
+      // Step 2: phantom typing — character by character
+      let i = 0;
+      function typeNext() {
+        if (isSkippedRef.current) return;
+        i++;
+        setSituation(msg.slice(0, i));
+        if (i < msg.length) {
+          const t = setTimeout(typeNext, 28 + Math.floor(Math.random() * 22));
+          tourTimeoutsRef.current.push(t);
+        } else {
+          // Typing complete — pause then submit
+          addT(async () => {
+            if (isSkippedRef.current) return;
+            setStep("submitting");
+            try {
+              const data = await fetch("/api/screen", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  firm_id: firmId,
+                  channel: "widget",
+                  message: msg,
+                  message_type: "text",
+                  demo: true,
+                }),
+              }).then(r => r.json()) as ScreenResponse;
+              if (!data.session_id) throw new Error("No session");
+              setSessionId(data.session_id);
+              applyResponse(data, "identity");
+            } catch (err) {
+              setApiError(String(err instanceof Error ? err.message : err));
+              setStep("intro");
+            }
+          }, 650);
+        }
+      }
+
+      addT(typeNext, 350);
+    }, 900);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guidedTour, demoScenario, firmId]);
+
+  // ── Guided tour: auto-select options when questions are shown ─────
+  useEffect(() => {
+    if (!guidedTour || isSkippedRef.current || step !== "questions" || questions.length === 0) return;
+
+    // Clear any stale tour timeouts (e.g., leftover from typing phase)
+    tourTimeoutsRef.current.forEach(clearTimeout);
+    tourTimeoutsRef.current = [];
+
+    let delay = 900;
+    questions.forEach(q => {
+      if (q.options.length > 0) {
+        // Prefer the second option (index 1) when available — avoids "Today" extremes
+        const optIdx = Math.min(1, q.options.length - 1);
+        const t = setTimeout(() => {
+          if (isSkippedRef.current) return;
+          selectAnswer(q.id, q.options[optIdx].value, q.options[optIdx].label);
+        }, delay);
+        tourTimeoutsRef.current.push(t);
+        delay += 820;
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guidedTour, step, questions]);
+
+  // ── Guided tour: auto-submit once all questions are answered ──────
+  useEffect(() => {
+    if (!guidedTour || isSkippedRef.current || step !== "questions" || !allAnswered) return;
+
+    const t = setTimeout(() => {
+      if (isSkippedRef.current) return;
+      handleQuestionsSubmit();
+    }, 700);
+
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guidedTour, step, allAnswered]);
 
   // ── API call helper ───────────────────────────────────────────────
   const callScreen = useCallback(
@@ -432,8 +554,15 @@ export function IntakeWidget({
     setResponseText(stripDisclaimer(data.response_text ?? ""));
 
     if (data.finalize && !identityCollected) {
-      setPendingResult(data);
-      setStep("identity");
+      if (guidedTour && !isSkippedRef.current) {
+        // Guided tour: skip identity form, go straight to result
+        setResult(data);
+        setStep("result");
+        setTimeout(() => setShowLawyerPanel(true), 1200);
+      } else {
+        setPendingResult(data);
+        setStep("identity");
+      }
     } else if (data.finalize) {
       setResult(data);
       setStep("result");
@@ -652,7 +781,50 @@ export function IntakeWidget({
     setAnswerLabels(prev => ({ ...prev, [questionId]: label }));
   }
 
+  function skipTour() {
+    tourTimeoutsRef.current.forEach(clearTimeout);
+    tourTimeoutsRef.current = [];
+    isSkippedRef.current = true;
+    setIsSkipped(true);
+
+    const msg = demoScenario ? SCENARIO_MESSAGES[demoScenario] : null;
+    if (!msg || step === "submitting" || step === "result") return;
+
+    setSituation(msg);
+    setStep("submitting");
+
+    fetch("/api/screen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firm_id: firmId,
+        channel: "widget",
+        message: msg,
+        message_type: "text",
+        demo: true,
+      }),
+    })
+      .then(r => r.json())
+      .then((data: ScreenResponse) => {
+        if (!data.session_id) throw new Error("No session");
+        setSessionId(data.session_id);
+        setResult(data);
+        setStep("result");
+        setTimeout(() => setShowLawyerPanel(true), 800);
+      })
+      .catch(err => {
+        setApiError(String(err instanceof Error ? err.message : err));
+        setStep("intro");
+      });
+  }
+
   function reset() {
+    // Clear any in-flight tour timeouts
+    tourTimeoutsRef.current.forEach(clearTimeout);
+    tourTimeoutsRef.current = [];
+    isSkippedRef.current = false;
+    tourStartedRef.current = false;
+    setIsSkipped(false);
     try {
       localStorage.removeItem(LS_KEY);
     } catch {
@@ -676,7 +848,6 @@ export function IntakeWidget({
     setApiError(null);
   }
 
-  const allAnswered = questions.length > 0 && questions.every(q => !!answers[q.id]);
   const canSubmitIdentity =
     contact.name.trim().length >= 2 &&
     (contact.email.trim().includes("@") || contact.phone.trim().length >= 7);
@@ -709,12 +880,22 @@ export function IntakeWidget({
               {firmName}
             </span>
             {step !== "intent" && step !== "result" && step !== "submitting" && (
-              <button
-                onClick={reset}
-                className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                Start over
-              </button>
+              guidedTour && !isSkipped ? (
+                <button
+                  onClick={skipTour}
+                  className="text-[11px] font-semibold hover:opacity-70 transition-opacity"
+                  style={{ color: "var(--accent)" }}
+                >
+                  Skip →
+                </button>
+              ) : (
+                <button
+                  onClick={reset}
+                  className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  Start over
+                </button>
+              )
             )}
           </div>
 
@@ -810,6 +991,12 @@ export function IntakeWidget({
                 className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-current focus:ring-2 focus:ring-offset-0 resize-none transition"
                 style={{ ["--tw-ring-color" as string]: `${accentColor}33` }}
               />
+              {guidedTour && !isSkipped && (
+                <p className="text-[10px] text-gray-400 flex items-center gap-1.5">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Guided demo — watch the intake in action
+                </p>
+              )}
               {apiError && (
                 <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{apiError}</p>
               )}

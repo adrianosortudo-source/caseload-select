@@ -245,45 +245,65 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
             {/* Right: scenario picker + AI widget */}
             <div ref={widgetRef} className="flex flex-col items-center lg:items-end gap-4">
 
-              {/* Scenario launcher chips */}
+              {/* Scenario launcher — guided demo */}
               <div className="w-full max-w-md">
-                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2.5 text-center lg:text-left">
-                  Try a scenario
-                </p>
-                <div className="flex flex-wrap gap-2 justify-center lg:justify-start">
-                  {DEMO_SCENARIOS.map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => {
-                        setActiveScenario(s.id);
-                        setTimeout(() => widgetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                        activeScenario === s.id
-                          ? "border-[#1B3A6B] bg-[#1B3A6B] text-white shadow-sm"
-                          : "border-gray-200 bg-white text-gray-600 hover:border-[#1B3A6B]/40 hover:bg-gray-50"
-                      }`}
+                <div className="rounded-2xl border-2 border-dashed border-gray-200 bg-white/70 px-4 py-3.5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div
+                      className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: NAVY }}
                     >
-                      <span className={`w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center flex-shrink-0 ${
-                        activeScenario === s.id ? "bg-white/20 text-white" : s.bandStyle
-                      }`}>
-                        {s.band}
-                      </span>
-                      {s.label}
-                      <span className={`text-[10px] ${activeScenario === s.id ? "text-white/60" : "text-gray-400"}`}>
-                        · {s.pa}
-                      </span>
-                    </button>
-                  ))}
-                  {activeScenario && (
-                    <button
-                      onClick={() => setActiveScenario(null)}
-                      className="px-3 py-1.5 rounded-full text-xs text-gray-400 hover:text-gray-600 border border-dashed border-gray-200 hover:border-gray-300 transition-all"
-                    >
-                      Clear
-                    </button>
-                  )}
+                      <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                    <span className="text-xs font-bold uppercase tracking-widest text-gray-700">
+                      See it work
+                    </span>
+                    <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
+                      3 scenarios · ~30 sec each
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {DEMO_SCENARIOS.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => {
+                          setActiveScenario(s.id);
+                          setTimeout(() => widgetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                          activeScenario === s.id
+                            ? "border-[#1B3A6B] bg-[#1B3A6B] text-white shadow-sm"
+                            : "border-gray-200 bg-white text-gray-600 hover:border-[#1B3A6B]/40 hover:bg-gray-50"
+                        }`}
+                      >
+                        <span className={`w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center flex-shrink-0 ${
+                          activeScenario === s.id ? "bg-white/20 text-white" : s.bandStyle
+                        }`}>
+                          {s.band}
+                        </span>
+                        {s.label}
+                        <span className={`text-[10px] ${activeScenario === s.id ? "text-white/60" : "text-gray-400"}`}>
+                          · {s.pa}
+                        </span>
+                      </button>
+                    ))}
+                    {activeScenario && (
+                      <button
+                        onClick={() => setActiveScenario(null)}
+                        className="px-3 py-1.5 rounded-full text-xs text-gray-400 hover:text-gray-600 border border-dashed border-gray-200 hover:border-gray-300 transition-all"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {!activeScenario && (
+                  <p className="text-[11px] text-gray-400 text-center mt-2">
+                    or type your own case directly in the widget below
+                  </p>
+                )}
               </div>
 
               <div className="w-full max-w-md">
@@ -300,6 +320,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
                   assistantAvatar="/brand/logos/icon-light-transparent.png"
                   demoMode={true}
                   demoScenario={activeScenario ?? undefined}
+                  guidedTour={!!activeScenario}
                 />
               </div>
             </div>
