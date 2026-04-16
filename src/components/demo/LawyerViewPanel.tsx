@@ -43,6 +43,7 @@ interface Props {
   situationSummary: string | null;
   practiceArea: string | null;
   contactName: string;
+  intakeTrail?: Array<{ question: string; answer: string }>;
 }
 
 // ─────────────────────────────────────────────
@@ -95,6 +96,51 @@ const BAND_ACTIONS: Record<string, string[]> = {
   E: ["No lead created. No attorney time used. Inquiry closed."],
 };
 
+const BAND_BLURB_BORDER: Record<string, string> = {
+  A: "border-l-4 border-emerald-400",
+  B: "border-l-4 border-blue-400",
+  C: "border-l-4 border-amber-400",
+  D: "border-l-4 border-orange-300",
+  E: "border-l-4 border-gray-300",
+};
+
+const BAND_REASON: Record<string, string> = {
+  A: "Strong fit across all dimensions. Priority case.",
+  B: "Good fit and case value. Recommended intake.",
+  C: "Borderline — meets criteria, limited case value.",
+  D: "Weak fit or low value. Nurture track only.",
+  E: "Outside scope. No attorney time warranted.",
+};
+
+const BAND_NEXT_STEPS: Record<string, string[]> = {
+  A: [
+    "Personal call from lawyer within 24 hours.",
+    "Retainer agreement drafted and sent via DocuSeal.",
+    "Case routed to priority litigation queue.",
+    "Consultation booking link delivered to client.",
+  ],
+  B: [
+    "Lawyer follow-up within 48 hours.",
+    "Retainer agreement sent via DocuSeal.",
+    "Case added to standard intake queue.",
+  ],
+  C: [
+    "Lead enrolled in 3-month nurture sequence.",
+    "Lawyer notified — no immediate time commitment.",
+    "Automated follow-up in 7 days.",
+  ],
+  D: [
+    "Enrolled in 6-month low-priority nurture track.",
+    "Educational resources delivered to client.",
+    "Zero attorney time consumed.",
+  ],
+  E: [
+    "Client redirected to appropriate external resource.",
+    "No CRM entry created.",
+    "Zero attorney time consumed.",
+  ],
+};
+
 // ─────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────
@@ -107,6 +153,7 @@ export default function LawyerViewPanel({
   situationSummary,
   practiceArea,
   contactName,
+  intakeTrail,
 }: Props) {
   const b = band ?? "E";
   const meta = BAND_META[b] ?? BAND_META["E"];
@@ -124,10 +171,14 @@ export default function LawyerViewPanel({
 
   if (!open) return null;
 
-  // Truncate summary to first sentence for the lead card preview
+  // Truncate summary to first sentence for the lead card preview and blurb
   const cardSummary = situationSummary
     ? situationSummary.split(/(?<=[.!?])\s/)[0] ?? situationSummary.slice(0, 120)
     : null;
+
+  const nextSteps = BAND_NEXT_STEPS[b] ?? BAND_NEXT_STEPS["E"];
+  const blurbBorder = BAND_BLURB_BORDER[b] ?? BAND_BLURB_BORDER["E"];
+  const bandReason = BAND_REASON[b] ?? BAND_REASON["E"];
 
   return (
     <div
@@ -177,6 +228,25 @@ export default function LawyerViewPanel({
             </span>
           </div>
 
+          {/* Section 1b: Case blurb — practice area, band, quick summary */}
+          <div className={`rounded-xl px-4 py-3 bg-[#F4F3EF] ${blurbBorder}`}>
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              {practiceArea && (
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/70 text-gray-600">
+                  {practiceArea}
+                </span>
+              )}
+              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${meta.bg} ${meta.text}`}>
+                {meta.label}
+              </span>
+              <span className="text-[11px] text-gray-500">CPI {cpi.total}/100</span>
+            </div>
+            {cardSummary && (
+              <p className="text-sm text-gray-800 font-medium leading-relaxed">{cardSummary}</p>
+            )}
+            <p className="text-[11px] text-gray-400 mt-1">{bandReason}</p>
+          </div>
+
           {/* Section 2: Lead card preview */}
           <div className="bg-[#F4F3EF] rounded-xl px-4 py-3 border border-gray-200">
             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">
@@ -210,6 +280,25 @@ export default function LawyerViewPanel({
               </p>
               <div className="bg-gray-50 rounded-xl px-4 py-3 border-l-4 border-[#1E2F58]">
                 <p className="text-sm text-gray-700 leading-relaxed">{situationSummary}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Section 3b: Intake trail — questions asked and answers given */}
+          {intakeTrail && intakeTrail.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">
+                Intake questions answered
+              </p>
+              <div className="space-y-1.5">
+                {intakeTrail.map((item, i) => (
+                  <div key={i} className="flex flex-col gap-0.5 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide leading-snug">
+                      {item.question}
+                    </p>
+                    <p className="text-xs font-semibold text-gray-700">{item.answer}</p>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -253,6 +342,25 @@ export default function LawyerViewPanel({
                     </svg>
                   </div>
                   <p className="text-sm text-gray-700">{action}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Section 6: What happens next */}
+          <div>
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2.5">
+              What happens next
+            </p>
+            <div className="space-y-2">
+              {nextSteps.map(s => (
+                <div key={s} className="flex items-start gap-2">
+                  <div className="w-4 h-4 rounded-full bg-[#1E2F58]/10 text-[#1E2F58] flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <p className="text-sm text-gray-700">{s}</p>
                 </div>
               ))}
             </div>

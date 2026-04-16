@@ -277,9 +277,9 @@ interface IntakeWidgetProps {
 // Pre-loaded scenario messages (mirrors DEMO_SCENARIOS in DemoLandingPage.tsx)
 const SCENARIO_MESSAGES: Record<string, string> = {
   pi_strong:
-    "I was in a car accident on the 401 three weeks ago. The other driver ran a red light. I'm still getting treatment for a back injury and missed three weeks of work.",
+    "I was rear-ended on the 401 about three weeks ago. The other driver ran a red light. I've been seeing a doctor since.",
   emp_mid:
-    "My employer terminated me last Friday. I was there for 4 years. They gave me 2 weeks severance and said it was restructuring.",
+    "My employer let me go last Friday. I'd been there for four years.",
   small_claims:
     "I want to sue my contractor for $8,000. He didn't finish the job and won't return my calls.",
 };
@@ -337,6 +337,10 @@ export function IntakeWidget({
   const isSkippedRef = useRef(false);
   const tourStartedRef = useRef(false);
   const [isSkipped, setIsSkipped] = useState(false);
+  // tourAction controls what the user clicks next during guided tour
+  const [tourAction, setTourAction] = useState<"show-answers" | "submit-answers" | null>(null);
+  // intakeTrail accumulates Q&A pairs across all question rounds
+  const [intakeTrail, setIntakeTrail] = useState<Array<{ question: string; answer: string }>>([]);
 
   // ── Welcome back: check localStorage on mount ─────────────────────
   useEffect(() => {
@@ -449,7 +453,13 @@ export function IntakeWidget({
         i++;
         setSituation(msg.slice(0, i));
         if (i < msg.length) {
-          const t = setTimeout(typeNext, 55 + Math.floor(Math.random() * 30));
+          const prevChar = msg[i - 1];
+          const charMs = prevChar === "." || prevChar === "!" || prevChar === "?"
+            ? 380
+            : prevChar === ","
+            ? 140
+            : 45 + Math.floor(Math.random() * 20);
+          const t = setTimeout(typeNext, charMs);
           tourTimeoutsRef.current.push(t);
         } else {
           // Typing complete — pause then submit
@@ -484,42 +494,20 @@ export function IntakeWidget({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guidedTour, demoScenario, firmId]);
 
-  // ── Guided tour: auto-select options when questions are shown ─────
+  // ── Guided tour: pause at questions — user clicks to see demo answers ──
+  // Replaces the old auto-select + auto-submit effects. The user now clicks
+  // "Show how the AI answered" and then "Submit answers" to advance.
   useEffect(() => {
     if (!guidedTour || isSkippedRef.current || step !== "questions" || questions.length === 0) return;
 
-    // Clear any stale tour timeouts (e.g., leftover from typing phase)
+    // Clear any stale tour timeouts from prior phases (e.g., typing)
     tourTimeoutsRef.current.forEach(clearTimeout);
     tourTimeoutsRef.current = [];
 
-    let delay = 900;
-    questions.forEach(q => {
-      if (q.options.length > 0) {
-        // Prefer the second option (index 1) when available — avoids "Today" extremes
-        const optIdx = Math.min(1, q.options.length - 1);
-        const t = setTimeout(() => {
-          if (isSkippedRef.current) return;
-          selectAnswer(q.id, q.options[optIdx].value, q.options[optIdx].label);
-        }, delay);
-        tourTimeoutsRef.current.push(t);
-        delay += 820;
-      }
-    });
+    // Pause — show the action button so user can read the questions first
+    setTourAction("show-answers");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guidedTour, step, questions]);
-
-  // ── Guided tour: auto-submit once all questions are answered ──────
-  useEffect(() => {
-    if (!guidedTour || isSkippedRef.current || step !== "questions" || !allAnswered) return;
-
-    const t = setTimeout(() => {
-      if (isSkippedRef.current) return;
-      handleQuestionsSubmit();
-    }, 700);
-
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [guidedTour, step, allAnswered]);
 
   // ── Guided tour: safety net — auto-advance past any identity step ─
   // Catches all paths to identity (collect_identity, finalize fallback, etc.)
@@ -534,10 +522,9 @@ export function IntakeWidget({
       if (isSkippedRef.current) return;
 
       if (pending) {
-        // Already have a scored result — just surface it
+        // Already have a scored result — surface it, user clicks to open panel
         setResult(pending);
         setStep("result");
-        setTimeout(() => setShowLawyerPanel(true), 1200);
         return;
       }
 
@@ -561,12 +548,10 @@ export function IntakeWidget({
         .then((data: ScreenResponse) => {
           setResult(data);
           setStep("result");
-          setTimeout(() => setShowLawyerPanel(true), 1200);
+          // User clicks "See what landed in your pipeline" to open panel
         })
         .catch(() => {
-          // Last resort: show result step with whatever we have
           setStep("result");
-          setTimeout(() => setShowLawyerPanel(true), 1200);
         });
     }, 600);
 
@@ -608,10 +593,9 @@ export function IntakeWidget({
 
     if (data.finalize && !identityCollected) {
       if (guidedTour && !isSkippedRef.current) {
-        // Guided tour: skip identity form, go straight to result
+        // Guided tour: skip identity, go to result — user clicks to open panel
         setResult(data);
         setStep("result");
-        setTimeout(() => setShowLawyerPanel(true), 1200);
       } else {
         setPendingResult(data);
         setStep("identity");
@@ -702,6 +686,14 @@ export function IntakeWidget({
 
   // ── Step 2: Submit branching question answers ─────────────────────
   async function handleQuestionsSubmit() {
+    // Accumulate Q&A trail before clearing answers for next round
+    const trailItems = questions
+      .filter(q => answerLabels[q.id] || answers[q.id])
+      .map(q => ({ question: q.text, answer: answerLabels[q.id] ?? answers[q.id] ?? "" }));
+    if (trailItems.length > 0) {
+      setIntakeTrail(prev => [...prev, ...trailItems]);
+    }
+
     setApiError(null);
     setStep("submitting");
 
@@ -835,11 +827,42 @@ export function IntakeWidget({
     setAnswerLabels(prev => ({ ...prev, [questionId]: label }));
   }
 
+  function handleTourAction() {
+    if (tourAction === "show-answers") {
+      setTourAction(null);
+      // Phantom-select options with 1.3s between each, then show submit button
+      let delay = 0;
+      questions.forEach(q => {
+        if (q.options.length > 0) {
+          const optIdx = Math.min(1, q.options.length - 1);
+          const t = setTimeout(() => {
+            if (isSkippedRef.current) return;
+            selectAnswer(q.id, q.options[optIdx].value, q.options[optIdx].label);
+          }, delay);
+          tourTimeoutsRef.current.push(t);
+          delay += 1300;
+        }
+      });
+      const t = setTimeout(() => {
+        if (isSkippedRef.current) return;
+        setTourAction("submit-answers");
+      }, delay + 500);
+      tourTimeoutsRef.current.push(t);
+      return;
+    }
+
+    if (tourAction === "submit-answers") {
+      setTourAction(null);
+      handleQuestionsSubmit();
+    }
+  }
+
   function skipTour() {
     tourTimeoutsRef.current.forEach(clearTimeout);
     tourTimeoutsRef.current = [];
     isSkippedRef.current = true;
     setIsSkipped(true);
+    setTourAction(null);
 
     const msg = demoScenario ? SCENARIO_MESSAGES[demoScenario] : null;
     if (!msg || step === "submitting" || step === "result") return;
@@ -879,6 +902,8 @@ export function IntakeWidget({
     isSkippedRef.current = false;
     tourStartedRef.current = false;
     setIsSkipped(false);
+    setTourAction(null);
+    setIntakeTrail([]);
     try {
       localStorage.removeItem(LS_KEY);
     } catch {
@@ -1123,14 +1148,34 @@ export function IntakeWidget({
                 <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{apiError}</p>
               )}
 
-              <button
-                onClick={handleQuestionsSubmit}
-                disabled={!allAnswered}
-                className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.98]"
-                style={{ backgroundColor: accentColor }}
-              >
-                Continue
-              </button>
+              {guidedTour && !isSkipped ? (
+                tourAction ? (
+                  <button
+                    onClick={handleTourAction}
+                    className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98] flex items-center justify-center gap-2"
+                    style={{ backgroundColor: accentColor }}
+                  >
+                    {tourAction === "show-answers" ? "Show how the AI answered" : "Submit answers"}
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                    </svg>
+                  </button>
+                ) : (
+                  <div className="flex items-center justify-center gap-2 py-2 text-[11px] text-gray-400">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Filling in demo answers…
+                  </div>
+                )
+              ) : (
+                <button
+                  onClick={handleQuestionsSubmit}
+                  disabled={!allAnswered}
+                  className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.98]"
+                  style={{ backgroundColor: accentColor }}
+                >
+                  Continue
+                </button>
+              )}
               <Disclaimer privacyUrl={firmPrivacyUrl} />
               <EscapeHatch firmPhone={firmPhone} firmPhoneTel={firmPhoneTel} firmBookingUrl={firmBookingUrl} />
             </div>
@@ -1428,6 +1473,7 @@ export function IntakeWidget({
           situationSummary={result.situation_summary}
           practiceArea={result.practice_area}
           contactName={contact.name.trim() || "Demo Lead"}
+          intakeTrail={intakeTrail.length > 0 ? intakeTrail : undefined}
         />
       )}
     </div>
