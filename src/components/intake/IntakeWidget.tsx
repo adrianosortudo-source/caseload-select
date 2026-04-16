@@ -449,7 +449,7 @@ export function IntakeWidget({
         i++;
         setSituation(msg.slice(0, i));
         if (i < msg.length) {
-          const t = setTimeout(typeNext, 28 + Math.floor(Math.random() * 22));
+          const t = setTimeout(typeNext, 55 + Math.floor(Math.random() * 30));
           tourTimeoutsRef.current.push(t);
         } else {
           // Typing complete — pause then submit
@@ -521,6 +521,59 @@ export function IntakeWidget({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guidedTour, step, allAnswered]);
 
+  // ── Guided tour: safety net — auto-advance past any identity step ─
+  // Catches all paths to identity (collect_identity, finalize fallback, etc.)
+  // regardless of how we got there. Submits dummy contact if no pending result.
+  useEffect(() => {
+    if (!guidedTour || isSkippedRef.current || step !== "identity") return;
+
+    const sid = sessionId;
+    const pending = pendingResult;
+
+    const t = setTimeout(() => {
+      if (isSkippedRef.current) return;
+
+      if (pending) {
+        // Already have a scored result — just surface it
+        setResult(pending);
+        setStep("result");
+        setTimeout(() => setShowLawyerPanel(true), 1200);
+        return;
+      }
+
+      // Submit dummy contact to get the finalized result
+      setIdentityCollected(true);
+      setStep("submitting");
+      fetch("/api/screen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sid,
+          firm_id: firmId,
+          channel: "widget",
+          demo: true,
+          message: "Contact details provided",
+          message_type: "contact",
+          structured_data: { first_name: "Demo", last_name: "User", phone: "5550000000" },
+        }),
+      })
+        .then(r => r.json())
+        .then((data: ScreenResponse) => {
+          setResult(data);
+          setStep("result");
+          setTimeout(() => setShowLawyerPanel(true), 1200);
+        })
+        .catch(() => {
+          // Last resort: show result step with whatever we have
+          setStep("result");
+          setTimeout(() => setShowLawyerPanel(true), 1200);
+        });
+    }, 600);
+
+    tourTimeoutsRef.current.push(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guidedTour, step]);
+
   // ── API call helper ───────────────────────────────────────────────
   const callScreen = useCallback(
     async (payload: {
@@ -571,6 +624,7 @@ export function IntakeWidget({
         setTimeout(() => setShowLawyerPanel(true), 1200);
       }
     } else if (data.collect_identity) {
+      // Guided tour handles identity bypass via its own safety-net useEffect
       setStep("identity");
     } else if (data.next_questions?.length) {
       setQuestions(data.next_questions);
