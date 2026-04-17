@@ -2,8 +2,9 @@
  * /portal/[firmId]/phases — Tier 3 FACT Phase View
  *
  * Four phase cards in a 2x2 grid.
- * Filter: band distribution + SLA gauge (live data).
- * Authority / Capture / Target: placeholder until external APIs are connected.
+ * Filter (F): band distribution + SLA gauge — live data.
+ * Authority (A): Clio Manage integration — live if connected, connect prompt if not.
+ * Capture (C) / Target (T): placeholders until BrightLocal / GA4 / Google Ads are live.
  *
  * Auth verified by parent layout.
  */
@@ -11,7 +12,9 @@
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
 import { supabase } from "@/lib/supabase";
+import { isClioConnected, getClioMatters } from "@/lib/clio";
 import FilterCard from "./FilterCard";
+import ClioCard from "./ClioCard";
 import PlaceholderCard from "./PlaceholderCard";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +35,8 @@ export default async function PhasesPage({
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const monthLabel = now.toLocaleString("en-CA", { month: "long", year: "numeric" });
 
-  const [sessionsMonth, leadsWithResponse] = await Promise.all([
+  // Fetch Filter data + Clio status in parallel
+  const [sessionsMonth, leadsWithResponse, clioConnected] = await Promise.all([
     supabase
       .from("intake_sessions")
       .select("band")
@@ -45,6 +49,8 @@ export default async function PhasesPage({
       .eq("law_firm_id", firmId)
       .gte("created_at", monthStart)
       .not("first_contact_at", "is", null),
+
+    isClioConnected(firmId),
   ]);
 
   const sessions = sessionsMonth.data ?? [];
@@ -67,6 +73,14 @@ export default async function PhasesPage({
     slaCompliance = Math.round((withinSLA / responseLeads.length) * 100);
   }
 
+  // Fetch Clio matters only if connected (non-fatal — card degrades gracefully on error)
+  const clioMatters = clioConnected
+    ? await getClioMatters(firmId, 5).catch(() => [])
+    : [];
+
+  // Count open matters for the summary stat
+  const openMatterCount = clioMatters.filter(m => m.status?.toLowerCase() === "open").length;
+
   return (
     <div className="space-y-6">
       <div>
@@ -82,7 +96,12 @@ export default async function PhasesPage({
           slaCompliance={slaCompliance}
           slaHasSamples={responseLeads.length > 0}
         />
-        <PlaceholderCard phase="Authority" />
+        <ClioCard
+          connected={clioConnected}
+          firmId={firmId}
+          matters={clioMatters}
+          matterCount={clioConnected ? openMatterCount : null}
+        />
         <PlaceholderCard phase="Capture" />
         <PlaceholderCard phase="Target" />
       </div>

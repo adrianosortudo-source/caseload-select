@@ -2,8 +2,9 @@
  * GET /api/portal/[firmId]/phases
  *
  * Tier 3 FACT Phase metrics.
- * Returns Filter card data now; Authority/Capture/Target return null
- * until BrightLocal / GA4 / Google Ads integrations are live.
+ * Filter: live band distribution + SLA compliance.
+ * Authority: Clio connection status + open matter count (live if connected).
+ * Capture / Target: null until BrightLocal / GA4 / Google Ads integrations are live.
  *
  * Auth: portal session cookie.
  */
@@ -11,6 +12,7 @@
 import { NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/portal-auth";
 import { supabase } from "@/lib/supabase";
+import { isClioConnected, getClioMatters } from "@/lib/clio";
 
 export async function GET(
   _req: Request,
@@ -26,7 +28,7 @@ export async function GET(
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  const [sessionsMonth, leadsWithResponse] = await Promise.all([
+  const [sessionsMonth, leadsWithResponse, clioConnected] = await Promise.all([
     supabase
       .from("intake_sessions")
       .select("band")
@@ -38,7 +40,13 @@ export async function GET(
       .eq("law_firm_id", firmId)
       .gte("created_at", monthStart)
       .not("first_contact_at", "is", null),
+    isClioConnected(firmId),
   ]);
+
+  // Fetch recent Clio matters only if connected (non-fatal)
+  const clioMatters = clioConnected
+    ? await getClioMatters(firmId, 5).catch(() => [])
+    : [];
 
   const sessions = sessionsMonth.data ?? [];
   const responseLeads = leadsWithResponse.data ?? [];
@@ -60,6 +68,8 @@ export async function GET(
     slaCompliance = Math.round((withinSLA / responseLeads.length) * 100);
   }
 
+  const openMatters = clioMatters.filter(m => m.status?.toLowerCase() === "open");
+
   return NextResponse.json({
     filter: {
       band_distribution: bandDist,
@@ -68,7 +78,19 @@ export async function GET(
       sla_compliance_pct: slaCompliance,
       sla_sample_size: responseLeads.length,
     },
-    authority: null,
+    authority: {
+      clio_connected: clioConnected,
+      open_matter_count: clioConnected ? openMatters.length : null,
+      recent_matters: clioMatters.map(m => ({
+        id: m.id,
+        display_number: m.display_number,
+        description: m.description,
+        status: m.status,
+        client_name: m.client?.name ?? null,
+        practice_area: m.practice_area?.name ?? null,
+        open_date: m.open_date,
+      })),
+    },
     capture: null,
     target: null,
   });
