@@ -4,16 +4,18 @@
  * Verifies a 6-digit OTP against the stored code in the session.
  * On success, marks the session otp_verified=true and clears the stored code.
  *
- * Band A/B: triggers retainer agreement generation.
  * Band A/B/C: auto-promotes session to a pipeline lead (idempotent).
  *
+ * NOTE: Retainer trigger has moved to POST /api/screen/round3.
+ * Band A/B retainer now fires after Round 3 completes, not at OTP verify.
+ * This ensures the lawyer receives both the memo and the retainer together.
+ *
  * Body: { session_id: string; code: string }
- * Returns: { verified: true } | { verified: false; reason: "invalid" | "expired" }
+ * Returns: { verified: true; band: string } | { verified: false; reason: "invalid" | "expired" }
  */
 
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { triggerRetainerAgreement } from "@/lib/retainer";
 
 export async function POST(req: Request) {
   try {
@@ -35,10 +37,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    // Already verified — re-trigger downstream (idempotent)
+    // Already verified — idempotent, return band so widget knows which step to show
     if (session.otp_verified) {
-      void triggerRetainerIfEligible(session_id, session.firm_id, session.band);
-      return NextResponse.json({ verified: true });
+      return NextResponse.json({ verified: true, band: session.band });
     }
 
     // Check expiry
@@ -58,34 +59,13 @@ export async function POST(req: Request) {
       .eq("id", session_id);
 
     // Non-fatal downstream triggers
-    void triggerRetainerIfEligible(session_id, session.firm_id, session.band);
+    // Note: retainer trigger moved to /api/screen/round3 (fires after Round 3 completes)
     void promoteToLead(session);
 
-    return NextResponse.json({ verified: true });
+    return NextResponse.json({ verified: true, band: session.band });
   } catch (err) {
     console.error("[otp/verify] Error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
-
-// ── Retainer trigger (Band A/B only) ─────────────────────────────────────────
-
-async function triggerRetainerIfEligible(
-  sessionId: string,
-  firmId: string | null,
-  band: string | null
-): Promise<void> {
-  if (!firmId || !band || !["A", "B"].includes(band)) return;
-
-  try {
-    const result = await triggerRetainerAgreement({ sessionId, firmId });
-    if (result.skipped) {
-      console.log(`[otp/verify] Retainer skipped for session ${sessionId}: ${result.reason}`);
-    } else {
-      console.log(`[otp/verify] Retainer generated for session ${sessionId}: agreement ${result.agreementId}`);
-    }
-  } catch (err) {
-    console.error(`[otp/verify] Retainer generation failed for session ${sessionId}:`, err);
   }
 }
 

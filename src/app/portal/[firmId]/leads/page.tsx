@@ -44,6 +44,7 @@ type LeadRow = {
   priority_band: string | null;
   urgency: string | null;
   created_at: string;
+  intake_session_id: string | null;
 };
 
 export default async function PortalLeadsPage({
@@ -63,7 +64,7 @@ export default async function PortalLeadsPage({
 
   let query = supabase
     .from("leads")
-    .select("id, name, case_type, stage, band, priority_band, urgency, created_at")
+    .select("id, name, case_type, stage, band, priority_band, urgency, created_at, intake_session_id")
     .eq("law_firm_id", firmId)
     .order("created_at", { ascending: false });
 
@@ -72,6 +73,18 @@ export default async function PortalLeadsPage({
 
   const { data } = await query;
   const leads = (data ?? []) as LeadRow[];
+
+  // Memo ready map: session_id → true (memo exists)
+  const sessionIds = leads.map(l => l.intake_session_id).filter(Boolean) as string[];
+  let memoReadySet = new Set<string>();
+  if (sessionIds.length > 0) {
+    const { data: memoRows } = await supabase
+      .from("intake_sessions")
+      .select("id")
+      .in("id", sessionIds)
+      .not("memo_generated_at", "is", null);
+    memoReadySet = new Set((memoRows ?? []).map(r => r.id));
+  }
 
   // Counts for filter tabs
   const { data: allLeads } = await supabase
@@ -155,12 +168,14 @@ export default async function PortalLeadsPage({
                 <th className="text-left px-4 py-3 font-medium">Case type</th>
                 <th className="text-left px-4 py-3 font-medium">Band</th>
                 <th className="text-left px-4 py-3 font-medium">Stage</th>
+                <th className="text-left px-4 py-3 font-medium">Memo</th>
                 <th className="text-left px-4 py-3 font-medium">Added</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
               {leads.map((lead) => {
                 const band = lead.priority_band ?? lead.band;
+                const hasMemo = lead.intake_session_id ? memoReadySet.has(lead.intake_session_id) : false;
                 return (
                   <tr key={lead.id} className="hover:bg-black/[0.01]">
                     <td className="px-4 py-3 font-medium text-black/80">{lead.name}</td>
@@ -178,6 +193,16 @@ export default async function PortalLeadsPage({
                     </td>
                     <td className="px-4 py-3 text-xs text-black/60">
                       {STAGE_LABEL[lead.stage] ?? lead.stage}
+                    </td>
+                    <td className="px-4 py-3">
+                      {hasMemo ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                          Memo ready
+                        </span>
+                      ) : (
+                        <span className="text-black/20 text-xs">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs text-black/50">
                       {new Date(lead.created_at).toLocaleDateString("en-CA")}

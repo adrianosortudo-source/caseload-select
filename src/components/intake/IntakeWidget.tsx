@@ -19,6 +19,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import LawyerViewPanel, { type FullCpi } from "@/components/demo/LawyerViewPanel";
+import { getRound3Questions, qualifiesForRound3, type Round3Question } from "@/lib/round3";
 
 // ─────────────────────────────────────────────
 // Types
@@ -48,7 +49,7 @@ interface ScreenResponse {
   prior_experience: string | null;
 }
 
-type Step = "intent" | "intro" | "questions" | "identity" | "otp" | "submitting" | "result" | "error";
+type Step = "intent" | "intro" | "questions" | "identity" | "otp" | "round3" | "submitting" | "result" | "error";
 
 // ─────────────────────────────────────────────
 // Styling constants
@@ -114,6 +115,7 @@ function ProgressBar({ step }: { step: Step }) {
     { label: "Your Case" },
     { label: "Your Details" },
     { label: "Verify" },
+    { label: "Step 3 of 3" },
   ];
 
   if (step === "intent" || step === "result" || step === "error") return null;
@@ -124,6 +126,7 @@ function ProgressBar({ step }: { step: Step }) {
     : step === "submitting" ? 1
     : step === "identity" ? 2
     : step === "otp" ? 3
+    : step === "round3" ? 4
     : 4;
 
   return (
@@ -512,6 +515,11 @@ export function IntakeWidget({
   const [identityCollected, setIdentityCollected] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  // Round 3 state
+  const [round3Questions, setRound3Questions] = useState<Round3Question[]>([]);
+  const [round3Answers, setRound3Answers] = useState<Record<string, string | string[]>>({});
+  const [round3Submitting, setRound3Submitting] = useState(false);
+
   // Demo mode state
   const [showLawyerPanel, setShowLawyerPanel] = useState(false);
   const autoSentRef = useRef(false);
@@ -674,6 +682,19 @@ export function IntakeWidget({
     setTourAction("show-answers");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guidedTour, step, questions]);
+
+  // ── Guided tour: auto-advance past round3 step ───────────────────
+  // In guided tour mode, skip Round 3 (it requires real answers) and go to result.
+  useEffect(() => {
+    if (!guidedTour || isSkippedRef.current || step !== "round3") return;
+    const t = setTimeout(() => {
+      if (isSkippedRef.current) return;
+      setStep("result");
+      setTimeout(() => setShowLawyerPanel(true), 1200);
+    }, 800);
+    tourTimeoutsRef.current.push(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guidedTour, step]);
 
   // ── Guided tour: safety net — auto-advance past any identity step ─
   // Catches all paths to identity (collect_identity, finalize fallback, etc.)
@@ -984,9 +1005,27 @@ export function IntakeWidget({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionId, code: otpCode.trim() }),
     });
-    const data = (await res.json()) as { verified: boolean; reason?: string };
+    const data = (await res.json()) as { verified: boolean; band?: string; reason?: string };
 
     if (data.verified) {
+      // Advance to Round 3 if band qualifies, else go to result
+      const band = data.band ?? result?.cpi?.band ?? null;
+      if (!demoMode && qualifiesForRound3(band)) {
+        const practiceArea = result?.practice_area ?? null;
+        const questions = getRound3Questions(practiceArea, null, band);
+        if (questions.length > 0) {
+          setRound3Questions(questions);
+          setRound3Answers({});
+          // Mark round3 started in db (non-fatal)
+          void fetch("/api/screen/round3/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: sessionId }),
+          }).catch(() => { /* ignore */ });
+          setStep("round3");
+          return;
+        }
+      }
       setStep("result");
     } else if (data.reason === "expired") {
       setApiError("This code has expired. Please request a new one.");
@@ -996,6 +1035,40 @@ export function IntakeWidget({
           ? "Too many incorrect attempts. Please request a new code."
           : "Incorrect code. Please try again."
       );
+    }
+  }
+
+  // ── Round 3 handlers ──────────────────────────────────────────────
+  function selectRound3Answer(questionId: string, value: string, multi?: boolean) {
+    setRound3Answers(prev => {
+      if (multi) {
+        const existing = (prev[questionId] as string[] | undefined) ?? [];
+        const already = existing.includes(value);
+        return {
+          ...prev,
+          [questionId]: already ? existing.filter(v => v !== value) : [...existing, value],
+        };
+      }
+      return { ...prev, [questionId]: value };
+    });
+  }
+
+  async function handleRound3Submit() {
+    if (!sessionId || round3Submitting) return;
+    setRound3Submitting(true);
+    setApiError(null);
+    try {
+      await fetch("/api/screen/round3", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, answers: round3Answers }),
+      });
+    } catch {
+      // Non-fatal — proceed to result regardless
+    } finally {
+      setRound3Submitting(false);
+      setStep("result");
+      if (demoMode) setTimeout(() => setShowLawyerPanel(true), 1200);
     }
   }
 
@@ -1118,6 +1191,9 @@ export function IntakeWidget({
     setPendingResult(null);
     setIdentityCollected(false);
     setApiError(null);
+    setRound3Questions([]);
+    setRound3Answers({});
+    setRound3Submitting(false);
     questionsRoundRef.current = 0;
     setQuestionRound(1);
   }
@@ -1137,6 +1213,7 @@ export function IntakeWidget({
     questions: "A few quick questions",
     identity: "How can we reach you?",
     otp: "Verify your email",
+    round3: "Case details",
     submitting: "One moment…",
     result: "Case review complete",
     error: "Something went wrong",
@@ -1490,6 +1567,122 @@ export function IntakeWidget({
             </div>
           )}
 
+          {/* ── Round 3: Post-capture deep qualification ── */}
+          {step === "round3" && (
+            <div className="space-y-5">
+              {/* Transition card — positioning line */}
+              <div
+                className="rounded-xl px-4 py-4 space-y-1"
+                style={{ backgroundColor: `${accentColor}0f`, borderLeft: `3px solid ${accentColor}` }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: accentColor }}>
+                  Step 3 of 3
+                </p>
+                <p className="text-sm font-medium text-gray-800 leading-snug">
+                  Rounds 1 and 2 decide whether to take the meeting.
+                </p>
+                <p className="text-sm text-gray-700 leading-snug">
+                  Round 3 decides how your lawyer walks into the meeting prepared.
+                </p>
+                <p className="text-[11px] text-gray-400 pt-1">
+                  Information you share is confidential under Ontario law, even if you do not retain this firm.
+                </p>
+              </div>
+
+              <p className="text-[11px] text-gray-400 -mt-1">
+                {round3Questions.length} question{round3Questions.length !== 1 ? "s" : ""} — your answers go directly to your lawyer before the call
+              </p>
+
+              {round3Questions.map(q => (
+                <div key={q.id} className="space-y-2">
+                  <p className="text-sm font-medium text-gray-800">{q.text}</p>
+
+                  {/* Structured multi-select */}
+                  {q.type === "structured_multi" && q.options && (
+                    <div className="flex flex-wrap gap-2">
+                      {q.options.map(opt => {
+                        const selected = Array.isArray(round3Answers[q.id])
+                          ? (round3Answers[q.id] as string[]).includes(opt.value)
+                          : round3Answers[q.id] === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            onClick={() => selectRound3Answer(q.id, opt.value, q.allow_multi_select)}
+                            className={`px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all text-left ${
+                              selected
+                                ? "border-current text-white"
+                                : "border-gray-200 text-gray-600 bg-gray-50 hover:border-gray-300 hover:bg-gray-100"
+                            }`}
+                            style={selected ? { backgroundColor: accentColor, borderColor: accentColor } : {}}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Structured single-select */}
+                  {q.type === "structured_single" && q.options && (
+                    <div className="flex flex-wrap gap-2">
+                      {q.options.map(opt => {
+                        const selected = round3Answers[q.id] === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            onClick={() => selectRound3Answer(q.id, opt.value, false)}
+                            className={`px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                              selected
+                                ? "border-current text-white"
+                                : "border-gray-200 text-gray-600 bg-gray-50 hover:border-gray-300 hover:bg-gray-100"
+                            }`}
+                            style={selected ? { backgroundColor: accentColor, borderColor: accentColor } : {}}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Free text */}
+                  {(q.type === "free_text" || (q.allow_free_text && q.type !== "structured_single")) && (
+                    <textarea
+                      value={typeof round3Answers[q.id] === "string" ? (round3Answers[q.id] as string) : ""}
+                      onChange={e => setRound3Answers(prev => ({ ...prev, [q.id]: e.target.value }))}
+                      placeholder={q.free_text_label ?? "Your answer…"}
+                      rows={q.type === "free_text" ? 3 : 1}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-current resize-none transition"
+                    />
+                  )}
+                </div>
+              ))}
+
+              {apiError && (
+                <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{apiError}</p>
+              )}
+
+              <button
+                onClick={handleRound3Submit}
+                disabled={round3Submitting}
+                className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.98] flex items-center justify-center gap-2"
+                style={{ backgroundColor: accentColor }}
+              >
+                {round3Submitting ? "Preparing your case file…" : "Complete and book my consultation"}
+                {!round3Submitting && (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                  </svg>
+                )}
+              </button>
+
+              <p className="text-[11px] text-gray-400 text-center">
+                Your lawyer will review this before your call — skip any question that doesn&apos;t apply.
+              </p>
+              <Disclaimer privacyUrl={firmPrivacyUrl} />
+            </div>
+          )}
+
           {/* ── Result ── */}
           {step === "result" && result && (
             <div className="space-y-4 pt-1">
@@ -1563,7 +1756,7 @@ export function IntakeWidget({
                       <p className="text-sm font-medium text-gray-800">{result.cta}</p>
                     </div>
 
-                    {/* Booking button — Band A and B only */}
+                    {/* Booking button — Band A and B only, after Round 3 */}
                     {isBookingBand && firmBookingUrl && (
                       <a
                         href={firmBookingUrl}
@@ -1572,7 +1765,7 @@ export function IntakeWidget({
                         className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-[0.98]"
                         style={{ backgroundColor: accentColor }}
                       >
-                        Book your consultation
+                        Your case memo is ready — book your consultation
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
                         </svg>
