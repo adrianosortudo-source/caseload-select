@@ -284,6 +284,11 @@ interface IntakeWidgetProps {
    */
   demoScenario?: string;
   /**
+   * Called whenever the widget's step changes during a guided tour.
+   * Used by DemoTour to sync balloon content with the active step.
+   */
+  onDemoStepChange?: (step: string) => void;
+  /**
    * Guided tour mode — when true, the widget plays through the scenario with
    * phantom typing and auto-advancing, simulating a real user session.
    * Used by the DemoLandingPage scenario chips. Requires demoScenario to be set.
@@ -484,10 +489,19 @@ export function IntakeWidget({
   demoMode = false,
   demoScenario,
   guidedTour = false,
+  onDemoStepChange,
 }: IntakeWidgetProps) {
   const LS_KEY = `cls_session_${firmId}`;
 
   const [step, setStep] = useState<Step>("intent");
+
+  // Notify parent of step changes during guided tour (for DemoTour balloon sync)
+  useEffect(() => {
+    if (guidedTour && onDemoStepChange) {
+      onDemoStepChange(step);
+    }
+  }, [step, guidedTour, onDemoStepChange]);
+
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [resumeSessionId, setResumeSessionId] = useState<string | null>(null);
   const [sourceHint, setSourceHint] = useState<string | null>(null);
