@@ -149,7 +149,7 @@ async function getFirmChecklists(): Promise<FirmChecklist[]> {
         status: conflictFirms.has(firm.id) ? "pass" : "warn",
         detail: conflictFirms.has(firm.id)
           ? "Register populated"
-          : "Empty — load CSV on onboarding or connect Clio",
+          : "Empty: load CSV on onboarding or connect Clio",
         required: false,
       },
     ];
@@ -262,9 +262,9 @@ export default async function OnboardingPage() {
         {/* Legend */}
         {firms.length > 0 && (
           <div className="flex items-center gap-6 text-xs text-black/40 pt-2">
-            <span className="flex items-center gap-1.5"><span className="text-emerald-600 font-bold">✓</span> Pass — configured correctly</span>
-            <span className="flex items-center gap-1.5"><span className="text-rose-600 font-bold">✗</span> Fail — required, blocks launch</span>
-            <span className="flex items-center gap-1.5"><span className="text-amber-500 font-bold">!</span> Warn — optional, reduced functionality</span>
+            <span className="flex items-center gap-1.5"><span className="text-emerald-600 font-bold">✓</span> Pass: configured correctly</span>
+            <span className="flex items-center gap-1.5"><span className="text-rose-600 font-bold">✗</span> Fail: required, blocks launch</span>
+            <span className="flex items-center gap-1.5"><span className="text-amber-500 font-bold">!</span> Warn: optional, reduced functionality</span>
           </div>
         )}
 

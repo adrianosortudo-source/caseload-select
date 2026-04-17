@@ -93,7 +93,7 @@ export default function FilterCard({ bandDist, total, bandECount, slaCompliance,
 
       {/* Band distribution stacked bar */}
       <div className="space-y-2">
-        <div className="text-xs font-medium text-black/60">Band Distribution — This Month</div>
+        <div className="text-xs font-medium text-black/60">Band Distribution: This Month</div>
         {total === 0 ? (
           <div className="text-sm text-black/30 py-2">No inquiries yet this month.</div>
         ) : (

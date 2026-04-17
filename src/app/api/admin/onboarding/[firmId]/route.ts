@@ -83,7 +83,7 @@ export async function GET(
       status: practiceAreas && practiceAreas.length > 0 ? "pass" : "fail",
       detail: practiceAreas?.length
         ? `${practiceAreas.length} area(s): ${practiceAreas.join(", ")}`
-        : "No practice areas set — GPT screening will use generic prompts",
+        : "No practice areas set: GPT screening will use generic prompts",
       required: true,
     },
     {
@@ -92,7 +92,7 @@ export async function GET(
       status: geoConfig && Object.keys(geoConfig).length > 0 ? "pass" : "fail",
       detail: geoConfig
         ? `Config present: ${JSON.stringify(geoConfig).slice(0, 80)}`
-        : "No geo config — out-of-area leads will not be filtered",
+        : "No geo config: out-of-area leads will not be filtered",
       required: true,
     },
     {
@@ -102,7 +102,7 @@ export async function GET(
         branding && branding.name && branding.primary_color ? "pass" : "fail",
       detail: branding?.name
         ? `Name: ${branding.name}${branding.primary_color ? ` · Color: ${branding.primary_color}` : " (no primary color)"}`
-        : "Branding not set — portal and widget will show placeholder identity",
+        : "Branding not set: portal and widget will show placeholder identity",
       required: true,
     },
     {
@@ -111,7 +111,7 @@ export async function GET(
       status: firm.ghl_webhook_url ? "pass" : "fail",
       detail: firm.ghl_webhook_url
         ? `Webhook set (${firm.ghl_webhook_url.slice(0, 40)}...)`
-        : "No GHL webhook — Band A/B leads will not route to CRM automatically",
+        : "No GHL webhook: Band A/B leads will not route to CRM automatically",
       required: true,
     },
     {
@@ -120,7 +120,7 @@ export async function GET(
       status: clioConfig?.access_token ? "pass" : "warn",
       detail: clioConfig?.access_token
         ? `Connected${clioConfig.expires_at ? ` · Token expires: ${new Date(clioConfig.expires_at as string).toLocaleDateString("en-CA")}` : ""}`
-        : "Clio not connected — matter creation on client_won will be skipped",
+        : "Clio not connected: matter creation on client_won will be skipped",
       required: false,
     },
     {
@@ -129,7 +129,7 @@ export async function GET(
       status: hasSession ? "pass" : "warn",
       detail: hasSession
         ? "At least one intake session recorded"
-        : "No sessions yet — confirm widget is embedded on firm website",
+        : "No sessions yet: confirm widget is embedded on firm website",
       required: false,
     },
     {
@@ -138,7 +138,7 @@ export async function GET(
       status: firm.custom_domain ? "pass" : "warn",
       detail: firm.custom_domain
         ? `Domain: ${firm.custom_domain}`
-        : "No custom domain — widget served from caseloadselect.ca/widget/[id]",
+        : "No custom domain: widget served from caseloadselect.ca/widget/[id]",
       required: false,
     },
     {
@@ -147,7 +147,7 @@ export async function GET(
       status: scoringWeights && Object.keys(scoringWeights).length > 0 ? "pass" : "warn",
       detail: scoringWeights
         ? "Custom weights active"
-        : "Using default CPI weights — acceptable for most firms",
+        : "Using default CPI weights: acceptable for most firms",
       required: false,
     },
     {
@@ -156,7 +156,7 @@ export async function GET(
       status: hasConflictRegister ? "pass" : "warn",
       detail: hasConflictRegister
         ? "Register populated (CSV import or client_won entries)"
-        : "Empty register — conflict checks will only match against Clio (if connected). Load CSV on onboarding.",
+        : "Empty register: conflict checks will only match against Clio (if connected). Load CSV on onboarding.",
       required: false,
     },
   ];
@@ -249,7 +249,7 @@ export async function POST(
       seeded_areas: [],
       skipped_areas: skipped,
       missing_areas: missing,
-      message: "No new question sets to seed — all target areas already configured or not in defaults",
+      message: "No new question sets to seed: all target areas already configured or not in defaults",
     });
   }
 

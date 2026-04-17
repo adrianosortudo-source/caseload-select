@@ -485,7 +485,7 @@ export async function POST(req: Request) {
         .join("\n");
       systemPrompt +=
         `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
-        `\nSESSION STATE — CONFIRMED ANSWERS (MUST NOT ask again)\n` +
+        `\nSESSION STATE: CONFIRMED ANSWERS (MUST NOT ask again)\n` +
         lines +
         `\n\nThese are the client's confirmed answers for this session. Do NOT include any question whose id or subject matches a key above in next_question or next_questions. Apply all scoring deltas for these values immediately.`;
     }
@@ -516,17 +516,17 @@ export async function POST(req: Request) {
             const q = questionById.get(qId)!;
             const optValues = q.options.map(o => o.value).join(" | ");
             const hints = meta.extraction_hints.slice(0, 6).join(", ");
-            return `  ${qId} — "${q.text}"\n    options: ${optValues}\n    scan for: ${hints}`;
+            return `  ${qId}: "${q.text}"\n    options: ${optValues}\n    scan for: ${hints}`;
           }).join("\n\n");
 
           systemPrompt +=
             `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
-            `\nSLOT EXTRACTION — Scan ALL client messages for pre-filled answers\n` +
+            `\nSLOT EXTRACTION: Scan ALL client messages for pre-filled answers\n` +
             `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
             `For each slot below, check if the client's free text already contains the answer.\n` +
             `Return the exact option value (not a paraphrase) in filled_slots.\n` +
             `Include slot_confidence: "high" (clear match), "medium" (strongly implied), "low" (guessed).\n` +
-            `CRITICAL: Only include HIGH and MEDIUM confidence slots — never guess.\n\n` +
+            `CRITICAL: Only include HIGH and MEDIUM confidence slots: never guess.\n\n` +
             slotLines +
             `\n\nReturn at top level:\n` +
             `  "filled_slots": { "question_id": "option_value" }\n` +

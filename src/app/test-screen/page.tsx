@@ -68,7 +68,7 @@ const QUICK_MESSAGES = [
   "My boss fired me after 12 years without cause and I never signed anything",
   "I think I was discriminated against at work because of my race",
   "Fui demitido sem justa causa depois de 8 anos na empresa",
-  "I resigned but I was basically forced out — hostile work environment",
+  "I resigned but I was basically forced out: hostile work environment",
   "My landlord is refusing to return my deposit (should route to out of scope)",
   "I want to sue my employer for wrongful dismissal",
 ];
@@ -145,7 +145,7 @@ export default function TestScreenPage() {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-900">
           <div>
-            <h1 className="text-sm font-semibold text-white">CaseLoad Screen — Engine Test</h1>
+            <h1 className="text-sm font-semibold text-white">CaseLoad Screen: Engine Test</h1>
             <p className="text-xs text-gray-400">Sakuraba Law · {channel}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -216,7 +216,7 @@ export default function TestScreenPage() {
                   </div>
                 )}
                 {msg.response?.finalize && (
-                  <div className="mt-2 text-xs font-semibold text-emerald-400">✓ FINALIZED — ready for GHL</div>
+                  <div className="mt-2 text-xs font-semibold text-emerald-400">✓ FINALIZED: ready for GHL</div>
                 )}
                 {msg.response?.collect_identity && (
                   <div className="mt-2 text-xs font-semibold text-amber-400">→ Collect identity next</div>

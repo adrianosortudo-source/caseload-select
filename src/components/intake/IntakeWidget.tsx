@@ -164,14 +164,28 @@ function ProgressBar({ step }: { step: Step }) {
   );
 }
 
+const PROCESSING_MESSAGES = [
+  "Reading your situation…",
+  "Identifying the practice area…",
+  "Preparing your questions…",
+];
+
 function Spinner() {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const t = setInterval(
+      () => setIdx(i => (i + 1) % PROCESSING_MESSAGES.length),
+      1400,
+    );
+    return () => clearInterval(t);
+  }, []);
   return (
     <div className="flex flex-col items-center justify-center py-12 gap-4">
       <div
         className="w-10 h-10 border-2 border-gray-200 border-t-current rounded-full animate-spin"
         style={{ borderTopColor: "var(--accent)" }}
       />
-      <p className="text-sm text-gray-500 animate-pulse">Analyzing your case…</p>
+      <p className="text-sm text-gray-500 transition-all duration-300">{PROCESSING_MESSAGES[idx]}</p>
     </div>
   );
 }
@@ -277,11 +291,32 @@ interface IntakeWidgetProps {
 // Pre-loaded scenario messages (mirrors DEMO_SCENARIOS in DemoLandingPage.tsx)
 const SCENARIO_MESSAGES: Record<string, string> = {
   pi_strong:
-    "I was rear-ended on the 401 about three weeks ago. The other driver ran a red light. I've been seeing a doctor since.",
+    "I was rear-ended on the 401 about three weeks ago. The other driver hit me from behind at highway speed. I've been seeing a doctor since.",
   emp_mid:
     "My employer let me go last Friday. I'd been there for four years.",
   small_claims:
     "I want to sue my contractor for $8,000. He didn't finish the job and won't return my calls.",
+};
+
+// Realistic contact info for guided tour scenarios (internal lawyer view only)
+// Used when contact form is skipped in guided tour so the lawyer panel still
+// shows a plausible lead record.
+const DEMO_CONTACTS: Record<string, { name: string; email: string; phone: string }> = {
+  pi_strong: {
+    name: "Jane Matthews",
+    email: "jane.matthews@gmail.com",
+    phone: "+1 (416) 555-2847",
+  },
+  emp_mid: {
+    name: "Daniel Chen",
+    email: "d.chen@outlook.com",
+    phone: "+1 (647) 555-0192",
+  },
+  small_claims: {
+    name: "Ryan Bishop",
+    email: "ryan.b@yahoo.com",
+    phone: "+1 (905) 555-3316",
+  },
 };
 
 // ── Pre-recorded fixture responses for guided tour ────────────────────────
@@ -351,8 +386,8 @@ const TOUR_FIXTURES: Record<string, ScreenResponse[]> = {
         urgency_score: 18, complexity_score: 22, multi_practice_score: 3, fee_score: 7 },
       response_text: "Your case presents strong indicators across liability, injury severity, and financial damages.",
       finalize: true, collect_identity: false,
-      situation_summary: "Client was rear-ended on the 401 approximately three weeks ago by a driver who ran a red light. A police report was filed. Ongoing medical treatment is in progress and significant work income was lost. Clear liability with documented injuries — strong personal injury claim.",
-      cta: "Your case has been rated Band A — priority. A lawyer will contact you within 24 hours to discuss your options and next steps.",
+      situation_summary: "Client was rear-ended on the 401 approximately three weeks ago at highway speed. A police report was filed. Ongoing medical treatment is in progress and significant work income was lost. Clear liability with documented injuries: strong personal injury claim.",
+      cta: "Your case has been rated Band A (priority). A lawyer will contact you within 24 hours to discuss your options and next steps.",
       flags: ["strong_liability", "documented_injuries", "income_loss"],
       value_tier: "high", prior_experience: null,
     },
@@ -393,7 +428,7 @@ const TOUR_FIXTURES: Record<string, ScreenResponse[]> = {
         urgency_score: 10, complexity_score: 12, multi_practice_score: 2, fee_score: 2 },
       response_text: "Your situation falls in a borderline range. The claim may have merit but limited recoverable damages affect the overall priority.",
       finalize: true, collect_identity: false,
-      situation_summary: "Client was terminated without stated cause after four years of employment and offered two weeks of severance — the statutory minimum. No written employment contract confirmed. Potential wrongful dismissal claim exists but limited damages given tenure and lack of negotiated terms.",
+      situation_summary: "Client was terminated without stated cause after four years of employment and offered two weeks of severance (the statutory minimum). No written employment contract confirmed. Potential wrongful dismissal claim exists but limited damages given tenure and lack of negotiated terms.",
       cta: "Your inquiry has been reviewed. A team member will follow up within a few business days to discuss whether and how we can assist.",
       flags: ["potential_wrongful_dismissal", "statutory_minimum_severance"],
       value_tier: "medium_low", prior_experience: null,
@@ -1221,7 +1256,7 @@ export function IntakeWidget({
               {guidedTour && !isSkipped && (
                 <p className="text-[10px] text-gray-400 flex items-center gap-1.5">
                   <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Guided demo — watch the intake in action
+                  Guided demo: watch the intake in action
                 </p>
               )}
               {apiError && (
@@ -1612,18 +1647,24 @@ export function IntakeWidget({
       </div>
 
       {/* Demo: Lawyer View Panel — post-finalization overlay */}
-      {demoMode && result && (
-        <LawyerViewPanel
-          open={showLawyerPanel}
-          onClose={() => setShowLawyerPanel(false)}
-          band={result.cpi.band}
-          cpi={result.cpi}
-          situationSummary={result.situation_summary}
-          practiceArea={result.practice_area}
-          contactName={contact.name.trim() || "Demo Lead"}
-          intakeTrail={intakeTrail.length > 0 ? intakeTrail : undefined}
-        />
-      )}
+      {demoMode && result && (() => {
+        const demoContact = guidedTour && demoScenario ? DEMO_CONTACTS[demoScenario] : null;
+        return (
+          <LawyerViewPanel
+            open={showLawyerPanel}
+            onClose={() => setShowLawyerPanel(false)}
+            band={result.cpi.band}
+            cpi={result.cpi}
+            situationSummary={result.situation_summary}
+            practiceArea={result.practice_area}
+            contactName={contact.name.trim() || demoContact?.name || "New Lead"}
+            contactEmail={contact.email.trim() || demoContact?.email}
+            contactPhone={contact.phone.trim() || demoContact?.phone}
+            sessionId={sessionId}
+            intakeTrail={intakeTrail.length > 0 ? intakeTrail : undefined}
+          />
+        );
+      })()}
     </div>
   );
 }

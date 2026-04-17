@@ -129,7 +129,7 @@ export async function createClioMatter(lead: Lead): Promise<ClioConversionResult
   // 2. Create matter
   const matterDescription = lead.description
     ? lead.description.slice(0, 255)
-    : `${lead.case_type ?? "Legal matter"} — retained via CaseLoad Select`;
+    : `${lead.case_type ?? "Legal matter"} (CaseLoad Select)`;
 
   const matterRes = await clioPost<{ data: { id: number } }>(token, "/matters", {
     data: {

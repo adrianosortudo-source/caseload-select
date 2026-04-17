@@ -73,7 +73,7 @@ export default async function Dashboard() {
           <div className="card p-4 border-red-300 bg-red-50 text-sm text-red-700">
             {error ?? "Failed to load dashboard stats."}
             {error?.includes("get_dashboard_stats") && (
-              <span> — Run <code>supabase/migrations/005_dashboard_rpc.sql</code> in Supabase SQL Editor.</span>
+              <span>. Run <code>supabase/migrations/005_dashboard_rpc.sql</code> in Supabase SQL Editor.</span>
             )}
           </div>
         </div>

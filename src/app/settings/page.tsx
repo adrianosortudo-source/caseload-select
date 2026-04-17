@@ -18,13 +18,13 @@ export default function SettingsPage() {
             {hasResend ? (
               <span className="badge bg-gold/10 text-gold">Connected</span>
             ) : (
-              <span className="badge bg-black/5">Not configured — paste RESEND_API_KEY in .env.local</span>
+              <span className="badge bg-black/5">Not configured: paste RESEND_API_KEY in .env.local</span>
             )}
           </div>
         </div>
         <div className="card p-5">
           <div className="text-sm font-medium mb-3">Operator</div>
-          <div className="text-sm">Adriano Domingues — caseloadselect.ca</div>
+          <div className="text-sm">Adriano Domingues, caseloadselect.ca</div>
         </div>
       </div>
     </div>

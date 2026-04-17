@@ -159,7 +159,7 @@ export default function NewLeadForm({ firms }: { firms: { id: string; name: stri
           <textarea
             className="input min-h-28"
             name="description"
-            placeholder="Specific matter, relevant facts, desired outcome — more detail = higher legitimacy score"
+            placeholder="Specific matter, relevant facts, desired outcome. More detail = higher legitimacy score."
           />
         </div>
       </div>

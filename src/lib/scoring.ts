@@ -96,10 +96,10 @@ export interface ScoringResult {
 // ── Dropdown options (used by form) ───────────────────────────────────────
 
 export const URGENCY_OPTIONS: { value: Urgency; label: string }[] = [
-  { value: "immediate", label: "Immediate — court date / active deadline (≤30 days)" },
-  { value: "high",      label: "High — needs representation within 2 weeks" },
-  { value: "medium",    label: "Medium — 1–2 months, no hard deadline" },
-  { value: "low",       label: "Low — researching, no urgency" },
+  { value: "immediate", label: "Immediate: court date / active deadline (≤30 days)" },
+  { value: "high",      label: "High: needs representation within 2 weeks" },
+  { value: "medium",    label: "Medium: 1–2 months, no hard deadline" },
+  { value: "low",       label: "Low: researching, no urgency" },
 ];
 
 export const SOURCE_OPTIONS: { value: Source; label: string }[] = [

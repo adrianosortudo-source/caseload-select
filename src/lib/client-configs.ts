@@ -84,7 +84,7 @@ const KENNY_LAW: ClientConfig = {
   custom_instructions:
     "This firm serves a predominantly Etobicoke-area clientele including newcomers and immigrants. " +
     "For immigration inquiries, always ask about the client's current immigration status first. " +
-    "Commissioner of Oaths and Notary service requests should be noted in flags but routed to the firm directly — " +
+    "Commissioner of Oaths and Notary service requests should be noted in flags but routed to the firm directly; " +
     "these are administrative services, not legal matters requiring CPI scoring.",
 };
 
@@ -133,7 +133,7 @@ const POWELL_LITIGATION: ClientConfig = {
     "This is a litigation-focused firm. Prioritize disputes with clear monetary claims, identifiable opposing parties, " +
     "and documented evidence. For personal injury matters, clarify whether the client wants to pursue through " +
     "litigation (this firm's strength) vs. insurance arbitration. Large commercial matters (>$100k) " +
-    "are the firm's sweet spot — apply a value_score boost for high-stakes claims.",
+    "are the firm's sweet spot; apply a value_score boost for high-stakes claims.",
 };
 
 // ─────────────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ const SAKURABA_LAW: ClientConfig = {
     "When immigration matters arise, ask about the client's current status (PR, work permit, visitor, etc.) early. " +
     "Celso Sakuraba is fluent in Portuguese, Spanish, and English; the team also covers French. " +
     "For Portuguese or Spanish-speaking clients, flag language preference in extracted_entities. " +
-    "Refugee and asylum claims are handled — treat with elevated urgency_score (floor 8). " +
+    "Refugee and asylum claims are handled; treat with elevated urgency_score (floor 8). " +
     "This firm was the reference client for CaseLoad Select system design.",
 };
 

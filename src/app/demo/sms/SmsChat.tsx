@@ -124,7 +124,7 @@ export default function SmsChat({ firmId }: { firmId: string }) {
     if (text) {
       addIn(text, options);
     } else if (!data.collect_identity && !data.finalize) {
-      addIn("Got it — one moment while I review your details.");
+      addIn("Got it. One moment while I review your details.");
     }
 
     // Identity collection
@@ -286,7 +286,7 @@ export default function SmsChat({ firmId }: { firmId: string }) {
               <div className={`flex ${msg.role === "out" ? "justify-end" : "justify-start"} mb-1`}>
                 <span className="text-[10px] text-gray-400 px-2">
                   {msg.time}
-                  {msg.role === "out" && " — Delivered"}
+                  {msg.role === "out" && " · Delivered"}
                 </span>
               </div>
               {/* Quick-reply pills (numbered options) */}
@@ -438,7 +438,7 @@ export default function SmsChat({ firmId }: { firmId: string }) {
       {/* Caption */}
       <div className="hidden sm:block absolute bottom-6 left-0 right-0 text-center">
         <p className="text-white/30 text-xs">
-          SMS intake simulation (Option C: Hybrid AI + Structured) — powered by CaseLoad Select
+          SMS intake simulation (Option C: Hybrid AI + Structured), powered by CaseLoad Select
         </p>
       </div>
     </div>

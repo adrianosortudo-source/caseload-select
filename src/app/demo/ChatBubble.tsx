@@ -93,7 +93,7 @@ export default function ChatBubble({ firmId, firmName, branding }: ChatBubblePro
                   <span className="text-2xl">💬</span>
                   <div>
                     <div className="font-semibold text-sm text-gray-800">Start AI Consultation</div>
-                    <div className="text-xs text-gray-500">Describe your situation — get an instant assessment</div>
+                    <div className="text-xs text-gray-500">Describe your situation and get an instant assessment</div>
                   </div>
                 </button>
 
@@ -121,7 +121,7 @@ export default function ChatBubble({ firmId, firmName, branding }: ChatBubblePro
                     <span className="text-2xl">📞</span>
                     <div>
                       <div className="font-semibold text-sm text-gray-800">Call Us Now</div>
-                      <div className="text-xs text-gray-500">{PHONE_DISPLAY} — Mon–Fri 8am–6pm</div>
+                      <div className="text-xs text-gray-500">{PHONE_DISPLAY}, Mon–Fri 8am–6pm</div>
                     </div>
                   </a>
                 )}

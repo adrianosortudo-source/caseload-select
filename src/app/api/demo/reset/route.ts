@@ -55,6 +55,6 @@ export async function POST(req: Request) {
   return NextResponse.json({
     ok: true,
     firmId,
-    message: "Demo firm data wiped — leads and sessions deleted.",
+    message: "Demo firm data wiped. Leads and sessions deleted.",
   });
 }

@@ -91,7 +91,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
       <div className="w-full text-center py-2.5 px-4 text-xs font-medium flex flex-wrap items-center justify-center gap-x-4 gap-y-1"
         style={{ backgroundColor: GOLD, color: "#1a1a2e" }}>
         <span>
-          🎯 <strong>Live Demo</strong> — Hartwell Law PC is a fictional firm built to show CaseLoad Select in action.
+          🎯 <strong>Live Demo:</strong> Hartwell Law PC is a fictional firm built to show CaseLoad Select in action.
           Try submitting a case inquiry using the widget below.
         </span>
         <span className="hidden sm:inline text-black/30">·</span>
@@ -200,12 +200,12 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
               </h1>
               <p className="text-lg text-gray-600 leading-relaxed mb-8">
                 Our AI intake system tells you immediately whether we can help and how urgent your matter
-                is — no gatekeeping, no waiting room, no intake forms that go nowhere.
+                is. No gatekeeping, no waiting room, no intake forms that go nowhere.
               </p>
               <ul className="space-y-3 mb-10">
                 {[
                   "35 practice areas across Ontario",
-                  "Immediate priority assessment — no waiting",
+                  "Immediate priority assessment, no waiting",
                   "Confidential, encrypted, and secure",
                   "Leads routed to a lawyer within minutes",
                 ].map(item => (
@@ -366,7 +366,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
               {
                 step: "02",
                 title: "Answer a Few Questions",
-                body: "Short, specific questions about your matter — takes under 3 minutes on average.",
+                body: "Short, specific questions about your matter. Takes under 3 minutes on average.",
               },
               {
                 step: "03",
@@ -421,7 +421,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
             <button onClick={scrollToWidget}
               className="px-8 py-3 rounded-xl text-white font-semibold text-sm shadow-lg transition hover:opacity-90"
               style={{ backgroundColor: NAVY }}>
-              Start Your Consultation — It&apos;s Free
+              Start a Free Consultation
             </button>
           </div>
         </div>
@@ -448,7 +448,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
               {
                 icon: "💬",
                 title: "Live Chat",
-                desc: "Click the chat bubble (bottom right). The AI works the same way — different entry point.",
+                desc: "Click the chat bubble (bottom right). The AI works the same way, different entry point.",
                 action: "Open Chat",
                 onClick: () => document.querySelector<HTMLButtonElement>("[aria-label='Open chat']")?.click(),
               },
@@ -462,7 +462,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
               {
                 icon: "📲",
                 title: "WhatsApp",
-                desc: "Send a message on WhatsApp — the system captures and routes your inquiry.",
+                desc: "Send a message on WhatsApp. The system captures and routes your inquiry.",
                 action: "Open WhatsApp",
                 href: "/demo/whatsapp",
               },

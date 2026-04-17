@@ -15,11 +15,11 @@ import { supabase } from "@/lib/supabase";
 export const dynamic = "force-dynamic";
 
 const BAND_LABEL: Record<string, string> = {
-  A: "Band A — Same-day consult",
-  B: "Band B — Call within 1h",
-  C: "Band C — Qualification needed",
-  D: "Band D — Long-view nurture",
-  E: "Band E — Auto-declined",
+  A: "Band A: Same-day consult",
+  B: "Band B: Call within 1h",
+  C: "Band C: Qualification needed",
+  D: "Band D: Long-view nurture",
+  E: "Band E: Auto-declined",
 };
 
 const BAND_COLOR: Record<string, string> = {
@@ -175,7 +175,7 @@ export default async function AnalyticsPage() {
         {/* Band distribution */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="card p-5">
-            <div className="text-sm font-medium mb-1">Band Distribution — All Time</div>
+            <div className="text-sm font-medium mb-1">Band Distribution: All Time</div>
             <div className="text-xs text-black/40 mb-4">Complete screened sessions only</div>
             <div className="space-y-2.5">
               {(["A", "B", "C", "D", "E"] as const).map((band) => (
@@ -191,7 +191,7 @@ export default async function AnalyticsPage() {
           </div>
 
           <div className="card p-5">
-            <div className="text-sm font-medium mb-1">Band Distribution — Last Month</div>
+            <div className="text-sm font-medium mb-1">Band Distribution: Last Month</div>
             <div className="text-xs text-black/40 mb-4">For month-over-month comparison</div>
             <div className="space-y-2.5">
               {(["A", "B", "C", "D", "E"] as const).map((band) => (

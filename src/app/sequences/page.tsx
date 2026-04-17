@@ -12,15 +12,15 @@ const TRIGGER_LABELS: Record<string, string> = {
   no_show:                "No Show",
   stalled_retainer:       "Stalled Retainer",
   incomplete_intake:      "Incomplete Intake",
-  spoke_no_book:          "J5A — Spoke, No Book",
-  consulted_no_sign:      "J5B — Consulted, No Sign",
-  retainer_awaiting:      "J6 — Retainer Awaiting",
-  consultation_scheduled: "J2 — Consultation Reminders",
-  review_request:         "J9 — Review Request",
-  matter_active:          "J8 — Active Matter",
-  re_engagement:          "J10 — Re-Engagement",
-  relationship_milestone: "J11 — Relationship Milestone",
-  long_term_nurture:      "J12 — Long-Term Nurture",
+  spoke_no_book:          "J5A: Spoke, No Book",
+  consulted_no_sign:      "J5B: Consulted, No Sign",
+  retainer_awaiting:      "J6: Retainer Awaiting",
+  consultation_scheduled: "J2: Consultation Reminders",
+  review_request:         "J9: Review Request",
+  matter_active:          "J8: Active Matter",
+  re_engagement:          "J10: Re-Engagement",
+  relationship_milestone: "J11: Relationship Milestone",
+  long_term_nurture:      "J12: Long-Term Nurture",
 };
 
 export default async function SequencesPage() {
@@ -38,7 +38,7 @@ export default async function SequencesPage() {
       <div className="p-8 space-y-4">
         {error && (
           <div className="card p-4 bg-red-50 text-red-700 text-sm">
-            {error.message} — Run migration 007_sequence_builder.sql in Supabase.
+            {error.message}. Run migration 007_sequence_builder.sql in Supabase.
           </div>
         )}
 

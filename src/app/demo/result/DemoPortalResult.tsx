@@ -35,7 +35,7 @@ const BAND_CFG: Record<string, {
     color: "#059669", bg: "#ecfdf5", border: "#6ee7b7", text: "#065f46",
     headline: "Priority Lead", sla: "Contact within 30 minutes", slaMin: 30,
     stage: "Hot Lead", stageColor: "#059669",
-    sequenceName: "Band A Priority Protocol — 3-touch same-day follow-up",
+    sequenceName: "Band A Priority Protocol: 3-touch same-day follow-up",
     nextSteps: ["Call client immediately", "Book same-day consultation", "Send priority confirmation SMS"],
     pipelineStages: [
       { label: "New" }, { label: "Screened" }, { label: "Hot Lead", active: true },
@@ -46,7 +46,7 @@ const BAND_CFG: Record<string, {
     color: "#2563eb", bg: "#eff6ff", border: "#93c5fd", text: "#1e3a8a",
     headline: "Warm Lead", sla: "Follow up within 1 hour", slaMin: 60,
     stage: "Warm Lead", stageColor: "#2563eb",
-    sequenceName: "Band B Consultation Sequence — 5-step 48-hour nurture",
+    sequenceName: "Band B Consultation Sequence: 5-step 48-hour nurture",
     nextSteps: ["Schedule consultation within 24 hours", "Send follow-up email", "Add to hot pipeline"],
     pipelineStages: [
       { label: "New" }, { label: "Screened" }, { label: "Warm Lead", active: true },
@@ -57,7 +57,7 @@ const BAND_CFG: Record<string, {
     color: "#d97706", bg: "#fffbeb", border: "#fcd34d", text: "#92400e",
     headline: "Qualified Lead", sla: "Book consultation within 24 hours", slaMin: 1440,
     stage: "Qualified", stageColor: "#d97706",
-    sequenceName: "Band C Consultation Nurture — 5-step 7-day sequence",
+    sequenceName: "Band C Consultation Nurture: 5-step 7-day sequence",
     nextSteps: ["Schedule consultation call within 48 hours", "Send information package", "Add to consultation nurture"],
     pipelineStages: [
       { label: "New" }, { label: "Screened" }, { label: "Qualified", active: true },
@@ -68,7 +68,7 @@ const BAND_CFG: Record<string, {
     color: "#ea580c", bg: "#fff7ed", border: "#fdba74", text: "#7c2d12",
     headline: "Nurture Lead", sla: "Follow up within 7 days", slaMin: 10080,
     stage: "Nurture", stageColor: "#ea580c",
-    sequenceName: "Band D Long-term Nurture — 30-day educational drip (8 messages)",
+    sequenceName: "Band D Long-term Nurture: 30-day educational drip (8 messages)",
     nextSteps: ["Send information package", "Add to 30-day nurture sequence", "Schedule 7-day check-in"],
     pipelineStages: [
       { label: "New" }, { label: "Screened" }, { label: "Nurture", active: true },
@@ -79,7 +79,7 @@ const BAND_CFG: Record<string, {
     color: "#dc2626", bg: "#fef2f2", border: "#fca5a5", text: "#7f1d1d",
     headline: "Outside Practice Areas", sla: "Decline politely", slaMin: 0,
     stage: "Declined", stageColor: "#dc2626",
-    sequenceName: "Band E Decline Protocol — 1-message close + referral log",
+    sequenceName: "Band E Decline Protocol: 1-message close + referral log",
     nextSteps: ["Send decline message with resources", "Log for referral tracking", "Suggest legal aid alternatives"],
     pipelineStages: [
       { label: "New" }, { label: "Screened" }, { label: "Declined", active: true, final: true },
@@ -203,11 +203,11 @@ function buildEvents(params: {
   };
 
   const alertCopy: Record<string, string> = {
-    A: `🔥 PRIORITY — ${fullName} · ${pa} · CPI ${cpiScore} · respond within 30 min`,
-    B: `⚡ WARM — ${fullName} · ${pa} · CPI ${cpiScore} · follow up within 1 hour`,
-    C: `📅 QUALIFIED — ${fullName} · ${pa} · CPI ${cpiScore} · schedule consultation`,
-    D: `📬 NURTURE — ${fullName} · ${pa} · CPI ${cpiScore} · 7-day sequence started`,
-    E: `📋 DECLINED — ${fullName} · ${pa} · Band E · decline message sent`,
+    A: `🔥 PRIORITY: ${fullName} · ${pa} · CPI ${cpiScore} · respond within 30 min`,
+    B: `⚡ WARM: ${fullName} · ${pa} · CPI ${cpiScore} · follow up within 1 hour`,
+    C: `📅 QUALIFIED: ${fullName} · ${pa} · CPI ${cpiScore} · schedule consultation`,
+    D: `📬 NURTURE: ${fullName} · ${pa} · CPI ${cpiScore} · 7-day sequence started`,
+    E: `📋 DECLINED: ${fullName} · ${pa} · Band E · decline message sent`,
   };
 
   const events: AutomationEvent[] = [
@@ -234,13 +234,13 @@ function buildEvents(params: {
         time: t(1800), icon: "check",
         text: `${band === "A" ? "Band A Priority Protocol activated" : "Band B consultation sequence activated"}`,
         sub: band === "A"
-          ? "3-touch same-day follow-up — call + SMS + booking link"
-          : "5-step 48-hour consultation nurture — email + SMS",
+          ? "3-touch same-day follow-up: call + SMS + booking link"
+          : "5-step 48-hour consultation nurture: email + SMS",
       },
       {
         time: t(2400), icon: "sms",
         text: `SMS dispatched → ${firstName || "client"}`,
-        sub: `"${smsCopy[band]} — Hartwell Law PC"`,
+        sub: `"${smsCopy[band]}" (Hartwell Law PC)`,
       },
       {
         time: t(3000), icon: "alert",
@@ -250,7 +250,7 @@ function buildEvents(params: {
       {
         time: t(3300), icon: "clock",
         text: `${band === "A" ? "30-minute" : "1-hour"} SLA timer started`,
-        sub: `Response window active — breach triggers ${band === "A" ? "senior lawyer escalation" : "partner alert"}`,
+        sub: `Response window active. Breach triggers ${band === "A" ? "senior lawyer escalation" : "partner alert"}.`,
       },
     );
     if (email) {
@@ -270,12 +270,12 @@ function buildEvents(params: {
       {
         time: t(1800), icon: "check",
         text: "Band C consultation nurture activated",
-        sub: "5-step 7-day sequence — consultation-focused",
+        sub: "5-step 7-day sequence, consultation-focused",
       },
       {
         time: t(2400), icon: "sms",
         text: `SMS dispatched → ${firstName || "client"}`,
-        sub: `"${smsCopy.C} — Hartwell Law PC"`,
+        sub: `"${smsCopy.C}" (Hartwell Law PC)`,
       },
       {
         time: t(2900), icon: "alert",
@@ -305,7 +305,7 @@ function buildEvents(params: {
       {
         time: t(1800), icon: "check",
         text: "Band D long-term nurture activated",
-        sub: "30-day educational drip — 8 messages over 4 weeks",
+        sub: "30-day educational drip: 8 messages over 4 weeks",
       },
       {
         time: t(2400), icon: "alert",
@@ -331,12 +331,12 @@ function buildEvents(params: {
       {
         time: t(1200), icon: "check",
         text: "Pipeline stage set → Declined",
-        sub: "Outside practice areas — Band E protocol triggered",
+        sub: "Outside practice areas. Band E protocol triggered.",
       },
       {
         time: t(1800), icon: "sms",
         text: `SMS dispatched → ${firstName || "client"}`,
-        sub: `"${smsCopy.E} — Hartwell Law PC"`,
+        sub: `"${smsCopy.E}" (Hartwell Law PC)`,
       },
     );
     if (email) {
@@ -599,7 +599,7 @@ export default function DemoPortalResult({ session }: { session: Record<string, 
               style={{ backgroundColor: "#F8F8F8" }}>
               <div>
                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">GoHighLevel</div>
-                <div className="text-xs font-semibold text-gray-700">Hartwell Law — Intake Pipeline</div>
+                <div className="text-xs font-semibold text-gray-700">Hartwell Law · Intake Pipeline</div>
               </div>
               <svg className="w-5 h-5 text-gray-300" viewBox="0 0 40 40" fill="currentColor">
                 <path d="M20 0C8.95 0 0 8.95 0 20s8.95 20 20 20 20-8.95 20-20S31.05 0 20 0zm0 6c3.87 0 7 3.13 7 7s-3.13 7-7 7-7-3.13-7-7 3.13-7 7-7zm0 28c-4.67 0-8.82-2.12-11.6-5.44C10.4 26.11 15 24 20 24s9.6 2.11 11.6 5.56C29.82 32.88 25.67 34 20 34z"/>
@@ -938,7 +938,7 @@ export default function DemoPortalResult({ session }: { session: Record<string, 
               What you just saw
             </p>
             <h2 className="text-xl sm:text-2xl font-extrabold text-white leading-snug mb-2">
-              This happens for every inquiry — automatically.
+              This happens for every inquiry, automatically.
             </h2>
             <p className="text-sm text-white/60 max-w-md">
               Band scoring, SLA routing, CRM entry, and follow-up sequences fire

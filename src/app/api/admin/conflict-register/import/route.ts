@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
       imported: 0,
       skipped,
       total: body.rows.length,
-      message: "All rows already exist — nothing imported.",
+      message: "All rows already exist. Nothing imported.",
     });
   }
 

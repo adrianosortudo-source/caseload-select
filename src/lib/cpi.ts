@@ -29,8 +29,8 @@ export const REFERRAL_OPTIONS: { value: ReferralSource; label: string }[] = [
   { value: "professional_referral", label: "Professional referral" },
   { value: "structured_partner", label: "Structured partner" },
   { value: "friend_family", label: "Friend or family" },
-  { value: "cold_organic", label: "Cold — organic" },
-  { value: "cold_paid", label: "Cold — paid" },
+  { value: "cold_organic", label: "Cold (organic)" },
+  { value: "cold_paid", label: "Cold (paid)" },
 ];
 
 export const URGENCY_OPTIONS: { value: Urgency; label: string }[] = [

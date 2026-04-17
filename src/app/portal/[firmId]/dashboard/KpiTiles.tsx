@@ -228,7 +228,7 @@ const TILE_CONFIG: Record<TileKey, TileConfig> = {
       if (s === null) return "No response data yet";
       if (s < 60) return "Under 60s target";
       if (s <= 300) return "60–300s range";
-      return "Over 300s — review";
+      return "Over 300s: review";
     },
   },
   pipelineValue: {
@@ -247,8 +247,8 @@ const TILE_CONFIG: Record<TileKey, TileConfig> = {
       const v = t.funnelConversion.value;
       if (v === null) return "Qualified → Signed";
       if (v >= 15) return "Strong conversion rate";
-      if (v >= 8) return "Moderate — room to improve";
-      return "Low — review qualification";
+      if (v >= 8) return "Moderate: room to improve";
+      return "Low: review qualification";
     },
   },
 };

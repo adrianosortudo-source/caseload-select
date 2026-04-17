@@ -44,15 +44,15 @@ const TRIGGER_OPTIONS = [
   { value: "no_show",                label: "No Show" },
   { value: "stalled_retainer",       label: "Stalled Retainer" },
   { value: "incomplete_intake",      label: "Incomplete Intake" },
-  { value: "consultation_scheduled", label: "J2 — Consultation Reminders" },
-  { value: "spoke_no_book",          label: "J5A — Spoke, No Book" },
-  { value: "consulted_no_sign",      label: "J5B — Consulted, No Sign" },
-  { value: "retainer_awaiting",      label: "J6 — Retainer Awaiting" },
-  { value: "review_request",         label: "J9 — Review Request" },
-  { value: "matter_active",          label: "J8 — Active Matter" },
-  { value: "re_engagement",          label: "J10 — Re-Engagement" },
-  { value: "relationship_milestone", label: "J11 — Relationship Milestone" },
-  { value: "long_term_nurture",      label: "J12 — Long-Term Nurture" },
+  { value: "consultation_scheduled", label: "J2: Consultation Reminders" },
+  { value: "spoke_no_book",          label: "J5A: Spoke, No Book" },
+  { value: "consulted_no_sign",      label: "J5B: Consulted, No Sign" },
+  { value: "retainer_awaiting",      label: "J6: Retainer Awaiting" },
+  { value: "review_request",         label: "J9: Review Request" },
+  { value: "matter_active",          label: "J8: Active Matter" },
+  { value: "re_engagement",          label: "J10: Re-Engagement" },
+  { value: "relationship_milestone", label: "J11: Relationship Milestone" },
+  { value: "long_term_nurture",      label: "J12: Long-Term Nurture" },
 ];
 
 const VARIABLES = ["{name}", "{case_type}", "{firm_name}"];
@@ -345,7 +345,7 @@ export default function SequenceEditor({ sequence: initial }: { sequence: Sequen
               {/* Email preview (collapsed) */}
               {isPreviewing && !isEditing && (
                 <div className="border-t border-black/5 mx-4 mb-4 pt-3">
-                  <div className="text-xs text-black/40 mb-1">Email preview — sample data</div>
+                  <div className="text-xs text-black/40 mb-1">Email preview: sample data</div>
                   <div className="bg-black/3 rounded-lg p-4 text-sm">
                     <div className="font-medium mb-2">{applyVars(emailSubject)}</div>
                     <div className="text-black/70 whitespace-pre-wrap">{applyVars(emailBody)}</div>
@@ -452,7 +452,7 @@ export default function SequenceEditor({ sequence: initial }: { sequence: Sequen
                     <div className="px-4 py-3 space-y-3">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-medium text-black/50">SMS Channel</span>
-                        <span className="text-[11px] bg-amber-100 text-amber-700 rounded px-2 py-0.5">Coming Soon — Phase 3</span>
+                        <span className="text-[11px] bg-amber-100 text-amber-700 rounded px-2 py-0.5">Coming Soon (Phase 3)</span>
                       </div>
                       <div>
                         <label className="label">Message body</label>
@@ -477,7 +477,7 @@ export default function SequenceEditor({ sequence: initial }: { sequence: Sequen
                     <div className="px-4 py-3 space-y-3">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-medium text-black/50">WhatsApp Channel</span>
-                        <span className="text-[11px] bg-amber-100 text-amber-700 rounded px-2 py-0.5">Coming Soon — Phase 3</span>
+                        <span className="text-[11px] bg-amber-100 text-amber-700 rounded px-2 py-0.5">Coming Soon (Phase 3)</span>
                       </div>
                       <div>
                         <label className="label">Template name</label>
@@ -505,7 +505,7 @@ export default function SequenceEditor({ sequence: initial }: { sequence: Sequen
                     <div className="px-4 py-3 space-y-3">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-medium text-black/50">Internal Note</span>
-                        <span className="text-[11px] bg-amber-100 text-amber-700 rounded px-2 py-0.5">Coming Soon — Phase 3</span>
+                        <span className="text-[11px] bg-amber-100 text-amber-700 rounded px-2 py-0.5">Coming Soon (Phase 3)</span>
                       </div>
                       <div>
                         <label className="label">Note</label>
