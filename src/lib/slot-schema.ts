@@ -684,6 +684,82 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     crim_dom_q46: { priority: 4, extraction_hints: ["children were present", "kids witnessed it", "children in the home", "no children were there", "children were asleep", "didn't witness anything"] },
     crim_dom_q47: { priority: 5, extraction_hints: ["no prior record", "clean record", "first offence", "prior domestic charges", "prior domestic conviction", "history of domestic calls", "prior assault on a partner"] },
   },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // IMMIGRATION LAW SUB-TYPE SLOT SCHEMAS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // ── Immigration — Express Entry ───────────────────────────────────────────────
+  imm_ee: {
+    imm_ee_q1:  { priority: 5, extraction_hints: ["Express Entry", "Federal Skilled Worker", "FSW", "Canadian Experience Class", "CEC", "Federal Skilled Trades", "FST", "skilled worker PR", "permanent residence through work"] },
+    imm_ee_q2:  { priority: 5, extraction_hints: ["active profile", "Express Entry profile", "in the pool", "received an ITA", "Invitation to Apply", "profile expired", "no profile yet"] },
+    imm_ee_q16: { priority: 5, extraction_hints: ["ITA received", "Invitation to Apply", "60 day deadline", "ITA issued", "received invitation", "when the ITA was", "apply within 60 days"] },
+    imm_ee_q17: { priority: 5, extraction_hints: ["CRS score", "comprehensive ranking", "my score is", "points", "above 500", "below 400", "draw threshold", "minimum cut-off"] },
+    imm_ee_q31: { priority: 5, extraction_hints: ["IELTS", "CELPIP", "TEF", "language test", "CLB", "test scores", "English proficiency", "French proficiency", "language results"] },
+    imm_ee_q32: { priority: 4, extraction_hints: ["ECA", "educational credential assessment", "credential evaluation", "foreign degree", "Canadian education", "WES", "ICAS", "recognized degree"] },
+    imm_ee_q46: { priority: 5, extraction_hints: ["provincial nomination", "PNP nomination", "+600 points", "nominated by province", "OINP nomination", "nominated for PR"] },
+    imm_ee_q47: { priority: 4, extraction_hints: ["prior refusal", "PR application refused", "misrepresentation", "inadmissibility", "clean record", "no prior issues", "refused before"] },
+  },
+
+  // ── Immigration — Spousal Sponsorship ────────────────────────────────────────
+  imm_spousal: {
+    imm_spo_q1:  { priority: 5, extraction_hints: ["spouse", "husband", "wife", "legally married", "common-law partner", "conjugal partner", "sponsoring my partner", "sponsoring my spouse"] },
+    imm_spo_q2:  { priority: 5, extraction_hints: ["inland sponsorship", "outland sponsorship", "applying inland", "applying outland", "open work permit while waiting", "applying from outside Canada"] },
+    imm_spo_q16: { priority: 4, extraction_hints: ["together for years", "relationship length", "been together since", "married for", "common law for", "length of relationship"] },
+    imm_spo_q17: { priority: 5, extraction_hints: ["status expiring", "permit expiring", "urgency", "pregnant", "medical", "family emergency", "need to stay in Canada", "permit expires soon"] },
+    imm_spo_q31: { priority: 5, extraction_hints: ["sponsor eligibility", "financial requirements", "income", "no social assistance", "no prior default", "previously sponsored", "undertaking"] },
+    imm_spo_q32: { priority: 5, extraction_hints: ["relationship evidence", "photos together", "joint finances", "travel records", "messages", "genuine relationship", "thin evidence", "officer questions genuineness"] },
+    imm_spo_q46: { priority: 5, extraction_hints: ["prior refusal", "prior spousal refusal", "misrepresentation", "overstay", "unauthorized work", "no prior issues", "clean immigration history"] },
+    imm_spo_q47: { priority: 3, extraction_hints: ["children included", "dependent children", "no children", "custody issue", "children from another relationship", "child of both"] },
+  },
+
+  // ── Immigration — Study Permit ────────────────────────────────────────────────
+  imm_study: {
+    imm_stu_q1:  { priority: 5, extraction_hints: ["study permit", "student visa", "extending my study permit", "PGWP", "post-graduation work permit", "restoration of student status", "initial study permit"] },
+    imm_stu_q2:  { priority: 5, extraction_hints: ["DLI", "designated learning institution", "is my school on the list", "university", "college", "private school", "not a DLI"] },
+    imm_stu_q16: { priority: 5, extraction_hints: ["permit expires", "permit expired", "within 90 days", "expired more than 90 days", "implied status", "before expiry", "restoration"] },
+    imm_stu_q17: { priority: 5, extraction_hints: ["full-time enrollment", "full time student", "dropped to part-time", "authorized leave", "break between programs", "not enrolled full time"] },
+    imm_stu_q31: { priority: 5, extraction_hints: ["PGWP eligible", "post-graduation work permit", "8 month program", "program length", "already have PGWP", "not eligible for PGWP"] },
+    imm_stu_q32: { priority: 5, extraction_hints: ["off-campus work", "20 hours", "worked more than allowed", "unauthorized work while studying", "complied with work hours", "didn't work at all"] },
+    imm_stu_q46: { priority: 4, extraction_hints: ["prior study permit refusal", "refused before", "multiple refusals", "first application", "no prior refusal"] },
+    imm_stu_q47: { priority: 3, extraction_hints: ["SDS", "Student Direct Stream", "India", "China", "Philippines", "Vietnam", "Pakistan", "GIC", "IELTS 6.0", "SDS country"] },
+  },
+
+  // ── Immigration — Work Permit ─────────────────────────────────────────────────
+  imm_work_permit: {
+    imm_wp_q1:  { priority: 5, extraction_hints: ["work permit", "worker visa", "extending my work permit", "open work permit", "PGWP", "bridging permit", "restoration of work authorization", "LMIA work permit"] },
+    imm_wp_q2:  { priority: 5, extraction_hints: ["LMIA", "labour market impact assessment", "LMIA-exempt", "CUSMA", "ICT", "intracompany transfer", "IEC", "working holiday", "significant benefit", "no LMIA needed"] },
+    imm_wp_q16: { priority: 5, extraction_hints: ["work permit expires", "permit expired", "implied status", "applying from abroad", "still valid", "expired 90 days", "restoration"] },
+    imm_wp_q17: { priority: 5, extraction_hints: ["need to start immediately", "employer needs me soon", "start within two weeks", "start date", "urgent start", "no deadline"] },
+    imm_wp_q31: { priority: 5, extraction_hints: ["CUSMA", "TN visa", "NAFTA", "intracompany transferee", "ICT", "IEC", "working holiday", "significant benefit", "R205", "LMIA required", "not exempt"] },
+    imm_wp_q32: { priority: 5, extraction_hints: ["valid status", "no violations", "worked beyond permit", "unauthorized work", "overstayed", "out of status", "applying from outside Canada"] },
+    imm_wp_q46: { priority: 4, extraction_hints: ["no prior refusal", "work permit refused before", "multiple refusals", "refused once", "first application"] },
+    imm_wp_q47: { priority: 3, extraction_hints: ["path to PR", "building Canadian experience", "Express Entry pathway", "employer sponsoring for PR", "just need the permit", "temporary only"] },
+  },
+
+  // ── Immigration — Refugee ─────────────────────────────────────────────────────
+  imm_refugee: {
+    imm_ref_q1:  { priority: 5, extraction_hints: ["refugee claim", "Convention refugee", "s.96", "s.97", "persecution", "fear of return", "protection from removal", "seeking asylum", "asylum claim"] },
+    imm_ref_q2:  { priority: 5, extraction_hints: ["entered at the airport", "crossed the border", "irregular crossing", "already in Canada", "inland claim", "entered through the US", "Roxham Road", "at the port of entry"] },
+    imm_ref_q16: { priority: 5, extraction_hints: ["RPD hearing", "hearing scheduled", "hearing date", "30 days", "imminent hearing", "no hearing yet", "claim rejected", "PRRA", "removal scheduled"] },
+    imm_ref_q17: { priority: 5, extraction_hints: ["removal order", "deportation", "CBSA enforcement", "removal imminent", "stay of removal", "no removal order", "CBSA contacted me"] },
+    imm_ref_q31: { priority: 5, extraction_hints: ["documentary evidence", "police report", "medical records", "country conditions", "news articles", "evidence of persecution", "testimony only", "no documents"] },
+    imm_ref_q32: { priority: 5, extraction_hints: ["first claim", "prior claim withdrawn", "prior claim rejected", "claimed refugee before", "claimed in another country", "previous application"] },
+    imm_ref_q46: { priority: 4, extraction_hints: ["designated country", "DCO", "my country is designated", "accelerated timeline", "not a DCO country", "standard RPD process"] },
+    imm_ref_q47: { priority: 3, extraction_hints: ["H&C", "humanitarian and compassionate", "PRRA", "establishment in Canada", "hardship", "children's best interests", "alternative application"] },
+  },
+
+  // ── Immigration — Provincial Nominee Program ──────────────────────────────────
+  imm_pnp: {
+    imm_pnp_q1:  { priority: 5, extraction_hints: ["OINP", "Ontario Immigrant Nominee", "BC PNP", "Alberta Immigrant Nominee", "AINP", "provincial nominee", "PNP", "which province"] },
+    imm_pnp_q2:  { priority: 5, extraction_hints: ["employer job offer stream", "Human Capital Priorities", "international student stream", "French-speaking skilled worker", "in-demand skills", "PNP stream", "which stream"] },
+    imm_pnp_q16: { priority: 5, extraction_hints: ["received nomination", "nomination certificate", "applied and waiting", "preparing application", "exploring options", "just starting", "nominated by province"] },
+    imm_pnp_q17: { priority: 5, extraction_hints: ["job offer deadline", "permit expiring", "EE profile expiring", "status expiry", "urgency", "no deadline"] },
+    imm_pnp_q31: { priority: 5, extraction_hints: ["job offer", "employer job offer", "permanent full-time offer", "qualifying job offer", "meets PNP wage requirement", "no job offer"] },
+    imm_pnp_q32: { priority: 5, extraction_hints: ["worked in Ontario", "studied in Ontario", "Canadian experience", "graduated in Canada", "Ontario education", "no connection to province", "no ties"] },
+    imm_pnp_q46: { priority: 5, extraction_hints: ["Express Entry profile", "CRS score", "above 400", "below 400", "EE pool", "no Express Entry profile", "+600 points from nomination"] },
+    imm_pnp_q47: { priority: 4, extraction_hints: ["prior PNP refusal", "refused by province", "immigration violation", "overstay", "unauthorized work", "no prior issues", "clean history"] },
+  },
 };
 
 /**

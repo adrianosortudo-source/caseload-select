@@ -313,6 +313,107 @@ const FAM_PRT_AUTO_RULES: AutoConfirmRule[] = [
   { questionId: "fam_prt_q2", patterns: /\b(financial abuse|controlling (my )?money|won.t let me access|coerced (to )?sign)\b/i, value: "financial" },
 ];
 
+const IMM_EE_AUTO_RULES: AutoConfirmRule[] = [
+  // Program — imm_ee_q1
+  { questionId: "imm_ee_q1", patterns: /\b(Canadian Experience Class|CEC|I (have|had) Canadian work experience|worked in Canada (for|and want) PR)\b/i, value: "cec" },
+  { questionId: "imm_ee_q1", patterns: /\b(Federal Skilled Worker|FSW|foreign work experience|skilled worker (program|PR))\b/i, value: "fsw" },
+
+  // Profile / ITA — imm_ee_q2
+  { questionId: "imm_ee_q2", patterns: /\b(received (an |the )?ITA|Invitation to Apply|got an invitation)\b/i, value: "ita_received" },
+  { questionId: "imm_ee_q2", patterns: /\b(active (Express Entry )?profile|profile (is )?in the pool|no ITA yet)\b/i, value: "profile_active" },
+  { questionId: "imm_ee_q2", patterns: /\b(profile expired|profile (has )?expired|need to (create|renew) (a )?profile)\b/i, value: "expired" },
+
+  // Language — imm_ee_q31
+  { questionId: "imm_ee_q31", patterns: /\b(IELTS|CELPIP|TEF|language test|test scores|CLB)\b/i, value: "clb7_8" },
+  { questionId: "imm_ee_q31", patterns: /\b(no (language )?test|haven.t (taken|done|completed) (a |the )?language test|test not (yet )?done)\b/i, value: "no_test" },
+
+  // PNP nomination — imm_ee_q46
+  { questionId: "imm_ee_q46", patterns: /\b(provincial nomination|PNP nomination|nominated (by|from) (a )?province|OINP nomination|provincial nominee)\b/i, value: "has_nomination" },
+  { questionId: "imm_ee_q46", patterns: /\b(applied to (a )?PNP|waiting (for|on) (a )?provincial nomination|PNP application (submitted|pending))\b/i, value: "pnp_applied" },
+];
+
+const IMM_SPO_AUTO_RULES: AutoConfirmRule[] = [
+  // Relationship type — imm_spo_q1
+  { questionId: "imm_spo_q1", patterns: /\b(legally married|my (wife|husband|spouse)|we (are|got|were) married|marriage certificate)\b/i, value: "married" },
+  { questionId: "imm_spo_q1", patterns: /\b(common.law|common law partner|lived together (for |continuously )?12|cohabiting for)\b/i, value: "common_law" },
+
+  // Stream — imm_spo_q2
+  { questionId: "imm_spo_q2", patterns: /\b(inland (sponsorship|application)|applying (here|inland)|I am (already |currently )?in Canada)\b/i, value: "inland" },
+  { questionId: "imm_spo_q2", patterns: /\b(outland|applying from (outside|abroad|my home country)|applying from overseas)\b/i, value: "outland" },
+
+  // Status urgency — imm_spo_q17
+  { questionId: "imm_spo_q17", patterns: /\b(status (is )?expiring|permit (is )?expiring|visa (is )?expiring|expires (soon|shortly|next month|in \d+ (days|weeks)))\b/i, value: "status_expiring" },
+];
+
+const IMM_STU_AUTO_RULES: AutoConfirmRule[] = [
+  // Permit type — imm_stu_q1
+  { questionId: "imm_stu_q1", patterns: /\b(PGWP|post.graduation work permit|applying for (my )?PGWP)\b/i, value: "pgwp" },
+  { questionId: "imm_stu_q1", patterns: /\b(extending (my )?study permit|renewing (my )?study permit|study permit extension)\b/i, value: "extension" },
+  { questionId: "imm_stu_q1", patterns: /\b(restoration|restore (my )?student status|study permit (has )?expired (within|less than) 90)\b/i, value: "restoration" },
+
+  // Expiry — imm_stu_q16
+  { questionId: "imm_stu_q16", patterns: /\b(study permit (has )?expired|permit expired|my (study )?permit ran out)\b/i, value: "expired_90_days" },
+  { questionId: "imm_stu_q16", patterns: /\b(applying before (it )?expires|still valid|permit (is )?valid|not (yet )?expired)\b/i, value: "not_expired" },
+
+  // Unauthorized work — imm_stu_q32
+  { questionId: "imm_stu_q32", patterns: /\b(worked more than (20|twenty) hours|exceeded (the )?work (hours|limit)|worked (without authorization|illegally))\b/i, value: "unauthorized_work" },
+  { questionId: "imm_stu_q32", patterns: /\b(within (authorized|allowed) hours|complied with (the )?(20.hour|work) (limit|restriction)|never worked)\b/i, value: "compliant_work" },
+];
+
+const IMM_WP_AUTO_RULES: AutoConfirmRule[] = [
+  // LMIA status — imm_wp_q2
+  { questionId: "imm_wp_q2", patterns: /\b(LMIA (has been |was |is )?obtained|positive LMIA|employer (has|got) (a |the )?LMIA)\b/i, value: "lmia_obtained" },
+  { questionId: "imm_wp_q2", patterns: /\b(LMIA.exempt|CUSMA|TN (visa|permit)|ICT|intracompany (transfer|transferee)|IEC|working holiday|significant benefit|R204|R205)\b/i, value: "lmia_exempt" },
+  { questionId: "imm_wp_q2", patterns: /\b(LMIA (is )?required|need (a |an )?LMIA|employer (is getting|needs to get) (a |the )?LMIA)\b/i, value: "lmia_needed" },
+
+  // Urgency — imm_wp_q17
+  { questionId: "imm_wp_q17", patterns: /\b(start (immediately|right away|within (a )?week|within two weeks)|employer needs me (to start )?immediately)\b/i, value: "urgent_start" },
+
+  // Unauthorized work — imm_wp_q32
+  { questionId: "imm_wp_q32", patterns: /\b(valid status|no violations|fully (compliant|authorized)|in (good |valid )?standing)\b/i, value: "valid_status" },
+  { questionId: "imm_wp_q32", patterns: /\b(worked (without authorization|beyond (my )?permit)|unauthorized work|overstayed)\b/i, value: "unauthorized" },
+
+  // PR pathway — imm_wp_q47
+  { questionId: "imm_wp_q47", patterns: /\b(building (Canadian )?experience (for|toward) (PR|permanent residence)|Express Entry (pathway|strategy)|CEC pathway)\b/i, value: "pr_pathway" },
+  { questionId: "imm_wp_q47", patterns: /\b(employer (is )?sponsoring (me )?(for PR|for permanent residence)|employer PR sponsorship)\b/i, value: "employer_pr" },
+];
+
+const IMM_REF_AUTO_RULES: AutoConfirmRule[] = [
+  // Entry method — imm_ref_q2
+  { questionId: "imm_ref_q2", patterns: /\b(entered (at the )?airport|flew (into|to) Canada|arrived (at the )?airport|port of entry (by air|arrival))\b/i, value: "official_port" },
+  { questionId: "imm_ref_q2", patterns: /\b(irregular (crossing|entry)|crossed (between ports|informally)|not (at|through) (an official|a) (crossing|port))\b/i, value: "irregular" },
+  { questionId: "imm_ref_q2", patterns: /\b(already (in|was in) Canada (when|before) (I|we) (claimed|filed)|inland (claim|application))\b/i, value: "inland" },
+  { questionId: "imm_ref_q2", patterns: /\b(through the US|at the US.Canada border|Roxham Road|US land (port|crossing))\b/i, value: "us_land_port" },
+
+  // Hearing urgency — imm_ref_q16
+  { questionId: "imm_ref_q16", patterns: /\b(RPD hearing (is |scheduled )?(within|in (the next|less than)) (30|14|7|2) (days|weeks)|hearing (is )?imminent|hearing (is )?very soon)\b/i, value: "hearing_imminent" },
+  { questionId: "imm_ref_q16", patterns: /\b(RPD hearing (is |has been )?(scheduled|set)|hearing date (is )?confirmed)\b/i, value: "hearing_scheduled" },
+  { questionId: "imm_ref_q16", patterns: /\b(claim (was )?rejected|refugee claim (was )?denied|RPD (denied|dismissed) (my )?claim|PRRA)\b/i, value: "post_rejection" },
+
+  // Removal — imm_ref_q17
+  { questionId: "imm_ref_q17", patterns: /\b(removal (is )?imminent|deportation (date|is|scheduled)|being deported|removal (is|in) \d+ (days|weeks))\b/i, value: "removal_imminent" },
+  { questionId: "imm_ref_q17", patterns: /\b(removal order (exists|in (place|effect)|was issued)|there is a removal order)\b/i, value: "removal_order" },
+  { questionId: "imm_ref_q17", patterns: /\b(stay of removal|removal (has been |is) stayed|judicial review (of|on) removal)\b/i, value: "stay_of_removal" },
+];
+
+const IMM_PNP_AUTO_RULES: AutoConfirmRule[] = [
+  // Province — imm_pnp_q1
+  { questionId: "imm_pnp_q1", patterns: /\b(OINP|Ontario (Immigrant Nominee|PNP)|Ontario.s PNP)\b/i, value: "ontario" },
+  { questionId: "imm_pnp_q1", patterns: /\b(BC PNP|British Columbia (PNP|nominee)|BCPNP)\b/i, value: "bc" },
+  { questionId: "imm_pnp_q1", patterns: /\b(AINP|Alberta (Immigrant Nominee|PNP)|Alberta.s PNP)\b/i, value: "alberta" },
+
+  // Stage — imm_pnp_q16
+  { questionId: "imm_pnp_q16", patterns: /\b(received (a |the |my )?nomination (certificate)?|nominated (by|from) (a )?province|provincial nomination (in hand|received|certificate))\b/i, value: "nominated" },
+
+  // Job offer — imm_pnp_q31
+  { questionId: "imm_pnp_q31", patterns: /\b(qualifying (job )?offer|permanent full.time (offer|position)|employer (job )?offer (that )?meets|valid PNP job offer)\b/i, value: "qualifying_offer" },
+  { questionId: "imm_pnp_q31", patterns: /\b(no (job )?offer|applying (through|via) Human Capital|not (through the )?employer stream)\b/i, value: "no_offer" },
+
+  // Canadian ties — imm_pnp_q32
+  { questionId: "imm_pnp_q32", patterns: /\b(worked in (Ontario|BC|Alberta|the province) (for|over) (a year|1 year|\d years)|work experience in (Ontario|BC|Alberta))\b/i, value: "work_experience" },
+  { questionId: "imm_pnp_q32", patterns: /\b(graduated (from|in) (Ontario|BC|Alberta|a Canadian)|Canadian (school|university|college) (in Ontario|in BC|in Alberta))\b/i, value: "education_in_province" },
+];
+
 const LLT_AUTO_RULES: AutoConfirmRule[] = [
   // Landlord role — llt_q1
   { questionId: "llt_q1", patterns: /\b(i am (the )?landlord|i own (the )?property|property owner|my rental|my tenant|my unit|i own (the )?unit)\b/i, value: "landlord" },
@@ -362,6 +463,14 @@ export const AUTO_RULES_BY_PA: Record<string, AutoConfirmRule[]> = {
   crim_theft:      CRIM_TFT_AUTO_RULES,
   crim_domestic:   CRIM_DOM_AUTO_RULES,
   crim_other:      [],   // qualifier set — no auto-confirm needed
+  // Imm sub-types
+  imm_ee:          IMM_EE_AUTO_RULES,
+  imm_spousal:     IMM_SPO_AUTO_RULES,
+  imm_study:       IMM_STU_AUTO_RULES,
+  imm_work_permit: IMM_WP_AUTO_RULES,
+  imm_refugee:     IMM_REF_AUTO_RULES,
+  imm_pnp:         IMM_PNP_AUTO_RULES,
+  imm_other:       [],   // qualifier set — no auto-confirm needed
 };
 
 /**
