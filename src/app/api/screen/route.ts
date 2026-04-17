@@ -395,6 +395,8 @@ export async function POST(req: Request) {
 
       if (questionSet != null) {
         const existingCpi = (session.scoring as CpiBreakdown & { _confirmed?: Record<string, unknown> }) ?? {} as CpiBreakdown;
+        const widgetScoringRaw = (session.scoring as Record<string, unknown>) ?? {};
+        const widgetRound2Started = !!widgetScoringRaw._round_2_started;
 
         // Save confirmed answers
         await supabase
@@ -410,6 +412,86 @@ export async function POST(req: Request) {
         const batch = bandLocked
           ? { questions: [], phase: "identity" as const }
           : selectNextQuestions(questionSet.questions, paId, updatedConfirmed, currentBand);
+
+        // ── Round 2 gate — widget ───────────────────────────────────────────
+        // When Round 1 is complete AND band is A or B AND Round 2 not started,
+        // call GPT with a lean prompt to generate 2 adaptive deep-dive questions.
+        // This is the only place in the widget fast path that calls GPT.
+        // Band C/D/E skip Round 2 and go straight to identity.
+        // If GPT fails, fall through to collect_identity gracefully.
+        if (batch.phase === "identity" && !widgetRound2Started && ["A", "B"].includes(currentBand)) {
+          const entitySummary = Object.entries(updatedConfirmed)
+            .filter(([k]) => !k.startsWith("_"))
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(", ") || "none collected yet";
+
+          const r2SystemPrompt =
+            `You are a legal intake specialist generating a second round of targeted screening questions.\n\n` +
+            `Practice area: ${paId}. Band candidate after Round 1: ${currentBand}.\n` +
+            `Entities already collected: ${entitySummary}\n\n` +
+            `Generate exactly 2 adaptive follow-up questions targeting the highest-uncertainty value drivers NOT already collected above.\n\n` +
+            `Practice area guidance:\n` +
+            `- emp: discrimination/harassment overlap, executive equity or bonus component, human rights filing intent, whether release was signed\n` +
+            `- pi: income replacement amount, catastrophic injury threshold, medical-legal report ordered, pre-existing conditions\n` +
+            `- fam: matrimonial home equity estimate, pension or RRSP division, cross-jurisdiction element, child support arrears\n` +
+            `- crim: exact breath reading if DUI, prior criminal record, victim statement filed\n` +
+            `- real: title search result, financing condition waived, home inspection findings\n` +
+            `- imm: current status in Canada, refusal history, provincial nomination received\n` +
+            `- All others: the 2 most value-determinative unknowns for this practice area.\n\n` +
+            `Return a JSON object with this exact shape (no other keys):\n` +
+            `{ "questions": [ { "id": "r2_[descriptive_id]", "text": "...", "options": [ { "label": "...", "value": "..." } ], "allow_free_text": false } ] }\n\n` +
+            `Rules: 2-4 options per question. Values in snake_case. Questions must be fully distinct from Round 1 and from each other. Do NOT repeat any subject already in the collected entities list.`;
+
+          try {
+            const r2Completion = await openai.chat.completions.create({
+              model: MODEL,
+              temperature: 0,
+              response_format: { type: "json_object" },
+              messages: [
+                { role: "system", content: r2SystemPrompt },
+                { role: "user", content: "Generate the 2 Round 2 questions now." },
+              ],
+            });
+
+            const r2Raw = r2Completion.choices[0]?.message?.content;
+            if (r2Raw) {
+              const r2Parsed = JSON.parse(r2Raw) as { questions?: unknown[] };
+              const r2Questions = Array.isArray(r2Parsed.questions) ? r2Parsed.questions : [];
+
+              if (r2Questions.length > 0) {
+                // Persist _round_2_started so the next answer submission goes to identity
+                await supabase
+                  .from("intake_sessions")
+                  .update({ scoring: { ...existingCpi, _confirmed: updatedConfirmed, _round_2_started: true } })
+                  .eq("id", session.id);
+
+                return NextResponse.json({
+                  session_id: session.id,
+                  practice_area: session.practice_area,
+                  practice_area_confidence: "high",
+                  next_question: null,
+                  next_questions: r2Questions,
+                  cpi: existingCpi,
+                  cpi_partial: computeCpiPartial(existingCpi, false),
+                  response_text: "",
+                  finalize: false,
+                  collect_identity: false,
+                  situation_summary: (session.situation_summary as string) ?? null,
+                  extracted_entities: (session.extracted_entities as Record<string, unknown>) ?? {},
+                  questions_answered: Object.keys(updatedConfirmed),
+                  complexity_indicators: ((existingCpi as unknown as Record<string, unknown>)._complexity_indicators as Record<string, unknown>) ?? null,
+                  value_tier: ((session.extracted_entities as Record<string, unknown>)?.value_tier as string) ?? null,
+                  prior_experience: ((session.extracted_entities as Record<string, unknown>)?.prior_experience as string) ?? null,
+                  flags: ((existingCpi as unknown as Record<string, unknown>)._flags as string[]) ?? [],
+                  cta: null,
+                });
+              }
+            }
+          } catch (err) {
+            // Round 2 generation failed — fall through to collect_identity gracefully
+            console.error("[screen] Round 2 widget generation failed, falling through to identity:", err);
+          }
+        }
 
         const nextQuestions = batch.phase !== "identity" ? batch.questions : null;
         const collectIdentity = batch.phase === "identity";
