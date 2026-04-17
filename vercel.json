@@ -3,40 +3,40 @@
   "outputDirectory": ".next",
   "crons": [
     {
-      "path": "/api/cron/send-sequences",
-      "schedule": "*/15 * * * *"
-    },
-    {
       "path": "/api/cron/persistence",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 7 * * *"
     },
     {
-      "path": "/api/cron/session-expiry",
-      "schedule": "0 * * * *"
+      "path": "/api/cron/send-sequences",
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/incomplete-intake",
-      "schedule": "0 * * * *"
+      "schedule": "0 9 * * *"
     },
     {
       "path": "/api/cron/no-show",
-      "schedule": "0 * * * *"
+      "schedule": "0 10 * * *"
     },
     {
       "path": "/api/cron/recovery-a",
-      "schedule": "0 * * * *"
+      "schedule": "0 11 * * *"
     },
     {
       "path": "/api/cron/recovery-b",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 14 * * *"
     },
     {
       "path": "/api/cron/retainer-followup",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 15 * * *"
     },
     {
       "path": "/api/cron/stalled-retainer",
-      "schedule": "0 9 * * *"
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/session-expiry",
+      "schedule": "0 2 * * *"
     },
     {
       "path": "/api/cron/data-retention",
