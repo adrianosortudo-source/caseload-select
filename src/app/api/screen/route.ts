@@ -413,84 +413,214 @@ export async function POST(req: Request) {
           ? { questions: [], phase: "identity" as const }
           : selectNextQuestions(questionSet.questions, paId, updatedConfirmed, currentBand);
 
-        // ── Round 2 gate — widget ───────────────────────────────────────────
-        // When Round 1 is complete AND band is A or B AND Round 2 not started,
-        // call GPT with a lean prompt to generate 2 adaptive deep-dive questions.
-        // This is the only place in the widget fast path that calls GPT.
-        // Band C/D/E skip Round 2 and go straight to identity.
-        // If GPT fails, fall through to collect_identity gracefully.
-        if (batch.phase === "identity" && !widgetRound2Started && ["A", "B"].includes(currentBand)) {
-          const entitySummary = Object.entries(updatedConfirmed)
+        // ── Round 1 completion: re-score then route ─────────────────────────
+        // When all Round 1 questions are done and Round 2 hasn't started yet:
+        // 1. Re-score CPI using every confirmed entity (GPT has the full scoring engine).
+        //    Fit components (geo, practice, legitimacy, referral) are locked from Turn 1.
+        // 2. Use the re-scored band — not the initial classification — to decide routing:
+        //    Band A/B → generate Round 2 deep-dive questions (lean GPT call).
+        //    Band C/D/E → collect_identity immediately with the updated CPI.
+        // Both GPT calls fall through gracefully: if either fails, the session continues
+        // with the existing CPI / initial band so the user never sees an error.
+        if (batch.phase === "identity" && !widgetRound2Started) {
+          const r1EntityLines = Object.entries(updatedConfirmed)
             .filter(([k]) => !k.startsWith("_"))
-            .map(([k, v]) => `${k}: ${v}`)
-            .join(", ") || "none collected yet";
+            .map(([k, v]) => `  ${k}: ${v}`)
+            .join("\n") || "  (none recorded)";
 
-          const r2SystemPrompt =
-            `You are a legal intake specialist generating a second round of targeted screening questions.\n\n` +
-            `Practice area: ${paId}. Band candidate after Round 1: ${currentBand}.\n` +
-            `Entities already collected: ${entitySummary}\n\n` +
-            `Generate exactly 2 adaptive follow-up questions targeting the highest-uncertainty value drivers NOT already collected above.\n\n` +
-            `Practice area guidance:\n` +
-            `- emp: discrimination/harassment overlap, executive equity or bonus component, human rights filing intent, whether release was signed\n` +
-            `- pi: income replacement amount, catastrophic injury threshold, medical-legal report ordered, pre-existing conditions\n` +
-            `- fam: matrimonial home equity estimate, pension or RRSP division, cross-jurisdiction element, child support arrears\n` +
-            `- crim: exact breath reading if DUI, prior criminal record, victim statement filed\n` +
-            `- real: title search result, financing condition waived, home inspection findings\n` +
-            `- imm: current status in Canada, refusal history, provincial nomination received\n` +
-            `- All others: the 2 most value-determinative unknowns for this practice area.\n\n` +
-            `Return a JSON object with this exact shape (no other keys):\n` +
-            `{ "questions": [ { "id": "r2_[descriptive_id]", "text": "...", "options": [ { "label": "...", "value": "..." } ], "allow_free_text": false } ] }\n\n` +
-            `Rules: 2-4 options per question. Values in snake_case. Questions must be fully distinct from Round 1 and from each other. Do NOT repeat any subject already in the collected entities list.`;
+          // Defaults — used if re-score GPT call fails
+          let r1Cpi = existingCpi;
+          let r1Band = currentBand;
+          let r1Entities = (session.extracted_entities as Record<string, unknown>) ?? {};
+          let r1ComplexityIndicators: Record<string, unknown> | null =
+            ((existingCpi as unknown as Record<string, unknown>)._complexity_indicators as Record<string, unknown>) ?? null;
+          let r1Flags: string[] = ((existingCpi as unknown as Record<string, unknown>)._flags as string[]) ?? [];
 
           try {
-            const r2Completion = await openai.chat.completions.create({
+            let r1Prompt = buildSystemPrompt(firmConfig, "widget", { includeQuestionSets: false });
+            r1Prompt +=
+              `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
+              `\nROUND 1 RE-SCORING PASS — override all channel instructions\n` +
+              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+              `All Round 1 intake questions have been answered. Re-score the CPI now.\n` +
+              `Return next_question: null, next_questions: null, collect_identity: true, finalize: false.\n` +
+              `response_text: "" (empty string). situation_summary: null.\n\n` +
+              `LOCKED FIT COMPONENTS (carry forward unchanged):\n` +
+              `  geo_score: ${existingCpi.geo_score}, practice_score: ${existingCpi.practice_score}\n` +
+              `  legitimacy_score: ${existingCpi.legitimacy_score}, referral_score: ${existingCpi.referral_score}\n` +
+              `  fit_score: ${existingCpi.fit_score}\n\n` +
+              `ALL CONFIRMED ENTITIES (Round 1):\n${r1EntityLines}\n\n` +
+              `TASK: Recalculate urgency_score, complexity_score, multi_practice_score, fee_score, and value_tier ` +
+              `using every entity above and the full scoring rules in this prompt. ` +
+              `value_score = urgency + complexity + multi_practice + fee. ` +
+              `total = ${existingCpi.fit_score} (locked fit) + value_score. ` +
+              `Band: A=80-100, B=60-79, C=40-59, D=20-39, E=0-19. ` +
+              `Return the complete JSON schema with all components.`;
+
+            const r1Completion = await openai.chat.completions.create({
               model: MODEL,
               temperature: 0,
               response_format: { type: "json_object" },
               messages: [
-                { role: "system", content: r2SystemPrompt },
-                { role: "user", content: "Generate the 2 Round 2 questions now." },
+                { role: "system", content: r1Prompt },
+                { role: "user", content: `Re-score this ${paId} case from Round 1 answers: ${r1EntityLines.replace(/\n/g, ", ")}` },
               ],
             });
 
-            const r2Raw = r2Completion.choices[0]?.message?.content;
-            if (r2Raw) {
-              const r2Parsed = JSON.parse(r2Raw) as { questions?: unknown[] };
-              const r2Questions = Array.isArray(r2Parsed.questions) ? r2Parsed.questions : [];
+            const r1Raw = r1Completion.choices[0]?.message?.content;
+            if (r1Raw) {
+              const r1Gpt = JSON.parse(r1Raw) as GptResponse;
 
-              if (r2Questions.length > 0) {
-                // Persist _round_2_started so the next answer submission goes to identity
-                await supabase
-                  .from("intake_sessions")
-                  .update({ scoring: { ...existingCpi, _confirmed: updatedConfirmed, _round_2_started: true } })
-                  .eq("id", session.id);
-
-                return NextResponse.json({
-                  session_id: session.id,
-                  practice_area: session.practice_area,
-                  practice_area_confidence: "high",
-                  next_question: null,
-                  next_questions: r2Questions,
-                  cpi: existingCpi,
-                  cpi_partial: computeCpiPartial(existingCpi, false),
-                  response_text: "",
-                  finalize: false,
-                  collect_identity: false,
-                  situation_summary: (session.situation_summary as string) ?? null,
-                  extracted_entities: (session.extracted_entities as Record<string, unknown>) ?? {},
-                  questions_answered: Object.keys(updatedConfirmed),
-                  complexity_indicators: ((existingCpi as unknown as Record<string, unknown>)._complexity_indicators as Record<string, unknown>) ?? null,
-                  value_tier: ((session.extracted_entities as Record<string, unknown>)?.value_tier as string) ?? null,
-                  prior_experience: ((session.extracted_entities as Record<string, unknown>)?.prior_experience as string) ?? null,
-                  flags: ((existingCpi as unknown as Record<string, unknown>)._flags as string[]) ?? [],
-                  cta: null,
-                });
+              // Lock fit components
+              if (r1Gpt.cpi) {
+                r1Gpt.cpi.geo_score = existingCpi.geo_score;
+                r1Gpt.cpi.practice_score = existingCpi.practice_score;
+                r1Gpt.cpi.legitimacy_score = existingCpi.legitimacy_score;
+                r1Gpt.cpi.referral_score = existingCpi.referral_score;
+                r1Gpt.cpi.fit_score = existingCpi.fit_score;
               }
+
+              // Apply floors
+              if (r1Gpt.cpi && r1Gpt.practice_area) {
+                const rePa = r1Gpt.practice_area;
+                if (r1Gpt.cpi.fee_score < (FEE_FLOOR[rePa] ?? 5)) r1Gpt.cpi.fee_score = FEE_FLOOR[rePa] ?? 5;
+                if (r1Gpt.cpi.complexity_score < (COMPLEXITY_FLOOR[rePa] ?? 5)) r1Gpt.cpi.complexity_score = COMPLEXITY_FLOOR[rePa] ?? 5;
+                if (r1Gpt.cpi.urgency_score < 2) r1Gpt.cpi.urgency_score = 2;
+              }
+
+              r1Cpi = validateAndFixScoring(r1Gpt.cpi ?? existingCpi);
+              r1Band = r1Cpi.band ?? currentBand;
+              r1ComplexityIndicators = r1Gpt.complexity_indicators ?? null;
+              r1Flags = r1Gpt.flags ?? [];
+              r1Entities = {
+                ...(session.extracted_entities as Record<string, unknown> ?? {}),
+                ...(r1Gpt.value_tier ? { value_tier: r1Gpt.value_tier } : {}),
+              };
+
+              // Persist re-scored CPI and updated band before routing decision
+              await supabase
+                .from("intake_sessions")
+                .update({
+                  scoring: {
+                    ...r1Cpi,
+                    _confirmed: updatedConfirmed,
+                    ...(r1ComplexityIndicators ? { _complexity_indicators: r1ComplexityIndicators } : {}),
+                    ...(r1Flags.length ? { _flags: r1Flags } : {}),
+                  },
+                  band: r1Band,
+                  extracted_entities: r1Entities,
+                })
+                .eq("id", session.id);
             }
           } catch (err) {
-            // Round 2 generation failed — fall through to collect_identity gracefully
-            console.error("[screen] Round 2 widget generation failed, falling through to identity:", err);
+            console.error("[screen] Round 1 re-score failed, using initial band for routing:", err);
+            // r1Cpi / r1Band stay at initial values — graceful degradation
           }
+
+          // ── Route based on re-scored band ──────────────────────────────────
+          if (["A", "B"].includes(r1Band)) {
+            // Band A/B: generate Round 2 deep-dive questions
+            const r2EntitySummary = Object.entries(updatedConfirmed)
+              .filter(([k]) => !k.startsWith("_"))
+              .map(([k, v]) => `${k}: ${v}`)
+              .join(", ") || "none collected yet";
+
+            const r2SystemPrompt =
+              `You are a legal intake specialist generating a second round of targeted screening questions.\n\n` +
+              `Practice area: ${paId}. Re-scored band after Round 1: ${r1Band}.\n` +
+              `Entities already collected: ${r2EntitySummary}\n\n` +
+              `Generate exactly 2 adaptive follow-up questions targeting the highest-uncertainty value drivers NOT already collected above.\n\n` +
+              `Practice area guidance:\n` +
+              `- emp: discrimination/harassment overlap, executive equity or bonus, human rights filing intent, whether release was signed\n` +
+              `- pi: income replacement amount, catastrophic injury threshold, medical-legal report ordered, pre-existing conditions\n` +
+              `- fam: matrimonial home equity estimate, pension or RRSP division, cross-jurisdiction element, child support arrears\n` +
+              `- crim: exact breath reading if DUI, prior criminal record, victim statement filed\n` +
+              `- real: title search result, financing condition waived, home inspection findings\n` +
+              `- imm: current status in Canada, refusal history, provincial nomination received\n` +
+              `- All others: the 2 most value-determinative unknowns for this practice area.\n\n` +
+              `Return a JSON object with this exact shape (no other keys):\n` +
+              `{ "questions": [ { "id": "r2_[descriptive_id]", "text": "...", "options": [ { "label": "...", "value": "..." } ], "allow_free_text": false } ] }\n\n` +
+              `Rules: 2-4 options per question. Values in snake_case. Fully distinct from Round 1 and from each other. Do NOT repeat any subject already in the collected entities list.`;
+
+            try {
+              const r2Completion = await openai.chat.completions.create({
+                model: MODEL,
+                temperature: 0,
+                response_format: { type: "json_object" },
+                messages: [
+                  { role: "system", content: r2SystemPrompt },
+                  { role: "user", content: "Generate the 2 Round 2 questions now." },
+                ],
+              });
+
+              const r2Raw = r2Completion.choices[0]?.message?.content;
+              if (r2Raw) {
+                const r2Parsed = JSON.parse(r2Raw) as { questions?: unknown[] };
+                const r2Questions = Array.isArray(r2Parsed.questions) ? r2Parsed.questions : [];
+
+                if (r2Questions.length > 0) {
+                  await supabase
+                    .from("intake_sessions")
+                    .update({
+                      scoring: {
+                        ...r1Cpi,
+                        _confirmed: updatedConfirmed,
+                        _round_2_started: true,
+                        ...(r1ComplexityIndicators ? { _complexity_indicators: r1ComplexityIndicators } : {}),
+                        ...(r1Flags.length ? { _flags: r1Flags } : {}),
+                      },
+                    })
+                    .eq("id", session.id);
+
+                  return NextResponse.json({
+                    session_id: session.id,
+                    practice_area: session.practice_area,
+                    practice_area_confidence: "high",
+                    next_question: null,
+                    next_questions: r2Questions,
+                    cpi: r1Cpi,
+                    cpi_partial: computeCpiPartial(r1Cpi, false),
+                    response_text: "",
+                    finalize: false,
+                    collect_identity: false,
+                    situation_summary: (session.situation_summary as string) ?? null,
+                    extracted_entities: r1Entities,
+                    questions_answered: Object.keys(updatedConfirmed),
+                    complexity_indicators: r1ComplexityIndicators,
+                    value_tier: (r1Entities.value_tier as string) ?? null,
+                    prior_experience: (r1Entities.prior_experience as string) ?? null,
+                    flags: r1Flags,
+                    cta: null,
+                  });
+                }
+              }
+            } catch (err) {
+              console.error("[screen] Round 2 widget generation failed, falling through to identity:", err);
+              // Fall through — return collect_identity with r1Cpi below
+            }
+          }
+
+          // Band C/D/E (or Round 2 generation failed) → identity with re-scored CPI
+          return NextResponse.json({
+            session_id: session.id,
+            practice_area: session.practice_area,
+            practice_area_confidence: "high",
+            next_question: null,
+            next_questions: null,
+            cpi: r1Cpi,
+            cpi_partial: computeCpiPartial(r1Cpi, false),
+            response_text: "",
+            finalize: false,
+            collect_identity: true,
+            situation_summary: (session.situation_summary as string) ?? null,
+            extracted_entities: r1Entities,
+            questions_answered: Object.keys(updatedConfirmed),
+            complexity_indicators: r1ComplexityIndicators,
+            value_tier: (r1Entities.value_tier as string) ?? null,
+            prior_experience: (r1Entities.prior_experience as string) ?? null,
+            flags: r1Flags,
+            cta: null,
+          });
         }
 
         // ── Round 2 CPI re-score ────────────────────────────────────────────
