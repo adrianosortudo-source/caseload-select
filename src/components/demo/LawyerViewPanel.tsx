@@ -385,11 +385,11 @@ export default function LawyerViewPanel({
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2.5">
               Actions fired (automation log)
             </p>
-            <div className="bg-gray-950 rounded-lg px-3 py-2.5 space-y-1 font-mono">
+            <div className="bg-[#1E2F58] rounded-lg px-3.5 py-3 space-y-1.5 font-mono">
               {actionLog.map(entry => (
                 <div key={entry.text} className="flex items-start gap-3 text-[11px] leading-relaxed">
-                  <span className="text-emerald-400 flex-shrink-0 w-12">{entry.t}</span>
-                  <span className="text-gray-300">{entry.text}</span>
+                  <span className="text-[#C4B49A] flex-shrink-0 w-12 font-semibold tabular-nums">{entry.t}</span>
+                  <span className="text-[#F4F3EF]/90">{entry.text}</span>
                 </div>
               ))}
             </div>

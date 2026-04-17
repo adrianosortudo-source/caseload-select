@@ -614,9 +614,15 @@ export function IntakeWidget({
   // Derived state — declared early so guided tour useEffects can reference allAnswered
   const allAnswered = questions.length > 0 && questions.every(q => !!answers[q.id]);
 
-  // ── Guided tour: phantom typing + auto-advance through the flow ───
+  // ── Guided tour: phantom typing, triggered by user click on intent button ─
+  // Fires when the user clicks "I need legal help" in guided-tour mode. The
+  // intent step is no longer auto-advanced — the user must explicitly start
+  // the intake. After typing completes, the user presses "Continue" (normal
+  // intro-step button) to submit and advance to Round 1 questions.
   useEffect(() => {
-    if (!guidedTour || !demoScenario || tourStartedRef.current) return;
+    if (!guidedTour || !demoScenario) return;
+    if (step !== "intro") return;
+    if (tourStartedRef.current) return;
     const msg = SCENARIO_MESSAGES[demoScenario];
     if (!msg) return;
     tourStartedRef.current = true;
@@ -627,48 +633,29 @@ export function IntakeWidget({
       return t;
     };
 
-    // Step 1: pause at intent step, then advance to intro
-    addT(() => {
+    // Phantom typing: character by character
+    let i = 0;
+    function typeNext() {
       if (isSkippedRef.current) return;
-      setStep("intro");
-
-      // Step 2: phantom typing — character by character
-      let i = 0;
-      function typeNext() {
-        if (isSkippedRef.current) return;
-        i++;
-        setSituation(msg.slice(0, i));
-        if (i < msg.length) {
-          const prevChar = msg[i - 1];
-          const charMs = prevChar === "." || prevChar === "!" || prevChar === "?"
-            ? 380
-            : prevChar === ","
-            ? 140
-            : 45 + Math.floor(Math.random() * 20);
-          const t = setTimeout(typeNext, charMs);
-          tourTimeoutsRef.current.push(t);
-        } else {
-          // Typing complete — brief pause then use pre-recorded fixture (instant)
-          addT(() => {
-            if (isSkippedRef.current) return;
-            setStep("submitting");
-            setTimeout(() => {
-              if (isSkippedRef.current) return;
-              const fixtures = TOUR_FIXTURES[demoScenario ?? ""];
-              const data = fixtures?.[tourFixtureStepRef.current];
-              if (!data) return;
-              tourFixtureStepRef.current++;
-              setSessionId(data.session_id);
-              applyResponse(data, "identity");
-            }, 500);
-          }, 650);
-        }
+      i++;
+      setSituation(msg.slice(0, i));
+      if (i < msg.length) {
+        const prevChar = msg[i - 1];
+        const charMs = prevChar === "." || prevChar === "!" || prevChar === "?"
+          ? 380
+          : prevChar === ","
+          ? 140
+          : 45 + Math.floor(Math.random() * 20);
+        const t = setTimeout(typeNext, charMs);
+        tourTimeoutsRef.current.push(t);
       }
+      // When typing completes, the textarea is filled and the user presses
+      // "Continue" themselves. No auto-submit.
+    }
 
-      addT(typeNext, 350);
-    }, 900);
+    addT(typeNext, 500);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [guidedTour, demoScenario, firmId]);
+  }, [guidedTour, demoScenario, step]);
 
   // ── Guided tour: pause at questions — user clicks to see demo answers ──
   // Replaces the old auto-select + auto-submit effects. The user now clicks
@@ -851,6 +838,22 @@ export function IntakeWidget({
     if (!situation.trim()) return;
     setApiError(null);
     setStep("submitting");
+
+    // Guided tour: use pre-recorded fixture instead of hitting the API
+    if (guidedTour && demoScenario && !isSkippedRef.current) {
+      const fixtures = TOUR_FIXTURES[demoScenario];
+      const data = fixtures?.[tourFixtureStepRef.current];
+      if (data) {
+        tourFixtureStepRef.current++;
+        setTimeout(() => {
+          if (isSkippedRef.current) return;
+          setSessionId(data.session_id);
+          applyResponse(data, "identity");
+        }, 600);
+        return;
+      }
+    }
+
     try {
       const data = await callScreen({ message: situation.trim(), message_type: "text" });
       applyResponse(data, "identity");
