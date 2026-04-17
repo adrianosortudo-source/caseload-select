@@ -527,6 +527,9 @@ export function IntakeWidget({
   const [intakeTrail, setIntakeTrail] = useState<Array<{ question: string; answer: string }>>([]);
   // tracks which fixture index to use next in the guided tour
   const tourFixtureStepRef = useRef(0);
+  // tracks how many question rounds have been shown (1 = Round 1, 2 = Round 2, etc.)
+  const questionsRoundRef = useRef(0);
+  const [questionRound, setQuestionRound] = useState(1);
 
   // ── Welcome back: check localStorage on mount ─────────────────────
   useEffect(() => {
@@ -774,11 +777,15 @@ export function IntakeWidget({
       // Guided tour handles identity bypass via its own safety-net useEffect
       setStep("identity");
     } else if (data.next_questions?.length) {
+      questionsRoundRef.current++;
+      setQuestionRound(questionsRoundRef.current);
       setQuestions(data.next_questions);
       setAnswers({});
       setAnswerLabels({});
       setStep("questions");
     } else if (data.next_question) {
+      questionsRoundRef.current++;
+      setQuestionRound(questionsRoundRef.current);
       setQuestions([data.next_question]);
       setAnswers({});
       setAnswerLabels({});
@@ -1111,6 +1118,8 @@ export function IntakeWidget({
     setPendingResult(null);
     setIdentityCollected(false);
     setApiError(null);
+    questionsRoundRef.current = 0;
+    setQuestionRound(1);
   }
 
   const canSubmitIdentity =
@@ -1286,7 +1295,9 @@ export function IntakeWidget({
             <div className="space-y-5">
               {/* Progress label */}
               <p className="text-[11px] text-gray-400 -mt-1">
-                {questions.length} question{questions.length !== 1 ? "s" : ""} to complete your intake
+                {questionRound > 1
+                  ? `Round 2 of 2 — ${questions.length} additional question${questions.length !== 1 ? "s" : ""}`
+                  : `${questions.length} question${questions.length !== 1 ? "s" : ""} to complete your intake`}
               </p>
 
               {responseText && (

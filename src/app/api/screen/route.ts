@@ -536,6 +536,12 @@ export async function POST(req: Request) {
       }
     }
 
+    // ── Round 2 state — read from session scoring JSONB ─────────────────────────
+    const sessionScoringRaw = (session.scoring as Record<string, unknown>) ?? {};
+    const round2Started = !!sessionScoringRaw._round_2_started;
+    const round2QCount = (sessionScoringRaw._round_2_q_count as number) ?? 0;
+    let startingRound2 = false; // set to true when this turn triggers Round 2
+
     // ── For conversational channels: tell GPT exactly which question to ask next ──
     // This prevents GPT from picking questions arbitrarily and eliminates repeats.
     if (channel !== "widget" && sessionPracticeArea) {
@@ -547,19 +553,55 @@ export async function POST(req: Request) {
       if (qs) {
         const nextQ = qs.questions.find(q => !(q.id in allCollected));
         if (nextQ) {
-          const opts = nextQ.options.map(o => o.label).join(" | ");
+          // Round 1: inject the next question with a transcript-scan instruction
+          const opts = nextQ.options.map((o, i) => `${i + 1}. ${o.label}`).join("\n");
           systemPrompt +=
             `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
             `\nNEXT QUESTION TO ASK (server-assigned)\n` +
-            `Ask this question conversationally in response_text:\n` +
-            `ID: ${nextQ.id}\nQuestion: ${nextQ.text}\nOptions: ${opts}\n\n` +
+            `BEFORE ASKING: Scan all prior user messages. If any earlier message already answers this question, extract the value into extracted_entities + questions_answered and set next_question to the NEXT unanswered question instead.\n\n` +
+            `If not already answered, ask this conversationally in response_text:\n` +
+            `ID: ${nextQ.id}\nQuestion: ${nextQ.text}\nOptions:\n${opts}\n\n` +
             `Set next_question.id = "${nextQ.id}", next_question.text = "${nextQ.text}", ` +
-            `next_question.options from above. Do NOT ask any other questions.`;
-        } else {
-          // All questions answered
+            `next_question.options from the numbered list above. Do NOT ask any other questions.`;
+        } else if (!round2Started && ["A", "B"].includes((session.band as string) ?? "")) {
+          // Round 1 complete, Band A or B — start adaptive Round 2 deep-dive
+          startingRound2 = true;
+          const entitySummary = Object.entries(allCollected)
+            .filter(([k]) => !k.startsWith("_"))
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(", ");
           systemPrompt +=
             `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
-            `\nAll intake questions for this matter have been answered. Set collect_identity = true in your response.`;
+            `\nROUND 2: ADAPTIVE DEEP-DIVE (3 questions total)\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `Round 1 screening is complete. Initial band candidate: ${(session.band as string) ?? "B"}.\n` +
+            `Collected so far: ${entitySummary}\n\n` +
+            `Ask ONE targeted follow-up question to sharpen the CPI before finalizing. Focus on the highest-uncertainty value driver for this practice area:\n` +
+            `- Employment: discrimination/harassment overlap, executive equity/bonus, human rights filing intent, release signed or not\n` +
+            `- Personal Injury: income replacement, catastrophic threshold, medical-legal report ordered, prior pre-existing conditions\n` +
+            `- Family Law: matrimonial home equity estimate, pension or RRSP division, cross-jurisdiction issue\n` +
+            `- Criminal: breath reading value (if DUI), prior criminal record, charges pending for co-accused\n` +
+            `- All others: the single most value-determinative unknown for this area\n\n` +
+            `Generate ONE question with 2–4 numbered options relevant to the client's stated facts.\n` +
+            `Use a new question ID prefixed with "r2_" (e.g. "r2_income_replacement").\n` +
+            `Set finalize=false, collect_identity=false.`;
+        } else if (round2Started && round2QCount < 2) {
+          // Round 2 in progress — ask one more adaptive question (cap at 3 total = indices 0,1,2)
+          const entitySummary = Object.entries(allCollected)
+            .filter(([k]) => !k.startsWith("_"))
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(", ");
+          systemPrompt +=
+            `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
+            `\nROUND 2 CONTINUING (question ${round2QCount + 1} of 3)\n` +
+            `Collected so far: ${entitySummary}\n\n` +
+            `Ask ONE more targeted follow-up question on a dimension not yet covered. Use a "r2_" prefixed ID.\n` +
+            `Set finalize=false, collect_identity=false.`;
+        } else {
+          // All done — Round 1 only (Band C/D/E) or Round 2 complete
+          systemPrompt +=
+            `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
+            `\nAll intake questions have been answered. Set collect_identity=true in your response.`;
         }
       }
     }
@@ -768,11 +810,15 @@ export async function POST(req: Request) {
 
     // complexity_indicators and flags are stored inside the scoring JSONB column
     // (not as top-level columns — those don't exist in the schema and cause PGRST204)
+    // Round 2 tracking: _round_2_started marks when Round 2 begins; _round_2_q_count
+    // counts answered Round 2 questions so we can cap at 3 without relying on GPT to count.
     const scoringPayload: Record<string, unknown> = {
       ...gptResponse.cpi,
       _confirmed: updatedConfirmed,
       ...(gptResponse.complexity_indicators ? { _complexity_indicators: gptResponse.complexity_indicators } : {}),
       ...(gptResponse.flags?.length ? { _flags: gptResponse.flags } : {}),
+      ...(startingRound2 ? { _round_2_started: true, _round_2_q_count: 0 } : {}),
+      ...(round2Started ? { _round_2_started: true, _round_2_q_count: round2QCount + 1 } : {}),
     };
 
     const sessionUpdate: Record<string, unknown> = {
