@@ -760,6 +760,54 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     imm_pnp_q46: { priority: 5, extraction_hints: ["Express Entry profile", "CRS score", "above 400", "below 400", "EE pool", "no Express Entry profile", "+600 points from nomination"] },
     imm_pnp_q47: { priority: 4, extraction_hints: ["prior PNP refusal", "refused by province", "immigration violation", "overstay", "unauthorized work", "no prior issues", "clean history"] },
   },
+
+  // ── Civil — Contract ──────────────────────────────────────────────────────────
+  civ_contract: {
+    civ_con_q1:  { priority: 5, extraction_hints: ["service contract", "goods contract", "employment contract", "lease contract", "NDA", "purchase agreement", "type of contract", "what was the contract for"] },
+    civ_con_q2:  { priority: 5, extraction_hints: ["I am the plaintiff", "I am owed money", "they breached the contract", "I am the defendant", "they are suing me", "claim against me"] },
+    civ_con_q16: { priority: 5, extraction_hints: ["breach occurred", "when did they breach", "date of breach", "how long ago", "within two years", "more than two years ago", "Limitations Act"] },
+    civ_con_q17: { priority: 5, extraction_hints: ["demand letter sent", "sent a demand letter", "no demand letter", "threatened legal action", "received demand letter", "notice given"] },
+    civ_con_q31: { priority: 5, extraction_hints: ["failure to perform", "non-payment", "incomplete work", "defective goods", "misrepresentation in contract", "anticipatory breach", "nature of the breach"] },
+    civ_con_q32: { priority: 5, extraction_hints: ["$35,000", "35 thousand", "Small Claims", "Superior Court", "claim amount", "total damages", "how much are you claiming", "value of claim"] },
+    civ_con_q46: { priority: 4, extraction_hints: ["defendant owns property", "defendant employed", "defendant has assets", "defendant business", "defendant has bank accounts", "collectible judgment", "ability to pay"] },
+    civ_con_q47: { priority: 4, extraction_hints: ["arbitration clause", "dispute resolution clause", "mandatory arbitration", "no arbitration clause", "contract says arbitration", "escalation clause"] },
+  },
+
+  // ── Civil — Debt ──────────────────────────────────────────────────────────────
+  civ_debt: {
+    civ_dbt_q1:  { priority: 5, extraction_hints: ["money lent", "unpaid invoice", "overdue account", "NSF cheque", "unpaid loan", "promissory note", "debt owed to me", "collecting a debt"] },
+    civ_dbt_q2:  { priority: 5, extraction_hints: ["written contract", "signed agreement", "promissory note", "invoice", "email agreement", "verbal agreement only", "no written evidence", "documentation"] },
+    civ_dbt_q16: { priority: 5, extraction_hints: ["debt became due", "when was payment due", "original due date", "how long overdue", "within two years", "more than two years", "limitation period"] },
+    civ_dbt_q17: { priority: 5, extraction_hints: ["total amount owed", "how much is the debt", "original amount", "with interest", "principal balance", "total claim value"] },
+    civ_dbt_q31: { priority: 5, extraction_hints: ["debtor acknowledged", "partial payment made", "debtor promised to pay", "no acknowledgment", "denied owing", "last payment date", "reset limitation"] },
+    civ_dbt_q32: { priority: 5, extraction_hints: ["debtor owns property", "debtor is employed", "debtor has a business", "garnishment possible", "writ of seizure", "no known assets", "judgment enforcement"] },
+    civ_dbt_q46: { priority: 4, extraction_hints: ["prior legal action", "previous lawsuit", "already sued", "sent to collections", "collection agency", "first time taking legal action"] },
+    civ_dbt_q47: { priority: 4, extraction_hints: ["individual debtor", "corporation", "sole proprietor", "partnership", "business entity", "personal guarantee", "personal liability"] },
+  },
+
+  // ── Civil — Tort ──────────────────────────────────────────────────────────────
+  civ_tort: {
+    civ_trt_q1:  { priority: 5, extraction_hints: ["defamation", "libel", "slander", "fraud", "deceit", "misrepresentation", "conversion", "property taken", "trespass", "type of wrong", "what they did to me"] },
+    civ_trt_q2:  { priority: 5, extraction_hints: ["I am the plaintiff", "they wronged me", "I am being sued", "claim against me", "defendant in a tort claim"] },
+    civ_trt_q16: { priority: 5, extraction_hints: ["when did it happen", "occurrence date", "how long ago", "within two years", "more than two years", "when did you discover", "discovery rule"] },
+    civ_trt_q17: { priority: 5, extraction_hints: ["published online", "social media post", "spoken statement", "printed publication", "email or text", "broadcast", "how was it communicated"] },
+    civ_trt_q31: { priority: 5, extraction_hints: ["financial loss", "lost business", "lost income", "reputational damage", "economic damages", "quantifiable loss", "harm suffered"] },
+    civ_trt_q32: { priority: 4, extraction_hints: ["truth defence", "it is true", "qualified privilege", "fair comment", "opinion not fact", "no defence", "retraction offered", "apology issued"] },
+    civ_trt_q46: { priority: 4, extraction_hints: ["retraction requested", "takedown request", "no retraction", "apology received", "post still up", "statement still published"] },
+    civ_trt_q47: { priority: 3, extraction_hints: ["defendant identified", "anonymous defendant", "unknown poster", "John Doe defendant", "online account", "need to identify defendant"] },
+  },
+
+  // ── Civil — Negligence ────────────────────────────────────────────────────────
+  civ_negligence: {
+    civ_neg_q1:  { priority: 5, extraction_hints: ["professional negligence", "contractor negligence", "product liability", "occupier's liability", "slip and fall", "type of negligence", "who was negligent"] },
+    civ_neg_q2:  { priority: 5, extraction_hints: ["lawyer", "accountant", "doctor", "engineer", "licensed professional", "regulated professional", "contractor", "tradesperson", "professional services"] },
+    civ_neg_q16: { priority: 5, extraction_hints: ["when did it happen", "date of incident", "date of discovery", "how long ago", "within two years", "more than two years", "discoverability", "Limitations Act"] },
+    civ_neg_q17: { priority: 5, extraction_hints: ["regulatory complaint", "filed complaint", "licensing body", "law society complaint", "CPA complaint", "CPSO complaint", "no complaint filed"] },
+    civ_neg_q31: { priority: 5, extraction_hints: ["breach is clear", "clear negligence", "debatable", "dispute about standard of care", "expert needed", "standard of care"] },
+    civ_neg_q32: { priority: 5, extraction_hints: ["total damages", "financial loss", "property damage", "physical injury", "economic loss", "how much are you claiming", "value of claim"] },
+    civ_neg_q46: { priority: 4, extraction_hints: ["contributory negligence", "partly my fault", "shared responsibility", "I also contributed", "my own conduct", "comparative fault", "pure negligence by them"] },
+    civ_neg_q47: { priority: 4, extraction_hints: ["professional liability insurance", "E&O insurance", "errors and omissions", "defendant has insurance", "contractor insurance", "no insurance known"] },
+  },
 };
 
 /**

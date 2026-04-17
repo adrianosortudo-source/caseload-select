@@ -425,6 +425,84 @@ const REAL_AUTO_RULES: AutoConfirmRule[] = [
   { questionId: "real_q1", patterns: /\b(selling (a |the )?house|selling (my )?home|selling (a |the )?condo|i am (a )?seller)\b/i, value: "selling" },
 ];
 
+const CIV_CON_AUTO_RULES: AutoConfirmRule[] = [
+  // Role — civ_con_q2
+  { questionId: "civ_con_q2", patterns: /\b(they (owe|breached|failed to pay|didn.t (pay|perform|deliver))|i (am owed|wasn.t paid|they breached)|breach (of contract )?against me|they violated (the )?contract)\b/i, value: "plaintiff" },
+  { questionId: "civ_con_q2", patterns: /\b(they.re suing me|i.m being sued|claim against me|defending (the )?lawsuit|i (am|am being) (the )?defendant)\b/i, value: "defendant" },
+  // Breach timing — civ_con_q16
+  { questionId: "civ_con_q16", patterns: /\b(within (the (last )?two years|2 years)|happened (recently|this year|last year|a few months ago)|less than two years ago)\b/i, value: "within_2_years" },
+  { questionId: "civ_con_q16", patterns: /\b(more than (two|2) years ago|over (two|2) years ago|happened (in 20(19|20|21|22|23)|years ago|a long time ago))\b/i, value: "over_2_years" },
+  // Demand letter — civ_con_q17
+  { questionId: "civ_con_q17", patterns: /\b(sent (a |the )?demand letter|demand letter (sent|issued|given)|formally demanded|legal (notice|demand) (sent|given))\b/i, value: "sent" },
+  { questionId: "civ_con_q17", patterns: /\b(received (a |their )?demand letter|they sent (a |the )?demand|demand letter (received|from them))\b/i, value: "received" },
+  { questionId: "civ_con_q17", patterns: /\b(no demand letter|haven.t (sent|issued)|no formal notice|not (yet )?sent)\b/i, value: "none" },
+  // Claim value threshold — civ_con_q32
+  { questionId: "civ_con_q32", patterns: /\b(small claims|under \$35(,000|k)|less than \$35(,000|k)|35 thousand or less)\b/i, value: "small_claims" },
+  { questionId: "civ_con_q32", patterns: /\b(over \$35(,000|k)|more than \$35(,000|k)|superior court|above (the )?small claims (limit|threshold)|exceeds \$35)\b/i, value: "superior_court" },
+  // Arbitration clause — civ_con_q47
+  { questionId: "civ_con_q47", patterns: /\b(arbitration clause|mandatory arbitration|contract (says|requires|has) arbitration|dispute resolution clause|forced (into )?arbitration)\b/i, value: "yes" },
+  { questionId: "civ_con_q47", patterns: /\b(no arbitration (clause|provision)|no dispute resolution clause|can go (straight )?to court|no (binding )?arbitration)\b/i, value: "no" },
+];
+
+const CIV_DBT_AUTO_RULES: AutoConfirmRule[] = [
+  // Written evidence — civ_dbt_q2
+  { questionId: "civ_dbt_q2", patterns: /\b(signed (contract|agreement|promissory note)|written (contract|agreement|IOU)|promissory note|invoice (signed|issued)|written evidence|formal agreement)\b/i, value: "written" },
+  { questionId: "civ_dbt_q2", patterns: /\b(verbal (agreement|deal|loan)|handshake (deal|agreement)|nothing in writing|no (written|signed) (contract|agreement|document)|oral agreement)\b/i, value: "verbal_only" },
+  // Due date timing — civ_dbt_q16
+  { questionId: "civ_dbt_q16", patterns: /\b(within (the (last )?two years|2 years)|due (date )?(was )?(recently|this year|last year|a few months ago)|less than two years ago)\b/i, value: "within_2_years" },
+  { questionId: "civ_dbt_q16", patterns: /\b(more than (two|2) years ago|over (two|2) years ago|due (in 20(19|20|21|22|23)|years ago)|long overdue (for years))\b/i, value: "over_2_years" },
+  // Acknowledgment — civ_dbt_q31
+  { questionId: "civ_dbt_q31", patterns: /\b(made (a |partial )?payment|partial payment|paid (something|partially|a portion)|acknowledged (the )?debt|promised (to pay|they.d pay)|said they (owe|will pay))\b/i, value: "acknowledged" },
+  { questionId: "civ_dbt_q31", patterns: /\b(denied (owing|the debt)|refused to acknowledge|says (they don.t|they didn.t) owe|no acknowledgment|disputes the debt entirely)\b/i, value: "denied" },
+  // Entity type — civ_dbt_q47
+  { questionId: "civ_dbt_q47", patterns: /\b(individual|personal (loan|debt|guarantee)|person (who owes|that owes)|private individual|not a (company|corporation|business))\b/i, value: "individual" },
+  { questionId: "civ_dbt_q47", patterns: /\b(corporation|company|incorporated|ltd\.?|inc\.?|business entity|corporate (debtor|defendant)|ltd (owes|is))\b/i, value: "corporation" },
+];
+
+const CIV_TRT_AUTO_RULES: AutoConfirmRule[] = [
+  // Tort type — civ_trt_q1
+  { questionId: "civ_trt_q1", patterns: /\b(defamation|libel|slander|defamatory statement|false statement about me|damaged (my )?reputation)\b/i, value: "defamation" },
+  { questionId: "civ_trt_q1", patterns: /\b(fraud|fraudulent (misrepresentation|scheme)|deceived me|false (representation|pretence)|fraudulently induced)\b/i, value: "fraud" },
+  { questionId: "civ_trt_q1", patterns: /\b(conversion|took my (property|belongings|vehicle|equipment)|wrongfully (took|kept|retained) (my )?property|unlawfully (taking|keeping))\b/i, value: "conversion" },
+  { questionId: "civ_trt_q1", patterns: /\b(trespass|entered (my )?property (without permission)?|unauthorized entry|came onto my (land|property)|on my property without (my )?(consent|permission))\b/i, value: "trespass" },
+  // Role — civ_trt_q2
+  { questionId: "civ_trt_q2", patterns: /\b(they wronged me|i.m the (victim|plaintiff)|they did this to me|i.m claiming against|they (harmed|defamed|defrauded) me)\b/i, value: "plaintiff" },
+  { questionId: "civ_trt_q2", patterns: /\b(they.re suing me|being sued (for|over)|claim against me|defending (the )?(lawsuit|claim)|i.m (the )?defendant)\b/i, value: "defendant" },
+  // Occurrence timing — civ_trt_q16
+  { questionId: "civ_trt_q16", patterns: /\b(within (the (last )?two years|2 years)|happened (recently|this year|last year|a few months ago)|discovered (recently|recently|within 2 years))\b/i, value: "within_2_years" },
+  { questionId: "civ_trt_q16", patterns: /\b(more than (two|2) years ago|over (two|2) years ago|happened (years ago|a long time ago))\b/i, value: "over_2_years" },
+  // Publication method — civ_trt_q17
+  { questionId: "civ_trt_q17", patterns: /\b(Facebook|Twitter|Instagram|LinkedIn|TikTok|social media (post|comment)|online (post|review)|posted (online|on social))\b/i, value: "social_media" },
+  { questionId: "civ_trt_q17", patterns: /\b(Google (review|Reviews)|Yelp review|online review (platform|site)|review (on|left on) (Google|Yelp))\b/i, value: "online_review" },
+  { questionId: "civ_trt_q17", patterns: /\b(said (it )?in person|verbal(ly)? said|spoken (to others|publicly)|told people|said it to someone|word of mouth)\b/i, value: "verbal" },
+  // Defences — civ_trt_q32
+  { questionId: "civ_trt_q32", patterns: /\b(it.s true|truth defence|the statement (is|was) true|they claim it.s true|true (and accurate|statement))\b/i, value: "truth" },
+  { questionId: "civ_trt_q32", patterns: /\b(no defence|they can.t (justify|defend)|indefensible|nothing to defend with|no justification)\b/i, value: "none" },
+  // Retraction — civ_trt_q46
+  { questionId: "civ_trt_q46", patterns: /\b(still (up|posted|published|visible)|still online|hasn.t (taken it down|retracted|apologized)|post (is )?still there)\b/i, value: "still_published" },
+  { questionId: "civ_trt_q46", patterns: /\b(took (it )?down|retracted|issued (an )?apology|removed (the )?post|apologized)\b/i, value: "retracted" },
+];
+
+const CIV_NEG_AUTO_RULES: AutoConfirmRule[] = [
+  // Negligence type — civ_neg_q1
+  { questionId: "civ_neg_q1", patterns: /\b(lawyer.s (mistake|error|negligence)|accountant (error|negligence)|doctor.s (negligence|error)|professional (malpractice|negligence)|solicitor negligence)\b/i, value: "professional" },
+  { questionId: "civ_neg_q1", patterns: /\b(contractor (did poor work|was negligent)|bad (renovation|construction|repair)|contractor.s (negligence|error|fault)|builder (mistake|negligence))\b/i, value: "contractor" },
+  { questionId: "civ_neg_q1", patterns: /\b(defective (product|device|equipment|appliance)|product (liability|defect)|dangerous (product|device)|product caused (harm|injury))\b/i, value: "product" },
+  { questionId: "civ_neg_q1", patterns: /\b(slip (and fall|on )?on (their )?(property|floor|stairs|ice|snow)|occupier.s liability|fell (on|at) (their |someone.s )?property|premises liability)\b/i, value: "occupier" },
+  // Professional status — civ_neg_q2
+  { questionId: "civ_neg_q2", patterns: /\b(licensed (lawyer|attorney|solicitor|barrister|paralegal|accountant|CPA|engineer|architect|doctor|physician|surgeon)|regulated professional|member of (the bar|a governing body|a college))\b/i, value: "licensed_professional" },
+  { questionId: "civ_neg_q2", patterns: /\b(contractor|tradesperson|builder|handyman|not (a )?licensed|no (professional )?licence|general contractor|subcontractor)\b/i, value: "contractor_tradesperson" },
+  // Discovery timing — civ_neg_q16
+  { questionId: "civ_neg_q16", patterns: /\b(within (the (last )?two years|2 years)|discovered (recently|this year|last year|a few months ago)|just (found out|discovered)|recently (discovered|found out))\b/i, value: "within_2_years" },
+  { questionId: "civ_neg_q16", patterns: /\b(more than (two|2) years ago|over (two|2) years ago|discovered (years ago|a long time ago)|knew (about it )?(for )?(years|a long time))\b/i, value: "over_2_years" },
+  // Contributory negligence — civ_neg_q46
+  { questionId: "civ_neg_q46", patterns: /\b(completely (their fault|negligent)|no fault of mine|entirely (their|the other party.s) fault|i did nothing wrong|i wasn.t at fault)\b/i, value: "none" },
+  { questionId: "civ_neg_q46", patterns: /\b(partly my fault|i (also|contributed|played a role)|shared (responsibility|fault|negligence)|i was (also|partly) (responsible|at fault)|contributory negligence)\b/i, value: "contributory" },
+  // Professional liability insurance — civ_neg_q47
+  { questionId: "civ_neg_q47", patterns: /\b(has (E&O|errors and omissions|professional liability|malpractice) insurance|insured (professional|contractor)|covered by (E&O|professional) insurance)\b/i, value: "yes" },
+  { questionId: "civ_neg_q47", patterns: /\b(no (E&O|errors and omissions|professional liability) insurance|not insured|no insurance|uninsured (professional|contractor)|don.t (know|think) (they.re|they are) insured)\b/i, value: "unknown" },
+];
+
 export const AUTO_RULES_BY_PA: Record<string, AutoConfirmRule[]> = {
   // Umbrella PA (legacy / backward compat)
   pi:            PI_AUTO_RULES,
@@ -471,6 +549,12 @@ export const AUTO_RULES_BY_PA: Record<string, AutoConfirmRule[]> = {
   imm_refugee:     IMM_REF_AUTO_RULES,
   imm_pnp:         IMM_PNP_AUTO_RULES,
   imm_other:       [],   // qualifier set — no auto-confirm needed
+  // Civ sub-types
+  civ_contract:    CIV_CON_AUTO_RULES,
+  civ_debt:        CIV_DBT_AUTO_RULES,
+  civ_tort:        CIV_TRT_AUTO_RULES,
+  civ_negligence:  CIV_NEG_AUTO_RULES,
+  civ_other:       [],   // qualifier set — no auto-confirm needed
 };
 
 /**
