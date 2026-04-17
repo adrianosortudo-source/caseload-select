@@ -808,6 +808,42 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     civ_neg_q46: { priority: 4, extraction_hints: ["contributory negligence", "partly my fault", "shared responsibility", "I also contributed", "my own conduct", "comparative fault", "pure negligence by them"] },
     civ_neg_q47: { priority: 4, extraction_hints: ["professional liability insurance", "E&O insurance", "errors and omissions", "defendant has insurance", "contractor insurance", "no insurance known"] },
   },
+
+  // ── Insurance — SABS ─────────────────────────────────────────────────────────
+  ins_sabs: {
+    ins_sab_q1:  { priority: 5, extraction_hints: ["income replacement benefit", "IRB", "medical and rehabilitation", "attendant care", "housekeeping benefit", "SABS benefit", "accident benefit", "they cut off my benefits", "benefits stopped"] },
+    ins_sab_q2:  { priority: 5, extraction_hints: ["denial letter", "termination letter", "benefit termination", "written denial", "OCF denial", "insurer denied in writing", "benefits cut off notice"] },
+    ins_sab_q16: { priority: 5, extraction_hints: ["received the denial", "denial notice date", "when did they deny", "termination notice date", "within 2 years", "more than 2 years", "limitation period SABS"] },
+    ins_sab_q17: { priority: 5, extraction_hints: ["DAR application", "dispute resolution", "FSRA mediation", "applied to FSRA", "arbitration pending", "mediation pending", "no dispute resolution started"] },
+    ins_sab_q31: { priority: 5, extraction_hints: ["attended IE", "independent examination", "missed IE appointment", "refused IE", "insurer examination", "attending an examination"] },
+    ins_sab_q32: { priority: 5, extraction_hints: ["pre-existing condition", "prior injury", "insurer says pre-existing", "prior accident", "pre-existing argument", "no pre-existing"] },
+    ins_sab_q46: { priority: 4, extraction_hints: ["monthly benefit value", "monthly IRB amount", "how much per month", "lump sum attendant care", "value of benefits denied", "amount at stake"] },
+    ins_sab_q47: { priority: 4, extraction_hints: ["tort claim", "pain and suffering claim", "suing the at-fault driver", "tort and SABS", "also have a tort action", "SABS only no tort"] },
+  },
+
+  // ── Insurance — Benefit Denial ────────────────────────────────────────────────
+  ins_denial: {
+    ins_den_q1:  { priority: 5, extraction_hints: ["disability insurance", "life insurance", "property insurance", "home insurance claim", "travel insurance", "critical illness", "health insurance claim", "type of policy"] },
+    ins_den_q2:  { priority: 5, extraction_hints: ["denial letter", "formal denial", "written reason", "verbal denial only", "they stopped paying", "insurer denied in writing"] },
+    ins_den_q16: { priority: 5, extraction_hints: ["internal appeal", "exhausted appeals", "insurer complaint process", "appeal denied", "no appeal process", "insurer review"] },
+    ins_den_q17: { priority: 5, extraction_hints: ["when did they deny", "date of denial", "denial was within 6 months", "more than 2 years ago", "limitation concern"] },
+    ins_den_q31: { priority: 5, extraction_hints: ["policy exclusion", "they cited exclusion", "non-disclosure", "pre-existing at application", "fraud allegation", "no reason given", "insufficient reason"] },
+    ins_den_q32: { priority: 5, extraction_hints: ["policy was active", "premiums paid", "policy in force", "late premium payment", "coverage was in effect", "was the policy current"] },
+    ins_den_q46: { priority: 4, extraction_hints: ["claim value", "how much is the claim", "denied claim amount", "policy benefit amount", "total denied", "value at stake"] },
+    ins_den_q47: { priority: 4, extraction_hints: ["FSRA complaint", "OmbudService complaint", "regulatory complaint", "filed with FSRA", "OLHI complaint", "no complaint filed yet"] },
+  },
+
+  // ── Insurance — Bad Faith ─────────────────────────────────────────────────────
+  ins_bad_faith: {
+    ins_bf_q1:  { priority: 5, extraction_hints: ["auto insurance bad faith", "property insurance bad faith", "disability bad faith", "life insurance bad faith", "commercial policy", "type of policy bad faith"] },
+    ins_bf_q2:  { priority: 5, extraction_hints: ["unreasonable delay", "insurer delayed", "wrongful denial", "knew claim was covered", "lowball offer", "inadequate settlement offer", "failure to defend"] },
+    ins_bf_q16: { priority: 5, extraction_hints: ["bad faith started", "delay began", "when did this start", "within last year", "over 2 years bad faith", "limitation period bad faith"] },
+    ins_bf_q17: { priority: 5, extraction_hints: ["still unpaid", "insurer still refusing", "paid after delay", "seeking consequential damages", "partially paid", "partial payment bad faith"] },
+    ins_bf_q31: { priority: 5, extraction_hints: ["documented evidence", "written correspondence", "emails showing delay", "call logs", "insurer communications", "evidence of bad faith conduct"] },
+    ins_bf_q32: { priority: 5, extraction_hints: ["lost my home", "defaulted on mortgage", "financial harm from delay", "consequential losses", "losses beyond the policy", "financial damage from insurer delay"] },
+    ins_bf_q46: { priority: 4, extraction_hints: ["court proceeding filed", "litigation underway", "arbitration started", "FSRA complaint bad faith", "regulatory action taken", "no formal action yet"] },
+    ins_bf_q47: { priority: 4, extraction_hints: ["total value at stake", "punitive damages", "aggravated damages", "bad faith damages amount", "total claim value", "over 250000 bad faith"] },
+  },
 };
 
 /**

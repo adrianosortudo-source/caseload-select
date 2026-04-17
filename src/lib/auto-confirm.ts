@@ -503,6 +503,57 @@ const CIV_NEG_AUTO_RULES: AutoConfirmRule[] = [
   { questionId: "civ_neg_q47", patterns: /\b(no (E&O|errors and omissions|professional liability) insurance|not insured|no insurance|uninsured (professional|contractor)|don.t (know|think) (they.re|they are) insured)\b/i, value: "unknown" },
 ];
 
+const INS_SABS_AUTO_RULES: AutoConfirmRule[] = [
+  // Benefit type — ins_sab_q1
+  { questionId: "ins_sab_q1", patterns: /\b(income replacement benefit|IRB|lost wages (after|from) (the )?accident|lost income benefit|income replacement (cut|stopped|denied))\b/i, value: "irb" },
+  { questionId: "ins_sab_q1", patterns: /\b(medical (and )?rehab|rehabilitation benefit|OCF-18|treatment plan denied|medical benefits (cut|denied|stopped))\b/i, value: "med_rehab" },
+  { questionId: "ins_sab_q1", patterns: /\b(attendant care|personal care benefit|attendant benefit|OCF-10|attendant (cut|denied|stopped))\b/i, value: "attendant_care" },
+  { questionId: "ins_sab_q1", patterns: /\b(housekeeping benefit|home maintenance benefit|housekeeping (cut|denied|stopped))\b/i, value: "housekeeping" },
+  // Formal denial — ins_sab_q2
+  { questionId: "ins_sab_q2", patterns: /\b(received (a |the )?denial letter|formal (denial|termination) (letter|notice|received)|written (denial|termination) (from|by) (the )?insurer)\b/i, value: "yes_formal" },
+  { questionId: "ins_sab_q2", patterns: /\b(benefits (have )?just stopped|stopped paying (without|with no) (notice|explanation|letter)|no (notice|letter) (received|given))\b/i, value: "stopped_no_notice" },
+  // DAR / dispute resolution — ins_sab_q17
+  { questionId: "ins_sab_q17", patterns: /\b(DAR (application|pending|filed)|applied (to FSRA|for mediation)|FSRA (mediation|dispute resolution)|arbitration (pending|filed)|dispute resolution (pending|underway))\b/i, value: "dar_pending" },
+  { questionId: "ins_sab_q17", patterns: /\b(no (DAR|dispute resolution|mediation|arbitration) (yet|started|filed)|haven.t (applied|started) (DAR|mediation|arbitration))\b/i, value: "none" },
+  { questionId: "ins_sab_q17", patterns: /\b(mediation (completed|concluded|done)|after (the )?mediation|mediation (failed|didn.t work)|now seeking arbitration)\b/i, value: "post_mediation" },
+  // Tort overlap — ins_sab_q47
+  { questionId: "ins_sab_q47", patterns: /\b(also (have|suing|filing) (a )?tort (claim|action)|pain and suffering (claim|action)|suing (the )?at.fault driver|tort and SABS)\b/i, value: "yes_tort" },
+  { questionId: "ins_sab_q47", patterns: /\b(SABS only|just the (accident )?benefits|no tort claim|not suing (the )?driver|only (dealing with|claiming) SABS)\b/i, value: "sabs_only" },
+];
+
+const INS_DEN_AUTO_RULES: AutoConfirmRule[] = [
+  // Policy type — ins_den_q1
+  { questionId: "ins_den_q1", patterns: /\b(disability (insurance|policy|claim|benefit)|long.term disability|LTD (denied|claim|benefit)|short.term disability|cannot work (due to|because of) (illness|injury|disability))\b/i, value: "disability" },
+  { questionId: "ins_den_q1", patterns: /\b(life insurance (denied|claim|benefit)|death benefit (denied|claim)|life policy|beneficiary (claim|denied))\b/i, value: "life" },
+  { questionId: "ins_den_q1", patterns: /\b(home (insurance|claim) (denied|refused)|property (insurance|claim) (denied|refused)|condo (insurance|claim) (denied|refused)|house (damage|fire|flood) claim denied)\b/i, value: "property" },
+  { questionId: "ins_den_q1", patterns: /\b(travel (insurance|claim) (denied|refused)|trip (cancellation|interruption) claim|medical (emergency|expense) travel claim)\b/i, value: "travel" },
+  { questionId: "ins_den_q1", patterns: /\b(critical illness (insurance|claim|benefit)|CI (benefit|claim|denied)|health (insurance|benefit) (denied|claim))\b/i, value: "health_ci" },
+  // Written denial — ins_den_q2
+  { questionId: "ins_den_q2", patterns: /\b(received (a )?denial letter|formal (denial|refusal) (letter|notice)|written (denial|refusal|notice) (from|by) (the )?insurer|letter (denying|refusing) (the )?claim)\b/i, value: "formal_denial" },
+  { questionId: "ins_den_q2", patterns: /\b(verbal(ly)? (denied|refused)|they (told|said) (me )?verbally|no written (denial|notice|letter))\b/i, value: "verbal_denial" },
+  { questionId: "ins_den_q2", patterns: /\b(stopped (paying|processing)|just (stopped|cut off)|no (response|explanation|notice|letter) (received|from them)|claims (ignored|unanswered))\b/i, value: "stopped_paying" },
+  // Internal appeals — ins_den_q16
+  { questionId: "ins_den_q16", patterns: /\b(internal appeal (denied|rejected|exhausted)|all (insurer )?remedies (exhausted|used)|appeal (was )?denied (by (the )?insurer)?|tried (their )?internal (process|appeal))\b/i, value: "appeals_exhausted" },
+  { questionId: "ins_den_q16", patterns: /\b(haven.t (appealed|tried (the )?internal)|no appeal (yet|filed)|still (in|going through) (the )?internal (process|appeal)|not (yet )?appealed)\b/i, value: "not_appealed" },
+  // Policy active — ins_den_q32
+  { questionId: "ins_den_q32", patterns: /\b(policy (was )?active|premiums (were )?paid|coverage (was )?in force|policy (was )?current|fully (paid|insured) (at the time|when it happened))\b/i, value: "policy_active" },
+];
+
+const INS_BF_AUTO_RULES: AutoConfirmRule[] = [
+  // Conduct type — ins_bf_q2
+  { questionId: "ins_bf_q2", patterns: /\b(unreasonable delay|insurer (delayed|took forever|took months)|delay in (paying|processing|investigating)|dragged (it )?out|took (too long|years))\b/i, value: "delay" },
+  { questionId: "ins_bf_q2", patterns: /\b(wrongful(ly)? (denied|refused)|knew (the )?claim was (valid|covered|payable)|should have (known|paid)|denied despite (clear|valid|obvious) (coverage|entitlement))\b/i, value: "wrongful_denial" },
+  { questionId: "ins_bf_q2", patterns: /\b(lowball (offer|settlement)|offered (way|far) (too little|less than (what|the)|below)|inadequate settlement|settlement offer (was|is) (too low|inadequate|unreasonable))\b/i, value: "lowball_offer" },
+  { questionId: "ins_bf_q2", patterns: /\b(failure to defend|refused to (defend|provide defence)|wouldn.t (defend|provide a lawyer)|duty to defend (breached|refused|ignored))\b/i, value: "failure_to_defend" },
+  // Still unpaid — ins_bf_q17
+  { questionId: "ins_bf_q17", patterns: /\b(still (unpaid|refusing|denying|not paid)|insurer (still|continues to) (refuse|deny|withhold)|hasn.t (paid|resolved) (yet|the claim)|payment (still )?outstanding)\b/i, value: "unpaid" },
+  { questionId: "ins_bf_q17", patterns: /\b(finally paid (after|but)|paid (it )?late|paid (after|following) (delay|pressure|a long time)|seeking (damages|compensation) for (the )?delay)\b/i, value: "paid_late" },
+  { questionId: "ins_bf_q17", patterns: /\b(partial(ly)? paid|paid (some|part|a portion)|only (part|some) of (the )?claim (was )?paid|paid (less than|below) (what they owe|the full amount))\b/i, value: "partial_payment" },
+  // Consequential losses — ins_bf_q32
+  { questionId: "ins_bf_q32", patterns: /\b(lost (my )?home|lost (my )?house|foreclosure|defaulted (on|on the) (mortgage|loan)|declared bankruptcy|financial (ruin|collapse|devastation)|couldn.t (pay|afford) (because of|due to) (the )?insurer)\b/i, value: "consequential_losses" },
+  { questionId: "ins_bf_q32", patterns: /\b(primarily (the )?benefit itself|just (the )?withheld (benefit|amount)|the (main|primary) loss is (the )?benefit|policy (benefit|amount) is (the )?only (loss|claim))\b/i, value: "benefit_only" },
+];
+
 export const AUTO_RULES_BY_PA: Record<string, AutoConfirmRule[]> = {
   // Umbrella PA (legacy / backward compat)
   pi:            PI_AUTO_RULES,
@@ -555,6 +606,11 @@ export const AUTO_RULES_BY_PA: Record<string, AutoConfirmRule[]> = {
   civ_tort:        CIV_TRT_AUTO_RULES,
   civ_negligence:  CIV_NEG_AUTO_RULES,
   civ_other:       [],   // qualifier set — no auto-confirm needed
+  // Ins sub-types
+  ins_sabs:        INS_SABS_AUTO_RULES,
+  ins_denial:      INS_DEN_AUTO_RULES,
+  ins_bad_faith:   INS_BF_AUTO_RULES,
+  ins_other:       [],   // qualifier set — no auto-confirm needed
 };
 
 /**
