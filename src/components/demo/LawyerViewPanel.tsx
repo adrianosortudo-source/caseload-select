@@ -133,15 +133,17 @@ const BAND_ACTION_LOG: Record<string, Array<{ t: string; text: string }>> = {
     { t: "+0.0s", text: "Lead created in CRM" },
     { t: "+0.2s", text: "Tags applied (band:A, priority)" },
     { t: "+0.4s", text: "Pipeline stage set to New Lead" },
-    { t: "+0.8s", text: "Retainer agreement queued via DocuSeal" },
-    { t: "+1.1s", text: "30-minute SLA timer started" },
+    { t: "+0.8s", text: "Case Intake Memo generated (Round 3 complete)" },
+    { t: "+1.2s", text: "Retainer agreement queued via DocuSeal" },
+    { t: "+1.5s", text: "30-minute SLA timer started" },
   ],
   B: [
     { t: "+0.0s", text: "Lead created in CRM" },
     { t: "+0.2s", text: "Tags applied (band:B, warm)" },
     { t: "+0.4s", text: "Pipeline stage set to New Lead" },
-    { t: "+0.8s", text: "Retainer agreement queued via DocuSeal" },
-    { t: "+1.1s", text: "1-hour SLA timer started" },
+    { t: "+0.8s", text: "Case Intake Memo generated (Round 3 complete)" },
+    { t: "+1.2s", text: "Retainer agreement queued via DocuSeal" },
+    { t: "+1.5s", text: "1-hour SLA timer started" },
   ],
   C: [
     { t: "+0.0s", text: "Lead created in CRM" },
@@ -411,6 +413,59 @@ export default function LawyerViewPanel({
               ))}
             </ol>
           </div>
+
+          {/* 5b. Case Intake Memo — Band A/B only */}
+          {(b === "A" || b === "B") && (
+            <div>
+              <div className="flex items-center justify-between mb-2.5">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">
+                  Case Intake Memo
+                </p>
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                  Memo ready
+                </span>
+              </div>
+              <div className="bg-[#F4F3EF] rounded-xl border border-black/5 px-4 py-3.5 space-y-3 font-mono text-[11px]">
+                <div className="not-italic font-sans">
+                  <p className="text-[10px] font-bold text-[#1E2F58] uppercase tracking-wider mb-0.5">Rounds 1 and 2 decide whether to take the meeting.</p>
+                  <p className="text-[10px] text-gray-500">Round 3 decides how the lawyer walks into the meeting prepared.</p>
+                </div>
+                <div className="border-t border-black/8 pt-3 space-y-2.5">
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Jurisdiction and Timeline</p>
+                    <p className="text-[11px] text-gray-700 not-italic font-sans">Incident date: approx. 3 weeks ago. Days elapsed: ~21. Within standard 2-year Ontario limitation period.</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Evidence Manifest</p>
+                    <p className="text-[11px] text-gray-700 not-italic font-sans leading-relaxed">
+                      - [x] Police report — client has report number<br />
+                      - [x] Ambulance attended, transported to hospital<br />
+                      - [x] Emergency room records (held by hospital)<br />
+                      - [x] Insurer contacted client in writing<br />
+                      - [ ] Full collision report not yet requested<br />
+                      - [ ] Opposing insurer correspondence — unknown
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Adverse Parties</p>
+                    <p className="text-[11px] text-gray-700 not-italic font-sans">Other driver identified. No opposing counsel retained at time of intake. Conflict check pending.</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Gaps for Lawyer to Probe</p>
+                    <p className="text-[11px] text-gray-700 not-italic font-sans leading-relaxed">
+                      - Full collision report not yet requested from OPP<br />
+                      - Physiotherapy and specialist records not confirmed<br />
+                      - Employment income loss documentation not obtained
+                    </p>
+                  </div>
+                  <p className="text-[10px] text-gray-400 border-t border-black/8 pt-2 not-italic font-sans">
+                    Prepared by CaseLoad Screen. Client-reported information only. Confidential — LSO Rule 3.3.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 6. Intake trail: evidence behind the score */}
           {intakeTrail && intakeTrail.length > 0 && (

@@ -205,9 +205,9 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
               <ul className="space-y-3 mb-10">
                 {[
                   "35 practice areas across Ontario",
-                  "Immediate priority assessment, no waiting",
-                  "Confidential, encrypted, and secure",
-                  "Leads routed to a lawyer within minutes",
+                  "Immediate priority assessment — no waiting room",
+                  "Your lawyer receives a prepared case memo before the call",
+                  "Confidential under Ontario law from the first message",
                 ].map(item => (
                   <li key={item} className="flex items-start gap-3 text-sm text-gray-700">
                     <span className="mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-white text-xs"
@@ -261,7 +261,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
                       See it work
                     </span>
                     <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
-                      3 scenarios · ~30 sec each
+                      3 scenarios · 4-step intake
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -354,9 +354,9 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
             How It Works
           </h2>
           <p className="text-center text-gray-500 mb-14 max-w-xl mx-auto">
-            Three steps between you and knowing exactly where your case stands.
+            Four steps. Your lawyer walks into the call already prepared.
           </p>
-          <div className="grid md:grid-cols-3 gap-10">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
             {[
               {
                 step: "01",
@@ -365,16 +365,28 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
               },
               {
                 step: "02",
-                title: "Answer a Few Questions",
-                body: "Short, specific questions about your matter. Takes under 3 minutes on average.",
+                title: "Two Rounds of Questions",
+                body: "Adaptive questions specific to your practice area. The system scores your case in real time.",
               },
               {
                 step: "03",
-                title: "Get Your Priority Assessment",
-                body: "You receive an immediate case quality assessment. A lawyer follows up based on your priority.",
+                title: "Case Details — Round 3",
+                body: "Evidence inventory, parties, deadlines, expectations. Rounds 1 and 2 decide whether to take the meeting. Round 3 decides how your lawyer walks in prepared.",
+                highlight: true,
               },
-            ].map(({ step, title, body }) => (
-              <div key={step} className="flex flex-col items-start">
+              {
+                step: "04",
+                title: "Your Lawyer Gets a Case Memo",
+                body: "Before the consultation, your lawyer receives a structured case file — not a sticky note. That is the difference.",
+              },
+            ].map(({ step, title, body, highlight }) => (
+              <div key={step} className={`flex flex-col items-start ${highlight ? "relative" : ""}`}>
+                {highlight && (
+                  <span className="absolute -top-3 left-0 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
+                    style={{ backgroundColor: GOLD, color: "#1a1a2e" }}>
+                    New
+                  </span>
+                )}
                 <div className="text-5xl font-black mb-4 leading-none" style={{ color: `${GOLD}44` }}>
                   {step}
                 </div>
