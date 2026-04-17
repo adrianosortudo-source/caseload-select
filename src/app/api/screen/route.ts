@@ -608,7 +608,7 @@ export async function POST(req: Request) {
                 questions_answered: Object.keys(updatedConfirmed),
                 complexity_indicators: reScoredGpt.complexity_indicators ?? null,
                 value_tier: reScoredGpt.value_tier ?? null,
-                prior_experience: (updatedEntities.prior_experience as string) ?? null,
+                prior_experience: ((updatedEntities as Record<string, unknown>).prior_experience as string) ?? null,
                 flags: reScoredGpt.flags ?? [],
                 cta: null,
               });
