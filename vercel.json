@@ -36,7 +36,7 @@
     },
     {
       "path": "/api/cron/stalled-round3",
-      "schedule": "0 * * * *"
+      "schedule": "0 17 * * *"
     },
     {
       "path": "/api/cron/session-expiry",
