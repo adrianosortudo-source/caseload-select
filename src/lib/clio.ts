@@ -9,7 +9,7 @@
  *   CLIO_CLIENT_SECRET
  *   CLIO_REDIRECT_URI  (e.g. https://app.caseloadselect.ca/api/clio/callback)
  *
- * Scopes requested: contacts:read matters:read calendar_entries:read
+ * Scopes requested: contacts:read contacts:write matters:read matters:write calendar_entries:read
  */
 
 import { supabase } from "./supabase";
@@ -17,7 +17,7 @@ import { supabase } from "./supabase";
 const CLIO_BASE = "https://app.clio.com/api/v4";
 const CLIO_AUTH_URL = "https://app.clio.com/oauth/authorize";
 const CLIO_TOKEN_URL = "https://app.clio.com/oauth/token";
-const SCOPES = "contacts:read matters:read calendar_entries:read";
+const SCOPES = "contacts:read contacts:write matters:read matters:write calendar_entries:read";
 
 export interface ClioTokens {
   access_token: string;

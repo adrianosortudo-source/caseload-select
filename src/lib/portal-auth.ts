@@ -5,7 +5,8 @@
  * No database table required — the signature is the authorization.
  *
  * Cookie name: portal_session
- * Signing key: CRON_SECRET (already in env)
+ * Signing key: PORTAL_SECRET (dedicated env var — do NOT reuse CRON_SECRET;
+ *              rotating the cron secret must not invalidate active portal sessions)
  */
 
 import { createHmac } from "crypto";
@@ -16,8 +17,8 @@ const LINK_TTL_HOURS = 48;
 const SESSION_TTL_HOURS = 720; // 30 days
 
 function signingKey(): string {
-  const key = process.env.CRON_SECRET;
-  if (!key) throw new Error("CRON_SECRET not set");
+  const key = process.env.PORTAL_SECRET ?? process.env.CRON_SECRET;
+  if (!key) throw new Error("PORTAL_SECRET not set");
   return key;
 }
 

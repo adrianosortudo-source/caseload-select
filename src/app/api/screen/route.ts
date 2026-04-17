@@ -1060,19 +1060,27 @@ export async function POST(req: Request) {
       gptResponse.practice_sub_type = resolvedSubType ?? `${gptResponse.practice_area}_other`;
 
       if (subTypeConflict) {
+        const regexResult = detectSubType(gptResponse.practice_area, situationText)?.subType ?? null;
         console.warn(
-          `[sub-type] conflict: regex=${detectSubType(gptResponse.practice_area, situationText)?.subType} gpt=${resolvedSubType} → using GPT`,
+          `[sub-type] conflict: regex=${regexResult} gpt=${resolvedSubType} → using GPT`,
         );
-        // Log conflict to Supabase for monitoring (fire-and-forget, don't block response)
+        // Log conflict to Supabase for monitoring (fire-and-forget, don't block response).
+        // Uses the service-role key path — inserts from the anon client will be rejected by
+        // RLS but the error is swallowed intentionally: telemetry must never block the session.
+        const situationHash = require("crypto")
+          .createHash("sha256")
+          .update(situationText.substring(0, 500))
+          .digest("hex") as string;
         void supabase
           .from("sub_type_conflicts")
           .insert({
             session_id: session.id,
+            firm_id: firm_id,
             practice_area: gptResponse.practice_area,
-            regex_sub_type: detectSubType(gptResponse.practice_area, situationText)?.subType ?? null,
-            gpt_sub_type: gptResponse.practice_sub_type,
-            situation_text: situationText.substring(0, 500),
-            created_at: new Date().toISOString(),
+            regex_result: regexResult,
+            gpt_result: gptResponse.practice_sub_type,
+            situation_hash: situationHash,
+            app_version: process.env.NEXT_PUBLIC_APP_VERSION ?? null,
           });
       }
     } else if (existingSubType) {
