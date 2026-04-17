@@ -21,6 +21,8 @@ import { supabase } from "@/lib/supabase";
 import { buildSystemPrompt, type FirmConfig } from "@/lib/screen-prompt";
 import { getSlotSchema } from "@/lib/slot-schema";
 import { selectNextQuestions } from "@/lib/question-selector";
+import { resolveSubType, detectSubType } from "@/lib/sub-type-detect";
+import { resolveQuestionSetKey } from "@/lib/sub-types";
 import {
   type CpiBreakdown,
   FEE_FLOOR,
@@ -70,6 +72,7 @@ interface ComplexityIndicators {
 interface GptResponse {
   practice_area: string | null;
   practice_area_confidence: "high" | "medium" | "low" | "unknown";
+  practice_sub_type: string | null;
   extracted_entities: Record<string, unknown>;
   questions_answered: string[];
   next_question: {
@@ -286,10 +289,15 @@ export async function POST(req: Request) {
       ? existingConversation.find(m => m.role === "user")?.content ?? message
       : message;
     if (session.practice_area) {
+      const sessionSubTypeEarly = (session.practice_sub_type as string | null) ?? null;
+      const sessionQSetKeyEarly = sessionSubTypeEarly
+        ? resolveQuestionSetKey(session.practice_area as string, sessionSubTypeEarly)
+        : null;
       const autoConfirmed = autoConfirmFromContext(
         session.practice_area as string,
         situationText,
         updatedConfirmed,
+        sessionQSetKeyEarly,
       );
       Object.assign(updatedConfirmed, autoConfirmed);
     }
@@ -384,7 +392,11 @@ export async function POST(req: Request) {
       session.practice_area
     ) {
       const paId = session.practice_area as string;
+      const sessionSubType = (session.practice_sub_type as string | null) ?? null;
+      const sessionQSetKey = resolveQuestionSetKey(paId, sessionSubType);
+      // Prefer sub-type-specific set, fall back to umbrella, then label-match
       const questionSet =
+        firmConfig.question_sets[sessionQSetKey] ??
         firmConfig.question_sets[paId] ??
         Object.values(firmConfig.question_sets).find(qs =>
           qs.practice_area_id === paId ||
@@ -407,11 +419,12 @@ export async function POST(req: Request) {
         // Dynamic question selection — S10.3
         // Priority-based: replaces hard-coded slice(0,6)/slice(6) Phase 2/3 split.
         // band_locked (S10.4): if band is already locked, skip straight to identity.
+        // Use sub-type key for slot schema lookup so priority weights match question IDs.
         const currentBand = (session.band as string) ?? existingCpi.band ?? "C";
         const bandLocked = !!(existingCpi as unknown as Record<string, unknown>).band_locked;
         const batch = bandLocked
           ? { questions: [], phase: "identity" as const }
-          : selectNextQuestions(questionSet.questions, paId, updatedConfirmed, currentBand);
+          : selectNextQuestions(questionSet.questions, sessionQSetKey, updatedConfirmed, currentBand);
 
         // ── Round 1 completion: re-score then route ─────────────────────────
         // When all Round 1 questions are done and Round 2 hasn't started yet:
@@ -788,13 +801,22 @@ export async function POST(req: Request) {
     let includeQuestionSets = false;
 
     if (channel !== "widget") {
-      if (sessionPracticeArea && firmConfig.question_sets[sessionPracticeArea]) {
-        // Known practice area: inject only that area's questions
-        promptFirmConfig = {
-          ...firmConfig,
-          question_sets: { [sessionPracticeArea]: firmConfig.question_sets[sessionPracticeArea] },
-        };
-        includeQuestionSets = true;
+      if (sessionPracticeArea) {
+        // Known practice area: inject the sub-type question set when available,
+        // otherwise fall back to the umbrella PA set.
+        const sessionSubTypePrompt = (session.practice_sub_type as string | null) ?? null;
+        const sessionQSetKeyPrompt = resolveQuestionSetKey(sessionPracticeArea, sessionSubTypePrompt);
+        const qSet =
+          firmConfig.question_sets[sessionQSetKeyPrompt] ??
+          firmConfig.question_sets[sessionPracticeArea] ??
+          null;
+        if (qSet) {
+          promptFirmConfig = {
+            ...firmConfig,
+            question_sets: { [sessionQSetKeyPrompt]: qSet },
+          };
+          includeQuestionSets = true;
+        }
       }
       // else: first call — no questions, classification-only prompt
     }
@@ -834,8 +856,12 @@ export async function POST(req: Request) {
     // returns filled_slots + slot_confidence. Only high/medium confidence slots are
     // auto-confirmed (merged into updatedConfirmed after the GPT response is parsed).
     if (sessionPracticeArea) {
-      const slotSchema = getSlotSchema(sessionPracticeArea);
+      const sessionSubTypeSlot = (session.practice_sub_type as string | null) ?? null;
+      const sessionQSetKeySlot = resolveQuestionSetKey(sessionPracticeArea, sessionSubTypeSlot);
+      // Use sub-type schema when available; fall back to umbrella PA schema
+      const slotSchema = getSlotSchema(sessionQSetKeySlot) || getSlotSchema(sessionPracticeArea);
       const questionSet =
+        firmConfig.question_sets[sessionQSetKeySlot] ??
         firmConfig.question_sets[sessionPracticeArea] ??
         Object.values(firmConfig.question_sets).find(qs => qs.practice_area_id === sessionPracticeArea) ??
         null;
@@ -1021,6 +1047,44 @@ export async function POST(req: Request) {
       if (pa) gptResponse.practice_area = pa.id;
     }
 
+    // ── Resolve practice_sub_type ─────────────────────────────────────
+    // Three-pass: (1) regex detection on situation text, (2) GPT output field,
+    // (3) resolve + conflict log. Only runs on first classification or if
+    // sub-type was not previously set (to allow at most one mid-session swap).
+    const existingSubType = session.practice_sub_type as string | null | undefined;
+    if (gptResponse.practice_area && !existingSubType) {
+      const { subType: resolvedSubType, conflict: subTypeConflict } =
+        resolveSubType(gptResponse.practice_area, situationText, gptResponse.practice_sub_type);
+
+      // Fallback: if neither regex nor GPT returned a sub-type, use `{pa}_other`
+      gptResponse.practice_sub_type = resolvedSubType ?? `${gptResponse.practice_area}_other`;
+
+      if (subTypeConflict) {
+        console.warn(
+          `[sub-type] conflict: regex=${detectSubType(gptResponse.practice_area, situationText)?.subType} gpt=${resolvedSubType} → using GPT`,
+        );
+        // Log conflict to Supabase for monitoring (fire-and-forget, don't block response)
+        void supabase
+          .from("sub_type_conflicts")
+          .insert({
+            session_id: session.id,
+            practice_area: gptResponse.practice_area,
+            regex_sub_type: detectSubType(gptResponse.practice_area, situationText)?.subType ?? null,
+            gpt_sub_type: gptResponse.practice_sub_type,
+            situation_text: situationText.substring(0, 500),
+            created_at: new Date().toISOString(),
+          });
+      }
+    } else if (existingSubType) {
+      // Keep the existing sub-type (locked after first classification)
+      gptResponse.practice_sub_type = existingSubType;
+    }
+
+    // Resolve the question-set key from PA + sub-type
+    const questionSetKey = gptResponse.practice_area
+      ? resolveQuestionSetKey(gptResponse.practice_area, gptResponse.practice_sub_type)
+      : null;
+
     // ── Apply per-area CPI floors ─────────────────────────────────────
     // GPT under-scores fee and complexity on the first message when data is
     // sparse. Floors ensure Band assignments are meaningful from turn 1.
@@ -1071,8 +1135,12 @@ export async function POST(req: Request) {
     // config, filtered by confirmed_answers. This eliminates cycling entirely.
     if (channel === "widget" && !gptResponse.finalize && !gptResponse.collect_identity) {
       const paId = gptResponse.practice_area;
-      // Find matching question set (by direct key, practice_area_id, or label)
-      let questionSet = paId ? firmConfig.question_sets[paId] : null;
+      // Find matching question set: prefer sub-type key, fall back to umbrella PA key,
+      // then fall back to practice_area_id match.
+      let questionSet = questionSetKey ? (firmConfig.question_sets[questionSetKey] ?? null) : null;
+      if (!questionSet && paId) {
+        questionSet = firmConfig.question_sets[paId] ?? null;
+      }
       if (!questionSet && paId) {
         questionSet = Object.values(firmConfig.question_sets).find(qs =>
           qs.practice_area_id === paId ||
@@ -1081,23 +1149,22 @@ export async function POST(req: Request) {
         ) ?? null;
       }
       if (questionSet) {
-        // Auto-skip from context: on first classification, GPT just assigned a
-        // practice area that may not have been known before. Run auto-confirm
-        // again with the new PA to catch any free-text matches.
+        // Auto-skip from context: on first classification, run auto-confirm with
+        // the resolved question-set key (sub-type-aware) to catch any free-text matches.
         if (paId && !session.practice_area) {
-          const postClassAutoConfirmed = autoConfirmFromContext(paId, situationText, updatedConfirmed);
+          const postClassAutoConfirmed = autoConfirmFromContext(paId, situationText, updatedConfirmed, questionSetKey);
           Object.assign(updatedConfirmed, postClassAutoConfirmed);
         }
 
         // Dynamic question selection — S10.3 + band_locked short-circuit — S10.4
-        // On first classification, GPT has just assigned an initial band.
-        // Priority-based selection replaces hard-coded slice(0,6)/slice(6).
-        // If band_locked=true, skip all questions and go straight to identity.
+        // Use questionSetKey (sub-type) as the schema lookup key so priority weights
+        // are drawn from the correct sub-type slot schema.
         const gpBand = gptResponse.cpi.band ?? "C";
         const gpBandLocked = gptResponse.cpi.band_locked ?? false;
+        const slotLookupKey = questionSetKey ?? paId ?? "";
         const postGptBatch = gpBandLocked
           ? { questions: [], phase: "identity" as const }
-          : selectNextQuestions(questionSet.questions, paId ?? "", updatedConfirmed, gpBand);
+          : selectNextQuestions(questionSet.questions, slotLookupKey, updatedConfirmed, gpBand);
 
         if (postGptBatch.phase !== "identity") {
           gptResponse.next_questions = postGptBatch.questions;
@@ -1164,6 +1231,7 @@ export async function POST(req: Request) {
       scoring: scoringPayload,
       extracted_entities: updatedEntities,
       practice_area: gptResponse.practice_area,
+      practice_sub_type: gptResponse.practice_sub_type ?? existingSubType ?? null,
       band: gptResponse.cpi.band,
       ...contactUpdate,
       ...(gptResponse.situation_summary ? { situation_summary: gptResponse.situation_summary } : {}),

@@ -404,6 +404,94 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     animal_q1: { priority: 5, extraction_hints: ["dog bite", "animal attack", "my dog bit someone", "my pet injured", "dog attacked", "animal incident"] },
     animal_q2: { priority: 5, extraction_hints: ["first incident", "never happened before", "prior bite", "history of biting", "known dangerous"] },
   },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // PERSONAL INJURY SUB-TYPE SLOT SCHEMAS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // ── PI — Motor Vehicle Accident ───────────────────────────────────────────────
+  pi_mva: {
+    pi_mva_q1:  { priority: 5, extraction_hints: ["I was driving", "my car", "behind the wheel", "passenger", "passenger seat", "pedestrian", "walking", "crosswalk", "cyclist", "cycling", "bike"] },
+    pi_mva_q2:  { priority: 4, extraction_hints: ["insured", "insurance", "policy", "have insurance", "no insurance", "uninsured"] },
+    pi_mva_q16: { priority: 5, extraction_hints: ["today", "yesterday", "last week", "this week", "just happened", "an hour ago", "this morning", "last month", "months ago", "years ago", "a year ago"] },
+    pi_mva_q17: { priority: 4, extraction_hints: ["hospital", "emergency", "ER", "doctor", "treatment", "medical", "ambulance", "x-ray", "scan", "MRI", "physio", "no treatment", "haven't seen a doctor"] },
+    pi_mva_q31: { priority: 5, extraction_hints: ["rear-ended", "hit from behind", "side impact", "t-boned", "intersection", "ran a red", "red light", "head-on", "pedestrian struck", "cyclist struck", "ran into me"] },
+    pi_mva_q32: { priority: 4, extraction_hints: ["witness", "witnesses", "bystander", "saw it happen", "saw the accident", "no witnesses", "nobody saw"] },
+    pi_mva_q46: { priority: 3, extraction_hints: ["two cars", "three cars", "multiple vehicles", "pileup", "multi-car", "one other car"] },
+    pi_mva_q47: { priority: 3, extraction_hints: ["police", "police report", "filed a report", "officer", "OPP", "Toronto Police", "no report", "didn't call police"] },
+  },
+
+  // ── PI — Slip and Fall ────────────────────────────────────────────────────────
+  pi_slip_fall: {
+    pi_sf_q1:  { priority: 5, extraction_hints: ["Walmart", "grocery", "mall", "store", "restaurant", "sidewalk", "public property", "park", "TTC", "subway", "workplace", "private home", "rental property"] },
+    pi_sf_q2:  { priority: 5, extraction_hints: ["reported the fall", "incident report", "reported to manager", "told the staff", "no report filed", "didn't report"] },
+    pi_sf_q16: { priority: 5, extraction_hints: ["today", "yesterday", "last week", "this week", "just happened", "a few days ago", "last month", "months ago", "years ago"] },
+    pi_sf_q17: { priority: 4, extraction_hints: ["hospital", "emergency", "ER", "doctor", "treatment", "medical", "ambulance", "physio", "no treatment", "haven't seen a doctor"] },
+    pi_sf_q31: { priority: 5, extraction_hints: ["wet floor", "spill", "mopping", "slippery", "no wet floor sign", "ice", "icy", "snow", "uneven", "pothole", "cracked pavement", "object on floor", "poor lighting", "broken handrail", "broken step", "defective stairs"] },
+    pi_sf_q32: { priority: 4, extraction_hints: ["took photos", "photographs", "pictures at the scene", "no photos", "didn't take photos", "photos of the floor"] },
+    pi_sf_q46: { priority: 4, extraction_hints: ["witnesses", "someone saw", "people around", "staff saw", "no witnesses", "nobody saw", "bystanders"] },
+    pi_sf_q47: { priority: 5, extraction_hints: ["10-day notice", "written notice", "notified the owner", "sent notice", "occupiers liability notice", "10 days", "no notice sent"] },
+  },
+
+  // ── PI — Dog Bite ─────────────────────────────────────────────────────────────
+  pi_dog_bite: {
+    pi_db_q1:  { priority: 5, extraction_hints: ["know the owner", "owner's name", "owner's address", "don't know who owns", "stranger's dog", "neighbour's dog"] },
+    pi_db_q2:  { priority: 5, extraction_hints: ["bitten before", "prior bite", "history of biting", "first time", "never attacked before", "known dangerous dog"] },
+    pi_db_q16: { priority: 5, extraction_hints: ["today", "yesterday", "last week", "this morning", "just happened", "last month", "months ago"] },
+    pi_db_q17: { priority: 4, extraction_hints: ["hospital", "ER", "emergency room", "doctor", "stitches", "rabies shot", "treatment", "no treatment needed"] },
+    pi_db_q31: { priority: 5, extraction_hints: ["surgery", "hospitalized", "scarring", "disfigured", "serious wound", "minor bite", "puncture wound", "laceration"] },
+    pi_db_q32: { priority: 4, extraction_hints: ["home insurance", "homeowner insurance", "liability insurance", "insured", "no insurance"] },
+    pi_db_q46: { priority: 4, extraction_hints: ["public park", "on the street", "sidewalk", "owner's property", "my property", "invited over"] },
+    pi_db_q47: { priority: 3, extraction_hints: ["witnesses", "someone saw", "no witnesses", "people nearby", "bystanders"] },
+  },
+
+  // ── PI — Medical Malpractice ──────────────────────────────────────────────────
+  pi_med_mal: {
+    pi_mm_q1:  { priority: 5, extraction_hints: ["physician", "family doctor", "GP", "surgeon", "specialist", "hospital", "clinic", "dentist", "nurse"] },
+    pi_mm_q2:  { priority: 4, extraction_hints: ["I am the patient", "on behalf of my", "my mother", "my father", "my spouse", "estate claim", "they passed"] },
+    pi_mm_q16: { priority: 5, extraction_hints: ["within the last year", "last year", "two years ago", "recently", "months ago", "years ago", "when I found out", "discovered"] },
+    pi_mm_q17: { priority: 5, extraction_hints: ["misdiagnosis", "wrong diagnosis", "failed to diagnose", "surgical error", "wrong-site", "wrong medication", "wrong dosage", "failure to refer"] },
+    pi_mm_q31: { priority: 5, extraction_hints: ["permanent disability", "disabled", "hospitalized", "death", "died", "passed away", "surgery required", "disfigured", "pain and suffering", "recovered"] },
+    pi_mm_q32: { priority: 4, extraction_hints: ["second opinion", "another doctor confirmed", "expert confirmed", "independent doctor", "no second opinion yet"] },
+    pi_mm_q46: { priority: 3, extraction_hints: ["medical records", "have my records", "obtaining records", "missing records", "records destroyed"] },
+    pi_mm_q47: { priority: 3, extraction_hints: ["consent form", "informed consent", "risk disclosed", "risk not disclosed", "signed consent", "wasn't told about the risk"] },
+  },
+
+  // ── PI — Product Liability ────────────────────────────────────────────────────
+  pi_product: {
+    pi_prod_q1:  { priority: 5, extraction_hints: ["appliance", "electronics", "vehicle part", "children's toy", "medical device", "health product", "food contamination", "consumer product"] },
+    pi_prod_q2:  { priority: 4, extraction_hints: ["manufacturer", "brand", "product name", "I know who made it", "retailer", "don't know who made it"] },
+    pi_prod_q16: { priority: 5, extraction_hints: ["today", "last week", "last month", "months ago", "recently", "years ago"] },
+    pi_prod_q17: { priority: 4, extraction_hints: ["ER", "hospital", "surgery", "hospitalized", "ongoing care", "physio", "minor", "fully recovered", "no treatment"] },
+    pi_prod_q31: { priority: 5, extraction_hints: ["manufacturing defect", "design defect", "failure to warn", "product failed", "the product broke", "not sure what failed"] },
+    pi_prod_q32: { priority: 4, extraction_hints: ["still have the product", "preserved", "discarded", "threw it out", "returned it", "product was disposed"] },
+    pi_prod_q46: { priority: 3, extraction_hints: ["recall", "Health Canada recall", "product recall", "safety alert", "no recall that I know of"] },
+    pi_prod_q47: { priority: 3, extraction_hints: ["receipt", "proof of purchase", "order confirmation", "credit card record", "no receipt", "no proof of purchase"] },
+  },
+
+  // ── PI — Workplace Injury ─────────────────────────────────────────────────────
+  pi_workplace: {
+    pi_wp_q1:  { priority: 5, extraction_hints: ["construction site", "renovation site", "industrial", "manufacturing", "warehouse", "distribution centre", "office", "retail"] },
+    pi_wp_q2:  { priority: 5, extraction_hints: ["WSIB claim", "filed with WSIB", "WSIB accepted", "WSIB pending", "no WSIB claim", "no WSIB coverage", "employer not registered with WSIB"] },
+    pi_wp_q16: { priority: 5, extraction_hints: ["today", "yesterday", "last week", "last month", "months ago", "years ago", "recently"] },
+    pi_wp_q17: { priority: 4, extraction_hints: ["ER", "hospital", "surgery", "physio", "ongoing treatment", "serious injuries", "minor injury", "no treatment"] },
+    pi_wp_q31: { priority: 5, extraction_hints: ["fall from height", "scaffold", "ladder", "struck by object", "falling object", "machinery", "entrapment", "slip on floor", "chemical exposure", "overexertion"] },
+    pi_wp_q32: { priority: 5, extraction_hints: ["third party", "subcontractor", "general contractor", "equipment manufacturer", "property owner", "only my employer involved"] },
+    pi_wp_q46: { priority: 3, extraction_hints: ["coworkers saw", "supervisor witnessed", "witnesses", "no witnesses", "was alone"] },
+    pi_wp_q47: { priority: 4, extraction_hints: ["safety violation", "OHSA", "occupational health", "no safety equipment", "guardrail missing", "no PPE", "employer was compliant"] },
+  },
+
+  // ── PI — Civil Assault ────────────────────────────────────────────────────────
+  pi_assault_ci: {
+    pi_ac_q1:  { priority: 5, extraction_hints: ["know who attacked me", "know the attacker", "stranger", "don't know who it was", "attacker's name", "I can identify them"] },
+    pi_ac_q2:  { priority: 4, extraction_hints: ["police charges", "charges laid", "criminal charges", "police report filed", "no charges", "no report"] },
+    pi_ac_q16: { priority: 5, extraction_hints: ["today", "last week", "last month", "months ago", "recently", "years ago"] },
+    pi_ac_q17: { priority: 5, extraction_hints: ["fracture", "broken", "surgery", "hospitalized", "PTSD", "psychological trauma", "ongoing therapy", "bruising", "minor", "no lasting effects"] },
+    pi_ac_q31: { priority: 4, extraction_hints: ["they have assets", "they have a job", "insurance", "can't pay", "no assets", "not sure of their finances"] },
+    pi_ac_q32: { priority: 4, extraction_hints: ["witnesses", "someone saw", "security cameras", "cameras nearby", "no witnesses"] },
+    pi_ac_q46: { priority: 3, extraction_hints: ["ER", "hospital", "doctor", "stitches", "surgery", "ongoing care", "no treatment"] },
+    pi_ac_q47: { priority: 3, extraction_hints: ["bar", "restaurant", "nightclub", "event venue", "street", "park", "transit", "private property"] },
+  },
 };
 
 /**

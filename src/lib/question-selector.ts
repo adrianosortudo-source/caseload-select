@@ -1,5 +1,5 @@
 /**
- * Dynamic Question Selector — S10.3
+ * Dynamic Question Selector — S10.3 + Sub-Type Routing
  *
  * Replaces hard-coded Phase 2/3 split (slice(0,6)/slice(6)) with
  * priority-based selection driven by the slot schema.
@@ -13,6 +13,9 @@
  * questions 6+ = priority 3) when no slot schema entry exists for a question.
  * This preserves backward compatibility for any practice areas not yet in
  * the slot schema, while immediately benefiting those that are.
+ *
+ * Sub-type routing: practiceAreaId may now be a sub-type key (e.g. "pi_slip_fall").
+ * getSlotSchema handles this transparently via sub-type namespace lookup.
  */
 
 import { getSlotSchema } from "@/lib/slot-schema";

@@ -230,7 +230,68 @@ ${includeQuestionSets ? `━━━━━━━━━━━━━━━━━━�
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BEHAVIOR RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. DETECT, DO NOT ASK: Detect the practice area from the client's first message. Never ask them to select a category. If ambiguous, ask one clarifying question.
+1. DETECT, DO NOT ASK: Detect the practice area AND the practice sub-type from the client's first message. Never ask them to select a category. If ambiguous, ask one clarifying question.
+
+   SUB-TYPE CLASSIFICATION (output as practice_sub_type in every response):
+   Always populate practice_sub_type whenever practice_area is known. Use the client's exact words to determine the sub-type. Sub-types by umbrella:
+
+   Personal Injury (pi):
+   - "pi_mva": car/truck/motorcycle accident, rear-ended, head-on, pedestrian/cyclist struck by vehicle, intersection collision
+   - "pi_slip_fall": slip and fall, wet floor, tripped, fell on premises, ice/snow fall, occupier liability
+   - "pi_dog_bite": dog bite, dog attack, animal attack
+   - "pi_med_mal": medical malpractice, surgical error, misdiagnosis, wrong diagnosis, standard of care failure, wrong medication
+   - "pi_product": defective product, product liability, product recall, appliance/device malfunction causing injury
+   - "pi_workplace": injured at work, workplace accident, construction site fall, machinery injury, on-the-job injury
+   - "pi_assault_ci": civil assault claim (sue for being assaulted, beaten, sexual assault civil claim)
+   - "pi_other": cannot determine from available information
+
+   Employment (emp):
+   - "emp_dismissal": wrongful dismissal, fired, terminated, laid off, let go without cause
+   - "emp_harassment": workplace harassment, bullying, hostile work environment, sexual harassment
+   - "emp_wage": unpaid wages, wage theft, overtime dispute, minimum wage violation
+   - "emp_disc": workplace discrimination (race, gender, age, disability, pregnancy)
+   - "emp_constructive": constructive dismissal, forced to quit, unilateral role/pay change
+   - "emp_other": cannot determine
+
+   Family (fam):
+   - "fam_divorce": divorce, separation, ending marriage
+   - "fam_custody": child custody, parenting time, access to children
+   - "fam_support": child support, spousal support, alimony
+   - "fam_property": property division, matrimonial home, equalization
+   - "fam_protection": restraining order, protection order, domestic violence, CAS
+   - "fam_other": cannot determine
+
+   Criminal (crim):
+   - "crim_dui": impaired driving, DUI, over 80mg, breathalyzer, refusal to blow
+   - "crim_assault": assault charge (non-domestic)
+   - "crim_drug": drug charges, possession, trafficking, CDSA
+   - "crim_theft": theft, fraud, robbery, shoplifting, B&E, embezzlement
+   - "crim_domestic": domestic assault, partner violence
+   - "crim_other": cannot determine
+
+   Immigration (imm):
+   - "imm_ee": Express Entry, CRS, Federal Skilled Worker, Canadian Experience Class
+   - "imm_spousal": spousal sponsorship, family class sponsorship
+   - "imm_study": study permit, student visa
+   - "imm_work_permit": work permit, LMIA, temporary foreign worker
+   - "imm_refugee": refugee claim, asylum, removal order, deportation
+   - "imm_pnp": Provincial Nominee Program
+   - "imm_other": cannot determine
+
+   Civil (civ):
+   - "civ_contract": breach of contract, contract dispute
+   - "civ_debt": debt collection, unpaid invoice, money owed
+   - "civ_tort": tort claim, nuisance, trespass
+   - "civ_negligence": professional negligence, duty of care, accountant/lawyer malpractice
+   - "civ_other": cannot determine
+
+   Insurance (ins):
+   - "ins_sabs": statutory accident benefits, SABS, income replacement, catastrophic impairment
+   - "ins_denial": insurance claim denied, insurer rejected claim
+   - "ins_bad_faith": insurer acting in bad faith, unreasonable denial/delay
+   - "ins_other": cannot determine
+
+   All other practice areas: set practice_sub_type to null (single question set, no sub-typing needed).
 2. EXTRACT FIRST: Before asking a question, check if the client already answered it in free text. "I was fired after 12 years without cause" answers termination_type AND tenure. Pre-fill those and skip the questions.
 3. ONE AT A TIME (conversation channels): Ask one question per turn. Exception: widget mode returns all at once.
 4. IDENTITY LAST: Do not collect name/email/phone until the branching questions are complete (unless the channel already provided contact info).
@@ -473,6 +534,7 @@ You MUST return a single JSON object matching this exact schema on every turn:
 {
   "practice_area": string | null,
   "practice_area_confidence": "high" | "medium" | "low" | "unknown",
+  "practice_sub_type": string | null,
   "extracted_entities": { [key: string]: string | number | boolean },  // structured question answers ONLY, e.g. {"emp_termination_type": "without_cause", "emp_tenure": "12_years"}. NEVER put value_tier, prior_experience, situation_summary, or complexity_indicators here.
   "questions_answered": string[],
   "next_question": {
@@ -521,6 +583,7 @@ VALIDATION RULES:
 - flags must always be present as an array (use [] if no flags).
 - OUT OF SCOPE response_text: when finalize=true due to out_of_scope, response_text must include a brief, polite explanation that the firm does not handle this type of matter and encourage the client to seek the appropriate legal help. Do not leave response_text as only the disclaimer.
 - filled_slots and slot_confidence must always be present as objects (use {} if no slots were extracted). Never omit these keys.
+- practice_sub_type must always be present. Set to null only for practice areas without sub-type routing (real, corp, est, llt, ip, tax, admin, bank, priv, fran, env, prov, condo, hr, edu, health, debt, nfp, defam, socben, gig, sec, elder, str, crypto, ecom, animal, const). For pi, emp, fam, crim, imm, civ, ins: always populate from the sub-type list above, or use "{pa}_other" if genuinely unclear.
 - NEVER include a slot in next_question or next_questions whose id appears in filled_slots at "high" or "medium" slot_confidence.
 
 ${firm.custom_instructions ? `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nFIRM-SPECIFIC INSTRUCTIONS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${firm.custom_instructions}` : ""}`;
