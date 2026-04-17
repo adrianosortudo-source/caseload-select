@@ -493,6 +493,132 @@ export async function POST(req: Request) {
           }
         }
 
+        // ── Round 2 CPI re-score ────────────────────────────────────────────
+        // Fires when Round 2 answers have just been submitted (widgetRound2Started=true)
+        // and all questions are done (batch.phase==="identity").
+        // Calls GPT with a lean prompt to recompute value_score components using the full
+        // entity set (R1 + R2). Fit components (geo, practice, legitimacy, referral) are
+        // locked from the initial classification and never change.
+        // On failure, falls through and uses the existing CPI.
+        if (widgetRound2Started && batch.phase === "identity") {
+          const entityLines = Object.entries(updatedConfirmed)
+            .filter(([k]) => !k.startsWith("_"))
+            .map(([k, v]) => `  ${k}: ${v}`)
+            .join("\n") || "  (none recorded)";
+
+          // Use the full scoring engine (no question sets) — ~8K tokens, covers all PA rules
+          let reScoringPrompt = buildSystemPrompt(firmConfig, "widget", { includeQuestionSets: false });
+          reScoringPrompt +=
+            `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
+            `\nFINAL RE-SCORING PASS — override all channel instructions\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `All intake questions (Round 1 and Round 2) have been answered.\n` +
+            `Return next_question: null, next_questions: null, collect_identity: true, finalize: false.\n` +
+            `response_text: "" (empty string). situation_summary: null.\n\n` +
+            `LOCKED FIT COMPONENTS (do not change these):\n` +
+            `  geo_score: ${existingCpi.geo_score}\n` +
+            `  practice_score: ${existingCpi.practice_score}\n` +
+            `  legitimacy_score: ${existingCpi.legitimacy_score}\n` +
+            `  referral_score: ${existingCpi.referral_score}\n` +
+            `  fit_score: ${existingCpi.fit_score}\n\n` +
+            `ALL COLLECTED ENTITIES (Round 1 + Round 2):\n${entityLines}\n\n` +
+            `TASK: Recalculate ONLY the value_score components:\n` +
+            `  urgency_score (0-20): apply timeline signals from entities\n` +
+            `  complexity_score (0-25): apply base_complexity + all complexity_delta from entities\n` +
+            `  multi_practice_score (0-5): apply if cross-practice signals present\n` +
+            `  fee_score (0-10): apply value_tier inference from entities\n\n` +
+            `value_score = urgency + complexity + multi_practice + fee\n` +
+            `total = fit_score (${existingCpi.fit_score}) + value_score\n` +
+            `band from total: A=80-100, B=60-79, C=40-59, D=20-39, E=0-19\n\n` +
+            `Return the complete JSON schema. Copy fit components from LOCKED values above.`;
+
+          try {
+            const reScoringCompletion = await openai.chat.completions.create({
+              model: MODEL,
+              temperature: 0,
+              response_format: { type: "json_object" },
+              messages: [
+                { role: "system", content: reScoringPrompt },
+                {
+                  role: "user",
+                  content: `Re-score this ${paId} case after all rounds. Entities: ${entityLines.replace(/\n/g, ", ")}`,
+                },
+              ],
+            });
+
+            const reScoringRaw = reScoringCompletion.choices[0]?.message?.content;
+            if (reScoringRaw) {
+              const reScoredGpt = JSON.parse(reScoringRaw) as GptResponse;
+
+              // Lock fit components — they never change from R2 answers
+              if (reScoredGpt.cpi) {
+                reScoredGpt.cpi.geo_score = existingCpi.geo_score;
+                reScoredGpt.cpi.practice_score = existingCpi.practice_score;
+                reScoredGpt.cpi.legitimacy_score = existingCpi.legitimacy_score;
+                reScoredGpt.cpi.referral_score = existingCpi.referral_score;
+                reScoredGpt.cpi.fit_score = existingCpi.fit_score;
+              }
+
+              // Apply floors + validate
+              if (reScoredGpt.cpi && reScoredGpt.practice_area) {
+                const rePa = reScoredGpt.practice_area;
+                const reFeeFloor = FEE_FLOOR[rePa] ?? 5;
+                const reComplexityFloor = COMPLEXITY_FLOOR[rePa] ?? 5;
+                if (reScoredGpt.cpi.fee_score < reFeeFloor) reScoredGpt.cpi.fee_score = reFeeFloor;
+                if (reScoredGpt.cpi.complexity_score < reComplexityFloor) reScoredGpt.cpi.complexity_score = reComplexityFloor;
+                if (reScoredGpt.cpi.urgency_score < 2) reScoredGpt.cpi.urgency_score = 2;
+              }
+
+              const updatedCpi = validateAndFixScoring(reScoredGpt.cpi ?? existingCpi);
+              const updatedEntities = {
+                ...(session.extracted_entities as Record<string, unknown> ?? {}),
+                ...(reScoredGpt.value_tier ? { value_tier: reScoredGpt.value_tier } : {}),
+              };
+
+              // Persist re-scored CPI + updated band to session
+              await supabase
+                .from("intake_sessions")
+                .update({
+                  scoring: {
+                    ...updatedCpi,
+                    _confirmed: updatedConfirmed,
+                    _round_2_started: true,
+                    _round_2_complete: true,
+                    ...(reScoredGpt.complexity_indicators ? { _complexity_indicators: reScoredGpt.complexity_indicators } : {}),
+                    ...(reScoredGpt.flags?.length ? { _flags: reScoredGpt.flags } : {}),
+                  },
+                  band: updatedCpi.band,
+                  extracted_entities: updatedEntities,
+                })
+                .eq("id", session.id);
+
+              return NextResponse.json({
+                session_id: session.id,
+                practice_area: session.practice_area,
+                practice_area_confidence: "high",
+                next_question: null,
+                next_questions: null,
+                cpi: updatedCpi,
+                cpi_partial: computeCpiPartial(updatedCpi, false),
+                response_text: "",
+                finalize: false,
+                collect_identity: true,
+                situation_summary: (session.situation_summary as string) ?? null,
+                extracted_entities: updatedEntities,
+                questions_answered: Object.keys(updatedConfirmed),
+                complexity_indicators: reScoredGpt.complexity_indicators ?? null,
+                value_tier: reScoredGpt.value_tier ?? null,
+                prior_experience: (updatedEntities.prior_experience as string) ?? null,
+                flags: reScoredGpt.flags ?? [],
+                cta: null,
+              });
+            }
+          } catch (err) {
+            console.error("[screen] Round 2 CPI re-score failed, using existing CPI:", err);
+            // Fall through — user still gets identity step with baseline CPI
+          }
+        }
+
         const nextQuestions = batch.phase !== "identity" ? batch.questions : null;
         const collectIdentity = batch.phase === "identity";
 
