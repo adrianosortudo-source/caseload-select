@@ -101,6 +101,66 @@ const EMP_AUTO_RULES: AutoConfirmRule[] = [
   { questionId: "emp_q16", patterns: /\b(today|just now|yesterday|this week|last week|just (got |been )?fired|just (got |been )?terminated|just (got |been )?let go)\b/i, value: "under_3mo" },
 ];
 
+// ─── Emp Dismissal sub-type rules ────────────────────────────────────────────
+const EMP_DIS_AUTO_RULES: AutoConfirmRule[] = [
+  // Timing — emp_dis_q16
+  { questionId: "emp_dis_q16", patterns: /\b(fired today|terminated today|let go today|fired yesterday|fired this week|fired last week|just (got |been )?fired|just (got |been )?terminated|just (got |been )?let go)\b/i, value: "under_3mo" },
+
+  // What they received — emp_dis_q17
+  { questionId: "emp_dis_q17", patterns: /\b(no notice|immediate(ly)?|walked out (the same day|same day)|effective immediately|nothing (on (the )?way out|when (I was|they))|no payment)\b/i, value: "nothing" },
+  { questionId: "emp_dis_q17", patterns: /\b(severance (pay|package|offer)|pay in lieu|lump sum payment|paid out)\b/i, value: "severance" },
+  { questionId: "emp_dis_q17", patterns: /\b(working notice|notice period|continued (to work|working)|worked through the notice)\b/i, value: "working_notice" },
+
+  // Reason — emp_dis_q31
+  { questionId: "emp_dis_q31", patterns: /\b(no reason|without cause|without a reason|without explanation|didn.t give a reason)\b/i, value: "no_reason" },
+  { questionId: "emp_dis_q31", patterns: /\b(restructur|reorganiz|position (eliminated|abolished)|role (eliminated|no longer exists)|downsizing|layoff)\b/i, value: "restructure" },
+  { questionId: "emp_dis_q31", patterns: /\b(performance (issues?|reasons?|concerns?)|based on performance|they said my performance)\b/i, value: "performance" },
+  { questionId: "emp_dis_q31", patterns: /\b(just cause|serious misconduct|theft|fraud|fired for cause)\b/i, value: "just_cause" },
+
+  // Signed release — emp_dis_q32
+  { questionId: "emp_dis_q32", patterns: /\b(haven.t signed|nothing (has been |is |been )?signed|not signed (yet|anything)|they gave me (papers|documents|an agreement) (to sign|and I haven.t))\b/i, value: "given_not_signed" },
+  { questionId: "emp_dis_q32", patterns: /\b(signed (a )?release|signed (a )?severance|signed (the )?agreement|full and final release)\b/i, value: "signed_release" },
+
+  // Seniority — emp_dis_q46
+  { questionId: "emp_dis_q46", patterns: /\b(director|vice[- ]?president|VP|C[- ]?suite|CEO|CFO|COO|president)\b/i, value: "executive" },
+  { questionId: "emp_dis_q46", patterns: /\b(manager|supervisor|team lead|head of)\b/i, value: "manager" },
+  { questionId: "emp_dis_q46", patterns: /\b(junior|entry[- ]?level|intern|assistant|coordinator)\b/i, value: "junior" },
+];
+
+// ─── Emp Harassment sub-type rules ───────────────────────────────────────────
+const EMP_HAR_AUTO_RULES: AutoConfirmRule[] = [
+  // Type — emp_har_q1
+  { questionId: "emp_har_q1", patterns: /\bsexual harassment\b/i, value: "sexual" },
+  { questionId: "emp_har_q1", patterns: /\b(discrimination|discriminatory harassment|harassment based on|racial|gender-based)\b/i, value: "discriminatory" },
+  { questionId: "emp_har_q1", patterns: /\b(bullying|personal harassment|bullied|being targeted)\b/i, value: "personal" },
+
+  // Perpetrator — emp_har_q2
+  { questionId: "emp_har_q2", patterns: /\b(my (direct )?supervisor|my (direct )?manager|my boss)\b/i, value: "supervisor" },
+  { questionId: "emp_har_q2", patterns: /\b(senior management|VP|director|executive (above|over))\b/i, value: "senior_mgmt" },
+  { questionId: "emp_har_q2", patterns: /\b(coworker|colleague|peer|someone at my level)\b/i, value: "coworker" },
+
+  // Still employed — emp_har_q17
+  { questionId: "emp_har_q17", patterns: /\b(still (working|employed|at (the company|work))|currently employed)\b/i, value: "yes_ongoing" },
+  { questionId: "emp_har_q17", patterns: /\b(I resigned|I quit|left the (job|company)|no longer (work|employed) there)\b.{0,30}\b(because of|due to)\b/i, value: "resigned" },
+];
+
+// ─── Emp Constructive sub-type rules ─────────────────────────────────────────
+const EMP_CON_AUTO_RULES: AutoConfirmRule[] = [
+  // Change type — emp_con_q1
+  { questionId: "emp_con_q1", patterns: /\b(pay cut|salary (cut|reduced|reduction)|compensation (cut|reduced|reduction)|they cut my (pay|salary))\b/i, value: "pay_cut" },
+  { questionId: "emp_con_q1", patterns: /\b(job duties (changed|altered)|my role (changed|was changed)|different (role|job|duties)|new duties)\b/i, value: "role_change" },
+  { questionId: "emp_con_q1", patterns: /\b(demoted|demotion|title (stripped|downgraded|removed)|reporting (changed|restructured)|lost (my authority|my team))\b/i, value: "demotion" },
+  { questionId: "emp_con_q1", patterns: /\b(relocated|forced to move|transfer(red)? to (another|a different) (city|location|office))\b/i, value: "relocation" },
+
+  // Still employed — emp_con_q2
+  { questionId: "emp_con_q2", patterns: /\b(still (employed|working there)|haven.t resigned|deciding (what|whether) to)\b/i, value: "still_employed" },
+  { questionId: "emp_con_q2", patterns: /\b(I (have )?resigned|I quit|I left)\b/i, value: "resigned_recent" },
+
+  // Objected — emp_con_q17
+  { questionId: "emp_con_q17", patterns: /\b(objected in writing|wrote (a letter|an email|to employer)|sent (them|HR) (a letter|an email) (objecting|about this|protesting))\b/i, value: "yes_refused" },
+  { questionId: "emp_con_q17", patterns: /\b(continued (to work|working)|didn.t (formally )?object|accepted (the change|it) (by continuing|and kept working))\b/i, value: "no_objection" },
+];
+
 const CRIM_AUTO_RULES: AutoConfirmRule[] = [
   // Driving — crim_q1
   { questionId: "crim_q1", patterns: /\b(i was driving|driving my|pulled over|traffic stop|behind the wheel|dui|dwi|impaired driving)\b/i, value: "yes" },
@@ -146,6 +206,13 @@ export const AUTO_RULES_BY_PA: Record<string, AutoConfirmRule[]> = {
   pi_workplace:  [],   // no unambiguous regex patterns; GPT extraction handles
   pi_assault_ci: [],   // no unambiguous regex patterns; GPT extraction handles
   pi_other:      [],   // qualifier set — no auto-confirm needed
+  // Emp sub-types
+  emp_dismissal:    EMP_DIS_AUTO_RULES,
+  emp_harassment:   EMP_HAR_AUTO_RULES,
+  emp_constructive: EMP_CON_AUTO_RULES,
+  emp_disc:         [],   // GPT handles — too many protected grounds for safe regex
+  emp_wage:         [],   // GPT handles — amount/type too varied for safe regex
+  emp_other:        [],   // qualifier set — no auto-confirm needed
 };
 
 /**

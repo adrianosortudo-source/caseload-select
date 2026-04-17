@@ -492,6 +492,70 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     pi_ac_q46: { priority: 3, extraction_hints: ["ER", "hospital", "doctor", "stitches", "surgery", "ongoing care", "no treatment"] },
     pi_ac_q47: { priority: 3, extraction_hints: ["bar", "restaurant", "nightclub", "event venue", "street", "park", "transit", "private property"] },
   },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // EMPLOYMENT SUB-TYPE SLOT SCHEMAS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // ── Employment — Wrongful Dismissal ──────────────────────────────────────────
+  emp_dismissal: {
+    emp_dis_q1:  { priority: 5, extraction_hints: ["employee", "on payroll", "was employed", "full-time", "part-time", "contractor", "freelancer", "not sure of my status"] },
+    emp_dis_q2:  { priority: 4, extraction_hints: ["employment contract", "signed a contract", "no written contract", "offer letter", "terms of employment", "employment agreement"] },
+    emp_dis_q16: { priority: 5, extraction_hints: ["fired today", "fired yesterday", "fired last week", "fired this week", "fired last month", "fired months ago", "terminated", "let go", "just got fired", "recently terminated"] },
+    emp_dis_q17: { priority: 5, extraction_hints: ["no notice", "immediate termination", "walked out same day", "severance pay", "pay in lieu", "working notice", "continued to work after notice", "no severance", "no payment"] },
+    emp_dis_q31: { priority: 5, extraction_hints: ["no reason given", "without cause", "restructuring", "position eliminated", "performance", "just cause", "misconduct", "fired for cause", "they didn't say why"] },
+    emp_dis_q32: { priority: 5, extraction_hints: ["haven't signed", "nothing signed", "given papers to sign", "signed release", "signed severance agreement", "full and final release", "not yet signed"] },
+    emp_dis_q46: { priority: 4, extraction_hints: ["director", "VP", "vice president", "C-suite", "CEO", "CFO", "COO", "manager", "supervisor", "team lead", "specialist", "entry-level", "junior"] },
+    emp_dis_q47: { priority: 5, extraction_hints: ["years with the company", "worked there for", "been there for", "12 years", "5 years", "20 years", "tenure", "long time", "just started", "short tenure"] },
+  },
+
+  // ── Employment — Harassment ───────────────────────────────────────────────────
+  emp_harassment: {
+    emp_har_q1:  { priority: 5, extraction_hints: ["harassment", "bullying", "hostile work environment", "sexual harassment", "discriminatory harassment", "being targeted", "intimidated at work"] },
+    emp_har_q2:  { priority: 5, extraction_hints: ["my supervisor", "my manager", "my boss", "a coworker", "senior management", "a client", "external party", "who is harassing me"] },
+    emp_har_q16: { priority: 4, extraction_hints: ["just started", "recent", "months", "been going on for", "how long", "started last year", "started years ago"] },
+    emp_har_q17: { priority: 5, extraction_hints: ["still employed", "still working there", "still at the company", "I resigned", "I quit because of it", "I was fired", "constructive dismissal"] },
+    emp_har_q31: { priority: 5, extraction_hints: ["HR complaint", "filed a complaint", "went to HR", "told HR", "no complaint made", "reported to management", "employer didn't act", "retaliated after complaint"] },
+    emp_har_q32: { priority: 5, extraction_hints: ["emails", "texts", "messages", "screenshots", "written evidence", "performance review retaliation", "witnesses", "no documentation"] },
+    emp_har_q46: { priority: 4, extraction_hints: ["medical leave", "stress leave", "mental health leave", "seen a doctor", "therapist", "psychologist", "sick leave because of work", "no impact on health"] },
+    emp_har_q47: { priority: 3, extraction_hints: ["witnesses", "coworkers saw", "coworkers heard", "someone heard", "no witnesses", "happened in private"] },
+  },
+
+  // ── Employment — Discrimination ───────────────────────────────────────────────
+  emp_disc: {
+    emp_dsc_q1:  { priority: 5, extraction_hints: ["race", "colour", "ethnic origin", "disability", "physical disability", "mental health", "gender", "pregnancy", "maternity", "age", "religion", "sexual orientation", "family status", "Human Rights Code", "protected ground"] },
+    emp_dsc_q2:  { priority: 5, extraction_hints: ["fired", "terminated", "demoted", "denied promotion", "pay cut", "hostile environment", "differential treatment", "refused accommodation", "accommodation denied", "no accommodation"] },
+    emp_dsc_q16: { priority: 5, extraction_hints: ["when it happened", "recently", "last month", "months ago", "last year", "over a year ago", "just happened", "date of the incident"] },
+    emp_dsc_q17: { priority: 4, extraction_hints: ["employer knew", "told my employer", "disclosed my disability", "disclosed my pregnancy", "they could see", "visible", "obvious to them", "employer was aware"] },
+    emp_dsc_q31: { priority: 5, extraction_hints: ["comparator", "another employee", "similar role", "treated differently", "coworker was treated better", "other employees", "same position", "different treatment"] },
+    emp_dsc_q32: { priority: 5, extraction_hints: ["emails", "written evidence", "witnesses", "heard discriminatory comments", "circumstantial", "no evidence yet", "pattern of conduct", "documentation"] },
+    emp_dsc_q46: { priority: 4, extraction_hints: ["accommodation request", "asked for accommodation", "disability accommodation", "religious accommodation", "they refused", "inadequate accommodation", "no accommodation provided", "didn't request one"] },
+    emp_dsc_q47: { priority: 3, extraction_hints: ["HRTO", "human rights tribunal", "filed with HRTO", "considering HRTO application", "civil claim", "which route to take"] },
+  },
+
+  // ── Employment — Wage Claim ───────────────────────────────────────────────────
+  emp_wage: {
+    emp_wag_q1:  { priority: 5, extraction_hints: ["unpaid wages", "not paid", "wages owed", "overtime not paid", "vacation pay", "commission not paid", "final paycheck", "termination pay not received", "money owed by employer"] },
+    emp_wag_q2:  { priority: 4, extraction_hints: ["still working there", "still employed", "no longer work there", "former employee", "still at the company"] },
+    emp_wag_q16: { priority: 5, extraction_hints: ["started happening", "when it began", "months ago", "last month", "recently", "over a year ago"] },
+    emp_wag_q17: { priority: 5, extraction_hints: ["amount owed", "how much", "$", "dollars", "thousands", "over $50,000", "under $5,000", "few thousand", "significant amount"] },
+    emp_wag_q31: { priority: 5, extraction_hints: ["employment contract", "offer letter", "pay policy", "written proof of entitlement", "verbal agreement", "no written documentation"] },
+    emp_wag_q32: { priority: 4, extraction_hints: ["raised with employer", "told employer", "employer acknowledged", "employer disputes", "employer ignored", "hasn't responded"] },
+    emp_wag_q46: { priority: 4, extraction_hints: ["payslips", "pay stubs", "pay records", "records show shortfall", "partial records", "no payslips available"] },
+    emp_wag_q47: { priority: 3, extraction_hints: ["other employees affected", "coworkers owed wages", "multiple workers", "just me", "class action", "colleagues affected"] },
+  },
+
+  // ── Employment — Constructive Dismissal ───────────────────────────────────────
+  emp_constructive: {
+    emp_con_q1:  { priority: 5, extraction_hints: ["pay cut", "salary reduced", "compensation reduced", "job duties changed", "role changed", "demoted", "relocated", "forced to move", "hours changed", "schedule changed", "reporting changed"] },
+    emp_con_q2:  { priority: 5, extraction_hints: ["still working there", "still employed deciding", "I resigned", "I quit", "I haven't resigned yet", "resigned last month"] },
+    emp_con_q16: { priority: 5, extraction_hints: ["when they changed", "when it happened", "last month", "months ago", "recently", "last year", "just changed"] },
+    emp_con_q17: { priority: 5, extraction_hints: ["objected in writing", "wrote to employer", "sent an email objecting", "objected verbally", "didn't object", "continued working", "no formal objection"] },
+    emp_con_q31: { priority: 5, extraction_hints: ["20 percent cut", "15 percent", "10 percent", "major pay reduction", "significant cut", "no pay cut but role changed", "lost bonus", "restructured compensation"] },
+    emp_con_q32: { priority: 4, extraction_hints: ["no explanation", "no reason given", "business reason", "performance reason", "vague explanation", "reorganization", "cost cutting"] },
+    emp_con_q46: { priority: 5, extraction_hints: ["years with the company", "worked there for", "tenure", "12 years", "5 years", "20 years", "long time", "short time"] },
+    emp_con_q47: { priority: 4, extraction_hints: ["director", "VP", "manager", "specialist", "executive", "entry-level", "senior", "job title"] },
+  },
 };
 
 /**
