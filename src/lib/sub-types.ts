@@ -26,7 +26,7 @@ export const SUB_TYPES: Record<string, string[]> = {
 
 /** Umbrella PAs that do NOT have sub-types (single question set) */
 export const SINGLE_SET_PAS = new Set([
-  "fam", "real", "corp", "est", "llt", "ip", "tax", "admin",
+  "real", "corp", "est", "llt", "ip", "tax", "admin",
   "bank", "priv", "fran", "env", "prov", "condo", "hr", "edu",
   "health", "debt", "nfp", "defam", "socben", "gig", "sec",
   "elder", "str", "crypto", "ecom", "animal", "const",

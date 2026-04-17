@@ -178,6 +178,54 @@ const FAM_AUTO_RULES: AutoConfirmRule[] = [
   { questionId: "fam_q2", patterns: /\b(ontario|living in ontario|based in ontario|years in ontario|moved to ontario)\b/i, value: "yes" },
 ];
 
+const FAM_DIV_AUTO_RULES: AutoConfirmRule[] = [
+  // Legally married — fam_div_q1
+  { questionId: "fam_div_q1", patterns: /\b(legally married|we got married|marriage certificate|my wife|my husband|my spouse)\b/i, value: "yes" },
+  { questionId: "fam_div_q1", patterns: /\b(common.law|common law|not legally married|just lived together)\b/i, value: "no" },
+
+  // Separation date agreed — fam_div_q2
+  { questionId: "fam_div_q2", patterns: /\b(we both agree on the separation date|agreed on when we separated|no dispute about the date)\b/i, value: "yes" },
+  { questionId: "fam_div_q2", patterns: /\b(disagree on the date|dispute when we separated|different separation dates|she says|he says it was)\b/i, value: "no" },
+];
+
+const FAM_CUS_AUTO_RULES: AutoConfirmRule[] = [
+  // Immediate safety — fam_cus_q17
+  { questionId: "fam_cus_q17", patterns: /\b(immediate danger|children are in danger|fear for my kids|kids are at risk right now|not safe for my children)\b/i, value: "immediate_danger" },
+  { questionId: "fam_cus_q17", patterns: /\b(history of domestic violence|abuse history|history of abuse|prior abuse|previously abused)\b/i, value: "history_violence" },
+
+  // Relocation threat — fam_cus_q32
+  { questionId: "fam_cus_q32", patterns: /\b(already moved|took the kids|abducted|moved without (my )?consent|left (the province|the country) with)\b/i, value: "already_moved" },
+  { questionId: "fam_cus_q32", patterns: /\b(threatening to move|wants to move|plans to relocate|talking about moving away with)\b/i, value: "threatened_move" },
+];
+
+const FAM_SUP_AUTO_RULES: AutoConfirmRule[] = [
+  // Support type — fam_sup_q1
+  { questionId: "fam_sup_q1", patterns: /\b(child support only|just child support|only paying child support)\b/i, value: "child_only" },
+  { questionId: "fam_sup_q1", patterns: /\b(spousal support|alimony|maintenance|spouse support)\b/i, value: "spousal_only" },
+
+  // Arrears — fam_sup_q32
+  { questionId: "fam_sup_q32", patterns: /\b(arrears|hasn.t paid|not paying|missed payments|owes support|behind on support)\b/i, value: "10k_50k" },
+];
+
+const FAM_PRO_AUTO_RULES: AutoConfirmRule[] = [
+  // Matrimonial home — fam_pro_q2
+  { questionId: "fam_pro_q2", patterns: /\b(home (was |has been )?sold|house (was |has been )?sold|proceeds from (the )?sale|sold the house)\b/i, value: "sold" },
+  { questionId: "fam_pro_q2", patterns: /\b(still (living|staying) in (the )?house|still in (the )?home|one of us (is )?in (the )?house)\b/i, value: "occupied" },
+  { questionId: "fam_pro_q2", patterns: /\b(we rented|we were renting|no house|no home|apartment|condo we rented)\b/i, value: "rental" },
+];
+
+const FAM_PRT_AUTO_RULES: AutoConfirmRule[] = [
+  // Current safety — fam_prt_q1
+  { questionId: "fam_prt_q1", patterns: /\b(immediate danger|in danger right now|not safe|need help (right )?now|emergency situation|he.s threatening me now|she.s threatening me now)\b/i, value: "immediate_danger" },
+  { questionId: "fam_prt_q1", patterns: /\b(i left|i have left|i.m out|staying with|at a shelter|left the house|moved out)\b/i, value: "safe_left" },
+
+  // Type of abuse — fam_prt_q2
+  { questionId: "fam_prt_q2", patterns: /\b(hit me|struck me|punched|pushed me|physical abuse|physically abusive|physically hurt|threats of physical|threatened to hurt)\b/i, value: "physical" },
+  { questionId: "fam_prt_q2", patterns: /\b(emotionally abusive|psychological abuse|controlling|isolation|gaslighting|intimidation|verbal abuse)\b/i, value: "emotional" },
+  { questionId: "fam_prt_q2", patterns: /\b(sexual abuse|sexually assaulted|sexual coercion|forced (to have )?sex)\b/i, value: "sexual" },
+  { questionId: "fam_prt_q2", patterns: /\b(financial abuse|controlling (my )?money|won.t let me access|coerced (to )?sign)\b/i, value: "financial" },
+];
+
 const LLT_AUTO_RULES: AutoConfirmRule[] = [
   // Landlord role — llt_q1
   { questionId: "llt_q1", patterns: /\b(i am (the )?landlord|i own (the )?property|property owner|my rental|my tenant|my unit|i own (the )?unit)\b/i, value: "landlord" },
@@ -213,6 +261,13 @@ export const AUTO_RULES_BY_PA: Record<string, AutoConfirmRule[]> = {
   emp_disc:         [],   // GPT handles — too many protected grounds for safe regex
   emp_wage:         [],   // GPT handles — amount/type too varied for safe regex
   emp_other:        [],   // qualifier set — no auto-confirm needed
+  // Fam sub-types
+  fam_divorce:     FAM_DIV_AUTO_RULES,
+  fam_custody:     FAM_CUS_AUTO_RULES,
+  fam_support:     FAM_SUP_AUTO_RULES,
+  fam_property:    FAM_PRO_AUTO_RULES,
+  fam_protection:  FAM_PRT_AUTO_RULES,
+  fam_other:       [],   // qualifier set — no auto-confirm needed
 };
 
 /**

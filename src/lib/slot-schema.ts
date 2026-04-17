@@ -556,6 +556,70 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     emp_con_q46: { priority: 5, extraction_hints: ["years with the company", "worked there for", "tenure", "12 years", "5 years", "20 years", "long time", "short time"] },
     emp_con_q47: { priority: 4, extraction_hints: ["director", "VP", "manager", "specialist", "executive", "entry-level", "senior", "job title"] },
   },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // FAMILY LAW SUB-TYPE SLOT SCHEMAS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // ── Family — Divorce ──────────────────────────────────────────────────────────
+  fam_divorce: {
+    fam_div_q1:  { priority: 5, extraction_hints: ["legally married", "we got married", "husband", "wife", "marriage certificate", "common-law", "common law only", "not legally married"] },
+    fam_div_q2:  { priority: 5, extraction_hints: ["separation date", "agreed on when we separated", "dispute the date", "date of separation", "both agree", "different dates"] },
+    fam_div_q16: { priority: 5, extraction_hints: ["separated last year", "separated years ago", "separated recently", "how long ago", "when we separated", "apart for", "living apart"] },
+    fam_div_q17: { priority: 4, extraction_hints: ["remarriage", "getting remarried", "pension deadline", "estate issue", "beneficiary designation", "tax reason", "no deadline"] },
+    fam_div_q31: { priority: 5, extraction_hints: ["one year separation", "adultery", "cruelty", "grounds for divorce", "physical cruelty", "mental cruelty", "no fault divorce"] },
+    fam_div_q32: { priority: 5, extraction_hints: ["separation agreement", "signed agreement", "nothing signed", "draft agreement", "negotiating", "no agreement yet", "full and final"] },
+    fam_div_q46: { priority: 4, extraction_hints: ["children", "kids", "no children", "one child", "two children", "three children", "under 18", "minor children"] },
+    fam_div_q47: { priority: 4, extraction_hints: ["pension", "RRSP", "registered accounts", "business interest", "professional corporation", "no pension", "defined benefit", "investment accounts"] },
+  },
+
+  // ── Family — Custody ─────────────────────────────────────────────────────────
+  fam_custody: {
+    fam_cus_q1:  { priority: 5, extraction_hints: ["my child", "children aged", "toddler", "infant", "school-age", "teenager", "teen", "12 years old", "multiple children", "two kids", "three kids"] },
+    fam_cus_q2:  { priority: 5, extraction_hints: ["court order", "custody order", "existing order", "parenting agreement", "signed agreement", "informal arrangement", "nothing in place", "no agreement"] },
+    fam_cus_q16: { priority: 4, extraction_hints: ["just separated", "separated last month", "current arrangement for months", "arrangement in place for years", "long-standing arrangement"] },
+    fam_cus_q17: { priority: 5, extraction_hints: ["immediate danger", "safety concern", "domestic violence", "abuse history", "fear for children", "children at risk", "no safety concern", "ongoing concern"] },
+    fam_cus_q31: { priority: 5, extraction_hints: ["we agree", "agreed on custody", "disagree", "other parent won't cooperate", "can't agree", "shared custody agreed", "equal time agreed"] },
+    fam_cus_q32: { priority: 5, extraction_hints: ["threatening to move", "already moved", "relocation", "moved to another city", "moved to another province", "moved abroad", "no relocation issue"] },
+    fam_cus_q46: { priority: 4, extraction_hints: ["CAS", "child protection", "Children's Aid", "open investigation", "child welfare", "CFS involvement", "no CAS involvement"] },
+    fam_cus_q47: { priority: 3, extraction_hints: ["both in Ontario", "other parent moved", "out of province", "another province", "outside Canada", "other parent in another country", "international"] },
+  },
+
+  // ── Family — Support ─────────────────────────────────────────────────────────
+  fam_support: {
+    fam_sup_q1:  { priority: 5, extraction_hints: ["child support", "spousal support", "alimony", "maintenance", "support arrears", "both child and spousal", "not paying support"] },
+    fam_sup_q2:  { priority: 5, extraction_hints: ["court order for support", "support order in place", "he's not paying", "she's not paying", "no order yet", "separation agreement for support", "vary the support order"] },
+    fam_sup_q16: { priority: 5, extraction_hints: ["just separated", "stopped paying recently", "arrears building up", "need to vary", "changed circumstances", "income changed", "recent change"] },
+    fam_sup_q17: { priority: 4, extraction_hints: ["earns", "income", "salary", "makes per year", "annual income", "self-employed income", "their income", "not sure of income"] },
+    fam_sup_q31: { priority: 5, extraction_hints: ["T4", "NOA", "notice of assessment", "clear income", "self-employed", "variable income", "hiding income", "under-reporting", "imputed income"] },
+    fam_sup_q32: { priority: 5, extraction_hints: ["arrears", "money owed", "hasn't paid", "missed payments", "owes support", "no arrears", "initial support amount", "unpaid"] },
+    fam_sup_q46: { priority: 4, extraction_hints: ["child age", "under 12", "teenager", "18 and in school", "multiple children", "no children", "adult student"] },
+    fam_sup_q47: { priority: 4, extraction_hints: ["married for years", "together for years", "long marriage", "short marriage", "5 years", "10 years", "20 years", "length of relationship"] },
+  },
+
+  // ── Family — Property Division ────────────────────────────────────────────────
+  fam_property: {
+    fam_pro_q1:  { priority: 5, extraction_hints: ["financial disclosure", "net family property", "statement of assets", "both disclosed", "hasn't disclosed", "exchange of financials", "no disclosure yet"] },
+    fam_pro_q2:  { priority: 5, extraction_hints: ["matrimonial home", "family home", "house already sold", "still in the house", "one of us lives there", "vacant home", "we rented", "no home to divide"] },
+    fam_pro_q16: { priority: 5, extraction_hints: ["separated months ago", "separated years ago", "recently separated", "separation date", "how long separated", "just separated", "years since separation"] },
+    fam_pro_q17: { priority: 5, extraction_hints: ["business", "professional corporation", "law firm", "medical practice", "investment portfolio", "real estate portfolio", "no business", "simple assets only"] },
+    fam_pro_q31: { priority: 5, extraction_hints: ["pre-marriage property", "gift", "inheritance", "excluded asset", "deduction", "asset brought into the marriage", "documentation of exclusion", "no excluded property"] },
+    fam_pro_q32: { priority: 4, extraction_hints: ["debts", "liabilities", "negative NFP", "owes money", "mortgage", "credit card debt", "hidden debts", "no significant debts"] },
+    fam_pro_q46: { priority: 4, extraction_hints: ["pension", "defined benefit", "defined contribution", "group RRSP", "pension division", "RRSP only", "no pension", "government pension", "union pension"] },
+    fam_pro_q47: { priority: 3, extraction_hints: ["total assets", "value of assets", "estate worth", "combined assets", "what are we dividing", "under 200k", "over a million", "millions", "home value"] },
+  },
+
+  // ── Family — Protection Orders ────────────────────────────────────────────────
+  fam_protection: {
+    fam_prt_q1:  { priority: 5, extraction_hints: ["in immediate danger", "not safe", "scared", "he hit me", "she hit me", "currently safe", "left the home", "still living with", "volatile situation"] },
+    fam_prt_q2:  { priority: 5, extraction_hints: ["physical violence", "he hit me", "assault", "threats", "emotional abuse", "psychological abuse", "controlling behavior", "sexual abuse", "financial abuse", "coercion"] },
+    fam_prt_q16: { priority: 5, extraction_hints: ["called police", "police report", "charges laid", "arrested", "no police involvement", "afraid to call police", "immigration concerns"] },
+    fam_prt_q17: { priority: 5, extraction_hints: ["restraining order", "peace bond", "protection order", "court order", "breaching the order", "no order in place", "order being followed"] },
+    fam_prt_q31: { priority: 5, extraction_hints: ["children at risk", "children witnessed", "abused children", "kids are afraid", "no children", "children are safe", "using children as leverage"] },
+    fam_prt_q32: { priority: 5, extraction_hints: ["photos of injuries", "medical records", "texts as evidence", "emails from abuser", "police report as evidence", "witnesses", "no documentation yet"] },
+    fam_prt_q46: { priority: 4, extraction_hints: ["safe housing", "shelter", "women's shelter", "left the home already", "plan to leave", "need help leaving", "nowhere to go"] },
+    fam_prt_q47: { priority: 3, extraction_hints: ["immigration status", "sponsored by", "tied to his status", "tied to her status", "permanent resident", "citizen", "work permit", "study permit", "sponsorship"] },
+  },
 };
 
 /**
