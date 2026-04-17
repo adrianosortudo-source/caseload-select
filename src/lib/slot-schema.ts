@@ -620,6 +620,70 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     fam_prt_q46: { priority: 4, extraction_hints: ["safe housing", "shelter", "women's shelter", "left the home already", "plan to leave", "need help leaving", "nowhere to go"] },
     fam_prt_q47: { priority: 3, extraction_hints: ["immigration status", "sponsored by", "tied to his status", "tied to her status", "permanent resident", "citizen", "work permit", "study permit", "sponsorship"] },
   },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // CRIMINAL LAW SUB-TYPE SLOT SCHEMAS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // ── Criminal — DUI / Impaired Driving ────────────────────────────────────────
+  crim_dui: {
+    crim_dui_q1:  { priority: 5, extraction_hints: ["impaired driving", "over 80", "DUI", "DWI", "breath test", "blew over", "breathalyzer", "refusal to blow", "drug impaired", "impaired operation"] },
+    crim_dui_q2:  { priority: 5, extraction_hints: ["provided a breath sample", "blew into the machine", "refused to provide", "blood sample", "roadside screening", "approved instrument", "station test"] },
+    crim_dui_q16: { priority: 5, extraction_hints: ["when it happened", "last night", "last week", "last month", "date of the offence", "the stop was", "pulled over on"] },
+    crim_dui_q17: { priority: 5, extraction_hints: ["court date", "first appearance", "next appearance", "set for", "scheduled for", "have to be in court"] },
+    crim_dui_q31: { priority: 5, extraction_hints: ["reading was", "mg reading", "borderline", "barely over", "high reading", "refused no reading", "100 mg", "120 mg", "150 mg", "don't know the reading"] },
+    crim_dui_q32: { priority: 5, extraction_hints: ["no accident", "traffic stop only", "minor damage", "hit another car", "someone was injured", "fatality", "person was killed"] },
+    crim_dui_q46: { priority: 5, extraction_hints: ["no prior record", "first offence", "clean record", "prior DUI", "prior impaired conviction", "second offence", "multiple priors"] },
+    crim_dui_q47: { priority: 4, extraction_hints: ["child in the car", "kid in the back", "minor passenger", "no children in the vehicle", "children were not present"] },
+  },
+
+  // ── Criminal — Assault ───────────────────────────────────────────────────────
+  crim_assault: {
+    crim_ass_q1:  { priority: 5, extraction_hints: ["common assault", "assault causing bodily harm", "aggravated assault", "assault with a weapon", "charged with assault", "ABH", "s.266", "s.267", "s.268"] },
+    crim_ass_q2:  { priority: 5, extraction_hints: ["stranger", "acquaintance", "my partner", "my wife", "my husband", "my ex", "my parent", "my sibling", "someone I know", "did not know them"] },
+    crim_ass_q16: { priority: 5, extraction_hints: ["when the incident happened", "date of the alleged assault", "last week", "last month", "a few months ago"] },
+    crim_ass_q17: { priority: 5, extraction_hints: ["court date", "bail conditions", "no contact order", "first appearance", "have to appear", "released on bail"] },
+    crim_ass_q31: { priority: 5, extraction_hints: ["self-defence", "defending myself", "he attacked me first", "she attacked me first", "defending someone else", "mutual fight", "I started it"] },
+    crim_ass_q32: { priority: 5, extraction_hints: ["no injuries", "bruise", "minor injury", "hospital visit", "broken bone", "serious injuries", "medical records", "no visible injuries"] },
+    crim_ass_q46: { priority: 5, extraction_hints: ["no witnesses", "my word against theirs", "surveillance video", "witnesses who support me", "bystanders saw it", "security camera"] },
+    crim_ass_q47: { priority: 4, extraction_hints: ["no prior record", "clean record", "first offence", "prior assault", "prior violence conviction", "criminal record for violence"] },
+  },
+
+  // ── Criminal — Drug Offences ─────────────────────────────────────────────────
+  crim_drug: {
+    crim_drg_q1:  { priority: 5, extraction_hints: ["possession", "trafficking", "PPOT", "possession for the purpose", "production", "cultivation", "drug charge", "drug offence", "controlled substance"] },
+    crim_drg_q2:  { priority: 5, extraction_hints: ["cannabis", "marijuana", "weed", "cocaine", "crack", "opioids", "fentanyl", "heroin", "meth", "methamphetamine", "MDMA", "ecstasy", "prescription pills"] },
+    crim_drg_q16: { priority: 5, extraction_hints: ["when police found it", "date of the arrest", "when I was stopped", "date of the search", "when it happened"] },
+    crim_drg_q17: { priority: 5, extraction_hints: ["court date", "first appearance", "scheduled appearance", "have to be in court"] },
+    crim_drg_q31: { priority: 5, extraction_hints: ["found on my person", "found in my car", "found in my house", "during a search", "traffic stop", "home search", "residence search"] },
+    crim_drg_q32: { priority: 5, extraction_hints: ["search warrant", "warrant was obtained", "I consented", "no warrant", "unlawful search", "warrantless search", "didn't consent"] },
+    crim_drg_q46: { priority: 5, extraction_hints: ["small amount", "personal use amount", "large quantity", "commercial quantity", "grams", "kilograms", "ounces", "just for myself"] },
+    crim_drg_q47: { priority: 4, extraction_hints: ["no prior record", "clean record", "first offence", "prior drug conviction", "prior trafficking conviction", "criminal record for drugs"] },
+  },
+
+  // ── Criminal — Theft / Property Offences ─────────────────────────────────────
+  crim_theft: {
+    crim_tft_q1:  { priority: 5, extraction_hints: ["shoplifting", "theft", "theft under 5000", "theft over 5000", "fraud", "break and enter", "B&E", "possession of stolen property", "stealing", "took merchandise"] },
+    crim_tft_q2:  { priority: 5, extraction_hints: ["value of the property", "how much was taken", "amount involved", "dollar value", "under $5,000", "over $5,000", "under $500", "thousands of dollars"] },
+    crim_tft_q16: { priority: 5, extraction_hints: ["when the incident happened", "date of the alleged offence", "when I was caught", "when it occurred"] },
+    crim_tft_q17: { priority: 5, extraction_hints: ["court date", "first appearance", "scheduled", "civil demand letter", "received a letter from the store", "appearance notice"] },
+    crim_tft_q31: { priority: 5, extraction_hints: ["surveillance video", "they have video", "camera footage", "witness saw me", "circumstantial only", "no direct evidence", "store employee identified me"] },
+    crim_tft_q32: { priority: 5, extraction_hints: ["I paid it back", "restitution", "repaid the amount", "offered to pay back", "no repayment made", "can't repay"] },
+    crim_tft_q46: { priority: 4, extraction_hints: ["I was an employee", "position of trust", "financial advisor", "accountant", "fiduciary", "had access", "no position of trust"] },
+    crim_tft_q47: { priority: 4, extraction_hints: ["no prior record", "clean record", "first offence", "prior theft", "prior fraud conviction", "history of theft"] },
+  },
+
+  // ── Criminal — Domestic Violence ─────────────────────────────────────────────
+  crim_domestic: {
+    crim_dom_q1:  { priority: 5, extraction_hints: ["domestic assault", "assault on partner", "assault on spouse", "uttering threats", "criminal harassment", "domestic charge", "intimate partner violence", "IPV"] },
+    crim_dom_q2:  { priority: 5, extraction_hints: ["my partner", "my spouse", "my wife", "my husband", "my girlfriend", "my boyfriend", "my ex", "my ex-wife", "my ex-husband", "family member", "my parent", "my sibling"] },
+    crim_dom_q16: { priority: 5, extraction_hints: ["when it happened", "date of the incident", "two weeks ago", "last month", "recently", "the night of"] },
+    crim_dom_q17: { priority: 5, extraction_hints: ["no contact order", "bail conditions", "can't go home", "excluded from the residence", "no communication", "stay away order", "no weapons condition"] },
+    crim_dom_q31: { priority: 5, extraction_hints: ["she wants it dropped", "he wants it dropped", "complainant doesn't want to proceed", "victim supports the charge", "she is cooperating", "he is cooperating", "not sure of their position"] },
+    crim_dom_q32: { priority: 5, extraction_hints: ["no injuries", "no 911 call", "bruise documented", "hospital records", "serious injuries", "photos of injuries", "911 recording", "significant injuries"] },
+    crim_dom_q46: { priority: 4, extraction_hints: ["children were present", "kids witnessed it", "children in the home", "no children were there", "children were asleep", "didn't witness anything"] },
+    crim_dom_q47: { priority: 5, extraction_hints: ["no prior record", "clean record", "first offence", "prior domestic charges", "prior domestic conviction", "history of domestic calls", "prior assault on a partner"] },
+  },
 };
 
 /**

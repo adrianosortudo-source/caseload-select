@@ -169,6 +169,93 @@ const CRIM_AUTO_RULES: AutoConfirmRule[] = [
   { questionId: "crim_q19", patterns: /\b(today|last night|yesterday|this week|just happened|got pulled over)\b/i, value: "under_3mo" },
 ];
 
+const CRIM_DUI_AUTO_RULES: AutoConfirmRule[] = [
+  // Charge type — crim_dui_q1
+  { questionId: "crim_dui_q1", patterns: /\b(over 80|blew over|breathalyzer reading|over the limit|80mg)\b/i, value: "over_80" },
+  { questionId: "crim_dui_q1", patterns: /\b(refused (to blow|to provide|a sample)|refusal charge)\b/i, value: "refusal" },
+  { questionId: "crim_dui_q1", patterns: /\b(drug.impaired|cannabis impaired|high (while|and) driving|marijuana (and |while )?driving)\b/i, value: "drug_impaired" },
+
+  // Sample provided — crim_dui_q2
+  { questionId: "crim_dui_q2", patterns: /\b(refused (to blow|to provide|a sample|the test)|I (didn.t|did not) blow|refusal)\b/i, value: "refused" },
+  { questionId: "crim_dui_q2", patterns: /\b(blew (into|at) the (station|machine|approved)|provided (a )?breath (samples|sample) at the station)\b/i, value: "approved_instrument" },
+
+  // No accident — crim_dui_q32
+  { questionId: "crim_dui_q32", patterns: /\b(no accident|just (a )?traffic stop|routine stop|just (got )?pulled over|no (crash|collision|damage))\b/i, value: "none" },
+  { questionId: "crim_dui_q32", patterns: /\b(someone (was )?injured|person (was )?hurt|accident (with|and) injur)\b/i, value: "injuries" },
+
+  // Prior record — crim_dui_q46
+  { questionId: "crim_dui_q46", patterns: /\b(no (prior|previous|criminal) record|clean record|never been charged|first (time|offence))\b/i, value: "none" },
+  { questionId: "crim_dui_q46", patterns: /\b(prior (impaired|DUI)|second (offence|time)|previous (impaired|DUI) conviction)\b/i, value: "one_prior" },
+
+  // Child passenger — crim_dui_q47
+  { questionId: "crim_dui_q47", patterns: /\b(no (kids|children) in (the )?car|no (child|minor) (passenger|in the vehicle))\b/i, value: "no" },
+  { questionId: "crim_dui_q47", patterns: /\b(my (kid|child|son|daughter) was in (the )?car|child (was )?a passenger|minor in (the )?vehicle)\b/i, value: "yes" },
+];
+
+const CRIM_ASS_AUTO_RULES: AutoConfirmRule[] = [
+  // Self-defence — crim_ass_q31
+  { questionId: "crim_ass_q31", patterns: /\b(self.defence|self defense|defending myself|he attacked (me )?first|she attacked (me )?first|I was attacked|acting in (self|defence))\b/i, value: "self_defence" },
+  { questionId: "crim_ass_q31", patterns: /\b(defending (someone else|my friend|my family|another person))\b/i, value: "defence_other" },
+  { questionId: "crim_ass_q31", patterns: /\b(mutual (fight|altercation|exchange)|we (both|were) fighting|both sides|it was (mutual|both of us))\b/i, value: "mutual" },
+
+  // No injuries — crim_ass_q32
+  { questionId: "crim_ass_q32", patterns: /\b(no injuries|not injured|no (visible |physical )?injury|didn.t hurt (them|him|her)|no marks?)\b/i, value: "none" },
+  { questionId: "crim_ass_q32", patterns: /\b(hospital|medical attention|broken|fracture|stitches|serious injur)\b/i, value: "medical_required" },
+
+  // Prior record — crim_ass_q47
+  { questionId: "crim_ass_q47", patterns: /\b(no (prior|previous|criminal) record|clean record|never been charged|first (time|offence))\b/i, value: "none" },
+  { questionId: "crim_ass_q47", patterns: /\b(prior (assault|violence) conviction|convicted (of assault|of violence)|history of (assault|violence))\b/i, value: "prior_assault" },
+];
+
+const CRIM_DRG_AUTO_RULES: AutoConfirmRule[] = [
+  // Substance — crim_drg_q2
+  { questionId: "crim_drg_q2", patterns: /\b(cannabis|marijuana|weed|pot|hash)\b/i, value: "cannabis" },
+  { questionId: "crim_drg_q2", patterns: /\b(cocaine|crack|coke)\b/i, value: "cocaine" },
+  { questionId: "crim_drg_q2", patterns: /\b(fentanyl|heroin|opioid|oxycodone|morphine|percocet)\b/i, value: "opioids" },
+  { questionId: "crim_drg_q2", patterns: /\b(meth|methamphetamine|crystal meth|MDMA|ecstasy|molly)\b/i, value: "meth_mdma" },
+
+  // No warrant — crim_drg_q32
+  { questionId: "crim_drg_q32", patterns: /\b(no warrant|without (a )?warrant|warrantless|didn.t (have|show) a warrant|I (didn.t|did not) consent)\b/i, value: "no_warrant_no_consent" },
+  { questionId: "crim_drg_q32", patterns: /\b(search warrant|they had (a )?warrant|warrant was obtained)\b/i, value: "warrant" },
+
+  // Prior record — crim_drg_q47
+  { questionId: "crim_drg_q47", patterns: /\b(no (prior|previous|criminal) record|clean record|never been charged|first (time|offence))\b/i, value: "none" },
+  { questionId: "crim_drg_q47", patterns: /\b(prior (drug|trafficking) conviction|previously convicted (of drugs|for trafficking))\b/i, value: "prior_trafficking" },
+];
+
+const CRIM_TFT_AUTO_RULES: AutoConfirmRule[] = [
+  // Value — crim_tft_q2
+  { questionId: "crim_tft_q2", patterns: /\b(under \$?5,?000|under five thousand|theft under|shoplifting|small (amount|value))\b/i, value: "500_5k" },
+  { questionId: "crim_tft_q2", patterns: /\b(over \$?5,?000|theft over|more than five thousand|significant amount)\b/i, value: "5k_50k" },
+
+  // Restitution — crim_tft_q32
+  { questionId: "crim_tft_q32", patterns: /\b(paid (it )?back|repaid (the )?full|full repayment|already (paid|repaid))\b/i, value: "full_repayment" },
+  { questionId: "crim_tft_q32", patterns: /\b(partial (repayment|payment)|offered to (pay|repay)|partially (paid|repaid))\b/i, value: "partial_repayment" },
+
+  // Prior record — crim_tft_q47
+  { questionId: "crim_tft_q47", patterns: /\b(no (prior|previous|criminal) record|clean record|never been charged|first (time|offence))\b/i, value: "none" },
+  { questionId: "crim_tft_q47", patterns: /\b(prior (theft|fraud|shoplifting) conviction|convicted (of theft|of fraud)|history of theft)\b/i, value: "prior_theft" },
+];
+
+const CRIM_DOM_AUTO_RULES: AutoConfirmRule[] = [
+  // Relationship — crim_dom_q2
+  { questionId: "crim_dom_q2", patterns: /\b(my (wife|husband|spouse|girlfriend|boyfriend|common.law|partner)|current (partner|spouse))\b/i, value: "current_partner" },
+  { questionId: "crim_dom_q2", patterns: /\b(my ex|ex.wife|ex.husband|ex.girlfriend|ex.boyfriend|former (partner|spouse))\b/i, value: "former_partner" },
+  { questionId: "crim_dom_q2", patterns: /\b(my (parent|mother|father|sibling|brother|sister|son|daughter)|family member)\b/i, value: "family" },
+
+  // Complainant support — crim_dom_q31
+  { questionId: "crim_dom_q31", patterns: /\b(she (wants it|the charge) dropped|he (wants it|the charge) dropped|complainant (doesn.t|does not) want to proceed|wants it withdrawn|not supporting (the )?charge)\b/i, value: "complainant_no_support" },
+  { questionId: "crim_dom_q31", patterns: /\b(she is (cooperating|supporting)|he is (cooperating|supporting)|victim (supports|is (behind|with)) the charge|pressing charges)\b/i, value: "supports_charge" },
+
+  // Children present — crim_dom_q46
+  { questionId: "crim_dom_q46", patterns: /\b(no (kids|children) (were |in the home|present)|children (weren.t|were not) (there|present|home))\b/i, value: "no_children" },
+  { questionId: "crim_dom_q46", patterns: /\b(children? (witnessed|saw|heard)|kids? (witnessed|saw|heard)|(kids|children) (were )?in the room)\b/i, value: "witnessed" },
+
+  // Prior record — crim_dom_q47
+  { questionId: "crim_dom_q47", patterns: /\b(no (prior|previous|criminal) record|clean record|never been charged|first (time|offence))\b/i, value: "none" },
+  { questionId: "crim_dom_q47", patterns: /\b(prior domestic (conviction|charge)|convicted of domestic|history of domestic (violence|calls|charges))\b/i, value: "prior_conviction" },
+];
+
 const FAM_AUTO_RULES: AutoConfirmRule[] = [
   // Marriage status — fam_q1
   { questionId: "fam_q1", patterns: /\b(married|legal marriage|my wife|my husband|my spouse)\b/i, value: "yes" },
@@ -268,6 +355,13 @@ export const AUTO_RULES_BY_PA: Record<string, AutoConfirmRule[]> = {
   fam_property:    FAM_PRO_AUTO_RULES,
   fam_protection:  FAM_PRT_AUTO_RULES,
   fam_other:       [],   // qualifier set — no auto-confirm needed
+  // Crim sub-types
+  crim_dui:        CRIM_DUI_AUTO_RULES,
+  crim_assault:    CRIM_ASS_AUTO_RULES,
+  crim_drug:       CRIM_DRG_AUTO_RULES,
+  crim_theft:      CRIM_TFT_AUTO_RULES,
+  crim_domestic:   CRIM_DOM_AUTO_RULES,
+  crim_other:      [],   // qualifier set — no auto-confirm needed
 };
 
 /**
