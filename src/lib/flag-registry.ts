@@ -108,7 +108,7 @@ const UNIVERSAL_FLAGS: FlagDefinition[] = [
     paFilter: [],
     triggerPatterns: [
       /\b(my\s+(last|previous|former)\s+lawyer|had\s+a\s+lawyer\s+(before|previously))\b/i,
-      /\b(changed|switched|fired|left)\s+(my\s+)?lawyer\b/i,
+      /\b(changed|switched|fired|left)\s+(my\s+)?(lawyer|attorney|counsel)\b/i,
       /\bmy\s+(last|old)\s+(attorney|counsel|legal\s+rep)\b/i,
     ],
     gateQuestions: [
@@ -310,8 +310,9 @@ const PA_FLAGS: FlagDefinition[] = [
     paFilter: ["pi"],
     triggerPatterns: [
       /\bhit\s+and\s+run\b/i,
-      /\b(drove|sped|ran)\s+away\b.{0,30}\b(accident|crash|hit)\b/i,
-      /\b(didn.t\s+stop|left\s+the\s+scene|no\s+plate|no\s+plates?|couldn.t\s+get\s+(their\s+)?plate)\b/i,
+      /\b(drove|sped|ran|fled)\s+away\b/i,
+      /\b(accident|crash|collision|hit\s+(me|my\s+car))\b.{0,60}\b(drove|sped|ran|fled)\s+away\b/i,
+      /\b(didn.t\s+stop|left\s+the\s+scene|fled\s+the\s+scene|no\s+plate|no\s+plates?|couldn.t\s+get\s+(their|the)\s+plate)\b/i,
       /\buninsured\s+(driver|motorist|vehicle)\b/i,
       /\bno\s+(contact\s+info|license\s+plate|insurance\s+info)\s+(from|for)\s+the\s+(other\s+)?(driver|vehicle)\b/i,
     ],
@@ -366,7 +367,7 @@ const PA_FLAGS: FlagDefinition[] = [
     severity: "S1",
     paFilter: ["pi"],
     triggerPatterns: [
-      /\b(think|believe|suspect)\s+(something\s+went\s+wrong|there\s+was\s+a\s+mistake|the\s+(doctor|surgeon|hospital)\s+(made|did\s+something))\b/i,
+      /\b(think|believe|suspect)\s+(something\s+went\s+wrong|there\s+was\s+a\s+mistake|(the|my)\s+(doctor|surgeon|hospital)\s+(made|did\s+something))\b/i,
       /\b(surgery|procedure|treatment)\s+(didn.t\s+work|went\s+wrong|caused\s+more\s+problems?)\b/i,
     ],
     gateQuestions: [
@@ -453,6 +454,7 @@ const PA_FLAGS: FlagDefinition[] = [
       /\b(sidewalk|road|street|public\s+park)\b.{0,40}\b(city|municipal|municipality|town|borough)\b/i,
       /\bpublic\s+(sidewalk|road|path|park)\b/i,
       /\b(fell|tripped|slipped)\b.{0,30}\b(sidewalk|road|public\s+(path|park))\b/i,
+      /\bpothole\b.{0,40}\b(road|street|city|municipal)\b/i,
     ],
     gateQuestions: [
       {
@@ -569,9 +571,11 @@ const PA_FLAGS: FlagDefinition[] = [
       /\bhague\s+(convention|application|petition)\b/i,
       /\b(parental|international|cross[- ]?border)\s+abduction\b/i,
       /\b(took|taken|brought|moved)\b.{0,40}\b(child|son|daughter|kids?)\b.{0,60}\b(country|abroad|overseas|home\s+country|another\s+country|outside\s+canada)\b/i,
+      /\b(child|son|daughter|kids?)\b.{0,60}\b(was\s+)?(took|taken|brought|moved)\b.{0,60}\b(country|abroad|overseas|another\s+country|outside\s+canada)\b/i,
       /\bwithout\s+my\s+(consent|permission|knowledge)\b.{0,60}\b(country|abroad|overseas|another\s+country)\b/i,
       /\bher\s+home\s+country\b.{0,40}\b(son|daughter|child|kids?)\b/i,
       /\bhis\s+home\s+country\b.{0,40}\b(son|daughter|child|kids?)\b/i,
+      /\b(son|daughter|child|kids?)\b.{0,40}\b(her|his)\s+home\s+country\b/i,
     ],
     gateQuestions: [
       {
@@ -638,10 +642,11 @@ const PA_FLAGS: FlagDefinition[] = [
     severity: "S2",
     paFilter: ["fam"],
     triggerPatterns: [
-      /\b(don.t\s+know|not\s+sure)\s+what\s+(he|she|they|my\s+(spouse|husband|wife|partner))\s+(earns?|owns?|has|hides?)\b/i,
+      /\b(don.t\s+know|not\s+sure|no\s+idea)\b.{0,40}\b(what\s+(he|she|they)\b.{0,20}\b(earns?|owns?|has|hides?)|what\s+my\s+(spouse|husband|wife|partner)\s+(earns?|owns?|has))\b/i,
       /\b(offshore|overseas|foreign)\s+(account|assets?|investment|bank)\b/i,
       /\b(hidden|hiding|concealing)\s+(assets?|money|income|accounts?)\b/i,
       /\b(self[- ]employed|own(s)?\s+a\s+business|runs?\s+a\s+business)\b.{0,40}\b(spouse|husband|wife|partner)\b/i,
+      /\b(husband|wife|spouse|partner)\b.{0,60}\bown(s)?\s+a\s+business\b/i,
     ],
     gateQuestions: [
       {
@@ -777,7 +782,7 @@ const PA_FLAGS: FlagDefinition[] = [
     severity: "S2",
     paFilter: ["imm"],
     triggerPatterns: [
-      /\b(criminal\s+(record|history)|prior\s+conviction)\b.{0,30}\b(immigration|visa|Canada)\b/i,
+      /\b(criminal\s+(record|history)|prior\s+conviction)\b.{0,60}\b(immigration|visa|Canada|permanent\s+residence)\b/i,
       /\b(refused\s+entry|denied\s+(entry|admission)|prior\s+deportation)\b/i,
       /\b(security\s+concern|security\s+check)\b.{0,30}\b(immigration|visa|IRCC)\b/i,
     ],
@@ -804,10 +809,11 @@ const PA_FLAGS: FlagDefinition[] = [
     severity: "S1",
     paFilter: ["crim"],
     triggerPatterns: [
-      /\b(searched\s+without\s+a\s+warrant|warrantless\s+search)\b/i,
+      /\bwarrantless\s+search\b/i,
+      /\bsearched\b.{0,30}\bwithout\s+a\s+warrant\b/i,
       /\b(didn.t\s+tell\s+me\s+(my\s+)?(rights?|right\s+to\s+a\s+lawyer))\b/i,
       /\b(detained\s+without|stopped\s+without)\s+(reason|cause|warrant)\b/i,
-      /\b(breathalyzer|blood\s+test|breath\s+sample)\b.{0,30}\b(without\s+a\s+lawyer|before\s+(calling|reaching)\s+a\s+lawyer)\b/i,
+      /\b(breathalyzer|blood\s+test|breath\s+sample)\b.{0,80}\b(lawyer|counsel)\b/i,
     ],
     gateQuestions: [
       {
@@ -890,6 +896,7 @@ const PA_FLAGS: FlagDefinition[] = [
     paFilter: ["emp", "hr"],
     triggerPatterns: [
       /\b(discrimination|discriminat)\b.{0,40}\b(race|gender|age|disability|religion|pregnancy|sex|colour|ethnic|sexual\s+orientation|creed)\b/i,
+      /\b(race|gender|age|disability|religion|pregnancy|sex|colour|ethnic|sexual\s+orientation|creed)\b.{0,80}\bdiscriminat/i,
       /\bHRTO\b/i,
       /\bhuman\s+rights\s+(complaint|violation|issue|application)\b/i,
       /\bdiscriminated\s+against\b/i,
@@ -1025,9 +1032,10 @@ const PA_FLAGS: FlagDefinition[] = [
     severity: "S1",
     paFilter: ["real"],
     triggerPatterns: [
-      /\b(didn.t\s+tell\s+me|not\s+disclosed|hid|concealed)\b.{0,40}\b(defect|damage|problem|issue|mold|flood|water|foundation|roof)\b/i,
-      /\b(found\s+out\s+after\s+(closing|I\s+moved\s+in|buying))\b/i,
-      /\b(defect|mold|water\s+damage|foundation\s+(crack|issue))\b.{0,30}\b(after\s+(closing|I\s+moved))\b/i,
+      /\b(didn.t\s+(tell\s+me|disclose|mention)|not\s+disclosed|hid|concealed|never\s+(told|mentioned|disclosed))\b.{0,60}\b(defect|damage|problem|issue|mold|flood|water|foundation|roof)\b/i,
+      /\b(found|discovered)\b.{0,80}\bafter\s+(buying|closing|moving\s+in|purchasing)\b/i,
+      /\bafter\s+(moving\s+in|I\s+moved\s+in|buying|closing|purchasing)\b.{0,80}\b(found|discovered|noticed)\b/i,
+      /\b(defect|mold|water\s+damage|foundation\s+(crack|issue))\b.{0,60}\b(after\s+(closing|I\s+moved))\b/i,
     ],
     gateQuestions: [
       {
@@ -1057,8 +1065,8 @@ const PA_FLAGS: FlagDefinition[] = [
     severity: "S1",
     paFilter: ["est"],
     triggerPatterns: [
-      /\b(dementia|alzheimer|cognitive\s+decline|memory\s+(loss|issues?))\b.{0,30}\b(will|estate|signing)\b/i,
-      /\b(doesn.t\s+really\s+understand|confused|not\s+mentally\s+sharp)\b.{0,30}\b(will|estate|signing)\b/i,
+      /\b(dementia|alzheimer|cognitive\s+decline|memory\s+(loss|issues?))\b.{0,80}\b(will|estate|signing)\b/i,
+      /\b(doesn.t\s+really\s+understand|confused|not\s+mentally\s+sharp)\b.{0,80}\b(will|estate|signing)\b/i,
     ],
     gateQuestions: [
       {
@@ -1136,6 +1144,8 @@ const PA_FLAGS: FlagDefinition[] = [
     paFilter: ["const"],
     triggerPatterns: [
       /\b(contractor|subcontractor|supplier)\b.{0,40}\b(not\s+paid|unpaid|won.t\s+pay|hasn.t\s+paid)\b/i,
+      /\b(owner|client|customer|general\s+contractor)\b.{0,40}\b(hasn.t\s+paid|won.t\s+pay|not\s+paid|owes?\s+(me|us))\b/i,
+      /\b(finished|completed)\b.{0,60}\b(project|job|work)\b.{0,80}\b(not\s+paid|unpaid|hasn.t\s+paid|haven.t\s+paid)\b/i,
       /\b(holdback|construction\s+lien|lien\s+rights?)\b/i,
       /\b(work\s+(is\s+)?done|project\s+(is\s+)?complete|substantial\s+performance)\b.{0,40}\b(not\s+paid|unpaid|money\s+owing)\b/i,
     ],
@@ -1359,6 +1369,7 @@ const PA_FLAGS: FlagDefinition[] = [
     triggerPatterns: [
       /\b(city|municipal|municipality|town)\b.{0,40}\b(sidewalk|road|street|park|property)\b.{0,40}\b(fell|tripped|slipped|injured|hurt)\b/i,
       /\b(fell|tripped|slipped|injured)\b.{0,40}\b(city|municipal|municipality|town)\b.{0,40}\b(sidewalk|road|street|park)\b/i,
+      /\b(city|municipal|municipality|town)\s+(street|road|sidewalk)\b/i,
       /\bpothole\b.{0,30}\b(city|municipal|road|street)\b/i,
     ],
     gateQuestions: [
@@ -1389,8 +1400,9 @@ const PA_FLAGS: FlagDefinition[] = [
     severity: "S1",
     paFilter: ["ins"],
     triggerPatterns: [
-      /\b(insurance\s+(claim\s+)?(denied|rejected|refused))\b/i,
-      /\b(denied|rejected|refused)\s+(my\s+)?insurance\s+claim\b/i,
+      /\b(insurance\s+claim)\b.{0,30}\b(denied|rejected|refused)\b/i,
+      /\b(insurance\s+company|insurer)\b.{0,40}\b(denied|rejected|refused)\b/i,
+      /\b(denied|rejected|refused)\s+(my\s+)?(insurance\s+claim|claim\s+for)\b/i,
       /\b(internal\s+appeal|appealing\s+(to\s+the\s+)?insurer)\b/i,
     ],
     gateQuestions: [
@@ -1421,8 +1433,8 @@ const PA_FLAGS: FlagDefinition[] = [
     severity: "S1",
     paFilter: ["sec"],
     triggerPatterns: [
-      /\b(investment\s+fraud|mis[- ]sold|unauthorized\s+trading|unsuitable\s+investment|Ponzi)\b/i,
-      /\b(financial\s+advisor|investment\s+advisor|broker)\b.{0,40}\b(fraud|misled|lied|wrong|lost\s+money)\b/i,
+      /\b(investment\s+fraud|mis[- ]sold|unauthorized\s+trad(ing|e|es)|unsuitable\s+investment|Ponzi)\b/i,
+      /\b(financial\s+advisor|investment\s+advisor|broker)\b.{0,80}\b(fraud|fraudulent|misled|lied|wrong|lost\s+money|unauthorized)\b/i,
       /\b(IIROC|OSC|securities\s+commission)\b.{0,30}\b(complaint|investigation|fraud)\b/i,
     ],
     gateQuestions: [
@@ -1453,7 +1465,7 @@ const PA_FLAGS: FlagDefinition[] = [
     severity: "S1",
     paFilter: ["elder", "est"],
     triggerPatterns: [
-      /\b(power\s+of\s+attorney|POA)\b.{0,40}\b(misused|abused|stole|took\s+money|unauthorized)\b/i,
+      /\b(power\s+of\s+attorney|POA)\b.{0,40}\b(misused|abused|stole|stolen|took\s+money|taking\s+money|unauthorized)\b/i,
       /\b(financial\s+elder\s+abuse|elder\s+financial\s+abuse)\b/i,
       /\b(my\s+family\s+(took|stole|took\s+over))\b.{0,40}\b(money|account|property|assets?)\b/i,
     ],
@@ -1507,6 +1519,595 @@ const PA_FLAGS: FlagDefinition[] = [
       },
     ],
     source: "Environmental Protection Act (Ontario), Part XV.1; Ontario Water Resources Act",
+  },
+
+  // ── Corporate ─────────────────────────────────────────────────────────────
+
+  {
+    id: "corp_oppression",
+    label: "Corporate Oppression Remedy",
+    severity: "S1",
+    paFilter: ["corp"],
+    triggerPatterns: [
+      /\b(oppression|oppressive\s+conduct)\b.{0,30}\b(shareholder|director|company)\b/i,
+      /\b(shareholder|minority\s+shareholder)\b.{0,40}\b(squeeze\s+out|excluded|frozen\s+out|removed|shut\s+out)\b/i,
+      /\boppression\s+remedy\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "corp_opp__q1",
+        text: "Are you a shareholder, director, or officer of the corporation involved?",
+        rationale: "Only shareholders, directors, or officers have standing for an oppression remedy.",
+      },
+      {
+        id: "corp_opp__q2",
+        text: "What specific conduct by the corporation or majority shareholders do you consider unfair?",
+        rationale: "Particulars of oppressive conduct define the remedy scope under OBCA s.248.",
+      },
+      {
+        id: "corp_opp__q3",
+        text: "Is there a unanimous shareholder agreement in place?",
+        rationale: "USA terms may restrict oppression remedies or provide alternative dispute resolution.",
+      },
+    ],
+    source: "Ontario Business Corporations Act, s.248 — oppression remedy",
+  },
+  {
+    id: "corp_personal_liability",
+    label: "Director/Officer Personal Liability",
+    severity: "S2",
+    paFilter: ["corp"],
+    triggerPatterns: [
+      /\b(director|officer)\b.{0,40}\b(personally\s+liable|personal\s+liability|sued\s+personally)\b/i,
+      /\b(piercing\s+the\s+corporate\s+veil|alter\s+ego|sham\s+corporation)\b/i,
+      /\bunpaid\s+(wages?|source\s+deductions?|HST|payroll)\b.{0,30}\b(director|officer)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "corp_pers__q1",
+        text: "Are you being named personally in a claim against the corporation?",
+        rationale: "Director liability under OBCA s.131 and CRA director liability are distinct claims.",
+      },
+      {
+        id: "corp_pers__q2",
+        text: "Did you resign as director before the liability arose? When?",
+        rationale: "Resignation timing is critical for CRA director liability — s.323 ITA defence.",
+      },
+    ],
+    source: "Ontario Business Corporations Act, s.131; Income Tax Act, s.323 — director liability",
+  },
+
+  // ── Construction (supplemental) ───────────────────────────────────────────
+
+  {
+    id: "construction_contract_dispute",
+    label: "Construction Contract Dispute",
+    severity: "S2",
+    paFilter: ["const"],
+    triggerPatterns: [
+      /\b(change\s+order|scope\s+creep|extras?)\b.{0,40}\b(dispute|refused|not\s+paid)\b/i,
+      /\b(deficiency|deficiencies|defective\s+work)\b.{0,30}\b(contractor|builder|subcontractor)\b/i,
+      /\b(construction\s+contract|general\s+contract)\b.{0,40}\b(breach|dispute|terminated)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "const_cont__q1",
+        text: "Is there a written contract? Who are the parties?",
+        rationale: "Written contract terms define obligations, dispute resolution, and termination rights.",
+      },
+      {
+        id: "const_cont__q2",
+        text: "What is the dollar value of the dispute?",
+        rationale: "Claim value determines whether Small Claims Court or Superior Court is appropriate.",
+      },
+    ],
+    source: "Construction Act (Ontario); common law contract principles",
+  },
+
+  // ── Landlord & Tenant ─────────────────────────────────────────────────────
+
+  {
+    id: "llt_notice_validity",
+    label: "Invalid Eviction Notice",
+    severity: "S1",
+    paFilter: ["llt"],
+    triggerPatterns: [
+      /\b(eviction\s+notice|notice\s+to\s+vacate|N\d\s+notice)\b/i,
+      /\b(landlord\s+(gave|served|sent)\b.{0,30}\b(notice|N4|N12|N13))\b/i,
+      /\b(evicted|eviction)\b.{0,30}\b(notice|improperly|wrong|invalid)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "llt_notice__q1",
+        text: "What type of notice did you receive — N4 (non-payment), N12 (personal use), or another?",
+        rationale: "Notice type determines grounds, required notice period, and available defences.",
+      },
+      {
+        id: "llt_notice__q2",
+        text: "When was the notice served and when must you vacate?",
+        rationale: "Improper service or insufficient notice period voids the notice entirely.",
+      },
+      {
+        id: "llt_notice__q3",
+        text: "Has an LTB hearing date been scheduled?",
+        rationale: "LTB response deadlines are strict; missing them may result in default order.",
+      },
+    ],
+    source: "Residential Tenancies Act, 2006 (Ontario) — eviction notice requirements",
+  },
+  {
+    id: "llt_non_payment",
+    label: "Non-Payment Arrears / Eviction",
+    severity: "S2",
+    paFilter: ["llt"],
+    triggerPatterns: [
+      /\b(rent\s+arrears?|behind\s+on\s+rent|owe\s+rent|unpaid\s+rent)\b/i,
+      /\b(N4|non[- ]payment\s+notice)\b/i,
+      /\b(eviction\s+for\s+(non[- ]payment|arrears?))\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "llt_nonpay__q1",
+        text: "How many months of rent are owed, and what is the monthly amount?",
+        rationale: "Arrears amount determines whether repayment plan vs. eviction order is more likely.",
+      },
+      {
+        id: "llt_nonpay__q2",
+        text: "Have you applied to the LTB for a hearing, or has the landlord?",
+        rationale: "Tenant can request a payment plan; LTB hearing timing affects available options.",
+      },
+    ],
+    source: "Residential Tenancies Act, 2006 (Ontario), s.87 — non-payment eviction process",
+  },
+
+  // ── Intellectual Property ─────────────────────────────────────────────────
+
+  {
+    id: "ip_maintenance_lapse",
+    label: "IP Maintenance Lapse",
+    severity: "S1",
+    paFilter: ["ip"],
+    triggerPatterns: [
+      /\b(patent|trademark|trade\s+mark)\b.{0,40}\b(lapsed|expired|abandoned|maintenance\s+fee)\b/i,
+      /\b(missed|failed\s+to\s+pay)\b.{0,30}\b(maintenance\s+fee|renewal\s+fee|annuity)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "ip_maint__q1",
+        text: "What type of IP — patent, trademark, or copyright — and when did it lapse or expire?",
+        rationale: "Reinstatement windows differ: 12 months for patents, varies for trademarks.",
+      },
+      {
+        id: "ip_maint__q2",
+        text: "Did you receive any notices from CIPO before the lapse?",
+        rationale: "Failure to receive CIPO notice may support a reinstatement application.",
+      },
+      {
+        id: "ip_maint__q3",
+        text: "Has any competitor begun using the IP since it lapsed?",
+        rationale: "Third-party reliance on lapsed IP complicates reinstatement and damages claims.",
+      },
+    ],
+    source: "Patent Act (Canada), s.46; Trade-marks Act (Canada) — maintenance and renewal obligations",
+  },
+  {
+    id: "ip_infringement",
+    label: "IP Infringement Claim",
+    severity: "S1",
+    paFilter: ["ip"],
+    triggerPatterns: [
+      /\b(copyright\s+infringement|trademark\s+infringement|patent\s+infringement)\b/i,
+      /\b(using\s+my\s+(trademark|logo|brand|patent|copyright|design)\s+without)\b/i,
+      /\b(stole|copied|knock[- ]off|counterfeit)\b.{0,30}\b(design|brand|logo|product|invention)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "ip_infring__q1",
+        text: "Is the IP registered — patent, trademark, or industrial design — and where?",
+        rationale: "Registered IP provides stronger statutory remedies; unregistered relies on common law.",
+      },
+      {
+        id: "ip_infring__q2",
+        text: "When did you first become aware of the infringement?",
+        rationale: "3-year limitation period for IP claims under federal Acts runs from knowledge.",
+      },
+      {
+        id: "ip_infring__q3",
+        text: "Have you sent a cease and desist letter yet?",
+        rationale: "Cease and desist establishes notice and may crystallize damages from that date.",
+      },
+    ],
+    source: "Copyright Act (Canada), s.41; Trade-marks Act, s.55 — infringement remedies",
+  },
+
+  // ── WSIB (supplemental) ───────────────────────────────────────────────────
+
+  {
+    id: "wsib_dearos",
+    label: "WSIB Appeals / Return-to-Work Dispute",
+    severity: "S1",
+    paFilter: ["wsib"],
+    triggerPatterns: [
+      /\b(WSIB\s+appeal|appeal(ing)?\s+(to|the)\s+WSIAT)\b/i,
+      /\b(return\s+to\s+work\s+plan|RTW\s+(plan|dispute|obligation))\b/i,
+      /\b(WSIB\s+(denied|refused|cut\s+off)\s+(my\s+)?(benefits?|claim))\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "wsib_dearos__q1",
+        text: "Have you received a decision letter from WSIB that you disagree with?",
+        rationale: "WSIB internal objection must be filed within 30 days of the decision.",
+      },
+      {
+        id: "wsib_dearos__q2",
+        text: "Have you already filed an objection with WSIB or an appeal to WSIAT?",
+        rationale: "WSIAT appeal must be filed within 6 months of the WSIB appeals branch decision.",
+      },
+      {
+        id: "wsib_dearos__q3",
+        text: "Are you in an active return-to-work dispute with your employer?",
+        rationale: "RTW obligations are separate from benefit entitlement; different timelines apply.",
+      },
+    ],
+    source: "Workplace Safety and Insurance Act, 1997 (Ontario), s.125 — appeals and return to work",
+  },
+
+  // ── Defamation (supplemental) ─────────────────────────────────────────────
+
+  {
+    id: "defamation_online",
+    label: "Online Defamation",
+    severity: "S2",
+    paFilter: ["defam"],
+    triggerPatterns: [
+      /\b(social\s+media|Facebook|Instagram|Twitter|Reddit|Google\s+review|Yelp)\b.{0,40}\b(defamatory|false|lies|defamation|lied|smear)\b/i,
+      /\b(posted|published)\b.{0,30}\b(lies|false\s+(statements?|information|allegations?)|defamatory)\b.{0,30}\b(online|internet|web|social\s+media)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "defam_online__q1",
+        text: "On which platform was the statement published and is it still accessible?",
+        rationale: "Online defamation may require injunctive relief; platform identification enables takedown.",
+      },
+      {
+        id: "defam_online__q2",
+        text: "Do you know the identity of the person who posted it?",
+        rationale: "Anonymous online defamation may require a Norwich order to identify the poster.",
+      },
+    ],
+    source: "Defamation Act (Ontario); common law — online defamation (no 6-week notice required)",
+  },
+
+  // ── Municipal (supplemental) ──────────────────────────────────────────────
+
+  {
+    id: "municipal_bylaw_appeal",
+    label: "Municipal By-law / Committee of Adjustment",
+    severity: "S2",
+    paFilter: ["admin"],
+    triggerPatterns: [
+      /\b(by[- ]law\s+(violation|offence|ticket|order|infraction))\b/i,
+      /\b(committee\s+of\s+adjustment|minor\s+variance|zoning\s+(appeal|variance))\b/i,
+      /\b(property\s+standards\s+(order|notice)|heritage\s+(designation|objection))\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "muni_bylaw__q1",
+        text: "What type of municipal order or decision is being challenged?",
+        rationale: "By-law appeals go to Committee of Adjustment or OMB; different deadlines apply.",
+      },
+      {
+        id: "muni_bylaw__q2",
+        text: "When was the order or decision issued and what is the deadline to appeal?",
+        rationale: "Committee of Adjustment appeals must be filed within 20 days under the Planning Act.",
+      },
+    ],
+    source: "Planning Act (Ontario), s.45 — Committee of Adjustment appeals; Municipal Act, s.444",
+  },
+
+  // ── Privacy ───────────────────────────────────────────────────────────────
+
+  {
+    id: "privacy_data_breach",
+    label: "Privacy / Data Breach",
+    severity: "S1",
+    paFilter: ["priv"],
+    triggerPatterns: [
+      /\b(data\s+breach|privacy\s+breach|personal\s+information\s+(leaked|exposed|stolen|compromised))\b/i,
+      /\b(PIPEDA|Privacy\s+Commissioner|privacy\s+complaint)\b/i,
+      /\b(hacked|cyberattack|ransomware)\b.{0,30}\b(personal\s+data|client\s+information|health\s+records?)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "priv_breach__q1",
+        text: "What type of personal information was disclosed — financial, health, or identity data?",
+        rationale: "PIPEDA breach severity and notification obligations depend on the type of information.",
+      },
+      {
+        id: "priv_breach__q2",
+        text: "Have you notified affected individuals and the Privacy Commissioner?",
+        rationale: "PIPEDA requires notification to OPC and affected individuals of material breaches.",
+      },
+      {
+        id: "priv_breach__q3",
+        text: "When did the breach occur and when was it discovered?",
+        rationale: "Limitation period for privacy claims and OPC complaint deadlines run from discovery.",
+      },
+    ],
+    source: "Personal Information Protection and Electronic Documents Act (PIPEDA), s.10.1",
+  },
+
+  // ── Animal Injury ─────────────────────────────────────────────────────────
+
+  {
+    id: "animal_bite_injury",
+    label: "Dog Bite / Animal Injury",
+    severity: "S2",
+    paFilter: ["pi"],
+    triggerPatterns: [
+      /\b(dog\s+bite|bitten\s+by\s+a\s+dog|attacked\s+by\s+(a\s+)?dog)\b/i,
+      /\b(dog|animal|pet)\b.{0,30}\b(attacked|bit|mauled|jumped\s+on)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "animal_bite__q1",
+        text: "Do you know who owns the dog or animal?",
+        rationale: "Under the Dog Owners' Liability Act (Ontario), the owner is strictly liable for bites.",
+      },
+      {
+        id: "animal_bite__q2",
+        text: "When did the bite occur and have you sought medical treatment?",
+        rationale: "Establishes the start of the 2-year limitation period and documents injury severity.",
+      },
+      {
+        id: "animal_bite__q3",
+        text: "Were there witnesses? Was the bite reported to animal control?",
+        rationale: "Animal control records document prior incidents and owner's knowledge of aggression.",
+      },
+    ],
+    source: "Dog Owners' Liability Act (Ontario), s.2 — strict liability for dog bites",
+  },
+
+  // ── Class Action ──────────────────────────────────────────────────────────
+
+  {
+    id: "class_action_opt_out",
+    label: "Class Action Opt-Out Deadline",
+    severity: "S1",
+    paFilter: ["civil"],
+    triggerPatterns: [
+      /\b(class\s+action|class\s+proceeding)\b.{0,40}\b(opt[- ]out|deadline|notice)\b/i,
+      /\b(received\s+notice\s+of\s+a\s+class\s+action)\b/i,
+      /\b(settlement\s+(notice|approval|class\s+action))\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "class_opt__q1",
+        text: "Have you received a class action opt-out notice? What is the opt-out deadline?",
+        rationale: "Missing the opt-out deadline means the client is bound by any settlement.",
+      },
+      {
+        id: "class_opt__q2",
+        text: "Do you have individual damages that may exceed a class action recovery?",
+        rationale: "Opting out preserves individual claims; opting in surrenders them on settlement.",
+      },
+    ],
+    source: "Class Proceedings Act, 1992 (Ontario), s.9 — opt-out rights and deadlines",
+  },
+
+  // ── Youth (supplemental) ─────────────────────────────────────────────────
+
+  {
+    id: "youth_school_discipline",
+    label: "School Discipline / Suspension Appeal",
+    severity: "S2",
+    paFilter: ["admin"],
+    triggerPatterns: [
+      /\b(school\s+(suspension|expulsion|discipline))\b/i,
+      /\b(expelled|suspended\s+from\s+school)\b/i,
+      /\b(safe\s+schools?\s+act|zero\s+tolerance\s+(policy|suspension))\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "youth_school__q1",
+        text: "Was the student suspended or expelled, and for how many days?",
+        rationale: "Long-term suspension (>5 days) and expulsion have different appeal timelines.",
+      },
+      {
+        id: "youth_school__q2",
+        text: "When was the suspension or expulsion decision communicated to the parent?",
+        rationale: "Suspension review must be requested promptly; timelines run from notice to parent.",
+      },
+    ],
+    source: "Education Act (Ontario), s.309-311 — long-term suspension and expulsion appeals",
+  },
+
+  // ── Insolvency ────────────────────────────────────────────────────────────
+
+  {
+    id: "insolvency_creditor_action",
+    label: "Creditor Action / Collection Threat",
+    severity: "S1",
+    paFilter: ["insol"],
+    triggerPatterns: [
+      /\b(creditor|collection\s+agency|bailiff)\b.{0,40}\b(seizing|garnish|lawsuit|judgment|writ)\b/i,
+      /\b(wage\s+garnishment|bank\s+account\s+(frozen|seized|garnished))\b/i,
+      /\b(statement\s+of\s+claim|served\s+(with\s+)?a\s+claim)\b.{0,30}\b(creditor|debt|money\s+owed)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "insol_cred__q1",
+        text: "Has a court judgment been obtained against you, or is a lawsuit pending?",
+        rationale: "A judgment creditor has enforcement rights; a pending claim may still be negotiated.",
+      },
+      {
+        id: "insol_cred__q2",
+        text: "What are your total debts and do you have assets that could be seized?",
+        rationale: "Debt-to-asset ratio determines whether a consumer proposal or bankruptcy is appropriate.",
+      },
+      {
+        id: "insol_cred__q3",
+        text: "Is your bank account or wages currently being garnished?",
+        rationale: "Immediate insolvency filing stops garnishment automatically via statutory stay.",
+      },
+    ],
+    source: "Bankruptcy and Insolvency Act (Canada), s.69 — automatic stay on insolvency filing",
+  },
+  {
+    id: "insolvency_asset_disclosure",
+    label: "Asset Concealment / Disclosure Risk",
+    severity: "S2",
+    paFilter: ["insol"],
+    triggerPatterns: [
+      /\b(transferred\s+(assets?|property|money))\b.{0,30}\b(before\s+(bankruptcy|filing|insolvency))\b/i,
+      /\b(preference\s+payment|fraudulent\s+preference|non[- ]arm.s[- ]length\s+transfer)\b/i,
+      /\b(exempt\s+assets?|RRSP\s+exempt|RSP\s+(protection|exempt))\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "insol_asset__q1",
+        text: "Have you transferred any property, money, or assets to family members in the last 5 years?",
+        rationale: "Transfers at undervalue within 5 years of bankruptcy may be reversed as fraudulent preferences.",
+      },
+      {
+        id: "insol_asset__q2",
+        text: "Do you have RRSPs or exempt assets that you want to protect?",
+        rationale: "Certain assets are exempt from seizure in bankruptcy — proper advice protects them.",
+      },
+    ],
+    source: "Bankruptcy and Insolvency Act, ss.91-96 — fraudulent preference and reviewable transactions",
+  },
+
+  // ── Additional Compliance Flags ────────────────────────────────────────────
+
+  {
+    id: "real_estate_closing_date",
+    label: "Real Estate Closing Date / Extension Risk",
+    severity: "S1",
+    paFilter: ["real"],
+    triggerPatterns: [
+      /\b(closing\s+date|closing\s+deadline)\b.{0,40}\b(missed|can.t\s+close|delay|extend|problem)\b/i,
+      /\b(can.t\s+(close|get\s+financing)|mortgage\s+(fell\s+through|not\s+approved))\b/i,
+      /\b(vendor|seller)\b.{0,40}\b(won.t\s+(close|extend|complete)|breach\s+of\s+(agreement|contract|APS))\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "real_close__q1",
+        text: "What is the closing date in the Agreement of Purchase and Sale?",
+        rationale: "Time is of the essence in real estate; missing the closing date is a breach.",
+      },
+      {
+        id: "real_close__q2",
+        text: "Has either party requested an extension? Was it agreed to in writing?",
+        rationale: "Unilateral extension attempts without consent do not bind the other party.",
+      },
+      {
+        id: "real_close__q3",
+        text: "What is the deposit amount and who holds it?",
+        rationale: "Deposit forfeiture and damages for breach of APS depend on who is at fault.",
+      },
+    ],
+    source: "LawPRO — failure to advise on time-of-the-essence in real estate transactions",
+  },
+  {
+    id: "immigration_misrepresentation",
+    label: "Immigration Misrepresentation Risk",
+    severity: "S1",
+    paFilter: ["imm"],
+    triggerPatterns: [
+      /\b(misrepresentation|material\s+misrepresentation)\b.{0,30}\b(immigration|visa|IRCC|application)\b/i,
+      /\b(fraud(ulent)?\s+(immigration|application|document))\b/i,
+      /\b(IRCC|immigration\s+officer)\b.{0,40}\b(question(ing)?|suspect(s)?|fraud|misrepresent)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "imm_misrep__q1",
+        text: "Has IRCC indicated that misrepresentation is a concern in your file?",
+        rationale: "A misrepresentation finding results in 5-year ban and removal order — immediate action required.",
+      },
+      {
+        id: "imm_misrep__q2",
+        text: "Was any information on the original application inaccurate or incomplete?",
+        rationale: "Even innocent errors can be characterized as misrepresentation — must assess and respond.",
+      },
+    ],
+    source: "IRPA, s.40 — misrepresentation: 5-year ban and finding of inadmissibility",
+  },
+  {
+    id: "wsib_appeal_deadline",
+    label: "WSIB Internal Objection / WSIAT Deadline",
+    severity: "S1",
+    paFilter: ["wsib"],
+    triggerPatterns: [
+      /\bWSIAT\b.{0,30}\b(appeal|application|deadline)\b/i,
+      /\b(internal\s+objection|objecting\s+to\s+(WSIB|the\s+decision))\b/i,
+      /\bWSIB\s+(decision|letter)\b.{0,40}\b(disagree|appeal|wrong|unfair)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "wsib_appeal__q1",
+        text: "When did you receive the WSIB decision you want to challenge?",
+        rationale: "WSIB internal objection must be filed within 30 days of the decision date.",
+      },
+      {
+        id: "wsib_appeal__q2",
+        text: "Have you already filed an objection with WSIB?",
+        rationale: "Must exhaust WSIB internal process before a WSIAT appeal is available.",
+      },
+    ],
+    source: "Workplace Safety and Insurance Act, 1997 (Ontario), s.125 — appeal deadlines",
+  },
+  {
+    id: "llt_illegal_entry",
+    label: "Illegal Landlord Entry",
+    severity: "S2",
+    paFilter: ["llt"],
+    triggerPatterns: [
+      /\b(landlord\s+(entered|came\s+in|went\s+into)\b.{0,30}\b(without\s+notice|uninvited|illegally))\b/i,
+      /\b(right\s+to\s+entry|illegal\s+entry|unauthorized\s+entry)\b.{0,30}\b(landlord|rental|unit)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "llt_entry__q1",
+        text: "Did the landlord provide 24-hour written notice before entering?",
+        rationale: "RTA requires 24-hour written notice with valid reason; no notice = illegal entry.",
+      },
+      {
+        id: "llt_entry__q2",
+        text: "How many times has this occurred and do you have any documentation?",
+        rationale: "Repeated illegal entries support an LTB application for remedy and rent abatement.",
+      },
+    ],
+    source: "Residential Tenancies Act, 2006 (Ontario), s.26 — landlord's right of entry",
+  },
+  {
+    id: "tax_voluntary_disclosure",
+    label: "CRA Voluntary Disclosure (VDP)",
+    severity: "S1",
+    paFilter: ["tax"],
+    triggerPatterns: [
+      /\b(voluntary\s+disclosure|VDP\s+(application|program))\b/i,
+      /\b(unreported\s+(income|assets?|foreign\s+(account|property)|T1135))\b/i,
+      /\b(offshore\s+(account|assets?|bank|income))\b.{0,30}\b(CRA|Canada\s+Revenue|tax)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "tax_vdp__q1",
+        text: "What type of disclosure are you making — unreported income, foreign assets, or other?",
+        rationale: "VDP program terms depend on disclosure type; general vs. limited program applies.",
+      },
+      {
+        id: "tax_vdp__q2",
+        text: "Have you previously received any contact or audit notices from CRA about this issue?",
+        rationale: "Prior CRA contact disqualifies the VDP application — must use other options.",
+      },
+      {
+        id: "tax_vdp__q3",
+        text: "How many years of unreported amounts are involved?",
+        rationale: "VDP covers all years; partial disclosure may not protect against prosecution.",
+      },
+    ],
+    source: "CRA Income Tax Information Circular IC00-1R6 — Voluntary Disclosures Program",
   },
 
   // ── Child & Youth ─────────────────────────────────────────────────────────

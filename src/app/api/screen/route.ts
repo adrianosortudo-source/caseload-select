@@ -32,6 +32,7 @@ import {
 } from "@/lib/cpi-calculator";
 import { autoConfirmFromContext } from "@/lib/auto-confirm";
 import { detectFlags, mergeFlags, getGateQuestions, hasCriticalFlag } from "@/lib/flag-registry";
+import { classify, type ClassifierResult } from "@/lib/classifier";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
@@ -1038,16 +1039,41 @@ export async function POST(req: Request) {
       }
     }
 
-    // ── Call GPT ──────────────────────────────────────────────────────
-    const completion = await openai.chat.completions.create({
-      model: MODEL,
-      temperature: 0, // deterministic scoring
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...conversation.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
-      ],
-    });
+    // ── Classifier: parallel call on turn 1 ──────────────────────────
+    // Runs alongside the main GPT call — zero added latency.
+    // Provides semantic flag detection for signals that regex cannot catch:
+    //   "I've been fighting internally for months" → ltd_appeal_clock_running
+    //   "my brother handles everything for mom"   → estates_undue_influence
+    //   "I signed papers before calling a lawyer" → emp_severance_signed
+    // Only fires on turn 1 when no practice area has been established yet.
+    // Failures are caught and treated as null — never blocks the main response.
+    const userTurnCount = conversation.filter(m => m.role === "user").length;
+    const classifierPromise: Promise<ClassifierResult | null> =
+      !sessionPracticeArea && userTurnCount <= 1
+        ? classify(openai, {
+            firmPracticeAreas: firmConfig.practice_areas,
+            conversationText: allUserText,
+            channel,
+          }).catch(err => {
+            console.error("[classifier] Non-fatal failure:", err);
+            return null;
+          })
+        : Promise.resolve(null);
+
+    // ── Call GPT (main) ───────────────────────────────────────────────
+    // Runs in parallel with the classifier above.
+    const [completion, classifierResult] = await Promise.all([
+      openai.chat.completions.create({
+        model: MODEL,
+        temperature: 0, // deterministic scoring
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...conversation.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+        ],
+      }),
+      classifierPromise,
+    ]);
 
     const rawResponse = completion.choices[0]?.message?.content;
     if (!rawResponse) {
@@ -1100,6 +1126,55 @@ export async function POST(req: Request) {
     if (gptResponse.practice_area && !sessionPracticeArea) {
       const refinedFlags = detectFlags(allUserText, gptResponse.practice_area);
       activeComplianceFlags = mergeFlags(activeComplianceFlags, refinedFlags);
+    }
+
+    // ── Merge semantic flags from classifier ─────────────────────────
+    // classifierResult is the parallel turn-1 classifier output (may be null if not
+    // triggered, or if the call failed and was caught above).
+    // Its flags cover semantic signals that regex patterns cannot reliably detect.
+    // Merged after PA refinement so the final set is maximally complete before storage.
+    if (classifierResult) {
+      // Merge semantic flags (classifier.flags is already validated against registry)
+      if (classifierResult.flags.length > 0) {
+        activeComplianceFlags = mergeFlags(activeComplianceFlags, classifierResult.flags);
+      }
+
+      // Handle classifier out-of-scope signal.
+      // Only override the main GPT response when the classifier is high-confidence
+      // AND neither the main GPT nor the firm config has a matching PA.
+      // Low/medium confidence out-of-scope is ignored — main GPT result prevails.
+      if (
+        classifierResult.out_of_scope &&
+        classifierResult.confidence === "high" &&
+        !sessionPracticeArea &&
+        !gptResponse.finalize
+      ) {
+        const classifierPA = classifierResult.practice_area;
+        const paInFirmConfig = classifierPA
+          ? firmConfig.practice_areas.find(a => a.id === classifierPA)
+          : null;
+        const isConfirmedOutOfScope =
+          !classifierPA || paInFirmConfig?.classification === "out_of_scope";
+
+        if (isConfirmedOutOfScope) {
+          gptResponse.finalize = true;
+          gptResponse.collect_identity = false;
+          gptResponse.next_question = null;
+          gptResponse.next_questions = null;
+          if (gptResponse.cpi) {
+            gptResponse.cpi.band = "E";
+            gptResponse.cpi.total = Math.min((gptResponse.cpi.total as number) ?? 15, 15);
+          }
+          if (!gptResponse.response_text) {
+            gptResponse.response_text =
+              "Based on what you've shared, this matter may fall outside our current practice areas. We encourage you to seek appropriate legal help.";
+          }
+          console.info(
+            "[classifier] High-confidence out-of-scope override applied:",
+            classifierResult.reasoning,
+          );
+        }
+      }
     }
 
     // ── Resolve practice_sub_type ─────────────────────────────────────
@@ -1287,6 +1362,12 @@ export async function POST(req: Request) {
       ...(gptResponse.flags?.length ? { _flags: gptResponse.flags } : {}),
       // Persist compliance flags across turns — accumulative (S1 flags from turn 1 stay through turn 5)
       ...(activeComplianceFlags.length ? { _compliance_flags: activeComplianceFlags } : {}),
+      // Classifier metadata — stored for observability / debugging (not used in scoring)
+      ...(classifierResult ? {
+        _classifier_confidence: classifierResult.confidence,
+        _classifier_pa: classifierResult.practice_area,
+        _classifier_flags_raw: classifierResult.gpt_flags_raw,
+      } : {}),
       ...(startingRound2 ? { _round_2_started: true, _round_2_q_count: 0 } : {}),
       ...(round2Started ? { _round_2_started: true, _round_2_q_count: round2QCount + 1 } : {}),
     };
