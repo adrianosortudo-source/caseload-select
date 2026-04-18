@@ -87,23 +87,25 @@ function getAllFlagIds(): string[] {
     "emp_hrto_clock", "emp_severance_signed", "emp_constructive_dismissal",
     "hrto_respondent_id",
     // Real Estate / Estates / Corporate
-    "real_estate_dual_representation", "real_estate_undisclosed_defects",
+    "real_estate_dual_representation", "real_estate_undisclosed_defects", "real_estate_closing_date",
     "estates_capacity", "estates_undue_influence", "estates_dependant_relief",
     "corp_oppression", "corp_personal_liability",
     // Construction / Landlord / IP / Insurance / Admin / WSIB
     "construction_lien_deadline", "construction_contract_dispute",
-    "llt_notice_validity", "llt_non_payment",
+    "llt_notice_validity", "llt_non_payment", "llt_illegal_entry",
     "ip_maintenance_lapse", "ip_infringement",
     "ins_claim_denial",
     "admin_jr_deadline",
-    "wsib_six_month_claim", "wsib_dearos",
+    "wsib_six_month_claim", "wsib_dearos", "wsib_appeal_deadline",
     // Defamation / Tax / Labour / Social Benefits / Municipal / Environmental
     "defamation_media_notice", "defamation_online",
-    "tax_objection_deadline",
+    "tax_objection_deadline", "tax_voluntary_disclosure",
     "labour_ulp_complaint",
     "social_benefits_appeal",
     "municipal_injury_notice", "municipal_bylaw_appeal",
     "env_remediation_order",
+    // Immigration (extended)
+    "immigration_misrepresentation",
     // Elder / Privacy / Securities / Animal / Class / Youth
     "elder_poa_abuse",
     "privacy_data_breach",
@@ -117,7 +119,8 @@ function getAllFlagIds(): string[] {
   ];
 }
 
-function buildClassifierPrompt(input: ClassifierInput): string {
+/** @internal — exported for testing only */
+export function buildClassifierPrompt(input: ClassifierInput): string {
   const primaryPAs = input.firmPracticeAreas
     .filter(a => a.classification === "primary")
     .map(a => `  - id: "${a.id}" | label: "${a.label}"`)
@@ -200,6 +203,8 @@ Read the client's message and output a JSON object with exactly these fields:
 
 **crim_charter_violation**: when police conduct (search, arrest, right to counsel) appears to violate Charter.
 
+**wsib_six_month_claim**: when a worker was injured on the job and has not yet filed a WSIB claim — strict 6-month filing deadline from date of injury or awareness.
+
 **out_of_scope:**
 - Set true if the matter is clearly outside ALL of the firm's listed practice areas.
 - Do not set true if it's ambiguous — low confidence and a best-match PA is better than out_of_scope.
@@ -226,7 +231,8 @@ Respond with ONLY valid JSON. No markdown, no explanation outside the JSON objec
 // GPT Call
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface RawClassifierOutput {
+/** @internal — exported for testing only */
+export interface RawClassifierOutput {
   practice_area: string | null;
   practice_sub_type: string | null;
   flags: string[];
@@ -235,11 +241,12 @@ interface RawClassifierOutput {
   reasoning?: string;
 }
 
-function parseClassifierResponse(raw: string): RawClassifierOutput | null {
+/** @internal — exported for testing only */
+export function parseClassifierResponse(raw: string): RawClassifierOutput | null {
   try {
     const parsed = JSON.parse(raw.trim()) as RawClassifierOutput;
     // Minimal validation
-    if (typeof parsed !== "object" || parsed === null) return null;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
     if (!Array.isArray(parsed.flags)) parsed.flags = [];
     if (!["high", "medium", "low"].includes(parsed.confidence)) parsed.confidence = "low";
     return parsed;
