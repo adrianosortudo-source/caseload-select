@@ -14,8 +14,19 @@
  *   value_score = urgency + complexity + multi_practice + fee  (max 60)
  *   total       = fit + value  (max 100)
  *
- * Band thresholds:
+ * Band thresholds (primary):
  *   A ≥ 80 | B ≥ 60 | C ≥ 40 | D ≥ 20 | E < 20
+ *
+ * Three-axis derived scores (normalized 0-100, read-only — do NOT let GPT write these):
+ *   cpi_fit      — how well this matter matches the firm (from fit_score)
+ *   cpi_urgency  — time pressure on this matter (from urgency_score)
+ *   cpi_friction — case risk / red-flag signal (inverted legitimacy_score)
+ *
+ * Band modifiers (applied after primary threshold):
+ *   Urgency promotion: cpi_urgency ≥ 75 AND total ≥ 55 → Band A
+ *     (imminent deadlines warrant immediate attention regardless of total)
+ *   Friction floor:    cpi_friction ≥ 80 (legitimacy ≤ 2) → floor at Band D
+ *     (very low legal basis cannot reach Band A or B)
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -36,6 +47,19 @@ export interface CpiBreakdown {
   total: number;
   band: "A" | "B" | "C" | "D" | "E" | null;
   band_locked: boolean;
+  /**
+   * Three-axis derived scores (normalized 0-100). Computed server-side in
+   * validateAndFixScoring(). Never written by GPT. Used for human-readable
+   * triage signals — lawyers see fit/urgency/friction, not the raw component scores.
+   *
+   * cpi_fit:      How well this matter matches what the firm does. Derived from fit_score.
+   * cpi_urgency:  Time pressure on this matter. Derived from urgency_score.
+   * cpi_friction: Red-flag / case-risk signal. Inverse of legitimacy_score.
+   *               High friction = low legal basis, prior complicating factors, or red flags.
+   */
+  cpi_fit: number;
+  cpi_urgency: number;
+  cpi_friction: number;
 }
 
 /**
@@ -50,6 +74,12 @@ export interface CpiPartial {
   score: number;
   band: "A" | "B" | "C" | "D" | "E" | null;
   confidence: "provisional" | "final";
+  /**
+   * Urgency axis (0-100). Exposed in partial when ≥ 50 so the widget can
+   * show a "time-sensitive" badge without revealing the full breakdown.
+   * Undefined when urgency is low (< 50) to keep the response lean.
+   */
+  urgency?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,12 +130,41 @@ export function validateAndFixScoring(cpi: CpiBreakdown): CpiBreakdown {
   cpi.value_score = cpi.urgency_score + cpi.complexity_score + cpi.multi_practice_score + cpi.fee_score;
   cpi.total       = cpi.fit_score + cpi.value_score;
 
-  // Assign band from total
+  // ── Three-axis derived scores (normalized 0-100) ───────────────────────
+  // Server-computed. Never written by GPT. These are exposed to lawyers as
+  // human-readable triage signals — fit quality, time pressure, and case risk.
+  //
+  // cpi_fit:     fit_score normalized from max 40
+  // cpi_urgency: urgency_score normalized from max 20
+  // cpi_friction: inverted legitimacy_score — high friction = low legitimacy
+  //               Ranges from 0 (legitimacy=10, clean) to 100 (legitimacy=0, red flags)
+  cpi.cpi_fit      = Math.round(cpi.fit_score / 40 * 100);
+  cpi.cpi_urgency  = Math.round(cpi.urgency_score / 20 * 100);
+  cpi.cpi_friction = Math.round((10 - cpi.legitimacy_score) / 10 * 100);
+
+  // ── Primary band assignment ────────────────────────────────────────────
   if      (cpi.total >= 80) cpi.band = "A";
   else if (cpi.total >= 60) cpi.band = "B";
   else if (cpi.total >= 40) cpi.band = "C";
   else if (cpi.total >= 20) cpi.band = "D";
   else                       cpi.band = "E";
+
+  // ── Band modifiers (applied after primary threshold) ──────────────────
+  // These only activate at the extremes — the middle of the distribution is unchanged.
+
+  // Urgency promotion: time-sensitive matters (imm_removal_order, fam_abduction,
+  // imm_rad_deadline, construction_lien expiring) get Band A if total ≥ 55.
+  // cpi_urgency ≥ 75 ↔ urgency_score ≥ 15/20.
+  if (!cpi.band_locked && cpi.cpi_urgency >= 75 && cpi.total >= 55 && cpi.band !== "A") {
+    cpi.band = "A";
+  }
+
+  // Friction floor: very low legitimacy (legitimacy_score ≤ 2, cpi_friction ≥ 80)
+  // cannot reach Band A or B — cap at D for matters with near-zero legal basis.
+  // Does not apply when band is locked (B+ already confirmed after full intake).
+  if (!cpi.band_locked && cpi.cpi_friction >= 80 && (cpi.band === "A" || cpi.band === "B")) {
+    cpi.band = "D";
+  }
 
   return cpi;
 }
@@ -122,9 +181,15 @@ export function validateAndFixScoring(cpi: CpiBreakdown): CpiBreakdown {
  * @returns         CpiPartial for inclusion in every API response.
  */
 export function computeCpiPartial(cpi: CpiBreakdown, finalized: boolean): CpiPartial {
-  return {
+  const partial: CpiPartial = {
     score: cpi.total,
     band: cpi.band,
     confidence: (finalized || cpi.band_locked) ? "final" : "provisional",
   };
+  // Expose urgency when it's significant (≥ 50) so the widget can show
+  // a "time-sensitive" badge without revealing the full breakdown.
+  if (cpi.cpi_urgency >= 50) {
+    partial.urgency = cpi.cpi_urgency;
+  }
+  return partial;
 }

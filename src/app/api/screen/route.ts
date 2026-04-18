@@ -250,7 +250,7 @@ export async function POST(req: Request) {
       const escapeText = [phonePart, bookPart].filter(Boolean).join("") ||
         "Please contact the firm directly to speak with someone.";
 
-      const escapeCpi = (session.scoring as CpiBreakdown) ?? { total: 0, band: null, band_locked: false, fit_score: 0, geo_score: 0, practice_score: 0, legitimacy_score: 0, referral_score: 0, value_score: 0, urgency_score: 0, complexity_score: 0, multi_practice_score: 0, fee_score: 0 } as unknown as CpiBreakdown;
+      const escapeCpi = (session.scoring as CpiBreakdown) ?? { total: 0, band: null, band_locked: false, fit_score: 0, geo_score: 0, practice_score: 0, legitimacy_score: 0, referral_score: 0, value_score: 0, urgency_score: 0, complexity_score: 0, multi_practice_score: 0, fee_score: 0, cpi_fit: 0, cpi_urgency: 0, cpi_friction: 0 } as unknown as CpiBreakdown;
       return NextResponse.json({
         session_id: session.id,
         practice_area: (session.practice_area as string) ?? null,
