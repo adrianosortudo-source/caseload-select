@@ -17,7 +17,7 @@
 export const SUB_TYPES: Record<string, string[]> = {
   pi:   ["pi_mva", "pi_slip_fall", "pi_dog_bite", "pi_med_mal", "pi_product", "pi_workplace", "pi_assault_ci", "pi_other"],
   emp:  ["emp_dismissal", "emp_harassment", "emp_wage", "emp_disc", "emp_constructive", "emp_other"],
-  fam:  ["fam_divorce", "fam_custody", "fam_support", "fam_property", "fam_protection", "fam_other"],
+  fam:  ["fam_abduction", "fam_divorce", "fam_custody", "fam_support", "fam_property", "fam_protection", "fam_other"],
   crim: ["crim_dui", "crim_assault", "crim_drug", "crim_theft", "crim_domestic", "crim_other"],
   imm:  ["imm_ee", "imm_spousal", "imm_study", "imm_work_permit", "imm_refugee", "imm_pnp", "imm_other"],
   civ:  ["civ_contract", "civ_debt", "civ_tort", "civ_negligence", "civ_other"],

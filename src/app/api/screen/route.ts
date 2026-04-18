@@ -31,6 +31,7 @@ import {
   computeCpiPartial,
 } from "@/lib/cpi-calculator";
 import { autoConfirmFromContext } from "@/lib/auto-confirm";
+import { detectFlags, mergeFlags, getGateQuestions, hasCriticalFlag } from "@/lib/flag-registry";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
@@ -221,6 +222,8 @@ export async function POST(req: Request) {
 
     const firm = firmResult.data;
     const session = sessionResult.data as Record<string, unknown>;
+    // Hoisted: used by flag detection (before buildSystemPrompt) and systemPrompt builder
+    const sessionPracticeArea = session.practice_area as string | null;
 
     const firmBranding = (firm.branding as Record<string, string | undefined>) ?? {};
 
@@ -310,6 +313,21 @@ export async function POST(req: Request) {
     // ── Append user message to conversation history ──────────────────
     const conversation = (session.conversation as Array<{ role: string; content: string }>) ?? [];
     conversation.push({ role: "user", content: userContent });
+
+    // ── Compliance flag detection (deterministic, regex) ─────────────
+    // Runs on every turn. Flags are merged with any already stored in the session
+    // so accumulation works across turns (S1 flags detected on turn 1 persist to turn 5).
+    // PA filtering: turn 1 (no PA yet) → universal flags only.
+    //               turn 2+ (PA known) → universal + PA-specific flags.
+    const allUserText = conversation
+      .filter(m => m.role === "user")
+      .map(m => m.content)
+      .join("\n");
+    const sessionComplianceFlags =
+      ((session.scoring as Record<string, unknown>)?._compliance_flags as string[]) ?? [];
+    const regexDetectedFlags = detectFlags(allUserText, sessionPracticeArea ?? "");
+    // Mutable — will be updated after PA classification when PA was previously unknown
+    let activeComplianceFlags = mergeFlags(sessionComplianceFlags, regexDetectedFlags);
 
     // ── Fast path: skip GPT for contact submission when band is already set ──
     // After widget question answers are confirmed, the practice area and initial
@@ -796,7 +814,6 @@ export async function POST(req: Request) {
     //   classification only. ~5K tokens instead of ~50K → ~80% latency reduction.
     // WhatsApp / SMS / chat (subsequent calls): inject ONLY the single relevant practice
     //   area's question set (~1K tokens) so GPT knows what to ask next.
-    const sessionPracticeArea = session.practice_area as string | null;
     let promptFirmConfig = firmConfig;
     let includeQuestionSets = false;
 
@@ -993,6 +1010,34 @@ export async function POST(req: Request) {
         `Return at top level: "filled_slots": { "question_id": "option_value" } and "slot_confidence": { "question_id": "high"|"medium" }`;
     }
 
+    // ── Inject compliance gate questions ─────────────────────────────
+    // Active flags drive mandatory questions that must be asked before standard
+    // qualification. Gate questions are ordered S1 before S2; only unasked ones
+    // are injected (checked against allCollected). Capped at 3 per turn to avoid
+    // overwhelming the client on turn 1. S1 flags get a critical escalation note.
+    if (activeComplianceFlags.length > 0) {
+      const gateQuestions = getGateQuestions(activeComplianceFlags);
+      const unaskedGate = gateQuestions.filter(q => !(q.id in allCollected));
+      if (unaskedGate.length > 0) {
+        const gateLines = unaskedGate
+          .slice(0, 3)
+          .map((q, i) => `  ${i + 1}. [${q.id}] ${q.text}`)
+          .join("\n");
+        const criticalNote = hasCriticalFlag(activeComplianceFlags)
+          ? `\n\nCRITICAL: One or more flags represent potential malpractice exposure or a time-sensitive deadline. These MUST be asked before any other qualification question.`
+          : "";
+        systemPrompt +=
+          `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
+          `\nCOMPLIANCE FLAGS — MANDATORY GATE QUESTIONS\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `These compliance signals were detected in the conversation. Ask the following questions before standard qualification questions. Integrate them naturally:\n\n` +
+          gateLines +
+          criticalNote +
+          `\n\nOnce these are answered, resume normal scoring and question flow. ` +
+          `Store answers in extracted_entities using the question ID as the key.`;
+      }
+    }
+
     // ── Call GPT ──────────────────────────────────────────────────────
     const completion = await openai.chat.completions.create({
       model: MODEL,
@@ -1045,6 +1090,16 @@ export async function POST(req: Request) {
           a.label.toLowerCase().replace(/[\s_-]+/g, "") === rawNorm
       );
       if (pa) gptResponse.practice_area = pa.id;
+    }
+
+    // ── Refine compliance flags now that PA is confirmed ────────────
+    // On turn 1, PA was unknown during flag detection so only universal flags fired.
+    // Re-run with the freshly classified practice_area to pick up PA-specific flags
+    // (e.g. slip_ice_snow for pi, fam_abduction for fam, mvac_insurer_not_notified).
+    // The refined set is stored in scoringPayload below; it feeds future turns' injection.
+    if (gptResponse.practice_area && !sessionPracticeArea) {
+      const refinedFlags = detectFlags(allUserText, gptResponse.practice_area);
+      activeComplianceFlags = mergeFlags(activeComplianceFlags, refinedFlags);
     }
 
     // ── Resolve practice_sub_type ─────────────────────────────────────
@@ -1230,6 +1285,8 @@ export async function POST(req: Request) {
       _confirmed: updatedConfirmed,
       ...(gptResponse.complexity_indicators ? { _complexity_indicators: gptResponse.complexity_indicators } : {}),
       ...(gptResponse.flags?.length ? { _flags: gptResponse.flags } : {}),
+      // Persist compliance flags across turns — accumulative (S1 flags from turn 1 stay through turn 5)
+      ...(activeComplianceFlags.length ? { _compliance_flags: activeComplianceFlags } : {}),
       ...(startingRound2 ? { _round_2_started: true, _round_2_q_count: 0 } : {}),
       ...(round2Started ? { _round_2_started: true, _round_2_q_count: round2QCount + 1 } : {}),
     };

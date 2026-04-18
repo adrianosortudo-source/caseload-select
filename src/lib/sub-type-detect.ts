@@ -208,6 +208,31 @@ const EMP_SUB_TYPE_RULES: SubTypeRule[] = [
 // FAMILY sub-types
 // ─────────────────────────────────────────────────────────────────────────────
 const FAM_SUB_TYPE_RULES: SubTypeRule[] = [
+  // fam_abduction — cross-border child abduction / Hague Convention
+  // Must appear BEFORE fam_protection: shares some signals (ex-partner + child)
+  // but fires only when there is a clear international / cross-border indicator.
+  {
+    subType: "fam_abduction",
+    confidence: "high",
+    patterns: [
+      // Hague Convention keyword (unambiguous)
+      /\bhague\s+(convention|application|petition)\b/i,
+      // "parental abduction" / "international abduction"
+      /\b(parental|international|cross[- ]?border)\s+abduction\b/i,
+      // "took/taken/brought" + child + country/abroad signal
+      /\b(took|taken|brought|moved)\b.{0,40}\b(child|son|daughter|kids?)\b.{0,60}\b(country|abroad|overseas|back\s+home|home\s+country|another\s+country|different\s+country|foreign\s+country|outside\s+canada)\b/i,
+      /\b(child|son|daughter|kids?)\b.{0,40}\b(took|taken|brought|moved)\b.{0,60}\b(country|abroad|overseas|back\s+home|home\s+country|another\s+country|different\s+country|foreign\s+country|outside\s+canada)\b/i,
+      // "without my consent" / "without my knowledge" + child + international
+      /\bwithout\s+my\s+(consent|permission|knowledge)\b.{0,60}\b(country|abroad|overseas|another\s+country|home\s+country|outside\s+canada)\b/i,
+      /\b(country|abroad|overseas|another\s+country|home\s+country|outside\s+canada)\b.{0,60}\bwithout\s+my\s+(consent|permission|knowledge)\b/i,
+      // "won't return" / "refusing to return" + child (cross-border implied by country mention nearby)
+      /\b(won.t|refusing\s+to|not\s+returning)\s+(return|come\s+back)\b.{0,40}\b(child|son|daughter|kids?)\b/i,
+      // Explicit "home country" + child + ex-partner signals
+      /\bher\s+home\s+country\b.{0,40}\b(son|daughter|child|kids?)\b/i,
+      /\bhis\s+home\s+country\b.{0,40}\b(son|daughter|child|kids?)\b/i,
+      /\b(son|daughter|child|kids?)\b.{0,40}\b(her|his)\s+home\s+country\b/i,
+    ],
+  },
   {
     subType: "fam_protection",
     confidence: "high",
