@@ -43,6 +43,12 @@ export interface FlagDefinition {
   gateQuestions: GateQuestion[];
   /** Ontario statute or rule that grounds this flag. */
   source: string;
+  /**
+   * S1 flags only. One sentence of warmth shown to the client before gate questions begin.
+   * Contextualises why we are asking — never generated, always authored.
+   * S2 flags leave this undefined (gate questions appear without a preamble).
+   */
+  preamble?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2240,4 +2246,112 @@ export function getFlagDefinitions(flagIds: string[]): FlagDefinition[] {
  */
 export function hasCriticalFlag(flagIds: string[]): boolean {
   return flagIds.some(id => FLAG_REGISTRY.get(id)?.severity === "S1");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// S1 Flag Preambles
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One contextualising sentence per S1 flag, shown to the client before gate
+ * questions begin. Tells the client why we are asking — never AI-generated,
+ * always authored. S2 flags are omitted; gate questions appear without a preamble.
+ *
+ * Authoring rule: short, factual, no legal conclusions, no urgency theatre.
+ * Bad:  "URGENT — you must answer this immediately or your case will be lost."
+ * Good: "A timing check — this affects whether legal action is still possible."
+ */
+const S1_PREAMBLES: Record<string, string> = {
+  // Universal
+  limitation_proximity:             "A quick timing check — this affects whether legal action is still possible.",
+  conflict_adverse_party:           "One standard check before we go further.",
+  // PI
+  pi_limitation_window:             "A timing question — this helps confirm whether your claim is still within the legal window.",
+  pi_unidentified_parties:          "A few details about the other party — needed to assess what options are available.",
+  pi_evidence_preservation:         "Evidence in injury cases can disappear quickly — one urgent question.",
+  // MVA
+  mvac_insurer_not_notified:        "One insurance question — timing here matters for your benefits.",
+  mvac_hit_and_run:                 "A few specifics about the other vehicle — this affects how your claim proceeds.",
+  // Med-mal
+  medmal_causation_unclear:         "A question about what happened during your treatment — this shapes the whole analysis.",
+  // Slip
+  slip_ice_snow:                    "A timing note — falls on ice or snow trigger a 60-day notice obligation in Ontario.",
+  slip_municipality:                "A timing note — falls on city property require notice within 10 days in Ontario.",
+  // LTD
+  ltd_appeal_clock_running:         "A timing check — LTD internal appeal windows are often 30 to 90 days.",
+  // Family
+  fam_property_clock:               "A timing question — property equalization claims have a strict 6-year deadline in Ontario.",
+  fam_abduction:                    "Given what you've described, I need to confirm a few things urgently — time is a factor here.",
+  fam_domestic_violence:            "A few questions about your safety situation — these help us understand what protection may be available.",
+  // Child protection
+  child_apprehension_recent:        "Given the recent involvement of authorities, I have a few time-sensitive questions.",
+  // Immigration
+  imm_rad_deadline:                 "This is time-sensitive — a refused refugee claim has only a 15-day appeal window.",
+  imm_removal_order:                "A removal order creates urgent timelines — a few questions before anything else.",
+  imm_inadmissibility:              "A few questions about immigration history — this shapes what options are available.",
+  immigration_misrepresentation:    "A few questions about your immigration history — the details affect your current status.",
+  // Criminal
+  crim_charter_violation:           "A question about how the police handled the situation — this can affect your entire defence.",
+  // Employment
+  emp_hrto_clock:                   "A timing check — discrimination claims have a strict 1-year HRTO deadline.",
+  emp_severance_signed:             "An important question given what you've already signed — timing matters here.",
+  emp_constructive_dismissal:       "A few questions about how the job ended — this shapes whether a constructive dismissal claim is viable.",
+  hrto_respondent_id:               "A quick question about who was involved — needed to properly identify the respondent.",
+  // Real estate
+  real_estate_dual_representation:  "A quick check on how the transaction is structured — this is a regulated area.",
+  real_estate_undisclosed_defects:  "A question about what was disclosed before closing — this affects your legal options.",
+  real_estate_closing_date:         "A timing question — closing date obligations are strict and have immediate legal consequences.",
+  // Estates
+  estates_capacity:                 "A few questions about the circumstances of the signing — these are legally significant.",
+  estates_undue_influence:          "Some background questions about who was present when the document was signed.",
+  estates_dependant_relief:         "A question about your relationship to the deceased — this determines what relief may be available.",
+  // Corporate
+  corp_oppression:                  "A few questions about how the business decisions were made — this shapes the available remedy.",
+  // Construction
+  construction_lien_deadline:       "A critical timing check — construction liens in Ontario must be registered within 60 days of completion.",
+  // Landlord-tenant
+  llt_notice_validity:              "A question about the notice you received — its validity determines your options.",
+  // IP
+  ip_maintenance_lapse:             "A timing check — IP rights can lapse permanently without action.",
+  ip_infringement:                  "A few questions about the infringement — the specifics affect what remedies are available.",
+  // Admin
+  admin_jr_deadline:                "A timing check — judicial review applications in Ontario have strict deadlines.",
+  // WSIB
+  wsib_six_month_claim:             "A timing check — WSIB claims must be filed within 6 months of the injury.",
+  wsib_dearos:                      "A question about your employer's WSIB coverage — this affects how your claim proceeds.",
+  wsib_appeal_deadline:             "A timing check — WSIB appeal windows are strict and cannot be extended.",
+  // Defamation
+  defamation_media_notice:          "A timing question — defamation claims against media outlets require early notice.",
+  // Tax
+  tax_objection_deadline:           "A timing check — CRA objections must be filed within 90 days of the assessment.",
+  tax_voluntary_disclosure:         "A timing question — voluntary disclosure programs have specific windows and conditions.",
+  // Elder
+  elder_poa_abuse:                  "A few questions about who has authority over financial decisions — this affects what action is available.",
+  // Privacy
+  privacy_data_breach:              "A few questions about what was exposed and when — this shapes what remedies apply.",
+  // Securities
+  sec_misrepresentation:            "A few questions about the investment and what you were told — the specifics matter here.",
+  // Class action
+  class_action_opt_out:             "A timing check — class action opt-out windows are often short and strictly enforced.",
+  // Insolvency
+  insolvency_creditor_action:       "A question about the creditor proceedings — timing here affects your options significantly.",
+  // Municipal
+  municipal_injury_notice:          "A timing check — injuries on city property require written notice within 10 days in Ontario.",
+};
+
+/**
+ * Returns the preamble for the highest-priority S1 flag in the active set.
+ * S1 flags without an authored preamble return undefined.
+ * Used by the gate injection block to warm the client before compliance questions.
+ *
+ * @param flagIds  Active flag IDs (S1 ordered first from mergeFlags).
+ */
+export function getFlagPreamble(flagIds: string[]): string | undefined {
+  for (const id of flagIds) {
+    const def = FLAG_REGISTRY.get(id);
+    if (def?.severity === "S1" && S1_PREAMBLES[id]) {
+      return S1_PREAMBLES[id];
+    }
+  }
+  return undefined;
 }

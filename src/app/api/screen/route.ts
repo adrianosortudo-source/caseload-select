@@ -31,7 +31,7 @@ import {
   computeCpiPartial,
 } from "@/lib/cpi-calculator";
 import { autoConfirmFromContext } from "@/lib/auto-confirm";
-import { detectFlags, mergeFlags, getGateQuestions, hasCriticalFlag } from "@/lib/flag-registry";
+import { detectFlags, mergeFlags, getGateQuestions, hasCriticalFlag, getFlagPreamble } from "@/lib/flag-registry";
 import { classify, type ClassifierResult } from "@/lib/classifier";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -1027,11 +1027,16 @@ export async function POST(req: Request) {
         const criticalNote = hasCriticalFlag(activeComplianceFlags)
           ? `\n\nCRITICAL: One or more flags represent potential malpractice exposure or a time-sensitive deadline. These MUST be asked before any other qualification question.`
           : "";
+        // S1 preamble — one authored sentence to open the gate question block.
+        // Tells the client why we're asking. Never generated; sourced from S1_PREAMBLES.
+        const gatePreamble = getFlagPreamble(activeComplianceFlags);
         systemPrompt +=
           `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
           `\nCOMPLIANCE FLAGS — MANDATORY GATE QUESTIONS\n` +
           `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-          `These compliance signals were detected in the conversation. Ask the following questions before standard qualification questions. Integrate them naturally:\n\n` +
+          (gatePreamble
+            ? `Open your response with this sentence (verbatim): "${gatePreamble}" Then ask:\n\n`
+            : `These compliance signals were detected in the conversation. Ask the following questions before standard qualification questions. Integrate them naturally:\n\n`) +
           gateLines +
           criticalNote +
           `\n\nOnce these are answered, resume normal scoring and question flow. ` +
@@ -1175,6 +1180,25 @@ export async function POST(req: Request) {
           );
         }
       }
+    }
+
+    // ── Classifier low-confidence disambiguation ──────────────────────
+    // When the classifier cannot resolve a PA (confidence=low, PA=null, not out-of-scope),
+    // we override the main GPT response with one short disambiguation question rather
+    // than letting GPT guess and generate irrelevant qualification questions.
+    // Turn 2 re-runs the classifier with the combined text, which should resolve the PA.
+    if (
+      classifierResult?.needs_clarification &&
+      !sessionPracticeArea &&
+      !gptResponse.practice_area &&
+      !gptResponse.finalize
+    ) {
+      const clarifyQ = classifierResult.clarification_prompt ??
+        "Could you share a bit more about your situation so I can point you to the right help?";
+      gptResponse.response_text = clarifyQ;
+      gptResponse.next_question = null;
+      gptResponse.next_questions = null;
+      console.info("[classifier] Low-confidence PA — requesting disambiguation on turn 1.");
     }
 
     // ── Resolve practice_sub_type ─────────────────────────────────────
@@ -1367,6 +1391,7 @@ export async function POST(req: Request) {
         _classifier_confidence: classifierResult.confidence,
         _classifier_pa: classifierResult.practice_area,
         _classifier_flags_raw: classifierResult.gpt_flags_raw,
+        ...(classifierResult.needs_clarification ? { _needs_pa_clarification: true } : {}),
       } : {}),
       ...(startingRound2 ? { _round_2_started: true, _round_2_q_count: 0 } : {}),
       ...(round2Started ? { _round_2_started: true, _round_2_q_count: round2QCount + 1 } : {}),

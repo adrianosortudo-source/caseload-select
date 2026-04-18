@@ -18,6 +18,7 @@ import {
   getGateQuestions,
   hasCriticalFlag,
   getFlagDefinitions,
+  getFlagPreamble,
   FLAG_REGISTRY,
 } from "../flag-registry";
 
@@ -736,5 +737,70 @@ describe("hasCriticalFlag", () => {
 
   it("returns true when S1 and S2 are mixed", () => {
     expect(hasCriticalFlag(["pi_evidence_preservation", "mvac_insurer_not_notified"])).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 1B: getFlagPreamble — S1 preamble authoring
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("getFlagPreamble — S1 preamble retrieval", () => {
+  it("returns a preamble for a known S1 flag", () => {
+    const p = getFlagPreamble(["limitation_proximity"]);
+    expect(p).toBeTruthy();
+    expect(typeof p).toBe("string");
+  });
+
+  it("returns the first S1 flag's preamble when mixed S1+S2 list", () => {
+    // mergeFlags orders S1 before S2; preamble picks first S1
+    const p = getFlagPreamble(["limitation_proximity", "prior_counsel"]);
+    expect(p).toContain("timing"); // limitation_proximity preamble mentions "timing check"
+  });
+
+  it("returns undefined for S2-only flags", () => {
+    const p = getFlagPreamble(["prior_counsel", "minor_claimant"]);
+    expect(p).toBeUndefined();
+  });
+
+  it("returns undefined for empty list", () => {
+    expect(getFlagPreamble([])).toBeUndefined();
+  });
+
+  it("fam_abduction preamble is distinct and urgent", () => {
+    const p = getFlagPreamble(["fam_abduction"]);
+    expect(p).toBeTruthy();
+    expect(p).toContain("urgently");
+  });
+
+  it("imm_rad_deadline preamble references 15-day window", () => {
+    const p = getFlagPreamble(["imm_rad_deadline"]);
+    expect(p).toContain("15-day");
+  });
+
+  it("construction_lien_deadline preamble references 60 days", () => {
+    const p = getFlagPreamble(["construction_lien_deadline"]);
+    expect(p).toContain("60 days");
+  });
+
+  it("slip_ice_snow preamble references 60-day notice", () => {
+    const p = getFlagPreamble(["slip_ice_snow"]);
+    expect(p).toContain("60-day");
+  });
+
+  it("municipal_injury_notice preamble references 10 days", () => {
+    const p = getFlagPreamble(["municipal_injury_notice"]);
+    expect(p).toContain("10 days");
+  });
+
+  it("all preambles are under 120 characters (discipline check)", () => {
+    const s1Flags = [...FLAG_REGISTRY.values()]
+      .filter(f => f.severity === "S1")
+      .map(f => f.id);
+    for (const id of s1Flags) {
+      const p = getFlagPreamble([id]);
+      if (p !== undefined) {
+        expect(p.length).toBeLessThan(120);
+      }
+    }
   });
 });

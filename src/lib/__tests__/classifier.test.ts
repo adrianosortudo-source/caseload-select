@@ -627,6 +627,101 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Phase 1A: Low-confidence clarifier
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("classify() — low-confidence clarifier (Phase 1A)", () => {
+  it("sets needs_clarification when confidence=low and PA=null and not out_of_scope", async () => {
+    const gptResponse: RawClassifierOutput = {
+      practice_area: null,
+      practice_sub_type: null,
+      flags: [],
+      confidence: "low",
+      out_of_scope: false,
+      reasoning: "Very vague — cannot determine practice area.",
+    };
+    const openai = mockOpenAI(JSON.stringify(gptResponse));
+    const result = await classify(openai, makeInput("I need help with a legal problem."));
+    expect(result.needs_clarification).toBe(true);
+    expect(result.clarification_prompt).toBeTruthy();
+  });
+
+  it("clarification_prompt lists firm's primary PA labels", async () => {
+    const gptResponse: RawClassifierOutput = {
+      practice_area: null,
+      practice_sub_type: null,
+      flags: [],
+      confidence: "low",
+      out_of_scope: false,
+    };
+    const openai = mockOpenAI(JSON.stringify(gptResponse));
+    const result = await classify(openai, makeInput("Help."));
+    // Should mention at least one primary PA label from FIRM_PAS
+    expect(result.clarification_prompt).toContain("Personal Injury");
+    expect(result.clarification_prompt).toContain("Family Law");
+  });
+
+  it("does NOT set needs_clarification when confidence=low but PA resolves", async () => {
+    const gptResponse: RawClassifierOutput = {
+      practice_area: "emp",
+      practice_sub_type: null,
+      flags: [],
+      confidence: "low",
+      out_of_scope: false,
+    };
+    const openai = mockOpenAI(JSON.stringify(gptResponse));
+    const result = await classify(openai, makeInput("I lost my job somehow."));
+    expect(result.needs_clarification).toBeUndefined();
+    expect(result.practice_area).toBe("emp");
+  });
+
+  it("does NOT set needs_clarification when confidence=medium and PA=null", async () => {
+    const gptResponse: RawClassifierOutput = {
+      practice_area: null,
+      practice_sub_type: null,
+      flags: [],
+      confidence: "medium",
+      out_of_scope: false,
+    };
+    const openai = mockOpenAI(JSON.stringify(gptResponse));
+    const result = await classify(openai, makeInput("I have a legal issue."));
+    // medium confidence — don't ask for clarification, let GPT handle
+    expect(result.needs_clarification).toBeUndefined();
+  });
+
+  it("does NOT set needs_clarification when out_of_scope is true", async () => {
+    const gptResponse: RawClassifierOutput = {
+      practice_area: null,
+      practice_sub_type: null,
+      flags: [],
+      confidence: "low",
+      out_of_scope: true,
+    };
+    const openai = mockOpenAI(JSON.stringify(gptResponse));
+    const result = await classify(openai, makeInput("I need help with a US immigration case."));
+    expect(result.needs_clarification).toBeUndefined();
+    expect(result.out_of_scope).toBe(true);
+  });
+
+  it("falls back to generic prompt when firm has no primary PAs", async () => {
+    const secondaryOnlyFirm = [
+      { id: "imm", label: "Immigration", classification: "secondary" as const },
+    ];
+    const gptResponse: RawClassifierOutput = {
+      practice_area: null,
+      practice_sub_type: null,
+      flags: [],
+      confidence: "low",
+      out_of_scope: false,
+    };
+    const openai = mockOpenAI(JSON.stringify(gptResponse));
+    const result = await classify(openai, { firmPracticeAreas: secondaryOnlyFirm, conversationText: "I need help." });
+    expect(result.needs_clarification).toBe(true);
+    expect(result.clarification_prompt).toContain("detail");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // getAllFlagIds consistency check
 // ─────────────────────────────────────────────────────────────────────────────
 

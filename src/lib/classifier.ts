@@ -53,6 +53,17 @@ export interface ClassifierResult {
   regex_flags_raw: string[];
   /** GPT's brief reasoning — used for debugging and conflict log. */
   reasoning?: string;
+  /**
+   * True when the classifier could not resolve a practice area (confidence=low, PA=null,
+   * not out-of-scope). Signals route.ts to ask one disambiguation question before
+   * proceeding to question generation. Cleared on turn 2 once PA resolves.
+   */
+  needs_clarification?: boolean;
+  /**
+   * Short disambiguation question to present when needs_clarification is true.
+   * Lists the firm's primary practice areas so the client can self-identify.
+   */
+  clarification_prompt?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -322,6 +333,25 @@ export async function classify(
   // Step 4: Merge flags (regex + GPT, S1 first, deduplicated)
   const mergedFlags = mergeFlags(regexFlags, gptOutput.flags ?? []);
 
+  // Step 5: Low-confidence clarification check.
+  // When the classifier cannot resolve a practice area (confidence=low, PA=null, not out-of-scope),
+  // flag for a single disambiguation question on the next turn rather than guessing.
+  // Fires only when the firm has primary PAs to list (fallback to generic ask otherwise).
+  const needsClarification =
+    resolvedPA === null &&
+    (gptOutput.confidence ?? "low") === "low" &&
+    !(gptOutput.out_of_scope ?? false);
+
+  let clarificationPrompt: string | undefined;
+  if (needsClarification) {
+    const primaryLabels = input.firmPracticeAreas
+      .filter(a => a.classification === "primary")
+      .map(a => a.label);
+    clarificationPrompt = primaryLabels.length > 0
+      ? `To make sure I ask the right questions: is your situation related to ${primaryLabels.join(", ")}, or something else?`
+      : "Could you share a bit more detail about your situation so I can point you to the right help?";
+  }
+
   return {
     practice_area: resolvedPA,
     practice_sub_type: gptOutput.practice_sub_type ?? null,
@@ -331,6 +361,8 @@ export async function classify(
     gpt_flags_raw: gptOutput.flags ?? [],
     regex_flags_raw: regexFlags,
     reasoning: gptOutput.reasoning,
+    needs_clarification: needsClarification || undefined,
+    clarification_prompt: clarificationPrompt,
   };
 }
 
