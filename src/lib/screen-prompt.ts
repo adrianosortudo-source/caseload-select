@@ -254,11 +254,12 @@ BEHAVIOR RULES
    - "emp_other": cannot determine
 
    Family (fam):
+   - "fam_abduction": international child abduction, Hague Convention, child taken to another country without consent, cross-border child removal — CLASSIFY THIS FIRST before fam_protection
    - "fam_divorce": divorce, separation, ending marriage
-   - "fam_custody": child custody, parenting time, access to children
+   - "fam_custody": child custody, parenting time, access to children (domestic only — no international element)
    - "fam_support": child support, spousal support, alimony
    - "fam_property": property division, matrimonial home, equalization
-   - "fam_protection": restraining order, protection order, domestic violence, CAS
+   - "fam_protection": restraining order, protection order, domestic violence, CAS (domestic only — if child taken internationally, use fam_abduction not fam_protection)
    - "fam_other": cannot determine
 
    Criminal (crim):
