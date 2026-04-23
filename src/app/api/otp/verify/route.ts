@@ -16,6 +16,7 @@
 
 import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import type { CpiBreakdown } from "@/lib/cpi-calculator";
 
 export async function POST(req: Request) {
   try {
@@ -87,8 +88,11 @@ async function promoteToLead(session: Record<string, unknown>): Promise<void> {
   const email = (contact.email as string) ?? null;
   const phone = (contact.phone as string) ?? null;
 
-  const scoring = (session.scoring as Record<string, unknown>) ?? {};
-  const cpiScore = (scoring.total as number) ?? 0;
+  // session.scoring is written by validateAndFixScoring() in cpi-calculator.ts
+  // and follows the CpiBreakdown shape (8 factors, fit max 40, value max 60).
+  // Distinct from the form-path ScoringResult produced by computeScore().
+  const scoring = (session.scoring as CpiBreakdown | null) ?? null;
+  const cpiScore = scoring?.total ?? 0;
 
   const practiceArea = (session.practice_area as string) ?? null;
   const situationSummary = (session.situation_summary as string) ?? null;
@@ -132,6 +136,18 @@ async function promoteToLead(session: Record<string, unknown>): Promise<void> {
   // Form paths (src/app/api/leads, src/app/api/v1/leads) persist the
   // three fields from computeScore(). Admin / portal UI and the cron all
   // handle null gracefully on GPT-path leads.
+  //
+  // Sub-score persistence (scoring_model branch):
+  // The five factors that overlap between the two engines  -  geo, legitimacy,
+  // complexity, urgency, fee  -  are written into the matching columns so the
+  // current admin score-bar UI renders something meaningful. fit_score and
+  // value_score are deliberately left null: GPT's fit max is 40 and value max
+  // is 60, but the admin UI labels those columns "/30" and "/65" respectively,
+  // so populating them would show broken ratios like "35/30". The full native
+  // GPT breakdown (including practice_score, referral_score, multi_practice_score,
+  // cpi_fit, cpi_urgency, cpi_friction, fit_score, value_score) is preserved
+  // in score_components JSONB; the source-aware helper in src/lib/score-components.ts
+  // reads scoring_model and returns the correct ScoreRationaleInput.
   const { error } = await supabase.from("leads").insert({
     name,
     email,
@@ -146,6 +162,15 @@ async function promoteToLead(session: Record<string, unknown>): Promise<void> {
     stage: bandToStage[band] ?? "new_lead",
     source: "caseload_screen",
     intake_session_id: sessionId,
+    // Overlapping sub-scores (safe to populate: same semantic field, same range)
+    geo_score:        scoring?.geo_score        ?? null,
+    legitimacy_score: scoring?.legitimacy_score ?? null,
+    complexity_score: scoring?.complexity_score ?? null,
+    urgency_score:    scoring?.urgency_score    ?? null,
+    fee_score:        scoring?.fee_score        ?? null,
+    // Source-aware snapshot for the rationale UI once it becomes scoring_model-aware
+    scoring_model:    scoring ? "gpt_cpi_v1" : null,
+    score_components: scoring ?? null,
   });
 
   if (error) {

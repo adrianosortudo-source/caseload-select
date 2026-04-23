@@ -75,6 +75,26 @@ export async function POST(req: Request) {
       cpi_confidence:     s.confidence,
       cpi_explanation:    s.explanation,
       cpi_missing_fields: s.missing_fields,
+
+      // Source-aware scoring snapshot. Tells downstream consumers (the
+      // rationale helper in src/lib/score-components.ts, analytics) that
+      // this row was scored by the v2.1 form engine (fit max 30, value max
+      // 65, 7 factors) and gives them the full native breakdown in one place.
+      // GPT-screen rows carry scoring_model='gpt_cpi_v1' with a different shape.
+      scoring_model: "v2.1_form",
+      score_components: {
+        fit_score:            s.fit_score,
+        value_score:          s.value_score,
+        geo_score:            s.geo_score,
+        contactability_score: s.contactability_score,
+        legitimacy_score:     s.legitimacy_score,
+        complexity_score:     s.complexity_score,
+        urgency_score:        s.urgency_score,
+        strategic_score:      s.strategic_score,
+        fee_score:            s.fee_score,
+        priority_index:       s.priority_index,
+        priority_band:        s.priority_band,
+      },
     })
     .select()
     .single();
