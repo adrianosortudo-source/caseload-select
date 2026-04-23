@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 
 export default function FirmForm() {
   const router = useRouter();
@@ -11,14 +10,18 @@ export default function FirmForm() {
     e.preventDefault();
     setBusy(true);
     const fd = new FormData(e.currentTarget);
-    const { error } = await supabase.from("law_firm_clients").insert({
-      name: fd.get("name"),
-      location: fd.get("location") || null,
-      status: "active",
+    const res = await fetch("/api/admin/firms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: fd.get("name"),
+        location: fd.get("location") || null,
+      }),
     });
     setBusy(false);
-    if (error) {
-      alert(error.message);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ error: "Request failed" }));
+      alert(data.error ?? "Request failed");
       return;
     }
     (e.target as HTMLFormElement).reset();
