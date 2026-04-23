@@ -4,20 +4,37 @@
  * Lead detail page. Shows full scoring breakdown, conflict check status,
  * email sequence history, and quick stage actions.
  *
- * Server component — all data loaded at request time.
+ * Server component  -  all data loaded at request time.
  * Interactive actions (stage change, conflict check) handled by LeadActions.
  */
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { PRIORITY_BAND_COLORS, type PriorityBand } from "@/lib/scoring";
 import { BAND_COLORS } from "@/lib/cpi";
 import { STAGES } from "@/lib/types";
 import { getLatestConflictCheck } from "@/lib/conflict-check";
+import { getFollowupSteps } from "@/lib/intake-memo";
+import { buildScoreRationale } from "@/lib/score-rationale";
+import { buildScoreRationaleInput } from "@/lib/score-components";
+import ScoreRationaleBlock from "@/components/ScoreRationaleBlock";
 import LeadActions from "./LeadActions";
 
 export const dynamic = "force-dynamic";
+
+// ─── SLA configuration (mirrors demo LawyerViewPanel) ────────────────────────
+
+const BAND_SLA_CONFIG: Record<string, {
+  label: string; sub: string; deadlineHours: number | null;
+  bg: string; text: string; accent: string; zero: boolean;
+}> = {
+  A: { label: "Respond within 30 minutes", sub: "Priority case. Senior lawyer escalation on breach.", deadlineHours: 0.5,  bg: "bg-emerald-50", text: "text-emerald-900", accent: "text-emerald-600", zero: false },
+  B: { label: "Respond within 4 hours",    sub: "Warm lead. Partner alert on breach.",               deadlineHours: 4,    bg: "bg-blue-50",    text: "text-blue-900",   accent: "text-blue-600",   zero: false },
+  C: { label: "Respond within 24 hours",   sub: "Qualified lead. Standard intake queue.",            deadlineHours: 24,   bg: "bg-amber-50",   text: "text-amber-900",  accent: "text-amber-600",  zero: false },
+  D: { label: "0 minutes of lawyer time",  sub: "6-month automated nurture. No manual touch.",      deadlineHours: null, bg: "bg-gray-100",   text: "text-gray-700",   accent: "text-gray-500",   zero: true  },
+  E: { label: "0 minutes of lawyer time",  sub: "Outside scope. Filtered out.",                     deadlineHours: null, bg: "bg-gray-100",   text: "text-gray-700",   accent: "text-gray-500",   zero: true  },
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -110,12 +127,60 @@ export default async function LeadDetailPage({
   const lead = leadRes.data;
   const firms = firmRes.data ?? [];
 
+  // Fetch the intake session memo (if this lead came from a widget intake)
+  let sessionMemo: { memo_text: string | null; memo_generated_at: string | null } | null = null;
+  const intakeSessionId = lead.intake_session_id as string | null;
+  if (intakeSessionId) {
+    const { data: sessionRow } = await supabase
+      .from("intake_sessions")
+      .select("memo_text, memo_generated_at")
+      .eq("id", intakeSessionId)
+      .single();
+    if (sessionRow) sessionMemo = sessionRow;
+  }
+
   const band = (lead.priority_band ?? lead.band) as PriorityBand | null;
   const bc = band
     ? (PRIORITY_BAND_COLORS[band] ?? BAND_COLORS[band as keyof typeof BAND_COLORS])
     : null;
   const pi = lead.priority_index ?? lead.cpi_score ?? 0;
-  const firmName = firms.find((f) => f.id === lead.law_firm_id)?.name ?? "—";
+  const firmName = firms.find((f) => f.id === lead.law_firm_id)?.name ?? " - ";
+
+  // SLA pill: deadline computed from intake arrival time + band hours
+  const slaCfg = band ? (BAND_SLA_CONFIG[band] ?? null) : null;
+  let deadlineStr: string | null = null;
+  let slaOverdue = false;
+  if (slaCfg?.deadlineHours) {
+    const deadline = new Date(new Date(lead.created_at).getTime() + slaCfg.deadlineHours * 3600 * 1000);
+    const now = new Date();
+    slaOverdue = now > deadline;
+    if (slaOverdue) {
+      const hoursOver = (now.getTime() - deadline.getTime()) / 3600000;
+      deadlineStr = hoursOver < 1 ? "Overdue" : `Overdue by ${Math.round(hoursOver)}h`;
+    } else {
+      const h = deadline.getHours();
+      const m = deadline.getMinutes();
+      const h12 = h % 12 === 0 ? 12 : h % 12;
+      const ampm = h < 12 ? "am" : "pm";
+      const mm = m.toString().padStart(2, "0");
+      const prefix = slaCfg.deadlineHours < 1
+        ? `${Math.round(slaCfg.deadlineHours * 60)}min deadline`
+        : `${slaCfg.deadlineHours}h deadline`;
+      deadlineStr = `${prefix}: ${h12}:${mm}${ampm}`;
+    }
+  }
+
+  // Pre-call checklist: missing fields the lawyer should confirm before consultation
+  const missingFields = (lead.cpi_missing_fields as string[] | null) ?? [];
+
+  // Structured "why this band" rationale. buildScoreRationaleInput() reads
+  // leads.scoring_model to select the correct engine layout (v2.1_form: 7
+  // factors, fit max 30, val max 65; gpt_cpi_v1: 8 factors, fit max 40, val
+  // max 60) and pulls sub-scores from the appropriate columns / JSONB. This
+  // replaces the previous hardcoded form-engine shape so GPT-path leads render
+  // correctly instead of showing all-zero bars.
+  const rationaleInput = buildScoreRationaleInput(lead, { aiAngle: null });
+  const rationale = rationaleInput ? buildScoreRationale(rationaleInput) : null;
 
   // Group sequences by template
   type SeqRow = {
@@ -219,6 +284,34 @@ export default async function LeadDetailPage({
 
       <div className="p-8 space-y-6 max-w-5xl">
 
+        {/* ── SLA pill ─────────────────────────────────────────────────── */}
+        {slaCfg && (
+          <div className={`rounded-xl px-4 py-3 ${slaCfg.bg}`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center bg-white ${slaCfg.accent} flex-shrink-0`}>
+                {slaCfg.zero ? (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className={`text-sm font-bold ${slaCfg.text}`}>{slaCfg.label}</p>
+                {deadlineStr && (
+                  <p className={`text-[11px] font-semibold mt-0.5 ${slaOverdue ? "text-rose-600" : `${slaCfg.text} opacity-60`}`}>
+                    {deadlineStr}
+                  </p>
+                )}
+                <p className={`text-[11px] ${slaCfg.accent} mt-0.5`}>{slaCfg.sub}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Header card ──────────────────────────────────────────────── */}
         <div className="card p-6">
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -252,23 +345,23 @@ export default async function LeadDetailPage({
             </p>
           )}
 
-          {/* CPI explanation */}
-          {lead.cpi_explanation && (
-            <div className="mt-4 text-sm text-black/60 bg-black/[0.02] rounded-lg px-4 py-3 border border-black/5">
-              {lead.cpi_explanation}
-            </div>
-          )}
-
           {/* Meta row */}
           <div className="flex flex-wrap gap-x-6 gap-y-1 mt-4 text-xs text-black/40 border-t border-black/5 pt-4">
-            <span>Case: <span className="text-black/60 capitalize">{lead.case_type ?? "—"}</span></span>
+            <span>Case: <span className="text-black/60 capitalize">{lead.case_type ?? " - "}</span></span>
             <span>Value: <span className="text-black/60">${Number(lead.estimated_value ?? 0).toLocaleString()}</span></span>
-            <span>Source: <span className="text-black/60 capitalize">{lead.source ?? "—"}</span></span>
-            <span>City: <span className="text-black/60">{lead.city ?? "—"}</span></span>
-            <span>Urgency: <span className="text-black/60 capitalize">{lead.urgency ?? "—"}</span></span>
+            <span>Source: <span className="text-black/60 capitalize">{lead.source ?? " - "}</span></span>
+            <span>City: <span className="text-black/60">{lead.city ?? " - "}</span></span>
+            <span>Urgency: <span className="text-black/60 capitalize">{lead.urgency ?? " - "}</span></span>
             <span>Added: <span className="text-black/60">{new Date(lead.created_at).toLocaleDateString("en-CA")}</span></span>
           </div>
         </div>
+
+        {/* ── Band rationale ─────────────────────────────────────────────
+           Explains WHY this band: fit/value trade-off in words, strongest
+           and weakest sub-scores, and (when confidence is not high) the
+           first-call questions that would move the score. Mirrors the demo
+           overlay and the firm portal, sourced from lib/score-rationale.ts. */}
+        {rationale && <ScoreRationaleBlock rationale={rationale} />}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
@@ -363,6 +456,88 @@ export default async function LeadDetailPage({
           </div>
         </div>
 
+        {/* ── Pre-call checklist ───────────────────────────────────────── */}
+        {missingFields.length > 0 && (
+          <div className="card p-5">
+            <div className="text-xs font-semibold text-black/40 uppercase tracking-wide mb-3">
+              Pre-call: confirm with client
+            </div>
+            <div className="space-y-2">
+              {missingFields.map((field, i) => (
+                <div key={i} className="flex items-center gap-2.5">
+                  <span className="w-4 h-4 rounded-full border-2 border-black/20 flex items-center justify-center flex-shrink-0">
+                    <span className="w-1 h-1 rounded-full bg-black/20" />
+                  </span>
+                  <span className="text-sm text-black/60">{field}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Follow-up protocol ──────────────────────────────────────────
+           Numbered next-step playbook by CPI band. Mirrors the demo overlay
+           and the firm portal, sourced from lib/intake-memo.ts. */}
+        {band && (
+          <div className="card p-5">
+            <div className="text-xs font-semibold text-black/40 uppercase tracking-wide mb-3">
+              Follow-up protocol
+            </div>
+            <ol className="space-y-2.5">
+              {getFollowupSteps(band).map((step, i) => (
+                <li key={i} className="flex items-start gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-navy text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                    {i + 1}
+                  </span>
+                  <p className="text-sm text-black/70 leading-snug">{step}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        {/* ── Case Intake Memo ────────────────────────────────────────────
+           AI-generated memo persisted to intake_sessions.memo_text after
+           Round 3 (src/lib/memo.ts). Plain text with ALL-CAPS section
+           headers; rendered with whitespace-pre-wrap. Shows a pending
+           state if the session exists but the memo has not been generated
+           yet (Band C and below never trigger Round 3). */}
+        {intakeSessionId && (
+          <div className="card overflow-hidden">
+            <div className="px-5 py-4 border-b border-black/8 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">Case Intake Memo</div>
+                {sessionMemo?.memo_generated_at && (
+                  <div className="text-xs text-black/40 mt-0.5">
+                    Generated {new Date(sessionMemo.memo_generated_at).toLocaleString("en-CA")}
+                  </div>
+                )}
+              </div>
+              {sessionMemo?.memo_text ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 flex-shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                  Memo ready
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-black/5 text-black/50 border border-black/10 rounded-full px-2 py-0.5 flex-shrink-0">
+                  Pending
+                </span>
+              )}
+            </div>
+            {sessionMemo?.memo_text ? (
+              <pre className="px-5 py-4 text-[12px] leading-relaxed text-black/75 font-sans whitespace-pre-wrap">
+                {sessionMemo.memo_text}
+              </pre>
+            ) : (
+              <div className="px-5 py-6 text-sm text-black/40">
+                Memo generation runs after Round 3 deep qualification. Not every
+                lead qualifies for Round 3, so a pending state here is expected
+                for Band C and below.
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Email sequences ───────────────────────────────────────────── */}
         {Object.keys(seqByTemplate).length > 0 && (
           <div className="card overflow-hidden">
@@ -382,7 +557,7 @@ export default async function LeadDetailPage({
                         <div key={row.id} className="flex items-center gap-3 text-xs">
                           <div className="w-6 text-center text-black/30 shrink-0">#{row.step_number}</div>
                           {seqStatusBadge(row.status)}
-                          <div className="flex-1 truncate text-black/60">{subject ?? "—"}</div>
+                          <div className="flex-1 truncate text-black/60">{subject ?? " - "}</div>
                           <div className="text-black/30 shrink-0">
                             {row.status === "sent" && row.sent_at
                               ? `Sent ${new Date(row.sent_at).toLocaleDateString("en-CA")}`
