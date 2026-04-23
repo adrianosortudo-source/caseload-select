@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { computeScore } from "@/lib/scoring";
 import { intentToState } from "@/lib/state";
 import { sendEmail } from "@/lib/email";
@@ -63,10 +63,18 @@ export async function POST(req: Request) {
       priority_index:       s.priority_index,
       priority_band:        s.priority_band,
 
-      // Legacy CPI (backward compat — store same composite for now)
+      // Legacy CPI (backward compat  -  store same composite for now)
       score:     s.priority_index,
       cpi_score: s.priority_index,
       band:      s.priority_band,
+
+      // Explainability (v2.2)  -  confidence, 1-3 sentence rationale, and
+      // human-readable missing-field labels. Read by the admin lead detail
+      // pill, the portal pre-call checklist, and the incomplete-intake cron
+      // (which nudges B/C leads whose confidence came back low).
+      cpi_confidence:     s.confidence,
+      cpi_explanation:    s.explanation,
+      cpi_missing_fields: s.missing_fields,
     })
     .select()
     .single();
@@ -82,7 +90,7 @@ export async function POST(req: Request) {
     new_state: lead.lead_state,
   });
 
-  // WF-05 — trigger Welcome Sequence from sequence builder
+  // WF-05  -  trigger Welcome Sequence from sequence builder
   const seqResult = await triggerSequence(lead.id, "new_lead");
 
   // Fire step 1 immediately if it was scheduled at delay 0

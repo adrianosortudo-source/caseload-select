@@ -15,7 +15,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
 export async function POST(req: Request) {
   try {
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    // Already verified — idempotent, return band so widget knows which step to show
+    // Already verified  -  idempotent, return band so widget knows which step to show
     if (session.otp_verified) {
       return NextResponse.json({ verified: true, band: session.band });
     }
@@ -71,7 +71,7 @@ export async function POST(req: Request) {
 
 // ── Pipeline lead promotion (Band A/B/C) ─────────────────────────────────────
 // Creates a lead in the CRM pipeline from the verified intake session.
-// Idempotent — skips if a lead with this session's email + firm already exists.
+// Idempotent  -  skips if a lead with this session's email + firm already exists.
 
 async function promoteToLead(session: Record<string, unknown>): Promise<void> {
   const band = session.band as string | null;
@@ -95,7 +95,7 @@ async function promoteToLead(session: Record<string, unknown>): Promise<void> {
   const sessionId = session.id as string;
 
   // Idempotency: check if a lead for this email + firm already exists.
-  // (intake_session_id column migration may not yet be applied — email+firm is safe fallback.)
+  // (intake_session_id column migration may not yet be applied  -  email+firm is safe fallback.)
   if (email) {
     const { data: existing } = await supabase
       .from("leads")
@@ -116,6 +116,22 @@ async function promoteToLead(session: Record<string, unknown>): Promise<void> {
     C: "new_lead",
   };
 
+  // Explainability (v2.2) is intentionally left null here.
+  //
+  // cpi_confidence / cpi_explanation / cpi_missing_fields are computed by
+  // computeScore() in src/lib/scoring.ts against a ScoringInput shape (raw
+  // form fields: urgency, estimated_value, source, etc.). The CaseLoad
+  // Screen path does NOT produce those raw inputs  -  GPT drives dynamic
+  // questioning and writes numeric sub-scores into intake_sessions.scoring
+  // via validateAndFixScoring(). Stamping a form-derived "low / medium /
+  // high" on a GPT session would conflate two different metrics and would
+  // misfire the incomplete-intake cron (which hunts cpi_confidence='low'
+  // B/C leads to nudge  -  GPT sessions already completed 2-3 rounds of
+  // dynamic questioning and are not "incomplete" in that sense).
+  //
+  // Form paths (src/app/api/leads, src/app/api/v1/leads) persist the
+  // three fields from computeScore(). Admin / portal UI and the cron all
+  // handle null gracefully on GPT-path leads.
   const { error } = await supabase.from("leads").insert({
     name,
     email,
@@ -129,6 +145,7 @@ async function promoteToLead(session: Record<string, unknown>): Promise<void> {
     priority_index: cpiScore,
     stage: bandToStage[band] ?? "new_lead",
     source: "caseload_screen",
+    intake_session_id: sessionId,
   });
 
   if (error) {
