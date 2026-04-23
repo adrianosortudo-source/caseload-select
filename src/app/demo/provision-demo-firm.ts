@@ -1,14 +1,20 @@
 /**
- * Shared demo firm provisioning — used by /demo, /demo/whatsapp, /demo/sms.
+ * Shared demo firm provisioning  -  used by /demo, /demo/whatsapp, /demo/sms.
  *
  * Finds or creates the "Hartwell Law PC [DEMO]" firm and always refreshes
  * question sets so module fixes auto-apply on every page load.
  */
 
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { DEFAULT_QUESTION_MODULES } from "@/lib/default-question-modules";
 
 export const DEMO_FIRM_NAME = "Hartwell Law PC [DEMO]";
+
+// Deterministic id for the single Hartwell demo firm row. Hardcoding prevents
+// race conditions: concurrent calls to provisionDemoFirm() can no longer each
+// insert a new row, because upsert on this id becomes a noop when one exists.
+// Value is the id of the original Hartwell row, kept as a stable anchor.
+export const DEMO_FIRM_ID = "1f5a2391-85d8-45a2-b427-90441e78a93c";
 
 export const ALL_PRACTICE_AREAS = [
   { id: "fam",     label: "Family Law",                      classification: "primary" },
@@ -72,14 +78,6 @@ export interface DemoFirmBranding {
  * and always refreshes question_sets from DEFAULT_QUESTION_MODULES.
  */
 export async function provisionDemoFirm(): Promise<{ firmId: string; branding: DemoFirmBranding } | { error: string }> {
-  const { data: existingRows } = await supabase
-    .from("intake_firms")
-    .select("id, question_sets, branding")
-    .eq("name", DEMO_FIRM_NAME)
-    .limit(1);
-
-  const existing = existingRows?.[0] ?? null;
-
   const DEMO_BRANDING: DemoFirmBranding = {
     accent_color: "#1B3A6B",
     firm_description:
@@ -92,35 +90,46 @@ export async function provisionDemoFirm(): Promise<{ firmId: string; branding: D
     privacy_policy_url: "/privacy",
   };
 
-  if (!existing) {
-    const { data: created, error } = await supabase
-      .from("intake_firms")
-      .insert({
+  // Atomic create-if-missing on a deterministic id. Concurrent callers are
+  // race-safe: ignoreDuplicates turns any duplicate-insert into a noop.
+  const { error: insertError } = await supabase
+    .from("intake_firms")
+    .upsert(
+      {
+        id: DEMO_FIRM_ID,
         name: DEMO_FIRM_NAME,
         location: "Toronto, Ontario",
         practice_areas: ALL_PRACTICE_AREAS,
         geographic_config: GEO_CONFIG,
         question_sets: DEFAULT_QUESTION_MODULES,
         branding: DEMO_BRANDING,
-      })
-      .select("id")
-      .single();
+      },
+      { onConflict: "id", ignoreDuplicates: true },
+    );
 
-    if (error || !created) {
-      return { error: error?.message ?? "Insert returned no data" };
-    }
-    return { firmId: created.id, branding: DEMO_BRANDING };
+  if (insertError) {
+    return { error: insertError.message };
   }
 
-  // Always refresh question sets and branding so fixes auto-apply
+  // Read stored branding (may contain manual overrides) before refresh.
+  const { data: before, error: selectError } = await supabase
+    .from("intake_firms")
+    .select("branding")
+    .eq("id", DEMO_FIRM_ID)
+    .single();
+
+  if (selectError || !before) {
+    return { error: selectError?.message ?? "Demo firm row not found after upsert" };
+  }
+
+  // Refresh question sets + branding so fixes auto-apply.
   await supabase
     .from("intake_firms")
     .update({ question_sets: DEFAULT_QUESTION_MODULES, branding: DEMO_BRANDING })
-    .eq("id", existing.id);
+    .eq("id", DEMO_FIRM_ID);
 
-  // Stored record wins for any overrides Adriano may have set manually
-  const storedBranding = (existing.branding as Partial<DemoFirmBranding>) ?? {};
+  const storedBranding = (before.branding as Partial<DemoFirmBranding>) ?? {};
   const mergedBranding: DemoFirmBranding = { ...DEMO_BRANDING, ...storedBranding };
 
-  return { firmId: existing.id, branding: mergedBranding };
+  return { firmId: DEMO_FIRM_ID, branding: mergedBranding };
 }
