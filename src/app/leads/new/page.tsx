@@ -1,5 +1,5 @@
 import PageHeader from "@/components/PageHeader";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import NewLeadForm from "./Form";
 
 export const dynamic = "force-dynamic";

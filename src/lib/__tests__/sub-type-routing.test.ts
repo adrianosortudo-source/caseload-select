@@ -12,7 +12,7 @@ import { DEFAULT_QUESTION_MODULES } from "../default-question-modules";
 
 // ─── resolveQuestionSetKey ────────────────────────────────────────────────────
 
-describe("resolveQuestionSetKey — single-set PAs", () => {
+describe("resolveQuestionSetKey  -  single-set PAs", () => {
   const singleSetSamples = ["real", "corp", "est", "llt", "ip", "tax", "admin", "bank", "priv"];
 
   for (const pa of singleSetSamples) {
@@ -23,7 +23,7 @@ describe("resolveQuestionSetKey — single-set PAs", () => {
   }
 });
 
-describe("resolveQuestionSetKey — sub-typed PAs with valid sub-type", () => {
+describe("resolveQuestionSetKey  -  sub-typed PAs with valid sub-type", () => {
   for (const [pa, subtypes] of Object.entries(SUB_TYPES)) {
     for (const subtype of subtypes) {
       it(`${pa} + ${subtype} → "${subtype}"`, () => {
@@ -33,7 +33,7 @@ describe("resolveQuestionSetKey — sub-typed PAs with valid sub-type", () => {
   }
 });
 
-describe("resolveQuestionSetKey — sub-typed PAs with null sub-type", () => {
+describe("resolveQuestionSetKey  -  sub-typed PAs with null sub-type", () => {
   for (const pa of Object.keys(SUB_TYPES)) {
     it(`${pa} + null → "${pa}_other"`, () => {
       expect(resolveQuestionSetKey(pa, null)).toBe(`${pa}_other`);
@@ -41,7 +41,7 @@ describe("resolveQuestionSetKey — sub-typed PAs with null sub-type", () => {
   }
 });
 
-describe("resolveQuestionSetKey — sub-typed PAs with invalid sub-type", () => {
+describe("resolveQuestionSetKey  -  sub-typed PAs with invalid sub-type", () => {
   for (const pa of Object.keys(SUB_TYPES)) {
     it(`${pa} + "garbage" → "${pa}_other"`, () => {
       expect(resolveQuestionSetKey(pa, "garbage")).toBe(`${pa}_other`);
@@ -49,7 +49,7 @@ describe("resolveQuestionSetKey — sub-typed PAs with invalid sub-type", () => 
   }
 });
 
-describe("resolveQuestionSetKey — cross-PA sub-type confusion", () => {
+describe("resolveQuestionSetKey  -  cross-PA sub-type confusion", () => {
   it("pi sub-type is not valid for emp PA", () => {
     expect(resolveQuestionSetKey("emp", "pi_mva")).toBe("emp_other");
   });
@@ -125,7 +125,7 @@ describe("umbrellaFromSubType", () => {
 
 // ─── DEFAULT_QUESTION_MODULES coverage ───────────────────────────────────────
 
-describe("DEFAULT_QUESTION_MODULES — every sub-type key has a question set", () => {
+describe("DEFAULT_QUESTION_MODULES  -  every sub-type key has a question set", () => {
   for (const [pa, subtypes] of Object.entries(SUB_TYPES)) {
     for (const subtype of subtypes) {
       it(`DEFAULT_QUESTION_MODULES["${subtype}"] exists`, () => {

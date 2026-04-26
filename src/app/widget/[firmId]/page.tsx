@@ -1,5 +1,5 @@
 /**
- * /widget/[firmId] — Standalone embeddable intake widget page.
+ * /widget/[firmId]  -  Standalone embeddable intake widget page.
  *
  * Usage:
  *   <iframe src="https://your-domain.com/widget/YOUR_FIRM_ID" />
@@ -18,7 +18,7 @@
  *   flag on /api/screen requests.
  */
 
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { IntakeWidget } from "@/components/intake/IntakeWidget";
 
 interface PageProps {

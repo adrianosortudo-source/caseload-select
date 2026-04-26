@@ -1,5 +1,5 @@
 /**
- * J5A — Recovery A: Spoke, No Book
+ * J5A  -  Recovery A: Spoke, No Book
  *
  * Fires when a lead has been in the "contacted" stage for 2+ days without
  * moving to qualified or consultation_scheduled. Represents a lead the firm
@@ -7,16 +7,16 @@
  *
  * Sequence template trigger_event: "spoke_no_book"
  * Recommended sequence: 4 touches over 14 days
- *   Step 1 (0h)   — "Still thinking it over?" — recap value, low pressure
- *   Step 2 (48h)  — "Quick question" — address common objection
- *   Step 3 (120h) — "One more thought" — urgency/limitations flag
- *   Step 4 (240h) — "Leaving the door open" — final touch, no hard sell
+ *   Step 1 (0h)    -  "Still thinking it over?"  -  recap value, low pressure
+ *   Step 2 (48h)   -  "Quick question"  -  address common objection
+ *   Step 3 (120h)  -  "One more thought"  -  urgency/limitations flag
+ *   Step 4 (240h)  -  "Leaving the door open"  -  final touch, no hard sell
  *
  * Exits: stage moves away from contacted (any direction).
  * Idempotency: skips leads that already have spoke_no_book steps scheduled.
  */
 
-import { supabase } from "./supabase";
+import { supabaseAdmin as supabase } from "./supabase-admin";
 import { triggerSequence } from "./sequence-engine";
 
 interface RecoveryALead {

@@ -2,9 +2,9 @@
  * Vercel API client for custom domain management.
  *
  * Required env vars:
- *   VERCEL_API_TOKEN   — Personal access token from vercel.com/account/tokens
- *   VERCEL_PROJECT_ID  — Project ID (prj_YmLWBg4YkJs9KuShlrv5VQI6eLyF)
- *   VERCEL_TEAM_ID     — Team ID (team_qS5LzYPKszR4AeCUSHXi9yW3) — optional for personal accounts
+ *   VERCEL_API_TOKEN    -  Personal access token from vercel.com/account/tokens
+ *   VERCEL_PROJECT_ID   -  Project ID (prj_YmLWBg4YkJs9KuShlrv5VQI6eLyF)
+ *   VERCEL_TEAM_ID      -  Team ID (team_qS5LzYPKszR4AeCUSHXi9yW3)  -  optional for personal accounts
  */
 
 const BASE = "https://api.vercel.com";

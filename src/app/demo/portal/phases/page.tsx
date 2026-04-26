@@ -1,11 +1,11 @@
 /**
- * /demo/portal/phases — FACT phases for Hartwell Law demo firm.
+ * /demo/portal/phases  -  FACT phases for Hartwell Law demo firm.
  * No auth. Uses live demo intake data.
  */
 
 import { redirect } from "next/navigation";
 import { getDemoFirmId } from "@/lib/demo-firm";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import FilterCard from "@/app/portal/[firmId]/phases/FilterCard";
 import PlaceholderCard from "@/app/portal/[firmId]/phases/PlaceholderCard";
 

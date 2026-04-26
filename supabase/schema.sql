@@ -1,5 +1,5 @@
 -- CaseLoad Select — Locked Schema
--- Last updated: 2026-04-14 (Sessions S7–S9, Sessions 4–5, Journey completion, Conflict check)
+-- Last updated: 2026-04-18 (S7+S6+S8+S9: matter routing, storage, sequences, intake quality, retainers, portal, custom domains)
 --
 -- This file is the authoritative schema reference. It documents the current
 -- state of the Supabase database. All future schema changes must:
@@ -194,3 +194,91 @@
 -- override_reason text   -- set when potential_conflict is manually overridden
 -- reviewed_by     text
 -- INDEX: (lead_id, checked_at DESC)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- matter_routing                                (migration: 20260418_matter_routing.sql)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Per-firm mapping of practice sub-type → GHL pipeline/stage + staff assignment.
+-- Applied at finalize time in /api/screen when sendToGHL() is called.
+-- id                   uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- firm_id              uuid REFERENCES intake_firms(id) ON DELETE CASCADE
+-- sub_type             text NOT NULL               -- e.g. "emp_dismissal", "pi_slip_fall"
+-- ghl_pipeline_id      text                        -- overrides default pipeline
+-- ghl_stage            text                        -- overrides default stage
+-- assigned_staff_id    text                        -- GHL user ID
+-- assigned_staff_email text                        -- fallback staff routing
+-- created_at           timestamptz DEFAULT now()
+-- updated_at           timestamptz DEFAULT now()   -- maintained by trigger
+-- UNIQUE (firm_id, sub_type)
+-- INDEX: (firm_id)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- intake-attachments Storage Bucket             (migration: 20260418_storage_intake_attachments.sql)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Supabase Storage bucket for Round 3 file upload answers.
+-- Bucket: intake-attachments  (public = true, 10 MB limit)
+-- Allowed MIME: image/jpeg, image/png, image/webp, image/gif, application/pdf, text/plain
+-- Path convention: {firmId}/{sessionId}/{timestamp}-{sanitizedFilename}
+-- RLS policies:
+--   intake_attachments_anon_insert — anon role can INSERT (server-side OTP gate enforces auth)
+--   intake_attachments_public_read — anyone can SELECT (public bucket for getPublicUrl())
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- intake_sessions additions                    (migrations: 20260417_round3_memo.sql)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- practice_sub_type    text        -- matched sub-type (e.g. "emp_dismissal")
+-- round3_answers       jsonb       -- { [questionId]: value } Round 3 answers incl. file URLs
+-- round3_started_at    timestamptz
+-- round3_completed_at  timestamptz
+-- memo_text            text        -- AI-generated case memo
+-- memo_generated_at    timestamptz
+-- scoring._quality     jsonb key   -- IntakeQualityReport persisted inside scoring JSONB on memo gen
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- sequence_steps.channels additions
+-- ─────────────────────────────────────────────────────────────────────────────
+-- channels.condition   jsonb (optional) -- StepCondition: { operator: "and"|"or", rules: ConditionRule[] }
+--   ConditionRule: { slot_id: string, op: "eq"|"neq"|"in"|"nin"|"exists"|"not_exists", value?: string|string[] }
+--   Evaluated at send time against merged (extracted_entities + scoring._confirmed) from intake_sessions.
+--   Step is skipped when condition evaluates to false.
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Custom domain routing — S9                  (src/middleware.ts)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- intake_firms.custom_domain (text UNIQUE) maps a hostname to a firm.
+-- Edge middleware (src/middleware.ts) intercepts every request:
+--   Non-app hostname → Supabase REST lookup → firmId resolved
+--   Rewrites:  /               → /widget/[firmId]
+--              /portal/*       → /portal/[firmId]/*
+--              /portal/login   → /portal/login  (pass-through)
+--              /api/*          → /api/*          (pass-through)
+-- Vercel domain registration: /api/admin/domain  (POST/DELETE)
+-- Admin UI: /domains page in operator app
+-- Env vars required: VERCEL_API_TOKEN, VERCEL_PROJECT_ID, VERCEL_TEAM_ID (optional)
+
+-- leads additions                              (migration: 20260415_leads_intake_session_id.sql)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- intake_session_id    uuid REFERENCES intake_sessions(id)  -- link to originating intake session
+--   Populated by promoteToLead() in /api/otp/verify when lead is created from intake session.
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- retainer_agreements                          (migration: 20260414_retainer_agreements.sql)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Triggered automatically for Band A/B leads after Round 3 completion.
+-- DocuGenerate fills PDF template; DocuSeal delivers for e-signature.
+-- id                         uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- session_id                 uuid REFERENCES intake_sessions(id) ON DELETE SET NULL  (FK: 20260418_retainer_fks.sql)
+-- firm_id                    uuid REFERENCES intake_firms(id) ON DELETE CASCADE      (FK: 20260418_retainer_fks.sql)
+-- contact_name               text
+-- contact_email              text
+-- contact_phone              text
+-- docugenerate_document_id   text
+-- docugenerate_document_url  text
+-- docuseal_submission_id     text UNIQUE
+-- docuseal_signing_url       text
+-- status                     text  -- 'pending' | 'generated' | 'sent' | 'viewed' | 'signed' | 'voided'
+-- generated_at / sent_at / viewed_at / signed_at / voided_at  timestamptz
+-- created_at / updated_at    timestamptz
+-- Env vars required: DOCUGENERATE_API_KEY, DOCUGENERATE_TEMPLATE_ID,
+--                    DOCUSEAL_API_KEY, DOCUSEAL_TEMPLATE_ID, DOCUSEAL_WEBHOOK_SECRET

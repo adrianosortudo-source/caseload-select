@@ -1,5 +1,5 @@
 /**
- * CaseLoad Select — Live Client Configurations
+ * CaseLoad Select  -  Live Client Configurations
  *
  * Source of truth for all provisioned client firms.
  * Each config maps directly to an intake_firms record.
@@ -35,7 +35,13 @@ export interface GeographicConfig {
 }
 
 export interface ClientConfig {
-  /** Stable slug used for lookup — never change after provisioning */
+  /**
+   * Deterministic UUID for the intake_firms row. Hardcoding prevents race
+   * conditions: concurrent provisioning calls upsert on this id and any
+   * duplicate attempt becomes a noop. Never change after provisioning.
+   */
+  id: string;
+  /** Stable slug used for lookup  -  never change after provisioning */
   slug: string;
   name: string;
   description: string;
@@ -52,6 +58,7 @@ export interface ClientConfig {
 // Etobicoke criminal / family / immigration boutique
 // ─────────────────────────────────────────────────────────────────
 const KENNY_LAW: ClientConfig = {
+  id: "b1c2d3e4-f5a6-7890-bcde-f12345678901",
   slug: "kennylaw-pc",
   name: "Kenny Law Professional Corporation",
   description: "an Etobicoke law firm serving families, individuals, and newcomers with criminal defence, family law, and immigration matters",
@@ -76,7 +83,7 @@ const KENNY_LAW: ClientConfig = {
       "an Etobicoke law firm serving families, individuals, and newcomers with criminal defence, family law, and immigration matters",
     tagline: "Local Counsel. Trusted Results.",
     assistant_name: "Alex",
-    phone_number: "(416) 555-0100", // placeholder — update after onboarding call
+    phone_number: "(416) 555-0100", // placeholder  -  update after onboarding call
     phone_tel: "tel:+14165550100",
     booking_url: "https://kennylaw.ca/book",
     privacy_policy_url: "https://kennylaw.ca/privacy",
@@ -93,6 +100,7 @@ const KENNY_LAW: ClientConfig = {
 // Downtown Toronto + North York civil litigation firm, 4 attorneys
 // ─────────────────────────────────────────────────────────────────
 const POWELL_LITIGATION: ClientConfig = {
+  id: "c1d2e3f4-a5b6-7890-cdef-123456789012",
   slug: "powell-litigation",
   name: "Powell Litigation",
   description: "a Toronto civil litigation firm with offices in downtown and North York, handling complex commercial and personal disputes for individuals and businesses",
@@ -124,7 +132,7 @@ const POWELL_LITIGATION: ClientConfig = {
       "a Toronto civil litigation firm handling complex commercial and personal disputes for individuals and businesses",
     tagline: "Principled Advocacy. Proven Results.",
     assistant_name: "Alex",
-    phone_number: "(416) 555-0200", // placeholder — update with live number
+    phone_number: "(416) 555-0200", // placeholder  -  update with live number
     phone_tel: "tel:+14165550200",
     booking_url: "https://ontariolitigationlawyers.com/contact",
     privacy_policy_url: "https://ontariolitigationlawyers.com/privacy",
@@ -141,6 +149,7 @@ const POWELL_LITIGATION: ClientConfig = {
 // Multilingual Toronto immigration + criminal defence boutique
 // ─────────────────────────────────────────────────────────────────
 const SAKURABA_LAW: ClientConfig = {
+  id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   slug: "sakuraba-law",
   name: "Sakuraba Law",
   description: "a multilingual Toronto law firm serving English, Portuguese, French, and Spanish-speaking clients across immigration, criminal defence, family law, and more",
@@ -185,7 +194,7 @@ const SAKURABA_LAW: ClientConfig = {
 };
 
 // ─────────────────────────────────────────────────────────────────
-// Registry — all live clients
+// Registry  -  all live clients
 // ─────────────────────────────────────────────────────────────────
 export const CLIENT_CONFIGS: ClientConfig[] = [
   KENNY_LAW,

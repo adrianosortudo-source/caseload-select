@@ -1,9 +1,9 @@
 /**
- * Sub-Type Detection — Deterministic Regex Layer
+ * Sub-Type Detection  -  Deterministic Regex Layer
  *
  * Three-pass detection system:
- *   Pass 1: Regex matchers (this file) — deterministic, instant, offline
- *   Pass 2: GPT classifier output field `practice_sub_type` — semantic
+ *   Pass 1: Regex matchers (this file)  -  deterministic, instant, offline
+ *   Pass 2: GPT classifier output field `practice_sub_type`  -  semantic
  *   Pass 3: Fallback to `{pa}_other` qualifier questions if both miss
  *
  * Rules:
@@ -30,7 +30,7 @@ type SubTypeRule = {
 // PERSONAL INJURY sub-types
 // ─────────────────────────────────────────────────────────────────────────────
 const PI_SUB_TYPE_RULES: SubTypeRule[] = [
-  // pi_slip_fall — premises liability, occupier, wet floor
+  // pi_slip_fall  -  premises liability, occupier, wet floor
   {
     subType: "pi_slip_fall",
     confidence: "high",
@@ -47,7 +47,7 @@ const PI_SUB_TYPE_RULES: SubTypeRule[] = [
       /\bfall|fell|trip|slip\b.{0,40}\bsupermarket|walmart|grocery|mall|store|restaurant\b/i,
     ],
   },
-  // pi_dog_bite — dog attack, animal
+  // pi_dog_bite  -  dog attack, animal
   {
     subType: "pi_dog_bite",
     confidence: "high",
@@ -59,7 +59,7 @@ const PI_SUB_TYPE_RULES: SubTypeRule[] = [
       /\bdog\s+owners?\s+liabilit/i,
     ],
   },
-  // pi_med_mal — medical malpractice
+  // pi_med_mal  -  medical malpractice
   {
     subType: "pi_med_mal",
     confidence: "high",
@@ -77,7 +77,7 @@ const PI_SUB_TYPE_RULES: SubTypeRule[] = [
       /\bsurgery\s+went\s+wrong\b/i,
     ],
   },
-  // pi_product — product liability
+  // pi_product  -  product liability
   {
     subType: "pi_product",
     confidence: "high",
@@ -88,7 +88,7 @@ const PI_SUB_TYPE_RULES: SubTypeRule[] = [
       /\bmanufacturer.{0,30}(defect|negligence|liabilit)/i,
     ],
   },
-  // pi_workplace — workplace injury (not WSIB-only)
+  // pi_workplace  -  workplace injury (not WSIB-only)
   {
     subType: "pi_workplace",
     confidence: "high",
@@ -103,7 +103,7 @@ const PI_SUB_TYPE_RULES: SubTypeRule[] = [
       /\bon\s+the\s+job\s+(injury|accident)\b/i,
     ],
   },
-  // pi_assault_ci — civil assault, intentional tort
+  // pi_assault_ci  -  civil assault, intentional tort
   {
     subType: "pi_assault_ci",
     confidence: "high",
@@ -115,7 +115,7 @@ const PI_SUB_TYPE_RULES: SubTypeRule[] = [
       /\bbattery\s+claim\b/i,
     ],
   },
-  // pi_mva — motor vehicle accident (broad, catches last after specifics)
+  // pi_mva  -  motor vehicle accident (broad, catches last after specifics)
   {
     subType: "pi_mva",
     confidence: "high",
@@ -139,7 +139,7 @@ const PI_SUB_TYPE_RULES: SubTypeRule[] = [
 // EMPLOYMENT sub-types
 // ─────────────────────────────────────────────────────────────────────────────
 const EMP_SUB_TYPE_RULES: SubTypeRule[] = [
-  // emp_harassment — workplace harassment, bullying
+  // emp_harassment  -  workplace harassment, bullying
   {
     subType: "emp_harassment",
     confidence: "high",
@@ -151,7 +151,13 @@ const EMP_SUB_TYPE_RULES: SubTypeRule[] = [
       /\bmy\s+(manager|boss|supervisor|coworker).{0,40}\b(harass|bully|intimidat)\b/i,
     ],
   },
-  // emp_disc — workplace discrimination
+  // emp_disc  -  workplace discrimination
+  //
+  // Note on patterns: the client does not need to use the word "discrimination"
+  // for this sub-type to apply. "Fired because I was pregnant" is a textbook
+  // Human Rights Code claim even without the label. These patterns fire on
+  // adverse action + protected ground in the same sentence, OR on explicit
+  // discrimination/HRTO language.
   {
     subType: "emp_disc",
     confidence: "high",
@@ -161,9 +167,16 @@ const EMP_SUB_TYPE_RULES: SubTypeRule[] = [
       /\bHRTO\b.{0,30}\b(employment|workplace)\b/i,
       /\bhuman\s+rights\s+(complaint|violation|issue)\b.{0,30}\b(work|employer|fired)\b/i,
       /\bdiscriminated\s+against\b/i,
+      // Adverse action followed by protected ground
+      /\b(fired|terminated|let\s+go|laid\s+off|dismissed|demoted|passed\s+over|denied\s+(a\s+)?(promotion|accommodation))\b.{0,40}\b(because|due\s+to|for\s+being|over|based\s+on|after\s+(I|he|she|they)\s+(told|disclosed|announced))\b.{0,60}\b(pregnan|race|black|asian|brown|white|muslim|jewish|christian|hindu|sikh|disabled|disability|autis|adhd|gay|lesbian|bisexual|transgender|trans|queer|too\s+old|age|religion|national\s+origin|accent|gender|sex)\b/i,
+      // Protected ground followed by adverse action
+      /\b(pregnan|race|black|asian|muslim|jewish|disabled|disability|gay|lesbian|transgender|trans|too\s+old|my\s+age|my\s+religion|my\s+accent)\b.{0,60}\b(and\s+)?(they|employer|boss|company|he|she)\s+(fired|terminated|let\s+(me|him|her)\s+go|laid\s+(me|him|her)\s+off|demoted|refused|denied)\b/i,
+      // Failure to accommodate (disability / religion) — signature Human Rights claim
+      /\bfailed?\s+to\s+accommodate\b.{0,40}\b(disability|religion|pregnancy|medical|family\s+status)\b/i,
+      /\brefused?\s+(my\s+)?accommodation\b/i,
     ],
   },
-  // emp_wage — wage theft, unpaid wages, overtime
+  // emp_wage  -  wage theft, unpaid wages, overtime
   {
     subType: "emp_wage",
     confidence: "high",
@@ -176,7 +189,7 @@ const EMP_SUB_TYPE_RULES: SubTypeRule[] = [
       /\bwithholding\s+(my\s+)?wages?\b/i,
     ],
   },
-  // emp_constructive — constructive dismissal
+  // emp_constructive  -  constructive dismissal
   {
     subType: "emp_constructive",
     confidence: "high",
@@ -189,7 +202,7 @@ const EMP_SUB_TYPE_RULES: SubTypeRule[] = [
       /\bmade\s+(work\s+)?life\s+(unbearable|impossible|hostile)\b/i,
     ],
   },
-  // emp_dismissal — wrongful dismissal, termination without cause
+  // emp_dismissal  -  wrongful dismissal, termination without cause
   {
     subType: "emp_dismissal",
     confidence: "high",
@@ -208,7 +221,7 @@ const EMP_SUB_TYPE_RULES: SubTypeRule[] = [
 // FAMILY sub-types
 // ─────────────────────────────────────────────────────────────────────────────
 const FAM_SUB_TYPE_RULES: SubTypeRule[] = [
-  // fam_abduction — cross-border child abduction / Hague Convention
+  // fam_abduction  -  cross-border child abduction / Hague Convention
   // Must appear BEFORE fam_protection: shares some signals (ex-partner + child)
   // but fires only when there is a clear international / cross-border indicator.
   {
@@ -543,9 +556,44 @@ export function detectSubType(
 }
 
 /**
+ * Does `subType`'s own regex rule set have any pattern that matches `text`?
+ * Used by the resolver as evidence that GPT's proposed sub-type is at least
+ * plausible given the literal text — prevents GPT from overriding regex with
+ * a sub-type whose signature signal (protected ground, wage amount,
+ * constructive trigger, etc.) is completely absent from what the client wrote.
+ */
+function subTypeHasRegexMatch(
+  practiceArea: string,
+  subType: string,
+  text: string,
+): boolean {
+  const rules = RULES_BY_PA[practiceArea];
+  if (!rules) return false;
+  const rule = rules.find(r => r.subType === subType);
+  if (!rule) return false;
+  return rule.patterns.some(p => p.test(text));
+}
+
+/**
  * Resolve the final sub-type from two sources: regex detection and GPT output.
- * Agreement = confident. Disagreement = use GPT, log conflict flag.
+ * Agreement = confident.
  * Neither = null (caller should fall back to `{pa}_other`).
+ * Disagreement = regex wins unless GPT's pick is itself backed by regex.
+ *
+ * Rationale for the conflict rule:
+ *   GPT is a useful semantic layer for cases where regex misses (e.g., the
+ *   client writes "I had no choice but to quit" without ever saying "forced"
+ *   or "constructive"). But GPT can also over-classify — routing to `emp_disc`
+ *   when no protected ground is mentioned, or to `fam_protection` on a custody
+ *   dispute with no violence signal. These hallucinations previously won every
+ *   conflict because GPT's vote was taken as authoritative.
+ *
+ *   New rule: GPT may override regex ONLY if GPT's proposed sub-type has at
+ *   least one of its own regex patterns matching the text. That caps the
+ *   GPT override to cases where there is at least some literal evidence for
+ *   GPT's pick. If regex's pick fires but GPT's pick has no regex support,
+ *   regex wins — because the deterministic signal is strictly stronger than
+ *   an unsupported semantic guess.
  */
 export function resolveSubType(
   practiceArea: string,
@@ -571,6 +619,13 @@ export function resolveSubType(
     return { subType: regexSubType, conflict: false };
   }
 
-  // Disagreement: trust GPT for semantic edge cases, flag the conflict for monitoring
+  // Disagreement. GPT only overrides regex when GPT's own sub-type has
+  // supporting regex evidence in the text.
+  const gptSupportedByRegex = subTypeHasRegexMatch(practiceArea, gptSubType!, text);
+  if (!gptSupportedByRegex) {
+    return { subType: regexSubType, conflict: true };
+  }
+
+  // Both sub-types have regex support. Trust GPT as the semantic tiebreaker.
   return { subType: gptSubType!, conflict: true };
 }

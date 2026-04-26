@@ -130,7 +130,7 @@ export default function WhatsAppChat({ firmId }: { firmId: string }) {
         }
       }
     } else if (!data.collect_identity && !data.finalize) {
-      // Fallback: GPT returned no text — ask the question directly
+      // Fallback: GPT returned no text  -  ask the question directly
       if (data.next_question) {
         addIn(data.next_question.text);
       } else {
@@ -215,7 +215,7 @@ export default function WhatsAppChat({ firmId }: { firmId: string }) {
   };
 
   return (
-    // ── Outer page — WhatsApp chat background ──────────────────────────────
+    // ── Outer page  -  WhatsApp chat background ──────────────────────────────
     <div className="min-h-screen flex items-center justify-center p-4 sm:p-8"
       style={{ backgroundColor: "#1A1A2E" }}>
 
@@ -432,7 +432,7 @@ export default function WhatsAppChat({ firmId }: { firmId: string }) {
       {/* Caption below phone */}
       <div className="hidden sm:block absolute bottom-6 left-0 right-0 text-center">
         <p className="text-white/30 text-xs">
-          WhatsApp intake simulation — powered by CaseLoad Select
+          WhatsApp intake simulation  -  powered by CaseLoad Select
         </p>
       </div>
     </div>

@@ -7,7 +7,7 @@
  * Middleware handles the actual routing at edge.
  */
 
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import DomainManager from "./DomainManager";
 
 export const dynamic = "force-dynamic";
@@ -82,7 +82,7 @@ export default async function DomainsPage() {
                   <td className="px-4 py-3 font-medium text-black/80">{firm.name}</td>
                   <td className="px-4 py-3">
                     <span className="badge bg-black/5 text-black/50 capitalize">
-                      {firm.status ?? "—"}
+                      {firm.status ?? " - "}
                     </span>
                   </td>
                   <td className="px-4 py-4">

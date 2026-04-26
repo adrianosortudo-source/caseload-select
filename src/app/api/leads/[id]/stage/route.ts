@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { triggerSequence } from "@/lib/sequence-engine";
 import { createClioMatter } from "@/lib/clio-conversion";
 import { isConflictClear, registerWonClient } from "@/lib/conflict-check";
@@ -28,7 +28,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     stage_changed_at: now,
   };
 
-  // Populate first_contact_at once — only when transitioning new_lead → contacted
+  // Populate first_contact_at once  -  only when transitioning new_lead → contacted
   if (stage === "contacted") {
     const { data: existing } = await supabase
       .from("leads")
@@ -51,9 +51,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: error?.message ?? "update failed" }, { status: 400 });
   }
 
-  // J9 + WF-06 — on client_won: create review_request tracking row, trigger 3-touch sequence
+  // J9 + WF-06  -  on client_won: create review_request tracking row, trigger 3-touch sequence
   if (stage === "client_won") {
-    // Idempotency guard — never double-trigger
+    // Idempotency guard  -  never double-trigger
     const { data: existing } = await supabase
       .from("review_requests")
       .select("id")
@@ -71,32 +71,32 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         .select()
         .single();
 
-      // J7 — welcome/onboarding sequence (4 touches over 7 days)
+      // J7  -  welcome/onboarding sequence (4 touches over 7 days)
       triggerSequence(lead.id, "client_won").catch((e) =>
         console.error("J7 trigger failed:", e)
       );
 
-      // J9 — trigger 3-touch review request sequence (send-sequences processes it)
+      // J9  -  trigger 3-touch review request sequence (send-sequences processes it)
       triggerSequence(lead.id, "review_request").catch((e) =>
         console.error("J9 trigger failed:", e)
       );
 
-      // J8 — trigger active matter check-ins (2wk, 4wk, 8wk)
+      // J8  -  trigger active matter check-ins (2wk, 4wk, 8wk)
       triggerSequence(lead.id, "matter_active").catch((e) =>
         console.error("J8 trigger failed:", e)
       );
 
-      // J11 — relationship milestone touchpoints (6mo, 12mo)
+      // J11  -  relationship milestone touchpoints (6mo, 12mo)
       triggerSequence(lead.id, "relationship_milestone").catch((e) =>
         console.error("J11 trigger failed:", e)
       );
 
-      // J12 — long-term nurture (18mo, 24mo)
+      // J12  -  long-term nurture (18mo, 24mo)
       triggerSequence(lead.id, "long_term_nurture").catch((e) =>
         console.error("J12 trigger failed:", e)
       );
 
-      // Clio matter creation — non-fatal, runs in background
+      // Clio matter creation  -  non-fatal, runs in background
       createClioMatter({
         id: lead.id,
         name: lead.name,
@@ -120,14 +120,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
   }
 
-  // J2 — consultation_scheduled: trigger 3-touch reminder sequence
+  // J2  -  consultation_scheduled: trigger 3-touch reminder sequence
   if (stage === "consultation_scheduled") {
     triggerSequence(lead.id, "consultation_scheduled").catch((e) =>
       console.error("J2 trigger failed:", e)
     );
   }
 
-  // J2 exit — cancel pending consultation reminders when lead leaves consultation stage
+  // J2 exit  -  cancel pending consultation reminders when lead leaves consultation stage
   if (
     ["no_show", "client_won", "client_lost", "consultation_held"].includes(stage)
   ) {
@@ -136,21 +136,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     );
   }
 
-  // J6 — retainer_awaiting: proposal sent, follow up until signed
+  // J6  -  retainer_awaiting: proposal sent, follow up until signed
   if (stage === "proposal_sent") {
     triggerSequence(lead.id, "retainer_awaiting").catch((e) =>
       console.error("J6 trigger failed:", e)
     );
   }
 
-  // J6 exit — cancel pending retainer follow-ups when retainer is signed or lost
+  // J6 exit  -  cancel pending retainer follow-ups when retainer is signed or lost
   if (["client_won", "client_lost"].includes(stage)) {
     cancelSequenceByTrigger(lead.id, "retainer_awaiting").catch((e) =>
       console.error("J6 cancel failed:", e)
     );
   }
 
-  // J10 — re-engagement: lost lead, reconnect at 90d + 180d
+  // J10  -  re-engagement: lost lead, reconnect at 90d + 180d
   if (stage === "client_lost") {
     triggerSequence(lead.id, "re_engagement").catch((e) =>
       console.error("J10 trigger failed:", e)

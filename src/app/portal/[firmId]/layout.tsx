@@ -8,7 +8,7 @@
 
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import PortalTabNav from "@/components/portal/PortalTabNav";
 
 interface Branding {

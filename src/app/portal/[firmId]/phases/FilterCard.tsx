@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * FilterCard — FACT Phase F (Filter) card.
+ * FilterCard  -  FACT Phase F (Filter) card.
  *
  * Shows:
  * - Horizontal stacked bar: band A–E distribution for current month
@@ -18,7 +18,7 @@ const BAND_COLORS: Record<string, string> = {
 };
 
 function SlaGauge({ pct, hasSamples }: { pct: number; hasSamples: boolean }) {
-  // SVG arc gauge — 180 degree sweep
+  // SVG arc gauge  -  180 degree sweep
   const r = 40;
   const cx = 60;
   const cy = 55;

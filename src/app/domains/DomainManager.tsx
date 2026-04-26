@@ -158,7 +158,7 @@ export default function DomainManager({
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-black/20 text-xs">—</span>
+      <span className="text-black/20 text-xs"> - </span>
       <button
         onClick={() => setShowAdd(true)}
         className="text-xs text-gold hover:text-gold-2 font-medium"

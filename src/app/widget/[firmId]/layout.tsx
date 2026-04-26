@@ -1,7 +1,7 @@
 /**
  * Standalone layout for /widget/[firmId].
  *
- * Overrides the root layout — no Sidebar, no nav, no app chrome.
+ * Overrides the root layout  -  no Sidebar, no nav, no app chrome.
  * This makes the route safe for iframe embedding.
  */
 

@@ -25,8 +25,11 @@ export async function POST(req: NextRequest) {
   }
 
   const token = generatePortalToken(firm_id);
-  const origin = base_url ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-  const magic_link = `${origin}/portal/login?token=${encodeURIComponent(token)}`;
+  const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN;
+  const defaultOrigin = base_url
+    ?? (appDomain ? `https://app.${appDomain}` : null)
+    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  const magic_link = `${defaultOrigin}/api/portal/login?token=${encodeURIComponent(token)}`;
 
   return NextResponse.json({ magic_link, expires_in_hours: 48 });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * AutomationLog — animated event log showing what fired after intake.
+ * AutomationLog  -  animated event log showing what fired after intake.
  *
  * Client component. Events are computed server-side and passed in,
  * so the animation reveals pre-built items rather than fetching.

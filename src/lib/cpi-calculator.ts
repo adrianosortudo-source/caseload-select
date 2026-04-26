@@ -1,13 +1,13 @@
 /**
- * CPI Calculator — S10.4
+ * CPI Calculator  -  S10.4
  *
  * Centralizes the Case Priority Index (CPI) scoring logic that was previously
  * embedded in route.ts. Exports:
- *   - CpiBreakdown      — typed shape of the full CPI score object
- *   - FEE_FLOOR         — per-PA minimum fee_score on first message
- *   - COMPLEXITY_FLOOR  — per-PA minimum complexity_score on first message
- *   - validateAndFixScoring() — clamps components, recomputes sums, assigns band
- *   - computeCpiPartial()     — derives the cpi_partial field for every response
+ *   - CpiBreakdown       -  typed shape of the full CPI score object
+ *   - FEE_FLOOR          -  per-PA minimum fee_score on first message
+ *   - COMPLEXITY_FLOOR   -  per-PA minimum complexity_score on first message
+ *   - validateAndFixScoring()  -  clamps components, recomputes sums, assigns band
+ *   - computeCpiPartial()      -  derives the cpi_partial field for every response
  *
  * The CPI scale:
  *   fit_score   = geo + practice + legitimacy + referral  (max 40)
@@ -17,10 +17,10 @@
  * Band thresholds (primary):
  *   A ≥ 80 | B ≥ 60 | C ≥ 40 | D ≥ 20 | E < 20
  *
- * Three-axis derived scores (normalized 0-100, read-only — do NOT let GPT write these):
- *   cpi_fit      — how well this matter matches the firm (from fit_score)
- *   cpi_urgency  — time pressure on this matter (from urgency_score)
- *   cpi_friction — case risk / red-flag signal (inverted legitimacy_score)
+ * Three-axis derived scores (normalized 0-100, read-only  -  do NOT let GPT write these):
+ *   cpi_fit       -  how well this matter matches the firm (from fit_score)
+ *   cpi_urgency   -  time pressure on this matter (from urgency_score)
+ *   cpi_friction  -  case risk / red-flag signal (inverted legitimacy_score)
  *
  * Band modifiers (applied after primary threshold):
  *   Urgency promotion: cpi_urgency ≥ 75 AND total ≥ 55 → Band A
@@ -50,7 +50,7 @@ export interface CpiBreakdown {
   /**
    * Three-axis derived scores (normalized 0-100). Computed server-side in
    * validateAndFixScoring(). Never written by GPT. Used for human-readable
-   * triage signals — lawyers see fit/urgency/friction, not the raw component scores.
+   * triage signals  -  lawyers see fit/urgency/friction, not the raw component scores.
    *
    * cpi_fit:      How well this matter matches what the firm does. Derived from fit_score.
    * cpi_urgency:  Time pressure on this matter. Derived from urgency_score.
@@ -67,8 +67,8 @@ export interface CpiBreakdown {
  * response so the widget can show a live updating band indicator.
  *
  * confidence:
- *   "provisional" — still collecting data; score will change as answers arrive
- *   "final"       — band is locked or the session is finalized; score is definitive
+ *   "provisional"  -  still collecting data; score will change as answers arrive
+ *   "final"        -  band is locked or the session is finalized; score is definitive
  */
 export interface CpiPartial {
   score: number;
@@ -106,7 +106,7 @@ export const COMPLEXITY_FLOOR: Record<string, number> = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Scoring validator — trust GPT's components, recompute sums, assign band
+// Scoring validator  -  trust GPT's components, recompute sums, assign band
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -132,11 +132,11 @@ export function validateAndFixScoring(cpi: CpiBreakdown): CpiBreakdown {
 
   // ── Three-axis derived scores (normalized 0-100) ───────────────────────
   // Server-computed. Never written by GPT. These are exposed to lawyers as
-  // human-readable triage signals — fit quality, time pressure, and case risk.
+  // human-readable triage signals  -  fit quality, time pressure, and case risk.
   //
   // cpi_fit:     fit_score normalized from max 40
   // cpi_urgency: urgency_score normalized from max 20
-  // cpi_friction: inverted legitimacy_score — high friction = low legitimacy
+  // cpi_friction: inverted legitimacy_score  -  high friction = low legitimacy
   //               Ranges from 0 (legitimacy=10, clean) to 100 (legitimacy=0, red flags)
   cpi.cpi_fit      = Math.round(cpi.fit_score / 40 * 100);
   cpi.cpi_urgency  = Math.round(cpi.urgency_score / 20 * 100);
@@ -150,7 +150,7 @@ export function validateAndFixScoring(cpi: CpiBreakdown): CpiBreakdown {
   else                       cpi.band = "E";
 
   // ── Band modifiers (applied after primary threshold) ──────────────────
-  // These only activate at the extremes — the middle of the distribution is unchanged.
+  // These only activate at the extremes  -  the middle of the distribution is unchanged.
 
   // Urgency promotion: time-sensitive matters (imm_removal_order, fam_abduction,
   // imm_rad_deadline, construction_lien expiring) get Band A if total ≥ 55.
@@ -160,7 +160,7 @@ export function validateAndFixScoring(cpi: CpiBreakdown): CpiBreakdown {
   }
 
   // Friction floor: very low legitimacy (legitimacy_score ≤ 2, cpi_friction ≥ 80)
-  // cannot reach Band A or B — cap at D for matters with near-zero legal basis.
+  // cannot reach Band A or B  -  cap at D for matters with near-zero legal basis.
   // Does not apply when band is locked (B+ already confirmed after full intake).
   if (!cpi.band_locked && cpi.cpi_friction >= 80 && (cpi.band === "A" || cpi.band === "B")) {
     cpi.band = "D";
@@ -170,7 +170,7 @@ export function validateAndFixScoring(cpi: CpiBreakdown): CpiBreakdown {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Partial CPI — for every API response
+// Partial CPI  -  for every API response
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**

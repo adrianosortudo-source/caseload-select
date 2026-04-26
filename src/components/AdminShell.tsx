@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import Sidebar from "./Sidebar";
 
 /**
- * AdminShell — conditionally renders the admin sidebar.
+ * AdminShell  -  conditionally renders the admin sidebar.
  * Portal and widget routes get clean, sidebar-free layouts.
  */
 export default function AdminShell({ children }: { children: React.ReactNode }) {

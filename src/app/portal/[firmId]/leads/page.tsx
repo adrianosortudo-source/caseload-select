@@ -2,7 +2,7 @@
  * /portal/[firmId]/leads
  *
  * Firm-facing leads pipeline view. Read-only. Shows all leads for
- * the firm with band, stage, case type, and date — no PII beyond
+ * the firm with band, stage, case type, and date  -  no PII beyond
  * what the firm needs to see.
  *
  * Auth is handled by the parent [firmId]/layout.tsx.
@@ -11,7 +11,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getPortalSession } from "@/lib/portal-auth";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -176,11 +176,16 @@ export default async function PortalLeadsPage({
               {leads.map((lead) => {
                 const band = lead.priority_band ?? lead.band;
                 const hasMemo = lead.intake_session_id ? memoReadySet.has(lead.intake_session_id) : false;
+                const detailHref = `/portal/${firmId}/leads/${lead.id}`;
                 return (
                   <tr key={lead.id} className="hover:bg-black/[0.01]">
-                    <td className="px-4 py-3 font-medium text-black/80">{lead.name}</td>
+                    <td className="px-4 py-3 font-medium text-black/80">
+                      <Link href={detailHref} className="hover:text-navy hover:underline">
+                        {lead.name}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-xs text-black/60 capitalize">
-                      {lead.case_type ?? <span className="text-black/20">—</span>}
+                      {lead.case_type ?? <span className="text-black/20"> - </span>}
                     </td>
                     <td className="px-4 py-3">
                       {band ? (
@@ -188,7 +193,7 @@ export default async function PortalLeadsPage({
                           {band}
                         </span>
                       ) : (
-                        <span className="text-black/20">—</span>
+                        <span className="text-black/20"> - </span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs text-black/60">
@@ -196,12 +201,15 @@ export default async function PortalLeadsPage({
                     </td>
                     <td className="px-4 py-3">
                       {hasMemo ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">
+                        <Link
+                          href={detailHref}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 hover:bg-emerald-100"
+                        >
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
                           Memo ready
-                        </span>
+                        </Link>
                       ) : (
-                        <span className="text-black/20 text-xs">—</span>
+                        <span className="text-black/20 text-xs"> - </span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs text-black/50">

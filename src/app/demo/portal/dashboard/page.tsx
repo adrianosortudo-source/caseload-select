@@ -1,5 +1,5 @@
 /**
- * /demo/portal/dashboard — Live demo partner dashboard.
+ * /demo/portal/dashboard  -  Live demo partner dashboard.
  *
  * Renders the full v2 KPI dashboard for the Hartwell Law PC demo firm.
  * No auth required. All data is real (populated by demo intake submissions).
@@ -10,7 +10,7 @@
 
 import { redirect } from "next/navigation";
 import { getDemoFirmId } from "@/lib/demo-firm";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import KpiTiles from "@/app/portal/[firmId]/dashboard/KpiTiles";
 
 export const dynamic = "force-dynamic";

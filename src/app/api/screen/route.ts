@@ -16,11 +16,12 @@
  */
 
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
-import { supabase } from "@/lib/supabase";
-import { buildSystemPrompt, type FirmConfig } from "@/lib/screen-prompt";
+import { openrouter, googleai, getIntakeModel, MODELS } from "@/lib/openrouter";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { buildSystemPrompt, type FirmConfig, type Question } from "@/lib/screen-prompt";
+import { getMatterRouting, type MatterRouting } from "@/lib/matter-routing";
 import { getSlotSchema } from "@/lib/slot-schema";
-import { selectNextQuestions } from "@/lib/question-selector";
+import { selectNextQuestions, inferImpliedAnswers } from "@/lib/question-selector";
 import { resolveSubType, detectSubType } from "@/lib/sub-type-detect";
 import { resolveQuestionSetKey } from "@/lib/sub-types";
 import {
@@ -33,9 +34,29 @@ import {
 import { autoConfirmFromContext } from "@/lib/auto-confirm";
 import { detectFlags, mergeFlags, getGateQuestions, hasCriticalFlag, getFlagPreamble } from "@/lib/flag-registry";
 import { classify, type ClassifierResult } from "@/lib/classifier";
+import { selectSlots, scoreFromSlotAnswers, shouldTriggerRound3 } from "@/lib/slot-selector";
+import { SLOTS_BY_SUBTYPE } from "@/lib/slot-registry";
+import { computeSabsUrgency, computeDismissalBardal } from "@/lib/interaction-scoring";
+import { estimateCaseValue } from "@/lib/case-value";
+import { extractEvents } from "@/lib/event-extractor";
+import { selectEvent } from "@/lib/event-selector";
+import { generateQuestion, generatePreamble } from "@/lib/event-question-generator";
+import { mapEventToSubType } from "@/lib/event-subtype-map";
+import {
+  getRewriteMode,
+  candidatesFromQuestionSet,
+  callRewriteModel,
+  applyResolvedQuestions,
+  applySuppressedQuestions,
+  buildRewriteMap,
+  type RewriteTurn,
+  type RewriteCallResult,
+} from "@/lib/llm-rewrite";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const MODEL = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+// Intake screening → Google AI Studio (draws from $400 Google credits)
+const openai = googleai;
+// Memo generation uses openrouter directly (Claude Sonnet via OpenRouter)
+// Model is resolved per-request via getIntakeModel()  -  see @/lib/openrouter
 
 // ─────────────────────────────────────────────
 // Types
@@ -102,6 +123,14 @@ interface GptResponse {
   filled_slots?: Record<string, string>;
   /** Confidence level for each filled slot. Only "high" and "medium" are auto-confirmed. */
   slot_confidence?: Record<string, "high" | "medium" | "low">;
+  /**
+   * Question IDs the client has already answered in free text but where no clean
+   * option value maps. Example: "I didn't go to the hospital" answers pi_q17
+   * ("Did you get medical treatment?") at the topic level. These IDs are
+   * suppressed from next_questions without binding a specific value.
+   * Safety net: regex inference in question-selector catches obvious misses.
+   */
+  implied_question_ids?: string[];
 }
 
 // autoConfirmFromContext and AUTO_RULES_BY_PA are imported from @/lib/auto-confirm
@@ -109,7 +138,7 @@ interface GptResponse {
 // ─────────────────────────────────────────────
 // GHL webhook delivery
 // ─────────────────────────────────────────────
-async function sendToGHL(session: Record<string, unknown>, ghlWebhookUrl: string): Promise<void> {
+async function sendToGHL(session: Record<string, unknown>, ghlWebhookUrl: string, routing: MatterRouting | null = null): Promise<void> {
   const contact = (session.contact as Record<string, unknown>) ?? {};
   const scoring = (session.scoring as CpiBreakdown) ?? {};
   const entities = (session.extracted_entities as Record<string, unknown>) ?? {};
@@ -176,9 +205,18 @@ async function sendToGHL(session: Record<string, unknown>, ghlWebhookUrl: string
       emp_severance_received: entities.emp_severance_received ?? null,
     },
     pipeline: {
-      stage: bandToStage[band] ?? "new_lead",
+      ...(routing?.ghl_pipeline_id ? { id: routing.ghl_pipeline_id } : {}),
+      stage: routing?.ghl_stage ?? bandToStage[band] ?? "new_lead",
       sla_minutes: bandToSLA[band] ?? 0,
     },
+    ...(routing?.assigned_staff_id || routing?.assigned_staff_email
+      ? {
+          assigned_staff: {
+            ...(routing.assigned_staff_id ? { id: routing.assigned_staff_id } : {}),
+            ...(routing.assigned_staff_email ? { email: routing.assigned_staff_email } : {}),
+          },
+        }
+      : {}),
     session_id: session.id,
   };
 
@@ -196,6 +234,9 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as ScreenRequest;
     const { session_id, firm_id, channel, message, message_type = "text", structured_data, source_hint, demo } = body;
+
+    // Resolve model tier once per request (checks OpenRouter spend, cached 5min)
+    const intakeModel = await getIntakeModel();
 
     if (!firm_id) {
       return NextResponse.json({ error: "firm_id required" }, { status: 400 });
@@ -241,7 +282,7 @@ export async function POST(req: Request) {
       booking_url: firmBranding.booking_url ?? undefined,
     };
 
-    // ── Escape hatch — intercept human-contact keywords before GPT ───
+    // ── Escape hatch  -  intercept human-contact keywords before GPT ───
     // Matches: CALL, HUMAN, 0, STOP, and natural-language equivalents.
     // Returns a phone/booking CTA without spending a GPT token.
     if (channel === "widget" && message_type === "text" && ESCAPE_HATCH_RE.test(message)) {
@@ -274,7 +315,7 @@ export async function POST(req: Request) {
     }
 
     // ── Accumulate confirmed answers (widget structured_data, keyed by question ID) ──
-    // These are authoritative — stored separately from GPT-extracted entities so
+    // These are authoritative  -  stored separately from GPT-extracted entities so
     // they always use the exact question IDs from the firm config, regardless of
     // whether GPT correctly extracts them.
     const existingConfirmed = ((session.scoring as Record<string, unknown>)?._confirmed as Record<string, unknown>) ?? {};
@@ -327,7 +368,7 @@ export async function POST(req: Request) {
     const sessionComplianceFlags =
       ((session.scoring as Record<string, unknown>)?._compliance_flags as string[]) ?? [];
     const regexDetectedFlags = detectFlags(allUserText, sessionPracticeArea ?? "");
-    // Mutable — will be updated after PA classification when PA was previously unknown
+    // Mutable  -  will be updated after PA classification when PA was previously unknown
     let activeComplianceFlags = mergeFlags(sessionComplianceFlags, regexDetectedFlags);
 
     // ── Fast path: skip GPT for contact submission when band is already set ──
@@ -387,22 +428,23 @@ export async function POST(req: Request) {
         prior_experience: (existingEntitiesForContact.prior_experience as string) ?? null,
         flags: (existingScoringForContact._flags as string[]) ?? [],
         cta: bandToCta[existingBand] ?? null,
+        case_value: (existingScoringForContact._case_value as { label: string; tier: string; rationale: string } | undefined) ?? null,
       });
     }
 
     // ── Fast path: skip GPT for structured widget answers ────────────
     // Three-phase question strategy:
     //
-    // Phase 2 — Core Qualification (first 6 questions, indices 0–5)
+    // Phase 2  -  Core Qualification (first 6 questions, indices 0–5)
     //   Ordered by CPI impact: urgency → merit → value → complexity.
     //   Served to every lead regardless of initial band.
     //
-    // Phase 3 — Signal Refinement (questions 7–8, indices 6–7)
+    // Phase 3  -  Signal Refinement (questions 7–8, indices 6–7)
     //   Served only when Phase 2 is complete AND band is B or C (40–79).
-    //   Band A leads go straight to identity — no refinement needed.
-    //   Band D/E leads go straight to identity — more questions won't help.
+    //   Band A leads go straight to identity  -  no refinement needed.
+    //   Band D/E leads go straight to identity  -  more questions won't help.
     //
-    // Phase 4 — Identity
+    // Phase 4  -  Identity
     //   Name, email, phone. Always last.
     if (
       channel === "widget" &&
@@ -435,7 +477,7 @@ export async function POST(req: Request) {
           .update({ scoring: { ...existingCpi, _confirmed: updatedConfirmed } })
           .eq("id", session.id);
 
-        // Dynamic question selection — S10.3
+        // Dynamic question selection  -  S10.3
         // Priority-based: replaces hard-coded slice(0,6)/slice(6) Phase 2/3 split.
         // band_locked (S10.4): if band is already locked, skip straight to identity.
         // Use sub-type key for slot schema lookup so priority weights match question IDs.
@@ -443,24 +485,31 @@ export async function POST(req: Request) {
         const bandLocked = !!(existingCpi as unknown as Record<string, unknown>).band_locked;
         const batch = bandLocked
           ? { questions: [], phase: "identity" as const }
-          : selectNextQuestions(questionSet.questions, sessionQSetKey, updatedConfirmed, currentBand);
+          : selectNextQuestions(questionSet.questions, sessionQSetKey, updatedConfirmed, currentBand, situationText);
 
         // ── Round 1 completion: re-score then route ─────────────────────────
-        // When all Round 1 questions are done and Round 2 hasn't started yet:
+        // When Round 1 primary questions are done and Round 2 hasn't started yet:
         // 1. Re-score CPI using every confirmed entity (GPT has the full scoring engine).
         //    Fit components (geo, practice, legitimacy, referral) are locked from Turn 1.
-        // 2. Use the re-scored band — not the initial classification — to decide routing:
+        // 2. Use the re-scored band  -  not the initial classification  -  to decide routing:
         //    Band A/B → generate Round 2 deep-dive questions (lean GPT call).
         //    Band C/D/E → collect_identity immediately with the updated CPI.
         // Both GPT calls fall through gracefully: if either fails, the session continues
         // with the existing CPI / initial band so the user never sees an error.
-        if (batch.phase === "identity" && !widgetRound2Started) {
+        //
+        // Refinement phase (priority-3 firm-set questions, B/C bands) is SKIPPED for
+        // the widget so users always see a full 5-question Round 2 deep-dive instead
+        // of a stub 2-question refinement batch. Refinement dimensions are covered by
+        // the GPT deep-dive prompt, which outperforms the static refinement set.
+        const shouldRunRound2 =
+          (batch.phase === "identity" || batch.phase === "refinement") && !widgetRound2Started;
+        if (shouldRunRound2) {
           const r1EntityLines = Object.entries(updatedConfirmed)
             .filter(([k]) => !k.startsWith("_"))
             .map(([k, v]) => `  ${k}: ${v}`)
             .join("\n") || "  (none recorded)";
 
-          // Defaults — used if re-score GPT call fails
+          // Defaults  -  used if re-score GPT call fails
           let r1Cpi = existingCpi;
           let r1Band = currentBand;
           let r1Entities = (session.extracted_entities as Record<string, unknown>) ?? {};
@@ -472,7 +521,7 @@ export async function POST(req: Request) {
             let r1Prompt = buildSystemPrompt(firmConfig, "widget", { includeQuestionSets: false });
             r1Prompt +=
               `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
-              `\nROUND 1 RE-SCORING PASS — override all channel instructions\n` +
+              `\nROUND 1 RE-SCORING PASS  -  override all channel instructions\n` +
               `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
               `All Round 1 intake questions have been answered. Re-score the CPI now.\n` +
               `Return next_question: null, next_questions: null, collect_identity: true, finalize: false.\n` +
@@ -490,9 +539,11 @@ export async function POST(req: Request) {
               `Return the complete JSON schema with all components.`;
 
             const r1Completion = await openai.chat.completions.create({
-              model: MODEL,
+              model: intakeModel,
               temperature: 0,
+              max_tokens: 2048,
               response_format: { type: "json_object" },
+              reasoning_effort: "none", // Gemini 2.5 thinking off  -  intake is classification, not reasoning
               messages: [
                 { role: "system", content: r1Prompt },
                 { role: "user", content: `Re-score this ${paId} case from Round 1 answers: ${r1EntityLines.replace(/\n/g, ", ")}` },
@@ -546,42 +597,70 @@ export async function POST(req: Request) {
             }
           } catch (err) {
             console.error("[screen] Round 1 re-score failed, using initial band for routing:", err);
-            // r1Cpi / r1Band stay at initial values — graceful degradation
+            // r1Cpi / r1Band stay at initial values  -  graceful degradation
           }
 
           // ── Route based on re-scored band ──────────────────────────────────
-          if (["A", "B"].includes(r1Band)) {
-            // Band A/B: generate Round 2 deep-dive questions
+          // A/B/C all earn a 5-question GPT deep-dive (matches the marketed
+          // "two rounds of questions" promise). D/E are decline cases and go
+          // straight to identity so the user isn't asked to invest more effort.
+          if (["A", "B", "C"].includes(r1Band)) {
+            // Band A/B/C: generate Round 2 deep-dive questions
             const r2EntitySummary = Object.entries(updatedConfirmed)
               .filter(([k]) => !k.startsWith("_"))
               .map(([k, v]) => `${k}: ${v}`)
               .join(", ") || "none collected yet";
 
+            // Feed GPT the CPI breakdown so it can see where the case is weakest
+            // and target those dimensions. A low urgency_score points to timeline
+            // questions; a low complexity_score points to strategic/legal depth;
+            // a low fee_score points to value/recovery questions.
+            const r2CpiSignal =
+              `urgency=${r1Cpi.urgency_score}/20, complexity=${r1Cpi.complexity_score}/25, ` +
+              `multi_practice=${r1Cpi.multi_practice_score}/5, fee=${r1Cpi.fee_score}/10 ` +
+              `(total value_score=${r1Cpi.value_score}/70, band=${r1Band})`;
+
+            // Feed GPT the unasked firm-set dimensions as inspiration — these are the
+            // questions the firm's own playbook would have asked. GPT picks whichever
+            // are still value-determinative for this specific case and generates fresh
+            // phrasings, plus net-new dimensions beyond the playbook.
+            const unaskedFirmDimensions = selectNextQuestions(
+              questionSet.questions,
+              sessionQSetKey,
+              updatedConfirmed,
+              r1Band,
+              situationText
+            ).questions.map(q => `  - ${q.text}`).join("\n") || "  (firm set exhausted)";
+
             const r2SystemPrompt =
-              `You are a legal intake specialist generating a second round of targeted screening questions.\n\n` +
-              `Practice area: ${paId}. Re-scored band after Round 1: ${r1Band}.\n` +
-              `Entities already collected: ${r2EntitySummary}\n\n` +
-              `Generate exactly 2 adaptive follow-up questions targeting the highest-uncertainty value drivers NOT already collected above.\n\n` +
-              `Practice area guidance:\n` +
-              `- emp: discrimination/harassment overlap, executive equity or bonus, human rights filing intent, whether release was signed\n` +
-              `- pi: income replacement amount, catastrophic injury threshold, medical-legal report ordered, pre-existing conditions\n` +
-              `- fam: matrimonial home equity estimate, pension or RRSP division, cross-jurisdiction element, child support arrears\n` +
-              `- crim: exact breath reading if DUI, prior criminal record, victim statement filed\n` +
-              `- real: title search result, financing condition waived, home inspection findings\n` +
-              `- imm: current status in Canada, refusal history, provincial nomination received\n` +
-              `- All others: the 2 most value-determinative unknowns for this practice area.\n\n` +
-              `Return a JSON object with this exact shape (no other keys):\n` +
+              `You are a senior legal intake specialist designing the final round of screening questions before the matter reaches a lawyer. Your goal: produce the 5 highest-information-value questions for this specific case.\n\n` +
+              `PRACTICE AREA: ${paId}\n` +
+              `RE-SCORED BAND AFTER ROUND 1: ${r1Band}\n` +
+              `CPI SCORING GAPS: ${r2CpiSignal}\n\n` +
+              `ENTITIES ALREADY CONFIRMED:\n${r2EntitySummary}\n\n` +
+              `FIRM PLAYBOOK DIMENSIONS STILL OPEN (inspiration only — rewrite and expand):\n${unaskedFirmDimensions}\n\n` +
+              `Practice area guidance (examples of high-value dimensions — use as signal, not script):\n` +
+              `- emp: discrimination or harassment overlap, executive equity or bonus, human rights filing intent, whether release was signed, notice period sought, mitigation efforts, prior employer communications\n` +
+              `- pi: income replacement amount, catastrophic injury threshold, medical-legal report ordered, pre-existing conditions, treatment plan in place, at-fault liability clarity, insurer communications to date\n` +
+              `- fam: matrimonial home equity estimate, pension or RRSP division, cross-jurisdiction element, child support arrears, parenting schedule status, domestic violence history, prior separation agreement\n` +
+              `- crim: exact breath reading if DUI, prior criminal record, victim statement filed, release conditions, disclosure received, co-accused status, bail terms\n` +
+              `- real: title search result, financing condition waived, home inspection findings, closing date pressure, counterparty counsel known, deposit at risk, status certificate reviewed\n` +
+              `- imm: current status in Canada, refusal history, provincial nomination received, employer sponsorship stage, dependants included, language test scores, prior application timelines\n\n` +
+              `TASK: Select the 5 questions with the highest information value for this case. Prioritize dimensions that (a) map to the weakest CPI component above, (b) would most change the case's tier/strategy if answered, and (c) are not covered by entities already confirmed.\n\n` +
+              `OUTPUT (JSON, exact shape):\n` +
               `{ "questions": [ { "id": "r2_[descriptive_id]", "text": "...", "options": [ { "label": "...", "value": "..." } ], "allow_free_text": false } ] }\n\n` +
-              `Rules: 2-4 options per question. Values in snake_case. Fully distinct from Round 1 and from each other. Do NOT repeat any subject already in the collected entities list.`;
+              `RULES: Exactly 5 questions. 2-4 options each. Values in snake_case. Plain conversational English in the text field, like a real intake specialist would ask. Every question must be fully distinct from Round 1 entities and from each other.`;
 
             try {
               const r2Completion = await openai.chat.completions.create({
-                model: MODEL,
+                model: intakeModel,
                 temperature: 0,
+                max_tokens: 2048,
                 response_format: { type: "json_object" },
+                reasoning_effort: "none", // Gemini 2.5 thinking off
                 messages: [
                   { role: "system", content: r2SystemPrompt },
-                  { role: "user", content: "Generate the 2 Round 2 questions now." },
+                  { role: "user", content: "Generate the 5 Round 2 questions now." },
                 ],
               });
 
@@ -628,7 +707,7 @@ export async function POST(req: Request) {
               }
             } catch (err) {
               console.error("[screen] Round 2 widget generation failed, falling through to identity:", err);
-              // Fall through — return collect_identity with r1Cpi below
+              // Fall through  -  return collect_identity with r1Cpi below
             }
           }
 
@@ -656,23 +735,27 @@ export async function POST(req: Request) {
         }
 
         // ── Round 2 CPI re-score ────────────────────────────────────────────
-        // Fires when Round 2 answers have just been submitted (widgetRound2Started=true)
-        // and all questions are done (batch.phase==="identity").
+        // Fires when Round 2 answers have just been submitted (widgetRound2Started=true).
+        // After R2, any firm-set refinement questions that remain unasked are ignored —
+        // R2's GPT deep-dive replaces the static refinement set, so serving priority-3
+        // firm questions now would be a duplicate third round (which the widget would
+        // label "Round 3 - 2 additional questions"). Treat refinement-after-R2 as identity.
+        //
         // Calls GPT with a lean prompt to recompute value_score components using the full
         // entity set (R1 + R2). Fit components (geo, practice, legitimacy, referral) are
         // locked from the initial classification and never change.
         // On failure, falls through and uses the existing CPI.
-        if (widgetRound2Started && batch.phase === "identity") {
+        if (widgetRound2Started && (batch.phase === "identity" || batch.phase === "refinement")) {
           const entityLines = Object.entries(updatedConfirmed)
             .filter(([k]) => !k.startsWith("_"))
             .map(([k, v]) => `  ${k}: ${v}`)
             .join("\n") || "  (none recorded)";
 
-          // Use the full scoring engine (no question sets) — ~8K tokens, covers all PA rules
+          // Use the full scoring engine (no question sets)  -  ~8K tokens, covers all PA rules
           let reScoringPrompt = buildSystemPrompt(firmConfig, "widget", { includeQuestionSets: false });
           reScoringPrompt +=
             `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
-            `\nFINAL RE-SCORING PASS — override all channel instructions\n` +
+            `\nFINAL RE-SCORING PASS  -  override all channel instructions\n` +
             `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
             `All intake questions (Round 1 and Round 2) have been answered.\n` +
             `Return next_question: null, next_questions: null, collect_identity: true, finalize: false.\n` +
@@ -696,9 +779,11 @@ export async function POST(req: Request) {
 
           try {
             const reScoringCompletion = await openai.chat.completions.create({
-              model: MODEL,
+              model: intakeModel,
               temperature: 0,
+              max_tokens: 2048,
               response_format: { type: "json_object" },
+              reasoning_effort: "none", // Gemini 2.5 thinking off
               messages: [
                 { role: "system", content: reScoringPrompt },
                 {
@@ -712,7 +797,7 @@ export async function POST(req: Request) {
             if (reScoringRaw) {
               const reScoredGpt = JSON.parse(reScoringRaw) as GptResponse;
 
-              // Lock fit components — they never change from R2 answers
+              // Lock fit components  -  they never change from R2 answers
               if (reScoredGpt.cpi) {
                 reScoredGpt.cpi.geo_score = existingCpi.geo_score;
                 reScoredGpt.cpi.practice_score = existingCpi.practice_score;
@@ -777,12 +862,16 @@ export async function POST(req: Request) {
             }
           } catch (err) {
             console.error("[screen] Round 2 CPI re-score failed, using existing CPI:", err);
-            // Fall through — user still gets identity step with baseline CPI
+            // Fall through  -  user still gets identity step with baseline CPI
           }
         }
 
-        const nextQuestions = batch.phase !== "identity" ? batch.questions : null;
-        const collectIdentity = batch.phase === "identity";
+        // After R2 has started, the firm-set refinement phase is exhausted from the
+        // widget's perspective — R2's GPT deep-dive replaces it. Collapse any remaining
+        // firm-set batch into identity so the user never sees a "Round 3" of duplicates.
+        const postRound2Identity = widgetRound2Started;
+        const nextQuestions = (batch.phase !== "identity" && !postRound2Identity) ? batch.questions : null;
+        const collectIdentity = batch.phase === "identity" || postRound2Identity;
 
         const shapeQ = (q: typeof batch.questions[number]) => q; // already shaped by selectNextQuestions
 
@@ -836,7 +925,7 @@ export async function POST(req: Request) {
           includeQuestionSets = true;
         }
       }
-      // else: first call — no questions, classification-only prompt
+      // else: first call  -  no questions, classification-only prompt
     }
 
     let systemPrompt = buildSystemPrompt(promptFirmConfig, channel, { includeQuestionSets });
@@ -868,7 +957,7 @@ export async function POST(req: Request) {
         `\n\nThese are the client's confirmed answers for this session. Do NOT include any question whose id or subject matches a key above in next_question or next_questions. Apply all scoring deltas for these values immediately.`;
     }
 
-    // ── Slot Extraction Block — S10.2 ────────────────────────────────────────────
+    // ── Slot Extraction Block  -  S10.2 ────────────────────────────────────────────
     // When a practice area is known, inject high-priority unfilled slots with their
     // option values and extraction_hints. GPT scans the full message history and
     // returns filled_slots + slot_confidence. Only high/medium confidence slots are
@@ -913,20 +1002,38 @@ export async function POST(req: Request) {
             `\n\nReturn at top level:\n` +
             `  "filled_slots": { "question_id": "option_value" }\n` +
             `  "slot_confidence": { "question_id": "high" | "medium" | "low" }\n` +
-            `If nothing can be extracted with confidence, return filled_slots: {} and slot_confidence: {}.`;
+            `If nothing can be extracted with confidence, return filled_slots: {} and slot_confidence: {}.\n\n` +
+            `ADDITIONALLY, return "implied_question_ids": [...] at top level.\n` +
+            `List any slot IDs from above where the client has CLEARLY answered the TOPIC in free text, even if no exact option value maps. Example: "I didn't go to the hospital" clearly answers a medical-treatment question at the topic level (the client is saying "no") even when the option values are about timing. Including an ID here will suppress the question without binding a value. Use this sparingly: only when re-asking would be a redundancy trap. Return [] if none apply.`;
         }
       }
     }
 
-    // ── Round 2 state — read from session scoring JSONB ─────────────────────────
+    // ── Round 2 state  -  read from session scoring JSONB ─────────────────────────
     const sessionScoringRaw = (session.scoring as Record<string, unknown>) ?? {};
     const round2Started = !!sessionScoringRaw._round_2_started;
     const round2QCount = (sessionScoringRaw._round_2_q_count as number) ?? 0;
     let startingRound2 = false; // set to true when this turn triggers Round 2
 
+    // ── Slot registry state  -  read from session scoring JSONB ────────────────────
+    // _slot_round: current round (1/2/3). Null = slot system not yet active.
+    // _slot_answered: accumulated map of slot ID → answer value(s) across all turns.
+    const slotRound = (sessionScoringRaw._slot_round as 1 | 2 | 3 | null) ?? null;
+    const slotAnswered = (sessionScoringRaw._slot_answered as Record<string, string | string[]>) ?? {};
+    let updatedSlotAnswered: Record<string, string | string[]> = { ...slotAnswered };
+    let slotRoundUpdated: 1 | 2 | 3 = slotRound ?? 1;
+
+    // ── Determine whether a slot bank is active for the current sub-type ─────────
+    // hasSlotBankActive gates the slot injection path below and suppresses the
+    // question-set injection so GPT does not receive two competing question lists.
+    const sessionSubTypeSlotInject = (session.practice_sub_type as string | null) ?? null;
+    const hasSlotBankActive = sessionSubTypeSlotInject
+      ? (SLOTS_BY_SUBTYPE.get(sessionSubTypeSlotInject)?.length ?? 0) > 0
+      : false;
+
     // ── For conversational channels: tell GPT exactly which question to ask next ──
     // This prevents GPT from picking questions arbitrarily and eliminates repeats.
-    if (channel !== "widget" && sessionPracticeArea) {
+    if (channel !== "widget" && sessionPracticeArea && !hasSlotBankActive) {
       const qs =
         promptFirmConfig.question_sets[sessionPracticeArea] ??
         Object.values(promptFirmConfig.question_sets).find(q => q.practice_area_id === sessionPracticeArea) ??
@@ -946,7 +1053,7 @@ export async function POST(req: Request) {
             `Set next_question.id = "${nextQ.id}", next_question.text = "${nextQ.text}", ` +
             `next_question.options from the numbered list above. Do NOT ask any other questions.`;
         } else if (!round2Started && ["A", "B"].includes((session.band as string) ?? "")) {
-          // Round 1 complete, Band A or B — start adaptive Round 2 deep-dive
+          // Round 1 complete, Band A or B  -  start adaptive Round 2 deep-dive
           startingRound2 = true;
           const entitySummary = Object.entries(allCollected)
             .filter(([k]) => !k.startsWith("_"))
@@ -954,7 +1061,7 @@ export async function POST(req: Request) {
             .join(", ");
           systemPrompt +=
             `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
-            `\nROUND 2: ADAPTIVE DEEP-DIVE (3 questions total)\n` +
+            `\nROUND 2: ADAPTIVE DEEP-DIVE (5 questions total)\n` +
             `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
             `Round 1 screening is complete. Initial band candidate: ${(session.band as string) ?? "B"}.\n` +
             `Collected so far: ${entitySummary}\n\n` +
@@ -967,20 +1074,20 @@ export async function POST(req: Request) {
             `Generate ONE question with 2–4 numbered options relevant to the client's stated facts.\n` +
             `Use a new question ID prefixed with "r2_" (e.g. "r2_income_replacement").\n` +
             `Set finalize=false, collect_identity=false.`;
-        } else if (round2Started && round2QCount < 2) {
-          // Round 2 in progress — ask one more adaptive question (cap at 3 total = indices 0,1,2)
+        } else if (round2Started && round2QCount < 4) {
+          // Round 2 in progress  -  ask one more adaptive question (cap at 5 total = indices 0,1,2,3,4)
           const entitySummary = Object.entries(allCollected)
             .filter(([k]) => !k.startsWith("_"))
             .map(([k, v]) => `${k}: ${v}`)
             .join(", ");
           systemPrompt +=
             `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
-            `\nROUND 2 CONTINUING (question ${round2QCount + 1} of 3)\n` +
+            `\nROUND 2 CONTINUING (question ${round2QCount + 1} of 5)\n` +
             `Collected so far: ${entitySummary}\n\n` +
             `Ask ONE more targeted follow-up question on a dimension not yet covered. Use a "r2_" prefixed ID.\n` +
             `Set finalize=false, collect_identity=false.`;
         } else {
-          // All done — Round 1 only (Band C/D/E) or Round 2 complete
+          // All done  -  Round 1 only (Band C/D/E) or Round 2 complete
           systemPrompt +=
             `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
             `\nAll intake questions have been answered. Set collect_identity=true in your response.`;
@@ -988,7 +1095,52 @@ export async function POST(req: Request) {
       }
     }
 
-    // ── First-turn compact slot extraction — S10.5 ───────────────────────────────
+    // ── Slot registry question injection  -  Phase 3B ───────────────────────────────
+    // Mutually exclusive with the question-set injection above (hasSlotBankActive gates both).
+    // Slot system activates on turn 2: sub_type is written to session on turn 1 from the GPT
+    // response, so sessionSubTypeSlotInject is populated from turn 2 onward.
+    // Round 1 (6 slots): unconditional qualifying questions, injected verbatim.
+    // Round 2 (5 slots): dependency-filtered, GPT selects the best one from the list.
+    // Round 3 (all slots): triggered by shouldTriggerRound3()  -  damages / severity depth.
+    if (channel !== "widget" && sessionPracticeArea && hasSlotBankActive && sessionSubTypeSlotInject) {
+      const currentRound = slotRoundUpdated;
+      const slotsToAsk = selectSlots(sessionSubTypeSlotInject, slotAnswered, currentRound, updatedConfirmed);
+
+      if (slotsToAsk.length > 0) {
+        const slotLines = slotsToAsk.map(slot => {
+          const optionText = slot.options
+            ? slot.options.map(o => `${o.value}: "${o.label}"`).join(" | ")
+            : "(free text)";
+          const preambleLine = slot.preamble ? `\n    Note: ${slot.preamble}` : "";
+          return `  [${slot.id}] ${slot.question}${preambleLine}\n    Options: ${optionText}`;
+        }).join("\n\n");
+
+        systemPrompt +=
+          `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
+          `\nSLOT QUESTIONS  -  Round ${currentRound} (${sessionSubTypeSlotInject})\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+          `Ask the FIRST slot question listed below that has not yet been answered. ` +
+          `Ask it conversationally in response_text.\n` +
+          `Also scan ALL prior client messages: if any earlier message already answers a slot, ` +
+          `extract the value now without asking again.\n` +
+          `Use the exact slot ID and exact option value when extracting.\n\n` +
+          slotLines +
+          `\n\nQUESTION LANGUAGE: When returning these questions in next_questions, rewrite each "text" field to be short and conversational. Plain English, like a real person asking. Keep IDs, option values, and complexity_delta unchanged. Only the text field changes. Examples: "What is the nature of the debt?" → "What kind of debt is this?"; "When did the debt become due and payable?" → "When was the money supposed to be paid back?"; "Were you an employee, not a contractor or freelancer?" → "Were you hired as an employee, not a contractor?"\n\n` +
+          `Return at top level:\n` +
+          `  "filled_slots": { "slot_id": "option_value" }\n` +
+          `  "slot_confidence": { "slot_id": "high" | "medium" | "low" }\n` +
+          `Only include HIGH or MEDIUM confidence extractions from prior messages. Never guess.\n` +
+          `Set finalize=false, collect_identity=false.`;
+      } else {
+        // All slots for this round have been answered  -  advance
+        systemPrompt +=
+          `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
+          `\nAll Round ${currentRound} qualification questions for ${sessionSubTypeSlotInject} ` +
+          `have been collected. Set collect_identity=true, finalize=false.`;
+      }
+    }
+
+    // ── First-turn compact slot extraction  -  S10.5 ───────────────────────────────
     // On turn 1, sessionPracticeArea is null so the full SLOT EXTRACTION block above
     // never fires. Inject a compact schema for the 6 most common practice areas so GPT
     // does classification AND extraction in a single call.
@@ -1008,7 +1160,44 @@ export async function POST(req: Request) {
         `CRIM: crim_q1=yes|no  crim_q19=under_3mo|3_6mo|6_12mo|1_2yr|over_2yr  crim_q34=over_80|refuse|drugs|impaired|other  crim_q35=provided|refused|unsure\n` +
         `REAL: real_q1=buying|selling|both  real_q2=house|condo|commercial|other  real_q14=under_2wk|2_4wk|1_3mo|over_3mo|unknown\n` +
         `LLT: llt_q1=landlord|tenant  llt_q18=0|1_2mo|3_6mo|over_6mo  llt_q19=yes|no\n\n` +
-        `Return at top level: "filled_slots": { "question_id": "option_value" } and "slot_confidence": { "question_id": "high"|"medium" }`;
+        `Return at top level: "filled_slots": { "question_id": "option_value" } and "slot_confidence": { "question_id": "high"|"medium" }\n` +
+        `Also return "implied_question_ids": [...] listing any IDs above where the client CLEARLY answered the topic in free text even if no option value maps (e.g. "didn't go to hospital" implies pi_q17). Return [] if none.`;
+    }
+
+    // ── LLM question rewrite / resolve / suppress  -  candidate pool ──────────────
+    // When the feature flag is active and we have a sub-type (turn 2+ widget),
+    // compute the remaining candidate pool. The rewrite is then fired as a
+    // separate GPT call in parallel with the main screening call (see below),
+    // using OpenAI structured outputs so the payload shape is schema-enforced.
+    // Question IDs and option values are frozen so scoring stays deterministic.
+    // On turn 1 the sub-type is not yet known, so the event extractor and
+    // compact schema handle the first question; rewrite kicks in from turn 2.
+    const rewriteMode = getRewriteMode();
+    let rewriteCandidates: Question[] = [];
+    let rewriteSubType: string | null = null;
+    if (
+      rewriteMode !== "off" &&
+      channel === "widget" &&
+      sessionPracticeArea
+    ) {
+      rewriteSubType = (session.practice_sub_type as string | null) ?? null;
+      const rewriteQSetKey = resolveQuestionSetKey(sessionPracticeArea, rewriteSubType);
+      const rewriteQuestionSet =
+        firmConfig.question_sets[rewriteQSetKey] ??
+        firmConfig.question_sets[sessionPracticeArea] ??
+        Object.values(firmConfig.question_sets).find(
+          qs => qs.practice_area_id === sessionPracticeArea,
+        ) ??
+        null;
+
+      if (rewriteQuestionSet && rewriteQuestionSet.questions.length > 0) {
+        // Use allCollected (existing entities + structured data this turn) so we
+        // never ask GPT to classify questions the client has already answered.
+        rewriteCandidates = candidatesFromQuestionSet(
+          rewriteQuestionSet.questions,
+          allCollected,
+        );
+      }
     }
 
     // ── Inject compliance gate questions ─────────────────────────────
@@ -1017,7 +1206,16 @@ export async function POST(req: Request) {
     // are injected (checked against allCollected). Capped at 3 per turn to avoid
     // overwhelming the client on turn 1. S1 flags get a critical escalation note.
     if (activeComplianceFlags.length > 0) {
-      const gateQuestions = getGateQuestions(activeComplianceFlags);
+      // On turn 1, sessionPracticeArea is null. Infer PA from message text for textByPA resolution.
+      const paHint = sessionPracticeArea ?? (
+        /\b(deport(ed|ation)?|immigr|visa|refugee|citizenship|sponsor|inadmissib|removal order|work permit|permanent resident)\b/i.test(message) ? "immigration" :
+        /\b(fired|terminat|laid off|wrongful dismissal|constructive dismissal|severance|employment)\b/i.test(message) ? "employment" :
+        /\b(accident|car crash|collision|slip|fall|injury|injured)\b/i.test(message) ? "pi" :
+        /\b(divorce|separation|custody|child support|spousal|family court)\b/i.test(message) ? "family" :
+        /\b(charged|arrested|criminal|bail|offence|DUI|assault)\b/i.test(message) ? "criminal" :
+        undefined
+      );
+      const gateQuestions = getGateQuestions(activeComplianceFlags, paHint ?? undefined);
       const unaskedGate = gateQuestions.filter(q => !(q.id in allCollected));
       if (unaskedGate.length > 0) {
         const gateLines = unaskedGate
@@ -1027,16 +1225,16 @@ export async function POST(req: Request) {
         const criticalNote = hasCriticalFlag(activeComplianceFlags)
           ? `\n\nCRITICAL: One or more flags represent potential malpractice exposure or a time-sensitive deadline. These MUST be asked before any other qualification question.`
           : "";
-        // S1 preamble — one authored sentence to open the gate question block.
+        // S1 preamble  -  one authored sentence to open the gate question block.
         // Tells the client why we're asking. Never generated; sourced from S1_PREAMBLES.
         const gatePreamble = getFlagPreamble(activeComplianceFlags);
         systemPrompt +=
           `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
-          `\nCOMPLIANCE FLAGS — MANDATORY GATE QUESTIONS\n` +
+          `\nCOMPLIANCE FLAGS  -  MANDATORY GATE QUESTIONS\n` +
           `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
           (gatePreamble
-            ? `Open your response with this sentence (verbatim): "${gatePreamble}" Then ask:\n\n`
-            : `These compliance signals were detected in the conversation. Ask the following questions before standard qualification questions. Integrate them naturally:\n\n`) +
+            ? `Open your response with this sentence (verbatim): "${gatePreamble}" Then ask the following question. IMPORTANT: do not use vague pronouns like "that" or "it"  -  replace them with the specific event the client named (e.g. "the deportation", "the termination", "the accident"). Ask:\n\n`
+            : `These compliance signals were detected in the conversation. Ask the following questions before standard qualification questions. Replace any vague pronouns ("that", "it", "this") with the specific event the client described. Integrate naturally:\n\n`) +
           gateLines +
           criticalNote +
           `\n\nOnce these are answered, resume normal scoring and question flow. ` +
@@ -1045,13 +1243,13 @@ export async function POST(req: Request) {
     }
 
     // ── Classifier: parallel call on turn 1 ──────────────────────────
-    // Runs alongside the main GPT call — zero added latency.
+    // Runs alongside the main GPT call  -  zero added latency.
     // Provides semantic flag detection for signals that regex cannot catch:
     //   "I've been fighting internally for months" → ltd_appeal_clock_running
     //   "my brother handles everything for mom"   → estates_undue_influence
     //   "I signed papers before calling a lawyer" → emp_severance_signed
     // Only fires on turn 1 when no practice area has been established yet.
-    // Failures are caught and treated as null — never blocks the main response.
+    // Failures are caught and treated as null  -  never blocks the main response.
     const userTurnCount = conversation.filter(m => m.role === "user").length;
     const classifierPromise: Promise<ClassifierResult | null> =
       !sessionPracticeArea && userTurnCount <= 1
@@ -1059,25 +1257,67 @@ export async function POST(req: Request) {
             firmPracticeAreas: firmConfig.practice_areas,
             conversationText: allUserText,
             channel,
-          }).catch(err => {
+          }, MODELS.CLASSIFIER).catch(err => {
             console.error("[classifier] Non-fatal failure:", err);
             return null;
           })
         : Promise.resolve(null);
 
+    // ── Rewrite model: dedicated parallel call ────────────────────────
+    // The rewrite job (classify each candidate into resolved / suppressed /
+    // to-ask, rewrite surface text to anchor on the client's words) is
+    // isolated into its own GPT call. Running it inline in the main
+    // screening prompt made gpt-4o-mini reliably return empty arrays; the
+    // isolated call uses OpenAI structured outputs, so the response shape
+    // is schema-enforced.
+    // Returns null on any failure (network, parse, abort, timeout); the
+    // intake never breaks because the rewrite call failed.
+    const rewritePromise: Promise<RewriteCallResult | null> =
+      rewriteMode !== "off" && rewriteCandidates.length > 0
+        ? callRewriteModel({
+            candidates: rewriteCandidates,
+            subType: rewriteSubType,
+            situation: situationText,
+            history: conversation.slice(-6) as RewriteTurn[],
+            client: openai,
+            model: intakeModel,
+          })
+        : Promise.resolve(null);
+
     // ── Call GPT (main) ───────────────────────────────────────────────
-    // Runs in parallel with the classifier above.
-    const [completion, classifierResult] = await Promise.all([
-      openai.chat.completions.create({
-        model: MODEL,
-        temperature: 0, // deterministic scoring
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...conversation.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
-        ],
-      }),
+    // Runs in parallel with the classifier and rewrite calls above.
+    // Falls back to OpenRouter (gpt-4o-mini) on transient Google AI 5xx errors
+    // so a momentary overload never surfaces as a user-visible 500.
+    const mainMessages = [
+      { role: "system" as const, content: systemPrompt },
+      ...conversation.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+    ];
+    const mainCallPromise = openai.chat.completions.create({
+      model: intakeModel,
+      temperature: 0, // deterministic scoring
+      max_tokens: 2048,
+      response_format: { type: "json_object" },
+      reasoning_effort: "none", // Gemini 2.5 thinking off  -  intake is classification + structured extraction
+      messages: mainMessages,
+    }).catch(async (err: unknown) => {
+      const status = (err as { status?: number }).status;
+      if (status === 503 || status === 502 || status === 529) {
+        console.warn("[screen] Google AI returned", status, "- falling back to OpenRouter:", MODELS.FALLBACK);
+        return openrouter.chat.completions.create({
+          model: MODELS.FALLBACK,
+          temperature: 0,
+          max_tokens: 2048,
+          response_format: { type: "json_object" },
+          messages: mainMessages,
+        });
+      }
+      throw err;
+    });
+
+    const [completion, classifierResult, rewriteCallResult] = await Promise.all([
+      mainCallPromise,
       classifierPromise,
+      rewritePromise,
     ]);
 
     const rawResponse = completion.choices[0]?.message?.content;
@@ -1092,16 +1332,146 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "GPT returned invalid JSON", raw: rawResponse }, { status: 500 });
     }
 
-    // ── Merge GPT-extracted slots into confirmed answers — S10.2 ─────────────────
+    // ── Merge GPT-extracted slots into confirmed answers  -  S10.2 ─────────────────
     // GPT returns filled_slots (question_id → option_value) from scanning free text.
     // Only high and medium confidence extractions are auto-confirmed.
-    // Low confidence slots are discarded — better to ask than to guess.
+    // Low confidence slots are discarded  -  better to ask than to guess.
+    // Slot-registry IDs (containing "__") are handled separately below  -  they go into
+    // updatedSlotAnswered, not updatedConfirmed, to keep the two systems isolated.
     if (gptResponse.filled_slots && Object.keys(gptResponse.filled_slots).length > 0) {
       const confidence = gptResponse.slot_confidence ?? {};
       for (const [slotId, slotValue] of Object.entries(gptResponse.filled_slots)) {
+        if (slotId.includes("__")) continue; // slot-registry IDs handled below
         const conf = confidence[slotId] ?? "medium"; // default to medium if not specified
         if (conf === "high" || conf === "medium") {
           updatedConfirmed[slotId] = slotValue;
+        }
+      }
+    }
+
+    // ── Merge LLM-inferred implied question IDs  -  topic-level redundancy ─────────
+    // The LLM flags questions whose TOPIC is answered in free text but where no
+    // option value maps cleanly (e.g. "I didn't go to the hospital" answers a
+    // medical-treatment question at the topic level).
+    // Stored with a sentinel value so selectNextQuestions sees them as confirmed
+    // and filters them out. Regex inference in question-selector is the safety net.
+    if (Array.isArray(gptResponse.implied_question_ids) && gptResponse.implied_question_ids.length > 0) {
+      for (const qId of gptResponse.implied_question_ids) {
+        if (typeof qId === "string" && qId.length > 0 && !qId.includes("__") && !(qId in updatedConfirmed)) {
+          updatedConfirmed[qId] = "__implied__";
+        }
+      }
+    }
+
+    // ── LLM rewrite: apply resolved + suppressed, stash rewrite map ───────────────
+    // Feature-flagged via LLM_QUESTION_REWRITE. The payload comes from the
+    // dedicated parallel call (rewriteCallResult) fired above. In "shadow" mode
+    // the decisions are logged but never applied. In "on" mode, resolved_questions
+    // write real option values to updatedConfirmed (gated by confidence >= 0.8 +
+    // option value check), suppressed_questions write the __implied__ sentinel,
+    // and the rewrite map is overlaid onto next_questions later.
+    // When the rewrite call failed or returned null, this block is a no-op.
+    const rewriteTextMap = new Map<string, string>();
+    if (
+      rewriteMode !== "off" &&
+      rewriteCandidates.length > 0 &&
+      rewriteCallResult !== null
+    ) {
+      const rewritePayload = rewriteCallResult.payload;
+      const candidateIds = new Set(rewriteCandidates.map(q => q.id));
+
+      if (rewriteMode === "on") {
+        const resolveResult = applyResolvedQuestions(
+          rewritePayload.resolved_questions,
+          rewriteCandidates,
+          updatedConfirmed,
+        );
+        const suppressResult = applySuppressedQuestions(
+          rewritePayload.suppressed_questions,
+          rewriteCandidates,
+          updatedConfirmed,
+        );
+        const rewriteResult = buildRewriteMap(
+          rewritePayload.questions_to_ask,
+          candidateIds,
+        );
+        for (const [id, text] of rewriteResult.map) rewriteTextMap.set(id, text);
+
+        console.info("[llm-rewrite] mode=on", {
+          session_id: session.id,
+          sub_type: (session.practice_sub_type as string | null) ?? null,
+          candidates: rewriteCandidates.length,
+          model: rewriteCallResult.model,
+          resolved_applied: resolveResult.applied,
+          suppressed_applied: suppressResult.applied,
+          rewrites_applied: rewriteTextMap.size,
+          resolved_log: resolveResult.log,
+          suppressed_log: suppressResult.log,
+          rewrite_log: rewriteResult.log,
+        });
+      } else {
+        // shadow mode  -  compute everything into a scratch map and log, never mutate
+        const scratchConfirmed = { ...updatedConfirmed };
+        const resolveResult = applyResolvedQuestions(
+          rewritePayload.resolved_questions,
+          rewriteCandidates,
+          scratchConfirmed,
+        );
+        const suppressResult = applySuppressedQuestions(
+          rewritePayload.suppressed_questions,
+          rewriteCandidates,
+          scratchConfirmed,
+        );
+        const rewriteResult = buildRewriteMap(
+          rewritePayload.questions_to_ask,
+          candidateIds,
+        );
+
+        console.info("[llm-rewrite] mode=shadow (no-op)", {
+          session_id: session.id,
+          sub_type: (session.practice_sub_type as string | null) ?? null,
+          candidates: rewriteCandidates.length,
+          model: rewriteCallResult.model,
+          resolved_would_apply: resolveResult.applied,
+          suppressed_would_apply: suppressResult.applied,
+          rewrites_would_apply: rewriteResult.map.size,
+          resolved_log: resolveResult.log,
+          suppressed_log: suppressResult.log,
+          rewrite_log: rewriteResult.log,
+        });
+      }
+    }
+
+    // ── Slot registry answer accumulation  -  Phase 3B ──────────────────────────────
+    // Collect slot-registry answers (IDs with "__") from filled_slots into
+    // updatedSlotAnswered and advance the slot round as answers accumulate.
+    // Round 1→2: when no round-1 slots remain for the sub-type.
+    // Round 2→3: when any answered option carries triggersRound3: true.
+    if (gptResponse.filled_slots && Object.keys(gptResponse.filled_slots).length > 0) {
+      const slotConf = gptResponse.slot_confidence ?? {};
+      const slotSubTypeForAccum =
+        gptResponse.practice_sub_type ?? (session.practice_sub_type as string | null) ?? null;
+
+      for (const [slotId, slotValue] of Object.entries(gptResponse.filled_slots)) {
+        if (!slotId.includes("__")) continue; // only slot-registry IDs
+        const conf = slotConf[slotId] ?? "medium";
+        if (conf === "high" || conf === "medium") {
+          updatedSlotAnswered[slotId] = slotValue;
+        }
+      }
+
+      // Round advancement (only when slot answers actually arrived this turn)
+      if (Object.keys(updatedSlotAnswered).length > Object.keys(slotAnswered).length && slotSubTypeForAccum) {
+        if (slotRoundUpdated === 1) {
+          const remainingR1 = selectSlots(slotSubTypeForAccum, updatedSlotAnswered, 1, updatedConfirmed);
+          if (remainingR1.length === 0) {
+            slotRoundUpdated = 2;
+            console.info("[slots] Round 1 complete  -  advancing to Round 2");
+          }
+        }
+        if (slotRoundUpdated === 2 && shouldTriggerRound3(updatedSlotAnswered)) {
+          slotRoundUpdated = 3;
+          console.info("[slots] Round 3 triggered  -  high-value signals detected");
         }
       }
     }
@@ -1147,7 +1517,7 @@ export async function POST(req: Request) {
       // Handle classifier out-of-scope signal.
       // Only override the main GPT response when the classifier is high-confidence
       // AND neither the main GPT nor the firm config has a matching PA.
-      // Low/medium confidence out-of-scope is ignored — main GPT result prevails.
+      // Low/medium confidence out-of-scope is ignored  -  main GPT result prevails.
       if (
         classifierResult.out_of_scope &&
         classifierResult.confidence === "high" &&
@@ -1198,7 +1568,7 @@ export async function POST(req: Request) {
       gptResponse.response_text = clarifyQ;
       gptResponse.next_question = null;
       gptResponse.next_questions = null;
-      console.info("[classifier] Low-confidence PA — requesting disambiguation on turn 1.");
+      console.info("[classifier] Low-confidence PA  -  requesting disambiguation on turn 1.");
     }
 
     // ── Resolve practice_sub_type ─────────────────────────────────────
@@ -1219,7 +1589,7 @@ export async function POST(req: Request) {
           `[sub-type] conflict: regex=${regexResult} gpt=${resolvedSubType} → using GPT`,
         );
         // Log conflict to Supabase for monitoring (fire-and-forget, don't block response).
-        // Uses the service-role key path — inserts from the anon client will be rejected by
+        // Uses the service-role key path  -  inserts from the anon client will be rejected by
         // RLS but the error is swallowed intentionally: telemetry must never block the session.
         const situationHash = require("crypto")
           .createHash("sha256")
@@ -1242,9 +1612,69 @@ export async function POST(req: Request) {
       gptResponse.practice_sub_type = existingSubType;
     }
 
+    // ── Umbrella → sub-type ID remap ───────────────────────────────────
+    // The first-turn compact schema uses umbrella PA IDs (e.g. "pi_q17") because
+    // sub-type is not yet known when the prompt is built. After sub-type resolution,
+    // translate umbrella-scoped keys in updatedConfirmed to the actual bank IDs
+    // served by the widget (e.g. "pi_q17" → "pi_mva_q17" when sub-type is "pi_mva").
+    // Without this, LLM-extracted answers never match the served questions and the
+    // widget re-asks them.
+    const resolvedSubTypeForRemap = gptResponse.practice_sub_type ?? existingSubType ?? null;
+    const umbrellaPA = gptResponse.practice_area ?? null;
+    if (resolvedSubTypeForRemap && umbrellaPA && resolvedSubTypeForRemap.startsWith(`${umbrellaPA}_`)) {
+      const umbrellaPrefix = `${umbrellaPA}_q`;
+      const subTypePrefix = `${resolvedSubTypeForRemap}_q`;
+      for (const key of Object.keys(updatedConfirmed)) {
+        if (key.startsWith(umbrellaPrefix) && !key.startsWith(subTypePrefix)) {
+          const suffix = key.slice(umbrellaPrefix.length); // e.g. "17"
+          const remapped = `${subTypePrefix}${suffix}`;
+          if (!(remapped in updatedConfirmed)) {
+            updatedConfirmed[remapped] = updatedConfirmed[key];
+          }
+          delete updatedConfirmed[key];
+        }
+      }
+    }
+
     // Resolve the question-set key from PA + sub-type
     const questionSetKey = gptResponse.practice_area
       ? resolveQuestionSetKey(gptResponse.practice_area, gptResponse.practice_sub_type)
+      : null;
+
+    // ── Event pipeline: turn-1 sub-type detection + targeted first question ──────
+    // On turn 1 (no practice_area yet on the session), run the deterministic
+    // extractor. Provides a precise sub-type bank key and a targeted first question
+    // before any GPT question set runs. Zero API cost. Zero hallucination surface.
+    // Fixes the Walmart bug: "slipped at walmart" → slip_fall → pi_slip_fall bank,
+    // not the generic PI bank that defaults to MVA questions.
+    const isFirstTurn = !session.practice_area;
+    const detectedEvents = isFirstTurn ? extractEvents(message) : [];
+    const selectedEvent = detectedEvents.length > 0 ? selectEvent(detectedEvents) : null;
+    const eventDerivedSubTypeKey = selectedEvent ? mapEventToSubType(selectedEvent.type) : null;
+    const sameTypeEvents = selectedEvent
+      ? detectedEvents.filter(e => e.type === selectedEvent.type)
+      : [];
+    // Distinctness gate: a client mentioning "car accident" twice in one message
+    // does NOT mean there were two accidents. Only treat same-type events as
+    // distinct when we have an affirmative signal:
+    //   (a) at least two events carry DIFFERENT resolved time triggers, OR
+    //   (b) the message contains explicit enumeration / multiplicity language
+    //       ("first", "second", "another", "separate", "two accidents",
+    //        "both accidents", "earlier accident", "previous accident", etc.)
+    // Without either, collapse to a single event and skip the disambiguation.
+    const hasDistinctTimes = (() => {
+      const times = sameTypeEvents
+        .map(e => (e.time ? e.time.toLowerCase().trim() : null))
+        .filter((t): t is string => t !== null);
+      return new Set(times).size >= 2;
+    })();
+    const enumerationSignal = /\b(first|second|third|another|other|separate|two|three|four|multiple|both|earlier|previous|prior)\s+(accident|accidents|crash|crashes|collision|collisions|incident|incidents|fall|falls|termination|firing|situation|situations)\b|\b(accidents|crashes|collisions|incidents|falls|terminations|firings)\b/i.test(message);
+    const treatAsMultiInstance = sameTypeEvents.length > 1 && (hasDistinctTimes || enumerationSignal);
+    const eventFirstQuestion = selectedEvent
+      ? generateQuestion(selectedEvent, treatAsMultiInstance ? sameTypeEvents : undefined)
+      : null;
+    const eventFirstPreamble = selectedEvent
+      ? generatePreamble(selectedEvent, treatAsMultiInstance ? sameTypeEvents : undefined)
       : null;
 
     // ── Apply per-area CPI floors ─────────────────────────────────────
@@ -1265,14 +1695,39 @@ export async function POST(req: Request) {
     // ── Validate + fix scoring (single pass, after all adjustments) ───
     gptResponse.cpi = validateAndFixScoring(gptResponse.cpi);
 
-    // Warn only after floors are applied — a zero here is a genuine miss.
+    // Warn only after floors are applied  -  a zero here is a genuine miss.
     if (gptResponse.cpi.practice_score > 0 && gptResponse.cpi.complexity_score === 0 && gptResponse.cpi.fee_score === 0) {
-      console.warn("[cpi] Floors applied but value score still zero — check GPT scoring for PA:", gptResponse.practice_area);
+      console.warn("[cpi] Floors applied but value score still zero  -  check GPT scoring for PA:", gptResponse.practice_area);
+    }
+
+    // ── Slot CPI delta application  -  Phase 3B ────────────────────────────────────
+    // Slot deltas are additive adjustments to the three normalized CPI axes
+    // (cpi_fit, cpi_urgency, cpi_friction). Applied AFTER validateAndFixScoring() so
+    // they layer on top of GPT's base scoring without interfering with raw component math.
+    // Band modifiers are re-applied to the adjusted axes to ensure urgency promotion
+    // and friction floor fire correctly on the final axis values.
+    if (Object.keys(updatedSlotAnswered).length > 0) {
+      const slotDelta = scoreFromSlotAnswers(updatedSlotAnswered);
+      if (slotDelta.fit !== 0 || slotDelta.urgency !== 0 || slotDelta.friction !== 0) {
+        gptResponse.cpi.cpi_fit      = Math.min(100, Math.max(0, gptResponse.cpi.cpi_fit + slotDelta.fit));
+        gptResponse.cpi.cpi_urgency  = Math.min(100, Math.max(0, gptResponse.cpi.cpi_urgency + slotDelta.urgency));
+        gptResponse.cpi.cpi_friction = Math.min(100, Math.max(0, gptResponse.cpi.cpi_friction + slotDelta.friction));
+
+        // Re-apply band modifiers on the adjusted axes (mirrors validateAndFixScoring logic)
+        if (!gptResponse.cpi.band_locked) {
+          if (gptResponse.cpi.cpi_urgency >= 75 && gptResponse.cpi.total >= 55 && gptResponse.cpi.band !== "A") {
+            gptResponse.cpi.band = "A";
+          }
+          if (gptResponse.cpi.cpi_friction >= 80 && (gptResponse.cpi.band === "A" || gptResponse.cpi.band === "B")) {
+            gptResponse.cpi.band = "D";
+          }
+        }
+      }
     }
 
     // ── Out-of-scope gate ─────────────────────────────────────────────
     // If the identified practice area is marked out_of_scope in the firm config,
-    // finalize immediately with Band E — do not collect identity or ask questions.
+    // finalize immediately with Band E  -  do not collect identity or ask questions.
     if (gptResponse.practice_area && !gptResponse.finalize) {
       const paConfig = firmConfig.practice_areas.find(
         (a) =>
@@ -1318,18 +1773,43 @@ export async function POST(req: Request) {
           Object.assign(updatedConfirmed, postClassAutoConfirmed);
         }
 
-        // Dynamic question selection — S10.3 + band_locked short-circuit — S10.4
+        // Dynamic question selection  -  S10.3 + band_locked short-circuit  -  S10.4
         // Use questionSetKey (sub-type) as the schema lookup key so priority weights
         // are drawn from the correct sub-type slot schema.
+        // On turn 1, event-derived sub-type takes precedence for slot schema lookup.
         const gpBand = gptResponse.cpi.band ?? "C";
         const gpBandLocked = gptResponse.cpi.band_locked ?? false;
-        const slotLookupKey = questionSetKey ?? paId ?? "";
+        const slotLookupKey = (isFirstTurn && eventDerivedSubTypeKey)
+          ? eventDerivedSubTypeKey
+          : (questionSetKey ?? paId ?? "");
         const postGptBatch = gpBandLocked
           ? { questions: [], phase: "identity" as const }
-          : selectNextQuestions(questionSet.questions, slotLookupKey, updatedConfirmed, gpBand);
+          : selectNextQuestions(questionSet.questions, slotLookupKey, updatedConfirmed, gpBand, situationText);
 
         if (postGptBatch.phase !== "identity") {
-          gptResponse.next_questions = postGptBatch.questions;
+          // Prepend the event-derived first question on turn 1 when available.
+          // It is a free-text question targeting the specific information gap the
+          // extractor identified (e.g. WHEN for slip_fall, written agreement for debt).
+          const bankQuestions = postGptBatch.questions;
+          const eventQ = (eventFirstQuestion && isFirstTurn)
+            ? [{
+                id: `event_q_${selectedEvent!.type}`,
+                text: eventFirstQuestion,
+                options: [] as Array<{ label: string; value: string }>,
+                allow_free_text: true as const,
+                ...(eventFirstPreamble ? { description: eventFirstPreamble } : {}),
+              }]
+            : [];
+          // De-duplicate: when the bank already has a structured question covering the
+          // same topic as the event question, suppress the event question (free-text)
+          // and let the bank version (with clickable options) serve instead.
+          // Rule: no free-text questions in Round 1 when a structured equivalent exists.
+          const eventQTextNorm = eventFirstQuestion?.trim().toLowerCase() ?? "";
+          const bankCoversEventTopic = eventFirstQuestion
+            ? bankQuestions.some(bq => bq.text.trim().toLowerCase() === eventQTextNorm)
+            : false;
+          const filteredEventQ = bankCoversEventTopic ? [] : eventQ;
+          gptResponse.next_questions = [...filteredEventQ, ...bankQuestions];
           gptResponse.next_question = null;
         } else {
           gptResponse.next_questions = null;
@@ -1341,6 +1821,107 @@ export async function POST(req: Request) {
         gptResponse.next_questions = [gptResponse.next_question];
         gptResponse.next_question = null;
       }
+
+      // Final safety net: strip implied or already-confirmed questions from
+      // next_questions regardless of which branch populated it. Covers two leaks:
+      //   (a) questionSet lookup misses (firm PA id ↔ question_set key mismatch)  -
+      //       GPT next_questions pass through without selectNextQuestions filtering.
+      //   (b) else-if fallback promotes next_question without filtering.
+      // selectNextQuestions applies the same filter on the primary path, so this
+      // is a no-op there.
+      if (Array.isArray(gptResponse.next_questions) && gptResponse.next_questions.length > 0) {
+        const pool = gptResponse.next_questions as unknown as Question[];
+        const impliedFromText = inferImpliedAnswers(situationText, pool);
+        const filtered = pool.filter(
+          q => !(q.id in updatedConfirmed) && !impliedFromText.has(q.id),
+        );
+        if (filtered.length === 0) {
+          gptResponse.next_questions = null;
+          gptResponse.collect_identity = true;
+        } else if (filtered.length < pool.length) {
+          gptResponse.next_questions = filtered as typeof gptResponse.next_questions;
+        }
+      }
+
+      // LLM rewrite overlay: replace canonical text with the validated
+      // rewrite for matching ids. No-op when rewriteTextMap is empty or
+      // feature flag is off. Ids, options, and everything else are left alone.
+      if (rewriteMode === "on" && rewriteTextMap.size > 0 && Array.isArray(gptResponse.next_questions)) {
+        let overlaid = 0;
+        for (const q of gptResponse.next_questions) {
+          if (!q || typeof q.id !== "string") continue;
+          const rewritten = rewriteTextMap.get(q.id);
+          if (rewritten) {
+            q.text = rewritten;
+            overlaid++;
+          }
+        }
+        if (overlaid > 0) {
+          console.info("[llm-rewrite] overlaid text on next_questions", {
+            session_id: session.id,
+            overlaid,
+            total: gptResponse.next_questions.length,
+          });
+        }
+      }
+
+      // Turn-1 rewrite: sequential, post-GPT, fires when the initial message is
+      // rich enough (≥8 words) to anchor personalization. Uses situation text as
+      // the sole anchor since there is no Q&A history on turn 1. Reuses the
+      // questionSet already resolved above. Non-blocking: any failure is caught.
+      if (
+        isFirstTurn &&
+        rewriteMode !== "off" &&
+        situationText.trim().split(/\s+/).length >= 8 &&
+        gptResponse.practice_area &&
+        questionSet &&
+        Array.isArray(gptResponse.next_questions) &&
+        gptResponse.next_questions.length > 0
+      ) {
+        try {
+          const t1Candidates = candidatesFromQuestionSet(questionSet.questions, allCollected);
+          if (t1Candidates.length > 0) {
+            const t1Result = await callRewriteModel({
+              candidates: t1Candidates,
+              subType: gptResponse.practice_sub_type ?? null,
+              situation: situationText,
+              history: [],
+              client: openai,
+              model: intakeModel,
+              timeoutMs: 6000, // sequential — keep short so turn-1 latency stays reasonable
+            });
+            if (t1Result !== null) {
+              const t1CandidateIds = new Set(t1Candidates.map(q => q.id));
+              const { map: t1TextMap } = buildRewriteMap(t1Result.payload.questions_to_ask, t1CandidateIds);
+              if (rewriteMode === "on" && t1TextMap.size > 0) {
+                let overlaid = 0;
+                for (const q of gptResponse.next_questions) {
+                  if (!q || typeof q.id !== "string") continue;
+                  const rewritten = t1TextMap.get(q.id);
+                  if (rewritten) { q.text = rewritten; overlaid++; }
+                }
+                if (overlaid > 0) {
+                  console.info("[llm-rewrite] turn-1 overlaid", {
+                    session_id: session.id,
+                    overlaid,
+                    total: gptResponse.next_questions.length,
+                    model: t1Result.model,
+                  });
+                }
+              } else if (rewriteMode === "shadow") {
+                console.info("[llm-rewrite] turn-1 shadow (no-op)", {
+                  session_id: session.id,
+                  candidates: t1Candidates.length,
+                  rewrites_would_apply: t1TextMap.size,
+                  model: t1Result.model,
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("[llm-rewrite] turn-1 rewrite failed (non-fatal):", err);
+        }
+      }
     }
 
     // ── Append GPT response to conversation ──────────────────────────
@@ -1350,7 +1931,7 @@ export async function POST(req: Request) {
     // extracted_entities: structured key-value pairs only (question IDs + values)
     // situation_summary is stored separately at the session level, not merged here
     // value_tier and prior_experience are stored inside extracted_entities JSONB
-    // (not as top-level session columns — those don't exist in the schema)
+    // (not as top-level session columns  -  those don't exist in the schema)
     const updatedEntities = {
       ...(session.extracted_entities as Record<string, unknown> ?? {}),
       ...gptResponse.extracted_entities,
@@ -1362,7 +1943,7 @@ export async function POST(req: Request) {
 
     // ── Persist contact details when provided ────────────────────────
     // structured_data for message_type "contact" carries first_name, last_name,
-    // email, phone. These must be written to intake_sessions.contact explicitly —
+    // email, phone. These must be written to intake_sessions.contact explicitly  - 
     // GPT only sees them as conversation text and does not write them back.
     const contactUpdate: Record<string, unknown> = {};
     if (message_type === "contact" && structured_data) {
@@ -1376,7 +1957,7 @@ export async function POST(req: Request) {
     }
 
     // complexity_indicators and flags are stored inside the scoring JSONB column
-    // (not as top-level columns — those don't exist in the schema and cause PGRST204)
+    // (not as top-level columns  -  those don't exist in the schema and cause PGRST204)
     // Round 2 tracking: _round_2_started marks when Round 2 begins; _round_2_q_count
     // counts answered Round 2 questions so we can cap at 3 without relying on GPT to count.
     const scoringPayload: Record<string, unknown> = {
@@ -1384,18 +1965,54 @@ export async function POST(req: Request) {
       _confirmed: updatedConfirmed,
       ...(gptResponse.complexity_indicators ? { _complexity_indicators: gptResponse.complexity_indicators } : {}),
       ...(gptResponse.flags?.length ? { _flags: gptResponse.flags } : {}),
-      // Persist compliance flags across turns — accumulative (S1 flags from turn 1 stay through turn 5)
+      // Persist compliance flags across turns  -  accumulative (S1 flags from turn 1 stay through turn 5)
       ...(activeComplianceFlags.length ? { _compliance_flags: activeComplianceFlags } : {}),
-      // Classifier metadata — stored for observability / debugging (not used in scoring)
+      // Classifier metadata  -  stored for observability / debugging (not used in scoring)
       ...(classifierResult ? {
         _classifier_confidence: classifierResult.confidence,
         _classifier_pa: classifierResult.practice_area,
         _classifier_flags_raw: classifierResult.gpt_flags_raw,
         ...(classifierResult.needs_clarification ? { _needs_pa_clarification: true } : {}),
       } : {}),
+      // Event pipeline metadata  -  stored for observability / debugging (not used in scoring)
+      // Written on turn 1 only. Inspect via Supabase: scoring->_event_* fields.
+      ...(isFirstTurn && detectedEvents.length > 0 ? {
+        _event_detected_types: detectedEvents.map(e => e.type),
+        _event_selected: selectedEvent?.type ?? null,
+        _event_sub_type_key: eventDerivedSubTypeKey ?? null,
+        _event_first_question: eventFirstQuestion ?? null,
+      } : {}),
       ...(startingRound2 ? { _round_2_started: true, _round_2_q_count: 0 } : {}),
       ...(round2Started ? { _round_2_started: true, _round_2_q_count: round2QCount + 1 } : {}),
+      // Slot registry state  -  persisted across turns so round advancement survives session reloads
+      ...(Object.keys(updatedSlotAnswered).length ? {
+        _slot_answered: updatedSlotAnswered,
+        _slot_round: slotRoundUpdated,
+      } : {}),
     };
+
+    // ── Resolve situation_summary with finalize-time fallback ──────────
+    // GPT occasionally returns null for situation_summary even on finalize.
+    // When that happens, synthesize a narrative from the first user message
+    // so the operator card always shows a case story instead of a blank slot.
+    let resolvedSummary: string | null =
+      gptResponse.situation_summary ?? (session.situation_summary as string | null) ?? null;
+    if (
+      gptResponse.finalize &&
+      (!resolvedSummary || resolvedSummary.trim().length < 20)
+    ) {
+      const firstNarrative = (
+        conversation.find(m => m.role === "user")?.content ?? ""
+      )
+        .trim()
+        .replace(/\s+/g, " ");
+      if (firstNarrative.length >= 20) {
+        resolvedSummary =
+          firstNarrative.length > 600
+            ? firstNarrative.slice(0, 597).trimEnd() + "..."
+            : firstNarrative;
+      }
+    }
 
     const sessionUpdate: Record<string, unknown> = {
       conversation,
@@ -1405,11 +2022,45 @@ export async function POST(req: Request) {
       practice_sub_type: gptResponse.practice_sub_type ?? existingSubType ?? null,
       band: gptResponse.cpi.band,
       ...contactUpdate,
-      ...(gptResponse.situation_summary ? { situation_summary: gptResponse.situation_summary } : {}),
+      ...(gptResponse.situation_summary
+        ? { situation_summary: gptResponse.situation_summary }
+        : gptResponse.finalize && resolvedSummary
+          ? { situation_summary: resolvedSummary }
+          : {}),
     };
 
     if (gptResponse.finalize) {
       sessionUpdate.status = "complete";
+
+      // ── Interaction scoring + case value  -  computed once at finalize ──
+      // Merge widget confirmed answers + slot-registry answered map for the
+      // most complete answer set. updatedConfirmed uses question IDs which
+      // are identical to slot IDs for widget sessions.
+      const finalAnswers: Record<string, string> = {};
+      for (const [k, v] of Object.entries(updatedSlotAnswered)) {
+        if (typeof v === "string") finalAnswers[k] = v;
+      }
+      for (const [k, v] of Object.entries(updatedConfirmed)) {
+        if (typeof v === "string") finalAnswers[k] = v;
+      }
+
+      const finalPa = (gptResponse.practice_area ?? sessionPracticeArea ?? "").toLowerCase();
+      let interactionScoring: Record<string, unknown> | null = null;
+      if (finalPa.startsWith("pi")) {
+        const r = computeSabsUrgency(finalAnswers);
+        interactionScoring = { type: "sabs_urgency", ...r };
+      } else if (finalPa.startsWith("emp")) {
+        const r = computeDismissalBardal(finalAnswers);
+        interactionScoring = { type: "bardal", ...r };
+      }
+
+      const caseValue = finalPa
+        ? estimateCaseValue(finalPa, gptResponse.cpi.total ?? 0, finalAnswers)
+        : null;
+
+      // Persist both inside the scoring JSONB column (no schema migration needed)
+      if (interactionScoring) scoringPayload._interaction_scoring = interactionScoring;
+      if (caseValue) scoringPayload._case_value = caseValue;
     }
 
     // ── Persist to Supabase ───────────────────────────────────────────
@@ -1426,15 +2077,17 @@ export async function POST(req: Request) {
     // Skipped when demo=true so test sessions never reach the production CRM.
     if (gptResponse.finalize && firm.ghl_webhook_url && !demo) {
       const finalSession = { ...session, ...sessionUpdate };
+      const finalSubType = (sessionUpdate.practice_sub_type as string | null) ?? (session.practice_sub_type as string | null) ?? null;
+      const routing = await getMatterRouting(firm_id, finalSubType).catch(() => null);
       try {
-        await sendToGHL(finalSession, firm.ghl_webhook_url);
+        await sendToGHL(finalSession, firm.ghl_webhook_url, routing);
         await supabase
           .from("intake_sessions")
           .update({ crm_synced: true })
           .eq("id", session.id);
       } catch (err) {
         console.error("GHL delivery failed:", err);
-        // Non-fatal — session is saved, lead is not lost
+        // Non-fatal  -  session is saved, lead is not lost
       }
     }
 
@@ -1461,7 +2114,7 @@ export async function POST(req: Request) {
       response_text: gptResponse.response_text,
       finalize: gptResponse.finalize,
       collect_identity: gptResponse.collect_identity,
-      situation_summary: gptResponse.situation_summary,
+      situation_summary: resolvedSummary,
       extracted_entities: updatedEntities,
       questions_answered: gptResponse.questions_answered,
       complexity_indicators: gptResponse.complexity_indicators ?? null,
@@ -1469,6 +2122,7 @@ export async function POST(req: Request) {
       prior_experience: gptResponse.prior_experience ?? null,
       flags: gptResponse.flags ?? [],
       cta,
+      case_value: (scoringPayload._case_value as { label: string; tier: string; rationale: string } | undefined) ?? null,
     });
   } catch (err) {
     console.error("/api/screen error:", err);

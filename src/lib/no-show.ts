@@ -1,12 +1,12 @@
 /**
- * WF-05 — No-Show Recovery Engine
+ * WF-05  -  No-Show Recovery Engine
  *
  * Triggered when a lead's stage is set to 'no_show'.
  * Reads email steps from the no_show sequence template in sequence_steps table.
  * Exits on re-engagement (stage change away from no_show) or all steps sent.
  */
 
-import { supabase } from "./supabase";
+import { supabaseAdmin as supabase } from "./supabase-admin";
 import { sendEmail } from "./email";
 import { getEmailContent } from "./sequence-engine";
 

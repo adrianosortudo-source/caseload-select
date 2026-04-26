@@ -1,5 +1,5 @@
 /**
- * DemoPortalResult — lawyer-facing portal view after intake completes.
+ * DemoPortalResult  -  lawyer-facing portal view after intake completes.
  *
  * Shows what lands in the portal 90 seconds after a prospect submits:
  * - Automation sequence log (what fired and when)
@@ -136,7 +136,7 @@ function toTitleCase(key: string): string {
 }
 
 function formatEntityValue(value: unknown): string {
-  if (value === null || value === undefined) return "—";
+  if (value === null || value === undefined) return " - ";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (Array.isArray(value)) return value.join(", ");
   return String(value);
@@ -466,7 +466,7 @@ export default function DemoPortalResult({ session }: { session: Record<string, 
   const channel          = (session.channel ?? "widget") as string;
   const createdAt        = (session.created_at ?? new Date().toISOString()) as string;
 
-  // Contact — prefer session.contact (set by screen API), fall back to extracted_entities
+  // Contact  -  prefer session.contact (set by screen API), fall back to extracted_entities
   const contactRecord = (session.contact ?? {}) as Record<string, unknown>;
   const firstName = String(contactRecord.first_name ?? entities.first_name ?? "");
   const lastName  = String(contactRecord.last_name  ?? entities.last_name  ?? "");
@@ -594,7 +594,7 @@ export default function DemoPortalResult({ session }: { session: Record<string, 
           {/* GHL-style pipeline card */}
           <div className="lg:col-span-2 bg-white rounded-2xl border border-black/5 shadow-sm overflow-hidden flex flex-col">
 
-            {/* Card header — GHL-style grey bar */}
+            {/* Card header  -  GHL-style grey bar */}
             <div className="px-4 py-2.5 border-b border-black/5 flex items-center justify-between"
               style={{ backgroundColor: "#F8F8F8" }}>
               <div>

@@ -1,5 +1,5 @@
 /**
- * CaseLoad Screen — Compliance Flag Registry
+ * CaseLoad Screen  -  Compliance Flag Registry
  *
  * 72 semantic flags derived from LawPRO claims data, LSO Rules of Professional
  * Conduct, and Ontario-specific limitation period statutes.
@@ -27,8 +27,10 @@ export type FlagSeverity = "S1" | "S2";
 
 export interface GateQuestion {
   id: string;            // stable ID, e.g. "flag_mvac_insurer__q1"
-  text: string;          // question text shown to client
-  rationale: string;     // internal — why this question exists (not shown to client)
+  text: string;          // fallback question text (used when no PA-specific text matches)
+  /** Practice-area-specific overrides. Key is a PA prefix, e.g. "immigration", "employment", "pi". */
+  textByPA?: Record<string, string>;
+  rationale: string;     // internal  -  why this question exists (not shown to client)
 }
 
 export interface FlagDefinition {
@@ -45,7 +47,7 @@ export interface FlagDefinition {
   source: string;
   /**
    * S1 flags only. One sentence of warmth shown to the client before gate questions begin.
-   * Contextualises why we are asking — never generated, always authored.
+   * Contextualises why we are asking  -  never generated, always authored.
    * S2 flags leave this undefined (gate questions appear without a preamble).
    */
   preamble?: string;
@@ -71,7 +73,16 @@ const UNIVERSAL_FLAGS: FlagDefinition[] = [
     gateQuestions: [
       {
         id: "limitation_proximity__q1",
-        text: "When exactly did this happen? Please provide the date if you remember it.",
+        text: "When did that happen? Do you remember the month and year?",
+        textByPA: {
+          immigration: "When were you deported from Canada?",
+          employment:  "When were you let go?",
+          pi:          "When did the accident happen?",
+          family:      "When did the separation happen?",
+          criminal:    "When did the incident happen?",
+          human_rights: "When did the last incident occur?",
+          real_estate: "When did the transaction take place?",
+        },
         rationale: "Establishes trigger date for limitation period analysis.",
       },
       {
@@ -92,7 +103,7 @@ const UNIVERSAL_FLAGS: FlagDefinition[] = [
     label: "Adverse Party Identification",
     severity: "S1",
     paFilter: [],
-    triggerPatterns: [], // always triggered when opposing party is named — GPT handles
+    triggerPatterns: [], // always triggered when opposing party is named  -  GPT handles
     gateQuestions: [
       {
         id: "conflict_adverse_party__q1",
@@ -134,7 +145,7 @@ const UNIVERSAL_FLAGS: FlagDefinition[] = [
         rationale: "Prior counsel may have preserved limitation or filed proceedings.",
       },
     ],
-    source: "LawPRO — scope creep and unrealistic expectations claim category",
+    source: "LawPRO  -  scope creep and unrealistic expectations claim category",
   },
   {
     id: "minor_claimant",
@@ -247,7 +258,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Witness identification may enable discovery of unknown defendant.",
       },
     ],
-    source: "LawPRO — failure to identify all defendants (top PI intake claim)",
+    source: "LawPRO  -  failure to identify all defendants (top PI intake claim)",
   },
   {
     id: "pi_evidence_preservation",
@@ -276,7 +287,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Video footage requires urgent preservation request or it is overwritten.",
       },
     ],
-    source: "LawPRO — inadequate fact investigation at intake",
+    source: "LawPRO  -  inadequate fact investigation at intake",
   },
 
   // ── Motor Vehicle Accidents ───────────────────────────────────────────────
@@ -307,7 +318,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Needed to file accident benefits claim immediately if window is still open.",
       },
     ],
-    source: "Insurance Act (Ontario), s.258.3 — 7-day notification for accident benefits",
+    source: "Insurance Act (Ontario), s.258.3  -  7-day notification for accident benefits",
   },
   {
     id: "mvac_hit_and_run",
@@ -364,6 +375,38 @@ const PA_FLAGS: FlagDefinition[] = [
     ],
     source: "Statutory Accident Benefits Schedule (SABS), O.Reg. 34/10",
   },
+  {
+    id: "pi_mig_designation",
+    label: "MIG Designation  -  Minor Injury Guideline Challenge",
+    severity: "S1",
+    paFilter: ["pi"],
+    triggerPatterns: [
+      /\b(MIG|minor\s+injury\s+guideline)\b/i,
+      /\b(placed\s+in|put\s+(me\s+)?in|designated\s+(under|to|in))\b.{0,30}\b(MIG|minor\s+injury|the\s+guideline)\b/i,
+      /\b(MIG|minor\s+injury\s+guideline)\b.{0,40}\b(capped|cap|limit|maximum|\$3[,.]?500)\b/i,
+      /(\$3[,.]?500\s+(cap|limit|maximum)).{0,40}\b(treatment|therapy|benefits?|SABS)\b/i,
+      /\b(treatment|therapy|benefits?)\b.{0,40}(\$3[,.]?500\s+(cap|limit|maximum))/i,
+      /\b(dispute|challenge|contest|disagree)\b.{0,30}\b(MIG|minor\s+injury|the\s+guideline|designation)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "pi_mig__q1",
+        text: "Has the insurer formally notified you that your injuries have been designated under the Minor Injury Guideline?",
+        rationale: "MIG designation limits treatment benefits to $3,500; formal notice triggers the dispute pathway.",
+      },
+      {
+        id: "pi_mig__q2",
+        text: "Do you have injuries that go beyond soft tissue  -  such as a psychological or psychiatric condition, a pre-existing condition that was worsened, or a chronic pain disorder?",
+        rationale: "Injuries beyond the MIG definition (pre-existing conditions, psychological injury, chronic pain) can be used to dispute the designation and access higher non-MIG benefits.",
+      },
+      {
+        id: "pi_mig__q3",
+        text: "Has your treating physician or specialist provided an opinion that your injuries fall outside the MIG?",
+        rationale: "A supporting medical opinion from a treating provider is the foundation of a successful MIG dispute at the LAT.",
+      },
+    ],
+    source: "SABS, O. Reg. 34/10 (Minor Injury Guideline); Insurance Act, s.280  -  LAT arbitration pathway for MIG disputes",
+  },
 
   // ── Medical Malpractice ───────────────────────────────────────────────────
 
@@ -416,14 +459,14 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Establishes the chain of care and pinpoints where the standard of care was breached.",
       },
     ],
-    source: "LawPRO — failure to identify all defendants in medical malpractice",
+    source: "LawPRO  -  failure to identify all defendants in medical malpractice",
   },
 
   // ── Slip & Fall ───────────────────────────────────────────────────────────
 
   {
     id: "slip_ice_snow",
-    label: "Slip on Ice/Snow — 60-Day Notice",
+    label: "Slip on Ice/Snow  -  60-Day Notice",
     severity: "S1",
     paFilter: ["pi"],
     triggerPatterns: [
@@ -439,7 +482,7 @@ const PA_FLAGS: FlagDefinition[] = [
       },
       {
         id: "slip_ice__q2",
-        text: "What type of property was it — a private home, a business, or a public area?",
+        text: "What type of property was it  -  a private home, a business, or a public area?",
         rationale: "Private property triggers the 60-day Occupiers' Liability Act notice obligation.",
       },
       {
@@ -448,7 +491,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Failure to give written notice within 60 days bars the claim under the Act.",
       },
     ],
-    source: "Occupiers' Liability Act (Ontario), s.6(1) — 60-day written notice for snow/ice",
+    source: "Occupiers' Liability Act (Ontario), s.6(1)  -  60-day written notice for snow/ice",
   },
   {
     id: "slip_municipality",
@@ -479,7 +522,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Failure to give notice within required period bars tort claim against municipality.",
       },
     ],
-    source: "Municipal Act, 2001 (Ontario), s.44(10) — notice of claim for municipal property injury",
+    source: "Municipal Act, 2001 (Ontario), s.44(10)  -  notice of claim for municipal property injury",
   },
 
   // ── Long-Term Disability ──────────────────────────────────────────────────
@@ -498,7 +541,7 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "ltd_appeal__q1",
         text: "When did you receive the written denial from the insurer?",
-        rationale: "The 2-year court limitation period runs from the denial date — NOT from the appeal outcome.",
+        rationale: "The 2-year court limitation period runs from the denial date  -  NOT from the appeal outcome.",
       },
       {
         id: "ltd_appeal__q2",
@@ -511,7 +554,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Denial date on the letter is the limitation trigger; client must produce it immediately.",
       },
     ],
-    source: "Ontario Limitations Act, 2002, s.4; LawPRO — LTD claim bar from missed court limitation",
+    source: "Ontario Limitations Act, 2002, s.4; LawPRO  -  LTD claim bar from missed court limitation",
   },
   {
     id: "ltd_policy_definition",
@@ -534,7 +577,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Own-occupation vs. any-occupation definition change at 2-year mark is a common trap.",
       },
     ],
-    source: "LawPRO — failure to analyze policy language (LTD claim category)",
+    source: "LawPRO  -  failure to analyze policy language (LTD claim category)",
   },
 
   // ── Family Law ────────────────────────────────────────────────────────────
@@ -562,11 +605,11 @@ const PA_FLAGS: FlagDefinition[] = [
       },
       {
         id: "fam_prop__q3",
-        text: "Are there significant assets to divide — home, pension, investments?",
+        text: "Are there significant assets to divide  -  home, pension, investments?",
         rationale: "High-value estates make the deadline more consequential.",
       },
     ],
-    source: "Family Law Act (Ontario), s.7(3) — 6-year limitation for property equalization",
+    source: "Family Law Act (Ontario), s.7(3)  -  6-year limitation for property equalization",
   },
   {
     id: "fam_abduction",
@@ -640,7 +683,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Immediate safety takes priority over legal strategy; may require crisis referral.",
       },
     ],
-    source: "LawPRO — failure to identify DV history impacts custody/safety strategy",
+    source: "LawPRO  -  failure to identify DV history impacts custody/safety strategy",
   },
   {
     id: "fam_hidden_assets",
@@ -666,7 +709,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Full financial disclosure is mandatory; gaps require discovery steps.",
       },
     ],
-    source: "LawPRO — inadequate financial disclosure at family law intake",
+    source: "LawPRO  -  inadequate financial disclosure at family law intake",
   },
 
   // ── Child Protection ──────────────────────────────────────────────────────
@@ -684,11 +727,11 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "child_app__q1",
         text: "When was the child removed or apprehended by CAS?",
-        rationale: "Child must be brought before court within 5 days of apprehension — CYFSA, s.16.",
+        rationale: "Child must be brought before court within 5 days of apprehension  -  CYFSA, s.16.",
       },
       {
         id: "child_app__q2",
-        text: "Where is the child placed now — foster home, relative, or other parent?",
+        text: "Where is the child placed now  -  foster home, relative, or other parent?",
         rationale: "Placement affects access rights and urgency of interim order application.",
       },
       {
@@ -720,7 +763,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Demonstrating proactive rehabilitation strengthens return-home applications.",
       },
     ],
-    source: "LawPRO — inadequate documentation of rehabilitation at child protection intake",
+    source: "LawPRO  -  inadequate documentation of rehabilitation at child protection intake",
   },
 
   // ── Immigration ───────────────────────────────────────────────────────────
@@ -752,7 +795,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Grounds for appeal are found in the decision reasons.",
       },
     ],
-    source: "IRPA; Refugee Appeal Division Rules, Rule 3 — 15-day notice, 45-day record",
+    source: "IRPA; Refugee Appeal Division Rules, Rule 3  -  15-day notice, 45-day record",
   },
   {
     id: "imm_removal_order",
@@ -766,7 +809,7 @@ const PA_FLAGS: FlagDefinition[] = [
     gateQuestions: [
       {
         id: "imm_removal__q1",
-        text: "Do you have a removal order? What type — departure, exclusion, or deportation order?",
+        text: "Do you have a removal order? What type  -  departure, exclusion, or deportation order?",
         rationale: "Order type determines enforcement timeline and available remedies.",
       },
       {
@@ -780,7 +823,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "PRRA eligibility is time-limited and may stay removal automatically.",
       },
     ],
-    source: "IRPA; Immigration and Refugee Protection Regulations — enforcement timelines",
+    source: "IRPA; Immigration and Refugee Protection Regulations  -  enforcement timelines",
   },
   {
     id: "imm_inadmissibility",
@@ -804,7 +847,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Prior refusals and deportations must be disclosed and may trigger enhanced scrutiny.",
       },
     ],
-    source: "IRPA, ss.36-38 — criminal, health, and security inadmissibility grounds",
+    source: "IRPA, ss.36-38  -  criminal, health, and security inadmissibility grounds",
   },
 
   // ── Criminal ──────────────────────────────────────────────────────────────
@@ -830,7 +873,7 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "crim_charter__q2",
         text: "Did police search your home, car, or phone? Did they have a warrant?",
-        rationale: "Warrantless search may be a s.8 Charter violation — key to exclusion application.",
+        rationale: "Warrantless search may be a s.8 Charter violation  -  key to exclusion application.",
       },
       {
         id: "crim_charter__q3",
@@ -864,10 +907,10 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "crim_co__q3",
         text: "Is the same lawyer being asked to represent more than one person charged?",
-        rationale: "Dual representation in criminal matters is almost always a conflict — must refuse.",
+        rationale: "Dual representation in criminal matters is almost always a conflict  -  must refuse.",
       },
     ],
-    source: "LSO Rules of Professional Conduct, Rule 3.4 — conflicts; criminal co-accused doctrine",
+    source: "LSO Rules of Professional Conduct, Rule 3.4  -  conflicts; criminal co-accused doctrine",
   },
   {
     id: "crim_bail_conditions",
@@ -890,7 +933,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "No-contact breaches are taken seriously; client must be warned immediately.",
       },
     ],
-    source: "Criminal Code of Canada, s.145 — failure to comply with bail conditions",
+    source: "Criminal Code of Canada, s.145  -  failure to comply with bail conditions",
   },
 
   // ── Employment ────────────────────────────────────────────────────────────
@@ -911,7 +954,7 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "emp_hrto__q1",
         text: "When was the last act of discrimination or harassment?",
-        rationale: "HRTO has a 1-year deadline from the last act — stricter than the general 2-year limitation.",
+        rationale: "HRTO has a 1-year deadline from the last act  -  stricter than the general 2-year limitation.",
       },
       {
         id: "emp_hrto__q2",
@@ -924,7 +967,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Internal complaints do not pause the HRTO limitation period.",
       },
     ],
-    source: "Ontario Human Rights Code, s.34 — 1-year limitation for HRTO applications",
+    source: "Ontario Human Rights Code, s.34  -  1-year limitation for HRTO applications",
   },
   {
     id: "emp_severance_signed",
@@ -953,7 +996,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Release wording determines whether the claim is barred.",
       },
     ],
-    source: "LawPRO — release signed without independent legal advice (top employment intake risk)",
+    source: "LawPRO  -  release signed without independent legal advice (top employment intake risk)",
   },
   {
     id: "emp_constructive_dismissal",
@@ -978,7 +1021,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Unilateral fundamental changes are the basis for a constructive dismissal claim.",
       },
     ],
-    source: "LawPRO — failure to identify constructive dismissal (client resigned, has valid claim)",
+    source: "LawPRO  -  failure to identify constructive dismissal (client resigned, has valid claim)",
   },
 
   // ── Human Rights ──────────────────────────────────────────────────────────
@@ -994,7 +1037,7 @@ const PA_FLAGS: FlagDefinition[] = [
     gateQuestions: [
       {
         id: "hrto_resp__q1",
-        text: "Who is your direct employer — the specific company name and any parent company?",
+        text: "Who is your direct employer  -  the specific company name and any parent company?",
         rationale: "HRTO application against wrong entity is rejected; respondent identification is critical.",
       },
       {
@@ -1003,7 +1046,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Franchisee vs. franchisor liability differs; wrong respondent voids application.",
       },
     ],
-    source: "LawPRO — misidentification of respondent entity (HRTO intake failure)",
+    source: "LawPRO  -  misidentification of respondent entity (HRTO intake failure)",
   },
 
   // ── Real Estate ───────────────────────────────────────────────────────────
@@ -1030,7 +1073,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "LSO requires informed consent in writing; non-disclosure is a discipline matter.",
       },
     ],
-    source: "LSO Rules of Professional Conduct, Rule 3.4; LawPRO — dual rep real estate claims",
+    source: "LSO Rules of Professional Conduct, Rule 3.4; LawPRO  -  dual rep real estate claims",
   },
   {
     id: "real_estate_undisclosed_defects",
@@ -1060,7 +1103,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "SPIS representations that are false are actionable misrepresentation.",
       },
     ],
-    source: "LawPRO — non-disclosure of material defects (top real estate claim category)",
+    source: "LawPRO  -  non-disclosure of material defects (top real estate claim category)",
   },
 
   // ── Wills & Estates ───────────────────────────────────────────────────────
@@ -1091,7 +1134,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Third party presence during instructions raises both capacity and undue influence concerns.",
       },
     ],
-    source: "LawPRO — testamentary capacity (top wills claim category)",
+    source: "LawPRO  -  testamentary capacity (top wills claim category)",
   },
   {
     id: "estates_undue_influence",
@@ -1112,10 +1155,10 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "est_ui__q2",
         text: "Is the main beneficiary also the person bringing the testator to the lawyer?",
-        rationale: "This pattern is the primary indicator of undue influence — requires independent interview.",
+        rationale: "This pattern is the primary indicator of undue influence  -  requires independent interview.",
       },
     ],
-    source: "LawPRO — undue influence (estates claim category); Vout v. Hay [1995] SCR",
+    source: "LawPRO  -  undue influence (estates claim category); Vout v. Hay [1995] SCR",
   },
   {
     id: "estates_dependant_relief",
@@ -1129,7 +1172,7 @@ const PA_FLAGS: FlagDefinition[] = [
     gateQuestions: [
       {
         id: "est_dep__q1",
-        text: "When was probate granted — that is, when was the estate trustee officially appointed by the court?",
+        text: "When was probate granted  -  that is, when was the estate trustee officially appointed by the court?",
         rationale: "6-month dependant relief deadline runs from the grant of probate.",
       },
       {
@@ -1138,7 +1181,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Only dependants within the SLRA definition have standing for a dependant relief claim.",
       },
     ],
-    source: "Succession Law Reform Act (Ontario), s.61 — 6-month deadline for dependant relief",
+    source: "Succession Law Reform Act (Ontario), s.61  -  6-month deadline for dependant relief",
   },
 
   // ── Construction ──────────────────────────────────────────────────────────
@@ -1158,7 +1201,7 @@ const PA_FLAGS: FlagDefinition[] = [
     gateQuestions: [
       {
         id: "const_lien__q1",
-        text: "When was substantial performance of your work achieved — roughly when was the project substantially complete?",
+        text: "When was substantial performance of your work achieved  -  roughly when was the project substantially complete?",
         rationale: "60-day lien preservation clock runs from substantial performance; missing it loses lien rights forever.",
       },
       {
@@ -1169,10 +1212,10 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "const_lien__q3",
         text: "Have you already registered a lien? If not, how many days ago was work substantially completed?",
-        rationale: "Urgency calculation — if past 45 days, immediate action required.",
+        rationale: "Urgency calculation  -  if past 45 days, immediate action required.",
       },
     ],
-    source: "Construction Act (Ontario), s.31 — 60-day lien preservation from substantial performance",
+    source: "Construction Act (Ontario), s.31  -  60-day lien preservation from substantial performance",
   },
 
   // ── Administrative Law ────────────────────────────────────────────────────
@@ -1204,7 +1247,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "After 30 days, leave to extend is required and often denied.",
       },
     ],
-    source: "Judicial Review Procedure Act (Ontario), s.5 (as amended July 8, 2020 — 30-day deadline)",
+    source: "Judicial Review Procedure Act (Ontario), s.5 (as amended July 8, 2020  -  30-day deadline)",
   },
 
   // ── WSIB ──────────────────────────────────────────────────────────────────
@@ -1236,14 +1279,14 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Employer failure to report is a separate WSIA violation; does not excuse worker's filing obligation.",
       },
     ],
-    source: "Workplace Safety and Insurance Act, 1997 (Ontario), s.22 — 6-month claim deadline",
+    source: "Workplace Safety and Insurance Act, 1997 (Ontario), s.22  -  6-month claim deadline",
   },
 
   // ── Defamation ────────────────────────────────────────────────────────────
 
   {
     id: "defamation_media_notice",
-    label: "Defamation — 6-Week Media Notice",
+    label: "Defamation  -  6-Week Media Notice",
     severity: "S1",
     paFilter: ["defam"],
     triggerPatterns: [
@@ -1254,7 +1297,7 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "defam_media__q1",
         text: "Was the statement published in a newspaper, magazine, online news outlet, or broadcast?",
-        rationale: "Libel and Slander Act applies — 6-week written notice required before lawsuit.",
+        rationale: "Libel and Slander Act applies  -  6-week written notice required before lawsuit.",
       },
       {
         id: "defam_media__q2",
@@ -1267,7 +1310,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Failure to give notice within 6 weeks bars the libel claim entirely.",
       },
     ],
-    source: "Libel and Slander Act (Ontario), s.5 — 6-week notice to newspaper/broadcaster",
+    source: "Libel and Slander Act (Ontario), s.5  -  6-week notice to newspaper/broadcaster",
   },
 
   // ── Tax ───────────────────────────────────────────────────────────────────
@@ -1299,14 +1342,14 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "After 90 days, extension application is required; after 1 year, claim is barred.",
       },
     ],
-    source: "Income Tax Act (Canada), s.165 — 90-day objection deadline from NOA",
+    source: "Income Tax Act (Canada), s.165  -  90-day objection deadline from NOA",
   },
 
   // ── Labour ────────────────────────────────────────────────────────────────
 
   {
     id: "labour_ulp_complaint",
-    label: "Unfair Labour Practice — 90 Days",
+    label: "Unfair Labour Practice  -  90 Days",
     severity: "S1",
     paFilter: ["labour"],
     triggerPatterns: [
@@ -1323,7 +1366,7 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "labour_ulp__q2",
         text: "When did this action occur?",
-        rationale: "90-day OLRB deadline runs from the date of the ULP — hard bar.",
+        rationale: "90-day OLRB deadline runs from the date of the ULP  -  hard bar.",
       },
       {
         id: "labour_ulp__q3",
@@ -1331,7 +1374,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "ULP context (organizing vs. post-certification) changes available remedies.",
       },
     ],
-    source: "Ontario Labour Relations Act, 1995, s.96(4) — 90-day ULP complaint deadline",
+    source: "Ontario Labour Relations Act, 1995, s.96(4)  -  90-day ULP complaint deadline",
   },
 
   // ── Social Benefits ───────────────────────────────────────────────────────
@@ -1348,7 +1391,7 @@ const PA_FLAGS: FlagDefinition[] = [
     gateQuestions: [
       {
         id: "socben_app__q1",
-        text: "Which program was denied or cut — Ontario Works (OW) or ODSP?",
+        text: "Which program was denied or cut  -  Ontario Works (OW) or ODSP?",
         rationale: "Different appeal bodies apply: internal review then Social Benefits Tribunal.",
       },
       {
@@ -1362,7 +1405,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Must exhaust internal review before Social Benefits Tribunal application.",
       },
     ],
-    source: "Ontario Works Act, 1997; ODSP Act, 1997 — 30-day internal review deadline",
+    source: "Ontario Works Act, 1997; ODSP Act, 1997  -  30-day internal review deadline",
   },
 
   // ── Municipal ────────────────────────────────────────────────────────────
@@ -1382,7 +1425,7 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "muni_injury__q1",
         text: "Was the injury on a city sidewalk, road, public park, or other municipal property?",
-        rationale: "Municipal Act notice requirement applies — different from Occupiers' Liability.",
+        rationale: "Municipal Act notice requirement applies  -  different from Occupiers' Liability.",
       },
       {
         id: "muni_injury__q2",
@@ -1395,7 +1438,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Failure to give notice may bar the claim; municipality can raise it as a defence.",
       },
     ],
-    source: "Municipal Act, 2001 (Ontario), s.44(10) — notice of claim requirement for municipal property",
+    source: "Municipal Act, 2001 (Ontario), s.44(10)  -  notice of claim requirement for municipal property",
   },
 
   // ── Insurance ─────────────────────────────────────────────────────────────
@@ -1415,7 +1458,7 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "ins_denial__q1",
         text: "When did you receive the written denial?",
-        rationale: "2-year limitation runs from denial date — internal appeal does NOT pause it.",
+        rationale: "2-year limitation runs from denial date  -  internal appeal does NOT pause it.",
       },
       {
         id: "ins_denial__q2",
@@ -1428,7 +1471,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Denial date and policy wording are the two key documents for analysis.",
       },
     ],
-    source: "Ontario Limitations Act, 2002, s.4; LawPRO — internal appeal / court clock trap",
+    source: "Ontario Limitations Act, 2002, s.4; LawPRO  -  internal appeal / court clock trap",
   },
 
   // ── Securities ────────────────────────────────────────────────────────────
@@ -1460,7 +1503,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Regulatory and civil remedies differ; IIROC arbitration has separate deadlines.",
       },
     ],
-    source: "Securities Act (Ontario), s.138.14 — 3-year/6-year civil liability for misrepresentation",
+    source: "Securities Act (Ontario), s.138.14  -  3-year/6-year civil liability for misrepresentation",
   },
 
   // ── Elder Law ─────────────────────────────────────────────────────────────
@@ -1492,7 +1535,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "If capacity is lost, revocation requires court application (Substitute Decisions Act).",
       },
     ],
-    source: "Substitute Decisions Act, 1992 (Ontario); LawPRO — financial elder abuse at intake",
+    source: "Substitute Decisions Act, 1992 (Ontario); LawPRO  -  financial elder abuse at intake",
   },
 
   // ── Environmental ─────────────────────────────────────────────────────────
@@ -1556,7 +1599,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "USA terms may restrict oppression remedies or provide alternative dispute resolution.",
       },
     ],
-    source: "Ontario Business Corporations Act, s.248 — oppression remedy",
+    source: "Ontario Business Corporations Act, s.248  -  oppression remedy",
   },
   {
     id: "corp_personal_liability",
@@ -1577,10 +1620,10 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "corp_pers__q2",
         text: "Did you resign as director before the liability arose? When?",
-        rationale: "Resignation timing is critical for CRA director liability — s.323 ITA defence.",
+        rationale: "Resignation timing is critical for CRA director liability  -  s.323 ITA defence.",
       },
     ],
-    source: "Ontario Business Corporations Act, s.131; Income Tax Act, s.323 — director liability",
+    source: "Ontario Business Corporations Act, s.131; Income Tax Act, s.323  -  director liability",
   },
 
   // ── Construction (supplemental) ───────────────────────────────────────────
@@ -1625,7 +1668,7 @@ const PA_FLAGS: FlagDefinition[] = [
     gateQuestions: [
       {
         id: "llt_notice__q1",
-        text: "What type of notice did you receive — N4 (non-payment), N12 (personal use), or another?",
+        text: "What type of notice did you receive  -  N4 (non-payment), N12 (personal use), or another?",
         rationale: "Notice type determines grounds, required notice period, and available defences.",
       },
       {
@@ -1639,7 +1682,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "LTB response deadlines are strict; missing them may result in default order.",
       },
     ],
-    source: "Residential Tenancies Act, 2006 (Ontario) — eviction notice requirements",
+    source: "Residential Tenancies Act, 2006 (Ontario)  -  eviction notice requirements",
   },
   {
     id: "llt_non_payment",
@@ -1663,7 +1706,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Tenant can request a payment plan; LTB hearing timing affects available options.",
       },
     ],
-    source: "Residential Tenancies Act, 2006 (Ontario), s.87 — non-payment eviction process",
+    source: "Residential Tenancies Act, 2006 (Ontario), s.87  -  non-payment eviction process",
   },
 
   // ── Intellectual Property ─────────────────────────────────────────────────
@@ -1680,7 +1723,7 @@ const PA_FLAGS: FlagDefinition[] = [
     gateQuestions: [
       {
         id: "ip_maint__q1",
-        text: "What type of IP — patent, trademark, or copyright — and when did it lapse or expire?",
+        text: "What type of IP  -  patent, trademark, or copyright  -  and when did it lapse or expire?",
         rationale: "Reinstatement windows differ: 12 months for patents, varies for trademarks.",
       },
       {
@@ -1694,7 +1737,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Third-party reliance on lapsed IP complicates reinstatement and damages claims.",
       },
     ],
-    source: "Patent Act (Canada), s.46; Trade-marks Act (Canada) — maintenance and renewal obligations",
+    source: "Patent Act (Canada), s.46; Trade-marks Act (Canada)  -  maintenance and renewal obligations",
   },
   {
     id: "ip_infringement",
@@ -1709,7 +1752,7 @@ const PA_FLAGS: FlagDefinition[] = [
     gateQuestions: [
       {
         id: "ip_infring__q1",
-        text: "Is the IP registered — patent, trademark, or industrial design — and where?",
+        text: "Is the IP registered  -  patent, trademark, or industrial design  -  and where?",
         rationale: "Registered IP provides stronger statutory remedies; unregistered relies on common law.",
       },
       {
@@ -1723,7 +1766,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Cease and desist establishes notice and may crystallize damages from that date.",
       },
     ],
-    source: "Copyright Act (Canada), s.41; Trade-marks Act, s.55 — infringement remedies",
+    source: "Copyright Act (Canada), s.41; Trade-marks Act, s.55  -  infringement remedies",
   },
 
   // ── WSIB (supplemental) ───────────────────────────────────────────────────
@@ -1755,7 +1798,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "RTW obligations are separate from benefit entitlement; different timelines apply.",
       },
     ],
-    source: "Workplace Safety and Insurance Act, 1997 (Ontario), s.125 — appeals and return to work",
+    source: "Workplace Safety and Insurance Act, 1997 (Ontario), s.125  -  appeals and return to work",
   },
 
   // ── Defamation (supplemental) ─────────────────────────────────────────────
@@ -1781,7 +1824,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Anonymous online defamation may require a Norwich order to identify the poster.",
       },
     ],
-    source: "Defamation Act (Ontario); common law — online defamation (no 6-week notice required)",
+    source: "Defamation Act (Ontario); common law  -  online defamation (no 6-week notice required)",
   },
 
   // ── Municipal (supplemental) ──────────────────────────────────────────────
@@ -1808,7 +1851,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Committee of Adjustment appeals must be filed within 20 days under the Planning Act.",
       },
     ],
-    source: "Planning Act (Ontario), s.45 — Committee of Adjustment appeals; Municipal Act, s.444",
+    source: "Planning Act (Ontario), s.45  -  Committee of Adjustment appeals; Municipal Act, s.444",
   },
 
   // ── Privacy ───────────────────────────────────────────────────────────────
@@ -1826,7 +1869,7 @@ const PA_FLAGS: FlagDefinition[] = [
     gateQuestions: [
       {
         id: "priv_breach__q1",
-        text: "What type of personal information was disclosed — financial, health, or identity data?",
+        text: "What type of personal information was disclosed  -  financial, health, or identity data?",
         rationale: "PIPEDA breach severity and notification obligations depend on the type of information.",
       },
       {
@@ -1871,7 +1914,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Animal control records document prior incidents and owner's knowledge of aggression.",
       },
     ],
-    source: "Dog Owners' Liability Act (Ontario), s.2 — strict liability for dog bites",
+    source: "Dog Owners' Liability Act (Ontario), s.2  -  strict liability for dog bites",
   },
 
   // ── Class Action ──────────────────────────────────────────────────────────
@@ -1898,7 +1941,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Opting out preserves individual claims; opting in surrenders them on settlement.",
       },
     ],
-    source: "Class Proceedings Act, 1992 (Ontario), s.9 — opt-out rights and deadlines",
+    source: "Class Proceedings Act, 1992 (Ontario), s.9  -  opt-out rights and deadlines",
   },
 
   // ── Youth (supplemental) ─────────────────────────────────────────────────
@@ -1925,7 +1968,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Suspension review must be requested promptly; timelines run from notice to parent.",
       },
     ],
-    source: "Education Act (Ontario), s.309-311 — long-term suspension and expulsion appeals",
+    source: "Education Act (Ontario), s.309-311  -  long-term suspension and expulsion appeals",
   },
 
   // ── Insolvency ────────────────────────────────────────────────────────────
@@ -1957,7 +2000,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Immediate insolvency filing stops garnishment automatically via statutory stay.",
       },
     ],
-    source: "Bankruptcy and Insolvency Act (Canada), s.69 — automatic stay on insolvency filing",
+    source: "Bankruptcy and Insolvency Act (Canada), s.69  -  automatic stay on insolvency filing",
   },
   {
     id: "insolvency_asset_disclosure",
@@ -1978,10 +2021,10 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "insol_asset__q2",
         text: "Do you have RRSPs or exempt assets that you want to protect?",
-        rationale: "Certain assets are exempt from seizure in bankruptcy — proper advice protects them.",
+        rationale: "Certain assets are exempt from seizure in bankruptcy  -  proper advice protects them.",
       },
     ],
-    source: "Bankruptcy and Insolvency Act, ss.91-96 — fraudulent preference and reviewable transactions",
+    source: "Bankruptcy and Insolvency Act, ss.91-96  -  fraudulent preference and reviewable transactions",
   },
 
   // ── Additional Compliance Flags ────────────────────────────────────────────
@@ -2013,7 +2056,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Deposit forfeiture and damages for breach of APS depend on who is at fault.",
       },
     ],
-    source: "LawPRO — failure to advise on time-of-the-essence in real estate transactions",
+    source: "LawPRO  -  failure to advise on time-of-the-essence in real estate transactions",
   },
   {
     id: "immigration_misrepresentation",
@@ -2029,15 +2072,15 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "imm_misrep__q1",
         text: "Has IRCC indicated that misrepresentation is a concern in your file?",
-        rationale: "A misrepresentation finding results in 5-year ban and removal order — immediate action required.",
+        rationale: "A misrepresentation finding results in 5-year ban and removal order  -  immediate action required.",
       },
       {
         id: "imm_misrep__q2",
         text: "Was any information on the original application inaccurate or incomplete?",
-        rationale: "Even innocent errors can be characterized as misrepresentation — must assess and respond.",
+        rationale: "Even innocent errors can be characterized as misrepresentation  -  must assess and respond.",
       },
     ],
-    source: "IRPA, s.40 — misrepresentation: 5-year ban and finding of inadmissibility",
+    source: "IRPA, s.40  -  misrepresentation: 5-year ban and finding of inadmissibility",
   },
   {
     id: "wsib_appeal_deadline",
@@ -2061,7 +2104,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Must exhaust WSIB internal process before a WSIAT appeal is available.",
       },
     ],
-    source: "Workplace Safety and Insurance Act, 1997 (Ontario), s.125 — appeal deadlines",
+    source: "Workplace Safety and Insurance Act, 1997 (Ontario), s.125  -  appeal deadlines",
   },
   {
     id: "llt_illegal_entry",
@@ -2084,7 +2127,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "Repeated illegal entries support an LTB application for remedy and rent abatement.",
       },
     ],
-    source: "Residential Tenancies Act, 2006 (Ontario), s.26 — landlord's right of entry",
+    source: "Residential Tenancies Act, 2006 (Ontario), s.26  -  landlord's right of entry",
   },
   {
     id: "tax_voluntary_disclosure",
@@ -2099,13 +2142,13 @@ const PA_FLAGS: FlagDefinition[] = [
     gateQuestions: [
       {
         id: "tax_vdp__q1",
-        text: "What type of disclosure are you making — unreported income, foreign assets, or other?",
+        text: "What type of disclosure are you making  -  unreported income, foreign assets, or other?",
         rationale: "VDP program terms depend on disclosure type; general vs. limited program applies.",
       },
       {
         id: "tax_vdp__q2",
         text: "Have you previously received any contact or audit notices from CRA about this issue?",
-        rationale: "Prior CRA contact disqualifies the VDP application — must use other options.",
+        rationale: "Prior CRA contact disqualifies the VDP application  -  must use other options.",
       },
       {
         id: "tax_vdp__q3",
@@ -2113,7 +2156,7 @@ const PA_FLAGS: FlagDefinition[] = [
         rationale: "VDP covers all years; partial disclosure may not protect against prosecution.",
       },
     ],
-    source: "CRA Income Tax Information Circular IC00-1R6 — Voluntary Disclosures Program",
+    source: "CRA Income Tax Information Circular IC00-1R6  -  Voluntary Disclosures Program",
   },
 
   // ── Child & Youth ─────────────────────────────────────────────────────────
@@ -2142,10 +2185,359 @@ const PA_FLAGS: FlagDefinition[] = [
       {
         id: "youth_ycja__q3",
         text: "Have police spoken to the youth without a parent or lawyer present?",
-        rationale: "Youth must be advised of right to consult parent and counsel before questioning — YCJA, s.146.",
+        rationale: "Youth must be advised of right to consult parent and counsel before questioning  -  YCJA, s.146.",
       },
     ],
-    source: "Youth Criminal Justice Act (Canada), s.146 — right to consult before questioning",
+    source: "Youth Criminal Justice Act (Canada), s.146  -  right to consult before questioning",
+  },
+
+  // ── Criminal (Ontario Courts  -  procedural) ────────────────────────────────
+
+  {
+    id: "crim_summary_ocj",
+    label: "Summary Conviction  -  OCJ Routing",
+    severity: "S1",
+    paFilter: ["crim"],
+    triggerPatterns: [
+      /\bsummary\s+conviction\b/i,
+      /\bprovincial\s+offence(s)?\b/i,
+      /\b(mischief|trespass|causing\s+a\s+disturbance|disorderly\s+conduct)\b.{0,30}\b(charged|charge|ticket|offence)\b/i,
+      /\b(fine\s+only|no\s+jail|maximum\s+(6|six)\s+months?)\b.{0,30}\b(offence|charge)\b/i,
+      /\bprovincial\s+court\b.{0,40}\b(charged|charge|offence|matter)\b/i,
+      /\bOCJ\b.{0,30}\b(charge|charged|matter|offence|hearing|court)\b/i,
+      /\b(charge|charged|matter|offence|set\s+down)\b.{0,30}\bOCJ\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "crim_sum__q1",
+        text: "Is the charge listed as a summary conviction offence on the information or charging document?",
+        rationale: "Summary offences are heard in Ontario Court of Justice, not Superior Court; confirms correct court routing.",
+      },
+      {
+        id: "crim_sum__q2",
+        text: "What specific offence are you charged with?",
+        rationale: "Offence classification determines whether Superior Court retainer is appropriate.",
+      },
+    ],
+    source: "Criminal Code (Canada), s.785  -  summary conviction proceedings; Ontario Court of Justice Act",
+  },
+  {
+    id: "crim_in_custody_bail",
+    label: "In Custody  -  Bail Review Urgent",
+    severity: "S1",
+    paFilter: ["crim"],
+    triggerPatterns: [
+      /\b(in\s+custody|held\s+in\s+custody|remand(ed)?|detained)\b/i,
+      /\b(denied\s+bail|bail\s+was\s+denied|no\s+bail|bail\s+refused)\b/i,
+      /\b(arrested\s+(today|this\s+morning|last\s+night|yesterday))\b/i,
+      /\b(calling\s+from\s+jail|calling\s+from\s+(a\s+)?(detention|correctional|remand)\s+centre)\b/i,
+      /\b(bail\s+hearing|show\s+cause\s+hearing)\b/i,
+      /\b(locked\s+up|in\s+jail|at\s+the\s+jail|at\s+(the\s+)?([A-Z][a-z]+\s+)?detention\s+centre)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "crim_bail_review__q1",
+        text: "Is the person currently in custody or was bail already denied at a show cause hearing?",
+        rationale: "In-custody status triggers same-day bail review priority; detention review deadlines run from first appearance.",
+      },
+      {
+        id: "crim_bail_review__q2",
+        text: "When was the arrest and has a bail hearing been held yet?",
+        rationale: "Bail must be heard within 24 hours of arrest (s.503 CC); delay is grounds for bail review.",
+      },
+      {
+        id: "crim_bail_review__q3",
+        text: "What is the charge and what grounds for detention were given?",
+        rationale: "Crown grounds for detention (primary, secondary, tertiary) determine the bail review strategy.",
+      },
+    ],
+    source: "Criminal Code (Canada), ss.503, 515, 520  -  show cause, bail, and bail review",
+  },
+  {
+    id: "crim_jordan_exposure",
+    label: "Jordan s.11(b)  -  Unreasonable Delay Risk",
+    severity: "S1",
+    paFilter: ["crim"],
+    triggerPatterns: [
+      /\b(charged|charge\s+laid|arrested)\b.{0,40}\b(more\s+than|over|almost|nearly)\s+(18|19|20|21|22|24|2)\s+(months?|years?)\s+ago\b/i,
+      /\b(case|matter|proceeding)\b.{0,30}\b(going\s+on|dragging\s+on|been\s+going)\b.{0,30}\b(18|19|20|21|22|24|2)\s+(months?|years?)\b/i,
+      /\b(many|multiple|several|numerous|too\s+many)\s+(adjournments?|delays?|postponements?)\b/i,
+      /\b(delayed|delay)\b.{0,40}\b(trial|court\s+date|proceeding)\b.{0,30}\b(months?|years?)\b/i,
+      /\b(s\.?\s*11\s*\(?b\)?|section\s+11\s*\(?b\)?|Jordan\s+application|unreasonable\s+delay)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "crim_jordan__q1",
+        text: "When exactly were the charges first laid?",
+        rationale: "Jordan clock runs from charge date; >18 months (OCJ) or >30 months (Superior) creates presumptive unreasonable delay.",
+      },
+      {
+        id: "crim_jordan__q2",
+        text: "How many court appearances have there been and what caused the delays?",
+        rationale: "Defence-caused delays are subtracted from the clock; Crown and institutional delays count toward the Jordan ceiling.",
+      },
+      {
+        id: "crim_jordan__q3",
+        text: "Has a trial date been set? If so, when?",
+        rationale: "Trial date determines the final elapsed time; Jordan application must be brought at trial or earlier.",
+      },
+    ],
+    source: "R v Jordan [2016] SCC 27  -  s.11(b) Charter; 18-month ceiling (OCJ), 30-month ceiling (Superior Court)",
+  },
+
+  // ── Family (Ontario Courts  -  procedural) ──────────────────────────────────
+
+  {
+    id: "fam_child_protection",
+    label: "CAS / Child Protection Proceeding",
+    severity: "S1",
+    paFilter: ["fam"],
+    triggerPatterns: [
+      /\b(CAS|Children.s\s+Aid\s+Society|child\s+protection\s+(worker|service|proceeding))\b.{0,40}\b(court|proceeding|application|order)\b/i,
+      /\b(protection\s+application|CYFSA|child\s+(is\s+)?in\s+(care|CAS\s+care))\b/i,
+      /\b(society\s+has\s+(filed|brought|started)\s+(an?\s+)?(application|proceeding))\b/i,
+      /\b(status\s+review|status\s+hearing)\b/i,
+      /\bprotection\s+order\b.{0,30}\b(CAS|society|child)\b/i,
+      /\b(taken\s+into\s+care|apprehended\s+by\s+(CAS|the\s+society|children.s\s+aid))\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "fam_cp__q1",
+        text: "Has the Children's Aid Society filed a court application, or has a hearing date been set?",
+        rationale: "CYFSA, s.47 requires a status hearing within 5 days of apprehension  -  a hard deadline that cannot be extended.",
+      },
+      {
+        id: "fam_cp__q2",
+        text: "Is the child currently in CAS care or in your home?",
+        rationale: "Placement status determines urgency and whether a temporary custody motion is needed immediately.",
+      },
+      {
+        id: "fam_cp__q3",
+        text: "Have you been served with any court documents by CAS?",
+        rationale: "Served documents may carry response deadlines; identifying them determines the filing urgency.",
+      },
+    ],
+    source: "Child, Youth and Family Services Act, 2017 (Ontario), s.47  -  5-day status hearing requirement",
+  },
+  {
+    id: "fam_safety_concern",
+    label: "Safety Concern  -  Urgent Motion / TBST",
+    severity: "S1",
+    paFilter: ["fam"],
+    triggerPatterns: [
+      /\b(emergency|urgent|immediately)\b.{0,30}\b(custody|access|protection|order|motion|restraining)\b/i,
+      /\b(ex\s+parte|without\s+notice\s+motion|urgent\s+motion)\b.{0,30}\b(family|custody|protection)\b/i,
+      /\b(TBST|telephone\s+blended\s+settlement|urgent\s+settlement\s+conference)\b/i,
+      /\bchild.{0,10}(at\s+risk|in\s+danger|is\s+unsafe|is\s+being\s+abused)\b/i,
+      /\b(abduction\s+risk|parental\s+abduction|flee\s+(with\s+the\s+child|the\s+country))\b/i,
+      /\b(immediate\s+(danger|threat|harm|risk))\b.{0,40}\b(child|children|family|spouse|partner)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "fam_safety__q1",
+        text: "Is there an immediate risk of harm to a child or yourself right now?",
+        rationale: "Immediate risk triggers ex parte (without-notice) motion path and may require police involvement before court.",
+      },
+      {
+        id: "fam_safety__q2",
+        text: "Is there a risk the other parent may leave the province or country with the child?",
+        rationale: "Flight risk requires a travel restriction order and possible passport surrender  -  different urgent motion than safety.",
+      },
+      {
+        id: "fam_safety__q3",
+        text: "Are there any existing court orders for custody, access, or protection?",
+        rationale: "Existing orders determine whether a motion to vary or an enforcement application is the correct path.",
+      },
+    ],
+    source: "Ontario Superior Court of Justice  -  Family Practice Direction (urgent motions); CYFSA  -  TBST protocol",
+  },
+  {
+    id: "fam_hearing_imminent",
+    label: "Hearing / Conference Within 10 Business Days",
+    severity: "S1",
+    paFilter: ["fam"],
+    triggerPatterns: [
+      /\b(court\s+(date|appearance)|conference|motion\s+date|hearing)\b.{0,30}\b(next\s+week|this\s+week|tomorrow|in\s+a\s+few\s+days|in\s+(1|2|3|4|5|6|7|8|9|10)\s+(days?|business\s+days?))\b/i,
+      /\b(hearing|conference|court\s+date)\b.{0,30}\b(very\s+soon|coming\s+up\s+soon|imminent|approaching)\b/i,
+      /\b(case\s+conference|settlement\s+conference|trial\s+(management\s+)?conference|motion)\b.{0,20}\b(next|this)\s+(week|monday|tuesday|wednesday|thursday|friday)\b/i,
+      /\b(Form\s+14C|confirmation\s+form|confirm\s+the\s+motion)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "fam_hearing__q1",
+        text: "What is the exact date of the upcoming hearing or conference?",
+        rationale: "Ontario practice direction requires Form 14C (Confirmation of Motion) filed no later than 2 p.m. three business days before the hearing.",
+      },
+      {
+        id: "fam_hearing__q2",
+        text: "What type of court event is it  -  case conference, settlement conference, motion, or trial?",
+        rationale: "Confirmation requirements and preparation differ by event type; motions require filed materials, conferences do not.",
+      },
+      {
+        id: "fam_hearing__q3",
+        text: "Has Form 14C (the confirmation of motion form) been filed yet?",
+        rationale: "Unfiled confirmation may result in the motion being removed from the list on the day of the hearing.",
+      },
+    ],
+    source: "Ontario Superior Court of Justice  -  Family Practice Direction; Form 14C, Rule 14(11) Family Law Rules",
+  },
+  {
+    id: "fam_form17f_confirmation",
+    label: "Form 17F  -  Settlement Conference Confirmation Required",
+    severity: "S1",
+    paFilter: ["fam"],
+    triggerPatterns: [
+      /\b(settlement\s+conference)\b.{0,50}\b(next\s+week|this\s+week|tomorrow|in\s+a\s+few\s+days|in\s+(1|2|3|4|5|6|7|8|9|10)\s+(days?|business\s+days?))\b/i,
+      /\b(settlement\s+conference|trial\s+management\s+conference|TMC)\b.{0,30}\b(soon|imminent|coming\s+up)\b/i,
+      /\b(Form\s+17F|17F\s+confirmation|confirm\s+the\s+settlement\s+conference)\b/i,
+      /\b(settlement\s+conference)\b.{0,30}\b(next|this)\s+(week|monday|tuesday|wednesday|thursday|friday)\b/i,
+      /\b(trial\s+management\s+conference)\b.{0,30}\b(next|this)\s+(week|monday|tuesday|wednesday|thursday|friday)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "fam_17f__q1",
+        text: "What is the exact date of the upcoming settlement conference?",
+        rationale: "Form 17F (Confirmation for Settlement Conference) must be filed no later than 2 p.m. two business days before the conference under the Family Law Rules.",
+      },
+      {
+        id: "fam_17f__q2",
+        text: "Has Form 17F been filed with the court?",
+        rationale: "Failure to file Form 17F by the deadline can result in the conference being removed from the list and a costs order against the defaulting party.",
+      },
+      {
+        id: "fam_17f__q3",
+        text: "Is there a settlement offer or without-prejudice proposal the other side should know about before the conference?",
+        rationale: "Settlement conferences are most effective when both sides come prepared with realistic offers; courts may draw adverse cost inferences from failure to make or respond to offers.",
+      },
+    ],
+    source: "Family Law Rules, O. Reg. 114/99, Rule 17(14)  -  Form 17F; Ontario Superior Court Family Practice Direction",
+  },
+  {
+    id: "fam_bjdr_eligible",
+    label: "BJDR Eligibility  -  Brief Judicial Dispute Resolution",
+    severity: "S2",
+    paFilter: ["fam"],
+    triggerPatterns: [
+      /\b(BJDR|brief\s+judicial\s+dispute\s+resolution|binding\s+JDR|judicial\s+dispute\s+resolution)\b/i,
+      /\b(want\s+to\s+avoid\s+trial|trying\s+to\s+avoid\s+trial|avoid\s+going\s+to\s+trial)\b.{0,40}\b(family|divorce|custody|support|property)\b/i,
+      /\b(focused\s+hearing|early\s+resolution|judge[- ]led\s+settlement)\b/i,
+      /\b(trial\s+management\s+conference)\b.{0,60}\b(hope|hoping|want|trying)\b.{0,30}\b(settle|resolution|resolved)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "fam_bjdr__q1",
+        text: "What stage are the proceedings at  -  has a case conference and settlement conference been completed?",
+        rationale: "BJDR is only available after prior conference steps under Rule 17 have been completed; parties cannot bypass earlier stages.",
+      },
+      {
+        id: "fam_bjdr__q2",
+        text: "Which issues remain unresolved  -  property, custody, support, or all?",
+        rationale: "BJDR is most effective for disputes with a small number of well-defined issues; judges will want to know the scope before agreeing to a BJDR.",
+      },
+      {
+        id: "fam_bjdr__q3",
+        text: "Are both parties open to a judge hearing submissions and potentially giving an opinion or direction?",
+        rationale: "BJDR is consensual  -  both sides must agree; if one party refuses, a different resolution path is needed.",
+      },
+    ],
+    source: "Family Law Rules, O. Reg. 114/99, Rule 17  -  conferences; Ontario Superior Court Early Resolution model",
+  },
+
+  // ── Civil Procedure ───────────────────────────────────────────────────────
+
+  {
+    id: "civ_small_claims_threshold",
+    label: "Small Claims Threshold  -  < $35,000",
+    severity: "S1",
+    paFilter: ["civil", "const", "real", "llt", "corp", "defam", "insol"],
+    triggerPatterns: [
+      /\bsmall\s+claims?(\s+court)?\b/i,
+      /\b(under|less\s+than|below|only|just)\s+\$\s*(35,000|35k|35\s+thousand)\b/i,
+      /\b(claim|owe|owed|lost|damages?)\b.{0,30}\$\s*[1-9]\d{0,3}\b(?!\s*,\d{3})/i,
+      /\b(claim|owe|owed|lost|damages?)\b.{0,30}\$\s*[1-2]\d{4}\b/,
+      /\$\s*(1|2|3|4|5|6|7|8|9)\s*,\s*000\b/i,
+      /\b(a\s+few|couple\s+of)\s+(thousand|hundred)\s+dollars?\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "civ_scc__q1",
+        text: "What is the total dollar amount you are claiming or being claimed against for?",
+        rationale: "Ontario Small Claims Court maximum is $35,000; amounts at or below that threshold cannot be brought in Superior Court as of right.",
+      },
+      {
+        id: "civ_scc__q2",
+        text: "Is this the full amount of the claim, or are there additional amounts like interest, punitive damages, or costs?",
+        rationale: "Total claim value including interest and punitive damages determines the correct court; Superior Court may still be appropriate if total exceeds $35,000.",
+      },
+    ],
+    source: "Courts of Justice Act (Ontario), s.23  -  Small Claims Court monetary jurisdiction ($35,000 maximum)",
+  },
+  {
+    id: "civ_statement_of_defence",
+    label: "Statement of Defence Clock Running",
+    severity: "S1",
+    paFilter: ["civil", "const", "real", "corp", "defam", "insol"],
+    triggerPatterns: [
+      /\b(served\s+(with\s+)?(a\s+)?(statement\s+of\s+claim|lawsuit|court\s+documents?|legal\s+(papers?|documents?)))\b/i,
+      /\b(received\s+(a\s+)?(statement\s+of\s+claim|lawsuit|court\s+documents?|legal\s+(papers?|documents?)))\b/i,
+      /\b(suing\s+me|being\s+sued|sued\s+by|named\s+(as\s+a\s+)?(defendant|respondent))\b/i,
+      /\b(statement\s+of\s+claim|notice\s+of\s+action|originating\s+process)\b.{0,40}\b(served|received|got)\b/i,
+      /\b(20\s+days?|twenty\s+days?)\b.{0,30}\b(defend|defence|respond|answer)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "civ_defence__q1",
+        text: "When were you served with the statement of claim or court documents?",
+        rationale: "Statement of defence must be delivered within 20 days of service in Ontario; 40 days if served outside Ontario  -  clock runs from service date.",
+      },
+      {
+        id: "civ_defence__q2",
+        text: "Have you taken any steps to respond  -  filed anything with the court, or contacted the plaintiff's lawyer?",
+        rationale: "Default judgment may be noted if no defence is filed and the defence window expires.",
+      },
+      {
+        id: "civ_defence__q3",
+        text: "What is the claim about and what amount is being claimed?",
+        rationale: "Claim amount and nature determine available defences and whether a counterclaim is appropriate.",
+      },
+    ],
+    source: "Rules of Civil Procedure (Ontario), Rule 18.01  -  20-day defence period from service",
+  },
+
+  // ── Divisional Court ──────────────────────────────────────────────────────
+
+  {
+    id: "div_tribunal_30day",
+    label: "Divisional Court Appeal  -  30-Day Tribunal Window",
+    severity: "S1",
+    paFilter: ["admin"],
+    triggerPatterns: [
+      /\b(Divisional\s+Court|Div\s+Court)\b.{0,30}\b(appeal|application)\b/i,
+      /\b(appeal|appealing)\b.{0,40}\b(LTB|tribunal|board)\b.{0,30}\b(decision|order|ruling)\b/i,
+      /\b(LTB|Landlord\s+and\s+Tenant\s+Board)\b.{0,60}\b(decision|order|ruling)\b/i,
+      /\b(decision|order|ruling)\b.{0,60}\b(LTB|Landlord\s+and\s+Tenant\s+Board)\b/i,
+      /\b(Consent\s+and\s+Capacity\s+Board|CCB)\b.{0,30}\b(decision|order|ruling)\b/i,
+      /\b(decision|order|ruling)\b.{0,60}\b(tribunal|board)\b/i,
+      /\b(tribunal|board)\b.{0,60}\b(decision|order|ruling)\b/i,
+    ],
+    gateQuestions: [
+      {
+        id: "div_30day__q1",
+        text: "Which tribunal issued the decision and when were the written reasons received?",
+        rationale: "Divisional Court appeal period is 30 days from receipt of the tribunal's written reasons  -  hard deadline under the Statutory Powers Procedure Act.",
+      },
+      {
+        id: "div_30day__q2",
+        text: "Have you filed a Notice of Appeal or applied for leave to appeal to Divisional Court?",
+        rationale: "Some tribunal appeals require leave (permission) from Divisional Court; others are as-of-right  -  the route depends on the enabling statute.",
+      },
+      {
+        id: "div_30day__q3",
+        text: "Are you seeking to appeal on the merits, or is there a procedural fairness or jurisdiction argument?",
+        rationale: "Divisional Court reviews tribunal decisions on a reasonableness standard for merits, correctness for jurisdiction  -  different thresholds for the same deadline.",
+      },
+    ],
+    source: "Statutory Powers Procedure Act (Ontario); Rules of Civil Procedure, Rule 61  -  Divisional Court appeal within 30 days of reasons",
   },
 ];
 
@@ -2209,10 +2601,9 @@ export function mergeFlags(regexFlags: string[], gptFlags: string[]): string[] {
  * S1 flag questions precede S2 flag questions.
  * Deduplicates questions that appear in multiple flags.
  */
-export function getGateQuestions(flagIds: string[]): GateQuestion[] {
+export function getGateQuestions(flagIds: string[], practiceArea?: string): GateQuestion[] {
   const seen = new Set<string>();
   const questions: GateQuestion[] = [];
-  // Sort flags S1 first to ensure S1 gate questions come first
   const sorted = [...flagIds].sort((a, b) => {
     const sa = FLAG_REGISTRY.get(a)?.severity ?? "S2";
     const sb = FLAG_REGISTRY.get(b)?.severity ?? "S2";
@@ -2225,7 +2616,15 @@ export function getGateQuestions(flagIds: string[]): GateQuestion[] {
     for (const q of flag.gateQuestions) {
       if (!seen.has(q.id)) {
         seen.add(q.id);
-        questions.push(q);
+        // Resolve PA-specific text: try exact match, then prefix match, then fallback
+        let resolvedText = q.text;
+        if (practiceArea && q.textByPA) {
+          const paKey = practiceArea.toLowerCase();
+          const match = q.textByPA[paKey]
+            ?? Object.entries(q.textByPA).find(([k]) => paKey.startsWith(k))?.[1];
+          if (match) resolvedText = match;
+        }
+        questions.push({ ...q, text: resolvedText });
       }
     }
   }
@@ -2254,89 +2653,105 @@ export function hasCriticalFlag(flagIds: string[]): boolean {
 
 /**
  * One contextualising sentence per S1 flag, shown to the client before gate
- * questions begin. Tells the client why we are asking — never AI-generated,
+ * questions begin. Tells the client why we are asking  -  never AI-generated,
  * always authored. S2 flags are omitted; gate questions appear without a preamble.
  *
  * Authoring rule: short, factual, no legal conclusions, no urgency theatre.
- * Bad:  "URGENT — you must answer this immediately or your case will be lost."
- * Good: "A timing check — this affects whether legal action is still possible."
+ * Bad:  "URGENT  -  you must answer this immediately or your case will be lost."
+ * Good: "A timing check  -  this affects whether legal action is still possible."
  */
 const S1_PREAMBLES: Record<string, string> = {
   // Universal
-  limitation_proximity:             "A quick timing check — this affects whether legal action is still possible.",
+  limitation_proximity:             "A quick timing check  -  this affects whether legal action is still possible.",
   conflict_adverse_party:           "One standard check before we go further.",
   // PI
-  pi_limitation_window:             "A timing question — this helps confirm whether your claim is still within the legal window.",
-  pi_unidentified_parties:          "A few details about the other party — needed to assess what options are available.",
-  pi_evidence_preservation:         "Evidence in injury cases can disappear quickly — one urgent question.",
+  pi_limitation_window:             "A timing question  -  this helps confirm whether your claim is still within the legal window.",
+  pi_unidentified_parties:          "A few details about the other party  -  needed to assess what options are available.",
+  pi_evidence_preservation:         "Evidence in injury cases can disappear quickly  -  one urgent question.",
   // MVA
-  mvac_insurer_not_notified:        "One insurance question — timing here matters for your benefits.",
-  mvac_hit_and_run:                 "A few specifics about the other vehicle — this affects how your claim proceeds.",
+  mvac_insurer_not_notified:        "One insurance question  -  timing here matters for your benefits.",
+  mvac_hit_and_run:                 "A few specifics about the other vehicle  -  this affects how your claim proceeds.",
   // Med-mal
-  medmal_causation_unclear:         "A question about what happened during your treatment — this shapes the whole analysis.",
+  medmal_causation_unclear:         "A question about what happened during your treatment  -  this shapes the whole analysis.",
   // Slip
-  slip_ice_snow:                    "A timing note — falls on ice or snow trigger a 60-day notice obligation in Ontario.",
-  slip_municipality:                "A timing note — falls on city property require notice within 10 days in Ontario.",
+  slip_ice_snow:                    "A timing note  -  falls on ice or snow trigger a 60-day notice obligation in Ontario.",
+  slip_municipality:                "A timing note  -  falls on city property require notice within 10 days in Ontario.",
   // LTD
-  ltd_appeal_clock_running:         "A timing check — LTD internal appeal windows are often 30 to 90 days.",
+  ltd_appeal_clock_running:         "A timing check  -  LTD internal appeal windows are often 30 to 90 days.",
   // Family
-  fam_property_clock:               "A timing question — property equalization claims have a strict 6-year deadline in Ontario.",
-  fam_abduction:                    "Given what you've described, I need to confirm a few things urgently — time is a factor here.",
-  fam_domestic_violence:            "A few questions about your safety situation — these help us understand what protection may be available.",
+  fam_property_clock:               "A timing question  -  property equalization claims have a strict 6-year deadline in Ontario.",
+  fam_abduction:                    "Given what you've described, I need to confirm a few things urgently  -  time is a factor here.",
+  fam_domestic_violence:            "A few questions about your safety situation  -  these help us understand what protection may be available.",
   // Child protection
   child_apprehension_recent:        "Given the recent involvement of authorities, I have a few time-sensitive questions.",
   // Immigration
-  imm_rad_deadline:                 "This is time-sensitive — a refused refugee claim has only a 15-day appeal window.",
-  imm_removal_order:                "A removal order creates urgent timelines — a few questions before anything else.",
-  imm_inadmissibility:              "A few questions about immigration history — this shapes what options are available.",
-  immigration_misrepresentation:    "A few questions about your immigration history — the details affect your current status.",
+  imm_rad_deadline:                 "This is time-sensitive  -  a refused refugee claim has only a 15-day appeal window.",
+  imm_removal_order:                "A removal order creates urgent timelines  -  a few questions before anything else.",
+  imm_inadmissibility:              "A few questions about immigration history  -  this shapes what options are available.",
+  immigration_misrepresentation:    "A few questions about your immigration history  -  the details affect your current status.",
   // Criminal
-  crim_charter_violation:           "A question about how the police handled the situation — this can affect your entire defence.",
+  crim_charter_violation:           "A question about how the police handled the situation  -  this can affect your entire defence.",
   // Employment
-  emp_hrto_clock:                   "A timing check — discrimination claims have a strict 1-year HRTO deadline.",
-  emp_severance_signed:             "An important question given what you've already signed — timing matters here.",
-  emp_constructive_dismissal:       "A few questions about how the job ended — this shapes whether a constructive dismissal claim is viable.",
-  hrto_respondent_id:               "A quick question about who was involved — needed to properly identify the respondent.",
+  emp_hrto_clock:                   "A timing check  -  discrimination claims have a strict 1-year HRTO deadline.",
+  emp_severance_signed:             "An important question given what you've already signed  -  timing matters here.",
+  emp_constructive_dismissal:       "A few questions about how the job ended  -  this shapes whether a constructive dismissal claim is viable.",
+  hrto_respondent_id:               "A quick question about who was involved  -  needed to properly identify the respondent.",
   // Real estate
-  real_estate_dual_representation:  "A quick check on how the transaction is structured — this is a regulated area.",
-  real_estate_undisclosed_defects:  "A question about what was disclosed before closing — this affects your legal options.",
-  real_estate_closing_date:         "A timing question — closing date obligations are strict and have immediate legal consequences.",
+  real_estate_dual_representation:  "A quick check on how the transaction is structured  -  this is a regulated area.",
+  real_estate_undisclosed_defects:  "A question about what was disclosed before closing  -  this affects your legal options.",
+  real_estate_closing_date:         "A timing question  -  closing date obligations are strict and have immediate legal consequences.",
   // Estates
-  estates_capacity:                 "A few questions about the circumstances of the signing — these are legally significant.",
+  estates_capacity:                 "A few questions about the circumstances of the signing  -  these are legally significant.",
   estates_undue_influence:          "Some background questions about who was present when the document was signed.",
-  estates_dependant_relief:         "A question about your relationship to the deceased — this determines what relief may be available.",
+  estates_dependant_relief:         "A question about your relationship to the deceased  -  this determines what relief may be available.",
   // Corporate
-  corp_oppression:                  "A few questions about how the business decisions were made — this shapes the available remedy.",
+  corp_oppression:                  "A few questions about how the business decisions were made  -  this shapes the available remedy.",
   // Construction
-  construction_lien_deadline:       "A critical timing check — construction liens in Ontario must be registered within 60 days of completion.",
+  construction_lien_deadline:       "A critical timing check  -  construction liens in Ontario must be registered within 60 days of completion.",
   // Landlord-tenant
-  llt_notice_validity:              "A question about the notice you received — its validity determines your options.",
+  llt_notice_validity:              "A question about the notice you received  -  its validity determines your options.",
   // IP
-  ip_maintenance_lapse:             "A timing check — IP rights can lapse permanently without action.",
-  ip_infringement:                  "A few questions about the infringement — the specifics affect what remedies are available.",
+  ip_maintenance_lapse:             "A timing check  -  IP rights can lapse permanently without action.",
+  ip_infringement:                  "A few questions about the infringement  -  the specifics affect what remedies are available.",
   // Admin
-  admin_jr_deadline:                "A timing check — judicial review applications in Ontario have strict deadlines.",
+  admin_jr_deadline:                "A timing check  -  judicial review applications in Ontario have strict deadlines.",
   // WSIB
-  wsib_six_month_claim:             "A timing check — WSIB claims must be filed within 6 months of the injury.",
-  wsib_dearos:                      "A question about your employer's WSIB coverage — this affects how your claim proceeds.",
-  wsib_appeal_deadline:             "A timing check — WSIB appeal windows are strict and cannot be extended.",
+  wsib_six_month_claim:             "A timing check  -  WSIB claims must be filed within 6 months of the injury.",
+  wsib_dearos:                      "A question about your employer's WSIB coverage  -  this affects how your claim proceeds.",
+  wsib_appeal_deadline:             "A timing check  -  WSIB appeal windows are strict and cannot be extended.",
   // Defamation
-  defamation_media_notice:          "A timing question — defamation claims against media outlets require early notice.",
+  defamation_media_notice:          "A timing question  -  defamation claims against media outlets require early notice.",
   // Tax
-  tax_objection_deadline:           "A timing check — CRA objections must be filed within 90 days of the assessment.",
-  tax_voluntary_disclosure:         "A timing question — voluntary disclosure programs have specific windows and conditions.",
+  tax_objection_deadline:           "A timing check  -  CRA objections must be filed within 90 days of the assessment.",
+  tax_voluntary_disclosure:         "A timing question  -  voluntary disclosure programs have specific windows and conditions.",
   // Elder
-  elder_poa_abuse:                  "A few questions about who has authority over financial decisions — this affects what action is available.",
+  elder_poa_abuse:                  "A few questions about who has authority over financial decisions  -  this affects what action is available.",
   // Privacy
-  privacy_data_breach:              "A few questions about what was exposed and when — this shapes what remedies apply.",
+  privacy_data_breach:              "A few questions about what was exposed and when  -  this shapes what remedies apply.",
   // Securities
-  sec_misrepresentation:            "A few questions about the investment and what you were told — the specifics matter here.",
+  sec_misrepresentation:            "A few questions about the investment and what you were told  -  the specifics matter here.",
   // Class action
-  class_action_opt_out:             "A timing check — class action opt-out windows are often short and strictly enforced.",
+  class_action_opt_out:             "A timing check  -  class action opt-out windows are often short and strictly enforced.",
   // Insolvency
-  insolvency_creditor_action:       "A question about the creditor proceedings — timing here affects your options significantly.",
+  insolvency_creditor_action:       "A question about the creditor proceedings  -  timing here affects your options significantly.",
   // Municipal
-  municipal_injury_notice:          "A timing check — injuries on city property require written notice within 10 days in Ontario.",
+  municipal_injury_notice:          "A timing check  -  injuries on city property require written notice within 10 days in Ontario.",
+  // Criminal  -  Ontario Courts procedural
+  crim_summary_ocj:                 "A quick question about the charge  -  this confirms which court the matter will proceed in.",
+  crim_in_custody_bail:             "Given that someone is in custody, I have a few urgent questions before anything else.",
+  crim_jordan_exposure:             "A timing question about when the charges were laid  -  this has direct bearing on a possible Charter argument.",
+  // Family  -  Ontario Courts procedural
+  fam_child_protection:             "Given CAS involvement, there are specific court timelines I need to confirm before anything else.",
+  fam_safety_concern:               "Given the safety signals in what you've described, I have a few urgent questions about next steps.",
+  fam_hearing_imminent:             "Because you have a court date coming up, I need to ask a few procedural questions quickly.",
+  // Civil procedure
+  civ_small_claims_threshold:       "A quick question about the dollar amount  -  this determines which court applies to your matter.",
+  civ_statement_of_defence:         "A timing question  -  the deadline to respond to a court claim in Ontario is strictly enforced.",
+  // Divisional Court
+  div_tribunal_30day:               "A timing check  -  Divisional Court appeal windows from tribunal decisions are strictly enforced.",
+  // KB-17 additions
+  fam_form17f_confirmation:         "A quick check on your upcoming settlement conference  -  there is a required confirmation form with a filing deadline.",
+  pi_mig_designation:               "A question about your injury classification  -  this determines the benefit limits that apply to your SABS claim.",
 };
 
 /**

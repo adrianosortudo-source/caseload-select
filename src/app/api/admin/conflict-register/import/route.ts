@@ -4,7 +4,7 @@
  * Bulk-imports a client list into the conflict_register table for a firm.
  * Called during onboarding when Adriano loads a firm's historical client export.
  *
- * Accepts JSON body (not raw CSV — the operator pre-processes the file):
+ * Accepts JSON body (not raw CSV  -  the operator pre-processes the file):
  * {
  *   firm_id: string,
  *   rows: Array<{
@@ -26,7 +26,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 

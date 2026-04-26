@@ -1,5 +1,6 @@
 import PageHeader from "@/components/PageHeader";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import Link from "next/link";
 import FirmForm from "./FirmForm";
 import PortalLinkButton from "./PortalLinkButton";
 
@@ -27,13 +28,14 @@ export default async function FirmsPage() {
                 <th className="text-right">Total leads</th>
                 <th className="text-right">Pipeline health</th>
                 <th className="text-right">Status</th>
+                <th className="text-right">Routing</th>
                 <th className="text-right px-4">Portal</th>
               </tr>
             </thead>
             <tbody>
               {firms.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-black/40">
+                  <td colSpan={6} className="py-8 text-center text-black/40">
                     No firms yet. Add one above.
                   </td>
                 </tr>
@@ -44,15 +46,23 @@ export default async function FirmsPage() {
                 const active = fLeads.filter((l) =>
                   ["new_lead", "qualified", "proposal_sent"].includes(l.stage)
                 ).length;
-                const health = fLeads.length === 0 ? "—" : `${won} won · ${active} active`;
+                const health = fLeads.length === 0 ? " - " : `${won} won · ${active} active`;
                 return (
                   <tr key={f.id} className="border-b border-black/5">
                     <td className="px-4 py-3 font-medium">{f.name}</td>
-                    <td className="text-black/60">{f.location ?? "—"}</td>
+                    <td className="text-black/60">{f.location ?? " - "}</td>
                     <td className="text-right">{fLeads.length}</td>
                     <td className="text-right text-black/60">{health}</td>
                     <td className="text-right">
                       <span className="badge bg-black/5">{f.status}</span>
+                    </td>
+                    <td className="text-right">
+                      <Link
+                        href={`/firms/${f.id}/routing`}
+                        className="text-xs text-navy hover:underline"
+                      >
+                        Routing
+                      </Link>
                     </td>
                     <td className="text-right px-4">
                       <PortalLinkButton firmId={f.id} />

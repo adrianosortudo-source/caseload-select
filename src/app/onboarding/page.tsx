@@ -7,13 +7,13 @@
  * Run this page after configuring a new firm to confirm all integrations are
  * live before the widget goes on the client's website.
  *
- * Data: server-side, direct Supabase queries — no API route needed for the list.
+ * Data: server-side, direct Supabase queries  -  no API route needed for the list.
  * Individual firm detail calls the /api/admin/onboarding/[firmId] endpoint
  * (which has Bearer auth) separately, so this page does not expose secrets.
  */
 
 import PageHeader from "@/components/PageHeader";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 

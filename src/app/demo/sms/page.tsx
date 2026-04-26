@@ -1,5 +1,5 @@
 /**
- * /demo/sms — SMS intake simulation (Option C: Hybrid AI + Structured).
+ * /demo/sms  -  SMS intake simulation (Option C: Hybrid AI + Structured).
  *
  * iPhone Messages-style UI. Uses /api/screen with channel "sms"
  * (falls through to "chat" behavior: one question at a time, plain text).

@@ -1,16 +1,16 @@
 /**
  * /analytics
  *
- * Filter Performance dashboard — operator view.
+ * Filter Performance dashboard  -  operator view.
  * Covers the CaseLoad Screen intake funnel: sessions, bands, verification,
  * channel mix, and decline reasons. Matches the 7-page Monthly Filter
  * Performance Report format delivered to clients.
  *
- * Data: live from intake_sessions. No RPC required — all client-side queries.
+ * Data: live from intake_sessions. No RPC required  -  all client-side queries.
  */
 
 import PageHeader from "@/components/PageHeader";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -153,7 +153,7 @@ export default async function AnalyticsPage() {
           <StatCard
             label="Qualified (A+B)"
             value={qualifiedCount}
-            sub={completedCount > 0 ? `${Math.round((qualifiedCount / completedCount) * 100)}% of screened` : "—"}
+            sub={completedCount > 0 ? `${Math.round((qualifiedCount / completedCount) * 100)}% of screened` : " - "}
           />
           <StatCard
             label="Filtered (Band E)"

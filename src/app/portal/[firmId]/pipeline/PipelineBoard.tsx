@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PipelineBoard — Read-only kanban for the client portal.
+ * PipelineBoard  -  Read-only kanban for the client portal.
  *
  * No drag-drop, no stage mutations, no CPI scores.
  * Shows: first name + last initial, practice area, band badge, days in stage.

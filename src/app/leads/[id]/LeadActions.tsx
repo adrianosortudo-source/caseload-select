@@ -135,7 +135,7 @@ export default function LeadActions({
           </button>
         </div>
 
-        {/* Override form — shown only for potential_conflict */}
+        {/* Override form  -  shown only for potential_conflict */}
         {conflictStatus === "potential_conflict" && (
           <div className="mt-2 space-y-2">
             <input

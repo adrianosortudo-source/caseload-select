@@ -12,7 +12,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
 const DEMO_FIRM_NAME = "Hartwell Law PC [DEMO]";
 

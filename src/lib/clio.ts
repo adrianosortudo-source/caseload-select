@@ -12,7 +12,7 @@
  * Scopes requested: contacts:read contacts:write matters:read matters:write calendar_entries:read
  */
 
-import { supabase } from "./supabase";
+import { supabaseAdmin as supabase } from "./supabase-admin";
 
 const CLIO_BASE = "https://app.clio.com/api/v4";
 const CLIO_AUTH_URL = "https://app.clio.com/oauth/authorize";

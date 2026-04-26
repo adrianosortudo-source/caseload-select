@@ -10,9 +10,9 @@
  *   - Register path: internal conflict_register table (CSV import + past clients)
  *
  * Result states:
- *   clear              — No matches. Lead may advance.
- *   potential_conflict — Partial match (name similarity). Operator reviews.
- *   confirmed_conflict — Exact email or phone match. Blocked; requires override.
+ *   clear               -  No matches. Lead may advance.
+ *   potential_conflict  -  Partial match (name similarity). Operator reviews.
+ *   confirmed_conflict  -  Exact email or phone match. Blocked; requires override.
  *
  * Matching rules:
  *   Email exact match   → confirmed_conflict
@@ -21,7 +21,7 @@
  *   No match            → clear
  */
 
-import { supabase } from "./supabase";
+import { supabaseAdmin as supabase } from "./supabase-admin";
 import { isClioConnected, getClioContacts, type ClioContact } from "./clio";
 
 export type ConflictResult = "clear" | "potential_conflict" | "confirmed_conflict";
@@ -237,7 +237,7 @@ export async function runConflictCheck(
   }
 ): Promise<ConflictCheckResult & { check_id: string }> {
   if (!lead.law_firm_id) {
-    // No firm context — cannot check. Return clear but log.
+    // No firm context  -  cannot check. Return clear but log.
     const { data: row } = await supabase
       .from("conflict_checks")
       .insert({

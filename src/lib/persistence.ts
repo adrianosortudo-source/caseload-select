@@ -1,12 +1,12 @@
 /**
- * WF-03 — Persistence Engine
+ * WF-03  -  Persistence Engine
  *
  * Triggered when a lead sits in new_lead/qualified with no movement for 30+ minutes.
  * Reads email steps from sequence_steps table via the no_engagement sequence template.
  * Exits on engagement (stage change), all steps sent, or Day 11 auto-close.
  */
 
-import { supabase } from "./supabase";
+import { supabaseAdmin as supabase } from "./supabase-admin";
 import { sendEmail } from "./email";
 import { getEmailContent } from "./sequence-engine";
 

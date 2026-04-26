@@ -1,5 +1,5 @@
 import PageHeader from "@/components/PageHeader";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { STAGES, BANDS } from "@/lib/types";
 import { BAND_COLORS } from "@/lib/cpi";
 
@@ -88,12 +88,12 @@ export default async function Dashboard() {
     ? Math.round((stats.client_won / stats.total_leads) * 100)
     : 0;
 
-  // Stage bars — preserve canonical order from STAGES constant
+  // Stage bars  -  preserve canonical order from STAGES constant
   const stageMap = Object.fromEntries(stats.by_stage.map((s) => [s.stage, s.count]));
   const byStage = STAGES.map((s) => ({ label: s.label, count: stageMap[s.key] ?? 0 }));
   const maxStage = Math.max(1, ...byStage.map((b) => b.count));
 
-  // Band bars — canonical A→E order
+  // Band bars  -  canonical A→E order
   const bandMap = Object.fromEntries(stats.by_band.map((b) => [b.band, b.count]));
   const byBand = BANDS.map((b) => ({ band: b, count: bandMap[b] ?? 0 }));
   const maxBand = Math.max(1, ...byBand.map((b) => b.count));
@@ -203,7 +203,7 @@ export default async function Dashboard() {
               {stats.firms.map((f) => (
                 <tr key={f.id} className="border-b border-black/5">
                   <td className="py-2">{f.name}</td>
-                  <td className="text-black/60">{f.location ?? "—"}</td>
+                  <td className="text-black/60">{f.location ?? " - "}</td>
                   <td className="text-right">{f.lead_count}</td>
                   <td className="text-right">{f.won_count}</td>
                   <td className="text-right">${Number(f.pipeline_value).toLocaleString()}</td>

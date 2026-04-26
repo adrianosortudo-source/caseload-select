@@ -11,7 +11,7 @@
 
 import { NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/portal-auth";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { isClioConnected, getClioMatters } from "@/lib/clio";
 
 export async function GET(

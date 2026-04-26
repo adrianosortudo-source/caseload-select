@@ -2,18 +2,19 @@
  * POST /api/admin/provision-clients
  *
  * Idempotent provisioning for all live client firms in CLIENT_CONFIGS.
- * Creates the firm if it doesn't exist, refreshes question_sets if it does.
- * Uses the config's `slug` stored in the description field as a stable identity key.
+ * Creates the firm if it doesn't exist, refreshes mutable fields if it does.
+ * Uses the config's deterministic `id` (UUID) as the stable identity key
+ * so concurrent callers are race-safe.
  *
  * Authentication: requires ADMIN_SECRET header matching ADMIN_API_SECRET env var.
  *
- * Optional body: { slug: "sakuraba-law" } — provision only one client.
+ * Optional body: { slug: "sakuraba-law" }  -  provision only one client.
  *
  * Returns: array of { slug, firmId, action: "created" | "updated" | "skipped" }
  */
 
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { CLIENT_CONFIGS, buildClientQuestionSets, type ClientConfig } from "@/lib/client-configs";
 
 async function provisionClient(cfg: ClientConfig): Promise<{
@@ -23,18 +24,28 @@ async function provisionClient(cfg: ClientConfig): Promise<{
 }> {
   const questionSets = buildClientQuestionSets(cfg.practice_areas);
 
-  // Look up by name (stable identity)
-  const { data: existing } = await supabase
+  // Existence check by deterministic id. maybeSingle() returns { data: null }
+  // safely when the row does not exist, and errors if multiple rows match
+  // (unreachable here since id is the primary key).
+  const { data: existing, error: selectError } = await supabase
     .from("intake_firms")
     .select("id")
-    .eq("name", cfg.name)
-    .limit(1)
-    .single();
+    .eq("id", cfg.id)
+    .maybeSingle();
 
-  if (!existing) {
-    const { data: created, error } = await supabase
-      .from("intake_firms")
-      .insert({
+  if (selectError) {
+    throw new Error(`Failed to check ${cfg.name}: ${selectError.message}`);
+  }
+
+  const action: "created" | "updated" = existing ? "updated" : "created";
+
+  // Atomic create-if-missing on a deterministic id. Concurrent callers are
+  // race-safe: ignoreDuplicates turns any duplicate-insert into a noop.
+  const { error: upsertError } = await supabase
+    .from("intake_firms")
+    .upsert(
+      {
+        id: cfg.id,
         name: cfg.name,
         description: cfg.description,
         location: cfg.location,
@@ -43,21 +54,20 @@ async function provisionClient(cfg: ClientConfig): Promise<{
         question_sets: questionSets,
         branding: cfg.branding,
         custom_instructions: cfg.custom_instructions ?? null,
-      })
-      .select("id")
-      .single();
+      },
+      { onConflict: "id", ignoreDuplicates: true },
+    );
 
-    if (error || !created) {
-      throw new Error(`Failed to create ${cfg.name}: ${error?.message ?? "no data"}`);
-    }
-
-    return { slug: cfg.slug, firmId: created.id, action: "created" };
+  if (upsertError) {
+    throw new Error(`Failed to upsert ${cfg.name}: ${upsertError.message}`);
   }
 
-  // Update question_sets + branding on every run so fixes auto-apply
+  // Refresh mutable fields on every run so fixes auto-apply. Harmless on a
+  // fresh insert (writes the same values that the upsert just set).
   const { error: updateError } = await supabase
     .from("intake_firms")
     .update({
+      name: cfg.name,
       description: cfg.description,
       location: cfg.location,
       practice_areas: cfg.practice_areas,
@@ -66,13 +76,13 @@ async function provisionClient(cfg: ClientConfig): Promise<{
       branding: cfg.branding,
       custom_instructions: cfg.custom_instructions ?? null,
     })
-    .eq("id", existing.id);
+    .eq("id", cfg.id);
 
   if (updateError) {
     throw new Error(`Failed to update ${cfg.name}: ${updateError.message}`);
   }
 
-  return { slug: cfg.slug, firmId: existing.id, action: "updated" };
+  return { slug: cfg.slug, firmId: cfg.id, action };
 }
 
 export async function POST(req: Request) {
@@ -93,7 +103,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     targetSlug = body?.slug ?? null;
   } catch {
-    // no body — provision all
+    // no body  -  provision all
   }
 
   const targets = targetSlug
@@ -114,7 +124,7 @@ export async function POST(req: Request) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       results.push({ slug: cfg.slug, error: msg });
-      console.error(`[provision-clients] FAILED: ${cfg.name} — ${msg}`);
+      console.error(`[provision-clients] FAILED: ${cfg.name}  -  ${msg}`);
     }
   }
 

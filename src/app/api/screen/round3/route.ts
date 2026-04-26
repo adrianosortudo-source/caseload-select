@@ -7,17 +7,17 @@
  *
  * Body:
  *   session_id: string
- *   answers: Record<string, unknown>   — question ID to answer value(s)
+ *   answers: Record<string, unknown>    -  question ID to answer value(s)
  *
  * Returns:
  *   { ok: true; memo_pending: true }
  *
  * Memo generation is async (non-blocking). The widget polls /api/memo/[sessionId]
- * or advances immediately — the memo badge appears in the portal when ready.
+ * or advances immediately  -  the memo badge appears in the portal when ready.
  */
 
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { qualifiesForRound3 } from "@/lib/round3";
 import { generateMemo } from "@/lib/memo";
 import { triggerRetainerAgreement } from "@/lib/retainer";
@@ -74,8 +74,9 @@ export async function POST(req: Request) {
       void triggerRetainerAsync(session_id, firmId);
     }
 
-    // Generate memo async — non-blocking so widget gets instant response
+    // Generate memo async  -  non-blocking so widget gets instant response
     const contact = (session.contact as Record<string, unknown>) ?? {};
+    const sessionScoring = (session.scoring as Record<string, unknown>) ?? {};
     void generateMemoAsync({
       sessionId: session_id,
       firmId: firmId ?? "",
@@ -88,10 +89,13 @@ export async function POST(req: Request) {
       practiceArea: session.practice_area as string | null,
       subType: (session as Record<string, unknown>).sub_type as string | null,
       band: band ?? "C",
-      cpiScore: ((session.scoring as Record<string, unknown>)?.total as number) ?? 0,
-      cpiConfidence: ((session.scoring as Record<string, unknown>)?.confidence as string) ?? "low",
+      cpiScore: (sessionScoring.total as number) ?? 0,
+      cpiConfidence: (sessionScoring.confidence as string) ?? "low",
       situationSummary: session.situation_summary as string | null,
       round3Answers: answers ?? {},
+      caseValue: (sessionScoring._case_value as Parameters<typeof generateMemoAsync>[0]["caseValue"]) ?? null,
+      interactionScoring: (sessionScoring._interaction_scoring as Parameters<typeof generateMemoAsync>[0]["interactionScoring"]) ?? null,
+      confirmedAnswers: (sessionScoring._confirmed as Record<string, unknown>) ?? {},
     });
 
     return NextResponse.json({ ok: true, memo_pending: true });

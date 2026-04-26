@@ -12,11 +12,11 @@
  * 4. Create DocuSeal submission (sends signing email to prospect)
  * 5. Store result in retainer_agreements
  *
- * Errors are non-fatal from the caller's perspective — OTP verification
+ * Errors are non-fatal from the caller's perspective  -  OTP verification
  * succeeds regardless of retainer generation outcome.
  */
 
-import { supabase } from "./supabase";
+import { supabaseAdmin as supabase } from "./supabase-admin";
 import { generateRetainerPdf } from "./docugenerate";
 import { createRetainerSubmission } from "./docuseal";
 

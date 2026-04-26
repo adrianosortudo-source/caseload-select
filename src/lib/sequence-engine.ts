@@ -3,10 +3,10 @@
  *
  * Looks up the active sequence_template for a trigger_event,
  * then inserts email_sequences rows for each active step.
- * Reads from channels.email — SMS/WhatsApp are Phase 3.
+ * Reads from channels.email  -  SMS/WhatsApp are Phase 3.
  */
 
-import { supabase } from "./supabase";
+import { supabaseAdmin as supabase } from "./supabase-admin";
 
 export type TriggerEvent =
   | "new_lead"
@@ -37,6 +37,10 @@ interface Channels {
   whatsapp?: { template_name: string; body: string; active: boolean };
   internal?: { note: string; active: boolean };
 }
+
+// Re-export condition types and evaluator from the isolated module (no Supabase dependency)
+export type { ConditionRule, StepCondition } from "@/lib/sequence-conditions";
+export { evaluateStepCondition } from "@/lib/sequence-conditions";
 
 interface StepRow {
   id: string;

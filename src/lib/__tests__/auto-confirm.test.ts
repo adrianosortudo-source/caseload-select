@@ -77,7 +77,7 @@ describe("auto-confirm edge cases", () => {
 
   it("returns empty object for unknown question set key", () => {
     const result = autoConfirmFromContext("pi", "Some text", {}, "pi_nonexistent_subtype");
-    // Falls back to umbrella "pi" rules — may have results or not, but must not throw.
+    // Falls back to umbrella "pi" rules  -  may have results or not, but must not throw.
     expect(typeof result).toBe("object");
   });
 
@@ -105,12 +105,12 @@ describe("auto-confirm edge cases", () => {
   });
 
   it("ins_denial rules fire for disability denial input", () => {
-    const result = autoConfirmFromContext("ins", "My long-term disability claim was denied — I cannot work due to chronic pain.", {}, "ins_denial");
+    const result = autoConfirmFromContext("ins", "My long-term disability claim was denied  -  I cannot work due to chronic pain.", {}, "ins_denial");
     expect(result["ins_den_q1"]).toBe("disability");
   });
 
   it("civ_contract rules fire for breach scenario", () => {
-    const result = autoConfirmFromContext("civ", "They're suing me for breach of our service agreement — I'm the defendant.", {}, "civ_contract");
+    const result = autoConfirmFromContext("civ", "They're suing me for breach of our service agreement  -  I'm the defendant.", {}, "civ_contract");
     expect(result["civ_con_q2"]).toBe("defendant");
   });
 
@@ -126,7 +126,7 @@ describe("auto-confirm edge cases", () => {
   });
 
   it("imm_refugee removal urgency fires", () => {
-    const result = autoConfirmFromContext("imm", "CBSA scheduled my deportation — removal is imminent and I need help urgently.", {}, "imm_refugee");
+    const result = autoConfirmFromContext("imm", "CBSA scheduled my deportation  -  removal is imminent and I need help urgently.", {}, "imm_refugee");
     expect(result["imm_ref_q17"]).toBe("removal_imminent");
   });
 

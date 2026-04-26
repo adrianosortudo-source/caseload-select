@@ -3,14 +3,14 @@
  *
  * Detects sessions where Round 3 was started but not completed within 2 hours.
  * Sends a single recovery email: "You're one step away from booking your call."
- * Single send — no nag sequence. Marks the session so it doesn't re-trigger.
+ * Single send  -  no nag sequence. Marks the session so it doesn't re-trigger.
  *
  * Schedule: 0 * * * * (every hour, Vercel evaluates staleness internally)
  * Auth: Bearer CRON_SECRET
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     .is("round3_completed_at", null)
     .not("round3_started_at", "is", null)
     // Use memo_generated_at as a proxy for "recovery already handled"
-    // (a completed session would have both — this filters out partially handled ones)
+    // (a completed session would have both  -  this filters out partially handled ones)
     .is("memo_generated_at", null)
     .limit(50);
 
@@ -103,7 +103,7 @@ function buildRecoveryEmail(firstName: string, firmName: string, sessionId: stri
     </h1>
 
     <p style="font-size: 14px; color: #444; line-height: 1.6; margin: 0 0 16px;">
-      You completed the intake screening with ${firmName}. The final step — a few case details — unlocks your consultation booking.
+      You completed the intake screening with ${firmName}. The final step  -  a few case details  -  unlocks your consultation booking.
     </p>
 
     <p style="font-size: 14px; color: #444; line-height: 1.6; margin: 0 0 24px;">

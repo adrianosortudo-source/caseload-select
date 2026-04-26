@@ -5,7 +5,7 @@
  * firm ID without requiring a portal session.
  */
 
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
 export const DEMO_FIRM_NAME = "Hartwell Law PC [DEMO]";
 

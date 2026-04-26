@@ -1,5 +1,5 @@
 import PageHeader from "@/components/PageHeader";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import Board from "./Board";
 import type { Lead, LawFirm } from "@/lib/types";
 

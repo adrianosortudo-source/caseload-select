@@ -2,6 +2,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import type { StepCondition, ConditionRule } from "@/lib/sequence-conditions";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -11,10 +12,11 @@ interface ChannelWhatsapp { template_name: string; body: string; active: boolean
 interface ChannelInternal { note: string; active: boolean }
 
 interface Channels {
-  email:    ChannelEmail;
-  sms:      ChannelSms;
-  whatsapp: ChannelWhatsapp;
-  internal: ChannelInternal;
+  email:     ChannelEmail;
+  sms:       ChannelSms;
+  whatsapp:  ChannelWhatsapp;
+  internal:  ChannelInternal;
+  condition?: StepCondition;
 }
 
 interface Step {
@@ -58,14 +60,32 @@ const TRIGGER_OPTIONS = [
 const VARIABLES = ["{name}", "{case_type}", "{firm_name}"];
 const SAMPLE    = { name: "Maria Santos", case_type: "immigration", firm_name: "Sakuraba Law" };
 
-type ChannelTab = "email" | "sms" | "whatsapp" | "internal";
+type ChannelTab = "email" | "sms" | "whatsapp" | "internal" | "condition";
 
 const CHANNEL_TABS: { key: ChannelTab; label: string; live: boolean }[] = [
-  { key: "email",    label: "Email",    live: true  },
-  { key: "sms",      label: "SMS",      live: false },
-  { key: "whatsapp", label: "WhatsApp", live: false },
-  { key: "internal", label: "Internal", live: false },
+  { key: "email",     label: "Email",     live: true  },
+  { key: "sms",       label: "SMS",       live: false },
+  { key: "whatsapp",  label: "WhatsApp",  live: false },
+  { key: "internal",  label: "Internal",  live: false },
+  { key: "condition", label: "Condition", live: true  },
 ];
+
+const CONDITION_OPS: { value: ConditionRule["op"]; label: string }[] = [
+  { value: "eq",         label: "equals" },
+  { value: "neq",        label: "not equals" },
+  { value: "in",         label: "is one of" },
+  { value: "nin",        label: "is not one of" },
+  { value: "exists",     label: "exists" },
+  { value: "not_exists", label: "not exists" },
+];
+
+function emptyCondition(): StepCondition {
+  return { operator: "and", rules: [] };
+}
+
+function emptyRule(): ConditionRule {
+  return { slot_id: "", op: "eq", value: "" };
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -312,7 +332,7 @@ export default function SequenceEditor({ sequence: initial }: { sequence: Sequen
                   {delayLabel(step.delay_hours)}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">{emailSubject || "—"}</div>
+                  <div className="text-sm font-medium truncate">{emailSubject || " - "}</div>
                   {!isEditing && (
                     <div className="text-xs text-black/40 truncate mt-0.5">
                       {emailBody.slice(0, 100)}{emailBody.length > 100 ? "…" : ""}
@@ -518,6 +538,111 @@ export default function SequenceEditor({ sequence: initial }: { sequence: Sequen
                       </div>
                     </div>
                   )}
+
+                  {/* Tab: Condition */}
+                  {editTab === "condition" && (() => {
+                    const cond: StepCondition = step.channels.condition ?? emptyCondition();
+                    function setCond(next: StepCondition) {
+                      mutateStep(step.id, (s) => ({
+                        ...s,
+                        channels: { ...s.channels, condition: next },
+                      }));
+                    }
+                    function updateRule(idx: number, patch: Partial<ConditionRule>) {
+                      const rules = cond.rules.map((r, i) => i === idx ? { ...r, ...patch } : r);
+                      setCond({ ...cond, rules });
+                    }
+                    function addRule() {
+                      setCond({ ...cond, rules: [...cond.rules, emptyRule()] });
+                    }
+                    function removeRule(idx: number) {
+                      setCond({ ...cond, rules: cond.rules.filter((_, i) => i !== idx) });
+                    }
+                    const hasRules = cond.rules.length > 0;
+                    return (
+                      <div className="px-4 py-3 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-black/60">Send this step only when</span>
+                          <select
+                            className="input w-20 py-1 text-xs"
+                            value={cond.operator}
+                            onChange={(e) => setCond({ ...cond, operator: e.target.value as "and" | "or" })}
+                          >
+                            <option value="and">ALL</option>
+                            <option value="or">ANY</option>
+                          </select>
+                          <span className="text-xs text-black/60">of these rules pass:</span>
+                        </div>
+
+                        {!hasRules && (
+                          <div className="text-xs text-black/40 italic">No rules  -  step always sends.</div>
+                        )}
+
+                        {cond.rules.map((rule, idx) => {
+                          const needsValue = rule.op !== "exists" && rule.op !== "not_exists";
+                          return (
+                            <div key={idx} className="flex items-start gap-2 bg-black/3 rounded-lg p-2">
+                              <div className="flex-1 grid grid-cols-3 gap-2">
+                                <div>
+                                  <label className="label text-[10px]">Slot ID</label>
+                                  <input
+                                    className="input text-xs py-1"
+                                    placeholder="e.g. pi_slip_fall__location_type"
+                                    value={rule.slot_id}
+                                    onChange={(e) => updateRule(idx, { slot_id: e.target.value })}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="label text-[10px]">Operator</label>
+                                  <select
+                                    className="input text-xs py-1"
+                                    value={rule.op}
+                                    onChange={(e) => updateRule(idx, { op: e.target.value as ConditionRule["op"] })}
+                                  >
+                                    {CONDITION_OPS.map((o) => (
+                                      <option key={o.value} value={o.value}>{o.label}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="label text-[10px]">Value{(rule.op === "in" || rule.op === "nin") ? " (comma-separated)" : ""}</label>
+                                  {needsValue ? (
+                                    <input
+                                      className="input text-xs py-1"
+                                      placeholder={rule.op === "in" || rule.op === "nin" ? "val1, val2" : "expected value"}
+                                      value={Array.isArray(rule.value) ? rule.value.join(", ") : (rule.value ?? "")}
+                                      onChange={(e) => {
+                                        const raw = e.target.value;
+                                        const val = (rule.op === "in" || rule.op === "nin")
+                                          ? raw.split(",").map((v) => v.trim()).filter(Boolean)
+                                          : raw;
+                                        updateRule(idx, { value: val });
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className="input text-xs py-1 opacity-40 select-none bg-black/5"> - </div>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => removeRule(idx)}
+                                className="mt-5 text-xs text-rose-400 hover:text-rose-600 px-1 shrink-0"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        })}
+
+                        <button
+                          onClick={addRule}
+                          className="text-xs text-navy hover:underline font-medium"
+                        >
+                          + Add rule
+                        </button>
+                      </div>
+                    );
+                  })()}
 
                   {/* Save / Cancel */}
                   <div className="flex gap-2 justify-end px-4 py-3 border-t border-black/5">

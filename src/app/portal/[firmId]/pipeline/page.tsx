@@ -1,5 +1,5 @@
 /**
- * /portal/[firmId]/pipeline — Tier 2 Pipeline View
+ * /portal/[firmId]/pipeline  -  Tier 2 Pipeline View
  *
  * Read-only kanban board. Nine stage columns. Filterable by practice area
  * and date range. No drag-drop, no mutations, no raw CPI scores.
@@ -12,7 +12,7 @@
 
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import PipelineBoard from "./PipelineBoard";
 import FunnelBar from "./FunnelBar";
 
@@ -78,7 +78,7 @@ export default async function PipelinePage({
 
   const practiceAreas = (firm?.practice_areas as Array<{ id: string; label: string }>) ?? [];
 
-  // Load leads — card fields only, no PII beyond name
+  // Load leads  -  card fields only, no PII beyond name
   let query = supabase
     .from("leads")
     .select("id, name, case_type, stage, band, priority_band, stage_changed_at, created_at")
@@ -94,7 +94,7 @@ export default async function PipelinePage({
   const leads = data ?? [];
 
   // ── Funnel counts: snapshot of where each lead currently sits.
-  // new_lead bucket = everyone who hasn't exited (client_lost / no_show) —
+  // new_lead bucket = everyone who hasn't exited (client_lost / no_show)  - 
   // this makes it the true top-of-funnel denominator.
   const funnelCounts: Record<string, number> = {};
   for (const key of FUNNEL_STAGE_KEYS) {

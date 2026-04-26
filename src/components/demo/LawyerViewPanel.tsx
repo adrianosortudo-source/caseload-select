@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * LawyerViewPanel — post-finalization demo overlay.
+ * LawyerViewPanel  -  post-finalization demo overlay.
  *
  * Shows the prospect exactly what lands in the lawyer's pipeline after
  * intake completes. Rendered only in demo mode (demoMode=true on IntakeWidget).
@@ -17,6 +17,13 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  BAND_FOLLOWUP,
+  buildDynamicMemo,
+  type MemoData,
+} from "@/lib/intake-memo";
+import { buildScoreRationale } from "@/lib/score-rationale";
+import ScoreRationaleBlock from "@/components/ScoreRationaleBlock";
 
 // ─────────────────────────────────────────────
 // Types
@@ -49,6 +56,9 @@ interface Props {
   contactPhone?: string;
   intakeTrail?: Array<{ question: string; answer: string }>;
   sessionId?: string | null;
+  caseValue?: { label: string; tier: string; rationale: string } | null;
+  /** Demo scenario ID  -  used to render the correct per-scenario case memo. */
+  scenarioId?: string | null;
 }
 
 // ─────────────────────────────────────────────
@@ -80,12 +90,12 @@ const BAND_REASON: Record<string, string> = {
 };
 
 // Band-specific SLA pill: the most prominent signal in the panel
-const BAND_SLA: Record<string, { label: string; sub: string; bg: string; text: string; accent: string; zero: boolean }> = {
-  A: { label: "Respond within 30 minutes", sub: "Priority routing. Senior lawyer escalation on breach.", bg: "bg-emerald-50", text: "text-emerald-900", accent: "text-emerald-600", zero: false },
-  B: { label: "Respond within 1 hour",     sub: "Warm lead. Partner alert on breach.",                  bg: "bg-blue-50",    text: "text-blue-900",    accent: "text-blue-600",    zero: false },
-  C: { label: "Consultation within 24 hours", sub: "Qualified lead. Standard queue.",                   bg: "bg-amber-50",   text: "text-amber-900",   accent: "text-amber-600",   zero: false },
-  D: { label: "0 minutes of your lawyer's time", sub: "6-month automated nurture. No manual touch.",    bg: "bg-gray-100",   text: "text-gray-700",    accent: "text-gray-500",    zero: true  },
-  E: { label: "0 minutes of your lawyer's time", sub: "Outside scope. Filtered out. No CRM entry.",     bg: "bg-gray-100",   text: "text-gray-700",    accent: "text-gray-500",    zero: true  },
+const BAND_SLA: Record<string, { label: string; sub: string; bg: string; text: string; accent: string; zero: boolean; deadlineHours: number | null }> = {
+  A: { label: "Respond within 30 minutes", sub: "Priority case. Senior lawyer escalation on breach.", bg: "bg-emerald-50", text: "text-emerald-900", accent: "text-emerald-600", zero: false, deadlineHours: 0.5  },
+  B: { label: "Respond within 4 hours",    sub: "Warm lead. Partner alert on breach.",                bg: "bg-blue-50",    text: "text-blue-900",    accent: "text-blue-600",    zero: false, deadlineHours: 4    },
+  C: { label: "Respond within 24 hours",   sub: "Qualified lead. Standard intake queue.",             bg: "bg-amber-50",   text: "text-amber-900",   accent: "text-amber-600",   zero: false, deadlineHours: 24   },
+  D: { label: "0 minutes of your lawyer's time", sub: "6-month automated nurture. No manual touch.",  bg: "bg-gray-100",   text: "text-gray-700",    accent: "text-gray-500",    zero: true,  deadlineHours: null },
+  E: { label: "0 minutes of your lawyer's time", sub: "Outside scope. Filtered out. No CRM entry.",   bg: "bg-gray-100",   text: "text-gray-700",    accent: "text-gray-500",    zero: true,  deadlineHours: null },
 };
 
 // Demo-only percentile context for CPI score
@@ -97,19 +107,12 @@ const BAND_PERCENTILE: Record<string, string> = {
   E: "Outside firm scope",
 };
 
-// Per-practice-area case value context
-const PA_CONTEXT: Record<string, string> = {
-  pi: "avg case value $45k to $180k",
-  emp: "avg case value $15k to $85k",
-  fam: "avg retainer $8k to $40k",
-  crim: "avg retainer $5k to $25k",
-  real: "avg case value $3k to $15k",
-  llt: "avg case value $2k to $8k",
-  imm: "avg retainer $3k to $10k",
-  corp: "avg retainer $10k to $40k",
-  wills: "avg retainer $2k to $6k",
-  sc: "small claims (no retainer)",
-  small_claims: "small claims (no retainer)",
+// Case value tier badge colours
+const VALUE_TIER_BADGE: Record<string, { bg: string; text: string }> = {
+  high:    { bg: "bg-emerald-100", text: "text-emerald-700" },
+  medium:  { bg: "bg-blue-100",    text: "text-blue-700" },
+  low:     { bg: "bg-amber-100",   text: "text-amber-700" },
+  minimal: { bg: "bg-gray-100",    text: "text-gray-500" },
 };
 
 // Maps short API IDs to human-readable labels for display
@@ -127,69 +130,143 @@ const PA_DISPLAY_NAMES: Record<string, string> = {
   small_claims: "Small Claims",
 };
 
-// Per-band automation log (fake relative timestamps for demo realism)
-const BAND_ACTION_LOG: Record<string, Array<{ t: string; text: string }>> = {
+// Per-band automation log (what fired in the background after intake completed)
+const BAND_ACTION_LOG: Record<string, Array<{ text: string }>> = {
   A: [
-    { t: "+0.0s", text: "Lead created in CRM" },
-    { t: "+0.2s", text: "Tags applied (band:A, priority)" },
-    { t: "+0.4s", text: "Pipeline stage set to New Lead" },
-    { t: "+0.8s", text: "Case Intake Memo generated (Round 3 complete)" },
-    { t: "+1.2s", text: "Retainer agreement queued via DocuSeal" },
-    { t: "+1.5s", text: "30-minute SLA timer started" },
+    { text: "Lead created, assigned to intake queue" },
+    { text: "Case memo prepared for lawyer review" },
+    { text: "Retainer agreement pre-drafted, awaiting lawyer release after consultation" },
+    { text: "Partner alert scheduled: 30-minute response window" },
   ],
   B: [
-    { t: "+0.0s", text: "Lead created in CRM" },
-    { t: "+0.2s", text: "Tags applied (band:B, warm)" },
-    { t: "+0.4s", text: "Pipeline stage set to New Lead" },
-    { t: "+0.8s", text: "Case Intake Memo generated (Round 3 complete)" },
-    { t: "+1.2s", text: "Retainer agreement queued via DocuSeal" },
-    { t: "+1.5s", text: "1-hour SLA timer started" },
+    { text: "Lead created, assigned to intake queue" },
+    { text: "Case memo prepared for lawyer review" },
+    { text: "Retainer agreement pre-drafted, awaiting lawyer release after consultation" },
+    { text: "Partner alert scheduled: 4-hour response window" },
   ],
   C: [
-    { t: "+0.0s", text: "Lead created in CRM" },
-    { t: "+0.2s", text: "Tags applied (band:C, qualified)" },
-    { t: "+0.4s", text: "Pipeline stage set to New Lead" },
-    { t: "+0.7s", text: "3-month nurture sequence started" },
+    { text: "Lead created, assigned to intake queue" },
+    { text: "3-month qualification nurture started" },
+    { text: "Lawyer notified: no immediate time commitment" },
   ],
   D: [
-    { t: "+0.0s", text: "Lead logged (nurture-only, not routed to pipeline)" },
-    { t: "+0.3s", text: "6-month educational drip started" },
-    { t: "+0.5s", text: "Zero lawyer notification sent" },
+    { text: "Lead logged. Nurture track only  -  no pipeline entry." },
+    { text: "6-month educational drip started" },
   ],
   E: [
-    { t: "+0.0s", text: "Inquiry filtered. No CRM entry created." },
-    { t: "+0.2s", text: "Client redirected to external resources" },
-    { t: "+0.3s", text: "Zero lawyer notification sent" },
+    { text: "Inquiry filtered. No CRM entry created." },
+    { text: "Client directed to external resources" },
   ],
 };
 
-const BAND_NEXT_STEPS: Record<string, string[]> = {
-  A: [
-    "Personal call from lawyer within 24 hours.",
-    "Retainer agreement drafted and sent via DocuSeal.",
-    "Case routed to priority litigation queue.",
-    "Consultation booking link delivered to client.",
-  ],
-  B: [
-    "Lawyer follow-up within 48 hours.",
-    "Retainer agreement sent via DocuSeal.",
-    "Case added to standard intake queue.",
-  ],
-  C: [
-    "Lead enrolled in 3-month nurture sequence.",
-    "Lawyer notified; no immediate time commitment.",
-    "Automated follow-up in 7 days.",
-  ],
-  D: [
-    "Enrolled in 6-month low-priority nurture track.",
-    "Educational resources delivered to client.",
-    "Zero attorney time consumed.",
-  ],
-  E: [
-    "Client redirected to appropriate external resource.",
-    "No CRM entry created.",
-    "Zero attorney time consumed.",
-  ],
+
+// ─────────────────────────────────────────────
+// Per-scenario case intake memos (demo only)
+// ─────────────────────────────────────────────
+
+const DEMO_MEMOS: Record<string, MemoData> = {
+  pi_strong: {
+    jurisdictionTimeline: "Ontario. Incident date: approx. 3 weeks ago. Days elapsed: ~21. Within standard 2-year Ontario limitation period.",
+    evidenceHeading: "Evidence Manifest",
+    evidenceItems: [
+      { checked: true,  text: "Police attended  -  report number held by client" },
+      { checked: true,  text: "Ambulance attended, transported to hospital" },
+      { checked: true,  text: "Emergency room records (held by hospital)" },
+      { checked: true,  text: "Insurer contacted client in writing" },
+      { checked: false, text: "Full collision report not yet requested from OPP" },
+      { checked: false, text: "Opposing insurer correspondence  -  status unknown" },
+    ],
+    adverseParties: "Other driver identified. No opposing counsel at time of intake. Conflict check pending.",
+    gaps: [
+      "Full collision report from OPP not yet requested",
+      "Physiotherapy and specialist records not yet confirmed",
+      "Employment income loss documentation not obtained",
+      "Whether client has given any statements to insurers",
+    ],
+  },
+
+  slip_fall: {
+    jurisdictionTimeline: "Ontario. Incident date: approx. 2 weeks ago. Days elapsed: ~14. Within standard 2-year limitation period. Grocery store (private property): written notice to property owner recommended immediately.",
+    evidenceHeading: "Evidence Manifest",
+    evidenceItems: [
+      { checked: true,  text: "Incident reported to store manager at time of fall" },
+      { checked: true,  text: "Emergency room treatment  -  same day" },
+      { checked: false, text: "Written incident report from store  -  not yet requested" },
+      { checked: false, text: "Security camera footage  -  urgent: risk of overwrite" },
+      { checked: false, text: "Witness contact information  -  not obtained" },
+      { checked: false, text: "Photographs of hazard  -  to be confirmed with client" },
+    ],
+    adverseParties: "Property owner (grocery store chain). No counsel identified at time of intake. Conflict check pending.",
+    gaps: [
+      "Security footage preservation letter must be sent immediately",
+      "Written incident report from store not in client's possession",
+      "ER medical records not yet requested",
+      "Ongoing treatment plan not confirmed  -  physiotherapy or specialist referral unknown",
+    ],
+  },
+
+  emp_dismissal: {
+    jurisdictionTimeline: "Ontario (Employment Standards Act + common law notice). Termination date: last Friday. Days elapsed: ~7. ESA complaint limitation: 6 months from termination. Common law: 2 years.",
+    evidenceHeading: "Employment Record",
+    evidenceItems: [
+      { checked: true,  text: "4 years tenure" },
+      { checked: true,  text: "Severance offered: 2 weeks (statutory minimum)" },
+      { checked: true,  text: "Stated reason: restructuring (no performance basis cited)" },
+      { checked: false, text: "Written employment contract  -  status unconfirmed" },
+      { checked: false, text: "Signed separation agreement  -  not yet reviewed" },
+      { checked: false, text: "Termination letter  -  to be reviewed" },
+    ],
+    adverseParties: "Former employer. No counsel identified at time of intake. Conflict check pending.",
+    gaps: [
+      "Written employment contract must be reviewed before any legal theory can be confirmed",
+      "Whether client signed any release or agreement at time of termination",
+      "Non-competition or non-solicitation clause status",
+      "Any progressive discipline history prior to termination",
+      "Mitigation: current employment search status",
+    ],
+  },
+
+  emp_wage: {
+    jurisdictionTimeline: "Ontario (Employment Standards Act, s.22 overtime). Alleged overtime period: past 8 months. Current employment: ongoing. ESA complaint: 2-year limitation. Ministry of Labour complaint recommended within 6 months.",
+    evidenceHeading: "Employment Record",
+    evidenceItems: [
+      { checked: true,  text: "Full-time employee" },
+      { checked: true,  text: "Consistent schedule: ~55 hours/week" },
+      { checked: true,  text: "Ontario ESA overtime threshold: 44 hours/week" },
+      { checked: true,  text: "Client holds detailed records of hours worked" },
+      { checked: false, text: "Pay stubs for the relevant period  -  status unknown" },
+      { checked: false, text: "Written employment contract confirming classification  -  not yet reviewed" },
+    ],
+    adverseParties: "Current employer (employment ongoing). No counsel identified. Conflict check pending.",
+    gaps: [
+      "Whether client's role is subject to an ESA overtime exemption (certain managers, IT professionals)",
+      "Exact hourly or annual rate to compute outstanding entitlement",
+      "Whether overtime concern has been raised internally and what the response was",
+      "Risk profile: ESA complaint vs civil action given ongoing employment",
+    ],
+  },
+
+  imm_spousal: {
+    jurisdictionTimeline: "Federal (IRCC). Marriage date: within 1 to 3 months. Current status: study permit (approved). Urgency: permit expiry proximity and upcoming marriage. Inland processing: ~12 months. Outland: 12 to 24 months.",
+    evidenceHeading: "Status Snapshot",
+    evidenceItems: [
+      { checked: true,  text: "Current permit: study permit  -  valid" },
+      { checked: true,  text: "Sponsor: Canadian citizen" },
+      { checked: true,  text: "No prior refused applications" },
+      { checked: false, text: "Study permit expiry date  -  exact date not confirmed" },
+      { checked: false, text: "Cohabitation start date and history  -  not yet reviewed" },
+      { checked: false, text: "Relationship documentation inventory  -  not yet assessed" },
+    ],
+    adverseParties: "None. No opposing counsel at time of intake.",
+    pathwayAssessment: "Inland sponsorship preferred if study permit has sufficient remaining validity and client maintains status throughout processing. Outland required if permit expires before IRCC completes inland review. Both pathways require IMM forms package, relationship evidence, police clearances, and medical exam.",
+    gaps: [
+      "Exact permit expiry date  -  critical for inland vs outland decision",
+      "Relationship length and cohabitation history (genuineness of relationship evidence)",
+      "Sponsor's prior sponsorship undertakings (if any)",
+      "Any criminality or inadmissibility flags from either party",
+      "Whether civil or religious ceremony, and registration in Canada",
+    ],
+  },
 };
 
 // ─────────────────────────────────────────────
@@ -227,23 +304,64 @@ export default function LawyerViewPanel({
   contactPhone,
   intakeTrail,
   sessionId,
+  caseValue,
+  scenarioId,
 }: Props) {
   const b = band ?? "E";
   const meta = BAND_META[b] ?? BAND_META["E"];
   const sla = BAND_SLA[b] ?? BAND_SLA["E"];
   const actionLog = BAND_ACTION_LOG[b] ?? BAND_ACTION_LOG["E"];
-  const nextSteps = BAND_NEXT_STEPS[b] ?? BAND_NEXT_STEPS["E"];
   const blurbBorder = BAND_BLURB_BORDER[b] ?? BAND_BLURB_BORDER["E"];
+
+  // Deadline timestamp for the SLA pill (computed once on mount)
+  const deadlineStr = useMemo(() => {
+    if (!sla.deadlineHours) return null;
+    const deadline = new Date(Date.now() + sla.deadlineHours * 60 * 60 * 1000);
+    const h = deadline.getHours();
+    const m = deadline.getMinutes();
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    const ampm = h < 12 ? "am" : "pm";
+    const mm = m.toString().padStart(2, "0");
+    const prefix = sla.deadlineHours < 1
+      ? `${Math.round(sla.deadlineHours * 60)}min deadline`
+      : `${sla.deadlineHours}h deadline`;
+    return `${prefix}: ${h12}:${mm}${ampm}`;
+  }, [sla.deadlineHours]);
   const bandReason = BAND_REASON[b] ?? BAND_REASON["E"];
   const percentile = BAND_PERCENTILE[b] ?? BAND_PERCENTILE["E"];
+
+  // Case memo: demo scenario fixture when available, otherwise built
+  // dynamically from the real intake data. Guarantees every A/B/C case
+  // produces a memo even for custom-typed (non-demo-chip) intakes.
+  const memo = useMemo(() => {
+    if (scenarioId && DEMO_MEMOS[scenarioId]) return DEMO_MEMOS[scenarioId];
+    return buildDynamicMemo({ situationSummary, practiceArea, intakeTrail });
+  }, [scenarioId, situationSummary, practiceArea, intakeTrail]);
+  const followupSteps = BAND_FOLLOWUP[b] ?? BAND_FOLLOWUP["E"];
+
+  // Structured "why this band" rationale. Pure function of the CPI shape.
+  // Demo has no missing-field or AI-angle data, so only the deterministic
+  // band line + strengths/weaknesses layer renders here.
+  const rationale = useMemo(() => buildScoreRationale({
+    band,
+    total: cpi.total,
+    fit: { value: cpi.fit_score, max: 40 },
+    val: { value: cpi.value_score, max: 60 },
+    components: [
+      { label: "Geographic fit",   value: cpi.geo_score,            max: 10 },
+      { label: "Practice match",   value: cpi.practice_score,       max: 10 },
+      { label: "Inquiry legitimacy", value: cpi.legitimacy_score,   max: 10 },
+      { label: "Referral signal",  value: cpi.referral_score,       max: 10 },
+      { label: "Urgency",          value: cpi.urgency_score,        max: 20 },
+      { label: "Case complexity",  value: cpi.complexity_score,     max: 25 },
+      { label: "Multi-practice",   value: cpi.multi_practice_score, max: 5  },
+      { label: "Fee tier",         value: cpi.fee_score,            max: 10 },
+    ],
+  }), [band, cpi]);
 
   // Resolve short API IDs ("pi") to full labels ("Personal Injury")
   const displayPracticeArea = practiceArea
     ? (PA_DISPLAY_NAMES[practiceArea] ?? PA_DISPLAY_NAMES[practiceArea.toLowerCase()] ?? practiceArea)
-    : null;
-
-  const paContext = practiceArea
-    ? (PA_CONTEXT[practiceArea] ?? PA_CONTEXT[practiceArea.toLowerCase()] ?? null)
     : null;
 
   // Stable per-session lead ID derived from sessionId (or random if none)
@@ -313,7 +431,7 @@ export default function LawyerViewPanel({
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
 
-          {/* 1. SLA pill — most prominent signal */}
+          {/* 1. SLA pill  -  most prominent signal */}
           <div className={`rounded-xl px-4 py-3 ${sla.bg}`}>
             <div className="flex items-center gap-3">
               <div className={`w-9 h-9 rounded-full flex items-center justify-center bg-white ${sla.accent} flex-shrink-0`}>
@@ -329,6 +447,9 @@ export default function LawyerViewPanel({
               </div>
               <div className="min-w-0">
                 <p className={`text-sm font-bold ${sla.text}`}>{sla.label}</p>
+                {deadlineStr && (
+                  <p className={`text-[11px] font-semibold ${sla.text} opacity-60 mt-0.5`}>{deadlineStr}</p>
+                )}
                 <p className={`text-[11px] ${sla.accent} mt-0.5`}>{sla.sub}</p>
               </div>
             </div>
@@ -338,8 +459,7 @@ export default function LawyerViewPanel({
           <div className="flex items-center gap-2 text-[11px] text-gray-500 font-mono">
             <span className="font-semibold text-gray-700">{leadId}</span>
             <span className="text-gray-300">·</span>
-            <span className="flex-1">Arrived {elapsedText}</span>
-            <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">scored in 2.3s</span>
+            <span>Arrived {elapsedText}</span>
           </div>
 
           {/* 3. Case card: contact, PA, band, CPI, full summary, reason */}
@@ -357,9 +477,6 @@ export default function LawyerViewPanel({
                 {displayPracticeArea && (
                   <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                     <span className="text-xs font-medium text-gray-700">{displayPracticeArea}</span>
-                    {paContext && (
-                      <span className="text-[10px] text-gray-400">· {paContext}</span>
-                    )}
                   </div>
                 )}
               </div>
@@ -376,96 +493,150 @@ export default function LawyerViewPanel({
             {situationSummary && (
               <p className="text-sm text-gray-700 leading-relaxed mt-2">{situationSummary}</p>
             )}
+            {caseValue && (() => {
+              const tierKey = caseValue.tier.toLowerCase();
+              const badge = VALUE_TIER_BADGE[tierKey] ?? VALUE_TIER_BADGE["minimal"];
+              return (
+                <div className="mt-2.5 pt-2 border-t border-gray-200/60">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                      Estimated case value
+                    </span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badge.bg} ${badge.text}`}>
+                      {caseValue.tier}
+                    </span>
+                  </div>
+                  <p className="text-sm font-semibold text-gray-900">{caseValue.label}</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{caseValue.rationale}</p>
+                </div>
+              );
+            })()}
             <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-gray-200/60">
               <p className="text-[11px] text-gray-500 leading-tight">{bandReason}</p>
               <span className="text-[10px] text-gray-400 whitespace-nowrap font-medium">{percentile}</span>
             </div>
           </div>
 
-          {/* 4. Actions fired: dark log format with timestamps (past tense) */}
+          {/* 3b. Structured band rationale: expands the one-line tagline into
+             why this band, strongest/weakest factors, and (when available)
+             first-call questions and AI angle. Shared across demo, admin,
+             and portal surfaces via <ScoreRationaleBlock>. */}
+          <ScoreRationaleBlock rationale={rationale} />
+
+          {/* 4. Actions fired: dark log format, no timestamps */}
           <div>
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2.5">
               Actions fired (automation log)
             </p>
             <div className="bg-[#1E2F58] rounded-lg px-3.5 py-3 space-y-1.5 font-mono">
               {actionLog.map(entry => (
-                <div key={entry.text} className="flex items-start gap-3 text-[11px] leading-relaxed">
-                  <span className="text-[#C4B49A] flex-shrink-0 w-12 font-semibold tabular-nums">{entry.t}</span>
+                <div key={entry.text} className="flex items-start gap-2 text-[11px] leading-relaxed">
+                  <span className="text-[#C4B49A] flex-shrink-0 mt-0.5">&#x2713;</span>
                   <span className="text-[#F4F3EF]/90">{entry.text}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* 5. Follow-up protocol: numbered forward-looking steps */}
+          {/* 4b. Follow-up protocol: numbered next steps, band-specific */}
           <div>
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2.5">
-              Follow-up protocol (next steps)
+              Follow-up protocol
             </p>
             <ol className="space-y-2">
-              {nextSteps.map((s, i) => (
-                <li key={s} className="flex items-start gap-2.5">
-                  <span className="w-5 h-5 rounded-full bg-[#1E2F58] text-white flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-0.5">
+              {followupSteps.map((step, i) => (
+                <li key={i} className="flex items-start gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-[#1E2F58] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
                     {i + 1}
                   </span>
-                  <p className="text-sm text-gray-700">{s}</p>
+                  <p className="text-sm text-gray-700 leading-snug">{step}</p>
                 </li>
               ))}
             </ol>
           </div>
 
-          {/* 5b. Case Intake Memo — Band A/B only */}
-          {(b === "A" || b === "B") && (
-            <div>
-              <div className="flex items-center justify-between mb-2.5">
-                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">
-                  Case Intake Memo
+          {/* 5. Pre-call checklist: unchecked evidence items from the memo */}
+          {(() => {
+            const uncheckedGaps = memo.evidenceItems.filter(item => !item.checked);
+            if (uncheckedGaps.length === 0) return null;
+            return (
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2.5">
+                  Pre-call: confirm with client
                 </p>
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                  Memo ready
-                </span>
+                <ul className="space-y-2">
+                  {uncheckedGaps.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                      </span>
+                      <p className="text-sm text-gray-500">{item.text}</p>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <div className="bg-[#F4F3EF] rounded-xl border border-black/5 px-4 py-3.5 space-y-3 font-mono text-[11px]">
-                <div className="not-italic font-sans">
-                  <p className="text-[10px] font-bold text-[#1E2F58] uppercase tracking-wider mb-0.5">Rounds 1 and 2 decide whether to take the meeting.</p>
-                  <p className="text-[10px] text-gray-500">Round 3 decides how the lawyer walks into the meeting prepared.</p>
-                </div>
-                <div className="border-t border-black/8 pt-3 space-y-2.5">
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Jurisdiction and Timeline</p>
-                    <p className="text-[11px] text-gray-700 not-italic font-sans">Incident date: approx. 3 weeks ago. Days elapsed: ~21. Within standard 2-year Ontario limitation period.</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Evidence Manifest</p>
-                    <p className="text-[11px] text-gray-700 not-italic font-sans leading-relaxed">
-                      - [x] Police report — client has report number<br />
-                      - [x] Ambulance attended, transported to hospital<br />
-                      - [x] Emergency room records (held by hospital)<br />
-                      - [x] Insurer contacted client in writing<br />
-                      - [ ] Full collision report not yet requested<br />
-                      - [ ] Opposing insurer correspondence — unknown
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Adverse Parties</p>
-                    <p className="text-[11px] text-gray-700 not-italic font-sans">Other driver identified. No opposing counsel retained at time of intake. Conflict check pending.</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Gaps for Lawyer to Probe</p>
-                    <p className="text-[11px] text-gray-700 not-italic font-sans leading-relaxed">
-                      - Full collision report not yet requested from OPP<br />
-                      - Physiotherapy and specialist records not confirmed<br />
-                      - Employment income loss documentation not obtained
-                    </p>
-                  </div>
-                  <p className="text-[10px] text-gray-400 border-t border-black/8 pt-2 not-italic font-sans">
-                    Prepared by CaseLoad Screen. Client-reported information only. Confidential — LSO Rule 3.3.
+            );
+          })()}
+
+          {/* 5b. Case Intake Memo  -  renders for every Band A/B/C case */}
+          {(b === "A" || b === "B" || b === "C") && (() => {
+            return (
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">
+                    Case Intake Memo
                   </p>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                    Memo ready
+                  </span>
+                </div>
+                <div className="bg-[#F4F3EF] rounded-xl border border-black/5 px-4 py-3.5 space-y-3 text-[11px]">
+                  <div>
+                    <p className="text-[10px] font-bold text-[#1E2F58] uppercase tracking-wider mb-0.5">Rounds 1 and 2 decide whether to take the meeting.</p>
+                    <p className="text-[10px] text-gray-500">Round 3 decides how the lawyer walks in prepared.</p>
+                  </div>
+                  <div className="border-t border-black/8 pt-3 space-y-2.5">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Jurisdiction and Timeline</p>
+                      <p className="text-[11px] text-gray-700">{memo.jurisdictionTimeline}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">{memo.evidenceHeading}</p>
+                      <div className="space-y-0.5">
+                        {memo.evidenceItems.map((item, i) => (
+                          <p key={i} className="text-[11px] text-gray-700 leading-relaxed">
+                            {item.checked ? "- [x]" : "- [ ]"} {item.text}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Adverse Parties</p>
+                      <p className="text-[11px] text-gray-700">{memo.adverseParties}</p>
+                    </div>
+                    {memo.pathwayAssessment && (
+                      <div>
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Pathway Assessment</p>
+                        <p className="text-[11px] text-gray-700">{memo.pathwayAssessment}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Gaps for Lawyer to Probe</p>
+                      <div className="space-y-0.5">
+                        {memo.gaps.map((gap, i) => (
+                          <p key={i} className="text-[11px] text-gray-700 leading-relaxed">- {gap}</p>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-gray-400 border-t border-black/8 pt-2">
+                      Prepared by CaseLoad Screen. Client-reported information only. Confidential  -  LSO Rule 3.3.
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* 6. Intake trail: evidence behind the score */}
           {intakeTrail && intakeTrail.length > 0 && (
@@ -488,8 +659,11 @@ export default function LawyerViewPanel({
 
           {/* 7. CPI breakdown: compact two-column numeric grid, no bars */}
           <div>
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2.5">
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
               CPI breakdown
+            </p>
+            <p className="text-[10px] text-gray-400 mb-2.5">
+              Band reflects intake message analysis plus Rounds 1 and 2. Round 3 completes the case memo but does not change the band.
             </p>
             <div className="grid grid-cols-2 gap-x-5">
               <div>

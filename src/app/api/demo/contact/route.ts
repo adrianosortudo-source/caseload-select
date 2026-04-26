@@ -4,7 +4,7 @@
  * Receives the Hartwell Law PC demo contact form and emails
  * the submission to the operator via Resend.
  *
- * No auth required — public demo endpoint.
+ * No auth required  -  public demo endpoint.
  * Rate-limit guard: rejects empty/bot submissions.
  */
 
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     <div style="font-family:sans-serif;max-width:560px;color:#0D1520">
       <div style="background:#1E2F58;padding:20px 24px;border-radius:8px 8px 0 0">
         <span style="color:#C4B49A;font-weight:700;font-size:14px;letter-spacing:0.05em">
-          CASELOAD SELECT — DEMO CONTACT
+          CASELOAD SELECT  -  DEMO CONTACT
         </span>
       </div>
       <div style="border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 8px 8px">
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
   try {
     await sendEmail(notifyTo, `Demo enquiry from ${name}`, html);
   } catch {
-    // Log but return success — don't expose email errors to public
+    // Log but return success  -  don't expose email errors to public
     console.error("[demo/contact] Resend error");
   }
 

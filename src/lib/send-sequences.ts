@@ -5,26 +5,27 @@
  * scheduled_at <= now(). Sends the email and marks the row sent or skipped.
  *
  * This is the execution layer for every triggerSequence()-based journey:
- *   J2  — consultation_scheduled  (consultation reminders)
- *   J5A — spoke_no_book           (recovery A)
- *   J5B — consulted_no_sign       (recovery B)
- *   J6  — retainer_awaiting       (retainer follow-up)
+ *   J2   -  consultation_scheduled  (consultation reminders)
+ *   J5A  -  spoke_no_book           (recovery A)
+ *   J5B  -  consulted_no_sign       (recovery B)
+ *   J6   -  retainer_awaiting       (retainer follow-up)
  *   ...any future sequence engine journeys
  *
  * Exit conditions: if a lead moves away from the expected stage for a
  * given trigger_event, remaining scheduled steps are marked 'skipped'.
  *
- * Exit stage map — lead must be in one of these stages for steps to send:
+ * Exit stage map  -  lead must be in one of these stages for steps to send:
  *   consultation_scheduled → ['consultation_scheduled']
  *   retainer_awaiting      → ['proposal_sent']
  *   spoke_no_book          → ['contacted']
  *   consulted_no_sign      → ['consultation_held']
- *   (all others have no exit condition — steps always send)
+ *   (all others have no exit condition  -  steps always send)
  */
 
-import { supabase } from "./supabase";
+import { supabaseAdmin as supabase } from "./supabase-admin";
 import { sendEmail } from "./email";
 import { getEmailContent } from "./sequence-engine";
+import { evaluateStepCondition, type StepCondition } from "./sequence-conditions";
 
 // ─── Exit stage map ───────────────────────────────────────────────────────────
 
@@ -64,6 +65,12 @@ interface LeadInfo {
   case_type: string | null;
   stage: string;
   law_firm_id: string | null;
+  intake_session_id: string | null;
+}
+
+interface SessionAnswers {
+  confirmed: Record<string, unknown>;
+  extracted: Record<string, unknown>;
 }
 
 export interface SendSequencesResult {
@@ -117,11 +124,33 @@ export async function runSendSequences(): Promise<SendSequencesResult> {
   const leadIds = [...new Set(dueRows.map((r: DueRow) => r.lead_id))];
   const { data: leadsData } = await supabase
     .from("leads")
-    .select("id, name, email, case_type, stage, law_firm_id")
+    .select("id, name, email, case_type, stage, law_firm_id, intake_session_id")
     .in("id", leadIds);
   const leadsById: Record<string, LeadInfo> = Object.fromEntries(
     (leadsData ?? []).map((l: LeadInfo) => [l.id, l])
   );
+
+  // Batch-load session answers for leads that have an intake_session_id.
+  // Answers = scoring._confirmed (slot answers) merged with extracted_entities.
+  const sessionIds = [...new Set(
+    (leadsData ?? []).map((l: LeadInfo) => l.intake_session_id).filter(Boolean)
+  )] as string[];
+
+  const sessionAnswersById: Record<string, SessionAnswers> = {};
+  if (sessionIds.length > 0) {
+    const { data: sessionsData } = await supabase
+      .from("intake_sessions")
+      .select("id, scoring, extracted_entities")
+      .in("id", sessionIds);
+
+    for (const s of sessionsData ?? []) {
+      const scoring = (s.scoring as Record<string, unknown>) ?? {};
+      sessionAnswersById[s.id as string] = {
+        confirmed: (scoring._confirmed as Record<string, unknown>) ?? {},
+        extracted: (s.extracted_entities as Record<string, unknown>) ?? {},
+      };
+    }
+  }
 
   // Track which lead+template combos have been exited this run
   // so we skip siblings without re-querying
@@ -162,6 +191,22 @@ export async function runSendSequences(): Promise<SendSequencesResult> {
         }
         result.skipped++;
         continue;
+      }
+
+      // Condition check  -  evaluate slot-answer rules if present in channels.condition
+      const stepCondition = (step.channels as Record<string, unknown>).condition as StepCondition | undefined;
+      if (stepCondition) {
+        const sessionAnswers = lead.intake_session_id
+          ? sessionAnswersById[lead.intake_session_id]
+          : null;
+        const flatAnswers = sessionAnswers
+          ? { ...sessionAnswers.extracted, ...sessionAnswers.confirmed }
+          : {};
+        if (!evaluateStepCondition(stepCondition, flatAnswers)) {
+          await markRow(row.id, "skipped");
+          result.skipped++;
+          continue;
+        }
       }
 
       // Build email content

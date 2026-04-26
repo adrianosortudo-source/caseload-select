@@ -1,5 +1,5 @@
 /**
- * CPI Calculator — scoring.test.ts
+ * CPI Calculator  -  scoring.test.ts
  *
  * Tests validateAndFixScoring() and computeCpiPartial() covering:
  *   - Component clamping
@@ -26,7 +26,7 @@ function makeCpi(overrides: Partial<CpiBreakdown> = {}): CpiBreakdown {
     fit_score: 0,
     geo_score: 0,
     practice_score: 0,
-    legitimacy_score: 5, // neutral default — not a red flag, not perfect
+    legitimacy_score: 5, // neutral default  -  not a red flag, not perfect
     referral_score: 0,
     value_score: 0,
     urgency_score: 0,
@@ -47,7 +47,7 @@ function makeCpi(overrides: Partial<CpiBreakdown> = {}): CpiBreakdown {
 // Component clamping
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("validateAndFixScoring — component clamping", () => {
+describe("validateAndFixScoring  -  component clamping", () => {
   it("clamps geo_score to 0-10", () => {
     const result = validateAndFixScoring(makeCpi({ geo_score: 15 }));
     expect(result.geo_score).toBe(10);
@@ -90,7 +90,7 @@ describe("validateAndFixScoring — component clamping", () => {
 // Sum recomputation
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("validateAndFixScoring — sum recomputation", () => {
+describe("validateAndFixScoring  -  sum recomputation", () => {
   it("recomputes fit_score from components", () => {
     const result = validateAndFixScoring(makeCpi({
       geo_score: 8, practice_score: 8, legitimacy_score: 8, referral_score: 4,
@@ -120,7 +120,7 @@ describe("validateAndFixScoring — sum recomputation", () => {
 // Primary band assignment
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("validateAndFixScoring — primary band thresholds", () => {
+describe("validateAndFixScoring  -  primary band thresholds", () => {
   it("does NOT reach Band A at total 76 without urgency promotion", () => {
     // urgency_score=5 → cpi_urgency=25 < 75, no promotion; total=76 → Band B
     const result = validateAndFixScoring(makeCpi({
@@ -192,7 +192,7 @@ describe("validateAndFixScoring — primary band thresholds", () => {
 // Three-axis derived scores
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("validateAndFixScoring — three-axis derived scores", () => {
+describe("validateAndFixScoring  -  three-axis derived scores", () => {
   it("cpi_fit: fit_score 40 → 100", () => {
     const result = validateAndFixScoring(makeCpi({
       geo_score: 10, practice_score: 10, legitimacy_score: 10, referral_score: 10,
@@ -252,7 +252,7 @@ describe("validateAndFixScoring — three-axis derived scores", () => {
 // Band modifiers
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("validateAndFixScoring — urgency promotion modifier", () => {
+describe("validateAndFixScoring  -  urgency promotion modifier", () => {
   it("promotes to Band A when cpi_urgency ≥ 75 AND total ≥ 55", () => {
     // urgency_score=15 → cpi_urgency=75; total=62 → Band B without modifier
     const result = validateAndFixScoring(makeCpi({
@@ -273,7 +273,7 @@ describe("validateAndFixScoring — urgency promotion modifier", () => {
       // fit=15, value=28, total=43 → Band C
     }));
     expect(result.cpi_urgency).toBe(75);
-    expect(result.band).toBe("C"); // not promoted — total too low
+    expect(result.band).toBe("C"); // not promoted  -  total too low
   });
 
   it("does NOT promote when total ≥ 55 but cpi_urgency < 75", () => {
@@ -298,7 +298,7 @@ describe("validateAndFixScoring — urgency promotion modifier", () => {
   });
 });
 
-describe("validateAndFixScoring — friction floor modifier", () => {
+describe("validateAndFixScoring  -  friction floor modifier", () => {
   it("caps Band A at D when cpi_friction ≥ 80 (legitimacy ≤ 2)", () => {
     // High total → Band A, but legitimacy=2 → cpi_friction=80 → friction floor
     const result = validateAndFixScoring(makeCpi({
@@ -345,7 +345,7 @@ describe("validateAndFixScoring — friction floor modifier", () => {
 
   it("friction floor and urgency promotion: friction wins (both active)", () => {
     // urgency=15 (cpi_urgency=75, promotes), legitimacy=2 (cpi_friction=80, floors)
-    // Friction floor is applied AFTER urgency promotion — friction wins
+    // Friction floor is applied AFTER urgency promotion  -  friction wins
     const result = validateAndFixScoring(makeCpi({
       geo_score: 7, practice_score: 7, legitimacy_score: 2, referral_score: 3,
       urgency_score: 15, complexity_score: 18, multi_practice_score: 2, fee_score: 6,
@@ -361,7 +361,7 @@ describe("validateAndFixScoring — friction floor modifier", () => {
 // computeCpiPartial
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("computeCpiPartial — output shape and urgency field", () => {
+describe("computeCpiPartial  -  output shape and urgency field", () => {
   it("returns score = total, band, confidence=provisional when not finalized", () => {
     const cpi = validateAndFixScoring(makeCpi({
       geo_score: 7, practice_score: 7, legitimacy_score: 7, referral_score: 3,

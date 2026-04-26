@@ -1,5 +1,5 @@
 /**
- * Flag Registry — Deterministic Detection Tests
+ * Flag Registry  -  Deterministic Detection Tests
  *
  * Tests detectFlags() regex accuracy across all 38 practice areas.
  * Each test provides a realistic client message and asserts which flags
@@ -38,7 +38,7 @@ function noFlag(flags: string[], id: string): boolean {
 // Registry integrity
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("FLAG_REGISTRY — registry integrity", () => {
+describe("FLAG_REGISTRY  -  registry integrity", () => {
   it("has 72 flags registered", () => {
     expect(FLAG_REGISTRY.size).toBeGreaterThanOrEqual(72);
   });
@@ -147,7 +147,7 @@ describe("Personal Injury flags", () => {
   });
 
   it("slip_ice_snow does NOT fire on generic wet floor", () => {
-    // Wet floor in summer is not an ice/snow case — no 60-day notice issue
+    // Wet floor in summer is not an ice/snow case  -  no 60-day notice issue
     const flags = detectFlags("I slipped on a wet floor at the supermarket in July.", "pi");
     expect(noFlag(flags, "slip_ice_snow")).toBe(true);
   });
@@ -227,12 +227,12 @@ describe("Family Law flags", () => {
   });
 
   it("fam_abduction fires on parental abduction", () => {
-    const flags = detectFlags("This is a case of parental abduction — she took the kids overseas without telling me.", "fam");
+    const flags = detectFlags("This is a case of parental abduction  -  she took the kids overseas without telling me.", "fam");
     expect(hasFlag(flags, "fam_abduction")).toBe(true);
   });
 
   it("fam_abduction does NOT fire on domestic custody dispute", () => {
-    // Pure domestic custody — no international element
+    // Pure domestic custody  -  no international element
     const flags = detectFlags("My ex won't let me see the kids. He lives in Ottawa and I'm in Toronto.", "fam");
     expect(noFlag(flags, "fam_abduction")).toBe(true);
   });
@@ -600,7 +600,7 @@ describe("Insurance flags", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Criminal — Youth
+// Criminal  -  Youth
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("Child & Youth flags", () => {
@@ -637,14 +637,14 @@ describe("Environmental flags", () => {
 
 describe("Edge cases and disambiguation", () => {
   it("fam_abduction does NOT fire on 'moved to another city'", () => {
-    // Domestic relocation — no international element
+    // Domestic relocation  -  no international element
     const flags = detectFlags("My ex moved our son to Vancouver without telling me. She left Ontario.", "fam");
     expect(noFlag(flags, "fam_abduction")).toBe(true);
   });
 
   it("slip_ice_snow fires even when mention is indirect ('slippery')", () => {
     const flags = detectFlags("The entrance was slippery and I fell. It was January and very cold outside.", "pi");
-    // Not triggered unless slippery is paired with winter surface words — check
+    // Not triggered unless slippery is paired with winter surface words  -  check
     // The current patterns require ice|icy|snow|slippery + specific surfaces, so this may not fire.
     // This is expected behaviour: ambiguous signals don't fire S1 flags without specificity.
     // Test documents the expected behaviour, not a pass/fail requirement.
@@ -741,10 +741,10 @@ describe("hasCriticalFlag", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Phase 1B: getFlagPreamble — S1 preamble authoring
+// Phase 1B: getFlagPreamble  -  S1 preamble authoring
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("getFlagPreamble — S1 preamble retrieval", () => {
+describe("getFlagPreamble  -  S1 preamble retrieval", () => {
   it("returns a preamble for a known S1 flag", () => {
     const p = getFlagPreamble(["limitation_proximity"]);
     expect(p).toBeTruthy();
@@ -802,5 +802,425 @@ describe("getFlagPreamble — S1 preamble retrieval", () => {
         expect(p.length).toBeLessThan(120);
       }
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KB-17 Ontario Courts Procedural  -  Criminal flags
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("crim_summary_ocj (KB-17)", () => {
+  it("fires on 'summary conviction'", () => {
+    const flags = detectFlags("I was charged with a summary conviction offence last month.", "crim");
+    expect(hasFlag(flags, "crim_summary_ocj")).toBe(true);
+  });
+
+  it("fires on 'provincial offence'", () => {
+    const flags = detectFlags("It's a provincial offence ticket, not a criminal charge.", "crim");
+    expect(hasFlag(flags, "crim_summary_ocj")).toBe(true);
+  });
+
+  it("fires on 'OCJ' court mention", () => {
+    const flags = detectFlags("The matter was set down in OCJ for a hearing in November.", "crim");
+    expect(hasFlag(flags, "crim_summary_ocj")).toBe(true);
+  });
+
+  it("does NOT fire for immigration context", () => {
+    const flags = detectFlags("My summary conviction is affecting my PR application.", "imm");
+    expect(noFlag(flags, "crim_summary_ocj")).toBe(true);
+  });
+
+  it("has a preamble", () => {
+    const p = getFlagPreamble(["crim_summary_ocj"]);
+    expect(p).toBeDefined();
+  });
+});
+
+describe("crim_in_custody_bail (KB-17)", () => {
+  it("fires on 'in custody'", () => {
+    const flags = detectFlags("My brother is in custody right now  -  he was arrested last night.", "crim");
+    expect(hasFlag(flags, "crim_in_custody_bail")).toBe(true);
+  });
+
+  it("fires on 'bail was denied'", () => {
+    const flags = detectFlags("He had a bail hearing and bail was denied. He's at the detention centre.", "crim");
+    expect(hasFlag(flags, "crim_in_custody_bail")).toBe(true);
+  });
+
+  it("fires on 'remanded'", () => {
+    const flags = detectFlags("He was remanded in custody pending his next court date.", "crim");
+    expect(hasFlag(flags, "crim_in_custody_bail")).toBe(true);
+  });
+
+  it("fires on 'show cause hearing'", () => {
+    const flags = detectFlags("There's a show cause hearing tomorrow  -  we need a lawyer today.", "crim");
+    expect(hasFlag(flags, "crim_in_custody_bail")).toBe(true);
+  });
+
+  it("does NOT fire for employment context", () => {
+    const flags = detectFlags("I was detained at the border when trying to attend a work conference.", "emp");
+    expect(noFlag(flags, "crim_in_custody_bail")).toBe(true);
+  });
+
+  it("has a preamble", () => {
+    const p = getFlagPreamble(["crim_in_custody_bail"]);
+    expect(p).toBeDefined();
+  });
+});
+
+describe("crim_jordan_exposure (KB-17)", () => {
+  it("fires on charge 2 years ago", () => {
+    const flags = detectFlags("I was charged over 2 years ago and we still haven't had a trial.", "crim");
+    expect(hasFlag(flags, "crim_jordan_exposure")).toBe(true);
+  });
+
+  it("fires on 'charged 20 months ago'", () => {
+    const flags = detectFlags("I was charged almost 20 months ago and nothing has happened.", "crim");
+    expect(hasFlag(flags, "crim_jordan_exposure")).toBe(true);
+  });
+
+  it("fires on 'many adjournments'", () => {
+    const flags = detectFlags("There have been many adjournments and the case just keeps being pushed back.", "crim");
+    expect(hasFlag(flags, "crim_jordan_exposure")).toBe(true);
+  });
+
+  it("fires on explicit Jordan reference", () => {
+    const flags = detectFlags("I heard about a Jordan application to stay the charges.", "crim");
+    expect(hasFlag(flags, "crim_jordan_exposure")).toBe(true);
+  });
+
+  it("does NOT fire for family context with delay language", () => {
+    const flags = detectFlags("Our case has been delayed many times in family court.", "fam");
+    expect(noFlag(flags, "crim_jordan_exposure")).toBe(true);
+  });
+
+  it("has a preamble", () => {
+    const p = getFlagPreamble(["crim_jordan_exposure"]);
+    expect(p).toBeDefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KB-17 Ontario Courts Procedural  -  Family flags
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("fam_child_protection (KB-17)", () => {
+  it("fires on CAS court application", () => {
+    const flags = detectFlags("CAS has filed a court application and we have a hearing scheduled.", "fam");
+    expect(hasFlag(flags, "fam_child_protection")).toBe(true);
+  });
+
+  it("fires on child in care + protection order", () => {
+    const flags = detectFlags("My child was apprehended by Children's Aid and is in CAS care.", "fam");
+    expect(hasFlag(flags, "fam_child_protection")).toBe(true);
+  });
+
+  it("fires on status hearing mention", () => {
+    const flags = detectFlags("There is a status hearing in 4 days and I don't have a lawyer.", "fam");
+    expect(hasFlag(flags, "fam_child_protection")).toBe(true);
+  });
+
+  it("fires on CYFSA mention", () => {
+    const flags = detectFlags("The society brought a protection application under the CYFSA.", "fam");
+    expect(hasFlag(flags, "fam_child_protection")).toBe(true);
+  });
+
+  it("does NOT fire for criminal context", () => {
+    const flags = detectFlags("CAS told me my son was apprehended after the arrest.", "crim");
+    expect(noFlag(flags, "fam_child_protection")).toBe(true);
+  });
+
+  it("has a preamble referencing CAS timelines", () => {
+    const p = getFlagPreamble(["fam_child_protection"]);
+    expect(p).toBeDefined();
+    expect(p).toContain("CAS");
+  });
+});
+
+describe("fam_safety_concern (KB-17)", () => {
+  it("fires on 'emergency custody motion'", () => {
+    const flags = detectFlags("I need an emergency custody motion filed  -  my children are not safe.", "fam");
+    expect(hasFlag(flags, "fam_safety_concern")).toBe(true);
+  });
+
+  it("fires on 'urgent motion' in family context", () => {
+    const flags = detectFlags("We need to bring an urgent motion to restrict access immediately.", "fam");
+    expect(hasFlag(flags, "fam_safety_concern")).toBe(true);
+  });
+
+  it("fires on 'abduction risk'", () => {
+    const flags = detectFlags("There is an abduction risk  -  he's threatened to flee the country with the kids.", "fam");
+    expect(hasFlag(flags, "fam_safety_concern")).toBe(true);
+  });
+
+  it("fires on 'child at risk'", () => {
+    const flags = detectFlags("I believe my child is at risk at the other parent's home.", "fam");
+    expect(hasFlag(flags, "fam_safety_concern")).toBe(true);
+  });
+
+  it("fires on TBST reference", () => {
+    const flags = detectFlags("Someone told me I could request a TBST for urgent family matters.", "fam");
+    expect(hasFlag(flags, "fam_safety_concern")).toBe(true);
+  });
+
+  it("does NOT fire for general urgency in employment context", () => {
+    const flags = detectFlags("This is urgent  -  I need to file something immediately about my wrongful termination.", "emp");
+    expect(noFlag(flags, "fam_safety_concern")).toBe(true);
+  });
+
+  it("has a preamble", () => {
+    const p = getFlagPreamble(["fam_safety_concern"]);
+    expect(p).toBeDefined();
+  });
+});
+
+describe("fam_hearing_imminent (KB-17)", () => {
+  it("fires on 'court date next week'", () => {
+    const flags = detectFlags("My court date is next week and I just found out my lawyer withdrew.", "fam");
+    expect(hasFlag(flags, "fam_hearing_imminent")).toBe(true);
+  });
+
+  it("fires on 'conference in 3 days'", () => {
+    const flags = detectFlags("I have a case conference in 3 days and no materials are filed.", "fam");
+    expect(hasFlag(flags, "fam_hearing_imminent")).toBe(true);
+  });
+
+  it("fires on 'hearing this Thursday'", () => {
+    const flags = detectFlags("I have a motion hearing this Thursday morning.", "fam");
+    expect(hasFlag(flags, "fam_hearing_imminent")).toBe(true);
+  });
+
+  it("fires on Form 14C mention", () => {
+    const flags = detectFlags("I forgot to file Form 14C and the motion is tomorrow.", "fam");
+    expect(hasFlag(flags, "fam_hearing_imminent")).toBe(true);
+  });
+
+  it("does NOT fire for distant future hearing", () => {
+    const flags = detectFlags("My trial is scheduled for next year  -  October 2026.", "fam");
+    expect(noFlag(flags, "fam_hearing_imminent")).toBe(true);
+  });
+
+  it("has a preamble", () => {
+    const p = getFlagPreamble(["fam_hearing_imminent"]);
+    expect(p).toBeDefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KB-17 Ontario Courts Procedural  -  Civil flags
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("civ_small_claims_threshold (KB-17)", () => {
+  it("fires on 'small claims' mention", () => {
+    const flags = detectFlags("Can I take this to small claims court? They owe me money.", "civil");
+    expect(hasFlag(flags, "civ_small_claims_threshold")).toBe(true);
+  });
+
+  it("fires on small dollar amount in civil context", () => {
+    const flags = detectFlags("The contractor owes me $8,000 for work he never finished.", "const");
+    expect(hasFlag(flags, "civ_small_claims_threshold")).toBe(true);
+  });
+
+  it("fires on 'under $35,000'", () => {
+    const flags = detectFlags("My claim is under $35,000 so I wasn't sure if you handle it.", "civil");
+    expect(hasFlag(flags, "civ_small_claims_threshold")).toBe(true);
+  });
+
+  it("fires on 'a few thousand dollars'", () => {
+    const flags = detectFlags("I'm owed a few thousand dollars from a neighbour dispute.", "real");
+    expect(hasFlag(flags, "civ_small_claims_threshold")).toBe(true);
+  });
+
+  it("does NOT fire for immigration context", () => {
+    const flags = detectFlags("Small claims or not, my issue is about my study permit.", "imm");
+    expect(noFlag(flags, "civ_small_claims_threshold")).toBe(true);
+  });
+
+  it("has a preamble", () => {
+    const p = getFlagPreamble(["civ_small_claims_threshold"]);
+    expect(p).toBeDefined();
+  });
+});
+
+describe("civ_statement_of_defence (KB-17)", () => {
+  it("fires on 'served with a statement of claim'", () => {
+    const flags = detectFlags("I was just served with a statement of claim from my former business partner.", "corp");
+    expect(hasFlag(flags, "civ_statement_of_defence")).toBe(true);
+  });
+
+  it("fires on 'someone is suing me'", () => {
+    const flags = detectFlags("My neighbour is suing me over a property boundary dispute.", "real");
+    expect(hasFlag(flags, "civ_statement_of_defence")).toBe(true);
+  });
+
+  it("fires on 'named as a defendant'", () => {
+    const flags = detectFlags("I've been named as a defendant in a lawsuit I just found out about.", "civil");
+    expect(hasFlag(flags, "civ_statement_of_defence")).toBe(true);
+  });
+
+  it("fires on '20 days to defend'", () => {
+    const flags = detectFlags("I was told I have 20 days to file a defence but I'm not sure what that means.", "civil");
+    expect(hasFlag(flags, "civ_statement_of_defence")).toBe(true);
+  });
+
+  it("does NOT fire for family context (respondent, not defendant)", () => {
+    const flags = detectFlags("I received court documents from my spouse's lawyer about divorce.", "fam");
+    expect(noFlag(flags, "civ_statement_of_defence")).toBe(true);
+  });
+
+  it("has a preamble", () => {
+    const p = getFlagPreamble(["civ_statement_of_defence"]);
+    expect(p).toBeDefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KB-17 Ontario Courts Procedural  -  Divisional Court flag
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("div_tribunal_30day (KB-17)", () => {
+  it("fires on LTB decision received recently", () => {
+    const flags = detectFlags("I just received an LTB order last week and want to appeal it.", "admin");
+    expect(hasFlag(flags, "div_tribunal_30day")).toBe(true);
+  });
+
+  it("fires on Divisional Court appeal mention", () => {
+    const flags = detectFlags("Can I take this to Divisional Court to appeal the tribunal's decision?", "admin");
+    expect(hasFlag(flags, "div_tribunal_30day")).toBe(true);
+  });
+
+  it("fires on recently received board decision", () => {
+    const flags = detectFlags("I got a decision from the board a few days ago and I disagree with it.", "admin");
+    expect(hasFlag(flags, "div_tribunal_30day")).toBe(true);
+  });
+
+  it("does NOT fire for criminal context", () => {
+    const flags = detectFlags("The Crown appealed the decision last month in my criminal case.", "crim");
+    expect(noFlag(flags, "div_tribunal_30day")).toBe(true);
+  });
+
+  it("has a preamble", () => {
+    const p = getFlagPreamble(["div_tribunal_30day"]);
+    expect(p).toBeDefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KB-17  -  fam_form17f_confirmation (S1, Family)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("fam_form17f_confirmation (KB-17)", () => {
+  it("fires on 'settlement conference next week'", () => {
+    const flags = detectFlags("My settlement conference is next week and I haven't filed anything.", "fam");
+    expect(hasFlag(flags, "fam_form17f_confirmation")).toBe(true);
+  });
+
+  it("fires on explicit Form 17F mention", () => {
+    const flags = detectFlags("Do I need to file Form 17F before the conference? It's coming up.", "fam");
+    expect(hasFlag(flags, "fam_form17f_confirmation")).toBe(true);
+  });
+
+  it("fires on 'TMC coming up soon'", () => {
+    const flags = detectFlags("There is a trial management conference coming up soon and I am not prepared.", "fam");
+    expect(hasFlag(flags, "fam_form17f_confirmation")).toBe(true);
+  });
+
+  it("fires on 'settlement conference in 3 business days'", () => {
+    const flags = detectFlags("The settlement conference is in 3 business days and I need to know about the confirmation form.", "fam");
+    expect(hasFlag(flags, "fam_form17f_confirmation")).toBe(true);
+  });
+
+  it("does NOT fire for non-family context", () => {
+    const flags = detectFlags("We have a settlement conference next week on the employment dispute.", "emp");
+    expect(noFlag(flags, "fam_form17f_confirmation")).toBe(true);
+  });
+
+  it("has a preamble", () => {
+    const p = getFlagPreamble(["fam_form17f_confirmation"]);
+    expect(p).toBeDefined();
+    expect(typeof p).toBe("string");
+  });
+
+  it("preamble references settlement conference", () => {
+    const p = getFlagPreamble(["fam_form17f_confirmation"]);
+    expect(p?.toLowerCase()).toContain("settlement");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KB-17  -  fam_bjdr_eligible (S2, Family)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("fam_bjdr_eligible (KB-17)", () => {
+  it("fires on explicit 'BJDR' mention", () => {
+    const flags = detectFlags("I heard about BJDR as a way to resolve the case before trial.", "fam");
+    expect(hasFlag(flags, "fam_bjdr_eligible")).toBe(true);
+  });
+
+  it("fires on 'brief judicial dispute resolution'", () => {
+    const flags = detectFlags("Is brief judicial dispute resolution available in our matter?", "fam");
+    expect(hasFlag(flags, "fam_bjdr_eligible")).toBe(true);
+  });
+
+  it("fires on 'want to avoid trial' in family context", () => {
+    const flags = detectFlags("We want to avoid trial if possible  -  this is a custody and support matter.", "fam");
+    expect(hasFlag(flags, "fam_bjdr_eligible")).toBe(true);
+  });
+
+  it("fires on 'judge-led settlement'", () => {
+    const flags = detectFlags("Someone mentioned a judge-led settlement process for family law cases.", "fam");
+    expect(hasFlag(flags, "fam_bjdr_eligible")).toBe(true);
+  });
+
+  it("does NOT fire for criminal context", () => {
+    const flags = detectFlags("We tried judicial dispute resolution in the criminal matter but it failed.", "crim");
+    expect(noFlag(flags, "fam_bjdr_eligible")).toBe(true);
+  });
+
+  it("has NO preamble (S2 flag)", () => {
+    const p = getFlagPreamble(["fam_bjdr_eligible"]);
+    expect(p).toBeUndefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KB-17  -  pi_mig_designation (S1, Personal Injury)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("pi_mig_designation (KB-17)", () => {
+  it("fires on 'placed in the MIG'", () => {
+    const flags = detectFlags("The insurance company placed me in the MIG and now my treatment is capped.", "pi");
+    expect(hasFlag(flags, "pi_mig_designation")).toBe(true);
+  });
+
+  it("fires on 'Minor Injury Guideline' alone", () => {
+    const flags = detectFlags("I was told the Minor Injury Guideline applies to my injuries.", "pi");
+    expect(hasFlag(flags, "pi_mig_designation")).toBe(true);
+  });
+
+  it("fires on '$3,500 cap on treatment'", () => {
+    const flags = detectFlags("They said there is a $3,500 cap on my treatment benefits.", "pi");
+    expect(hasFlag(flags, "pi_mig_designation")).toBe(true);
+  });
+
+  it("fires on 'dispute the MIG designation'", () => {
+    const flags = detectFlags("I want to dispute the MIG designation because my injuries are more serious.", "pi");
+    expect(hasFlag(flags, "pi_mig_designation")).toBe(true);
+  });
+
+  it("does NOT fire for family context with unrelated language", () => {
+    const flags = detectFlags("The issue involves a MIG (migration) of our pension assets during the divorce.", "fam");
+    expect(noFlag(flags, "pi_mig_designation")).toBe(true);
+  });
+
+  it("has a preamble", () => {
+    const p = getFlagPreamble(["pi_mig_designation"]);
+    expect(p).toBeDefined();
+    expect(typeof p).toBe("string");
+  });
+
+  it("preamble references injury classification or benefit limits", () => {
+    const p = getFlagPreamble(["pi_mig_designation"]);
+    expect(p?.toLowerCase()).toMatch(/injur|benefit|classif/);
   });
 });

@@ -16,10 +16,10 @@
  * No external animation libraries needed.
  *
  * Props:
- *   active      — whether the demo is currently running
- *   currentStep — the widget's current step, passed via onDemoStepChange callback
- *   scenarioId  — which scenario is active (for labeling)
- *   onExit      — called when user clicks Exit or presses Escape
+ *   active       -  whether the demo is currently running
+ *   currentStep  -  the widget's current step, passed via onDemoStepChange callback
+ *   scenarioId   -  which scenario is active (for labeling)
+ *   onExit       -  called when user clicks Exit or presses Escape
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -34,7 +34,7 @@ interface BalloonContent {
 
 const BALLOON: Record<string, BalloonContent> = {
   intent: {
-    title: "Step 1 — Describe the situation",
+    title: "Step 1  -  Describe the situation",
     body: "The client types in plain language. No forms, no drop-downs, no practice area selection.",
   },
   intro: {
@@ -43,22 +43,22 @@ const BALLOON: Record<string, BalloonContent> = {
   },
   submitting: {
     title: "Scoring in progress…",
-    body: "Facts extracted, CPI calculated, case routed — in under 3 seconds.",
+    body: "Facts extracted, CPI calculated, case routed  -  in under 3 seconds.",
   },
   questions: {
-    title: "Rounds 1 & 2 — Qualification",
+    title: "Rounds 1 & 2  -  Qualification",
     body: "Adaptive questions build the Case Priority Index in real time. Every answer adjusts the score.",
   },
   identity: {
     title: "Identity captured",
-    body: "Name and contact are collected after qualification — not as a gate at the start.",
+    body: "Name and contact are collected after qualification  -  not as a gate at the start.",
   },
   otp: {
     title: "Verification",
     body: "A one-time code confirms a real person. Filters bots and protects the lawyer's time.",
   },
   round3: {
-    title: "Round 3 — Case details",
+    title: "Round 3  -  Case details",
     body: "Evidence inventory, adverse parties, deadlines. Rounds 1 and 2 decide whether to meet. Round 3 decides how the lawyer walks in.",
   },
   result: {
@@ -77,9 +77,12 @@ const DEFAULT_BALLOON: BalloonContent = {
 };
 
 const SCENARIO_LABEL: Record<string, string> = {
-  pi_strong:    "Band A — Strong case",
-  emp_mid:      "Band C — Borderline",
-  small_claims: "Band E — Outside scope",
+  pi_strong:    "Band A  -  Motor vehicle accident",
+  slip_fall:    "Band B  -  Slip and fall",
+  emp_dismissal: "Band C  -  Wrongful dismissal",
+  emp_wage:     "Band B  -  Unpaid overtime",
+  imm_spousal:  "Band B  -  Spousal sponsorship",
+  small_claims: "Band E  -  Outside scope",
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -170,7 +173,7 @@ export default function DemoTour({ active, currentStep, scenarioId, onExit }: Pr
         Mobile: fixed bottom, above the sticky call bar (bottom-20).
       */}
       <div
-        className="fixed z-[60] bottom-20 left-3 right-3 sm:bottom-8 sm:left-6 sm:right-auto sm:w-[300px] transition-opacity duration-200"
+        className="fixed z-[60] bottom-20 left-3 right-3 sm:bottom-auto sm:top-[200px] sm:right-[540px] sm:left-auto sm:w-[300px] transition-opacity duration-200"
         style={{ opacity: visible ? 1 : 0 }}
       >
         <div
@@ -178,7 +181,7 @@ export default function DemoTour({ active, currentStep, scenarioId, onExit }: Pr
           className="bg-white rounded-2xl shadow-2xl border border-black/[0.07] px-4 py-4 relative"
           style={{ animation: "balloon-enter 250ms cubic-bezier(0.22, 1, 0.36, 1) both" }}
         >
-          {/* Tail — right side, desktop only, points toward widget */}
+          {/* Tail  -  right side, desktop only, points toward widget */}
           <div
             className="absolute right-[-7px] top-5 w-0 h-0 hidden sm:block"
             style={{

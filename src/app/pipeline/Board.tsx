@@ -11,6 +11,25 @@ function daysSince(iso: string) {
   return Math.max(0, Math.floor(ms / (24 * 3600 * 1000)));
 }
 
+// SLA response window per band (hours). A/B/C only — D/E consume no lawyer time.
+const BAND_SLA_HOURS: Record<string, number> = { A: 0.5, B: 4, C: 24 };
+
+function slaStatus(createdAt: string, band: string | null): { label: string; overdue: boolean } | null {
+  if (!band || !BAND_SLA_HOURS[band]) return null;
+  const deadline = new Date(new Date(createdAt).getTime() + BAND_SLA_HOURS[band] * 3600 * 1000);
+  const now = new Date();
+  const overdue = now > deadline;
+  if (overdue) {
+    const h = (now.getTime() - deadline.getTime()) / 3600000;
+    return { label: h < 1 ? "SLA overdue" : `Overdue ${Math.round(h)}h`, overdue: true };
+  }
+  const remaining = (deadline.getTime() - now.getTime()) / 3600000;
+  const label = remaining < 1
+    ? `${Math.round(remaining * 60)}min left`
+    : `${remaining.toFixed(0)}h left`;
+  return { label, overdue: false };
+}
+
 // Conflict check result stored per lead ID (fetched on demand)
 type ConflictStatus = { result: string; checked_at: string; override_reason: string | null } | null;
 
@@ -105,6 +124,7 @@ export default function Board({ leads: initial, firms }: { leads: Lead[]; firms:
                 const pi = l.priority_index ?? l.cpi_score ?? 0;
                 const ls = l.lead_state ?? "problem_aware";
                 const ss = STATE_STYLES[ls];
+                const sla = l.stage === "new_lead" ? slaStatus(l.created_at, band) : null;
                 return (
                   <div
                     key={l.id}
@@ -127,18 +147,25 @@ export default function Board({ leads: initial, firms }: { leads: Lead[]; firms:
                           {band} · {pi}
                         </span>
                       ) : (
-                        <span className="badge bg-black/5">—</span>
+                        <span className="badge bg-black/5"> - </span>
                       )}
                     </div>
 
                     {/* Firm */}
                     <div className="text-xs text-black/60 mt-1">
-                      {l.law_firm_id ? firmById[l.law_firm_id] ?? "—" : "No firm"}
+                      {l.law_firm_id ? firmById[l.law_firm_id] ?? " - " : "No firm"}
                     </div>
+
+                    {/* SLA deadline  -  new_lead cards, A/B/C bands only */}
+                    {sla && (
+                      <div className={`text-[11px] font-medium mt-1.5 ${sla.overdue ? "text-rose-600" : "text-black/40"}`}>
+                        {sla.overdue ? "⚠ " : "⏱ "}{sla.label}
+                      </div>
+                    )}
 
                     {/* Case type + value */}
                     <div className="flex items-center justify-between mt-2 text-xs">
-                      <span className="capitalize text-black/60">{l.case_type ?? "—"}</span>
+                      <span className="capitalize text-black/60">{l.case_type ?? " - "}</span>
                       <span className="font-medium">
                         ${Number(l.estimated_value ?? 0).toLocaleString()}
                       </span>
@@ -179,7 +206,7 @@ export default function Board({ leads: initial, firms }: { leads: Lead[]; firms:
                       </span>
                     </div>
 
-                    {/* Conflict check — shown on qualified cards (gate before consultation) */}
+                    {/* Conflict check  -  shown on qualified cards (gate before consultation) */}
                     {l.stage === "qualified" && (
                       <div className="mt-2 pt-2 border-t border-black/5 flex items-center justify-between gap-2">
                         {conflictMap[l.id] ? (

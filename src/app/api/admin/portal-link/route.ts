@@ -17,9 +17,12 @@ export async function GET(req: NextRequest) {
   }
 
   const token = generatePortalToken(firmId);
-  const origin = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : req.nextUrl.origin;
+  const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN;
+  const origin = appDomain
+    ? `https://app.${appDomain}`
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : req.nextUrl.origin;
 
   const magic_link = `${origin}/api/portal/login?token=${encodeURIComponent(token)}`;
 

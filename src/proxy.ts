@@ -1,5 +1,5 @@
 /**
- * Next.js proxy (edge middleware) — host-based routing for white-label custom domains.
+ * Next.js proxy (edge middleware)  -  host-based routing for white-label custom domains.
  *
  * When a request arrives on a custom domain (not the main app domain),
  * the proxy looks up the firm by custom_domain in Supabase, then rewrites:
@@ -53,7 +53,7 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Custom domain — look up firm
+  // Custom domain  -  look up firm
   const firmId = await firmIdForDomain(hostname);
   if (!firmId) return NextResponse.next();
 

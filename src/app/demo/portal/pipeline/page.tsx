@@ -1,11 +1,11 @@
 /**
- * /demo/portal/pipeline — Live demo pipeline kanban.
+ * /demo/portal/pipeline  -  Live demo pipeline kanban.
  * No auth. Uses Hartwell Law PC demo firm.
  */
 
 import { redirect } from "next/navigation";
 import { getDemoFirmId } from "@/lib/demo-firm";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import PipelineBoard from "@/app/portal/[firmId]/pipeline/PipelineBoard";
 import FunnelBar from "@/app/portal/[firmId]/pipeline/FunnelBar";
 

@@ -5,7 +5,7 @@
  * filterable by status. Lets Adriano see what's outstanding at a glance.
  */
 
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +45,7 @@ function statusBadge(status: string) {
 }
 
 function fmtDate(d: string | null) {
-  if (!d) return <span className="text-black/20">—</span>;
+  if (!d) return <span className="text-black/20"> - </span>;
   return <span>{new Date(d).toLocaleDateString("en-CA")}</span>;
 }
 
@@ -159,7 +159,7 @@ export default async function RetainersPage({
                     )}
                   </td>
                   <td className="px-4 py-3 text-black/60 text-xs">
-                    {row.intake_firms?.name ?? "—"}
+                    {row.intake_firms?.name ?? " - "}
                   </td>
                   <td className="px-4 py-3">
                     {statusBadge(row.status)}

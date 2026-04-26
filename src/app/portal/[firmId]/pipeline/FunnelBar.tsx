@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * FunnelBar — Stage-to-stage funnel conversion above the pipeline kanban.
+ * FunnelBar  -  Stage-to-stage funnel conversion above the pipeline kanban.
  *
  * Navy background bar. Each stage shows its count and the drop-off %
  * from the previous stage. Drop-offs > 40% pulse red.

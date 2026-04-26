@@ -5,16 +5,16 @@
  * No raw CPI scores, no AI rationale, no operator notes.
  *
  * Query params:
- *   practice_area — filter by case_type
- *   date_from     — ISO date string (default: start of current month)
- *   date_to       — ISO date string (default: now)
+ *   practice_area  -  filter by case_type
+ *   date_from      -  ISO date string (default: start of current month)
+ *   date_to        -  ISO date string (default: now)
  *
  * Auth: portal session cookie.
  */
 
 import { NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/portal-auth";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
 const PIPELINE_STAGES = [
   { key: "new_lead",               label: "New Inquiry"   },
@@ -87,7 +87,7 @@ export async function GET(
       .filter(l => l.stage === key)
       .map(l => ({
         id: l.id,
-        name: obfuscateName(l.name as string ?? "—"),
+        name: obfuscateName(l.name as string ?? " - "),
         practice_area: l.case_type ?? null,
         band: (l.priority_band ?? l.band) as string | null,
         days_in_stage: daysSince(l.stage_changed_at as string | null),

@@ -1,5 +1,5 @@
 /**
- * Compliance Pipeline — Integration Tests
+ * Compliance Pipeline  -  Integration Tests
  *
  * Tests the full compliance layer pipeline end-to-end:
  *   detectFlags() → mergeFlags() → getGateQuestions() → gate injection text
@@ -8,13 +8,13 @@
  * verify that the layers work together correctly for realistic multi-turn intakes.
  *
  * Scenarios covered:
- *   1. International child abduction (fam) — fam_abduction vs fam_protection disambiguation
- *   2. MVA hit-and-run + no insurer notification (pi) — multiple S1 flags, cap enforcement
- *   3. HRTO 1-year clock — employment discrimination (emp)
+ *   1. International child abduction (fam)  -  fam_abduction vs fam_protection disambiguation
+ *   2. MVA hit-and-run + no insurer notification (pi)  -  multiple S1 flags, cap enforcement
+ *   3. HRTO 1-year clock  -  employment discrimination (emp)
  *   4. Post-closing defect discovery (real)
  *   5. RAD 15-day appeal deadline (imm)
- *   6. Cross-turn flag accumulation — turn 1 (no PA) → turn 2 (PA known)
- *   7. Gate injection text assembly — format, CRITICAL note, unasked filter
+ *   6. Cross-turn flag accumulation  -  turn 1 (no PA) → turn 2 (PA known)
+ *   7. Gate injection text assembly  -  format, CRITICAL note, unasked filter
  *   8. shouldRunClassifier logic
  */
 
@@ -56,7 +56,7 @@ function buildGateBlock(
 
   return (
     `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
-    `\nCOMPLIANCE FLAGS — MANDATORY GATE QUESTIONS\n` +
+    `\nCOMPLIANCE FLAGS  -  MANDATORY GATE QUESTIONS\n` +
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
     `These compliance signals were detected in the conversation. Ask the following questions before standard qualification questions. Integrate them naturally:\n\n` +
     gateLines +
@@ -70,7 +70,7 @@ function buildGateBlock(
 // Scenario 1: International Child Abduction
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("Scenario 1 — International child abduction (fam)", () => {
+describe("Scenario 1  -  International child abduction (fam)", () => {
   const clientMessage =
     "My ex-wife brought our son to her home country without my consent and now she won't respond to my messages.";
 
@@ -81,7 +81,7 @@ describe("Scenario 1 — International child abduction (fam)", () => {
     expect(flags).not.toContain("fam_protection");
   });
 
-  it("fam_abduction is S1 — critical flag", () => {
+  it("fam_abduction is S1  -  critical flag", () => {
     const flags = detectFlags(clientMessage, "fam");
     expect(hasCriticalFlag(flags)).toBe(true);
   });
@@ -141,7 +141,7 @@ describe("Scenario 1 — International child abduction (fam)", () => {
 // Scenario 2: MVA Hit-and-Run + No Insurer Notification
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("Scenario 2 — MVA hit-and-run + no insurer notification (pi)", () => {
+describe("Scenario 2  -  MVA hit-and-run + no insurer notification (pi)", () => {
   const clientMessage =
     "I was in a car accident this morning. The other driver sped away. I couldn't get the license plate. I haven't called my insurance yet.";
 
@@ -201,10 +201,10 @@ describe("Scenario 2 — MVA hit-and-run + no insurer notification (pi)", () => 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Scenario 3: HRTO 1-Year Clock — Employment Discrimination
+// Scenario 3: HRTO 1-Year Clock  -  Employment Discrimination
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("Scenario 3 — HRTO clock, employment discrimination (emp)", () => {
+describe("Scenario 3  -  HRTO clock, employment discrimination (emp)", () => {
   const clientMessage =
     "My employer fired me shortly after I disclosed my disability. I believe this is discrimination.";
 
@@ -224,7 +224,7 @@ describe("Scenario 3 — HRTO clock, employment discrimination (emp)", () => {
     expect(texts.some(t => t.includes("when") || t.includes("last act") || t.includes("last"))).toBe(true);
   });
 
-  it("no false positives — emp_severance_signed does NOT fire (nothing signed)", () => {
+  it("no false positives  -  emp_severance_signed does NOT fire (nothing signed)", () => {
     const flags = detectFlags(clientMessage, "emp");
     expect(flags).not.toContain("emp_severance_signed");
   });
@@ -237,7 +237,7 @@ describe("Scenario 3 — HRTO clock, employment discrimination (emp)", () => {
   });
 
   it("discrimination via protected ground BEFORE 'discrimination' keyword also fires", () => {
-    // Bidirectional pattern — ground comes first, then discrimination label
+    // Bidirectional pattern  -  ground comes first, then discrimination label
     const text = "I was passed over for promotions because of my age. I think this is discrimination.";
     const flags = detectFlags(text, "emp");
     expect(flags).toContain("emp_hrto_clock");
@@ -248,7 +248,7 @@ describe("Scenario 3 — HRTO clock, employment discrimination (emp)", () => {
 // Scenario 4: Post-Closing Defect Discovery (real estate)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("Scenario 4 — Post-closing defect discovery (real)", () => {
+describe("Scenario 4  -  Post-closing defect discovery (real)", () => {
   const clientMessage =
     "After I moved in I found mold throughout the basement. The sellers never disclosed it.";
 
@@ -286,7 +286,7 @@ describe("Scenario 4 — Post-closing defect discovery (real)", () => {
 // Scenario 5: RAD 15-Day Appeal Deadline (immigration)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("Scenario 5 — RAD appeal deadline (imm)", () => {
+describe("Scenario 5  -  RAD appeal deadline (imm)", () => {
   const clientMessage =
     "My refugee claim was refused by the RPD last week and I need to appeal.";
 
@@ -323,12 +323,12 @@ describe("Scenario 5 — RAD appeal deadline (imm)", () => {
 // Scenario 6: Cross-Turn Flag Accumulation
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("Scenario 6 — Cross-turn flag accumulation", () => {
+describe("Scenario 6  -  Cross-turn flag accumulation", () => {
   const turn1Text = "I had a car accident two years ago and I had a lawyer before but fired them.";
   const turn2Text = "I was in a car accident this morning. The other driver sped away.";
   const combinedText = `${turn1Text}\n${turn2Text}`;
 
-  it("turn 1 (no PA): universal flags only — limitation_proximity + prior_counsel", () => {
+  it("turn 1 (no PA): universal flags only  -  limitation_proximity + prior_counsel", () => {
     const flags = detectFlags(turn1Text, "");
     expect(flags).toContain("limitation_proximity");
     expect(flags).toContain("prior_counsel");
@@ -358,7 +358,7 @@ describe("Scenario 6 — Cross-turn flag accumulation", () => {
     expect(flags).toContain("mvac_hit_and_run");
   });
 
-  it("mergeFlags deduplicates — no flag appears twice", () => {
+  it("mergeFlags deduplicates  -  no flag appears twice", () => {
     const a = detectFlags(turn1Text, "");
     const b = detectFlags(combinedText, "pi");
     const merged = mergeFlags(a, b);
@@ -388,7 +388,7 @@ describe("Scenario 6 — Cross-turn flag accumulation", () => {
 // Scenario 7: Gate Injection Text Assembly
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("Scenario 7 — Gate injection text assembly", () => {
+describe("Scenario 7  -  Gate injection text assembly", () => {
   it("no gate block when no flags", () => {
     const block = buildGateBlock([], {});
     expect(block).toBeNull();
@@ -436,7 +436,7 @@ describe("Scenario 7 — Gate injection text assembly", () => {
     expect(block).toContain("  1. [");
   });
 
-  it("partial answer — only unanswered questions injected", () => {
+  it("partial answer  -  only unanswered questions injected", () => {
     const flags = ["mvac_insurer_not_notified"];
     const questions = getGateQuestions(flags);
     expect(questions.length).toBeGreaterThanOrEqual(2);
@@ -473,7 +473,7 @@ describe("Scenario 7 — Gate injection text assembly", () => {
 // Scenario 8: shouldRunClassifier logic
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("Scenario 8 — shouldRunClassifier", () => {
+describe("Scenario 8  -  shouldRunClassifier", () => {
   it("runs on turn 1 with intent step, not locked", () => {
     expect(shouldRunClassifier(1, "intent", false)).toBe(true);
   });
@@ -508,7 +508,7 @@ describe("Scenario 8 — shouldRunClassifier", () => {
 // Scenario 9: No false positives on clean messages
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("Scenario 9 — No false positives on clean messages", () => {
+describe("Scenario 9  -  No false positives on clean messages", () => {
   it("standard divorce inquiry: no S1 flags", () => {
     const text = "My wife and I are separating. We want to know how to divide our assets.";
     const flags = detectFlags(text, "fam");
@@ -543,7 +543,7 @@ describe("Scenario 9 — No false positives on clean messages", () => {
   it("completely out-of-scope message: no flags fire for unknown PA", () => {
     const text = "Hello, I'd like some general advice about starting a business.";
     const flags = detectFlags(text, "");
-    // Only universal flags with clear trigger patterns could fire — none should for this text
+    // Only universal flags with clear trigger patterns could fire  -  none should for this text
     expect(flags).not.toContain("limitation_proximity");
     expect(flags).not.toContain("fam_abduction");
     expect(flags).not.toContain("mvac_hit_and_run");
@@ -554,7 +554,7 @@ describe("Scenario 9 — No false positives on clean messages", () => {
 // Scenario 10: Gate question deduplication across overlapping flags
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("Scenario 10 — Gate question deduplication", () => {
+describe("Scenario 10  -  Gate question deduplication", () => {
   it("no duplicate question IDs when multiple flags active", () => {
     // Both ltd_appeal_clock_running and ins_claim_denial are active for insurance denial
     const flags = mergeFlags(["ltd_appeal_clock_running"], ["ins_claim_denial"]);

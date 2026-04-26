@@ -2,7 +2,7 @@
  * /portal/login
  *
  * Landing page for expired or invalid magic links.
- * The firm never navigates here directly — they arrive via a magic link
+ * The firm never navigates here directly  -  they arrive via a magic link
  * which validates and redirects immediately. This page only shows on error.
  */
 

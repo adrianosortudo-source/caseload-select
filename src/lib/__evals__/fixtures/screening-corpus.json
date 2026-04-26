@@ -1,0 +1,168 @@
+{
+  "description": "CaseLoad Screen  -  intake screening corpus. Ground truth for extractor, selector, sub-type routing, and first-question targeting. Real-voice messy client inputs. Corpus only grows  -  never delete, only add.",
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "id": "fix-001",
+      "message": "I slipped at walmart and hurt my back they didn't clean the floor",
+      "expected_events": ["slip_fall"],
+      "expected_selected": "slip_fall",
+      "expected_sub_type": "pi_slip_fall",
+      "expected_target_gap": "when",
+      "notes": "Motivating Walmart bug. No time anchor, slip_fall REQUIRES_TIME=true. First question must target WHEN, not driver/passenger."
+    },
+    {
+      "id": "fix-002",
+      "message": "I got rear-ended last Tuesday on the DVP, the other driver was texting",
+      "expected_events": ["mva"],
+      "expected_selected": "mva",
+      "expected_sub_type": "pi_mva",
+      "expected_target_gap": "injuries",
+      "notes": "Time resolved, fault signal present. Next real gap is injuries / medical treatment."
+    },
+    {
+      "id": "fix-003",
+      "message": "i was fired last week with no notice after 5 years at the company",
+      "expected_events": ["termination"],
+      "expected_selected": "termination",
+      "expected_sub_type": "emp_dismissal",
+      "expected_target_gap": "reason_given",
+      "notes": "Time resolved, tenure stated, notice status stated. Next gap is whether a reason was given (without cause vs for cause)."
+    },
+    {
+      "id": "fix-004",
+      "message": "my employer hasn't paid me overtime for the past year even though I work 50+ hour weeks",
+      "expected_events": ["unpaid_overtime"],
+      "expected_selected": "unpaid_overtime",
+      "expected_sub_type": "emp_wage",
+      "expected_target_gap": "employment_status",
+      "notes": "Duration signal, not trigger. Still employed or departed? Employee or contractor? That flips the legal route."
+    },
+    {
+      "id": "fix-005",
+      "message": "I was deported 2 years ago and want to come back to Canada",
+      "expected_events": ["deportation"],
+      "expected_selected": "deportation",
+      "expected_sub_type": "imm_other",
+      "expected_target_gap": "reason_for_removal",
+      "notes": "GAP  -  no imm_removal / imm_deportation bank exists. Router falls back to imm_other. Flag: deportation is common enough to justify its own sub-type bank."
+    },
+    {
+      "id": "fix-006",
+      "message": "I am marrying a Canadian citizen, we want to apply for sponsorship",
+      "expected_events": ["marriage_to_citizen"],
+      "expected_selected": "marriage_to_citizen",
+      "expected_sub_type": "imm_spousal",
+      "expected_target_gap": "current_status",
+      "notes": "No time anchor, marriage_to_citizen REQUIRES_TIME=false. First question targets current immigration status (inside / outside / visitor / work permit)."
+    },
+    {
+      "id": "fix-007",
+      "message": "I bought a house and after closing I found water damage that wasn't disclosed",
+      "expected_events": ["real_estate_defect"],
+      "expected_selected": "real_estate_defect",
+      "expected_sub_type": null,
+      "expected_target_gap": "discovery_time",
+      "notes": "HARD GAP  -  no real_estate sub-type namespace exists at all. Router has nothing to route to. Stage 7 must decide: add re_defect bank or disable real_estate_defect detector until bank exists."
+    },
+    {
+      "id": "fix-008",
+      "message": "I loaned my cousin $15,000 in March 2024 and he won't repay me",
+      "expected_events": ["debt_owed"],
+      "expected_selected": "debt_owed",
+      "expected_sub_type": "civ_debt",
+      "expected_target_gap": "written_agreement",
+      "notes": "Time resolved, amount known, borrower relationship known. Next gap is whether there is written evidence (contract, IOU, texts)."
+    },
+    {
+      "id": "fix-009",
+      "message": "I am marrying a Canadian citizen but I was deported 2 years ago",
+      "expected_events": ["marriage_to_citizen", "deportation"],
+      "expected_selected": "marriage_to_citizen",
+      "expected_sub_type": "imm_spousal",
+      "expected_target_gap": "removal_disclosure",
+      "notes": "Corpus case 1. Selector prioritizes marriage_to_citizen because unresolved beats resolved. Generator should be aware of the deportation context since removal affects sponsorship admissibility."
+    },
+    {
+      "id": "fix-010",
+      "message": "I was fired last week but I also had an issue with unpaid overtime for the past year",
+      "expected_events": ["termination", "unpaid_overtime"],
+      "expected_selected": "unpaid_overtime",
+      "expected_sub_type": "emp_wage",
+      "expected_target_gap": "employment_status_during_overtime",
+      "notes": "Corpus case 2. Selector picks unpaid_overtime because duration is unresolved. Watch: the termination carries a harder limitation clock. If the eval shows this selection is wrong in practice, add a deadline-weight rule to the selector."
+    },
+    {
+      "id": "fix-011",
+      "message": "I slipped and fell at a restaurant three weeks ago and my knee is still messed up",
+      "expected_events": ["slip_fall"],
+      "expected_selected": "slip_fall",
+      "expected_sub_type": "pi_slip_fall",
+      "expected_target_gap": "incident_report",
+      "notes": "Slip-fall with time resolved  -  contrast with fix-001. Next gap is whether the incident was reported to management on the day."
+    },
+    {
+      "id": "fix-012",
+      "message": "I was never fired, I'm actually still employed but I want to know my rights",
+      "expected_events": [],
+      "expected_selected": null,
+      "expected_sub_type": null,
+      "expected_target_gap": null,
+      "notes": "Negation correctly drops termination. Zero events detected. Classifier fallback territory (Stage 7)."
+    },
+    {
+      "id": "fix-013",
+      "message": "I have a legal problem with my neighbour over a fence",
+      "expected_events": [],
+      "expected_selected": null,
+      "expected_sub_type": null,
+      "expected_target_gap": null,
+      "notes": "No detector matches. Property boundary dispute has no current bank. Classifier fallback territory. Surface for Stage 7 triage."
+    },
+    {
+      "id": "fix-014",
+      "message": "A dog bit me last week at a friend's house, I needed stitches",
+      "expected_events": [],
+      "expected_selected": null,
+      "expected_sub_type": null,
+      "expected_target_gap": null,
+      "notes": "DETECTOR GAP  -  no dog_bite pattern in extractor but pi_dog_bite bank exists. Stage 7 decision: add dog_bite detector (cheap, deterministic) vs. rely on GPT classifier fallback."
+    },
+    {
+      "id": "fix-015",
+      "message": "I got fired last year from Rogers and was fired again last week from Bell",
+      "expected_events": ["termination", "termination"],
+      "expected_selected": "termination",
+      "expected_sub_type": "emp_dismissal",
+      "expected_target_gap": "which_incident",
+      "notes": "Multi-instance same type. Both time-resolved. Selector tie-breaks by earliest position (Rogers). Generator must ask which termination the client wants representation on before any substantive question."
+    },
+    {
+      "id": "fix-016",
+      "message": "I'm engaged to a Canadian citizen and we want to apply for spousal sponsorship",
+      "expected_events": ["marriage_to_citizen"],
+      "expected_selected": "marriage_to_citizen",
+      "expected_sub_type": "imm_spousal",
+      "expected_target_gap": "current_status",
+      "notes": "Stage 9: marriage_to_citizen expansion. Engaged-to pattern. REQUIRES_TIME=false so first question targets current immigration status, not timing."
+    },
+    {
+      "id": "fix-017",
+      "message": "My husband is a Canadian citizen, can he sponsor me to come to Canada?",
+      "expected_events": ["marriage_to_citizen"],
+      "expected_selected": "marriage_to_citizen",
+      "expected_sub_type": "imm_spousal",
+      "expected_target_gap": "current_status",
+      "notes": "Stage 9: marriage_to_citizen expansion. Spouse-is-citizen pattern. Same routing as fix-016."
+    },
+    {
+      "id": "fix-018",
+      "message": "I have water damage in my basement from a leaky pipe, just need advice on repairs",
+      "expected_events": [],
+      "expected_selected": null,
+      "expected_sub_type": null,
+      "expected_target_gap": null,
+      "notes": "Stage 9: false-positive guard for real estate detector. Water damage without any real estate anchor (seller, closing, bought, disclosed) must not trigger real_estate_defect."
+    }
+  ]
+}

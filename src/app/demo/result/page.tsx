@@ -1,11 +1,11 @@
 /**
  * /demo/result?session={sessionId}
  *
- * Demo portal view — shows what the lawyer sees after intake completes.
+ * Demo portal view  -  shows what the lawyer sees after intake completes.
  * Access-gated by session ID in the URL (no login required for demo).
  */
 
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import DemoPortalResult from "./DemoPortalResult";
 import Link from "next/link";
 

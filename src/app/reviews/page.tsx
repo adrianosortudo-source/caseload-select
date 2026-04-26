@@ -1,5 +1,5 @@
 import PageHeader from "@/components/PageHeader";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import ReviewsClient from "./ReviewsClient";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +34,7 @@ export default async function ReviewsPage() {
   );
 
   // Count sent J9 touches per lead (via sequence steps belonging to the review_request template)
-  // For simplicity, count all sent email_sequences rows per lead —
+  // For simplicity, count all sent email_sequences rows per lead  - 
   // a lead in this table will have at most J9 rows at this stage.
   const touchesByLead: Record<string, { sent: number; total: number }> = {};
   if (tmplRes.data) {
@@ -49,7 +49,7 @@ export default async function ReviewsPage() {
     const j9StepIds = new Set((steps ?? []).map((s: { id: string }) => s.id));
 
     for (const seq of seqRes.data ?? []) {
-      // We'd need sequence_step_id here — re-query with it
+      // We'd need sequence_step_id here  -  re-query with it
       void seq; // placeholder; we re-query below
     }
 
@@ -74,9 +74,9 @@ export default async function ReviewsPage() {
 
   const enriched = reviews.map((r) => ({
     ...r,
-    lead_name: leadMap[r.lead_id]?.name ?? "—",
+    lead_name: leadMap[r.lead_id]?.name ?? " - ",
     lead_email: leadMap[r.lead_id]?.email ?? null,
-    firm_name: r.law_firm_id ? (firmMap[r.law_firm_id] ?? "—") : "—",
+    firm_name: r.law_firm_id ? (firmMap[r.law_firm_id] ?? " - ") : " - ",
     touches: touchesByLead[r.lead_id] ?? { sent: 0, total: 3 },
   }));
 

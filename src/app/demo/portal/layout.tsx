@@ -1,5 +1,5 @@
 /**
- * Demo portal layout — /demo/portal
+ * Demo portal layout  -  /demo/portal
  *
  * No auth required. Always shows the Hartwell Law PC [DEMO] firm.
  * Gold banner makes it clear this is a demo view.
@@ -24,7 +24,7 @@ export default function DemoPortalLayout({
         style={{ backgroundColor: GOLD, color: "#1a1a2e" }}
       >
         <span>
-          🎯 <strong>Demo Partner Dashboard</strong> — Hartwell Law PC is a fictional firm.
+          🎯 <strong>Demo Partner Dashboard</strong>  -  Hartwell Law PC is a fictional firm.
           Data updates live as demo intakes are submitted.
         </span>
         <span className="hidden sm:inline text-black/30">·</span>

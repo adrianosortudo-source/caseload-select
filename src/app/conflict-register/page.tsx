@@ -6,7 +6,7 @@
  * name, email, phone, or matter type.
  */
 
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -188,13 +188,13 @@ export default async function ConflictRegisterPage({
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs text-black/60">
-                    {row.law_firm_clients?.name ?? "—"}
+                    {row.law_firm_clients?.name ?? " - "}
                   </td>
                   <td className="px-4 py-3 text-xs text-black/60 capitalize">
-                    {row.matter_type ?? <span className="text-black/20">—</span>}
+                    {row.matter_type ?? <span className="text-black/20"> - </span>}
                   </td>
                   <td className="px-4 py-3 text-xs text-black/60">
-                    {row.opposing_party ?? <span className="text-black/20">—</span>}
+                    {row.opposing_party ?? <span className="text-black/20"> - </span>}
                   </td>
                   <td className="px-4 py-3">
                     {sourceBadge(row.source)}

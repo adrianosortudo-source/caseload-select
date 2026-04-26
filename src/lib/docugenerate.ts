@@ -1,12 +1,12 @@
 /**
- * DocuGenerate — PDF generation client
+ * DocuGenerate  -  PDF generation client
  *
  * Fills a configured template with client and case data, returns a URL
  * to the generated PDF. That URL is passed to DocuSeal for e-signature.
  *
  * Env vars required:
- *   DOCUGENERATE_API_KEY      — API key from docugenerate.com dashboard
- *   DOCUGENERATE_TEMPLATE_ID  — template ID for the retainer agreement
+ *   DOCUGENERATE_API_KEY       -  API key from docugenerate.com dashboard
+ *   DOCUGENERATE_TEMPLATE_ID   -  template ID for the retainer agreement
  */
 
 const BASE_URL = "https://api.docugenerate.com/v1";

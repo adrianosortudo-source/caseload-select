@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
   const qualified = staleSessions.filter((s) => s.band === "B" || s.band === "C");
   if (qualified.length > 0) {
     console.log(
-      `[session-expiry] ${qualified.length} qualified session(s) expired (band B/C) — re-engagement pending S8:`,
+      `[session-expiry] ${qualified.length} qualified session(s) expired (band B/C)  -  re-engagement pending S8:`,
       qualified.map((s) => s.id)
     );
   }

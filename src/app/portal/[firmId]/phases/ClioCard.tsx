@@ -1,12 +1,12 @@
 /**
- * ClioCard — FACT Phase A (Authority) replacement card.
+ * ClioCard  -  FACT Phase A (Authority) replacement card.
  *
  * Shows Clio Manage connection status for the firm.
  *
  * Connected: displays matter count + last 5 matters with status badges.
  * Not connected: muted card with a "Connect Clio" action link.
  *
- * Server component — data is fetched in phases/page.tsx and passed as props.
+ * Server component  -  data is fetched in phases/page.tsx and passed as props.
  */
 
 import type { ClioMatter } from "@/lib/clio";
@@ -47,7 +47,7 @@ export default function ClioCard({ connected, firmId, matters, matterCount }: Pr
             Connect your Clio Manage account to see matter activity, track signed files, and sync client data directly in this portal.
           </p>
           <a
-            href="/api/clio/connect"
+            href={`/api/clio/connect?firm_id=${firmId}`}
             className="inline-block text-xs font-semibold bg-navy text-white rounded-lg px-4 py-2 hover:opacity-90 transition-opacity"
           >
             Connect Clio
@@ -118,7 +118,7 @@ export default function ClioCard({ connected, firmId, matters, matterCount }: Pr
       <div className="border-t border-black/5 pt-3 flex items-center justify-between">
         <span className="text-xs text-black/40">Powered by Clio Manage v4</span>
         <a
-          href="/api/clio/connect"
+          href={`/api/clio/connect?firm_id=${firmId}`}
           className="text-xs text-navy/70 hover:text-navy underline underline-offset-2"
         >
           Reconnect

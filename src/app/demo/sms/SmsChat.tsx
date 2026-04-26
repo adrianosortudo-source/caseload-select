@@ -390,7 +390,7 @@ export default function SmsChat({ firmId }: { firmId: string }) {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input bar — iOS Messages style */}
+        {/* Input bar  -  iOS Messages style */}
         {phase === "chat" && (
           <div className="shrink-0 flex items-end gap-2 px-3 py-2 border-t border-gray-200 bg-white">
             {/* Camera icon (cosmetic) */}

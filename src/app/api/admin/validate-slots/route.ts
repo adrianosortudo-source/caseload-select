@@ -1,7 +1,7 @@
 /**
  * GET /api/admin/validate-slots
  *
- * S10.5 — Demo Validation
+ * S10.5  -  Demo Validation
  * Runs 10 real intake scenarios through the autoConfirmFromContext + selectNextQuestions
  * pipeline. Returns a JSON report showing:
  *   - How many slots regex extracted from each first message
@@ -46,7 +46,7 @@ const SCENARIOS = [
   {
     id: "EMP-02",
     pa: "emp",
-    message: "I just got terminated today — they said I was laid off due to restructuring.",
+    message: "I just got terminated today  -  they said I was laid off due to restructuring.",
     band: "B",
   },
   {

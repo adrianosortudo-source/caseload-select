@@ -1,12 +1,12 @@
 /**
- * WF-06 — Stalled Retainer Engine
+ * WF-06  -  Stalled Retainer Engine
  *
  * Triggered when a lead's stage is 'stalled_retainer'.
  * Reads email steps from the stalled_retainer sequence template.
  * Exits on re-engagement (stage change) or all steps sent.
  */
 
-import { supabase } from "./supabase";
+import { supabaseAdmin as supabase } from "./supabase-admin";
 import { sendEmail } from "./email";
 import { getEmailContent } from "./sequence-engine";
 

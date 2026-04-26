@@ -1,5 +1,5 @@
 /**
- * PlaceholderCard — Muted phase card for Authority, Capture, Target.
+ * PlaceholderCard  -  Muted phase card for Authority, Capture, Target.
  * Shown until BrightLocal / GA4 / Google Ads APIs are connected.
  */
 

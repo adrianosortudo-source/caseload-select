@@ -10,7 +10,7 @@
 
 import { NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/portal-auth";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
 export async function GET(
   _req: Request,
@@ -159,7 +159,7 @@ export async function GET(
     ? Math.round((adSpend + 3500) / signedNow)
     : null;
 
-  // 5. Avg response time (seconds) — median of first_contact_at - created_at
+  // 5. Avg response time (seconds)  -  median of first_contact_at - created_at
   let avgResponseSecs: number | null = null;
   if (responseLeads.length > 0) {
     const deltas = responseLeads

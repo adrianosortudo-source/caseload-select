@@ -43,7 +43,7 @@ export interface Lead {
   cpi_score: number | null;
   band: Band | null;
 
-  // Phase 2 — Priority Scoring Engine
+  // Phase 2  -  Priority Scoring Engine
   fit_score: number | null;
   value_score: number | null;
   geo_score: number | null;

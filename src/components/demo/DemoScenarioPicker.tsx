@@ -4,7 +4,7 @@
  * DemoScenarioPicker
  *
  * Modal interstitial for selecting a guided demo scenario.
- * Appears BEFORE the demo overlay activates — entirely separate
+ * Appears BEFORE the demo overlay activates  -  entirely separate
  * from the Hartwell Law website UI.
  *
  * Visual language: CaseLoad Select brand (#1E2F58), not Hartwell gold.
@@ -95,7 +95,7 @@ export default function DemoScenarioPicker({ open, onSelect, onClose }: Props) {
         {/* Body */}
         <div className="px-5 py-4">
           <p className="text-xs text-gray-500 leading-relaxed mb-4">
-            Watch the intake engine qualify a real case — from the client&apos;s perspective.
+            Watch the intake engine qualify a real case  -  from the client&apos;s perspective.
             The lawyer&apos;s view appears at the end.
           </p>
 

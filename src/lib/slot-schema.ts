@@ -1,16 +1,16 @@
 /**
- * Slot Schema Layer — S10.1
+ * Slot Schema Layer  -  S10.1
  *
  * Defines priority weights and extraction hints for every question across all
  * 35 practice area modules. This is the intelligence layer: questions are no
  * longer static UI cards but structured slots that GPT fills from free text.
  *
  * Priority scale:
- *   5 = Critical — determines band placement, always ask if not extracted
- *   4 = High     — significant CPI impact, ask in first question batch
- *   3 = Moderate — refines accuracy, ask in second batch (Band B/C only)
- *   2 = Low      — nice to have, skip for Band A/D/E
- *   1 = Minimal  — documentation / admin, only needed pre-finalize
+ *   5 = Critical  -  determines band placement, always ask if not extracted
+ *   4 = High      -  significant CPI impact, ask in first question batch
+ *   3 = Moderate  -  refines accuracy, ask in second batch (Band B/C only)
+ *   2 = Low       -  nice to have, skip for Band A/D/E
+ *   1 = Minimal   -  documentation / admin, only needed pre-finalize
  *
  * extraction_hints: keywords and phrases that indicate this slot is answerable
  * from the user's free text. GPT checks these when building filled_slots.
@@ -409,7 +409,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
   // PERSONAL INJURY SUB-TYPE SLOT SCHEMAS
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // ── PI — Motor Vehicle Accident ───────────────────────────────────────────────
+  // ── PI  -  Motor Vehicle Accident ───────────────────────────────────────────────
   pi_mva: {
     pi_mva_q1:  { priority: 5, extraction_hints: ["I was driving", "my car", "behind the wheel", "passenger", "passenger seat", "pedestrian", "walking", "crosswalk", "cyclist", "cycling", "bike"] },
     pi_mva_q2:  { priority: 4, extraction_hints: ["insured", "insurance", "policy", "have insurance", "no insurance", "uninsured"] },
@@ -421,7 +421,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     pi_mva_q47: { priority: 3, extraction_hints: ["police", "police report", "filed a report", "officer", "OPP", "Toronto Police", "no report", "didn't call police"] },
   },
 
-  // ── PI — Slip and Fall ────────────────────────────────────────────────────────
+  // ── PI  -  Slip and Fall ────────────────────────────────────────────────────────
   pi_slip_fall: {
     pi_sf_q1:  { priority: 5, extraction_hints: ["Walmart", "grocery", "mall", "store", "restaurant", "sidewalk", "public property", "park", "TTC", "subway", "workplace", "private home", "rental property"] },
     pi_sf_q2:  { priority: 5, extraction_hints: ["reported the fall", "incident report", "reported to manager", "told the staff", "no report filed", "didn't report"] },
@@ -433,7 +433,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     pi_sf_q47: { priority: 5, extraction_hints: ["10-day notice", "written notice", "notified the owner", "sent notice", "occupiers liability notice", "10 days", "no notice sent"] },
   },
 
-  // ── PI — Dog Bite ─────────────────────────────────────────────────────────────
+  // ── PI  -  Dog Bite ─────────────────────────────────────────────────────────────
   pi_dog_bite: {
     pi_db_q1:  { priority: 5, extraction_hints: ["know the owner", "owner's name", "owner's address", "don't know who owns", "stranger's dog", "neighbour's dog"] },
     pi_db_q2:  { priority: 5, extraction_hints: ["bitten before", "prior bite", "history of biting", "first time", "never attacked before", "known dangerous dog"] },
@@ -445,7 +445,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     pi_db_q47: { priority: 3, extraction_hints: ["witnesses", "someone saw", "no witnesses", "people nearby", "bystanders"] },
   },
 
-  // ── PI — Medical Malpractice ──────────────────────────────────────────────────
+  // ── PI  -  Medical Malpractice ──────────────────────────────────────────────────
   pi_med_mal: {
     pi_mm_q1:  { priority: 5, extraction_hints: ["physician", "family doctor", "GP", "surgeon", "specialist", "hospital", "clinic", "dentist", "nurse"] },
     pi_mm_q2:  { priority: 4, extraction_hints: ["I am the patient", "on behalf of my", "my mother", "my father", "my spouse", "estate claim", "they passed"] },
@@ -457,7 +457,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     pi_mm_q47: { priority: 3, extraction_hints: ["consent form", "informed consent", "risk disclosed", "risk not disclosed", "signed consent", "wasn't told about the risk"] },
   },
 
-  // ── PI — Product Liability ────────────────────────────────────────────────────
+  // ── PI  -  Product Liability ────────────────────────────────────────────────────
   pi_product: {
     pi_prod_q1:  { priority: 5, extraction_hints: ["appliance", "electronics", "vehicle part", "children's toy", "medical device", "health product", "food contamination", "consumer product"] },
     pi_prod_q2:  { priority: 4, extraction_hints: ["manufacturer", "brand", "product name", "I know who made it", "retailer", "don't know who made it"] },
@@ -469,7 +469,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     pi_prod_q47: { priority: 3, extraction_hints: ["receipt", "proof of purchase", "order confirmation", "credit card record", "no receipt", "no proof of purchase"] },
   },
 
-  // ── PI — Workplace Injury ─────────────────────────────────────────────────────
+  // ── PI  -  Workplace Injury ─────────────────────────────────────────────────────
   pi_workplace: {
     pi_wp_q1:  { priority: 5, extraction_hints: ["construction site", "renovation site", "industrial", "manufacturing", "warehouse", "distribution centre", "office", "retail"] },
     pi_wp_q2:  { priority: 5, extraction_hints: ["WSIB claim", "filed with WSIB", "WSIB accepted", "WSIB pending", "no WSIB claim", "no WSIB coverage", "employer not registered with WSIB"] },
@@ -481,7 +481,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     pi_wp_q47: { priority: 4, extraction_hints: ["safety violation", "OHSA", "occupational health", "no safety equipment", "guardrail missing", "no PPE", "employer was compliant"] },
   },
 
-  // ── PI — Civil Assault ────────────────────────────────────────────────────────
+  // ── PI  -  Civil Assault ────────────────────────────────────────────────────────
   pi_assault_ci: {
     pi_ac_q1:  { priority: 5, extraction_hints: ["know who attacked me", "know the attacker", "stranger", "don't know who it was", "attacker's name", "I can identify them"] },
     pi_ac_q2:  { priority: 4, extraction_hints: ["police charges", "charges laid", "criminal charges", "police report filed", "no charges", "no report"] },
@@ -497,7 +497,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
   // EMPLOYMENT SUB-TYPE SLOT SCHEMAS
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // ── Employment — Wrongful Dismissal ──────────────────────────────────────────
+  // ── Employment  -  Wrongful Dismissal ──────────────────────────────────────────
   emp_dismissal: {
     emp_dis_q1:  { priority: 5, extraction_hints: ["employee", "on payroll", "was employed", "full-time", "part-time", "contractor", "freelancer", "not sure of my status"] },
     emp_dis_q2:  { priority: 4, extraction_hints: ["employment contract", "signed a contract", "no written contract", "offer letter", "terms of employment", "employment agreement"] },
@@ -509,7 +509,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     emp_dis_q47: { priority: 5, extraction_hints: ["years with the company", "worked there for", "been there for", "12 years", "5 years", "20 years", "tenure", "long time", "just started", "short tenure"] },
   },
 
-  // ── Employment — Harassment ───────────────────────────────────────────────────
+  // ── Employment  -  Harassment ───────────────────────────────────────────────────
   emp_harassment: {
     emp_har_q1:  { priority: 5, extraction_hints: ["harassment", "bullying", "hostile work environment", "sexual harassment", "discriminatory harassment", "being targeted", "intimidated at work"] },
     emp_har_q2:  { priority: 5, extraction_hints: ["my supervisor", "my manager", "my boss", "a coworker", "senior management", "a client", "external party", "who is harassing me"] },
@@ -521,7 +521,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     emp_har_q47: { priority: 3, extraction_hints: ["witnesses", "coworkers saw", "coworkers heard", "someone heard", "no witnesses", "happened in private"] },
   },
 
-  // ── Employment — Discrimination ───────────────────────────────────────────────
+  // ── Employment  -  Discrimination ───────────────────────────────────────────────
   emp_disc: {
     emp_dsc_q1:  { priority: 5, extraction_hints: ["race", "colour", "ethnic origin", "disability", "physical disability", "mental health", "gender", "pregnancy", "maternity", "age", "religion", "sexual orientation", "family status", "Human Rights Code", "protected ground"] },
     emp_dsc_q2:  { priority: 5, extraction_hints: ["fired", "terminated", "demoted", "denied promotion", "pay cut", "hostile environment", "differential treatment", "refused accommodation", "accommodation denied", "no accommodation"] },
@@ -533,7 +533,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     emp_dsc_q47: { priority: 3, extraction_hints: ["HRTO", "human rights tribunal", "filed with HRTO", "considering HRTO application", "civil claim", "which route to take"] },
   },
 
-  // ── Employment — Wage Claim ───────────────────────────────────────────────────
+  // ── Employment  -  Wage Claim ───────────────────────────────────────────────────
   emp_wage: {
     emp_wag_q1:  { priority: 5, extraction_hints: ["unpaid wages", "not paid", "wages owed", "overtime not paid", "vacation pay", "commission not paid", "final paycheck", "termination pay not received", "money owed by employer"] },
     emp_wag_q2:  { priority: 4, extraction_hints: ["still working there", "still employed", "no longer work there", "former employee", "still at the company"] },
@@ -545,7 +545,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     emp_wag_q47: { priority: 3, extraction_hints: ["other employees affected", "coworkers owed wages", "multiple workers", "just me", "class action", "colleagues affected"] },
   },
 
-  // ── Employment — Constructive Dismissal ───────────────────────────────────────
+  // ── Employment  -  Constructive Dismissal ───────────────────────────────────────
   emp_constructive: {
     emp_con_q1:  { priority: 5, extraction_hints: ["pay cut", "salary reduced", "compensation reduced", "job duties changed", "role changed", "demoted", "relocated", "forced to move", "hours changed", "schedule changed", "reporting changed"] },
     emp_con_q2:  { priority: 5, extraction_hints: ["still working there", "still employed deciding", "I resigned", "I quit", "I haven't resigned yet", "resigned last month"] },
@@ -561,7 +561,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
   // FAMILY LAW SUB-TYPE SLOT SCHEMAS
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // ── Family — Divorce ──────────────────────────────────────────────────────────
+  // ── Family  -  Divorce ──────────────────────────────────────────────────────────
   fam_divorce: {
     fam_div_q1:  { priority: 5, extraction_hints: ["legally married", "we got married", "husband", "wife", "marriage certificate", "common-law", "common law only", "not legally married"] },
     fam_div_q2:  { priority: 5, extraction_hints: ["separation date", "agreed on when we separated", "dispute the date", "date of separation", "both agree", "different dates"] },
@@ -573,7 +573,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     fam_div_q47: { priority: 4, extraction_hints: ["pension", "RRSP", "registered accounts", "business interest", "professional corporation", "no pension", "defined benefit", "investment accounts"] },
   },
 
-  // ── Family — Custody ─────────────────────────────────────────────────────────
+  // ── Family  -  Custody ─────────────────────────────────────────────────────────
   fam_custody: {
     fam_cus_q1:  { priority: 5, extraction_hints: ["my child", "children aged", "toddler", "infant", "school-age", "teenager", "teen", "12 years old", "multiple children", "two kids", "three kids"] },
     fam_cus_q2:  { priority: 5, extraction_hints: ["court order", "custody order", "existing order", "parenting agreement", "signed agreement", "informal arrangement", "nothing in place", "no agreement"] },
@@ -585,7 +585,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     fam_cus_q47: { priority: 3, extraction_hints: ["both in Ontario", "other parent moved", "out of province", "another province", "outside Canada", "other parent in another country", "international"] },
   },
 
-  // ── Family — Support ─────────────────────────────────────────────────────────
+  // ── Family  -  Support ─────────────────────────────────────────────────────────
   fam_support: {
     fam_sup_q1:  { priority: 5, extraction_hints: ["child support", "spousal support", "alimony", "maintenance", "support arrears", "both child and spousal", "not paying support"] },
     fam_sup_q2:  { priority: 5, extraction_hints: ["court order for support", "support order in place", "he's not paying", "she's not paying", "no order yet", "separation agreement for support", "vary the support order"] },
@@ -597,7 +597,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     fam_sup_q47: { priority: 4, extraction_hints: ["married for years", "together for years", "long marriage", "short marriage", "5 years", "10 years", "20 years", "length of relationship"] },
   },
 
-  // ── Family — Property Division ────────────────────────────────────────────────
+  // ── Family  -  Property Division ────────────────────────────────────────────────
   fam_property: {
     fam_pro_q1:  { priority: 5, extraction_hints: ["financial disclosure", "net family property", "statement of assets", "both disclosed", "hasn't disclosed", "exchange of financials", "no disclosure yet"] },
     fam_pro_q2:  { priority: 5, extraction_hints: ["matrimonial home", "family home", "house already sold", "still in the house", "one of us lives there", "vacant home", "we rented", "no home to divide"] },
@@ -609,7 +609,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     fam_pro_q47: { priority: 3, extraction_hints: ["total assets", "value of assets", "estate worth", "combined assets", "what are we dividing", "under 200k", "over a million", "millions", "home value"] },
   },
 
-  // ── Family — Protection Orders ────────────────────────────────────────────────
+  // ── Family  -  Protection Orders ────────────────────────────────────────────────
   fam_protection: {
     fam_prt_q1:  { priority: 5, extraction_hints: ["in immediate danger", "not safe", "scared", "he hit me", "she hit me", "currently safe", "left the home", "still living with", "volatile situation"] },
     fam_prt_q2:  { priority: 5, extraction_hints: ["physical violence", "he hit me", "assault", "threats", "emotional abuse", "psychological abuse", "controlling behavior", "sexual abuse", "financial abuse", "coercion"] },
@@ -625,7 +625,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
   // CRIMINAL LAW SUB-TYPE SLOT SCHEMAS
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // ── Criminal — DUI / Impaired Driving ────────────────────────────────────────
+  // ── Criminal  -  DUI / Impaired Driving ────────────────────────────────────────
   crim_dui: {
     crim_dui_q1:  { priority: 5, extraction_hints: ["impaired driving", "over 80", "DUI", "DWI", "breath test", "blew over", "breathalyzer", "refusal to blow", "drug impaired", "impaired operation"] },
     crim_dui_q2:  { priority: 5, extraction_hints: ["provided a breath sample", "blew into the machine", "refused to provide", "blood sample", "roadside screening", "approved instrument", "station test"] },
@@ -637,7 +637,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     crim_dui_q47: { priority: 4, extraction_hints: ["child in the car", "kid in the back", "minor passenger", "no children in the vehicle", "children were not present"] },
   },
 
-  // ── Criminal — Assault ───────────────────────────────────────────────────────
+  // ── Criminal  -  Assault ───────────────────────────────────────────────────────
   crim_assault: {
     crim_ass_q1:  { priority: 5, extraction_hints: ["common assault", "assault causing bodily harm", "aggravated assault", "assault with a weapon", "charged with assault", "ABH", "s.266", "s.267", "s.268"] },
     crim_ass_q2:  { priority: 5, extraction_hints: ["stranger", "acquaintance", "my partner", "my wife", "my husband", "my ex", "my parent", "my sibling", "someone I know", "did not know them"] },
@@ -649,7 +649,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     crim_ass_q47: { priority: 4, extraction_hints: ["no prior record", "clean record", "first offence", "prior assault", "prior violence conviction", "criminal record for violence"] },
   },
 
-  // ── Criminal — Drug Offences ─────────────────────────────────────────────────
+  // ── Criminal  -  Drug Offences ─────────────────────────────────────────────────
   crim_drug: {
     crim_drg_q1:  { priority: 5, extraction_hints: ["possession", "trafficking", "PPOT", "possession for the purpose", "production", "cultivation", "drug charge", "drug offence", "controlled substance"] },
     crim_drg_q2:  { priority: 5, extraction_hints: ["cannabis", "marijuana", "weed", "cocaine", "crack", "opioids", "fentanyl", "heroin", "meth", "methamphetamine", "MDMA", "ecstasy", "prescription pills"] },
@@ -661,7 +661,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     crim_drg_q47: { priority: 4, extraction_hints: ["no prior record", "clean record", "first offence", "prior drug conviction", "prior trafficking conviction", "criminal record for drugs"] },
   },
 
-  // ── Criminal — Theft / Property Offences ─────────────────────────────────────
+  // ── Criminal  -  Theft / Property Offences ─────────────────────────────────────
   crim_theft: {
     crim_tft_q1:  { priority: 5, extraction_hints: ["shoplifting", "theft", "theft under 5000", "theft over 5000", "fraud", "break and enter", "B&E", "possession of stolen property", "stealing", "took merchandise"] },
     crim_tft_q2:  { priority: 5, extraction_hints: ["value of the property", "how much was taken", "amount involved", "dollar value", "under $5,000", "over $5,000", "under $500", "thousands of dollars"] },
@@ -673,7 +673,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     crim_tft_q47: { priority: 4, extraction_hints: ["no prior record", "clean record", "first offence", "prior theft", "prior fraud conviction", "history of theft"] },
   },
 
-  // ── Criminal — Domestic Violence ─────────────────────────────────────────────
+  // ── Criminal  -  Domestic Violence ─────────────────────────────────────────────
   crim_domestic: {
     crim_dom_q1:  { priority: 5, extraction_hints: ["domestic assault", "assault on partner", "assault on spouse", "uttering threats", "criminal harassment", "domestic charge", "intimate partner violence", "IPV"] },
     crim_dom_q2:  { priority: 5, extraction_hints: ["my partner", "my spouse", "my wife", "my husband", "my girlfriend", "my boyfriend", "my ex", "my ex-wife", "my ex-husband", "family member", "my parent", "my sibling"] },
@@ -689,7 +689,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
   // IMMIGRATION LAW SUB-TYPE SLOT SCHEMAS
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // ── Immigration — Express Entry ───────────────────────────────────────────────
+  // ── Immigration  -  Express Entry ───────────────────────────────────────────────
   imm_ee: {
     imm_ee_q1:  { priority: 5, extraction_hints: ["Express Entry", "Federal Skilled Worker", "FSW", "Canadian Experience Class", "CEC", "Federal Skilled Trades", "FST", "skilled worker PR", "permanent residence through work"] },
     imm_ee_q2:  { priority: 5, extraction_hints: ["active profile", "Express Entry profile", "in the pool", "received an ITA", "Invitation to Apply", "profile expired", "no profile yet"] },
@@ -701,7 +701,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     imm_ee_q47: { priority: 4, extraction_hints: ["prior refusal", "PR application refused", "misrepresentation", "inadmissibility", "clean record", "no prior issues", "refused before"] },
   },
 
-  // ── Immigration — Spousal Sponsorship ────────────────────────────────────────
+  // ── Immigration  -  Spousal Sponsorship ────────────────────────────────────────
   imm_spousal: {
     imm_spo_q1:  { priority: 5, extraction_hints: ["spouse", "husband", "wife", "legally married", "common-law partner", "conjugal partner", "sponsoring my partner", "sponsoring my spouse"] },
     imm_spo_q2:  { priority: 5, extraction_hints: ["inland sponsorship", "outland sponsorship", "applying inland", "applying outland", "open work permit while waiting", "applying from outside Canada"] },
@@ -713,7 +713,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     imm_spo_q47: { priority: 3, extraction_hints: ["children included", "dependent children", "no children", "custody issue", "children from another relationship", "child of both"] },
   },
 
-  // ── Immigration — Study Permit ────────────────────────────────────────────────
+  // ── Immigration  -  Study Permit ────────────────────────────────────────────────
   imm_study: {
     imm_stu_q1:  { priority: 5, extraction_hints: ["study permit", "student visa", "extending my study permit", "PGWP", "post-graduation work permit", "restoration of student status", "initial study permit"] },
     imm_stu_q2:  { priority: 5, extraction_hints: ["DLI", "designated learning institution", "is my school on the list", "university", "college", "private school", "not a DLI"] },
@@ -725,7 +725,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     imm_stu_q47: { priority: 3, extraction_hints: ["SDS", "Student Direct Stream", "India", "China", "Philippines", "Vietnam", "Pakistan", "GIC", "IELTS 6.0", "SDS country"] },
   },
 
-  // ── Immigration — Work Permit ─────────────────────────────────────────────────
+  // ── Immigration  -  Work Permit ─────────────────────────────────────────────────
   imm_work_permit: {
     imm_wp_q1:  { priority: 5, extraction_hints: ["work permit", "worker visa", "extending my work permit", "open work permit", "PGWP", "bridging permit", "restoration of work authorization", "LMIA work permit"] },
     imm_wp_q2:  { priority: 5, extraction_hints: ["LMIA", "labour market impact assessment", "LMIA-exempt", "CUSMA", "ICT", "intracompany transfer", "IEC", "working holiday", "significant benefit", "no LMIA needed"] },
@@ -737,7 +737,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     imm_wp_q47: { priority: 3, extraction_hints: ["path to PR", "building Canadian experience", "Express Entry pathway", "employer sponsoring for PR", "just need the permit", "temporary only"] },
   },
 
-  // ── Immigration — Refugee ─────────────────────────────────────────────────────
+  // ── Immigration  -  Refugee ─────────────────────────────────────────────────────
   imm_refugee: {
     imm_ref_q1:  { priority: 5, extraction_hints: ["refugee claim", "Convention refugee", "s.96", "s.97", "persecution", "fear of return", "protection from removal", "seeking asylum", "asylum claim"] },
     imm_ref_q2:  { priority: 5, extraction_hints: ["entered at the airport", "crossed the border", "irregular crossing", "already in Canada", "inland claim", "entered through the US", "Roxham Road", "at the port of entry"] },
@@ -749,7 +749,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     imm_ref_q47: { priority: 3, extraction_hints: ["H&C", "humanitarian and compassionate", "PRRA", "establishment in Canada", "hardship", "children's best interests", "alternative application"] },
   },
 
-  // ── Immigration — Provincial Nominee Program ──────────────────────────────────
+  // ── Immigration  -  Provincial Nominee Program ──────────────────────────────────
   imm_pnp: {
     imm_pnp_q1:  { priority: 5, extraction_hints: ["OINP", "Ontario Immigrant Nominee", "BC PNP", "Alberta Immigrant Nominee", "AINP", "provincial nominee", "PNP", "which province"] },
     imm_pnp_q2:  { priority: 5, extraction_hints: ["employer job offer stream", "Human Capital Priorities", "international student stream", "French-speaking skilled worker", "in-demand skills", "PNP stream", "which stream"] },
@@ -761,7 +761,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     imm_pnp_q47: { priority: 4, extraction_hints: ["prior PNP refusal", "refused by province", "immigration violation", "overstay", "unauthorized work", "no prior issues", "clean history"] },
   },
 
-  // ── Civil — Contract ──────────────────────────────────────────────────────────
+  // ── Civil  -  Contract ──────────────────────────────────────────────────────────
   civ_contract: {
     civ_con_q1:  { priority: 5, extraction_hints: ["service contract", "goods contract", "employment contract", "lease contract", "NDA", "purchase agreement", "type of contract", "what was the contract for"] },
     civ_con_q2:  { priority: 5, extraction_hints: ["I am the plaintiff", "I am owed money", "they breached the contract", "I am the defendant", "they are suing me", "claim against me"] },
@@ -773,7 +773,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     civ_con_q47: { priority: 4, extraction_hints: ["arbitration clause", "dispute resolution clause", "mandatory arbitration", "no arbitration clause", "contract says arbitration", "escalation clause"] },
   },
 
-  // ── Civil — Debt ──────────────────────────────────────────────────────────────
+  // ── Civil  -  Debt ──────────────────────────────────────────────────────────────
   civ_debt: {
     civ_dbt_q1:  { priority: 5, extraction_hints: ["money lent", "unpaid invoice", "overdue account", "NSF cheque", "unpaid loan", "promissory note", "debt owed to me", "collecting a debt"] },
     civ_dbt_q2:  { priority: 5, extraction_hints: ["written contract", "signed agreement", "promissory note", "invoice", "email agreement", "verbal agreement only", "no written evidence", "documentation"] },
@@ -785,7 +785,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     civ_dbt_q47: { priority: 4, extraction_hints: ["individual debtor", "corporation", "sole proprietor", "partnership", "business entity", "personal guarantee", "personal liability"] },
   },
 
-  // ── Civil — Tort ──────────────────────────────────────────────────────────────
+  // ── Civil  -  Tort ──────────────────────────────────────────────────────────────
   civ_tort: {
     civ_trt_q1:  { priority: 5, extraction_hints: ["defamation", "libel", "slander", "fraud", "deceit", "misrepresentation", "conversion", "property taken", "trespass", "type of wrong", "what they did to me"] },
     civ_trt_q2:  { priority: 5, extraction_hints: ["I am the plaintiff", "they wronged me", "I am being sued", "claim against me", "defendant in a tort claim"] },
@@ -797,7 +797,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     civ_trt_q47: { priority: 3, extraction_hints: ["defendant identified", "anonymous defendant", "unknown poster", "John Doe defendant", "online account", "need to identify defendant"] },
   },
 
-  // ── Civil — Negligence ────────────────────────────────────────────────────────
+  // ── Civil  -  Negligence ────────────────────────────────────────────────────────
   civ_negligence: {
     civ_neg_q1:  { priority: 5, extraction_hints: ["professional negligence", "contractor negligence", "product liability", "occupier's liability", "slip and fall", "type of negligence", "who was negligent"] },
     civ_neg_q2:  { priority: 5, extraction_hints: ["lawyer", "accountant", "doctor", "engineer", "licensed professional", "regulated professional", "contractor", "tradesperson", "professional services"] },
@@ -809,7 +809,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     civ_neg_q47: { priority: 4, extraction_hints: ["professional liability insurance", "E&O insurance", "errors and omissions", "defendant has insurance", "contractor insurance", "no insurance known"] },
   },
 
-  // ── Insurance — SABS ─────────────────────────────────────────────────────────
+  // ── Insurance  -  SABS ─────────────────────────────────────────────────────────
   ins_sabs: {
     ins_sab_q1:  { priority: 5, extraction_hints: ["income replacement benefit", "IRB", "medical and rehabilitation", "attendant care", "housekeeping benefit", "SABS benefit", "accident benefit", "they cut off my benefits", "benefits stopped"] },
     ins_sab_q2:  { priority: 5, extraction_hints: ["denial letter", "termination letter", "benefit termination", "written denial", "OCF denial", "insurer denied in writing", "benefits cut off notice"] },
@@ -821,7 +821,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     ins_sab_q47: { priority: 4, extraction_hints: ["tort claim", "pain and suffering claim", "suing the at-fault driver", "tort and SABS", "also have a tort action", "SABS only no tort"] },
   },
 
-  // ── Insurance — Benefit Denial ────────────────────────────────────────────────
+  // ── Insurance  -  Benefit Denial ────────────────────────────────────────────────
   ins_denial: {
     ins_den_q1:  { priority: 5, extraction_hints: ["disability insurance", "life insurance", "property insurance", "home insurance claim", "travel insurance", "critical illness", "health insurance claim", "type of policy"] },
     ins_den_q2:  { priority: 5, extraction_hints: ["denial letter", "formal denial", "written reason", "verbal denial only", "they stopped paying", "insurer denied in writing"] },
@@ -833,7 +833,7 @@ export const SLOT_SCHEMA: Record<string, Record<string, SlotMeta>> = {
     ins_den_q47: { priority: 4, extraction_hints: ["FSRA complaint", "OmbudService complaint", "regulatory complaint", "filed with FSRA", "OLHI complaint", "no complaint filed yet"] },
   },
 
-  // ── Insurance — Bad Faith ─────────────────────────────────────────────────────
+  // ── Insurance  -  Bad Faith ─────────────────────────────────────────────────────
   ins_bad_faith: {
     ins_bf_q1:  { priority: 5, extraction_hints: ["auto insurance bad faith", "property insurance bad faith", "disability bad faith", "life insurance bad faith", "commercial policy", "type of policy bad faith"] },
     ins_bf_q2:  { priority: 5, extraction_hints: ["unreasonable delay", "insurer delayed", "wrongful denial", "knew claim was covered", "lowball offer", "inadequate settlement offer", "failure to defend"] },

@@ -8,18 +8,18 @@
  * Auth: Bearer CRON_SECRET (operator only)
  *
  * Checklist items:
- *   1. practice_areas      — At least one practice area configured
- *   2. geo_config          — Geographic boundaries set
- *   3. branding            — Firm name + primary color in branding object
- *   4. ghl_webhook         — GHL webhook URL present (lead routing to CRM)
- *   5. clio_connected      — Clio OAuth tokens saved (matter creation)
- *   6. first_session       — At least one intake session received (widget live)
- *   7. custom_domain       — Custom domain configured (optional — shows warning, not error)
- *   8. scoring_weights     — Custom scoring weights configured (optional)
+ *   1. practice_areas       -  At least one practice area configured
+ *   2. geo_config           -  Geographic boundaries set
+ *   3. branding             -  Firm name + primary color in branding object
+ *   4. ghl_webhook          -  GHL webhook URL present (lead routing to CRM)
+ *   5. clio_connected       -  Clio OAuth tokens saved (matter creation)
+ *   6. first_session        -  At least one intake session received (widget live)
+ *   7. custom_domain        -  Custom domain configured (optional  -  shows warning, not error)
+ *   8. scoring_weights      -  Custom scoring weights configured (optional)
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { DEFAULT_QUESTION_MODULES } from "@/lib/default-question-modules";
 import type { PracticeArea } from "@/lib/screen-prompt";
 
@@ -54,7 +54,7 @@ export async function GET(
       .select("id")
       .eq("firm_id", firmId)
       .limit(1),
-    // Check conflict register — need a law_firm_clients link; use intake firm name to find it
+    // Check conflict register  -  need a law_firm_clients link; use intake firm name to find it
     supabase
       .from("conflict_register")
       .select("id", { count: "exact", head: true })
@@ -183,7 +183,7 @@ export async function GET(
  * Only adds modules that don't already exist (non-destructive). Existing custom question sets
  * are preserved.
  *
- * Body (optional): { "areas": ["emp", "fam", ...] } — limits seeding to specific area IDs.
+ * Body (optional): { "areas": ["emp", "fam", ...] }  -  limits seeding to specific area IDs.
  *                  If omitted, seeds all areas matching the firm's configured practice_areas.
  *                  Pass { "areas": "all" } to seed all 35 default modules regardless of config.
  *

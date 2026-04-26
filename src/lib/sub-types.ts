@@ -1,5 +1,5 @@
 /**
- * Sub-Type Taxonomy — Contextual Routing Layer
+ * Sub-Type Taxonomy  -  Contextual Routing Layer
  *
  * Every umbrella practice area has sub-types. Routing a client to the
  * correct question set requires knowing not just "pi" but "pi_slip_fall"
@@ -7,7 +7,7 @@
  *
  * Rules:
  *   - Every umbrella PA must have an `_other` fallback.
- *   - Sub-type IDs are stable — never rename after production deployment.
+ *   - Sub-type IDs are stable  -  never rename after production deployment.
  *   - Question set keys in default-question-modules.ts must match these IDs.
  *   - `_other` routes to a short 5-question qualifier set that determines the
  *     real sub-type before loading the main question set.

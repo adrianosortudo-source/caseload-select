@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * /test-screen — CaseLoad Screen Engine test harness
+ * /test-screen  -  CaseLoad Screen Engine test harness
  *
  * Lets you fire messages at /api/screen and see:
  *   - GPT's response text
@@ -55,6 +55,11 @@ interface Message {
   response?: ScreenResponse;
 }
 
+interface BatchSelection {
+  label: string;
+  value: string;
+}
+
 const BAND_COLORS: Record<string, string> = {
   A: "bg-emerald-600",
   B: "bg-blue-600",
@@ -71,6 +76,7 @@ const QUICK_MESSAGES = [
   "I resigned but I was basically forced out: hostile work environment",
   "My landlord is refusing to return my deposit (should route to out of scope)",
   "I want to sue my employer for wrongful dismissal",
+  "my boss fired me after I complained about how he was treating me",
 ];
 
 export default function TestScreenPage() {
@@ -80,13 +86,18 @@ export default function TestScreenPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [channel, setChannel] = useState<string>("widget");
   const [lastResponse, setLastResponse] = useState<ScreenResponse | null>(null);
+  // Batch-select state: accumulates answers for next_questions before sending
+  const [batchSelections, setBatchSelections] = useState<Record<string, BatchSelection>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function send(messageText?: string) {
+  async function send(
+    messageText?: string,
+    opts?: { message_type?: string; structured_data?: Record<string, string> }
+  ) {
     const text = messageText ?? input.trim();
     if (!text || loading) return;
 
@@ -105,7 +116,8 @@ export default function TestScreenPage() {
           firm_id: SAKURABA_FIRM_ID,
           channel,
           message: text,
-          message_type: "text",
+          message_type: opts?.message_type ?? "text",
+          ...(opts?.structured_data ? { structured_data: opts.structured_data } : {}),
         }),
       });
 
@@ -114,6 +126,9 @@ export default function TestScreenPage() {
       if (!sessionId && data.session_id) {
         setSessionId(data.session_id);
       }
+
+      // Clear any pending batch selections when a new response arrives
+      setBatchSelections({});
 
       setLastResponse(data);
       setMessages(prev => [...prev, {
@@ -136,6 +151,33 @@ export default function TestScreenPage() {
     setSessionId(null);
     setLastResponse(null);
     setInput("");
+    setBatchSelections({});
+  }
+
+  // Derive the active batch question set from the last assistant message
+  const lastAssistantMsg = messages.length > 0
+    ? messages.findLast(m => m.role === "assistant")
+    : null;
+  const activeBatchQuestions = lastAssistantMsg?.response?.next_questions ?? null;
+
+  // All batch questions have a selection
+  const batchComplete = activeBatchQuestions !== null
+    && activeBatchQuestions.length > 0
+    && activeBatchQuestions.every(q => batchSelections[q.id]);
+
+  function submitBatch() {
+    if (!activeBatchQuestions || !batchComplete) return;
+    const summary = activeBatchQuestions
+      .filter(q => batchSelections[q.id])
+      .map(q => `${q.text}: ${batchSelections[q.id].label}`)
+      .join(". ");
+    const structured = Object.fromEntries(
+      activeBatchQuestions
+        .filter(q => batchSelections[q.id])
+        .map(q => [q.id, batchSelections[q.id].value])
+    );
+    setBatchSelections({});
+    send(summary, { message_type: "answer", structured_data: structured });
   }
 
   return (
@@ -146,7 +188,7 @@ export default function TestScreenPage() {
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-900">
           <div>
             <h1 className="text-sm font-semibold text-white">CaseLoad Screen: Engine Test</h1>
-            <p className="text-xs text-gray-400">Sakuraba Law · {channel}</p>
+            <p className="text-xs text-gray-400">Test firm · {channel}</p>
           </div>
           <div className="flex items-center gap-2">
             <select
@@ -194,36 +236,96 @@ export default function TestScreenPage() {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
-                msg.role === "user"
-                  ? "bg-blue-700 text-white"
-                  : "bg-gray-800 text-gray-100"
-              }`}>
-                {msg.content}
-                {/* Show next question(s) inline in the chat bubble */}
-                {msg.response?.next_question && (
-                  <div className="mt-2 pt-2 border-t border-gray-600">
-                    <p className="text-xs font-medium text-gray-200">{msg.response.next_question.text}</p>
-                  </div>
-                )}
-                {msg.response?.next_questions && msg.response.next_questions.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-gray-600 space-y-1.5">
-                    {msg.response.next_questions.map(q => (
-                      <p key={q.id} className="text-xs font-medium text-gray-200">{q.text}</p>
-                    ))}
-                  </div>
-                )}
-                {msg.response?.finalize && (
-                  <div className="mt-2 text-xs font-semibold text-emerald-400">✓ FINALIZED: ready for GHL</div>
-                )}
-                {msg.response?.collect_identity && (
-                  <div className="mt-2 text-xs font-semibold text-amber-400">→ Collect identity next</div>
-                )}
+          {messages.map((msg, i) => {
+            const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
+            return (
+              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                  msg.role === "user"
+                    ? "bg-blue-700 text-white"
+                    : "bg-gray-800 text-gray-100"
+                }`}>
+                  {msg.content}
+                  {/* next_question (single legacy) */}
+                  {msg.response?.next_question && (
+                    <div className="mt-2 pt-2 border-t border-gray-600">
+                      <p className="text-xs font-medium text-gray-200">{msg.response.next_question.text}</p>
+                      {msg.response.next_question.options.length > 0 && (
+                        <div className="mt-1 space-y-1">
+                          {msg.response.next_question.options.map(opt => (
+                            <button
+                              key={opt.value}
+                              onClick={() => send(opt.label)}
+                              className="block w-full text-left text-xs bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded px-2 py-1.5 text-gray-200"
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* next_questions (batch) — widget-mode: accumulate then submit */}
+                  {msg.response?.next_questions && msg.response.next_questions.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-gray-600 space-y-3">
+                      {msg.response.next_questions.map(q => (
+                        <div key={q.id}>
+                          <p className="text-xs font-medium text-gray-200 mb-1">{q.text}</p>
+                          {q.options && q.options.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {q.options.map(opt => {
+                                const isSelected = isLastAssistant && batchSelections[q.id]?.value === opt.value;
+                                return (
+                                  <button
+                                    key={opt.value}
+                                    disabled={!isLastAssistant || loading}
+                                    onClick={() => {
+                                      if (!isLastAssistant) return;
+                                      setBatchSelections(prev => ({
+                                        ...prev,
+                                        [q.id]: { label: opt.label, value: opt.value },
+                                      }));
+                                    }}
+                                    className={`text-xs border rounded px-2 py-1 transition-all ${
+                                      isSelected
+                                        ? "bg-blue-600 border-blue-500 text-white"
+                                        : isLastAssistant
+                                          ? "bg-gray-700 hover:bg-gray-600 border-gray-600 text-gray-200"
+                                          : "bg-gray-800 border-gray-700 text-gray-500 cursor-default"
+                                    }`}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {/* Submit batch button — only on the last assistant message */}
+                      {isLastAssistant && (
+                        <button
+                          onClick={submitBatch}
+                          disabled={!batchComplete || loading}
+                          className="mt-1 w-full text-xs py-1.5 rounded border transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-blue-700 hover:bg-blue-600 border-blue-600 text-white font-medium"
+                        >
+                          {batchComplete
+                            ? `Submit answers (${Object.keys(batchSelections).length}/${activeBatchQuestions?.length ?? 0})`
+                            : `Select all answers (${Object.keys(batchSelections).length}/${activeBatchQuestions?.length ?? 0})`}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {msg.response?.finalize && (
+                    <div className="mt-2 text-xs font-semibold text-emerald-400">&#10003; FINALIZED: ready for GHL</div>
+                  )}
+                  {msg.response?.collect_identity && (
+                    <div className="mt-2 text-xs font-semibold text-amber-400">&#8594; Collect identity next</div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {loading && (
             <div className="flex justify-start">
               <div className="bg-gray-800 rounded-lg px-3 py-2 text-sm text-gray-400 animate-pulse">
@@ -269,7 +371,7 @@ export default function TestScreenPage() {
               <p className="text-xs text-gray-500 mb-1">Practice Area</p>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-white">
-                  {lastResponse.practice_area ?? "—"}
+                  {lastResponse.practice_area ?? " - "}
                 </span>
                 {lastResponse.practice_area_confidence && (
                   <span className={`text-xs px-1.5 py-0.5 rounded ${
@@ -330,7 +432,7 @@ export default function TestScreenPage() {
               </div>
             </div>
 
-            {/* Next question */}
+            {/* Next question (single, legacy panel) */}
             {lastResponse.next_question && (
               <div>
                 <p className="text-xs text-gray-500 mb-1">Next Question</p>

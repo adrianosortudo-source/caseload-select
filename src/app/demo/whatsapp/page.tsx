@@ -1,5 +1,5 @@
 /**
- * /demo/whatsapp — WhatsApp intake simulation.
+ * /demo/whatsapp  -  WhatsApp intake simulation.
  *
  * Renders a mobile-frame WhatsApp UI that runs the real CaseLoad Screen
  * intake in "whatsapp" channel mode (one question at a time, plain text,

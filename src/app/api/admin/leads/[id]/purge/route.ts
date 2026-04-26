@@ -4,7 +4,7 @@
  * PIPEDA right-to-deletion endpoint. Immediately anonymizes all PII
  * for the specified lead on written request from the data subject.
  *
- * Auth: Bearer CRON_SECRET (operator only — never expose to clients)
+ * Auth: Bearer CRON_SECRET (operator only  -  never expose to clients)
  *
  * Logs the purge to console for the 3-year audit trail required by PIPEDA.
  */

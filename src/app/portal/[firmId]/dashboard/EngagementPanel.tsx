@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * EngagementPanel — Collapsible "Since Engagement Start" summary.
+ * EngagementPanel  -  Collapsible "Since Engagement Start" summary.
  *
  * Shows cumulative totals from the firm's engagement_start_date:
  * total inquiries, qualified leads, signed cases, CPSC trajectory.
  *
- * Lazy reveal via toggle — doesn't add to initial paint cost.
+ * Lazy reveal via toggle  -  doesn't add to initial paint cost.
  */
 
 import { useState } from "react";
@@ -36,7 +36,7 @@ function CpscBar({ points, monthlyFee }: { points: MonthPoint[]; monthlyFee: num
   if (points.length === 0 || monthlyFee === null) {
     return (
       <div className="text-xs text-black/30 py-2 text-center">
-        No CPSC data — configure monthly ad spend to enable.
+        No CPSC data  -  configure monthly ad spend to enable.
       </div>
     );
   }
@@ -137,7 +137,7 @@ export default function EngagementPanel({
           {/* CPSC trajectory */}
           <div>
             <div className="text-xs font-medium text-black/50 uppercase tracking-wide mb-2">
-              Cost per Signed Case — Monthly
+              Cost per Signed Case  -  Monthly
             </div>
             <CpscBar points={monthlyPoints} monthlyFee={monthlyAdSpend ? monthlyAdSpend + 3500 : null} />
           </div>

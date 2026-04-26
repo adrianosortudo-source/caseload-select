@@ -1,5 +1,5 @@
 /**
- * Domain management API — operator only.
+ * Domain management API  -  operator only.
  *
  * POST   /api/admin/domains   Add a custom domain to a firm
  * DELETE /api/admin/domains   Remove a custom domain from a firm
@@ -17,7 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { addVercelDomain, removeVercelDomain, getVercelDomainStatus } from "@/lib/vercel-domains";
 
 function authorized(req: NextRequest): boolean {
@@ -94,7 +94,7 @@ export async function DELETE(req: NextRequest) {
       await removeVercelDomain(firm.custom_domain);
     } catch (err) {
       console.warn("[admin/domains] Vercel domain remove failed:", (err as Error).message);
-      // Non-fatal — remove from DB regardless
+      // Non-fatal  -  remove from DB regardless
     }
   }
 

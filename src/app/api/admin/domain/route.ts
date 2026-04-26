@@ -1,5 +1,5 @@
 /**
- * Admin domain management — no CRON_SECRET needed (admin UI is operator-only).
+ * Admin domain management  -  no CRON_SECRET needed (admin UI is operator-only).
  *
  * POST   /api/admin/domain   { firm_id, domain } → add domain
  * DELETE /api/admin/domain   { firm_id }         → remove domain
@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { addVercelDomain, removeVercelDomain, getVercelDomainStatus } from "@/lib/vercel-domains";
 
 export async function GET(req: NextRequest) {
@@ -92,7 +92,7 @@ export async function DELETE(req: NextRequest) {
       await removeVercelDomain(firm.custom_domain);
     } catch (err) {
       console.warn("[admin/domain] Vercel remove failed:", (err as Error).message);
-      // non-fatal — clear from DB regardless
+      // non-fatal  -  clear from DB regardless
     }
   }
 

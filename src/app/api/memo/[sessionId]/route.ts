@@ -14,7 +14,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { getPortalSession } from "@/lib/portal-auth";
 
 export async function GET(

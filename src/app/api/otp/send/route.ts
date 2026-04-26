@@ -11,7 +11,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 
 const OTP_TTL_MINUTES = 15;
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     const otp = generateOtp();
     const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
 
-    // Store OTP in session (plaintext — 6-digit, time-limited, session-scoped)
+    // Store OTP in session (plaintext  -  6-digit, time-limited, session-scoped)
     const { error: updateErr } = await supabase
       .from("intake_sessions")
       .update({ otp_code: otp, otp_expires_at: expiresAt })
@@ -81,11 +81,11 @@ export async function POST(req: Request) {
     try {
       const result = await sendEmail(email, `Your ${firm_name} verification code: ${otp}`, html);
       if (result.skipped) {
-        // Resend not configured — dev mode
+        // Resend not configured  -  dev mode
         console.info(`[otp/send] DEV: OTP for ${email}: ${otp}`);
       }
     } catch (emailErr) {
-      // Email delivery failed (e.g. Resend sandbox restriction) — OTP is still valid in DB
+      // Email delivery failed (e.g. Resend sandbox restriction)  -  OTP is still valid in DB
       console.warn(`[otp/send] Email delivery failed, OTP still stored. Code for ${email}: ${otp}`, emailErr);
     }
 

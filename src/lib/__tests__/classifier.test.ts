@@ -1,24 +1,24 @@
 /**
- * Classifier — Hardening Tests
+ * Classifier  -  Hardening Tests
  *
  * Tests the classify() pipeline at three levels:
  *
- *   Level 1 — Prompt builder (buildClassifierPrompt):
+ *   Level 1  -  Prompt builder (buildClassifierPrompt):
  *     Verify the prompt correctly constrains GPT output vocabulary to the
  *     firm's PAs, includes all valid flag IDs, and carries key disambiguation
  *     guidance (fam_abduction vs fam_protection, etc.).
  *
- *   Level 2 — Response parser (parseClassifierResponse):
+ *   Level 2  -  Response parser (parseClassifierResponse):
  *     Verify the parser handles valid output, missing fields, invalid
  *     confidence values, non-JSON, and hallucinated PA IDs gracefully.
  *
- *   Level 3 — classify() with mocked OpenAI:
+ *   Level 3  -  classify() with mocked OpenAI:
  *     Verify the full classify() function: PA validation against firm list,
  *     regex + GPT flag merging, out-of-scope handling, and graceful
  *     degradation on GPT failures.
  *
  * Accuracy target: ≥95% on S1 flags from the golden prompt scenarios.
- * (Validated via prompt content — actual GPT calls are not made in unit tests.)
+ * (Validated via prompt content  -  actual GPT calls are not made in unit tests.)
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -79,7 +79,7 @@ function failingOpenAI(): OpenAI {
 // Level 1: buildClassifierPrompt
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("buildClassifierPrompt — prompt content", () => {
+describe("buildClassifierPrompt  -  prompt content", () => {
   const prompt = buildClassifierPrompt(makeInput("I was injured in a car accident."));
 
   it("lists all firm primary practice area IDs", () => {
@@ -95,7 +95,7 @@ describe("buildClassifierPrompt — prompt content", () => {
     expect(prompt).toContain("Secondary");
   });
 
-  it("instructs GPT to use firm PA IDs only — out-of-scope handling", () => {
+  it("instructs GPT to use firm PA IDs only  -  out-of-scope handling", () => {
     expect(prompt).toContain("out_of_scope");
     expect(prompt).toContain("outside ALL of the firm");
   });
@@ -168,7 +168,7 @@ describe("buildClassifierPrompt — prompt content", () => {
 // Level 2: parseClassifierResponse
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("parseClassifierResponse — parser robustness", () => {
+describe("parseClassifierResponse  -  parser robustness", () => {
   it("parses a valid complete response", () => {
     const raw: RawClassifierOutput = {
       practice_area: "pi",
@@ -176,7 +176,7 @@ describe("parseClassifierResponse — parser robustness", () => {
       flags: ["mvac_hit_and_run", "limitation_proximity"],
       confidence: "high",
       out_of_scope: false,
-      reasoning: "Motor vehicle accident — hit and run signals.",
+      reasoning: "Motor vehicle accident  -  hit and run signals.",
     };
     const result = parseClassifierResponse(JSON.stringify(raw));
     expect(result).not.toBeNull();
@@ -234,7 +234,7 @@ describe("parseClassifierResponse — parser robustness", () => {
   });
 
   it("handles GPT wrapping JSON in markdown (trimmed correctly)", () => {
-    // GPT sometimes adds whitespace — trim() handles it
+    // GPT sometimes adds whitespace  -  trim() handles it
     const raw = JSON.stringify({
       practice_area: "crim",
       practice_sub_type: "crim_dui",
@@ -260,7 +260,7 @@ describe("parseClassifierResponse — parser robustness", () => {
   });
 
   it("preserves flags array as-is (validation happens in classify())", () => {
-    // Parser does NOT filter hallucinated flag IDs — that's mergeFlags()'s job
+    // Parser does NOT filter hallucinated flag IDs  -  that's mergeFlags()'s job
     const raw = {
       practice_area: "pi",
       practice_sub_type: null,
@@ -277,7 +277,7 @@ describe("parseClassifierResponse — parser robustness", () => {
 // Level 3: classify() with mocked OpenAI
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("classify() — full pipeline with mocked OpenAI", () => {
+describe("classify()  -  full pipeline with mocked OpenAI", () => {
   it("resolves PA when GPT returns a valid firm PA", async () => {
     const gptResponse: RawClassifierOutput = {
       practice_area: "pi",
@@ -347,7 +347,7 @@ describe("classify() — full pipeline with mocked OpenAI", () => {
       flags: [],
       confidence: "high",
       out_of_scope: true,
-      reasoning: "Clearly a patent dispute — not in firm scope.",
+      reasoning: "Clearly a patent dispute  -  not in firm scope.",
     };
     const openai = mockOpenAI(JSON.stringify(gptResponse));
     const result = await classify(openai, makeInput("I need help with a US patent dispute."));
@@ -362,7 +362,7 @@ describe("classify() — full pipeline with mocked OpenAI", () => {
       practice_sub_type: null,
       flags: [],
       confidence: "medium",
-      out_of_scope: true, // contradictory — PA is valid
+      out_of_scope: true, // contradictory  -  PA is valid
     };
     const openai = mockOpenAI(JSON.stringify(gptResponse));
     const result = await classify(openai, makeInput("I was hurt in a car accident."));
@@ -371,7 +371,7 @@ describe("classify() — full pipeline with mocked OpenAI", () => {
     expect(result.out_of_scope).toBe(false);
   });
 
-  it("graceful degradation — returns low-confidence null result on GPT failure", async () => {
+  it("graceful degradation  -  returns low-confidence null result on GPT failure", async () => {
     const openai = failingOpenAI();
     const result = await classify(openai, makeInput("I need legal help."));
     expect(result.practice_area).toBeNull();
@@ -381,7 +381,7 @@ describe("classify() — full pipeline with mocked OpenAI", () => {
     expect(result.reasoning).toContain("classifier_error");
   });
 
-  it("graceful degradation — returns low-confidence result on invalid GPT JSON", async () => {
+  it("graceful degradation  -  returns low-confidence result on invalid GPT JSON", async () => {
     const openai = mockOpenAI("this is not valid json at all");
     const result = await classify(openai, makeInput("I need legal help."));
     expect(result.practice_area).toBeNull();
@@ -448,7 +448,7 @@ describe("classify() — full pipeline with mocked OpenAI", () => {
 // Verify the classifier prompt correctly positions each scenario's key signals
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("Prompt accuracy — 20 golden intake scenarios", () => {
+describe("Prompt accuracy  -  20 golden intake scenarios", () => {
   /** Returns true if the prompt contains all the expected guidance for the scenario. */
   function promptCovers(text: string, mustContain: string[]): boolean {
     const prompt = buildClassifierPrompt(makeInput(text));
@@ -456,7 +456,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   }
 
   // 1. PI / MVA
-  it("MVA scenario — prompt includes pi_mva sub-type and mvac flags", () => {
+  it("MVA scenario  -  prompt includes pi_mva sub-type and mvac flags", () => {
     expect(promptCovers(
       "I was hit by a car last week and the driver fled.",
       ["pi_mva", "mvac_hit_and_run", "mvac_insurer_not_notified"]
@@ -464,7 +464,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 2. PI / Slip & Fall ice
-  it("Slip on ice — prompt includes slip_ice_snow guidance", () => {
+  it("Slip on ice  -  prompt includes slip_ice_snow guidance", () => {
     expect(promptCovers(
       "I slipped on ice outside the grocery store.",
       ["slip_ice_snow", "60-day", "pi_slip_fall"]
@@ -472,7 +472,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 3. PI / Med-mal
-  it("Medical malpractice — prompt includes medmal flags", () => {
+  it("Medical malpractice  -  prompt includes medmal flags", () => {
     expect(promptCovers(
       "I think my surgeon made a mistake during the operation.",
       ["medmal_causation_unclear", "pi_med_mal"]
@@ -480,7 +480,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 4. Family / Abduction
-  it("International abduction — prompt has fam_abduction guidance BEFORE fam_protection", () => {
+  it("International abduction  -  prompt has fam_abduction guidance BEFORE fam_protection", () => {
     const prompt = buildClassifierPrompt(makeInput(
       "My ex took our daughter to another country without my consent."
     ));
@@ -492,7 +492,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 5. Family / Domestic violence
-  it("Domestic violence — prompt includes fam_domestic_violence", () => {
+  it("Domestic violence  -  prompt includes fam_domestic_violence", () => {
     expect(promptCovers(
       "I am afraid of my husband and need a restraining order.",
       ["fam_domestic_violence", "fam_protection"]
@@ -500,7 +500,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 6. Family / Property equalization deadline
-  it("Long separation + property — prompt includes fam_property_clock", () => {
+  it("Long separation + property  -  prompt includes fam_property_clock", () => {
     expect(promptCovers(
       "We separated 5 years ago and never divided our home.",
       ["fam_property_clock", "fam_property"]
@@ -508,7 +508,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 7. Criminal / DUI charter
-  it("DUI charter violation — prompt includes crim_charter_violation", () => {
+  it("DUI charter violation  -  prompt includes crim_charter_violation", () => {
     expect(promptCovers(
       "Police made me blow into the breathalyzer without letting me call a lawyer.",
       ["crim_charter_violation", "crim_dui"]
@@ -516,7 +516,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 8. Criminal / Co-accused
-  it("Co-accused — prompt includes crim_co_accused", () => {
+  it("Co-accused  -  prompt includes crim_co_accused", () => {
     expect(promptCovers(
       "My friend and I were both arrested at the scene.",
       ["crim_co_accused"]
@@ -524,7 +524,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 9. Employment / HRTO clock
-  it("HRTO clock — prompt includes 1-year deadline guidance", () => {
+  it("HRTO clock  -  prompt includes 1-year deadline guidance", () => {
     expect(promptCovers(
       "I was passed over for promotion because of my disability.",
       ["emp_hrto_clock", "1-year"]
@@ -532,7 +532,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 10. Employment / Severance signed
-  it("Signed severance — prompt includes emp_severance_signed", () => {
+  it("Signed severance  -  prompt includes emp_severance_signed", () => {
     expect(promptCovers(
       "I already signed the severance documents before getting advice.",
       ["emp_severance_signed"]
@@ -540,7 +540,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 11. Immigration / RAD deadline
-  it("RAD deadline — prompt includes 15-day guidance", () => {
+  it("RAD deadline  -  prompt includes 15-day guidance", () => {
     expect(promptCovers(
       "My refugee claim was refused by the RPD last week.",
       ["imm_rad_deadline", "15-day"]
@@ -548,7 +548,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 12. Immigration / Removal order
-  it("Removal order — prompt includes imm_removal_order", () => {
+  it("Removal order  -  prompt includes imm_removal_order", () => {
     expect(promptCovers(
       "I received a deportation order and must leave Canada in 2 weeks.",
       ["imm_removal_order"]
@@ -556,7 +556,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 13. Real estate / Dual rep
-  it("Dual representation — prompt includes real_estate_dual_representation", () => {
+  it("Dual representation  -  prompt includes real_estate_dual_representation", () => {
     expect(promptCovers(
       "The same lawyer is representing both the buyer and the seller.",
       ["real_estate_dual_representation"]
@@ -564,7 +564,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 14. Real estate / Post-closing defect
-  it("Post-closing defect — prompt includes real_estate_undisclosed_defects", () => {
+  it("Post-closing defect  -  prompt includes real_estate_undisclosed_defects", () => {
     expect(promptCovers(
       "After I moved in I found mold they never disclosed.",
       ["real_estate_undisclosed_defects"]
@@ -572,7 +572,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 15. Construction lien
-  it("Construction lien — prompt includes 60-day lien guidance", () => {
+  it("Construction lien  -  prompt includes 60-day lien guidance", () => {
     expect(promptCovers(
       "I finished the renovation 6 weeks ago and the owner still hasn't paid.",
       ["construction_lien_deadline", "60-day"]
@@ -580,7 +580,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 16. LTD appeal clock
-  it("LTD denial — prompt includes ltd_appeal_clock_running", () => {
+  it("LTD denial  -  prompt includes ltd_appeal_clock_running", () => {
     expect(promptCovers(
       "My long-term disability claim was denied 6 months ago and I am still appealing.",
       ["ltd_appeal_clock_running"]
@@ -588,7 +588,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 17. Estates / Capacity
-  it("Estates capacity — prompt includes estates_capacity", () => {
+  it("Estates capacity  -  prompt includes estates_capacity", () => {
     expect(promptCovers(
       "My father has dementia and my sister is pressuring him to sign a new will.",
       ["estates_capacity", "estates_undue_influence"]
@@ -596,7 +596,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 18. WSIB
-  it("WSIB — prompt includes wsib_six_month_claim", () => {
+  it("WSIB  -  prompt includes wsib_six_month_claim", () => {
     expect(promptCovers(
       "I was injured at work last month and haven't filed a WSIB claim.",
       ["wsib_six_month_claim", "6-month"]
@@ -604,13 +604,13 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 19. Out-of-scope matter (estate planning for a firm with no estates PA)
-  it("Out-of-scope — prompt instructs GPT to return out_of_scope: true when no PA matches", () => {
+  it("Out-of-scope  -  prompt instructs GPT to return out_of_scope: true when no PA matches", () => {
     const limitedFirm: PracticeArea[] = [
       { id: "pi", label: "Personal Injury", classification: "primary" },
     ];
     const prompt = buildClassifierPrompt({
       firmPracticeAreas: limitedFirm,
-      conversationText: "I need help administering a will — my father just died.",
+      conversationText: "I need help administering a will  -  my father just died.",
     });
     expect(prompt).toContain("out_of_scope");
     expect(prompt).toContain('"pi"'); // only PA listed
@@ -618,7 +618,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
   });
 
   // 20. Municipal injury notice
-  it("Municipal injury — prompt includes municipal_injury_notice and 10-day notice", () => {
+  it("Municipal injury  -  prompt includes municipal_injury_notice and 10-day notice", () => {
     expect(promptCovers(
       "I tripped on a broken city sidewalk last week.",
       ["municipal_injury_notice"]
@@ -630,7 +630,7 @@ describe("Prompt accuracy — 20 golden intake scenarios", () => {
 // Phase 1A: Low-confidence clarifier
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("classify() — low-confidence clarifier (Phase 1A)", () => {
+describe("classify()  -  low-confidence clarifier (Phase 1A)", () => {
   it("sets needs_clarification when confidence=low and PA=null and not out_of_scope", async () => {
     const gptResponse: RawClassifierOutput = {
       practice_area: null,
@@ -638,7 +638,7 @@ describe("classify() — low-confidence clarifier (Phase 1A)", () => {
       flags: [],
       confidence: "low",
       out_of_scope: false,
-      reasoning: "Very vague — cannot determine practice area.",
+      reasoning: "Very vague  -  cannot determine practice area.",
     };
     const openai = mockOpenAI(JSON.stringify(gptResponse));
     const result = await classify(openai, makeInput("I need help with a legal problem."));
@@ -685,7 +685,7 @@ describe("classify() — low-confidence clarifier (Phase 1A)", () => {
     };
     const openai = mockOpenAI(JSON.stringify(gptResponse));
     const result = await classify(openai, makeInput("I have a legal issue."));
-    // medium confidence — don't ask for clarification, let GPT handle
+    // medium confidence  -  don't ask for clarification, let GPT handle
     expect(result.needs_clarification).toBeUndefined();
   });
 
@@ -725,7 +725,7 @@ describe("classify() — low-confidence clarifier (Phase 1A)", () => {
 // getAllFlagIds consistency check
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("getAllFlagIds — classifier list vs registry consistency", () => {
+describe("getAllFlagIds  -  classifier list vs registry consistency", () => {
   it("all flag IDs in the classifier prompt are valid registry IDs", () => {
     const prompt = buildClassifierPrompt(makeInput("test"));
     // Extract the flag list line from the prompt

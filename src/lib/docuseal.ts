@@ -1,13 +1,13 @@
 /**
- * DocuSeal — e-signature submission client
+ * DocuSeal  -  e-signature submission client
  *
  * Creates a signing submission from a DocuGenerate-produced PDF URL.
  * DocuSeal sends the signing email directly to the prospect.
  *
  * Env vars required:
- *   DOCUSEAL_API_KEY         — API key from docuseal.com dashboard
- *   DOCUSEAL_TEMPLATE_ID     — template ID defining signature field positions
- *   DOCUSEAL_WEBHOOK_SECRET  — secret for verifying incoming webhook signatures
+ *   DOCUSEAL_API_KEY          -  API key from docuseal.com dashboard
+ *   DOCUSEAL_TEMPLATE_ID      -  template ID defining signature field positions
+ *   DOCUSEAL_WEBHOOK_SECRET   -  secret for verifying incoming webhook signatures
  *
  * DocuSeal template setup (one-time):
  *   1. Create a template in the DocuSeal dashboard with a single "Client" signer
@@ -101,7 +101,7 @@ export function verifyDocuSealWebhook(
 ): boolean {
   const secret = process.env.DOCUSEAL_WEBHOOK_SECRET;
   if (!secret) {
-    console.warn("[docuseal] DOCUSEAL_WEBHOOK_SECRET not set — skipping signature check");
+    console.warn("[docuseal] DOCUSEAL_WEBHOOK_SECRET not set  -  skipping signature check");
     return true; // permissive in dev; always set in production
   }
 

@@ -1,5 +1,5 @@
 /**
- * CaseLoad Screen — Firm-Scoped Classifier
+ * CaseLoad Screen  -  Firm-Scoped Classifier
  *
  * Converts a raw conversation transcript into a structured classification:
  *   { practice_area, practice_sub_type, flags[], confidence, out_of_scope }
@@ -15,11 +15,12 @@
  * Re-classification is possible if the user significantly changes their description
  * (e.g. starts with employment, reveals it is a human rights matter).
  *
- * Integration point: src/app/api/screen/route.ts — called after session load,
+ * Integration point: src/app/api/screen/route.ts  -  called after session load,
  * before buildSystemPrompt(). Result stored in session state as `classifier_result`.
  */
 
 import OpenAI from "openai";
+import { MODELS } from "@/lib/openrouter";
 import type { PracticeArea } from "@/lib/screen-prompt";
 import { detectFlags, mergeFlags } from "@/lib/flag-registry";
 
@@ -28,7 +29,7 @@ import { detectFlags, mergeFlags } from "@/lib/flag-registry";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ClassifierInput {
-  /** Firm's practice areas — constrains the output vocabulary. */
+  /** Firm's practice areas  -  constrains the output vocabulary. */
   firmPracticeAreas: PracticeArea[];
   /** Full conversation text from the client (all user turns concatenated with newlines). */
   conversationText: string;
@@ -47,11 +48,11 @@ export interface ClassifierResult {
   confidence: "high" | "medium" | "low";
   /** True if the matter is clearly outside all of the firm's practice areas. */
   out_of_scope: boolean;
-  /** Raw GPT flags before merge — preserved for conflict monitoring. */
+  /** Raw GPT flags before merge  -  preserved for conflict monitoring. */
   gpt_flags_raw: string[];
-  /** Regex flags before merge — preserved for conflict monitoring. */
+  /** Regex flags before merge  -  preserved for conflict monitoring. */
   regex_flags_raw: string[];
-  /** GPT's brief reasoning — used for debugging and conflict log. */
+  /** GPT's brief reasoning  -  used for debugging and conflict log. */
   reasoning?: string;
   /**
    * True when the classifier could not resolve a practice area (confidence=low, PA=null,
@@ -71,7 +72,7 @@ export interface ClassifierResult {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * All flag IDs the classifier may emit — used to constrain GPT hallucination.
+ * All flag IDs the classifier may emit  -  used to constrain GPT hallucination.
  * Imported lazily to avoid circular dependency at module load.
  */
 function getAllFlagIds(): string[] {
@@ -130,7 +131,7 @@ function getAllFlagIds(): string[] {
   ];
 }
 
-/** @internal — exported for testing only */
+/** @internal  -  exported for testing only */
 export function buildClassifierPrompt(input: ClassifierInput): string {
   const primaryPAs = input.firmPracticeAreas
     .filter(a => a.classification === "primary")
@@ -188,7 +189,7 @@ Read the client's message and output a JSON object with exactly these fields:
 **flags:**
 - Select ONLY from this validated list: ${validFlagIds}
 - Flag an issue ONLY when you have clear evidence in the text, not just possibility.
-- Prioritize S1 (critical) flags — these represent malpractice or claim-barring risks.
+- Prioritize S1 (critical) flags  -  these represent malpractice or claim-barring risks.
 
 ### Key Flag Guidance:
 
@@ -198,27 +199,27 @@ Read the client's message and output a JSON object with exactly these fields:
 
 **mvac_insurer_not_notified**: when a car accident was recent (days ago) and client has not yet notified insurer.
 
-**slip_ice_snow**: when fall involved ice, snow, or slippery winter conditions — triggers 60-day Occupiers' Liability Act notice obligation.
+**slip_ice_snow**: when fall involved ice, snow, or slippery winter conditions  -  triggers 60-day Occupiers' Liability Act notice obligation.
 
-**slip_municipality**: when fall occurred on city sidewalk, road, or municipal property — triggers Municipal Act notice.
+**slip_municipality**: when fall occurred on city sidewalk, road, or municipal property  -  triggers Municipal Act notice.
 
-**emp_hrto_clock**: when discrimination on a protected ground is described — triggers 1-year HRTO deadline (stricter than 2-year).
+**emp_hrto_clock**: when discrimination on a protected ground is described  -  triggers 1-year HRTO deadline (stricter than 2-year).
 
 **emp_severance_signed**: when client mentions having already signed a document after termination.
 
-**imm_rad_deadline**: when refugee claim was refused or denied by RPD — 15-day appeal window.
+**imm_rad_deadline**: when refugee claim was refused or denied by RPD  -  15-day appeal window.
 
-**construction_lien_deadline**: when contractor/subcontractor describes work done and non-payment — 60-day lien window.
+**construction_lien_deadline**: when contractor/subcontractor describes work done and non-payment  -  60-day lien window.
 
 **ltd_appeal_clock_running**: when long-term disability claim was denied and client is in or considering internal appeal.
 
 **crim_charter_violation**: when police conduct (search, arrest, right to counsel) appears to violate Charter.
 
-**wsib_six_month_claim**: when a worker was injured on the job and has not yet filed a WSIB claim — strict 6-month filing deadline from date of injury or awareness.
+**wsib_six_month_claim**: when a worker was injured on the job and has not yet filed a WSIB claim  -  strict 6-month filing deadline from date of injury or awareness.
 
 **out_of_scope:**
 - Set true if the matter is clearly outside ALL of the firm's listed practice areas.
-- Do not set true if it's ambiguous — low confidence and a best-match PA is better than out_of_scope.
+- Do not set true if it's ambiguous  -  low confidence and a best-match PA is better than out_of_scope.
 
 **confidence:**
 - "high": clear single PA match with specific facts.
@@ -242,7 +243,7 @@ Respond with ONLY valid JSON. No markdown, no explanation outside the JSON objec
 // GPT Call
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** @internal — exported for testing only */
+/** @internal  -  exported for testing only */
 export interface RawClassifierOutput {
   practice_area: string | null;
   practice_sub_type: string | null;
@@ -252,7 +253,7 @@ export interface RawClassifierOutput {
   reasoning?: string;
 }
 
-/** @internal — exported for testing only */
+/** @internal  -  exported for testing only */
 export function parseClassifierResponse(raw: string): RawClassifierOutput | null {
   try {
     const parsed = JSON.parse(raw.trim()) as RawClassifierOutput;
@@ -271,13 +272,13 @@ export function parseClassifierResponse(raw: string): RawClassifierOutput | null
  *
  * @param openai   Shared OpenAI client instance.
  * @param input    Classifier input (firm PAs + conversation text).
- * @param model    Model to use for classification. Defaults to gpt-4o-mini.
+ * @param model    Model to use for classification. Defaults to MODELS.CLASSIFIER (gemini-2.5-flash).
  * @returns        ClassifierResult with PA, sub-type, flags, and confidence.
  */
 export async function classify(
   openai: OpenAI,
   input: ClassifierInput,
-  model = "gpt-4o-mini",
+  model: string = MODELS.CLASSIFIER,
 ): Promise<ClassifierResult> {
   const prompt = buildClassifierPrompt(input);
 
@@ -287,9 +288,13 @@ export async function classify(
     const completion = await openai.chat.completions.create({
       model,
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.1, // Low temperature — classification should be deterministic
+      temperature: 0.1, // Low temperature  -  classification should be deterministic
       max_tokens: 512,
       response_format: { type: "json_object" },
+      // Disable Gemini 2.5 Flash's "thinking" mode. Classification is
+      // pattern-matching, not reasoning  -  thinking adds 3-5s of latency
+      // without improving accuracy.
+      reasoning_effort: "none",
     });
     const raw = completion.choices[0]?.message?.content ?? "";
     gptOutput = parseClassifierResponse(raw);

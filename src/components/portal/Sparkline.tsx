@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * Sparkline — SVG polyline for portal KPI tiles.
+ * Sparkline  -  SVG polyline for portal KPI tiles.
  * 6 data points (one per week). No external dependencies.
  *
  * yoyData: optional prior-year series rendered as a dashed, muted line
- * on the same scale — visible only when 12+ months of data exist.
+ * on the same scale  -  visible only when 12+ months of data exist.
  */
 
 interface SparklineProps {
@@ -53,7 +53,7 @@ export default function Sparkline({
       fill="none"
       aria-hidden="true"
     >
-      {/* Prior-year line — dashed, 25% opacity */}
+      {/* Prior-year line  -  dashed, 25% opacity */}
       {yoyPoints && (
         <polyline
           points={yoyPoints.join(" ")}

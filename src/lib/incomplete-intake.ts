@@ -9,7 +9,7 @@
  * the screen API after initial scoring.
  */
 
-import { supabase } from "./supabase";
+import { supabaseAdmin as supabase } from "./supabase-admin";
 import { triggerSequence } from "./sequence-engine";
 import type { Confidence, PriorityBand } from "./scoring";
 

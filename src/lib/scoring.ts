@@ -1,9 +1,9 @@
 /**
- * CaseLoad Select — Priority Scoring Engine v2.1
+ * CaseLoad Select  -  Priority Scoring Engine v2.1
  *
  * priority_index = fit_score (max 30) + value_score (max 65) = 0–100 (capped)
  *
- * v2.1 changes (April 2026 — LawBrokr research upgrade):
+ * v2.1 changes (April 2026  -  LawBrokr research upgrade):
  * - ScoringInput extended: value_tier, complexity_indicators, prior_experience
  * - complexityScore() rewritten: structured practice-specific indicators (max 25)
  * - feeScore() rewritten: value-tier lookup per practice area
@@ -206,7 +206,7 @@ export function complexityScore(
       score += 4;
     }
 
-    // Special considerations — additive per flag
+    // Special considerations  -  additive per flag
     if (indicators.special_considerations?.length) {
       const FLAG_WEIGHTS: Record<string, number> = {
         domestic_violence: 6,
@@ -228,7 +228,7 @@ export function complexityScore(
       else if (indicators.prior_refusal_count === 1) score += 3;
     }
 
-    // Liability clarity (PI) — disputed = higher complexity
+    // Liability clarity (PI)  -  disputed = higher complexity
     if (indicators.liability_clarity != null) {
       score += indicators.liability_clarity; // 0-6
     }
@@ -250,7 +250,7 @@ export function complexityScore(
       else if (indicators.beneficiary_count >= 3) score += 1;
     }
 
-    // Employment discrimination flags — additive per flag
+    // Employment discrimination flags  -  additive per flag
     if (indicators.employment_factors?.length) {
       score += Math.min(indicators.employment_factors.length * 3, 6);
     }
@@ -312,7 +312,7 @@ export function strategicScore(
   else if (source === "gbp" || source === "organic" || source === "directory") score = 4;
   else score = 3;
 
-  // Prior experience bonus — stacks with existing signals
+  // Prior experience bonus  -  stacks with existing signals
   if (priorExperience === "has_representation") score += 3; // switching lawyers = high intent
   else if (priorExperience === "had_representation") score += 2; // experienced = moderate intent
 

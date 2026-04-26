@@ -1,9 +1,9 @@
 /**
- * /portal/[firmId]/phases — Tier 3 FACT Phase View
+ * /portal/[firmId]/phases  -  Tier 3 FACT Phase View
  *
  * Four phase cards in a 2x2 grid.
- * Filter (F): band distribution + SLA gauge — live data.
- * Authority (A): Clio Manage integration — live if connected, connect prompt if not.
+ * Filter (F): band distribution + SLA gauge  -  live data.
+ * Authority (A): Clio Manage integration  -  live if connected, connect prompt if not.
  * Capture (C) / Target (T): placeholders until BrightLocal / GA4 / Google Ads are live.
  *
  * Auth verified by parent layout.
@@ -11,7 +11,7 @@
 
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { isClioConnected, getClioMatters } from "@/lib/clio";
 import FilterCard from "./FilterCard";
 import ClioCard from "./ClioCard";
@@ -73,7 +73,7 @@ export default async function PhasesPage({
     slaCompliance = Math.round((withinSLA / responseLeads.length) * 100);
   }
 
-  // Fetch Clio matters only if connected (non-fatal — card degrades gracefully on error)
+  // Fetch Clio matters only if connected (non-fatal  -  card degrades gracefully on error)
   const clioMatters = clioConnected
     ? await getClioMatters(firmId, 5).catch(() => [])
     : [];

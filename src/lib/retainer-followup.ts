@@ -1,5 +1,5 @@
 /**
- * J6 — Retainer Awaiting Signature
+ * J6  -  Retainer Awaiting Signature
  *
  * Fires when a lead moves to "proposal_sent" (retainer sent, awaiting signature).
  * Follows up until the lead converts to client_won or client_lost, or the
@@ -7,10 +7,10 @@
  *
  * Sequence template trigger_event: "retainer_awaiting"
  * Recommended sequence: 4 touches over 10 days
- *   Step 1 (2h)   — "Your retainer agreement" — confirm they received it
- *   Step 2 (24h)  — "Any questions about the agreement?" — remove friction
- *   Step 3 (72h)  — "Following up" — gentle nudge with deadline framing
- *   Step 4 (168h) — "Last reminder" — final touch before file goes cold
+ *   Step 1 (2h)    -  "Your retainer agreement"  -  confirm they received it
+ *   Step 2 (24h)   -  "Any questions about the agreement?"  -  remove friction
+ *   Step 3 (72h)   -  "Following up"  -  gentle nudge with deadline framing
+ *   Step 4 (168h)  -  "Last reminder"  -  final touch before file goes cold
  *
  * Exits: stage moves to client_won or client_lost.
  * Idempotency: skips leads that already have retainer_awaiting steps scheduled.
@@ -19,7 +19,7 @@
  * on proposal_sent → no delay before the first touch.
  */
 
-import { supabase } from "./supabase";
+import { supabaseAdmin as supabase } from "./supabase-admin";
 import { triggerSequence } from "./sequence-engine";
 
 interface RetainerLead {

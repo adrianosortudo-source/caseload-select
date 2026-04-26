@@ -1,5 +1,5 @@
 /**
- * /demo — CaseLoad Select sales demonstration page.
+ * /demo  -  CaseLoad Select sales demonstration page.
  *
  * Auto-provisions a fictional law firm ("Hartwell Law PC") on first load.
  * Subsequent loads reuse the same firm ID.

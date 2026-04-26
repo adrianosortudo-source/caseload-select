@@ -2,10 +2,10 @@
  * Portal authentication utilities.
  *
  * Magic links are signed tokens (HMAC-SHA256) containing { firm_id, exp }.
- * No database table required — the signature is the authorization.
+ * No database table required  -  the signature is the authorization.
  *
  * Cookie name: portal_session
- * Signing key: PORTAL_SECRET (dedicated env var — do NOT reuse CRON_SECRET;
+ * Signing key: PORTAL_SECRET (dedicated env var  -  do NOT reuse CRON_SECRET;
  *              rotating the cron secret must not invalidate active portal sessions)
  */
 

@@ -148,7 +148,7 @@ export default function NewLeadForm({ firms }: { firms: { id: string; name: stri
         <div className="col-span-2">
           <label className="label">Law firm</label>
           <select className="input" name="law_firm_id" defaultValue="">
-            <option value="">— None —</option>
+            <option value=""> -  None  - </option>
             {firms.map((f) => (
               <option key={f.id} value={f.id}>{f.name}</option>
             ))}

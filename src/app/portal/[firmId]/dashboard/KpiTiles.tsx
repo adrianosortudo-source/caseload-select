@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * KpiTiles — v2 Tier 1 Partner Dashboard.
+ * KpiTiles  -  v2 Tier 1 Partner Dashboard.
  *
  * Hero row: 3 configurable tiles (firm's hero_metrics setting).
- * Standard grid: 7 tiles — Inquiries, Qualified, Signed, CPSC,
+ * Standard grid: 7 tiles  -  Inquiries, Qualified, Signed, CPSC,
  *   Avg Response, Pipeline Value, Funnel Conversion.
  *
  * Each tile shows: value, MoM delta, 6-week sparkline (with optional
@@ -89,7 +89,7 @@ function funnelColor(pct: number | null): string {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function Delta({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="text-xs text-black/30">—</span>;
+  if (pct === null) return <span className="text-xs text-black/30"> - </span>;
   if (pct === 0) return <span className="text-xs text-black/40">→ flat</span>;
   const up = pct > 0;
   return (
@@ -280,7 +280,7 @@ export default function KpiTiles({
       const json = await res.json() as { tiles: TilesMap };
       setTiles(json.tiles);
     } catch {
-      // Silent — stale data is fine
+      // Silent  -  stale data is fine
     }
   }, [firmId]);
 
@@ -289,7 +289,7 @@ export default function KpiTiles({
     return () => clearInterval(interval);
   }, [refresh]);
 
-  // Resolve hero keys — fall back gracefully if key is invalid
+  // Resolve hero keys  -  fall back gracefully if key is invalid
   const heroKeys = heroMetrics
     .filter((k): k is TileKey => k in TILE_CONFIG)
     .slice(0, 3);
@@ -324,7 +324,7 @@ export default function KpiTiles({
         </div>
       )}
 
-      {/* Standard 7-tile grid — non-hero tiles */}
+      {/* Standard 7-tile grid  -  non-hero tiles */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
         {STANDARD_ORDER.filter(k => !heroSet.has(k)).map((key) => {
           const cfg = TILE_CONFIG[key];

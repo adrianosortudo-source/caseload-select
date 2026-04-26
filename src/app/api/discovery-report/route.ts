@@ -12,7 +12,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 
 const RECIPIENT = "adrianosortudo@gmail.com";
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
         });
 
       if (error) {
-        // Table might not exist yet — create it on first run
+        // Table might not exist yet  -  create it on first run
         if (error.code === "42P01") {
           console.warn("[discovery-report] Table does not exist. Skipping store. Create the table manually.");
           storeError = "Table discovery_reports does not exist";

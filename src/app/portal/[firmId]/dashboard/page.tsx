@@ -1,5 +1,5 @@
 /**
- * /portal/[firmId]/dashboard — v2 Tier 1 Partner Dashboard
+ * /portal/[firmId]/dashboard  -  v2 Tier 1 Partner Dashboard
  *
  * Fetches server-side:
  * - 7 KPI tiles (Inquiries, Qualified, Signed, CPSC, Response Time,
@@ -14,8 +14,10 @@
 
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import KpiTiles from "./KpiTiles";
+import IntakeQualityPanel from "./IntakeQualityPanel";
+import type { IntakeQualityReport } from "@/lib/memo";
 
 export const dynamic = "force-dynamic";
 
@@ -83,8 +85,9 @@ export default async function DashboardPage({
     leadsWithResponse,
     leadsActiveValue,
     benchmarksResult,
+    qualitySessions,
   ] = await Promise.all([
-    // Firm config — hero_metrics, ad spend, engagement start
+    // Firm config  -  hero_metrics, ad spend, engagement start
     supabase
       .from("intake_firms")
       .select("monthly_ad_spend, hero_metrics, engagement_start_date")
@@ -146,6 +149,13 @@ export default async function DashboardPage({
 
     // Industry benchmarks
     supabase.from("industry_benchmarks").select("metric_key, benchmark_value, direction"),
+
+    // Sessions with quality data this month (scoring._quality written by memo generator)
+    supabase.from("intake_sessions")
+      .select("scoring")
+      .eq("firm_id", firmId)
+      .gte("created_at", monthStart.toISOString())
+      .not("scoring->_quality", "is", null),
   ]);
 
   // ── Unpack ────────────────────────────────────────────────────────────────
@@ -172,6 +182,34 @@ export default async function DashboardPage({
       direction: b.direction as "higher_better" | "lower_better",
     };
   }
+
+  // ── Intake quality aggregation ────────────────────────────────────────────
+  const qualityRows = (qualitySessions.data ?? [])
+    .map(r => (r.scoring as Record<string, unknown>)?._quality as IntakeQualityReport | undefined)
+    .filter((q): q is IntakeQualityReport => !!q);
+
+  const qualityTierCounts: Record<IntakeQualityReport["qualityTier"], number> = {
+    complete: 0, adequate: 0, partial: 0, sparse: 0,
+  };
+  let qualityScoreSum = 0;
+  const gapFreq: Record<string, number> = {};
+
+  for (const q of qualityRows) {
+    qualityTierCounts[q.qualityTier] = (qualityTierCounts[q.qualityTier] ?? 0) + 1;
+    qualityScoreSum += q.completenessScore;
+    for (const gap of q.gaps ?? []) {
+      gapFreq[gap] = (gapFreq[gap] ?? 0) + 1;
+    }
+  }
+
+  const qualityAvgScore = qualityRows.length > 0
+    ? Math.round(qualityScoreSum / qualityRows.length)
+    : null;
+
+  const topGaps = Object.entries(gapFreq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([id]) => id);
 
   // ── KPI calculations ──────────────────────────────────────────────────────
   const delta = (curr: number, prev: number) =>
@@ -248,7 +286,7 @@ export default async function DashboardPage({
   // Only include YoY data when there's actually prior-year data
   const hasYoyData = (arr: number[]) => arr.some(v => v > 0);
 
-  // ── Engagement panel — cumulative since engagement_start_date ────────────
+  // ── Engagement panel  -  cumulative since engagement_start_date ────────────
   interface EngagementMonth {
     label: string;
     signed: number;
@@ -372,6 +410,13 @@ export default async function DashboardPage({
             benchmark: b("funnelConversion", funnelConversion),
           },
         }}
+      />
+
+      <IntakeQualityPanel
+        avgScore={qualityAvgScore}
+        tierCounts={qualityTierCounts}
+        topGaps={topGaps}
+        sessionCount={qualityRows.length}
       />
     </div>
   );

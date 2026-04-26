@@ -6,6 +6,7 @@ import ChatBubble from "./ChatBubble";
 import DemoScenarioPicker from "@/components/demo/DemoScenarioPicker";
 import DemoTour from "@/components/demo/DemoTour";
 import type { DemoFirmBranding } from "./provision-demo-firm";
+import { DEMO_SCENARIOS } from "@/components/demo/demo-scenarios";
 import type { ScenarioId } from "@/components/demo/demo-scenarios";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -75,7 +76,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
         body: JSON.stringify(contactForm),
       });
     } catch {
-      // Silent — show confirmation regardless
+      // Silent  -  show confirmation regardless
     }
     setContactSending(false);
     setContactSent(true);
@@ -188,7 +189,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
               <ul className="space-y-3 mb-10">
                 {[
                   "35 practice areas across Ontario",
-                  "Immediate priority assessment — no waiting room",
+                  "Immediate priority assessment  -  no waiting room",
                   "Your lawyer receives a prepared case memo before the call",
                   "Confidential under Ontario law from the first message",
                 ].map(item => (
@@ -219,7 +220,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
             {/* Right: widget + demo trigger */}
             <div className="flex flex-col items-center lg:items-end gap-3">
 
-              {/* Demo trigger strip — visually distinct from site UI */}
+              {/* Demo trigger strip  -  visually distinct from site UI */}
               <div className="w-full max-w-md">
                 {!activeScenario ? (
                   /* Inactive state: invite to try a scenario */
@@ -243,9 +244,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
                     <span className="text-[11px] font-semibold text-[#1E2F58]">Demo running</span>
                     <span className="text-[10px] text-black/30">·</span>
                     <span className="text-[10px] text-black/50">
-                      {activeScenario === "pi_strong" && "Band A — Strong case"}
-                      {activeScenario === "emp_mid" && "Band C — Borderline"}
-                      {activeScenario === "small_claims" && "Band E — Outside scope"}
+                      {DEMO_SCENARIOS.find(s => s.id === activeScenario)?.outcome ?? ""}
                     </span>
                     <button
                       onClick={exitDemo}
@@ -257,7 +256,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
                 )}
               </div>
 
-              {/* Widget container — spotlighted above overlay when demo is active */}
+              {/* Widget container  -  spotlighted above overlay when demo is active */}
               <div
                 ref={widgetRef}
                 className="w-full max-w-md transition-all duration-300"
@@ -326,14 +325,14 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
               },
               {
                 step: "03",
-                title: "Case Details — Round 3",
+                title: "Case Details  -  Round 3",
                 body: "Evidence inventory, parties, deadlines, expectations. Rounds 1 and 2 decide whether to take the meeting. Round 3 decides how your lawyer walks in prepared.",
                 highlight: true,
               },
               {
                 step: "04",
                 title: "Your Lawyer Gets a Case Memo",
-                body: "Before the consultation, your lawyer receives a structured case file — not a sticky note. That is the difference.",
+                body: "Before the consultation, your lawyer receives a structured case file  -  not a sticky note. That is the difference.",
               },
             ].map(({ step, title, body, highlight }) => (
               <div key={step} className={`flex flex-col items-start ${highlight ? "relative" : ""}`}>
@@ -596,14 +595,14 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
       )}
 
       {/* ── DEMO SYSTEM ─────────────────────────────────────────────────── */}
-      {/* Scenario picker modal — z-70, above everything including header */}
+      {/* Scenario picker modal  -  z-70, above everything including header */}
       <DemoScenarioPicker
         open={showPicker}
         onSelect={handleScenarioSelect}
         onClose={() => setShowPicker(false)}
       />
 
-      {/* Tour overlay + balloon — z-30 overlay, z-60 balloon/exit */}
+      {/* Tour overlay + balloon  -  z-30 overlay, z-60 balloon/exit */}
       <DemoTour
         active={!!activeScenario}
         currentStep={demoStep}

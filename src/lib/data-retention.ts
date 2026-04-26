@@ -6,11 +6,11 @@
  * than deleting rows, preserving aggregate scoring data for reporting.
  *
  * Retention schedule by band (measured from updated_at / last activity):
- *   A / B  — 1095 days (3 years) — retained clients, long relationship
- *   C      — 365 days (1 year)   — qualified but not converted
- *   D      — 180 days (6 months) — long-view nurture
- *   E      — 30 days             — auto-declined, no engagement
- *   null   — 90 days             — unscored / stale intake
+ *   A / B   -  1095 days (3 years)  -  retained clients, long relationship
+ *   C       -  365 days (1 year)    -  qualified but not converted
+ *   D       -  180 days (6 months)  -  long-view nurture
+ *   E       -  30 days              -  auto-declined, no engagement
+ *   null    -  90 days              -  unscored / stale intake
  *
  * PIPEDA obligations met:
  *   - Retention periods reflect "no longer necessary for the identified purpose"
@@ -18,7 +18,7 @@
  *   - Records of anonymization logged to console for breach audit trail
  */
 
-import { supabase } from "./supabase";
+import { supabaseAdmin as supabase } from "./supabase-admin";
 
 const RETENTION_DAYS: Record<string, number> = {
   A: 1095,
@@ -87,7 +87,7 @@ export async function runDataRetention(): Promise<RetentionResult> {
         .in("firm_id", leads.map(() => "").filter(Boolean)); // placeholder join
 
       // Clear sessions linked via intake that reference these leads (by contact.email match)
-      // Sessions store contact in JSONB — clear conversation + contact PII, keep scoring
+      // Sessions store contact in JSONB  -  clear conversation + contact PII, keep scoring
       const { error: sessErr } = await supabase
         .from("intake_sessions")
         .update({

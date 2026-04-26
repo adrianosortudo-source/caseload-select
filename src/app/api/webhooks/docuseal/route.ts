@@ -18,7 +18,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { verifyDocuSealWebhook } from "@/lib/docuseal";
 
 // Disable body parsing so we can read raw bytes for signature verification
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     const submissionId = String(body.data?.submission?.id ?? "");
 
     if (!submissionId) {
-      return NextResponse.json({ ok: true, note: "no submission_id — ignored" });
+      return NextResponse.json({ ok: true, note: "no submission_id  -  ignored" });
     }
 
     const now = new Date().toISOString();
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
         .eq("docuseal_submission_id", submissionId)
         .eq("status", "sent"); // only advance if currently 'sent'
 
-      console.log(`[docuseal-webhook] form.viewed — submission ${submissionId}`);
+      console.log(`[docuseal-webhook] form.viewed  -  submission ${submissionId}`);
     } else if (eventType === "form.completed") {
       // All signers have signed
       await supabase
@@ -82,9 +82,9 @@ export async function POST(req: Request) {
         .eq("docuseal_submission_id", submissionId)
         .in("status", ["sent", "viewed"]); // advance from either prior state
 
-      console.log(`[docuseal-webhook] form.completed — submission ${submissionId}`);
+      console.log(`[docuseal-webhook] form.completed  -  submission ${submissionId}`);
     } else {
-      // Unhandled event — acknowledge without action
+      // Unhandled event  -  acknowledge without action
       console.log(`[docuseal-webhook] unhandled event: ${eventType}`);
     }
 

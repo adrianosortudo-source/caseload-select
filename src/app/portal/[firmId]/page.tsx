@@ -1,7 +1,7 @@
 /**
  * /portal/[firmId]
  *
- * Root entry point — redirects to the Dashboard tab.
+ * Root entry point  -  redirects to the Dashboard tab.
  * Auth is verified in the parent [firmId]/layout.tsx before this renders.
  * Preserves existing bookmarks and magic links.
  */

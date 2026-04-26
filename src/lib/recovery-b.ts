@@ -1,5 +1,5 @@
 /**
- * J5B — Recovery B: Consulted, No Sign
+ * J5B  -  Recovery B: Consulted, No Sign
  *
  * Fires when a lead has been in "consultation_held" for 3+ days without
  * moving to proposal_sent or client_won. Represents a lead who had the
@@ -7,17 +7,17 @@
  *
  * Sequence template trigger_event: "consulted_no_sign"
  * Recommended sequence: 5 touches over 21 days
- *   Step 1 (0h)   — "Following up on your consultation" — recap key points
- *   Step 2 (48h)  — "One thing I forgot to mention" — add value
- *   Step 3 (120h) — "Your situation + timeline" — limitations urgency
- *   Step 4 (216h) — "Decision point" — direct ask
- *   Step 5 (360h) — "Whenever you're ready" — low-pressure final touch
+ *   Step 1 (0h)    -  "Following up on your consultation"  -  recap key points
+ *   Step 2 (48h)   -  "One thing I forgot to mention"  -  add value
+ *   Step 3 (120h)  -  "Your situation + timeline"  -  limitations urgency
+ *   Step 4 (216h)  -  "Decision point"  -  direct ask
+ *   Step 5 (360h)  -  "Whenever you're ready"  -  low-pressure final touch
  *
  * Exits: stage moves away from consultation_held.
  * Idempotency: skips leads that already have consulted_no_sign steps scheduled.
  */
 
-import { supabase } from "./supabase";
+import { supabaseAdmin as supabase } from "./supabase-admin";
 import { triggerSequence } from "./sequence-engine";
 
 interface RecoveryBLead {

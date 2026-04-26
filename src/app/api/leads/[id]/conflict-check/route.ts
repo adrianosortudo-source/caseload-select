@@ -1,20 +1,20 @@
 /**
  * /api/leads/[id]/conflict-check
  *
- * GET  — returns the latest conflict check result for a lead
- * POST — runs a new conflict check (or override an existing potential_conflict)
+ * GET   -  returns the latest conflict check result for a lead
+ * POST  -  runs a new conflict check (or override an existing potential_conflict)
  *
  * POST body:
- *   {}                               — run fresh check
- *   { override_reason: "..." }       — override a potential_conflict result
+ *   {}                                -  run fresh check
+ *   { override_reason: "..." }        -  override a potential_conflict result
  *
- * Auth: none — operator-only internal app, same trust level as the rest of the pipeline.
+ * Auth: none  -  operator-only internal app, same trust level as the rest of the pipeline.
  * Override action (setting override_reason) is intentionally restricted to
  * potential_conflict only; confirmed_conflict cannot be self-overridden.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { runConflictCheck, getLatestConflictCheck } from "@/lib/conflict-check";
 
 export async function GET(

@@ -7,10 +7,10 @@
  * Gracefully no-ops if:
  *   - The firm has no Clio tokens (firm not connected to Clio)
  *   - CLIO_CLIENT_ID is not configured
- *   - Any Clio API call fails (non-fatal — lead is won regardless)
+ *   - Any Clio API call fails (non-fatal  -  lead is won regardless)
  */
 
-import { supabase } from "./supabase";
+import { supabaseAdmin as supabase } from "./supabase-admin";
 
 const CLIO_BASE = "https://app.clio.com/api/v4";
 const CLIO_TOKEN_URL = "https://app.clio.com/oauth/token";
