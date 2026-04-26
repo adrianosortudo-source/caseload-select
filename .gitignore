@@ -38,4 +38,11 @@ supabase/.branches/
 # Claude local config
 .claude/
 
+# Local dev artifacts (test outputs, screenshots, server logs)
+dev-server.log
+dev-server-err.log
+*.verified.png
+round2-verified.png
+turn*.json
+
 .vercel
