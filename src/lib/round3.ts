@@ -85,15 +85,22 @@ const PI_MVA_QUESTIONS: Round3Question[] = [
     // Suppress when the timing question has already been answered in R1.
     // pi_q16 (generic PI base): "When did the accident happen?" — any value
     // here means we already have the timing signal, no need to re-ask in R3.
-    // Suppress when ANY R1 timing answer was captured. Five sub-types share
-    // this question with different IDs; we list all so a dog bite, slip-fall,
-    // MVA, or other PI session correctly skips this R3 duplicate.
+    // Suppress when ANY R1 timing answer was captured. Coverage based on
+    // production query of intake_sessions.scoring._confirmed across 14 real
+    // sessions: the AI emits both short (pi_db_q16) and long (pi_dog_bite_q16)
+    // sub-type prefixes interchangeably, plus the q1 variant for some banks.
     excludeWhen: {
-      "pi_q16":       ["*"],
-      "pi_mva_q16":   ["*"],
-      "pi_sf_q16":    ["*"],
-      "pi_db_q16":    ["*"],
-      "pi_other_q16": ["*"],
+      "pi_q16": ["*"],          "pi_q1":  ["*"],
+      "pi_mva_q16": ["*"],      "pi_mva_q1":  ["*"],
+      "pi_sf_q16": ["*"],       "pi_sf_q1":   ["*"],
+      "pi_slip_fall_q16": ["*"],"pi_slip_fall_q1": ["*"],
+      "pi_db_q16": ["*"],       "pi_db_q1":   ["*"],
+      "pi_dog_bite_q16": ["*"], "pi_dog_bite_q1": ["*"],
+      "pi_other_q16": ["*"],    "pi_other_q1": ["*"],
+      "pi_med_mal_q16": ["*"],
+      "pi_product_q16": ["*"],
+      "pi_workplace_q16": ["*"],
+      "pi_assault_ci_q16": ["*"],
     },
   },
   {
@@ -114,12 +121,20 @@ const PI_MVA_QUESTIONS: Round3Question[] = [
     allow_free_text: true,
     memo_label: "Collision description / Fault indicators",
     // Suppress when collision pattern already captured in R1 via pi_q31.
+    // Collision / incident pattern dedupe — covers all PI sub-types both
+    // short and long ID variants seen in production data.
     excludeWhen: {
-      "pi_q31":       ["*"],
-      "pi_mva_q31":   ["*"],
-      "pi_sf_q31":    ["*"],
-      "pi_db_q31":    ["*"],
-      "pi_other_q31": ["*"],
+      "pi_q31": ["*"],          "pi_q2":  ["*"],
+      "pi_mva_q31": ["*"],      "pi_mva_q2":  ["*"],
+      "pi_sf_q31": ["*"],       "pi_sf_q2":   ["*"],
+      "pi_slip_fall_q31": ["*"],"pi_slip_fall_q2": ["*"],
+      "pi_db_q31": ["*"],       "pi_db_q2":   ["*"],
+      "pi_dog_bite_q31": ["*"], "pi_dog_bite_q2": ["*"],
+      "pi_other_q31": ["*"],    "pi_other_q2": ["*"],
+      "pi_med_mal_q31": ["*"],
+      "pi_product_q31": ["*"],
+      "pi_workplace_q31": ["*"],
+      "pi_assault_ci_q31": ["*"],
     },
   },
   {
@@ -332,7 +347,18 @@ const EMPLOYMENT_DISMISSAL_QUESTIONS: Round3Question[] = [
       { label: "Over 15 years",         value: "over_15yr" },
     ],
     memo_label: "Employment tenure / Limitations analysis",
-    excludeWhen: { "emp_q47": ["*"] }, // R1 already asks tenure
+    // Tenure dedupe — short + long sub-type prefixes + custom AI IDs.
+    excludeWhen: {
+      "emp_q47": ["*"],
+      "emp_dis_q47": ["*"],     "emp_dismissal_q47": ["*"],
+      "emp_har_q47": ["*"],     "emp_harassment_q47": ["*"],
+      "emp_disc_q47": ["*"],
+      "emp_con_q47": ["*"],     "emp_constructive_q47": ["*"],
+      "emp_wage_q47": ["*"],
+      "emp_other_q47": ["*"],
+      // Custom semantic IDs the AI sometimes invents
+      "emp_tenure": ["*"],
+    },
   },
   {
     id: "emp_dis_q2",
@@ -347,7 +373,16 @@ const EMPLOYMENT_DISMISSAL_QUESTIONS: Round3Question[] = [
       { label: "Senior executive or director",                   value: "executive" },
     ],
     memo_label: "Role and seniority / Character of employment",
-    excludeWhen: { "emp_q46": ["*"] }, // R1 already asks role level
+    // Role / seniority dedupe — covers all employment sub-type prefixes.
+    excludeWhen: {
+      "emp_q46": ["*"],
+      "emp_dis_q46": ["*"],     "emp_dismissal_q46": ["*"],
+      "emp_har_q46": ["*"],     "emp_harassment_q46": ["*"],
+      "emp_disc_q46": ["*"],
+      "emp_con_q46": ["*"],     "emp_constructive_q46": ["*"],
+      "emp_wage_q46": ["*"],
+      "emp_other_q46": ["*"],
+    },
   },
   {
     id: "emp_dis_q3",

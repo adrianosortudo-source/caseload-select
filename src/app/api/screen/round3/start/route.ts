@@ -124,19 +124,26 @@ export async function POST(req: Request) {
     const scoring = (session.scoring as Record<string, unknown> | null) ?? {};
     const confirmed = (scoring._confirmed as Record<string, unknown> | null) ?? {};
 
+    // Layer 1: explicit excludeWhen against confirmed R1/R2 answer ids.
     questions = questions.filter(q => {
       if (!q.excludeWhen) return true;
       for (const [depId, blockedValues] of Object.entries(q.excludeWhen)) {
         const answered = confirmed[depId];
         // Wildcard "*" — suppress when ANY answer exists for the dependency.
-        // Used to dedupe R3 questions whose intent is fully covered by an R1/R2
-        // question, regardless of which specific value the prospect picked.
         if (blockedValues.includes("*") && answered !== undefined && answered !== null && answered !== "") return false;
         if (typeof answered === "string" && blockedValues.includes(answered)) return false;
         if (Array.isArray(answered) && answered.some(v => blockedValues.includes(v as string))) return false;
       }
       return true;
     });
+
+    // Layer 2: category-based suppression safety net. Catches AI-invented IDs
+    // (emp_tenure, r2_*, etc.) that no explicit excludeWhen could anticipate.
+    // Only fires for R3 categories with strong R1 overlap (timing, fact pattern,
+    // evidence). R3 categories that go deeper than R1 (fact_pattern_depth,
+    // conflict_and_parties, expectations_alignment) are NOT category-suppressed.
+    const { isCategorySuppressed } = await import("@/lib/round3-category-suppression");
+    questions = questions.filter(q => !isCategorySuppressed(q.category, confirmed as Record<string, unknown>));
 
     if (questions.length === 0) {
       return NextResponse.json({ ok: true, questions: [] });
