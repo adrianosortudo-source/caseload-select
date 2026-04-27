@@ -9,6 +9,7 @@
 
 import { useState } from "react";
 import type { ScreenItem } from "./types";
+import { VoiceInput } from "./VoiceInput";
 
 interface Props {
   item: ScreenItem;
@@ -20,12 +21,22 @@ interface Props {
   submitLabel?: string;
   /** Minimum char count to enable submit. Default: 1. */
   minChars?: number;
+  /** When true, show the voice-record button beside the textarea. Used for kickoff. */
+  enableVoice?: boolean;
 }
 
-export function TextCard({ item, value, onChange, onSubmit, submitLabel = "Continue", minChars = 1 }: Props) {
+export function TextCard({ item, value, onChange, onSubmit, submitLabel = "Continue", minChars = 1, enableVoice = false }: Props) {
   const [focused, setFocused] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const text = typeof value === "string" ? value : "";
   const canSubmit = text.trim().length >= minChars;
+
+  function handleTranscript(transcript: string) {
+    setVoiceError(null);
+    // Append to existing text (with a leading space if there's already content)
+    const prefix = text.trim().length > 0 ? text.trim() + " " : "";
+    onChange(prefix + transcript);
+  }
 
   return (
     <div className="flex flex-col gap-7">
@@ -56,6 +67,25 @@ export function TextCard({ item, value, onChange, onSubmit, submitLabel = "Conti
         ].join(" ")}
         style={{ fontFamily: "DM Sans, sans-serif" }}
       />
+
+      {enableVoice && (
+        <div className="flex flex-col gap-2 -mt-2">
+          <div className="flex items-center gap-3">
+            <VoiceInput
+              onTranscript={handleTranscript}
+              onError={setVoiceError}
+            />
+            <span className="text-[12px] text-[#1E2F58]/55" style={{ fontFamily: "DM Sans, sans-serif" }}>
+              or speak instead of typing
+            </span>
+          </div>
+          {voiceError && (
+            <p className="text-[12px] text-red-600" style={{ fontFamily: "DM Sans, sans-serif" }}>
+              {voiceError}
+            </p>
+          )}
+        </div>
+      )}
 
       {onSubmit && (
         <button

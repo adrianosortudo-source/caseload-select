@@ -526,14 +526,14 @@ DETECTION CUES:
 
 ROUTING IMPACT BY PRACTICE AREA:
   Animal: plaintiff → Personal Injury, sub-type pi_dog_bite. Defendant → Animal Law (owner defending), sub-type animal.
-  Employment: plaintiff → emp_dismissal / emp_wage / emp_harassment / emp_disc / emp_constructive. Defendant (employer being sued) → emp_other AND add flag "perspective_defendant_no_bank" so operator knows to handle manually until a defendant bank is authored.
-  Civil Litigation: plaintiff → civ_contract / civ_debt / civ_tort / civ_negligence. Defendant → civ_other AND add flag "perspective_defendant_no_bank".
-  Defamation: plaintiff (defamed seeking damages) → defam (current bank is plaintiff-leaning). Defendant (accused defamer) → defam AND add flag "perspective_defendant_no_bank".
-  Construction Law: plaintiff (lien claimant, unpaid sub) → const. Defendant (owner/GC facing lien) → const AND add flag "perspective_defendant_no_bank".
-  Real Estate: prospect-as-buyer or seller; prospect-as-tenant or landlord — both sides served by the same real_estate or llt sub-types; do not flag.
-  Personal Injury: almost always plaintiff (victim). If a rare PI defendant appears (e.g. driver being sued), route to pi_other and add flag "perspective_defendant_no_bank".
+  Employment: plaintiff → emp_dismissal / emp_wage / emp_harassment / emp_disc / emp_constructive. Defendant (employer being sued) → emp_employer_defense.
+  Civil Litigation: plaintiff → civ_contract / civ_debt / civ_tort / civ_negligence. Defendant → civ_defendant.
+  Defamation: plaintiff (defamed seeking damages) → defam. Defendant (accused defamer) → defam_defendant.
+  Construction Law: plaintiff (lien claimant, unpaid sub) → const. Defendant (owner/GC facing lien) → const_lien_defending.
+  Real Estate: prospect-as-buyer or seller; prospect-as-tenant or landlord — both sides served by the same real_estate or llt sub-types.
+  Personal Injury: almost always plaintiff (victim). If a rare PI defendant appears (e.g. driver being sued), route to pi_other and add flag "perspective_defendant_pi" for manual operator handling (pi_defendant bank not yet seeded).
 
-CRITICAL: when adding the "perspective_defendant_no_bank" flag, also reduce the question batch size by one and prepend an opening question on the FIRST round that asks the prospect to confirm: "We see this is a defense matter (you're responding to a claim against you). Is that right?" with options Yes / No / Not sure. This gives the operator and downstream lawyer a chance to catch perspective mis-routing before deep questions are wasted.
+CRITICAL: when the prospect is a defendant, prepend a confirmation question on the FIRST round: "We see this is a defense matter (you're responding to a claim against you). Is that right?" with options Yes / No / Not sure. This catches perspective mis-routing before deep questions are wasted on the wrong perspective bank.
 
 WHEN IN DOUBT:
   Re-read the user's situation text. The grammar usually decides: "I was X" → plaintiff. "They are doing X to me" or "I have to defend X" → defendant. Ask the user directly only if both readings are equally plausible.

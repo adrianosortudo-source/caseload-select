@@ -501,7 +501,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
           item={{
             id: "situation",
             question: "Tell us what happened.",
-            description: "A few sentences is enough. Your lawyer will see exactly what you write.",
+            description: "A few sentences is enough. Type or use the mic. Your lawyer will see exactly what you write.",
             presentation: "text",
             placeholder: "I was rear-ended on the QEW last Tuesday...",
           }}
@@ -510,6 +510,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
           onSubmit={submitKickoff}
           submitLabel="Continue"
           minChars={10}
+          enableVoice={true}
         />
       </Shell>
     );
