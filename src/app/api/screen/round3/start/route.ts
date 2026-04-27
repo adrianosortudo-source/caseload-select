@@ -120,28 +120,44 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, questions: [] });
     }
 
-    // ── 4. Apply excludeWhen against confirmed R1/R2 answers ─────────────────
+    // ── 4. Apply dedupe layers against confirmed R1/R2 facts ─────────────────
     const scoring = (session.scoring as Record<string, unknown> | null) ?? {};
     const confirmed = (scoring._confirmed as Record<string, unknown> | null) ?? {};
+    // Canonical intent map populated by intent-extractor.ts on turn 1. This is
+    // the long-term-stable contract  -  values keyed by system-controlled keys
+    // like "incident_timing", not by AI-emitted question IDs.
+    const intents = (scoring._intents as Record<string, string> | null) ?? {};
+    const { intentForQuestionId } = await import("@/lib/intent-registry");
 
-    // Layer 1: explicit excludeWhen against confirmed R1/R2 answer ids.
+    // Layer 1: explicit excludeWhen against confirmed answer ids OR intents.
+    // For each excludeWhen dep id: check both the legacy _confirmed map AND
+    // the canonical _intents map. Either one being filled suppresses the R3
+    // question. This is what makes the dedupe robust to AI ID drift.
     questions = questions.filter(q => {
       if (!q.excludeWhen) return true;
       for (const [depId, blockedValues] of Object.entries(q.excludeWhen)) {
+        // (a) Check the legacy _confirmed map by raw id
         const answered = confirmed[depId];
-        // Wildcard "*" — suppress when ANY answer exists for the dependency.
         if (blockedValues.includes("*") && answered !== undefined && answered !== null && answered !== "") return false;
         if (typeof answered === "string" && blockedValues.includes(answered)) return false;
         if (Array.isArray(answered) && answered.some(v => blockedValues.includes(v as string))) return false;
+
+        // (b) Check the canonical _intents map by following depId → intent
+        const linkedIntent = intentForQuestionId(depId);
+        if (linkedIntent) {
+          const intentValue = intents[linkedIntent.key];
+          if (intentValue !== undefined && intentValue !== null && intentValue !== "") {
+            if (blockedValues.includes("*")) return false;
+            if (blockedValues.includes(intentValue)) return false;
+          }
+        }
       }
       return true;
     });
 
     // Layer 2: category-based suppression safety net. Catches AI-invented IDs
-    // (emp_tenure, r2_*, etc.) that no explicit excludeWhen could anticipate.
-    // Only fires for R3 categories with strong R1 overlap (timing, fact pattern,
-    // evidence). R3 categories that go deeper than R1 (fact_pattern_depth,
-    // conflict_and_parties, expectations_alignment) are NOT category-suppressed.
+    // that no explicit excludeWhen anticipated. Only fires for R3 categories
+    // with strong R1 overlap (timing, fact pattern, evidence).
     const { isCategorySuppressed } = await import("@/lib/round3-category-suppression");
     questions = questions.filter(q => !isCategorySuppressed(q.category, confirmed as Record<string, unknown>));
 

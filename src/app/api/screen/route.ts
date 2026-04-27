@@ -39,6 +39,7 @@ import { SLOTS_BY_SUBTYPE } from "@/lib/slot-registry";
 import { computeSabsUrgency, computeDismissalBardal } from "@/lib/interaction-scoring";
 import { estimateCaseValue } from "@/lib/case-value";
 import { extractEvents } from "@/lib/event-extractor";
+import { extractIntents } from "@/lib/intent-extractor";
 import { selectEvent } from "@/lib/event-selector";
 import { generateQuestion, generatePreamble } from "@/lib/event-question-generator";
 import { mapEventToSubType } from "@/lib/event-subtype-map";
@@ -1104,7 +1105,8 @@ export async function POST(req: Request) {
     // Round 3 (all slots): triggered by shouldTriggerRound3()  -  damages / severity depth.
     if (channel !== "widget" && sessionPracticeArea && hasSlotBankActive && sessionSubTypeSlotInject) {
       const currentRound = slotRoundUpdated;
-      const slotsToAsk = selectSlots(sessionSubTypeSlotInject, slotAnswered, currentRound, updatedConfirmed);
+      const sessionIntents = ((session.scoring as Record<string, unknown>)?._intents as Record<string, string>) ?? {};
+      const slotsToAsk = selectSlots(sessionSubTypeSlotInject, slotAnswered, currentRound, updatedConfirmed, sessionIntents);
 
       if (slotsToAsk.length > 0) {
         const slotLines = slotsToAsk.map(slot => {
@@ -1463,7 +1465,8 @@ export async function POST(req: Request) {
       // Round advancement (only when slot answers actually arrived this turn)
       if (Object.keys(updatedSlotAnswered).length > Object.keys(slotAnswered).length && slotSubTypeForAccum) {
         if (slotRoundUpdated === 1) {
-          const remainingR1 = selectSlots(slotSubTypeForAccum, updatedSlotAnswered, 1, updatedConfirmed);
+          const sessionIntents = ((session.scoring as Record<string, unknown>)?._intents as Record<string, string>) ?? {};
+          const remainingR1 = selectSlots(slotSubTypeForAccum, updatedSlotAnswered, 1, updatedConfirmed, sessionIntents);
           if (remainingR1.length === 0) {
             slotRoundUpdated = 2;
             console.info("[slots] Round 1 complete  -  advancing to Round 2");
@@ -1649,6 +1652,15 @@ export async function POST(req: Request) {
     // not the generic PI bank that defaults to MVA questions.
     const isFirstTurn = !session.practice_area;
     const detectedEvents = isFirstTurn ? extractEvents(message) : [];
+
+    // Kick off intent extraction in parallel with the GPT classifier work.
+    // On turn 1, mine the situation text for canonical facts (incident_timing,
+    // treatment_received, fault_pattern, tenure, role_level, etc.) so R1/R2/R3
+    // can dedupe against intents already known from the kickoff. The promise
+    // is awaited later when scoringPayload is assembled  -  zero perceptible
+    // latency cost since it runs alongside the main classifier + screening calls.
+    const intentExtractionPromise: Promise<{ intents: Record<string, string>; situation_summary: string | null }> =
+      isFirstTurn ? extractIntents(message, null) : Promise.resolve({ intents: {}, situation_summary: null });
     const selectedEvent = detectedEvents.length > 0 ? selectEvent(detectedEvents) : null;
     const eventDerivedSubTypeKey = selectedEvent ? mapEventToSubType(selectedEvent.type) : null;
     const sameTypeEvents = selectedEvent
@@ -1960,9 +1972,20 @@ export async function POST(req: Request) {
     // (not as top-level columns  -  those don't exist in the schema and cause PGRST204)
     // Round 2 tracking: _round_2_started marks when Round 2 begins; _round_2_q_count
     // counts answered Round 2 questions so we can cap at 3 without relying on GPT to count.
+    // Await the kickoff intent extraction (kicked off in parallel earlier).
+    // Merge with any existing intents from prior turns. Subsequent turns can
+    // also extract from new user messages, but for now we only run on turn 1.
+    const extractedIntentsResult = await intentExtractionPromise;
+    const previousIntents = ((session.scoring as Record<string, unknown>)?._intents as Record<string, string> | null) ?? {};
+    const mergedIntents: Record<string, string> = { ...previousIntents, ...extractedIntentsResult.intents };
+
     const scoringPayload: Record<string, unknown> = {
       ...gptResponse.cpi,
       _confirmed: updatedConfirmed,
+      // Canonical-key intent map  -  populated by intent-extractor.ts on turn 1.
+      // R1/R2/R3 dedupe checks this BEFORE the question-id-based wildcard rules.
+      // Stable across AI naming variations because keys are system-controlled.
+      ...(Object.keys(mergedIntents).length ? { _intents: mergedIntents } : {}),
       ...(gptResponse.complexity_indicators ? { _complexity_indicators: gptResponse.complexity_indicators } : {}),
       ...(gptResponse.flags?.length ? { _flags: gptResponse.flags } : {}),
       // Persist compliance flags across turns  -  accumulative (S1 flags from turn 1 stay through turn 5)

@@ -23,6 +23,7 @@
 
 import { SLOT_REGISTRY, SLOTS_BY_SUBTYPE, UNIVERSAL_SLOTS } from "./slot-registry";
 import type { Slot } from "./slot-registry";
+import { intentForQuestionId } from "./intent-registry";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -74,6 +75,11 @@ export function selectSlots(
   answeredSlots: Record<string, string | string[]>,
   round: 1 | 2 | 3,
   confirmedAnswers: Record<string, unknown> = {},
+  /** Canonical intents map populated by the kickoff extractor. When the
+   *  excludeWhen ID maps to a filled intent, suppress the slot even if the
+   *  raw _confirmed key is missing. This makes slot dedupe robust to AI
+   *  question-id drift. */
+  intents: Record<string, string> = {},
 ): Slot[] {
   // Shared dependency predicate  -  reused for both universal and sub-type slots.
   function depSatisfied(slot: Slot): boolean {
@@ -88,13 +94,25 @@ export function selectSlots(
 
   // excludeWhen gate: suppress slot when a confirmed AI answer matches a blocked value.
   // Wildcard "*" suppresses when ANY non-empty answer exists for the dependency.
+  // Also checks the canonical _intents map for stable cross-naming dedupe.
   function notExcluded(slot: Slot): boolean {
     if (!slot.excludeWhen) return true;
     for (const [questionId, blockedValues] of Object.entries(slot.excludeWhen)) {
+      // (a) Check raw _confirmed map
       const answered = confirmedAnswers[questionId];
       if (blockedValues.includes("*") && answered !== undefined && answered !== null && answered !== "") return false;
       if (typeof answered === "string" && blockedValues.includes(answered)) return false;
       if (Array.isArray(answered) && (answered as string[]).some(v => blockedValues.includes(v))) return false;
+
+      // (b) Check canonical _intents map via questionId → intent reverse-lookup
+      const linkedIntent = intentForQuestionId(questionId);
+      if (linkedIntent) {
+        const intentVal = intents[linkedIntent.key];
+        if (intentVal !== undefined && intentVal !== null && intentVal !== "") {
+          if (blockedValues.includes("*")) return false;
+          if (blockedValues.includes(intentVal)) return false;
+        }
+      }
     }
     return true;
   }
