@@ -224,9 +224,33 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
       if (screenIdx > 0) setScreenIdx(i => i - 1);
       else setStep("kickoff");
     } else if (step === "identity") {
-      // No back from identity — answers already submitted to engine
+      // From identity, go back to the last questions screen.
+      // R1/R2 answers stay in the answers map; the engine has already received
+      // them, but the prospect can edit and re-submit if needed.
+      if (screens.length > 0) {
+        setScreenIdx(screens.length - 1);
+        setStep("questions");
+      } else {
+        setStep("kickoff");
+      }
+    } else if (step === "otp") {
+      // From OTP, go back to identity capture.
+      setStep("identity");
     } else if (step === "round3") {
       if (r3Idx > 0) setR3Idx(i => i - 1);
+      else {
+        // From R3 q1, go back to the OTP step. The session is already verified
+        // so re-entering the same code (or any code in demo mode) re-verifies.
+        setStep("otp");
+      }
+    } else if (step === "done") {
+      // Back from Done returns to last R3 question (or identity if no R3).
+      if (r3Questions.length > 0) {
+        setR3Idx(r3Questions.length - 1);
+        setStep("round3");
+      } else {
+        setStep("identity");
+      }
     }
   }
 
@@ -278,6 +302,13 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
       finalize: data.finalize,
       collectIdentity: data.collect_identity,
     };
+    // Diagnostic logging — visible only when DevTools console is open. Helps
+    // diagnose why the live scoring panel is missing fields. Cheap and silent
+    // for normal users.
+    if (typeof window !== "undefined" && typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.log("[CaseLoad-v2] /api/screen response:", { cpi: data.cpi, practice: data.practice_area, sub_type: (data as { practice_sub_type?: string }).practice_sub_type, finalize: data.finalize, collect_identity: data.collect_identity });
+    }
     setLatestSnapshot(snap);
     if (onScoreUpdate) onScoreUpdate(snap);
 
@@ -538,7 +569,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     const screen = screens[screenIdx];
     const isLast  = screenIdx === screens.length - 1;
     const total   = screens.length;
-    const onBack  = screenIdx > 0 ? goBack : undefined;
+    const onBack  = goBack; // always available — back to prev screen or kickoff
 
     if (screen.kind === "rapid_fire") {
       const allAnswered = screen.items.every(i => answers[i.id] !== undefined && answers[i.id] !== "");
@@ -606,7 +637,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
 
   if (step === "identity") {
     return (
-      <Shell totalScreens={1} currentScreen={0} roundLabel="Confirm your details">
+      <Shell totalScreens={1} currentScreen={0} roundLabel="Confirm your details" onBack={goBack}>
         <IdentityCard
           initialName={identityName}
           initialEmail={identityEmail}
@@ -620,7 +651,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
 
   if (step === "otp") {
     return (
-      <Shell totalScreens={1} currentScreen={0} roundLabel="Confirm your details">
+      <Shell totalScreens={1} currentScreen={0} roundLabel="Confirm your details" onBack={goBack}>
         <OtpCard
           destination={identityEmail}
           onVerify={verifyOtp}
@@ -639,7 +670,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     }
     const q = r3Questions[r3Idx];
     const total = r3Questions.length;
-    const onBack = r3Idx > 0 ? goBack : undefined;
+    const onBack = goBack; // always available — back to prev R3 or OTP step
 
     const isLast = r3Idx === total - 1;
     const allowMulti = !!q.allow_multi_select;
@@ -725,23 +756,132 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
   }
 
   if (step === "done") {
+    // Compose a quick review of every answer the prospect gave during R1/R2/R3.
+    // Pull labels from the screens map and r3Questions map for human readability.
+    interface ReviewRow { id: string; question: string; answer: string }
+    const reviewRows: ReviewRow[] = [];
+    const labelOf = (id: string, raw: string | string[]): string => {
+      // Find option label by walking screens + r3Questions
+      const screenItem = screens.flatMap(s => s.items).find(i => i.id === id);
+      const r3Match = r3Questions.find(q => q.id === id);
+      const optMap = new Map<string, string>();
+      if (screenItem?.options) screenItem.options.forEach(o => optMap.set(o.value, o.label));
+      if (r3Match?.options) r3Match.options.forEach(o => optMap.set(o.value, o.label));
+      const fmt = (v: string) => v.startsWith("other:") ? `Other: ${v.slice(6)}` : (optMap.get(v) ?? v);
+      return Array.isArray(raw) ? raw.map(fmt).join(", ") : fmt(raw);
+    };
+    // Situation kickoff first
+    if (situation.trim().length > 0) {
+      reviewRows.push({ id: "situation", question: "Your situation", answer: situation.trim() });
+    }
+    // R1/R2 answers (from screens)
+    for (const screen of screens) {
+      for (const item of screen.items) {
+        const v = answers[item.id];
+        if (v !== undefined && v !== "") {
+          reviewRows.push({ id: item.id, question: item.question, answer: labelOf(item.id, v) });
+        }
+      }
+    }
+    // R3 answers
+    for (const q of r3Questions) {
+      const v = answers[q.id];
+      if (v !== undefined && v !== "") {
+        reviewRows.push({ id: q.id, question: q.text, answer: labelOf(q.id, v) });
+      }
+    }
+
+    const cpiSnap = (latestSnapshot?.cpi ?? {}) as Record<string, unknown>;
+    const score =
+      (typeof cpiSnap.total          === "number" ? cpiSnap.total          : null) ??
+      (typeof cpiSnap.priority_index === "number" ? cpiSnap.priority_index : null) ??
+      (typeof cpiSnap.cpi_score      === "number" ? cpiSnap.cpi_score      : null) ??
+      (typeof cpiSnap.score          === "number" ? cpiSnap.score          : null);
+
+    const bandLabel: Record<string, { name: string; tone: string; copy: string }> = {
+      A: { name: "Strong fit",       tone: "bg-emerald-100 text-emerald-800 border-emerald-300", copy: `${firmName ? firmName : "Your lawyer"} will call you within the hour. A retainer agreement is on the way to your email.` },
+      B: { name: "Good fit",         tone: "bg-blue-100 text-blue-800 border-blue-300",          copy: `${firmName ? firmName : "Your lawyer"} will reach out within a few hours. Expect a consultation slot this week.` },
+      C: { name: "Possible fit",     tone: "bg-sky-100 text-sky-800 border-sky-300",             copy: `${firmName ? firmName : "Your lawyer"}'s team will review and contact you within 24 hours.` },
+      D: { name: "Weak fit",         tone: "bg-slate-100 text-slate-700 border-slate-300",       copy: `Thanks for sharing your situation. ${firmName ? firmName : "We"} will be in touch with referral options if your case isn't a match for our practice.` },
+      E: { name: "Outside criteria", tone: "bg-slate-100 text-slate-600 border-slate-300",       copy: `Thanks for reaching out. This matter looks to be outside what ${firmName ? firmName : "the firm"} handles directly. We'll send referral options if available.` },
+    };
+    const bandInfo = band ? bandLabel[band] : null;
+
     return (
-      <div className="min-h-screen bg-[#F4F3EF] flex flex-col items-center justify-center px-5">
-        <div className="max-w-[480px] text-center flex flex-col gap-5">
-          <div className="w-16 h-16 mx-auto rounded-full bg-[#1E2F58] flex items-center justify-center">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
+      <Shell totalScreens={1} currentScreen={0} roundLabel="Case file ready" onBack={goBack}>
+        <div className="flex flex-col gap-7">
+          {/* Hero — checkmark + heading */}
+          <div className="flex flex-col items-center text-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-[#1E2F58] flex items-center justify-center">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <h2 className="text-[26px] sm:text-[30px] font-extrabold text-[#1E2F58] leading-tight" style={{ fontFamily: "Manrope, sans-serif" }}>
+              Your case file is ready.
+            </h2>
+            {bandInfo && (
+              <p className="text-[15px] text-[#1E2F58]/75 leading-relaxed max-w-md" style={{ fontFamily: "DM Sans, sans-serif" }}>
+                {bandInfo.copy}
+              </p>
+            )}
           </div>
-          <h2 className="text-[28px] font-extrabold text-[#1E2F58]" style={{ fontFamily: "Manrope, sans-serif" }}>
-            Your case file is ready.
-          </h2>
-          <p className="text-[15px] text-[#1E2F58]/70 leading-relaxed" style={{ fontFamily: "DM Sans, sans-serif" }}>
-            {firmName ? `${firmName} will reach out within hours.` : "Your lawyer will reach out within hours."}
-            {band === "A" || band === "B" ? " You'll get a retainer agreement to review by email shortly." : ""}
+
+          {/* Score card */}
+          {(band || score !== null) && (
+            <div className="rounded-xl border border-[#1E2F58]/12 bg-white p-5 flex items-center gap-5">
+              <div className="flex-1">
+                <p className="text-[11px] uppercase tracking-[0.14em] text-[#1E2F58]/55 font-medium mb-1" style={{ fontFamily: "DM Sans, sans-serif" }}>
+                  Case priority index
+                </p>
+                <div className="flex items-end gap-2">
+                  <span className="text-[40px] font-bold text-[#1E2F58] leading-none tabular-nums" style={{ fontFamily: "Manrope, sans-serif" }}>
+                    {score !== null ? Math.round(score) : "--"}
+                  </span>
+                  <span className="text-[14px] text-[#1E2F58]/45 mb-1.5">/ 100</span>
+                </div>
+              </div>
+              {bandInfo && (
+                <div className={`px-3 py-1.5 rounded-full border text-[13px] font-semibold ${bandInfo.tone}`} style={{ fontFamily: "DM Sans, sans-serif" }}>
+                  Band {band} — {bandInfo.name}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Review answers — collapsed by default, expands on tap */}
+          <details className="rounded-xl border border-[#1E2F58]/12 bg-white">
+            <summary className="cursor-pointer list-none px-5 py-4 flex items-center justify-between text-[14px] font-semibold text-[#1E2F58] hover:bg-[#1E2F58]/3" style={{ fontFamily: "DM Sans, sans-serif" }}>
+              <span>Review your answers ({reviewRows.length})</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </summary>
+            <div className="px-5 pb-4 pt-2 flex flex-col gap-3 border-t border-[#1E2F58]/8">
+              {reviewRows.length === 0 ? (
+                <p className="text-[13px] text-[#1E2F58]/50 italic" style={{ fontFamily: "DM Sans, sans-serif" }}>
+                  No answers captured.
+                </p>
+              ) : (
+                reviewRows.map((row, i) => (
+                  <div key={`${row.id}-${i}`} className="flex flex-col gap-0.5 py-2 border-b border-[#1E2F58]/6 last:border-b-0">
+                    <p className="text-[12px] text-[#1E2F58]/55 leading-snug" style={{ fontFamily: "DM Sans, sans-serif" }}>
+                      {row.question}
+                    </p>
+                    <p className="text-[14px] text-[#1E2F58] font-medium leading-snug" style={{ fontFamily: "DM Sans, sans-serif" }}>
+                      {row.answer}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </details>
+
+          <p className="text-[12px] text-[#1E2F58]/45 text-center" style={{ fontFamily: "DM Sans, sans-serif" }}>
+            Use the back button if you want to revise an answer before your lawyer reviews this file.
           </p>
         </div>
-      </div>
+      </Shell>
     );
   }
 
