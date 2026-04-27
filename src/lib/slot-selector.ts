@@ -87,10 +87,12 @@ export function selectSlots(
   }
 
   // excludeWhen gate: suppress slot when a confirmed AI answer matches a blocked value.
+  // Wildcard "*" suppresses when ANY non-empty answer exists for the dependency.
   function notExcluded(slot: Slot): boolean {
     if (!slot.excludeWhen) return true;
     for (const [questionId, blockedValues] of Object.entries(slot.excludeWhen)) {
       const answered = confirmedAnswers[questionId];
+      if (blockedValues.includes("*") && answered !== undefined && answered !== null && answered !== "") return false;
       if (typeof answered === "string" && blockedValues.includes(answered)) return false;
       if (Array.isArray(answered) && (answered as string[]).some(v => blockedValues.includes(v))) return false;
     }

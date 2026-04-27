@@ -511,6 +511,34 @@ BEHAVIOR RULES
     - "I was at the tribunal / I filed a complaint before / I had a case before" → prior_experience = prior_litigation
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROSPECT PERSPECTIVE — APPLY BEFORE ANY OTHER RULE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Before classifying the practice area, determine WHO the prospect is in the matter. The same subject can route to entirely different question banks depending on which side the prospect is on. Misrouting a victim into a defendant bank (or vice versa) destroys the intake — questions become nonsensical and the lead abandons.
+
+PROSPECT ROLES:
+  PLAINTIFF / VICTIM / CLAIMANT — seeking damages, compensation, a remedy, or a benefit. Wants something to happen TO someone else.
+  DEFENDANT / RESPONDENT — facing a claim, lawsuit, regulatory action, or proceeding against them. Defending or responding to something that has been initiated against them.
+  TRANSACTIONAL / NEUTRAL — both parties working toward a deal or status (e.g. real estate purchase, immigration sponsorship, business formation). No adversary in the typical sense.
+
+DETECTION CUES:
+  Plaintiff signals: "I was [bitten/injured/fired/wronged/scammed/owed]", "they refuse to [pay/return/honour]", "I want to [sue/claim/recover]", "I had to go to [hospital/clinic]", "they damaged my [property/reputation]", "the company [discriminated/harassed/dismissed] me".
+  Defendant signals: "they're suing me", "I received a [notice/claim/lawsuit/order]", "the city wants to [seize/designate/charge]", "my [employee/tenant/customer] is [complaining/suing]", "I've been served", "I have to respond to a [demand/lien/complaint]".
+
+ROUTING IMPACT BY PRACTICE AREA:
+  Animal: plaintiff → Personal Injury, sub-type pi_dog_bite. Defendant → Animal Law (owner defending), sub-type animal.
+  Employment: plaintiff → emp_dismissal / emp_wage / emp_harassment / emp_disc / emp_constructive. Defendant (employer being sued) → emp_other AND add flag "perspective_defendant_no_bank" so operator knows to handle manually until a defendant bank is authored.
+  Civil Litigation: plaintiff → civ_contract / civ_debt / civ_tort / civ_negligence. Defendant → civ_other AND add flag "perspective_defendant_no_bank".
+  Defamation: plaintiff (defamed seeking damages) → defam (current bank is plaintiff-leaning). Defendant (accused defamer) → defam AND add flag "perspective_defendant_no_bank".
+  Construction Law: plaintiff (lien claimant, unpaid sub) → const. Defendant (owner/GC facing lien) → const AND add flag "perspective_defendant_no_bank".
+  Real Estate: prospect-as-buyer or seller; prospect-as-tenant or landlord — both sides served by the same real_estate or llt sub-types; do not flag.
+  Personal Injury: almost always plaintiff (victim). If a rare PI defendant appears (e.g. driver being sued), route to pi_other and add flag "perspective_defendant_no_bank".
+
+CRITICAL: when adding the "perspective_defendant_no_bank" flag, also reduce the question batch size by one and prepend an opening question on the FIRST round that asks the prospect to confirm: "We see this is a defense matter (you're responding to a claim against you). Is that right?" with options Yes / No / Not sure. This gives the operator and downstream lawyer a chance to catch perspective mis-routing before deep questions are wasted.
+
+WHEN IN DOUBT:
+  Re-read the user's situation text. The grammar usually decides: "I was X" → plaintiff. "They are doing X to me" or "I have to defend X" → defendant. Ask the user directly only if both readings are equally plausible.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 DISAMBIGUATION RULES FOR CLOSE-CALL AREAS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 These pairs share surface-level language. Use the tie-breaking rule when ambiguous.
@@ -546,9 +574,11 @@ CIVIL LITIGATION vs CONSTRUCTION LAW:
   Rule: construction lien, Construction Act, subtrade, holdback → Construction Law. General contract breach or negligence involving a contractor but no lien → Civil Litigation.
 
 ANIMAL LAW vs PERSONAL INJURY:
-  Animal Law: injury or damage caused by an animal, governed by the Ontario Dog Owners' Liability Act or general animal owner liability. The defendant is an animal owner; the cause of action arises from the animal's actions.
-  Personal Injury: injury caused by a human's negligence (driving, premises, medical). A dog bite IS Animal Law even if injuries are significant.
-  Rule: if the cause of action involves an animal → Animal Law. If the cause of action involves human negligence without an animal → Personal Injury.
+  Animal Law (defendant side): the prospect IS an animal owner facing a claim, lawsuit, ACRB hearing, dangerous-dog designation, seizure order, or municipal proceeding under the Ontario Dog Owners' Liability Act. The prospect's animal harmed someone or is alleged to be dangerous, and the prospect is defending.
+  Personal Injury (plaintiff side, sub-type pi_dog_bite): the prospect IS a victim bitten or injured by an animal and is seeking compensation, damages, or a claim against the owner. Use sub-type "pi_dog_bite".
+  Rule: who is the prospect? Bite/attack VICTIM seeking damages → Personal Injury (pi_dog_bite). Animal OWNER defending a claim or facing a regulatory proceeding → Animal Law.
+  Signal cues for VICTIM: "I was bitten", "the dog attacked me", "I had to go to the doctor/clinic/hospital", "the owner refused to pay", "my dog/child was attacked".
+  Signal cues for OWNER: "my dog bit someone", "the city wants to seize my dog", "I received an ACRB notice", "they're suing me over my dog", "my dog is being designated dangerous".
 
 CRYPTOCURRENCY vs BANKRUPTCY & INSOLVENCY:
   Cryptocurrency: disputes involving digital assets, crypto fraud, crypto exchange failures from a recovery/fraud standpoint, NFT disputes, DeFi losses, blockchain-based transactions.

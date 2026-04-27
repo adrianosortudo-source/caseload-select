@@ -27,6 +27,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "session_id and code required" }, { status: 400 });
     }
 
+    const demo = (body as { demo?: boolean }).demo === true;
+
     // Load session OTP fields + band + firm_id for retainer trigger
     const { data: session, error: sessionErr } = await supabase
       .from("intake_sessions")
@@ -43,14 +45,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ verified: true, band: session.band });
     }
 
-    // Check expiry
-    if (!session.otp_expires_at || new Date(session.otp_expires_at) < new Date()) {
-      return NextResponse.json({ verified: false, reason: "expired" });
-    }
+    // Demo bypass: any 6-digit code accepted, no expiry / match check.
+    // Only honoured when caller passes demo: true AND we are not in production
+    // (NODE_ENV check guarantees this can never be exploited on prod even if
+    // a misbehaving client sends demo: true).
+    const isProd = process.env.NODE_ENV === "production";
+    if (demo && !isProd && /^\d{6}$/.test(code.trim())) {
+      // Skip directly to verify success
+    } else {
+      // Check expiry
+      if (!session.otp_expires_at || new Date(session.otp_expires_at) < new Date()) {
+        return NextResponse.json({ verified: false, reason: "expired" });
+      }
 
-    // Check code
-    if (!session.otp_code || session.otp_code !== code.trim()) {
-      return NextResponse.json({ verified: false, reason: "invalid" });
+      // Check code
+      if (!session.otp_code || session.otp_code !== code.trim()) {
+        return NextResponse.json({ verified: false, reason: "invalid" });
+      }
     }
 
     // Mark verified, clear code

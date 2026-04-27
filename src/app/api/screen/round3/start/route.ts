@@ -128,6 +128,10 @@ export async function POST(req: Request) {
       if (!q.excludeWhen) return true;
       for (const [depId, blockedValues] of Object.entries(q.excludeWhen)) {
         const answered = confirmed[depId];
+        // Wildcard "*" — suppress when ANY answer exists for the dependency.
+        // Used to dedupe R3 questions whose intent is fully covered by an R1/R2
+        // question, regardless of which specific value the prospect picked.
+        if (blockedValues.includes("*") && answered !== undefined && answered !== null && answered !== "") return false;
         if (typeof answered === "string" && blockedValues.includes(answered)) return false;
         if (Array.isArray(answered) && answered.some(v => blockedValues.includes(v as string))) return false;
       }

@@ -117,6 +117,15 @@ export interface Slot {
    * no injuries in a prior AI turn.
    */
   excludeWhen?: Record<string, string[]>;
+  /**
+   * Optional widget rendering hint. Drives the IntakeWidget v2 layout choice.
+   *   "card"   - decision card, 1 slot per screen, 2-column option grid
+   *   "chip"   - inline chip pills, 3-4 slots grouped on one rapid-fire screen
+   *   "slider" - bucketed slider for ordinal/ranged options
+   * When omitted, the widget auto-resolves: yes_no | single_select with <=3 options -> chip;
+   * single_select with >=4 options or multi_select -> card; numeric -> slider.
+   */
+  presentation?: "card" | "chip" | "slider";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

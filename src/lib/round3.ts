@@ -34,6 +34,15 @@ export interface Round3Question {
    * this question. Applied in /api/screen/round3/start before LLM rewrite.
    */
   excludeWhen?: Record<string, string[]>;
+  /**
+   * Optional widget rendering hint for IntakeWidget v2.
+   *   "card"   - decision card layout, 1 question per screen
+   *   "chip"   - chip pills (used for short structured_single questions)
+   *   "slider" - bucketed slider (numeric / ordinal options)
+   *   "text"   - free-text textarea (default for type=free_text)
+   * When omitted, the widget auto-resolves from `type`.
+   */
+  presentation?: "card" | "chip" | "slider" | "text";
 }
 
 export interface Round3Bank {
@@ -63,16 +72,40 @@ const PI_MVA_QUESTIONS: Round3Question[] = [
   {
     id: "pi_mva_q1",
     category: "jurisdiction_limitations",
-    text: "When did the accident happen? Please give the date as precisely as you can.",
-    type: "free_text",
+    text: "When did the accident happen?",
+    type: "structured_single",
+    options: [
+      { label: "Today or within the last week",  value: "today_week" },
+      { label: "Within the last month",           value: "within_month" },
+      { label: "1 to 6 months ago",               value: "1_6mo" },
+      { label: "6 months to 2 years ago",         value: "6mo_2yr" },
+      { label: "Over 2 years ago",                value: "over_2yr" },
+    ],
     memo_label: "Incident date / Limitations status",
+    // Suppress when the timing question has already been answered in R1.
+    // pi_q16 (generic PI base): "When did the accident happen?" — any value
+    // here means we already have the timing signal, no need to re-ask in R3.
+    excludeWhen: { "pi_q16": ["*"] }, // wildcard — any R1 timing answer suppresses this R3 duplicate
   },
   {
     id: "pi_mva_q2",
     category: "fact_pattern",
-    text: "In your own words, describe how the collision happened. Who was involved, how many vehicles, and what was each vehicle doing at the moment of impact?",
-    type: "free_text",
+    text: "How did the collision happen?",
+    type: "structured_single",
+    options: [
+      { label: "I was stopped, hit from behind",                       value: "rear_end_stopped" },
+      { label: "I was moving, hit from behind",                        value: "rear_end_moving" },
+      { label: "Intersection — the other driver ran a light or sign",  value: "intersection_other_fault" },
+      { label: "Intersection — I may share fault",                     value: "intersection_shared" },
+      { label: "Lane-change or merge collision",                       value: "lane_change" },
+      { label: "Head-on or oncoming",                                  value: "head_on" },
+      { label: "Single-vehicle (lost control, road conditions)",       value: "single_vehicle" },
+      { label: "Something else",                                       value: "other" },
+    ],
+    allow_free_text: true,
     memo_label: "Collision description / Fault indicators",
+    // Suppress when collision pattern already captured in R1 via pi_q31.
+    excludeWhen: { "pi_q31": ["*"] }, // wildcard — R1 collision pattern answer suppresses this R3 duplicate
   },
   {
     id: "pi_mva_q3",
@@ -138,8 +171,16 @@ const PI_MVA_QUESTIONS: Round3Question[] = [
   {
     id: "pi_mva_q6",
     category: "fact_pattern_depth",
-    text: "Has the accident affected your ability to work? If yes, are you employed, self-employed, or a student? Have you lost income, and do you have documentation of that loss?",
-    type: "free_text",
+    text: "Has the accident affected your ability to work?",
+    type: "structured_single",
+    options: [
+      { label: "Yes — I have lost income and have documents proving it",       value: "loss_documented" },
+      { label: "Yes — I have lost income but no documents yet",                 value: "loss_undocumented" },
+      { label: "Yes — I am off work but income is paid (sick leave, EI, disability)", value: "off_work_paid" },
+      { label: "Yes — I am self-employed, harder to document loss",             value: "self_employed_loss" },
+      { label: "No — I am working as before",                                   value: "no_impact" },
+      { label: "I am a student or not in the workforce",                        value: "not_employed" },
+    ],
     memo_label: "Employment impact / Income loss documentation",
     // Suppress if client already confirmed no injuries in R1/R2 — income loss
     // is not relevant when no injury was reported.
@@ -150,15 +191,28 @@ const PI_MVA_QUESTIONS: Round3Question[] = [
   {
     id: "pi_mva_q7",
     category: "conflict_and_parties",
-    text: "Please give me the full legal name of the other driver, if you know it. Do you know if they have retained a lawyer? Have you received any correspondence from a lawyer acting on their behalf?",
-    type: "free_text",
-    memo_label: "Adverse parties / Opposing counsel",
+    text: "What do you know about the other driver and any lawyer acting for them?",
+    type: "structured_single",
+    options: [
+      { label: "I know who the driver is and have not heard from a lawyer for them",  value: "known_no_counsel" },
+      { label: "I know who the driver is and have heard from their lawyer",            value: "known_with_counsel" },
+      { label: "I have insurance contact info but do not know the driver personally",  value: "insurer_only" },
+      { label: "I do not know who the other driver is (hit and run, or unknown)",      value: "unknown_driver" },
+      { label: "I would rather walk through this with the lawyer directly",            value: "prefer_consult" },
+    ],
+    memo_label: "Adverse driver / Opposing counsel",
   },
   {
     id: "pi_mva_q8",
     category: "expectations_alignment",
-    text: "Have you spoken with any other lawyer about this accident? What outcome are you hoping for from this consultation, and is there a specific timeline driving your decision to reach out now?",
-    type: "free_text",
+    text: "Where are you in the process of finding a lawyer for this?",
+    type: "structured_single",
+    options: [
+      { label: "First consultation — I have not spoken to anyone yet", value: "first_consult" },
+      { label: "I spoke with another lawyer but did not retain them",  value: "spoke_no_retain" },
+      { label: "I am still considering options",                        value: "still_considering" },
+      { label: "I need someone urgently — there is a deadline I am worried about", value: "urgent_deadline" },
+    ],
     memo_label: "Prior counsel / Client expectations and urgency",
   },
 ];
@@ -171,36 +225,76 @@ const GENERIC_QUESTIONS: Round3Question[] = [
   {
     id: "gen_q1",
     category: "jurisdiction_limitations",
-    text: "When did the incident, event, or situation you are seeking legal help for first occur? Please give the date as precisely as you can.",
-    type: "free_text",
+    text: "When did this situation first happen?",
+    type: "structured_single",
+    options: [
+      { label: "Within the last week",                value: "within_week" },
+      { label: "Within the last month",               value: "within_month" },
+      { label: "1 to 6 months ago",                   value: "1_6mo" },
+      { label: "6 months to 2 years ago",             value: "6mo_2yr" },
+      { label: "Over 2 years ago",                    value: "over_2yr" },
+      { label: "It is ongoing — there is no single date", value: "ongoing" },
+    ],
     memo_label: "Incident date / Limitations status",
   },
   {
     id: "gen_q2",
     category: "fact_pattern",
-    text: "Please describe what happened in as much detail as you can. Include who was involved, what each party did, and the sequence of events.",
-    type: "free_text",
-    memo_label: "Fact pattern",
+    text: "What are you mainly trying to do?",
+    type: "structured_single",
+    options: [
+      { label: "Make a claim against someone (compensation, damages)",  value: "make_claim" },
+      { label: "Defend against a claim someone is making against me",    value: "defend_claim" },
+      { label: "Get advice before I decide my next step",                 value: "advice" },
+      { label: "Review or sign a document",                               value: "document_review" },
+      { label: "Negotiate with someone (settlement, agreement)",          value: "negotiate" },
+      { label: "Something else",                                          value: "other" },
+    ],
+    allow_free_text: true,
+    memo_label: "Client objective / Matter type",
   },
   {
     id: "gen_q3",
     category: "evidence_inventory",
-    text: "Do you have any documents related to this matter  -  contracts, letters, emails, notices, reports, or photographs? If yes, who currently holds them?",
-    type: "free_text",
+    text: "Which documents do you currently have related to this matter?",
+    type: "structured_multi",
+    options: [
+      { label: "Contracts, agreements, or signed documents",         value: "contracts" },
+      { label: "Letters, emails, or messages",                        value: "letters_emails" },
+      { label: "Court papers, notices, or filings",                   value: "court_papers" },
+      { label: "Photos, videos, or recordings",                       value: "photos_videos" },
+      { label: "Reports (police, medical, professional)",             value: "reports" },
+      { label: "Receipts, statements, or financial records",          value: "financial" },
+      { label: "Nothing in writing yet",                              value: "nothing" },
+    ],
+    allow_multi_select: true,
     memo_label: "Documents / Evidence held",
   },
   {
     id: "gen_q4",
     category: "conflict_and_parties",
-    text: "Who are the other parties involved? Please provide their full legal names. Do you know if any of them have retained legal counsel?",
-    type: "free_text",
+    text: "What do you know about the other parties involved in this matter?",
+    type: "structured_single",
+    options: [
+      { label: "I know who they are and have not heard from any lawyer for them",  value: "known_no_counsel" },
+      { label: "I know who they are and have already heard from their lawyer",      value: "known_with_counsel" },
+      { label: "I know some of them, not all",                                       value: "partial" },
+      { label: "I am not sure who the parties are yet",                              value: "unknown" },
+      { label: "I would rather discuss this with the lawyer directly",               value: "prefer_consult" },
+    ],
     memo_label: "Adverse parties / Opposing counsel",
   },
   {
     id: "gen_q5",
     category: "expectations_alignment",
-    text: "Have you consulted any other lawyer about this matter? What outcome are you hoping this consultation will produce, and what is your timeline?",
-    type: "free_text",
+    text: "Where are you in the process of finding a lawyer for this?",
+    type: "structured_single",
+    options: [
+      { label: "First consultation — I have not spoken to anyone yet", value: "first_consult" },
+      { label: "I spoke with another lawyer but did not retain them",  value: "spoke_no_retain" },
+      { label: "I am still considering options",                        value: "still_considering" },
+      { label: "I need someone urgently — there is a deadline I am worried about", value: "urgent_deadline" },
+    ],
     memo_label: "Prior counsel / Client expectations",
   },
 ];
@@ -213,16 +307,32 @@ const EMPLOYMENT_DISMISSAL_QUESTIONS: Round3Question[] = [
   {
     id: "emp_dis_q1",
     category: "jurisdiction_limitations",
-    text: "When did your employment start, and when were you terminated? Please give dates as precisely as you can.",
-    type: "free_text",
+    text: "How long were you employed there?",
+    type: "structured_single",
+    options: [
+      { label: "Less than 1 year",     value: "under_1yr" },
+      { label: "1 to 3 years",          value: "1_3yr" },
+      { label: "3 to 7 years",          value: "3_7yr" },
+      { label: "7 to 15 years",         value: "7_15yr" },
+      { label: "Over 15 years",         value: "over_15yr" },
+    ],
     memo_label: "Employment tenure / Limitations analysis",
+    excludeWhen: { "emp_q47": ["*"] }, // R1 already asks tenure
   },
   {
     id: "emp_dis_q2",
     category: "fact_pattern",
-    text: "What was your job title and a brief description of your main responsibilities? Were you in a management or supervisory role?",
-    type: "free_text",
+    text: "What was your role level at the company?",
+    type: "structured_single",
+    options: [
+      { label: "Junior or entry-level",                          value: "junior" },
+      { label: "Mid-level individual contributor",               value: "mid" },
+      { label: "Senior individual contributor (specialist, lead)", value: "senior_ic" },
+      { label: "Manager or supervisor",                          value: "manager" },
+      { label: "Senior executive or director",                   value: "executive" },
+    ],
     memo_label: "Role and seniority / Character of employment",
+    excludeWhen: { "emp_q46": ["*"] }, // R1 already asks role level
   },
   {
     id: "emp_dis_q3",
@@ -244,8 +354,14 @@ const EMPLOYMENT_DISMISSAL_QUESTIONS: Round3Question[] = [
   {
     id: "emp_dis_q4",
     category: "fact_pattern_depth",
-    text: "Were there any HR complaints, grievances, or workplace disputes in the period before your termination? Did you raise any concerns about pay, conditions, or treatment with your employer?",
-    type: "free_text",
+    text: "Did you raise any concerns or complaints with your employer before being let go?",
+    type: "structured_single",
+    options: [
+      { label: "Yes — in writing (email, formal complaint, HR ticket)", value: "written" },
+      { label: "Yes — but only verbally",                                value: "verbal" },
+      { label: "I considered raising concerns but did not",              value: "considered" },
+      { label: "No — nothing was raised",                                value: "none" },
+    ],
     memo_label: "Pre-termination complaints / Reprisal indicators",
   },
   {
@@ -264,15 +380,29 @@ const EMPLOYMENT_DISMISSAL_QUESTIONS: Round3Question[] = [
   {
     id: "emp_dis_q6",
     category: "fact_pattern_depth",
-    text: "What is your current income situation since the termination? Are you working, receiving EI, or currently without income?",
-    type: "free_text",
+    text: "What is your current income situation?",
+    type: "structured_single",
+    options: [
+      { label: "Working full-time elsewhere",                         value: "ft_elsewhere" },
+      { label: "Working part-time or contract",                        value: "pt_contract" },
+      { label: "Receiving Employment Insurance (EI)",                  value: "ei" },
+      { label: "On medical or disability leave",                       value: "medical_leave" },
+      { label: "Currently without income",                             value: "no_income" },
+      { label: "I would rather discuss this with the lawyer",          value: "prefer_consult" },
+    ],
     memo_label: "Mitigation / Current income status",
   },
   {
     id: "emp_dis_q7",
     category: "expectations_alignment",
-    text: "Have you consulted any other lawyer about this matter? What outcome are you hoping for, and is there a specific deadline or pressure driving your decision to reach out now?",
-    type: "free_text",
+    text: "Where are you in the process of finding a lawyer for this?",
+    type: "structured_single",
+    options: [
+      { label: "First consultation — I have not spoken to anyone yet", value: "first_consult" },
+      { label: "I spoke with another lawyer but did not retain them",  value: "spoke_no_retain" },
+      { label: "I am still considering options",                        value: "still_considering" },
+      { label: "I need someone urgently — there is a deadline I am worried about", value: "urgent_deadline" },
+    ],
     memo_label: "Prior counsel / Client expectations and urgency",
   },
 ];
@@ -285,15 +415,31 @@ const EMPLOYMENT_WAGE_QUESTIONS: Round3Question[] = [
   {
     id: "emp_wage_q1",
     category: "jurisdiction_limitations",
-    text: "When did the unpaid overtime begin? Please give the start date as precisely as you can, and confirm whether you are still employed at this company.",
-    type: "free_text",
+    text: "When did the unpaid overtime begin?",
+    type: "structured_single",
+    options: [
+      { label: "Within the last 3 months",            value: "under_3mo" },
+      { label: "3 to 12 months ago",                   value: "3_12mo" },
+      { label: "1 to 2 years ago",                     value: "1_2yr" },
+      { label: "Over 2 years ago",                     value: "over_2yr" },
+      { label: "It has been ongoing since I started",  value: "ongoing_since_start" },
+    ],
     memo_label: "Claim period / Current employment status",
   },
   {
     id: "emp_wage_q2",
     category: "fact_pattern",
-    text: "What is your hourly or annual salary? Approximately how many hours per week were you working during the period of unpaid overtime?",
-    type: "free_text",
+    text: "What is your annual salary or pay range?",
+    type: "structured_single",
+    options: [
+      { label: "Under $50,000",                                    value: "under_50k" },
+      { label: "$50,000 to $80,000",                                value: "50_80k" },
+      { label: "$80,000 to $120,000",                               value: "80_120k" },
+      { label: "$120,000 to $200,000",                              value: "120_200k" },
+      { label: "Over $200,000",                                     value: "over_200k" },
+      { label: "I am paid hourly, not salaried",                    value: "hourly" },
+      { label: "I would rather discuss this with the lawyer",       value: "prefer_consult" },
+    ],
     memo_label: "Compensation details / Overtime calculation basis",
   },
   {
@@ -314,8 +460,14 @@ const EMPLOYMENT_WAGE_QUESTIONS: Round3Question[] = [
   {
     id: "emp_wage_q4",
     category: "fact_pattern_depth",
-    text: "Have you raised the overtime issue with your employer, HR, or a manager? If yes, what was the response, and was anything communicated in writing?",
-    type: "free_text",
+    text: "Have you raised the overtime issue with your employer?",
+    type: "structured_single",
+    options: [
+      { label: "Yes — in writing (email or formal complaint)",       value: "written" },
+      { label: "Yes — but only verbally",                             value: "verbal" },
+      { label: "I have not raised it yet",                            value: "not_raised" },
+      { label: "I raised it and was told it would be addressed but nothing changed", value: "ignored" },
+    ],
     memo_label: "Internal complaint history / Employer response",
   },
   {
@@ -333,8 +485,14 @@ const EMPLOYMENT_WAGE_QUESTIONS: Round3Question[] = [
   {
     id: "emp_wage_q6",
     category: "expectations_alignment",
-    text: "Have you consulted any other lawyer about this? What outcome are you hoping for, and is there any deadline or urgency driving your decision to act now?",
-    type: "free_text",
+    text: "Where are you in the process of finding a lawyer for this?",
+    type: "structured_single",
+    options: [
+      { label: "First consultation — I have not spoken to anyone yet", value: "first_consult" },
+      { label: "I spoke with another lawyer but did not retain them",  value: "spoke_no_retain" },
+      { label: "I am still considering options",                        value: "still_considering" },
+      { label: "I need someone urgently — there is a deadline I am worried about", value: "urgent_deadline" },
+    ],
     memo_label: "Prior counsel / Client expectations and urgency",
   },
 ];
@@ -347,15 +505,34 @@ const IMMIGRATION_SPOUSAL_QUESTIONS: Round3Question[] = [
   {
     id: "imm_sp_q1",
     category: "jurisdiction_limitations",
-    text: "What type of permit or status do you currently hold, and when does it expire? Please give the exact expiry date if you have it available.",
-    type: "free_text",
+    text: "What is your current status in Canada?",
+    type: "structured_single",
+    options: [
+      { label: "Canadian citizen",                                value: "citizen" },
+      { label: "Permanent resident",                              value: "pr" },
+      { label: "Work permit (valid for over 6 months)",           value: "work_permit_long" },
+      { label: "Work permit (expiring within 6 months)",          value: "work_permit_short" },
+      { label: "Study permit",                                    value: "study_permit" },
+      { label: "Visitor record or implied status",                value: "visitor" },
+      { label: "Status has expired or no current status",         value: "no_status" },
+      { label: "Other",                                           value: "other" },
+    ],
+    allow_free_text: true,
     memo_label: "Current status / Expiry date / Pathway urgency",
   },
   {
     id: "imm_sp_q2",
     category: "fact_pattern",
-    text: "When did you and your partner meet? How long have you been together, and are you currently living together?",
-    type: "free_text",
+    text: "How long have you been with your partner, and are you living together?",
+    type: "structured_single",
+    options: [
+      { label: "Under 1 year — not living together",  value: "u1_apart" },
+      { label: "Under 1 year — living together",      value: "u1_together" },
+      { label: "1 to 3 years — not living together",  value: "1_3_apart" },
+      { label: "1 to 3 years — living together",      value: "1_3_together" },
+      { label: "Over 3 years — not living together",  value: "over3_apart" },
+      { label: "Over 3 years — living together",      value: "over3_together" },
+    ],
     memo_label: "Relationship timeline / Cohabitation history",
   },
   {
@@ -378,8 +555,15 @@ const IMMIGRATION_SPOUSAL_QUESTIONS: Round3Question[] = [
   {
     id: "imm_sp_q4",
     category: "fact_pattern_depth",
-    text: "Tell me about the sponsor. Are they a Canadian citizen or permanent resident? How long have they lived in Canada? Have they sponsored anyone before?",
-    type: "free_text",
+    text: "What is your sponsor's status, and have they sponsored anyone before?",
+    type: "structured_single",
+    options: [
+      { label: "Canadian citizen — never sponsored anyone before",    value: "citizen_first" },
+      { label: "Canadian citizen — has sponsored someone in the past", value: "citizen_prior" },
+      { label: "Permanent resident — never sponsored anyone before",  value: "pr_first" },
+      { label: "Permanent resident — has sponsored someone in the past", value: "pr_prior" },
+      { label: "Sponsor's status is unclear or I would rather discuss with the lawyer", value: "prefer_consult" },
+    ],
     memo_label: "Sponsor eligibility / Prior undertakings",
   },
   {
@@ -399,22 +583,44 @@ const IMMIGRATION_SPOUSAL_QUESTIONS: Round3Question[] = [
   {
     id: "imm_sp_q6",
     category: "fact_pattern_depth",
-    text: "When is the marriage taking place, and where? Will it be a civil or religious ceremony, and will it be registered in Canada?",
-    type: "free_text",
+    text: "What is your marriage situation?",
+    type: "structured_single",
+    options: [
+      { label: "We are already legally married in Canada",                       value: "married_canada" },
+      { label: "We are already legally married outside Canada",                  value: "married_abroad" },
+      { label: "We are planning to marry in Canada within the next 6 months",    value: "marrying_canada" },
+      { label: "We are planning to marry outside Canada within the next 6 months", value: "marrying_abroad" },
+      { label: "We are common-law and not planning to marry",                    value: "common_law" },
+      { label: "We are still deciding",                                          value: "undecided" },
+    ],
     memo_label: "Marriage details / Registration",
   },
   {
     id: "imm_sp_q7",
     category: "evidence_inventory",
-    text: "Do you have a valid passport, and when does it expire? Are there any criminality or health issues that could affect your admissibility?",
-    type: "free_text",
+    text: "Are there any concerns that could affect your admissibility to Canada?",
+    type: "structured_single",
+    options: [
+      { label: "No — passport valid, no criminal or health issues",          value: "clear" },
+      { label: "My passport expires within 6 months",                         value: "passport_expiring" },
+      { label: "I have a past criminal conviction (any country)",             value: "criminal_history" },
+      { label: "I have a current or past health condition that could be flagged", value: "health" },
+      { label: "I have had a prior visa refusal or enforcement issue",        value: "refusal_history" },
+      { label: "I would rather discuss this with the lawyer directly",        value: "prefer_consult" },
+    ],
     memo_label: "Passport validity / Admissibility flags",
   },
   {
     id: "imm_sp_q8",
     category: "expectations_alignment",
-    text: "Have you consulted any other immigration lawyer or consultant about this matter? What is your most important priority right now  -  speed, cost, or certainty  -  and is there a hard deadline we need to plan around?",
-    type: "free_text",
+    text: "Where are you in the process of finding an immigration lawyer for this?",
+    type: "structured_single",
+    options: [
+      { label: "First consultation — I have not spoken to anyone yet",                value: "first_consult" },
+      { label: "I spoke with another lawyer or consultant but did not retain them",    value: "spoke_no_retain" },
+      { label: "I am still considering options",                                        value: "still_considering" },
+      { label: "I need someone urgently — there is a deadline driving this",            value: "urgent_deadline" },
+    ],
     memo_label: "Prior counsel / Client priorities and timeline",
   },
 ];
@@ -431,18 +637,39 @@ interface BankEntry {
 }
 
 const BANK_REGISTRY: Record<SubTypeKey, BankEntry> = {
-  // PI sub-types
+  // ── Short-code keys (what the AI actually emits in practice_sub_type) ──
+  // Personal Injury sub-types
+  "pi_mva":          { questions: PI_MVA_QUESTIONS, bandCIds: BAND_C_QUESTIONS_PI_MVA },
+  "pi_slip_fall":    { questions: PI_MVA_QUESTIONS, bandCIds: BAND_C_QUESTIONS_PI_MVA },
+  "pi_dog_bite":     { questions: PI_MVA_QUESTIONS, bandCIds: BAND_C_QUESTIONS_PI_MVA }, // TODO: dedicated pi_db R3 bank
+  "pi_med_mal":      { questions: PI_MVA_QUESTIONS, bandCIds: BAND_C_QUESTIONS_PI_MVA },
+  "pi_product":      { questions: PI_MVA_QUESTIONS, bandCIds: BAND_C_QUESTIONS_PI_MVA },
+  "pi_workplace":    { questions: PI_MVA_QUESTIONS, bandCIds: BAND_C_QUESTIONS_PI_MVA },
+  "pi_assault_ci":   { questions: PI_MVA_QUESTIONS, bandCIds: BAND_C_QUESTIONS_PI_MVA },
+  "pi_other":        { questions: PI_MVA_QUESTIONS, bandCIds: BAND_C_QUESTIONS_PI_MVA },
+  "pi":              { questions: PI_MVA_QUESTIONS, bandCIds: BAND_C_QUESTIONS_PI_MVA },
+
+  // Employment Law sub-types
+  "emp_dismissal":   { questions: EMPLOYMENT_DISMISSAL_QUESTIONS, bandCIds: BAND_C_QUESTIONS_EMP_DIS },
+  "emp_wage":        { questions: EMPLOYMENT_WAGE_QUESTIONS,       bandCIds: BAND_C_QUESTIONS_EMP_WAGE },
+  "emp_disc":        { questions: EMPLOYMENT_DISMISSAL_QUESTIONS, bandCIds: BAND_C_QUESTIONS_EMP_DIS }, // TODO: dedicated discrimination bank
+  "emp_harassment":  { questions: EMPLOYMENT_DISMISSAL_QUESTIONS, bandCIds: BAND_C_QUESTIONS_EMP_DIS }, // TODO: dedicated harassment bank
+  "emp_other":       { questions: EMPLOYMENT_DISMISSAL_QUESTIONS, bandCIds: BAND_C_QUESTIONS_EMP_DIS },
+  "emp":             { questions: EMPLOYMENT_DISMISSAL_QUESTIONS, bandCIds: BAND_C_QUESTIONS_EMP_DIS },
+
+  // Immigration Law sub-types
+  "imm_spousal":     { questions: IMMIGRATION_SPOUSAL_QUESTIONS, bandCIds: BAND_C_QUESTIONS_IMM_SP },
+  "imm_other":       { questions: IMMIGRATION_SPOUSAL_QUESTIONS, bandCIds: BAND_C_QUESTIONS_IMM_SP },
+  "imm":             { questions: IMMIGRATION_SPOUSAL_QUESTIONS, bandCIds: BAND_C_QUESTIONS_IMM_SP },
+
+  // ── Long-form keys (kept for backwards compatibility with any older callers) ──
   "personal_injury:motor_vehicle_accident": { questions: PI_MVA_QUESTIONS, bandCIds: BAND_C_QUESTIONS_PI_MVA },
   "personal_injury:slip_and_fall":          { questions: PI_MVA_QUESTIONS, bandCIds: BAND_C_QUESTIONS_PI_MVA },
   "personal_injury:general":                { questions: PI_MVA_QUESTIONS, bandCIds: BAND_C_QUESTIONS_PI_MVA },
   "personal_injury":                        { questions: PI_MVA_QUESTIONS, bandCIds: BAND_C_QUESTIONS_PI_MVA },
-
-  // Employment Law sub-types
   "employment_law:wrongful_dismissal":      { questions: EMPLOYMENT_DISMISSAL_QUESTIONS, bandCIds: BAND_C_QUESTIONS_EMP_DIS },
   "employment_law:wage_claim":              { questions: EMPLOYMENT_WAGE_QUESTIONS,       bandCIds: BAND_C_QUESTIONS_EMP_WAGE },
   "employment_law":                         { questions: EMPLOYMENT_DISMISSAL_QUESTIONS, bandCIds: BAND_C_QUESTIONS_EMP_DIS },
-
-  // Immigration Law sub-types
   "immigration_law:spousal_sponsorship":    { questions: IMMIGRATION_SPOUSAL_QUESTIONS, bandCIds: BAND_C_QUESTIONS_IMM_SP },
   "immigration_law":                        { questions: IMMIGRATION_SPOUSAL_QUESTIONS, bandCIds: BAND_C_QUESTIONS_IMM_SP },
 
@@ -466,8 +693,17 @@ export function getRound3Questions(
   const pa = (practiceArea ?? "").toLowerCase().replace(/\s+/g, "_");
   const st = (subType ?? "").toLowerCase().replace(/\s+/g, "_");
 
-  const key = st ? `${pa}:${st}` : pa;
-  const entry = BANK_REGISTRY[key] ?? BANK_REGISTRY[`${pa}`] ?? BANK_REGISTRY["__generic__"];
+  // Lookup priority:
+  //   1. short-code sub_type (e.g. "pi_mva")  -  what the AI emits in practice_sub_type
+  //   2. compound long-form key (e.g. "personal_injury:motor_vehicle_accident")  -  legacy callers
+  //   3. short-code practice area (e.g. "pi")  -  when sub_type unknown
+  //   4. long-form practice area (e.g. "personal_injury")  -  legacy callers
+  //   5. generic fallback
+  const entry =
+    (st ? BANK_REGISTRY[st] : undefined) ??
+    BANK_REGISTRY[`${pa}:${st}`] ??
+    BANK_REGISTRY[pa] ??
+    BANK_REGISTRY["__generic__"];
 
   if (isFullRound3(band)) {
     return entry.questions;
@@ -476,4 +712,72 @@ export function getRound3Questions(
   // Band C: filter to shortened set
   const bandCIds = new Set(entry.bandCIds ?? GENERIC_BAND_C);
   return entry.questions.filter(q => bandCIds.has(q.id));
+}
+
+/**
+ * Resolve raw R3 answer codes back to their human-readable labels.
+ *
+ * The R3 banks store structured codes (e.g. "loss_documented", "rear_end_stopped").
+ * Memo generation reads these and would echo the codes verbatim into the memo
+ * unless we translate them. This function looks up each answered question in
+ * the registry, finds the matching option, and produces a parallel map keyed
+ * by question.id where values are the option labels (or arrays of labels for
+ * multi-select). Free-text answers prefixed "other:" are stripped to the user's
+ * own text. Unknown codes are passed through unchanged so nothing is silently
+ * lost.
+ *
+ * Returns a Record<questionId, humanLabel | humanLabel[]> with both the
+ * resolved label and the original question text alongside, suitable for
+ * direct inclusion in the memo prompt.
+ */
+export interface HumanizedAnswer {
+  question_id: string;
+  question_text: string;
+  memo_label: string;
+  answer: string | string[];
+}
+
+export function humanizeRound3Answers(
+  answers: Record<string, unknown>,
+  practiceArea: string | null,
+  subType: string | null,
+): HumanizedAnswer[] {
+  const pa = (practiceArea ?? "").toLowerCase().replace(/\s+/g, "_");
+  const st = (subType ?? "").toLowerCase().replace(/\s+/g, "_");
+  const entry =
+    (st ? BANK_REGISTRY[st] : undefined) ??
+    BANK_REGISTRY[`${pa}:${st}`] ??
+    BANK_REGISTRY[pa] ??
+    BANK_REGISTRY["__generic__"];
+
+  const byId = new Map(entry.questions.map(q => [q.id, q]));
+  const result: HumanizedAnswer[] = [];
+
+  for (const [qid, raw] of Object.entries(answers)) {
+    const q = byId.get(qid);
+    if (!q) {
+      // Unknown question id  -  pass through with the raw value
+      result.push({
+        question_id: qid,
+        question_text: qid,
+        memo_label: qid,
+        answer: typeof raw === "string" ? raw : Array.isArray(raw) ? raw.map(String) : String(raw ?? ""),
+      });
+      continue;
+    }
+    const optionMap = new Map((q.options ?? []).map(o => [o.value, o.label]));
+    const labelOf = (v: string): string => {
+      if (typeof v !== "string") return String(v ?? "");
+      if (v.startsWith("other:")) return v.slice(6).trim();
+      return optionMap.get(v) ?? v;
+    };
+    const answer = Array.isArray(raw) ? (raw as string[]).map(labelOf) : labelOf(String(raw ?? ""));
+    result.push({
+      question_id: qid,
+      question_text: q.text,
+      memo_label: q.memo_label,
+      answer,
+    });
+  }
+  return result;
 }

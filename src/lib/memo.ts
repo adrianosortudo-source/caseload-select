@@ -19,6 +19,7 @@ import { openrouter, MODELS } from "@/lib/openrouter";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { formatCaseValueForMemo, type CaseValueBucket } from "@/lib/case-value";
 import type { SabsUrgencyResult, BardalResult } from "@/lib/interaction-scoring";
+import { humanizeRound3Answers } from "@/lib/round3";
 
 const openai = openrouter;
 
@@ -220,7 +221,12 @@ GENERATED: ${generatedDate}
 SITUATION SUMMARY (from Rounds 1 and 2):
 ${situationSummary ?? "Not captured."}
 
-ROUND 3 ANSWERS (raw):
+ROUND 3 ANSWERS (humanised — labels resolved from structured options):
+${humanizeRound3Answers(round3Answers, practiceArea, subType)
+  .map(a => `  - ${a.memo_label} (${a.question_id}): ${Array.isArray(a.answer) ? a.answer.join("; ") : a.answer}`)
+  .join("\n") || "  (none captured)"}
+
+ROUND 3 ANSWERS (raw codes for reference):
 ${JSON.stringify(round3Answers, null, 2)}
 
 LIMITATIONS FLAG (computed  -  factual only, do not restate as advice):
