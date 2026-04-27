@@ -28,13 +28,16 @@ interface ShellProps {
   roundLabel?: string;
   /** Callback when the back button is pressed. Hidden when undefined. */
   onBack?: () => void;
+  /** Callback when the skip-forward button is pressed. Hidden when undefined.
+   * Lets the prospect bypass a question they don't have an answer for. */
+  onSkip?: () => void;
   /** Main content. */
   children: ReactNode;
   /** Sticky footer (e.g. Continue button for multi-select). */
   footer?: ReactNode;
 }
 
-export function Shell({ totalScreens, currentScreen, roundLabel, onBack, children, footer }: ShellProps) {
+export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip, children, footer }: ShellProps) {
   return (
     <div className="min-h-screen bg-[#F4F3EF] flex flex-col">
       {/* Top chrome */}
@@ -78,7 +81,22 @@ export function Shell({ totalScreens, currentScreen, roundLabel, onBack, childre
           </div>
         </div>
 
-        <div className="w-10" />
+        {onSkip ? (
+          <button
+            type="button"
+            onClick={onSkip}
+            aria-label="Skip this question"
+            className="flex items-center gap-1.5 h-10 px-3 -mr-3 rounded-full text-[#1E2F58]/65 hover:bg-[#1E2F58]/8 hover:text-[#1E2F58] transition"
+            style={{ fontFamily: "DM Sans, sans-serif" }}
+          >
+            <span className="text-[13px] font-medium">Skip</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </button>
+        ) : (
+          <span className="w-10" aria-hidden="true" />
+        )}
       </header>
 
       {/* Body */}

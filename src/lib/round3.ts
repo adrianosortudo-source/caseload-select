@@ -85,7 +85,16 @@ const PI_MVA_QUESTIONS: Round3Question[] = [
     // Suppress when the timing question has already been answered in R1.
     // pi_q16 (generic PI base): "When did the accident happen?" — any value
     // here means we already have the timing signal, no need to re-ask in R3.
-    excludeWhen: { "pi_q16": ["*"] }, // wildcard — any R1 timing answer suppresses this R3 duplicate
+    // Suppress when ANY R1 timing answer was captured. Five sub-types share
+    // this question with different IDs; we list all so a dog bite, slip-fall,
+    // MVA, or other PI session correctly skips this R3 duplicate.
+    excludeWhen: {
+      "pi_q16":       ["*"],
+      "pi_mva_q16":   ["*"],
+      "pi_sf_q16":    ["*"],
+      "pi_db_q16":    ["*"],
+      "pi_other_q16": ["*"],
+    },
   },
   {
     id: "pi_mva_q2",
@@ -105,7 +114,13 @@ const PI_MVA_QUESTIONS: Round3Question[] = [
     allow_free_text: true,
     memo_label: "Collision description / Fault indicators",
     // Suppress when collision pattern already captured in R1 via pi_q31.
-    excludeWhen: { "pi_q31": ["*"] }, // wildcard — R1 collision pattern answer suppresses this R3 duplicate
+    excludeWhen: {
+      "pi_q31":       ["*"],
+      "pi_mva_q31":   ["*"],
+      "pi_sf_q31":    ["*"],
+      "pi_db_q31":    ["*"],
+      "pi_other_q31": ["*"],
+    },
   },
   {
     id: "pi_mva_q3",

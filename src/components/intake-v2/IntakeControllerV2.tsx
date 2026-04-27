@@ -254,6 +254,25 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     }
   }
 
+  /** Skip / forward — advance without recording a real answer. Records the
+   * sentinel "__skipped__" so the engine can see the question was offered.
+   * Useful when the prospect doesn't have an answer and would otherwise be
+   * stuck on a single-select card with no Continue button. */
+  function goForward() {
+    if (step === "questions") {
+      const item = screens[screenIdx]?.items?.[0];
+      if (item) setAnswers(a => ({ ...a, [item.id]: "__skipped__" }));
+      const isLast = screenIdx === screens.length - 1;
+      if (isLast) submitCurrentBatch();
+      else setScreenIdx(i => i + 1);
+    } else if (step === "round3") {
+      const q = r3Questions[r3Idx];
+      if (q) setAnswers(a => ({ ...a, [q.id]: "__skipped__" }));
+      if (r3Idx + 1 < r3Questions.length) setR3Idx(i => i + 1);
+      else void submitR3();
+    }
+  }
+
   // ── 1. Kickoff submit ──────────────────────────────────────────────────────
   async function submitKickoff() {
     if (situation.trim().length < 10) return;
@@ -290,18 +309,6 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     setCollectIdentityNext(data.collect_identity);
     setFinalizeNext(data.finalize);
 
-    // Snapshot used by the demo scoring panel and by the final-state effect.
-    const snap: ScoreSnapshot = {
-      cpi: (data.cpi ?? {}) as Record<string, unknown>,
-      band: (data.cpi?.band as string | null) ?? null,
-      practiceArea: data.practice_area,
-      practiceConfidence: data.practice_area_confidence,
-      situationSummary: data.situation_summary,
-      flags: data.flags ?? [],
-      valueTier: data.value_tier,
-      finalize: data.finalize,
-      collectIdentity: data.collect_identity,
-    };
     // Diagnostic logging — visible only when DevTools console is open. Helps
     // diagnose why the live scoring panel is missing fields. Cheap and silent
     // for normal users.
@@ -309,8 +316,30 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
       // eslint-disable-next-line no-console
       console.log("[CaseLoad-v2] /api/screen response:", { cpi: data.cpi, practice: data.practice_area, sub_type: (data as { practice_sub_type?: string }).practice_sub_type, finalize: data.finalize, collect_identity: data.collect_identity });
     }
-    setLatestSnapshot(snap);
-    if (onScoreUpdate) onScoreUpdate(snap);
+
+    // MERGE with the previous snapshot rather than wholesale replace. Some
+    // /api/screen responses come back with cpi: {} or partial fields (e.g.
+    // identity-submission round-trips, batch ack responses). Without merging,
+    // a sparse response would overwrite the previously-captured score data and
+    // blank out the live operator panel mid-flow. Merging preserves the last
+    // known good values for any field the new response doesn't update.
+    setLatestSnapshot(prev => {
+      const incomingCpi    = (data.cpi ?? {}) as Record<string, unknown>;
+      const cpiHasContent  = Object.keys(incomingCpi).length > 0;
+      const next: ScoreSnapshot = {
+        cpi:                cpiHasContent ? incomingCpi : (prev?.cpi ?? {}),
+        band:               (data.cpi?.band as string | null) ?? prev?.band ?? null,
+        practiceArea:       data.practice_area ?? prev?.practiceArea ?? null,
+        practiceConfidence: data.practice_area_confidence ?? prev?.practiceConfidence ?? null,
+        situationSummary:   data.situation_summary ?? prev?.situationSummary ?? null,
+        flags:              (data.flags && data.flags.length > 0) ? data.flags : (prev?.flags ?? []),
+        valueTier:          data.value_tier ?? prev?.valueTier ?? null,
+        finalize:           data.finalize,
+        collectIdentity:    data.collect_identity,
+      };
+      if (onScoreUpdate) onScoreUpdate(next);
+      return next;
+    });
 
     const batch: ApiQuestion[] | null = data.next_questions ?? (data.next_question ? [data.next_question] : null);
 
@@ -579,6 +608,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
           currentScreen={screenIdx}
           roundLabel={roundLabel}
           onBack={onBack}
+          onSkip={goForward}
           footer={
             <button
               type="button"
@@ -618,7 +648,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     };
 
     return (
-      <Shell totalScreens={total} currentScreen={screenIdx} roundLabel={roundLabel} onBack={onBack}>
+      <Shell totalScreens={total} currentScreen={screenIdx} roundLabel={roundLabel} onBack={onBack} onSkip={goForward}>
         {item.presentation === "card"   && <DecisionCard item={item} value={answers[item.id]} onChange={handleChange} />}
         {item.presentation === "slider" && <SliderCard   item={item} value={typeof answers[item.id] === "string" ? answers[item.id] as string : undefined} onChange={v => handleChange(v)} />}
         {item.presentation === "text"   && (
@@ -690,7 +720,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
       };
       const value = typeof answers[q.id] === "string" ? (answers[q.id] as string) : "";
       return (
-        <Shell totalScreens={total} currentScreen={r3Idx} roundLabel="Final details" onBack={onBack}>
+        <Shell totalScreens={total} currentScreen={r3Idx} roundLabel="Final details" onBack={onBack} onSkip={goForward}>
           <TextCard
             item={textItem}
             value={value}
@@ -722,6 +752,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
           currentScreen={r3Idx}
           roundLabel="Final details"
           onBack={onBack}
+          onSkip={goForward}
           footer={
             <button
               type="button"
@@ -742,7 +773,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     }
 
     return (
-      <Shell totalScreens={total} currentScreen={r3Idx} roundLabel="Final details" onBack={onBack}>
+      <Shell totalScreens={total} currentScreen={r3Idx} roundLabel="Final details" onBack={onBack} onSkip={goForward}>
         <DecisionCard
           item={item}
           value={answers[q.id]}
