@@ -58,13 +58,23 @@ export function composeScreens(questions: ApiQuestion[]): Screen[] {
 
     const optCount = q.options?.length ?? 0;
 
-    // No options at all → always render as TextCard so the user can answer.
-    // Whether or not allow_free_text is set, an empty-options question is
-    // unanswerable as a card/chip and would dead-end the flow. Free text is
-    // the safe fallback.
+    // No options at all → synthesize a generic Yes / No / Not sure / Other
+    // option set so the prospect always has tappable choices. The AI is
+    // instructed to never return empty-options questions in widget mode, but
+    // when one slips through this fallback ensures the experience stays
+    // tap-driven. allow_free_text stays true so "Other" reveals a text input.
     if (optCount === 0) {
       flushChips();
-      screens.push({ kind: "solo", items: [toScreenItem(q, "text")] });
+      const synthesized: typeof q = {
+        ...q,
+        options: [
+          { label: "Yes",      value: "yes" },
+          { label: "No",       value: "no" },
+          { label: "Not sure", value: "unsure" },
+        ],
+        allow_free_text: true,
+      };
+      screens.push({ kind: "solo", items: [toScreenItem(synthesized, "card")] });
       continue;
     }
 
