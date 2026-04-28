@@ -382,6 +382,11 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     }
 
     try {
+      // The /api/screen route expects structured tap-answers under
+      // `structured_data` (keyed by question ID) and `message_type: "answer"`.
+      // We were previously sending `answers:` which the route silently ignored,
+      // so the GPT call ran without the new tap data and band-locked on the
+      // kickoff alone, producing premature collect_identity short-circuits.
       const res = await fetch("/api/screen", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -389,7 +394,9 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
           session_id: sessionId,
           firm_id: firmId,
           channel: "widget",
-          answers: batchAnswers,
+          message_type: "answer",
+          message: "",
+          structured_data: batchAnswers,
         }),
       });
       const data = (await res.json()) as ScreenResponse;
@@ -410,7 +417,15 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     setOtpError(null);
 
     try {
-      // Submit identity to engine first
+      // Submit identity to engine. Same contract issue as submitCurrentBatch:
+      // the route reads structured_data.first_name / last_name / email / phone,
+      // not a nested contact object. Split full name on first space  -  imperfect
+      // but matches v1's behaviour and what the engine expects.
+      const trimmedName = name.trim();
+      const firstSpace = trimmedName.indexOf(" ");
+      const firstName = firstSpace === -1 ? trimmedName : trimmedName.slice(0, firstSpace);
+      const lastName  = firstSpace === -1 ? ""           : trimmedName.slice(firstSpace + 1).trim();
+
       await fetch("/api/screen", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -418,7 +433,14 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
           session_id: sessionId,
           firm_id: firmId,
           channel: "widget",
-          contact: { name, email, phone },
+          message_type: "answer",
+          message: "",
+          structured_data: {
+            first_name: firstName,
+            last_name:  lastName,
+            email,
+            phone,
+          },
         }),
       });
 
