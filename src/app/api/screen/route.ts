@@ -2151,13 +2151,51 @@ export async function POST(req: Request) {
     };
     const cta = gptResponse.finalize ? (bandToCta[gptResponse.cpi.band ?? "E"] ?? null) : null;
 
+    // ── First-question router (TURN 1 ONLY): deterministic question selection ──
+    // Replaces the AI's first question on turn 1 when the (PA, sub_type, stage)
+    // combination has an authored router entry. This was added because the AI
+    // routinely defaulted to seed-bank questions that didn't match the prospect's
+    // actual situation (e.g. "I want to buy a business" got the incorporation
+    // seed question). The router owns this one decision; the AI still owns
+    // everything else (response_text, scoring, follow-up questions, summary).
+    let finalNextQuestions = gptResponse.next_questions;
+    let finalNextQuestion  = gptResponse.next_question;
+    if (isFirstTurnEarly && channel === "widget" && !gptResponse.finalize && !gptResponse.collect_identity) {
+      const routedStage = (mergedIntentsEarly.stage_of_engagement ?? null) as string | null;
+      const routedPA    = gptResponse.practice_area ?? sessionPracticeArea ?? null;
+      const routedSub   = (gptResponse.practice_sub_type as string | null) ?? null;
+      const { firstQuestionFor } = await import("@/lib/first-question-router");
+      const routed = firstQuestionFor(routedPA, routedSub, routedStage);
+      if (routed) {
+        const routerQuestion = {
+          id: routed.id,
+          text: routed.text,
+          options: routed.options,
+          allow_free_text: routed.allow_free_text,
+          ...(routed.description ? { description: routed.description } : {}),
+        };
+        // Overlay: keep the AI's other questions but force the first one to
+        // be the router's pick. If the entry is "exclusive", drop AI's other
+        // questions for this turn entirely so the prospect lands on a single
+        // contextually-correct question.
+        if (routed.exclusive) {
+          finalNextQuestions = [routerQuestion];
+        } else if (Array.isArray(gptResponse.next_questions) && gptResponse.next_questions.length > 0) {
+          finalNextQuestions = [routerQuestion, ...gptResponse.next_questions.slice(1)];
+        } else {
+          finalNextQuestions = [routerQuestion];
+        }
+        finalNextQuestion = null;
+      }
+    }
+
     // ── Return response ───────────────────────────────────────────────
     return NextResponse.json({
       session_id: session.id,
       practice_area: gptResponse.practice_area,
       practice_area_confidence: gptResponse.practice_area_confidence,
-      next_question: gptResponse.next_question,
-      next_questions: gptResponse.next_questions,
+      next_question: finalNextQuestion,
+      next_questions: finalNextQuestions,
       cpi: gptResponse.cpi,
       cpi_partial: computeCpiPartial(gptResponse.cpi, gptResponse.finalize),
       response_text: gptResponse.response_text,

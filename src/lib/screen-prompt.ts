@@ -324,6 +324,33 @@ BEHAVIOR RULES
    - "ins_bad_faith": insurer acting in bad faith, unreasonable denial/delay
    - "ins_other": cannot determine
 
+   Corporate / Commercial (corp):
+   - "corp_incorporation": starting a new business, incorporating, forming an entity, founder questions
+   - "corp_acquisition": buying a business, asset purchase, share purchase, business acquisition (BUYER side)
+   - "corp_sale": selling a business, exit, transitioning ownership (SELLER side)
+   - "corp_shareholder_dispute": minority shareholder oppression, partner taking funds, self-dealing, fiduciary breach, partner exclusion, conflicts between shareholders / directors / officers
+   - "corp_partnership_dispute": dispute with a business partner outside a formal corporation, partnership dissolution, partner buyout, partnership breakdown
+   - "corp_governance": board issues, director duties, governance disputes, corporate decisions and meeting procedure
+   - "corp_contract_dispute": dispute over a commercial contract (vendor, customer, service agreement) where the matter is contractual not partner-related
+   - "corp_other": cannot determine
+
+   Civil Litigation (civ):
+   - "civ_contract": breach of contract claim or defence
+   - "civ_debt": debt collection, demand letter, unpaid invoices
+   - "civ_tort": negligence or other tort matter (non-PI)
+   - "civ_negligence": professional negligence, malpractice (non-medical)
+   - "civ_defendant": prospect IS being sued / responding to a claim (any subject matter)
+   - "civ_other": cannot determine
+
+   Family (fam):
+   - "fam_divorce": divorce, separation, ending a marriage
+   - "fam_custody": custody / parenting time / access disputes
+   - "fam_support": child support, spousal support
+   - "fam_property": equalization, matrimonial property division
+   - "fam_protection": protection orders, domestic violence, restraining orders
+   - "fam_abduction": child abduction, parental alienation, relocation disputes
+   - "fam_other": cannot determine
+
    All other practice areas: set practice_sub_type to null (single question set, no sub-typing needed).
 2. EXTRACT FIRST: Before asking a question, check if the client already answered it in free text. "I was fired after 12 years without cause" answers termination_type AND tenure. Pre-fill those and skip the questions.
 
