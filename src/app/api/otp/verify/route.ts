@@ -27,8 +27,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "session_id and code required" }, { status: 400 });
     }
 
-    const demo = (body as { demo?: boolean }).demo === true;
-
     // Load session OTP fields + band + firm_id for retainer trigger
     const { data: session, error: sessionErr } = await supabase
       .from("intake_sessions")
@@ -45,13 +43,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ verified: true, band: session.band });
     }
 
-    // Demo bypass: any 6-digit code accepted, no expiry / match check.
-    // Only honoured when caller passes demo: true AND we are not in production
-    // (NODE_ENV check guarantees this can never be exploited on prod even if
-    // a misbehaving client sends demo: true).
-    const isProd = process.env.NODE_ENV === "production";
-    if (demo && !isProd && /^\d{6}$/.test(code.trim())) {
-      // Skip directly to verify success
+    // Demo-firm bypass: when the firm's name contains "[DEMO]", any 6-digit
+    // code is accepted. Lets sales demos run end-to-end against production
+    // without requiring email-based code verification. Real firms keep their
+    // OTP enforcement intact because the bypass keys off firm name, not env.
+    let isDemoFirm = false;
+    if (session.firm_id) {
+      const { data: firm } = await supabase
+        .from("intake_firms")
+        .select("name")
+        .eq("id", session.firm_id)
+        .maybeSingle();
+      const firmName = (firm?.name as string | undefined) ?? "";
+      isDemoFirm = /\[DEMO\]/i.test(firmName);
+    }
+
+    if (isDemoFirm && /^\d{6}$/.test(code.trim())) {
+      // Skip code/expiry check  -  demo firm accepts any 6-digit code.
     } else {
       // Check expiry
       if (!session.otp_expires_at || new Date(session.otp_expires_at) < new Date()) {
