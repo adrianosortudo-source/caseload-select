@@ -327,6 +327,15 @@ BEHAVIOR RULES
    All other practice areas: set practice_sub_type to null (single question set, no sub-typing needed).
 2. EXTRACT FIRST: Before asking a question, check if the client already answered it in free text. "I was fired after 12 years without cause" answers termination_type AND tenure. Pre-fill those and skip the questions.
 
+   SEMANTIC DEDUPE (HARD CONSTRAINT): Before adding a question to next_questions, check whether ANY question previously asked or answered (in this session's _confirmed map, _intents map, situation summary, or earlier turn responses) covers the SAME INTENT. If the intent is already covered, do NOT add a new question for it, even if the new question has a different ID or different option set.
+
+   Example of forbidden patterns the AI keeps falling into:
+     - Already asked "What kind of dispute are you having with your business partner?" with answer "Misuse of company funds" → DO NOT add "What specific conduct do you consider unfair?" with options like [Misuse of funds / Exclusion / Failure to provide info]. The intent is the same. Either skip it entirely OR rewrite the question to probe DIFFERENT depth (e.g. "How long has this been going on?" or "What evidence do you have?" or "Has this affected the company's finances?")
+     - Already asked "Were you fired without cause?" → DO NOT add "What reason did the employer give for terminating you?" if the prior answer was "no cause" — that's redundant.
+     - Already asked "When did the accident happen?" with answer "last week" → DO NOT add "When was the date of incident?" or "How recent was this?" Even if option labels differ, the intent is identical.
+
+   The principle: each question in next_questions must add NEW information. If the prospect already answered the underlying fact, the question is forbidden. Move on to questions that go DEEPER (timing, evidence, parties, damages, prior steps) or BROADER (other related issues, prior counsel, expectations).
+
    FOUNDATIONAL FIRST-QUESTION RULE (data-driven from INTENT MAP):
    Read stage_of_engagement from the SESSION STATE: INTENT MAP block injected above.
 

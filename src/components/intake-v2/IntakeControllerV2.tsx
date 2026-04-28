@@ -25,7 +25,7 @@
  * State is in-component. Sub-components are presentation-only.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Shell } from "./Shell";
 import { TextCard } from "./TextCard";
 import { DecisionCard } from "./DecisionCard";
@@ -132,6 +132,10 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Guards against double-submission of a question batch when both the
+  // auto-advance setTimeout and the Continue button (or repeated taps) fire.
+  const batchSubmitInFlightRef = useRef<boolean>(false);
 
   // Kickoff
   const [situation, setSituation] = useState("");
@@ -366,8 +370,17 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
   }
 
   // ── 3. Submit answers from current question batch ──────────────────────────
+  // batchSubmitInFlightRef guards against duplicate POSTs caused by:
+  //  - rapid double-taps on the same auto-advance card
+  //  - Continue button tapped after auto-advance already fired the submit
+  //  - re-renders that cause useEffect-style re-invocation
+  // Without this guard, the route receives the same answer twice, the answer
+  // log shows duplicate entries, and the AI may serve overlapping follow-ups
+  // because it interprets two identical structured_data submits as two events.
   async function submitCurrentBatch() {
     if (!sessionId) return;
+    if (batchSubmitInFlightRef.current) return;
+    batchSubmitInFlightRef.current = true;
     setRoundLabel("A few more details");
     setTransitionText({ loading: "Looking at your answers...", reveal: "One more round." });
     setTransitionPhase("loading");
@@ -404,6 +417,10 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     } catch (err) {
       setErrorMessage(String(err instanceof Error ? err.message : err));
       setStep("error");
+    } finally {
+      // Release the in-flight guard so the next round's batch can submit.
+      // Done in finally so a thrown error doesn't permanently block submissions.
+      batchSubmitInFlightRef.current = false;
     }
   }
 
