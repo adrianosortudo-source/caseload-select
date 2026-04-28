@@ -268,6 +268,19 @@ export async function POST(req: Request) {
     // Hoisted: used by flag detection (before buildSystemPrompt) and systemPrompt builder
     const sessionPracticeArea = session.practice_area as string | null;
 
+    // ── Intent extraction (synchronous on turn 1) ──────────────────────────────
+    // Mines the kickoff text for canonical facts (stage_of_engagement,
+    // incident_timing, etc.) before the system prompt is built. The result is
+    // injected into the prompt so the AI uses it to pick foundational vs
+    // structural first questions, not just to dedupe later. Adds ~1-2s of
+    // latency on turn 1; zero cost on subsequent turns.
+    const isFirstTurnEarly = !sessionPracticeArea;
+    const previousIntentsEarly = ((session.scoring as Record<string, unknown>)?._intents as Record<string, string> | null) ?? {};
+    const extractedNow = isFirstTurnEarly && message
+      ? await extractIntents(message, null)
+      : { intents: {}, situation_summary: null };
+    const mergedIntentsEarly: Record<string, string> = { ...previousIntentsEarly, ...extractedNow.intents };
+
     const firmBranding = (firm.branding as Record<string, string | undefined>) ?? {};
 
     const firmConfig: FirmConfig = {
@@ -941,6 +954,23 @@ export async function POST(req: Request) {
         ` utm_source:google with utm_medium:cpc = paid ads (referral_score 3).` +
         ` utm_medium:organic or direct = organic search (referral_score 4).` +
         ` utm_source:facebook = social media (referral_score 2).`;
+    }
+
+    // Inject canonical intent state (stage_of_engagement, incident_timing, etc.)
+    // populated by the kickoff intent extractor. The AI uses stage_of_engagement
+    // to decide whether to lead with foundational or transactional questions.
+    if (Object.keys(mergedIntentsEarly).length > 0) {
+      const intentLines = Object.entries(mergedIntentsEarly)
+        .map(([k, v]) => `  - ${k}: ${v}`)
+        .join("\n");
+      systemPrompt +=
+        `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` +
+        `\nSESSION STATE: INTENT MAP (canonical facts mined from kickoff)\n` +
+        intentLines +
+        `\n\nThese facts were extracted from the prospect's situation text. Use them to:\n` +
+        `(1) NEVER re-ask a question whose answer is already in this map.\n` +
+        `(2) Decide whether to lead with foundational or transactional questions per the FOUNDATIONAL FIRST-QUESTION rule.\n` +
+        `(3) Apply scoring deltas immediately based on these values where applicable.`;
     }
 
     // Inject confirmed answers into system prompt so GPT never re-asks.
@@ -1652,15 +1682,11 @@ export async function POST(req: Request) {
     // not the generic PI bank that defaults to MVA questions.
     const isFirstTurn = !session.practice_area;
     const detectedEvents = isFirstTurn ? extractEvents(message) : [];
-
-    // Kick off intent extraction in parallel with the GPT classifier work.
-    // On turn 1, mine the situation text for canonical facts (incident_timing,
-    // treatment_received, fault_pattern, tenure, role_level, etc.) so R1/R2/R3
-    // can dedupe against intents already known from the kickoff. The promise
-    // is awaited later when scoringPayload is assembled  -  zero perceptible
-    // latency cost since it runs alongside the main classifier + screening calls.
+    // Intent extraction already ran synchronously near the top of the request
+    // (mergedIntentsEarly + extractedNow). Reuse those values here for the
+    // scoring update without re-extracting.
     const intentExtractionPromise: Promise<{ intents: Record<string, string>; situation_summary: string | null }> =
-      isFirstTurn ? extractIntents(message, null) : Promise.resolve({ intents: {}, situation_summary: null });
+      Promise.resolve(extractedNow);
     const selectedEvent = detectedEvents.length > 0 ? selectEvent(detectedEvents) : null;
     const eventDerivedSubTypeKey = selectedEvent ? mapEventToSubType(selectedEvent.type) : null;
     const sameTypeEvents = selectedEvent

@@ -57,6 +57,17 @@ export interface Intent {
 
 export const INTENTS: Intent[] = [
   // ── Universal ──
+  // ── Universal: stage of engagement ──
+  // Drives whether the AI leads with foundational questions (when exploring)
+  // or transactional/structural questions (when actively engaged).
+  {
+    key: "stage_of_engagement",
+    label: "Where the prospect is in the legal journey",
+    description: "How committed or advanced the prospect is in the matter. Extract from explicit signals only. 'I'm thinking about', 'I want to understand', 'I don't know what to do' → exploring. 'I've found a target', 'I have an offer pending', 'I just received a letter' → identified. 'I'm in negotiations', 'we're in the middle of', 'they served me' → actively_engaged. 'closing date is', 'court date is', 'I need to file by' → closing_or_dispute. When unclear, omit.",
+    appliesTo: ["all"],
+    enum: ["exploring", "identified", "actively_engaged", "closing_or_dispute"],
+    questionIds: [],
+  },
   {
     key: "incident_timing",
     label: "When the incident happened",
