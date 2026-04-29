@@ -15,7 +15,7 @@
  * parent (widget controller) decides whether to advance or wait for "Continue".
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ScreenItem } from "./types";
 import { OTHER_VALUE } from "./types";
 
@@ -36,6 +36,17 @@ export function DecisionCard({ item, value, onChange }: Props) {
   const [pressedValue, setPressedValue] = useState<string | null>(null);
   const [otherMode, setOtherMode] = useState(false);
   const [otherText, setOtherText] = useState(typeof selected === "string" && selected.startsWith("other:") ? selected.slice(6) : "");
+
+  // Reset Other-mode and Other-text whenever the question changes. Without
+  // this, the textarea state from the PREVIOUS question persists onto the
+  // next question's screen, forcing the prospect to tap Cancel to dismiss
+  // a stale "In your own words:" panel that has nothing to do with the
+  // current question.
+  useEffect(() => {
+    setOtherMode(false);
+    setOtherText(typeof value === "string" && value.startsWith("other:") ? value.slice(6) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
 
   function handleTap(optionValue: string) {
     setPressedValue(optionValue);

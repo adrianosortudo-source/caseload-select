@@ -11,7 +11,7 @@
  * Used for yes/no, 2-3 option questions, and binary follow-ups.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ScreenItem } from "./types";
 import { OTHER_VALUE } from "./types";
 
@@ -25,6 +25,16 @@ export function RapidFire({ items, values, onChange }: Props) {
   const [pressedKey, setPressedKey] = useState<string | null>(null);
   const [otherOpenFor, setOtherOpenFor] = useState<string | null>(null);
   const [otherTexts, setOtherTexts] = useState<Record<string, string>>({});
+
+  // When the screen's question batch changes (different round / different
+  // chip group), reset the Other-mode state so a stale textarea from the
+  // previous round doesn't persist onto a new screen of questions.
+  const itemSignature = items.map(i => i.id).join("|");
+  useEffect(() => {
+    setOtherOpenFor(null);
+    setOtherTexts({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemSignature]);
 
   function handleTap(itemId: string, optionValue: string, multi: boolean) {
     if (optionValue === OTHER_VALUE) {
