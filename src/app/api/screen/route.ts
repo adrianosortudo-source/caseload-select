@@ -18,7 +18,7 @@
 import { NextResponse } from "next/server";
 import { openrouter, googleai, getIntakeModel, MODELS } from "@/lib/openrouter";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
-import { buildSystemPrompt, type FirmConfig, type Question } from "@/lib/screen-prompt";
+import { buildSystemPrompt, SCREEN_PROMPT_VERSION, type FirmConfig, type Question } from "@/lib/screen-prompt";
 import { getMatterRouting, type MatterRouting } from "@/lib/matter-routing";
 import { getSlotSchema } from "@/lib/slot-schema";
 import { selectNextQuestions, inferImpliedAnswers } from "@/lib/question-selector";
@@ -132,6 +132,19 @@ interface GptResponse {
    * Safety net: regex inference in question-selector catches obvious misses.
    */
   implied_question_ids?: string[];
+  /**
+   * 2 to 4 sentence plain-English justification for the current band/score.
+   * Required on every turn that produces a band. Surfaced operator-side for
+   * audit and trust. Must reference the specific facts from the prospect's
+   * answers  -  generic phrasing fails the contract.
+   */
+  reasoning?: string | null;
+  /**
+   * Self-reported confidence in the current scoring (0.0 to 1.0). Below 0.6
+   * triggers Band X fallback so the lead lands in Needs Review instead of
+   * being routed on a guess.
+   */
+  score_confidence?: number | null;
 }
 
 // autoConfirmFromContext and AUTO_RULES_BY_PA are imported from @/lib/auto-confirm
@@ -150,6 +163,7 @@ async function sendToGHL(session: Record<string, unknown>, ghlWebhookUrl: string
     C: "Your intake is complete. A member of our team will personally review your situation and be in touch as soon as possible.",
     D: "We've received everything. A member of our team will take a careful look and follow up with you.",
     E: "Based on what you've shared, this matter may fall outside our practice areas. We encourage you to seek appropriate legal help.",
+    X: "Thank you. We're reviewing your information and a member of the team will be in touch shortly.",
   };
 
   const bandToLeadState: Record<string, string> = {
@@ -158,6 +172,7 @@ async function sendToGHL(session: Record<string, unknown>, ghlWebhookUrl: string
     C: "03_solution_aware",
     D: "02_problem_aware",
     E: "01_unaware",
+    X: "needs_review",
   };
 
   const bandToStage: Record<string, string> = {
@@ -166,6 +181,7 @@ async function sendToGHL(session: Record<string, unknown>, ghlWebhookUrl: string
     C: "qualified",
     D: "nurture",
     E: "declined",
+    X: "needs_review",
   };
 
   const bandToSLA: Record<string, number> = {
@@ -174,6 +190,7 @@ async function sendToGHL(session: Record<string, unknown>, ghlWebhookUrl: string
     C: 1440,
     D: 10080,
     E: 0,
+    X: 240, // Band X = manual triage within 4 hours
   };
 
   const band = scoring.band ?? "E";
@@ -204,6 +221,10 @@ async function sendToGHL(session: Record<string, unknown>, ghlWebhookUrl: string
       emp_termination_type: entities.emp_termination_type ?? null,
       emp_tenure: entities.emp_tenure ?? null,
       emp_severance_received: entities.emp_severance_received ?? null,
+      // KB-23 Lesson 01: reasoning surfaced to operators in CRM
+      ai_reasoning: (scoring as unknown as Record<string, unknown>)._reasoning ?? null,
+      // KB-23 Lesson 02: Band X triage reason
+      ai_band_x_reason: (scoring as unknown as Record<string, unknown>)._band_x_reason ?? null,
     },
     pipeline: {
       ...(routing?.ghl_pipeline_id ? { id: routing.ghl_pipeline_id } : {}),
@@ -226,6 +247,42 @@ async function sendToGHL(session: Record<string, unknown>, ghlWebhookUrl: string
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+// ─────────────────────────────────────────────
+// Band X fallback helper (KB-23 Lesson 02)
+// Build a "Needs Review" response when the LLM call fails, returns invalid
+// JSON, scores with confidence below 0.6, or omits required reasoning. The
+// session is finalized into a manual-triage state rather than producing a
+// wrong band or 500ing the request.
+// ─────────────────────────────────────────────
+function buildBandXResponse(practiceArea: string | null, reason: string): GptResponse {
+  const zeroCpi: CpiBreakdown = {
+    fit_score: 0, geo_score: 0, practice_score: 0, legitimacy_score: 0, referral_score: 0,
+    value_score: 0, urgency_score: 0, complexity_score: 0, multi_practice_score: 0, fee_score: 0,
+    total: 0, band: "X", band_locked: true,
+    cpi_fit: 0, cpi_urgency: 0, cpi_friction: 0,
+  };
+  return {
+    practice_area: practiceArea,
+    practice_area_confidence: "low",
+    practice_sub_type: null,
+    extracted_entities: {},
+    questions_answered: [],
+    next_question: null,
+    next_questions: null,
+    cpi: zeroCpi,
+    complexity_indicators: null,
+    value_tier: null,
+    prior_experience: null,
+    flags: ["needs_human_review"],
+    response_text: "Thank you. We're reviewing your information and a member of the team will be in touch shortly.",
+    finalize: true,
+    collect_identity: false,
+    situation_summary: null,
+    reasoning: `Routed to Needs Review: ${reason}`,
+    score_confidence: 0,
+  };
 }
 
 // ─────────────────────────────────────────────
@@ -953,7 +1010,12 @@ export async function POST(req: Request) {
       // else: first call  -  no questions, classification-only prompt
     }
 
-    let systemPrompt = buildSystemPrompt(promptFirmConfig, channel, { includeQuestionSets });
+    let systemPrompt = buildSystemPrompt(promptFirmConfig, channel, {
+      includeQuestionSets,
+      // KB-23 Lesson 06: inject few-shot anchors for the resolved practice area.
+      // Empty string when PA not yet known or no examples authored  -  pure additive.
+      practiceAreaHint: sessionPracticeArea,
+    });
 
     // Inject source context so GPT can factor in the lead's entry point
     if (source_hint) {
@@ -1363,16 +1425,47 @@ export async function POST(req: Request) {
       rewritePromise,
     ]);
 
+    // ── Band X fallback router (KB-23 Lesson 02) ────────────────────────
+    // Catches: empty completion, JSON parse failures, low confidence (<0.6),
+    // empty reasoning. Routes the lead to "Needs Review" rather than 500ing
+    // or silently producing a wrong band. The single most-cited pitfall in
+    // the lead-qualification corpus  -  silent lead loss on LLM failure.
     const rawResponse = completion.choices[0]?.message?.content;
+    let gptResponse: GptResponse;
+    let bandXReason: string | null = null;
+
     if (!rawResponse) {
-      return NextResponse.json({ error: "No response from GPT" }, { status: 500 });
+      bandXReason = "empty_completion";
+      gptResponse = buildBandXResponse(sessionPracticeArea, "GPT returned an empty response.");
+    } else {
+      try {
+        gptResponse = JSON.parse(rawResponse);
+      } catch {
+        bandXReason = "json_parse_failure";
+        console.error("[screen] band-x: JSON parse failure", { session_id: session.id, raw: rawResponse.slice(0, 500) });
+        gptResponse = buildBandXResponse(sessionPracticeArea, "GPT response could not be parsed as JSON.");
+      }
     }
 
-    let gptResponse: GptResponse;
-    try {
-      gptResponse = JSON.parse(rawResponse);
-    } catch {
-      return NextResponse.json({ error: "GPT returned invalid JSON", raw: rawResponse }, { status: 500 });
+    // Confidence-floor catch: even if parse succeeded, route to Band X if
+    // the model self-reported low confidence on a turn that produced a band.
+    if (
+      !bandXReason &&
+      gptResponse.cpi &&
+      typeof gptResponse.cpi.band === "string" &&
+      typeof gptResponse.score_confidence === "number" &&
+      gptResponse.score_confidence < 0.6
+    ) {
+      bandXReason = "low_confidence";
+      console.warn("[screen] band-x: low confidence", {
+        session_id: session.id,
+        confidence: gptResponse.score_confidence,
+        original_band: gptResponse.cpi.band,
+      });
+      gptResponse = buildBandXResponse(
+        sessionPracticeArea,
+        `Model confidence ${gptResponse.score_confidence?.toFixed(2)} below 0.60 floor. Original band: ${gptResponse.cpi.band}.`,
+      );
     }
 
     // ── Merge GPT-extracted slots into confirmed answers  -  S10.2 ─────────────────
@@ -1974,7 +2067,12 @@ export async function POST(req: Request) {
     }
 
     // ── Append GPT response to conversation ──────────────────────────
-    conversation.push({ role: "assistant", content: rawResponse });
+    // When the Band X fallback fired, rawResponse may be empty/invalid; persist
+    // the synthesized fallback so the conversation log stays readable.
+    conversation.push({
+      role: "assistant",
+      content: rawResponse ?? JSON.stringify(gptResponse),
+    });
 
     // ── Build updated session state ──────────────────────────────────
     // extracted_entities: structured key-value pairs only (question IDs + values)
@@ -2049,6 +2147,41 @@ export async function POST(req: Request) {
         _slot_answered: updatedSlotAnswered,
         _slot_round: slotRoundUpdated,
       } : {}),
+      // ── KB-23 Lesson 01: reasoning string ──
+      // 2-4 sentence justification for the current band/score. Surfaced
+      // operator-side for audit. Required on every turn that produces a band.
+      ...(typeof gptResponse.reasoning === "string" && gptResponse.reasoning.trim().length > 0
+        ? { _reasoning: gptResponse.reasoning.trim() }
+        : {}),
+      ...(typeof gptResponse.score_confidence === "number"
+        ? { _score_confidence: gptResponse.score_confidence }
+        : {}),
+      // ── KB-23 Lesson 02: Band X audit trail ──
+      // When the fallback router fired, persist the reason for triage.
+      ...(bandXReason ? { _band_x_reason: bandXReason } : {}),
+      // ── KB-23 Lesson 12: drift instrumentation ──
+      // Persist prompt version + model id + turn timestamp on every turn so
+      // we can resample historical leads against the current model and alarm
+      // on band-agreement divergence.
+      _meta: (() => {
+        const prev = ((session.scoring as Record<string, unknown>)?._meta as Record<string, unknown> | undefined) ?? {};
+        const now = new Date().toISOString();
+        return {
+          ...prev, // preserve first_message_at, finalized_at across turns
+          prompt_version: SCREEN_PROMPT_VERSION,
+          model_id: intakeModel,
+          turn_at: now,
+          // ── KB-23 Lesson 03: speed-to-lead SLA ──
+          // first_message_at: stamped on the first user turn (sticky). SLA timer starts here.
+          // finalized_at: stamped when the session reaches finalize=true (sticky).
+          ...(!prev.first_message_at && message
+            ? { first_message_at: now }
+            : {}),
+          ...(gptResponse.finalize && !prev.finalized_at
+            ? { finalized_at: now }
+            : {}),
+        };
+      })(),
     };
 
     // ── Resolve situation_summary with finalize-time fallback ──────────
@@ -2261,6 +2394,8 @@ export async function POST(req: Request) {
       flags: gptResponse.flags ?? [],
       cta,
       case_value: (scoringPayload._case_value as { label: string; tier: string; rationale: string } | undefined) ?? null,
+      reasoning: (scoringPayload._reasoning as string | undefined) ?? null,
+      band_x_reason: (scoringPayload._band_x_reason as string | undefined) ?? null,
     });
   } catch (err) {
     console.error("/api/screen error:", err);

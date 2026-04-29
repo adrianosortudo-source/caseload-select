@@ -6,6 +6,16 @@
  * No code redeploy needed.
  */
 
+import { fewShotExamplesFor } from "./few-shot-examples";
+
+/**
+ * Bumped on any meaningful change to the prompt or output contract. Persisted
+ * to scoring._meta.prompt_version per turn so historical leads can be resampled
+ * against the current model and divergence flagged (KB-23 Lesson 12 drift
+ * monitoring). Format: yyyy-mm-dd.semver-suffix.
+ */
+export const SCREEN_PROMPT_VERSION = "2026-04-29.kb23-reasoning";
+
 export interface PracticeArea {
   id: string;
   label: string;
@@ -96,7 +106,11 @@ export interface FirmConfig {
   booking_url?: string;
 }
 
-export function buildSystemPrompt(firm: FirmConfig, channel: string, options?: { includeQuestionSets?: boolean }): string {
+export function buildSystemPrompt(
+  firm: FirmConfig,
+  channel: string,
+  options?: { includeQuestionSets?: boolean; practiceAreaHint?: string | null },
+): string {
   const includeQuestionSets = options?.includeQuestionSets ?? true;
   const primaryAreas = firm.practice_areas.filter(a => a.classification === "primary").map(a => a.label).join(", ");
   const secondaryAreas = firm.practice_areas.filter(a => a.classification === "secondary").map(a => a.label).join(", ") || "none";
@@ -768,6 +782,8 @@ OUTPUT SCHEMA (STRICT JSON: no markdown, no extra keys)
     "band": "A" | "B" | "C" | "D" | "E" | null,
     "band_locked": boolean
   },
+  "reasoning": string,  // REQUIRED on every turn. 2-4 sentences in plain English explaining the current band/score. Reference the prospect's actual stated facts (dates, amounts, role, jurisdiction, urgency). NEVER use generic phrasing like "scored based on standard criteria"  -  every reasoning string must be auditable against this specific session's answers. Example: "Band B. Without-cause termination after 12 years, $180k salary, severance offered but unsigned. Tenure and salary push value tier 4. No urgency flags." Empty string is a contract violation.
+  "score_confidence": number,  // REQUIRED on every turn. Self-reported confidence in the current scoring as a float 0.0 to 1.0. Below 0.6 will route the lead to Needs Review (Band X) instead of producing a final band. Be honest: if key fields are missing or you had to guess, return < 0.6 so the human catches it.
   "complexity_indicators": { [key: string]: string | number | boolean | string[] | null } | null,  // top-level: inferred complexity signals (e.g. {"contestation_level": 3, "emp_executive_level": true})
   "value_tier": "tier_1" | "tier_2" | "tier_3" | "tier_4" | "tier_5" | null,  // top-level: inferred from salary, tenure, and role signals
   "prior_experience": "yes" | "no" | "prior_litigation" | null,  // top-level: routing signal, NOT CPI
@@ -796,5 +812,5 @@ VALIDATION RULES:
 - practice_sub_type must always be present. Set to null only for practice areas without sub-type routing (real, corp, est, llt, ip, tax, admin, bank, priv, fran, env, prov, condo, hr, edu, health, debt, nfp, defam, socben, gig, sec, elder, str, crypto, ecom, animal, const). For pi, emp, fam, crim, imm, civ, ins: always populate from the sub-type list above, or use "{pa}_other" if genuinely unclear.
 - NEVER include a slot in next_question or next_questions whose id appears in filled_slots at "high" or "medium" slot_confidence.
 
-${firm.custom_instructions ? `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nFIRM-SPECIFIC INSTRUCTIONS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${firm.custom_instructions}` : ""}`;
+${firm.custom_instructions ? `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nFIRM-SPECIFIC INSTRUCTIONS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${firm.custom_instructions}` : ""}${fewShotExamplesFor(options?.practiceAreaHint)}`;
 }

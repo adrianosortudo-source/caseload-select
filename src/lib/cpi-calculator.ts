@@ -45,7 +45,11 @@ export interface CpiBreakdown {
   multi_practice_score: number;
   fee_score: number;
   total: number;
-  band: "A" | "B" | "C" | "D" | "E" | null;
+  /** A/B/C/D/E are scored bands. X = "Needs Review" fallback (KB-23 Lesson 02):
+   *  set when the LLM call failed, returned invalid JSON, scored with confidence
+   *  below 0.6, or omitted required reasoning. Routed to manual triage  -  never
+   *  treated as a regular score. */
+  band: "A" | "B" | "C" | "D" | "E" | "X" | null;
   band_locked: boolean;
   /**
    * Three-axis derived scores (normalized 0-100). Computed server-side in
@@ -72,7 +76,7 @@ export interface CpiBreakdown {
  */
 export interface CpiPartial {
   score: number;
-  band: "A" | "B" | "C" | "D" | "E" | null;
+  band: "A" | "B" | "C" | "D" | "E" | "X" | null;
   confidence: "provisional" | "final";
   /**
    * Urgency axis (0-100). Exposed in partial when ≥ 50 so the widget can
