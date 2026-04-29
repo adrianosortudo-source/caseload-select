@@ -58,6 +58,15 @@ export function DecisionCard({ item, value, onChange }: Props) {
       return;
     }
 
+    // Tapping a structured option while the Other textarea is open closes
+    // the textarea and discards the typed text. The prospect is committing
+    // to the structured choice and the prior free-text exploration is no
+    // longer relevant.
+    if (otherMode) {
+      setOtherMode(false);
+      setOtherText("");
+    }
+
     if (multi) {
       const current = Array.isArray(selected) ? selected : [];
       const next = current.includes(optionValue)
@@ -147,7 +156,10 @@ export function DecisionCard({ item, value, onChange }: Props) {
         </div>
       )}
 
-      {!otherMode && (
+      {/* Options grid stays visible even when the Other textarea is open,
+          so the prospect can switch back to a structured option without
+          first dismissing the textarea via Cancel. handleTap auto-closes
+          the textarea when a structured option is tapped. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {item.options?.map(opt => {
           const isOn = isSelected(opt.value);
@@ -205,7 +217,6 @@ export function DecisionCard({ item, value, onChange }: Props) {
           </button>
         )}
       </div>
-      )}
     </div>
   );
 }
