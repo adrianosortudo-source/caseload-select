@@ -1,12 +1,20 @@
 "use client";
 
 /**
- * FilterCard  -  FACT Phase F (Filter) card.
+ * ScreenCard  -  ACTS Phase S (Screen) card.
+ *
+ * The Screen phase is CaseLoad Screen itself: the AI intake engine that
+ * scores and routes leads. This card shows the engine's output for the
+ * current month: how leads are distributed across bands and how fast
+ * the firm is reaching the hot ones.
  *
  * Shows:
  * - Horizontal stacked bar: band A–E distribution for current month
  * - SLA compliance arc gauge (% leads contacted within 60s)
  * - Band E filter count
+ *
+ * Renamed from FilterCard in April 2026 when the FACT framing was
+ * deprecated in favour of ACTS (Authority, Capture, Target, Screen).
  */
 
 const BAND_COLORS: Record<string, string> = {
@@ -75,7 +83,7 @@ interface Props {
   slaHasSamples: boolean;
 }
 
-export default function FilterCard({ bandDist, total, bandECount, slaCompliance, slaHasSamples }: Props) {
+export default function ScreenCard({ bandDist, total, bandECount, slaCompliance, slaHasSamples }: Props) {
   const bands = ["A", "B", "C", "D", "E"] as const;
   const totalNonZero = Math.max(1, total);
 
@@ -83,8 +91,8 @@ export default function FilterCard({ bandDist, total, bandECount, slaCompliance,
     <div className="bg-white rounded-xl border border-black/5 shadow-sm p-5 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-black/40">Phase F</div>
-          <div className="text-base font-bold text-navy mt-0.5">Filter</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-black/40">Phase S</div>
+          <div className="text-base font-bold text-navy mt-0.5">Screen</div>
         </div>
         <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 font-medium">
           Active
@@ -138,7 +146,7 @@ export default function FilterCard({ bandDist, total, bandECount, slaCompliance,
 
       {/* Band E stat */}
       <div className="flex items-center justify-between border-t border-black/5 pt-3">
-        <span className="text-xs text-black/50">Filtered out (Band E)</span>
+        <span className="text-xs text-black/50">Screened out (Band E)</span>
         <span className="text-sm font-semibold text-red-600">{bandECount}</span>
       </div>
     </div>

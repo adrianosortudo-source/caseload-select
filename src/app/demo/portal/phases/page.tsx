@@ -1,12 +1,12 @@
 /**
- * /demo/portal/phases  -  FACT phases for Hartwell Law demo firm.
- * No auth. Uses live demo intake data.
+ * /demo/portal/phases  -  ACTS phases for the Hartwell Law demo firm.
+ * No auth. Uses live demo intake data. Renamed from FACT in April 2026.
  */
 
 import { redirect } from "next/navigation";
 import { getDemoFirmId } from "@/lib/demo-firm";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
-import FilterCard from "@/app/portal/[firmId]/phases/FilterCard";
+import ScreenCard from "@/app/portal/[firmId]/phases/ScreenCard";
 import PlaceholderCard from "@/app/portal/[firmId]/phases/PlaceholderCard";
 
 export const dynamic = "force-dynamic";
@@ -50,21 +50,21 @@ export default async function DemoPortalPhases() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-navy">FACT Phases</h1>
+        <h1 className="text-xl font-semibold text-navy">ACTS Phases</h1>
         <p className="text-sm text-black/40 mt-1">{monthLabel} · Live demo data</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FilterCard
+        <PlaceholderCard phase="Authority" />
+        <PlaceholderCard phase="Capture" />
+        <PlaceholderCard phase="Target" />
+        <ScreenCard
           bandDist={bandDist}
           total={sessions.length}
           bandECount={bandDist.E ?? 0}
           slaCompliance={slaCompliance}
           slaHasSamples={responseLeads.length > 0}
         />
-        <PlaceholderCard phase="Authority" />
-        <PlaceholderCard phase="Capture" />
-        <PlaceholderCard phase="Target" />
       </div>
     </div>
   );

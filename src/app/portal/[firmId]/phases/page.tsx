@@ -1,10 +1,15 @@
 /**
- * /portal/[firmId]/phases  -  Tier 3 FACT Phase View
+ * /portal/[firmId]/phases  -  Tier 3 ACTS Phase View
  *
- * Four phase cards in a 2x2 grid.
- * Filter (F): band distribution + SLA gauge  -  live data.
- * Authority (A): Clio Manage integration  -  live if connected, connect prompt if not.
- * Capture (C) / Target (T): placeholders until BrightLocal / GA4 / Google Ads are live.
+ * Four phase cards in a 2x2 grid (ACTS reading order):
+ *   Authority (A): Clio Manage integration  -  live if connected, connect prompt otherwise
+ *   Capture (C):   placeholder until BrightLocal / GA4 are wired
+ *   Target (T):    placeholder until Google Ads API is wired
+ *   Screen (S):    band distribution + SLA gauge  -  live data from CaseLoad Screen
+ *
+ * Renamed from FACT Phases in April 2026 when the FACT framing was deprecated
+ * in favour of ACTS (Authority, Capture, Target, Screen). The Screen phase is
+ * CaseLoad Screen itself  -  the AI intake engine.
  *
  * Auth verified by parent layout.
  */
@@ -13,7 +18,7 @@ import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { isClioConnected, getClioMatters } from "@/lib/clio";
-import FilterCard from "./FilterCard";
+import ScreenCard from "./ScreenCard";
 import ClioCard from "./ClioCard";
 import PlaceholderCard from "./PlaceholderCard";
 
@@ -84,18 +89,11 @@ export default async function PhasesPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-navy">FACT Phases</h1>
+        <h1 className="text-xl font-semibold text-navy">ACTS Phases</h1>
         <p className="text-sm text-black/40 mt-1">{monthLabel}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FilterCard
-          bandDist={bandDist}
-          total={sessions.length}
-          bandECount={bandDist.E ?? 0}
-          slaCompliance={slaCompliance}
-          slaHasSamples={responseLeads.length > 0}
-        />
         <ClioCard
           connected={clioConnected}
           firmId={firmId}
@@ -104,6 +102,13 @@ export default async function PhasesPage({
         />
         <PlaceholderCard phase="Capture" />
         <PlaceholderCard phase="Target" />
+        <ScreenCard
+          bandDist={bandDist}
+          total={sessions.length}
+          bandECount={bandDist.E ?? 0}
+          slaCompliance={slaCompliance}
+          slaHasSamples={responseLeads.length > 0}
+        />
       </div>
     </div>
   );

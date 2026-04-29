@@ -1,10 +1,10 @@
 /**
  * GET /api/portal/[firmId]/phases
  *
- * Tier 3 FACT Phase metrics.
- * Filter: live band distribution + SLA compliance.
+ * Tier 3 ACTS Phase metrics.
  * Authority: Clio connection status + open matter count (live if connected).
  * Capture / Target: null until BrightLocal / GA4 / Google Ads integrations are live.
+ * Screen: live band distribution + SLA compliance from CaseLoad Screen.
  *
  * Auth: portal session cookie.
  */

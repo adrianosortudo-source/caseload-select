@@ -1,5 +1,5 @@
 /**
- * ClioCard  -  FACT Phase A (Authority) replacement card.
+ * ClioCard  -  ACTS Phase A (Authority) live card.
  *
  * Shows Clio Manage connection status for the firm.
  *
