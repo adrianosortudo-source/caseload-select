@@ -120,13 +120,18 @@ interface Props {
   /** Fired whenever the controller's internal step changes. Lets a wrapper
    * (e.g. demo split-screen) react to phase transitions. */
   onStepChange?: (step: string) => void;
+  /** Optional pre-filled kickoff narrative. The /demo page uses this to seed
+   *  the situation textarea from a chosen scenario so the prospect-watching-
+   *  the-demo can see a realistic flow without typing. The widget remounts
+   *  on prop change (parent passes a new `key`), which resets all state. */
+  kickoffSeed?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLogged, onStepChange }: Props) {
+export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLogged, onStepChange, kickoffSeed }: Props) {
   // Core state
   const [step, setStep] = useState<Step>("kickoff");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -137,8 +142,9 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
   // auto-advance setTimeout and the Continue button (or repeated taps) fire.
   const batchSubmitInFlightRef = useRef<boolean>(false);
 
-  // Kickoff
-  const [situation, setSituation] = useState("");
+  // Kickoff. Seeded from `kickoffSeed` when present so demo scenarios pre-fill
+  // the textarea. The user can still edit before submitting.
+  const [situation, setSituation] = useState(kickoffSeed ?? "");
 
   // Round state
   const [screens, setScreens] = useState<Screen[]>([]);

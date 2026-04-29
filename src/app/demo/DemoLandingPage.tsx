@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { IntakeWidget } from "@/components/intake/IntakeWidget";
+import { IntakeControllerV2 } from "@/components/intake-v2/IntakeControllerV2";
 import ChatBubble from "./ChatBubble";
 import DemoScenarioPicker from "@/components/demo/DemoScenarioPicker";
 import DemoTour from "@/components/demo/DemoTour";
@@ -53,8 +53,23 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
     setDemoStep("intent");
   }, []);
 
+  // Map IntakeControllerV2's step names to the legacy step names DemoTour's
+  // BALLOON map keys on. Keeps the side-balloon working with the new widget
+  // without touching DemoTour. New steps (thinking_r3, round3) fall through
+  // to the existing "questions" balloon, which is the right narrative cue.
+  const STEP_ALIAS: Record<string, string> = {
+    kickoff: "intent",
+    thinking: "submitting",
+    questions: "questions",
+    identity: "identity",
+    otp: "otp",
+    thinking_r3: "submitting",
+    round3: "questions",
+    done: "result",
+    error: "error",
+  };
   const handleStepChange = useCallback((step: string) => {
-    setDemoStep(step);
+    setDemoStep(STEP_ALIAS[step] ?? step);
   }, []);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -256,27 +271,26 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
                 )}
               </div>
 
-              {/* Widget container  -  spotlighted above overlay when demo is active */}
+              {/* Widget container  -  renders the same IntakeControllerV2
+                  used in production at /widget/[firmId]. The demo seeds the
+                  kickoff narrative from the chosen scenario; the prospect can
+                  still edit before submitting. The `key` forces a remount on
+                  scenario switch so all internal state resets cleanly. */}
               <div
                 ref={widgetRef}
                 className="w-full max-w-md transition-all duration-300"
                 style={activeScenario ? { position: "relative", zIndex: 35 } : {}}
               >
-                <IntakeWidget
+                <IntakeControllerV2
                   key={activeScenario ?? "free"}
                   firmId={firmId}
                   firmName="Hartwell Law PC"
-                  accentColor={branding.accent_color}
-                  assistantName={branding.assistant_name}
-                  firmPhone={branding.phone_number}
-                  firmPhoneTel={branding.phone_tel}
-                  firmBookingUrl={branding.booking_url}
-                  firmPrivacyUrl={branding.privacy_policy_url}
-                  assistantAvatar="/brand/logos/icon-light-transparent.png"
-                  demoMode={true}
-                  demoScenario={activeScenario ?? undefined}
-                  guidedTour={!!activeScenario}
-                  onDemoStepChange={handleStepChange}
+                  kickoffSeed={
+                    activeScenario
+                      ? DEMO_SCENARIOS.find(s => s.id === activeScenario)?.message
+                      : undefined
+                  }
+                  onStepChange={handleStepChange}
                 />
               </div>
             </div>
