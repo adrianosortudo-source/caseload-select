@@ -44,9 +44,26 @@ type LeadRow = {
   stage: string;
   band: string | null;
   priority_band: string | null;
+  cpi_score: number | null;
+  priority_index: number | null;
+  estimated_value: number | null;
   created_at: string;
   intake_session_id: string | null;
 };
+
+/** Compact dollar formatter. $42,500 -> "$42.5k", $1,250,000 -> "$1.25M". */
+function formatCaseValue(value: number | null): string {
+  if (value == null || value <= 0) return "—";
+  if (value >= 1_000_000) {
+    const m = value / 1_000_000;
+    return `$${m % 1 === 0 ? m.toFixed(0) : m.toFixed(2)}M`;
+  }
+  if (value >= 1_000) {
+    const k = value / 1_000;
+    return `$${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
+  }
+  return `$${value}`;
+}
 
 export default async function DemoPortalLeadsPage({
   searchParams,
@@ -60,7 +77,7 @@ export default async function DemoPortalLeadsPage({
 
   let query = supabase
     .from("leads")
-    .select("id, name, case_type, stage, band, priority_band, created_at, intake_session_id")
+    .select("id, name, case_type, stage, band, priority_band, cpi_score, priority_index, estimated_value, created_at, intake_session_id")
     .eq("law_firm_id", firmId)
     .order("created_at", { ascending: false });
   if (bandFilter) query = query.eq("band", bandFilter);
@@ -178,6 +195,8 @@ export default async function DemoPortalLeadsPage({
                 <th className="text-left px-4 py-3 font-medium">Client</th>
                 <th className="text-left px-4 py-3 font-medium">Case type</th>
                 <th className="text-left px-4 py-3 font-medium">Band</th>
+                <th className="text-right px-4 py-3 font-medium">Score</th>
+                <th className="text-right px-4 py-3 font-medium">Case value</th>
                 <th className="text-left px-4 py-3 font-medium">Why this band</th>
                 <th className="text-left px-4 py-3 font-medium">Stage</th>
                 <th className="text-left px-4 py-3 font-medium">Memo</th>
@@ -212,6 +231,20 @@ export default async function DemoPortalLeadsPage({
                         </span>
                       ) : (
                         <span className="text-black/20"> - </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs tabular-nums">
+                      {(() => {
+                        const score = lead.priority_index ?? lead.cpi_score;
+                        if (score == null || isBandX) return <span className="text-black/20"> - </span>;
+                        return <span className="font-semibold text-black/80">{score}</span>;
+                      })()}
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs tabular-nums">
+                      {isBandX ? (
+                        <span className="text-black/20"> - </span>
+                      ) : (
+                        <span className="text-black/70">{formatCaseValue(lead.estimated_value)}</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs text-black/60 max-w-[320px]">
