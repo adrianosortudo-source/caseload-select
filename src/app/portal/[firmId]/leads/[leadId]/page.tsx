@@ -29,6 +29,9 @@ const BAND_COLOR: Record<string, string> = {
   C: "bg-yellow-100 text-yellow-800",
   D: "bg-orange-100 text-orange-800",
   E: "bg-red-100 text-red-800",
+  // KB-23 Lesson 02: Band X = Needs Review. Distinct amber treatment so the
+  // firm can spot pending operator triage at a glance.
+  X: "bg-amber-100 text-amber-900 border border-amber-300",
 };
 
 const STAGE_LABEL: Record<string, string> = {
@@ -41,6 +44,7 @@ const STAGE_LABEL: Record<string, string> = {
   proposal_sent: "Proposal Sent",
   client_won: "Retained",
   client_lost: "Lost",
+  needs_review: "Needs Review",
 };
 
 export default async function PortalLeadDetailPage({
@@ -63,16 +67,55 @@ export default async function PortalLeadDetailPage({
 
   if (!lead || lead.law_firm_id !== firmId) notFound();
 
-  // Fetch intake session memo if this lead came from a widget intake
+  // Fetch intake session memo + scoring metadata if this lead came from a
+  // widget intake. The scoring jsonb carries the engine's reasoning string
+  // (KB-23 Lesson 01), the Band X fallback reason if it fired (Lesson 02),
+  // and the speed-to-lead timestamps (Lesson 03), all of which we surface
+  // operator-side on this page.
   let sessionMemo: { memo_text: string | null; memo_generated_at: string | null } | null = null;
+  let aiReasoning: string | null = null;
+  let bandXReason: string | null = null;
+  let firstMessageAt: string | null = null;
+  let finalizedAt: string | null = null;
   if (lead.intake_session_id) {
     const { data: sessionRow } = await supabase
       .from("intake_sessions")
-      .select("memo_text, memo_generated_at")
+      .select("memo_text, memo_generated_at, scoring")
       .eq("id", lead.intake_session_id)
       .single();
-    if (sessionRow) sessionMemo = sessionRow;
+    if (sessionRow) {
+      sessionMemo = { memo_text: sessionRow.memo_text, memo_generated_at: sessionRow.memo_generated_at };
+      const scoring = (sessionRow.scoring as Record<string, unknown> | null) ?? null;
+      if (scoring) {
+        const r = scoring._reasoning;
+        if (typeof r === "string" && r.trim().length > 0) aiReasoning = r.trim();
+        const bxr = scoring._band_x_reason;
+        if (typeof bxr === "string" && bxr.trim().length > 0) bandXReason = bxr.trim();
+        const meta = scoring._meta as Record<string, unknown> | undefined;
+        if (meta) {
+          if (typeof meta.first_message_at === "string") firstMessageAt = meta.first_message_at;
+          if (typeof meta.finalized_at === "string") finalizedAt = meta.finalized_at;
+        }
+      }
+    }
   }
+
+  // Format human-readable Band X reason. The internal codes are snake_case
+  // so render them as plain English for the firm's view.
+  const bandXReasonHuman = bandXReason
+    ? bandXReason
+        .replace(/^low_confidence$/, "The AI was not confident enough to score this lead automatically.")
+        .replace(/^json_parse_failure$/, "The screening engine returned an unreadable response.")
+        .replace(/^empty_completion$/, "The screening engine returned no response.")
+        .replace(/_/g, " ")
+    : null;
+
+  // Time-to-finalize for the operator audit. Only meaningful when both
+  // timestamps exist  -  pre-KB23 sessions have neither.
+  const timeToFinalizeSec =
+    firstMessageAt && finalizedAt
+      ? Math.max(0, Math.round((new Date(finalizedAt).getTime() - new Date(firstMessageAt).getTime()) / 1000))
+      : null;
 
   const band = (lead.priority_band ?? lead.band) as string | null;
   const stageLabel = STAGE_LABEL[lead.stage] ?? lead.stage;
@@ -122,13 +165,21 @@ export default async function PortalLeadDetailPage({
                 <span className="capitalize">{lead.case_type}</span>
               )}
               <span>Added {new Date(lead.created_at).toLocaleDateString("en-CA")}</span>
+              {timeToFinalizeSec != null && (
+                <span title="Time from first message to finalize">
+                  Intake completed in{" "}
+                  {timeToFinalizeSec < 90
+                    ? `${timeToFinalizeSec} seconds`
+                    : `${(timeToFinalizeSec / 60).toFixed(1)} minutes`}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="badge bg-black/5 text-black/60">{stageLabel}</span>
             {band && (
               <span className={`badge font-bold ${BAND_COLOR[band] ?? "bg-black/5 text-black/40"}`}>
-                Band {band}
+                {band === "X" ? "Needs Review" : `Band ${band}`}
               </span>
             )}
           </div>
@@ -139,6 +190,41 @@ export default async function PortalLeadDetailPage({
           </p>
         )}
       </div>
+
+      {/* Band X callout  -  surfaced before everything else when the engine
+         routed this session to manual triage. Tells the firm exactly what
+         happened and what to expect next. */}
+      {band === "X" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-amber-200 text-amber-900 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 9v4M12 17h.01" />
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-amber-900">Pending operator review</div>
+              <p className="mt-1.5 text-[13px] text-amber-900/80 leading-relaxed">
+                {bandXReasonHuman ?? "This intake needs a human review before it routes to your pipeline."} A member of the CaseLoad Select team will triage this lead within four hours and assign the correct band manually.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI reasoning card  -  the operator-side audit string. KB-23 Lesson
+         01: every band ships with 2-4 sentences explaining why, referencing
+         the prospect's actual stated facts. Not shown for Band X (where the
+         band X callout above already explains the situation). */}
+      {aiReasoning && band !== "X" && (
+        <div className="bg-white rounded-xl border border-black/5 p-5">
+          <div className="text-xs font-semibold text-black/40 uppercase tracking-wide mb-2.5">
+            Why this band
+          </div>
+          <p className="text-sm text-black/75 leading-relaxed">{aiReasoning}</p>
+        </div>
+      )}
 
       {/* Band rationale  -  compact mode hides raw sub-score values,
          keeps the plain-English band verdict and first-call questions */}

@@ -21,6 +21,9 @@ const BAND_COLOR: Record<string, string> = {
   C: "bg-yellow-100 text-yellow-800",
   D: "bg-orange-100 text-orange-800",
   E: "bg-red-100 text-red-800",
+  // KB-23 Lesson 02: Band X = Needs Review fallback. Distinct amber/warning
+  // treatment so the firm sees at a glance that operator triage is pending.
+  X: "bg-amber-100 text-amber-900 border border-amber-300",
 };
 
 const STAGE_LABEL: Record<string, string> = {
@@ -33,6 +36,8 @@ const STAGE_LABEL: Record<string, string> = {
   proposal_sent: "Proposal Sent",
   client_won: "Retained",
   client_lost: "Lost",
+  // KB-23 Lesson 02: Band X session pipeline stage. 4-hour manual triage SLA.
+  needs_review: "Needs Review",
 };
 
 type LeadRow = {
@@ -74,16 +79,33 @@ export default async function PortalLeadsPage({
   const { data } = await query;
   const leads = (data ?? []) as LeadRow[];
 
-  // Memo ready map: session_id → true (memo exists)
+  // Memo ready map + reasoning map. Both come from intake_sessions  -  one
+  // round-trip fetches everything we need to enrich the list rows. Reasoning
+  // is the operator-side audit string (KB-23 Lesson 01) so the firm can see
+  // why a lead was scored Band X vs Band A without opening the detail page.
   const sessionIds = leads.map(l => l.intake_session_id).filter(Boolean) as string[];
-  let memoReadySet = new Set<string>();
+  const memoReadySet = new Set<string>();
+  const reasoningBySession = new Map<string, string>();
+  const bandXReasonBySession = new Map<string, string>();
   if (sessionIds.length > 0) {
-    const { data: memoRows } = await supabase
+    const { data: sessionRows } = await supabase
       .from("intake_sessions")
-      .select("id")
-      .in("id", sessionIds)
-      .not("memo_generated_at", "is", null);
-    memoReadySet = new Set((memoRows ?? []).map(r => r.id));
+      .select("id, memo_generated_at, scoring")
+      .in("id", sessionIds);
+    for (const row of sessionRows ?? []) {
+      if (row.memo_generated_at) memoReadySet.add(row.id as string);
+      const scoring = (row.scoring as Record<string, unknown> | null) ?? null;
+      if (scoring) {
+        const reasoning = scoring._reasoning;
+        if (typeof reasoning === "string" && reasoning.trim().length > 0) {
+          reasoningBySession.set(row.id as string, reasoning.trim());
+        }
+        const bandXReason = scoring._band_x_reason;
+        if (typeof bandXReason === "string" && bandXReason.trim().length > 0) {
+          bandXReasonBySession.set(row.id as string, bandXReason.trim());
+        }
+      }
+    }
   }
 
   // Counts for filter tabs
@@ -97,13 +119,17 @@ export default async function PortalLeadsPage({
     if (l.band) bandCounts[l.band] = (bandCounts[l.band] ?? 0) + 1;
   }
 
-  const bandTabs = [
+  const bandTabs: Array<{ key: string; label: string; emphasis?: "warning" }> = [
     { key: "all",  label: "All" },
     { key: "A",    label: "Band A" },
     { key: "B",    label: "Band B" },
     { key: "C",    label: "Band C" },
     { key: "D",    label: "Band D" },
     { key: "E",    label: "Band E" },
+    // Always show the Band X tab when at least one such lead exists in the
+    // firm's history. Hidden otherwise so the tab strip stays clean for firms
+    // that have never had a fallback session.
+    ...(bandCounts.X ? [{ key: "X", label: "Needs Review", emphasis: "warning" as const }] : []),
   ];
 
   const activeTab = bandFilter ?? "all";
@@ -134,24 +160,33 @@ export default async function PortalLeadsPage({
 
       {/* Band filter tabs */}
       <div className="flex gap-2 flex-wrap">
-        {bandTabs.map((tab) => (
-          <a
-            key={tab.key}
-            href={buildHref(tab.key, stageFilter ?? null)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-              activeTab === tab.key
-                ? "bg-navy text-white"
-                : "bg-black/5 text-black/60 hover:bg-black/8"
-            }`}
-          >
-            {tab.label}
-            {bandCounts[tab.key] != null && (
-              <span className={`ml-1.5 ${activeTab === tab.key ? "text-white/60" : "text-black/30"}`}>
-                {bandCounts[tab.key]}
-              </span>
-            )}
-          </a>
-        ))}
+        {bandTabs.map((tab) => {
+          const isActive = activeTab === tab.key;
+          const isWarning = tab.emphasis === "warning";
+          const className = isActive
+            ? isWarning
+              ? "bg-amber-600 text-white"
+              : "bg-navy text-white"
+            : isWarning
+              ? "bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100"
+              : "bg-black/5 text-black/60 hover:bg-black/8";
+          return (
+            <a
+              key={tab.key}
+              href={buildHref(tab.key, stageFilter ?? null)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${className}`}
+            >
+              {tab.label}
+              {bandCounts[tab.key] != null && (
+                <span className={`ml-1.5 ${
+                  isActive ? "text-white/60" : isWarning ? "text-amber-700/60" : "text-black/30"
+                }`}>
+                  {bandCounts[tab.key]}
+                </span>
+              )}
+            </a>
+          );
+        })}
       </div>
 
       {/* Table */}
@@ -167,6 +202,7 @@ export default async function PortalLeadsPage({
                 <th className="text-left px-4 py-3 font-medium">Client</th>
                 <th className="text-left px-4 py-3 font-medium">Case type</th>
                 <th className="text-left px-4 py-3 font-medium">Band</th>
+                <th className="text-left px-4 py-3 font-medium">Why this band</th>
                 <th className="text-left px-4 py-3 font-medium">Stage</th>
                 <th className="text-left px-4 py-3 font-medium">Memo</th>
                 <th className="text-left px-4 py-3 font-medium">Added</th>
@@ -176,9 +212,17 @@ export default async function PortalLeadsPage({
               {leads.map((lead) => {
                 const band = lead.priority_band ?? lead.band;
                 const hasMemo = lead.intake_session_id ? memoReadySet.has(lead.intake_session_id) : false;
+                const reasoning = lead.intake_session_id ? reasoningBySession.get(lead.intake_session_id) : null;
+                const bandXReason = lead.intake_session_id ? bandXReasonBySession.get(lead.intake_session_id) : null;
+                const isBandX = band === "X";
                 const detailHref = `/portal/${firmId}/leads/${lead.id}`;
+                // Reasoning preview: keep short so the table stays scannable.
+                // Operator gets the full text on the detail page.
+                const reasoningPreview = reasoning
+                  ? reasoning.length > 110 ? reasoning.slice(0, 107).trimEnd() + "..." : reasoning
+                  : null;
                 return (
-                  <tr key={lead.id} className="hover:bg-black/[0.01]">
+                  <tr key={lead.id} className={`hover:bg-black/[0.01] ${isBandX ? "bg-amber-50/40" : ""}`}>
                     <td className="px-4 py-3 font-medium text-black/80">
                       <Link href={detailHref} className="hover:text-navy hover:underline">
                         {lead.name}
@@ -190,8 +234,19 @@ export default async function PortalLeadsPage({
                     <td className="px-4 py-3">
                       {band ? (
                         <span className={`badge font-bold ${BAND_COLOR[band] ?? "bg-black/5 text-black/40"}`}>
-                          {band}
+                          {band === "X" ? "Review" : band}
                         </span>
+                      ) : (
+                        <span className="text-black/20"> - </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-black/60 max-w-[320px]">
+                      {isBandX && bandXReason ? (
+                        <span className="italic text-amber-800/80">
+                          {bandXReason.replace(/_/g, " ")}
+                        </span>
+                      ) : reasoningPreview ? (
+                        <span className="leading-snug">{reasoningPreview}</span>
                       ) : (
                         <span className="text-black/20"> - </span>
                       )}
