@@ -2178,23 +2178,36 @@ export async function POST(req: Request) {
       const { firstQuestionFor } = await import("@/lib/first-question-router");
       const routed = firstQuestionFor(routedPA, routedSub, routedStage);
       if (routed) {
-        const routerQuestion = {
-          id: routed.id,
-          text: routed.text,
-          options: routed.options,
-          allow_free_text: routed.allow_free_text,
-          ...(routed.description ? { description: routed.description } : {}),
-        };
-        // Overlay: keep the AI's other questions but force the first one to
-        // be the router's pick. If the entry is "exclusive", drop AI's other
-        // questions for this turn entirely so the prospect lands on a single
-        // contextually-correct question.
-        if (routed.exclusive) {
-          finalNextQuestions = [routerQuestion];
-        } else if (Array.isArray(gptResponse.next_questions) && gptResponse.next_questions.length > 0) {
-          finalNextQuestions = [routerQuestion, ...gptResponse.next_questions.slice(1)];
+        // If the router owns the full R1 batch, serve all of those questions
+        // deterministically. The AI is bypassed for R1 question selection
+        // entirely  -  this is the strongest commitment, used for sub-types
+        // where the AI repeatedly fails to follow dedupe rules and produces
+        // semantic duplicates of the router's first question.
+        if (routed.r1Batch && routed.r1Batch.length > 0) {
+          finalNextQuestions = routed.r1Batch.map(q => ({
+            id: q.id,
+            text: q.text,
+            options: q.options,
+            allow_free_text: q.allow_free_text,
+            ...(q.description ? { description: q.description } : {}),
+          }));
         } else {
-          finalNextQuestions = [routerQuestion];
+          // Single-question router entry: overlay the router's question over
+          // the AI's first question. Other AI questions can follow if not exclusive.
+          const routerQuestion = {
+            id: routed.id,
+            text: routed.text,
+            options: routed.options,
+            allow_free_text: routed.allow_free_text,
+            ...(routed.description ? { description: routed.description } : {}),
+          };
+          if (routed.exclusive) {
+            finalNextQuestions = [routerQuestion];
+          } else if (Array.isArray(gptResponse.next_questions) && gptResponse.next_questions.length > 0) {
+            finalNextQuestions = [routerQuestion, ...gptResponse.next_questions.slice(1)];
+          } else {
+            finalNextQuestions = [routerQuestion];
+          }
         }
         finalNextQuestion = null;
       }

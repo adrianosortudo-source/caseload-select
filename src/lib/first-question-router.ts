@@ -36,6 +36,23 @@ export interface RoutedFirstQuestion {
   /** When true, the router suggests this is the only first question to serve.
    *  When false, the AI may add additional R1 questions alongside. */
   exclusive?: boolean;
+  /** When present, the router owns the ENTIRE R1 batch for this sub-type.
+   *  All of these questions are served deterministically on turn 1 and the
+   *  AI is bypassed for R1 question selection. The AI still does scoring,
+   *  response_text, R2 follow-ups, etc. This is the strongest commitment
+   *  the router can make and is used for sub-types where the AI has shown
+   *  it cannot reliably follow dedupe rules.
+   *
+   *  When this is set, the `id`, `text`, `options`, `allow_free_text` fields
+   *  represent the FIRST question of the batch (for backwards compatibility)
+   *  and `r1Batch` provides the full ordered list. */
+  r1Batch?: Array<{
+    id: string;
+    text: string;
+    options: Array<{ label: string; value: string }>;
+    allow_free_text: boolean;
+    description?: string;
+  }>;
 }
 
 type RouterKey = string; // "pa|sub_type|stage"
@@ -102,6 +119,70 @@ const TABLE: Record<RouterKey, RoutedFirstQuestion> = {
     ],
     allow_free_text: true,
     exclusive: true,
+    // Router owns the full R1 batch for this sub-type. The AI was repeatedly
+    // serving semantic duplicates of the dispute question (different ID, same
+    // intent) despite multiple prompt rules. Now turn 1 is fully deterministic.
+    r1Batch: [
+      {
+        id: "rt_corp_dispute_q1",
+        text: "What's the issue with your business partner or co-owner?",
+        options: [
+          { label: "Misuse of company funds",                  value: "misuse_funds" },
+          { label: "Self-dealing or conflicts of interest",    value: "self_dealing" },
+          { label: "Refusing to share financial information",  value: "info_refusal" },
+          { label: "Excluding me from decisions",              value: "exclusion_decisions" },
+          { label: "Disagreement on direction or strategy",    value: "direction_dispute" },
+          { label: "I want to exit the partnership",           value: "want_to_exit" },
+          { label: "Something else",                           value: "other" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_dispute_q2",
+        text: "What's your role in the corporation?",
+        options: [
+          { label: "Minority shareholder",                     value: "minority_sh" },
+          { label: "50/50 partner / equal shareholder",        value: "equal_sh" },
+          { label: "Majority shareholder",                     value: "majority_sh" },
+          { label: "Director or officer (not shareholder)",    value: "director_only" },
+          { label: "Both shareholder AND director/officer",    value: "shareholder_director" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_dispute_q3",
+        text: "When did you first discover this issue?",
+        options: [
+          { label: "In the last 30 days",                      value: "under_30d" },
+          { label: "1 to 3 months ago",                        value: "1_3mo" },
+          { label: "3 to 12 months ago",                       value: "3_12mo" },
+          { label: "Over a year ago",                          value: "over_1yr" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_dispute_q4",
+        text: "Have you confronted the other party about it?",
+        options: [
+          { label: "Yes, in writing  -  they refused or ignored", value: "written_refused" },
+          { label: "Yes, verbally  -  no resolution",          value: "verbal_no_resolution" },
+          { label: "Not yet  -  I want legal advice first",    value: "not_yet_legal_first" },
+          { label: "Tried but they cut off communication",     value: "communication_cut" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_dispute_q5",
+        text: "What documentation do you have to support your concerns?",
+        options: [
+          { label: "Bank statements or financial records",     value: "financial_records" },
+          { label: "Emails, texts, or written communications", value: "communications" },
+          { label: "Witness statements from others",           value: "witnesses" },
+          { label: "Limited or no documentation yet",          value: "limited" },
+        ],
+        allow_free_text: true,
+      },
+    ],
   },
   [k("corp", "corp_partnership_dispute", null)]: {
     id: "rt_corp_partnership_q1",
@@ -133,6 +214,68 @@ const TABLE: Record<RouterKey, RoutedFirstQuestion> = {
     ],
     allow_free_text: true,
     exclusive: true,
+    r1Batch: [
+      {
+        id: "rt_corp_acq_q1",
+        text: "What stage are you at with buying this business?",
+        options: [
+          { label: "Just exploring options",                   value: "exploring" },
+          { label: "Identified a target business",             value: "identified_target" },
+          { label: "In active negotiations",                   value: "negotiations" },
+          { label: "Doing due diligence",                      value: "due_diligence" },
+          { label: "Ready to close",                           value: "closing_soon" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_acq_q2",
+        text: "What kind of business are you looking to buy?",
+        options: [
+          { label: "Retail or e-commerce",                     value: "retail" },
+          { label: "Service business (consulting, agency, trades)", value: "service" },
+          { label: "Restaurant or hospitality",                value: "hospitality" },
+          { label: "Manufacturing or distribution",            value: "manufacturing" },
+          { label: "Professional practice",                    value: "professional" },
+          { label: "Other or not sure yet",                    value: "other" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_acq_q3",
+        text: "What's your timeline for closing?",
+        options: [
+          { label: "Within 30 days",                           value: "under_30d" },
+          { label: "1 to 3 months",                            value: "1_3mo" },
+          { label: "3 to 6 months",                            value: "3_6mo" },
+          { label: "Over 6 months / no rush",                  value: "over_6mo" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_acq_q4",
+        text: "How are you funding the purchase?",
+        options: [
+          { label: "Own funds / cash",                         value: "own_funds" },
+          { label: "Bank loan / financing",                    value: "bank_loan" },
+          { label: "Seller financing or earnout",              value: "seller_financing" },
+          { label: "Investors or partners",                    value: "investors" },
+          { label: "Combination",                              value: "combination" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_acq_q5",
+        text: "What's the approximate purchase price?",
+        options: [
+          { label: "Under $250,000",                           value: "under_250k" },
+          { label: "$250k to $1 million",                      value: "250k_1m" },
+          { label: "$1 million to $5 million",                 value: "1m_5m" },
+          { label: "Over $5 million",                          value: "over_5m" },
+          { label: "Not yet determined",                       value: "tbd" },
+        ],
+        allow_free_text: true,
+      },
+    ],
   },
   [k("corp", "corp_acquisition", null)]: {
     id: "rt_corp_acq_q1",
