@@ -283,12 +283,23 @@ export async function POST(req: Request) {
 
     const firmBranding = (firm.branding as Record<string, string | undefined>) ?? {};
 
+    // Merge the seed defaults from default-question-modules.ts with the firm's
+    // own question_sets. Firm-specific banks override defaults (firms can
+    // customise during onboarding); defaults fill in any gaps so new banks
+    // added to the seed file become immediately available to every firm
+    // without requiring a per-firm DB migration. This is what makes
+    // corp_shareholder_dispute / corp_acquisition / etc. work for firms that
+    // were created BEFORE those banks were authored.
+    const { DEFAULT_QUESTION_MODULES } = await import("@/lib/default-question-modules");
+    const firmQuestionSets = (firm.question_sets ?? {}) as Record<string, unknown>;
+    const mergedQuestionSets = { ...DEFAULT_QUESTION_MODULES, ...firmQuestionSets } as Record<string, import("@/lib/screen-prompt").QuestionSet>;
+
     const firmConfig: FirmConfig = {
       name: firm.name,
       description: firm.description ?? "",
       location: firm.location ?? "",
       practice_areas: firm.practice_areas,
-      question_sets: firm.question_sets,
+      question_sets: mergedQuestionSets,
       geographic_config: firm.geographic_config,
       custom_instructions: firm.custom_instructions ?? undefined,
       assistant_name: firmBranding.assistant_name ?? undefined,
