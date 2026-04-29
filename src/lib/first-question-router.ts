@@ -53,6 +53,17 @@ export interface RoutedFirstQuestion {
     allow_free_text: boolean;
     description?: string;
   }>;
+  /** When present, the router also owns R2. Served on turn 2 after R1 answers
+   *  are submitted. Same contract as r1Batch  -  AI is bypassed for R2
+   *  question selection. The AI still does scoring and response_text on
+   *  every turn; only question selection is deterministic. */
+  r2Batch?: Array<{
+    id: string;
+    text: string;
+    options: Array<{ label: string; value: string }>;
+    allow_free_text: boolean;
+    description?: string;
+  }>;
 }
 
 type RouterKey = string; // "pa|sub_type|stage"
@@ -183,6 +194,73 @@ const TABLE: Record<RouterKey, RoutedFirstQuestion> = {
         allow_free_text: true,
       },
     ],
+    // R2 depth questions. Authored to NEVER assume the prospect's role
+    // (the AI was inventing director-liability questions for a co-founder
+    // who had not described themselves as a director). These five questions
+    // are role-agnostic and focus on stakes, prior action, parties affected,
+    // outcome, and urgency  -  the exact dimensions a litigator needs next.
+    r2Batch: [
+      {
+        id: "rt_corp_dispute_r2_q1",
+        text: "What's roughly at stake financially in this dispute?",
+        options: [
+          { label: "Under $50,000",                            value: "under_50k" },
+          { label: "$50,000 to $250,000",                      value: "50k_250k" },
+          { label: "$250,000 to $1 million",                   value: "250k_1m" },
+          { label: "Over $1 million",                          value: "over_1m" },
+          { label: "Hard to estimate right now",               value: "unknown" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_dispute_r2_q2",
+        text: "Have you taken any formal action so far?",
+        options: [
+          { label: "Sent a demand letter",                     value: "demand_letter" },
+          { label: "Filed a complaint with regulators",        value: "regulator_complaint" },
+          { label: "Started or threatened litigation",         value: "litigation_threat" },
+          { label: "Engaged another lawyer previously",        value: "prior_counsel" },
+          { label: "No formal action yet",                     value: "no_action" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_dispute_r2_q3",
+        text: "Who else is affected by this situation?",
+        options: [
+          { label: "Just me and the other party",              value: "two_party" },
+          { label: "Other shareholders or investors",          value: "other_shareholders" },
+          { label: "Employees of the business",                value: "employees" },
+          { label: "Customers or suppliers",                   value: "customers_suppliers" },
+          { label: "Family members involved in the business",  value: "family_involved" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_dispute_r2_q4",
+        text: "What outcome would resolve this for you?",
+        options: [
+          { label: "Buy the other party out",                  value: "buy_them_out" },
+          { label: "Be bought out and exit cleanly",           value: "be_bought_out" },
+          { label: "Recover money that was misused",           value: "recover_funds" },
+          { label: "Force compliance with my rights",          value: "compel_compliance" },
+          { label: "Wind up or dissolve the business",         value: "wind_up" },
+          { label: "Not sure yet  -  need advice",             value: "need_advice" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_dispute_r2_q5",
+        text: "How urgent is this for you?",
+        options: [
+          { label: "Critical  -  business is bleeding cash now",   value: "critical" },
+          { label: "Soon  -  want action in the next 30 days",     value: "30d" },
+          { label: "Moderate  -  next 1 to 3 months",              value: "1_3mo" },
+          { label: "Not urgent  -  exploring options",             value: "exploring" },
+        ],
+        allow_free_text: true,
+      },
+    ],
   },
   [k("corp", "corp_partnership_dispute", null)]: {
     id: "rt_corp_partnership_q1",
@@ -272,6 +350,71 @@ const TABLE: Record<RouterKey, RoutedFirstQuestion> = {
           { label: "$1 million to $5 million",                 value: "1m_5m" },
           { label: "Over $5 million",                          value: "over_5m" },
           { label: "Not yet determined",                       value: "tbd" },
+        ],
+        allow_free_text: true,
+      },
+    ],
+    // R2 depth questions for an acquisition matter. Focus on transaction
+    // structure, drafted documents, due diligence concerns, advisor team,
+    // and the seller relationship  -  what a corporate lawyer needs to
+    // scope the engagement before booking the consult.
+    r2Batch: [
+      {
+        id: "rt_corp_acq_r2_q1",
+        text: "What deal structure are you considering?",
+        options: [
+          { label: "Share purchase",                           value: "share_purchase" },
+          { label: "Asset purchase",                           value: "asset_purchase" },
+          { label: "Hybrid / not sure yet",                    value: "hybrid_unsure" },
+          { label: "Need advice on which is better",           value: "need_advice" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_acq_r2_q2",
+        text: "What documents have been drafted so far?",
+        options: [
+          { label: "Letter of intent (LOI) signed",            value: "loi_signed" },
+          { label: "Term sheet only",                          value: "term_sheet" },
+          { label: "Draft purchase agreement exchanged",       value: "draft_apa" },
+          { label: "NDA only",                                 value: "nda_only" },
+          { label: "Nothing in writing yet",                   value: "nothing_yet" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_acq_r2_q3",
+        text: "What's your biggest concern about this deal?",
+        options: [
+          { label: "Hidden liabilities or legal issues",       value: "hidden_liabilities" },
+          { label: "Tax structure and exposure",               value: "tax_exposure" },
+          { label: "Customer or supplier contracts transferring", value: "contract_assignment" },
+          { label: "Employee transition or severance",         value: "employee_transition" },
+          { label: "Whether the price is fair",                value: "valuation" },
+          { label: "Seller's representations holding up",      value: "rep_warranty" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_acq_r2_q4",
+        text: "Who else is advising you on this transaction?",
+        options: [
+          { label: "Accountant or tax advisor engaged",        value: "accountant" },
+          { label: "Business broker involved",                 value: "broker" },
+          { label: "Banker or lender involved",                value: "lender" },
+          { label: "Multiple advisors lined up",               value: "multi_advisor" },
+          { label: "Just me  -  no advisors yet",              value: "solo" },
+        ],
+        allow_free_text: true,
+      },
+      {
+        id: "rt_corp_acq_r2_q5",
+        text: "Is the seller represented by their own lawyer?",
+        options: [
+          { label: "Yes  -  seller has counsel",               value: "seller_repped" },
+          { label: "Not yet  -  seller is solo",               value: "seller_solo" },
+          { label: "Not sure",                                 value: "unknown" },
+          { label: "Same lawyer was suggested for both sides", value: "shared_counsel_proposed" },
         ],
         allow_free_text: true,
       },

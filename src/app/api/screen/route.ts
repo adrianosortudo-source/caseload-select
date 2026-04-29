@@ -2171,45 +2171,72 @@ export async function POST(req: Request) {
     // everything else (response_text, scoring, follow-up questions, summary).
     let finalNextQuestions = gptResponse.next_questions;
     let finalNextQuestion  = gptResponse.next_question;
-    if (isFirstTurnEarly && channel === "widget" && !gptResponse.finalize && !gptResponse.collect_identity) {
+    if (channel === "widget" && !gptResponse.finalize && !gptResponse.collect_identity) {
       const routedStage = (mergedIntentsEarly.stage_of_engagement ?? null) as string | null;
       const routedPA    = gptResponse.practice_area ?? sessionPracticeArea ?? null;
       const routedSub   = (gptResponse.practice_sub_type as string | null) ?? null;
       const { firstQuestionFor } = await import("@/lib/first-question-router");
       const routed = firstQuestionFor(routedPA, routedSub, routedStage);
       if (routed) {
-        // If the router owns the full R1 batch, serve all of those questions
-        // deterministically. The AI is bypassed for R1 question selection
-        // entirely  -  this is the strongest commitment, used for sub-types
-        // where the AI repeatedly fails to follow dedupe rules and produces
-        // semantic duplicates of the router's first question.
-        if (routed.r1Batch && routed.r1Batch.length > 0) {
-          finalNextQuestions = routed.r1Batch.map(q => ({
-            id: q.id,
-            text: q.text,
-            options: q.options,
-            allow_free_text: q.allow_free_text,
-            ...(q.description ? { description: q.description } : {}),
-          }));
-        } else {
-          // Single-question router entry: overlay the router's question over
-          // the AI's first question. Other AI questions can follow if not exclusive.
-          const routerQuestion = {
-            id: routed.id,
-            text: routed.text,
-            options: routed.options,
-            allow_free_text: routed.allow_free_text,
-            ...(routed.description ? { description: routed.description } : {}),
-          };
-          if (routed.exclusive) {
-            finalNextQuestions = [routerQuestion];
-          } else if (Array.isArray(gptResponse.next_questions) && gptResponse.next_questions.length > 0) {
-            finalNextQuestions = [routerQuestion, ...gptResponse.next_questions.slice(1)];
+        if (isFirstTurnEarly) {
+          // ── TURN 1 ──
+          // If the router owns the full R1 batch, serve all of those questions
+          // deterministically. The AI is bypassed for R1 question selection
+          // entirely  -  this is the strongest commitment, used for sub-types
+          // where the AI repeatedly fails to follow dedupe rules and produces
+          // semantic duplicates of the router's first question.
+          if (routed.r1Batch && routed.r1Batch.length > 0) {
+            finalNextQuestions = routed.r1Batch.map(q => ({
+              id: q.id,
+              text: q.text,
+              options: q.options,
+              allow_free_text: q.allow_free_text,
+              ...(q.description ? { description: q.description } : {}),
+            }));
           } else {
-            finalNextQuestions = [routerQuestion];
+            // Single-question router entry: overlay the router's question over
+            // the AI's first question. Other AI questions can follow if not exclusive.
+            const routerQuestion = {
+              id: routed.id,
+              text: routed.text,
+              options: routed.options,
+              allow_free_text: routed.allow_free_text,
+              ...(routed.description ? { description: routed.description } : {}),
+            };
+            if (routed.exclusive) {
+              finalNextQuestions = [routerQuestion];
+            } else if (Array.isArray(gptResponse.next_questions) && gptResponse.next_questions.length > 0) {
+              finalNextQuestions = [routerQuestion, ...gptResponse.next_questions.slice(1)];
+            } else {
+              finalNextQuestions = [routerQuestion];
+            }
+          }
+          finalNextQuestion = null;
+        } else if (routed.r2Batch && routed.r2Batch.length > 0) {
+          // ── TURN 2 ──
+          // The router owns R2 too. Serve r2Batch on the turn AFTER R1 answers
+          // were submitted, before the AI gets a chance to invent a duplicate
+          // or context-mismatched follow-up. Detection rule: any R1 batch id
+          // appears in updatedConfirmed (R1 was answered) AND no R2 batch id
+          // appears yet (R2 hasn't been served and answered). Same architectural
+          // commitment as R1  -  AI is bypassed for question selection only;
+          // it still owns scoring, response_text, and finalize logic.
+          const r2Ids = new Set(routed.r2Batch.map(q => q.id));
+          const r1Ids = new Set((routed.r1Batch ?? []).map(q => q.id));
+          const answeredKeys = Object.keys(updatedConfirmed);
+          const anyR1Answered = r1Ids.size > 0 && answeredKeys.some(k => r1Ids.has(k));
+          const anyR2Answered = answeredKeys.some(k => r2Ids.has(k));
+          if (anyR1Answered && !anyR2Answered) {
+            finalNextQuestions = routed.r2Batch.map(q => ({
+              id: q.id,
+              text: q.text,
+              options: q.options,
+              allow_free_text: q.allow_free_text,
+              ...(q.description ? { description: q.description } : {}),
+            }));
+            finalNextQuestion = null;
           }
         }
-        finalNextQuestion = null;
       }
     }
 
