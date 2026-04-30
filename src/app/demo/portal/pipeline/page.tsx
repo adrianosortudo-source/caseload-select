@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { getDemoFirmId } from "@/lib/demo-firm";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import FunnelBar from "@/app/portal/[firmId]/pipeline/FunnelBar";
-import PipelineLayoutPicker from "@/components/portal/PipelineLayoutPicker";
+import PipelineBoard from "@/app/portal/[firmId]/pipeline/PipelineBoard";
 
 export const dynamic = "force-dynamic";
 
@@ -90,7 +90,7 @@ export default async function DemoPortalPipeline() {
       </div>
 
       <FunnelBar counts={funnelCounts} />
-      <PipelineLayoutPicker columns={columns} />
+      <PipelineBoard columns={columns} />
     </div>
   );
 }
