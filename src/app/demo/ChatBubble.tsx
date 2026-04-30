@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { IntakeWidget } from "@/components/intake/IntakeWidget";
 import type { DemoFirmBranding } from "./provision-demo-firm";
 
 type View = "menu" | "sms" | "chat" | "whatsapp";
@@ -54,7 +53,32 @@ export default function ChatBubble({ firmId, firmName, branding }: ChatBubblePro
       </button>
 
       {/* ── Widget panel ── */}
-      {open && (
+      {open && view === "chat" && (
+        /* Chat view: full iframe panel — ChatWidget owns its own header */
+        <div className="fixed bottom-24 right-6 z-50 w-80 sm:w-96 rounded-2xl shadow-2xl overflow-hidden"
+          style={{ height: "580px", maxHeight: "calc(100vh - 120px)" }}>
+          <iframe
+            src={`/widget-v3/${firmId}`}
+            title="Start Your Consultation"
+            allow="microphone"
+            className="w-full h-full border-0 block"
+          />
+          {/* Back to menu — small pill overlay at bottom-left */}
+          <button
+            onClick={() => setView("menu")}
+            className="absolute bottom-3 left-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium text-white/80 hover:text-white transition"
+            style={{ backgroundColor: "rgba(0,0,0,0.35)", backdropFilter: "blur(4px)" }}
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            More options
+          </button>
+        </div>
+      )}
+
+      {open && view !== "chat" && (
+        /* Menu / SMS views: standard header + body panel */
         <div className="fixed bottom-24 right-6 z-50 w-80 sm:w-96 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
           style={{ maxHeight: "calc(100vh - 120px)" }}>
 
@@ -174,29 +198,6 @@ export default function ChatBubble({ firmId, firmName, branding }: ChatBubblePro
                     </button>
                   </form>
                 )}
-              </div>
-            )}
-
-            {/* ── Live Chat (AI widget) ── */}
-            {view === "chat" && (
-              <div className="p-2">
-                <button onClick={() => setView("menu")} className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 mb-2 px-2">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                  Back
-                </button>
-                <IntakeWidget
-                  firmId={firmId}
-                  firmName={firmName}
-                  accentColor={ACCENT}
-                  assistantName={ASSISTANT_NAME}
-                  assistantAvatar="/brand/logos/icon-light-transparent.png"
-                  firmPhone={PHONE_DISPLAY}
-                  firmPhoneTel={PHONE}
-                  firmBookingUrl={branding.booking_url || undefined}
-                  firmPrivacyUrl={branding.privacy_policy_url || undefined}
-                />
               </div>
             )}
           </div>
