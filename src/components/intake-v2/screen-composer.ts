@@ -58,23 +58,26 @@ export function composeScreens(questions: ApiQuestion[]): Screen[] {
 
     const optCount = q.options?.length ?? 0;
 
-    // No options at all → synthesize a generic Yes / No / Not sure / Other
-    // option set so the prospect always has tappable choices. The AI is
-    // instructed to never return empty-options questions in widget mode, but
-    // when one slips through this fallback ensures the experience stays
-    // tap-driven. allow_free_text stays true so "Other" reveals a text input.
+    // No options + allow_free_text → free-text TextCard (event-derived questions
+    // like "When did the incident happen?" are intentionally free-text).
+    // No options + no allow_free_text → synthesize Yes/No/Not sure as a fallback
+    // for GPT responses that accidentally omit options.
     if (optCount === 0) {
       flushChips();
-      const synthesized: typeof q = {
-        ...q,
-        options: [
-          { label: "Yes",      value: "yes" },
-          { label: "No",       value: "no" },
-          { label: "Not sure", value: "unsure" },
-        ],
-        allow_free_text: true,
-      };
-      screens.push({ kind: "solo", items: [toScreenItem(synthesized, "card")] });
+      if (q.allow_free_text) {
+        screens.push({ kind: "solo", items: [toScreenItem(q, "text")] });
+      } else {
+        const synthesized: typeof q = {
+          ...q,
+          options: [
+            { label: "Yes",      value: "yes" },
+            { label: "No",       value: "no" },
+            { label: "Not sure", value: "unsure" },
+          ],
+          allow_free_text: true,
+        };
+        screens.push({ kind: "solo", items: [toScreenItem(synthesized, "card")] });
+      }
       continue;
     }
 
