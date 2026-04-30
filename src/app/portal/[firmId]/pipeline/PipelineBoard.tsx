@@ -5,7 +5,10 @@
  *
  * No drag-drop, no stage mutations, no CPI scores.
  * Shows: first name + last initial, practice area, band badge, days in stage.
+ * Cards link to the lead detail (intelligence dashboard) when href is provided.
  */
+
+import Link from "next/link";
 
 const BAND_STYLE: Record<string, string> = {
   A: "bg-emerald-100 text-emerald-800 border-emerald-200",
@@ -29,6 +32,7 @@ interface Card {
   practice_area: string | null;
   band: string | null;
   days_in_stage: number;
+  href?: string;
 }
 
 interface Column {
@@ -39,8 +43,8 @@ interface Column {
 
 function LeadCard({ card }: { card: Card }) {
   const band = card.band?.toUpperCase() ?? null;
-  return (
-    <div className="bg-white rounded-lg border border-black/6 p-3 shadow-sm space-y-2">
+  const inner = (
+    <div className={`bg-white rounded-lg border border-black/6 p-3 shadow-sm space-y-2 ${card.href ? "hover:border-navy/20 hover:shadow-md transition-shadow cursor-pointer" : ""}`}>
       <div className="flex items-start justify-between gap-2">
         <span className="text-sm font-medium text-black/80 leading-snug">{card.name}</span>
         {band && (
@@ -54,13 +58,21 @@ function LeadCard({ card }: { card: Card }) {
           {card.practice_area}
         </span>
       )}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-between gap-1.5">
         <span className="text-[10px] text-black/35">
           {card.days_in_stage === 0 ? "Today" : `${card.days_in_stage}d in stage`}
         </span>
+        {card.href && (
+          <span className="text-[10px] text-navy/50 font-medium">View →</span>
+        )}
       </div>
     </div>
   );
+
+  if (card.href) {
+    return <Link href={card.href}>{inner}</Link>;
+  }
+  return inner;
 }
 
 export default function PipelineBoard({ columns }: { columns: Column[] }) {

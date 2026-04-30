@@ -116,6 +116,7 @@ export default async function PipelinePage({
         practice_area: (l.case_type as string | null) ?? null,
         band: ((l.priority_band ?? l.band) as string | null) ?? null,
         days_in_stage: daysSince(l.stage_changed_at as string | null),
+        href: `/portal/${firmId}/leads/${l.id as string}`,
       })),
   }));
 

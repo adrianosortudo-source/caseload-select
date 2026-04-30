@@ -76,6 +76,7 @@ export default async function DemoPortalPipeline() {
         practice_area: (l.case_type as string | null) ?? null,
         band: ((l.priority_band ?? l.band) as string | null) ?? null,
         days_in_stage: daysSince(l.stage_changed_at as string | null),
+        href: `/demo/portal/leads/${l.id as string}`,
       })),
   }));
 
