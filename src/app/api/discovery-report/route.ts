@@ -15,7 +15,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 
-const RECIPIENT = "adrianosortudo@gmail.com";
+const RECIPIENT = "adriano@caseloadselect.ca";
 const SUBJECT_PREFIX = "CaseLoad Select Discovery Report: ";
 
 // Allow CORS for ChatGPT action calls
