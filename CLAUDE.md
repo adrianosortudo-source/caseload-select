@@ -158,6 +158,113 @@ Product name: **CaseLoad Screen**. "Case Review" and "Intake OS" are deprecated 
 
 Embeddable at `/widget/[firmId]` as iframe on firm websites.
 
+## Lawyer Triage Portal (CaseLoad Screen 2.0 / CRM Bible v5 era)
+
+A NEW surface inside the existing portal, alongside the legacy Dashboard / Pipeline / Phases tabs, consuming output from CaseLoad Screen 2.0 (the Vite SPA at `https://caseload-screen-v2.vercel.app`). The lawyer's daily decision surface for inbound leads.
+
+### Distinct from the legacy machinery
+
+The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), and 12-journey sequence engine are **untouched** by this work. The triage portal reads from a NEW table (`screened_leads`) populated by a NEW endpoint (`/api/intake-v2`). The two systems run side by side; the legacy CRM Bible v3 dashboard continues serving until the legacy data is migrated or aged out (separate decision).
+
+### Tables
+
+| Table | Purpose |
+|---|---|
+| `screened_leads` | Main store for Screen 2.0 output. Brief JSON + brief HTML + slot answers, four-axis scores, lifecycle status, decision deadline, derived flags (whale_nurture, band_c_subtrack). Migration: `20260505_screened_leads.sql`. Lifecycle enum hard-enforced: `triaging` / `taken` / `passed` / `declined`. |
+| `firm_decline_templates` | Per-firm and per-practice-area decline copy. Three-layer resolver: `screened_leads.status_note` (per-lead override) → per-PA → firm default → system fallback in `lib/decline-resolver-pure`. Migration: `20260505_firm_decline_templates.sql`. |
+| `webhook_outbox` | At-least-once delivery store for outbound GHL webhooks. Idempotency-keyed on `(lead_id, action)`. Migration: `20260505_webhook_outbox.sql`. |
+
+### Routes
+
+| Route | Purpose |
+|---|---|
+| `/portal/[firmId]/triage` | Triage queue page. Sorted Band A → B → C with deadline tiebreaker. `?band=A\|B\|C` filter. |
+| `/portal/[firmId]/triage/[leadId]` | Single brief view. Renders `brief_html` verbatim, sticky Take/Pass action bar at bottom. |
+| `POST /api/intake-v2` | Persistence endpoint — Screen 2.0 POSTs here. Demo skip on missing/invalid firmId. Fires `declined_oos` webhook for OOS leads. |
+| `POST /api/portal/request-link` | Lawyer-initiated magic link. Resolves email via `intake_firms.branding.lawyer_email`. Always 200 to block enumeration. |
+| `GET /api/portal/[firmId]/triage` | Queue API endpoint. Same data as the page. |
+| `GET /api/portal/[firmId]/triage/[leadId]` | Brief API endpoint. |
+| `POST /api/portal/[firmId]/triage/[leadId]/take` | Take action — flips status to `taken`, fires `taken` webhook. |
+| `POST /api/portal/[firmId]/triage/[leadId]/pass` | Pass action — flips status to `passed`, body `{ note? }`, fires `passed` webhook with resolved decline copy. |
+| `GET /api/cron/triage-backstop` | Backstop sweeper for expired triaging rows. Wired, not scheduled (Hobby plan caps daily). |
+| `GET /api/cron/webhook-retry` | Outbox retry sweeper. Wired, not scheduled. |
+| `GET /api/admin/webhook-outbox` | Operator-visible delivery log. Filters: `firm_id`, `status`. CRON_SECRET auth. |
+| `POST /api/admin/webhook-outbox/[outboxId]/retry` | Operator manual retry. Resets attempts to 0. |
+
+### Auth model
+
+Same HMAC magic-link pattern as the legacy Client Portal (`portal-auth.ts`). 48h link, 30-day session cookie, `/portal` scoped. The lawyer-initiated request-link endpoint extends this with Resend email sending; the operator-provisioned `/api/portal/generate` continues to work.
+
+### GHL webhook contract
+
+Versioned artifact at `docs/ghl-webhook-contract.md`. Four actions (`taken`, `passed`, `declined_oos`, `declined_backstop`), one common envelope, action-specific extension keyed by action name. Idempotency: `<lead_id>:<action>`. Delivery: at-least-once via the outbox.
+
+### Locked decisions (CRM Bible v5)
+
+| Decision | Value |
+|---|---|
+| Whale nurture trigger | `value_score ≥ 7 AND readiness_score ≤ 4` |
+| Decision-deadline tiers | 48h default; 24h at urgency ≥ 6; 12h at urgency ≥ 8 |
+| Lifecycle states | `triaging` / `taken` / `passed` / `declined` (hard-enforced via DB CHECK constraint) |
+| Decline copy resolution | per-lead override → per-PA → firm default → system fallback |
+| Webhook delivery | At-least-once via `webhook_outbox`, exponential backoff, max 5 attempts |
+
+### Source files (key map)
+
+```
+src/
+├── app/
+│   ├── api/
+│   │   ├── intake-v2/route.ts                          # Screen 2.0 persistence
+│   │   ├── portal/
+│   │   │   ├── request-link/route.ts                   # Lawyer-initiated magic link
+│   │   │   └── [firmId]/triage/
+│   │   │       ├── route.ts                            # Queue API
+│   │   │       └── [leadId]/
+│   │   │           ├── route.ts                        # Brief API
+│   │   │           ├── take/route.ts                   # Take action
+│   │   │           └── pass/route.ts                   # Pass action
+│   │   ├── cron/
+│   │   │   ├── triage-backstop/route.ts                # Deadline-expiry sweeper
+│   │   │   └── webhook-retry/route.ts                  # Outbox retry sweeper
+│   │   └── admin/webhook-outbox/
+│   │       ├── route.ts                                # Operator listing
+│   │       └── [outboxId]/retry/route.ts               # Manual retry
+│   └── portal/[firmId]/triage/
+│       ├── page.tsx                                    # Queue page
+│       └── [leadId]/
+│           ├── page.tsx                                # Brief page
+│           └── brief.css                               # Scoped brief styles
+├── components/portal/
+│   ├── DecisionTimer.tsx                               # Live countdown
+│   ├── TriageActionBar.tsx                             # Sticky Take/Pass bar
+│   ├── RefreshOnFocus.tsx                              # Queue auto-refresh
+│   └── RequestLinkForm.tsx                             # Login email form
+└── lib/
+    ├── intake-v2-derive.ts                             # Pure: timer/whale/initial-status/clamp
+    ├── decline-resolver.ts / -pure.ts                  # Three-layer decline copy resolution
+    ├── ghl-webhook.ts / -pure.ts                       # Payload builders + delivery
+    ├── webhook-outbox.ts / -pure.ts                    # At-least-once delivery + backoff
+    ├── triage-sort.ts                                  # Pure queue comparator
+    ├── decision-timer.ts                               # Pure timer math
+    └── screened-leads-labels.ts                        # Display labels
+```
+
+### Vercel Hobby plan caveats
+
+Two crons are wired and ready (`triage-backstop`, `webhook-retry`) but **not scheduled in `vercel.json`** because the account is on Hobby (caps daily, which combined with the 48h decision window introduces unacceptable latency). To enable: upgrade to Vercel Pro and add hourly entries, OR migrate to Supabase pg_cron + pg_net.
+
+Both routes are CRON_SECRET-auth'd and manually triggerable in the meantime. The `/api/admin/webhook-outbox/[id]/retry` endpoint also lets the operator re-fire individual deliveries on demand.
+
+### Phase 4+ deferred
+
+- Schedule the two crons (Pro plan or pg_cron decision)
+- Webhook delivery admin UI (currently CRON_SECRET REST only)
+- Supabase Realtime queue subscription (replace RefreshOnFocus)
+- HMAC signature header on outbound webhooks (when GHL adds inbound shared-secret support)
+- Per-lawyer auth tier for 2-lawyer firms (currently single firm-scoped session per firm)
+- v5 operator dashboard reading from `screened_leads` (deferred until real lead flow accumulates)
+
 ## Sequence Engine (sequence-engine.ts + send-sequences.ts)
 
 `triggerSequence(leadId, triggerEvent)` inserts scheduled rows into `email_sequences`. The generic processor `src/lib/send-sequences.ts` runs every 15 minutes via `/api/cron/send-sequences` and sends due rows. Exit conditions per trigger_event are enforced: if a lead has moved away from the expected stage, remaining scheduled steps are skipped.
