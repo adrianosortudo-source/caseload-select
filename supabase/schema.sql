@@ -309,6 +309,34 @@
 --   idx_screened_leads_created         (created_at DESC)             -- cross-firm time windows
 --   idx_screened_leads_firm_created    (firm_id, created_at DESC)    -- per-firm time windows
 --   idx_screened_leads_status_band     (status, band)                -- cross-firm rollups
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- firm_decline_templates                       (migration: 20260505_firm_decline_templates.sql)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Three-layer decline copy storage for the lawyer triage Pass action and the
+-- two auto-decline paths (OOS at intake, backstop on deadline expiry).
+-- The per-lead override (layer 1) lives on screened_leads.status_note;
+-- this table holds layers 2 and 3 (per-PA variant and firm default).
+--
+-- id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- firm_id         uuid NOT NULL REFERENCES intake_firms(id) ON DELETE CASCADE
+-- practice_area   text                        -- NULL = firm default; non-null = per-area variant
+-- subject         text                        -- email subject; falls back to "Re: your inquiry"
+-- body            text NOT NULL               -- email body (plain or simple inline HTML)
+-- created_at      timestamptz NOT NULL DEFAULT now()
+-- updated_at      timestamptz NOT NULL DEFAULT now()
+--
+-- Unique:
+--   uniq_firm_decline_templates_pair (firm_id, practice_area) NULLS NOT DISTINCT
+--     — enforces one default per firm and one variant per (firm, area) pair
+--
+-- Resolution at decline time (lib/decline-resolver.ts):
+--   1. screened_leads.status_note (per-lead override)
+--   2. firm_decline_templates where firm_id + practice_area
+--   3. firm_decline_templates where firm_id + practice_area IS NULL
+--   4. hard-coded system fallback in lib/decline-resolver.ts
+--
+-- RLS forced; service_role only.
 --
 -- RLS: enabled and forced. service_role only (no anon, no authenticated path).
 

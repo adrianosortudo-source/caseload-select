@@ -61,6 +61,19 @@ import {
   computeInitialStatus,
   clampAxis,
 } from "@/lib/intake-v2-derive";
+import { loadDeclineCandidates, resolveDecline } from "@/lib/decline-resolver";
+import { buildDeclinedOosPayload, fireGhlWebhook, type LeadFacts } from "@/lib/ghl-webhook";
+
+// Practice-area display labels for the OOS decline copy interpolation. Matches
+// the engine's labels in the screen for consistency with what the lead saw.
+const OOS_AREA_LABELS: Record<string, string> = {
+  family: "family law",
+  immigration: "immigration",
+  employment: "employment",
+  criminal: "criminal",
+  personal_injury: "personal injury",
+  estates: "wills and estates",
+};
 
 interface IntakeAxes {
   value: number;
@@ -228,6 +241,43 @@ export async function POST(req: NextRequest) {
       { error: `insert failed: ${insertErr.message}` },
       { status: 500, headers: corsHeaders }
     );
+  }
+
+  // OOS auto-decline webhook (CRM Bible v5 DR-006). Fired AFTER insert succeeds
+  // so a webhook never goes out for a row that did not land. Best-effort
+  // delivery; failure does not roll back the insert.
+  if (matterType === 'out_of_scope') {
+    const candidates = await loadDeclineCandidates({
+      firmId: firmIdParam,
+      practiceArea: body.practice_area as string,
+      perLeadOverride: null,
+    });
+    const areaLabel = OOS_AREA_LABELS[body.practice_area as string] ?? "this practice area";
+    const verdict = resolveDecline(candidates, "oos", areaLabel);
+
+    const facts: LeadFacts = {
+      lead_id: body.lead_id as string,
+      firm_id: firmIdParam,
+      band: null,
+      matter_type: matterType,
+      practice_area: body.practice_area as string,
+      submitted_at: body.submitted_at ?? now.toISOString(),
+      contact_name: body.contact?.name ?? null,
+      contact_email: body.contact?.email ?? null,
+      contact_phone: body.contact?.phone ?? null,
+    };
+    const payload = buildDeclinedOosPayload({
+      facts,
+      statusChangedAt: now,
+      declineSubject: verdict.subject,
+      declineBody: verdict.body,
+      declineSource: verdict.source,
+      detectedAreaLabel: areaLabel,
+    });
+    // Fire and forget — we don't surface delivery state to the screen, which
+    // already moved on. The result is observable via the firm's GHL inbox or
+    // (Phase 3) the webhook_outbox table.
+    void fireGhlWebhook(firmIdParam, payload);
   }
 
   return NextResponse.json(

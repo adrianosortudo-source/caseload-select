@@ -18,6 +18,7 @@ import { notFound } from "next/navigation";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { matterLabel, subtrackLabel } from "@/lib/screened-leads-labels";
 import DecisionTimer from "@/components/portal/DecisionTimer";
+import TriageActionBar from "@/components/portal/TriageActionBar";
 
 interface LeadRow {
   lead_id: string;
@@ -73,7 +74,12 @@ export default async function TriageLeadPage({
       <Header row={row} subtrack={subtrack} />
       {row.status !== "triaging" && <StatusBanner status={row.status} />}
       <BriefFrame html={row.brief_html} />
-      <ActionBarPlaceholder />
+      <TriageActionBar
+        firmId={firmId}
+        leadId={row.lead_id}
+        band={row.band}
+        initialStatus={row.status}
+      />
     </div>
   );
 }
@@ -178,32 +184,3 @@ function BriefFrame({ html }: { html: string }) {
   );
 }
 
-function ActionBarPlaceholder() {
-  return (
-    <div className="fixed inset-x-0 bottom-0 bg-white border-t border-black/10 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.04)]">
-      <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-        <p className="text-xs text-black/50 uppercase tracking-wider">
-          Take / Pass actions ship in Phase 2
-        </p>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled
-            className="bg-stone-200 text-stone-500 px-4 py-2 text-sm font-semibold uppercase tracking-wider cursor-not-allowed"
-            title="Phase 2"
-          >
-            Pass
-          </button>
-          <button
-            type="button"
-            disabled
-            className="bg-stone-300 text-stone-500 px-4 py-2 text-sm font-semibold uppercase tracking-wider cursor-not-allowed"
-            title="Phase 2"
-          >
-            Take
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}

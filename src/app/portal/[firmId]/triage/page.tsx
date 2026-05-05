@@ -20,6 +20,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { matterLabel, subtrackLabel } from "@/lib/screened-leads-labels";
 import { sortTriageRows } from "@/lib/triage-sort";
 import DecisionTimer from "@/components/portal/DecisionTimer";
+import RefreshOnFocus from "@/components/portal/RefreshOnFocus";
 
 interface QueueRow {
   lead_id: string;
@@ -70,6 +71,7 @@ export default async function TriageQueuePage({
 
   return (
     <div className="space-y-6">
+      <RefreshOnFocus />
       <Header count={rows.length} />
       {rows.length === 0 ? (
         <EmptyState />

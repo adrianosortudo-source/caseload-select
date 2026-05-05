@@ -1,0 +1,136 @@
+/**
+ * POST /api/portal/[firmId]/triage/[leadId]/take
+ *
+ * Lawyer-initiated Take action. Flips the lead's status from 'triaging' to
+ * 'taken', then fires the band-driven cadence webhook to GHL.
+ *
+ * Auth: portal session must match firmId.
+ *
+ * Idempotency: if the row is already in 'taken' state, the endpoint returns
+ * 200 with the existing state (no second webhook fired). For any other
+ * non-triaging state ('passed' / 'declined'), returns 409 — the lawyer
+ * cannot take a passed or declined lead.
+ *
+ * Webhook delivery: at-most-once. If the webhook fails after the DB update
+ * succeeded, the row stays 'taken' and the operator surfaces the failure.
+ * See docs/ghl-webhook-contract.md for the contract.
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { getPortalSession } from "@/lib/portal-auth";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { buildTakenPayload, fireGhlWebhook, type LeadFacts } from "@/lib/ghl-webhook";
+
+interface BriefJson {
+  matter_snapshot?: string;
+  fee_estimate?: string;
+}
+
+interface LeadRow {
+  lead_id: string;
+  firm_id: string;
+  status: "triaging" | "taken" | "passed" | "declined";
+  band: "A" | "B" | "C" | null;
+  matter_type: string;
+  practice_area: string;
+  submitted_at: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  brief_json: BriefJson | null;
+}
+
+export async function POST(
+  _req: NextRequest,
+  { params }: { params: Promise<{ firmId: string; leadId: string }> }
+) {
+  const { firmId, leadId } = await params;
+  const session = await getPortalSession();
+  if (!session || session.firm_id !== firmId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Load the lead. 404 covers cross-firm; 409 covers already-non-triaging.
+  const { data: existing, error: fetchErr } = await supabase
+    .from("screened_leads")
+    .select(`
+      lead_id, firm_id, status,
+      band, matter_type, practice_area, submitted_at,
+      contact_name, contact_email, contact_phone,
+      brief_json
+    `)
+    .eq("lead_id", leadId)
+    .maybeSingle();
+
+  if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+  if (!existing || existing.firm_id !== firmId) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const lead = existing as LeadRow;
+
+  // Idempotent: if already taken, return the current state without re-firing.
+  if (lead.status === "taken") {
+    return NextResponse.json({
+      ok: true,
+      already: true,
+      lead_id: lead.lead_id,
+      status: lead.status,
+    });
+  }
+  if (lead.status === "passed" || lead.status === "declined") {
+    return NextResponse.json(
+      {
+        error: `Lead is already ${lead.status}; cannot Take.`,
+        current_status: lead.status,
+      },
+      { status: 409 },
+    );
+  }
+
+  // Update first, fire webhook second. The order matters: if the webhook fails
+  // after the DB update, the row is in the correct state and the operator can
+  // re-fire. The reverse would leave the cadence engaged for a row still
+  // showing as triaging.
+  const now = new Date();
+  const { error: updateErr } = await supabase
+    .from("screened_leads")
+    .update({
+      status: "taken",
+      status_changed_at: now.toISOString(),
+      status_changed_by: "lawyer",
+    })
+    .eq("lead_id", leadId)
+    .eq("firm_id", firmId)
+    .eq("status", "triaging"); // guard against race with another tab
+
+  if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
+
+  // Build and fire the webhook.
+  const facts: LeadFacts = {
+    lead_id: lead.lead_id,
+    firm_id: lead.firm_id,
+    band: lead.band,
+    matter_type: lead.matter_type,
+    practice_area: lead.practice_area,
+    submitted_at: lead.submitted_at,
+    contact_name: lead.contact_name,
+    contact_email: lead.contact_email,
+    contact_phone: lead.contact_phone,
+  };
+  const payload = buildTakenPayload({
+    facts,
+    statusChangedAt: now,
+    statusChangedBy: "lawyer",
+    feeEstimate: lead.brief_json?.fee_estimate ?? null,
+    matterSnapshot: lead.brief_json?.matter_snapshot ?? null,
+  });
+  const delivery = await fireGhlWebhook(firmId, payload);
+
+  return NextResponse.json({
+    ok: true,
+    lead_id: leadId,
+    status: "taken",
+    webhook: delivery,
+  });
+}
