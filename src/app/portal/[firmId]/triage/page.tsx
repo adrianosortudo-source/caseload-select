@@ -43,12 +43,19 @@ interface QueueRow {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type BandFilter = "all" | "A" | "B" | "C";
+
 export default async function TriageQueuePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ firmId: string }>;
+  searchParams: Promise<{ band?: string }>;
 }) {
   const { firmId } = await params;
+  const { band: bandRaw } = await searchParams;
+  const bandFilter: BandFilter =
+    bandRaw === "A" || bandRaw === "B" || bandRaw === "C" ? bandRaw : "all";
 
   const { data, error } = await supabase
     .from("screened_leads")
@@ -67,14 +74,28 @@ export default async function TriageQueuePage({
     );
   }
 
-  const rows = sortTriageRows((data ?? []) as QueueRow[]);
+  const allRows = sortTriageRows((data ?? []) as QueueRow[]);
+  const totalCount = allRows.length;
+  const rows = bandFilter === "all"
+    ? allRows
+    : allRows.filter((r) => r.band === bandFilter);
+
+  // Counts per band for the filter row, computed off the unfiltered list so
+  // the buttons always show absolute totals not "self-filtered" zeros.
+  const counts = {
+    all: totalCount,
+    A: allRows.filter((r) => r.band === "A").length,
+    B: allRows.filter((r) => r.band === "B").length,
+    C: allRows.filter((r) => r.band === "C").length,
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <RefreshOnFocus />
-      <Header count={rows.length} />
+      <Header count={totalCount} />
+      <BandFilterRow firmId={firmId} active={bandFilter} counts={counts} />
       {rows.length === 0 ? (
-        <EmptyState />
+        <EmptyState filtered={bandFilter !== "all"} />
       ) : (
         <ul className="space-y-3">
           {rows.map((row) => (
@@ -84,6 +105,51 @@ export default async function TriageQueuePage({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function BandFilterRow({
+  firmId,
+  active,
+  counts,
+}: {
+  firmId: string;
+  active: BandFilter;
+  counts: Record<BandFilter, number>;
+}) {
+  const tabs: Array<{ key: BandFilter; label: string }> = [
+    { key: "all", label: "All" },
+    { key: "A",   label: "Band A" },
+    { key: "B",   label: "Band B" },
+    { key: "C",   label: "Band C" },
+  ];
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {tabs.map((t) => {
+        const isActive = active === t.key;
+        const href = t.key === "all"
+          ? `/portal/${firmId}/triage`
+          : `/portal/${firmId}/triage?band=${t.key}`;
+        return (
+          <Link
+            key={t.key}
+            href={href}
+            className={`
+              inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border transition-colors
+              ${isActive
+                ? "border-navy bg-navy text-white"
+                : "border-black/15 bg-white text-black/70 hover:border-navy hover:text-navy"
+              }
+            `}
+          >
+            <span>{t.label}</span>
+            <span className={`font-mono text-[10px] ${isActive ? "text-white/70" : "text-black/40"}`}>
+              {counts[t.key]}
+            </span>
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -102,11 +168,13 @@ function Header({ count }: { count: number }) {
   );
 }
 
-function EmptyState() {
+function EmptyState({ filtered }: { filtered?: boolean }) {
   return (
     <div className="bg-white border border-black/8 px-6 py-10 text-center">
       <p className="text-sm text-black/60">
-        No leads currently in triage. New screenings land here as they arrive.
+        {filtered
+          ? "No leads in this band currently in triage. Try clearing the filter."
+          : "No leads currently in triage. New screenings land here as they arrive."}
       </p>
     </div>
   );

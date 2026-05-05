@@ -341,6 +341,35 @@
 -- RLS: enabled and forced. service_role only (no anon, no authenticated path).
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- webhook_outbox                               (migration: 20260505_webhook_outbox.sql)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- At-least-once delivery for GHL outbound webhooks fired by the lawyer
+-- triage action endpoints (Take, Pass, OOS auto-decline, backstop).
+--
+-- id                   uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- lead_id              text NOT NULL
+-- firm_id              uuid NOT NULL REFERENCES intake_firms(id) ON DELETE CASCADE
+-- action               text NOT NULL                  -- taken | passed | declined_oos | declined_backstop
+-- idempotency_key      text NOT NULL                  -- "<lead_id>:<action>", UNIQUE
+-- payload              jsonb NOT NULL                 -- the WebhookPayload at insert time
+-- webhook_url          text NOT NULL                  -- snapshotted at insert; rotation-safe
+-- status               text NOT NULL DEFAULT 'pending' -- pending | sent | failed
+-- attempts             integer NOT NULL DEFAULT 0
+-- max_attempts         integer NOT NULL DEFAULT 5
+-- next_attempt_at      timestamptz NOT NULL DEFAULT now()
+-- last_error           text
+-- last_http_status     integer
+-- created_at, updated_at, sent_at, failed_at
+--
+-- Indexes:
+--   uniq_webhook_outbox_idempotency  (idempotency_key) UNIQUE
+--   idx_webhook_outbox_retry         (next_attempt_at) WHERE status = 'pending'
+--   idx_webhook_outbox_firm_timeline (firm_id, created_at DESC)
+--
+-- Backoff: 30s, 2m, 8m, 32m, 6h cap. After 5 failed attempts → 'failed';
+-- operator can manually retry via /api/admin/webhook-outbox/[id]/retry.
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- retainer_agreements                          (migration: 20260414_retainer_agreements.sql)
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Triggered automatically for Band A/B leads after Round 3 completion.

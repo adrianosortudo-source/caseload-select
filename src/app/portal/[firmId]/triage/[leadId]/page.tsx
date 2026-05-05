@@ -19,6 +19,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { matterLabel, subtrackLabel } from "@/lib/screened-leads-labels";
 import DecisionTimer from "@/components/portal/DecisionTimer";
 import TriageActionBar from "@/components/portal/TriageActionBar";
+import "./brief.css";
 
 interface LeadRow {
   lead_id: string;
@@ -175,9 +176,13 @@ function StatusBanner({ status }: { status: LeadRow["status"] }) {
  * captured HTML or import the screen's stylesheet.
  */
 function BriefFrame({ html }: { html: string }) {
+  // The brief HTML carries its own group panels, headers, and section
+  // structure (see brief.css for the styling contract). The outer wrapper
+  // adds only horizontal padding so the grouped panels breathe inside the
+  // portal's max-w-5xl content column.
   return (
     <div
-      className="bg-white border border-black/10 px-6 py-6 brief-frame"
+      className="brief-frame px-2 md:px-4"
       // eslint-disable-next-line react/no-danger
       dangerouslySetInnerHTML={{ __html: html }}
     />

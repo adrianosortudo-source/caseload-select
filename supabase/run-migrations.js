@@ -51,6 +51,7 @@ const MIGRATIONS = [
   "20260505_screened_leads.sql",
   "20260505_screened_leads_dashboard_indexes.sql",
   "20260505_firm_decline_templates.sql",
+  "20260505_webhook_outbox.sql",
 ];
 
 const MIGRATIONS_DIR = path.join(__dirname, "migrations");

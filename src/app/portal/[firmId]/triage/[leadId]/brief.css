@@ -1,0 +1,454 @@
+/*
+ * Portal-side brief styles.
+ *
+ * The screen captures reportArea.innerHTML at submit time and persists it
+ * verbatim. The portal renders that HTML inside a <div class="brief-frame">
+ * wrapper. This stylesheet mirrors the brief-relevant rules from the
+ * screen's style.css, all scoped under .brief-frame so they cannot leak
+ * into the rest of the portal.
+ *
+ * Fidelity contract: this file is a snapshot of the screen's brief styling
+ * at the moment Phase 2 shipped (2026-05-05). When the screen's brief
+ * styling changes meaningfully, this file should be re-synced. Drift is
+ * acceptable for minor tweaks; large redesigns require a refresh here.
+ *
+ * Source: D:\00_Work\01_CaseLoad_Select\CaseLoadScreen_2.0_2026-05-03\src\style.css
+ *         (lines roughly 700-1345 in that file, plus .band-badge at 365)
+ */
+
+.brief-frame {
+  /* Local variables so .brief-frame styles don't depend on the portal's
+     globals or Tailwind tokens. Mirrors the screen's :root values. */
+  --bf-navy:        #1E2F58;
+  --bf-navy-2:      #15224A;
+  --bf-gold:        #C4B49A;
+  --bf-gold-2:      #B6A487;
+  --bf-parchment:   #F4F3EF;
+  --bf-parchment-2: #EFEDE6;
+  --bf-black:       #0D1520;
+  --bf-white:       #FFFFFF;
+  --bf-gray-100:    #F0EFE9;
+  --bf-gray-200:    #E4E2DB;
+  --bf-gray-300:    #CFCBC2;
+  --bf-gray-400:    #9B9690;
+  --bf-gray-600:    #5C5850;
+  --bf-gray-700:    #3F3C36;
+  --bf-band-a:      #0F6B3C;
+  --bf-band-b:      #7D5B00;
+  --bf-band-c:      #8B2E00;
+  --bf-radius:      4px;
+
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color: var(--bf-black);
+  line-height: 1.5;
+}
+
+/* Reset only inside the brief frame so portal globals stay untouched. */
+.brief-frame *, .brief-frame *::before, .brief-frame *::after {
+  box-sizing: border-box;
+}
+
+.brief-frame h1, .brief-frame h2, .brief-frame h3, .brief-frame h4 { margin: 0; }
+.brief-frame p, .brief-frame ul, .brief-frame ol, .brief-frame dl { margin: 0; padding: 0; }
+.brief-frame ul, .brief-frame ol { list-style: none; }
+
+/* ─── Meta header (id strip + LSO notice) ─────────────────────────────── */
+
+.brief-frame .brief-meta-header {
+  background: var(--bf-parchment-2);
+  padding: 14px 18px 16px;
+  margin: -8px -8px 18px;
+  border-bottom: 2px solid var(--bf-gold);
+  border-radius: var(--bf-radius);
+}
+
+.brief-frame .brief-lead-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  background: var(--bf-parchment-2);
+  border-radius: var(--bf-radius);
+  margin-bottom: 10px;
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brief-frame .brief-lead-id { color: var(--bf-navy); font-weight: 700; }
+.brief-frame .brief-lead-time {
+  color: var(--bf-gray-600);
+  font-weight: 500;
+  flex: 1 1 auto;
+}
+
+.brief-frame .brief-copy {
+  background: var(--bf-navy);
+  color: var(--bf-white);
+  border: none;
+  border-radius: var(--bf-radius);
+  padding: 6px 10px;
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.brief-frame .brief-copy:hover { background: var(--bf-navy-2); }
+
+.brief-frame .brief-notice {
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--bf-gray-600);
+  background: var(--bf-parchment);
+  border-left: 3px solid var(--bf-gold);
+  padding: 10px 14px;
+  margin: 0;
+}
+
+/* ─── Truth warnings (yellow panel above band) ────────────────────────── */
+
+.brief-frame .brief-truth-warnings {
+  background: #FFF3CD;
+  border: 1px solid #f5d57b;
+  border-radius: var(--bf-radius);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.brief-frame .brief-truth-title {
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bf-band-b);
+  margin-bottom: 6px;
+}
+
+.brief-frame .brief-truth-list li {
+  font-size: 0.88rem;
+  color: var(--bf-gray-700);
+  padding: 3px 0 3px 14px;
+  position: relative;
+  line-height: 1.5;
+}
+.brief-frame .brief-truth-list li::before {
+  content: '!';
+  position: absolute;
+  left: 0;
+  top: 3px;
+  font-weight: 800;
+  color: var(--bf-band-b);
+}
+
+/* ─── Band header ──────────────────────────────────────────────────────── */
+
+.brief-frame .brief-band {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.brief-frame .band-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 2px;
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.brief-frame .band-A { background: #D4EDDA; color: var(--bf-band-a); }
+.brief-frame .band-B { background: #FFF3CD; color: var(--bf-band-b); }
+.brief-frame .band-C { background: #FFE0D6; color: var(--bf-band-c); }
+
+.brief-frame .brief-priority {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--bf-navy);
+}
+
+.brief-frame .brief-calibration {
+  font-size: 0.85rem;
+  color: var(--bf-gray-700);
+  margin-bottom: 18px;
+}
+
+/* ─── Group panels (Decision / Commercial / Call prep / Facts) ────────── */
+
+.brief-frame .brief-group {
+  background: var(--bf-white);
+  border: 1px solid var(--bf-gray-200);
+  border-radius: var(--bf-radius);
+  padding: 22px 24px;
+  margin-bottom: 18px;
+}
+
+.brief-frame .brief-group[data-group="headline"] {
+  background: var(--bf-parchment-2);
+  border-color: var(--bf-gold);
+}
+.brief-frame .brief-group[data-group="commercial"] { background: #FBFAF6; }
+.brief-frame .brief-group[data-group="callprep"]   { background: var(--bf-white); }
+.brief-frame .brief-group[data-group="facts"]      { background: #F7F6F1; }
+.brief-frame .brief-group[data-group="routing"]    { background: var(--bf-parchment-2); }
+
+.brief-frame .brief-group-title {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bf-navy);
+  border-bottom: 2px solid var(--bf-gold);
+  padding-bottom: 8px;
+  margin-bottom: 14px;
+}
+.brief-frame .brief-group[data-group="headline"] .brief-group-title { color: var(--bf-black); }
+
+/* ─── Sections within a group ─────────────────────────────────────────── */
+
+.brief-frame .section {
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px dotted var(--bf-gray-200);
+}
+.brief-frame .section:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+
+.brief-frame .section-title {
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bf-gray-400);
+  margin-bottom: 4px;
+}
+
+.brief-frame .section-body {
+  font-size: 0.93rem;
+  line-height: 1.55;
+  color: var(--bf-black);
+}
+.brief-frame .section-body.muted { color: var(--bf-gray-400); }
+
+.brief-frame .brief-group[data-group="headline"] .section-body {
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+/* ─── Per-axis breakdown (Why this is Band X) ─────────────────────────── */
+
+.brief-frame .axis-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.brief-frame .axis-block {
+  background: var(--bf-white);
+  border: 1px solid var(--bf-gray-200);
+  border-left: 4px solid var(--bf-gold);
+  padding: 12px 16px;
+  border-radius: var(--bf-radius);
+}
+.brief-frame .axis-block-positive { border-left-color: var(--bf-band-a); }
+.brief-frame .axis-block-drag     { border-left-color: var(--bf-band-c); }
+.brief-frame .axis-block-pending  {
+  border-left-color: var(--bf-gold);
+  border-left-style: dashed;
+}
+
+.brief-frame .axis-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px dotted var(--bf-gray-200);
+}
+
+.brief-frame .axis-block-name {
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bf-gray-700);
+}
+
+.brief-frame .axis-block-score {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--bf-navy);
+  letter-spacing: -0.005em;
+}
+
+.brief-frame .axis-block-reasons li {
+  position: relative;
+  padding: 3px 0 3px 14px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--bf-black);
+}
+.brief-frame .axis-block-reasons li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 11px;
+  width: 5px;
+  height: 5px;
+  background: var(--bf-gold);
+}
+.brief-frame .axis-block-drag .axis-block-reasons li::before    { background: var(--bf-band-c); }
+.brief-frame .axis-block-pending .axis-block-reasons li::before {
+  background: var(--bf-gold-2);
+  opacity: 0.6;
+}
+
+/* ─── Bullet lists (services, openers, what to confirm, etc.) ─────────── */
+
+.brief-frame .bullet-list li {
+  position: relative;
+  padding: 4px 0 4px 16px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.brief-frame .bullet-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  width: 6px;
+  height: 6px;
+  background: var(--bf-gold);
+  border-radius: 1px;
+}
+
+/* ─── Fee block (hero number + supporting copy) ───────────────────────── */
+
+.brief-frame .fee-block { display: block; }
+
+.brief-frame .fee-range {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+  margin-bottom: 4px;
+  font-size: 1.9rem;
+  color: var(--bf-black);
+}
+
+.brief-frame .fee-supporting {
+  font-size: 0.86rem;
+  color: var(--bf-gray-700);
+  line-height: 1.5;
+}
+
+/* ─── Resolved facts with provenance ──────────────────────────────────── */
+
+.brief-frame .fact-list li.fact-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--bf-gray-100);
+  font-size: 0.88rem;
+}
+.brief-frame .fact-list li.fact-row:last-child { border-bottom: none; }
+
+.brief-frame .fact-label { color: var(--bf-gray-600); }
+.brief-frame .fact-value {
+  color: var(--bf-black);
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+}
+
+.brief-frame .fact-source {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.brief-frame .src-stated    { background: #D4EDDA; color: var(--bf-band-a); }
+.brief-frame .src-confirmed { background: #D8E4FF; color: #1E4DBA; }
+.brief-frame .src-inferred  { background: #FFF3CD; color: var(--bf-band-b); }
+.brief-frame .src-unknown   { background: var(--bf-gray-100); color: var(--bf-gray-600); }
+
+/* ─── Tag rows (risk flags, open questions) ───────────────────────────── */
+
+.brief-frame .tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.brief-frame .tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 2px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  background: var(--bf-gray-100);
+  color: var(--bf-gray-700);
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.brief-frame .tag-risk { background: #FFE0D6; color: var(--bf-band-c); }
+.brief-frame .tag-open { background: #FFF3CD; color: var(--bf-band-b); }
+.brief-frame .tag-warn {
+  background: #FFE0D6;
+  color: var(--bf-band-c);
+  border: 1px solid #f5b3a0;
+}
+
+/* ─── GHL payload preview (collapsible) ───────────────────────────────── */
+
+.brief-frame .brief-ghl-details {
+  margin-top: 20px;
+  border: 1px dashed var(--bf-gray-300);
+  border-radius: var(--bf-radius);
+  background: var(--bf-parchment);
+}
+
+.brief-frame .brief-ghl-details summary {
+  padding: 10px 14px;
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bf-gold-2);
+  cursor: pointer;
+}
+
+.brief-frame .brief-ghl-details[open] summary {
+  border-bottom: 1px solid var(--bf-gray-200);
+}
+
+.brief-frame .brief-ghl-payload {
+  padding: 14px 16px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.78rem;
+  color: var(--bf-gray-700);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--bf-white);
+}
