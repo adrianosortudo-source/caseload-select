@@ -48,6 +48,8 @@ const MIGRATIONS = [
   "20260423_rls_hardening.sql",
   "20260423_rls_hardening_fix.sql",
   "20260423_rls_hardening_sweep.sql",
+  "20260505_screened_leads.sql",
+  "20260505_screened_leads_dashboard_indexes.sql",
 ];
 
 const MIGRATIONS_DIR = path.join(__dirname, "migrations");

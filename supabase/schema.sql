@@ -1,5 +1,5 @@
 -- CaseLoad Select — Locked Schema
--- Last updated: 2026-04-18 (S7+S6+S8+S9: matter routing, storage, sequences, intake quality, retainers, portal, custom domains)
+-- Last updated: 2026-05-05 (Screen 2.0 persistence: screened_leads table)
 --
 -- This file is the authoritative schema reference. It documents the current
 -- state of the Supabase database. All future schema changes must:
@@ -261,6 +261,56 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- intake_session_id    uuid REFERENCES intake_sessions(id)  -- link to originating intake session
 --   Populated by promoteToLead() in /api/otp/verify when lead is created from intake session.
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- screened_leads                               (migration: 20260505_screened_leads.sql)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- CaseLoad Screen 2.0 persistence target. NEW table, not an extension of leads
+-- (rationale in the migration header). Populated by /api/intake-v2 when the
+-- Vite-based screen at https://caseload-screen-v2.vercel.app submits.
+-- The lawyer portal queue and brief view read from this table.
+--
+-- id                  uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- lead_id             text UNIQUE NOT NULL                    -- L-YYYY-MM-DD-XXX
+-- firm_id             uuid REFERENCES intake_firms(id) ON DELETE CASCADE
+-- screen_version      integer NOT NULL DEFAULT 2
+-- status              text NOT NULL DEFAULT 'triaging'        -- triaging | taken | passed | declined
+-- status_changed_at   timestamptz NOT NULL DEFAULT now()
+-- status_changed_by   text                                    -- lawyer email | 'system' | 'system:backstop'
+-- status_note         text                                    -- optional Pass note from lawyer
+-- brief_json          jsonb NOT NULL                          -- LawyerReport object
+-- brief_html          text NOT NULL                           -- pre-rendered moment-in-time snapshot
+-- slot_answers        jsonb NOT NULL                          -- raw EngineState slots/meta/evidence
+-- band                text                                    -- 'A' | 'B' | 'C' | NULL
+-- matter_type         text NOT NULL                           -- one of 16 in-scope or 'out_of_scope'
+-- practice_area       text NOT NULL
+-- value_score         integer (0-10)
+-- complexity_score    integer (0-10)                          -- engine-internal, displayed as Simplicity (10 - complexity)
+-- urgency_score       integer (0-10)
+-- readiness_score     integer (0-10)
+-- readiness_answered  boolean NOT NULL DEFAULT false
+-- whale_nurture       boolean NOT NULL DEFAULT false          -- value_score >= 7 AND readiness_score <= 4
+-- band_c_subtrack     text                                    -- fast_transaction | window_shopper | wrong_fit | NULL
+-- decision_deadline   timestamptz NOT NULL                    -- 48h / 24h (urgency >= 6) / 12h (urgency >= 8)
+-- contact_name        text
+-- contact_email       text
+-- contact_phone       text
+-- submitted_at        timestamptz NOT NULL DEFAULT now()
+-- created_at          timestamptz NOT NULL DEFAULT now()
+-- updated_at          timestamptz NOT NULL DEFAULT now()
+--
+-- Indexes (queue + audit, from base migration):
+--   idx_screened_leads_queue           (firm_id, status, band, decision_deadline)
+--   idx_screened_leads_lead_id         (lead_id)
+--   idx_screened_leads_status_changed  (firm_id, status_changed_at DESC)
+--   idx_screened_leads_deadline_active (decision_deadline) WHERE status = 'triaging'
+--
+-- Indexes (v5 dashboard, from 20260505_screened_leads_dashboard_indexes.sql):
+--   idx_screened_leads_created         (created_at DESC)             -- cross-firm time windows
+--   idx_screened_leads_firm_created    (firm_id, created_at DESC)    -- per-firm time windows
+--   idx_screened_leads_status_band     (status, band)                -- cross-firm rollups
+--
+-- RLS: enabled and forced. service_role only (no anon, no authenticated path).
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- retainer_agreements                          (migration: 20260414_retainer_agreements.sql)
