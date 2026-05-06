@@ -19,7 +19,7 @@ export default function PortalTabNav({ firmId }: PortalTabNavProps) {
     { href: `/portal/${firmId}/triage`,    label: "Triage"    },
     { href: `/portal/${firmId}/dashboard`, label: "Dashboard" },
     { href: `/portal/${firmId}/pipeline`,  label: "Pipeline"  },
-    { href: `/portal/${firmId}/phases`,    label: "Phases"    },
+    { href: `/portal/${firmId}/files`,     label: "Files"     },
   ];
 
   return (

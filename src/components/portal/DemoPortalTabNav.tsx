@@ -7,7 +7,6 @@ const TABS = [
   { href: "/demo/portal/dashboard", label: "Dashboard" },
   { href: "/demo/portal/leads",     label: "Leads"     },
   { href: "/demo/portal/pipeline",  label: "Pipeline"  },
-  { href: "/demo/portal/phases",    label: "Phases"    },
 ];
 
 export default function DemoPortalTabNav() {
