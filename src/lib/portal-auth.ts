@@ -65,7 +65,13 @@ export function createSessionCookie(firmId: string): { name: string; value: stri
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      path: "/portal",
+      // Path "/" so the cookie rides along on /api/portal/* fetches from
+      // client components (Take/Pass action bar). The earlier "/portal" was
+      // too restrictive: client-side fetch to /api/portal/* doesn't match
+      // path=/portal, so the cookie was dropped and the API returned 401.
+      // The cookie is httpOnly and HMAC-signed; broader path doesn't widen
+      // the attack surface (no JS read, signature is the gate).
+      path: "/",
       maxAge: SESSION_TTL_HOURS * 3600,
     },
   };
