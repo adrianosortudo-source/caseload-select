@@ -188,12 +188,19 @@ The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), 
 | `POST /api/portal/[firmId]/triage/[leadId]/pass` | Pass action — flips status to `passed`, body `{ note? }`, fires `passed` webhook with resolved decline copy. |
 | `GET /api/cron/triage-backstop` | Backstop sweeper for expired triaging rows. Wired, not scheduled (Hobby plan caps daily). |
 | `GET /api/cron/webhook-retry` | Outbox retry sweeper. Wired, not scheduled. |
-| `GET /api/admin/webhook-outbox` | Operator-visible delivery log. Filters: `firm_id`, `status`. CRON_SECRET auth. |
-| `POST /api/admin/webhook-outbox/[outboxId]/retry` | Operator manual retry. Resets attempts to 0. |
+| `GET /api/admin/webhook-outbox` | Operator-visible delivery log. Accepts CRON_SECRET / PG_CRON_TOKEN bearer or operator session. Filters: `firm_id`, `status`. |
+| `POST /api/admin/webhook-outbox/[outboxId]/retry` | Operator manual retry. Resets attempts to 0. Same auth shape as the listing route. |
+| `/admin/triage` | Operator-only cross-firm triage queue. Firm filter + band filter. Rows link to /portal/[firmId]/triage/[leadId]. |
+| `/admin/webhook-outbox` | Operator-only delivery log UI with manual retry button. |
 
 ### Auth model
 
-Same HMAC magic-link pattern as the legacy Client Portal (`portal-auth.ts`). 48h link, 30-day session cookie, `/portal` scoped. The lawyer-initiated request-link endpoint extends this with Resend email sending; the operator-provisioned `/api/portal/generate` continues to work.
+Same HMAC magic-link pattern as the legacy Client Portal (`portal-auth.ts`). 48h link, 30-day session cookie, root-scoped (path `/`). Two role tiers on the token:
+
+- `lawyer` (default): firm-scoped. Token's `firm_id` must match the requested route's firmId. Lands at /portal/[firmId]/triage.
+- `operator`: cross-firm. Bypasses the firm match. Lands at /admin/triage. Operators can also view any firm's portal pages with an "Operator view" banner.
+
+`firm_lawyers` table holds the canonical mapping of email → firm + role. Multi-lawyer per firm supported. Legacy `intake_firms.branding.lawyer_email` remains as a fallback. Inserting a row into `firm_lawyers` automatically fires a magic-link invitation email via the `trg_firm_lawyers_invite` pg_net trigger.
 
 ### GHL webhook contract
 
@@ -250,19 +257,34 @@ src/
     └── screened-leads-labels.ts                        # Display labels
 ```
 
-### Vercel Hobby plan caveats
+### Cron scheduling — Supabase pg_cron + pg_net
 
-Two crons are wired and ready (`triage-backstop`, `webhook-retry`) but **not scheduled in `vercel.json`** because the account is on Hobby (caps daily, which combined with the 48h decision window introduces unacceptable latency). To enable: upgrade to Vercel Pro and add hourly entries, OR migrate to Supabase pg_cron + pg_net.
+Both crons are scheduled via Supabase pg_cron (no Vercel Pro dependency):
 
-Both routes are CRON_SECRET-auth'd and manually triggerable in the meantime. The `/api/admin/webhook-outbox/[id]/retry` endpoint also lets the operator re-fire individual deliveries on demand.
+- `triage-backstop-hourly` — `7 * * * *`, calls `/api/cron/triage-backstop`
+- `webhook-retry-5m` — `*/5 * * * *`, calls `/api/cron/webhook-retry`
+
+Migration `20260506_pg_cron_pg_net_setup.sql` enables `pg_cron` and `pg_net`, stores the bearer token in Supabase Vault as `pg_cron_token`, defines `cron_internal.call_cron_route(path)` (reads token from Vault, posts to `https://app.caseloadselect.ca` via pg_net), and schedules the two jobs.
+
+Auth: routes accept either `CRON_SECRET` or `PG_CRON_TOKEN` via Bearer token (`lib/cron-auth.ts`, constant-time compare). Both tokens are also accepted by `/api/admin/webhook-outbox/*` for ops scripts. The operator can rotate one without affecting the other.
+
+Run history is visible via `cron.job_run_details` and pg_net responses via `net._http_response`.
+
+### New-lead notification
+
+`/api/intake-v2` fires a fan-out email to all `firm_lawyers` rows with `role='lawyer'` for the firm whenever it lands a row with `status='triaging'`. Builders are pure (`lib/lead-notify-pure.ts`); I/O wrapper (`lib/lead-notify.ts`) resolves recipients and dispatches via Resend. Best-effort — failure does not block intake. Falls back to legacy `branding.lawyer_email` when no firm_lawyers row exists.
+
+### Compliance pages
+
+- `/privacy` — PIPEDA-aware retention table tied to `lib/data-retention.ts`. Public.
+- `/terms` — LSO Rule 4.2-1 calibrated. No outcome promises, lawyer-client relationship is between lead and engaged firm. Public.
+- Footer links from portal, admin, login.
 
 ### Phase 4+ deferred
 
-- Schedule the two crons (Pro plan or pg_cron decision)
-- Webhook delivery admin UI (currently CRON_SECRET REST only)
+- Webhook delivery `vercel.json` cron (currently the Supabase pg_cron path; the Vercel slot remains unused)
 - Supabase Realtime queue subscription (replace RefreshOnFocus)
 - HMAC signature header on outbound webhooks (when GHL adds inbound shared-secret support)
-- Per-lawyer auth tier for 2-lawyer firms (currently single firm-scoped session per firm)
 - v5 operator dashboard reading from `screened_leads` (deferred until real lead flow accumulates)
 
 ## Sequence Engine (sequence-engine.ts + send-sequences.ts)
