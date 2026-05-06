@@ -51,7 +51,20 @@ function uid() {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────
-export default function WhatsAppChat({ firmId }: { firmId: string }) {
+
+interface WhatsAppChatProps {
+  firmId: string;
+  /**
+   * "page"  - default. Standalone view at /demo/whatsapp.
+   *           Outer wrapper takes min-h-screen, phone frame caps at 90vh,
+   *           a back arrow in the chat header navigates to /demo.
+   * "embed" - rendered inside another page (e.g. the main /demo landing).
+   *           No min-h-screen, fixed-ish phone height (720px), no back arrow.
+   */
+  variant?: "page" | "embed";
+}
+
+export default function WhatsAppChat({ firmId, variant = "page" }: WhatsAppChatProps) {
   const [messages, setMessages]     = useState<Message[]>([]);
   const [input, setInput]           = useState("");
   const [sessionId, setSessionId]   = useState<string | null>(null);
@@ -214,14 +227,18 @@ export default function WhatsAppChat({ firmId }: { firmId: string }) {
     A: "#16a34a", B: "#2563eb", C: "#d97706", D: "#6b7280", E: "#dc2626",
   };
 
+  const isEmbed = variant === "embed";
+
   return (
-    // ── Outer page  -  WhatsApp chat background ──────────────────────────────
-    <div className="min-h-screen flex items-center justify-center p-4 sm:p-8"
-      style={{ backgroundColor: "#1A1A2E" }}>
+    // ── Outer wrapper - WhatsApp chat backdrop ──────────────────────────────
+    <div
+      className={`flex items-center justify-center p-4 sm:p-8 ${isEmbed ? "" : "min-h-screen"}`}
+      style={{ backgroundColor: isEmbed ? "transparent" : "#1A1A2E" }}
+    >
 
       {/* ── Phone frame ─────────────────────────────────────────────────── */}
       <div className="w-full max-w-sm bg-black rounded-[2.5rem] shadow-2xl overflow-hidden"
-        style={{ border: "6px solid #111", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+        style={{ border: "6px solid #111", maxHeight: isEmbed ? "720px" : "90vh", height: isEmbed ? "720px" : undefined, display: "flex", flexDirection: "column" }}>
 
         {/* Phone status bar */}
         <div className="bg-black flex items-center justify-between px-6 pt-3 pb-1 shrink-0">
@@ -244,11 +261,13 @@ export default function WhatsAppChat({ firmId }: { firmId: string }) {
 
         {/* WhatsApp header */}
         <div className="shrink-0 flex items-center gap-3 px-3 py-2" style={{ backgroundColor: WA_DARK }}>
-          <a href="/demo" className="text-white/80 hover:text-white">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
-            </svg>
-          </a>
+          {!isEmbed && (
+            <a href="/demo" className="text-white/80 hover:text-white">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
+              </svg>
+            </a>
+          )}
           {/* Avatar */}
           <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
             style={{ backgroundColor: WA_MID }}>

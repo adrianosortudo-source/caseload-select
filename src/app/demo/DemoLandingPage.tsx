@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { IntakeControllerV2 } from "@/components/intake-v2/IntakeControllerV2";
 import ChatBubble from "./ChatBubble";
+import WhatsAppChat from "./whatsapp/WhatsAppChat";
 import DemoScenarioPicker from "@/components/demo/DemoScenarioPicker";
 import DemoTour from "@/components/demo/DemoTour";
 import type { DemoFirmBranding } from "./provision-demo-firm";
@@ -28,6 +29,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
 
   const widgetRef = useRef<HTMLDivElement>(null);
   const contactRef = useRef<HTMLDivElement>(null);
+  const whatsappRef = useRef<HTMLDivElement>(null);
 
   const [contactForm, setContactForm] = useState({ name: "", email: "", message: "" });
   const [contactSent, setContactSent] = useState(false);
@@ -79,6 +81,9 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
   }
   function scrollToContact() {
     contactRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  function scrollToWhatsapp() {
+    whatsappRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function handleContactSubmit(e: React.FormEvent) {
@@ -223,9 +228,9 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
                 <a href={PHONE_TEL} className="px-6 py-3 rounded-xl font-semibold text-sm transition hover:opacity-90 border-2 flex items-center gap-2" style={{ borderColor: NAVY, color: NAVY }}>
                   📞 {PHONE_DISPLAY}
                 </a>
-                <a href="/demo/whatsapp" className="px-6 py-3 rounded-xl font-semibold text-sm transition hover:opacity-90 flex items-center gap-2" style={{ backgroundColor: "#25D366", color: "white" }}>
+                <button onClick={scrollToWhatsapp} className="px-6 py-3 rounded-xl font-semibold text-sm transition hover:opacity-90 flex items-center gap-2" style={{ backgroundColor: "#25D366", color: "white" }}>
                   <span>📲</span> WhatsApp
-                </a>
+                </button>
                 <a href="/demo/sms" className="px-6 py-3 rounded-xl font-semibold text-sm transition hover:opacity-90 flex items-center gap-2 border-2" style={{ borderColor: "#6b7280", color: "#374151" }}>
                   <span>💬</span> SMS
                 </a>
@@ -293,6 +298,66 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
                   onStepChange={handleStepChange}
                 />
               </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* ── WHATSAPP SIMULATOR ──────────────────────────────────────────── */}
+      {/* Same intake engine as the website widget, rendered in WhatsApp's
+          one-question-at-a-time format. Lets the operator test how the
+          conversation flows on the channel before pointing real GHL traffic
+          at it. The standalone /demo/whatsapp page still exists for sharing. */}
+      <section
+        ref={whatsappRef}
+        id="whatsapp-simulator"
+        className="py-16 lg:py-20"
+        style={{ backgroundColor: "#1A1A2E" }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+
+            {/* Left: framing copy */}
+            <div className="text-white">
+              <div
+                className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest mb-5 px-3 py-1.5 rounded-full w-fit"
+                style={{ backgroundColor: "#25D36622", color: "#25D366" }}
+              >
+                Same intake, WhatsApp channel
+              </div>
+              <h2 className="text-3xl lg:text-4xl font-extrabold leading-tight mb-5">
+                The conversation, on WhatsApp
+              </h2>
+              <p className="text-base text-white/70 leading-relaxed mb-6">
+                Try the screen here in WhatsApp's format. The same engine drives the website widget above; the difference is the rhythm: one question at a time, plain text, quick-reply chips when they help.
+              </p>
+              <ul className="space-y-2.5 text-sm text-white/70 mb-8">
+                {[
+                  "One question at a time, no walls of options",
+                  "Quick-reply chips render as tappable WhatsApp Business pills",
+                  "Identity capture happens inside the chat, not on a form",
+                  "The lead lands in the same triage queue as the widget",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-3">
+                    <span
+                      className="mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-white text-xs"
+                      style={{ backgroundColor: "#25D366" }}
+                    >
+                      ✓
+                    </span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-white/40 leading-relaxed max-w-md">
+                This is a UI simulator for testing the script, not a live WhatsApp Business number. Hooking the same flow into a real WhatsApp Business API account is a separate switch.
+              </p>
+            </div>
+
+            {/* Right: phone-frame simulator */}
+            <div className="flex items-start justify-center">
+              <WhatsAppChat firmId={firmId} variant="embed" />
             </div>
 
           </div>
@@ -440,9 +505,9 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
               {
                 icon: "📲",
                 title: "WhatsApp",
-                desc: "Send a message on WhatsApp. The system captures and routes your inquiry.",
+                desc: "Same screening engine, WhatsApp's one-question-at-a-time rhythm. Test the conversation flow below.",
                 action: "Open WhatsApp",
-                href: "/demo/whatsapp",
+                onClick: scrollToWhatsapp,
               },
             ].map(({ icon, title, desc, action, onClick, href }) => (
               <div key={title} className="border border-gray-200 rounded-2xl p-6 flex flex-col gap-4 hover:shadow-md transition">
@@ -491,9 +556,9 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
                 <a href={PHONE_TEL} className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-white font-semibold text-sm transition hover:opacity-90" style={{ backgroundColor: NAVY }}>
                   📞 Call Now
                 </a>
-                <a href="/demo/whatsapp" className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition hover:opacity-90 text-white" style={{ backgroundColor: "#25D366" }}>
+                <button onClick={scrollToWhatsapp} className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition hover:opacity-90 text-white" style={{ backgroundColor: "#25D366" }}>
                   📲 WhatsApp
-                </a>
+                </button>
                 <button onClick={scrollToWidget} className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition hover:opacity-90 border-2" style={{ borderColor: NAVY, color: NAVY }}>
                   🤖 AI Intake
                 </button>
@@ -598,9 +663,9 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
             📞 Call
           </a>
           <div className="w-px bg-gray-200" />
-          <a href="/demo/whatsapp" className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold" style={{ color: "#25D366" }}>
+          <button onClick={scrollToWhatsapp} className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold" style={{ color: "#25D366" }}>
             📲 WhatsApp
-          </a>
+          </button>
           <div className="w-px bg-gray-200" />
           <button onClick={scrollToWidget} className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold text-white" style={{ backgroundColor: NAVY }}>
             🤖 Start
