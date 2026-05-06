@@ -4,6 +4,16 @@
 **Effort:** ~10 minutes per firm once Supabase + Vercel access is set.
 **Last revised:** 2026-05-05
 
+> **Stay in sync.** Three docs share the operational contract for the lawyer triage portal and must be updated on the same pass when contract semantics change:
+>
+> | Doc | Audience | Path |
+> |---|---|---|
+> | This file (setup checklist) | Operator | `caseload-select-app/docs/lawyer-portal-firm-setup.md` |
+> | Build prompt | Build agent (Claude Code, @dev) | `D:\00_Work\01_CaseLoad_Select\05_Product\LawyerPortal_BuildPrompt_v1.md` |
+> | CRM Bible | Strategic reference | `D:\00_Work\01_CaseLoad_Select\04_Playbooks\04_Screen\Strategy\CaseLoad_Select_CRM_Bible_v5.html` |
+>
+> Plus the GHL webhook contract at `caseload-select-app/docs/ghl-webhook-contract.md` whenever payload shapes or actions change.
+
 ---
 
 ## Prerequisites
