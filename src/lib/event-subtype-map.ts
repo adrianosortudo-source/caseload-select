@@ -54,7 +54,8 @@ export type SubTypeKey =
   | "crim_drug"
   | "crim_theft"
   | "crim_domestic"
-  | "crim_other";
+  | "crim_other"
+  | "corp_incorporation";
 
 /**
  * Map from extractor event type to the best-fit sub-type bank key.
@@ -69,6 +70,7 @@ const EVENT_TO_SUBTYPE: Record<string, SubTypeKey | null> = {
   deportation: "imm_other",       // gap: no imm_removal / imm_deportation bank
   real_estate_defect: null,        // gap: no real_estate namespace at all
   debt_owed: "civ_debt",
+  corp_formation: "corp_incorporation",
 };
 
 /**

@@ -303,3 +303,41 @@ export function computeJordanUrgency(
 export function getSlotById(id: string): Slot | undefined {
   return SLOT_REGISTRY.get(id);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// slotToApiQuestion
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Shape returned by the screen API for a single question.
+ * Matches the GptResponse.next_questions element shape in route.ts.
+ */
+export interface ApiQuestion {
+  id: string;
+  text: string;
+  options: Array<{ label: string; value: string }>;
+  allow_free_text: boolean;
+  description?: string;
+}
+
+/**
+ * Convert a Slot definition into the ApiQuestion shape the screen API returns
+ * to the widget. This is the single function that bridges the slot bank to
+ * the UI layer — slot bank is now the source of truth for question text,
+ * options, and input type.
+ *
+ * Rules:
+ *   - options: strip scoring fields (fitDelta, urgencyDelta, frictionDelta,
+ *     triggersRound3, disqualifies) — the widget only needs label + value.
+ *   - allow_free_text: true when answerType is text, numeric, or date.
+ *   - description: forwarded when present (rendered as grey subtext in widget).
+ */
+export function slotToApiQuestion(slot: Slot): ApiQuestion {
+  return {
+    id: slot.id,
+    text: slot.question,
+    options: (slot.options ?? []).map(o => ({ label: o.label, value: o.value })),
+    allow_free_text: slot.answerType === "text" || slot.answerType === "numeric" || slot.answerType === "date",
+    ...(slot.description ? { description: slot.description } : {}),
+  };
+}

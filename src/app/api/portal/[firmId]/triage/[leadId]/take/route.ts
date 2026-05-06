@@ -46,9 +46,12 @@ export async function POST(
 ) {
   const { firmId, leadId } = await params;
   const session = await getPortalSession();
-  if (!session || session.firm_id !== firmId) {
+  // Operators can act on any firm; lawyers only on their own.
+  const isAuthorized = !!session && (session.role === "operator" || session.firm_id === firmId);
+  if (!session || !isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const actor = session.role === "operator" ? "operator" : "lawyer";
 
   // Load the lead. 404 covers cross-firm; 409 covers already-non-triaging.
   const { data: existing, error: fetchErr } = await supabase
@@ -98,7 +101,7 @@ export async function POST(
     .update({
       status: "taken",
       status_changed_at: now.toISOString(),
-      status_changed_by: "lawyer",
+      status_changed_by: actor,
     })
     .eq("lead_id", leadId)
     .eq("firm_id", firmId)
@@ -121,7 +124,7 @@ export async function POST(
   const payload = buildTakenPayload({
     facts,
     statusChangedAt: now,
-    statusChangedBy: "lawyer",
+    statusChangedBy: actor,
     feeEstimate: lead.brief_json?.fee_estimate ?? null,
     matterSnapshot: lead.brief_json?.matter_snapshot ?? null,
   });

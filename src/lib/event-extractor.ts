@@ -150,6 +150,24 @@ const DETECTORS: Detector[] = [
     ],
     baseConfidence: 0.9,
   },
+  // ── Corporate incorporation / business formation ────────────────────────
+  // Covers new incorporations, business setup, and entity formation intents.
+  // NOTE: Do NOT add general "start a business" patterns that could overlap with
+  // employment or landlord-tenant contexts. Keep them specific to entity formation.
+  {
+    type: "corp_formation",
+    patterns: [
+      /\b(?:want\s+to\s+)?incorporat(?:e|ion|ing)\b/i,                           // "incorporate", "incorporation", "incorporating"
+      /\bopen(?:ing)?\s+a\s+(?:corporation|company|corp\b)/i,                    // "open a corporation/company"
+      /\bstart(?:ing)?\s+a\s+(?:corporation|company|corp\b|business\b.*incorp)/i, // "starting a corporation", "starting a business and incorporate"
+      /\bform(?:ing)?\s+(?:a\s+)?(?:corporation|company|corp\b|llc\b|inc\b)/i,   // "forming a corporation/company"
+      /\bregist(?:er|ering|ration)\s+(?:a\s+)?(?:corporation|company|business\s+entity)\b/i, // "registering a corporation/company"
+      /\bbusiness\s+incorporat/i,                                                  // "business incorporation"
+      /\bset\s+up\s+(?:a\s+)?(?:corporation|company|corp\b)/i,                   // "set up a corporation/company"
+    ],
+    baseConfidence: 0.90,
+  },
+
   {
     type: "real_estate_defect",
     patterns: [

@@ -452,3 +452,35 @@
   overflow-y: auto;
   background: var(--bf-white);
 }
+
+/* ─── Mobile overrides ────────────────────────────────────────────────────
+   The brief was authored for a desktop column. On phones, three-column
+   tables collapse to two-row stacks, oversized padding tightens, and the
+   raw GHL payload preview caps at a phone-friendly height. */
+
+@media (max-width: 640px) {
+  .brief-frame { font-size: 14px; }
+
+  .brief-frame .brief-meta-header {
+    padding: 12px 14px 14px;
+    margin: -8px -8px 14px;
+  }
+
+  .brief-frame .fact-list li.fact-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 10px 0;
+  }
+  .brief-frame .fact-value {
+    text-align: left;
+  }
+  .brief-frame .fact-source {
+    justify-self: start;
+  }
+
+  .brief-frame .brief-ghl-payload {
+    max-height: 240px;
+    font-size: 0.72rem;
+    padding: 12px 14px;
+  }
+}

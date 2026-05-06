@@ -26,16 +26,19 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
 
   if (status !== "triaging") {
     return (
-      <div className="fixed inset-x-0 bottom-0 bg-white border-t border-black/10 px-4 py-3 z-30">
+      <div
+        className="fixed inset-x-0 bottom-0 bg-white border-t border-black/10 px-4 py-3 z-30"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0) + 0.75rem)" }}
+      >
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-          <p className="text-sm text-black/60">
+          <p className="text-sm text-black/60 truncate">
             {status === "taken"   && "Lead taken. Cadence engaged."}
             {status === "passed"  && "Lead passed. Decline-with-grace fired."}
             {status === "declined" && "Lead declined."}
           </p>
           <a
             href={`/portal/${firmId}/triage`}
-            className="text-xs uppercase tracking-wider font-semibold text-navy hover:underline"
+            className="text-xs uppercase tracking-wider font-semibold text-navy hover:underline shrink-0"
           >
             Back to queue →
           </a>
@@ -90,12 +93,15 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
 
   return (
     <>
-      <div className="fixed inset-x-0 bottom-0 bg-white border-t border-black/10 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.04)] z-30">
+      <div
+        className="fixed inset-x-0 bottom-0 bg-white border-t border-black/10 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.04)] z-30"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0) + 0.75rem)" }}
+      >
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-          <div className="text-xs text-black/50 uppercase tracking-wider">
+          <div className="text-xs text-black/50 uppercase tracking-wider truncate min-w-0">
             {error && mode === "error" ? <span className="text-red-700">{error}</span> : "Decision required"}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setMode("pass-modal")}
@@ -110,7 +116,16 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
               disabled={mode === "submitting"}
               className="bg-navy text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-navy-deep disabled:opacity-50"
             >
-              {mode === "submitting" ? "Working…" : (band ? ACTION_LABEL[band] : "Take")}
+              {mode === "submitting" ? (
+                "Working…"
+              ) : band ? (
+                <>
+                  <span className="sm:hidden">Take</span>
+                  <span className="hidden sm:inline">{ACTION_LABEL[band]}</span>
+                </>
+              ) : (
+                "Take"
+              )}
             </button>
           </div>
         </div>

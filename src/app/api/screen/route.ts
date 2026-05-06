@@ -34,14 +34,16 @@ import {
 import { autoConfirmFromContext } from "@/lib/auto-confirm";
 import { detectFlags, mergeFlags, getGateQuestions, hasCriticalFlag, getFlagPreamble } from "@/lib/flag-registry";
 import { classify, type ClassifierResult } from "@/lib/classifier";
-import { selectSlots, scoreFromSlotAnswers, shouldTriggerRound3 } from "@/lib/slot-selector";
+import { selectSlots, scoreFromSlotAnswers, shouldTriggerRound3, slotToApiQuestion } from "@/lib/slot-selector";
 import { SLOTS_BY_SUBTYPE } from "@/lib/slot-registry";
 import { computeSabsUrgency, computeDismissalBardal } from "@/lib/interaction-scoring";
 import { estimateCaseValue } from "@/lib/case-value";
 import { extractEvents } from "@/lib/event-extractor";
 import { extractIntents } from "@/lib/intent-extractor";
 import { selectEvent } from "@/lib/event-selector";
-import { generateQuestion, generatePreamble } from "@/lib/event-question-generator";
+// event-question-generator: generateQuestion() and generatePreamble() removed.
+// Questions now come from the slot bank via selectSlots() → slotToApiQuestion().
+// event-slot-map: EVENT_TIMING_SLOT_MAP removed — slot bank is the single source of truth.
 import { mapEventToSubType } from "@/lib/event-subtype-map";
 import {
   getRewriteMode,
@@ -553,6 +555,100 @@ export async function POST(req: Request) {
         const widgetScoringRaw = (session.scoring as Record<string, unknown>) ?? {};
         const widgetRound2Started = !!widgetScoringRaw._round_2_started;
 
+        // Derive slot answers in this fast-path context (mirrors the derivation at line ~1140).
+        // updatedSlotAnswered is set later in the request lifecycle; compute it inline here.
+        const widgetSlotAnsweredBase = (widgetScoringRaw._slot_answered as Record<string, string | string[]>) ?? {};
+        const widgetUpdatedSlotAnswered: Record<string, string | string[]> = { ...widgetSlotAnsweredBase };
+        for (const [k, v] of Object.entries(updatedConfirmed)) {
+          if (k.includes("__") && typeof v === "string" && !(k in widgetUpdatedSlotAnswered)) {
+            widgetUpdatedSlotAnswered[k] = v;
+          }
+        }
+
+        const currentBand = (session.band as string) ?? existingCpi.band ?? "C";
+        const bandLocked = !!(existingCpi as unknown as Record<string, unknown>).band_locked;
+
+        // ── Slot bank path: deterministic question serving ────────────────────────
+        // When a slot bank is active for this subtype, drive the entire answer turn
+        // from the slot registry. No GPT calls, no round-1 re-score, no round-2 deep-dive.
+        // CPI deltas are applied from scoreFromSlotAnswers() — no re-score needed.
+        const hasSlotBankForWidget = sessionSubType
+          ? (SLOTS_BY_SUBTYPE.get(sessionSubType)?.length ?? 0) > 0
+          : false;
+
+        if (hasSlotBankForWidget && sessionSubType) {
+          const currentSlotRound = (widgetScoringRaw._slot_round as 1 | 2 | 3 | null) ?? 1;
+          const sessionIntentsWidget = (widgetScoringRaw._intents as Record<string, string>) ?? {};
+
+          // Advance round when round 1 is exhausted
+          let nextRound: 1 | 2 | 3 = currentSlotRound;
+          if (currentSlotRound === 1) {
+            const remainingR1 = selectSlots(sessionSubType, widgetUpdatedSlotAnswered, 1, updatedConfirmed, sessionIntentsWidget);
+            if (remainingR1.length === 0) {
+              nextRound = shouldTriggerRound3(widgetUpdatedSlotAnswered) ? 3 : 2;
+            }
+          }
+
+          const slotsToServe = bandLocked
+            ? []
+            : selectSlots(sessionSubType, widgetUpdatedSlotAnswered, nextRound, updatedConfirmed, sessionIntentsWidget);
+
+          // Apply slot scoring deltas to CPI axes
+          let slotCpi = { ...existingCpi };
+          if (Object.keys(widgetUpdatedSlotAnswered).length > 0) {
+            const slotDelta = scoreFromSlotAnswers(widgetUpdatedSlotAnswered);
+            if (slotDelta.fit !== 0 || slotDelta.urgency !== 0 || slotDelta.friction !== 0) {
+              slotCpi.cpi_fit     = Math.min(100, Math.max(0, (slotCpi.cpi_fit     ?? 50) + slotDelta.fit));
+              slotCpi.cpi_urgency = Math.min(100, Math.max(0, (slotCpi.cpi_urgency ?? 50) + slotDelta.urgency));
+              slotCpi.cpi_friction = Math.min(100, Math.max(0, (slotCpi.cpi_friction ?? 50) + slotDelta.friction));
+              slotCpi = validateAndFixScoring(slotCpi);
+            }
+          }
+
+          const collectIdentity = slotsToServe.length === 0 || bandLocked;
+
+          await supabase
+            .from("intake_sessions")
+            .update({
+              scoring: {
+                ...slotCpi,
+                _confirmed: updatedConfirmed,
+                _slot_answered: widgetUpdatedSlotAnswered,
+                _slot_round: nextRound,
+                ...((slotCpi as unknown as Record<string, unknown>)._complexity_indicators
+                  ? { _complexity_indicators: (slotCpi as unknown as Record<string, unknown>)._complexity_indicators }
+                  : {}),
+                ...((slotCpi as unknown as Record<string, unknown>)._flags
+                  ? { _flags: (slotCpi as unknown as Record<string, unknown>)._flags }
+                  : {}),
+              },
+              ...(slotCpi.band ? { band: slotCpi.band } : {}),
+            })
+            .eq("id", session.id);
+
+          return NextResponse.json({
+            session_id: session.id,
+            practice_area: paId,
+            practice_area_confidence: "high",
+            next_question: null,
+            next_questions: collectIdentity ? null : slotsToServe.map(slotToApiQuestion),
+            cpi: slotCpi,
+            cpi_partial: computeCpiPartial(slotCpi, collectIdentity),
+            response_text: "",
+            finalize: false,
+            collect_identity: collectIdentity,
+            situation_summary: (session.situation_summary as string) ?? null,
+            extracted_entities: (session.extracted_entities as Record<string, unknown>) ?? {},
+            questions_answered: Object.keys(updatedConfirmed),
+            complexity_indicators: ((slotCpi as unknown as Record<string, unknown>)._complexity_indicators as Record<string, unknown>) ?? null,
+            value_tier: ((session.extracted_entities as Record<string, unknown>)?.value_tier as string) ?? null,
+            prior_experience: ((session.extracted_entities as Record<string, unknown>)?.prior_experience as string) ?? null,
+            flags: ((slotCpi as unknown as Record<string, unknown>)._flags as string[]) ?? [],
+            cta: null,
+          });
+        }
+
+        // ── Question bank path (subtypes without a slot bank) ─────────────────────
         // Save confirmed answers
         await supabase
           .from("intake_sessions")
@@ -563,8 +659,6 @@ export async function POST(req: Request) {
         // Priority-based: replaces hard-coded slice(0,6)/slice(6) Phase 2/3 split.
         // band_locked (S10.4): if band is already locked, skip straight to identity.
         // Use sub-type key for slot schema lookup so priority weights match question IDs.
-        const currentBand = (session.band as string) ?? existingCpi.band ?? "C";
-        const bandLocked = !!(existingCpi as unknown as Record<string, unknown>).band_locked;
         const batch = bandLocked
           ? { questions: [], phase: "identity" as const }
           : selectNextQuestions(questionSet.questions, sessionQSetKey, updatedConfirmed, currentBand, situationText);
@@ -1127,6 +1221,16 @@ export async function POST(req: Request) {
     let updatedSlotAnswered: Record<string, string | string[]> = { ...slotAnswered };
     let slotRoundUpdated: 1 | 2 | 3 = slotRound ?? 1;
 
+    // Route slot-keyed widget answers (containing "__") into updatedSlotAnswered.
+    // When the widget serves slot questions (id like "pi_slip_fall__incident_date"),
+    // the structured_data answer flows through updatedConfirmed. This ensures those
+    // answers are also visible to selectSlots() on the same request.
+    for (const [k, v] of Object.entries(updatedConfirmed)) {
+      if (k.includes("__") && typeof v === "string" && !(k in updatedSlotAnswered)) {
+        updatedSlotAnswered[k] = v;
+      }
+    }
+
     // ── Determine whether a slot bank is active for the current sub-type ─────────
     // hasSlotBankActive gates the slot injection path below and suppresses the
     // question-set injection so GPT does not receive two competing question lists.
@@ -1619,15 +1723,46 @@ export async function POST(req: Request) {
     // Must run BEFORE floor application so FEE_FLOOR/COMPLEXITY_FLOOR keys match.
     if (gptResponse.practice_area) {
       const raw = gptResponse.practice_area;
-      const rawNorm = raw.toLowerCase().replace(/[\s_-]+/g, "");
+      // Strip all non-alphanumeric characters so "corporate_commercial",
+      // "Corporate & Commercial", and "Corporate / Commercial" all normalize
+      // to the same string ("corporatecommercial") for comparison.
+      const rawNorm = raw.toLowerCase().replace(/[^a-z0-9]/g, "");
       const pa = firmConfig.practice_areas.find(
         a =>
           a.id === raw ||
           a.id.toLowerCase() === raw.toLowerCase() ||
           a.label.toLowerCase() === raw.toLowerCase() ||
-          a.label.toLowerCase().replace(/[\s_-]+/g, "") === rawNorm
+          a.label.toLowerCase().replace(/[^a-z0-9]/g, "") === rawNorm
       );
-      if (pa) gptResponse.practice_area = pa.id;
+      if (pa) {
+        gptResponse.practice_area = pa.id;
+      } else {
+        // Fallback: GPT long-form slug → canonical short ID.
+        // Handles cases where GPT output and the firm label normalize to different
+        // strings (e.g. GPT "immigration" vs label "Immigration & Refugee").
+        const PA_ALIAS: Record<string, string> = {
+          corporate_commercial: "corp",
+          corporate:            "corp",
+          family_law:           "fam",
+          family:               "fam",
+          immigration:          "imm",
+          personal_injury:      "pi",
+          employment_law:       "emp",
+          employment:           "emp",
+          criminal_defence:     "crim",
+          criminal_defense:     "crim",
+          criminal:             "crim",
+          civil_litigation:     "civ",
+          civil:                "civ",
+          insurance:            "ins",
+          real_estate:          "real",
+          wills_estates:        "est",
+          wills_and_estates:    "est",
+          landlord_tenant:      "llt",
+        };
+        const aliasId = PA_ALIAS[raw.toLowerCase()] ?? PA_ALIAS[rawNorm];
+        if (aliasId) gptResponse.practice_area = aliasId;
+      }
     }
 
     // ── Refine compliance flags now that PA is confirmed ────────────
@@ -1811,13 +1946,26 @@ export async function POST(req: Request) {
       return new Set(times).size >= 2;
     })();
     const enumerationSignal = /\b(first|second|third|another|other|separate|two|three|four|multiple|both|earlier|previous|prior)\s+(accident|accidents|crash|crashes|collision|collisions|incident|incidents|fall|falls|termination|firing|situation|situations)\b|\b(accidents|crashes|collisions|incidents|falls|terminations|firings)\b/i.test(message);
+    // treatAsMultiInstance kept for logging / sub-type resolution context.
     const treatAsMultiInstance = sameTypeEvents.length > 1 && (hasDistinctTimes || enumerationSignal);
-    const eventFirstQuestion = selectedEvent
-      ? generateQuestion(selectedEvent, treatAsMultiInstance ? sameTypeEvents : undefined)
-      : null;
-    const eventFirstPreamble = selectedEvent
-      ? generatePreamble(selectedEvent, treatAsMultiInstance ? sameTypeEvents : undefined)
-      : null;
+    // Event question generation removed. Questions come from the slot bank via
+    // selectSlots() → slotToApiQuestion() in the widget question pipeline below.
+    // eventDerivedSubTypeKey is still used to select the correct slot bank on turn 1.
+
+    // ── Event-derived sub-type override ──────────────────────────────────
+    // Sub-type resolution runs at ~line 1848, before eventDerivedSubTypeKey is
+    // computed. When the resolver fell back to `{pa}_other` (no regex or GPT hit)
+    // but the event extractor has a specific sub-type key, promote it now.
+    // This is critical for session continuity: the widget fast path on turn 2
+    // reads session.practice_sub_type to select the slot bank — it must be
+    // the specific sub-type ("corp_incorporation"), not the generic "_other" fallback.
+    if (
+      eventDerivedSubTypeKey &&
+      !existingSubType &&                                     // first classification turn only
+      gptResponse.practice_sub_type?.endsWith("_other")       // only when resolver fell back
+    ) {
+      gptResponse.practice_sub_type = eventDerivedSubTypeKey;
+    }
 
     // ── Apply per-area CPI floors ─────────────────────────────────────
     // GPT under-scores fee and complexity on the first message when data is
@@ -1915,48 +2063,62 @@ export async function POST(req: Request) {
           Object.assign(updatedConfirmed, postClassAutoConfirmed);
         }
 
-        // Dynamic question selection  -  S10.3 + band_locked short-circuit  -  S10.4
-        // Use questionSetKey (sub-type) as the schema lookup key so priority weights
-        // are drawn from the correct sub-type slot schema.
-        // On turn 1, event-derived sub-type takes precedence for slot schema lookup.
         const gpBand = gptResponse.cpi.band ?? "C";
         const gpBandLocked = gptResponse.cpi.band_locked ?? false;
-        const slotLookupKey = (isFirstTurn && eventDerivedSubTypeKey)
-          ? eventDerivedSubTypeKey
-          : (questionSetKey ?? paId ?? "");
-        const postGptBatch = gpBandLocked
-          ? { questions: [], phase: "identity" as const }
-          : selectNextQuestions(questionSet.questions, slotLookupKey, updatedConfirmed, gpBand, situationText);
 
-        if (postGptBatch.phase !== "identity") {
-          // Prepend the event-derived first question on turn 1 when available.
-          // It is a free-text question targeting the specific information gap the
-          // extractor identified (e.g. WHEN for slip_fall, written agreement for debt).
-          const bankQuestions = postGptBatch.questions;
-          const eventQ = (eventFirstQuestion && isFirstTurn)
-            ? [{
-                id: `event_q_${selectedEvent!.type}`,
-                text: eventFirstQuestion,
-                options: [] as Array<{ label: string; value: string }>,
-                allow_free_text: true as const,
-                ...(eventFirstPreamble ? { description: eventFirstPreamble } : {}),
-              }]
-            : [];
-          // De-duplicate: when the bank already has a structured question covering the
-          // same topic as the event question, suppress the event question (free-text)
-          // and let the bank version (with clickable options) serve instead.
-          // Rule: no free-text questions in Round 1 when a structured equivalent exists.
-          const eventQTextNorm = eventFirstQuestion?.trim().toLowerCase() ?? "";
-          const bankCoversEventTopic = eventFirstQuestion
-            ? bankQuestions.some(bq => bq.text.trim().toLowerCase() === eventQTextNorm)
-            : false;
-          const filteredEventQ = bankCoversEventTopic ? [] : eventQ;
-          gptResponse.next_questions = [...filteredEventQ, ...bankQuestions];
-          gptResponse.next_question = null;
+        // ── Slot bank path: serve questions from slot registry when a bank is active ──
+        // On turn 1, the sub-type comes from the event extractor (eventDerivedSubTypeKey)
+        // or from the GPT classifier (questionSetKey / paId). Slot bank is the source of
+        // truth for question text, options, and order — no event question prepend needed.
+        const slotSubTypeForGptPath = (isFirstTurn && eventDerivedSubTypeKey)
+          ? eventDerivedSubTypeKey
+          : (gptResponse.practice_sub_type ?? questionSetKey ?? paId ?? "");
+
+        const hasSlotBankForGptPath = slotSubTypeForGptPath
+          ? (SLOTS_BY_SUBTYPE.get(slotSubTypeForGptPath)?.length ?? 0) > 0
+          : false;
+
+        if (hasSlotBankForGptPath && slotSubTypeForGptPath) {
+          // Select round 1 slots (or current round if session already advanced)
+          const gptPathRound = slotRoundUpdated;
+          const gptPathIntents = mergedIntentsEarly;
+          const slotsFromBank = gpBandLocked
+            ? []
+            : selectSlots(slotSubTypeForGptPath, updatedSlotAnswered, gptPathRound, updatedConfirmed, gptPathIntents);
+
+          if (slotsFromBank.length > 0) {
+            gptResponse.next_questions = slotsFromBank.map(slotToApiQuestion);
+            gptResponse.next_question = null;
+          } else {
+            // Try next round before collecting identity
+            const nextRound: 1 | 2 | 3 = gptPathRound === 1 ? (shouldTriggerRound3(updatedSlotAnswered) ? 3 : 2) : 3;
+            const slotsNextRound = gpBandLocked
+              ? []
+              : selectSlots(slotSubTypeForGptPath, updatedSlotAnswered, nextRound, updatedConfirmed, gptPathIntents);
+            if (slotsNextRound.length > 0) {
+              gptResponse.next_questions = slotsNextRound.map(slotToApiQuestion);
+              gptResponse.next_question = null;
+            } else {
+              gptResponse.next_questions = null;
+              gptResponse.next_question = null;
+              gptResponse.collect_identity = true;
+            }
+          }
         } else {
-          gptResponse.next_questions = null;
-          gptResponse.next_question = null;
-          gptResponse.collect_identity = true;
+          // ── Question bank path (subtypes without a slot bank) ─────────────────
+          const slotLookupKey = slotSubTypeForGptPath || (questionSetKey ?? paId ?? "");
+          const postGptBatch = gpBandLocked
+            ? { questions: [], phase: "identity" as const }
+            : selectNextQuestions(questionSet.questions, slotLookupKey, updatedConfirmed, gpBand, situationText);
+
+          if (postGptBatch.phase !== "identity") {
+            gptResponse.next_questions = postGptBatch.questions;
+            gptResponse.next_question = null;
+          } else {
+            gptResponse.next_questions = null;
+            gptResponse.next_question = null;
+            gptResponse.collect_identity = true;
+          }
         }
       } else if (gptResponse.next_question) {
         // Fallback: promote single next_question to next_questions array
@@ -2138,7 +2300,6 @@ export async function POST(req: Request) {
         _event_detected_types: detectedEvents.map(e => e.type),
         _event_selected: selectedEvent?.type ?? null,
         _event_sub_type_key: eventDerivedSubTypeKey ?? null,
-        _event_first_question: eventFirstQuestion ?? null,
       } : {}),
       ...(startingRound2 ? { _round_2_started: true, _round_2_q_count: 0 } : {}),
       ...(round2Started ? { _round_2_started: true, _round_2_q_count: round2QCount + 1 } : {}),
@@ -2308,8 +2469,15 @@ export async function POST(req: Request) {
       const routedStage = (mergedIntentsEarly.stage_of_engagement ?? null) as string | null;
       const routedPA    = gptResponse.practice_area ?? sessionPracticeArea ?? null;
       const routedSub   = (gptResponse.practice_sub_type as string | null) ?? null;
+      // Slot bank takes priority over the legacy first-question-router.
+      // When a registered slot bank exists for this sub-type, the slot bank
+      // already set finalNextQuestions to the correct deterministic batch above.
+      // Skip the router so it does not overwrite the slot bank's output.
+      const slotBankActiveForSub = routedSub
+        ? (SLOTS_BY_SUBTYPE.get(routedSub)?.length ?? 0) > 0
+        : false;
       const { firstQuestionFor } = await import("@/lib/first-question-router");
-      const routed = firstQuestionFor(routedPA, routedSub, routedStage);
+      const routed = slotBankActiveForSub ? null : firstQuestionFor(routedPA, routedSub, routedStage);
       if (routed) {
         if (isFirstTurnEarly) {
           // ── TURN 1 ──

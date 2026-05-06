@@ -48,7 +48,13 @@ export default async function PortalLoginPage({
           <RequestLinkForm />
         </div>
 
-        <p className="text-center text-xs text-black/40">caseloadselect.ca</p>
+        <div className="flex items-center justify-center gap-3 text-xs text-black/40">
+          <span>caseloadselect.ca</span>
+          <span aria-hidden>·</span>
+          <a href="/privacy" className="hover:text-navy transition-colors">Privacy</a>
+          <span aria-hidden>·</span>
+          <a href="/terms" className="hover:text-navy transition-colors">Terms</a>
+        </div>
       </div>
     </div>
   );

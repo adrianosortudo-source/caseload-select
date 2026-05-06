@@ -4,13 +4,14 @@
 **Effort:** ~10 minutes per firm once Supabase + Vercel access is set.
 **Last revised:** 2026-05-05
 
-> **Stay in sync.** Three docs share the operational contract for the lawyer triage portal and must be updated on the same pass when contract semantics change:
+> **Stay in sync.** Four docs share the operational contract and must be updated on the same pass when contract semantics change:
 >
 > | Doc | Audience | Path |
 > |---|---|---|
 > | This file (setup checklist) | Operator | `caseload-select-app/docs/lawyer-portal-firm-setup.md` |
 > | Build prompt | Build agent (Claude Code, @dev) | `D:\00_Work\01_CaseLoad_Select\05_Product\LawyerPortal_BuildPrompt_v1.md` |
-> | CRM Bible | Strategic reference | `D:\00_Work\01_CaseLoad_Select\04_Playbooks\04_Screen\Strategy\CaseLoad_Select_CRM_Bible_v5.html` |
+> | CRM Bible v5.1 | Strategic reference | `D:\00_Work\01_CaseLoad_Select\04_Playbooks\04_Screen\Strategy\CaseLoad_Select_CRM_Bible_v5.1.html` |
+> | GBP Reviews playbook | Operator training and J8 reference | `D:\00_Work\01_CaseLoad_Select\04_Playbooks\01_Authority\PB_Auth_GBPReviews_v1.html` |
 >
 > Plus the GHL webhook contract at `caseload-select-app/docs/ghl-webhook-contract.md` whenever payload shapes or actions change.
 
@@ -163,7 +164,126 @@ curl -H "Authorization: Bearer $CRON_SECRET" \
 
 ---
 
-## 5. Operational notes
+## 5. GBP Reviews setup (J8 asking system)
+
+The lawyer triage portal handles the first 48 hours after a lead arrives. The GBP Reviews asking system handles the inverse: the moment a matter closes and the firm wants the satisfied client to leave a Google review. J8 in the CRM Bible specifies the cadence; this section is the operator checklist.
+
+Full strategic and training reference: `D:\00_Work\01_CaseLoad_Select\04_Playbooks\01_Authority\PB_Auth_GBPReviews_v1.html` (in-person scripts, physical asset specs, reply templates, anti-pattern training).
+
+### 5a. Verify the Google Business Profile
+
+```sql
+-- Confirm the firm has a verified GBP and the URL is captured
+SELECT id, name,
+  branding->>'gbp_review_url' AS gbp_review_url,
+  branding->>'gbp_short_link' AS gbp_short_link
+FROM intake_firms
+WHERE id = 'FIRM_UUID_HERE';
+```
+
+If `gbp_review_url` is missing, generate it from the firm's GBP dashboard: GBP admin → "Get more reviews" → copy the URL. Then shorten via GHL's branded short-link tool (or any short-link tool the firm uses) and store both in `branding`:
+
+```sql
+UPDATE intake_firms
+SET branding = branding
+  || jsonb_build_object(
+    'gbp_review_url', 'https://g.page/r/FIRM_GBP_ID/review',
+    'gbp_short_link', 'https://firm.com/review'
+  )
+WHERE id = 'FIRM_UUID_HERE';
+```
+
+### 5b. Generate the QR code
+
+The QR code points to `gbp_short_link` (not the full GBP URL; the short link is rebrandable later if the GBP URL changes). Generate via any QR tool that produces vector output. Store the SVG in the firm's brand assets folder.
+
+### 5c. Order the physical asset kit
+
+For each firm, order at minimum:
+
+- One desk QR sticker for the signing area (2 inch x 2 inch, vinyl)
+- Two NFC plaques or NFC business cards for reception and signing desk
+- 250 business cards with the QR code on the reverse
+- Updated invoice and receipt templates with the QR code and short link in the footer
+
+The asset kit is a one-time onboarding cost charged to the firm or absorbed into the retainer; confirm with Adriano per firm.
+
+### 5d. Configure J8 cadence in GHL
+
+Build the asking system as a GHL workflow keyed on matter status changing to Closed. Specifications per the CRM Bible §9.8:
+
+| Step | Channel | Timing | Conditional |
+|---|---|---|---|
+| 01 | SMS | T+2 hours | Standard cadence only (matter_emotion_class = standard) |
+| 02 | Email | T+2 business days, 1-3 PM window | Standard cadence only |
+| 03 | SMS reminder | T+3 days | If no review posted yet |
+| 04 | Email reminder | T+5 days | If no review posted yet |
+| 05 | Anniversary SMS | T+30 days | High-emotion variant only (matter_emotion_class = high) |
+
+Copy templates: see CRM Bible §9.8 copy seeds, or pull from the playbook's full library. The SMS at T+2 hours has two variants based on `in_person_ask_outcome`: if the lawyer captured "asked_yes" during the close meeting, fire the "as we discussed" copy; otherwise fire the standard copy.
+
+NPS gate: J8 only fires when `nps >= 7` from the J6 T+7 prompt or any subsequent NPS in J7. Configure the gate as the workflow's entry condition.
+
+### 5e. Train the lawyer on in-person scripts
+
+The in-person ask is the highest-converting channel (40 to 60 percent vs 8 to 15 percent for SMS). Train the lawyer and any client-facing staff on the five in-person scripts in the playbook (Section 04, page 5):
+
+- Script 01: Gap-time ask while documents print
+- Script 02: Direct hand-off to the desk QR sticker
+- Script 03: Ask following a spontaneous compliment
+- Script 04: "Is everything going well" trigger
+- Script 05: Verbal commit, then hand the card
+
+Walkthrough takes about 15 minutes. Schedule a 90-day re-training calendar reminder; in-person script delivery decays without practice.
+
+### 5f. Configure the reply SLA
+
+Every posted review gets a lawyer reply within 72 hours. Set this up as:
+
+- A daily check on new reviews via BrightLocal (already in the firm's stack) or via direct GBP API polling
+- A calendar block on the lawyer's schedule labeled "Review replies" at a fixed time three times a week
+- Five reply scripts pre-loaded into the firm's email tool (5-star generic, 5-star with specifics, 3-4 stars constructive, 1-2 stars addressable, 1-2 stars no record). Templates: see playbook Section 09, page 10.
+
+If the lawyer misses the 72-hour window twice in a quarter, that surfaces in the operator dashboard as a coaching item.
+
+### 5g. Verify channel attribution is wired
+
+Each review record should capture which channel triggered it. The five channel tags:
+
+- `in_person`: review posted within 30 minutes of the in-person ask (inferred from timestamp + lack of any digital touch)
+- `sms_link_click`: review posted within 24 hours of an SMS link click (tracked via short-link analytics)
+- `email_link_click`: same for email
+- `qr_scan`: review posted from a QR code scan event
+- `anniversary_sms`: review posted within 24 hours of the 30-day SMS
+
+The dashboard reads from this attribution. Without it, the firm cannot tell which channel is producing and where to reweight effort.
+
+### 5h. Anti-pattern compliance check
+
+Confirm the workflow does not include any of the following (per CRM Bible DR-020):
+
+- [ ] No funnel gating (every NPS-positive client sees the same public review path)
+- [ ] No incentive triggers (cash, gift cards, raffle entries tied to review submission)
+- [ ] No bulk reactivation (any backlog of past clients drips over weeks, not days)
+- [ ] No friends-and-family asks (shared surnames or addresses flag for review)
+- [ ] No keyword-stuffed reply templates (replies are plain prose; no firm-name or city-name keyword stuffing)
+
+These are Google ToS and LSO 4.2-1 compliance gates. Violating any of them risks profile suspension or LSO complaint.
+
+### 5i. First-quarter targets
+
+For a 1-to-2 lawyer firm, expect:
+
+- Q1: 12 reviews
+- Q2: 15-18 reviews
+- Q3: 20-25 reviews
+- Q4: 25-30 reviews
+
+These are bounded by the firm's actual case-completion volume, not invented. The system's job is to convert close-out events into review events at high rate, not to manufacture reviews.
+
+---
+
+## 6. Operational notes
 
 ### Cron jobs (not yet scheduled)
 

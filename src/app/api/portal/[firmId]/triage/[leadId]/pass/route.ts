@@ -47,9 +47,12 @@ export async function POST(
 ) {
   const { firmId, leadId } = await params;
   const session = await getPortalSession();
-  if (!session || session.firm_id !== firmId) {
+  // Operators can act on any firm; lawyers only on their own.
+  const isAuthorized = !!session && (session.role === "operator" || session.firm_id === firmId);
+  if (!session || !isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const actor = session.role === "operator" ? "operator" : "lawyer";
 
   let body: { note?: string };
   try {
@@ -103,7 +106,7 @@ export async function POST(
     .update({
       status: "passed",
       status_changed_at: now.toISOString(),
-      status_changed_by: "lawyer",
+      status_changed_by: actor,
       status_note: note, // null when not provided; lookup honours empty as no override
     })
     .eq("lead_id", leadId)
@@ -135,7 +138,7 @@ export async function POST(
   const payload = buildPassedPayload({
     facts,
     statusChangedAt: now,
-    statusChangedBy: "lawyer",
+    statusChangedBy: actor,
     declineSubject: verdict.subject,
     declineBody: verdict.body,
     declineSource: verdict.source,

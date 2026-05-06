@@ -23,13 +23,19 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { postToWebhookUrl } from "@/lib/ghl-webhook";
 import { recordAttempt, type OutboxRow } from "@/lib/webhook-outbox";
 import type { WebhookPayload } from "@/lib/ghl-webhook-pure";
+import { isCronAuthorized } from "@/lib/cron-auth";
+import { getOperatorSession } from "@/lib/portal-auth";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ outboxId: string }> }
 ) {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Two valid auth paths:
+  //   1. Bearer CRON_SECRET / PG_CRON_TOKEN — operator curl, automation.
+  //   2. Operator session cookie — operator console UI button.
+  const cronAuthed = isCronAuthorized(req);
+  const operatorSession = cronAuthed ? null : await getOperatorSession();
+  if (!cronAuthed && !operatorSession) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

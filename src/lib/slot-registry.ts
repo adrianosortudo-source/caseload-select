@@ -2373,6 +2373,189 @@ const DIV_TRIBUNAL_REVIEW_SLOTS: Slot[] = [
 ];
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CORP_INCORPORATION  -  Business incorporation (new or existing)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CORP_INCORPORATION_SLOTS: Slot[] = [
+
+  // ── Round 1: Business context (up to 6 slots) ────────────────────────────
+
+  {
+    id: "corp_incorporation__business_stage",
+    subType: "corp_incorporation",
+    round: 1,
+    question: "Where are you with starting this business?",
+    answerType: "single_select",
+    priorityWeight: 95,
+    options: [
+      { value: "new_ready_to_form",    label: "Have the idea, ready to form an entity",               fitDelta: 20, urgencyDelta: 10, frictionDelta: 0  },
+      { value: "already_operating",    label: "Already operating  -  need to incorporate now",        fitDelta: 20, urgencyDelta: 15, frictionDelta: 5  },
+      { value: "still_validating",     label: "Still validating the idea",                            fitDelta: 10, urgencyDelta: 0,  frictionDelta: 0  },
+      { value: "not_sure_if_needed",   label: "Not sure if I need to incorporate",                    fitDelta: 5,  urgencyDelta: 0,  frictionDelta: 5  },
+    ],
+  },
+
+  {
+    id: "corp_incorporation__timeline",
+    subType: "corp_incorporation",
+    round: 1,
+    question: "When do you need the incorporation completed?",
+    answerType: "single_select",
+    priorityWeight: 90,
+    options: [
+      { value: "within_2_weeks",  label: "As soon as possible (within 1-2 weeks)",  fitDelta: 20, urgencyDelta: 25, frictionDelta: 5  },
+      { value: "within_1_month",  label: "Within the next month",                   fitDelta: 15, urgencyDelta: 15, frictionDelta: 0  },
+      { value: "1_to_3_months",   label: "1 to 3 months from now",                  fitDelta: 10, urgencyDelta: 5,  frictionDelta: 0  },
+      { value: "no_hard_deadline", label: "No hard deadline yet",                   fitDelta: 5,  urgencyDelta: 0,  frictionDelta: 0  },
+    ],
+  },
+
+  {
+    id: "corp_incorporation__director_count",
+    subType: "corp_incorporation",
+    round: 1,
+    question: "Will the corporation have any other directors besides yourself?",
+    answerType: "single_select",
+    priorityWeight: 85,
+    options: [
+      { value: "sole_director",       label: "No, just me",                                      fitDelta: 20, urgencyDelta: 0, frictionDelta: 0  },
+      { value: "multiple_known",      label: "Yes  -  I know who they are",                      fitDelta: 15, urgencyDelta: 0, frictionDelta: 10 },
+      { value: "multiple_unknown",    label: "Yes  -  still deciding",                           fitDelta: 10, urgencyDelta: 0, frictionDelta: 15 },
+      { value: "not_sure",            label: "Not sure yet",                                     fitDelta: 5,  urgencyDelta: 0, frictionDelta: 5  },
+    ],
+  },
+
+  {
+    id: "corp_incorporation__jurisdiction",
+    subType: "corp_incorporation",
+    round: 1,
+    question: "Are you planning an Ontario or Federal incorporation?",
+    answerType: "single_select",
+    priorityWeight: 80,
+    options: [
+      { value: "ontario_obca",   label: "Ontario  -  operating mainly in Ontario (OBCA)",         fitDelta: 20, urgencyDelta: 0, frictionDelta: 0  },
+      { value: "federal_cbca",   label: "Federal  -  operating in multiple provinces (CBCA)",     fitDelta: 15, urgencyDelta: 0, frictionDelta: 10 },
+      { value: "not_sure",       label: "Not sure yet",                                           fitDelta: 10, urgencyDelta: 0, frictionDelta: 5  },
+    ],
+  },
+
+  {
+    id: "corp_incorporation__business_purpose",
+    subType: "corp_incorporation",
+    round: 1,
+    question: "What will the corporation do?",
+    answerType: "single_select",
+    priorityWeight: 75,
+    options: [
+      { value: "professional_services", label: "Professional services or consulting",                  fitDelta: 20, urgencyDelta: 0, frictionDelta: 0  },
+      { value: "retail_ecommerce",      label: "Retail or e-commerce",                                fitDelta: 15, urgencyDelta: 0, frictionDelta: 5  },
+      { value: "tech_software",         label: "Technology or software",                              fitDelta: 15, urgencyDelta: 0, frictionDelta: 5  },
+      { value: "regulated_industry",    label: "Regulated industry (finance, health, construction)",  fitDelta: 10, urgencyDelta: 0, frictionDelta: 15 },
+      { value: "not_yet_determined",    label: "Not yet determined",                                  fitDelta: 5,  urgencyDelta: 0, frictionDelta: 5  },
+    ],
+  },
+
+  {
+    id: "corp_incorporation__share_structure",
+    subType: "corp_incorporation",
+    round: 1,
+    question: "How many shareholders will the corporation have?",
+    answerType: "single_select",
+    priorityWeight: 70,
+    options: [
+      { value: "sole_shareholder",        label: "Just me  -  sole shareholder",                      fitDelta: 20, urgencyDelta: 0, frictionDelta: 0  },
+      { value: "two_to_three_aligned",    label: "2-3 shareholders, all aligned",                     fitDelta: 15, urgencyDelta: 0, frictionDelta: 10 },
+      { value: "multiple_complex",        label: "Multiple shareholders with different interests",     fitDelta: 10, urgencyDelta: 0, frictionDelta: 20 },
+      { value: "not_sure",                label: "Still deciding",                                     fitDelta: 5,  urgencyDelta: 0, frictionDelta: 5  },
+    ],
+  },
+
+  // ── Round 2: Depth qualification ─────────────────────────────────────────
+
+  {
+    id: "corp_incorporation__shareholders_agreement",
+    subType: "corp_incorporation",
+    round: 2,
+    question: "Will a shareholders' agreement be needed?",
+    answerType: "single_select",
+    priorityWeight: 80,
+    dependsOn: {
+      slotId: "corp_incorporation__share_structure",
+      values: ["two_to_three_aligned", "multiple_complex"],
+    },
+    options: [
+      { value: "yes_needed",        label: "Yes  -  we want one in place",            fitDelta: 20, urgencyDelta: 5,  frictionDelta: 10 },
+      { value: "not_sure",          label: "Not sure yet  -  open to advice",         fitDelta: 10, urgencyDelta: 0,  frictionDelta: 5  },
+      { value: "no_not_needed",     label: "No  -  not planning on one",              fitDelta: 5,  urgencyDelta: 0,  frictionDelta: 0  },
+    ],
+  },
+
+  {
+    id: "corp_incorporation__contracts_needed",
+    subType: "corp_incorporation",
+    round: 2,
+    question: "Do you anticipate needing employment agreements, supplier contracts, or terms of service drafted?",
+    answerType: "single_select",
+    priorityWeight: 75,
+    options: [
+      { value: "yes_various",    label: "Yes  -  will need various contracts",          fitDelta: 20, urgencyDelta: 5,  frictionDelta: 5  },
+      { value: "yes_specific",   label: "Yes  -  one specific type",                   fitDelta: 15, urgencyDelta: 0,  frictionDelta: 5  },
+      { value: "no",             label: "No  -  just the incorporation for now",        fitDelta: 10, urgencyDelta: 0,  frictionDelta: 0  },
+      { value: "not_sure",       label: "Not sure yet",                                fitDelta: 5,  urgencyDelta: 0,  frictionDelta: 0  },
+    ],
+  },
+
+  {
+    id: "corp_incorporation__existing_assets",
+    subType: "corp_incorporation",
+    round: 2,
+    question: "Are there existing business assets or operations to transfer into the corporation?",
+    answerType: "single_select",
+    priorityWeight: 70,
+    dependsOn: {
+      slotId: "corp_incorporation__business_stage",
+      values: ["already_operating"],
+    },
+    options: [
+      { value: "yes_significant",  label: "Yes  -  significant assets or contracts to transfer",  fitDelta: 20, urgencyDelta: 10, frictionDelta: 15 },
+      { value: "yes_minor",        label: "Yes  -  minor equipment or accounts",                  fitDelta: 15, urgencyDelta: 5,  frictionDelta: 5  },
+      { value: "no",               label: "No  -  starting fresh inside the corporation",         fitDelta: 10, urgencyDelta: 0,  frictionDelta: 0  },
+      { value: "not_sure",         label: "Not sure what qualifies",                              fitDelta: 5,  urgencyDelta: 0,  frictionDelta: 5  },
+    ],
+  },
+
+  {
+    id: "corp_incorporation__preferred_shares",
+    subType: "corp_incorporation",
+    round: 2,
+    question: "Will the share structure include preferred shares or multiple share classes?",
+    answerType: "single_select",
+    priorityWeight: 65,
+    options: [
+      { value: "yes_preferred",     label: "Yes  -  preferred shares or income splitting planned",  fitDelta: 15, urgencyDelta: 0, frictionDelta: 15 },
+      { value: "common_only",       label: "No  -  common shares only",                            fitDelta: 20, urgencyDelta: 0, frictionDelta: 0  },
+      { value: "not_sure",          label: "Not sure  -  need advice on this",                     fitDelta: 10, urgencyDelta: 0, frictionDelta: 5  },
+    ],
+  },
+
+  {
+    id: "corp_incorporation__lawyer_search_stage",
+    subType: "corp_incorporation",
+    round: 2,
+    question: "Where are you in the process of finding a lawyer for this?",
+    answerType: "single_select",
+    priorityWeight: 60,
+    options: [
+      { value: "first_consult",      label: "First consultation  -  I have not spoken to anyone yet",                 fitDelta: 20, urgencyDelta: 5,  frictionDelta: 0  },
+      { value: "spoke_no_retain",    label: "I spoke with another lawyer but did not retain them",                   fitDelta: 15, urgencyDelta: 0,  frictionDelta: 5  },
+      { value: "still_considering",  label: "I am still considering options",                                        fitDelta: 10, urgencyDelta: 0,  frictionDelta: 0  },
+      { value: "urgent_deadline",    label: "I need someone urgently  -  there is a deadline I am worried about",   fitDelta: 20, urgencyDelta: 25, frictionDelta: 5  },
+    ],
+  },
+
+];
+
 /**
  * Master slot registry, keyed by slot ID.
  * Add new banks here as they are authored and lawyer-reviewed.
@@ -2387,6 +2570,7 @@ export const SLOT_REGISTRY: Map<string, Slot> = new Map(
     ...DIV_TRIBUNAL_REVIEW_SLOTS,
     ...PI_MVA_SLOTS,
     ...EMP_DISMISSAL_SLOTS,
+    ...CORP_INCORPORATION_SLOTS,
     // Future banks: IMM_REFUGEE_SLOTS, PI_MVA_SLIP_FALL_MERGED, ...
   ].map(slot => [slot.id, slot])
 );

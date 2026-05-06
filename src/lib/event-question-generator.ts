@@ -202,82 +202,12 @@ const PREAMBLE_BY_GAP: Record<string, string> = {
   multi: "You mentioned more than one situation. Focusing on the right one helps us give you accurate information.",
 };
 
-/**
- * Generate a targeted intake question for a selected event.
- *
- * Returns null only when the event type is unrecognised. Callers should
- * fall back to the standard question bank in that case.
- */
-export function generateQuestion(
-  event: ExtractedEvent,
-  allEventsOfSameType?: ExtractedEvent[],
-): string | null {
-  const { type } = event;
+// NOTE: generateQuestion() and generatePreamble() were removed.
+// Questions now come from the slot bank via selectSlots() → slotToApiQuestion().
+// The slot registry (src/lib/slot-registry.ts) is the single source of truth for
+// question text, options, and order. The event extractor still runs to detect the
+// sub-type (e.g. slip_fall → pi_slip_fall) so the right slot bank is selected,
+// but question generation is fully deterministic from the bank.
+// Event-selector, event-subtype-map, and the extractor remain in use for sub-type
+// resolution on turn 1. The question generation layer is gone.
 
-  // Disambiguation: multiple instances of the same event type
-  if (allEventsOfSameType && allEventsOfSameType.length > 1) {
-    const multiQ = MULTI_INSTANCE_QUESTIONS[type];
-    if (multiQ) return rewritePronouns(multiQ, type);
-  }
-
-  // Primary gap: time not resolved AND time is a legal requirement for this type.
-  // For types where REQUIRES_TIME = false, skip straight to the substantive question.
-  if (!event.time_resolved && REQUIRES_TIME[type] !== false) {
-    const whenQ = WHEN_QUESTIONS[type];
-    if (whenQ) return rewritePronouns(whenQ, type);
-  }
-
-  // Secondary gap: time resolved, target next unknown
-  const resolvedFn = RESOLVED_QUESTIONS[type];
-  if (resolvedFn) {
-    return rewritePronouns(resolvedFn(event), type);
-  }
-
-  return null;
-}
-
-/**
- * Generate a one-sentence preamble (grey subtext) for the event-derived question.
- *
- * Explains briefly why we need the answer — makes the first question feel like
- * a conversation rather than a form. Safe to display directly to clients.
- *
- * Returns null when the event type is unrecognised (same contract as generateQuestion).
- */
-export function generatePreamble(
-  event: ExtractedEvent,
-  allEventsOfSameType?: ExtractedEvent[],
-): string | null {
-  const { type } = event;
-
-  // Multi-instance: same preamble for all types
-  if (allEventsOfSameType && allEventsOfSameType.length > 1) {
-    if (MULTI_INSTANCE_QUESTIONS[type]) return PREAMBLE_BY_GAP["multi"];
-  }
-
-  // WHEN gap
-  if (!event.time_resolved && REQUIRES_TIME[type] !== false) {
-    const key = `${type}_when`;
-    return PREAMBLE_BY_GAP[key] ?? null;
-  }
-
-  // Substantive gap — derive the key from which question the resolved path would pick
-  if (type === "slip_fall") {
-    return event.attributes.known.includes("incident_reported")
-      ? PREAMBLE_BY_GAP["slip_fall_injuries"] ?? PREAMBLE_BY_GAP["slip_fall_report"]
-      : PREAMBLE_BY_GAP["slip_fall_report"];
-  }
-  if (type === "mva") {
-    return (event.attributes.known.includes("other_driver_fault") || event.attributes.known.includes("ran_red_light"))
-      ? PREAMBLE_BY_GAP["mva_injuries"]
-      : PREAMBLE_BY_GAP["mva_role"];
-  }
-  if (type === "termination")  return PREAMBLE_BY_GAP["termination_reason"];
-  if (type === "unpaid_overtime") return PREAMBLE_BY_GAP["unpaid_overtime_status"];
-  if (type === "deportation")  return PREAMBLE_BY_GAP["deportation_reason"];
-  if (type === "marriage_to_citizen") return PREAMBLE_BY_GAP["marriage_to_citizen_status"];
-  if (type === "debt_owed")    return PREAMBLE_BY_GAP["debt_owed_agreement"];
-  if (type === "real_estate_defect") return PREAMBLE_BY_GAP["real_estate_defect_discovery"];
-
-  return null;
-}

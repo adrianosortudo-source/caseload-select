@@ -37,7 +37,9 @@ export async function GET(
 ) {
   const { firmId } = await params;
   const session = await getPortalSession();
-  if (!session || session.firm_id !== firmId) {
+  // Operators can read any firm's queue; lawyers only their own.
+  const isAuthorized = !!session && (session.role === "operator" || session.firm_id === firmId);
+  if (!session || !isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

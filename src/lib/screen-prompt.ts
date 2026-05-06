@@ -809,7 +809,7 @@ VALIDATION RULES:
 - flags must always be present as an array (use [] if no flags).
 - OUT OF SCOPE response_text: when finalize=true due to out_of_scope, response_text must include a brief, polite explanation that the firm does not handle this type of matter and encourage the client to seek the appropriate legal help. Do not leave response_text as only the disclaimer.
 - filled_slots and slot_confidence must always be present as objects (use {} if no slots were extracted). Never omit these keys.
-- practice_sub_type must always be present. Set to null only for practice areas without sub-type routing (real, corp, est, llt, ip, tax, admin, bank, priv, fran, env, prov, condo, hr, edu, health, debt, nfp, defam, socben, gig, sec, elder, str, crypto, ecom, animal, const). For pi, emp, fam, crim, imm, civ, ins: always populate from the sub-type list above, or use "{pa}_other" if genuinely unclear.
+- practice_sub_type must always be present. Set to null only for practice areas without sub-type routing (real, est, llt, ip, tax, admin, bank, priv, fran, env, prov, condo, hr, edu, health, debt, nfp, defam, socben, gig, sec, elder, str, crypto, ecom, animal, const). For pi, emp, fam, crim, imm, civ, ins, corp: always populate from the sub-type list above, or use "{pa}_other" if genuinely unclear.
 - NEVER include a slot in next_question or next_questions whose id appears in filled_slots at "high" or "medium" slot_confidence.
 
 ${firm.custom_instructions ? `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nFIRM-SPECIFIC INSTRUCTIONS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${firm.custom_instructions}` : ""}${fewShotExamplesFor(options?.practiceAreaHint)}`;

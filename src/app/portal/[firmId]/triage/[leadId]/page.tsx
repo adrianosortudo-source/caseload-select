@@ -98,11 +98,11 @@ function BackLink({ firmId }: { firmId: string }) {
 
 function Header({ row, subtrack }: { row: LeadRow; subtrack: string | null }) {
   return (
-    <div className="bg-white border border-black/10 px-6 py-5">
-      <div className="flex items-start justify-between gap-6 flex-wrap">
+    <div className="bg-white border border-black/10 px-4 sm:px-6 py-4 sm:py-5">
+      <div className="flex items-start justify-between gap-4 sm:gap-6 flex-wrap">
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-wider font-semibold text-gold">Lawyer triage</p>
-          <h1 className="text-2xl font-bold text-navy mt-1">{matterLabel(row.matter_type)}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-navy mt-1 break-words">{matterLabel(row.matter_type)}</h1>
           <div className="mt-1 flex items-center gap-2 text-xs text-black/50">
             <span className="font-mono">{row.lead_id}</span>
             {row.contact_name && (

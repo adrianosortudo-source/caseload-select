@@ -30,6 +30,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { loadDeclineCandidates, resolveDecline } from "@/lib/decline-resolver";
 import { buildDeclinedBackstopPayload, fireGhlWebhook, type LeadFacts } from "@/lib/ghl-webhook";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 const BATCH_LIMIT = 25;
 
@@ -55,10 +56,9 @@ interface BackstopOutcome {
 }
 
 export async function GET(req: NextRequest) {
-  // Cron auth. Vercel sends Authorization: Bearer <CRON_SECRET> when the
-  // job fires; the same path is also callable manually with that header.
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Cron auth. Accepts CRON_SECRET (Vercel cron, operator curl) or
+  // PG_CRON_TOKEN (Supabase pg_cron). See lib/cron-auth for details.
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

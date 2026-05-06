@@ -17,13 +17,19 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { isCronAuthorized } from "@/lib/cron-auth";
+import { getOperatorSession } from "@/lib/portal-auth";
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
 
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Two valid auth paths:
+  //   1. Bearer CRON_SECRET / PG_CRON_TOKEN — operator curl, automation.
+  //   2. Operator session cookie — operator console UI fetch.
+  const cronAuthed = isCronAuthorized(req);
+  const operatorSession = cronAuthed ? null : await getOperatorSession();
+  if (!cronAuthed && !operatorSession) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

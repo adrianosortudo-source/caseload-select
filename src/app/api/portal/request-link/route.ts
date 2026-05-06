@@ -32,6 +32,14 @@ interface FirmRow {
   branding: { lawyer_email?: string; firm_name?: string } | null;
 }
 
+interface FirmLawyerRow {
+  id: string;
+  firm_id: string;
+  email: string;
+  role: "lawyer" | "operator";
+  intake_firms: FirmRow | null;
+}
+
 export async function POST(req: NextRequest) {
   let body: { email?: string };
   try {
@@ -45,29 +53,63 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true }); // silent
   }
 
-  // Look up firm by branding.lawyer_email. JSONB scan is cheap at this scale
-  // (a handful of firms in the table); when this grows past ~100 firms, add
-  // a btree index on (branding->>'lawyer_email').
-  const { data: firms, error } = await supabase
-    .from("intake_firms")
-    .select("id, name, branding")
-    .filter("branding->>lawyer_email", "eq", email);
+  // Resolve email → firm + role. Two paths:
+  //
+  //   1. firm_lawyers (canonical, multi-lawyer + role-aware). Picks the most
+  //      recently signed-in row when an email belongs to multiple firms.
+  //   2. intake_firms.branding.lawyer_email (legacy, backward compat).
+  //      One-firm-per-email; defaults role='lawyer'.
+  //
+  // First match wins. Operator-role rows in firm_lawyers issue tokens that
+  // unlock /admin/* surfaces; lawyer-role rows behave as before.
 
-  if (error || !firms || firms.length === 0) {
+  let firmId: string | null = null;
+  let firmRow: FirmRow | null = null;
+  let lawyerId: string | undefined;
+  let role: "lawyer" | "operator" = "lawyer";
+
+  const { data: lawyerRows } = await supabase
+    .from("firm_lawyers")
+    .select("id, firm_id, email, role, intake_firms!inner(id, name, branding)")
+    .ilike("email", email)
+    .order("last_signed_in_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .returns<FirmLawyerRow[]>();
+
+  if (lawyerRows && lawyerRows.length > 0) {
+    const row = lawyerRows[0];
+    firmId = row.firm_id;
+    firmRow = row.intake_firms;
+    lawyerId = row.id;
+    role = row.role;
+  } else {
+    // Legacy fallback: branding.lawyer_email
+    const { data: firms } = await supabase
+      .from("intake_firms")
+      .select("id, name, branding")
+      .filter("branding->>lawyer_email", "eq", email);
+    if (firms && firms.length > 0) {
+      firmRow = firms[0] as FirmRow;
+      firmId = firmRow.id;
+    }
+  }
+
+  if (!firmId || !firmRow) {
     return NextResponse.json({ ok: true }); // silent
   }
 
-  const firm = firms[0] as FirmRow;
-  const token = generatePortalToken(firm.id);
+  const token = generatePortalToken(firmId, { role, lawyer_id: lawyerId });
   const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN;
   const origin =
     (appDomain ? `https://app.${appDomain}` : null) ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
   const magicLink = `${origin}/api/portal/login?token=${encodeURIComponent(token)}`;
 
-  const firmName = firm.branding?.firm_name ?? firm.name ?? "your firm";
-  const subject = "CaseLoad Select sign-in link";
-  const html = renderMagicLinkEmail({ firmName, magicLink });
+  const firmName = firmRow.branding?.firm_name ?? firmRow.name ?? "your firm";
+  const subject = role === "operator"
+    ? "CaseLoad Select operator sign-in link"
+    : "CaseLoad Select sign-in link";
+  const html = renderMagicLinkEmail({ firmName, magicLink, role });
 
   try {
     await sendEmail(email, subject, html);
@@ -79,8 +121,11 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-function renderMagicLinkEmail(args: { firmName: string; magicLink: string }): string {
-  const { firmName, magicLink } = args;
+function renderMagicLinkEmail(args: { firmName: string; magicLink: string; role: "lawyer" | "operator" }): string {
+  const { firmName, magicLink, role } = args;
+  const heading = role === "operator"
+    ? "Operator sign-in link"
+    : `Sign-in link for ${escapeHtml(firmName)}`;
   return `<!doctype html>
 <html>
 <body style="margin:0;padding:0;background:#F4F3EF;font-family:'DM Sans',Arial,sans-serif;color:#0D1520;">
@@ -95,7 +140,7 @@ function renderMagicLinkEmail(args: { firmName: string; magicLink: string }): st
           </tr>
           <tr>
             <td style="padding:32px 28px 8px;">
-              <div style="font-family:'Manrope',Arial,sans-serif;font-weight:800;font-size:22px;line-height:1.25;color:#1E2F58;">Sign-in link for ${escapeHtml(firmName)}</div>
+              <div style="font-family:'Manrope',Arial,sans-serif;font-weight:800;font-size:22px;line-height:1.25;color:#1E2F58;">${heading}</div>
             </td>
           </tr>
           <tr>

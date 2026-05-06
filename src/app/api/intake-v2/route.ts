@@ -63,6 +63,7 @@ import {
 } from "@/lib/intake-v2-derive";
 import { loadDeclineCandidates, resolveDecline } from "@/lib/decline-resolver";
 import { buildDeclinedOosPayload, fireGhlWebhook, type LeadFacts } from "@/lib/ghl-webhook";
+import { notifyLawyersOfNewLead } from "@/lib/lead-notify";
 
 // Practice-area display labels for the OOS decline copy interpolation. Matches
 // the engine's labels in the screen for consistency with what the lead saw.
@@ -278,6 +279,27 @@ export async function POST(req: NextRequest) {
     // already moved on. The result is observable via the firm's GHL inbox or
     // (Phase 3) the webhook_outbox table.
     void fireGhlWebhook(firmIdParam, payload);
+  }
+
+  // New-lead notification email. Only fires for triaging rows — OOS leads
+  // were already handled above with the decline-with-grace cadence, and
+  // pre-decided rows would not arrive through this endpoint. Best effort,
+  // never blocks the response. Recipient list comes from firm_lawyers
+  // (role='lawyer'); legacy branding.lawyer_email is the fallback.
+  if (inserted.status === "triaging") {
+    void notifyLawyersOfNewLead({
+      firmId: firmIdParam,
+      leadId: inserted.lead_id,
+      contactName: body.contact?.name ?? null,
+      matterType: matterType,
+      practiceArea: body.practice_area as string,
+      band,
+      decisionDeadlineIso: inserted.decision_deadline,
+      whaleNurture: !!inserted.whale_nurture,
+    }).catch((err) => {
+      // Visible in Vercel function logs; not surfaced to the screen.
+      console.error("[intake-v2] notifyLawyersOfNewLead failed:", err);
+    });
   }
 
   return NextResponse.json(
