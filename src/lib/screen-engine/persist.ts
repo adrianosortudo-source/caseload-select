@@ -20,7 +20,7 @@ import { buildReport } from './report';
 // Set in Vercel project env. Falls back to the production app URL for any
 // build that forgets to set it; the endpoint itself handles demo flow safely.
 const ENDPOINT =
-  (import.meta.env?.VITE_INTAKE_ENDPOINT as string | undefined) ??
+  ((import.meta as { env?: { VITE_INTAKE_ENDPOINT?: string } }).env?.VITE_INTAKE_ENDPOINT as string | undefined) ??
   'https://app.caseloadselect.ca/api/intake-v2';
 
 const REQUEST_TIMEOUT_MS = 10_000;
