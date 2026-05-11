@@ -1,0 +1,850 @@
+{
+  "slot_options": {
+    "corporate_problem_type": {
+      "Someone owes my company money": "Someone owes my company money",
+      "I have a dispute with a business partner or co-owner": "I have a dispute with a business partner or co-owner",
+      "A vendor or supplier has billed us incorrectly": "A vendor or supplier has billed us incorrectly",
+      "I am concerned about financial irregularities in the company": "I am concerned about financial irregularities in the company",
+      "A contract or agreement was not honoured": "A contract or agreement was not honoured",
+      "Something else": "Something else"
+    },
+    "company_involvement": {
+      "I own or co-own the company": "I own or co-own the company",
+      "I am a director or officer": "I am a director or officer",
+      "I am a customer or client of the company": "I am a customer or client of the company",
+      "I work for the company": "I work for the company",
+      "I am a vendor or supplier": "I am a vendor or supplier",
+      "Other": "Other"
+    },
+    "advisory_path": {
+      "Starting a new business": "Starting a new business",
+      "Buying into an existing business": "Buying into an existing business",
+      "Not sure": "Not sure"
+    },
+    "co_owner_count": {
+      "Just me": "Just me",
+      "One partner": "One partner",
+      "Multiple partners": "Multiple partners",
+      "Not sure yet": "Not sure yet"
+    },
+    "advisory_concern": {
+      "Knowing what kind of company to set up": "Knowing what kind of company to set up",
+      "Deciding who owns what": "Deciding who owns what",
+      "Avoiding problems with a partner later": "Avoiding problems with a partner later",
+      "Reviewing documents before signing": "Reviewing documents before signing",
+      "Not sure": "Not sure"
+    },
+    "signed_anything": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "documents_exist": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "advisory_actionability": {
+      "Just exploring": "Just exploring",
+      "Planning soon": "Planning soon",
+      "Ready to move forward": "Ready to move forward",
+      "Need review now": "Need review now",
+      "Not sure": "Not sure"
+    },
+    "advisory_specific_task": {
+      "Choosing the right structure": "Choosing the right structure",
+      "Reviewing documents": "Reviewing documents",
+      "Splitting ownership": "Splitting ownership",
+      "Protecting against future problems": "Protecting against future problems",
+      "Not sure": "Not sure"
+    },
+    "advisory_timing": {
+      "No rush": "No rush",
+      "In the next 1-3 months": "In the next 1-3 months",
+      "This month": "This month",
+      "This week": "This week",
+      "Urgent": "Urgent",
+      "Not sure": "Not sure"
+    },
+    "business_activity_type": {
+      "Professional services": "Professional services",
+      "Online business": "Online business",
+      "Retail or storefront": "Retail or storefront",
+      "Trades or construction": "Trades or construction",
+      "Holding company or investment": "Holding company or investment",
+      "Not sure": "Not sure"
+    },
+    "business_stage": {
+      "Just researching": "Just researching",
+      "Planning to start soon": "Planning to start soon",
+      "Already operating": "Already operating",
+      "Need to incorporate before launching": "Need to incorporate before launching",
+      "Not sure": "Not sure"
+    },
+    "setup_needs": {
+      "Incorporating the company": "Incorporating the company",
+      "Choosing the right business structure": "Choosing the right business structure",
+      "Reviewing documents": "Reviewing documents",
+      "Taxes or accounting setup": "Taxes or accounting setup",
+      "Not sure": "Not sure"
+    },
+    "ownership_split_discussed": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "revenue_expectation": {
+      "Under $30,000 (small or part-time)": "Under $30,000 (small or part-time)",
+      "$30,000–$100,000 (full-time, sole operator)": "$30,000–$100,000 (full-time, sole operator)",
+      "$100,000–$500,000 (small team or busy practice)": "$100,000–$500,000 (small team or busy practice)",
+      "Over $500,000 (early-stage business with momentum)": "Over $500,000 (early-stage business with momentum)",
+      "Not sure yet": "Not sure yet"
+    },
+    "employees_planned": {
+      "No, just me": "No, just me",
+      "Maybe one or two contractors": "Maybe one or two contractors",
+      "Yes, one or two employees": "Yes, one or two employees",
+      "Yes, three or more employees": "Yes, three or more employees",
+      "Not sure yet": "Not sure yet"
+    },
+    "regulated_industry": {
+      "No, general services or products": "No, general services or products",
+      "Yes, health or medical": "Yes, health or medical",
+      "Yes, financial or investment": "Yes, financial or investment",
+      "Yes, food or alcohol": "Yes, food or alcohol",
+      "Yes, legal or professional licensing": "Yes, legal or professional licensing",
+      "Yes, other regulated area": "Yes, other regulated area",
+      "Not sure": "Not sure"
+    },
+    "cross_border_work": {
+      "No, Canada only": "No, Canada only",
+      "Mostly US clients": "Mostly US clients",
+      "Mostly other international": "Mostly other international",
+      "Mixed Canadian and foreign": "Mixed Canadian and foreign",
+      "Not sure yet": "Not sure yet"
+    },
+    "ip_planned": {
+      "No, services only": "No, services only",
+      "Yes, a brand name or logo to protect": "Yes, a brand name or logo to protect",
+      "Yes, software, code, or formulas": "Yes, software, code, or formulas",
+      "Yes, multiple types of IP": "Yes, multiple types of IP",
+      "Not sure": "Not sure"
+    },
+    "client_role": {
+      "Shareholder": "Shareholder",
+      "Director/officer": "Director/officer",
+      "Business partner": "Business partner",
+      "Employee": "Employee",
+      "Not sure": "Not sure"
+    },
+    "counterparty_type": {
+      "Business partner": "Business partner",
+      "Cofounder": "Cofounder",
+      "Other shareholder": "Other shareholder",
+      "Company management": "Company management",
+      "Not sure": "Not sure"
+    },
+    "proof_of_ownership": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "shareholder_agreement": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "corporate_records_available": {
+      "Yes": "Yes",
+      "No": "No",
+      "Partial access": "Partial access",
+      "Not sure": "Not sure"
+    },
+    "management_exclusion": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "dividend_or_money_issue": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "company_profitable": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "deadlock_status": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "desired_outcome_shareholder_dispute": {
+      "Recover money taken from the company": "Recover money taken from the company",
+      "Regain access to records or accounts": "Regain access to records or accounts",
+      "Stop unauthorized decisions": "Stop unauthorized decisions",
+      "Negotiate a buyout or exit": "Negotiate a buyout or exit",
+      "Resolve ownership/control dispute": "Resolve ownership/control dispute",
+      "Not sure": "Not sure"
+    },
+    "amount_at_stake": {
+      "Under $5,000": "Under $5,000",
+      "$5,000–$25,000": "$5,000–$25,000",
+      "$25,000–$100,000": "$25,000–$100,000",
+      "Over $100,000": "Over $100,000",
+      "Not sure": "Not sure"
+    },
+    "invoice_exists": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "payment_status": {
+      "Nothing paid": "Nothing paid",
+      "Partially paid": "Partially paid",
+      "Disputed — claims they paid": "Disputed — claims they paid",
+      "Not sure": "Not sure"
+    },
+    "proof_of_performance": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "dispute_reason": {
+      "Says work was not done properly": "Says work was not done properly",
+      "Says there was no agreement": "Says there was no agreement",
+      "Says they already paid": "Says they already paid",
+      "No clear reason": "No clear reason",
+      "Not sure": "Not sure"
+    },
+    "desired_outcome_unpaid_invoice": {
+      "Get paid": "Get paid",
+      "Negotiate payment": "Negotiate payment",
+      "Send demand letter": "Send demand letter",
+      "Start claim": "Start claim",
+      "Not sure": "Not sure"
+    },
+    "written_terms": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "contract_exists": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "communications_exist": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "desired_outcome_contract": {
+      "Enforce agreement": "Enforce agreement",
+      "Recover damages": "Recover damages",
+      "Stop the other side from breaching": "Stop the other side from breaching",
+      "Negotiate settlement": "Negotiate settlement",
+      "Not sure": "Not sure"
+    },
+    "vendor_type": {
+      "A supplier of goods": "A supplier of goods",
+      "A service provider": "A service provider",
+      "A software or subscription vendor": "A software or subscription vendor",
+      "A contractor or subcontractor": "A contractor or subcontractor",
+      "Another type of vendor": "Another type of vendor",
+      "Not sure": "Not sure"
+    },
+    "billing_dispute_reason": {
+      "Overcharged for services or goods received": "Overcharged for services or goods received",
+      "Charged for something we did not receive": "Charged for something we did not receive",
+      "Dispute over contract terms or pricing": "Dispute over contract terms or pricing",
+      "Unauthorized or unexpected charges": "Unauthorized or unexpected charges",
+      "Subscription or renewal dispute": "Subscription or renewal dispute",
+      "Other": "Other"
+    },
+    "vendor_contract_exists": {
+      "Yes, a signed contract": "Yes, a signed contract",
+      "Yes, terms of service or a purchase order": "Yes, terms of service or a purchase order",
+      "No formal agreement": "No formal agreement",
+      "Not sure": "Not sure"
+    },
+    "vendor_services_received": {
+      "Yes, fully delivered": "Yes, fully delivered",
+      "Partially delivered": "Partially delivered",
+      "Not delivered": "Not delivered",
+      "Disputed": "Disputed",
+      "Not sure": "Not sure"
+    },
+    "desired_outcome_vendor": {
+      "Refund or credit": "Refund or credit",
+      "Correct invoice and pay proper amount": "Correct invoice and pay proper amount",
+      "Terminate the vendor relationship": "Terminate the vendor relationship",
+      "Damages for losses caused": "Damages for losses caused",
+      "Not sure": "Not sure"
+    },
+    "reporter_role_money": {
+      "Owner or shareholder": "Owner or shareholder",
+      "Director or officer": "Director or officer",
+      "Employee or manager": "Employee or manager",
+      "Accountant or bookkeeper": "Accountant or bookkeeper",
+      "Other": "Other"
+    },
+    "irregularity_type": {
+      "Money appears to be missing or unaccounted for": "Money appears to be missing or unaccounted for",
+      "Unauthorized payments or transfers": "Unauthorized payments or transfers",
+      "Fraudulent or inflated invoices": "Fraudulent or inflated invoices",
+      "Someone is misusing company accounts or cards": "Someone is misusing company accounts or cards",
+      "Other": "Other"
+    },
+    "irregularity_amount": {
+      "Under $10,000": "Under $10,000",
+      "$10,000–$50,000": "$10,000–$50,000",
+      "$50,000–$200,000": "$50,000–$200,000",
+      "Over $200,000": "Over $200,000",
+      "Unknown": "Unknown"
+    },
+    "evidence_of_irregularity": {
+      "Yes": "Yes",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "reported_to_anyone": {
+      "Yes, reported": "Yes, reported",
+      "No, not yet": "No, not yet",
+      "In progress": "In progress",
+      "Not sure": "Not sure"
+    },
+    "desired_outcome_money_control": {
+      "Recover the missing money": "Recover the missing money",
+      "Stop the misuse": "Stop the misuse",
+      "Internal investigation": "Internal investigation",
+      "Report to authorities": "Report to authorities",
+      "Not sure": "Not sure"
+    },
+    "real_estate_problem_type": {
+      "Buying or selling commercial property": "Buying or selling commercial property",
+      "Buying or selling a home or condo": "Buying or selling a home or condo",
+      "A real estate deal that has gone wrong (deposit, closing, misrepresentation)": "A real estate deal that has gone wrong (deposit, closing, misrepresentation)",
+      "A landlord or tenant dispute": "A landlord or tenant dispute",
+      "Unpaid construction or renovation work": "Unpaid construction or renovation work",
+      "A pre-construction condo or new build issue": "A pre-construction condo or new build issue",
+      "A mortgage or power-of-sale issue": "A mortgage or power-of-sale issue",
+      "Something else": "Something else"
+    },
+    "commercial_re_role": {
+      "Buyer": "Buyer",
+      "Seller": "Seller",
+      "Landlord": "Landlord",
+      "Tenant": "Tenant",
+      "Investor": "Investor",
+      "Not sure": "Not sure"
+    },
+    "commercial_property_type": {
+      "Office": "Office",
+      "Retail / storefront": "Retail / storefront",
+      "Industrial / warehouse": "Industrial / warehouse",
+      "Mixed-use": "Mixed-use",
+      "Multi-residential / apartment building": "Multi-residential / apartment building",
+      "Land / development site": "Land / development site",
+      "Not sure": "Not sure"
+    },
+    "commercial_re_amount": {
+      "Under $500,000": "Under $500,000",
+      "$500,000–$2M": "$500,000–$2M",
+      "$2M–$10M": "$2M–$10M",
+      "Over $10M": "Over $10M",
+      "Not sure": "Not sure"
+    },
+    "commercial_re_stage": {
+      "Just exploring": "Just exploring",
+      "Talking with the other side": "Talking with the other side",
+      "Signed an offer or letter of intent": "Signed an offer or letter of intent",
+      "Conditions still to clear": "Conditions still to clear",
+      "Closing date set": "Closing date set",
+      "Already closed": "Already closed",
+      "Not sure": "Not sure"
+    },
+    "commercial_re_concerns": {
+      "Reviewing the agreement": "Reviewing the agreement",
+      "Title or zoning concern": "Title or zoning concern",
+      "Environmental concern": "Environmental concern",
+      "Financing or mortgage": "Financing or mortgage",
+      "Tenant or lease structure": "Tenant or lease structure",
+      "Not sure yet": "Not sure yet"
+    },
+    "residential_role": {
+      "Buying": "Buying",
+      "Selling": "Selling",
+      "Both (buying and selling)": "Both (buying and selling)",
+      "Not sure": "Not sure"
+    },
+    "residential_property_type": {
+      "Detached / semi-detached": "Detached / semi-detached",
+      "Townhouse": "Townhouse",
+      "Condo": "Condo",
+      "Pre-construction unit": "Pre-construction unit",
+      "Vacant land": "Vacant land",
+      "Not sure": "Not sure"
+    },
+    "residential_re_amount": {
+      "Under $500,000": "Under $500,000",
+      "$500,000–$1M": "$500,000–$1M",
+      "$1M–$2M": "$1M–$2M",
+      "Over $2M": "Over $2M",
+      "Not sure": "Not sure"
+    },
+    "residential_re_stage": {
+      "Just exploring": "Just exploring",
+      "Offer not yet made": "Offer not yet made",
+      "Offer accepted, still working through conditions": "Offer accepted, still working through conditions",
+      "Deal is locked, closing soon": "Deal is locked, closing soon",
+      "Closing this week, urgent": "Closing this week, urgent",
+      "Already closed": "Already closed",
+      "Not sure": "Not sure"
+    },
+    "residential_re_concern": {
+      "Reviewing the contract before signing": "Reviewing the contract before signing",
+      "Title and closing paperwork": "Title and closing paperwork",
+      "Mortgage and financing": "Mortgage and financing",
+      "Conditions or guarantees": "Conditions or guarantees",
+      "Something has gone wrong at closing": "Something has gone wrong at closing",
+      "Not sure yet": "Not sure yet"
+    },
+    "residential_closing_timeline": {
+      "No firm date yet": "No firm date yet",
+      "More than 60 days away": "More than 60 days away",
+      "30 to 60 days away": "30 to 60 days away",
+      "Less than 30 days away": "Less than 30 days away",
+      "This week": "This week",
+      "Already passed (closing was missed)": "Already passed (closing was missed)",
+      "Not sure": "Not sure"
+    },
+    "residential_mortgage_situation": {
+      "Pre-approved": "Pre-approved",
+      "Approved with conditions still open": "Approved with conditions still open",
+      "Application submitted, no answer yet": "Application submitted, no answer yet",
+      "Cash purchase, no financing": "Cash purchase, no financing",
+      "Private or alternative lender": "Private or alternative lender",
+      "Not started": "Not started"
+    },
+    "residential_representation": {
+      "Yes, I have an agent": "Yes, I have an agent",
+      "No, dealing with the other side directly": "No, dealing with the other side directly",
+      "No, the seller has an agent and I do not": "No, the seller has an agent and I do not",
+      "Not sure": "Not sure"
+    },
+    "litigation_subject": {
+      "The other side did not close the deal": "The other side did not close the deal",
+      "Deposit was lost or is being kept": "Deposit was lost or is being kept",
+      "Seller hid problems or misrepresented the property": "Seller hid problems or misrepresented the property",
+      "Title or boundary problem": "Title or boundary problem",
+      "Disagreement over use of land (easement)": "Disagreement over use of land (easement)",
+      "Real estate fraud": "Real estate fraud",
+      "Not sure": "Not sure"
+    },
+    "litigation_role": {
+      "Buyer": "Buyer",
+      "Seller": "Seller",
+      "Property owner": "Property owner",
+      "Neighbour": "Neighbour",
+      "Investor": "Investor",
+      "Not sure": "Not sure"
+    },
+    "litigation_amount": {
+      "Under $25,000": "Under $25,000",
+      "$25,000–$100,000": "$25,000–$100,000",
+      "$100,000–$500,000": "$100,000–$500,000",
+      "Over $500,000": "Over $500,000",
+      "Not sure": "Not sure"
+    },
+    "litigation_documents": {
+      "Yes": "Yes",
+      "No": "No",
+      "Some, but only drafts or partial": "Some, but only drafts or partial",
+      "Not sure": "Not sure"
+    },
+    "litigation_stage": {
+      "No, not yet": "No, not yet",
+      "A lawyer's letter has been sent": "A lawyer's letter has been sent",
+      "Already in court (we filed)": "Already in court (we filed)",
+      "Already in court (we were served)": "Already in court (we were served)",
+      "Not sure": "Not sure"
+    },
+    "litigation_when_event": {
+      "In the last 30 days": "In the last 30 days",
+      "Within the last 6 months": "Within the last 6 months",
+      "6 months to 2 years ago": "6 months to 2 years ago",
+      "Over 2 years ago": "Over 2 years ago",
+      "Not sure": "Not sure"
+    },
+    "litigation_settlement_attempted": {
+      "No contact yet": "No contact yet",
+      "Informal conversations only": "Informal conversations only",
+      "Demand letters exchanged": "Demand letters exchanged",
+      "Mediation attempted, did not resolve": "Mediation attempted, did not resolve",
+      "Settlement offer on the table": "Settlement offer on the table",
+      "Not sure": "Not sure"
+    },
+    "tenancy_party": {
+      "Landlord": "Landlord",
+      "Tenant": "Tenant",
+      "Property manager": "Property manager",
+      "Not sure": "Not sure"
+    },
+    "tenancy_type": {
+      "Residential (house, condo, apartment)": "Residential (house, condo, apartment)",
+      "Commercial (office, retail, industrial)": "Commercial (office, retail, industrial)",
+      "Mixed": "Mixed",
+      "Not sure": "Not sure"
+    },
+    "tenancy_issue": {
+      "Unpaid rent": "Unpaid rent",
+      "Eviction or possession": "Eviction or possession",
+      "Lease terms or breach": "Lease terms or breach",
+      "Damage or repairs": "Damage or repairs",
+      "Illegal use / nuisance": "Illegal use / nuisance",
+      "Other": "Other"
+    },
+    "tenancy_amount": {
+      "Under $5,000": "Under $5,000",
+      "$5,000–$25,000": "$5,000–$25,000",
+      "$25,000–$100,000": "$25,000–$100,000",
+      "Over $100,000": "Over $100,000",
+      "Not sure": "Not sure"
+    },
+    "tenancy_lease_exists": {
+      "Yes": "Yes",
+      "No": "No",
+      "Verbal only": "Verbal only",
+      "Not sure": "Not sure"
+    },
+    "tenancy_notice_status": {
+      "No, nothing started": "No, nothing started",
+      "Formal notice given to the other side": "Formal notice given to the other side",
+      "Application filed at the Landlord and Tenant Board": "Application filed at the Landlord and Tenant Board",
+      "Court action started (commercial)": "Court action started (commercial)",
+      "Not sure": "Not sure"
+    },
+    "lien_role": {
+      "Property owner": "Property owner",
+      "General contractor": "General contractor",
+      "Subcontractor or trade": "Subcontractor or trade",
+      "Supplier of materials": "Supplier of materials",
+      "Architect or consultant": "Architect or consultant",
+      "Not sure": "Not sure"
+    },
+    "lien_amount": {
+      "Under $25,000": "Under $25,000",
+      "$25,000–$100,000": "$25,000–$100,000",
+      "$100,000–$500,000": "$100,000–$500,000",
+      "Over $500,000": "Over $500,000",
+      "Not sure": "Not sure"
+    },
+    "lien_last_supply": {
+      "Within the last 60 days": "Within the last 60 days",
+      "60–90 days ago": "60–90 days ago",
+      "More than 90 days ago": "More than 90 days ago",
+      "Not sure": "Not sure"
+    },
+    "lien_preserved": {
+      "Yes, a claim was registered": "Yes, a claim was registered",
+      "Yes, registered and a court action started": "Yes, registered and a court action started",
+      "No, nothing registered yet": "No, nothing registered yet",
+      "Not sure": "Not sure"
+    },
+    "lien_documents": {
+      "Yes, all three": "Yes, all three",
+      "Some paperwork, not all": "Some paperwork, not all",
+      "It was a verbal agreement": "It was a verbal agreement",
+      "Not sure": "Not sure"
+    },
+    "precon_role": {
+      "I am the original buyer": "I am the original buyer",
+      "I am taking over a unit from someone else": "I am taking over a unit from someone else",
+      "I am selling my unit before closing": "I am selling my unit before closing",
+      "I bought multiple units (investor)": "I bought multiple units (investor)",
+      "Not sure": "Not sure"
+    },
+    "precon_issue": {
+      "Builder keeps delaying closing": "Builder keeps delaying closing",
+      "Worried about my deposit": "Worried about my deposit",
+      "Trouble selling my unit before closing": "Trouble selling my unit before closing",
+      "New-home warranty issue (Tarion)": "New-home warranty issue (Tarion)",
+      "Reviewing the contract before signing": "Reviewing the contract before signing",
+      "Builder hid problems or misrepresented the unit": "Builder hid problems or misrepresented the unit",
+      "Other": "Other"
+    },
+    "precon_developer_status": {
+      "Refusing or stalling": "Refusing or stalling",
+      "Offering a settlement": "Offering a settlement",
+      "No response": "No response",
+      "Not sure": "Not sure"
+    },
+    "precon_amount": {
+      "Under $50,000": "Under $50,000",
+      "$50,000–$200,000": "$50,000–$200,000",
+      "Over $200,000": "Over $200,000",
+      "Not sure": "Not sure"
+    },
+    "precon_documents": {
+      "Yes": "Yes",
+      "No": "No",
+      "Partial": "Partial",
+      "Not sure": "Not sure"
+    },
+    "mortgage_role": {
+      "I am the borrower (property owner)": "I am the borrower (property owner)",
+      "I am the lender": "I am the lender",
+      "I co-signed or guaranteed the loan": "I co-signed or guaranteed the loan",
+      "I am another involved party": "I am another involved party",
+      "Not sure": "Not sure"
+    },
+    "mortgage_status": {
+      "Lender is threatening to call the mortgage": "Lender is threatening to call the mortgage",
+      "I received a Notice of Sale": "I received a Notice of Sale",
+      "The lender has started the power-of-sale process": "The lender has started the power-of-sale process",
+      "Disagreement over refinancing": "Disagreement over refinancing",
+      "Issue with paying off or discharging the mortgage": "Issue with paying off or discharging the mortgage",
+      "Other": "Other"
+    },
+    "mortgage_amount": {
+      "Under $250,000": "Under $250,000",
+      "$250,000–$1M": "$250,000–$1M",
+      "$1M–$5M": "$1M–$5M",
+      "Over $5M": "Over $5M",
+      "Not sure": "Not sure"
+    },
+    "mortgage_lender_type": {
+      "A bank or major institution": "A bank or major institution",
+      "A private lender": "A private lender",
+      "A credit union": "A credit union",
+      "A mortgage investment company": "A mortgage investment company",
+      "Not sure": "Not sure"
+    },
+    "mortgage_documents": {
+      "Yes": "Yes",
+      "Some": "Some",
+      "No": "No",
+      "Not sure": "Not sure"
+    },
+    "hiring_timeline": {
+      "Now (this week)": "Now (this week)",
+      "Within the next 30 days": "Within the next 30 days",
+      "Within the next few months": "Within the next few months",
+      "Just exploring, no timeline yet": "Just exploring, no timeline yet",
+      "Not sure": "Not sure"
+    },
+    "other_counsel": {
+      "No, you are the first": "No, you are the first",
+      "Yes, I am comparing options": "Yes, I am comparing options",
+      "Yes, switching from a previous lawyer": "Yes, switching from a previous lawyer",
+      "Not sure": "Not sure"
+    },
+    "decision_authority": {
+      "Just me": "Just me",
+      "Me with a partner or family member": "Me with a partner or family member",
+      "Multiple owners or directors": "Multiple owners or directors",
+      "Someone else decides": "Someone else decides",
+      "Not sure": "Not sure"
+    }
+  },
+  "summary": {
+    "out_of_scope": {
+      "intro_prefix": "From what you described, this looks like a",
+      "intro_suffix": "matter.",
+      "closing": "A team member will review and respond directly. The firm does not yet handle this area on its own, but they will tell you whether they can help or refer you to someone who can.",
+      "area_labels": {
+        "family": "family law",
+        "immigration": "immigration",
+        "employment": "employment",
+        "criminal": "criminal",
+        "personal_injury": "personal injury",
+        "estates": "wills and estates",
+        "default": "this area"
+      }
+    },
+    "business_setup_advisory": {
+      "intro_default": "You are looking at setting up a business and want a lawyer to help you do it the right way.",
+      "intro_partner_setup": "You are starting a business with one or more partners and want a lawyer to help you set it up correctly.",
+      "intro_solo_setup": "You are starting a business on your own and want a lawyer to help you set it up correctly.",
+      "intro_buy_in": "You are buying into or joining an existing business and want a lawyer to review the documents and protect your position.",
+      "closing": "A lawyer can help you choose the right structure, document ownership clearly, and put the agreements in place that prevent avoidable problems later."
+    },
+    "shareholder_dispute": {
+      "intro": "You are in a dispute with a business partner or fellow shareholder, and you want a lawyer to help you protect your position.",
+      "closing": "A lawyer can review your situation, demand access to the records you are entitled to, and pursue a remedy under shareholder protection laws.",
+      "no_records_access": "You cannot access the company records or accounts.",
+      "management_excluded": "You are being kept out of decisions that affect the business.",
+      "money_concern": "You are concerned about money being taken from the company.",
+      "has_ownership_docs": "You have documentation of your ownership."
+    },
+    "unpaid_invoice": {
+      "intro": "You are owed money for work, goods, or services and you are not getting paid.",
+      "closing": "A lawyer can send a demand, file a claim, or negotiate a settlement to recover what you are owed.",
+      "has_invoice": "You have an invoice or written record of the amount.",
+      "has_proof_of_performance": "You can show the work or goods were delivered."
+    },
+    "contract_dispute": {
+      "intro": "You have a dispute over an agreement that has not been honoured.",
+      "closing": "A lawyer can review the agreement, assess your position, and pursue resolution by negotiation or court action.",
+      "has_written_agreement": "You have the agreement in writing."
+    },
+    "vendor_supplier_dispute": {
+      "intro": "You are in a billing dispute with a vendor or supplier.",
+      "closing": "A lawyer can review the terms, assess the overcharge or non-delivery, and advise on recovery."
+    },
+    "corporate_money_control": {
+      "intro": "You have concerns about financial irregularities inside a company.",
+      "closing": "A lawyer can help you understand your duties, protect the company, and advise on civil or criminal action where appropriate.",
+      "has_full_evidence": "You have documented evidence.",
+      "has_partial_evidence": "You have some evidence but not the full picture.",
+      "not_reported": "You have not reported this to anyone yet."
+    },
+    "commercial_real_estate": {
+      "intro": "You are involved in a commercial real estate transaction and want a lawyer to protect your position.",
+      "closing": "A lawyer can review the agreement, surface title or zoning risks, and protect your position before closing."
+    },
+    "residential_purchase_sale": {
+      "intro_default": "You are involved in a residential property transaction and want a lawyer to handle it properly.",
+      "intro_buying": "You are buying a home and want a lawyer to handle the closing properly.",
+      "intro_selling": "You are selling a home and want a lawyer to handle the closing properly.",
+      "intro_both": "You are both buying and selling a home and want a lawyer to handle both closings.",
+      "closing": "A lawyer can review the agreement, handle the closing, and resolve issues that come up before keys change hands."
+    },
+    "real_estate_litigation": {
+      "intro": "You are in a real estate dispute and want a lawyer to help you assess your options.",
+      "closing": "A lawyer can review the contract and history, assess your position, and advise on recovery of the deposit, the deal, or damages."
+    },
+    "landlord_tenant": {
+      "intro_default": "You have a tenancy dispute and want a lawyer to help you resolve it.",
+      "intro_landlord": "You are a landlord with a tenancy dispute.",
+      "intro_tenant": "You are a tenant with a dispute against your landlord.",
+      "closing": "A lawyer can review the lease, advise on the dispute, and represent you at the LTB or in court depending on the tenancy."
+    },
+    "construction_lien": {
+      "intro": "You have done construction or renovation work and you are owed money for it.",
+      "closing": "Construction Act timelines are tight, so a lawyer can act quickly to register a claim against the property and pursue what you are owed."
+    },
+    "preconstruction_condo": {
+      "intro": "You have a pre-construction condo matter and want a lawyer to help you protect your position.",
+      "closing": "A lawyer can review the builder agreement, assess Tarion remedies, and advise on deposits, delayed closing, or assignments."
+    },
+    "mortgage_dispute": {
+      "intro": "You have a mortgage matter and want a lawyer to help you understand your rights and options.",
+      "closing": "A lawyer can review the lender notices, advise on your rights, and intervene to protect the property where possible."
+    },
+    "corporate_general": {
+      "intro": "From what you described, this looks like a corporate or real estate matter, but we need a bit more to know exactly which kind.",
+      "closing": "The firm will review the description and follow up to confirm what you need."
+    },
+    "default": {
+      "intro": "Thank you. Here is what we understood from your description.",
+      "closing": "A team member will review and follow up."
+    }
+  },
+  "summary_labels": {
+    "what_you_do": "What you do",
+    "where_you_are": "Where you are",
+    "business_location": "Where the business will be based",
+    "revenue_expectation": "Revenue you expect in year one",
+    "hiring_plans": "Hiring plans",
+    "regulated_area": "Regulated area",
+    "clients_outside_canada": "Clients outside Canada",
+    "ip_protection": "Brand or intellectual property to protect",
+    "amount_owed": "Amount owed",
+    "the_other_side_is": "The other side is",
+    "value_of_dispute": "Value of the dispute",
+    "the_dispute_is": "The dispute is",
+    "amount_in_dispute": "Amount in dispute",
+    "what_happened": "What happened",
+    "agreement": "Agreement",
+    "your_role": "Your role",
+    "what_observed": "What you have observed",
+    "amount_involved": "Amount involved",
+    "property": "Property",
+    "approximate_value": "Approximate value",
+    "main_concern": "Main concern",
+    "property_type": "Property type",
+    "approximate_price": "Approximate price",
+    "closing_timing": "Closing timing",
+    "main_need": "Main need",
+    "dispute_about": "The dispute is about",
+    "roughly_at_stake": "Roughly at stake",
+    "written_agreement": "Written agreement",
+    "court_status": "Court status",
+    "when_this_happened": "When this happened",
+    "tenancy_type": "Tenancy type",
+    "the_issue": "The issue",
+    "lease": "Lease",
+    "notices_or_applications": "Notices or applications",
+    "last_work_supplied": "Last work or materials supplied",
+    "lien_status": "Lien status",
+    "paperwork": "Paperwork",
+    "how_developer_responding": "How the developer is responding",
+    "builder_agreement": "Builder agreement",
+    "amount_at_stake": "Amount at stake",
+    "where_things_stand": "Where things stand",
+    "approximate_balance": "Approximate balance or amount in dispute",
+    "lender": "Lender",
+    "documents_in_hand": "Documents in hand"
+  },
+  "prompts": {
+    "sms_reply_instruction": "Reply with the number of your choice.",
+    "gbp_reply_instruction": "Reply with the number of your choice.",
+    "clarify_message": "To route this correctly, could you tell me a bit more about what's happening? A few examples of the buckets we handle: starting a business, partner dispute, contract issue, money owed, real estate matter."
+  },
+  "bridge_text": {
+    "shareholder_dispute": "Thank you. The firm will receive a brief on your situation along with the next-step questions a lawyer would normally ask, so the team can decide how to follow up.",
+    "unpaid_invoice": "Thank you. The firm will receive a brief on the payment matter, along with notes on documents and amounts a lawyer would typically review next.",
+    "contract_dispute": "Thank you. The firm will receive a brief on the contract matter, along with the open questions a lawyer would normally clarify before advising.",
+    "vendor_supplier_dispute": "Thank you. The firm will receive a brief on the billing dispute and the documents a lawyer would normally request next.",
+    "corporate_money_control": "Thank you. The firm will receive a brief on the financial concern with the next-step questions a lawyer would normally ask. Given the nature of the matter, the firm may follow up promptly.",
+    "business_setup_advisory": "Thank you. The firm will receive a brief on what you are setting up so the team can prepare for a productive first call.",
+    "corporate_general": "Thank you. The firm will receive a brief on what you described so the team can route the matter and follow up.",
+    "commercial_real_estate": "Thank you. The firm will receive a brief on the commercial transaction with the documents and timing a lawyer would normally review.",
+    "residential_purchase_sale": "Thank you. The firm will receive a brief on the residential transaction so the team can prepare for the next step.",
+    "real_estate_litigation": "Thank you. The firm will receive a brief on the real estate dispute and the documents a lawyer would normally request next.",
+    "landlord_tenant": "Thank you. The firm will receive a brief on the tenancy matter so the team can decide how best to follow up.",
+    "construction_lien": "Thank you. The firm will receive a brief on the unpaid construction work, including the timing details that matter under the Construction Act. The firm may follow up promptly given how time-sensitive lien matters can be.",
+    "preconstruction_condo": "Thank you. The firm will receive a brief on the builder matter so the team can decide how to follow up.",
+    "mortgage_dispute": "Thank you. The firm will receive a brief on the mortgage matter. Given the nature of these matters, the firm may follow up promptly.",
+    "real_estate_general": "Thank you. The firm will receive a brief on what you described so the team can follow up.",
+    "out_of_scope_prefix": "Thank you. Your information has been sent to the firm. Your matter looks like it sits in ",
+    "out_of_scope_suffix": ", which the firm will review and respond on directly.",
+    "out_of_scope_area_family": "family law",
+    "out_of_scope_area_immigration": "immigration",
+    "out_of_scope_area_employment": "employment",
+    "out_of_scope_area_criminal": "criminal",
+    "out_of_scope_area_personal_injury": "personal injury",
+    "out_of_scope_area_estates": "wills and estates",
+    "out_of_scope_area_default": "this area",
+    "default": "Thank you. Your information has been sent to the firm."
+  },
+  "chips": {
+    "whatsapp": {
+      "name": "WhatsApp",
+      "note": "Phone auto-captured from the channel."
+    },
+    "sms": {
+      "name": "SMS",
+      "note": "Short-form intake, full discovery on the call."
+    },
+    "instagram": {
+      "name": "Instagram DM",
+      "note": "Display name auto-captured. Phone and email asked in chat."
+    },
+    "facebook": {
+      "name": "Facebook Messenger",
+      "note": "Display name auto-captured. Phone and email asked in chat."
+    },
+    "gbp": {
+      "name": "Google Business Profile",
+      "note": "Lead opened the chat from a local search; plain text, no rich UI."
+    },
+    "voice": {
+      "name": "Voice",
+      "note": "Transcribed from a phone call. Confirm details on the call back."
+    }
+  }
+}
