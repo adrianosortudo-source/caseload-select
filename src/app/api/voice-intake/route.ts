@@ -42,6 +42,7 @@ import {
 import { notifyLawyersOfNewLead } from '@/lib/lead-notify';
 import { loadDeclineCandidates, resolveDecline } from '@/lib/decline-resolver';
 import { buildDeclinedOosPayload, fireGhlWebhook, type LeadFacts } from '@/lib/ghl-webhook';
+import { waitUntil } from '@vercel/functions';
 import { initialiseState } from '@/lib/screen-engine/extractor';
 import { runEvidencePass } from '@/lib/screen-engine/slotEvidence';
 import { mergeLlmResults } from '@/lib/screen-engine/llm/extractor';
@@ -323,7 +324,7 @@ export async function POST(req: NextRequest) {
       });
       // Fire and forget. Observable via the firm's GHL inbox or (Phase 3)
       // the webhook_outbox table; never surfaced to the Voice AI caller.
-      void fireGhlWebhook(firmIdParam, payload);
+      waitUntil(fireGhlWebhook(firmIdParam, payload));
     } catch (err) {
       // Webhook resolution or dispatch failed; the row still persists. Log
       // for Vercel function logs; do not abort the response.
@@ -333,7 +334,7 @@ export async function POST(req: NextRequest) {
 
   // ── New-lead notification email (best-effort) ──────────────────────────
   if (inserted.status === 'triaging') {
-    void notifyLawyersOfNewLead({
+    waitUntil(notifyLawyersOfNewLead({
       firmId: firmIdParam,
       leadId: inserted.lead_id,
       contactName: state.slots['client_name'] ?? callerName ?? null,
@@ -344,7 +345,7 @@ export async function POST(req: NextRequest) {
       whaleNurture: !!inserted.whale_nurture,
     }).catch((err) => {
       console.error('[voice-intake] notifyLawyersOfNewLead failed:', err);
-    });
+    }));
   }
 
   return NextResponse.json(

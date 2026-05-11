@@ -14,6 +14,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.45.4",
+    "@vercel/functions": "^3.5.1",
     "franc": "^6.2.0",
     "next": "^16.2.3",
     "openai": "^6.34.0",
