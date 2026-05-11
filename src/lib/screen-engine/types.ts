@@ -250,11 +250,16 @@ export interface EngineState {
   debug?: Record<string, unknown>;
 }
 
+export interface SlotOption {
+  value: string;  // canonical English string — stored in state.slots, read by scoring
+  label: string;  // English display string — shown to the lead (initially equals value)
+}
+
 export interface SlotDefinition {
   id: string;
   question: string;
   input_type: 'single_select' | 'free_text';
-  options?: string[];
+  options?: SlotOption[];
   applies_to: MatterType[];
   applies_to_subtrack?: AdvisorySubtrack[];
   tier: SlotTier;

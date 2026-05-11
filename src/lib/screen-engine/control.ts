@@ -1,4 +1,6 @@
 import type { EngineState, NextStep, Band, LeadSummary } from './types';
+import { getI18n } from './i18n/loader';
+import type { I18nBundle } from './i18n/loader';
 import { selectNextSlot, computeCoreCompleteness, getDecisionGap } from './selector';
 import { computeBand } from './band';
 import { SLOT_REGISTRY } from './slotRegistry';
@@ -49,6 +51,12 @@ function overChannelBudget(state: EngineState): boolean {
 // ─── Bridge messages ───────────────────────────────────────────────────────
 
 function getBridgeText(state: EngineState): string {
+  return state.language === 'en'
+    ? getBridgeTextEn(state)
+    : getBridgeTextI18n(state, getI18n(state.language));
+}
+
+function getBridgeTextEn(state: EngineState): string {
   if (state.matter_type === 'out_of_scope') {
     const areaLabels: Record<string, string> = {
       family: 'family law',
@@ -97,6 +105,19 @@ function getBridgeText(state: EngineState): string {
   }
 }
 
+export function getBridgeTextI18n(state: EngineState, i18n: I18nBundle): string {
+  const bt = i18n.bridge_text ?? {};
+  if (state.matter_type === 'out_of_scope') {
+    const prefix = bt['out_of_scope_prefix']
+      || 'Thank you. Your information has been sent to the firm. Your matter looks like it sits in ';
+    const suffix = bt['out_of_scope_suffix'] || ', which the firm will review and respond on directly.';
+    const areaKey = `out_of_scope_area_${state.practice_area}`;
+    const area = bt[areaKey] || bt['out_of_scope_area_default'] || 'this area';
+    return `${prefix}${area}${suffix}`;
+  }
+  return bt[state.matter_type] || bt['default'] || 'Thank you. Your information has been sent to the firm.';
+}
+
 // ─── Lead-facing summary ──────────────────────────────────────────────────
 // Plain-language recap of what we understood, shown at the bridge moment so
 // the lead can confirm we got it right or volunteer to add more details.
@@ -105,7 +126,24 @@ function slot(state: EngineState, id: string): string | null {
   return state.slots[id] ?? null;
 }
 
-export function buildLeadSummary(state: EngineState): LeadSummary {
+/**
+ * Builds the lead-facing summary for the bridge screen.
+ *
+ * i18n is a required argument — compile-time enforcement ensures every caller
+ * provides the correct bundle. English callers pass getI18n('en'); the fast
+ * path then skips all bundle lookups entirely, preserving zero overhead on
+ * the English flow.
+ */
+export function buildLeadSummary(state: EngineState, i18n: I18nBundle): LeadSummary {
+  return state.language === 'en'
+    ? buildLeadSummaryEn(state)
+    : buildLeadSummaryI18n(state, i18n);
+}
+
+// ─── English fast path (state.language === 'en') ──────────────────────────
+// Original hardcoded logic, completely unchanged. No bundle lookups.
+
+function buildLeadSummaryEn(state: EngineState): LeadSummary {
   const t = state.matter_type;
   const points: string[] = [];
 
@@ -344,6 +382,271 @@ export function buildLeadSummary(state: EngineState): LeadSummary {
     intro: 'Thank you. Here is what we understood from your description.',
     points: [],
     closing: 'A team member will review and follow up.',
+  };
+}
+
+// ─── i18n path (state.language !== 'en') ─────────────────────────────────
+// Bundle lookups for intro, closing, Pattern C strings, and Pattern A/B
+// labels. Values (canonical slot content) remain in English throughout.
+// Falls back to hardcoded English strings when a bundle key is absent.
+
+function buildLeadSummaryI18n(state: EngineState, i18n: I18nBundle): LeadSummary {
+  const t = state.matter_type;
+  const points: string[] = [];
+  const sm: Record<string, string> = (i18n.summary ?? {})[t] ?? {};
+  const sl: Record<string, string> = i18n.summary_labels ?? {};
+
+  // ss: summary string — i18n.summary[matterType][key] with English fallback
+  const ss = (key: string, fallback: string): string => sm[key] || fallback;
+  // lb: label — i18n.summary_labels[key] with English fallback
+  const lb = (key: string, fallback: string): string => sl[key] || fallback;
+  // pt: Pattern A/B labeled point — translated label, canonical value, trailing period
+  const pt = (labelKey: string, labelEn: string, value: string): string =>
+    `${lb(labelKey, labelEn)}: ${value}.`;
+
+  if (t === 'out_of_scope') {
+    const areaLabels: Record<string, string> = {
+      family: 'family law',
+      immigration: 'immigration',
+      employment: 'employment',
+      criminal: 'criminal',
+      personal_injury: 'personal injury',
+      estates: 'wills and estates',
+    };
+    const area = areaLabels[state.practice_area] ?? 'this area';
+    const prefix = ss('intro_prefix', 'From what you described, this looks like a');
+    const suffix = ss('intro_suffix', 'matter.');
+    return {
+      intro: `${prefix} ${area} ${suffix}`,
+      points: [],
+      closing: ss('closing', 'A team member will review and respond directly. The firm does not yet handle this area on its own, but they will tell you whether they can help or refer you to someone who can.'),
+    };
+  }
+
+  if (t === 'business_setup_advisory') {
+    const sub = state.advisory_subtrack;
+    let intro = ss('intro_default', 'You are looking at setting up a business and want a lawyer to help you do it the right way.');
+    if (sub === 'partner_setup') intro = ss('intro_partner_setup', 'You are starting a business with one or more partners and want a lawyer to help you set it up correctly.');
+    else if (sub === 'solo_setup') intro = ss('intro_solo_setup', 'You are starting a business on your own and want a lawyer to help you set it up correctly.');
+    else if (sub === 'buy_in_or_joining') intro = ss('intro_buy_in', 'You are buying into or joining an existing business and want a lawyer to review the documents and protect your position.');
+
+    const activity = slot(state, 'business_activity_type');
+    if (activity) points.push(pt('what_you_do', 'What you do', activity.toLowerCase()));
+    const stage = slot(state, 'business_stage');
+    if (stage) points.push(pt('where_you_are', 'Where you are', stage.toLowerCase()));
+    const location = slot(state, 'business_location');
+    if (location) points.push(pt('business_location', 'Where the business will be based', location));
+    const revenue = slot(state, 'revenue_expectation');
+    if (revenue) points.push(pt('revenue_expectation', 'Revenue you expect in year one', revenue.toLowerCase()));
+    const employees = slot(state, 'employees_planned');
+    if (employees && employees !== 'No, just me') points.push(pt('hiring_plans', 'Hiring plans', employees.toLowerCase()));
+    const regulated = slot(state, 'regulated_industry');
+    if (regulated && regulated.startsWith('Yes')) points.push(pt('regulated_area', 'Regulated area', regulated.replace(/^Yes,\s*/i, '')));
+    const crossBorder = slot(state, 'cross_border_work');
+    if (crossBorder && crossBorder !== 'No, Canada only' && crossBorder !== 'Not sure yet') points.push(pt('clients_outside_canada', 'Clients outside Canada', crossBorder.toLowerCase()));
+    const ip = slot(state, 'ip_planned');
+    if (ip && ip !== 'No, services only' && ip !== 'Not sure') points.push(pt('ip_protection', 'Brand or intellectual property to protect', ip.replace(/^Yes,\s*/i, '')));
+
+    return {
+      intro,
+      points,
+      closing: ss('closing', 'A lawyer can help you choose the right structure, document ownership clearly, and put the agreements in place that prevent avoidable problems later.'),
+    };
+  }
+
+  if (t === 'shareholder_dispute') {
+    // Pattern C ×4: full strings translated from bundle
+    const intro = ss('intro', 'You are in a dispute with a business partner or fellow shareholder, and you want a lawyer to help you protect your position.');
+    if (slot(state, 'corporate_records_available') === 'No') points.push(ss('no_records_access', 'You cannot access the company records or accounts.'));
+    if (slot(state, 'management_exclusion') === 'Yes') points.push(ss('management_excluded', 'You are being kept out of decisions that affect the business.'));
+    if (slot(state, 'dividend_or_money_issue') === 'Yes') points.push(ss('money_concern', 'You are concerned about money being taken from the company.'));
+    const proof = slot(state, 'proof_of_ownership') ?? slot(state, 'shareholder_agreement');
+    if (proof === 'Yes') points.push(ss('has_ownership_docs', 'You have documentation of your ownership.'));
+    return {
+      intro,
+      points,
+      closing: ss('closing', 'A lawyer can review your situation, demand access to the records you are entitled to, and pursue a remedy under shareholder protection laws.'),
+    };
+  }
+
+  if (t === 'unpaid_invoice') {
+    const intro = ss('intro', 'You are owed money for work, goods, or services and you are not getting paid.');
+    const amount = slot(state, 'amount_at_stake');
+    if (amount) points.push(pt('amount_owed', 'Amount owed', amount));
+    // Pattern C ×2
+    if (slot(state, 'invoice_exists') === 'Yes') points.push(ss('has_invoice', 'You have an invoice or written record of the amount.'));
+    if (slot(state, 'proof_of_performance') === 'Yes') points.push(ss('has_proof_of_performance', 'You can show the work or goods were delivered.'));
+    if (slot(state, 'dispute_reason')) points.push(pt('the_other_side_is', 'The other side is', slot(state, 'dispute_reason')!.toLowerCase()));
+    return {
+      intro,
+      points,
+      closing: ss('closing', 'A lawyer can send a demand, file a claim, or negotiate a settlement to recover what you are owed.'),
+    };
+  }
+
+  if (t === 'contract_dispute') {
+    const intro = ss('intro', 'You have a dispute over an agreement that has not been honoured.');
+    const amount = slot(state, 'amount_at_stake');
+    if (amount) points.push(pt('value_of_dispute', 'Value of the dispute', amount));
+    // Pattern C ×1
+    if (slot(state, 'written_terms') === 'Yes' || slot(state, 'contract_exists') === 'Yes') points.push(ss('has_written_agreement', 'You have the agreement in writing.'));
+    if (slot(state, 'dispute_reason')) points.push(pt('the_dispute_is', 'The dispute is', slot(state, 'dispute_reason')!.toLowerCase()));
+    return {
+      intro,
+      points,
+      closing: ss('closing', 'A lawyer can review the agreement, assess your position, and pursue resolution by negotiation or court action.'),
+    };
+  }
+
+  if (t === 'vendor_supplier_dispute') {
+    const intro = ss('intro', 'You are in a billing dispute with a vendor or supplier.');
+    const amount = slot(state, 'amount_at_stake');
+    if (amount) points.push(pt('amount_in_dispute', 'Amount in dispute', amount));
+    if (slot(state, 'billing_dispute_reason')) points.push(pt('what_happened', 'What happened', slot(state, 'billing_dispute_reason')!.toLowerCase()));
+    if (slot(state, 'vendor_contract_exists')) points.push(pt('agreement', 'Agreement', slot(state, 'vendor_contract_exists')!.toLowerCase()));
+    return {
+      intro,
+      points,
+      closing: ss('closing', 'A lawyer can review the terms, assess the overcharge or non-delivery, and advise on recovery.'),
+    };
+  }
+
+  if (t === 'corporate_money_control') {
+    const intro = ss('intro', 'You have concerns about financial irregularities inside a company.');
+    if (slot(state, 'reporter_role_money')) points.push(pt('your_role', 'Your role', slot(state, 'reporter_role_money')!.toLowerCase()));
+    if (slot(state, 'irregularity_type')) points.push(pt('what_observed', 'What you have observed', slot(state, 'irregularity_type')!.toLowerCase()));
+    if (slot(state, 'irregularity_amount')) points.push(pt('amount_involved', 'Amount involved', slot(state, 'irregularity_amount')!));
+    // Pattern C ×3
+    if (slot(state, 'evidence_of_irregularity') === 'Yes') points.push(ss('has_full_evidence', 'You have documented evidence.'));
+    else if (slot(state, 'evidence_of_irregularity') === 'Some, but not enough') points.push(ss('has_partial_evidence', 'You have some evidence but not the full picture.'));
+    if (slot(state, 'reported_to_anyone') === 'No, not yet') points.push(ss('not_reported', 'You have not reported this to anyone yet.'));
+    return {
+      intro,
+      points,
+      closing: ss('closing', 'A lawyer can help you understand your duties, protect the company, and advise on civil or criminal action where appropriate.'),
+    };
+  }
+
+  if (t === 'commercial_real_estate') {
+    const intro = ss('intro', 'You are involved in a commercial real estate transaction and want a lawyer to protect your position.');
+    if (slot(state, 'commercial_re_role')) points.push(pt('your_role', 'Your role', slot(state, 'commercial_re_role')!.toLowerCase()));
+    if (slot(state, 'commercial_property_type')) points.push(pt('property', 'Property', slot(state, 'commercial_property_type')!.toLowerCase()));
+    if (slot(state, 'commercial_re_amount')) points.push(pt('approximate_value', 'Approximate value', slot(state, 'commercial_re_amount')!));
+    if (slot(state, 'commercial_re_stage')) points.push(pt('where_you_are', 'Where you are', slot(state, 'commercial_re_stage')!.toLowerCase()));
+    if (slot(state, 'commercial_re_concerns') && slot(state, 'commercial_re_concerns') !== 'Not sure yet') points.push(pt('main_concern', 'Main concern', slot(state, 'commercial_re_concerns')!.toLowerCase()));
+    return {
+      intro,
+      points,
+      closing: ss('closing', 'A lawyer can review the agreement, surface title or zoning risks, and protect your position before closing.'),
+    };
+  }
+
+  if (t === 'residential_purchase_sale') {
+    const role = slot(state, 'residential_role');
+    let intro = ss('intro_default', 'You are involved in a residential property transaction and want a lawyer to handle it properly.');
+    if (role === 'Buying') intro = ss('intro_buying', 'You are buying a home and want a lawyer to handle the closing properly.');
+    else if (role === 'Selling') intro = ss('intro_selling', 'You are selling a home and want a lawyer to handle the closing properly.');
+    else if (role === 'Both (buying and selling)') intro = ss('intro_both', 'You are both buying and selling a home and want a lawyer to handle both closings.');
+    if (slot(state, 'residential_property_type')) points.push(pt('property_type', 'Property type', slot(state, 'residential_property_type')!.toLowerCase()));
+    if (slot(state, 'residential_re_amount')) points.push(pt('approximate_price', 'Approximate price', slot(state, 'residential_re_amount')!));
+    if (slot(state, 'residential_re_stage')) points.push(pt('where_you_are', 'Where you are', slot(state, 'residential_re_stage')!.toLowerCase()));
+    if (slot(state, 'residential_closing_timeline')) points.push(pt('closing_timing', 'Closing timing', slot(state, 'residential_closing_timeline')!.toLowerCase()));
+    if (slot(state, 'residential_re_concern')) points.push(pt('main_need', 'Main need', slot(state, 'residential_re_concern')!.toLowerCase()));
+    return {
+      intro,
+      points,
+      closing: ss('closing', 'A lawyer can review the agreement, handle the closing, and resolve issues that come up before keys change hands.'),
+    };
+  }
+
+  if (t === 'real_estate_litigation') {
+    const intro = ss('intro', 'You are in a real estate dispute and want a lawyer to help you assess your options.');
+    if (slot(state, 'litigation_subject')) points.push(pt('dispute_about', 'The dispute is about', slot(state, 'litigation_subject')!.toLowerCase()));
+    if (slot(state, 'litigation_role')) points.push(pt('your_role', 'Your role', slot(state, 'litigation_role')!.toLowerCase()));
+    if (slot(state, 'litigation_amount')) points.push(pt('roughly_at_stake', 'Roughly at stake', slot(state, 'litigation_amount')!));
+    if (slot(state, 'litigation_documents')) points.push(pt('written_agreement', 'Written agreement', slot(state, 'litigation_documents')!.toLowerCase()));
+    if (slot(state, 'litigation_stage')) points.push(pt('court_status', 'Court status', slot(state, 'litigation_stage')!.toLowerCase()));
+    if (slot(state, 'litigation_when_event')) points.push(pt('when_this_happened', 'When this happened', slot(state, 'litigation_when_event')!.toLowerCase()));
+    return {
+      intro,
+      points,
+      closing: ss('closing', 'A lawyer can review the contract and history, assess your position, and advise on recovery of the deposit, the deal, or damages.'),
+    };
+  }
+
+  if (t === 'landlord_tenant') {
+    const party = slot(state, 'tenancy_party');
+    let intro = ss('intro_default', 'You have a tenancy dispute and want a lawyer to help you resolve it.');
+    if (party === 'Landlord') intro = ss('intro_landlord', 'You are a landlord with a tenancy dispute.');
+    else if (party === 'Tenant') intro = ss('intro_tenant', 'You are a tenant with a dispute against your landlord.');
+    if (slot(state, 'tenancy_type')) points.push(pt('tenancy_type', 'Tenancy type', slot(state, 'tenancy_type')!.toLowerCase()));
+    if (slot(state, 'tenancy_issue')) points.push(pt('the_issue', 'The issue', slot(state, 'tenancy_issue')!.toLowerCase()));
+    if (slot(state, 'tenancy_amount')) points.push(pt('amount_involved', 'Amount involved', slot(state, 'tenancy_amount')!));
+    if (slot(state, 'tenancy_lease_exists')) points.push(pt('lease', 'Lease', slot(state, 'tenancy_lease_exists')!.toLowerCase()));
+    if (slot(state, 'tenancy_notice_status')) points.push(pt('notices_or_applications', 'Notices or applications', slot(state, 'tenancy_notice_status')!.toLowerCase()));
+    return {
+      intro,
+      points,
+      closing: ss('closing', 'A lawyer can review the lease, advise on the dispute, and represent you at the LTB or in court depending on the tenancy.'),
+    };
+  }
+
+  if (t === 'construction_lien') {
+    const intro = ss('intro', 'You have done construction or renovation work and you are owed money for it.');
+    if (slot(state, 'lien_role')) points.push(pt('your_role', 'Your role', slot(state, 'lien_role')!.toLowerCase()));
+    if (slot(state, 'lien_amount')) points.push(pt('amount_owed', 'Amount owed', slot(state, 'lien_amount')!));
+    if (slot(state, 'lien_last_supply')) points.push(pt('last_work_supplied', 'Last work or materials supplied', slot(state, 'lien_last_supply')!.toLowerCase()));
+    if (slot(state, 'lien_preserved')) points.push(pt('lien_status', 'Lien status', slot(state, 'lien_preserved')!.toLowerCase()));
+    if (slot(state, 'lien_documents')) points.push(pt('paperwork', 'Paperwork', slot(state, 'lien_documents')!.toLowerCase()));
+    return {
+      intro,
+      points,
+      closing: ss('closing', 'Construction Act timelines are tight, so a lawyer can act quickly to register a claim against the property and pursue what you are owed.'),
+    };
+  }
+
+  if (t === 'preconstruction_condo') {
+    const intro = ss('intro', 'You have a pre-construction condo matter and want a lawyer to help you protect your position.');
+    if (slot(state, 'precon_role')) points.push(pt('your_role', 'Your role', slot(state, 'precon_role')!.toLowerCase()));
+    if (slot(state, 'precon_issue')) points.push(pt('the_issue', 'The issue', slot(state, 'precon_issue')!.toLowerCase()));
+    if (slot(state, 'precon_amount')) points.push(pt('amount_at_stake', 'Amount at stake', slot(state, 'precon_amount')!));
+    if (slot(state, 'precon_developer_status')) points.push(pt('how_developer_responding', 'How the developer is responding', slot(state, 'precon_developer_status')!.toLowerCase()));
+    if (slot(state, 'precon_documents')) points.push(pt('builder_agreement', 'Builder agreement', slot(state, 'precon_documents')!.toLowerCase()));
+    return {
+      intro,
+      points,
+      closing: ss('closing', 'A lawyer can review the builder agreement, assess Tarion remedies, and advise on deposits, delayed closing, or assignments.'),
+    };
+  }
+
+  if (t === 'mortgage_dispute') {
+    const intro = ss('intro', 'You have a mortgage matter and want a lawyer to help you understand your rights and options.');
+    if (slot(state, 'mortgage_role')) points.push(pt('your_role', 'Your role', slot(state, 'mortgage_role')!.toLowerCase()));
+    if (slot(state, 'mortgage_status')) points.push(pt('where_things_stand', 'Where things stand', slot(state, 'mortgage_status')!.toLowerCase()));
+    if (slot(state, 'mortgage_amount')) points.push(pt('approximate_balance', 'Approximate balance or amount in dispute', slot(state, 'mortgage_amount')!));
+    if (slot(state, 'mortgage_lender_type')) points.push(pt('lender', 'Lender', slot(state, 'mortgage_lender_type')!.toLowerCase()));
+    if (slot(state, 'mortgage_documents')) points.push(pt('documents_in_hand', 'Documents in hand', slot(state, 'mortgage_documents')!.toLowerCase()));
+    return {
+      intro,
+      points,
+      closing: ss('closing', 'A lawyer can review the lender notices, advise on your rights, and intervene to protect the property where possible.'),
+    };
+  }
+
+  if (t === 'corporate_general' || t === 'real_estate_general') {
+    const cgSm: Record<string, string> = (i18n.summary ?? {})['corporate_general'] ?? {};
+    return {
+      intro: cgSm['intro'] || 'From what you described, this looks like a corporate or real estate matter, but we need a bit more to know exactly which kind.',
+      points: [],
+      closing: cgSm['closing'] || 'The firm will review the description and follow up to confirm what you need.',
+    };
+  }
+
+  const defSm: Record<string, string> = (i18n.summary ?? {})['default'] ?? {};
+  return {
+    intro: defSm['intro'] || 'Thank you. Here is what we understood from your description.',
+    points: [],
+    closing: defSm['closing'] || 'A team member will review and follow up.',
   };
 }
 

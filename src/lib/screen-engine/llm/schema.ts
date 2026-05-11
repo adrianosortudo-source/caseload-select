@@ -144,7 +144,7 @@ function slotToExtractionSlot(slot: SlotDefinition): ExtractionSlot {
     id: slot.id,
     question: slot.question,
     input_type: slot.input_type,
-    options: slot.options,
+    options: slot.options?.map(o => o.value),
     description: describeSlot(slot),
   };
 }

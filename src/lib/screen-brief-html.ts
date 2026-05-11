@@ -16,6 +16,8 @@
  */
 
 import type { Channel, LawyerReport, ResolvedFact } from './screen-engine/types';
+import { getI18n } from './screen-engine/i18n/loader';
+import { getChannelChipData } from './screen-engine/i18n/display';
 
 const FACT_SOURCE_LABEL: Record<string, string> = {
   stated: 'Stated in description',
@@ -31,38 +33,6 @@ const FACT_SOURCE_CLASS: Record<string, string> = {
   unknown: 'src-unknown',
 };
 
-const CHANNEL_CHIP: Partial<Record<Channel, { name: string; note: string; cls: string }>> = {
-  whatsapp: {
-    name: 'WhatsApp',
-    note: 'Phone auto-captured from the channel.',
-    cls: 'brief-channel-whatsapp',
-  },
-  sms: {
-    name: 'SMS',
-    note: 'Short-form intake, full discovery on the call.',
-    cls: 'brief-channel-sms',
-  },
-  instagram: {
-    name: 'Instagram DM',
-    note: 'Display name auto-captured. Phone and email asked in chat.',
-    cls: 'brief-channel-instagram',
-  },
-  facebook: {
-    name: 'Facebook Messenger',
-    note: 'Display name auto-captured. Phone and email asked in chat.',
-    cls: 'brief-channel-facebook',
-  },
-  gbp: {
-    name: 'Google Business Profile',
-    note: 'Lead opened the chat from a local search; plain text, no rich UI.',
-    cls: 'brief-channel-gbp',
-  },
-  voice: {
-    name: 'Voice',
-    note: 'Transcribed from a phone call. Confirm details on the call back.',
-    cls: 'brief-channel-voice',
-  },
-};
 
 function esc(s: string | null | undefined): string {
   if (s == null) return '';
@@ -136,8 +106,8 @@ function riskFlagsBlock(flags: readonly string[]): string {
 }
 
 function channelChipHtml(channel: Channel | undefined): string {
-  if (!channel || channel === 'web') return '';
-  const meta = CHANNEL_CHIP[channel];
+  const i18n = getI18n('en');
+  const meta = getChannelChipData(channel ?? 'web', 'en', i18n);
   if (!meta) return '';
   return `
     <div class="brief-channel ${meta.cls}">
