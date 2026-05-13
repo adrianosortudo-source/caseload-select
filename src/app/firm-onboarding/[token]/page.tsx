@@ -60,7 +60,7 @@ export default async function FirmOnboardingPage({ params }: PageProps) {
             src="/brand/logos/wordmark-dark-transparent.png"
             alt="CaseLoad Select"
             style={{
-              height: "clamp(14px, 3vw, 17px)",
+              height: "clamp(22px, 5vw, 26px)",
               width: "auto",
               display: "block",
               border: 0,

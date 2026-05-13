@@ -33,7 +33,7 @@ export default async function SubmittedPage({ params }: PageProps) {
           <img
             src="/brand/logos/wordmark-dark-transparent.png"
             alt="CaseLoad Select"
-            style={{ height: "clamp(14px, 3vw, 17px)", width: "auto", display: "block", border: 0 }}
+            style={{ height: "clamp(22px, 5vw, 26px)", width: "auto", display: "block", border: 0 }}
           />
           <span
             style={{
