@@ -67,6 +67,7 @@ import { loadDeclineCandidates, resolveDecline } from "@/lib/decline-resolver";
 import { buildDeclinedOosPayload, fireGhlWebhook, type LeadFacts } from "@/lib/ghl-webhook";
 import { waitUntil } from "@vercel/functions";
 import { notifyLawyersOfNewLead } from "@/lib/lead-notify";
+import { originAllowed, validateIntakeBody, sanitizeBriefHtml } from "@/lib/intake-v2-security";
 
 // Practice-area display labels for the OOS decline copy interpolation. Matches
 // the engine's labels in the screen for consistency with what the lead saw.
@@ -110,14 +111,32 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export async function POST(req: NextRequest) {
   // CORS — Screen 2.0 lives on a different Vercel project, so the browser
-  // calls this endpoint cross-origin. Allow any origin for the POST since the
-  // payload only carries lead-supplied data (no secrets) and writes are gated
-  // by firmId validity.
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
+  // calls this endpoint cross-origin. The platform-owned domain and any
+  // firm's custom domain are allowed; everything else is rejected.
+  // (Codex audit HIGH #4 — previously this used Access-Control-Allow-Origin
+  // = "*" with no schema validation, letting any origin POST arbitrary
+  // brief_html that the lawyer portal renders verbatim.)
+  const originCheck = await originAllowed(req);
+  const requestOrigin = req.headers.get('origin');
+  const corsHeaders = originCheck.ok
+    ? {
+        'Access-Control-Allow-Origin': requestOrigin ?? '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Vary': 'Origin',
+      }
+    : {
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Vary': 'Origin',
+      };
+
+  if (!originCheck.ok) {
+    return NextResponse.json(
+      { error: 'origin not allowed', reason: originCheck.reason },
+      { status: 403, headers: corsHeaders },
+    );
+  }
 
   // Parse body
   let body: IntakeBody;
@@ -168,24 +187,33 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Body validation ────────────────────────────────────────────────────────
-  const missing: string[] = [];
-  if (!body.lead_id) missing.push('lead_id');
-  if (!body.matter_type) missing.push('matter_type');
-  if (!body.practice_area) missing.push('practice_area');
-  if (!body.brief_json) missing.push('brief_json');
-  if (!body.brief_html) missing.push('brief_html');
-  if (!body.slot_answers) missing.push('slot_answers');
-  if (!body.axes) missing.push('axes');
-  if (missing.length > 0) {
+  // Full shape + bounds + type validation. Replaces the previous
+  // missing-field check (which left brief_html / brief_json / slot_answers
+  // unbounded and unchecked). Returns a structured 400 on first failure
+  // batch rather than failing at the DB insert with an opaque error.
+  const validated = validateIntakeBody(body);
+  if (!validated.ok) {
     return NextResponse.json(
-      { error: `missing required fields: ${missing.join(', ')}` },
-      { status: 400, headers: corsHeaders }
+      { error: 'invalid body', issues: validated.errors },
+      { status: 400, headers: corsHeaders },
     );
   }
 
-  const axes = body.axes as IntakeAxes;
-  const matterType = body.matter_type as string;
-  const band = body.band ?? null;
+  // Re-bind to the validated shape so downstream reads can rely on the
+  // narrowed types. We continue to reference `body` for the parts we
+  // pass to other writes for backwards-compat with the existing code.
+  const v = validated.body;
+
+  // brief_html sanitize: strip script tags, event handlers, dangerous URL
+  // schemes, iframe/object/embed, HTML comments. The triage portal dumps
+  // brief_html verbatim into a scoped .brief container, so this is the
+  // last line of defense before stored XSS could fire in the lawyer's
+  // authenticated session.
+  const sanitizedBriefHtml = sanitizeBriefHtml(v.brief_html);
+
+  const axes = v.axes as IntakeAxes;
+  const matterType = v.matter_type;
+  const band = v.band;
 
   // ── Derived flags ──────────────────────────────────────────────────────────
   const now = new Date();
@@ -207,17 +235,17 @@ export async function POST(req: NextRequest) {
   const { data: inserted, error: insertErr } = await supabase
     .from('screened_leads')
     .insert({
-      lead_id: body.lead_id,
+      lead_id: v.lead_id,
       firm_id: firmIdParam,
       screen_version: 2,
       status: initialStatus,
       status_changed_by: initialChangedBy,
-      brief_json: body.brief_json,
-      brief_html: body.brief_html,
-      slot_answers: body.slot_answers,
+      brief_json: v.brief_json,
+      brief_html: sanitizedBriefHtml,
+      slot_answers: v.slot_answers,
       band,
       matter_type: matterType,
-      practice_area: body.practice_area,
+      practice_area: v.practice_area,
       value_score: clampAxis(axes.value),
       complexity_score: clampAxis(axes.complexity),
       urgency_score: clampAxis(axes.urgency),
@@ -226,12 +254,12 @@ export async function POST(req: NextRequest) {
       whale_nurture: whaleNurture,
       band_c_subtrack: bandCSubtrack,
       decision_deadline: decisionDeadline.toISOString(),
-      contact_name: body.contact?.name ?? null,
-      contact_email: body.contact?.email ?? null,
-      contact_phone: body.contact?.phone ?? null,
-      submitted_at: body.submitted_at ?? now.toISOString(),
-      intake_language: body.intake_language ?? 'en',
-      raw_transcript: body.raw_transcript ?? null,
+      contact_name: v.contact?.name ?? null,
+      contact_email: v.contact?.email ?? null,
+      contact_phone: v.contact?.phone ?? null,
+      submitted_at: v.submitted_at ?? now.toISOString(),
+      intake_language: v.intake_language ?? 'en',
+      raw_transcript: v.raw_transcript ?? null,
     })
     .select('id, lead_id, status, decision_deadline, whale_nurture')
     .single();
@@ -241,7 +269,7 @@ export async function POST(req: NextRequest) {
     // Return 409 so the screen can either ignore (idempotent) or surface.
     if (insertErr.code === '23505') {
       return NextResponse.json(
-        { persisted: false, mode: 'duplicate', lead_id: body.lead_id },
+        { persisted: false, mode: 'duplicate', lead_id: v.lead_id },
         { status: 409, headers: corsHeaders }
       );
     }
@@ -257,23 +285,23 @@ export async function POST(req: NextRequest) {
   if (matterType === 'out_of_scope') {
     const candidates = await loadDeclineCandidates({
       firmId: firmIdParam,
-      practiceArea: body.practice_area as string,
+      practiceArea: v.practice_area,
       perLeadOverride: null,
     });
-    const areaLabel = OOS_AREA_LABELS[body.practice_area as string] ?? "this practice area";
+    const areaLabel = OOS_AREA_LABELS[v.practice_area] ?? "this practice area";
     const verdict = resolveDecline(candidates, "oos", areaLabel);
 
     const facts: LeadFacts = {
-      lead_id: body.lead_id as string,
+      lead_id: v.lead_id,
       firm_id: firmIdParam,
       band: null,
       matter_type: matterType,
-      practice_area: body.practice_area as string,
-      submitted_at: body.submitted_at ?? now.toISOString(),
-      contact_name: body.contact?.name ?? null,
-      contact_email: body.contact?.email ?? null,
-      contact_phone: body.contact?.phone ?? null,
-      intake_language: body.intake_language ?? 'en',
+      practice_area: v.practice_area,
+      submitted_at: v.submitted_at ?? now.toISOString(),
+      contact_name: v.contact?.name ?? null,
+      contact_email: v.contact?.email ?? null,
+      contact_phone: v.contact?.phone ?? null,
+      intake_language: v.intake_language ?? 'en',
     };
     const payload = buildDeclinedOosPayload({
       facts,
@@ -298,13 +326,13 @@ export async function POST(req: NextRequest) {
     waitUntil(notifyLawyersOfNewLead({
       firmId: firmIdParam,
       leadId: inserted.lead_id,
-      contactName: body.contact?.name ?? null,
+      contactName: v.contact?.name ?? null,
       matterType: matterType,
-      practiceArea: body.practice_area as string,
+      practiceArea: v.practice_area,
       band,
       decisionDeadlineIso: inserted.decision_deadline,
       whaleNurture: !!inserted.whale_nurture,
-      intakeLanguage: body.intake_language ?? 'en',
+      intakeLanguage: v.intake_language ?? 'en',
     }).catch((err) => {
       // Visible in Vercel function logs; not surfaced to the screen.
       console.error("[intake-v2] notifyLawyersOfNewLead failed:", err);
@@ -325,14 +353,20 @@ export async function POST(req: NextRequest) {
   );
 }
 
-export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
+export async function OPTIONS(req: NextRequest) {
+  // Origin-aware preflight. Echo the Origin back ONLY when it's allowed;
+  // otherwise omit the allow-origin header (browser will block the
+  // cross-origin POST without it). Mirrors the runtime check in POST.
+  const check = await originAllowed(req);
+  const requestOrigin = req.headers.get('origin');
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Vary': 'Origin',
+  };
+  if (check.ok && requestOrigin) {
+    headers['Access-Control-Allow-Origin'] = requestOrigin;
+  }
+  return new NextResponse(null, { status: 204, headers });
 }
 
