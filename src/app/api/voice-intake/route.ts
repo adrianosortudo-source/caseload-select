@@ -52,6 +52,12 @@ import { computeCoreCompleteness } from '@/lib/screen-engine/selector';
 import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
 import type { EngineState, Band } from '@/lib/screen-engine/types';
+import {
+  verifyVoiceWebhookSignature,
+  shouldRejectVoiceRequest,
+  isHmacRequired,
+  VOICE_SIGNATURE_HEADER,
+} from '@/lib/voice-webhook-auth';
 
 // Practice-area display labels for the OOS decline copy interpolation.
 // Mirrors the same constant in intake-v2/route.ts (duplicated rather than
@@ -129,9 +135,13 @@ function seedVoiceState(state: EngineState, callerPhone: string | null, callerNa
 }
 
 export async function POST(req: NextRequest) {
+  // Read the raw body FIRST. HMAC verification requires byte-exact input;
+  // parsing JSON and re-serializing would change whitespace and break the
+  // hash. We then re-parse from the raw string ourselves.
+  const rawBody = await req.text();
   let body: VoiceIntakeBody;
   try {
-    body = (await req.json()) as VoiceIntakeBody;
+    body = JSON.parse(rawBody) as VoiceIntakeBody;
   } catch {
     return NextResponse.json(
       { error: 'invalid JSON body' },
@@ -179,6 +189,44 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { persisted: false, mode: 'demo', reason: 'firmId not found in intake_firms' },
       { status: 200, headers: CORS_HEADERS },
+    );
+  }
+
+  // ── HMAC verification (Codex audit HIGH #7) ───────────────────────────
+  // GHL Voice AI is expected to send X-CLS-Voice-Signature: sha256=<hex>
+  // over the raw body, computed with the firm-specific shared secret
+  // stored in intake_firms.voice_webhook_secret. Until that column
+  // exists, until per-firm secrets are populated, and until
+  // VOICE_HMAC_REQUIRED=true is set globally, this verification is in
+  // "soft enforce" mode — it logs signature mismatches but does not
+  // reject. See src/lib/voice-webhook-auth.ts for the full rollout
+  // posture.
+  const signature = req.headers.get(VOICE_SIGNATURE_HEADER);
+  const verifyResult = await verifyVoiceWebhookSignature({
+    firmId: firmIdParam,
+    rawBody,
+    signatureHeader: signature,
+  });
+  const required = isHmacRequired();
+  const gate = shouldRejectVoiceRequest(verifyResult, required);
+  if (gate.reject) {
+    console.warn(
+      `[voice-intake] signature gate rejected firm=${firmIdParam} required=${required} reason=${gate.reason}`,
+    );
+    return NextResponse.json(
+      { error: 'voice webhook signature rejected', reason: gate.reason },
+      { status: 401, headers: CORS_HEADERS },
+    );
+  }
+  if (verifyResult.mode === 'verified') {
+    // Log success at info-level only on the first verified call per cold
+    // start (cheap signal that the wiring works for this firm).
+    console.log(`[voice-intake] signature verified firm=${firmIdParam}`);
+  } else if (verifyResult.mode === 'mismatch' || verifyResult.mode === 'malformed_signature') {
+    // Soft-fail: log the mismatch even though we proceed, so the operator
+    // can spot rollout problems while VOICE_HMAC_REQUIRED is still off.
+    console.warn(
+      `[voice-intake] signature soft-fail firm=${firmIdParam} mode=${verifyResult.mode} reason=${verifyResult.reason}`,
     );
   }
 
