@@ -230,16 +230,28 @@ The OOS path in `intake-v2/route.ts` has `body.intake_language` available but `b
 
 ## Fix applied: intake_language in webhook payloads
 
-The following changes add `intake_language` to all four webhook payload paths.
+`ghl-webhook-pure.ts` already had `intake_language?: string | null` in `LeadFacts` and `intake_language: facts.intake_language ?? 'en'` in `buildEnvelope`. The bug was that four callers never populated the field.
 
-Files changed:
-1. `src/lib/ghl-webhook-pure.ts` — add `intake_language` to `LeadFacts`
-2. `src/app/api/portal/[firmId]/triage/[leadId]/take/route.ts` — select + pass intake_language
-3. `src/app/api/portal/[firmId]/triage/[leadId]/pass/route.ts` — same
-4. `src/app/api/cron/triage-backstop/route.ts` — same
-5. `src/app/api/intake-v2/route.ts` — pass `body.intake_language` to OOS payload builder
+Changes applied (all 1534 unit tests pass after):
 
-See git commit for diff.
+**`src/app/api/portal/[firmId]/triage/[leadId]/take/route.ts`**
+- Added `intake_language: string | null` to `LeadRow` interface
+- Added `intake_language` to the `.select(...)` query
+- Added `intake_language: lead.intake_language` to `facts`
+
+**`src/app/api/portal/[firmId]/triage/[leadId]/pass/route.ts`**
+- Same three changes as take route
+
+**`src/app/api/cron/triage-backstop/route.ts`**
+- Added `intake_language: string | null` to `TriagingRow` interface
+- Added `intake_language` to the `.select(...)` query
+- Added `intake_language: row.intake_language` to `facts`
+
+**`src/app/api/intake-v2/route.ts`**
+- Added `intake_language: body.intake_language ?? 'en'` to the OOS `facts` object
+
+**`docs/ghl-webhook-contract.md`**
+- Corrected "runs every 15 minutes" → "runs hourly at minute 7" (pg_cron `7 * * * *`)
 
 ---
 
