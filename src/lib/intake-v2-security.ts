@@ -61,7 +61,10 @@ async function loadCustomDomainsCached(): Promise<Set<string>> {
 function hostFromOrigin(origin: string | null): string | null {
   if (!origin) return null;
   try {
-    return new URL(origin).host.toLowerCase();
+    // .hostname strips the port (URL.host includes it). We compare hosts,
+    // not host:port pairs, so localhost:3000 and localhost:5173 both
+    // resolve to "localhost".
+    return new URL(origin).hostname.toLowerCase();
   } catch {
     return null;
   }
