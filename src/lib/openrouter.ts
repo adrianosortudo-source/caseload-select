@@ -127,8 +127,14 @@ export async function getMonthlySpend(): Promise<{ usage: number; limit: number 
 /**
  * Resolves the model to use for intake screening.
  *
- * Intake now runs on Google AI Studio (STANDARD = gemini-2.0-flash) which
- * draws from Google credits, so OpenRouter-spend tiering no longer applies.
+ * Intake runs on Google AI Studio (STANDARD = gemini-2.5-flash, see MODELS
+ * constant) via the OpenAI-compatible endpoint at
+ * generativelanguage.googleapis.com. Auth is GOOGLE_AI_API_KEY (server-only;
+ * never set as NEXT_PUBLIC_ or VITE_). The OpenAI SDK is used purely as an
+ * HTTP transport because Google's endpoint mirrors the OpenAI API shape;
+ * no OpenAI account or OPENAI_API_KEY is involved in the intake path.
+ * Cost draws from Google credits, so OpenRouter-spend tiering no longer
+ * applies to intake.
  *
  * Override via env: OPENROUTER_MODEL_OVERRIDE (kept for backwards compat,
  * still useful for forcing a specific model in testing).

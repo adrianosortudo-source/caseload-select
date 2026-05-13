@@ -141,6 +141,11 @@ export function mergeLlmResults(
   for (const [slotId, value] of Object.entries(extracted)) {
     // Skip the synthetic classifier field — already handled above.
     if (slotId === MATTER_TYPE_CLASSIFIER_FIELD) continue;
+    // Skip the synthetic language-confirm field — already handled above. Not
+    // skipping it here would let mergeLlmResults persist a language code
+    // (e.g. "fr") as if it were a user's slot answer, leaking detector
+    // output into state.slots.
+    if (slotId === LANGUAGE_DETECTOR_FIELD) continue;
 
     if (value === null || value === '' || value === undefined) continue;
     // Drop non-answer literals — see comment block above.

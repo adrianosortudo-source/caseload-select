@@ -809,7 +809,7 @@ export async function POST(req: Request) {
             ).questions.map(q => `  - ${q.text}`).join("\n") || "  (firm set exhausted)";
 
             const r2SystemPrompt =
-              `You are a senior legal intake specialist designing the final round of screening questions before the matter reaches a lawyer. Your goal: produce the 5 highest-information-value questions for this specific case.\n\n` +
+              `You are an intake-screening assistant. Design the final round of screening questions before the matter reaches the lawyer. You are not a lawyer; do not give legal advice; do not characterize the case's merits. Your goal: produce the 5 highest-information-value questions for this specific case.\n\n` +
               `PRACTICE AREA: ${paId}\n` +
               `RE-SCORED BAND AFTER ROUND 1: ${r1Band}\n` +
               `CPI SCORING GAPS: ${r2CpiSignal}\n\n` +

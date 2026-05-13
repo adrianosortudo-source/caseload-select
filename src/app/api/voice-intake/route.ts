@@ -315,6 +315,12 @@ export async function POST(req: NextRequest) {
         contact_name: state.slots['client_name'] ?? callerName ?? null,
         contact_email: state.slots['client_email'] ?? null,
         contact_phone: state.slots['client_phone'] ?? callerPhone ?? null,
+        // Voice OOS path: include the caller's language so the envelope is
+        // not silently defaulted to English by buildEnvelope (DR-036). Voice
+        // calls in non-English get correct intake_language in the webhook
+        // common envelope so GHL workflows can branch on language for
+        // translated decline templates.
+        intake_language: state.language ?? 'en',
       };
       const payload = buildDeclinedOosPayload({
         facts,

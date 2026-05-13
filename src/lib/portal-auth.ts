@@ -22,7 +22,7 @@
  * still verify. The verifier defaults missing role to 'lawyer'.
  */
 
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 
 const COOKIE_NAME = "portal_session";
@@ -82,7 +82,18 @@ export function verifyPortalToken(token: string): PortalSession | null {
   if (dot === -1) return null;
   const payload = token.slice(0, dot);
   const sig = token.slice(dot + 1);
-  if (sign(payload) !== sig) return null;
+  // Constant-time signature compare. Plain !== is vulnerable to timing
+  // attacks: an attacker can incrementally guess the correct signature by
+  // measuring how long the comparison takes on each prefix. timingSafeEqual
+  // requires equal-length buffers, so we guard with a length check first
+  // (length is not secret — only the contents are).
+  const expected = sign(payload);
+  if (expected.length !== sig.length) return null;
+  try {
+    if (!timingSafeEqual(Buffer.from(expected), Buffer.from(sig))) return null;
+  } catch {
+    return null;
+  }
   let data: Partial<PortalSession>;
   try {
     data = decode<Partial<PortalSession>>(payload);

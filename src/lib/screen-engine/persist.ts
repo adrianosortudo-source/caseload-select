@@ -65,6 +65,25 @@ export async function persistScreenedLead(
 ): Promise<PersistResult> {
   const report = buildReport(state);
 
+  // intake_language is the ISO 639-1 code of the language the lead used to
+  // converse with the screen. Defaults to 'en' if franc never ran for any
+  // reason. The endpoint uses this to set screened_leads.intake_language
+  // (DR-036: language-agnostic at intake, English at the lawyer surface).
+  const intakeLanguage = state.language ?? 'en';
+
+  // raw_transcript: the lead's original natural-language description as
+  // they first typed it (state.input is set once by initialiseState and is
+  // not overwritten during the slot-driven follow-up turns). We only
+  // persist it when intake was NOT English — for English intakes there is
+  // nothing to preserve that the English brief does not already contain,
+  // and storing it would duplicate PII. For non-English intakes the
+  // lawyer's brief is translated to English but compliance / appeals
+  // occasionally need the raw original text. (CLAUDE.md: "For web leads:
+  // the initial description when non-English.")
+  const rawTranscript = intakeLanguage === 'en'
+    ? null
+    : (typeof state.input === 'string' && state.input.length > 0 ? state.input : null);
+
   const payload = {
     lead_id: report.lead_id,
     submitted_at: report.submitted_at,
@@ -74,6 +93,8 @@ export async function persistScreenedLead(
     axes: report.four_axis,
     brief_json: report,
     brief_html: briefHtml,
+    intake_language: intakeLanguage,
+    raw_transcript: rawTranscript,
     slot_answers: {
       slots: state.slots,
       slot_meta: state.slot_meta,
