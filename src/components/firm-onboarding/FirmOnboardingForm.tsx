@@ -271,17 +271,6 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
 
       {/* Section 2: SMS A2P 10DLC */}
       <Section title="2. SMS — A2P 10DLC brand registration" subtitle="Carrier-required for outbound SMS to your leads">
-        <Field label="Vertical" hint="Pick the one that most accurately describes your firm.">
-          <select
-            value={form.sms_vertical}
-            onChange={(e) => update("sms_vertical", e.target.value)}
-            style={inputStyle}
-          >
-            <option value="LEGAL_SERVICES">Legal services</option>
-            <option value="PROFESSIONAL_SERVICES">Professional services</option>
-          </select>
-        </Field>
-
         <Field
           label="Sender phone number preference"
           hint="The number your SMS will originate from. Default: we provision a new GHL number for you with a Toronto area code. If you prefer to port an existing line, describe it here and we will coordinate the port separately (2-4 week timeline)."
