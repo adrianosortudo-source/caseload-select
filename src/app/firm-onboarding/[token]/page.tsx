@@ -181,13 +181,23 @@ export default async function FirmOnboardingPage({ params }: PageProps) {
 
 /**
  * Convert a token like "DRG-LAW-2026-05-13" into "DRG Law" for display.
- * Strips the date suffix and title-cases the remaining segments.
+ * Strips the date suffix; treats short all-uppercase segments (≤4 chars
+ * in the source token) as acronyms and preserves their case. Anything
+ * longer is title-cased.
+ *
+ *   "DRG-LAW-2026-05-13"        → "DRG Law"
+ *   "KENNY-LAW-2026-05-20"      → "Kenny Law"
+ *   "POWELL-LITIGATION-..."     → "Powell Litigation"
+ *   "ABC-CORPORATE-LAW-..."     → "ABC Corporate Law"
  */
 function humaniseToken(token: string): string {
   const stripped = token.replace(/[-_]\d{4}[-_]\d{2}[-_]\d{2}.*$/i, "");
   const parts = stripped.split(/[-_]/).filter(Boolean);
   if (parts.length === 0) return token;
   return parts
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+    .map((p) => {
+      const isAcronym = p.length <= 4 && p === p.toUpperCase() && /^[A-Z]+$/.test(p);
+      return isAcronym ? p : p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+    })
     .join(" ");
 }
