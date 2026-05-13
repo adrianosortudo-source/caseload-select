@@ -18,6 +18,7 @@ interface FormState {
   authorized_rep_title: string;
   authorized_rep_email: string;
   authorized_rep_phone: string;
+  booking_url: string;
   sms_vertical: string;
   sms_sender_phone_preference: string;
   whatsapp_number_decision: string;
@@ -64,6 +65,7 @@ const INITIAL: FormState = {
   authorized_rep_title: "",
   authorized_rep_email: "",
   authorized_rep_phone: "",
+  booking_url: "",
   sms_vertical: "LEGAL_SERVICES",
   sms_sender_phone_preference: "",
   whatsapp_number_decision: "",
@@ -288,6 +290,19 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
             />
           </Field>
         </div>
+
+        <Field
+          label="Calendar booking link (optional)"
+          hint="Where clients book consultations with you — Calendly, Cal.com, GHL native calendar, etc. If you don't have one yet, leave blank and we'll set one up together."
+        >
+          <input
+            type="url"
+            value={form.booking_url}
+            onChange={(e) => update("booking_url", e.target.value)}
+            style={inputStyle}
+            placeholder="https://calendly.com/yourfirm"
+          />
+        </Field>
       </Section>
 
       {/* Section 2: SMS A2P 10DLC */}

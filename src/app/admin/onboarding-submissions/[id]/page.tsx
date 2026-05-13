@@ -50,6 +50,7 @@ interface Submission {
   signed_email: string | null;
   consent_acknowledged: boolean;
   notes: string | null;
+  booking_url: string | null;
   submitted_at: string;
   ip_address: string | null;
   user_agent: string | null;
@@ -130,6 +131,7 @@ export default async function SubmissionDetailPage({
           <Field label="Title" value={row.authorized_rep_title} />
           <Field label="Rep email" value={row.authorized_rep_email} link={row.authorized_rep_email ? `mailto:${row.authorized_rep_email}` : undefined} />
           <Field label="Rep phone" value={row.authorized_rep_phone} />
+          <Field label="Calendar booking URL" value={row.booking_url} link />
         </Fields>
       </Section>
 

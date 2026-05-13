@@ -54,6 +54,7 @@ interface SubmitBody {
   signed_email?: string;
   consent_acknowledged?: boolean;
   notes?: string;
+  booking_url?: string;
 }
 
 const OPERATOR_EMAIL = process.env.OPERATOR_NOTIFICATION_EMAIL ?? "adriano@caseloadselect.ca";
@@ -149,6 +150,7 @@ export async function POST(
       signed_email: body.signed_email?.trim() || body.authorized_rep_email || null,
       consent_acknowledged: true,
       notes: body.notes ?? null,
+      booking_url: body.booking_url?.trim() || null,
       ip_address: ipAddress,
       user_agent: userAgent,
     })
@@ -254,6 +256,7 @@ function buildNotificationHtml({
         ${row("Title", body.authorized_rep_title)}
         ${row("Rep email", body.authorized_rep_email)}
         ${row("Rep phone", body.authorized_rep_phone)}
+        ${row("Calendar booking URL", body.booking_url)}
 
         <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 2 · SMS</td></tr>
         ${row("Vertical", body.sms_vertical)}
