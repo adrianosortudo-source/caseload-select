@@ -118,18 +118,14 @@ export async function POST(req: NextRequest) {
   // brief_html that the lawyer portal renders verbatim.)
   const originCheck = await originAllowed(req);
   const requestOrigin = req.headers.get('origin');
-  const corsHeaders = originCheck.ok
-    ? {
-        'Access-Control-Allow-Origin': requestOrigin ?? '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Vary': 'Origin',
-      }
-    : {
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Vary': 'Origin',
-      };
+  const corsHeaders: Record<string, string> = {
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    Vary: 'Origin',
+  };
+  if (originCheck.ok) {
+    corsHeaders['Access-Control-Allow-Origin'] = requestOrigin ?? '*';
+  }
 
   if (!originCheck.ok) {
     return NextResponse.json(
@@ -323,13 +319,18 @@ export async function POST(req: NextRequest) {
   // never blocks the response. Recipient list comes from firm_lawyers
   // (role='lawyer'); legacy branding.lawyer_email is the fallback.
   if (inserted.status === "triaging") {
+    // Narrow band to the email-render shape. D/E/X arrive here via the
+    // out-of-scope path which already returned before the notification
+    // fires, so realistic values are A/B/C/null only.
+    const notifyBand: "A" | "B" | "C" | null =
+      band === "A" || band === "B" || band === "C" ? band : null;
     waitUntil(notifyLawyersOfNewLead({
       firmId: firmIdParam,
       leadId: inserted.lead_id,
       contactName: v.contact?.name ?? null,
       matterType: matterType,
       practiceArea: v.practice_area,
-      band,
+      band: notifyBand,
       decisionDeadlineIso: inserted.decision_deadline,
       whaleNurture: !!inserted.whale_nurture,
       intakeLanguage: v.intake_language ?? 'en',

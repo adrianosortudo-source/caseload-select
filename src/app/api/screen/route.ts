@@ -2466,7 +2466,7 @@ export async function POST(req: Request) {
           gptResponse.situation_summary ??
           null;
         const dualWriteResult = await writeScreenedLeadFromScreen(supabase, {
-          sessionId: session.id,
+          sessionId: String(session.id),
           firmId: firm_id,
           cpi: (gptResponse.cpi as unknown as import("@/lib/screen-to-screened").ScreenCpiSnapshot) ?? {},
           practiceArea: gptResponse.practice_area ?? null,
