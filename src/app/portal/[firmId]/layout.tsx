@@ -93,14 +93,14 @@ export default async function PortalLayout({
  */
 function OperatorViewingBanner({ firmName }: { firmName: string }) {
   return (
-    <div className="bg-gold/15 border-b border-gold/30 px-6 py-2 text-xs text-navy flex items-center justify-between gap-3">
+    <div className="bg-gold/15 border-b border-gold/30 px-4 sm:px-6 py-2 text-xs text-navy flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3">
       <span>
         <span className="uppercase tracking-wider font-bold mr-2">Operator view</span>
         Viewing {firmName} as the operator console.
       </span>
       <a
         href="/admin/triage"
-        className="uppercase tracking-wider font-semibold text-navy/80 hover:text-navy underline underline-offset-2"
+        className="uppercase tracking-wider font-semibold text-navy/80 hover:text-navy underline underline-offset-2 whitespace-nowrap"
       >
         Back to operator console
       </a>

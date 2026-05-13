@@ -298,10 +298,11 @@ export default function KpiTiles({
 
   return (
     <div className="space-y-4">
-      {/* Hero row */}
+      {/* Hero row — stacks on mobile, side-by-side from sm+ */}
       {heroKeys.length > 0 && (
-        <div className={`grid gap-4 grid-cols-${heroKeys.length} md:grid-cols-${heroKeys.length}`}
-          style={{ gridTemplateColumns: `repeat(${heroKeys.length}, minmax(0, 1fr))` }}
+        <div
+          className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:[grid-template-columns:var(--hero-cols)]"
+          style={{ ["--hero-cols" as string]: `repeat(${heroKeys.length}, minmax(0, 1fr))` }}
         >
           {heroKeys.map((key) => {
             const cfg = TILE_CONFIG[key];

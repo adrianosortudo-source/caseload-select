@@ -91,7 +91,7 @@ export default function FileRowActions({ firmId, fileId, archived }: Props) {
           type="button"
           onClick={onDownload}
           disabled={state !== "idle"}
-          className="text-[11px] uppercase tracking-wider font-semibold px-2.5 py-1.5 border border-navy/30 text-navy hover:bg-navy hover:text-white transition-colors disabled:opacity-40"
+          className="text-[11px] uppercase tracking-wider font-semibold px-2.5 py-2 sm:py-1.5 min-h-[40px] sm:min-h-0 border border-navy/30 text-navy hover:bg-navy hover:text-white transition-colors disabled:opacity-40"
         >
           {state === "downloading" ? "Opening…" : "Download"}
         </button>
@@ -101,7 +101,7 @@ export default function FileRowActions({ firmId, fileId, archived }: Props) {
           type="button"
           onClick={onArchive}
           disabled={state !== "idle"}
-          className="text-[11px] uppercase tracking-wider font-semibold px-2 py-1.5 text-black/50 hover:text-red-700 disabled:opacity-40"
+          className="text-[11px] uppercase tracking-wider font-semibold px-2 py-2 sm:py-1.5 min-h-[40px] sm:min-h-0 text-black/50 hover:text-red-700 disabled:opacity-40"
           title="Archive"
         >
           {state === "archiving" ? "…" : "Archive"}

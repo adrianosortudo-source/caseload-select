@@ -96,10 +96,10 @@ export default function PipelineBoard({ columns }: { columns: Column[] }) {
       {columns.map((col) => {
         const accent = STAGE_ACCENT[col.stage] ?? "bg-black/15";
         return (
-          <div key={col.stage} className="flex items-start gap-5 py-4">
+          <div key={col.stage} className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-5 py-4">
 
-            {/* Stage label — fixed width */}
-            <div className="w-36 flex-shrink-0 flex items-center gap-2 pt-0.5">
+            {/* Stage label — stacks above cards on mobile, fixed-width column at sm+ */}
+            <div className="w-full sm:w-36 sm:flex-shrink-0 flex items-center gap-2 pt-0.5">
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${accent}`} />
               <div className="min-w-0">
                 <span className="block text-[11px] font-semibold text-black/55 uppercase tracking-wide leading-tight">

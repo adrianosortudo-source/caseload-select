@@ -139,7 +139,7 @@ function BandFilterRow({
             key={t.key}
             href={href}
             className={`
-              inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border transition-colors
+              inline-flex items-center gap-2 px-3 py-2 sm:py-1.5 text-xs font-semibold uppercase tracking-wider border transition-colors min-h-[40px] sm:min-h-0
               ${isActive
                 ? "border-navy bg-navy text-white"
                 : "border-black/15 bg-white text-black/70 hover:border-navy hover:text-navy"

@@ -106,7 +106,7 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
               type="button"
               onClick={() => setMode("pass-modal")}
               disabled={mode === "submitting"}
-              className="bg-white border border-black/20 text-black/80 px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:border-navy hover:text-navy disabled:opacity-50"
+              className="bg-white border border-black/20 text-black/80 px-4 py-2.5 sm:py-2 text-sm font-semibold uppercase tracking-wider hover:border-navy hover:text-navy disabled:opacity-50 min-h-[44px] sm:min-h-0"
             >
               Pass
             </button>
@@ -114,7 +114,7 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
               type="button"
               onClick={onTake}
               disabled={mode === "submitting"}
-              className="bg-navy text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-navy-deep disabled:opacity-50"
+              className="bg-navy text-white px-5 py-2.5 sm:py-2 text-sm font-semibold uppercase tracking-wider hover:bg-navy-deep disabled:opacity-50 min-h-[44px] sm:min-h-0"
             >
               {mode === "submitting" ? (
                 "Working…"
@@ -157,7 +157,7 @@ function PassModal({ onCancel, onConfirm }: PassModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-40 flex items-end md:items-center justify-center p-4">
-      <div className="bg-white max-w-lg w-full border border-black/10">
+      <div className="bg-white max-w-lg w-full border border-black/10 max-h-[90vh] overflow-y-auto">
         <div className="px-6 py-4 border-b border-black/8">
           <h2 className="text-lg font-bold text-navy">Pass on this lead</h2>
           <p className="mt-1 text-sm text-black/60">

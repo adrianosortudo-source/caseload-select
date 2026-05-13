@@ -24,8 +24,8 @@ export default function PortalTabNav({ firmId }: PortalTabNavProps) {
 
   return (
     <nav className="border-b border-black/8 bg-white/60 backdrop-blur-sm shrink-0">
-      <div className="max-w-5xl mx-auto px-6">
-        <div className="flex gap-1">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 overflow-x-auto">
+        <div className="flex gap-1 whitespace-nowrap">
           {tabs.map((tab) => {
             const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
             return (

@@ -191,7 +191,7 @@ export default async function PortalLeadsPage({
             <a
               key={tab.key}
               href={buildHref(tab.key, stageFilter ?? null)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${className}`}
+              className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-medium transition ${className}`}
             >
               {tab.label}
               {bandCounts[tab.key] != null && (
@@ -212,8 +212,8 @@ export default async function PortalLeadsPage({
           No leads match the selected filter.
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-black/5 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white rounded-xl border border-black/5 overflow-x-auto">
+          <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="border-b border-black/8 bg-black/[0.02] text-xs text-black/50">
                 <th className="text-left px-4 py-3 font-medium">Client</th>
