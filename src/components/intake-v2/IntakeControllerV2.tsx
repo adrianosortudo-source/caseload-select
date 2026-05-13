@@ -869,19 +869,39 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
       }
     }
 
-    const cpiSnap = (latestSnapshot?.cpi ?? {}) as Record<string, unknown>;
-    const score =
-      (typeof cpiSnap.total          === "number" ? cpiSnap.total          : null) ??
-      (typeof cpiSnap.priority_index === "number" ? cpiSnap.priority_index : null) ??
-      (typeof cpiSnap.cpi_score      === "number" ? cpiSnap.cpi_score      : null) ??
-      (typeof cpiSnap.score          === "number" ? cpiSnap.score          : null);
+    // CPI score formerly resolved here for the prospect-visible score card.
+    // Removed 2026-05-13 (audit HIGH #2): the prospect must not see the
+    // priority index or band. Score still flows to the lawyer-facing triage
+    // portal via the persisted snapshot.
+
+    // Lead-facing review copy.
+    //
+    // Rules (LSO Rule 4.2-1 + scope discipline):
+    //   - No outcome promises ("will win", "guaranteed", "strong case").
+    //   - No retainer language. The retainer document workflow is permanently
+    //     out of CaseLoad Select's scope; the lawyer owns it on their own tool.
+    //   - No firm time commitments ("within the hour", "within a few hours")
+    //     unless the firm has an opted-in SLA — which is not the current model.
+    //   - Never expose the band letter, priority index, or fit score to the
+    //     prospect. Those are internal lawyer-facing signals.
+    //
+    // We keep band-keyed copy for tone variation but the substance is uniform:
+    // a lawyer reviews the submission and reaches out directly if the matter
+    // fits the firm's practice.
+    const reviewCopy = firmName
+      ? `A lawyer at ${firmName} will review what you shared and reach out directly if your matter fits the firm's practice.`
+      : "A lawyer will review what you shared and reach out directly if your matter fits the firm's practice.";
+
+    const referralCopy = firmName
+      ? `Thanks for sharing your situation. ${firmName} will follow up with referral options if this matter is outside the firm's practice.`
+      : "Thanks for sharing your situation. The firm will follow up with referral options if this matter is outside the firm's practice.";
 
     const bandLabel: Record<string, { name: string; tone: string; copy: string }> = {
-      A: { name: "Strong fit",       tone: "bg-emerald-100 text-emerald-800 border-emerald-300", copy: `${firmName ? firmName : "Your lawyer"} will call you within the hour. A retainer agreement is on the way to your email.` },
-      B: { name: "Good fit",         tone: "bg-blue-100 text-blue-800 border-blue-300",          copy: `${firmName ? firmName : "Your lawyer"} will reach out within a few hours. Expect a consultation slot this week.` },
-      C: { name: "Possible fit",     tone: "bg-sky-100 text-sky-800 border-sky-300",             copy: `${firmName ? firmName : "Your lawyer"}'s team will review and contact you within 24 hours.` },
-      D: { name: "Weak fit",         tone: "bg-slate-100 text-slate-700 border-slate-300",       copy: `Thanks for sharing your situation. ${firmName ? firmName : "We"} will be in touch with referral options if your case isn't a match for our practice.` },
-      E: { name: "Outside criteria", tone: "bg-slate-100 text-slate-600 border-slate-300",       copy: `Thanks for reaching out. This matter looks to be outside what ${firmName ? firmName : "the firm"} handles directly. We'll send referral options if available.` },
+      A: { name: "Submitted for review", tone: "bg-emerald-50 text-emerald-900 border-emerald-200", copy: reviewCopy },
+      B: { name: "Submitted for review", tone: "bg-blue-50 text-blue-900 border-blue-200",          copy: reviewCopy },
+      C: { name: "Submitted for review", tone: "bg-sky-50 text-sky-900 border-sky-200",             copy: reviewCopy },
+      D: { name: "Submitted for review", tone: "bg-slate-50 text-slate-800 border-slate-200",       copy: referralCopy },
+      E: { name: "Submitted for review", tone: "bg-slate-50 text-slate-700 border-slate-200",       copy: referralCopy },
     };
     const bandInfo = band ? bandLabel[band] : null;
 
@@ -905,27 +925,14 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
             )}
           </div>
 
-          {/* Score card */}
-          {(band || score !== null) && (
-            <div className="rounded-xl border border-[#1E2F58]/12 bg-white p-5 flex items-center gap-5">
-              <div className="flex-1">
-                <p className="text-[11px] uppercase tracking-[0.14em] text-[#1E2F58]/55 font-medium mb-1" style={{ fontFamily: "DM Sans, sans-serif" }}>
-                  Case priority index
-                </p>
-                <div className="flex items-end gap-2">
-                  <span className="text-[40px] font-bold text-[#1E2F58] leading-none tabular-nums" style={{ fontFamily: "Manrope, sans-serif" }}>
-                    {score !== null ? Math.round(score) : "--"}
-                  </span>
-                  <span className="text-[14px] text-[#1E2F58]/45 mb-1.5">/ 100</span>
-                </div>
-              </div>
-              {bandInfo && (
-                <div className={`px-3 py-1.5 rounded-full border text-[13px] font-semibold ${bandInfo.tone}`} style={{ fontFamily: "DM Sans, sans-serif" }}>
-                  Band {band} — {bandInfo.name}
-                </div>
-              )}
-            </div>
-          )}
+          {/*
+            Score card REMOVED 2026-05-13.
+            CPI score and priority band are internal lawyer-facing signals
+            (per screen-prompt.ts rule: "never show band or score to the
+            client"). The prospect sees the neutral review-status copy in
+            bandInfo above; the lawyer sees score + band in the triage
+            portal at /portal/[firmId]/triage/[leadId].
+          */}
 
           {/* Review answers — collapsed by default, expands on tap */}
           <details className="rounded-xl border border-[#1E2F58]/12 bg-white">

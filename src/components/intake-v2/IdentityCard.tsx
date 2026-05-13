@@ -48,7 +48,7 @@ export function IdentityCard({ initialName = "", initialEmail = "", initialPhone
           Almost there. Where do we send it?
         </h2>
         <p className="text-[15px] text-[#1E2F58]/65 leading-relaxed" style={{ fontFamily: "DM Sans, sans-serif" }}>
-          Your lawyer will see this case file and reach out within hours. We will text a quick code to confirm your number.
+          A lawyer will review this case file. If your matter fits the firm&rsquo;s practice, the firm will reach out directly. We will text a quick code to confirm your number.
         </p>
       </div>
 
