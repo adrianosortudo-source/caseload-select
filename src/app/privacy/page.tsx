@@ -25,7 +25,7 @@ export default function PrivacyPage() {
         <div>
           <p className="text-xs uppercase tracking-[0.18em] font-semibold text-gold">CaseLoad Select</p>
           <h1 className="text-3xl font-bold text-navy mt-2">Privacy Policy</h1>
-          <p className="mt-2 text-sm text-black/50">Last updated: 2026-05-06</p>
+          <p className="mt-2 text-sm text-black/50">Last updated: 2026-05-13</p>
         </div>
 
         <Section title="Who we are">
@@ -49,6 +49,66 @@ export default function PrivacyPage() {
           </p>
         </Section>
 
+        <Section title="Channels we receive intake on">
+          <p>
+            CaseLoad Select receives intake submissions across seven channels. All seven route through the same CaseLoad Screen engine; the channel affects only how the conversation is initiated, not how your data is stored or retained. The web-based screening conversation runs in the CaseLoad Screen SPA at <code>caseload-screen-v2.vercel.app</code> or in the widget embedded on the firm&rsquo;s website.
+          </p>
+          <div className="overflow-x-auto mt-1">
+            <table className="w-full text-sm border border-black/10">
+              <thead className="bg-parchment-2 border-b border-black/10">
+                <tr className="text-left text-black/50 uppercase tracking-wider text-xs">
+                  <th className="px-3 py-2 font-semibold">Channel</th>
+                  <th className="px-3 py-2 font-semibold">How intake is initiated</th>
+                  <th className="px-3 py-2 font-semibold">Data captured</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/5 text-xs">
+                <tr>
+                  <td className="px-3 py-2 font-medium">Web widget</td>
+                  <td className="px-3 py-2">Form embedded on the firm&rsquo;s website or at <code>app.caseloadselect.ca/widget/[firmId]</code></td>
+                  <td className="px-3 py-2">Typed description, follow-up answers, name, email, phone</td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 font-medium">WhatsApp</td>
+                  <td className="px-3 py-2">Text conversation via the firm&rsquo;s GoHighLevel-connected WhatsApp number</td>
+                  <td className="px-3 py-2">Message text, WhatsApp phone number</td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 font-medium">SMS</td>
+                  <td className="px-3 py-2">Text conversation via the firm&rsquo;s GoHighLevel number</td>
+                  <td className="px-3 py-2">Message text, mobile phone number</td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 font-medium">Voice</td>
+                  <td className="px-3 py-2">Inbound phone call handled by GoHighLevel Voice AI; transcript processed server-side</td>
+                  <td className="px-3 py-2">Call transcript, caller phone number</td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 font-medium">Instagram DM</td>
+                  <td className="px-3 py-2">Direct message on the firm&rsquo;s Instagram account, routed through GoHighLevel</td>
+                  <td className="px-3 py-2">Message text, Instagram handle</td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 font-medium">Facebook Messenger</td>
+                  <td className="px-3 py-2">Message on the firm&rsquo;s Facebook page, routed through GoHighLevel</td>
+                  <td className="px-3 py-2">Message text, Facebook profile name</td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 font-medium">Google Business Profile chat</td>
+                  <td className="px-3 py-2">Message initiated from the firm&rsquo;s Google Business listing, routed through GoHighLevel</td>
+                  <td className="px-3 py-2">Message text, Google account name</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            For Instagram DM and Facebook Messenger, Meta Platforms, Inc. processes the conversation before we receive it. Meta&rsquo;s data processing terms govern the conversation layer; our policy applies from the point of receipt into our systems.
+          </p>
+          <p>
+            For Google Business Profile chat, Google LLC processes the conversation before we receive it. Google&rsquo;s privacy terms govern the conversation layer.
+          </p>
+        </Section>
+
         <Section title="Why we collect it">
           <ul className="list-disc pl-5 space-y-1.5">
             <li>To evaluate whether the matter falls within the firm&rsquo;s scope of practice and to score it for priority.</li>
@@ -62,8 +122,11 @@ export default function PrivacyPage() {
           <ul className="list-disc pl-5 space-y-1.5">
             <li>The lawyer or staff at the firm whose form you submitted to.</li>
             <li>Adriano Domingues, in the role of CaseLoad Select operator, for system administration, support, and quality control.</li>
-            <li>The firm&rsquo;s CRM and email service providers (typically GoHighLevel and Resend) that deliver the firm&rsquo;s automated replies.</li>
-            <li>Supabase Inc. (database hosting, Toronto region), Vercel Inc. (application hosting), OpenAI (intake screening assistance) and similar service providers under written agreements limited to processing on our instructions.</li>
+            <li>The firm&rsquo;s CRM and communication service provider (GoHighLevel) and transactional email provider (Resend), which deliver the firm&rsquo;s automated replies. GoHighLevel also handles WhatsApp, SMS, Voice, Instagram DM, Facebook Messenger, and Google Business Profile chat channels on the firm&rsquo;s behalf.</li>
+            <li>Supabase Inc. (database hosting, Toronto region) and Vercel Inc. (application hosting), under written service agreements limited to processing on our instructions.</li>
+            <li>Google LLC (intake screening via Gemini 2.5 Flash for Screen 2.0 and the voice channel), under Google&rsquo;s data processing terms.</li>
+            <li>OpenAI, L.L.C. (intake screening assistance for legacy web widget sessions), under OpenAI&rsquo;s data processing terms.</li>
+            <li>Meta Platforms, Inc., for intake that arrives via Instagram DM or Facebook Messenger. Meta processes the conversation before it reaches our systems. Their data processing terms apply to that layer.</li>
           </ul>
           <p>
             We do not sell or rent your information. We do not use your information for advertising.
@@ -112,6 +175,15 @@ export default function PrivacyPage() {
           </ul>
           <p>
             Send written requests to <a href="mailto:privacy@caseloadselect.ca" className="text-navy underline underline-offset-2">privacy@caseloadselect.ca</a>. We will respond within 30 days.
+          </p>
+        </Section>
+
+        <Section title="Follow-up communications">
+          <p>
+            By submitting an intake form, you provide express consent under Canada&rsquo;s Anti-Spam Legislation (CASL) for the firm and CaseLoad Select to send you electronic messages related to your inquiry. This includes automated replies, status updates, and follow-up messages about your matter.
+          </p>
+          <p>
+            If you receive marketing messages (such as review requests or re-engagement messages from the firm), each message will identify the firm as the sender and include a working unsubscribe mechanism. Unsubscribing from marketing messages does not affect transactional messages directly related to your open matter.
           </p>
         </Section>
 

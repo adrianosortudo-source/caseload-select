@@ -19,17 +19,22 @@ interface Props {
   onSubmit: (name: string, email: string, phone: string) => void;
   /** Disable submit while parent processes (loading state). */
   loading?: boolean;
+  /** Firm name shown in the consent label. */
+  firmName?: string;
+  /** Absolute URL for the privacy policy link. */
+  privacyUrl?: string;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[\d\s()+\-.]{7,}$/;
 
-export function IdentityCard({ initialName = "", initialEmail = "", initialPhone = "", onSubmit, loading }: Props) {
+export function IdentityCard({ initialName = "", initialEmail = "", initialPhone = "", onSubmit, loading, firmName, privacyUrl = "https://app.caseloadselect.ca/privacy" }: Props) {
   const [name, setName]   = useState(initialName);
   const [email, setEmail] = useState(initialEmail);
   const [phone, setPhone] = useState(initialPhone);
+  const [consentGiven, setConsentGiven] = useState(false);
 
-  const valid = name.trim().length >= 2 && EMAIL_RE.test(email.trim()) && PHONE_RE.test(phone.trim());
+  const valid = name.trim().length >= 2 && EMAIL_RE.test(email.trim()) && PHONE_RE.test(phone.trim()) && consentGiven;
 
   function handleSubmit() {
     if (!valid || loading) return;
@@ -51,6 +56,31 @@ export function IdentityCard({ initialName = "", initialEmail = "", initialPhone
         <Input id="v2-name"  label="Full name"     value={name}  onChange={setName}  type="text"  autoComplete="name" />
         <Input id="v2-email" label="Email"         value={email} onChange={setEmail} type="email" autoComplete="email" />
         <Input id="v2-phone" label="Phone number"  value={phone} onChange={setPhone} type="tel"   autoComplete="tel" />
+      </div>
+
+      <div className="flex items-start gap-3">
+        <input
+          id="v2-consent"
+          type="checkbox"
+          checked={consentGiven}
+          onChange={e => setConsentGiven(e.target.checked)}
+          className="mt-0.5 h-4 w-4 flex-shrink-0 cursor-pointer rounded border-[#1E2F58]/30 accent-[#1E2F58]"
+        />
+        <label
+          htmlFor="v2-consent"
+          className="text-[12px] text-[#1E2F58]/65 leading-relaxed cursor-pointer"
+          style={{ fontFamily: "DM Sans, sans-serif" }}
+        >
+          I agree that {firmName ? firmName : "this firm"} and CaseLoad Select may use my contact details to follow up on this inquiry and send related communications. Marketing messages will include an unsubscribe option. This is not legal advice and submitting does not create a lawyer-client relationship.{" "}
+          <a
+            href={privacyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-[#1E2F58] transition-colors"
+          >
+            Privacy Policy
+          </a>
+        </label>
       </div>
 
       <button

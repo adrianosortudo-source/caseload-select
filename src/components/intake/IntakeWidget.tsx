@@ -1195,6 +1195,7 @@ export function IntakeWidget({
   const [pendingResult, setPendingResult] = useState<ScreenResponse | null>(null);
   const [identityCollected, setIdentityCollected] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [consentGiven, setConsentGiven] = useState(false);
 
   // Round 3 state
   const [round3Questions, setRound3Questions] = useState<Round3Question[]>([]);
@@ -1929,7 +1930,8 @@ export function IntakeWidget({
 
   const canSubmitIdentity =
     contact.name.trim().length >= 2 &&
-    (contact.email.trim().includes("@") || contact.phone.trim().length >= 7);
+    (contact.email.trim().includes("@") || contact.phone.trim().length >= 7) &&
+    consentGiven;
 
   const accentStyle = {
     "--accent": accentColor,
@@ -2330,6 +2332,25 @@ export function IntakeWidget({
               {apiError && (
                 <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{apiError}</p>
               )}
+
+              <div className="flex items-start gap-2.5">
+                <input
+                  id="v1-consent"
+                  type="checkbox"
+                  checked={consentGiven}
+                  onChange={e => setConsentGiven(e.target.checked)}
+                  className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 cursor-pointer rounded border-gray-300"
+                  style={{ accentColor }}
+                />
+                <label htmlFor="v1-consent" className="text-[11px] text-gray-500 leading-relaxed cursor-pointer">
+                  I agree that {firmName} and CaseLoad Select may use my contact details to follow up on this inquiry and send related communications. Marketing messages will include an unsubscribe option. This is not legal advice.{" "}
+                  {firmPrivacyUrl && (
+                    <a href={firmPrivacyUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-700 transition-colors">
+                      Privacy Policy
+                    </a>
+                  )}
+                </label>
+              </div>
 
               <button
                 onClick={handleIdentitySubmit}

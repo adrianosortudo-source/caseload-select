@@ -719,6 +719,8 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
           initialPhone={identityPhone}
           onSubmit={submitIdentity}
           loading={otpLoading}
+          firmName={firmName}
+          privacyUrl="https://app.caseloadselect.ca/privacy"
         />
       </Shell>
     );
