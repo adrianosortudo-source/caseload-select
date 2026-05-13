@@ -295,6 +295,27 @@ export async function POST(req: Request) {
     const body = (await req.json()) as ScreenRequest;
     const { session_id, firm_id, channel, message, message_type = "text", structured_data, source_hint, demo } = body;
 
+    // ── Legacy-endpoint telemetry ────────────────────────────────────────
+    // /api/screen is the v2.1 conversational endpoint that pre-dates the
+    // Screen 2.0 screened_leads invariant. The production widget still
+    // calls it (IntakeControllerV2.tsx:296) — Codex audit MEDIUM #6 flags
+    // this and HIGH #1 wants the widget cut over to /api/intake-v2. Until
+    // that cutover lands, log every caller so the operator can see who is
+    // still hitting the legacy path. Lightweight: structured one-line log,
+    // visible in the new /admin/health page indirectly (cron / outbox
+    // panels) and via Vercel runtime logs directly.
+    try {
+      const ua = (req.headers.get("user-agent") ?? "").slice(0, 120);
+      const ref = (req.headers.get("referer") ?? "").slice(0, 200);
+      const origin = req.headers.get("origin") ?? "";
+      // eslint-disable-next-line no-console
+      console.log(
+        `[legacy-screen] caller firm_id=${firm_id ?? "none"} channel=${channel ?? "none"} session=${session_id ? "resume" : "new"} origin=${origin} ref=${ref} ua=${ua}`,
+      );
+    } catch {
+      // never let telemetry break the request
+    }
+
     // Resolve model tier once per request (checks OpenRouter spend, cached 5min)
     const intakeModel = await getIntakeModel();
 

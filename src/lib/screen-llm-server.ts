@@ -27,12 +27,39 @@ const MODEL = 'gemini-2.5-flash';
 const TEMPERATURE = 0.1;
 const MAX_DESCRIPTION_LENGTH = 4000;
 
+// Retry policy for transient Gemini failures (429 rate limit, 5xx server,
+// network errors). Bounded so a sustained outage degrades to regex-only
+// extraction rather than blocking intake indefinitely.
+const MAX_LLM_ATTEMPTS = 3;
+const RETRY_BACKOFF_MS = [400, 1200]; // gaps before retry 2 and 3
+
 export interface LlmExtractionResponse {
   extracted: Record<string, string | null>;
-  mode: 'live' | 'disabled' | 'error';
+  mode: 'live' | 'disabled' | 'error' | 'degraded';
   reason?: string;
   tokens?: { prompt?: number; completion?: number };
   dropped?: Record<string, string>;
+  /** Number of attempts made (1 = succeeded on first try; >1 = retried). */
+  attempts?: number;
+}
+
+/**
+ * True for errors that are worth retrying. Gemini SDK errors include the
+ * HTTP status in the message ("[GoogleGenerativeAI Error]: 429 Too Many
+ * Requests" etc.) or surface as fetch-style network errors. Treat 429
+ * (rate limit / quota), 408 (timeout), 5xx (server), and ECONN errors as
+ * transient. 400 / 401 / 403 / 404 are caller / config bugs, do not retry.
+ */
+function isTransientLlmError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/\b(429|408|500|502|503|504)\b/.test(msg)) return true;
+  if (/(ECONN|ETIMEDOUT|fetch failed|network)/i.test(msg)) return true;
+  if (/quota/i.test(msg)) return true;
+  return false;
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -68,26 +95,64 @@ export async function llmExtractServer(
   const systemPrompt = buildSystemPrompt();
   const userPrompt = buildUserPrompt(trimmed, matterType, slots);
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: MODEL,
-      systemInstruction: systemPrompt,
-      generationConfig: {
-        temperature: TEMPERATURE,
-        responseMimeType: 'application/json',
-        responseSchema: responseSchema as never,
-      },
-    });
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: MODEL,
+    systemInstruction: systemPrompt,
+    generationConfig: {
+      temperature: TEMPERATURE,
+      responseMimeType: 'application/json',
+      responseSchema: responseSchema as never,
+    },
+  });
 
-    const result = await model.generateContent(userPrompt);
+  // Bounded retry on transient Gemini failures. The previous implementation
+  // ran a single generateContent() and any 429/5xx surfaced as mode='error',
+  // which left the caller running regex-only extraction even when a quick
+  // retry would have succeeded.
+  let result: Awaited<ReturnType<typeof model.generateContent>> | null = null;
+  let lastErr: unknown = null;
+  let attempt = 0;
+
+  try {
+    for (attempt = 1; attempt <= MAX_LLM_ATTEMPTS; attempt++) {
+      try {
+        result = await model.generateContent(userPrompt);
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+        if (attempt < MAX_LLM_ATTEMPTS && isTransientLlmError(err)) {
+          const wait = RETRY_BACKOFF_MS[attempt - 1] ?? 1200;
+          console.warn(
+            `[screen-llm-server] transient Gemini error on attempt ${attempt}, retrying in ${wait}ms:`,
+            err instanceof Error ? err.message : String(err),
+          );
+          await sleep(wait);
+          continue;
+        }
+        break;
+      }
+    }
+
+    if (!result) {
+      const reason = lastErr instanceof Error ? lastErr.message : String(lastErr);
+      const transient = lastErr ? isTransientLlmError(lastErr) : false;
+      return {
+        extracted: {},
+        mode: transient ? 'degraded' : 'error',
+        reason,
+        attempts: attempt,
+      };
+    }
+
     const raw = result.response.text();
 
     let parsed: Record<string, string | null> = {};
     try {
       parsed = JSON.parse(raw);
     } catch {
-      return { extracted: {}, mode: 'error', reason: 'parse_failed' };
+      return { extracted: {}, mode: 'error', reason: 'parse_failed', attempts: attempt };
     }
 
     // Filter + normalize enums (same logic as sandbox's api/extract.ts)
@@ -123,16 +188,20 @@ export async function llmExtractServer(
       extracted: cleaned,
       dropped,
       mode: 'live',
+      attempts: attempt,
       tokens: {
         prompt: usage?.promptTokenCount,
         completion: usage?.candidatesTokenCount,
       },
     };
   } catch (err) {
+    // Unexpected post-LLM error (json shape, response normalization). Not
+    // a Gemini transport failure; do not retry.
     return {
       extracted: {},
       mode: 'error',
       reason: err instanceof Error ? err.message : String(err),
+      attempts: attempt,
     };
   }
 }

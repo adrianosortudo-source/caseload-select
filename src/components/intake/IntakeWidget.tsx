@@ -17,7 +17,7 @@
  * Channels: always uses "widget" mode (GPT returns all questions at once).
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import LawyerViewPanel, { type FullCpi } from "@/components/demo/LawyerViewPanel";
 import { getRound3Questions, qualifiesForRound3, type Round3Question } from "@/lib/round3";
 
@@ -1153,7 +1153,27 @@ export function IntakeWidget({
   guidedTour = false,
   onDemoStepChange,
 }: IntakeWidgetProps) {
-  const LS_KEY = `cls_session_${firmId}`;
+  // Per-tab localStorage key. Without the tab id, two tabs of the same firm
+  // share the same slot and overwrite each other's in-progress session
+  // (Codex sandbox audit MEDIUM). sessionStorage scopes the tab id to this
+  // browser tab; closing the tab loses the tab id and the localStorage slot
+  // becomes orphaned, which is acceptable — orphans get evicted when
+  // localStorage hits its quota and re-opening the firm starts a fresh slot.
+  const LS_KEY = useMemo(() => {
+    if (typeof window === "undefined") return `cls_session_${firmId}`;
+    let tabId: string | null = null;
+    try {
+      tabId = window.sessionStorage.getItem("cls_tab_id");
+      if (!tabId) {
+        tabId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        window.sessionStorage.setItem("cls_tab_id", tabId);
+      }
+    } catch {
+      // sessionStorage unavailable (private mode); fall back to firm-only key
+      tabId = null;
+    }
+    return tabId ? `cls_session_${firmId}_${tabId}` : `cls_session_${firmId}`;
+  }, [firmId]);
 
   const [step, setStep] = useState<Step>("intent");
   const [submittingStage, setSubmittingStage] = useState<SubmittingStage>("initial");
