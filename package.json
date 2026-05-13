@@ -9,7 +9,8 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:engine-sync": "bash scripts/check-engine-sync.sh"
+    "check:engine-sync": "bash scripts/check-engine-sync.sh",
+    "check:engine-sync:win": "powershell -ExecutionPolicy Bypass -File scripts/check-engine-sync.ps1"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
