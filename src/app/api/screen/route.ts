@@ -41,6 +41,7 @@ import { estimateCaseValue } from "@/lib/case-value";
 import { extractEvents } from "@/lib/event-extractor";
 import { extractIntents } from "@/lib/intent-extractor";
 import { selectEvent } from "@/lib/event-selector";
+import { writeScreenedLeadFromScreen } from "@/lib/screen-to-screened";
 // event-question-generator: generateQuestion() and generatePreamble() removed.
 // Questions now come from the slot bank via selectSlots() → slotToApiQuestion().
 // event-slot-map: EVENT_TIMING_SLOT_MAP removed — slot bank is the single source of truth.
@@ -2448,6 +2449,55 @@ export async function POST(req: Request) {
       console.error("[screen] Session update failed:", updateError.code, updateError.message, { session_id: session.id, keys: Object.keys(sessionUpdate) });
     }
 
+    // ── Dual-write to screened_leads on finalize (Codex audit HIGH #1) ─
+    // The legacy widget at /widget/[firmId] runs through this endpoint and
+    // historically never landed a screened_leads row, so the lawyer's
+    // triage portal at /portal/[firmId]/triage was blank for web traffic.
+    // Mirror the finalize state into screened_leads so the portal works
+    // for both the legacy widget AND the future sandbox-engine widget.
+    // Skipped on demo=true so test sessions never appear in production
+    // triage. Best-effort: a failure here does not block the session
+    // response (the legacy intake_sessions update + GHL delivery still
+    // happen and the lead is recoverable).
+    if (gptResponse.finalize && !demo) {
+      try {
+        const dualWriteSummary =
+          (sessionUpdate.situation_summary as string | null | undefined) ??
+          gptResponse.situation_summary ??
+          null;
+        const dualWriteResult = await writeScreenedLeadFromScreen(supabase, {
+          sessionId: session.id,
+          firmId: firm_id,
+          cpi: (gptResponse.cpi as unknown as import("@/lib/screen-to-screened").ScreenCpiSnapshot) ?? {},
+          practiceArea: gptResponse.practice_area ?? null,
+          practiceSubType: (gptResponse.practice_sub_type as string | null) ?? null,
+          situationSummary: dualWriteSummary,
+          confirmedAnswers: updatedConfirmed as Record<string, unknown>,
+          contact: {
+            name: (sessionUpdate.contact as { name?: string } | null | undefined)?.name ?? null,
+            email: (sessionUpdate.contact as { email?: string } | null | undefined)?.email ?? null,
+            phone: (sessionUpdate.contact as { phone?: string } | null | undefined)?.phone ?? null,
+          },
+          caseValueLabel:
+            (scoringPayload._case_value as { label?: string } | undefined)?.label ?? null,
+          caseValueRationale:
+            (scoringPayload._case_value as { rationale?: string } | undefined)?.rationale ?? null,
+          intakeLanguage: (session.intake_language as string | null) ?? "en",
+        });
+        if (!dualWriteResult.ok) {
+          console.warn("[screen] screened_leads dual-write failed:", dualWriteResult.error, { session_id: session.id });
+        } else {
+          console.log(`[screen] dual-wrote screened_leads ${dualWriteResult.lead_id} status=${dualWriteResult.status}`);
+        }
+      } catch (dualWriteErr) {
+        console.warn(
+          "[screen] screened_leads dual-write threw:",
+          dualWriteErr instanceof Error ? dualWriteErr.message : String(dualWriteErr),
+          { session_id: session.id },
+        );
+      }
+    }
+
     // ── GHL delivery on finalize ──────────────────────────────────────
     // Skipped when demo=true so test sessions never reach the production CRM.
     if (gptResponse.finalize && firm.ghl_webhook_url && !demo) {
@@ -2467,13 +2517,23 @@ export async function POST(req: Request) {
     }
 
     // ── Compute CTA from band (returned on finalize) ─────────────────
-    // A/B: booking call to action. C/D: warm follow-up, no timeline. E: external resources.
+    // LSO Rule 4.2-1 + scope discipline: no outcome promises, no time-window
+    // commitments ("within 30 minutes", "within the hour"), no retainer
+    // language, no band/score exposure to the prospect, no superlatives.
+    // Same posture as the V2 widget bandLabel copy (see
+    // IntakeControllerV2.tsx).
+    //
+    // A/B/C: neutral review-submitted message. The lawyer reviews on their
+    // own cadence and reaches out if the matter fits the firm's practice.
+    // D/E: same neutral review message with a referral-tone variant for
+    // matters that may fall outside the firm's practice; we do NOT
+    // characterize the prospect's case strength.
     const bandToCta: Record<string, string> = {
-      A: "A lawyer will contact you within 30 minutes. Book a same-day consultation to secure your spot.",
-      B: "We'll review your case and reach out within the hour. Pick a time to speak with a lawyer.",
-      C: "Your intake is complete. A member of our team will personally review your situation and be in touch as soon as possible.",
-      D: "We've received everything. A member of our team will take a careful look and follow up with you.",
-      E: "Based on what you've shared, this matter may fall outside our practice areas. We encourage you to seek appropriate legal help.",
+      A: "Submitted for review. A lawyer will review what you shared and reach out directly if your matter fits the firm's practice.",
+      B: "Submitted for review. A lawyer will review what you shared and reach out directly if your matter fits the firm's practice.",
+      C: "Submitted for review. A lawyer will review what you shared and reach out directly if your matter fits the firm's practice.",
+      D: "Submitted for review. If this matter is outside the firm's practice, the firm will follow up with referral options.",
+      E: "Submitted for review. If this matter is outside the firm's practice, the firm will follow up with referral options.",
     };
     const cta = gptResponse.finalize ? (bandToCta[gptResponse.cpi.band ?? "E"] ?? null) : null;
 
