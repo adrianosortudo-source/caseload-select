@@ -42,6 +42,8 @@ interface SubmitBody {
   // Access-grant status tracking (one of: not_started, in_progress, granted, blocked)
   meta_admin_status?: string;
   meta_admin_blocker_note?: string;
+  gbp_admin_status?: string;
+  gbp_admin_blocker_note?: string;
   linkedin_admin_status?: string;
   linkedin_admin_blocker_note?: string;
   m365_admin_status?: string;
@@ -138,6 +140,8 @@ export async function POST(
         body.will_add_operator_as_admin === "yes" ? true : null,
       meta_admin_status: body.meta_admin_status || null,
       meta_admin_blocker_note: body.meta_admin_blocker_note || null,
+      gbp_admin_status: body.gbp_admin_status || null,
+      gbp_admin_blocker_note: body.gbp_admin_blocker_note || null,
       linkedin_admin_status: body.linkedin_admin_status || null,
       linkedin_admin_blocker_note: body.linkedin_admin_blocker_note || null,
       m365_admin_status: body.m365_admin_status || null,
@@ -284,11 +288,15 @@ function buildNotificationHtml({
         ${row("Meta admin status", prettifyStatus(body.meta_admin_status))}
         ${row("Meta admin blocker", body.meta_admin_blocker_note)}
 
-        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 5 · LinkedIn Company Page admin</td></tr>
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 5 · Google Business Profile manager</td></tr>
+        ${row("GBP Manager status", prettifyStatus(body.gbp_admin_status))}
+        ${row("GBP Manager blocker", body.gbp_admin_blocker_note)}
+
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 6 · LinkedIn Company Page admin</td></tr>
         ${row("LinkedIn admin status", prettifyStatus(body.linkedin_admin_status))}
         ${row("LinkedIn admin blocker", body.linkedin_admin_blocker_note)}
 
-        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 6 · Microsoft 365 Exchange admin</td></tr>
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 7 · Microsoft 365 Exchange admin</td></tr>
         ${row("M365 admin status", prettifyStatus(body.m365_admin_status))}
         ${row("M365 admin blocker", body.m365_admin_blocker_note)}
 

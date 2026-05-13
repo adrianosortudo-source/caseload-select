@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google Business Profile manager access · DRG Law · CaseLoad Select</title>
+<meta name="description" content="Three-step visual guide to granting Manager access on the firm Google Business Profile so CaseLoad Select can run local SEO and respond to reviews, prepared by CaseLoad Select.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700&family=Manrope:wght@500;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --deep-black: #0D1520;
+    --gold: #C4B49A;
+    --gold-on-light: #8B7A5E;
+    --gold-tint: rgba(196, 180, 154, 0.16);
+    --navy: #1E2F58;
+    --parchment: #F4F3EF;
+    --white: #FFFFFF;
+    --body: #4a5a72;
+    --muted: #8090A8;
+    --border: #e0ddd6;
+    --off-white: #F9F8F5;
+    --green-pass: #27834A;
+    --red-fail: #c0564e;
+
+    --font-display: 'Oxanium', sans-serif;
+    --font-heading: 'Manrope', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+
+    /* Google Business Profile palette — light, clean, Material-derived */
+    --g-blue: #1A73E8;
+    --g-bg: #F8F9FA;
+    --g-card: #FFFFFF;
+    --g-text: #202124;
+    --g-muted: #5F6368;
+    --g-border: #DADCE0;
+    --g-side: #FFFFFF;
+    --g-side-active: #E8F0FE;
+    --g-side-active-text: #1A73E8;
+    --g-red: #EA4335;
+    --g-yellow: #FBBC04;
+    --g-green: #34A853;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { font-size: 16px; scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-body);
+    font-weight: 400;
+    color: var(--body);
+    background: var(--parchment);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  img { max-width: 100%; display: block; }
+
+  .topbar {
+    background: var(--deep-black);
+    padding: 18px 32px 16px;
+    border-bottom: 2px solid var(--gold);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .topbar-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+  .topbar img { height: 17px; width: auto; }
+  .topbar .crumb {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 9.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+
+  .cover { background: var(--deep-black); color: var(--white); padding: 96px 32px 80px; }
+  .cover-inner { max-width: 920px; margin: 0 auto; }
+  .cover-eyebrow {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 28px;
+  }
+  .cover h1 {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 64px;
+    color: var(--white);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin-bottom: 24px;
+    max-width: 840px;
+  }
+  .cover h1 .term, .section h1 .term {
+    width: 0.22em;
+    height: 0.22em;
+    margin-left: 0.12em;
+    vertical-align: top;
+    display: inline-block;
+    position: relative;
+    top: 0.1em;
+    flex-shrink: 0;
+  }
+  .cover .lede {
+    font-size: 18px;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.78);
+    max-width: 680px;
+    margin-bottom: 56px;
+  }
+  .cover-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 32px;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    padding-top: 32px;
+  }
+  .cover-meta .lbl {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 6px;
+  }
+  .cover-meta .val { font-size: 14px; color: var(--white); font-weight: 500; }
+
+  .section {
+    padding: 88px 32px 72px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section:last-of-type { border-bottom: none; }
+  .section-inner { max-width: 920px; margin: 0 auto; }
+  .section-num {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold-on-light);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-num .mark { display: inline-block; width: 8px; height: 8px; background: var(--gold); }
+  .section h1 {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 44px;
+    color: var(--navy);
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    margin-bottom: 20px;
+    max-width: 780px;
+  }
+  .section .lead {
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--body);
+    max-width: 720px;
+    margin-bottom: 28px;
+  }
+  .section p {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--body);
+    margin-bottom: 14px;
+    max-width: 760px;
+  }
+  .section p strong { color: var(--navy); font-weight: 600; }
+  .section h2 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 24px;
+    color: var(--navy);
+    line-height: 1.2;
+    margin: 24px 0 12px;
+  }
+  .section h3 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 17px;
+    color: var(--navy);
+    margin: 20px 0 8px;
+  }
+
+  .step-header {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 24px;
+    align-items: start;
+    margin-bottom: 24px;
+  }
+  .step-num-big {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 64px;
+    line-height: 0.9;
+    color: var(--gold);
+    text-align: right;
+  }
+  .step-meta {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold-on-light);
+    margin-bottom: 10px;
+  }
+  .step-body h1 { font-size: 32px; max-width: 700px; margin-bottom: 14px; }
+
+  .panel {
+    background: var(--white);
+    border: 1px solid var(--border);
+    padding: 24px 28px;
+    margin: 18px 0;
+  }
+  .panel.gold { background: var(--gold-tint); border-color: var(--gold); }
+  .panel.dark {
+    background: var(--deep-black);
+    color: var(--white);
+    border-color: var(--deep-black);
+  }
+  .panel.dark p { color: rgba(255, 255, 255, 0.8); }
+  .panel.dark h3 { color: var(--gold); }
+  .panel.dark p strong { color: var(--gold); }
+  .panel h3:first-child { margin-top: 0; }
+  .panel p:last-child { margin-bottom: 0; }
+  .panel.featured { border: 2px solid var(--gold); background: var(--white); }
+
+  .ann {
+    background: var(--white);
+    border: 1px solid var(--border);
+    padding: 16px 20px;
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+  .ann.gold { background: var(--gold-tint); border-color: var(--gold); }
+  .ann .lbl {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--navy);
+  }
+  .ann.gold .lbl { color: var(--deep-black); }
+  .ann .body { font-size: 14px; line-height: 1.55; color: var(--body); }
+  .ann .body strong { color: var(--navy); font-weight: 600; }
+  @media (max-width: 640px) {
+    .ann { grid-template-columns: 1fr; gap: 6px; }
+  }
+
+  /* Scope yes / no */
+  .scope-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+  }
+  @media (max-width: 720px) { .scope-grid { grid-template-columns: 1fr; } }
+  .scope-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    padding: 22px 26px;
+  }
+  .scope-card .pill {
+    display: inline-block;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    margin-bottom: 14px;
+  }
+  .scope-card.yes .pill { background: var(--green-pass); color: var(--white); }
+  .scope-card.no .pill { background: transparent; color: var(--red-fail); border: 1px solid var(--red-fail); }
+  .scope-card ul { list-style: none; }
+  .scope-card li {
+    font-size: 14px;
+    color: var(--body);
+    padding: 5px 0;
+    line-height: 1.5;
+    position: relative;
+    padding-left: 18px;
+  }
+  .scope-card.yes li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 12px;
+    width: 6px;
+    height: 6px;
+    background: var(--green-pass);
+  }
+  .scope-card.no li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 12px;
+    width: 6px;
+    height: 6px;
+    background: var(--red-fail);
+  }
+
+  /* Google Business Profile mockup */
+  .g-mock {
+    background: var(--g-bg);
+    border: 1px solid var(--border);
+    margin: 24px 0;
+    overflow: hidden;
+    font-family: 'Google Sans', Roboto, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    color: var(--g-text);
+  }
+  .g-topbar {
+    background: var(--g-card);
+    border-bottom: 1px solid var(--g-border);
+    height: 56px;
+    display: flex;
+    align-items: center;
+    padding: 0 22px;
+    gap: 16px;
+    font-size: 14px;
+  }
+  .g-logo {
+    display: inline-flex;
+    align-items: baseline;
+    font-family: 'Google Sans', Roboto, sans-serif;
+    font-weight: 500;
+    font-size: 19px;
+    letter-spacing: -0.01em;
+  }
+  .g-logo .b { color: var(--g-blue); }
+  .g-logo .r { color: var(--g-red); }
+  .g-logo .y { color: var(--g-yellow); }
+  .g-logo .g { color: var(--g-green); }
+  .g-logo .business {
+    margin-left: 6px;
+    color: var(--g-muted);
+    font-size: 16px;
+  }
+  .g-actions { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .g-actions .ic { width: 22px; height: 22px; border-radius: 50%; background: var(--g-border); opacity: 0.6; }
+  .g-actions .av {
+    width: 30px; height: 30px;
+    background: linear-gradient(135deg, #C7D1E0, #8FA3BF);
+    color: var(--white);
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .g-shell {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    min-height: 360px;
+  }
+  .g-side {
+    background: var(--g-side);
+    border-right: 1px solid var(--g-border);
+    padding: 12px 8px;
+    font-size: 14px;
+  }
+  .g-side .item {
+    padding: 10px 14px;
+    border-radius: 0 22px 22px 0;
+    color: var(--g-text);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 2px;
+  }
+  .g-side .item .ic {
+    width: 20px; height: 20px;
+    background: var(--g-muted);
+    border-radius: 4px;
+    opacity: 0.55;
+    flex-shrink: 0;
+  }
+  .g-side .item.active {
+    background: var(--g-side-active);
+    color: var(--g-side-active-text);
+    font-weight: 500;
+  }
+  .g-side .item.active .ic { background: var(--g-side-active-text); opacity: 1; }
+
+  .g-content { background: var(--g-bg); padding: 28px 32px; }
+  .g-content h4 {
+    font-family: 'Google Sans', Roboto, sans-serif;
+    font-weight: 500;
+    font-size: 22px;
+    color: var(--g-text);
+    margin-bottom: 6px;
+  }
+  .g-content .sub {
+    font-size: 14px;
+    color: var(--g-muted);
+    margin-bottom: 22px;
+  }
+  .g-cmdbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .g-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px;
+    border-radius: 18px;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: 'Google Sans', Roboto, sans-serif;
+  }
+  .g-btn.primary { background: var(--g-blue); color: var(--white); }
+  .g-btn.primary.highlight { box-shadow: 0 0 0 3px rgba(196, 180, 154, 0.7); }
+  .g-btn.secondary {
+    background: transparent;
+    color: var(--g-blue);
+    border: 1px solid var(--g-border);
+  }
+
+  .g-table {
+    background: var(--g-card);
+    border: 1px solid var(--g-border);
+    border-radius: 8px;
+    font-size: 14px;
+    overflow: hidden;
+  }
+  .g-table .row {
+    display: grid;
+    grid-template-columns: 1fr 180px 120px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--g-border);
+    align-items: center;
+  }
+  .g-table .row:last-child { border-bottom: none; }
+  .g-table .row.head {
+    background: var(--g-bg);
+    font-weight: 500;
+    color: var(--g-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 12px 18px;
+  }
+  .g-table .row.highlight {
+    background: var(--gold-tint);
+    box-shadow: inset 3px 0 0 var(--gold);
+  }
+  .g-table .row .nm-wrap { display: flex; align-items: center; gap: 12px; }
+  .g-table .row .av-x {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, #1E2F58, #3a4d7a);
+    color: var(--white);
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .g-table .row .av-x.guest { background: linear-gradient(135deg, #C4B49A, #8B7E6A); }
+  .g-table .row .name { font-weight: 500; }
+  .g-table .row .meta { font-size: 12px; color: var(--g-muted); margin-top: 2px; }
+  .g-table .row .role-tag {
+    font-family: 'Google Sans', Roboto, sans-serif;
+    font-size: 13px;
+    color: var(--g-text);
+  }
+
+  /* Add user modal */
+  .g-modal {
+    background: var(--g-card);
+    border: 1px solid var(--g-border);
+    border-radius: 8px;
+    max-width: 520px;
+    margin: 24px 0;
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  }
+  .g-modal .head-x {
+    padding: 18px 22px 12px;
+  }
+  .g-modal .head-x .title {
+    font-family: 'Google Sans', Roboto, sans-serif;
+    font-weight: 500;
+    font-size: 18px;
+    color: var(--g-text);
+  }
+  .g-modal .body-x { padding: 14px 22px 20px; }
+  .g-modal .lbl-x {
+    font-size: 12px;
+    color: var(--g-muted);
+    margin-bottom: 4px;
+  }
+  .g-modal .field {
+    border: 1px solid var(--g-border);
+    border-radius: 4px;
+    padding: 12px 14px;
+    font-size: 14px;
+    color: var(--g-text);
+    background: var(--white);
+    margin-bottom: 18px;
+  }
+  .g-modal .field.focus {
+    border-color: var(--g-blue);
+    box-shadow: 0 0 0 1px var(--g-blue);
+  }
+  .g-modal .role-picker {
+    background: var(--white);
+    border: 1px solid var(--g-border);
+    border-radius: 4px;
+    padding: 0;
+    margin-bottom: 14px;
+  }
+  .g-modal .role-row {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--g-border);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+  }
+  .g-modal .role-row:last-child { border-bottom: none; }
+  .g-modal .role-row.active { background: var(--g-side-active); }
+  .g-modal .role-row .dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--g-muted);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .g-modal .role-row.active .dot {
+    border-color: var(--g-blue);
+    background: var(--g-blue);
+    box-shadow: inset 0 0 0 4px var(--white);
+  }
+  .g-modal .role-row .nm { font-weight: 500; color: var(--g-text); }
+  .g-modal .role-row .desc { font-size: 12px; color: var(--g-muted); margin-top: 3px; line-height: 1.5; }
+  .g-modal .foot-x {
+    padding: 12px 18px;
+    border-top: 1px solid var(--g-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .doc-footer {
+    background: var(--deep-black);
+    color: rgba(255, 255, 255, 0.55);
+    padding: 22px 32px;
+    font-size: 11px;
+  }
+  .doc-footer-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .doc-footer .sep { margin: 0 8px; color: rgba(255, 255, 255, 0.25); }
+
+  @media (max-width: 720px) {
+    .cover { padding: 64px 24px 56px; }
+    .cover h1 { font-size: 44px; }
+    .cover .lede { font-size: 16px; margin-bottom: 36px; }
+    .cover-meta { grid-template-columns: 1fr; gap: 18px; }
+    .section { padding: 56px 24px 48px; }
+    .section h1 { font-size: 30px; }
+    .step-header { grid-template-columns: 1fr; gap: 8px; }
+    .step-num-big { text-align: left; font-size: 48px; }
+    .step-body h1 { font-size: 24px; }
+    .g-shell { grid-template-columns: 1fr; }
+    .g-side { display: none; }
+    .g-table .row { grid-template-columns: 1fr; gap: 6px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar" role="banner">
+  <div class="topbar-inner">
+    <img src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select · Sign Better Cases">
+    <a id="back-to-onboarding" href="/" class="crumb" style="text-decoration: none; cursor: pointer; transition: color 0.15s;" onmouseover="this.style.color='#FFFFFF'" onmouseout="this.style.color=''">← Back to onboarding</a>
+  </div>
+</header>
+
+<section class="cover">
+  <div class="cover-inner">
+    <div class="cover-eyebrow">Guide 04 · Capture workstream</div>
+    <h1>Google Business Profile manager&nbsp;access<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+    <p class="lede">A three-step walkthrough for granting CaseLoad Select Manager-level access to your Google Business Profile so the local SEO, review automation, and (optionally) the GBP chat intake channel can be run on your behalf. Five minutes of work, reversible at any time, no access to your personal Google account.</p>
+    <div class="cover-meta">
+      <div>
+        <div class="lbl">Prepared for</div>
+        <div class="val">Damaris Regina Guimaraes</div>
+      </div>
+      <div>
+        <div class="lbl">Prepared by</div>
+        <div class="val">Adriano Domingues, CaseLoad Select</div>
+      </div>
+      <div>
+        <div class="lbl">Version</div>
+        <div class="val">v1 · 13 May 2026</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="section-num"><span class="mark"></span>Why this access matters</div>
+    <h1>Local search is where most legal leads start the&nbsp;journey<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+    <p class="lead">Over 60 percent of prospective clients in the Toronto legal market run a Google search before they contact a firm. The Google Business Profile is what they find: the firm's name, address, phone, hours, photos, services, and the review stars. A poorly maintained or unverified profile loses ranking against firms with active profiles. Manager access lets CaseLoad Select keep the profile current, respond to reviews on the firm's behalf under your guidance, and run the local SEO optimisations that move ranking.</p>
+    <p>The role is added by email. You go to your Google Business Profile, add me as Manager, and I receive an invitation. Manager is the second-highest role tier; it permits all the operational work without giving up Owner rights. You stay Owner alongside me and can remove me from the same screen at any time.</p>
+
+    <h2>What this access permits, what it does not</h2>
+
+    <div class="scope-grid">
+      <div class="scope-card yes">
+        <span class="pill">CaseLoad Select can</span>
+        <ul>
+          <li>Edit business information (hours, services, attributes, description)</li>
+          <li>Add and manage photos</li>
+          <li>Respond to reviews and Q&amp;A</li>
+          <li>Post updates, offers, and events</li>
+          <li>Manage GBP chat / messages (when enabled)</li>
+          <li>View profile insights and search performance</li>
+          <li>Configure messaging notifications</li>
+        </ul>
+      </div>
+      <div class="scope-card no">
+        <span class="pill">CaseLoad Select cannot</span>
+        <ul>
+          <li>Add or remove other managers (Owner-only)</li>
+          <li>Transfer or delete the profile (Owner-only)</li>
+          <li>Access your personal Google account, Gmail, or Drive</li>
+          <li>See your Google Ads accounts unless explicitly granted</li>
+          <li>Modify your linked Google Business Profile website (if you use one) without your sign-off</li>
+        </ul>
+      </div>
+    </div>
+
+    <p>The role being requested is <strong>Manager</strong>. The hierarchy is Primary Owner &gt; Owner &gt; Manager. Manager covers everything operational and editorial without the destructive privileges (delete, transfer, manage other roles) that should stay with you.</p>
+
+    <div class="panel dark">
+      <h3>Reversible at any time</h3>
+      <p>One click in the same Users screen removes my access. Profile data is unaffected — only my role disappears. Use removal any time you feel uncertain about the access. Nothing about this is permanent without your continued consent.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">01</div>
+      <div class="step-body">
+        <div class="step-meta">Step 1 · About 1 minute</div>
+        <h1>Sign in at business.google.com<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>Open <strong>business.google.com</strong> in your browser and sign in with the Google account that owns the DRG Law business profile. If the firm has multiple profiles or you manage several businesses, the home screen shows them as cards; click into the DRG Law card. Then click <strong>Manage profile</strong> (or simply the profile name) to enter the management surface.</p>
+      </div>
+    </div>
+
+    <div class="g-mock">
+      <div class="g-topbar">
+        <div class="g-logo"><span class="b">G</span><span class="r">o</span><span class="y">o</span><span class="b">g</span><span class="g">l</span><span class="r">e</span><span class="business">Business Profile</span></div>
+        <div class="g-actions">
+          <div class="ic"></div>
+          <div class="ic"></div>
+          <div class="av">DG</div>
+        </div>
+      </div>
+      <div class="g-shell">
+        <div class="g-side">
+          <div class="item active"><span class="ic"></span>Overview</div>
+          <div class="item"><span class="ic"></span>Edit profile</div>
+          <div class="item"><span class="ic"></span>Reviews</div>
+          <div class="item"><span class="ic"></span>Messages</div>
+          <div class="item"><span class="ic"></span>Photos</div>
+          <div class="item"><span class="ic"></span>Posts</div>
+          <div class="item"><span class="ic"></span>Performance</div>
+          <div class="item"><span class="ic"></span>Settings</div>
+        </div>
+        <div class="g-content">
+          <h4>DRG Law Professional Corporation</h4>
+          <div class="sub">Toronto, ON · Law firm · Verified</div>
+          <div style="background: var(--g-card); border: 1px solid var(--g-border); border-radius: 8px; padding: 20px 22px; margin-bottom: 12px;">
+            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Profile views this week</div>
+            <div style="font-size: 13px; color: var(--g-muted);">Tracked across Google Search and Maps</div>
+          </div>
+          <div style="background: var(--g-card); border: 1px solid var(--g-border); border-radius: 8px; padding: 20px 22px;">
+            <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">Suggested next step</div>
+            <div style="font-size: 13px; color: var(--g-muted);">Add a manager to help run this profile</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">If you do not see the profile</div>
+      <div class="body">If business.google.com loads but shows no profile, the Google account you signed in with is not the Owner of the DRG Law listing. Sign out and sign in with the account that originally claimed the profile (often the firm's primary Gmail). If you do not know which account owns the profile, run a quick lookup with me on the Thursday call and we will recover access together.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">Already done?</div>
+      <div class="body">If you already added me as a Manager from a previous request, that grant still applies — Google does not auto-expire Manager roles. On the form, just mark this section as "Done — access granted" and skip ahead. The next steps below are for first-time grants.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">02</div>
+      <div class="step-body">
+        <div class="step-meta">Step 2 · About 2 minutes</div>
+        <h1>Open Settings, then Managers and&nbsp;owners<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>In the left sidebar of the Business Profile manager, click <strong>Settings</strong>. From the Settings menu, choose <strong>Managers and owners</strong> (sometimes labelled just "People" or "Users" depending on the GBP rollout in your account). The screen lists everyone with a role on this profile. Click the <strong>+ Add user</strong> button at the top.</p>
+      </div>
+    </div>
+
+    <div class="g-mock">
+      <div class="g-topbar">
+        <div class="g-logo"><span class="b">G</span><span class="r">o</span><span class="y">o</span><span class="b">g</span><span class="g">l</span><span class="r">e</span><span class="business">Business Profile · DRG Law</span></div>
+        <div class="g-actions">
+          <div class="ic"></div>
+          <div class="av">DG</div>
+        </div>
+      </div>
+      <div class="g-shell">
+        <div class="g-side">
+          <div class="item"><span class="ic"></span>Overview</div>
+          <div class="item"><span class="ic"></span>Edit profile</div>
+          <div class="item"><span class="ic"></span>Reviews</div>
+          <div class="item"><span class="ic"></span>Messages</div>
+          <div class="item active"><span class="ic"></span>Settings</div>
+        </div>
+        <div class="g-content">
+          <h4>Managers and owners</h4>
+          <div class="sub">People who can manage this Business Profile</div>
+          <div class="g-cmdbar">
+            <div class="g-btn primary highlight">+ Add user</div>
+          </div>
+          <div class="g-table">
+            <div class="row head">
+              <div>Person</div>
+              <div>Role</div>
+              <div>Status</div>
+            </div>
+            <div class="row">
+              <div class="nm-wrap">
+                <span class="av-x">DG</span>
+                <div>
+                  <div class="name">Damaris Guimaraes</div>
+                  <div class="meta">damaris@drglaw.ca</div>
+                </div>
+              </div>
+              <div class="role-tag">Primary owner</div>
+              <div style="font-size: 12px; color: var(--g-green); font-weight: 500;">● Active</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">Click here</div>
+      <div class="body">The blue <strong>+ Add user</strong> button at the top of the list, highlighted in gold above. This opens the dialog where you enter my email and assign the Manager role. Step 3 walks through the dialog itself.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">If the menu name differs</div>
+      <div class="body">Google has been rolling out a redesign across regions and account types. The settings entry might be called <strong>"Managers"</strong>, <strong>"People who can manage this profile"</strong>, or <strong>"Users"</strong>. They all lead to the same screen. Look for the section in Settings that lists names and roles.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">03</div>
+      <div class="step-body">
+        <div class="step-meta">Step 3 · About 2 minutes</div>
+        <h1>Add me by email and pick the Manager&nbsp;role<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>The Add user dialog opens. Enter my email, pick the <strong>Manager</strong> role from the role picker (not Owner — Manager is what we need), and click <strong>Invite</strong>. Google sends me an email with the invitation. I accept, sign in with my Google account, and the role activates within minutes. You will see "Adriano Domingues" appear in the Managers list with status Active.</p>
+      </div>
+    </div>
+
+    <div class="g-modal">
+      <div class="head-x">
+        <div class="title">Add user</div>
+      </div>
+      <div class="body-x">
+        <div class="lbl-x">Email address</div>
+        <div class="field focus">adriano@caseloadselect.ca</div>
+
+        <div class="lbl-x">Select a role</div>
+        <div class="role-picker">
+          <div class="role-row">
+            <div class="dot"></div>
+            <div>
+              <div class="nm">Owner</div>
+              <div class="desc">Full control. Can transfer the profile, add and remove other owners and managers, and delete the profile.</div>
+            </div>
+          </div>
+          <div class="role-row active">
+            <div class="dot"></div>
+            <div>
+              <div class="nm">Manager</div>
+              <div class="desc">Manage all profile content and respond to reviews and messages. Cannot transfer or delete the profile, and cannot manage other users.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="foot-x">
+        <div class="g-btn secondary">Cancel</div>
+        <div class="g-btn primary">Invite</div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">Use these values</div>
+      <div class="body"><strong>Email:</strong> adriano@caseloadselect.ca. <strong>Role:</strong> Manager (not Owner). Click <strong>Invite</strong>. Google sends the invitation immediately.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">What happens after Invite</div>
+      <div class="body">Google sends me an email at adriano@caseloadselect.ca with the subject "You're invited to manage [DRG Law] on Google". I click <strong>Accept invitation</strong>, sign in with my Google account, and the role activates immediately. You will see me listed in the Managers table within a few minutes with status Active.</div>
+    </div>
+
+    <div class="ann" style="border-left: 3px solid var(--red-fail);">
+      <div class="lbl" style="color: var(--red-fail);">Not Owner</div>
+      <div class="body">Manager is what we need. Owner permissions include the destructive privileges (delete profile, transfer ownership, manage other owners) that should stay with you. If you accidentally pick Owner, you can downgrade me to Manager from the same screen at any time without revoking access first.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="section-num"><span class="mark"></span>What happens next</div>
+    <h1>From access grant to a polished local search&nbsp;footprint<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+    <p class="lead">Once the role is granted, CaseLoad Select runs a profile audit within 48 hours and surfaces what is missing or out-of-date: hours, services, photos, attributes, and the categorisation that Google ranking relies on. Local SEO is the lowest-effort highest-impact work in the Capture pillar; profile completeness alone moves rank meaningfully for solo and small-firm listings in Toronto.</p>
+
+    <div class="panel featured">
+      <h3>When you finish Steps 1 to 3</h3>
+      <p>Send me a quick WhatsApp confirming the invitation is on its way. I will accept within the hour and start the profile audit that day.</p>
+    </div>
+
+    <div class="panel dark">
+      <h3>A note on review responses</h3>
+      <p>CaseLoad Select responds to reviews on the firm's behalf as part of standard service. Every response is brief, factual, and LSO-compliant — no outcome promises, no specialist or expert language, no disparagement of the reviewer regardless of the review content. You can opt to review and approve each response before it posts (slower but with full editorial control) or let CaseLoad Select post directly under guidelines you and I agree to upfront (faster, lower overhead, default for most firms). The choice is locked in during onboarding and revisable at any time.</p>
+    </div>
+  </div>
+</section>
+
+<footer class="doc-footer" role="contentinfo">
+  <div class="doc-footer-inner">
+    <span class="left">CaseLoad Select<span class="sep">·</span>Automated Case Selection System</span>
+    <span>Confidential<span class="sep">·</span>Prepared for DRG Law<span class="sep">·</span>caseloadselect.ca</span>
+  </div>
+</footer>
+
+<script>
+  // Token-aware back link. The form sends ?token=DRG-LAW-2026-05-13 when it
+  // links to this guide; we wire the "Back to onboarding" anchor to return
+  // the user to /firm-onboarding/[token]. Falls back to root if no token.
+  (function () {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get('token');
+      var link = document.getElementById('back-to-onboarding');
+      if (link) {
+        link.href = token ? '/firm-onboarding/' + encodeURIComponent(token) : '/';
+      }
+    } catch (e) { /* no-op: link defaults to / */ }
+  })();
+</script>
+</body>
+</html>

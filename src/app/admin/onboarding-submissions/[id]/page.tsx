@@ -41,6 +41,8 @@ interface Submission {
   will_add_operator_as_admin: boolean | null;
   meta_admin_status: string | null;
   meta_admin_blocker_note: string | null;
+  gbp_admin_status: string | null;
+  gbp_admin_blocker_note: string | null;
   linkedin_admin_status: string | null;
   linkedin_admin_blocker_note: string | null;
   m365_admin_status: string | null;
@@ -221,7 +223,15 @@ export default async function SubmissionDetailPage({
         />
       </Section>
 
-      <Section title="5. LinkedIn Company Page admin">
+      <Section title="5. Google Business Profile manager">
+        <AccessStatusRow
+          label="GBP Manager access"
+          status={row.gbp_admin_status}
+          blockerNote={row.gbp_admin_blocker_note}
+        />
+      </Section>
+
+      <Section title="6. LinkedIn Company Page admin">
         <AccessStatusRow
           label="LinkedIn Super admin access"
           status={row.linkedin_admin_status}
@@ -229,7 +239,7 @@ export default async function SubmissionDetailPage({
         />
       </Section>
 
-      <Section title="6. Microsoft 365 Exchange admin">
+      <Section title="7. Microsoft 365 Exchange admin">
         <AccessStatusRow
           label="Exchange Admin (guest) access"
           status={row.m365_admin_status}
@@ -238,7 +248,7 @@ export default async function SubmissionDetailPage({
       </Section>
 
       {row.notes ? (
-        <Section title="7. Notes from the rep">
+        <Section title="8. Notes from the rep">
           <p className="text-sm text-black/80 whitespace-pre-wrap leading-relaxed">{row.notes}</p>
         </Section>
       ) : null}

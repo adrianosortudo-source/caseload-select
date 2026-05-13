@@ -34,6 +34,8 @@ interface FormState {
   will_add_operator_as_admin: string;
   meta_admin_status: string;
   meta_admin_blocker_note: string;
+  gbp_admin_status: string;
+  gbp_admin_blocker_note: string;
   linkedin_admin_status: string;
   linkedin_admin_blocker_note: string;
   m365_admin_status: string;
@@ -81,6 +83,8 @@ const INITIAL: FormState = {
   will_add_operator_as_admin: "",
   meta_admin_status: "",
   meta_admin_blocker_note: "",
+  gbp_admin_status: "",
+  gbp_admin_blocker_note: "",
   linkedin_admin_status: "",
   linkedin_admin_blocker_note: "",
   m365_admin_status: "",
@@ -469,9 +473,33 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         />
       </Section>
 
-      {/* Section 5: LinkedIn Company Page admin */}
+      {/* Section 5: Google Business Profile manager */}
       <Section
-        title="5. LinkedIn Company Page admin"
+        title="5. Google Business Profile manager"
+        subtitle="So we can run local SEO, respond to reviews, and (optionally) handle GBP chat intake on your behalf"
+      >
+        <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.95rem", color: "#4a5a72", lineHeight: 1.6, marginBottom: "16px" }}>
+          Google Business Profile is the foundation of local search visibility for a Toronto law firm. We need Manager-level access (not Owner — you stay Owner) to keep the profile current, respond to reviews under your guidelines, and manage GBP chat if you chose that intake channel. Three-step walkthrough opens in a new tab.
+        </p>
+
+        <GuideLinkButton
+          href={`/firm-onboarding-guides/gbp.html?token=${encodeURIComponent(token)}`}
+          label="View the Google Business Profile guide"
+        />
+
+        <AccessStatusBlock
+          label="Google Business Profile Manager status"
+          hint="Set this once you have run through the guide. If you already added CaseLoad Select as a Manager previously, pick 'Done — access granted'."
+          status={form.gbp_admin_status}
+          onStatusChange={(v) => update("gbp_admin_status", v)}
+          blockerNote={form.gbp_admin_blocker_note}
+          onBlockerNoteChange={(v) => update("gbp_admin_blocker_note", v)}
+        />
+      </Section>
+
+      {/* Section 6: LinkedIn Company Page admin */}
+      <Section
+        title="6. LinkedIn Company Page admin"
         subtitle="So we can publish and manage the firm Company Page on your behalf"
       >
         <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.95rem", color: "#4a5a72", lineHeight: 1.6, marginBottom: "16px" }}>
@@ -493,9 +521,9 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         />
       </Section>
 
-      {/* Section 6: Microsoft 365 admin */}
+      {/* Section 7: Microsoft 365 admin */}
       <Section
-        title="6. Microsoft 365 admin for email authentication"
+        title="7. Microsoft 365 admin for email authentication"
         subtitle="Time-boxed Exchange Admin access so we can configure SPF, DKIM, and DMARC on your sending domain"
       >
         <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.95rem", color: "#4a5a72", lineHeight: 1.6, marginBottom: "16px" }}>
@@ -517,8 +545,8 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         />
       </Section>
 
-      {/* Section 7: notes + signature + submit */}
-      <Section title="7. Notes + authorisation" subtitle="Optional notes, then sign to submit">
+      {/* Section 8: notes + signature + submit */}
+      <Section title="8. Notes + authorisation" subtitle="Optional notes, then sign to submit">
         <Field label="Notes (optional)">
           <textarea
             value={form.notes}
