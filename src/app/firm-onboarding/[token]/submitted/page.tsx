@@ -18,7 +18,7 @@ export default async function SubmittedPage({ params }: PageProps) {
         style={{
           background: "#0D1520",
           borderBottom: "2px solid #C4B49A",
-          padding: "18px 28px 16px",
+          padding: "16px clamp(16px, 4vw, 28px) 14px",
         }}
       >
         <div
@@ -27,21 +27,23 @@ export default async function SubmittedPage({ params }: PageProps) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            gap: "12px",
           }}
         >
           <img
             src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png"
             alt="CaseLoad Select · Sign Better Cases"
-            style={{ height: "24px", width: "auto", display: "block", border: 0 }}
+            style={{ height: "clamp(20px, 5vw, 24px)", width: "auto", display: "block", border: 0 }}
           />
           <span
             style={{
               fontFamily: "var(--font-oxanium), sans-serif",
-              fontSize: "0.7rem",
+              fontSize: "clamp(0.62rem, 2.4vw, 0.7rem)",
               fontWeight: 600,
               letterSpacing: "0.18em",
               textTransform: "uppercase",
               color: "rgba(255,255,255,0.55)",
+              whiteSpace: "nowrap",
             }}
           >
             Firm Onboarding
@@ -54,7 +56,7 @@ export default async function SubmittedPage({ params }: PageProps) {
           style={{
             background: "#FFFFFF",
             border: "1px solid #E4E2DB",
-            padding: "44px 40px",
+            padding: "clamp(28px, 5vw, 44px) clamp(22px, 5vw, 40px)",
             borderRadius: "4px",
           }}
         >
@@ -75,7 +77,7 @@ export default async function SubmittedPage({ params }: PageProps) {
             style={{
               fontFamily: "var(--font-manrope), sans-serif",
               fontWeight: 800,
-              fontSize: "2.2rem",
+              fontSize: "clamp(1.75rem, 5.5vw, 2.2rem)",
               lineHeight: 1.1,
               color: "#1E2F58",
               marginBottom: "24px",
@@ -86,8 +88,8 @@ export default async function SubmittedPage({ params }: PageProps) {
             <span
               style={{
                 display: "inline-block",
-                width: "10px",
-                height: "10px",
+                width: "clamp(8px, 2vw, 10px)",
+                height: "clamp(8px, 2vw, 10px)",
                 background: "#C4B49A",
                 marginLeft: "5px",
                 verticalAlign: "baseline",

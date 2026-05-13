@@ -29,6 +29,12 @@ interface SubmitBody {
   whatsapp_number_decision?: string;
   whatsapp_display_name?: string;
   whatsapp_business_verification_doc_note?: string;
+  // Verification doc upload (populated by /api/firm-onboarding/[token]/upload
+  // when the rep picks a file; null if they skipped).
+  verification_doc_storage_path?: string | null;
+  verification_doc_original_name?: string | null;
+  verification_doc_size_bytes?: number | null;
+  verification_doc_mime_type?: string | null;
   has_facebook_account?: string;
   has_meta_business_manager?: string;
   meta_business_manager_url?: string;
@@ -98,6 +104,10 @@ export async function POST(
       whatsapp_display_name: body.whatsapp_display_name ?? null,
       whatsapp_business_verification_doc_note:
         body.whatsapp_business_verification_doc_note ?? null,
+      verification_doc_storage_path: body.verification_doc_storage_path ?? null,
+      verification_doc_original_name: body.verification_doc_original_name ?? null,
+      verification_doc_size_bytes: body.verification_doc_size_bytes ?? null,
+      verification_doc_mime_type: body.verification_doc_mime_type ?? null,
       has_facebook_account: toBool(body.has_facebook_account),
       has_meta_business_manager:
         body.has_meta_business_manager === "yes"
@@ -200,7 +210,15 @@ function buildNotificationHtml({
         <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 3 · WhatsApp</td></tr>
         ${row("Number decision", body.whatsapp_number_decision)}
         ${row("Display name", body.whatsapp_display_name)}
-        ${row("Verification doc", body.whatsapp_business_verification_doc_note)}
+        ${row("Verification doc type", body.whatsapp_business_verification_doc_note)}
+        ${
+          body.verification_doc_storage_path
+            ? row(
+                "Verification doc uploaded",
+                `${body.verification_doc_original_name ?? "(file)"} (${body.verification_doc_size_bytes ? Math.round((body.verification_doc_size_bytes / 1024) * 10) / 10 : "?"} KB) — storage path: ${body.verification_doc_storage_path}`
+              )
+            : ""
+        }
 
         <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 4 · Meta</td></tr>
         ${row("Has FB account", yesNo(body.has_facebook_account))}

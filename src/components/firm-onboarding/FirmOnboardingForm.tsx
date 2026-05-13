@@ -23,6 +23,10 @@ interface FormState {
   whatsapp_number_decision: string;
   whatsapp_display_name: string;
   whatsapp_business_verification_doc_note: string;
+  verification_doc_storage_path: string | null;
+  verification_doc_original_name: string | null;
+  verification_doc_size_bytes: number | null;
+  verification_doc_mime_type: string | null;
   has_facebook_account: string;
   has_meta_business_manager: string;
   meta_business_manager_url: string;
@@ -30,6 +34,12 @@ interface FormState {
   consent_acknowledged: boolean;
   notes: string;
 }
+
+type UploadState =
+  | { status: "idle" }
+  | { status: "uploading"; name: string }
+  | { status: "done"; name: string; sizeBytes: number }
+  | { status: "error"; message: string };
 
 const INITIAL: FormState = {
   legal_name: "",
@@ -46,6 +56,10 @@ const INITIAL: FormState = {
   whatsapp_number_decision: "",
   whatsapp_display_name: "",
   whatsapp_business_verification_doc_note: "",
+  verification_doc_storage_path: null,
+  verification_doc_original_name: null,
+  verification_doc_size_bytes: null,
+  verification_doc_mime_type: null,
   has_facebook_account: "",
   has_meta_business_manager: "",
   meta_business_manager_url: "",
@@ -59,9 +73,56 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
   const [form, setForm] = useState<FormState>(INITIAL);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [upload, setUpload] = useState<UploadState>({ status: "idle" });
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleFileUpload(file: File) {
+    setUpload({ status: "uploading", name: file.name });
+
+    const fd = new FormData();
+    fd.append("file", file);
+
+    try {
+      const res = await fetch(
+        `/api/firm-onboarding/${encodeURIComponent(token)}/upload`,
+        { method: "POST", body: fd }
+      );
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json?.error ?? "upload failed");
+      }
+      setForm((prev) => ({
+        ...prev,
+        verification_doc_storage_path: json.storage_path,
+        verification_doc_original_name: json.original_name,
+        verification_doc_size_bytes: json.size_bytes,
+        verification_doc_mime_type: json.mime_type,
+      }));
+      setUpload({
+        status: "done",
+        name: json.original_name,
+        sizeBytes: json.size_bytes,
+      });
+    } catch (err) {
+      setUpload({
+        status: "error",
+        message: err instanceof Error ? err.message : "upload failed",
+      });
+    }
+  }
+
+  function clearUpload() {
+    setForm((prev) => ({
+      ...prev,
+      verification_doc_storage_path: null,
+      verification_doc_original_name: null,
+      verification_doc_size_bytes: null,
+      verification_doc_mime_type: null,
+    }));
+    setUpload({ status: "idle" });
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -211,7 +272,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
 
         <Field
           label="Sender phone number preference"
-          hint="The number your SMS will originate from. Default: we provision a new GHL number for you (Toronto area code, ~$3-5/mo). If you prefer to port an existing line, describe it here and we will coordinate the port separately (2-4 week timeline)."
+          hint="The number your SMS will originate from. Default: we provision a new GHL number for you with a Toronto area code. If you prefer to port an existing line, describe it here and we will coordinate the port separately (2-4 week timeline)."
         >
           <textarea
             value={form.sms_sender_phone_preference}
@@ -253,20 +314,26 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         </Field>
 
         <Field
-          label="Business verification document — note"
-          hint="Meta will ask for one of: Articles of Incorporation, recent utility bill at the registered address, OR recent tax document. We will send a secure upload link in a follow-up email — for now, just confirm which document you will provide."
+          label="Business verification document"
+          hint="Meta will ask for one of: Articles of Incorporation, a recent utility bill at the registered address, OR a recent tax document. Tell us which document you will provide and (optionally) upload it now — PDF, JPG, or PNG up to 10 MB. If you would rather send it later, leave the upload blank; we will email you a secure link."
         >
           <select
             value={form.whatsapp_business_verification_doc_note}
             onChange={(e) => update("whatsapp_business_verification_doc_note", e.target.value)}
             style={inputStyle}
           >
-            <option value="">— Select one —</option>
+            <option value="">— Select the document type —</option>
             <option value="articles_of_incorporation">Articles of Incorporation</option>
             <option value="utility_bill">Recent utility bill (registered address)</option>
             <option value="tax_document">Recent tax document</option>
             <option value="not_sure">Not sure yet — let&apos;s discuss</option>
           </select>
+
+          <FileUploadBlock
+            upload={upload}
+            onPick={handleFileUpload}
+            onClear={clearUpload}
+          />
         </Field>
       </Section>
 
@@ -399,9 +466,14 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
 
         <button
           type="submit"
-          disabled={submitting || !form.consent_acknowledged}
+          disabled={
+            submitting || !form.consent_acknowledged || upload.status === "uploading"
+          }
           style={{
-            background: submitting || !form.consent_acknowledged ? "#8090A8" : "#1E2F58",
+            background:
+              submitting || !form.consent_acknowledged || upload.status === "uploading"
+                ? "#8090A8"
+                : "#1E2F58",
             color: "#FFFFFF",
             border: "none",
             padding: "16px 32px",
@@ -409,12 +481,21 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
             fontWeight: 700,
             fontSize: "0.95rem",
             borderRadius: "4px",
-            cursor: submitting || !form.consent_acknowledged ? "not-allowed" : "pointer",
+            cursor:
+              submitting || !form.consent_acknowledged || upload.status === "uploading"
+                ? "not-allowed"
+                : "pointer",
             letterSpacing: "0.01em",
             transition: "background 0.15s",
+            width: "100%",
+            maxWidth: "320px",
           }}
         >
-          {submitting ? "Sending..." : "Submit to CaseLoad Select"}
+          {submitting
+            ? "Sending..."
+            : upload.status === "uploading"
+              ? "Waiting for upload..."
+              : "Submit to CaseLoad Select"}
         </button>
       </Section>
     </form>
@@ -436,7 +517,8 @@ function Section({
     <section
       style={{
         background: "#FFFFFF",
-        padding: "28px 30px",
+        // Fluid padding: 20px on small phones, scales up to 28/30px on desktop
+        padding: "clamp(20px, 4vw, 28px) clamp(18px, 5vw, 30px)",
         borderRadius: "4px",
         border: "1px solid #E4E2DB",
       }}
@@ -445,10 +527,11 @@ function Section({
         style={{
           fontFamily: "var(--font-manrope), sans-serif",
           fontWeight: 700,
-          fontSize: "1.25rem",
+          fontSize: "clamp(1.1rem, 3.8vw, 1.25rem)",
           color: "#1E2F58",
           marginBottom: subtitle ? "4px" : "20px",
           letterSpacing: "-0.005em",
+          lineHeight: 1.25,
         }}
       >
         {title}
@@ -566,12 +649,150 @@ function RadioGroup({
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  padding: "11px 14px",
+  padding: "12px 14px",
   fontFamily: "var(--font-dm-sans), sans-serif",
-  fontSize: "0.95rem",
+  // 16px minimum to prevent iOS Safari from zooming when the input is focused.
+  fontSize: "1rem",
   color: "#3F3C36",
   background: "#FFFFFF",
   border: "1px solid #D8D5CB",
   borderRadius: "4px",
   outline: "none",
 };
+
+function FileUploadBlock({
+  upload,
+  onPick,
+  onClear,
+}: {
+  upload: UploadState;
+  onPick: (file: File) => void;
+  onClear: () => void;
+}) {
+  const inputId = "verification-doc-upload";
+
+  return (
+    <div
+      style={{
+        marginTop: "12px",
+        background: "#FBFAF6",
+        border: "1px dashed #C4B49A",
+        borderRadius: "4px",
+        padding: "14px 16px",
+      }}
+    >
+      {upload.status === "idle" || upload.status === "error" ? (
+        <>
+          <label
+            htmlFor={inputId}
+            style={{
+              display: "inline-block",
+              fontFamily: "var(--font-manrope), sans-serif",
+              fontWeight: 600,
+              fontSize: "0.88rem",
+              color: "#FFFFFF",
+              background: "#1E2F58",
+              padding: "10px 18px",
+              borderRadius: "4px",
+              cursor: "pointer",
+              letterSpacing: "0.01em",
+            }}
+          >
+            Choose a file
+          </label>
+          <input
+            id={inputId}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onPick(f);
+              // Reset the input so the same file can be picked again after clearing.
+              e.target.value = "";
+            }}
+            style={{ display: "none" }}
+          />
+          <span
+            style={{
+              marginLeft: "12px",
+              fontFamily: "var(--font-dm-sans), sans-serif",
+              fontSize: "0.85rem",
+              color: "#6B665E",
+            }}
+          >
+            PDF, JPG, or PNG · up to 10 MB · optional
+          </span>
+          {upload.status === "error" ? (
+            <p
+              style={{
+                marginTop: "10px",
+                fontFamily: "var(--font-dm-sans), sans-serif",
+                fontSize: "0.85rem",
+                color: "#B00020",
+              }}
+            >
+              Upload failed: {upload.message}
+            </p>
+          ) : null}
+        </>
+      ) : upload.status === "uploading" ? (
+        <p
+          style={{
+            fontFamily: "var(--font-dm-sans), sans-serif",
+            fontSize: "0.92rem",
+            color: "#3F3C36",
+            margin: 0,
+          }}
+        >
+          Uploading <b>{upload.name}</b>...
+        </p>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+          <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+            <p
+              style={{
+                fontFamily: "var(--font-manrope), sans-serif",
+                fontWeight: 600,
+                fontSize: "0.92rem",
+                color: "#1E2F58",
+                margin: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span style={{ marginRight: "8px", color: "#27834A" }}>✓</span>
+              {upload.name}
+            </p>
+            <p
+              style={{
+                fontFamily: "var(--font-dm-sans), sans-serif",
+                fontSize: "0.82rem",
+                color: "#6B665E",
+                margin: "4px 0 0",
+              }}
+            >
+              Uploaded · {Math.round((upload.sizeBytes / 1024) * 10) / 10} KB
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClear}
+            style={{
+              fontFamily: "var(--font-dm-sans), sans-serif",
+              fontSize: "0.85rem",
+              color: "#1E2F58",
+              background: "transparent",
+              border: "1px solid #C4B49A",
+              padding: "8px 14px",
+              borderRadius: "4px",
+              cursor: "pointer",
+            }}
+          >
+            Replace
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
