@@ -51,6 +51,7 @@ export default async function AdminLayout({
         <div className="max-w-6xl mx-auto flex items-center gap-1 min-w-max">
           <AdminTab href="/admin/triage" label="Triage queue" />
           <AdminTab href="/admin/webhook-outbox" label="Webhook outbox" />
+          <AdminTab href="/admin/onboarding-submissions" label="Onboarding" />
         </div>
       </nav>
 
