@@ -37,6 +37,13 @@ interface FormState {
   linkedin_admin_blocker_note: string;
   m365_admin_status: string;
   m365_admin_blocker_note: string;
+  // Channel mix the firm wants CaseLoad Screen to handle (multi-select).
+  // Web is always implied (the widget). The rest are opt-in.
+  intake_channels: string[];
+  // Typed signature block at the bottom (replaces the bare consent checkbox).
+  // Filling signed_name + clicking Submit = explicit authorization.
+  signed_name: string;
+  signed_email: string;
   consent_acknowledged: boolean;
   notes: string;
 }
@@ -76,6 +83,11 @@ const INITIAL: FormState = {
   linkedin_admin_blocker_note: "",
   m365_admin_status: "",
   m365_admin_blocker_note: "",
+  // Pre-check the three defaults (whatsapp + sms + voice). Rep can uncheck
+  // any of them and opt into the others.
+  intake_channels: ["whatsapp", "sms", "voice"],
+  signed_name: "",
+  signed_email: "",
   consent_acknowledged: false,
   notes: "",
 };
@@ -141,17 +153,26 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
     e.preventDefault();
     setError(null);
 
-    if (!form.consent_acknowledged) {
-      setError("Please acknowledge the consent at the bottom of the form.");
+    // The signature is the consent. We require a typed name at the bottom of
+    // the form before allowing submit.
+    if (!form.signed_name.trim()) {
+      setError("Please sign the form at the bottom (type your full name).");
       return;
     }
+
+    // The signature email defaults to the rep email entered in Section 1.
+    // Persist that fallback before sending.
+    const submitBody = {
+      ...form,
+      signed_email: form.signed_email.trim() || form.authorized_rep_email,
+    };
 
     setSubmitting(true);
     try {
       const res = await fetch(`/api/firm-onboarding/${encodeURIComponent(token)}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(submitBody),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
@@ -284,8 +305,18 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         </Field>
       </Section>
 
-      {/* Section 3: WhatsApp Business */}
-      <Section title="3. WhatsApp Business" subtitle="So we can register a WhatsApp Business Account (WABA) on your behalf">
+      {/* Section 3: Intake channels + WhatsApp setup */}
+      <Section title="3. Intake channels + WhatsApp setup" subtitle="Which channels CaseLoad Screen should handle, and the WhatsApp specifics if you want it">
+        <Field
+          label="Beyond your website widget, which channels do you want CaseLoad Screen to handle intake on?"
+          hint="The first three are the default channel mix we set up for every firm. The next three are opt-in — they need extra Meta-side setup we'll walk through together. Check all that apply."
+        >
+          <ChannelMultiSelect
+            value={form.intake_channels}
+            onChange={(next) => update("intake_channels", next)}
+          />
+        </Field>
+
         <Field
           label="Phone number for WhatsApp"
           hint="The same GHL number above will double as your WhatsApp Business number — one line handles Voice AI, SMS, and WhatsApp. The number can never be used on consumer WhatsApp once registered. Confirm below."
@@ -471,49 +502,30 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         />
       </Section>
 
-      {/* Section 7: notes + consent + submit */}
-      <Section title="7. Anything else?" subtitle="Optional notes, questions, or context">
-        <Field label="Notes">
+      {/* Section 7: notes + signature + submit */}
+      <Section title="7. Notes + authorisation" subtitle="Optional notes, then sign to submit">
+        <Field label="Notes (optional)">
           <textarea
             value={form.notes}
             onChange={(e) => update("notes", e.target.value)}
             style={{ ...inputStyle, minHeight: "90px", resize: "vertical" }}
-            placeholder="Optional"
+            placeholder="Anything you want us to know that did not fit the questions above"
           />
         </Field>
 
-        <div
-          style={{
-            background: "#FBFAF6",
-            border: "1px solid #E4E2DB",
-            padding: "16px 18px",
-            borderRadius: "4px",
+        <SignatureBlock
+          firmLabel={firmLabel}
+          name={form.signed_name}
+          onNameChange={(v) => {
+            update("signed_name", v);
+            // The signature acts as the consent — keep the boolean in sync so
+            // any external code that still checks consent_acknowledged stays
+            // truthful to what actually happened.
+            update("consent_acknowledged", v.trim().length > 0);
           }}
-        >
-          <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={form.consent_acknowledged}
-              onChange={(e) => update("consent_acknowledged", e.target.checked)}
-              style={{ marginTop: "4px" }}
-              required
-            />
-            <span
-              style={{
-                fontFamily: "var(--font-dm-sans), sans-serif",
-                fontSize: "0.9rem",
-                color: "#3F3C36",
-                lineHeight: 1.55,
-              }}
-            >
-              I confirm I am authorised to provide this information on behalf of {firmLabel}.
-              I authorise CaseLoad Select to use these details to register the firm with the
-              SMS carriers (A2P 10DLC), with Meta (WhatsApp Business), and to configure the
-              firm&apos;s GoHighLevel sub-account. CaseLoad Select will not share these
-              details with any party other than the registration providers listed above.
-            </span>
-          </label>
-        </div>
+          email={form.signed_email || form.authorized_rep_email}
+          onEmailChange={(v) => update("signed_email", v)}
+        />
 
         {error ? (
           <p
@@ -534,11 +546,11 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         <button
           type="submit"
           disabled={
-            submitting || !form.consent_acknowledged || upload.status === "uploading"
+            submitting || !form.signed_name.trim() || upload.status === "uploading"
           }
           style={{
             background:
-              submitting || !form.consent_acknowledged || upload.status === "uploading"
+              submitting || !form.signed_name.trim() || upload.status === "uploading"
                 ? "#8090A8"
                 : "#1E2F58",
             color: "#FFFFFF",
@@ -549,7 +561,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
             fontSize: "0.95rem",
             borderRadius: "4px",
             cursor:
-              submitting || !form.consent_acknowledged || upload.status === "uploading"
+              submitting || !form.signed_name.trim() || upload.status === "uploading"
                 ? "not-allowed"
                 : "pointer",
             letterSpacing: "0.01em",
@@ -860,6 +872,221 @@ function FileUploadBlock({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Channel selector ────────────────────────────────────────────────────
+
+const CHANNELS: Array<{ key: string; label: string; hint?: string; preset?: boolean }> = [
+  { key: "whatsapp", label: "WhatsApp Business", hint: "Default — we're setting this up", preset: true },
+  { key: "sms", label: "SMS", hint: "Default — we're setting this up", preset: true },
+  { key: "voice", label: "Voice / phone calls", hint: "Default — Voice AI on the firm GHL line", preset: true },
+  { key: "instagram_dm", label: "Instagram DM", hint: "Requires an Instagram Business account + Meta App Review (1-3 weeks first-time only)" },
+  { key: "facebook_messenger", label: "Facebook Messenger", hint: "Requires a Facebook Page + Meta App Review (shares the review with Instagram DM)" },
+  { key: "gbp_chat", label: "Google Business Profile chat", hint: "Requires a verified Google Business Profile" },
+  { key: "discuss", label: "Not sure yet — let's talk", hint: "Pick this if you want to discuss the channel mix together before deciding" },
+];
+
+function ChannelMultiSelect({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  function toggle(key: string) {
+    if (value.includes(key)) {
+      onChange(value.filter((k) => k !== key));
+    } else {
+      onChange([...value, key]);
+    }
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {CHANNELS.map((channel) => {
+        const checked = value.includes(channel.key);
+        return (
+          <label
+            key={channel.key}
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "12px",
+              padding: "12px 14px",
+              background: checked ? "#F4F3EF" : "#FBFAF6",
+              border: checked ? "1px solid #1E2F58" : "1px solid #E4E2DB",
+              borderRadius: "4px",
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={() => toggle(channel.key)}
+              style={{ marginTop: "3px", flexShrink: 0 }}
+            />
+            <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+              <div
+                style={{
+                  fontFamily: "var(--font-manrope), sans-serif",
+                  fontWeight: 600,
+                  fontSize: "0.93rem",
+                  color: "#1E2F58",
+                }}
+              >
+                {channel.label}
+              </div>
+              {channel.hint ? (
+                <div
+                  style={{
+                    fontFamily: "var(--font-dm-sans), sans-serif",
+                    fontSize: "0.82rem",
+                    color: channel.preset ? "#27834A" : "#6B665E",
+                    marginTop: "2px",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {channel.hint}
+                </div>
+              ) : null}
+            </div>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Signature block ─────────────────────────────────────────────────────
+
+function SignatureBlock({
+  firmLabel,
+  name,
+  onNameChange,
+  email,
+  onEmailChange,
+}: {
+  firmLabel: string;
+  name: string;
+  onNameChange: (v: string) => void;
+  email: string;
+  onEmailChange: (v: string) => void;
+}) {
+  // Render today's date in the user's locale — display only, the server
+  // captures the canonical submitted_at when the row is persisted.
+  const today = new Date().toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  return (
+    <div
+      style={{
+        background: "#FBFAF6",
+        border: "1px solid #C4B49A",
+        borderRadius: "4px",
+        padding: "22px 24px",
+        marginTop: "8px",
+      }}
+    >
+      <p
+        style={{
+          fontFamily: "var(--font-oxanium), sans-serif",
+          fontSize: "0.68rem",
+          letterSpacing: "0.2em",
+          textTransform: "uppercase",
+          color: "#8B7A5E",
+          fontWeight: 600,
+          marginBottom: "12px",
+        }}
+      >
+        Authorisation
+      </p>
+      <p
+        style={{
+          fontFamily: "var(--font-dm-sans), sans-serif",
+          fontSize: "0.9rem",
+          color: "#3F3C36",
+          lineHeight: 1.6,
+          marginBottom: "22px",
+        }}
+      >
+        By signing below, I confirm I am authorised to provide this information on behalf of{" "}
+        <strong>{firmLabel}</strong>. I authorise CaseLoad Select to use these details to register the firm with the SMS carriers (A2P 10DLC), with Meta (Business Manager, WhatsApp Business, and the social DM channels selected above), with LinkedIn (Company Page admin), and with Microsoft 365 (Exchange admin for email DNS authentication). CaseLoad Select will not share these details with any party other than the registration providers listed.
+      </p>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "18px",
+        }}
+      >
+        <SignatureField label="Signed by" value={name} onChange={onNameChange} placeholder="Type your full name" required />
+        <SignatureField label="Email" value={email} onChange={onEmailChange} placeholder="you@yourfirm.ca" />
+      </div>
+      <div style={{ marginTop: "14px" }}>
+        <SignatureField label="Date" value={today} readOnly />
+      </div>
+    </div>
+  );
+}
+
+function SignatureField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  required,
+  readOnly,
+}: {
+  label: string;
+  value: string;
+  onChange?: (v: string) => void;
+  placeholder?: string;
+  required?: boolean;
+  readOnly?: boolean;
+}) {
+  return (
+    <div>
+      <label
+        style={{
+          fontFamily: "var(--font-oxanium), sans-serif",
+          fontWeight: 600,
+          fontSize: "0.66rem",
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: "#8B7A5E",
+          display: "block",
+          marginBottom: "4px",
+        }}
+      >
+        {label}
+      </label>
+      <input
+        type="text"
+        value={value}
+        onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+        placeholder={placeholder}
+        readOnly={readOnly}
+        required={required}
+        style={{
+          width: "100%",
+          padding: "8px 2px",
+          background: "transparent",
+          border: "none",
+          borderBottom: "1px solid #1E2F58",
+          fontFamily: readOnly ? "var(--font-dm-sans), sans-serif" : "var(--font-caveat), var(--font-dm-sans), cursive",
+          fontSize: readOnly ? "1rem" : "1.4rem",
+          fontWeight: readOnly ? 400 : 500,
+          color: "#1E2F58",
+          outline: "none",
+          borderRadius: 0,
+        }}
+      />
     </div>
   );
 }

@@ -13,7 +13,7 @@
  *   --font-body:    DM Sans 300-600 (body)
  */
 
-import { Oxanium, Manrope, DM_Sans } from "next/font/google";
+import { Oxanium, Manrope, DM_Sans, Caveat } from "next/font/google";
 
 const oxanium = Oxanium({
   subsets: ["latin"],
@@ -36,6 +36,15 @@ const dmSans = DM_Sans({
   display: "swap",
 });
 
+// Caveat — cursive font used by the typed signature input at the bottom of
+// the form. Aesthetic only; the signed_name value is plain text.
+const caveat = Caveat({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-caveat",
+  display: "swap",
+});
+
 export default function FirmOnboardingLayout({
   children,
 }: {
@@ -43,7 +52,7 @@ export default function FirmOnboardingLayout({
 }) {
   return (
     <div
-      className={`${oxanium.variable} ${manrope.variable} ${dmSans.variable}`}
+      className={`${oxanium.variable} ${manrope.variable} ${dmSans.variable} ${caveat.variable}`}
       style={{ fontFamily: "var(--font-dm-sans), system-ui, sans-serif" }}
     >
       {children}

@@ -46,6 +46,12 @@ interface SubmitBody {
   linkedin_admin_blocker_note?: string;
   m365_admin_status?: string;
   m365_admin_blocker_note?: string;
+  // Channel mix the firm wants (subset of: whatsapp, sms, voice,
+  // instagram_dm, facebook_messenger, gbp_chat, discuss). Web is implied.
+  intake_channels?: string[];
+  // Typed signature at the bottom of the form (now the consent gesture).
+  signed_name?: string;
+  signed_email?: string;
   consent_acknowledged?: boolean;
   notes?: string;
 }
@@ -69,9 +75,13 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "invalid JSON body" }, { status: 400 });
   }
 
-  if (!body.consent_acknowledged) {
+  // The typed signature at the bottom of the form is the consent gesture.
+  // Either signed_name OR consent_acknowledged must be present (the former
+  // sets the latter on the client, but accept either to keep older clients
+  // working).
+  if (!body.signed_name?.trim() && !body.consent_acknowledged) {
     return NextResponse.json(
-      { ok: false, error: "consent must be acknowledged before submitting" },
+      { ok: false, error: "signature is required (type your full name at the bottom of the form)" },
       { status: 400 }
     );
   }
@@ -131,6 +141,12 @@ export async function POST(
       linkedin_admin_blocker_note: body.linkedin_admin_blocker_note || null,
       m365_admin_status: body.m365_admin_status || null,
       m365_admin_blocker_note: body.m365_admin_blocker_note || null,
+      intake_channels:
+        Array.isArray(body.intake_channels) && body.intake_channels.length > 0
+          ? body.intake_channels
+          : null,
+      signed_name: body.signed_name?.trim() || null,
+      signed_email: body.signed_email?.trim() || body.authorized_rep_email || null,
       consent_acknowledged: true,
       notes: body.notes ?? null,
       ip_address: ipAddress,
@@ -196,6 +212,20 @@ function buildNotificationHtml({
     return v;
   };
 
+  const prettifyChannels = (v: string[] | undefined | null): string | null => {
+    if (!v || v.length === 0) return null;
+    const labels: Record<string, string> = {
+      whatsapp: "WhatsApp",
+      sms: "SMS",
+      voice: "Voice",
+      instagram_dm: "Instagram DM",
+      facebook_messenger: "Facebook Messenger",
+      gbp_chat: "Google Business Profile chat",
+      discuss: "Discuss together",
+    };
+    return v.map((k) => labels[k] ?? k).join(", ");
+  };
+
   return `<!DOCTYPE html>
 <html>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background:#F4F3EF; padding:24px; color:#3F3C36;">
@@ -229,7 +259,8 @@ function buildNotificationHtml({
         ${row("Vertical", body.sms_vertical)}
         ${row("Phone preference", body.sms_sender_phone_preference)}
 
-        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 3 · WhatsApp</td></tr>
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 3 · Intake channels + WhatsApp</td></tr>
+        ${row("Channels selected", prettifyChannels(body.intake_channels))}
         ${row("Number decision", body.whatsapp_number_decision)}
         ${row("Display name", body.whatsapp_display_name)}
         ${row("Verification doc type", body.whatsapp_business_verification_doc_note)}
@@ -263,6 +294,11 @@ function buildNotificationHtml({
             ? `<tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Notes</td></tr>${row("Rep notes", body.notes)}`
             : ""
         }
+
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Signature</td></tr>
+        ${row("Signed by", body.signed_name)}
+        ${row("Signature email", body.signed_email)}
+        ${row("Signed at", new Date(submittedAt).toLocaleString("en-CA", { timeZone: "America/Toronto" }))}
       </table>
 
       <p style="margin:24px 0 0;font-size:13px;color:#6B665E;line-height:1.6;">

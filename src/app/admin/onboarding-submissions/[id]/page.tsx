@@ -45,6 +45,9 @@ interface Submission {
   linkedin_admin_blocker_note: string | null;
   m365_admin_status: string | null;
   m365_admin_blocker_note: string | null;
+  intake_channels: string[] | null;
+  signed_name: string | null;
+  signed_email: string | null;
   consent_acknowledged: boolean;
   notes: string | null;
   submitted_at: string;
@@ -137,8 +140,12 @@ export default async function SubmissionDetailPage({
         </Fields>
       </Section>
 
-      <Section title="3. WhatsApp Business">
+      <Section title="3. Intake channels + WhatsApp Business">
         <Fields>
+          <Field
+            label="Channels selected"
+            value={prettifyChannels(row.intake_channels)}
+          />
           <Field
             label="Number decision"
             value={
@@ -234,9 +241,17 @@ export default async function SubmissionDetailPage({
         </Section>
       ) : null}
 
+      <Section title="Authorisation">
+        <Fields>
+          <Field label="Signed by" value={row.signed_name} />
+          <Field label="Signature email" value={row.signed_email} link={row.signed_email ? `mailto:${row.signed_email}` : undefined} />
+          <Field label="Signed at" value={formatTime(row.submitted_at)} />
+          <Field label="Consent flag" value={row.consent_acknowledged ? "Yes" : "No"} />
+        </Fields>
+      </Section>
+
       <Section title="Submission metadata">
         <Fields>
-          <Field label="Consent acknowledged" value={row.consent_acknowledged ? "Yes" : "No"} />
           <Field label="Submitted at" value={formatTime(row.submitted_at)} />
           <Field label="IP address" value={row.ip_address} mono />
           <Field label="User agent" value={row.user_agent} mono />
@@ -362,6 +377,20 @@ function prettifyDocType(v: string | null): string | null {
   if (v === "tax_document") return "Recent tax document";
   if (v === "not_sure") return "Not sure — discuss";
   return v;
+}
+
+function prettifyChannels(v: string[] | null): string | null {
+  if (!v || v.length === 0) return null;
+  const labels: Record<string, string> = {
+    whatsapp: "WhatsApp",
+    sms: "SMS",
+    voice: "Voice",
+    instagram_dm: "Instagram DM",
+    facebook_messenger: "Facebook Messenger",
+    gbp_chat: "Google Business Profile chat",
+    discuss: "Discuss together",
+  };
+  return v.map((k) => labels[k] ?? k).join(", ");
 }
 
 function formatTime(iso: string | null): string {
