@@ -57,6 +57,21 @@ interface SubmitBody {
   consent_acknowledged?: boolean;
   notes?: string;
   booking_url?: string;
+  // Section 1 extensions
+  office_hours?: string;
+  additional_lawyers?: Array<{ name: string; email: string; role?: string }>;
+  // Section 2: Practice scope
+  practice_areas?: string[];
+  practice_areas_other?: string;
+  service_area?: string;
+  service_area_other?: string;
+  out_of_scope_notes?: string;
+  // Section 3: Existing systems + PMS
+  existing_website_form_url?: string;
+  existing_phone_lines?: string;
+  practice_management_system?: string;
+  practice_management_system_other?: string;
+  pms_integration_preference?: string;
 }
 
 const OPERATOR_EMAIL = process.env.OPERATOR_NOTIFICATION_EMAIL ?? "adriano@caseloadselect.ca";
@@ -155,6 +170,25 @@ export async function POST(
       consent_acknowledged: true,
       notes: body.notes ?? null,
       booking_url: body.booking_url?.trim() || null,
+      office_hours: body.office_hours?.trim() || null,
+      additional_lawyers:
+        Array.isArray(body.additional_lawyers) && body.additional_lawyers.length > 0
+          ? body.additional_lawyers.filter((l) => l.name?.trim() || l.email?.trim())
+          : null,
+      practice_areas:
+        Array.isArray(body.practice_areas) && body.practice_areas.length > 0
+          ? body.practice_areas
+          : null,
+      practice_areas_other: body.practice_areas_other?.trim() || null,
+      service_area: body.service_area?.trim() || null,
+      service_area_other: body.service_area_other?.trim() || null,
+      out_of_scope_notes: body.out_of_scope_notes?.trim() || null,
+      existing_website_form_url: body.existing_website_form_url?.trim() || null,
+      existing_phone_lines: body.existing_phone_lines?.trim() || null,
+      practice_management_system: body.practice_management_system?.trim() || null,
+      practice_management_system_other:
+        body.practice_management_system_other?.trim() || null,
+      pms_integration_preference: body.pms_integration_preference?.trim() || null,
       ip_address: ipAddress,
       user_agent: userAgent,
     })
@@ -232,6 +266,80 @@ function buildNotificationHtml({
     return v.map((k) => labels[k] ?? k).join(", ");
   };
 
+  const prettifyAdditionalLawyers = (
+    v: Array<{ name: string; email: string; role?: string }> | undefined | null
+  ): string | null => {
+    if (!v || v.length === 0) return null;
+    return v
+      .filter((l) => l.name?.trim() || l.email?.trim())
+      .map((l) => `${l.name ?? "(no name)"} <${l.email ?? "(no email)"}>`)
+      .join(", ");
+  };
+
+  const prettifyPracticeAreas = (v: string[] | undefined | null): string | null => {
+    if (!v || v.length === 0) return null;
+    const labels: Record<string, string> = {
+      family: "Family Law",
+      civil_litigation: "Civil Litigation",
+      real_estate: "Real Estate Law",
+      corporate: "Corporate & Commercial",
+      wills_estates: "Wills & Estates",
+      employment: "Employment Law",
+      immigration: "Immigration & Refugee",
+      personal_injury: "Personal Injury",
+      criminal: "Criminal Defence",
+      landlord_tenant: "Landlord & Tenant",
+      tax: "Tax Law",
+      insurance: "Insurance Law",
+      construction: "Construction Law",
+      intellectual_property: "Intellectual Property",
+      administrative: "Administrative & Regulatory",
+    };
+    return v.map((k) => labels[k] ?? k).join(", ");
+  };
+
+  const prettifyServiceArea = (
+    v: string | undefined | null,
+    other: string | undefined | null
+  ): string | null => {
+    if (!v) return null;
+    const labels: Record<string, string> = {
+      toronto_core: "Toronto core (downtown + 416)",
+      gta: "Greater Toronto Area",
+      ontario_wide: "Ontario-wide",
+      cross_border: "Cross-border (Ontario + other jurisdictions)",
+      other: other?.trim() || "Other / multi-province",
+    };
+    return labels[v] ?? v;
+  };
+
+  const prettifyPMS = (
+    v: string | undefined | null,
+    other: string | undefined | null
+  ): string | null => {
+    if (!v) return null;
+    const labels: Record<string, string> = {
+      clio: "Clio",
+      practice_panther: "PracticePanther",
+      mycase: "MyCase",
+      cosmolex: "CosmoLex",
+      leap: "LEAP",
+      pclaw: "PCLaw",
+      soluno: "Soluno",
+      other: other?.trim() || "Other",
+      none: "None / spreadsheets / file folders",
+    };
+    return labels[v] ?? v;
+  };
+
+  const prettifyPMSIntegration = (v: string | undefined | null): string | null => {
+    if (!v) return null;
+    if (v === "yes") return "Yes, integrate at go-live";
+    if (v === "not_now") return "Not now — run side-by-side and revisit";
+    if (v === "discuss") return "Discuss scope together";
+    return v;
+  };
+
   return `<!DOCTYPE html>
 <html>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background:#F4F3EF; padding:24px; color:#3F3C36;">
@@ -261,12 +369,27 @@ function buildNotificationHtml({
         ${row("Rep email", body.authorized_rep_email)}
         ${row("Rep phone", body.authorized_rep_phone)}
         ${row("Calendar booking URL", body.booking_url)}
+        ${row("Office hours", body.office_hours)}
+        ${row("Additional lawyers", prettifyAdditionalLawyers(body.additional_lawyers))}
 
-        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 2 · SMS</td></tr>
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 2 · Practice scope</td></tr>
+        ${row("Practice areas", prettifyPracticeAreas(body.practice_areas))}
+        ${row("Other areas", body.practice_areas_other)}
+        ${row("Service area", prettifyServiceArea(body.service_area, body.service_area_other))}
+        ${row("Out of scope", body.out_of_scope_notes)}
+
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 3 · Existing systems + migration</td></tr>
+        ${row("Current website form", body.existing_website_form_url)}
+        ${row("Existing phone lines", body.existing_phone_lines)}
+        ${row("Practice management system", prettifyPMS(body.practice_management_system, body.practice_management_system_other))}
+        ${row("PMS integration preference", prettifyPMSIntegration(body.pms_integration_preference))}
+        ${row("Calendar booking URL", body.booking_url)}
+
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 4 · SMS</td></tr>
         ${row("Vertical", body.sms_vertical)}
         ${row("Phone preference", body.sms_sender_phone_preference)}
 
-        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 3 · Intake channels + WhatsApp</td></tr>
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 5 · Intake channels + WhatsApp</td></tr>
         ${row("Channels selected", prettifyChannels(body.intake_channels))}
         ${row("Number decision", body.whatsapp_number_decision)}
         ${row("Display name", body.whatsapp_display_name)}
@@ -280,7 +403,7 @@ function buildNotificationHtml({
             : ""
         }
 
-        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 4 · Meta Business Manager</td></tr>
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 6 · Meta Business Manager</td></tr>
         ${row("Has FB account", yesNo(body.has_facebook_account))}
         ${row("Has Meta Business Manager", yesNo(body.has_meta_business_manager))}
         ${row("MBM URL", body.meta_business_manager_url)}
@@ -288,15 +411,15 @@ function buildNotificationHtml({
         ${row("Meta admin status", prettifyStatus(body.meta_admin_status))}
         ${row("Meta admin blocker", body.meta_admin_blocker_note)}
 
-        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 5 · Google Business Profile manager</td></tr>
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 7 · Google Business Profile manager</td></tr>
         ${row("GBP Manager status", prettifyStatus(body.gbp_admin_status))}
         ${row("GBP Manager blocker", body.gbp_admin_blocker_note)}
 
-        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 6 · LinkedIn Company Page admin</td></tr>
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 8 · LinkedIn Company Page admin</td></tr>
         ${row("LinkedIn admin status", prettifyStatus(body.linkedin_admin_status))}
         ${row("LinkedIn admin blocker", body.linkedin_admin_blocker_note)}
 
-        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 7 · Microsoft 365 Exchange admin</td></tr>
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 9 · Microsoft 365 Exchange admin</td></tr>
         ${row("M365 admin status", prettifyStatus(body.m365_admin_status))}
         ${row("M365 admin blocker", body.m365_admin_blocker_note)}
 

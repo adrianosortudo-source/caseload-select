@@ -53,6 +53,18 @@ interface Submission {
   consent_acknowledged: boolean;
   notes: string | null;
   booking_url: string | null;
+  office_hours: string | null;
+  additional_lawyers: Array<{ name?: string; email?: string; role?: string }> | null;
+  practice_areas: string[] | null;
+  practice_areas_other: string | null;
+  service_area: string | null;
+  service_area_other: string | null;
+  out_of_scope_notes: string | null;
+  existing_website_form_url: string | null;
+  existing_phone_lines: string | null;
+  practice_management_system: string | null;
+  practice_management_system_other: string | null;
+  pms_integration_preference: string | null;
   submitted_at: string;
   ip_address: string | null;
   user_agent: string | null;
@@ -134,17 +146,44 @@ export default async function SubmissionDetailPage({
           <Field label="Rep email" value={row.authorized_rep_email} link={row.authorized_rep_email ? `mailto:${row.authorized_rep_email}` : undefined} />
           <Field label="Rep phone" value={row.authorized_rep_phone} />
           <Field label="Calendar booking URL" value={row.booking_url} link />
+          <Field label="Office hours" value={row.office_hours} />
+          <Field
+            label="Additional lawyers"
+            value={prettifyAdditionalLawyers(row.additional_lawyers)}
+            multiline
+          />
         </Fields>
       </Section>
 
-      <Section title="2. SMS · A2P 10DLC">
+      <Section title="2. Practice scope">
+        <Fields>
+          <Field label="Primary practice areas" value={prettifyPracticeAreas(row.practice_areas)} multiline />
+          <Field label="Other areas" value={row.practice_areas_other} multiline />
+          <Field label="Service area" value={prettifyServiceArea(row.service_area, row.service_area_other)} />
+          <Field label="Out-of-scope matters" value={row.out_of_scope_notes} multiline />
+        </Fields>
+      </Section>
+
+      <Section title="3. Existing systems + migration">
+        <Fields>
+          <Field label="Current website contact form" value={row.existing_website_form_url} link />
+          <Field label="Existing phone line(s)" value={row.existing_phone_lines} multiline />
+          <Field
+            label="Practice management system"
+            value={prettifyPMS(row.practice_management_system, row.practice_management_system_other)}
+          />
+          <Field label="Integration preference" value={prettifyPMSIntegration(row.pms_integration_preference)} />
+        </Fields>
+      </Section>
+
+      <Section title="4. SMS · A2P 10DLC">
         <Fields>
           <Field label="Vertical" value={row.sms_vertical} />
           <Field label="Sender phone preference" value={row.sms_sender_phone_preference} multiline />
         </Fields>
       </Section>
 
-      <Section title="3. Intake channels + WhatsApp Business">
+      <Section title="5. Intake channels + WhatsApp Business">
         <Fields>
           <Field
             label="Channels selected"
@@ -209,7 +248,7 @@ export default async function SubmissionDetailPage({
         </div>
       </Section>
 
-      <Section title="4. Meta Business Manager">
+      <Section title="6. Meta Business Manager">
         <Fields>
           <Field label="Has Facebook account" value={yesNo(row.has_facebook_account)} />
           <Field label="Has Meta Business Manager" value={yesNo(row.has_meta_business_manager)} />
@@ -223,7 +262,7 @@ export default async function SubmissionDetailPage({
         />
       </Section>
 
-      <Section title="5. Google Business Profile manager">
+      <Section title="7. Google Business Profile manager">
         <AccessStatusRow
           label="GBP Manager access"
           status={row.gbp_admin_status}
@@ -231,7 +270,7 @@ export default async function SubmissionDetailPage({
         />
       </Section>
 
-      <Section title="6. LinkedIn Company Page admin">
+      <Section title="8. LinkedIn Company Page admin">
         <AccessStatusRow
           label="LinkedIn Super admin access"
           status={row.linkedin_admin_status}
@@ -239,7 +278,7 @@ export default async function SubmissionDetailPage({
         />
       </Section>
 
-      <Section title="7. Microsoft 365 Exchange admin">
+      <Section title="9. Microsoft 365 Exchange admin">
         <AccessStatusRow
           label="Exchange Admin (guest) access"
           status={row.m365_admin_status}
@@ -248,7 +287,7 @@ export default async function SubmissionDetailPage({
       </Section>
 
       {row.notes ? (
-        <Section title="8. Notes from the rep">
+        <Section title="10. Notes from the rep">
           <p className="text-sm text-black/80 whitespace-pre-wrap leading-relaxed">{row.notes}</p>
         </Section>
       ) : null}
@@ -403,6 +442,74 @@ function prettifyChannels(v: string[] | null): string | null {
     discuss: "Discuss together",
   };
   return v.map((k) => labels[k] ?? k).join(", ");
+}
+
+function prettifyAdditionalLawyers(
+  v: Array<{ name?: string; email?: string; role?: string }> | null
+): string | null {
+  if (!v || v.length === 0) return null;
+  return v
+    .filter((l) => (l.name && l.name.trim()) || (l.email && l.email.trim()))
+    .map((l) => `${l.name?.trim() ?? "(no name)"} — ${l.email?.trim() ?? "(no email)"}`)
+    .join("\n");
+}
+
+function prettifyPracticeAreas(v: string[] | null): string | null {
+  if (!v || v.length === 0) return null;
+  const labels: Record<string, string> = {
+    family: "Family Law",
+    civil_litigation: "Civil Litigation",
+    real_estate: "Real Estate Law",
+    corporate: "Corporate & Commercial",
+    wills_estates: "Wills & Estates",
+    employment: "Employment Law",
+    immigration: "Immigration & Refugee",
+    personal_injury: "Personal Injury",
+    criminal: "Criminal Defence",
+    landlord_tenant: "Landlord & Tenant",
+    tax: "Tax Law",
+    insurance: "Insurance Law",
+    construction: "Construction Law",
+    intellectual_property: "Intellectual Property",
+    administrative: "Administrative & Regulatory",
+  };
+  return v.map((k) => labels[k] ?? k).join(", ");
+}
+
+function prettifyServiceArea(v: string | null, other: string | null): string | null {
+  if (!v) return null;
+  const labels: Record<string, string> = {
+    toronto_core: "Toronto core (downtown + 416)",
+    gta: "Greater Toronto Area",
+    ontario_wide: "Ontario-wide",
+    cross_border: "Cross-border (Ontario + other jurisdictions)",
+    other: other?.trim() || "Other / multi-province",
+  };
+  return labels[v] ?? v;
+}
+
+function prettifyPMS(v: string | null, other: string | null): string | null {
+  if (!v) return null;
+  const labels: Record<string, string> = {
+    clio: "Clio (fully integrated)",
+    practice_panther: "PracticePanther",
+    mycase: "MyCase",
+    cosmolex: "CosmoLex",
+    leap: "LEAP",
+    pclaw: "PCLaw",
+    soluno: "Soluno",
+    other: other?.trim() || "Other",
+    none: "None / spreadsheets / file folders",
+  };
+  return labels[v] ?? v;
+}
+
+function prettifyPMSIntegration(v: string | null): string | null {
+  if (!v) return null;
+  if (v === "yes") return "Yes, integrate at go-live";
+  if (v === "not_now") return "Not now — run side-by-side and revisit";
+  if (v === "discuss") return "Discuss scope together";
+  return v;
 }
 
 function formatTime(iso: string | null): string {

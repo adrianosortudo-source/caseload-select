@@ -40,6 +40,23 @@ interface FormState {
   linkedin_admin_blocker_note: string;
   m365_admin_status: string;
   m365_admin_blocker_note: string;
+  // Section 1 extensions (operating hours + additional lawyers beyond the
+  // authorized rep).
+  office_hours: string;
+  additional_lawyers: Array<{ name: string; email: string; role: string }>;
+  // Section 2: Practice scope. The arrays + free-text "other" capture the
+  // condensed-list-plus-free-text input pattern used in the form.
+  practice_areas: string[];
+  practice_areas_other: string;
+  service_area: string;
+  service_area_other: string;
+  out_of_scope_notes: string;
+  // Section 3: Existing systems + migration context.
+  existing_website_form_url: string;
+  existing_phone_lines: string;
+  practice_management_system: string;
+  practice_management_system_other: string;
+  pms_integration_preference: string;
   // Channel mix the firm wants CaseLoad Screen to handle (multi-select).
   // Web is always implied (the widget). The rest are opt-in.
   intake_channels: string[];
@@ -89,6 +106,18 @@ const INITIAL: FormState = {
   linkedin_admin_blocker_note: "",
   m365_admin_status: "",
   m365_admin_blocker_note: "",
+  office_hours: "",
+  additional_lawyers: [],
+  practice_areas: [],
+  practice_areas_other: "",
+  service_area: "",
+  service_area_other: "",
+  out_of_scope_notes: "",
+  existing_website_form_url: "",
+  existing_phone_lines: "",
+  practice_management_system: "",
+  practice_management_system_other: "",
+  pms_integration_preference: "",
   // Pre-check the three defaults (whatsapp + sms + voice). Rep can uncheck
   // any of them and opt into the others.
   intake_channels: ["whatsapp", "sms", "voice"],
@@ -307,10 +336,187 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
             placeholder="https://calendly.com/yourfirm"
           />
         </Field>
+
+        <Field
+          label="Office hours (optional)"
+          hint="When your firm is open for inquiries. Affects the tone of automated acknowledgments (formal during hours, after-hours tone outside). Default if blank: Monday-Friday, 9am-5pm Toronto time."
+        >
+          <input
+            type="text"
+            value={form.office_hours}
+            onChange={(e) => update("office_hours", e.target.value)}
+            style={inputStyle}
+            placeholder="e.g. Monday-Friday 9am-6pm, Saturday by appointment"
+          />
+        </Field>
+
+        <Field
+          label="Additional lawyers"
+          hint="Anyone besides the authorized representative who should get new-lead notifications and access to the lawyer triage portal. Leave blank if you are a solo practitioner."
+        >
+          <AdditionalLawyersBlock
+            lawyers={form.additional_lawyers}
+            onChange={(next) => update("additional_lawyers", next)}
+          />
+        </Field>
       </Section>
 
-      {/* Section 2: SMS A2P 10DLC */}
-      <Section title="2. SMS — A2P 10DLC brand registration" subtitle="Carrier-required for outbound SMS to your leads">
+      {/* Section 2: Practice scope */}
+      <Section
+        title="2. Practice scope"
+        subtitle="So we know which leads are in-scope vs out-of-scope when the screen engine routes intake"
+      >
+        <Field
+          label="Primary practice areas"
+          hint="Check every area the firm currently handles. If anything is missing from this list, add it in the free-text below. The screen engine uses this to route in-scope leads to the lawyer and decline-with-grace on out-of-scope matters."
+        >
+          <PracticeAreasMultiSelect
+            value={form.practice_areas}
+            onChange={(next) => update("practice_areas", next)}
+          />
+        </Field>
+
+        <Field
+          label="Other practice areas (optional)"
+          hint="Anything not on the list above. Comma-separated."
+        >
+          <input
+            type="text"
+            value={form.practice_areas_other}
+            onChange={(e) => update("practice_areas_other", e.target.value)}
+            style={inputStyle}
+            placeholder="e.g. Cryptocurrency disputes, Animal law, Aviation law"
+          />
+        </Field>
+
+        <Field
+          label="Geographic service area"
+          hint="The geography the firm serves. Determines whether leads from outside the area get declined as OOS or routed to the lawyer."
+        >
+          <RadioGroup
+            name="service_area"
+            value={form.service_area}
+            onChange={(v) => update("service_area", v)}
+            options={[
+              { value: "toronto_core", label: "Toronto core (downtown + 416)" },
+              { value: "gta", label: "Greater Toronto Area (Toronto + 416/647/905)" },
+              { value: "ontario_wide", label: "Ontario-wide" },
+              { value: "cross_border", label: "Cross-border (Ontario + other jurisdictions)" },
+              { value: "other", label: "Other / multi-province" },
+            ]}
+          />
+        </Field>
+
+        {form.service_area === "other" ? (
+          <Field label="Specify your service area" hint="Cities, provinces, or other geographic descriptors.">
+            <input
+              type="text"
+              value={form.service_area_other}
+              onChange={(e) => update("service_area_other", e.target.value)}
+              style={inputStyle}
+              placeholder="e.g. Ontario + British Columbia, federal courts nationally"
+            />
+          </Field>
+        ) : null}
+
+        <Field
+          label="Out-of-scope matters (optional)"
+          hint="Specific matter types you explicitly do not handle, even within your primary practice areas. Helps the screen engine decline-with-grace earlier and refer the lead to a more suitable firm."
+        >
+          <textarea
+            value={form.out_of_scope_notes}
+            onChange={(e) => update("out_of_scope_notes", e.target.value)}
+            style={{ ...inputStyle, minHeight: "70px", resize: "vertical" }}
+            placeholder="e.g. We handle family law but not LGBTQ+ family cases, or we handle real estate but only residential not commercial"
+          />
+        </Field>
+      </Section>
+
+      {/* Section 3: Existing systems + migration */}
+      <Section
+        title="3. Existing systems + migration"
+        subtitle="What the firm uses today, so we can integrate or migrate cleanly"
+      >
+        <Field
+          label="Current website contact form URL (optional)"
+          hint="If your website has a contact form today, paste the URL. When we go live, we replace it with the CaseLoad Screen widget. Leave blank if there isn't one or if you don't have a website yet."
+        >
+          <input
+            type="url"
+            value={form.existing_website_form_url}
+            onChange={(e) => update("existing_website_form_url", e.target.value)}
+            style={inputStyle}
+            placeholder="https://yourfirm.ca/contact"
+          />
+        </Field>
+
+        <Field
+          label="Existing phone line(s) for legal inquiries (optional)"
+          hint="Main number(s) clients use today to reach you. If you want to forward an existing number to the new GHL line, list it here. Format: any."
+        >
+          <textarea
+            value={form.existing_phone_lines}
+            onChange={(e) => update("existing_phone_lines", e.target.value)}
+            style={{ ...inputStyle, minHeight: "60px", resize: "vertical" }}
+            placeholder="e.g. (416) 555-0100 main line, (416) 555-0101 direct line"
+          />
+        </Field>
+
+        <Field
+          label="Practice management system"
+          hint="Which platform the firm uses to manage matters, clients, and billing. Drives how we integrate (Clio has a full integration; others vary). Pick the one you use; we walk through the integration scope together after submission."
+        >
+          <RadioGroup
+            name="practice_management_system"
+            value={form.practice_management_system}
+            onChange={(v) => update("practice_management_system", v)}
+            options={[
+              { value: "clio", label: "Clio (fully integrated)" },
+              { value: "practice_panther", label: "PracticePanther" },
+              { value: "mycase", label: "MyCase" },
+              { value: "cosmolex", label: "CosmoLex" },
+              { value: "leap", label: "LEAP" },
+              { value: "pclaw", label: "PCLaw" },
+              { value: "soluno", label: "Soluno" },
+              { value: "other", label: "Other (specify below)" },
+              { value: "none", label: "None / spreadsheets / file folders" },
+            ]}
+          />
+        </Field>
+
+        {form.practice_management_system === "other" ? (
+          <Field label="Which system?" hint="Name and (if known) the vendor URL.">
+            <input
+              type="text"
+              value={form.practice_management_system_other}
+              onChange={(e) => update("practice_management_system_other", e.target.value)}
+              style={inputStyle}
+              placeholder="e.g. Smokeball, Rocket Matter, Filevine"
+            />
+          </Field>
+        ) : null}
+
+        {form.practice_management_system && form.practice_management_system !== "none" ? (
+          <Field
+            label="Integration preference"
+            hint="Whether you want CaseLoad Select to integrate with your system at go-live so client_won leads auto-create matters and conflict checks query your existing client database."
+          >
+            <RadioGroup
+              name="pms_integration_preference"
+              value={form.pms_integration_preference}
+              onChange={(v) => update("pms_integration_preference", v)}
+              options={[
+                { value: "yes", label: "Yes, integrate at go-live" },
+                { value: "not_now", label: "Not now — we will run side-by-side and revisit" },
+                { value: "discuss", label: "Let's discuss the scope together" },
+              ]}
+            />
+          </Field>
+        ) : null}
+      </Section>
+
+      {/* Section 4: SMS A2P 10DLC */}
+      <Section title="4. SMS — A2P 10DLC brand registration" subtitle="Carrier-required for outbound SMS to your leads">
         <Field
           label="Sender phone number preference"
           hint="The number your SMS will originate from. Default: we provision a new GHL number for you with a Toronto area code. If you prefer to port an existing line, describe it here and we will coordinate the port separately (2-4 week timeline)."
@@ -325,7 +531,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
       </Section>
 
       {/* Section 3: Intake channels + WhatsApp setup */}
-      <Section title="3. Intake channels + WhatsApp setup" subtitle="Which channels CaseLoad Screen should handle, and the WhatsApp specifics if you want it">
+      <Section title="5. Intake channels + WhatsApp setup" subtitle="Which channels CaseLoad Screen should handle, and the WhatsApp specifics if you want it">
         <Field
           label="Beyond your website widget, which channels do you want CaseLoad Screen to handle intake on?"
           hint="The first three are the default channel mix we set up for every firm. The next three are opt-in — they need extra Meta-side setup we'll walk through together. Check all that apply."
@@ -390,7 +596,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
 
       {/* Section 4: Meta Business Manager */}
       <Section
-        title="4. Meta Business Manager"
+        title="6. Meta Business Manager"
         subtitle="Prerequisites for WhatsApp. Required by Meta before we can register your WABA"
       >
         <Field
@@ -475,7 +681,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
 
       {/* Section 5: Google Business Profile manager */}
       <Section
-        title="5. Google Business Profile manager"
+        title="7. Google Business Profile manager"
         subtitle="So we can run local SEO, respond to reviews, and (optionally) handle GBP chat intake on your behalf"
       >
         <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.95rem", color: "#4a5a72", lineHeight: 1.6, marginBottom: "16px" }}>
@@ -499,7 +705,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
 
       {/* Section 6: LinkedIn Company Page admin */}
       <Section
-        title="6. LinkedIn Company Page admin"
+        title="8. LinkedIn Company Page admin"
         subtitle="So we can publish and manage the firm Company Page on your behalf"
       >
         <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.95rem", color: "#4a5a72", lineHeight: 1.6, marginBottom: "16px" }}>
@@ -523,7 +729,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
 
       {/* Section 7: Microsoft 365 admin */}
       <Section
-        title="7. Microsoft 365 admin for email authentication"
+        title="9. Microsoft 365 admin for email authentication"
         subtitle="Time-boxed Exchange Admin access so we can configure SPF, DKIM, and DMARC on your sending domain"
       >
         <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.95rem", color: "#4a5a72", lineHeight: 1.6, marginBottom: "16px" }}>
@@ -546,7 +752,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
       </Section>
 
       {/* Section 8: notes + signature + submit */}
-      <Section title="8. Notes + authorisation" subtitle="Optional notes, then sign to submit">
+      <Section title="10. Notes + authorisation" subtitle="Optional notes, then sign to submit">
         <Field label="Notes (optional)">
           <textarea
             value={form.notes}
@@ -919,6 +1125,194 @@ function FileUploadBlock({
   );
 }
 
+// ── Additional lawyers block (Section 1 extension) ──────────────────────
+
+function AdditionalLawyersBlock({
+  lawyers,
+  onChange,
+}: {
+  lawyers: Array<{ name: string; email: string; role: string }>;
+  onChange: (next: Array<{ name: string; email: string; role: string }>) => void;
+}) {
+  function addRow() {
+    onChange([...lawyers, { name: "", email: "", role: "" }]);
+  }
+  function removeRow(idx: number) {
+    onChange(lawyers.filter((_, i) => i !== idx));
+  }
+  function updateRow(idx: number, key: "name" | "email" | "role", value: string) {
+    onChange(lawyers.map((l, i) => (i === idx ? { ...l, [key]: value } : l)));
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      {lawyers.map((lawyer, idx) => (
+        <div
+          key={idx}
+          style={{
+            background: "#FBFAF6",
+            border: "1px solid #E4E2DB",
+            borderRadius: "4px",
+            padding: "14px 16px",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr auto",
+            gap: "12px",
+            alignItems: "flex-end",
+          }}
+        >
+          <div>
+            <label style={subFieldLabelStyle}>Name</label>
+            <input
+              type="text"
+              value={lawyer.name}
+              onChange={(e) => updateRow(idx, "name", e.target.value)}
+              style={inputStyle}
+              placeholder="Full name"
+            />
+          </div>
+          <div>
+            <label style={subFieldLabelStyle}>Email</label>
+            <input
+              type="email"
+              value={lawyer.email}
+              onChange={(e) => updateRow(idx, "email", e.target.value)}
+              style={inputStyle}
+              placeholder="lawyer@yourfirm.ca"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => removeRow(idx)}
+            style={{
+              background: "transparent",
+              border: "1px solid #C4B49A",
+              color: "#1E2F58",
+              padding: "10px 14px",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontFamily: "var(--font-dm-sans), sans-serif",
+              fontSize: "0.82rem",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={addRow}
+        style={{
+          alignSelf: "flex-start",
+          background: "#FFFFFF",
+          border: "1px dashed #C4B49A",
+          color: "#1E2F58",
+          padding: "10px 18px",
+          borderRadius: "4px",
+          cursor: "pointer",
+          fontFamily: "var(--font-manrope), sans-serif",
+          fontSize: "0.88rem",
+          fontWeight: 600,
+        }}
+      >
+        + Add {lawyers.length === 0 ? "another lawyer" : "one more"}
+      </button>
+    </div>
+  );
+}
+
+const subFieldLabelStyle: React.CSSProperties = {
+  fontFamily: "var(--font-oxanium), sans-serif",
+  fontSize: "0.66rem",
+  fontWeight: 600,
+  letterSpacing: "0.16em",
+  textTransform: "uppercase",
+  color: "#8B7A5E",
+  display: "block",
+  marginBottom: "4px",
+};
+
+// ── Practice areas multi-select (Section 2) ─────────────────────────────
+
+const PRACTICE_AREAS: Array<{ key: string; label: string }> = [
+  { key: "family", label: "Family Law" },
+  { key: "civil_litigation", label: "Civil Litigation" },
+  { key: "real_estate", label: "Real Estate Law" },
+  { key: "corporate", label: "Corporate & Commercial" },
+  { key: "wills_estates", label: "Wills & Estates" },
+  { key: "employment", label: "Employment Law" },
+  { key: "immigration", label: "Immigration & Refugee" },
+  { key: "personal_injury", label: "Personal Injury" },
+  { key: "criminal", label: "Criminal Defence" },
+  { key: "landlord_tenant", label: "Landlord & Tenant" },
+  { key: "tax", label: "Tax Law" },
+  { key: "insurance", label: "Insurance Law" },
+  { key: "construction", label: "Construction Law" },
+  { key: "intellectual_property", label: "Intellectual Property" },
+  { key: "administrative", label: "Administrative & Regulatory" },
+];
+
+function PracticeAreasMultiSelect({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  function toggle(key: string) {
+    if (value.includes(key)) {
+      onChange(value.filter((k) => k !== key));
+    } else {
+      onChange([...value, key]);
+    }
+  }
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+        gap: "8px",
+      }}
+    >
+      {PRACTICE_AREAS.map((area) => {
+        const checked = value.includes(area.key);
+        return (
+          <label
+            key={area.key}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              padding: "10px 12px",
+              background: checked ? "#F4F3EF" : "#FBFAF6",
+              border: checked ? "1px solid #1E2F58" : "1px solid #E4E2DB",
+              borderRadius: "4px",
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={() => toggle(area.key)}
+              style={{ flexShrink: 0 }}
+            />
+            <span
+              style={{
+                fontFamily: "var(--font-dm-sans), sans-serif",
+                fontSize: "0.92rem",
+                color: "#1E2F58",
+              }}
+            >
+              {area.label}
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Channel selector ────────────────────────────────────────────────────
 
 const CHANNELS: Array<{ key: string; label: string; hint?: string; preset?: boolean }> = [
@@ -1058,7 +1452,7 @@ function SignatureBlock({
         }}
       >
         By signing below, I confirm I am authorised to provide this information on behalf of{" "}
-        <strong>{firmLabel}</strong>. I authorise CaseLoad Select to use these details to register the firm with the SMS carriers (A2P 10DLC), with Meta (Business Manager, WhatsApp Business, and the social DM channels selected above), with LinkedIn (Company Page admin), and with Microsoft 365 (Exchange admin for email DNS authentication). CaseLoad Select will not share these details with any party other than the registration providers listed.
+        <strong>{firmLabel}</strong>. I authorise CaseLoad Select to use these details to register the firm with the SMS carriers (A2P 10DLC), with Meta (Business Manager, WhatsApp Business, and the social DM channels selected above), with Google (Business Profile management), with LinkedIn (Company Page admin), and with Microsoft 365 (Exchange admin for email DNS authentication). I also authorise CaseLoad Select to act on the firm&apos;s behalf in configuring the firm&apos;s practice management system integration where applicable. CaseLoad Select will not share these details with any party other than the registration and integration providers listed.
       </p>
 
       <div
