@@ -57,10 +57,10 @@ export default async function FirmOnboardingPage({ params }: PageProps) {
           }}
         >
           <img
-            src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png"
-            alt="CaseLoad Select · Sign Better Cases"
+            src="/brand/logos/wordmark-dark-transparent.png"
+            alt="CaseLoad Select"
             style={{
-              height: "clamp(20px, 5vw, 24px)",
+              height: "clamp(14px, 3vw, 17px)",
               width: "auto",
               display: "block",
               border: 0,
@@ -69,11 +69,11 @@ export default async function FirmOnboardingPage({ params }: PageProps) {
           <span
             style={{
               fontFamily: "var(--font-oxanium), sans-serif",
-              fontSize: "clamp(0.62rem, 2.4vw, 0.7rem)",
+              fontSize: "clamp(0.7rem, 2.6vw, 0.78rem)",
               fontWeight: 600,
               letterSpacing: "0.18em",
               textTransform: "uppercase",
-              color: "rgba(255,255,255,0.55)",
+              color: "rgba(255,255,255,0.7)",
               whiteSpace: "nowrap",
             }}
           >
