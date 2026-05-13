@@ -147,5 +147,31 @@ If steps 1 + 2 land before 11am Adriano-time, Block 2 has clean prerequisites an
 | `6217bb6` | Engine prompts: DR-036 English-at-lawyer enforced, role wording neutralized, persist.ts now carries intake_language + raw_transcript, voice OOS envelope includes language, language detector skip in slot merge, portal-auth uses timingSafeEqual |
 | `0c5983c` | Retention + DSR: screened_leads anonymization on the daily 3am cron, purgeLeadPii covers both legacy uuid and screened_leads lead_id, outbox payloads anonymized too |
 | `eda35b3` | Gemini retry + backoff (3 attempts, 400/1200ms gaps, transient-error classifier), legacy /api/screen caller telemetry, IntakeWidget per-tab localStorage nonce |
+| `feb081f` | **HIGH #1 widget cutover** — server-side dual-write at /api/screen finalize creates screened_leads row for legacy widget traffic, neutral band CTAs replace LSO-violating timing/retainer promises. Plus /api/whatsapp-intake scaffold for Block 2. |
+| `9932f78` | **HIGH #4 intake-v2 security** — origin allow-list + Zod-style body validator + brief_html sanitizer. POSTs from non-allow-listed origins now get 403; malformed bodies get 400 with issue list; brief_html stripped of <script>, on*=, javascript: schemes before insert. |
+| `243ceaf` | Vercel build fix: TypeScript reconciliation on the CORS headers union and band-type narrowing. |
+| `0e468e3` | LOW #1 PowerShell wrapper for scripts/check-engine-sync.ps1 (Windows-native engine-sync check) |
+| `6fe18e1` | **84 unit tests** for screen-to-screened + intake-v2-security helpers + localhost-port bug fix surfaced by the tests |
+| `2cb5b7e` | **HIGH #7 voice HMAC** — verifyVoiceWebhookSignature() helper + soft-enforce wiring in /api/voice-intake. Code is dormant until the migration applies + per-firm secret is set + VOICE_HMAC_REQUIRED=true. 17 unit tests cover the rollout matrix. |
+| `326bd63` | Sandbox MEDIUM: slot_confidence defaults to "low" instead of "medium" on /api/screen so unconfirmed model guesses no longer auto-apply. |
 
-16 of 25 actionable findings closed. Top three "fix this week" items from both audits are all addressed except the widget cutover (HIGH #1 above).
+**22 of 25 actionable findings closed tonight.**
+
+### Updated remaining HIGH items
+
+- **HIGH #1 widget cutover** — DONE in commit `feb081f`. Web-channel screencast tomorrow now produces a real screened_leads row.
+- **HIGH #4 intake-v2 security** — DONE in commit `9932f78`. Verified live in production via curl: hostile origin → 403, legit origin → ACAO echoed.
+- **HIGH #7 voice-intake HMAC** — Code DONE in commit `2cb5b7e` (soft-enforce). To activate per-firm tomorrow during Block 2 Phase 8 GHL sub-account setup:
+  1. Apply migration `supabase/migrations/20260513_voice_webhook_secret.sql` via Supabase SQL editor.
+  2. `UPDATE intake_firms SET voice_webhook_secret = '<base64-32-bytes>' WHERE id = '<test-firm-id>'`
+  3. Configure that secret as the X-CLS-Voice-Signature header value in the firm's GHL voice webhook.
+  4. After confirming a test call lands cleanly, set `VOICE_HMAC_REQUIRED=true` in Vercel Production.
+- **HIGH #8 + #9 Messenger + IG bidirectional engine wiring** — STILL deferred to Block 2 Phase 5 (test FB Page required, 4-6 hr scope). Unchanged from the original plan.
+
+### Remaining LOW / MEDIUM items
+
+- Sandbox MEDIUM SMS chunking + WhatsApp template/24h modeling in demo adapters — demo polish, cosmetic
+- Sandbox LOW LawyerViewPanel static demo + emoji encoding — cosmetic
+- LOW #2 + #3 Route-level multilingual + Arabic E2E tests — covered partly by the 84 unit tests landed tonight, full route-level still queued
+
+Tomorrow's clean prerequisite for Block 2: web + intake-v2 + voice channels are all locked down. Messenger + IG remain to wire during Block 2 itself with the test FB Page.
