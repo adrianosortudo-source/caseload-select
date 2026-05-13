@@ -14,11 +14,15 @@ export default async function SubmittedPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#F4F3EF" }}>
+      {/*
+        Canonical header per LOGO-USAGE.md §4 — matches the form page and
+        the firm-onboarding-guides/* HTML pages exactly.
+      */}
       <header
         style={{
           background: "#0D1520",
           borderBottom: "2px solid #C4B49A",
-          padding: "16px clamp(16px, 4vw, 28px) 14px",
+          padding: "18px clamp(16px, 4vw, 28px) 16px",
         }}
       >
         <div
@@ -27,22 +31,22 @@ export default async function SubmittedPage({ params }: PageProps) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: "12px",
+            gap: "16px",
           }}
         >
           <img
-            src="/brand/logos/wordmark-dark-transparent.png"
-            alt="CaseLoad Select"
-            style={{ height: "clamp(22px, 5vw, 26px)", width: "auto", display: "block", border: 0 }}
+            src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png"
+            alt="CaseLoad Select · Sign Better Cases"
+            style={{ height: "17px", width: "auto", display: "block", border: 0 }}
           />
           <span
             style={{
               fontFamily: "var(--font-oxanium), sans-serif",
-              fontSize: "clamp(0.7rem, 2.6vw, 0.78rem)",
+              fontSize: "9.5px",
               fontWeight: 600,
               letterSpacing: "0.18em",
               textTransform: "uppercase",
-              color: "rgba(255,255,255,0.7)",
+              color: "#C4B49A",
               whiteSpace: "nowrap",
             }}
           >

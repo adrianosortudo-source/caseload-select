@@ -39,6 +39,13 @@ interface SubmitBody {
   has_meta_business_manager?: string;
   meta_business_manager_url?: string;
   will_add_operator_as_admin?: string;
+  // Access-grant status tracking (one of: not_started, in_progress, granted, blocked)
+  meta_admin_status?: string;
+  meta_admin_blocker_note?: string;
+  linkedin_admin_status?: string;
+  linkedin_admin_blocker_note?: string;
+  m365_admin_status?: string;
+  m365_admin_blocker_note?: string;
   consent_acknowledged?: boolean;
   notes?: string;
 }
@@ -118,6 +125,12 @@ export async function POST(
       meta_business_manager_url: body.meta_business_manager_url ?? null,
       will_add_operator_as_admin:
         body.will_add_operator_as_admin === "yes" ? true : null,
+      meta_admin_status: body.meta_admin_status || null,
+      meta_admin_blocker_note: body.meta_admin_blocker_note || null,
+      linkedin_admin_status: body.linkedin_admin_status || null,
+      linkedin_admin_blocker_note: body.linkedin_admin_blocker_note || null,
+      m365_admin_status: body.m365_admin_status || null,
+      m365_admin_blocker_note: body.m365_admin_blocker_note || null,
       consent_acknowledged: true,
       notes: body.notes ?? null,
       ip_address: ipAddress,
@@ -174,6 +187,15 @@ function buildNotificationHtml({
   const yesNo = (v: string | undefined) =>
     v === "yes" ? "Yes" : v === "no" ? "No" : v === "not_sure" ? "Not sure" : v === "discuss" ? "Discuss" : v ?? "";
 
+  const prettifyStatus = (v: string | undefined | null): string | null => {
+    if (!v) return null;
+    if (v === "not_started") return "Not started yet";
+    if (v === "in_progress") return "In progress";
+    if (v === "granted") return "Done — access granted";
+    if (v === "blocked") return "Blocked";
+    return v;
+  };
+
   return `<!DOCTYPE html>
 <html>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background:#F4F3EF; padding:24px; color:#3F3C36;">
@@ -220,11 +242,21 @@ function buildNotificationHtml({
             : ""
         }
 
-        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 4 · Meta</td></tr>
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 4 · Meta Business Manager</td></tr>
         ${row("Has FB account", yesNo(body.has_facebook_account))}
         ${row("Has Meta Business Manager", yesNo(body.has_meta_business_manager))}
         ${row("MBM URL", body.meta_business_manager_url)}
         ${row("Will add operator as admin", yesNo(body.will_add_operator_as_admin))}
+        ${row("Meta admin status", prettifyStatus(body.meta_admin_status))}
+        ${row("Meta admin blocker", body.meta_admin_blocker_note)}
+
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 5 · LinkedIn Company Page admin</td></tr>
+        ${row("LinkedIn admin status", prettifyStatus(body.linkedin_admin_status))}
+        ${row("LinkedIn admin blocker", body.linkedin_admin_blocker_note)}
+
+        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 6 · Microsoft 365 Exchange admin</td></tr>
+        ${row("M365 admin status", prettifyStatus(body.m365_admin_status))}
+        ${row("M365 admin blocker", body.m365_admin_blocker_note)}
 
         ${
           body.notes

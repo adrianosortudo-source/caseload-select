@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meta Business Manager admin access · DRG Law · CaseLoad Select</title>
+<meta name="description" content="Four-step visual guide to granting admin access on Meta Business Manager so the WhatsApp Business Account can be registered and managed, prepared by CaseLoad Select.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700&family=Manrope:wght@500;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --deep-black: #0D1520;
+    --gold: #C4B49A;
+    --gold-on-light: #8B7A5E;
+    --gold-tint: rgba(196, 180, 154, 0.16);
+    --navy: #1E2F58;
+    --parchment: #F4F3EF;
+    --white: #FFFFFF;
+    --body: #4a5a72;
+    --muted: #8090A8;
+    --border: #e0ddd6;
+    --off-white: #F9F8F5;
+    --green-pass: #27834A;
+    --red-fail: #c0564e;
+
+    --font-display: 'Oxanium', sans-serif;
+    --font-heading: 'Manrope', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+
+    /* Meta Business Suite palette */
+    --fb-blue: #1877F2;
+    --fb-bg: #F0F2F5;
+    --fb-card: #FFFFFF;
+    --fb-text: #1C1E21;
+    --fb-muted: #65676B;
+    --fb-border: #DADDE1;
+    --fb-side: #FFFFFF;
+    --fb-side-hover: #F2F3F5;
+    --fb-side-active: #E7F3FF;
+    --fb-side-active-text: #1877F2;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { font-size: 16px; scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-body);
+    font-weight: 400;
+    color: var(--body);
+    background: var(--parchment);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  img { max-width: 100%; display: block; }
+
+  .topbar {
+    background: var(--deep-black);
+    padding: 18px 32px 16px;
+    border-bottom: 2px solid var(--gold);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .topbar-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+  .topbar img { height: 17px; width: auto; }
+  .topbar .crumb {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 9.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+
+  .cover { background: var(--deep-black); color: var(--white); padding: 96px 32px 80px; }
+  .cover-inner { max-width: 920px; margin: 0 auto; }
+  .cover-eyebrow {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 28px;
+  }
+  .cover h1 {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 64px;
+    color: var(--white);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin-bottom: 24px;
+    max-width: 820px;
+  }
+  .cover h1 .term, .section h1 .term {
+    width: 0.22em;
+    height: 0.22em;
+    margin-left: 0.12em;
+    vertical-align: top;
+    display: inline-block;
+    position: relative;
+    top: 0.1em;
+    flex-shrink: 0;
+  }
+  .cover .lede {
+    font-size: 18px;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.78);
+    max-width: 680px;
+    margin-bottom: 56px;
+  }
+  .cover-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 32px;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    padding-top: 32px;
+  }
+  .cover-meta .lbl {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 6px;
+  }
+  .cover-meta .val { font-size: 14px; color: var(--white); font-weight: 500; }
+
+  .section {
+    padding: 88px 32px 72px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section:last-of-type { border-bottom: none; }
+  .section-inner { max-width: 920px; margin: 0 auto; }
+  .section-num {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold-on-light);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-num .mark { display: inline-block; width: 8px; height: 8px; background: var(--gold); }
+  .section h1 {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 44px;
+    color: var(--navy);
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    margin-bottom: 20px;
+    max-width: 780px;
+  }
+  .section .lead {
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--body);
+    max-width: 720px;
+    margin-bottom: 28px;
+  }
+  .section p {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--body);
+    margin-bottom: 14px;
+    max-width: 760px;
+  }
+  .section p strong { color: var(--navy); font-weight: 600; }
+  .section h2 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 24px;
+    color: var(--navy);
+    line-height: 1.2;
+    margin: 24px 0 12px;
+  }
+  .section h3 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 17px;
+    color: var(--navy);
+    margin: 20px 0 8px;
+  }
+
+  .step-header {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 24px;
+    align-items: start;
+    margin-bottom: 24px;
+  }
+  .step-num-big {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 64px;
+    line-height: 0.9;
+    color: var(--gold);
+    text-align: right;
+  }
+  .step-meta {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold-on-light);
+    margin-bottom: 10px;
+  }
+  .step-body h1 { font-size: 32px; max-width: 700px; margin-bottom: 14px; }
+
+  .panel {
+    background: var(--white);
+    border: 1px solid var(--border);
+    padding: 24px 28px;
+    margin: 18px 0;
+  }
+  .panel.gold { background: var(--gold-tint); border-color: var(--gold); }
+  .panel.dark {
+    background: var(--deep-black);
+    color: var(--white);
+    border-color: var(--deep-black);
+  }
+  .panel.dark p { color: rgba(255, 255, 255, 0.8); }
+  .panel.dark h3 { color: var(--gold); }
+  .panel.dark p strong { color: var(--gold); }
+  .panel h3:first-child { margin-top: 0; }
+  .panel p:last-child { margin-bottom: 0; }
+  .panel.featured { border: 2px solid var(--gold); background: var(--white); }
+
+  .ann {
+    background: var(--white);
+    border: 1px solid var(--border);
+    padding: 16px 20px;
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+  .ann.gold { background: var(--gold-tint); border-color: var(--gold); }
+  .ann .lbl {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--navy);
+  }
+  .ann.gold .lbl { color: var(--deep-black); }
+  .ann .body { font-size: 14px; line-height: 1.55; color: var(--body); }
+  .ann .body strong { color: var(--navy); font-weight: 600; }
+  @media (max-width: 640px) {
+    .ann { grid-template-columns: 1fr; gap: 6px; }
+  }
+
+  /* Scope yes / no */
+  .scope-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+  }
+  @media (max-width: 720px) { .scope-grid { grid-template-columns: 1fr; } }
+  .scope-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    padding: 22px 26px;
+  }
+  .scope-card .pill {
+    display: inline-block;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    margin-bottom: 14px;
+  }
+  .scope-card.yes .pill { background: var(--green-pass); color: var(--white); }
+  .scope-card.no .pill { background: transparent; color: var(--red-fail); border: 1px solid var(--red-fail); }
+  .scope-card ul { list-style: none; }
+  .scope-card li {
+    font-size: 14px;
+    color: var(--body);
+    padding: 5px 0;
+    line-height: 1.5;
+    position: relative;
+    padding-left: 18px;
+  }
+  .scope-card.yes li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 12px;
+    width: 6px;
+    height: 6px;
+    background: var(--green-pass);
+  }
+  .scope-card.no li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 12px;
+    width: 6px;
+    height: 6px;
+    background: var(--red-fail);
+  }
+
+  /* Meta Business Suite mockup */
+  .fb-mock {
+    background: var(--fb-bg);
+    border: 1px solid var(--border);
+    margin: 24px 0;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    color: var(--fb-text);
+  }
+  .fb-topbar {
+    background: var(--fb-card);
+    border-bottom: 1px solid var(--fb-border);
+    height: 48px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 14px;
+    font-size: 14px;
+  }
+  .fb-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    color: var(--fb-blue);
+    font-size: 15px;
+  }
+  .fb-logo .glyph {
+    width: 22px;
+    height: 22px;
+    background: var(--fb-blue);
+    color: var(--white);
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .fb-search {
+    background: var(--fb-bg);
+    border: 1px solid var(--fb-border);
+    border-radius: 999px;
+    flex: 0 0 260px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    font-size: 13px;
+    color: var(--fb-muted);
+  }
+  .fb-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .fb-actions .ic {
+    width: 26px; height: 26px;
+    background: var(--fb-bg);
+    border-radius: 50%;
+  }
+  .fb-actions .av {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, #C7D1E0, #8FA3BF);
+    color: var(--white);
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .fb-shell {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    min-height: 380px;
+  }
+  .fb-side {
+    background: var(--fb-side);
+    border-right: 1px solid var(--fb-border);
+    padding: 16px 12px;
+    font-size: 14px;
+  }
+  .fb-side .group-lbl {
+    font-size: 11px;
+    color: var(--fb-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    padding: 10px 8px 6px;
+  }
+  .fb-side .item {
+    padding: 9px 10px;
+    border-radius: 6px;
+    color: var(--fb-text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: default;
+  }
+  .fb-side .item .ic {
+    width: 18px; height: 18px;
+    background: var(--fb-muted);
+    border-radius: 4px;
+    opacity: 0.5;
+    flex-shrink: 0;
+  }
+  .fb-side .item.active {
+    background: var(--fb-side-active);
+    color: var(--fb-side-active-text);
+    font-weight: 600;
+  }
+  .fb-side .item.active .ic { background: var(--fb-side-active-text); opacity: 1; }
+
+  .fb-content { background: var(--fb-bg); padding: 22px 28px; }
+  .fb-content h4 {
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--fb-text);
+    margin-bottom: 4px;
+  }
+  .fb-content .sub {
+    font-size: 13px;
+    color: var(--fb-muted);
+    margin-bottom: 18px;
+  }
+  .fb-cmdbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .fb-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .fb-btn.primary { background: var(--fb-blue); color: var(--white); }
+  .fb-btn.primary.highlight { box-shadow: 0 0 0 3px rgba(196, 180, 154, 0.7); }
+  .fb-btn.secondary {
+    background: var(--fb-card);
+    color: var(--fb-text);
+    border: 1px solid var(--fb-border);
+  }
+  .fb-table {
+    background: var(--fb-card);
+    border: 1px solid var(--fb-border);
+    border-radius: 8px;
+    font-size: 14px;
+    overflow: hidden;
+  }
+  .fb-table .row {
+    display: grid;
+    grid-template-columns: 1fr 220px 120px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--fb-border);
+    align-items: center;
+  }
+  .fb-table .row:last-child { border-bottom: none; }
+  .fb-table .row.head {
+    background: var(--fb-bg);
+    font-weight: 600;
+    color: var(--fb-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .fb-table .row.highlight {
+    background: var(--gold-tint);
+    box-shadow: inset 3px 0 0 var(--gold);
+  }
+  .fb-table .row .nm-wrap { display: flex; align-items: center; gap: 12px; }
+  .fb-table .row .av-x {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, #1E2F58, #3a4d7a);
+    color: var(--white);
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .fb-table .row .av-x.guest { background: linear-gradient(135deg, #C4B49A, #8B7E6A); }
+  .fb-table .row .name { font-weight: 600; }
+  .fb-table .row .meta { font-size: 12px; color: var(--fb-muted); margin-top: 2px; }
+  .fb-table .row .role-pill {
+    display: inline-block;
+    background: var(--fb-bg);
+    border: 1px solid var(--fb-border);
+    border-radius: 999px;
+    padding: 3px 11px;
+    font-size: 12px;
+    color: var(--fb-text);
+    font-weight: 500;
+  }
+  .fb-table .row .role-pill.admin { background: rgba(24, 119, 242, 0.1); color: var(--fb-blue); border-color: rgba(24, 119, 242, 0.3); }
+
+  /* Modal: add people */
+  .fb-modal {
+    background: var(--fb-card);
+    border: 1px solid var(--fb-border);
+    border-radius: 10px;
+    max-width: 540px;
+    margin: 24px 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  .fb-modal .head-x {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--fb-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .fb-modal .head-x .title { font-size: 16px; font-weight: 600; color: var(--fb-text); }
+  .fb-modal .head-x .x { color: var(--fb-muted); font-size: 18px; }
+  .fb-modal .body-x { padding: 20px; }
+  .fb-modal .lbl-x {
+    font-size: 13px;
+    color: var(--fb-text);
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .fb-modal .field {
+    border: 1px solid var(--fb-border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: var(--fb-text);
+    background: var(--white);
+    margin-bottom: 16px;
+  }
+  .fb-modal .field.focus {
+    border-color: var(--fb-blue);
+    box-shadow: 0 0 0 1px var(--fb-blue);
+  }
+  .fb-modal .role-cards {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .fb-modal .role-card {
+    border: 1px solid var(--fb-border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .fb-modal .role-card.active {
+    border-color: var(--fb-blue);
+    background: var(--fb-side-active);
+  }
+  .fb-modal .role-card .dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--fb-muted);
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .fb-modal .role-card.active .dot {
+    border-color: var(--fb-blue);
+    background: var(--fb-blue);
+    box-shadow: inset 0 0 0 3px var(--white);
+  }
+  .fb-modal .role-card .nm { font-size: 14px; font-weight: 600; color: var(--fb-text); }
+  .fb-modal .role-card .desc { font-size: 12px; color: var(--fb-muted); margin-top: 3px; line-height: 1.5; }
+  .fb-modal .foot-x {
+    padding: 14px 20px;
+    border-top: 1px solid var(--fb-border);
+    background: var(--fb-bg);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  /* Timeline */
+  .timeline {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-top: 28px;
+  }
+  @media (max-width: 880px) { .timeline { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 520px) { .timeline { grid-template-columns: 1fr; } }
+  .tl-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    padding: 18px 20px;
+  }
+  .tl-card .when {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold-on-light);
+    margin-bottom: 8px;
+  }
+  .tl-card h3 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--navy);
+    margin: 0 0 6px;
+  }
+  .tl-card p {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--body);
+    margin: 0;
+  }
+
+  .doc-footer {
+    background: var(--deep-black);
+    color: rgba(255, 255, 255, 0.55);
+    padding: 22px 32px;
+    font-size: 11px;
+  }
+  .doc-footer-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .doc-footer .sep { margin: 0 8px; color: rgba(255, 255, 255, 0.25); }
+
+  @media (max-width: 720px) {
+    .cover { padding: 64px 24px 56px; }
+    .cover h1 { font-size: 44px; }
+    .cover .lede { font-size: 16px; margin-bottom: 36px; }
+    .cover-meta { grid-template-columns: 1fr; gap: 18px; }
+    .section { padding: 56px 24px 48px; }
+    .section h1 { font-size: 30px; }
+    .step-header { grid-template-columns: 1fr; gap: 8px; }
+    .step-num-big { text-align: left; font-size: 48px; }
+    .step-body h1 { font-size: 24px; }
+    .fb-shell { grid-template-columns: 1fr; }
+    .fb-side { display: none; }
+    .fb-table .row { grid-template-columns: 1fr; gap: 6px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar" role="banner">
+  <div class="topbar-inner">
+    <img src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select · Sign Better Cases">
+    <a id="back-to-onboarding" href="/" class="crumb" style="text-decoration: none; cursor: pointer; transition: color 0.15s;" onmouseover="this.style.color='#FFFFFF'" onmouseout="this.style.color=''">← Back to onboarding</a>
+  </div>
+</header>
+
+<section class="cover">
+  <div class="cover-inner">
+    <div class="cover-eyebrow">Guide 03 · WhatsApp workstream</div>
+    <h1>Meta Business Manager admin&nbsp;access<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+    <p class="lede">A four-step walkthrough for adding CaseLoad Select as an admin on the firm Meta Business Manager so the WhatsApp Business Account can be created, verified, and run on your behalf. Ten minutes of work, reversible at any time, no access to your personal Facebook profile.</p>
+    <div class="cover-meta">
+      <div>
+        <div class="lbl">Prepared for</div>
+        <div class="val">Damaris Regina Guimaraes</div>
+      </div>
+      <div>
+        <div class="lbl">Prepared by</div>
+        <div class="val">Adriano Domingues, CaseLoad Select</div>
+      </div>
+      <div>
+        <div class="lbl">Version</div>
+        <div class="val">v1 · 13 May 2026</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="section-num"><span class="mark"></span>Why this access matters</div>
+    <h1>WhatsApp Business lives inside Meta Business&nbsp;Manager<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+    <p class="lead">The WhatsApp Business Account, the verified phone number, the message templates Meta has to approve before any outbound send, and the verification documents Meta cross-checks against your business records all live inside the Business Manager. Without an admin role there, no WhatsApp configuration is possible.</p>
+    <p>The role is added by email, not by tenant membership. Meta has no "guest user" model the way Microsoft does. You add me by email, I receive an invite, I accept with my personal Facebook account, and the role activates. You stay Admin alongside me and can remove me from the same screen at any time.</p>
+
+    <h2>What this access permits, what it does not</h2>
+
+    <div class="scope-grid">
+      <div class="scope-card yes">
+        <span class="pill">CaseLoad Select can</span>
+        <ul>
+          <li>Submit WhatsApp message templates to Meta for approval</li>
+          <li>Register and verify the WhatsApp phone number</li>
+          <li>Manage WhatsApp Business Account quality scores and rate limits</li>
+          <li>Upload and manage business verification documents</li>
+          <li>Add and remove WhatsApp business assets we configure together</li>
+          <li>See your business profile and connected business pages</li>
+        </ul>
+      </div>
+      <div class="scope-card no">
+        <span class="pill">CaseLoad Select cannot</span>
+        <ul>
+          <li>Read your personal Facebook profile, posts, or messages</li>
+          <li>Access your personal friends list or photos</li>
+          <li>Post on your personal timeline</li>
+          <li>Modify billing on any ad account unless explicitly granted</li>
+          <li>See other businesses you manage in your Business Manager</li>
+          <li>Take any action outside the assets we are granted</li>
+        </ul>
+      </div>
+    </div>
+
+    <p>The role being requested is <strong>Admin</strong> on the firm Business Manager. Admin is the minimum role that can submit WhatsApp templates and complete verifications. Lower roles (Employee) cannot publish templates, which would block the J-workflows from sending.</p>
+
+    <div class="panel dark">
+      <h3>Reversible at any time</h3>
+      <p>Unlike Microsoft, where the access is time-boxed because the work is one-time, the Meta admin role is ongoing because we keep submitting templates and handling re-verifications as the platform requires them. That said, the role is one-click removable. Step 4 of this guide shows the exact path. You stay in control.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">01</div>
+      <div class="step-body">
+        <div class="step-meta">Step 1 · About 2 minutes</div>
+        <h1>Sign in at business.facebook.com<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>Open <strong>business.facebook.com</strong> in your browser and sign in with your <strong>personal Facebook account</strong>. Meta does not use business-domain accounts the way Microsoft does. If you do not have a Facebook account, you will need to create one (private, no public profile required) before continuing. The Business Manager home screen loads showing your current business or an offer to create one.</p>
+      </div>
+    </div>
+
+    <div class="fb-mock">
+      <div class="fb-topbar">
+        <div class="fb-logo"><span class="glyph">M</span>Meta Business Suite</div>
+        <div class="fb-search">Search businesses, ads, posts</div>
+        <div class="fb-actions">
+          <div class="ic"></div>
+          <div class="ic"></div>
+          <div class="av">DG</div>
+        </div>
+      </div>
+      <div class="fb-shell">
+        <div class="fb-side">
+          <div class="group-lbl">Manage</div>
+          <div class="item active"><span class="ic"></span>Home</div>
+          <div class="item"><span class="ic"></span>Inbox</div>
+          <div class="item"><span class="ic"></span>Notifications</div>
+          <div class="item"><span class="ic"></span>Posts &amp; stories</div>
+          <div class="item"><span class="ic"></span>Ads</div>
+          <div class="group-lbl">Business</div>
+          <div class="item"><span class="ic"></span>Business settings</div>
+          <div class="item"><span class="ic"></span>Billing</div>
+        </div>
+        <div class="fb-content">
+          <h4>Welcome, Damaris</h4>
+          <div class="sub">DRG Law · 0 assets · Business not yet configured</div>
+          <div style="background: var(--fb-card); border: 1px solid var(--fb-border); border-radius: 8px; padding: 18px 22px; margin-bottom: 12px;">
+            <div style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Your business</div>
+            <div style="font-size: 13px; color: var(--fb-muted);">DRG Law · Business ID will be created on first asset add</div>
+          </div>
+          <div style="background: var(--fb-card); border: 1px solid var(--fb-border); border-radius: 8px; padding: 18px 22px;">
+            <div style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Suggested next step</div>
+            <div style="font-size: 13px; color: var(--fb-muted);">Add people who will help manage your business</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">No Facebook yet?</div>
+      <div class="body">If you do not currently have a Facebook account, create one at facebook.com. You can leave the profile blank (no friends, no posts, no photos). The account exists solely to authenticate you to Meta Business Manager. Once created, return to <strong>business.facebook.com</strong> and sign in.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">Bookmark this</div>
+      <div class="body">Save business.facebook.com to your browser bookmarks. We come back to this same screen when you remove my role in Step 4, when you submit annual verification documents, and when you check WhatsApp quality scores month to month.</div>
+    </div>
+
+    <div class="ann" style="border-left: 3px solid var(--red-fail);">
+      <div class="lbl" style="color: var(--red-fail);">Not Meta for Developers</div>
+      <div class="body">Meta has two adjacent surfaces: <strong>business.facebook.com</strong> (this guide) and <strong>developers.facebook.com</strong> (for engineering teams building apps). Use the business one. The developer surface does not have the People management screens used in Step 3.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">02</div>
+      <div class="step-body">
+        <div class="step-meta">Step 2 · About 3 minutes</div>
+        <h1>Open Business&nbsp;Settings<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>From the Meta Business Suite home, click your business name in the top-left, then choose <strong>Business Settings</strong> from the menu. If you have never set up a business yet, you will see a <strong>Create a business</strong> button instead — click it, enter <strong>DRG Law</strong> as the name and your email, then come back to this step. The Business Settings page opens with a left navigation rail.</p>
+      </div>
+    </div>
+
+    <div class="fb-mock">
+      <div class="fb-topbar">
+        <div class="fb-logo"><span class="glyph">M</span>Business Settings · DRG Law</div>
+        <div class="fb-search">Search settings</div>
+        <div class="fb-actions">
+          <div class="ic"></div>
+          <div class="av">DG</div>
+        </div>
+      </div>
+      <div class="fb-shell">
+        <div class="fb-side">
+          <div class="group-lbl">Users</div>
+          <div class="item active"><span class="ic"></span>People</div>
+          <div class="item"><span class="ic"></span>Partners</div>
+          <div class="item"><span class="ic"></span>System users</div>
+          <div class="group-lbl">Accounts</div>
+          <div class="item"><span class="ic"></span>Pages</div>
+          <div class="item"><span class="ic"></span>Ad accounts</div>
+          <div class="item"><span class="ic"></span>WhatsApp accounts</div>
+          <div class="item"><span class="ic"></span>Instagram accounts</div>
+          <div class="group-lbl">Data sources</div>
+          <div class="item"><span class="ic"></span>Pixels</div>
+          <div class="item"><span class="ic"></span>Catalogs</div>
+        </div>
+        <div class="fb-content">
+          <h4>People</h4>
+          <div class="sub">People who can access and manage this business</div>
+          <div class="fb-cmdbar">
+            <div class="fb-btn primary highlight">+ Add</div>
+            <div class="fb-btn secondary">Filter</div>
+          </div>
+          <div class="fb-table">
+            <div class="row head">
+              <div>Person</div>
+              <div>Role</div>
+              <div>Status</div>
+            </div>
+            <div class="row">
+              <div class="nm-wrap">
+                <span class="av-x">DG</span>
+                <div>
+                  <div class="name">Damaris Guimaraes</div>
+                  <div class="meta">damaris@drglaw.ca</div>
+                </div>
+              </div>
+              <div><span class="role-pill admin">Admin</span></div>
+              <div style="font-size: 12px; color: var(--green-pass); font-weight: 600;">● Active</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">Click here</div>
+      <div class="body">The blue <strong>+ Add</strong> button at the top of the People list, highlighted in gold above. This opens the dialog where you enter my email and assign the role. Step 3 walks through that dialog.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">If you cannot find Business Settings</div>
+      <div class="body">Meta sometimes hides the link behind your profile picture in the top-right. Click your avatar, then <strong>Manage business</strong> or <strong>Switch business</strong> → pick your business → <strong>Business Settings</strong>. Or go directly to <strong>business.facebook.com/settings</strong>.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">03</div>
+      <div class="step-body">
+        <div class="step-meta">Step 3 · About 4 minutes</div>
+        <h1>Add me by email and pick the Admin&nbsp;role<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>The Add dialog opens. Enter my work email, pick the <strong>Admin</strong> role card, and click <strong>Next</strong>. The follow-up screen asks which business assets to grant access to. Select the WhatsApp Business Account (and Pages or Ad accounts if you want me to help with those later; for the WhatsApp build, WhatsApp account is the only required asset). Click <strong>Invite</strong> to send the invitation.</p>
+      </div>
+    </div>
+
+    <div class="fb-modal">
+      <div class="head-x">
+        <div class="title">Add people to your business</div>
+        <div class="x">×</div>
+      </div>
+      <div class="body-x">
+        <div class="lbl-x">Work email</div>
+        <div class="field focus">adriano@caseloadselect.ca</div>
+
+        <div class="lbl-x">Role</div>
+        <div class="role-cards">
+          <div class="role-card active">
+            <div class="dot"></div>
+            <div>
+              <div class="nm">Admin</div>
+              <div class="desc">Manage everything in this business, including users, assets, billing, and integrations. Required to submit WhatsApp templates for approval.</div>
+            </div>
+          </div>
+          <div class="role-card">
+            <div class="dot"></div>
+            <div>
+              <div class="nm">Employee</div>
+              <div class="desc">Access only the specific assets you grant. Cannot manage users or submit WhatsApp templates.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="foot-x">
+        <div class="fb-btn secondary">Cancel</div>
+        <div class="fb-btn primary">Next</div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">Use these values</div>
+      <div class="body"><strong>Email:</strong> adriano@caseloadselect.ca. <strong>Role:</strong> Admin (not Employee — Employee cannot submit WhatsApp templates, which would block the J-workflows). Click <strong>Next</strong>, grant access to the <strong>WhatsApp Business Account</strong> on the asset-selection screen, then <strong>Invite</strong>.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">What happens after Invite</div>
+      <div class="body">Meta sends me an email at adriano@caseloadselect.ca with the subject "DRG Law invited you to their business". I click <strong>Accept invitation</strong>, sign in with my personal Facebook account, and the role activates immediately. You will see me listed in the People table within a few minutes.</div>
+    </div>
+
+    <div class="ann" style="border-left: 3px solid var(--red-fail);">
+      <div class="lbl" style="color: var(--red-fail);">Not the Page Roles screen</div>
+      <div class="body">Adding admins to a Facebook Page is a different surface (Page → Settings → Page roles). That grants access only to the Page, not to the WhatsApp Business Account underneath. For WhatsApp work, the add must happen here in <strong>Business Settings → Users → People</strong>.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">04</div>
+      <div class="step-body">
+        <div class="step-meta">Step 4 · About 1 minute · Run only if you want to remove access</div>
+        <h1>Remove me from the Business at any&nbsp;time<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>Meta admin access is ongoing because we keep submitting templates and handling re-verifications. There is no time-boxed window the way there is on Microsoft. That said, removal is one click. Back in <strong>Business Settings → Users → People</strong>, find my row, click the menu icon at the right end, and choose <strong>Remove from business</strong>. The role disappears immediately and I lose access to every asset in the business.</p>
+      </div>
+    </div>
+
+    <div class="fb-mock">
+      <div class="fb-topbar">
+        <div class="fb-logo"><span class="glyph">M</span>Business Settings · DRG Law</div>
+        <div class="fb-search">Search settings</div>
+        <div class="fb-actions">
+          <div class="ic"></div>
+          <div class="av">DG</div>
+        </div>
+      </div>
+      <div class="fb-shell">
+        <div class="fb-side">
+          <div class="group-lbl">Users</div>
+          <div class="item active"><span class="ic"></span>People</div>
+          <div class="item"><span class="ic"></span>Partners</div>
+          <div class="item"><span class="ic"></span>System users</div>
+        </div>
+        <div class="fb-content">
+          <h4>People</h4>
+          <div class="sub">2 people have access to this business</div>
+          <div class="fb-table">
+            <div class="row head">
+              <div>Person</div>
+              <div>Role</div>
+              <div>Status</div>
+            </div>
+            <div class="row">
+              <div class="nm-wrap">
+                <span class="av-x">DG</span>
+                <div>
+                  <div class="name">Damaris Guimaraes</div>
+                  <div class="meta">damaris@drglaw.ca · Owner</div>
+                </div>
+              </div>
+              <div><span class="role-pill admin">Admin</span></div>
+              <div style="font-size: 12px; color: var(--green-pass); font-weight: 600;">● Active</div>
+            </div>
+            <div class="row highlight">
+              <div class="nm-wrap">
+                <span class="av-x guest">AD</span>
+                <div>
+                  <div class="name">Adriano Domingues</div>
+                  <div class="meta">adriano@caseloadselect.ca · CaseLoad Select</div>
+                </div>
+              </div>
+              <div><span class="role-pill admin">Admin</span></div>
+              <div style="text-align: right;">
+                <span style="display: inline-block; border: 1px solid var(--red-fail); color: var(--red-fail); padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600;">Remove</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">What removal does</div>
+      <div class="body">My role on every business asset disappears instantly. The person record stays in your directory (so the audit trail of who-had-what-and-when is preserved), but the access permissions are revoked. Any WhatsApp templates already approved by Meta stay approved; my ability to submit new ones or modify existing ones ends at the same moment.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">If anything looks off</div>
+      <div class="body">Removal is one-click and immediate. Use it any time you feel uncertain about the access, even mid-build. I would rather you remove the role and we troubleshoot than leave it open if you have questions. We can always re-add it the same day.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="section-num"><span class="mark"></span>What happens next</div>
+    <h1>From admin grant to first WhatsApp&nbsp;send<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+    <p class="lead">Once the role is granted, the WhatsApp setup runs through a sequence Meta dictates: register the phone number, verify the business with a document, get the display name approved, submit message templates one by one. Each step has a Meta-side approval window of one to three days. The path below is the typical one for a Toronto law firm in 2026.</p>
+
+    <div class="timeline">
+      <div class="tl-card">
+        <div class="when">Day 0 · Today</div>
+        <h3>Admin role accepted</h3>
+        <p>You complete Steps 1 to 3. I receive the Meta invitation email, accept it, and the role is live on my account.</p>
+      </div>
+      <div class="tl-card">
+        <div class="when">Days 1 to 3</div>
+        <h3>WhatsApp number registered</h3>
+        <p>I add the GHL phone number to your WhatsApp Business Account, complete the SMS or voice verification, and set up the display name (DRG Law) for Meta approval.</p>
+      </div>
+      <div class="tl-card">
+        <div class="when">Days 3 to 5</div>
+        <h3>Business verification</h3>
+        <p>I upload the verification document you provided in the onboarding form. Meta cross-checks it against the Business Manager profile and approves the business — usually within 48 hours.</p>
+      </div>
+      <div class="tl-card">
+        <div class="when">Days 5 to 7</div>
+        <h3>Templates approved, first send live</h3>
+        <p>Message templates for the J-workflows (acknowledgment, no-show recovery, review request) get submitted and approved one by one. Once the first template clears, WhatsApp goes live for outbound sends from your number.</p>
+      </div>
+    </div>
+
+    <div class="panel featured">
+      <h3>When you finish Steps 1 to 3</h3>
+      <p>Send me a quick WhatsApp confirming the invitation is in your queue or already accepted on my end. I will accept within the hour and start the WhatsApp setup that day.</p>
+    </div>
+
+    <div class="panel dark">
+      <h3>A note on data privacy</h3>
+      <p>Meta admin access on a Business Manager does not give visibility into your personal Facebook activity. The Business Manager is a separate context from your personal account; the same login authenticates both, but the permissions are scoped to business assets only. If you ever want a full audit of what an admin can see and do, Meta's documentation under <strong>People in your business</strong> lists every permission attached to every role.</p>
+    </div>
+  </div>
+</section>
+
+<footer class="doc-footer" role="contentinfo">
+  <div class="doc-footer-inner">
+    <span class="left">CaseLoad Select<span class="sep">·</span>Automated Case Selection System</span>
+    <span>Confidential<span class="sep">·</span>Prepared for DRG Law<span class="sep">·</span>caseloadselect.ca</span>
+  </div>
+</footer>
+
+<script>
+  // Token-aware back link. The form sends ?token=DRG-LAW-2026-05-13 when it
+  // links to this guide; we wire the "Back to onboarding" anchor to return
+  // the user to /firm-onboarding/[token]. Falls back to root if no token.
+  (function () {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get('token');
+      var link = document.getElementById('back-to-onboarding');
+      if (link) {
+        link.href = token ? '/firm-onboarding/' + encodeURIComponent(token) : '/';
+      }
+    } catch (e) { /* no-op: link defaults to / */ }
+  })();
+</script>
+</body>
+</html>

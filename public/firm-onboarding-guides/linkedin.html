@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinkedIn Company Page setup · DRG Law · CaseLoad Select</title>
+<meta name="description" content="Four-step visual guide to standing up the DRG Law LinkedIn Company Page, prepared for Damaris Regina Guimaraes by CaseLoad Select.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700&family=Manrope:wght@500;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --deep-black: #0D1520;
+    --gold: #C4B49A;
+    --gold-on-light: #8B7A5E;
+    --gold-tint: rgba(196, 180, 154, 0.16);
+    --navy: #1E2F58;
+    --parchment: #F4F3EF;
+    --white: #FFFFFF;
+    --body: #4a5a72;
+    --muted: #8090A8;
+    --border: #e0ddd6;
+    --off-white: #F9F8F5;
+
+    --font-display: 'Oxanium', sans-serif;
+    --font-heading: 'Manrope', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+
+    --li-blue: #0A66C2;
+    --li-bg: #F4F2EE;
+    --li-card: #FFFFFF;
+    --li-text: #1F1F1F;
+    --li-muted: #5E5E5E;
+    --li-border: #E0E0E0;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { font-size: 16px; scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-body);
+    font-weight: 400;
+    color: var(--body);
+    background: var(--parchment);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  img { max-width: 100%; display: block; }
+
+  .topbar {
+    background: var(--deep-black);
+    padding: 18px 32px 16px;
+    border-bottom: 2px solid var(--gold);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .topbar-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+  .topbar img { height: 17px; width: auto; }
+  .topbar .crumb {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 9.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+
+  .cover {
+    background: var(--deep-black);
+    color: var(--white);
+    padding: 96px 32px 80px;
+  }
+  .cover-inner { max-width: 920px; margin: 0 auto; }
+  .cover-eyebrow {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 28px;
+  }
+  .cover h1 {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 64px;
+    color: var(--white);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin-bottom: 24px;
+    max-width: 800px;
+  }
+  .cover h1 .term, .section h1 .term {
+    width: 0.22em;
+    height: 0.22em;
+    margin-left: 0.12em;
+    vertical-align: top;
+    display: inline-block;
+    position: relative;
+    top: 0.1em;
+    flex-shrink: 0;
+  }
+  .cover .lede {
+    font-size: 18px;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.78);
+    max-width: 660px;
+    margin-bottom: 56px;
+  }
+  .cover-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 32px;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    padding-top: 32px;
+  }
+  .cover-meta .lbl {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 6px;
+  }
+  .cover-meta .val { font-size: 14px; color: var(--white); font-weight: 500; }
+
+  .section {
+    padding: 88px 32px 72px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section:last-of-type { border-bottom: none; }
+  .section-inner { max-width: 920px; margin: 0 auto; }
+  .section-num {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold-on-light);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-num .mark { display: inline-block; width: 8px; height: 8px; background: var(--gold); }
+  .section h1 {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 44px;
+    color: var(--navy);
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    margin-bottom: 20px;
+    max-width: 780px;
+  }
+  .section .lead {
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--body);
+    max-width: 720px;
+    margin-bottom: 28px;
+  }
+  .section p {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--body);
+    margin-bottom: 14px;
+    max-width: 760px;
+  }
+  .section p strong { color: var(--navy); font-weight: 600; }
+  .section h2 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 24px;
+    color: var(--navy);
+    line-height: 1.2;
+    margin: 24px 0 12px;
+  }
+  .section h3 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 17px;
+    color: var(--navy);
+    margin: 20px 0 8px;
+  }
+
+  .step-header {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 24px;
+    align-items: start;
+    margin-bottom: 24px;
+  }
+  .step-num-big {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 64px;
+    line-height: 0.9;
+    color: var(--gold);
+    text-align: right;
+  }
+  .step-meta {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold-on-light);
+    margin-bottom: 10px;
+  }
+  .step-body h1 { font-size: 32px; max-width: 700px; margin-bottom: 14px; }
+
+  .panel {
+    background: var(--white);
+    border: 1px solid var(--border);
+    padding: 24px 28px;
+    margin: 18px 0;
+  }
+  .panel.gold { background: var(--gold-tint); border-color: var(--gold); }
+  .panel.dark {
+    background: var(--deep-black);
+    color: var(--white);
+    border-color: var(--deep-black);
+  }
+  .panel.dark p { color: rgba(255, 255, 255, 0.8); }
+  .panel.dark h3 { color: var(--gold); }
+  .panel.dark p strong { color: var(--gold); }
+  .panel h3:first-child { margin-top: 0; }
+  .panel p:last-child { margin-bottom: 0; }
+  .panel.featured { border: 2px solid var(--gold); background: var(--white); }
+
+  .ann {
+    background: var(--white);
+    border: 1px solid var(--border);
+    padding: 16px 20px;
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+  .ann.gold { background: var(--gold-tint); border-color: var(--gold); }
+  .ann .lbl {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--navy);
+  }
+  .ann.gold .lbl { color: var(--deep-black); }
+  .ann .body {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--body);
+  }
+  .ann .body strong { color: var(--navy); font-weight: 600; }
+
+  .split-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+  }
+  @media (max-width: 720px) { .split-2 { grid-template-columns: 1fr; } }
+
+  /* LinkedIn UI mockup */
+  .li-mock {
+    background: var(--li-bg);
+    border: 1px solid var(--border);
+    margin: 24px 0;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+    color: var(--li-text);
+  }
+  .li-topbar {
+    background: var(--li-card);
+    border-bottom: 1px solid var(--li-border);
+    height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 0 18px;
+    gap: 14px;
+  }
+  .li-logo {
+    width: 26px; height: 26px;
+    background: var(--li-blue);
+    color: var(--white);
+    font-weight: 800;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    font-family: 'Manrope', sans-serif;
+  }
+  .li-search {
+    background: #EEF3F8;
+    height: 28px;
+    border-radius: 3px;
+    flex: 0 0 240px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 12px;
+    color: var(--li-muted);
+  }
+  .li-nav {
+    margin-left: auto;
+    display: flex;
+    gap: 18px;
+    font-size: 11px;
+    color: var(--li-muted);
+  }
+  .li-nav .item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .li-nav .ic { width: 16px; height: 16px; background: #C9C9C9; border-radius: 50%; }
+  .li-nav .item.me .ic { background: linear-gradient(135deg, #d8d8d8, #a9a9a9); }
+  .li-nav .item.active { color: var(--li-text); }
+
+  .li-body { padding: 28px 32px; }
+
+  .li-settings {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 28px;
+  }
+  .li-settings-side h4 {
+    font-family: 'Manrope', sans-serif;
+    font-weight: 800;
+    font-size: 16px;
+    color: var(--li-text);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .li-settings-side h4 .av {
+    width: 24px; height: 24px;
+    background: linear-gradient(135deg, #d8d8d8, #a9a9a9);
+    border-radius: 50%;
+  }
+  .li-settings-side ul { list-style: none; }
+  .li-settings-side li {
+    padding: 8px 0;
+    font-size: 13px;
+    color: var(--li-text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .li-settings-side li.active {
+    color: #047A4D;
+    font-weight: 600;
+    border-left: 3px solid #047A4D;
+    padding-left: 10px;
+    margin-left: -13px;
+  }
+  .li-settings-side li .dot {
+    width: 14px; height: 14px;
+    background: #B5B5B5;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .li-settings-side li.active .dot { background: #047A4D; }
+
+  .li-card {
+    background: var(--li-card);
+    padding: 22px 26px;
+    border: 1px solid var(--li-border);
+  }
+  .li-card .back { color: var(--li-blue); font-size: 12px; margin-bottom: 14px; }
+  .li-card .h { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  .li-card .sub { font-size: 12px; color: var(--li-muted); margin-bottom: 18px; }
+  .li-card .label-r { font-size: 12px; font-weight: 600; margin-top: 18px; margin-bottom: 4px; }
+  .li-card .val { font-size: 13px; margin-bottom: 8px; }
+  .li-btn {
+    display: inline-block;
+    border: 1.5px solid var(--li-blue);
+    color: var(--li-blue);
+    background: transparent;
+    border-radius: 999px;
+    padding: 7px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 14px;
+  }
+  .li-btn.solid { background: var(--li-blue); color: var(--white); }
+  .li-btn.highlight { box-shadow: 0 0 0 3px rgba(196, 180, 154, 0.7); }
+
+  .li-modal-wrap { background: rgba(0, 0, 0, 0.32); padding: 24px; display: flex; justify-content: center; }
+  .li-modal { background: var(--li-card); border-radius: 8px; width: 100%; max-width: 520px; overflow: hidden; }
+  .li-modal .head {
+    padding: 18px 22px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--li-border);
+  }
+  .li-modal .head .title { font-weight: 700; font-size: 17px; }
+  .li-modal .head .x { color: var(--li-muted); font-size: 20px; }
+  .li-modal .body-m { padding: 18px 22px; }
+  .li-field { margin-bottom: 14px; }
+  .li-field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--li-text);
+  }
+  .li-input {
+    width: 100%;
+    border: 1px solid #4A4A4A;
+    border-radius: 3px;
+    padding: 9px 12px;
+    font-size: 14px;
+    background: var(--white);
+    color: var(--li-text);
+  }
+  .li-input.focus { box-shadow: 0 0 0 3px rgba(196, 180, 154, 0.6); }
+  .li-input.placeholder { color: var(--li-muted); }
+  .li-select {
+    width: 100%;
+    border: 1px solid #4A4A4A;
+    border-radius: 3px;
+    padding: 9px 12px;
+    font-size: 14px;
+    color: var(--li-muted);
+    display: flex;
+    justify-content: space-between;
+    background: var(--white);
+  }
+  .li-checkbox { display: flex; align-items: center; gap: 10px; margin: 8px 0 14px; }
+  .li-checkbox .box {
+    width: 16px; height: 16px;
+    border-radius: 2px;
+    background: #047A4D;
+    color: var(--white);
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .li-checkbox span { font-size: 13px; color: var(--li-text); }
+
+  .li-dropdown {
+    background: var(--white);
+    border: 1px solid var(--li-border);
+    border-top: none;
+    margin-top: -2px;
+  }
+  .li-dropdown .opt {
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--li-border);
+  }
+  .li-dropdown .opt:last-child { border-bottom: none; }
+  .li-dropdown .logo-bx {
+    width: 26px; height: 26px;
+    background: linear-gradient(135deg, #B7C2D6, #7B8DA8);
+  }
+
+  .li-modal .actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 14px 22px 16px;
+    border-top: 1px solid var(--li-border);
+  }
+
+  .li-chooser { text-align: center; padding: 40px 24px; }
+  .li-chooser h3 {
+    font-family: 'Manrope', sans-serif;
+    font-weight: 600;
+    font-size: 24px;
+    margin-bottom: 8px;
+    color: var(--li-text);
+  }
+  .li-chooser .sub { font-size: 13px; color: var(--li-muted); margin-bottom: 28px; }
+  .li-chooser-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .li-chooser-card {
+    background: var(--li-card);
+    border: 1px solid var(--li-border);
+    padding: 26px 18px;
+    text-align: center;
+  }
+  .li-chooser-card.highlight { box-shadow: 0 0 0 3px var(--gold); }
+  .li-chooser-card .ico {
+    width: 50px; height: 50px;
+    margin: 0 auto 14px;
+    background: linear-gradient(135deg, #C7D1E0, #8FA3BF);
+  }
+  .li-chooser-card .ttl { font-weight: 700; font-size: 14px; margin-bottom: 4px; color: var(--li-text); }
+  .li-chooser-card .txt { font-size: 12px; color: var(--li-muted); line-height: 1.45; }
+
+  .li-setup { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .li-setup-form, .li-setup-side {
+    background: var(--li-card);
+    border: 1px solid var(--li-border);
+    padding: 22px 26px;
+  }
+  .li-setup-side .hdr { font-weight: 700; font-size: 13px; margin-bottom: 14px; }
+  .li-preview-card { background: var(--li-bg); padding: 22px; border: 1px solid var(--li-border); }
+  .li-preview-card .pic {
+    width: 64px; height: 64px;
+    background: linear-gradient(135deg, #B7C2D6, #7B8DA8);
+    margin-bottom: 14px;
+  }
+  .li-preview-card .name {
+    font-weight: 800;
+    font-size: 17px;
+    color: var(--li-text);
+    margin-bottom: 4px;
+    font-family: 'Manrope', sans-serif;
+  }
+  .li-preview-card .tag, .li-preview-card .ind { font-size: 12px; color: var(--li-muted); margin-bottom: 4px; }
+  .li-preview-card .follow {
+    display: inline-block;
+    margin-top: 10px;
+    background: var(--li-blue);
+    color: var(--white);
+    border-radius: 999px;
+    padding: 6px 18px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .li-admin { background: var(--li-card); border: 1px solid var(--li-border); padding: 22px 26px; }
+  .li-admin .h { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  .li-admin .sub { font-size: 12px; color: var(--li-muted); margin-bottom: 18px; }
+  .li-admin-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 0;
+    border-top: 1px solid var(--li-border);
+    font-size: 13px;
+  }
+  .li-admin-row .av {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, #d8d8d8, #a9a9a9);
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .li-admin-row .av.you { background: linear-gradient(135deg, var(--navy), #3a4d7a); }
+  .li-admin-row .info { flex: 1; }
+  .li-admin-row .nm { font-weight: 600; color: var(--li-text); }
+  .li-admin-row .role-d { font-size: 12px; color: var(--li-muted); }
+  .li-admin-row .dropdown {
+    border: 1px solid #4A4A4A;
+    border-radius: 999px;
+    padding: 5px 16px;
+    font-size: 12px;
+    color: var(--li-text);
+  }
+  .li-admin .add-row { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--li-border); }
+  .role-options { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .li-role-opt {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--li-border);
+    font-size: 13px;
+    background: var(--white);
+  }
+  .li-role-opt.active { border-color: var(--li-blue); background: rgba(10, 102, 194, 0.04); }
+  .li-role-opt .dot {
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--li-muted);
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 1px;
+    position: relative;
+  }
+  .li-role-opt.active .dot { border-color: var(--li-blue); }
+  .li-role-opt.active .dot::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    background: var(--li-blue);
+    border-radius: 50%;
+  }
+  .li-role-opt .nm { font-weight: 700; color: var(--li-text); margin-bottom: 2px; }
+  .li-role-opt .desc { font-size: 12px; color: var(--li-muted); line-height: 1.45; }
+
+  .timeline {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+  }
+  @media (max-width: 720px) { .timeline { grid-template-columns: 1fr; } }
+  .tl-card { background: var(--white); border: 1px solid var(--border); padding: 22px 26px; }
+  .tl-card .when {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold-on-light);
+    margin-bottom: 8px;
+  }
+  .tl-card h3 { font-size: 15px; margin: 0 0 6px; color: var(--navy); }
+  .tl-card p { font-size: 13px; line-height: 1.55; color: var(--body); margin: 0; max-width: none; }
+
+  .doc-footer {
+    background: var(--deep-black);
+    color: rgba(255, 255, 255, 0.65);
+    padding: 22px 32px;
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .doc-footer-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .doc-footer .left { color: rgba(196, 180, 154, 0.85); }
+  .doc-footer .sep { color: rgba(196, 180, 154, 0.4); margin: 0 8px; }
+
+  @media (max-width: 720px) {
+    .cover h1 { font-size: 44px; }
+    .section h1 { font-size: 32px; }
+    .step-header { grid-template-columns: 1fr; gap: 8px; }
+    .step-num-big { text-align: left; font-size: 48px; }
+    .li-settings { grid-template-columns: 1fr; }
+    .li-setup { grid-template-columns: 1fr; }
+    .li-chooser-grid { grid-template-columns: 1fr; }
+    .ann { grid-template-columns: 1fr; gap: 6px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar" role="banner">
+  <div class="topbar-inner">
+    <img src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select · Sign Better Cases">
+    <a id="back-to-onboarding" href="/" class="crumb" style="text-decoration: none; cursor: pointer; transition: color 0.15s;" onmouseover="this.style.color='#FFFFFF'" onmouseout="this.style.color=''">← Back to onboarding</a>
+  </div>
+</header>
+
+<section class="cover">
+  <div class="cover-inner">
+    <div class="cover-eyebrow">Guide 01 · Authority workstream</div>
+    <h1>LinkedIn Company&nbsp;Page&nbsp;setup<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+    <p class="lede">A four-step walkthrough for standing up the DRG Law Page on LinkedIn. About twenty minutes of work from your account, then the page is ready for content the moment brand and content strategy land.</p>
+    <div class="cover-meta">
+      <div>
+        <div class="lbl">Prepared for</div>
+        <div class="val">Damaris Regina Guimaraes</div>
+      </div>
+      <div>
+        <div class="lbl">Prepared by</div>
+        <div class="val">Adriano Domingues, CaseLoad Select</div>
+      </div>
+      <div>
+        <div class="lbl">Version</div>
+        <div class="val">v3 · 13 May 2026</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="section-num"><span class="mark"></span>What this guide does</div>
+    <h1>Twenty minutes from your account, then I take it from&nbsp;there<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+    <p class="lead">LinkedIn requires that a Company Page be created from a personal account whose profile lists the company as a current employer and has a verified work email on the same domain. That gating cannot be delegated. After the page exists, anyone you invite as Super admin can run it without ever touching your password.</p>
+    <p>This guide walks you through the four screens you need to complete from your own LinkedIn login. None of it requires sharing credentials. None of it commits you to publishing anything. The page can sit empty for a week while we lock the brand and content strategy, then post one switches on.</p>
+
+    <div class="panel">
+      <h3>The shape of the work</h3>
+      <p><strong>Step 1.</strong> Verify damaris@drglaw.ca on your personal LinkedIn account. <strong>Step 2.</strong> Add DRG Law as your current position. <strong>Step 3.</strong> Create the Company Page. <strong>Step 4.</strong> Add me as Super admin so I can publish from there.</p>
+    </div>
+
+    <div class="panel featured">
+      <h3>What I do not need</h3>
+      <p>Your LinkedIn password. Sharing personal credentials breaches LinkedIn's Terms of Service and would not even help, since Pages are a separate object that requires admin invitations regardless. Your account stays your account.</p>
+    </div>
+
+    <div class="split-2">
+      <div class="panel">
+        <h3>Time on your end</h3>
+        <p>About twenty minutes total, including the email verification round trip. Easiest at a desktop, not phone.</p>
+      </div>
+      <div class="panel">
+        <h3>What you will need</h3>
+        <p>Access to the damaris@drglaw.ca inbox to confirm the verification code, and a square version of the DRG Law logo for the Page picture (we will provide if missing).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">01</div>
+      <div class="step-body">
+        <div class="step-meta">Step 1 · About 5 minutes</div>
+        <h1>Verify damaris@drglaw.ca on your personal LinkedIn&nbsp;account<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>Open <strong>linkedin.com/psettings/email</strong> while logged in to your personal LinkedIn. Click <strong>Add email address</strong>, enter <strong>damaris@drglaw.ca</strong>, and complete the code-confirmation step that lands in your DRG inbox. This is the verification LinkedIn checks before allowing you to create a Company Page on the drglaw.ca domain.</p>
+      </div>
+    </div>
+
+    <div class="li-mock">
+      <div class="li-topbar">
+        <div class="li-logo">in</div>
+        <div class="li-search">Search</div>
+        <div class="li-nav">
+          <div class="item"><span class="ic"></span>Home</div>
+          <div class="item"><span class="ic"></span>Network</div>
+          <div class="item"><span class="ic"></span>Jobs</div>
+          <div class="item me"><span class="ic"></span>Me</div>
+        </div>
+      </div>
+      <div class="li-body">
+        <div class="li-settings">
+          <div class="li-settings-side">
+            <h4><span class="av"></span>Settings</h4>
+            <ul>
+              <li><span class="dot"></span>Account preferences</li>
+              <li class="active"><span class="dot"></span>Sign in &amp; security</li>
+              <li><span class="dot"></span>Visibility</li>
+              <li><span class="dot"></span>Data privacy</li>
+              <li><span class="dot"></span>Notifications</li>
+            </ul>
+          </div>
+          <div class="li-card">
+            <div class="back">&larr; Back</div>
+            <div class="h">Email addresses</div>
+            <div class="sub">Emails you've added</div>
+            <div class="label-r">Primary email</div>
+            <div class="val">damaris@drglaw.ca</div>
+            <div class="label-r" style="margin-top: 18px;">Add a verified work email</div>
+            <button class="li-btn highlight">Add email address</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">Where to click</div>
+      <div class="body">The blue-bordered <strong>Add email address</strong> button. Enter damaris@drglaw.ca, then check the inbox for the six-digit code and paste it back into the form to confirm.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">Watch for</div>
+      <div class="body">LinkedIn may ask for a security code on your primary email first to authorize the change. That round trip is normal. Confirm it and continue.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">02</div>
+      <div class="step-body">
+        <div class="step-meta">Step 2 · About 5 minutes</div>
+        <h1>Add DRG Law as your current&nbsp;position<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>Open your personal LinkedIn profile and click <strong>Add section &rsaquo; Core &rsaquo; Add position</strong>. Enter your title (Lawyer, Founder, or whatever you prefer), and in the <strong>Company or organization</strong> field, type <strong>DRG Law</strong>. The autocomplete will show existing companies. If DRG Law is not in the list yet, that is expected. Save the entry. We come back here in Step 3 after the Page is created, to attach you to it.</p>
+      </div>
+    </div>
+
+    <div class="li-mock">
+      <div class="li-topbar">
+        <div class="li-logo">in</div>
+        <div class="li-search">Search</div>
+        <div class="li-nav">
+          <div class="item"><span class="ic"></span>Home</div>
+          <div class="item"><span class="ic"></span>Network</div>
+          <div class="item"><span class="ic"></span>Jobs</div>
+          <div class="item me"><span class="ic"></span>Me</div>
+        </div>
+      </div>
+      <div class="li-modal-wrap">
+        <div class="li-modal">
+          <div class="head">
+            <div class="title">Add experience</div>
+            <div class="x">&times;</div>
+          </div>
+          <div class="body-m">
+            <div class="li-field">
+              <label>Title*</label>
+              <div class="li-input placeholder">Ex: Lawyer</div>
+            </div>
+            <div class="li-field">
+              <label>Employment type</label>
+              <div class="li-select">Please select <span>&#9662;</span></div>
+            </div>
+            <div class="li-field">
+              <label>Company or organization*</label>
+              <div class="li-input focus">DRG Law</div>
+              <div class="li-dropdown">
+                <div class="opt"><span class="logo-bx"></span>DRG LAWYERS SL</div>
+                <div class="opt"><span class="logo-bx"></span>DRG PROPERTY LAW LIMITED</div>
+              </div>
+            </div>
+            <div class="li-checkbox">
+              <span class="box">&#10003;</span>
+              <span>I am currently working in this role</span>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="li-btn solid">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">Why this matters</div>
+      <div class="body">LinkedIn confirms you are authorized to create a Company Page by checking that the email domain on your profile (Step 1) and your current employer field (Step 2) align with the company you are about to create.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">If it shows up</div>
+      <div class="body">If DRG Law already appears in the dropdown, a different LinkedIn user has already created a Page using that name. We will spot this in Step 3 and choose either to claim it (if it is yours, abandoned) or to use a slight variant.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">03</div>
+      <div class="step-body">
+        <div class="step-meta">Step 3 · About 7 minutes</div>
+        <h1>Create the Company&nbsp;Page<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>Open <strong>linkedin.com/company/setup/new</strong>. Pick the <strong>Company</strong> tile (the leftmost option). Then fill the setup form using the values we want for DRG Law.</p>
+      </div>
+    </div>
+
+    <div class="li-mock">
+      <div class="li-topbar">
+        <div class="li-logo">in</div>
+        <div class="li-search">Search</div>
+        <div class="li-nav">
+          <div class="item active"><span class="ic"></span>Home</div>
+          <div class="item"><span class="ic"></span>Network</div>
+          <div class="item"><span class="ic"></span>Jobs</div>
+          <div class="item me"><span class="ic"></span>Me</div>
+        </div>
+      </div>
+      <div class="li-body">
+        <div class="li-chooser">
+          <h3>Create a LinkedIn Page</h3>
+          <div class="sub">Connect with clients, employees, and the LinkedIn community. To get started, choose a page type.</div>
+          <div class="li-chooser-grid">
+            <div class="li-chooser-card highlight">
+              <div class="ico"></div>
+              <div class="ttl">Company</div>
+              <div class="txt">Small, medium, and large businesses</div>
+            </div>
+            <div class="li-chooser-card">
+              <div class="ico"></div>
+              <div class="ttl">Showcase page</div>
+              <div class="txt">Sub-pages associated with an existing page</div>
+            </div>
+            <div class="li-chooser-card">
+              <div class="ico"></div>
+              <div class="ttl">Educational institution</div>
+              <div class="txt">Schools and universities</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">Click here</div>
+      <div class="body">The <strong>Company</strong> tile (highlighted in gold). Showcase pages and Educational institution do not apply.</div>
+    </div>
+
+    <h2>Use these exact values</h2>
+    <p>The form has fields for Name, public URL, Website, Industry, Organization size, Organization type, Logo, and Tagline. The right side shows a live preview. Fill the required fields, leave Logo and Tagline blank for now (we populate them when the brand assets are locked).</p>
+
+    <div class="li-mock">
+      <div class="li-body">
+        <div class="li-setup">
+          <div class="li-setup-form">
+            <div class="li-field">
+              <label>Name*</label>
+              <div class="li-input">DRG Law</div>
+            </div>
+            <div class="li-field">
+              <label>linkedin.com/company/*</label>
+              <div class="li-input focus">drg-law</div>
+            </div>
+            <div class="li-field">
+              <label>Website</label>
+              <div class="li-input">https://www.drglaw.ca</div>
+            </div>
+            <div class="li-field">
+              <label>Industry*</label>
+              <div class="li-input">Law Practice</div>
+            </div>
+            <div class="li-field">
+              <label>Organization size*</label>
+              <div class="li-select">1 employee <span>&#9662;</span></div>
+            </div>
+            <div class="li-field">
+              <label>Organization type*</label>
+              <div class="li-select">Self-employed <span>&#9662;</span></div>
+            </div>
+          </div>
+          <div class="li-setup-side">
+            <div class="hdr">Page preview</div>
+            <div class="li-preview-card">
+              <div class="pic"></div>
+              <div class="name">DRG Law</div>
+              <div class="tag">Tagline</div>
+              <div class="ind">Law Practice</div>
+              <div class="follow">+ Follow</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">Field by field</div>
+      <div class="body"><strong>Name:</strong> DRG Law. <strong>URL slug:</strong> drg-law (becomes linkedin.com/company/drg-law). <strong>Website:</strong> https://www.drglaw.ca. <strong>Industry:</strong> Law Practice (auto-suggests after a few keystrokes). <strong>Organization size:</strong> 1 employee. <strong>Organization type:</strong> Self-employed.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">If drg-law is taken</div>
+      <div class="body">Try drglaw, drg-law-toronto, or drg-law-ca. The slug must be unique across all of LinkedIn. We can change it later, so do not block on it.</div>
+    </div>
+
+    <p>When all required fields are filled, the <strong>Create page</strong> button at the bottom turns blue. Click it. LinkedIn lands you on the new Page in admin view, ready to receive content.</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">04</div>
+      <div class="step-body">
+        <div class="step-meta">Step 4 · About 3 minutes</div>
+        <h1>Add me as Super&nbsp;admin<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>From the new Page in admin view, click <strong>Settings</strong> in the left sidebar, then <strong>Manage admins</strong>. Click <strong>Add admin</strong>, type <strong>Adriano Domingues</strong>, pick my profile from the suggestions (linkedin.com/in/adriano-domingues), and select <strong>Super admin</strong> as the role. Save.</p>
+      </div>
+    </div>
+
+    <div class="li-mock">
+      <div class="li-body">
+        <div class="li-admin">
+          <div class="h">Manage admins</div>
+          <div class="sub">Page admins · Paid media admins</div>
+          <div class="li-admin-row">
+            <div class="av"></div>
+            <div class="info">
+              <div class="nm">Damaris Regina Guimaraes</div>
+              <div class="role-d">Super admin · Lawyer at DRG Law</div>
+            </div>
+            <div class="dropdown">Super admin &#9662;</div>
+          </div>
+          <div class="add-row">
+            <div class="h" style="font-size: 13px; margin-bottom: 6px;">Add admin</div>
+            <div class="li-input focus">Adriano Domingues</div>
+            <div class="li-dropdown">
+              <div class="opt">
+                <span class="logo-bx" style="background: linear-gradient(135deg, #1E2F58, #3a4d7a);"></span>
+                <div>
+                  <div style="font-weight: 600;">Adriano Domingues</div>
+                  <div style="font-size: 11px; color: var(--li-muted);">Director · CaseLoad Select · Toronto</div>
+                </div>
+              </div>
+            </div>
+            <div class="role-options">
+              <div class="li-role-opt active">
+                <div class="dot"></div>
+                <div>
+                  <div class="nm">Super admin</div>
+                  <div class="desc">Full access. Edit page details, post content, manage admins, edit settings.</div>
+                </div>
+              </div>
+              <div class="li-role-opt">
+                <div class="dot"></div>
+                <div>
+                  <div class="nm">Content admin</div>
+                  <div class="desc">Post content and respond to comments. Cannot manage admins or edit page settings.</div>
+                </div>
+              </div>
+              <div class="li-role-opt">
+                <div class="dot"></div>
+                <div>
+                  <div class="nm">Curator</div>
+                  <div class="desc">Suggest content for review. Cannot publish.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">Pick this role</div>
+      <div class="body"><strong>Super admin.</strong> The only role that lets me edit page details, publish, manage future admins, and respond to messages, all of which we need to run the channel for you.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">You stay in control</div>
+      <div class="body">You remain Super admin too. If you ever want to remove me, the path is the same screen: Manage admins, click the role dropdown next to my name, choose <strong>Remove admin</strong>. No password reset, no escalation.</div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">Already cleared: the "follow the Page first" gate</div>
+      <div class="body">LinkedIn requires the candidate admin to be following the Company Page before they can be added. When you first tried this on 12 May, LinkedIn returned <em>"This member isn't following your Page. Only members following DRG Law Professional Corporation can be made admins."</em> That gate is now cleared. I followed the DRG Law page on 13 May, so retrying the add-admin step now goes through without that error.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="section-num"><span class="mark"></span>What happens next</div>
+    <h1>Page created, then quiet, then&nbsp;live<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+    <p class="lead">The four steps stand the channel up structurally. After that, the Page sits dormant for one to two weeks while brand and content strategy land. Once those are approved, the channel turns on and the publishing cadence begins.</p>
+
+    <div class="timeline">
+      <div class="tl-card">
+        <div class="when">Day 0 · This week</div>
+        <h3>Steps 1 to 4 complete</h3>
+        <p>Page exists at linkedin.com/company/drg-law. Damaris is owner, Adriano is Super admin. Page is empty. No posts.</p>
+      </div>
+      <div class="tl-card">
+        <div class="when">Days 1 to 5</div>
+        <h3>Page populated</h3>
+        <p>Logo, About copy, tagline, cover image, founded year, location, specialties, call-to-action button. Still no posts.</p>
+      </div>
+      <div class="tl-card">
+        <div class="when">Days 5 to 14</div>
+        <h3>Brand and content strategy approved</h3>
+        <p>Brand identity locked. Content pillars and publishing cadence confirmed by you. Editorial calendar drafted for first 30 days.</p>
+      </div>
+      <div class="tl-card">
+        <div class="when">Day 15 onward</div>
+        <h3>Posting activates</h3>
+        <p>First post goes live. Publishing on the agreed cadence, monitoring engagement, adjusting against the metrics that matter for inflow.</p>
+      </div>
+    </div>
+
+    <div class="panel featured">
+      <h3>When you finish Steps 1 to 4</h3>
+      <p>Send me a one-line WhatsApp confirming the Page is live and I am added as admin. Include the linkedin.com/company/* URL. From there I take over.</p>
+    </div>
+
+    <div class="panel dark">
+      <h3>Compliance note</h3>
+      <p>All public content on the Page will follow LSO Rule 4.2-1. No outcome promises, no specialist or expert language, no unverifiable superlatives. Final approval on every post stays with you until we agree on a tighter pre-approval rhythm.</p>
+    </div>
+  </div>
+</section>
+
+<footer class="doc-footer" role="contentinfo">
+  <div class="doc-footer-inner">
+    <span class="left">CaseLoad Select<span class="sep">·</span>Automated Case Selection System</span>
+    <span>Confidential<span class="sep">·</span>Prepared for DRG Law<span class="sep">·</span>caseloadselect.ca</span>
+  </div>
+</footer>
+
+<script>
+  // Token-aware back link. The form sends ?token=DRG-LAW-2026-05-13 when it
+  // links to this guide; we wire the "Back to onboarding" anchor to return
+  // the user to /firm-onboarding/[token]. Falls back to root if no token.
+  (function () {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get('token');
+      var link = document.getElementById('back-to-onboarding');
+      if (link) {
+        link.href = token ? '/firm-onboarding/' + encodeURIComponent(token) : '/';
+      }
+    } catch (e) { /* no-op: link defaults to / */ }
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Microsoft 365 admin access · DRG Law · CaseLoad Select</title>
+<meta name="description" content="Four-step visual guide to granting scoped Microsoft 365 admin access for email authentication, prepared for Damaris Regina Guimaraes by CaseLoad Select.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700&family=Manrope:wght@500;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --deep-black: #0D1520;
+    --gold: #C4B49A;
+    --gold-on-light: #8B7A5E;
+    --gold-tint: rgba(196, 180, 154, 0.16);
+    --navy: #1E2F58;
+    --parchment: #F4F3EF;
+    --white: #FFFFFF;
+    --body: #4a5a72;
+    --muted: #8090A8;
+    --border: #e0ddd6;
+    --off-white: #F9F8F5;
+    --green-pass: #27834A;
+    --red-fail: #c0564e;
+
+    --font-display: 'Oxanium', sans-serif;
+    --font-heading: 'Manrope', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+
+    --ms-blue: #2564CF;
+    --ms-bg: #FAF9F8;
+    --ms-card: #FFFFFF;
+    --ms-text: #323130;
+    --ms-muted: #605E5C;
+    --ms-border: #EDEBE9;
+    --ms-side: #F3F2F1;
+    --ms-side-active: #E1DFDD;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { font-size: 16px; scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-body);
+    font-weight: 400;
+    color: var(--body);
+    background: var(--parchment);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  img { max-width: 100%; display: block; }
+
+  .topbar {
+    background: var(--deep-black);
+    padding: 18px 32px 16px;
+    border-bottom: 2px solid var(--gold);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .topbar-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+  .topbar img { height: 17px; width: auto; }
+  .topbar .crumb {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 9.5px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+
+  .cover { background: var(--deep-black); color: var(--white); padding: 96px 32px 80px; }
+  .cover-inner { max-width: 920px; margin: 0 auto; }
+  .cover-eyebrow {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 28px;
+  }
+  .cover h1 {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 64px;
+    color: var(--white);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin-bottom: 24px;
+    max-width: 800px;
+  }
+  .cover h1 .term, .section h1 .term {
+    width: 0.22em;
+    height: 0.22em;
+    margin-left: 0.12em;
+    vertical-align: top;
+    display: inline-block;
+    position: relative;
+    top: 0.1em;
+    flex-shrink: 0;
+  }
+  .cover .lede {
+    font-size: 18px;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.78);
+    max-width: 660px;
+    margin-bottom: 56px;
+  }
+  .cover-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 32px;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    padding-top: 32px;
+  }
+  .cover-meta .lbl {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 6px;
+  }
+  .cover-meta .val { font-size: 14px; color: var(--white); font-weight: 500; }
+
+  .section {
+    padding: 88px 32px 72px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section:last-of-type { border-bottom: none; }
+  .section-inner { max-width: 920px; margin: 0 auto; }
+  .section-num {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold-on-light);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-num .mark { display: inline-block; width: 8px; height: 8px; background: var(--gold); }
+  .section h1 {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 44px;
+    color: var(--navy);
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    margin-bottom: 20px;
+    max-width: 780px;
+  }
+  .section .lead {
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--body);
+    max-width: 720px;
+    margin-bottom: 28px;
+  }
+  .section p {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--body);
+    margin-bottom: 14px;
+    max-width: 760px;
+  }
+  .section p strong { color: var(--navy); font-weight: 600; }
+  .section h2 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 24px;
+    color: var(--navy);
+    line-height: 1.2;
+    margin: 24px 0 12px;
+  }
+  .section h3 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 17px;
+    color: var(--navy);
+    margin: 20px 0 8px;
+  }
+
+  .step-header {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 24px;
+    align-items: start;
+    margin-bottom: 24px;
+  }
+  .step-num-big {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 64px;
+    line-height: 0.9;
+    color: var(--gold);
+    text-align: right;
+  }
+  .step-meta {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold-on-light);
+    margin-bottom: 10px;
+  }
+  .step-body h1 { font-size: 32px; max-width: 700px; margin-bottom: 14px; }
+
+  .panel {
+    background: var(--white);
+    border: 1px solid var(--border);
+    padding: 24px 28px;
+    margin: 18px 0;
+  }
+  .panel.gold { background: var(--gold-tint); border-color: var(--gold); }
+  .panel.dark {
+    background: var(--deep-black);
+    color: var(--white);
+    border-color: var(--deep-black);
+  }
+  .panel.dark p { color: rgba(255, 255, 255, 0.8); }
+  .panel.dark h3 { color: var(--gold); }
+  .panel.dark p strong { color: var(--gold); }
+  .panel h3:first-child { margin-top: 0; }
+  .panel p:last-child { margin-bottom: 0; }
+  .panel.featured { border: 2px solid var(--gold); background: var(--white); }
+
+  .ann {
+    background: var(--white);
+    border: 1px solid var(--border);
+    padding: 16px 20px;
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+  .ann.gold { background: var(--gold-tint); border-color: var(--gold); }
+  .ann .lbl {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--navy);
+  }
+  .ann.gold .lbl { color: var(--deep-black); }
+  .ann .body { font-size: 14px; line-height: 1.55; color: var(--body); }
+  .ann .body strong { color: var(--navy); font-weight: 600; }
+
+  /* Scope panels (yes / no) — symmetric border, status pill at top */
+  .scope-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+  }
+  @media (max-width: 720px) { .scope-grid { grid-template-columns: 1fr; } }
+  .scope-card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    padding: 22px 26px;
+  }
+  .scope-card .pill {
+    display: inline-block;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    margin-bottom: 14px;
+  }
+  .scope-card.yes .pill { background: var(--green-pass); color: var(--white); }
+  .scope-card.no .pill { background: transparent; color: var(--red-fail); border: 1px solid var(--red-fail); }
+  .scope-card ul { list-style: none; }
+  .scope-card li {
+    font-size: 14px;
+    color: var(--body);
+    padding: 5px 0;
+    line-height: 1.5;
+    position: relative;
+    padding-left: 18px;
+  }
+  .scope-card li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 12px;
+    width: 6px;
+    height: 6px;
+    background: var(--gold);
+  }
+
+  /* Microsoft 365 admin center mockup */
+  .ms-mock {
+    background: var(--ms-bg);
+    border: 1px solid var(--border);
+    margin: 24px 0;
+    overflow: hidden;
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    color: var(--ms-text);
+  }
+  .ms-topbar {
+    background: var(--ms-card);
+    border-bottom: 1px solid var(--ms-border);
+    height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 12px;
+    font-size: 13px;
+  }
+  .ms-burger {
+    width: 18px;
+    height: 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .ms-burger span { height: 2px; background: var(--ms-text); width: 100%; }
+  .ms-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--ms-text);
+    font-size: 13px;
+  }
+  .ms-logo .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2px;
+    width: 16px;
+    height: 16px;
+  }
+  .ms-logo .grid div { width: 7px; height: 7px; }
+  .ms-logo .grid div:nth-child(1) { background: #F25022; }
+  .ms-logo .grid div:nth-child(2) { background: #7FBA00; }
+  .ms-logo .grid div:nth-child(3) { background: #00A4EF; }
+  .ms-logo .grid div:nth-child(4) { background: #FFB900; }
+
+  .ms-search {
+    background: var(--ms-bg);
+    border: 1px solid var(--ms-border);
+    flex: 0 0 240px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 12px;
+    color: var(--ms-muted);
+  }
+  .ms-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .ms-actions .ic { width: 16px; height: 16px; background: var(--ms-muted); border-radius: 50%; opacity: 0.55; }
+  .ms-actions .av {
+    width: 26px; height: 26px;
+    background: linear-gradient(135deg, #C7D1E0, #8FA3BF);
+    border-radius: 50%;
+    color: var(--white);
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ms-shell {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    min-height: 360px;
+  }
+  .ms-side {
+    background: var(--ms-side);
+    border-right: 1px solid var(--ms-border);
+    padding: 16px 0;
+    font-size: 13px;
+  }
+  .ms-side .item {
+    padding: 8px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ms-text);
+  }
+  .ms-side .item .ic {
+    width: 16px; height: 16px;
+    background: var(--ms-muted);
+    flex-shrink: 0;
+    opacity: 0.6;
+  }
+  .ms-side .item.active {
+    background: var(--ms-side-active);
+    border-left: 3px solid var(--ms-blue);
+    padding-left: calc(18px - 3px);
+    font-weight: 600;
+  }
+  .ms-side .item.active .ic { background: var(--ms-blue); opacity: 1; }
+  .ms-side .item.sub { padding-left: 44px; font-size: 12px; }
+  .ms-side .item.sub.active {
+    background: rgba(37, 100, 207, 0.08);
+    color: var(--ms-blue);
+    font-weight: 600;
+    border-left: 3px solid var(--ms-blue);
+    padding-left: calc(44px - 3px);
+  }
+
+  .ms-content { background: var(--ms-bg); padding: 26px 30px; }
+  .ms-content h4 {
+    font-family: "Segoe UI", sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    color: var(--ms-text);
+    margin-bottom: 14px;
+  }
+  .ms-tabs {
+    display: flex;
+    gap: 22px;
+    border-bottom: 1px solid var(--ms-border);
+    margin-bottom: 18px;
+    font-size: 13px;
+  }
+  .ms-tabs .tab { padding: 8px 0; color: var(--ms-muted); }
+  .ms-tabs .tab.active {
+    color: var(--ms-blue);
+    font-weight: 600;
+    border-bottom: 2px solid var(--ms-blue);
+  }
+  .ms-cmdbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--ms-text);
+  }
+  .ms-cmdbar .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 3px;
+  }
+  .ms-cmdbar .btn.primary { background: var(--ms-blue); color: var(--white); font-weight: 600; }
+  .ms-cmdbar .btn.primary.highlight { box-shadow: 0 0 0 3px rgba(196, 180, 154, 0.7); }
+  .ms-cmdbar .btn.secondary {
+    background: var(--ms-card);
+    border: 1px solid var(--ms-border);
+    color: var(--ms-text);
+  }
+
+  .ms-table {
+    background: var(--ms-card);
+    border: 1px solid var(--ms-border);
+    font-size: 13px;
+  }
+  .ms-table .row {
+    display: grid;
+    grid-template-columns: 200px 1fr 130px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--ms-border);
+    align-items: center;
+  }
+  .ms-table .row:last-child { border-bottom: none; }
+  .ms-table .row.head {
+    font-weight: 600;
+    color: var(--ms-muted);
+    font-size: 11px;
+    background: var(--ms-bg);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .ms-table .row.highlight {
+    background: var(--gold-tint);
+    box-shadow: inset 3px 0 0 var(--gold);
+  }
+  .ms-table .row .pill-x {
+    display: inline-block;
+    background: var(--ms-bg);
+    border: 1px solid var(--ms-border);
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 11px;
+    color: var(--ms-muted);
+  }
+  .ms-table .row .pill-x.assigned {
+    background: rgba(39, 131, 74, 0.1);
+    color: var(--green-pass);
+    border-color: rgba(39, 131, 74, 0.3);
+  }
+  .ms-table .row .desc { color: var(--ms-muted); font-size: 12px; }
+
+  /* Slide-in panel */
+  .ms-shell-3col {
+    display: grid;
+    grid-template-columns: 200px 1fr 320px;
+    min-height: 400px;
+  }
+  .ms-detail-panel {
+    background: var(--white);
+    border-left: 1px solid var(--ms-border);
+    padding: 22px 24px;
+  }
+  .ms-detail-panel .head-x {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .ms-detail-panel .head-x .title { font-weight: 600; font-size: 15px; color: var(--ms-text); }
+  .ms-detail-panel .head-x .x { color: var(--ms-muted); font-size: 18px; }
+  .ms-detail-panel .lbl-x { font-size: 11px; color: var(--ms-muted); margin-top: 14px; margin-bottom: 4px; }
+  .ms-detail-panel .field {
+    border: 1px solid var(--ms-border);
+    border-radius: 2px;
+    padding: 7px 11px;
+    font-size: 13px;
+    color: var(--ms-text);
+    background: var(--white);
+  }
+  .ms-detail-panel .field.focus {
+    border-color: var(--ms-blue);
+    box-shadow: 0 0 0 1px var(--ms-blue);
+  }
+  .ms-detail-panel .field.placeholder { color: var(--ms-muted); min-height: 56px; }
+  .ms-detail-panel .actions-x {
+    margin-top: 22px;
+    display: flex;
+    gap: 10px;
+    border-top: 1px solid var(--ms-border);
+    padding-top: 16px;
+  }
+  .ms-detail-panel .actions-x .btn {
+    padding: 6px 16px;
+    font-size: 13px;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+  .ms-detail-panel .actions-x .btn.primary { background: var(--ms-blue); color: var(--white); }
+  .ms-detail-panel .actions-x .btn.secondary {
+    background: var(--white);
+    color: var(--ms-text);
+    border: 1px solid var(--ms-border);
+  }
+
+  /* Role detail (Step 4) */
+  .ms-role { background: var(--ms-card); border: 1px solid var(--ms-border); padding: 22px 26px; }
+  .ms-role .head-r { border-bottom: 1px solid var(--ms-border); padding-bottom: 14px; margin-bottom: 18px; }
+  .ms-role .head-r .name { font-weight: 700; font-size: 16px; color: var(--ms-text); }
+  .ms-role .head-r .desc { font-size: 13px; color: var(--ms-muted); margin-top: 4px; }
+  .ms-role .row {
+    display: grid;
+    grid-template-columns: 200px 1fr 130px;
+    padding: 10px 0;
+    align-items: center;
+    border-bottom: 1px solid var(--ms-border);
+    font-size: 13px;
+  }
+  .ms-role .row:last-child { border-bottom: none; }
+  .ms-role .row.head-row {
+    font-weight: 600;
+    color: var(--ms-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .ms-role .row .av {
+    width: 30px; height: 30px;
+    background: linear-gradient(135deg, #1E2F58, #3a4d7a);
+    color: var(--white);
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 12px;
+  }
+  .ms-role .row .av.guest { background: linear-gradient(135deg, #C4B49A, #8B7E6A); }
+  .ms-role .row .nm-wrap { display: flex; align-items: center; }
+  .ms-role .row .role-label { font-size: 11px; color: var(--ms-muted); }
+
+  .timeline {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+  }
+  @media (max-width: 720px) { .timeline { grid-template-columns: 1fr; } }
+  .tl-card { background: var(--white); border: 1px solid var(--border); padding: 22px 26px; }
+  .tl-card .when {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold-on-light);
+    margin-bottom: 8px;
+  }
+  .tl-card h3 { font-size: 15px; margin: 0 0 6px; color: var(--navy); }
+  .tl-card p { font-size: 13px; line-height: 1.55; color: var(--body); margin: 0; max-width: none; }
+
+  .doc-footer {
+    background: var(--deep-black);
+    color: rgba(255, 255, 255, 0.65);
+    padding: 22px 32px;
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .doc-footer-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .doc-footer .left { color: rgba(196, 180, 154, 0.85); }
+  .doc-footer .sep { color: rgba(196, 180, 154, 0.4); margin: 0 8px; }
+
+  @media (max-width: 720px) {
+    .cover h1 { font-size: 44px; }
+    .section h1 { font-size: 32px; }
+    .step-header { grid-template-columns: 1fr; gap: 8px; }
+    .step-num-big { text-align: left; font-size: 48px; }
+    .ms-shell, .ms-shell-3col { grid-template-columns: 1fr; }
+    .ms-side { display: none; }
+    .ann { grid-template-columns: 1fr; gap: 6px; }
+    .ms-table .row, .ms-role .row { grid-template-columns: 1fr; gap: 4px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar" role="banner">
+  <div class="topbar-inner">
+    <img src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select · Sign Better Cases">
+    <a id="back-to-onboarding" href="/" class="crumb" style="text-decoration: none; cursor: pointer; transition: color 0.15s;" onmouseover="this.style.color='#FFFFFF'" onmouseout="this.style.color=''">← Back to onboarding</a>
+  </div>
+</header>
+
+<section class="cover">
+  <div class="cover-inner">
+    <div class="cover-eyebrow">Guide 02 · Authority workstream</div>
+    <h1>Microsoft 365 admin&nbsp;access<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+    <p class="lede">A four-step walkthrough for granting Adriano scoped admin access on the @drglaw.ca tenant so SPF, DKIM, and DMARC can be configured. Twenty minutes of work, scoped to email infrastructure only, time-boxed and revocable.</p>
+    <div class="cover-meta">
+      <div>
+        <div class="lbl">Prepared for</div>
+        <div class="val">Damaris Regina Guimaraes</div>
+      </div>
+      <div>
+        <div class="lbl">Prepared by</div>
+        <div class="val">Adriano Domingues, CaseLoad Select</div>
+      </div>
+      <div>
+        <div class="lbl">Version</div>
+        <div class="val">v3 · 13 May 2026</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="section-num"><span class="mark"></span>Why this access matters</div>
+    <h1>Authenticated email is the difference between inbox and&nbsp;spam<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+    <p class="lead">When we send review request emails, follow-up sequences, and any campaign content from your domain, Gmail and Outlook check three records (SPF, DKIM, DMARC) to confirm the message is really from drglaw.ca and not a spoof. Without those records, modern inboxes route your mail to spam at best, and at worst your domain stays open to impersonation by anyone willing to forge it.</p>
+    <p>The setup is one-time. Once it lands, everything routed through your domain inherits the trust. Every review request, every nurture sequence, every transactional confirmation. The work itself is plumbing, not creative, but it has to happen before any of the Authority and Capture work goes live.</p>
+
+    <h2>What this access permits, what it does not</h2>
+
+    <div class="scope-grid">
+      <div class="scope-card yes">
+        <span class="pill">Adriano can</span>
+        <ul>
+          <li>Enable DKIM signing on drglaw.ca</li>
+          <li>Configure DMARC reporting</li>
+          <li>Manage mail flow rules</li>
+          <li>Set up email aliases and forwarding</li>
+          <li>Verify domain authentication health</li>
+          <li>Configure shared mailboxes if needed later</li>
+        </ul>
+      </div>
+      <div class="scope-card no">
+        <span class="pill">Adriano cannot</span>
+        <ul>
+          <li>Read your email or anyone else's</li>
+          <li>Reset your password</li>
+          <li>Access OneDrive or SharePoint files</li>
+          <li>See your calendar or contacts</li>
+          <li>Change billing or subscriptions</li>
+          <li>Modify other users' accounts</li>
+        </ul>
+      </div>
+    </div>
+
+    <p>The role being requested is <strong>Exchange Administrator.</strong> It is the surgical role for email infrastructure work. It is not Global Administrator, which would give blanket access. The DNS-side records (SPF, DMARC) that live at your domain registrar will be sent to you as a separate list, since registrar-level DNS sits outside Microsoft 365 entirely.</p>
+
+    <div class="panel dark">
+      <h3>Time-boxed and reversible</h3>
+      <p>The grant is intended for a five-business-day window. Once authentication is live and tested, you remove the role from the same screen where you granted it. Step 4 of this guide shows the exact path. Nothing about this is permanent without your active consent.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">01</div>
+      <div class="step-body">
+        <div class="step-meta">Step 1 · About 2 minutes</div>
+        <h1>Sign in to admin.microsoft.com<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>Open <strong>admin.microsoft.com</strong> in your browser and sign in with your <strong>damaris@drglaw.ca</strong> credentials, the same login you use for Outlook on the web. If you have multi-factor authentication enabled (you should), approve the prompt on your phone. The Microsoft 365 admin center loads with a left sidebar showing Home, Users, Teams &amp; groups, and other categories.</p>
+      </div>
+    </div>
+
+    <div class="ms-mock">
+      <div class="ms-topbar">
+        <div class="ms-burger"><span></span><span></span><span></span></div>
+        <div class="ms-logo"><span class="grid"><div></div><div></div><div></div><div></div></span>Microsoft 365 admin center</div>
+        <div class="ms-search">Search</div>
+        <div class="ms-actions">
+          <div class="ic"></div>
+          <div class="ic"></div>
+          <div class="av">DG</div>
+        </div>
+      </div>
+      <div class="ms-shell">
+        <div class="ms-side">
+          <div class="item active"><span class="ic"></span>Home</div>
+          <div class="item"><span class="ic"></span>Users</div>
+          <div class="item"><span class="ic"></span>Teams &amp; groups</div>
+          <div class="item"><span class="ic"></span>Roles</div>
+          <div class="item"><span class="ic"></span>Resources</div>
+          <div class="item"><span class="ic"></span>Billing</div>
+          <div class="item"><span class="ic"></span>Settings</div>
+          <div class="item"><span class="ic"></span>Setup</div>
+          <div class="item"><span class="ic"></span>Reports</div>
+          <div class="item"><span class="ic"></span>Health</div>
+        </div>
+        <div class="ms-content">
+          <h4>Welcome, Damaris</h4>
+          <p style="font-size: 13px; color: var(--ms-muted); margin-bottom: 16px;">DRG Law · 1 user · Microsoft 365 Business Basic</p>
+          <div style="background: var(--ms-card); border: 1px solid var(--ms-border); padding: 18px 22px; margin-bottom: 12px;">
+            <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">Your organization</div>
+            <div style="font-size: 12px; color: var(--ms-muted);">drglaw.ca · Domain verified · 1 active user</div>
+          </div>
+          <div style="background: var(--ms-card); border: 1px solid var(--ms-border); padding: 18px 22px;">
+            <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">Recommended setup</div>
+            <div style="font-size: 12px; color: var(--ms-muted);">Configure email security and authentication</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">If sign-in fails</div>
+      <div class="body">Try resetting your password from the Outlook login screen first, then come back. The admin portal uses the same credentials. If you do not see the admin sidebar after sign in, your account may not have admin rights yet, in which case message me and I will help diagnose.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">Bookmark this</div>
+      <div class="body">Save admin.microsoft.com to your browser bookmarks. We come back to this same screen when you remove the access in Step 4, so having it one click away matters.</div>
+    </div>
+
+    <div class="ann" style="border-left-color: var(--red-fail);">
+      <div class="lbl" style="color: var(--red-fail);">Not the Entra admin center</div>
+      <div class="body">Microsoft has two portals that both list "Roles" in the sidebar. Use <strong>admin.microsoft.com</strong> (Microsoft 365 admin center) for this guide. <strong>entra.microsoft.com</strong> (Microsoft Entra admin center) is a different portal that gates the same roles behind Privileged Identity Management and does not offer the simple "Invite a guest" option used in Step 3. If you land on a screen that says "Microsoft Entra ID" at the top, close that tab and start fresh at admin.microsoft.com.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">02</div>
+      <div class="step-body">
+        <div class="step-meta">Step 2 · About 3 minutes</div>
+        <h1>Open Roles, then Exchange&nbsp;administrator<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>In the left sidebar, click <strong>Roles</strong>. The Roles page shows every administrative role in your tenant, what each one permits, and who currently holds it. Filter by name or scroll to find <strong>Exchange administrator</strong> in the list. Click the row to open the role's detail page.</p>
+      </div>
+    </div>
+
+    <div class="ms-mock">
+      <div class="ms-topbar">
+        <div class="ms-burger"><span></span><span></span><span></span></div>
+        <div class="ms-logo"><span class="grid"><div></div><div></div><div></div><div></div></span>Microsoft 365 admin center</div>
+        <div class="ms-search">Search</div>
+        <div class="ms-actions">
+          <div class="ic"></div>
+          <div class="ic"></div>
+          <div class="av">DG</div>
+        </div>
+      </div>
+      <div class="ms-shell">
+        <div class="ms-side">
+          <div class="item"><span class="ic"></span>Home</div>
+          <div class="item"><span class="ic"></span>Users</div>
+          <div class="item"><span class="ic"></span>Teams &amp; groups</div>
+          <div class="item active"><span class="ic"></span>Roles</div>
+          <div class="item sub active">Role assignments</div>
+          <div class="item sub">Compare roles</div>
+          <div class="item"><span class="ic"></span>Resources</div>
+          <div class="item"><span class="ic"></span>Billing</div>
+          <div class="item"><span class="ic"></span>Settings</div>
+        </div>
+        <div class="ms-content">
+          <h4>Role assignments</h4>
+          <div class="ms-tabs">
+            <div class="tab active">Microsoft Entra</div>
+            <div class="tab">Exchange</div>
+            <div class="tab">Intune</div>
+          </div>
+          <div class="ms-cmdbar">
+            <span style="color: var(--ms-muted);">Filter:</span>
+            <div class="btn secondary">All roles</div>
+            <div class="btn secondary">Search by name</div>
+          </div>
+          <div class="ms-table">
+            <div class="row head">
+              <div>Role name</div>
+              <div>Description</div>
+              <div>Assigned</div>
+            </div>
+            <div class="row">
+              <div>Billing administrator</div>
+              <div class="desc">Manage subscriptions and billing</div>
+              <div><span class="pill-x">0</span></div>
+            </div>
+            <div class="row">
+              <div>Compliance administrator</div>
+              <div class="desc">Manage compliance features</div>
+              <div><span class="pill-x">0</span></div>
+            </div>
+            <div class="row highlight">
+              <div><strong>Exchange administrator</strong></div>
+              <div class="desc">Manage mailboxes, mail flow, authentication</div>
+              <div><span class="pill-x">0</span></div>
+            </div>
+            <div class="row">
+              <div>Global administrator</div>
+              <div class="desc">Full access to all features (you)</div>
+              <div><span class="pill-x assigned">1 assigned</span></div>
+            </div>
+            <div class="row">
+              <div>Global reader</div>
+              <div class="desc">Read-only access across the tenant</div>
+              <div><span class="pill-x">0</span></div>
+            </div>
+            <div class="row">
+              <div>SharePoint administrator</div>
+              <div class="desc">Manage SharePoint sites</div>
+              <div><span class="pill-x">0</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">Click here</div>
+      <div class="body">The <strong>Exchange administrator</strong> row, highlighted in gold above. Clicking the row name opens the role detail screen where you assign people to the role.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">Not Global admin</div>
+      <div class="body">Global administrator owns the entire tenant including billing and security. There is no email work that needs that level of access. Exchange administrator is enough.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">03</div>
+      <div class="step-body">
+        <div class="step-meta">Step 3 · About 5 minutes</div>
+        <h1>Add Adriano as an&nbsp;assignment<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>The Exchange administrator detail page lists current assignments (currently empty) and the actions available. Click <strong>Add assignments</strong> at the top. A panel slides in from the right asking for a user. Click <strong>Invite a guest</strong> at the bottom of the panel, then enter the details below.</p>
+      </div>
+    </div>
+
+    <div class="ms-mock">
+      <div class="ms-topbar">
+        <div class="ms-burger"><span></span><span></span><span></span></div>
+        <div class="ms-logo"><span class="grid"><div></div><div></div><div></div><div></div></span>Microsoft 365 admin center</div>
+        <div class="ms-search">Search</div>
+        <div class="ms-actions">
+          <div class="ic"></div>
+          <div class="ic"></div>
+          <div class="av">DG</div>
+        </div>
+      </div>
+      <div class="ms-shell-3col">
+        <div class="ms-side">
+          <div class="item"><span class="ic"></span>Home</div>
+          <div class="item"><span class="ic"></span>Users</div>
+          <div class="item active"><span class="ic"></span>Roles</div>
+          <div class="item sub active">Role assignments</div>
+          <div class="item"><span class="ic"></span>Settings</div>
+        </div>
+        <div class="ms-content" style="border-right: 1px solid var(--ms-border);">
+          <h4>Exchange administrator</h4>
+          <div class="ms-cmdbar">
+            <div class="btn primary highlight"><span>+</span> Add assignments</div>
+            <div class="btn secondary">Export</div>
+          </div>
+          <div class="ms-tabs">
+            <div class="tab active">Assigned</div>
+            <div class="tab">Permissions</div>
+            <div class="tab">Description</div>
+          </div>
+          <div style="font-size: 13px; color: var(--ms-muted); padding: 16px 0;">No one is currently assigned this role.</div>
+        </div>
+        <div class="ms-detail-panel">
+          <div class="head-x">
+            <div class="title">Add assignments</div>
+            <div class="x">&times;</div>
+          </div>
+          <div style="font-size: 12px; color: var(--ms-muted); margin-bottom: 12px;">Search for a user or invite a guest.</div>
+
+          <div class="lbl-x">User</div>
+          <div class="field focus">adriano@caseloadselect.ca</div>
+
+          <div class="lbl-x">Display name</div>
+          <div class="field">Adriano Domingues</div>
+
+          <div class="lbl-x">Personal message (optional)</div>
+          <div class="field placeholder">CaseLoad Select pilot, email authentication setup. Five-business-day window.</div>
+
+          <div class="actions-x">
+            <div class="btn primary">Add</div>
+            <div class="btn secondary">Cancel</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">Use these values</div>
+      <div class="body"><strong>Email:</strong> adriano@caseloadselect.ca. <strong>Display name:</strong> Adriano Domingues. <strong>Message:</strong> any short note works (the example above is fine). Click <strong>Add</strong> when done.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">Microsoft sends me an invite</div>
+      <div class="body">After you click Add, Microsoft sends an invitation to my email. I accept, complete a one-time MFA challenge, and the role is active on my account. You will see "Adriano Domingues (guest)" appear in the Exchange administrator assignments list within minutes.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="step-header">
+      <div class="step-num-big">04</div>
+      <div class="step-body">
+        <div class="step-meta">Step 4 · About 1 minute · Run when I confirm the work is complete</div>
+        <h1>Remove the assignment when authentication is&nbsp;live<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+        <p>Once I confirm SPF, DKIM, and DMARC are configured and tested (typically within five business days), come back to the same Exchange administrator screen. Find my row in the assigned list, hover, click the menu icon at the right end of the row, and choose <strong>Remove</strong>. Confirm. The role is gone immediately.</p>
+      </div>
+    </div>
+
+    <div class="ms-mock">
+      <div class="ms-topbar">
+        <div class="ms-burger"><span></span><span></span><span></span></div>
+        <div class="ms-logo"><span class="grid"><div></div><div></div><div></div><div></div></span>Microsoft 365 admin center</div>
+        <div class="ms-search">Search</div>
+        <div class="ms-actions">
+          <div class="ic"></div>
+          <div class="ic"></div>
+          <div class="av">DG</div>
+        </div>
+      </div>
+      <div class="ms-shell">
+        <div class="ms-side">
+          <div class="item"><span class="ic"></span>Home</div>
+          <div class="item"><span class="ic"></span>Users</div>
+          <div class="item active"><span class="ic"></span>Roles</div>
+          <div class="item sub active">Role assignments</div>
+        </div>
+        <div class="ms-content">
+          <h4>Exchange administrator</h4>
+          <div class="ms-cmdbar">
+            <div class="btn primary"><span>+</span> Add assignments</div>
+            <div class="btn secondary">Export</div>
+          </div>
+          <div class="ms-role">
+            <div class="head-r">
+              <div class="name">Assigned to this role</div>
+              <div class="desc">2 assigned, including 1 guest</div>
+            </div>
+            <div class="row head-row">
+              <div>Name</div>
+              <div>Email</div>
+              <div></div>
+            </div>
+            <div class="row">
+              <div class="nm-wrap">
+                <span class="av">DG</span>
+                <div>
+                  <div style="font-weight: 600;">Damaris Guimaraes</div>
+                  <div class="role-label">Owner</div>
+                </div>
+              </div>
+              <div style="font-size: 13px; color: var(--ms-muted);">damaris@drglaw.ca</div>
+              <div></div>
+            </div>
+            <div class="row" style="background: var(--gold-tint); box-shadow: inset 3px 0 0 var(--gold);">
+              <div class="nm-wrap">
+                <span class="av guest">AD</span>
+                <div>
+                  <div style="font-weight: 600;">Adriano Domingues</div>
+                  <div class="role-label">Guest · CaseLoad Select</div>
+                </div>
+              </div>
+              <div style="font-size: 13px; color: var(--ms-muted);">adriano@caseloadselect.ca</div>
+              <div style="text-align: right;">
+                <div style="display: inline-block; border: 1px solid var(--red-fail); color: var(--red-fail); padding: 4px 12px; border-radius: 3px; font-size: 12px; font-weight: 600;">Remove</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ann">
+      <div class="lbl">What removal does</div>
+      <div class="body">My Exchange administrator role disappears immediately. The guest user record stays in your directory (so any audit trail is preserved), but I can no longer see or change anything in your tenant. To delete the guest record entirely, go to <strong>Users &rsaquo; Guest users</strong> and remove the entry there.</div>
+    </div>
+
+    <div class="ann gold">
+      <div class="lbl">If anything looks off</div>
+      <div class="body">Removal is one-click. Use it any time you feel uncertain about the access, even before the work is finished. I would rather you remove and we troubleshoot than leave the assignment open if you have questions.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-inner">
+    <div class="section-num"><span class="mark"></span>What happens next</div>
+    <h1>Five days from grant to authenticated&nbsp;email<svg class="term" viewBox="0 0 6 6" aria-hidden="true"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+    <p class="lead">Once the role is granted, the work runs in parallel between two surfaces. I configure DKIM signing inside Exchange admin center, you paste a small set of DNS records at your domain registrar (where drglaw.ca is hosted, likely GoDaddy). Each record is a one-line copy-paste with values I supply. By end of week, all three protocols are live and you are protected.</p>
+
+    <div class="timeline">
+      <div class="tl-card">
+        <div class="when">Day 0 · Today</div>
+        <h3>Role assignment complete</h3>
+        <p>You complete Steps 1 to 3 above. I receive the invitation, accept, complete MFA. Exchange administrator role is active on my account.</p>
+      </div>
+      <div class="tl-card">
+        <div class="when">Days 1 to 2</div>
+        <h3>DKIM keys generated, DNS values sent</h3>
+        <p>I generate DKIM signing keys inside Exchange admin center. I send you a list of three DNS records (one for SPF, two CNAMEs for DKIM, one for DMARC) in a clear copy-paste table.</p>
+      </div>
+      <div class="tl-card">
+        <div class="when">Days 2 to 4</div>
+        <h3>You add the DNS records</h3>
+        <p>You paste the values at your domain registrar. Five-minute job, on its own page in your registrar dashboard. We can do this together over a fifteen-minute call if it is your first time touching DNS.</p>
+      </div>
+      <div class="tl-card">
+        <div class="when">Day 5</div>
+        <h3>Verified, then revoked</h3>
+        <p>I run a verification test (mail-tester.com or equivalent) to confirm SPF, DKIM, and DMARC pass. I send you the green-light report. You run Step 4 of this guide and remove my admin role.</p>
+      </div>
+    </div>
+
+    <div class="panel featured">
+      <h3>When you finish Steps 1 to 3</h3>
+      <p>Send me a one-line WhatsApp confirming the assignment is in place. I will accept the invitation within the hour and start the configuration that day.</p>
+    </div>
+
+    <div class="panel dark">
+      <h3>A note on data privacy</h3>
+      <p>The Exchange administrator role does not give visibility into mailbox content. If you ever want a complete audit of what an admin can see and do, the Microsoft documentation under "About admin roles in the Microsoft 365 admin center" lists every permission attached to every role, sourced directly from Microsoft. The role being requested here is the most surgical option for the work that needs to happen.</p>
+    </div>
+  </div>
+</section>
+
+<footer class="doc-footer" role="contentinfo">
+  <div class="doc-footer-inner">
+    <span class="left">CaseLoad Select<span class="sep">·</span>Automated Case Selection System</span>
+    <span>Confidential<span class="sep">·</span>Prepared for DRG Law<span class="sep">·</span>caseloadselect.ca</span>
+  </div>
+</footer>
+
+<script>
+  // Token-aware back link. The form sends ?token=DRG-LAW-2026-05-13 when it
+  // links to this guide; we wire the "Back to onboarding" anchor to return
+  // the user to /firm-onboarding/[token]. Falls back to root if no token.
+  (function () {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get('token');
+      var link = document.getElementById('back-to-onboarding');
+      if (link) {
+        link.href = token ? '/firm-onboarding/' + encodeURIComponent(token) : '/';
+      }
+    } catch (e) { /* no-op: link defaults to / */ }
+  })();
+</script>
+</body>
+</html>

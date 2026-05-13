@@ -39,12 +39,17 @@ export default async function FirmOnboardingPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen" style={{ background: "#F4F3EF" }}>
-      {/* Canonical header: deep-black bg, 17px logo, 2px gold border-bottom */}
+      {/*
+        Canonical header per LOGO-USAGE.md §4: deep-black background,
+        lockup-horizontal-tagline at 17px, 2px gold border-bottom,
+        padding 18px 28px 16px. Identical pattern across firm-onboarding
+        pages and the firm-onboarding-guides/* HTML pages.
+      */}
       <header
         style={{
           background: "#0D1520",
           borderBottom: "2px solid #C4B49A",
-          padding: "16px clamp(16px, 4vw, 28px) 14px",
+          padding: "18px clamp(16px, 4vw, 28px) 16px",
         }}
       >
         <div
@@ -53,14 +58,14 @@ export default async function FirmOnboardingPage({ params }: PageProps) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: "12px",
+            gap: "16px",
           }}
         >
           <img
-            src="/brand/logos/wordmark-dark-transparent.png"
-            alt="CaseLoad Select"
+            src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png"
+            alt="CaseLoad Select · Sign Better Cases"
             style={{
-              height: "clamp(22px, 5vw, 26px)",
+              height: "17px",
               width: "auto",
               display: "block",
               border: 0,
@@ -69,11 +74,11 @@ export default async function FirmOnboardingPage({ params }: PageProps) {
           <span
             style={{
               fontFamily: "var(--font-oxanium), sans-serif",
-              fontSize: "clamp(0.7rem, 2.6vw, 0.78rem)",
+              fontSize: "9.5px",
               fontWeight: 600,
               letterSpacing: "0.18em",
               textTransform: "uppercase",
-              color: "rgba(255,255,255,0.7)",
+              color: "#C4B49A",
               whiteSpace: "nowrap",
             }}
           >

@@ -31,6 +31,12 @@ interface FormState {
   has_meta_business_manager: string;
   meta_business_manager_url: string;
   will_add_operator_as_admin: string;
+  meta_admin_status: string;
+  meta_admin_blocker_note: string;
+  linkedin_admin_status: string;
+  linkedin_admin_blocker_note: string;
+  m365_admin_status: string;
+  m365_admin_blocker_note: string;
   consent_acknowledged: boolean;
   notes: string;
 }
@@ -64,6 +70,12 @@ const INITIAL: FormState = {
   has_meta_business_manager: "",
   meta_business_manager_url: "",
   will_add_operator_as_admin: "",
+  meta_admin_status: "",
+  meta_admin_blocker_note: "",
+  linkedin_admin_status: "",
+  linkedin_admin_blocker_note: "",
+  m365_admin_status: "",
+  m365_admin_blocker_note: "",
   consent_acknowledged: false,
   notes: "",
 };
@@ -390,7 +402,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
 
         <Field
           label="Will you add CaseLoad Select as an admin on your Meta Business Manager?"
-          hint="Required for us to submit message templates and handle re-verifications without needing you to be available each time. Standard part of the done-for-you model. Admin access can be revoked at any time."
+          hint="Required for us to submit WhatsApp message templates and handle re-verifications without needing you to be available each time. Standard part of the done-for-you model. Admin access can be revoked at any time."
         >
           <RadioGroup
             name="will_add_operator_as_admin"
@@ -402,10 +414,76 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
             onChange={(v) => update("will_add_operator_as_admin", v)}
           />
         </Field>
+
+        <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.95rem", color: "#4a5a72", lineHeight: 1.6, marginBottom: "16px", marginTop: "8px" }}>
+          A four-step walkthrough is available if you want to grant admin access now.
+        </p>
+
+        <GuideLinkButton
+          href={`/firm-onboarding-guides/meta.html?token=${encodeURIComponent(token)}`}
+          label="View the Meta Business Manager guide"
+        />
+
+        <AccessStatusBlock
+          label="Meta admin access status"
+          hint="Set this once you have run through the Meta guide. If you hit a blocker, describe it below."
+          status={form.meta_admin_status}
+          onStatusChange={(v) => update("meta_admin_status", v)}
+          blockerNote={form.meta_admin_blocker_note}
+          onBlockerNoteChange={(v) => update("meta_admin_blocker_note", v)}
+        />
       </Section>
 
-      {/* Section 5: notes + consent + submit */}
-      <Section title="5. Anything else?" subtitle="Optional notes, questions, or context">
+      {/* Section 5: LinkedIn Company Page admin */}
+      <Section
+        title="5. LinkedIn Company Page admin"
+        subtitle="So we can publish and manage the firm Company Page on your behalf"
+      >
+        <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.95rem", color: "#4a5a72", lineHeight: 1.6, marginBottom: "16px" }}>
+          The firm&apos;s LinkedIn Company Page is the centre of authority-building on the platform. We need Super admin access to post content, respond to messages, and manage the Page going forward. The four-step setup walkthrough opens in a new tab.
+        </p>
+
+        <GuideLinkButton
+          href={`/firm-onboarding-guides/linkedin.html?token=${encodeURIComponent(token)}`}
+          label="View the LinkedIn setup guide"
+        />
+
+        <AccessStatusBlock
+          label="LinkedIn Super admin status"
+          hint="Set this once you have run through the guide. If you hit a blocker, describe it below."
+          status={form.linkedin_admin_status}
+          onStatusChange={(v) => update("linkedin_admin_status", v)}
+          blockerNote={form.linkedin_admin_blocker_note}
+          onBlockerNoteChange={(v) => update("linkedin_admin_blocker_note", v)}
+        />
+      </Section>
+
+      {/* Section 6: Microsoft 365 admin */}
+      <Section
+        title="6. Microsoft 365 admin for email authentication"
+        subtitle="Time-boxed Exchange Admin access so we can configure SPF, DKIM, and DMARC on your sending domain"
+      >
+        <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.95rem", color: "#4a5a72", lineHeight: 1.6, marginBottom: "16px" }}>
+          Authenticated email is the difference between inbox and spam. We need Exchange Administrator (guest user) access for roughly five business days to enable DKIM signing and configure the related DNS records. The role is the surgical minimum — it does not give visibility into mailbox content — and it is revoked the moment authentication is verified live.
+        </p>
+
+        <GuideLinkButton
+          href={`/firm-onboarding-guides/m365.html?token=${encodeURIComponent(token)}`}
+          label="View the Microsoft 365 setup guide"
+        />
+
+        <AccessStatusBlock
+          label="Microsoft 365 Exchange Admin status"
+          hint="Set this once you have run through the guide. If the invitation flow trips up, describe it below and we will walk through it together."
+          status={form.m365_admin_status}
+          onStatusChange={(v) => update("m365_admin_status", v)}
+          blockerNote={form.m365_admin_blocker_note}
+          onBlockerNoteChange={(v) => update("m365_admin_blocker_note", v)}
+        />
+      </Section>
+
+      {/* Section 7: notes + consent + submit */}
+      <Section title="7. Anything else?" subtitle="Optional notes, questions, or context">
         <Field label="Notes">
           <textarea
             value={form.notes}
@@ -793,6 +871,94 @@ function FileUploadBlock({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Access-grant helpers ────────────────────────────────────────────────
+
+function GuideLinkButton({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "8px",
+        background: "#1E2F58",
+        color: "#FFFFFF",
+        textDecoration: "none",
+        padding: "12px 22px",
+        borderRadius: "4px",
+        fontFamily: "var(--font-manrope), sans-serif",
+        fontWeight: 600,
+        fontSize: "0.92rem",
+        letterSpacing: "0.01em",
+        marginBottom: "20px",
+      }}
+    >
+      {label}
+      <span aria-hidden style={{ fontSize: "0.85em" }}>↗</span>
+    </a>
+  );
+}
+
+function AccessStatusBlock({
+  label,
+  hint,
+  status,
+  onStatusChange,
+  blockerNote,
+  onBlockerNoteChange,
+}: {
+  label: string;
+  hint: string;
+  status: string;
+  onStatusChange: (v: string) => void;
+  blockerNote: string;
+  onBlockerNoteChange: (v: string) => void;
+}) {
+  return (
+    <div style={{ marginTop: "8px" }}>
+      <Field label={label} hint={hint}>
+        <RadioGroup
+          name={`status-${label}`}
+          options={[
+            { value: "not_started", label: "Not started yet" },
+            { value: "in_progress", label: "In progress" },
+            { value: "granted", label: "Done — access granted" },
+            { value: "blocked", label: "Blocked — see notes below" },
+          ]}
+          value={status}
+          onChange={onStatusChange}
+        />
+      </Field>
+      {status === "blocked" ? (
+        <div style={{ marginTop: "12px" }}>
+          <Field label="What's blocking you?" hint="Briefly describe the error or screen you got stuck on. We will follow up.">
+            <textarea
+              value={blockerNote}
+              onChange={(e) => onBlockerNoteChange(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "12px 14px",
+                fontFamily: "var(--font-dm-sans), sans-serif",
+                fontSize: "1rem",
+                color: "#3F3C36",
+                background: "#FFFFFF",
+                border: "1px solid #D8D5CB",
+                borderRadius: "4px",
+                outline: "none",
+                minHeight: "80px",
+                resize: "vertical",
+              }}
+              placeholder="e.g. The Add button is greyed out, or I got a permissions error..."
+            />
+          </Field>
+        </div>
+      ) : null}
     </div>
   );
 }

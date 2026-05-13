@@ -39,6 +39,12 @@ interface Submission {
   has_meta_business_manager: boolean | null;
   meta_business_manager_url: string | null;
   will_add_operator_as_admin: boolean | null;
+  meta_admin_status: string | null;
+  meta_admin_blocker_note: string | null;
+  linkedin_admin_status: string | null;
+  linkedin_admin_blocker_note: string | null;
+  m365_admin_status: string | null;
+  m365_admin_blocker_note: string | null;
   consent_acknowledged: boolean;
   notes: string | null;
   submitted_at: string;
@@ -199,10 +205,31 @@ export default async function SubmissionDetailPage({
           <Field label="MBM URL / ID" value={row.meta_business_manager_url} link />
           <Field label="Will add operator as admin" value={yesNo(row.will_add_operator_as_admin)} />
         </Fields>
+        <AccessStatusRow
+          label="Meta admin access"
+          status={row.meta_admin_status}
+          blockerNote={row.meta_admin_blocker_note}
+        />
+      </Section>
+
+      <Section title="5. LinkedIn Company Page admin">
+        <AccessStatusRow
+          label="LinkedIn Super admin access"
+          status={row.linkedin_admin_status}
+          blockerNote={row.linkedin_admin_blocker_note}
+        />
+      </Section>
+
+      <Section title="6. Microsoft 365 Exchange admin">
+        <AccessStatusRow
+          label="Exchange Admin (guest) access"
+          status={row.m365_admin_status}
+          blockerNote={row.m365_admin_blocker_note}
+        />
       </Section>
 
       {row.notes ? (
-        <Section title="5. Notes from the rep">
+        <Section title="7. Notes from the rep">
           <p className="text-sm text-black/80 whitespace-pre-wrap leading-relaxed">{row.notes}</p>
         </Section>
       ) : null}
@@ -227,6 +254,44 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h2 className="text-sm font-bold text-navy uppercase tracking-wider mb-4">{title}</h2>
       {children}
     </section>
+  );
+}
+
+function AccessStatusRow({
+  label,
+  status,
+  blockerNote,
+}: {
+  label: string;
+  status: string | null;
+  blockerNote: string | null;
+}) {
+  const meta =
+    status === "granted"
+      ? { text: "Done — access granted", className: "bg-emerald-100 text-emerald-900 border-emerald-300" }
+      : status === "in_progress"
+        ? { text: "In progress", className: "bg-amber-50 text-amber-900 border-amber-300" }
+        : status === "blocked"
+          ? { text: "Blocked", className: "bg-red-50 text-red-900 border-red-300" }
+          : status === "not_started"
+            ? { text: "Not started yet", className: "bg-black/5 text-black/60 border-black/15" }
+            : { text: "—", className: "bg-black/5 text-black/40 border-black/10" };
+
+  return (
+    <div className="mt-4 bg-parchment border border-gold/40 px-5 py-4">
+      <p className="text-[11px] uppercase tracking-wider font-semibold text-gold mb-3">{label}</p>
+      <span
+        className={`inline-flex items-center font-bold text-[10px] uppercase tracking-wider px-2 py-1 border ${meta.className}`}
+      >
+        {meta.text}
+      </span>
+      {blockerNote ? (
+        <div className="mt-3 text-sm text-black/80 whitespace-pre-wrap bg-white border border-red-200 px-4 py-3">
+          <p className="text-[10px] uppercase tracking-wider font-semibold text-red-700 mb-1.5">Blocker note from the rep</p>
+          {blockerNote}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
