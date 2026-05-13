@@ -14,6 +14,11 @@
  *   1. Row written to firm_onboarding_intake
  *   2. Notification email fires to the operator via Resend
  *   3. Rep sees the /submitted thank-you page
+ *
+ * Brand alignment: follows LOGO-USAGE.md (lockup-horizontal-tagline-dark-
+ * transparent.png at 17px on deep-black header, 2px gold bottom border)
+ * and Brand Book ACTS V1 (Manrope 800 h1, Oxanium kickers and labels in
+ * 12px 2.5-3px letter-spacing uppercase, DM Sans body, 4px panel corners).
  */
 
 import FirmOnboardingForm from "@/components/firm-onboarding/FirmOnboardingForm";
@@ -34,43 +39,40 @@ export default async function FirmOnboardingPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen" style={{ background: "#F4F3EF" }}>
+      {/* Canonical header: deep-black bg, 17px logo, 2px gold border-bottom */}
       <header
-        className="w-full"
         style={{
-          background: "#1E2F58",
-          padding: "28px 0",
+          background: "#0D1520",
+          borderBottom: "2px solid #C4B49A",
+          padding: "18px 28px 16px",
         }}
       >
-        <div className="max-w-3xl mx-auto px-6 flex items-center justify-between">
-          <span
+        <div
+          className="max-w-3xl mx-auto"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <img
+            src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png"
+            alt="CaseLoad Select · Sign Better Cases"
             style={{
-              fontFamily: "Oxanium, sans-serif",
-              fontWeight: 700,
-              fontSize: "1.1rem",
-              color: "#FFFFFF",
-              letterSpacing: "0.05em",
+              height: "24px",
+              width: "auto",
+              display: "block",
+              border: 0,
             }}
-          >
-            CaseLoad Select
-            <span
-              style={{
-                display: "inline-block",
-                width: "6px",
-                height: "6px",
-                background: "#C4B49A",
-                marginLeft: "4px",
-                verticalAlign: "baseline",
-                marginBottom: "1px",
-              }}
-            />
-          </span>
+          />
           <span
             style={{
-              fontFamily: "DM Sans, sans-serif",
-              fontSize: "0.78rem",
-              color: "rgba(255,255,255,0.7)",
-              letterSpacing: "0.08em",
+              fontFamily: "var(--font-oxanium), sans-serif",
+              fontSize: "0.7rem",
+              fontWeight: 600,
+              letterSpacing: "0.18em",
               textTransform: "uppercase",
+              color: "rgba(255,255,255,0.55)",
             }}
           >
             Firm Onboarding
@@ -82,37 +84,50 @@ export default async function FirmOnboardingPage({ params }: PageProps) {
         <div className="mb-10">
           <p
             style={{
-              fontFamily: "Oxanium, sans-serif",
-              fontSize: "0.72rem",
-              letterSpacing: "0.12em",
+              fontFamily: "var(--font-oxanium), sans-serif",
+              fontSize: "0.66rem",
+              letterSpacing: "0.22em",
               textTransform: "uppercase",
-              color: "#C4B49A",
-              fontWeight: 700,
-              marginBottom: "8px",
+              color: "#8B7A5E",
+              fontWeight: 600,
+              marginBottom: "14px",
             }}
           >
             {firmLabel}
           </p>
           <h1
             style={{
-              fontFamily: "Manrope, sans-serif",
+              fontFamily: "var(--font-manrope), sans-serif",
               fontWeight: 800,
-              fontSize: "2.1rem",
-              lineHeight: 1.15,
+              fontSize: "2.4rem",
+              lineHeight: 1.1,
               color: "#1E2F58",
-              marginBottom: "16px",
-              letterSpacing: "-0.01em",
+              marginBottom: "20px",
+              letterSpacing: "-0.015em",
             }}
           >
             Tell us about your firm
+            <span
+              style={{
+                display: "inline-block",
+                width: "10px",
+                height: "10px",
+                background: "#C4B49A",
+                marginLeft: "5px",
+                verticalAlign: "baseline",
+                marginBottom: "4px",
+              }}
+              aria-hidden="true"
+            />
           </h1>
           <p
             style={{
-              fontFamily: "DM Sans, sans-serif",
-              fontSize: "1rem",
-              lineHeight: 1.6,
-              color: "#3F3C36",
+              fontFamily: "var(--font-dm-sans), sans-serif",
+              fontSize: "1.0625rem",
+              lineHeight: 1.65,
+              color: "#4a5a72",
               marginBottom: 0,
+              fontWeight: 400,
             }}
           >
             Twelve fields, fifteen minutes. This gives us everything we need
@@ -128,34 +143,29 @@ export default async function FirmOnboardingPage({ params }: PageProps) {
       </main>
 
       <footer
-        className="w-full mt-16"
         style={{
           background: "#0D1520",
-          padding: "20px 0",
+          padding: "22px 0",
+          marginTop: "60px",
         }}
       >
-        <div className="max-w-3xl mx-auto px-6">
-          <p
+        <div className="max-w-3xl mx-auto px-6" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <img
+            src="/brand/logos/wordmark-dark-transparent.png"
+            alt="CaseLoad Select"
+            style={{ height: "16px", width: "auto", display: "block", border: 0, opacity: 0.85 }}
+          />
+          <span
             style={{
-              fontFamily: "DM Sans, sans-serif",
-              fontSize: "0.78rem",
-              color: "rgba(255,255,255,0.55)",
-              margin: 0,
+              fontFamily: "var(--font-oxanium), sans-serif",
+              fontSize: "0.66rem",
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: "rgba(255,255,255,0.45)",
             }}
           >
-            CaseLoad Select &middot; Sign Better Cases
-            <span
-              style={{
-                display: "inline-block",
-                width: "5px",
-                height: "5px",
-                background: "#C4B49A",
-                marginLeft: "4px",
-                verticalAlign: "baseline",
-                marginBottom: "1px",
-              }}
-            />
-          </p>
+            Sign Better Cases
+          </span>
         </div>
       </footer>
     </div>
@@ -167,7 +177,6 @@ export default async function FirmOnboardingPage({ params }: PageProps) {
  * Strips the date suffix and title-cases the remaining segments.
  */
 function humaniseToken(token: string): string {
-  // Remove trailing date if present (YYYY-MM-DD or similar)
   const stripped = token.replace(/[-_]\d{4}[-_]\d{2}[-_]\d{2}.*$/i, "");
   const parts = stripped.split(/[-_]/).filter(Boolean);
   if (parts.length === 0) return token;

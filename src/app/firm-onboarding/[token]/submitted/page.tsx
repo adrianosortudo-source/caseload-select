@@ -2,6 +2,7 @@
  * /firm-onboarding/[token]/submitted
  *
  * Thank-you page after the firm onboarding form is submitted.
+ * Brand alignment matches /firm-onboarding/[token]/page.tsx.
  */
 
 interface PageProps {
@@ -13,29 +14,37 @@ export default async function SubmittedPage({ params }: PageProps) {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#F4F3EF" }}>
-      <header className="w-full" style={{ background: "#1E2F58", padding: "28px 0" }}>
-        <div className="max-w-3xl mx-auto px-6">
+      <header
+        style={{
+          background: "#0D1520",
+          borderBottom: "2px solid #C4B49A",
+          padding: "18px 28px 16px",
+        }}
+      >
+        <div
+          className="max-w-3xl mx-auto"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <img
+            src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png"
+            alt="CaseLoad Select · Sign Better Cases"
+            style={{ height: "24px", width: "auto", display: "block", border: 0 }}
+          />
           <span
             style={{
-              fontFamily: "Oxanium, sans-serif",
-              fontWeight: 700,
-              fontSize: "1.1rem",
-              color: "#FFFFFF",
-              letterSpacing: "0.05em",
+              fontFamily: "var(--font-oxanium), sans-serif",
+              fontSize: "0.7rem",
+              fontWeight: 600,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: "rgba(255,255,255,0.55)",
             }}
           >
-            CaseLoad Select
-            <span
-              style={{
-                display: "inline-block",
-                width: "6px",
-                height: "6px",
-                background: "#C4B49A",
-                marginLeft: "4px",
-                verticalAlign: "baseline",
-                marginBottom: "1px",
-              }}
-            />
+            Firm Onboarding
           </span>
         </div>
       </header>
@@ -45,54 +54,55 @@ export default async function SubmittedPage({ params }: PageProps) {
           style={{
             background: "#FFFFFF",
             border: "1px solid #E4E2DB",
-            padding: "40px 36px",
+            padding: "44px 40px",
             borderRadius: "4px",
           }}
         >
           <p
             style={{
-              fontFamily: "Oxanium, sans-serif",
-              fontSize: "0.72rem",
-              letterSpacing: "0.12em",
+              fontFamily: "var(--font-oxanium), sans-serif",
+              fontSize: "0.66rem",
+              letterSpacing: "0.22em",
               textTransform: "uppercase",
-              color: "#C4B49A",
-              fontWeight: 700,
-              marginBottom: "10px",
+              color: "#8B7A5E",
+              fontWeight: 600,
+              marginBottom: "14px",
             }}
           >
             Submitted
           </p>
           <h1
             style={{
-              fontFamily: "Manrope, sans-serif",
+              fontFamily: "var(--font-manrope), sans-serif",
               fontWeight: 800,
-              fontSize: "2rem",
-              lineHeight: 1.15,
+              fontSize: "2.2rem",
+              lineHeight: 1.1,
               color: "#1E2F58",
-              marginBottom: "20px",
-              letterSpacing: "-0.01em",
+              marginBottom: "24px",
+              letterSpacing: "-0.015em",
             }}
           >
             Thank you
             <span
               style={{
                 display: "inline-block",
-                width: "9px",
-                height: "9px",
+                width: "10px",
+                height: "10px",
                 background: "#C4B49A",
                 marginLeft: "5px",
                 verticalAlign: "baseline",
-                marginBottom: "3px",
+                marginBottom: "4px",
               }}
+              aria-hidden="true"
             />
           </h1>
           <p
             style={{
-              fontFamily: "DM Sans, sans-serif",
-              fontSize: "1rem",
+              fontFamily: "var(--font-dm-sans), sans-serif",
+              fontSize: "1.0625rem",
               lineHeight: 1.65,
-              color: "#3F3C36",
-              marginBottom: "14px",
+              color: "#4a5a72",
+              marginBottom: "16px",
             }}
           >
             Your firm onboarding details are with us. CaseLoad Select will use them to file
@@ -101,11 +111,11 @@ export default async function SubmittedPage({ params }: PageProps) {
           </p>
           <p
             style={{
-              fontFamily: "DM Sans, sans-serif",
-              fontSize: "1rem",
+              fontFamily: "var(--font-dm-sans), sans-serif",
+              fontSize: "1.0625rem",
               lineHeight: 1.65,
-              color: "#3F3C36",
-              marginBottom: "14px",
+              color: "#4a5a72",
+              marginBottom: "16px",
             }}
           >
             Expect to hear back within 1-2 business days with the next-step plan: timing,
@@ -114,10 +124,10 @@ export default async function SubmittedPage({ params }: PageProps) {
           </p>
           <p
             style={{
-              fontFamily: "DM Sans, sans-serif",
+              fontFamily: "var(--font-dm-sans), sans-serif",
               fontSize: "0.95rem",
               lineHeight: 1.65,
-              color: "#6B665E",
+              color: "#8090A8",
               marginBottom: 0,
             }}
           >
@@ -127,29 +137,24 @@ export default async function SubmittedPage({ params }: PageProps) {
         </div>
       </main>
 
-      <footer className="w-full" style={{ background: "#0D1520", padding: "20px 0" }}>
-        <div className="max-w-3xl mx-auto px-6">
-          <p
+      <footer style={{ background: "#0D1520", padding: "22px 0" }}>
+        <div className="max-w-3xl mx-auto px-6" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <img
+            src="/brand/logos/wordmark-dark-transparent.png"
+            alt="CaseLoad Select"
+            style={{ height: "16px", width: "auto", display: "block", border: 0, opacity: 0.85 }}
+          />
+          <span
             style={{
-              fontFamily: "DM Sans, sans-serif",
-              fontSize: "0.78rem",
-              color: "rgba(255,255,255,0.55)",
-              margin: 0,
+              fontFamily: "var(--font-oxanium), sans-serif",
+              fontSize: "0.66rem",
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: "rgba(255,255,255,0.45)",
             }}
           >
-            CaseLoad Select &middot; Sign Better Cases
-            <span
-              style={{
-                display: "inline-block",
-                width: "5px",
-                height: "5px",
-                background: "#C4B49A",
-                marginLeft: "4px",
-                verticalAlign: "baseline",
-                marginBottom: "1px",
-              }}
-            />
-          </p>
+            Sign Better Cases
+          </span>
         </div>
       </footer>
     </div>

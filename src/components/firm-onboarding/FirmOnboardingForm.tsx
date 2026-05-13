@@ -366,7 +366,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
             />
             <span
               style={{
-                fontFamily: "DM Sans, sans-serif",
+                fontFamily: "var(--font-dm-sans), sans-serif",
                 fontSize: "0.9rem",
                 color: "#3F3C36",
                 lineHeight: 1.55,
@@ -384,7 +384,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         {error ? (
           <p
             style={{
-              fontFamily: "DM Sans, sans-serif",
+              fontFamily: "var(--font-dm-sans), sans-serif",
               fontSize: "0.9rem",
               color: "#B00020",
               padding: "10px 14px",
@@ -401,16 +401,17 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
           type="submit"
           disabled={submitting || !form.consent_acknowledged}
           style={{
-            background: submitting || !form.consent_acknowledged ? "#9B9690" : "#1E2F58",
+            background: submitting || !form.consent_acknowledged ? "#8090A8" : "#1E2F58",
             color: "#FFFFFF",
             border: "none",
-            padding: "16px 36px",
-            fontFamily: "Manrope, sans-serif",
+            padding: "16px 32px",
+            fontFamily: "var(--font-manrope), sans-serif",
             fontWeight: 700,
-            fontSize: "1rem",
-            borderRadius: "999px",
+            fontSize: "0.95rem",
+            borderRadius: "4px",
             cursor: submitting || !form.consent_acknowledged ? "not-allowed" : "pointer",
-            letterSpacing: "0.02em",
+            letterSpacing: "0.01em",
+            transition: "background 0.15s",
           }}
         >
           {submitting ? "Sending..." : "Submit to CaseLoad Select"}
@@ -442,7 +443,7 @@ function Section({
     >
       <h2
         style={{
-          fontFamily: "Manrope, sans-serif",
+          fontFamily: "var(--font-manrope), sans-serif",
           fontWeight: 700,
           fontSize: "1.25rem",
           color: "#1E2F58",
@@ -455,7 +456,7 @@ function Section({
       {subtitle ? (
         <p
           style={{
-            fontFamily: "DM Sans, sans-serif",
+            fontFamily: "var(--font-dm-sans), sans-serif",
             fontSize: "0.88rem",
             color: "#5C5850",
             marginBottom: "22px",
@@ -482,7 +483,7 @@ function Field({
     <div>
       <label
         style={{
-          fontFamily: "DM Sans, sans-serif",
+          fontFamily: "var(--font-dm-sans), sans-serif",
           fontWeight: 600,
           fontSize: "0.92rem",
           color: "#1E2F58",
@@ -495,7 +496,7 @@ function Field({
       {hint ? (
         <p
           style={{
-            fontFamily: "DM Sans, sans-serif",
+            fontFamily: "var(--font-dm-sans), sans-serif",
             fontSize: "0.82rem",
             color: "#6B665E",
             marginBottom: "8px",
@@ -549,7 +550,7 @@ function RadioGroup({
           />
           <span
             style={{
-              fontFamily: "DM Sans, sans-serif",
+              fontFamily: "var(--font-dm-sans), sans-serif",
               fontSize: "0.9rem",
               color: "#3F3C36",
               lineHeight: 1.5,
@@ -566,7 +567,7 @@ function RadioGroup({
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "11px 14px",
-  fontFamily: "DM Sans, sans-serif",
+  fontFamily: "var(--font-dm-sans), sans-serif",
   fontSize: "0.95rem",
   color: "#3F3C36",
   background: "#FFFFFF",
