@@ -1391,7 +1391,7 @@ export async function POST(req: Request) {
         `CRIM: crim_q1=yes|no  crim_q19=under_3mo|3_6mo|6_12mo|1_2yr|over_2yr  crim_q34=over_80|refuse|drugs|impaired|other  crim_q35=provided|refused|unsure\n` +
         `REAL: real_q1=buying|selling|both  real_q2=house|condo|commercial|other  real_q14=under_2wk|2_4wk|1_3mo|over_3mo|unknown\n` +
         `LLT: llt_q1=landlord|tenant  llt_q18=0|1_2mo|3_6mo|over_6mo  llt_q19=yes|no\n\n` +
-        `Return at top level: "filled_slots": { "question_id": "option_value" } and "slot_confidence": { "question_id": "high"|"medium" }\n` +
+        `Return at top level: "filled_slots": { "question_id": "option_value" } and "slot_confidence": { "question_id": "high" | "medium" | "low" } where "high" = clear match, "medium" = strongly implied, "low" = guessed. Only high/medium values are auto-applied; "low" values are dropped server-side so unconfirmed guesses are not accepted as answers.\n` +
         `Also return "implied_question_ids": [...] listing any IDs above where the client CLEARLY answered the topic in free text even if no option value maps (e.g. "didn't go to hospital" implies pi_q17). Return [] if none.`;
     }
 
@@ -1604,7 +1604,15 @@ export async function POST(req: Request) {
       const confidence = gptResponse.slot_confidence ?? {};
       for (const [slotId, slotValue] of Object.entries(gptResponse.filled_slots)) {
         if (slotId.includes("__")) continue; // slot-registry IDs handled below
-        const conf = confidence[slotId] ?? "medium"; // default to medium if not specified
+        // Default to "low" when the model omits or returns an unexpected
+        // confidence value. The audit (Codex sandbox MEDIUM, /api/screen
+        // route.ts:1199) flagged that defaulting to "medium" let
+        // unconfirmed model guesses through; "low" is the conservative
+        // default that requires the model to explicitly upgrade. Also
+        // narrows the value through the enum check before use.
+        const raw = confidence[slotId];
+        const conf: "high" | "medium" | "low" =
+          raw === "high" || raw === "medium" || raw === "low" ? raw : "low";
         if (conf === "high" || conf === "medium") {
           updatedConfirmed[slotId] = slotValue;
         }
@@ -1716,7 +1724,11 @@ export async function POST(req: Request) {
 
       for (const [slotId, slotValue] of Object.entries(gptResponse.filled_slots)) {
         if (!slotId.includes("__")) continue; // only slot-registry IDs
-        const conf = slotConf[slotId] ?? "medium";
+        // Same conservative default as the non-registry path above:
+        // missing or unexpected confidence value → "low" → skipped.
+        const raw = slotConf[slotId];
+        const conf: "high" | "medium" | "low" =
+          raw === "high" || raw === "medium" || raw === "low" ? raw : "low";
         if (conf === "high" || conf === "medium") {
           updatedSlotAnswered[slotId] = slotValue;
         }
