@@ -1,0 +1,97 @@
+{
+  "$schema": "CaseLoad Select Core Chassis · Custom Fields v1",
+  "version": "1.0.0",
+  "drafted": "2026-05-06",
+  "source": "Snapshot Build Sequence v1, Phase 1",
+  "description": "Lead-level data points captured at intake and updated through the journey. These drive band routing, journey selection, and decline logic. All fields attach to Contact entity in GHL.",
+  "groups": [
+    {
+      "group": "identity",
+      "label": "Lead identity and source",
+      "fields": [
+        { "key": "first_name", "type": "TEXT", "required": true, "description": "From intake form." },
+        { "key": "last_name", "type": "TEXT", "required": true, "description": "From intake form." },
+        { "key": "email", "type": "EMAIL", "required": true, "description": "Primary contact email." },
+        { "key": "phone", "type": "PHONE", "required": true, "description": "Primary contact phone in E.164." },
+        { "key": "preferred_language", "type": "SINGLE_OPTIONS", "options": ["English", "Portuguese", "Spanish", "French", "Mandarin", "Other"], "description": "Drives snippet variant selection." },
+        { "key": "source", "type": "SINGLE_OPTIONS", "options": ["Organic", "Paid", "Referral", "Direct", "Social", "Missed call", "Other"], "description": "High-level acquisition channel." },
+        { "key": "source_detail", "type": "TEXT", "description": "Specific referrer, campaign, or referrer name." },
+        { "key": "utm_campaign", "type": "TEXT", "description": "UTM campaign parameter for attribution." }
+      ]
+    },
+    {
+      "group": "matter",
+      "label": "Matter context",
+      "fields": [
+        { "key": "practice_area", "type": "SINGLE_OPTIONS", "options": ["Real Estate", "Business Law", "Litigation", "Immigration", "Family", "Wills and Estates", "Other"], "description": "Set by Screen auto-detect or intake form." },
+        { "key": "sub_practice", "type": "TEXT", "description": "Granular practice area, e.g. 'Residential Closing', 'Shareholders Agreement'." },
+        { "key": "matter_summary", "type": "LARGE_TEXT", "description": "Free-text matter description from Screen conversation." },
+        { "key": "jurisdiction", "type": "TEXT", "description": "Province or state where matter resides. Defaults to Ontario." },
+        { "key": "opposing_party", "type": "TEXT", "description": "Named opposing party for conflict check. Optional." },
+        { "key": "conflict_check_status", "type": "SINGLE_OPTIONS", "options": ["Pending", "Clear", "Conflict identified", "Not applicable"], "description": "Lawyer-set after running conflict check." }
+      ]
+    },
+    {
+      "group": "cpi_inputs",
+      "label": "CPI scoring inputs",
+      "fields": [
+        { "key": "value_estimate", "type": "MONETARY", "description": "Dollar value at stake. Drives Value axis. Practice-area module sets tier thresholds." },
+        { "key": "urgency_signal", "type": "SINGLE_OPTIONS", "options": ["Crisis (statutory clock)", "Tight (weeks)", "Standard (months)", "Open-ended", "Not applicable"], "description": "Drives Urgency axis. Crisis triggers Band A override." },
+        { "key": "simplicity_score", "type": "NUMERIC", "description": "0 to 10. Higher means simpler matter. Set by Screen heuristics." },
+        { "key": "readiness_score", "type": "NUMERIC", "description": "0 to 10. Lead readiness to engage. Drives long-term hold routing if low." }
+      ]
+    },
+    {
+      "group": "cpi_outputs",
+      "label": "CPI scoring outputs",
+      "fields": [
+        { "key": "cpi_score", "type": "NUMERIC", "description": "Composite CPI score 0 to 100, derived from inputs." },
+        { "key": "band", "type": "SINGLE_OPTIONS", "options": ["A", "B", "C"], "description": "Band assignment per CRM Bible v5.1. A ≥50% net ratio, B 16-50%, C <16%." },
+        { "key": "band_subtrack", "type": "SINGLE_OPTIONS", "options": ["High value low simplicity", "Standard fit", "Whale not ready", "Not applicable"], "description": "Only set for Band C. Drives sub-track routing in J3." },
+        { "key": "value_tier", "type": "SINGLE_OPTIONS", "options": ["Premium", "Standard", "Entry", "Sub-threshold"], "description": "Practice-area-specific value tier from module overlay." },
+        { "key": "override_reason", "type": "SINGLE_OPTIONS", "options": ["Value-first", "Crisis-urgency", "Whale match", "None"], "description": "Reason for band override if not by net ratio." }
+      ]
+    },
+    {
+      "group": "engagement_modifiers",
+      "label": "Engagement modifiers",
+      "fields": [
+        { "key": "referral_source", "type": "TEXT", "description": "Named referrer if referral. Drives priority weighting." },
+        { "key": "repeat_client", "type": "CHECKBOX", "description": "True if existing client of the firm." },
+        { "key": "language_match", "type": "CHECKBOX", "description": "True if preferred_language matches a firm-supported language." },
+        { "key": "fit_signal", "type": "SINGLE_OPTIONS", "options": ["Strong", "Moderate", "Weak", "None"], "description": "Qualitative fit assessment from Screen." },
+        { "key": "timing_signal", "type": "SINGLE_OPTIONS", "options": ["Immediate", "Quarter", "Year+", "Unknown"], "description": "When the lead expects to engage. Long-term hold trigger." }
+      ]
+    },
+    {
+      "group": "journey_state",
+      "label": "Journey state and timers",
+      "fields": [
+        { "key": "active_journey", "type": "SINGLE_OPTIONS", "options": ["J0", "J1", "J2", "J3", "J4", "J5", "J7", "J8", "J9", "J10", "J11", "J12", "Recovery A", "Recovery B", "Long-term hold", "Closed"], "description": "Currently active journey for routing." },
+        { "key": "journey_started_at", "type": "DATE", "description": "Timestamp the active journey started. Drives 48h rule." },
+        { "key": "response_window_expires_at", "type": "DATE", "description": "Hard deadline before backstop fires. Compressed by urgency." },
+        { "key": "take_pass_decision", "type": "SINGLE_OPTIONS", "options": ["Take", "Pass", "Pending", "Backstop fired"], "description": "Lawyer Take/Pass decision state." },
+        { "key": "decline_reason", "type": "SINGLE_OPTIONS", "options": ["Out of scope", "Conflict", "Capacity", "Below value tier", "Out of jurisdiction", "Not ready", "Other"], "description": "Reason for decline, set during J4." }
+      ]
+    },
+    {
+      "group": "outcome",
+      "label": "Conversion and review outcomes",
+      "fields": [
+        { "key": "retainer_signed_at", "type": "DATE", "description": "Timestamp retainer was signed. Triggers J7 closing-day SMS path and J12 review request." },
+        { "key": "retainer_amount", "type": "MONETARY", "description": "Initial retainer dollar amount." },
+        { "key": "matter_closed_at", "type": "DATE", "description": "Timestamp matter completed. Secondary trigger for J12." },
+        { "key": "review_requested_at", "type": "DATE", "description": "When J12 SMS fired. Used for follow-up timing." },
+        { "key": "review_received_at", "type": "DATE", "description": "When the review actually posted. Closes the J12 loop." }
+      ]
+    }
+  ],
+  "implementation_notes": [
+    "Create each as a Custom Field in GHL Settings → Custom Fields. Attach to Contact entity.",
+    "GHL field types map directly: TEXT, LARGE_TEXT, EMAIL, PHONE, NUMERIC, DATE, MONETARY, CHECKBOX, SINGLE_OPTIONS, MULTIPLE_OPTIONS.",
+    "For SINGLE_OPTIONS, options array order matters in the dropdown. Keep in priority or alphabetical order as appropriate.",
+    "Total: 8 identity fields, 6 matter fields, 4 CPI input fields, 5 CPI output fields, 5 engagement modifier fields, 5 journey state fields, 5 outcome fields. 38 fields total.",
+    "Group labels become folder names in GHL Custom Fields UI for easier navigation.",
+    "When the CaseLoad Screen webhook delivers payload, it must POST these exact field keys. Field key contract is binding."
+  ]
+}

@@ -1,4 +1,21 @@
 /**
+ * @deprecated Removed from scope on 2026-05-06. Do not call from new code.
+ *
+ * S6 (retainer automation via DocuGenerate + DocuSeal) was permanently
+ * removed from the project. The retainer document workflow is lawyer-owned
+ * (Clio for Clio firms; lawyer's own tool of choice otherwise). CaseLoad
+ * Select fires the J6 follow-up cadence; the document itself is never
+ * touched by the platform. See master CLAUDE.md "Build Roadmap" and CRM
+ * Bible v5.1 DR-032.
+ *
+ * This file is preserved as dormant code pending a follow-up cleanup that
+ * will remove `triggerRetainerIfEligible` from `/api/otp/verify`, drop the
+ * `retainer_agreements` table, delete this file plus `docuseal.ts`,
+ * `docugenerate.ts`, `retainers/page.tsx`, and `/api/webhooks/docuseal`.
+ *
+ * --------------------------------------------------------------------
+ * ORIGINAL DESCRIPTION (HISTORICAL):
+ *
  * Retainer agreement orchestration
  *
  * Called after OTP verification on Band A/B intake sessions.

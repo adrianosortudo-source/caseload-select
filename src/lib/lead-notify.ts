@@ -44,6 +44,7 @@ export interface NotifyArgs {
   band: "A" | "B" | "C" | null;
   decisionDeadlineIso: string;
   whaleNurture: boolean;
+  intakeLanguage?: string | null;
 }
 
 export interface NotifyResult {
@@ -131,6 +132,7 @@ export async function notifyLawyersOfNewLead(args: NotifyArgs): Promise<NotifyRe
     decisionDeadlineIso: args.decisionDeadlineIso,
     whaleNurture: args.whaleNurture,
     briefUrl,
+    intakeLanguage: args.intakeLanguage ?? null,
   };
 
   const email = buildNewLeadEmail(emailInput);

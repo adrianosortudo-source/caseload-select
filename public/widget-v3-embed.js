@@ -7,7 +7,7 @@
  *     src="https://app.caseloadselect.ca/widget-v3-embed.js"
  *     data-firm-id="YOUR_FIRM_ID"
  *     data-color="#1E2F58"
- *     data-label="Start Your Consultation"
+ *     data-label="Submit for review"
  *     data-position="bottom-right"
  *   ></script>
  *
@@ -26,7 +26,7 @@
 
   var firmId   = script.getAttribute("data-firm-id");
   var color    = script.getAttribute("data-color")    || "#1E2F58";
-  var label    = script.getAttribute("data-label")    || "Start Your Consultation";
+  var label    = script.getAttribute("data-label")    || "Submit for review";
   var position = script.getAttribute("data-position") || "bottom-right";
 
   if (!firmId) {

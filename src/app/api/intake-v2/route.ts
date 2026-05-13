@@ -41,7 +41,9 @@
  *       name?:  string,
  *       email?: string,
  *       phone?: string,
- *     }
+ *     },
+ *     intake_language?: string,   -- ISO 639-1 code (e.g. 'en', 'fr', 'pt'); optional, defaults to 'en'
+ *     raw_transcript?:  string,   -- lead's original-language text; only sent when intake_language != 'en'
  *   }
  *
  * Lifecycle (the contract across Supabase, the portal, and the GHL custom
@@ -100,6 +102,8 @@ interface IntakeBody {
     email?: string;
     phone?: string;
   };
+  intake_language?: string;
+  raw_transcript?: string;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -226,6 +230,8 @@ export async function POST(req: NextRequest) {
       contact_email: body.contact?.email ?? null,
       contact_phone: body.contact?.phone ?? null,
       submitted_at: body.submitted_at ?? now.toISOString(),
+      intake_language: body.intake_language ?? 'en',
+      raw_transcript: body.raw_transcript ?? null,
     })
     .select('id, lead_id, status, decision_deadline, whale_nurture')
     .single();
@@ -267,6 +273,7 @@ export async function POST(req: NextRequest) {
       contact_name: body.contact?.name ?? null,
       contact_email: body.contact?.email ?? null,
       contact_phone: body.contact?.phone ?? null,
+      intake_language: body.intake_language ?? 'en',
     };
     const payload = buildDeclinedOosPayload({
       facts,
@@ -297,6 +304,7 @@ export async function POST(req: NextRequest) {
       band,
       decisionDeadlineIso: inserted.decision_deadline,
       whaleNurture: !!inserted.whale_nurture,
+      intakeLanguage: body.intake_language ?? 'en',
     }).catch((err) => {
       // Visible in Vercel function logs; not surfaced to the screen.
       console.error("[intake-v2] notifyLawyersOfNewLead failed:", err);

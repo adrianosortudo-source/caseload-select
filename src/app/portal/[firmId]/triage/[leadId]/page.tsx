@@ -17,6 +17,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { matterLabel, subtrackLabel } from "@/lib/screened-leads-labels";
+import { intakeLanguageLabel } from "@/lib/intake-language-label";
 import DecisionTimer from "@/components/portal/DecisionTimer";
 import TriageActionBar from "@/components/portal/TriageActionBar";
 import "./brief.css";
@@ -34,6 +35,7 @@ interface LeadRow {
   decision_deadline: string;
   submitted_at: string;
   contact_name: string | null;
+  intake_language: string | null;
 }
 
 export const dynamic = "force-dynamic";
@@ -51,7 +53,7 @@ export default async function TriageLeadPage({
     .select(`
       lead_id, firm_id, status, brief_html, brief_json,
       band, matter_type, whale_nurture, band_c_subtrack,
-      decision_deadline, submitted_at, contact_name
+      decision_deadline, submitted_at, contact_name, intake_language
     `)
     .eq("lead_id", leadId)
     .maybeSingle();
@@ -69,11 +71,14 @@ export default async function TriageLeadPage({
   const row = data as LeadRow;
   const subtrack = subtrackLabel(row.band_c_subtrack);
 
+  const langLabel = intakeLanguageLabel(row.intake_language);
+
   return (
     <div className="space-y-4 pb-32">
       <BackLink firmId={firmId} />
       <Header row={row} subtrack={subtrack} />
       {row.status !== "triaging" && <StatusBanner status={row.status} />}
+      {langLabel && <LanguageCallout label={langLabel} />}
       <BriefFrame html={row.brief_html} />
       <TriageActionBar
         firmId={firmId}
@@ -150,6 +155,20 @@ function BandBadge({ band }: { band: "A" | "B" | "C" | null }) {
     >
       Band {band ?? "—"}
     </span>
+  );
+}
+
+function LanguageCallout({ label }: { label: string }) {
+  return (
+    <div className="bg-blue-50 border border-blue-200 px-4 py-3 flex items-center gap-3">
+      <span className="text-xs uppercase tracking-wider font-semibold text-blue-700">
+        Intake language
+      </span>
+      <span className="text-sm font-semibold text-blue-900">{label}</span>
+      <span className="text-xs text-blue-600">
+        The brief is translated to English. Original-language text preserved in the raw transcript.
+      </span>
+    </div>
   );
 }
 

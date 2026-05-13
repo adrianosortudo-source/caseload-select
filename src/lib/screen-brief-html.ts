@@ -18,6 +18,7 @@
 import type { Channel, LawyerReport, ResolvedFact } from './screen-engine/types';
 import { getI18n } from './screen-engine/i18n/loader';
 import { getChannelChipData } from './screen-engine/i18n/display';
+import { intakeLanguageLabel } from './intake-language-label';
 
 const FACT_SOURCE_LABEL: Record<string, string> = {
   stated: 'Stated in description',
@@ -116,6 +117,16 @@ function channelChipHtml(channel: Channel | undefined): string {
     </div>`;
 }
 
+function languageCalloutHtml(code: string | null | undefined): string {
+  const label = intakeLanguageLabel(code);
+  if (!label) return '';
+  return `
+    <div class="brief-language-callout">
+      <span class="brief-language-label">Lead communicated in: <strong>${esc(label)}</strong></span>
+      <span class="brief-language-note">The brief above is translated to English. The original-language text is preserved in the raw transcript for audit reference.</span>
+    </div>`;
+}
+
 function truthWarningsHtml(warnings: readonly string[]): string {
   if (!warnings || warnings.length === 0) return '';
   const items = warnings.map((w) => `<li>${esc(w)}</li>`).join('');
@@ -136,7 +147,11 @@ function truthWarningsHtml(warnings: readonly string[]): string {
  * `channel` is passed separately so we don't need to plumb the full
  * EngineState into the renderer.
  */
-export function renderBriefHtmlServer(report: LawyerReport, channel: Channel): string {
+export function renderBriefHtmlServer(
+  report: LawyerReport,
+  channel: Channel,
+  intakeLanguage?: string | null,
+): string {
   const isOOS = report.band == null; // OOS reports do not band-rank
   const sections: string[] = [];
 
@@ -152,6 +167,7 @@ export function renderBriefHtmlServer(report: LawyerReport, channel: Channel): s
     </div>
   `);
 
+  sections.push(languageCalloutHtml(intakeLanguage));
   sections.push(truthWarningsHtml(report.truth_warnings));
 
   // Band row

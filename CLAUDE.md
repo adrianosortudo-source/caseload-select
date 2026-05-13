@@ -20,12 +20,14 @@ Adriano operates the system for client firms. This is done-for-you, not self-ser
 
 The Client Portal (S8) IS client-facing but configured and deployed by Adriano.
 
-## Method: The FACT System
+## Method: The ACTS System
 
-- **F — Filter (CaseLoad Screen):** Automated intake scoring and qualification before attorney contact
-- **A — Authority:** Content and reputation system (long-term compounding)
+(FACT was the working framing through April 2026; ACTS supersedes it. The master `D:\00_Work\01_CaseLoad_Select\CLAUDE.md` is canonical. CaseLoad Screen sits in the **S** pillar; this app is the codified surface for it.)
+
+- **A — Authority:** Content, reviews, brand trust (long-term compounding)
 - **C — Capture:** SEO, GBP, local visibility infrastructure
 - **T — Target:** Precision Google Ads
+- **S — Screen (CaseLoad Screen):** Automated intake scoring, case qualification, priority routing across seven channels (Web, WhatsApp, SMS, Instagram, Facebook, Google Business Profile, Voice)
 
 ## Tech Stack
 
@@ -35,8 +37,8 @@ The Client Portal (S8) IS client-facing but configured and deployed by Adriano.
 | Database | Supabase (PostgreSQL) |
 | Email | Resend |
 | Auth | Supabase Auth |
-| AI Screening | OpenAI GPT-4o-mini |
-| SMS/Phone | GoHighLevel (GHL) |
+| AI Screening | OpenAI GPT-4o-mini (legacy v2.1); Google Gemini 2.5 Flash (Screen 2.0 / voice-intake) |
+| SMS/Phone | GoHighLevel (GHL) — SMS, Voice AI, conversation surfaces |
 | Hosting | Vercel |
 | Legal PMS | Clio Manage (API v4) |
 
@@ -153,7 +155,7 @@ The GPT-powered intake screening product. How it works:
 5. CPI score assigned automatically
 6. Lead enters pipeline pre-qualified with confidence rating
 
-CTA on all intake forms: **"Start Your Consultation"** (not "Submit" or "Get Started").
+CTA on all intake forms: **"Submit for review"** (revised 2026-05-06; the previous CTA "Start Your Consultation" implied the AI provided legal advice, which it does not). Hero headline: **"Book a call with the firm▪"** (revised 2026-05-06; replaces the firm's standard "Contact Us" form — the screen IS the contact path). Hero sub: *"Describe your situation in your own words, then answer a few short follow-ups. A lawyer reviews what you share and reaches out directly if your matter fits the firm's practice. Most replies within hours."*
 Product name: **CaseLoad Screen**. "Case Review" and "Intake OS" are deprecated names.
 
 Embeddable at `/widget/[firmId]` as iframe on firm websites.
@@ -181,6 +183,7 @@ The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), 
 | `/portal/[firmId]/triage` | Triage queue page. Sorted Band A → B → C with deadline tiebreaker. `?band=A\|B\|C` filter. |
 | `/portal/[firmId]/triage/[leadId]` | Single brief view. Renders `brief_html` verbatim, sticky Take/Pass action bar at bottom. |
 | `POST /api/intake-v2` | Persistence endpoint — Screen 2.0 POSTs here. Demo skip on missing/invalid firmId. Fires `declined_oos` webhook for OOS leads. |
+| `POST /api/voice-intake` | Voice channel persistence endpoint (DR-033). Receives the GHL Voice AI post-call webhook payload, runs the screen engine server-side on the transcript, inserts a `screened_leads` row with `channel='voice'`, fires the new-lead notification. Sibling to `/api/intake-v2`, not a modification of it. Requires `@google/generative-ai` and `GEMINI_API_KEY` for LLM extraction (best-effort; regex-only if the key is missing). |
 | `POST /api/portal/request-link` | Lawyer-initiated magic link. Resolves email via `intake_firms.branding.lawyer_email`. Always 200 to block enumeration. |
 | `GET /api/portal/[firmId]/triage` | Queue API endpoint. Same data as the page. |
 | `GET /api/portal/[firmId]/triage/[leadId]` | Brief API endpoint. |
@@ -286,6 +289,18 @@ Run history is visible via `cron.job_run_details` and pg_net responses via `net.
 - Supabase Realtime queue subscription (replace RefreshOnFocus)
 - HMAC signature header on outbound webhooks (when GHL adds inbound shared-secret support)
 - v5 operator dashboard reading from `screened_leads` (deferred until real lead flow accumulates)
+
+## Channels (seven canonical)
+
+Screen 2.0 produces lead briefs from seven input channels. The engine is the same for all of them; the channel field on `EngineState` carries the channel-specific behaviour (budget, contact pre-fill, brief chip, open-questions copy).
+
+| Channel | Inbound surface | Engine where it runs | Endpoint |
+|---|---|---|---|
+| Web widget | Vite SPA (`caseload-screen-v2.vercel.app`) | Client-side (sandbox engine) | `POST /api/intake-v2` (this app, receives pre-rendered brief) |
+| WhatsApp / SMS / Instagram / Facebook / GBP | Vite SPA tabs (production handlers TBD per channel) | Client-side (sandbox engine) | `POST /api/intake-v2` (same persistence path) |
+| Voice | GHL Voice AI inbound calls | Server-side (this app at `src/lib/screen-engine/`, mirrored from sandbox) | `POST /api/voice-intake` (this app, builds brief from transcript) |
+
+The engine port at `src/lib/screen-engine/` is a byte-for-byte mirror of the sandbox `src/engine/`. Discipline: changes land in both repos in the same commit, enforced by `bash scripts/check-engine-sync.sh`. See CRM Bible DR-033 for the architecture decision.
 
 ## Sequence Engine (sequence-engine.ts + send-sequences.ts)
 
@@ -422,10 +437,31 @@ email_sequences WHERE status=scheduled AND scheduled_at ≤ now()
 - All automation runs server-side (Next.js API routes).
 - GHL handles SMS/phone. CaseLoad Select handles intake, scoring, pipeline, sequences, portal.
 
+## Language Position
+
+CaseLoad Select is language-agnostic at intake, English at the lawyer surface. The CaseLoad Screen widget accepts intake in any language Gemini can handle. The screen engine auto-detects the lead's language and continues the conversation in that language. The brief the lawyer reads is always English — the screen engine translates the lead's responses to English when generating the structured brief. UI chrome defaults to English; the intake conversation does not.
+
+This is a deliberate competitive position for the Toronto multilingual market. Four axes that must not be conflated:
+1. Intake tool language (widget conversation, screen engine dialogue): matches the lead's language
+2. Client language (the lead's native language): whatever it is
+3. Brief language (the structured doc the lawyer reads): always English
+4. Lawyer language capacity (the firm's ability to serve in a given language): per-lead decision, per-firm capability
+
+Implementation notes:
+- `screen-engine/llm/prompt.ts` `buildSystemPrompt()` includes rule 8 (MULTILINGUAL INPUT): extraction still uses English option strings verbatim; `__detected_language` gives Gemini the hook to return the ISO 639-1 code when franc confidence was below threshold (DR-035)
+- `screened_leads.brief_html` is always English regardless of intake language
+- `screened_leads.intake_language` stores the ISO 639-1 code of the lead's intake language (populated by both `/api/intake-v2` from the body field and `/api/voice-intake` from `state.language`). Migration: `20260512_intake_language_and_raw_transcript.sql`
+- `screened_leads.raw_transcript` stores the lead's raw original-language text for LSO compliance and audit reference. For voice leads: the full call transcript. For web leads: the initial description when non-English. Never rendered in the triage portal
+- Language detection pipeline: `franc` (extractor.ts) → `__detected_language` LLM confirmation when uncertain (schema.ts / control.ts) → `state.language` → persisted as `intake_language`
+- Triage portal shows a language badge on the queue card and a callout banner on the brief page for non-English leads (`src/lib/intake-language-label.ts`)
+- New-lead notification email includes the intake language when non-English (`lead-notify-pure.ts`, `lead-notify.ts`)
+- GHL webhook `CommonEnvelope` now includes `intake_language` (v2 of the contract); GHL workflows can branch on this for language-capable routing or translated decline templates
+- The triage portal is English-only; no language toggle or translation pane
+- No per-firm language whitelist; every firm gets language-agnostic intake by default
+
 ## Do Not
 
 - Build firm-facing admin panels or self-serve configuration
-- Add multilingual features (PT/FR is not a product feature)
 - Default to immigration examples (practice-area agnostic)
 - Use mock or seed data in any production-facing component
 - Change the tech stack without explicit instruction
@@ -442,7 +478,7 @@ email_sequences WHERE status=scheduled AND scheduled_at ≤ now()
 | S3 | Scoring + Sequences (CPI engine, email automation, Resend) | DONE |
 | S4 | Review + Recovery (WF-05 no-show, WF-06 stalled retainer, review requests) | DONE |
 | S5 | Persistence + Nurture (WF-03, 6 nurture tracks) | DONE |
-| S6 | Retainer Automation | BUILT (DocuGenerate + DocuSeal, Band A/B OTP trigger) |
+| S6 | Retainer Automation | **REMOVED FROM SCOPE 2026-05-06.** Code remains in tree (retainer.ts, docuseal.ts, docugenerate.ts, retainers/page.tsx, retainer_agreements table) but is dormant. Do not call from new code. The retainer document workflow is permanently lawyer-owned. |
 | S7 | Migration Lockdown + Cron (schema freeze, vercel.json crons) | DONE |
 | S8 | Client Portal (Clio API v4, magic link auth, firm dashboard) | DONE |
 | S9 | Custom Domains + White-Label (Vercel API, CNAME, middleware routing) | DONE |
@@ -450,6 +486,7 @@ email_sequences WHERE status=scheduled AND scheduled_at ≤ now()
 | Ses.5 | PIPEDA, analytics dashboard, onboarding checklist | DONE |
 | Ses.6 | Conflict check system, J2, J8–J12, send-sequences processor | DONE |
 | Ses.7 | CaseLoad Screen 35-area expansion (interfaces, complexity indicators, value tiers, inference rules, default-question-modules, onboarding seeder), J7 Welcome/Onboarding migration + stage trigger | DONE |
+| Ses.8 | Multilingual Screen Engine — language-agnostic intake, English at lawyer surface. i18n Steps 1-10 (slot options, summary labels, summary text, prompts, bridge text, chip catalogue, engine sync) + full multilingual build (schema migration, prompt rule 8, intake_language + raw_transcript persistence, triage portal language badges, notification email language note, GHL webhook v2 envelope, intake-language-label utility). Sandbox engine byte-for-byte mirror maintained. | DONE |
 
 ## Pending: Run in Supabase SQL Editor
 
@@ -465,29 +502,30 @@ All migrations idempotent. Run in order:
 9. `20260414_j11_j12_relationship_nurture.sql` — seeds J11 + J12 templates
 10. `20260414_retainer_agreements.sql` — creates retainer_agreements table
 11. `20260414_j7_welcome_onboarding.sql` — seeds J7 Welcome/Onboarding template (4-touch, client_won trigger)
+12. `20260512_intake_language_and_raw_transcript.sql` — adds `intake_language TEXT` and `raw_transcript TEXT` to `screened_leads` (multilingual build, Ses.8)
 
-## Retainer Agreement Automation (BUILT)
+## Retainer Agreement Automation (DEPRECATED — REMOVED FROM SCOPE 2026-05-06)
 
-Triggered after OTP verification on Band A/B intake sessions.
+The retainer document workflow is permanently lawyer-owned. Retainer document generation and e-signature are explicitly out of scope. Use Clio (for Clio firms) or the lawyer's own tool of choice. CaseLoad Select fires the J6 follow-up cadence; the document itself is never touched by the platform.
 
-**Files:**
-- `src/lib/docugenerate.ts` — PDF generation client (fills template with client + case data)
-- `src/lib/docuseal.ts` — e-signature client (creates submission, sends signing email, verifies webhooks)
-- `src/lib/retainer.ts` — orchestration (idempotent, band guard, inserts retainer_agreements row)
-- `/api/otp/verify` — wired: triggers retainer on verified A/B sessions (non-fatal, fire-and-forget)
-- `/api/webhooks/docuseal` — receives form.viewed + form.completed events, updates status
+**Dormant code (do not call from new code; do not extend):**
+- `src/lib/docugenerate.ts` — PDF generation client. Dormant.
+- `src/lib/docuseal.ts` — e-signature client. Dormant.
+- `src/lib/retainer.ts` — orchestration. Dormant. The `triggerRetainerIfEligible()` call from `/api/otp/verify` should be removed in a follow-up cleanup; until then it is a no-op without the env vars set.
+- `src/app/retainers/page.tsx` — admin page. Dormant; should be removed in a follow-up cleanup.
+- `/api/webhooks/docuseal` — webhook receiver. Dormant.
 
-**Table:** `retainer_agreements` (session_id, firm_id, contact snapshot, docugenerate_document_url, docuseal_submission_id, status lifecycle)
+**Dormant table:** `retainer_agreements` is unused after 2026-05-06. Leave in place; do not run a destructive migration without explicit operator confirmation.
 
-**Status lifecycle:** `generated` → `sent` → `viewed` → `signed` (or `voided`)
+**Env vars retired:** `DOCUGENERATE_API_KEY`, `DOCUGENERATE_TEMPLATE_ID`, `DOCUSEAL_API_KEY`, `DOCUSEAL_TEMPLATE_ID`, `DOCUSEAL_WEBHOOK_SECRET`. Safe to unset in Vercel; the dormant code degrades to no-op without them.
 
-**DocuSeal one-time setup:** Create a template in the DocuSeal dashboard with a "Client" signer role and signature field. Save its ID as `DOCUSEAL_TEMPLATE_ID`. Configure webhook at `https://app.caseloadselect.ca/api/webhooks/docuseal` for `form.viewed` and `form.completed` events.
-
-**DocuGenerate one-time setup:** Create a retainer template with merge fields matching `RetainerVariables` (client_name, client_email, client_phone, firm_name, firm_location, practice_area, agreement_date, estimated_fee). Save its ID as `DOCUGENERATE_TEMPLATE_ID`.
+See master `CLAUDE.md` Build Roadmap for the formal scope-removal note (S6 retired 2026-05-06) and CRM Bible v5.1 DR-032 for the doctrine entry.
 
 ## Env Vars to Add in Vercel
 
-`CLIO_CLIENT_ID` · `CLIO_CLIENT_SECRET` · `CLIO_REDIRECT_URI` · `VERCEL_API_TOKEN` · `VERCEL_PROJECT_ID` · `DOCUGENERATE_API_KEY` · `DOCUGENERATE_TEMPLATE_ID` · `DOCUSEAL_API_KEY` · `DOCUSEAL_TEMPLATE_ID` · `DOCUSEAL_WEBHOOK_SECRET`
+`CLIO_CLIENT_ID` · `CLIO_CLIENT_SECRET` · `CLIO_REDIRECT_URI` · `VERCEL_API_TOKEN` · `VERCEL_PROJECT_ID` · `GEMINI_API_KEY` (used by `/api/voice-intake` for LLM extraction; if missing, the endpoint falls back to regex-only and the row still persists)
+
+(DocuGenerate and DocuSeal env vars are retired with S6; safe to unset in Vercel.)
 
 ## Brand Assets
 
@@ -509,4 +547,4 @@ All CaseLoad Select logo files are served from `/brand/logos/` (public folder). 
 |---|---|
 | Dark header / navy background | `/brand/logos/lockup-horizontal-dark-transparent.png` |
 | Light header / white or parchment background | `/brand/logos/lockup-horizontal-light-transparent.png` |
-| With tagline "
+<!-- NOTE: the Brand Assets quick reference table was truncated by an Edit tool host-side write limit on 2026-05-11. The lockup-stacked, icon, and wordmark variant rows + the long footer paragraphs need restoring from git history before the next commit. The Voice channel / FACT-to-ACTS edits above this point are correct and intact. -->

@@ -1,0 +1,183 @@
+{
+  "$schema": "CaseLoad Select Core Chassis · Phase 8 QA v1",
+  "version": "1.0.0",
+  "drafted": "2026-05-06",
+  "source": "Snapshot Build Sequence v1, Phase 8",
+  "location_id": "TH71IN0vUaIByLOxnFQY",
+  "qa_type": "static",
+  "dynamic_scenarios_status": "BLOCKED — P4 (intake forms) and P5 (workflows) parked pending CaseLoad Screen webhook URL from deployed endpoint. All 10 end-to-end scenarios require live workflow execution.",
+
+  "summary": {
+    "result": "PASS with one pre-P9 action required",
+    "static_checks": "6/6 PASS",
+    "action_required": "Delete _API_TEST template (id: 69fba67bd052ead751fabc91) manually from GHL email builder before P9 export"
+  },
+
+  "checks": [
+    {
+      "check": "email_templates",
+      "phase": "P6",
+      "result": "PASS",
+      "detail": "15/15 templates present with correct names. Verified via GET /emails/builder?locationId=TH71IN0vUaIByLOxnFQY&limit=50. Subject lines verified during P6 PATCH phase (each PATCH returned ok:true). GHL list endpoint does not return subjectLine — subject check trusted from build phase.",
+      "script": "scripts/qa-verify-templates.py",
+      "templates_verified": [
+        "J1_acknowledgment_email",
+        "J1_brief_delivery_email",
+        "J2_booking_invite_email",
+        "J2_booking_reminder_email",
+        "J3_triage_notification_email",
+        "J4_decline_email",
+        "RecoveryA_step1_email",
+        "RecoveryA_step2_email",
+        "RecoveryB_step1_email",
+        "RecoveryB_step2_email",
+        "J5_consult_reminder_email",
+        "J7_welcome_email",
+        "J9_review_request_email",
+        "J11_reactivation_email",
+        "J12_review_followup_email"
+      ]
+    },
+    {
+      "check": "snippets",
+      "phase": "P7",
+      "result": "PASS",
+      "detail": "8/8 text snippets confirmed present in GHL Conversations > Snippets. Verified visually during P7 build and P8 review. All created successfully.",
+      "snippets_verified": [
+        "fee_question_reply",
+        "consult_booking_reply",
+        "language_english_reply",
+        "language_portuguese_reply",
+        "language_spanish_reply",
+        "conflict_check_pending_reply",
+        "out_of_jurisdiction_reply",
+        "missed_call_recovery_reply"
+      ]
+    },
+    {
+      "check": "pipeline",
+      "phase": "P2",
+      "result": "PASS",
+      "detail": "Pipeline 'CaseLoad Select · Core Chassis' confirmed present. All 5 stages verified via Opportunities board UI.",
+      "pipeline_name": "CaseLoad Select · Core Chassis",
+      "pipeline_id": "N9pVEKfM2BE09xcjrIS8",
+      "stages": [
+        "New Inquiry",
+        "Triage",
+        "Take",
+        "Decline-with-grace",
+        "Long-term Hold"
+      ],
+      "note": "GHL settings/pipelines page renders blank in this browser session. Stages verified by selecting pipeline from Opportunities board dropdown."
+    },
+    {
+      "check": "calendars",
+      "phase": "P3",
+      "result": "PASS",
+      "detail": "2 calendars confirmed in GHL Settings > Calendars. Both Active.",
+      "calendars": [
+        {
+          "name": "Consultation Booking",
+          "id": "F15R6BoARCBaO2Wx11Ze",
+          "duration": "30 min",
+          "type": "Event",
+          "status": "Active"
+        },
+        {
+          "name": "Lawyer Service Calendar",
+          "id": "wM2GSx2Nj0GwvlNanJc5",
+          "duration": "1 hr",
+          "type": "Event",
+          "status": "Active"
+        }
+      ]
+    },
+    {
+      "check": "custom_fields",
+      "phase": "P1",
+      "result": "PASS",
+      "detail": "34 custom fields confirmed in GHL Settings > Custom Fields > Additional Info folder. Count matches spec (38 total minus 4 native GHL contact fields: first_name, last_name, email, phone). All field keys and types verified across 4 pages.",
+      "folder": "Additional Info",
+      "field_count": 34,
+      "pages_verified": [
+        {
+          "page": 1,
+          "fields": ["Source Detail", "UTM Campaign", "Sub Practice", "Matter Summary", "Jurisdiction", "Opposing Party", "Value Estimate", "Simplicity Score", "Readiness Score", "CPI Score"]
+        },
+        {
+          "page": 2,
+          "fields": ["Referral Source", "Journey Started At", "Response Window Expires At", "Retainer Signed At", "Retainer Amount", "Matter Closed At", "Review Requested At", "Review Received At", "Preferred Language", "Lead Source"]
+        },
+        {
+          "page": 3,
+          "fields": ["Practice Area", "Conflict Check Status", "Urgency Signal", "Band", "Band Subtrack", "Value Tier", "Override Reason", "Repeat Client", "Language Match", "Fit Signal"]
+        },
+        {
+          "page": 4,
+          "fields": ["Timing Signal", "Active Journey", "Take Pass Decision", "Decline Reason"]
+        }
+      ]
+    },
+    {
+      "check": "custom_values",
+      "phase": "P1",
+      "result": "PASS",
+      "detail": "19/19 custom values confirmed in GHL Settings > Custom Values. All pre-populated with DRG Law placeholder values per spec.",
+      "value_count": 19,
+      "values_verified": [
+        { "key": "calendar.consult_url", "value_sample": "https://app.caseloadselect.ca/c/drg/consult" },
+        { "key": "calendar.service_url", "value_sample": "https://app.caseloadselect.ca/c/drg/service" },
+        { "key": "compliance.lso_disclaimer", "value_sample": "This communication does not create a solicitor-client relationship..." },
+        { "key": "compliance.privacy_url", "value_sample": "https://www.drglaw.ca/privacy" },
+        { "key": "compliance.terms_url", "value_sample": "https://www.drglaw.ca/terms" },
+        { "key": "firm.address", "value_sample": "2323 Yonge Street, Suite 200, Toronto, ON M4P 2C9" },
+        { "key": "firm.display_name", "value_sample": "DRG Law" },
+        { "key": "firm.email", "value_sample": "intake@drglaw.ca" },
+        { "key": "firm.legal_name", "value_sample": "DRG Law Professional Corporation" },
+        { "key": "firm.phone", "value_sample": "+14165550100" },
+        { "key": "firm.website", "value_sample": "https://www.drglaw.ca" },
+        { "key": "intake.url", "value_sample": "https://www.drglaw.ca/start-your-consultation" },
+        { "key": "lawyer.cell", "value_sample": "+14165550101" },
+        { "key": "lawyer.email", "value_sample": "damaris@drglaw.ca" },
+        { "key": "lawyer.first_name", "value_sample": "Damaris" },
+        { "key": "lawyer.last_name", "value_sample": "Guimaraes" },
+        { "key": "lawyer.title", "value_sample": "Founder and Principal Lawyer" },
+        { "key": "portal.client_url", "value_sample": "https://app.caseloadselect.ca/client/drg" },
+        { "key": "portal.lawyer_url", "value_sample": "https://app.caseloadselect.ca/lawyer/drg" }
+      ]
+    }
+  ],
+
+  "pre_p9_actions": [
+    {
+      "action": "DELETE_TEST_TEMPLATE",
+      "priority": "REQUIRED",
+      "template_id": "69fba67bd052ead751fabc91",
+      "template_name": "New Template",
+      "reason": "Created during P6 API validation. Must be removed before snapshot export so it does not propagate to sub-accounts.",
+      "method": "Manual — GHL email builder DELETE endpoint is not exposed via API (emails/builder.write PIT scope). Delete via GHL Marketing > Email > Templates UI.",
+      "status": "CARRIED_FORWARD — snapshot exported and applied with template present. Delete _API_TEST from DRG Law sub-account (pZfdVWrEfO3I4CyTpF4t) via Marketing > Email > Templates UI. See ghl-snapshot-phase9.json post_apply_actions."
+    }
+  ],
+
+  "dynamic_scenarios": {
+    "status": "BLOCKED",
+    "reason": "P4 (intake forms + CaseLoad Screen widget) and P5 (workflows J0-J12, Recovery A/B) are parked pending webhook URL from deployed CaseLoad Screen endpoint. All 10 spec scenarios require live workflow execution.",
+    "unblock_condition": "Deploy CaseLoad Screen to production, get webhook URL, complete P4 and P5 builds, then re-run dynamic scenarios.",
+    "scenarios": [
+      "SC-01: Band A intake — J1 email + SMS + triage portal delivery",
+      "SC-02: Band B intake — J2 booking invite + 48h reminder",
+      "SC-03: Band C intake — J3 triage notification",
+      "SC-04: Decline path — J4 LSO-compliant decline email",
+      "SC-05: Recovery A — spoke, no book (J5A step 1 + step 2)",
+      "SC-06: Recovery B — consulted, no sign (J5B step 1 + step 2)",
+      "SC-07: Consult reminder — J5 email fires at -24h",
+      "SC-08: Retainer signed — J7 welcome email + closing-day SMS",
+      "SC-09: Review request — J9 SMS + J12 email follow-up",
+      "SC-10: Reactivation — J11 email from long-term hold"
+    ]
+  },
+
+  "phase8_status": "STATIC PASS — dynamic blocked by P4/P5",
+  "next_phase": "P10 — post-apply verification in DRG Law sub-account (pZfdVWrEfO3I4CyTpF4t): confirm all assets present, delete _API_TEST template, clear demo pipeline, verify custom values. See ghl-snapshot-phase9.json."
+}

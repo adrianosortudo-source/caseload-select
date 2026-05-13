@@ -1,4 +1,15 @@
 /**
+ * @deprecated Removed from scope on 2026-05-06. Do not call from new code.
+ *
+ * S6 (retainer automation via DocuGenerate + DocuSeal) was permanently
+ * removed from the project. The retainer document workflow is lawyer-owned.
+ * See master CLAUDE.md "Build Roadmap" and CRM Bible v5.1 DR-032.
+ *
+ * This file is preserved as dormant code pending a follow-up cleanup.
+ *
+ * --------------------------------------------------------------------
+ * ORIGINAL DESCRIPTION (HISTORICAL):
+ *
  * DocuSeal  -  e-signature submission client
  *
  * Creates a signing submission from a DocuGenerate-produced PDF URL.

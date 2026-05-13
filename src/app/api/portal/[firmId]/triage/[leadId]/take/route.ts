@@ -38,6 +38,7 @@ interface LeadRow {
   contact_email: string | null;
   contact_phone: string | null;
   brief_json: BriefJson | null;
+  intake_language: string | null;
 }
 
 export async function POST(
@@ -60,7 +61,7 @@ export async function POST(
       lead_id, firm_id, status,
       band, matter_type, practice_area, submitted_at,
       contact_name, contact_email, contact_phone,
-      brief_json
+      brief_json, intake_language
     `)
     .eq("lead_id", leadId)
     .maybeSingle();
@@ -120,6 +121,7 @@ export async function POST(
     contact_name: lead.contact_name,
     contact_email: lead.contact_email,
     contact_phone: lead.contact_phone,
+    intake_language: lead.intake_language,
   };
   const payload = buildTakenPayload({
     facts,

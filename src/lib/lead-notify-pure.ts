@@ -12,6 +12,7 @@
 
 import { matterLabel, practiceAreaLabel } from "@/lib/screened-leads-labels";
 import { formatRemaining } from "@/lib/decision-timer";
+import { intakeLanguageLabel } from "@/lib/intake-language-label";
 
 export interface NewLeadEmailInput {
   firmName: string;
@@ -22,6 +23,7 @@ export interface NewLeadEmailInput {
   decisionDeadlineIso: string;
   whaleNurture: boolean;
   briefUrl: string;             // absolute URL to /portal/[firmId]/triage/[leadId]
+  intakeLanguage?: string | null; // ISO 639-1 code; omitted / null for English
   now?: Date;
 }
 
@@ -69,6 +71,7 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
     decisionDeadlineIso,
     whaleNurture,
     briefUrl,
+    intakeLanguage,
     now = new Date(),
   } = input;
 
@@ -77,6 +80,10 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
   const matter = matterLabel(matterType);
   const area = practiceAreaLabel(practiceArea);
   const bandLine = band ? `Priority ${band}` : "Awaiting band";
+  const langLabel = intakeLanguageLabel(intakeLanguage ?? null);
+  const langNote = langLabel
+    ? `<div style="margin-top:6px;font-size:12px;color:#1E3A5F;font-family:'Oxanium',Arial,sans-serif;letter-spacing:0.08em;text-transform:uppercase;">Intake language: ${escapeHtml(langLabel)} · Brief translated to English</div>`
+    : "";
   const whaleNote = whaleNurture
     ? `<div style="margin-top:6px;font-size:12px;color:#7A6638;font-family:'Oxanium',Arial,sans-serif;letter-spacing:0.08em;text-transform:uppercase;">High value, low readiness · whale nurture flag</div>`
     : "";
@@ -113,6 +120,7 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
                     <div style="margin-top:10px;font-family:'DM Sans',Arial,sans-serif;font-size:13px;line-height:1.5;color:#0D1520;">
                       Decision window: <strong style="font-weight:700;color:#1E2F58;">${escapeHtml(remaining)}</strong> left to Take or Pass before the backstop fires the decline-with-grace cadence.
                     </div>
+                    ${langNote}
                     ${whaleNote}
                   </td>
                 </tr>

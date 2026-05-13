@@ -223,7 +223,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
               </ul>
               <div className="flex flex-wrap gap-3">
                 <button onClick={scrollToWidget} className="px-6 py-3 rounded-xl text-white font-semibold text-sm transition hover:opacity-90 shadow-lg" style={{ backgroundColor: NAVY }}>
-                  Start Your Consultation
+                  Submit for review
                 </button>
                 <a href={PHONE_TEL} className="px-6 py-3 rounded-xl font-semibold text-sm transition hover:opacity-90 border-2 flex items-center gap-2" style={{ borderColor: NAVY, color: NAVY }}>
                   📞 {PHONE_DISPLAY}

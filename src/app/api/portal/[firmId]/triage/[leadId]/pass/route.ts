@@ -37,6 +37,7 @@ interface LeadRow {
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  intake_language: string | null;
 }
 
 const MAX_NOTE_LEN = 4000;
@@ -69,7 +70,8 @@ export async function POST(
     .select(`
       lead_id, firm_id, status,
       band, matter_type, practice_area, submitted_at,
-      contact_name, contact_email, contact_phone
+      contact_name, contact_email, contact_phone,
+      intake_language
     `)
     .eq("lead_id", leadId)
     .maybeSingle();
@@ -134,6 +136,7 @@ export async function POST(
     contact_name: lead.contact_name,
     contact_email: lead.contact_email,
     contact_phone: lead.contact_phone,
+    intake_language: lead.intake_language,
   };
   const payload = buildPassedPayload({
     facts,

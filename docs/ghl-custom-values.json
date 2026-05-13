@@ -1,0 +1,64 @@
+{
+  "$schema": "CaseLoad Select Core Chassis · Custom Values v1",
+  "version": "1.0.0",
+  "drafted": "2026-05-06",
+  "source": "Snapshot Build Sequence v1, Phase 1",
+  "description": "Firm-level tokens used in every email subject, SMS body, and brief delivery. These resolve per-sub-account at runtime. Never hardcode firm data in templates; reference these tokens.",
+  "groups": [
+    {
+      "group": "firm",
+      "label": "Firm identity",
+      "values": [
+        { "key": "firm.legal_name", "type": "text", "example": "DRG Law Professional Corporation", "description": "Full legal entity name. Used in compliance footers and engagement letters." },
+        { "key": "firm.display_name", "type": "text", "example": "DRG Law", "description": "Short brand name for headers, subject lines, and casual references." },
+        { "key": "firm.phone", "type": "phone", "example": "+14165550100", "description": "Primary firm phone in E.164 format." },
+        { "key": "firm.email", "type": "email", "example": "intake@drglaw.ca", "description": "Primary firm intake email." },
+        { "key": "firm.address", "type": "text", "example": "2323 Yonge Street, Suite 200, Toronto, ON M4P 2C9", "description": "Single-line firm address." },
+        { "key": "firm.website", "type": "url", "example": "https://www.drglaw.ca", "description": "Firm website root URL." }
+      ]
+    },
+    {
+      "group": "lawyer",
+      "label": "Principal lawyer",
+      "values": [
+        { "key": "lawyer.first_name", "type": "text", "example": "Damaris", "description": "Lawyer first name for personalized openings." },
+        { "key": "lawyer.last_name", "type": "text", "example": "Guimaraes", "description": "Lawyer last name." },
+        { "key": "lawyer.title", "type": "text", "example": "Founder and Principal Lawyer", "description": "Display title for signatures and bios." },
+        { "key": "lawyer.cell", "type": "phone", "example": "+14165550101", "description": "Direct cell for J1 Band A SMS delivery." },
+        { "key": "lawyer.email", "type": "email", "example": "damaris@drglaw.ca", "description": "Direct lawyer email for sensitive communications." }
+      ]
+    },
+    {
+      "group": "calendar",
+      "label": "Calendar URLs",
+      "values": [
+        { "key": "calendar.consult_url", "type": "url", "example": "https://app.caseloadselect.ca/c/drg/consult", "description": "Public consult booking link surfaced in J2 and Take." },
+        { "key": "calendar.service_url", "type": "url", "example": "https://app.caseloadselect.ca/c/drg/service", "description": "Internal lawyer service calendar URL." }
+      ]
+    },
+    {
+      "group": "intake",
+      "label": "Intake and portal",
+      "values": [
+        { "key": "intake.url", "type": "url", "example": "https://www.drglaw.ca/start-your-consultation", "description": "Public CaseLoad Screen entry point." },
+        { "key": "portal.lawyer_url", "type": "url", "example": "https://app.caseloadselect.ca/lawyer/drg", "description": "Lawyer triage portal for Take/Pass decisions." },
+        { "key": "portal.client_url", "type": "url", "example": "https://app.caseloadselect.ca/client/drg", "description": "Client portal for retainer status and document access." }
+      ]
+    },
+    {
+      "group": "compliance",
+      "label": "LSO and CASL compliance",
+      "values": [
+        { "key": "compliance.lso_disclaimer", "type": "longtext", "example": "This communication does not create a solicitor-client relationship. No advice is provided until a written engagement letter is signed.", "description": "Footer text for every email per LSO Rule 4.2-1." },
+        { "key": "compliance.privacy_url", "type": "url", "example": "https://www.drglaw.ca/privacy", "description": "Firm privacy policy URL." },
+        { "key": "compliance.terms_url", "type": "url", "example": "https://www.drglaw.ca/terms", "description": "Firm terms and conditions URL." }
+      ]
+    }
+  ],
+  "implementation_notes": [
+    "Create each as a Custom Value in GHL Settings → Custom Values.",
+    "GHL renders these as {{custom_values.firm.legal_name}} in templates. The double-brace token name shown above is the canonical reference; GHL's UI will namespace under custom_values.",
+    "Example values are DRG Law placeholders for the first sub-account. CaseLoad Select master snapshot ships with empty values; each sub-account fills in its own at onboarding.",
+    "When a value contains URL or email content, validate format on import. GHL accepts longtext for disclaimer."
+  ]
+}

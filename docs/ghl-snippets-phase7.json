@@ -1,0 +1,84 @@
+{
+  "$schema": "CaseLoad Select Core Chassis · Phase 7 Snippets v1",
+  "version": "1.0.0",
+  "drafted": "2026-05-06",
+  "source": "Snapshot Build Sequence v1, Phase 7",
+  "location_id": "TH71IN0vUaIByLOxnFQY",
+  "description": "Text snippets for manual conversation replies. Saved in GHL Conversations > Snippets tab. All 8 created as Type: Text. No email snippets in Phase 7.",
+
+  "snippets": [
+    {
+      "name": "fee_question_reply",
+      "category": "Fee question",
+      "trigger": "Lead asks about cost before booking",
+      "body": "Our consultations are flat-fee. The retainer amount depends on the scope of your matter and will be confirmed during our consultation. There are no hidden charges.",
+      "merge_tags": []
+    },
+    {
+      "name": "consult_booking_reply",
+      "category": "Consultation booking",
+      "trigger": "Lead asks how to book or requests a meeting",
+      "body": "I'd be happy to set up a time. You can book directly at {{custom_values.calendar.consult_url}}, choose any time that works for you. If you prefer, reply here and I can help find a slot.",
+      "merge_tags": ["{{custom_values.calendar.consult_url}}"],
+      "compliance_note": "No em dash. Calendar link uses custom value token."
+    },
+    {
+      "name": "language_english_reply",
+      "category": "Language — English",
+      "trigger": "Lead asks whether the firm works in English",
+      "body": "We work in English and are happy to assist you in that language throughout your matter.",
+      "merge_tags": []
+    },
+    {
+      "name": "language_portuguese_reply",
+      "category": "Language — Portuguese",
+      "trigger": "Lead asks whether the firm works in Portuguese",
+      "body": "Trabalhamos com clientes de lingua portuguesa e podemos atende-lo em portugues durante todo o processo.",
+      "merge_tags": [],
+      "implementation_note": "Accented characters entered as ASCII approximations for Windows CP1252 compatibility. Replace with proper diacritics (língua, atendê-lo, português) if GHL displays them correctly."
+    },
+    {
+      "name": "language_spanish_reply",
+      "category": "Language — Spanish",
+      "trigger": "Lead asks whether the firm works in Spanish",
+      "body": "Trabajamos con clientes de habla hispana y podemos atenderle en espanol durante todo el proceso.",
+      "merge_tags": [],
+      "implementation_note": "Accented characters entered as ASCII approximations. Replace with proper diacritics (español) if GHL displays them correctly."
+    },
+    {
+      "name": "conflict_check_pending_reply",
+      "category": "Conflict check pending",
+      "trigger": "Conflict check initiated, lead is waiting",
+      "body": "Thank you for your inquiry. Before we can proceed, we need to complete a brief conflict-of-interest check. This is a standard step and we will follow up within one business day to confirm next steps.",
+      "merge_tags": []
+    },
+    {
+      "name": "out_of_jurisdiction_reply",
+      "category": "Out of jurisdiction",
+      "trigger": "Lead matter is outside the firm's service area",
+      "body": "Thank you for reaching out. Based on the details you have shared, this matter falls outside the jurisdictions we currently serve. We are not able to assist, but the Law Society Referral Service at 1-800-268-8326 can connect you with a lawyer in the right region.",
+      "merge_tags": [],
+      "compliance_note": "LSO referral number included per LSO Rule 4.2-1 decline guidance. No outcome promises. No reason that implies legal advice given."
+    },
+    {
+      "name": "missed_call_recovery_reply",
+      "category": "Missed call recovery",
+      "trigger": "Lead called but no one answered; manual follow-up",
+      "body": "Hi {{contact.first_name}}, we missed your call and want to make sure you get the help you need. You can reach us at {{custom_values.firm.phone}} or start your inquiry here: {{custom_values.intake.url}}",
+      "merge_tags": ["{{contact.first_name}}", "{{custom_values.firm.phone}}", "{{custom_values.intake.url}}"],
+      "implementation_note": "Merge tags entered via JavaScript setValue (GHL's {{ trigger opens a merge tag picker that intercepts keyboard input). Verify tokens resolve correctly during P8 QA."
+    }
+  ],
+
+  "implementation_notes": [
+    "All 8 snippets created via GHL Conversations > Snippets tab (Add Text Snippet). Type: Text for all.",
+    "GHL has no snippet API endpoint. These are UI-only resources included in the snapshot export.",
+    "Snippets with merge tags (consult_booking_reply, missed_call_recovery_reply) require the corresponding Custom Values to be populated at sub-account onboarding before they resolve correctly.",
+    "Language snippets (PT/ES) use ASCII approximations for accented characters. Review during P8 QA and update in-place if GHL renders diacritics correctly.",
+    "The missed_call_recovery_reply snippet body was set via JavaScript (document.querySelector + native value setter + input event dispatch) because typing {{ in GHL's SMS textarea activates a merge tag picker that intercepts subsequent keystrokes. This is a known GHL UI behaviour.",
+    "Review automation (J12 two-step sequence) is handled via email templates J9_review_request_email and J12_review_followup_email (Phase 6) and the J12_review_request_sms (Phase 5 workflow inline). Snippets are for manual reply use only, not automated sequences."
+  ],
+
+  "phase7_status": "COMPLETE",
+  "next_phase": "P8 — QA pass (10 scenarios per spec). P4 and P5 remain parked pending webhook URL from deployed CaseLoad Screen endpoint."
+}

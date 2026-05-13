@@ -1,0 +1,104 @@
+{
+  "$schema": "CaseLoad Select Core Chassis · Phase 9 Snapshot v1",
+  "version": "1.0.0",
+  "drafted": "2026-05-06",
+  "source": "Snapshot Build Sequence v1, Phase 9",
+
+  "snapshot": {
+    "name": "CaseLoad Select · Core Chassis · v1.0",
+    "ghl_snapshot_id": "H2R1INca40TJkijGiNzl",
+    "ghl_version": "v1",
+    "created": "2026-05-06T17:47:00",
+    "source_location_id": "TH71IN0vUaIByLOxnFQY",
+    "source_account_name": "CaseLoad Select"
+  },
+
+  "export": {
+    "status": "COMPLETE",
+    "method": "GHL Account Snapshots > Create New Snapshot",
+    "asset_selection": "All (116 categories selected via master checkbox)",
+    "assets_with_data": [
+      { "category": "Calendars", "count": 2 },
+      { "category": "Contact Detail Views", "count": 1 },
+      { "category": "Custom Fields", "count": 63 },
+      { "category": "Custom Values", "count": 19 },
+      { "category": "Email Builder Templates", "count": 16 },
+      { "category": "Knowledge Bases", "count": 1 },
+      { "category": "Pipelines", "count": 2 },
+      { "category": "Review Settings", "count": 1 },
+      { "category": "Tags", "count": 3 },
+      { "category": "Text & Email Templates", "count": 8 }
+    ],
+    "note_email_templates": "16 email builder templates includes the _API_TEST template (id: 69fba67bd052ead751fabc91). DELETE endpoint not available via API; Marketing email UI non-functional in this session. Template is present in snapshot. Delete manually in DRG Law sub-account post-apply via GHL Marketing > Email > Templates UI when the UI renders correctly.",
+    "note_pipelines": "2 pipelines: 'CaseLoad Select · Core Chassis' (N9pVEKfM2BE09xcjrIS8) and the GHL default demo pipeline. The default pipeline carries demo opportunity data; review and clear from DRG Law after snapshot apply."
+  },
+
+  "apply": {
+    "status": "PUSHED",
+    "target_location_id": "pZfdVWrEfO3I4CyTpF4t",
+    "target_account_name": "DRG Law Professional Corporation",
+    "method": "GHL Agency > Sub-Accounts > DRG Law > Actions > Load Snapshot",
+    "snapshot_selected": "Own - CaseLoad Select · Core Chassis · v1.0",
+    "asset_selection_step": "Master 'Select all' enabled — all categories selected for push",
+    "conflicts_found": 0,
+    "confirmation": "CONFIRM typed; Proceed clicked",
+    "ghl_response": "Snapshot is being pushed to the selected sub-accounts. You will be notified when Completed.",
+    "applied_at": "2026-05-06T18:00:00"
+  },
+
+  "post_apply_actions": [
+    {
+      "action": "DELETE_API_TEST_TEMPLATE",
+      "priority": "REQUIRED",
+      "template_id": "69fba67bd052ead751fabc91",
+      "target": "DRG Law sub-account (pZfdVWrEfO3I4CyTpF4t)",
+      "method": "GHL Marketing > Email > Templates UI — delete 'New Template' (_API_TEST)",
+      "status": "PENDING"
+    },
+    {
+      "action": "CLEAR_DEMO_PIPELINE",
+      "priority": "RECOMMENDED",
+      "target": "DRG Law sub-account — default GHL demo pipeline",
+      "method": "GHL Opportunities board — delete or archive the demo pipeline and its example deals",
+      "status": "PENDING"
+    },
+    {
+      "action": "UPDATE_CUSTOM_VALUES",
+      "priority": "REQUIRED_AT_ONBOARDING",
+      "target": "DRG Law sub-account — all 19 custom values",
+      "detail": "Custom values are pre-populated with DRG Law placeholder values from the snapshot. Verify each value reflects the live DRG Law configuration: calendar URLs, portal URLs, intake URL, firm contact details, compliance URLs.",
+      "values_to_verify": [
+        "calendar.consult_url",
+        "calendar.service_url",
+        "compliance.lso_disclaimer",
+        "compliance.privacy_url",
+        "compliance.terms_url",
+        "firm.address",
+        "firm.display_name",
+        "firm.email",
+        "firm.legal_name",
+        "firm.phone",
+        "firm.website",
+        "intake.url",
+        "lawyer.cell",
+        "lawyer.email",
+        "lawyer.first_name",
+        "lawyer.last_name",
+        "lawyer.title",
+        "portal.client_url",
+        "portal.lawyer_url"
+      ],
+      "status": "PENDING"
+    },
+    {
+      "action": "COMPLETE_P4_P5",
+      "priority": "BLOCKED",
+      "detail": "P4 (intake forms + CaseLoad Screen widget) and P5 (workflows J0–J12, Recovery A/B) remain parked pending CaseLoad Screen webhook URL from deployed endpoint. Complete these phases and re-run dynamic P8 QA scenarios after deployment.",
+      "status": "BLOCKED"
+    }
+  ],
+
+  "phase9_status": "COMPLETE — snapshot exported and pushed to DRG Law. GHL processing in background.",
+  "build_sequence_status": "Phases P1–P3, P6–P9 COMPLETE. P4, P5, dynamic P8 QA BLOCKED pending CaseLoad Screen webhook URL.",
+  "next_phase": "P10 — Post-apply verification in DRG Law sub-account: confirm all assets present, delete _API_TEST template, clear demo pipeline, verify custom values resolve correctly."
+}

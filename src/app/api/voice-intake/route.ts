@@ -213,7 +213,7 @@ export async function POST(req: NextRequest) {
 
   // ── Build the brief ─────────────────────────────────────────────────────
   const report = buildReport(state);
-  const briefHtml = renderBriefHtmlServer(report, 'voice');
+  const briefHtml = renderBriefHtmlServer(report, 'voice', state.language);
   const completeness = computeCoreCompleteness(state);
   const bandResult = computeBand(state);
   const band: Band | null = state.matter_type === 'out_of_scope' ? null : bandResult.band;
@@ -267,6 +267,8 @@ export async function POST(req: NextRequest) {
       contact_email: state.slots['client_email'] ?? null,
       contact_phone: state.slots['client_phone'] ?? callerPhone ?? null,
       submitted_at: state.submitted_at ?? now.toISOString(),
+      intake_language: state.language ?? 'en',
+      raw_transcript: transcript,
     })
     .select('id, lead_id, status, decision_deadline, whale_nurture')
     .single();
@@ -343,6 +345,7 @@ export async function POST(req: NextRequest) {
       band,
       decisionDeadlineIso: inserted.decision_deadline,
       whaleNurture: !!inserted.whale_nurture,
+      intakeLanguage: state.language ?? 'en',
     }).catch((err) => {
       console.error('[voice-intake] notifyLawyersOfNewLead failed:', err);
     }));

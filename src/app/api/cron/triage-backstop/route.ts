@@ -46,6 +46,7 @@ interface TriagingRow {
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  intake_language: string | null;
 }
 
 interface BackstopOutcome {
@@ -72,7 +73,7 @@ export async function GET(req: NextRequest) {
     .select(`
       lead_id, firm_id, band, matter_type, practice_area,
       submitted_at, decision_deadline, status_note,
-      contact_name, contact_email, contact_phone
+      contact_name, contact_email, contact_phone, intake_language
     `)
     .eq("status", "triaging")
     .lt("decision_deadline", nowIso)
@@ -143,6 +144,7 @@ export async function GET(req: NextRequest) {
       contact_name: row.contact_name,
       contact_email: row.contact_email,
       contact_phone: row.contact_phone,
+      intake_language: row.intake_language,
     };
     const payload = buildDeclinedBackstopPayload({
       facts,

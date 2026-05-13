@@ -19,6 +19,7 @@ import Link from "next/link";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { matterLabel, subtrackLabel } from "@/lib/screened-leads-labels";
 import { sortTriageRows } from "@/lib/triage-sort";
+import { intakeLanguageLabel } from "@/lib/intake-language-label";
 import DecisionTimer from "@/components/portal/DecisionTimer";
 import RefreshOnFocus from "@/components/portal/RefreshOnFocus";
 
@@ -38,6 +39,7 @@ interface QueueRow {
   contact_name: string | null;
   submitted_at: string;
   brief_json: { matter_snapshot?: string; fee_estimate?: string } | null;
+  intake_language: string | null;
 }
 
 export const dynamic = "force-dynamic";
@@ -63,7 +65,8 @@ export default async function TriageQueuePage({
       lead_id, band, matter_type, practice_area,
       value_score, complexity_score, urgency_score, readiness_score,
       readiness_answered, whale_nurture, band_c_subtrack,
-      decision_deadline, contact_name, submitted_at, brief_json
+      decision_deadline, contact_name, submitted_at, brief_json,
+      intake_language
     `)
     .eq("firm_id", firmId)
     .eq("status", "triaging");
@@ -192,6 +195,7 @@ function QueueCard({ firmId, row }: { firmId: string; row: QueueRow }) {
   const snapshot = row.brief_json?.matter_snapshot ?? matterLabel(row.matter_type);
   const subtrack = subtrackLabel(row.band_c_subtrack);
   const simplicity = row.complexity_score === null ? null : 10 - row.complexity_score;
+  const langLabel = intakeLanguageLabel(row.intake_language);
 
   return (
     <Link
@@ -214,6 +218,11 @@ function QueueCard({ firmId, row }: { firmId: string; row: QueueRow }) {
             {subtrack && (
               <span className="text-[10px] uppercase tracking-wider font-semibold bg-parchment-2 text-black/70 px-2 py-0.5 border border-black/10">
                 {subtrack}
+              </span>
+            )}
+            {langLabel && (
+              <span className="text-[10px] uppercase tracking-wider font-semibold bg-blue-50 text-blue-800 px-2 py-0.5 border border-blue-200">
+                {langLabel}
               </span>
             )}
           </div>

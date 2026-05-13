@@ -1,0 +1,46 @@
+{
+  "lead_id": "L-SMOKE-2026-05-06-001",
+  "submitted_at": "2026-05-06T17:10:00.000Z",
+  "matter_type": "shareholder_dispute",
+  "practice_area": "corporate",
+  "band": "B",
+  "axes": {
+    "value": 7,
+    "complexity": 6,
+    "urgency": 5,
+    "readiness": 6,
+    "readinessAnswered": true
+  },
+  "brief_json": {
+    "matter_snapshot": "Two-founder Ontario tech company; minority founder is being squeezed out after a Series A bridge round. Looking for valuation defence and an exit option.",
+    "fee_estimate": "$15,000 retainer",
+    "value_band": "B",
+    "lawyer_recommended_action": "Send a booking link"
+  },
+  "brief_html": "<div class=\"brief-meta-header\"><div class=\"brief-lead-strip\"><span class=\"brief-lead-id\">L-SMOKE-2026-05-06-001</span><span class=\"brief-lead-time\">2026-05-06 17:10 UTC</span></div></div><h2>Snapshot</h2><p>Two-founder Ontario tech company; minority founder is being squeezed out after a Series A bridge round. Looking for valuation defence and an exit option. Smoke-test row, safe to delete.</p><h2>Resolved facts</h2><ul class=\"fact-list\"><li class=\"fact-row\"><span class=\"fact-label\">Practice area</span><span class=\"fact-value\">Corporate</span><span class=\"fact-source\">Caller</span></li><li class=\"fact-row\"><span class=\"fact-label\">Matter type</span><span class=\"fact-value\">Shareholder dispute</span><span class=\"fact-source\">Caller</span></li><li class=\"fact-row\"><span class=\"fact-label\">Estimated fee</span><span class=\"fact-value\">$15,000 retainer</span><span class=\"fact-source\">Engine</span></li></ul>",
+  "slot_answers": {
+    "slots": {
+      "matter_type": "shareholder_dispute",
+      "company_size": "two-founder",
+      "stage": "post-Series-A bridge",
+      "ask": "valuation defence + exit option"
+    },
+    "slot_meta": {
+      "matter_type": { "confidence": "high" },
+      "company_size": { "confidence": "high" },
+      "stage": { "confidence": "medium" },
+      "ask": { "confidence": "medium" }
+    },
+    "slot_evidence": {
+      "matter_type": "Caller said 'shareholder dispute' verbatim",
+      "company_size": "Caller said 'two of us'",
+      "stage": "Inferred from 'we just closed our bridge'",
+      "ask": "Caller said 'figure out what my share is worth'"
+    }
+  },
+  "contact": {
+    "name": "Smoke Test",
+    "email": "smoke-test+caseload@example.com",
+    "phone": "+14165550199"
+  }
+}

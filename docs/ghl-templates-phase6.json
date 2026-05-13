@@ -1,0 +1,205 @@
+{
+  "$schema": "CaseLoad Select Core Chassis · Phase 6 Templates v1",
+  "version": "1.0.0",
+  "drafted": "2026-05-06",
+  "source": "Snapshot Build Sequence v1, Phase 6",
+  "location_id": "TH71IN0vUaIByLOxnFQY",
+  "pit_template_builder": "pit-1d13628d-84bc-4a65-91f0-b5345264bfc0",
+  "pit_scopes": ["emails/builder.write", "emails/builder.readonly"],
+  "naming_convention": "J[NN]_[step]_[channel] or RecoveryX_[step]_[channel]",
+  "compliance_note": "Every email ends with {{custom_values.compliance.lso_disclaimer}} and unsubscribe link. No hardcoded firm data.",
+
+  "email_templates": [
+    {
+      "name": "J1_acknowledgment_email",
+      "id": "69fba75fa3d632376286feae",
+      "subject": "Your inquiry is with us, {{contact.first_name}}",
+      "journey": "J1",
+      "recipient": "lead",
+      "trigger": "Immediate on intake completion (all bands)",
+      "description": "Confirms inquiry received. Sets expectation for follow-up. No outcomes promised."
+    },
+    {
+      "name": "J1_brief_delivery_email",
+      "id": "69fba76071af1b40fa2d52cd",
+      "subject": "Band A lead: {{contact.first_name}} {{contact.last_name}} — action required",
+      "journey": "J1",
+      "recipient": "lawyer",
+      "trigger": "Band A CPI assignment",
+      "description": "Lead summary table (name, phone, email, practice area, CPI score, matter). Links to triage portal. Take/Pass required within 48h."
+    },
+    {
+      "name": "J2_booking_invite_email",
+      "id": "69fba761b9da8df0492a8059",
+      "subject": "Next step: schedule your consultation with {{custom_values.firm.display_name}}",
+      "journey": "J2",
+      "recipient": "lead",
+      "trigger": "Band B CPI assignment",
+      "description": "Invites lead to book 30-min consultation. Links to {{calendar.consult_url}}."
+    },
+    {
+      "name": "J2_booking_reminder_email",
+      "id": "69fba761a3d632090c86fec2",
+      "subject": "Following up: your consultation with {{custom_values.firm.display_name}}",
+      "journey": "J2",
+      "recipient": "lead",
+      "trigger": "+48h if no booking recorded",
+      "description": "Soft follow-up. Booking link still open. Low pressure."
+    },
+    {
+      "name": "J3_triage_notification_email",
+      "id": "69fba7625925963639d9e347",
+      "subject": "Band C inquiry for review: {{contact.first_name}} {{contact.last_name}}",
+      "journey": "J3",
+      "recipient": "lawyer",
+      "trigger": "Band C CPI assignment",
+      "description": "Lead summary for Band C. Warns about 48h backstop. Links to triage portal."
+    },
+    {
+      "name": "J4_decline_email",
+      "id": "69fba762a3d632d63186fed6",
+      "subject": "Regarding your inquiry to {{custom_values.firm.display_name}}",
+      "journey": "J4",
+      "recipient": "lead",
+      "trigger": "Lawyer Pass decision or 48h backstop fires",
+      "description": "LSO-compliant decline. No reason given that implies legal advice. Refers to LSO referral service and Ontario Legal Aid. Warm but clear."
+    },
+    {
+      "name": "RecoveryA_step1_email",
+      "id": "69fba763b403f26e88c4c55d",
+      "subject": "Still here when the timing works, {{contact.first_name}}",
+      "journey": "Recovery A",
+      "recipient": "lead",
+      "trigger": "Spoke with lead but no consultation booked after +7d",
+      "description": "Light re-engagement. Low pressure. Calendar link included."
+    },
+    {
+      "name": "RecoveryA_step2_email",
+      "id": "69fba763d052ea5b93fac9c7",
+      "subject": "One last check-in, {{contact.first_name}}",
+      "journey": "Recovery A",
+      "recipient": "lead",
+      "trigger": "+7d after RecoveryA step 1 (no response)",
+      "description": "Final outreach. Explicit that no further messages will be sent. Phone number offered."
+    },
+    {
+      "name": "RecoveryB_step1_email",
+      "id": "69fba764d052ea16dcfac9d6",
+      "subject": "Questions after your consultation, {{contact.first_name}}?",
+      "journey": "Recovery B",
+      "recipient": "lead",
+      "trigger": "Consultation held but retainer not signed after +5d",
+      "description": "Post-consultation follow-up. Addresses hesitation. Invites questions. Not pushy."
+    },
+    {
+      "name": "RecoveryB_step2_email",
+      "id": "69fba765b403f2b351c4c593",
+      "subject": "Following up from {{custom_values.lawyer.first_name}} at {{custom_values.firm.display_name}}",
+      "journey": "Recovery B",
+      "recipient": "lead",
+      "trigger": "+7d after RecoveryB step 1 (no response)",
+      "description": "Final follow-up. From lawyer directly. Graceful close if no engagement."
+    },
+    {
+      "name": "J5_consult_reminder_email",
+      "id": "69fba76578ffe76150b5a34b",
+      "subject": "Reminder: your consultation tomorrow with {{custom_values.firm.display_name}}",
+      "journey": "J5",
+      "recipient": "lead",
+      "trigger": "-24h before scheduled consultation",
+      "description": "Pre-consult prep reminder. What to bring, what to expect. Reschedule link."
+    },
+    {
+      "name": "J7_welcome_email",
+      "id": "69fba766ec0bf66b0e904a5c",
+      "subject": "Welcome to {{custom_values.firm.display_name}}, {{contact.first_name}}",
+      "journey": "J7",
+      "recipient": "lead (now client)",
+      "trigger": "Retainer signed (retainer_signed_at set)",
+      "description": "Post-retainer welcome. Sets communication expectations. Client portal link."
+    },
+    {
+      "name": "J9_review_request_email",
+      "id": "69fba766d052ea0b28faca01",
+      "subject": "A small favour, {{contact.first_name}}",
+      "journey": "J9",
+      "recipient": "former client",
+      "trigger": "Positive outcome trigger (retainer signed, matter closed, or lawyer-flagged)",
+      "description": "Google review request. Personal tone. Two-minute framing. Review link."
+    },
+    {
+      "name": "J11_reactivation_email",
+      "id": "69fba7676568cd2525acea86",
+      "subject": "Reconnecting, {{contact.first_name}}",
+      "journey": "J11",
+      "recipient": "long-term hold lead",
+      "trigger": "Long-term hold reactivation trigger event detected",
+      "description": "Re-engages whale or long-term hold leads. Asks if timing has changed. Calendar link."
+    },
+    {
+      "name": "J12_review_followup_email",
+      "id": "69fba767b403f22999c4c5be",
+      "subject": "Following up: your review of {{custom_values.firm.display_name}}",
+      "journey": "J12",
+      "recipient": "former client",
+      "trigger": "+48h after J9 review SMS if no review posted",
+      "description": "Email follow-up if SMS review request got no response. Closes the J12 loop."
+    }
+  ],
+
+  "sms_templates": {
+    "note": "GHL has no standalone SMS template library. SMS content lives in workflow action steps. Copy defined here as source of truth for P5 workflow build.",
+    "channel_rules": [
+      "SMS is reserved for urgency (J1 Band A alert, J2 high-value reminder), significance (J7 closing-day, J12 review request), and missed-call text-back.",
+      "Never SMS for nurture content.",
+      "First SMS to any lead must include opt-out language: 'Reply STOP to unsubscribe.'",
+      "Opt-out trigger removes contact from all automated sequences."
+    ],
+    "templates": [
+      {
+        "name": "J0_missed_call_sms",
+        "journey": "J0",
+        "recipient": "inbound caller",
+        "trigger": "Missed inbound call to firm number (within 30 seconds)",
+        "copy": "Hi, this is {{custom_values.firm.display_name}}. We missed your call and want to help. Click here to tell us about your matter and we will follow up right away: {{intake.url}} — Reply STOP to unsubscribe."
+      },
+      {
+        "name": "J1_band_a_lawyer_sms",
+        "journey": "J1",
+        "recipient": "lawyer (to lawyer.cell)",
+        "trigger": "Band A CPI assignment (immediate)",
+        "copy": "Band A lead just arrived: {{contact.first_name}} {{contact.last_name}}, {{contact.practice_area}}. CPI: {{contact.cpi_score}}. Open triage portal: {{custom_values.portal.lawyer_url}}"
+      },
+      {
+        "name": "J2_booking_reminder_sms",
+        "journey": "J2",
+        "recipient": "lead",
+        "trigger": "+24h after booking invite if not booked (Band B high-value only)",
+        "copy": "Hi {{contact.first_name}}, this is {{custom_values.lawyer.first_name}} at {{custom_values.firm.display_name}}. I wanted to follow up on your inquiry. Book a consultation here: {{custom_values.calendar.consult_url}} — Reply STOP to unsubscribe."
+      },
+      {
+        "name": "J7_closing_day_sms",
+        "journey": "J7",
+        "recipient": "lead (now client)",
+        "trigger": "Retainer signed (retainer_signed_at set)",
+        "copy": "Welcome to {{custom_values.firm.display_name}}, {{contact.first_name}}. We are glad to be working with you. {{custom_values.lawyer.first_name}} will be in touch shortly with next steps."
+      },
+      {
+        "name": "J12_review_request_sms",
+        "journey": "J12",
+        "recipient": "former client",
+        "trigger": "Positive outcome trigger (sent before J12 email follow-up)",
+        "copy": "Hi {{contact.first_name}}, it was a pleasure working with {{custom_values.firm.display_name}}. A quick Google review would mean a lot to us: {{custom_values.firm.website}} — Reply STOP to unsubscribe."
+      }
+    ]
+  },
+
+  "implementation_notes": [
+    "Email templates created via POST /emails/builder with pit-1d13628d-84bc-4a65-91f0-b5345264bfc0.",
+    "SMS copy defined here is entered inline in P5 workflow SMS action steps. Not a separate GHL resource.",
+    "All email merge tags use GHL double-brace syntax: {{contact.field_key}} and {{custom_values.key}}.",
+    "Review link in J9 and J12 uses {{custom_values.firm.website}} as placeholder. Replace with the actual Google review URL per client firm at onboarding.",
+    "Unsubscribe tag {{contact.unsubscribe_url}} is the GHL HTML email unsubscribe merge tag. Validate during P8 QA.",
+    "The test template '_API_TEST' (id: 69fba67bd052ead751fabc91) was created during API validation. Delete manually or exclude from snapshot export."
+  ]
+}

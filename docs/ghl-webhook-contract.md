@@ -1,7 +1,8 @@
 # GHL Webhook Contract — Lawyer Triage Actions
 
-**Version:** 1
+**Version:** 2
 **Drafted:** 2026-05-05
+**Revised:** 2026-05-12 — added `intake_language` to common envelope (multilingual build)
 **Audience:** Operator (Adriano), GHL workflow builders, future contributors
 **Source surfaces:** caseload-select-app (`src/lib/ghl-webhook.ts`, the four action endpoints), GoHighLevel inbound webhook configured per firm in `intake_firms.ghl_webhook_url`
 
@@ -41,6 +42,7 @@ Every webhook payload, regardless of action, includes the following envelope fie
 | `status_changed_by` | string | `lawyer` for Take/Pass, `system:oos` for `declined_oos`, `system:backstop` for `declined_backstop` |
 | `contact` | object | `{ name?, email?, phone? }` from the screen submission |
 | `idempotency_key` | string | `<lead_id>:<action>` — GHL workflows should dedupe on this if retries are configured |
+| `intake_language` | string | ISO 639-1 code of the language the lead used during intake (e.g. `en`, `fr`, `pt`, `zh`, `es`, `ar`). Always present; defaults to `en` for legacy rows and English-language intakes. Use this field in GHL to route non-English leads to language-capable staff or trigger translated cadence templates. |
 
 Action-specific fields nest under a sibling key matching the action name (`taken`, `passed`, `declined_oos`, `declined_backstop`). Unknown fields must be ignored by GHL; new fields are additive.
 
@@ -172,7 +174,7 @@ The `practice_area` field carries the engine's OOS classification (`family`, `im
 
 ## Action: `declined_backstop`
 
-Fires from `GET /api/cron/triage-backstop` (Vercel cron, runs every 15 minutes) when a row in `triaging` state has passed its `decision_deadline` without lawyer action.
+Fires from `GET /api/cron/triage-backstop` (Supabase pg_cron, runs hourly at minute 7) when a row in `triaging` state has passed its `decision_deadline` without lawyer action.
 
 ### Payload
 
@@ -257,5 +259,9 @@ This file is `v1`. Bump the version whenever:
 - A new action is added (e.g. `re_engaged` for cross-cadence handoffs in Phase 3)
 - The decline template resolution order changes
 - The idempotency key shape changes
+
+### v1 → v2 (2026-05-12)
+
+- Added `intake_language` to the common envelope. ISO 639-1 code. Always present (defaults to `en`). GHL workflows can branch on this to route non-English leads to language-capable staff or select translated decline templates. Existing workflows that do not read `intake_language` are unaffected.
 
 Never silently change a field's semantics. GHL workflow builders should pin their work to a version of this file.

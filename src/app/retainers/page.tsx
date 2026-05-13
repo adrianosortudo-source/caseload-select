@@ -1,4 +1,17 @@
 /**
+ * @deprecated Removed from scope on 2026-05-06. Do not link to from new pages.
+ *
+ * S6 (retainer automation via DocuGenerate + DocuSeal) was permanently
+ * removed from the project. The retainer document workflow is lawyer-owned.
+ * See master CLAUDE.md "Build Roadmap" and CRM Bible v5.1 DR-032.
+ *
+ * This page is dormant. The `retainer_agreements` table is no longer being
+ * written to from new sessions. Existing rows (if any) will display, but
+ * the tracker itself should be removed in a follow-up cleanup.
+ *
+ * --------------------------------------------------------------------
+ * ORIGINAL DESCRIPTION (HISTORICAL):
+ *
  * /retainers
  *
  * Retainer agreements tracker. Shows all retainer_agreements across firms,
