@@ -10,7 +10,6 @@ const links = [
   { href: "/domains", label: "Custom Domains" },
   { href: "/sequences", label: "Email Sequences" },
   { href: "/reviews", label: "Review Requests" },
-  { href: "/retainers", label: "Retainers" },
   { href: "/conflict-register", label: "Conflict Register" },
   { href: "/analytics", label: "Analytics" },
   { href: "/onboarding", label: "Onboarding" },

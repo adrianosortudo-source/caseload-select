@@ -2,8 +2,7 @@
  * POST /api/screen/round3
  *
  * Receives completed Round 3 answers from the intake widget.
- * Persists answers, marks round3_completed_at, triggers async memo generation,
- * and fires the retainer for Band A/B.
+ * Persists answers, marks round3_completed_at, triggers async memo generation.
  *
  * Body:
  *   session_id: string
@@ -14,13 +13,16 @@
  *
  * Memo generation is async (non-blocking). The widget polls /api/memo/[sessionId]
  * or advances immediately  -  the memo badge appears in the portal when ready.
+ *
+ * S6 retainer automation was removed from scope 2026-05-06 (the workflow is
+ * permanently lawyer-owned). The retainer trigger that lived here is gone;
+ * J6 follow-up cadence runs from /api/cron/retainer-followup independently.
  */
 
 import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { qualifiesForRound3 } from "@/lib/round3";
 import { generateMemo } from "@/lib/memo";
-import { triggerRetainerAgreement } from "@/lib/retainer";
 
 export async function POST(req: Request) {
   try {
@@ -66,13 +68,11 @@ export async function POST(req: Request) {
       })
       .eq("id", session_id);
 
-    // Fire retainer for Band A/B (moved here from OTP verify)
+    // S6 retainer trigger removed 2026-05-14 (master CLAUDE.md doctrine —
+    // retainer workflow is permanently lawyer-owned). band + firmId still
+    // pulled for memo generation below.
     const band = session.band as string | null;
     const firmId = session.firm_id as string | null;
-
-    if (firmId && (band === "A" || band === "B")) {
-      void triggerRetainerAsync(session_id, firmId);
-    }
 
     // Generate memo async  -  non-blocking so widget gets instant response
     const contact = (session.contact as Record<string, unknown>) ?? {};
@@ -116,15 +116,3 @@ async function generateMemoAsync(input: Parameters<typeof generateMemo>[0]): Pro
   }
 }
 
-async function triggerRetainerAsync(sessionId: string, firmId: string): Promise<void> {
-  try {
-    const result = await triggerRetainerAgreement({ sessionId, firmId });
-    if (result.skipped) {
-      console.log(`[screen/round3] Retainer skipped for session ${sessionId}: ${result.reason}`);
-    } else {
-      console.log(`[screen/round3] Retainer triggered for session ${sessionId}: agreement ${result.agreementId}`);
-    }
-  } catch (err) {
-    console.error(`[screen/round3] Retainer failed for session ${sessionId}:`, err);
-  }
-}
