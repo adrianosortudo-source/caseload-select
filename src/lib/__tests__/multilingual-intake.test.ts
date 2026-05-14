@@ -35,6 +35,8 @@ const FIXTURES = {
   pt: { code: "pt", label: "Portuguese", input: "quero abrir uma empresa no canada" },
   es: { code: "es", label: "Spanish",    input: "Necesito ayuda con un caso de divorcio" },
   zh: { code: "zh", label: "Mandarin Chinese", input: "我需要在加拿大注册公司" },
+  ar: { code: "ar", label: "Arabic",      input: "أحتاج إلى محامٍ للهجرة إلى كندا" },
+  fr: { code: "fr", label: "French",      input: "Je cherche un avocat en droit du travail" },
   en: { code: "en", label: null,          input: "hi" },
 } as const;
 
@@ -130,7 +132,7 @@ describe("GHL webhook — intake_language in envelope", () => {
     expect(payload.intake_language).toBe("en");
   });
 
-  it.each(["pt", "es", "zh", "fr"] as const)(
+  it.each(["pt", "es", "zh", "fr", "ar"] as const)(
     "includes intake_language = %s in taken payload for non-English lead",
     (code) => {
       const payload = buildTakenPayload({
