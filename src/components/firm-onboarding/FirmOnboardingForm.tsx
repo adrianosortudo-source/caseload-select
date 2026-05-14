@@ -38,8 +38,6 @@ interface FormState {
   gbp_admin_blocker_note: string;
   linkedin_admin_status: string;
   linkedin_admin_blocker_note: string;
-  m365_admin_status: string;
-  m365_admin_blocker_note: string;
   // Section 1 extensions (operating hours + additional lawyers beyond the
   // authorized rep).
   office_hours: string;
@@ -104,8 +102,6 @@ const INITIAL: FormState = {
   gbp_admin_blocker_note: "",
   linkedin_admin_status: "",
   linkedin_admin_blocker_note: "",
-  m365_admin_status: "",
-  m365_admin_blocker_note: "",
   office_hours: "",
   additional_lawyers: [],
   practice_areas: [],
@@ -727,32 +723,14 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         />
       </Section>
 
-      {/* Section 7: Microsoft 365 admin */}
-      <Section
-        title="9. Microsoft 365 admin for email authentication"
-        subtitle="Time-boxed Exchange Admin access so we can configure SPF, DKIM, and DMARC on your sending domain"
-      >
-        <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.95rem", color: "#4a5a72", lineHeight: 1.6, marginBottom: "16px" }}>
-          Authenticated email is the difference between inbox and spam. We need Exchange Administrator (guest user) access for roughly five business days to enable DKIM signing and configure the related DNS records. The role is the surgical minimum — it does not give visibility into mailbox content — and it is revoked the moment authentication is verified live.
-        </p>
-
-        <GuideLinkButton
-          href={`/firm-onboarding-guides/m365.html?token=${encodeURIComponent(token)}`}
-          label="View the Microsoft 365 setup guide"
-        />
-
-        <AccessStatusBlock
-          label="Microsoft 365 Exchange Admin status"
-          hint="Set this once you have run through the guide. If the invitation flow trips up, describe it below and we will walk through it together."
-          status={form.m365_admin_status}
-          onStatusChange={(v) => update("m365_admin_status", v)}
-          blockerNote={form.m365_admin_blocker_note}
-          onBlockerNoteChange={(v) => update("m365_admin_blocker_note", v)}
-        />
-      </Section>
-
-      {/* Section 8: notes + signature + submit */}
-      <Section title="10. Notes + authorisation" subtitle="Optional notes, then sign to submit">
+      {/* Section 7: notes + signature + submit
+         (Microsoft 365 admin step removed 2026-05-14 — Resend handles
+         outbound transactional email via DNS records on the firm's
+         domain; no Exchange Admin role is required from the firm. The
+         m365_admin_status / m365_admin_blocker_note columns stay in
+         firm_onboarding_intake for historical rows but new submissions
+         do not populate them.) */}
+      <Section title="9. Notes + authorisation" subtitle="Optional notes, then sign to submit">
         <Field label="Notes (optional)">
           <textarea
             value={form.notes}
@@ -1452,7 +1430,7 @@ function SignatureBlock({
         }}
       >
         By signing below, I confirm I am authorised to provide this information on behalf of{" "}
-        <strong>{firmLabel}</strong>. I authorise CaseLoad Select to use these details to register the firm with the SMS carriers (A2P 10DLC), with Meta (Business Manager, WhatsApp Business, and the social DM channels selected above), with Google (Business Profile management), with LinkedIn (Company Page admin), and with Microsoft 365 (Exchange admin for email DNS authentication). I also authorise CaseLoad Select to act on the firm&apos;s behalf in configuring the firm&apos;s practice management system integration where applicable. CaseLoad Select will not share these details with any party other than the registration and integration providers listed.
+        <strong>{firmLabel}</strong>. I authorise CaseLoad Select to use these details to register the firm with the SMS carriers (A2P 10DLC), with Meta (Business Manager, WhatsApp Business, and the social DM channels selected above), with Google (Business Profile management), and with LinkedIn (Company Page admin). I also authorise CaseLoad Select to act on the firm&apos;s behalf in configuring the firm&apos;s practice management system integration where applicable. CaseLoad Select will not share these details with any party other than the registration and integration providers listed.
       </p>
 
       <div

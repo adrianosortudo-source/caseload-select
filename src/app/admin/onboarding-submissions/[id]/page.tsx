@@ -278,16 +278,15 @@ export default async function SubmissionDetailPage({
         />
       </Section>
 
-      <Section title="9. Microsoft 365 Exchange admin">
-        <AccessStatusRow
-          label="Exchange Admin (guest) access"
-          status={row.m365_admin_status}
-          blockerNote={row.m365_admin_blocker_note}
-        />
-      </Section>
+      {/* Microsoft 365 Exchange admin section removed 2026-05-14 — Resend
+         handles outbound email via DNS records, no Exchange Admin role
+         needed from the firm. m365_admin_status and m365_admin_blocker_note
+         columns remain in firm_onboarding_intake for historical rows but
+         this UI no longer renders them. Query Supabase directly if you
+         need to inspect an old submission's M365 field. */}
 
       {row.notes ? (
-        <Section title="10. Notes from the rep">
+        <Section title="9. Notes from the rep">
           <p className="text-sm text-black/80 whitespace-pre-wrap leading-relaxed">{row.notes}</p>
         </Section>
       ) : null}

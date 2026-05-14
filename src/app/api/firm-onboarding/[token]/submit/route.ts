@@ -47,8 +47,10 @@ interface SubmitBody {
   gbp_admin_blocker_note?: string;
   linkedin_admin_status?: string;
   linkedin_admin_blocker_note?: string;
-  m365_admin_status?: string;
-  m365_admin_blocker_note?: string;
+  // M365 admin fields were dropped from the form 2026-05-14 (Resend
+  // handles outbound email via DNS, no Exchange Admin role needed
+  // from the firm). The DB columns stay populated only for historical
+  // submissions; new submissions never set them.
   // Channel mix the firm wants (subset of: whatsapp, sms, voice,
   // instagram_dm, facebook_messenger, gbp_chat, discuss). Web is implied.
   intake_channels?: string[];
@@ -173,8 +175,9 @@ export async function POST(
       gbp_admin_blocker_note: body.gbp_admin_blocker_note || null,
       linkedin_admin_status: body.linkedin_admin_status || null,
       linkedin_admin_blocker_note: body.linkedin_admin_blocker_note || null,
-      m365_admin_status: body.m365_admin_status || null,
-      m365_admin_blocker_note: body.m365_admin_blocker_note || null,
+      // M365 columns intentionally left out of new inserts (2026-05-14).
+      // The DB column nullability handles this; historical rows stay
+      // populated.
       intake_channels:
         Array.isArray(body.intake_channels) && body.intake_channels.length > 0
           ? body.intake_channels
@@ -432,10 +435,6 @@ function buildNotificationHtml({
         <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 8 · LinkedIn Company Page admin</td></tr>
         ${row("LinkedIn admin status", prettifyStatus(body.linkedin_admin_status))}
         ${row("LinkedIn admin blocker", body.linkedin_admin_blocker_note)}
-
-        <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Section 9 · Microsoft 365 Exchange admin</td></tr>
-        ${row("M365 admin status", prettifyStatus(body.m365_admin_status))}
-        ${row("M365 admin blocker", body.m365_admin_blocker_note)}
 
         ${
           body.notes
