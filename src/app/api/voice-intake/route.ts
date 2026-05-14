@@ -58,6 +58,7 @@ import {
   isHmacRequired,
   VOICE_SIGNATURE_HEADER,
 } from '@/lib/voice-webhook-auth';
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from '@/lib/rate-limit';
 
 // Practice-area display labels for the OOS decline copy interpolation.
 // Mirrors the same constant in intake-v2/route.ts (duplicated rather than
@@ -135,6 +136,18 @@ function seedVoiceState(state: EngineState, callerPhone: string | null, callerNa
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limit (APP-007). Same shape and bucket size as /api/intake-v2.
+  // 429 with Retry-After on bucket exhaustion. Fail-open until Upstash
+  // env vars are configured.
+  const ip = ipFromRequest(req);
+  const rl = await checkRateLimit('intake', ip);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'rate limited', retry_after_seconds: Math.ceil((rl.reset - Date.now()) / 1000) },
+      { status: 429, headers: { ...CORS_HEADERS, ...rateLimitHeaders(rl) } },
+    );
+  }
+
   // Read the raw body FIRST. HMAC verification requires byte-exact input;
   // parsing JSON and re-serializing would change whitespace and break the
   // hash. We then re-parse from the raw string ourselves.

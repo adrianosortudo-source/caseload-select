@@ -68,6 +68,7 @@ import { buildDeclinedOosPayload, fireGhlWebhook, type LeadFacts } from "@/lib/g
 import { waitUntil } from "@vercel/functions";
 import { notifyLawyersOfNewLead } from "@/lib/lead-notify";
 import { originAllowed, validateIntakeBody, sanitizeBriefHtml } from "@/lib/intake-v2-security";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 // Practice-area display labels for the OOS decline copy interpolation. Matches
 // the engine's labels in the screen for consistency with what the lead saw.
@@ -131,6 +132,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: 'origin not allowed', reason: originCheck.reason },
       { status: 403, headers: corsHeaders },
+    );
+  }
+
+  // Rate limit (APP-007). Each call writes a screened_leads row and
+  // we eat the Gemini extraction cost upstream; 30/min/IP stops a
+  // spam flood from running up the bill. 429 + Retry-After when the
+  // bucket is empty.
+  const ip = ipFromRequest(req);
+  const rl = await checkRateLimit('intake', ip);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'rate limited', retry_after_seconds: Math.ceil((rl.reset - Date.now()) / 1000) },
+      { status: 429, headers: { ...corsHeaders, ...rateLimitHeaders(rl) } },
     );
   }
 

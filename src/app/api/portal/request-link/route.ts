@@ -23,6 +23,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generatePortalToken } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
+import { checkRateLimit, ipFromRequest } from "@/lib/rate-limit";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -41,6 +42,18 @@ interface FirmLawyerRow {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limit (APP-007): magic-link send is the highest-value enumeration
+  // surface. Always returns 200 anyway (anti-enumeration), so we silently
+  // drop the email send when the bucket is empty — attackers can't tell
+  // throttled requests from successful ones. 5 requests per 10 minutes
+  // per IP, generous for a legit lawyer typing their email twice.
+  const ip = ipFromRequest(req);
+  const rl = await checkRateLimit("requestLink", ip);
+  if (!rl.ok) {
+    // Silent drop — same response shape as a malformed email.
+    return NextResponse.json({ ok: true });
+  }
+
   let body: { email?: string };
   try {
     body = (await req.json()) as { email?: string };

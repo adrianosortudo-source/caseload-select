@@ -42,6 +42,7 @@ import { extractEvents } from "@/lib/event-extractor";
 import { extractIntents } from "@/lib/intent-extractor";
 import { selectEvent } from "@/lib/event-selector";
 import { writeScreenedLeadFromScreen } from "@/lib/screen-to-screened";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 // event-question-generator: generateQuestion() and generatePreamble() removed.
 // Questions now come from the slot bank via selectSlots() → slotToApiQuestion().
 // event-slot-map: EVENT_TIMING_SLOT_MAP removed — slot bank is the single source of truth.
@@ -293,6 +294,20 @@ function buildBandXResponse(practiceArea: string | null, reason: string): GptRes
 // ─────────────────────────────────────────────
 export async function POST(req: Request) {
   try {
+    // Rate limit (APP-007). Legacy /api/screen builds large LLM prompts
+    // every turn; same blast-radius shape as /api/intake-v2 (Gemini bill
+    // + DB writes). 30/min/IP, fail-open until Upstash env vars exist.
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      ?? req.headers.get('x-real-ip')?.trim()
+      ?? 'unknown';
+    const rl = await checkRateLimit('screen', ip);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'rate limited', retry_after_seconds: Math.ceil((rl.reset - Date.now()) / 1000) },
+        { status: 429, headers: rateLimitHeaders(rl) },
+      );
+    }
+
     const body = (await req.json()) as ScreenRequest;
     const { session_id, firm_id, channel, message, message_type = "text", structured_data, source_hint, demo } = body;
 

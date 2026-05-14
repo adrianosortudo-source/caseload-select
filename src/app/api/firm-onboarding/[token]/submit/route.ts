@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 interface SubmitBody {
   legal_name?: string;
@@ -80,6 +81,19 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  // Rate limit (APP-007). 10 per hour per IP. The token gates content
+  // access but not request frequency; tight bucket forces an attacker
+  // to slow-roll guesses. Also caps the operator-notification email
+  // spam that every successful POST triggers.
+  const ip = ipFromRequest(req);
+  const rl = await checkRateLimit('firmOnboarding', ip);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { ok: false, error: 'rate limited' },
+      { status: 429, headers: rateLimitHeaders(rl) },
+    );
+  }
+
   const { token } = await params;
 
   if (!token || token.length > 200) {
