@@ -22,6 +22,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { DEFAULT_QUESTION_MODULES } from "@/lib/default-question-modules";
 import type { PracticeArea } from "@/lib/screen-prompt";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ firmId: string }> }
 ) {
-  if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -193,7 +194,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ firmId: string }> }
 ) {
-  if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

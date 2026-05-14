@@ -19,9 +19,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { addVercelDomain, removeVercelDomain, getVercelDomainStatus } from "@/lib/vercel-domains";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
+// Wrapper kept for call-site readability. The actual constant-time
+// compare lives in @/lib/cron-auth.
 function authorized(req: NextRequest): boolean {
-  return req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`;
+  return isCronAuthorized(req);
 }
 
 export async function GET(req: NextRequest) {

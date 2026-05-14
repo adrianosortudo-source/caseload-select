@@ -11,12 +11,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { purgeLeadPii } from "@/lib/data-retention";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

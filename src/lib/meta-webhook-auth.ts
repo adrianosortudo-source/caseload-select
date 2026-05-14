@@ -100,7 +100,23 @@ export function handleVerificationChallenge({
   if (!expectedVerifyToken) {
     return { ok: false, reason: 'verify token not configured on server' };
   }
-  if (token !== expectedVerifyToken) {
+  // Constant-time compare (Jim Manico audit APP-005). Plain !== leaks
+  // token length and per-byte timing on the rejection path. timingSafeEqual
+  // needs equal-length buffers; length-mismatch case still pays the same
+  // CPU cost so a length-only probe can't shortcut the compare.
+  const tokenBuf = Buffer.from(token, 'utf8');
+  const expectedBuf = Buffer.from(expectedVerifyToken, 'utf8');
+  if (tokenBuf.length !== expectedBuf.length) {
+    // Burn equivalent time, then reject.
+    const longest = Math.max(tokenBuf.length, expectedBuf.length);
+    const padA = Buffer.alloc(longest);
+    const padB = Buffer.alloc(longest);
+    tokenBuf.copy(padA);
+    expectedBuf.copy(padB);
+    timingSafeEqual(padA, padB);
+    return { ok: false, reason: 'hub.verify_token mismatch' };
+  }
+  if (!timingSafeEqual(tokenBuf, expectedBuf)) {
     return { ok: false, reason: 'hub.verify_token mismatch' };
   }
   if (!challenge) {
