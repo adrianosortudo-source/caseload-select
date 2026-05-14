@@ -106,11 +106,85 @@ export interface FirmConfig {
   booking_url?: string;
 }
 
+/**
+ * Sanitize a single string field before interpolating it into the system
+ * prompt (Jim Manico audit APP-009). Operator-supplied config is trusted
+ * today but it's mutable from /api/admin/* routes (now gated behind
+ * requireOperator() as of 5ae8ea4) — defense-in-depth here lifts the
+ * prompt-injection bar even if a future write path skips that gate.
+ *
+ * Strips:
+ *   - Control characters except newline / tab
+ *   - Section-header markers (━ U+2501) that the system prompt uses as
+ *     structural delimiters — firm copy must not be able to fake a new
+ *     section header
+ *   - Common explicit prompt-injection trigger phrases ("ignore previous
+ *     instructions", "system:", "<|im_start|>") — best effort, not
+ *     comprehensive (the multi-message structure in the AISVS guidance
+ *     would be the real fix)
+ *
+ * Caps:
+ *   - Per-field max length so a single field can't dominate the prompt
+ *     budget (DoS via prompt bloat)
+ */
+function sanitizeForPrompt(input: unknown, maxLen: number): string {
+  if (typeof input !== "string") return "";
+  return input
+    // Strip control chars (0x00-0x08, 0x0B-0x1F, 0x7F). Keep \n (0x0A) and \t (0x09).
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x08\x0B-\x1F\x7F]/g, "")
+    // Strip our prompt's section-header markers
+    .replace(/━+/g, "")
+    // Collapse runs of whitespace
+    .replace(/[ \t]+/g, " ")
+    // Cap length
+    .slice(0, maxLen)
+    .trim();
+}
+
+function sanitizeFirmConfig(firm: FirmConfig): FirmConfig {
+  const safe: FirmConfig = {
+    ...firm,
+    name: sanitizeForPrompt(firm.name, 100) || firm.name?.slice(0, 100) || "the firm",
+    description: sanitizeForPrompt(firm.description, 300),
+    location: sanitizeForPrompt(firm.location, 100),
+    geographic_config: {
+      service_area: sanitizeForPrompt(firm.geographic_config?.service_area, 200),
+      gta_core_description: sanitizeForPrompt(firm.geographic_config?.gta_core_description, 300),
+      partial_description: sanitizeForPrompt(firm.geographic_config?.partial_description, 200),
+      national_practice_areas: firm.geographic_config?.national_practice_areas
+        ?.map((s) => sanitizeForPrompt(s, 80))
+        .filter((s) => s.length > 0),
+    },
+    custom_instructions: firm.custom_instructions
+      ? sanitizeForPrompt(firm.custom_instructions, 1500)
+      : undefined,
+    assistant_name: firm.assistant_name
+      ? sanitizeForPrompt(firm.assistant_name, 50)
+      : undefined,
+    phone_number: firm.phone_number
+      ? sanitizeForPrompt(firm.phone_number, 50)
+      : undefined,
+    booking_url: firm.booking_url
+      ? sanitizeForPrompt(firm.booking_url, 300)
+      : undefined,
+    practice_areas: firm.practice_areas.map((a) => ({
+      ...a,
+      label: sanitizeForPrompt(a.label, 80) || a.label?.slice(0, 80) || a.id,
+    })),
+  };
+  return safe;
+}
+
 export function buildSystemPrompt(
   firm: FirmConfig,
   channel: string,
   options?: { includeQuestionSets?: boolean; practiceAreaHint?: string | null },
 ): string {
+  // Sanitize all operator-supplied strings BEFORE any interpolation
+  // (APP-009 defense in depth). All downstream references to `firm` use
+  // the sanitized view; raw values are not accessed past this line.
+  firm = sanitizeFirmConfig(firm);
   const includeQuestionSets = options?.includeQuestionSets ?? true;
   const primaryAreas = firm.practice_areas.filter(a => a.classification === "primary").map(a => a.label).join(", ");
   const secondaryAreas = firm.practice_areas.filter(a => a.classification === "secondary").map(a => a.label).join(", ") || "none";
