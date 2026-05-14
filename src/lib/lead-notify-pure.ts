@@ -14,6 +14,24 @@ import { matterLabel, practiceAreaLabel } from "@/lib/screened-leads-labels";
 import { formatRemaining } from "@/lib/decision-timer";
 import { intakeLanguageLabel } from "@/lib/intake-language-label";
 
+/**
+ * Lifecycle status that drives the email's visual treatment AND subject prefix.
+ *
+ *   triaging — standard new-lead notification. Lawyer decides Take or Pass
+ *              within the decision window before the backstop fires.
+ *   declined — the engine auto-filtered the matter as out-of-scope. The
+ *              lawyer still receives the email so they have full visibility
+ *              of who tried to contact them; copy explains what happened
+ *              and how to override if the engine got it wrong.
+ *
+ * Doctrine (CRM Bible 2026-05-14): "The system filters attention, never
+ * visibility." Both lifecycle states surface to the lawyer; the email's
+ * subject and body make the distinction obvious so the lawyer's primary
+ * attention stays on triaging leads while still being aware of every
+ * declined contact.
+ */
+export type LifecycleStatus = "triaging" | "declined";
+
 export interface NewLeadEmailInput {
   firmName: string;
   firstName: string;            // contact first name; "this lead" if unknown
@@ -24,6 +42,8 @@ export interface NewLeadEmailInput {
   whaleNurture: boolean;
   briefUrl: string;             // absolute URL to /portal/[firmId]/triage/[leadId]
   intakeLanguage?: string | null; // ISO 639-1 code; omitted / null for English
+  /** Defaults to 'triaging' for backward compat with older callers. */
+  lifecycleStatus?: LifecycleStatus;
   now?: Date;
 }
 
@@ -33,19 +53,29 @@ export interface NewLeadEmail {
 }
 
 /**
- * Subject line. Band-prefixed when known so the lawyer can pre-sort by
- * priority without opening the message. Format:
+ * Subject line. Two shapes depending on lifecycle status:
  *
- *   Priority A — Sarah · Wrongful dismissal (decide within 12h)
- *   Priority B — this lead · Real Estate Litigation
- *   New lead — Mike · Contract Dispute
+ *   triaging:
+ *     Priority A — Sarah · Wrongful dismissal
+ *     Priority B — this lead · Real Estate Litigation
+ *     New lead — Mike · Contract Dispute  (when band is null)
+ *
+ *   declined:
+ *     [Auto-filtered] Sarah · matter flagged as Family Law
+ *     [Auto-filtered] this lead · matter flagged as Immigration & Refugee
+ *
+ * The "[Auto-filtered]" prefix makes the difference obvious at a glance in
+ * the inbox so the lawyer's primary triage queue surface is not diluted.
  */
 export function buildNewLeadSubject(input: NewLeadEmailInput): string {
-  const { firstName, matterType, band } = input;
+  const { firstName, matterType, practiceArea, band, lifecycleStatus } = input;
   const matter = matterLabel(matterType);
+  if (lifecycleStatus === "declined") {
+    const area = practiceAreaLabel(practiceArea);
+    return `[Auto-filtered] ${firstName} · matter flagged as ${area}`;
+  }
   const prefix = band ? `Priority ${band}` : "New lead";
-  const subject = `${prefix} — ${firstName} · ${matter}`;
-  return subject;
+  return `${prefix} — ${firstName} · ${matter}`;
 }
 
 /**
@@ -72,21 +102,66 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
     whaleNurture,
     briefUrl,
     intakeLanguage,
+    lifecycleStatus = "triaging",
     now = new Date(),
   } = input;
 
-  const remainingMs = new Date(decisionDeadlineIso).getTime() - now.getTime();
-  const remaining = formatRemaining(remainingMs);
   const matter = matterLabel(matterType);
   const area = practiceAreaLabel(practiceArea);
-  const bandLine = band ? `Priority ${band}` : "Awaiting band";
   const langLabel = intakeLanguageLabel(intakeLanguage ?? null);
   const langNote = langLabel
     ? `<div style="margin-top:6px;font-size:12px;color:#1E3A5F;font-family:'Oxanium',Arial,sans-serif;letter-spacing:0.08em;text-transform:uppercase;">Intake language: ${escapeHtml(langLabel)} · Brief translated to English</div>`
     : "";
-  const whaleNote = whaleNurture
-    ? `<div style="margin-top:6px;font-size:12px;color:#7A6638;font-family:'Oxanium',Arial,sans-serif;letter-spacing:0.08em;text-transform:uppercase;">High value, low readiness · whale nurture flag</div>`
-    : "";
+
+  // Two distinct visual treatments. Triaging is the "act now" email; declined
+  // is the "for your awareness" email. They share the navy header band and
+  // brand chrome so the inbox looks coherent, but the eyebrow label, headline
+  // colour, status panel copy, and CTA wording differ.
+  const isDeclined = lifecycleStatus === "declined";
+
+  // Eyebrow label above the headline.
+  const eyebrow = isDeclined ? "Auto-filtered lead" : "New lead in triage";
+  const eyebrowColor = isDeclined ? "#7A4A20" : "#7A6638";
+
+  // The status panel content varies. Triaging shows the decision timer +
+  // priority band. Declined shows what the engine flagged + an "override"
+  // affordance message so the lawyer knows the engine can be overridden.
+  let statusPanel: string;
+  if (isDeclined) {
+    statusPanel = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#7A4A20;">Auto-filtered</td>
+        <td align="right" style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#5C5850;">${escapeHtml(area)}</td>
+      </tr>
+    </table>
+    <div style="margin-top:10px;font-family:'DM Sans',Arial,sans-serif;font-size:13px;line-height:1.5;color:#0D1520;">
+      The screen engine classified this matter as out of scope for your practice and sent the contact a polite decline-with-grace response. No action required from you. If the engine got it wrong, open the brief and move the lead back to triage.
+    </div>
+    ${langNote}`;
+  } else {
+    const remainingMs = new Date(decisionDeadlineIso).getTime() - now.getTime();
+    const remaining = formatRemaining(remainingMs);
+    const bandLine = band ? `Priority ${band}` : "Awaiting band";
+    const whaleNote = whaleNurture
+      ? `<div style="margin-top:6px;font-size:12px;color:#7A6638;font-family:'Oxanium',Arial,sans-serif;letter-spacing:0.08em;text-transform:uppercase;">High value, low readiness · whale nurture flag</div>`
+      : "";
+    statusPanel = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#5C5850;">${escapeHtml(bandLine)}</td>
+        <td align="right" style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#5C5850;">${escapeHtml(area)}</td>
+      </tr>
+    </table>
+    <div style="margin-top:10px;font-family:'DM Sans',Arial,sans-serif;font-size:13px;line-height:1.5;color:#0D1520;">
+      Decision window: <strong style="font-weight:700;color:#1E2F58;">${escapeHtml(remaining)}</strong> left to Take or Pass before the backstop fires the decline-with-grace cadence.
+    </div>
+    ${langNote}
+    ${whaleNote}`;
+  }
+
+  const bodyParagraph = isDeclined
+    ? "The brief is rendered in your portal queue. Open it, scan the case file, decide."
+    : "The brief is rendered in your portal queue. Open it, scan the case file, decide.";
+  const ctaLabel = isDeclined ? "Review the brief" : "Open the brief";
 
   return `<!doctype html>
 <html>
@@ -102,7 +177,7 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
           </tr>
           <tr>
             <td style="padding:28px 28px 4px;">
-              <div style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#7A6638;">New lead in triage</div>
+              <div style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:${eyebrowColor};">${escapeHtml(eyebrow)}</div>
               <div style="margin-top:8px;font-family:'Manrope',Arial,sans-serif;font-weight:800;font-size:24px;line-height:1.2;color:#1E2F58;">${escapeHtml(firstName)} · ${escapeHtml(matter)}</div>
             </td>
           </tr>
@@ -111,17 +186,7 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F3EF;border:1px solid #E4E2DB;">
                 <tr>
                   <td style="padding:14px 16px;">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#5C5850;">${escapeHtml(bandLine)}</td>
-                        <td align="right" style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#5C5850;">${escapeHtml(area)}</td>
-                      </tr>
-                    </table>
-                    <div style="margin-top:10px;font-family:'DM Sans',Arial,sans-serif;font-size:13px;line-height:1.5;color:#0D1520;">
-                      Decision window: <strong style="font-weight:700;color:#1E2F58;">${escapeHtml(remaining)}</strong> left to Take or Pass before the backstop fires the decline-with-grace cadence.
-                    </div>
-                    ${langNote}
-                    ${whaleNote}
+                    ${statusPanel}
                   </td>
                 </tr>
               </table>
@@ -130,10 +195,10 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
           <tr>
             <td style="padding:8px 28px 28px;">
               <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#3F3C36;">
-                The brief is rendered in your portal queue. Open it, scan the case file, decide.
+                ${escapeHtml(bodyParagraph)}
               </p>
               <p style="margin:0;">
-                <a href="${escapeAttr(briefUrl)}" style="display:inline-block;background:#1E2F58;color:#FFFFFF;text-decoration:none;font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;padding:13px 24px;">Open the brief</a>
+                <a href="${escapeAttr(briefUrl)}" style="display:inline-block;background:#1E2F58;color:#FFFFFF;text-decoration:none;font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;padding:13px 24px;">${escapeHtml(ctaLabel)}</a>
               </p>
             </td>
           </tr>

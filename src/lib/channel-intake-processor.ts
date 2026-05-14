@@ -390,8 +390,13 @@ export async function processChannelInbound(
     }
   }
 
-  // ── New-lead notification (best-effort) ────────────────────────────────
-  if (inserted.status === 'triaging') {
+  // ── Lead notification (best-effort) ────────────────────────────────────
+  // Doctrine (2026-05-14): "The system filters attention, never visibility."
+  // Both 'triaging' and 'declined' notify the lawyer. Subject + body copy
+  // differ so the lawyer's inbox makes the distinction obvious without
+  // forcing them to open every auto-filtered message. See
+  // `lib/lead-notify-pure.ts` for the rendering split.
+  if (inserted.status === 'triaging' || inserted.status === 'declined') {
     await notifyLawyersOfNewLead({
       firmId,
       leadId: inserted.lead_id as string,
@@ -402,6 +407,7 @@ export async function processChannelInbound(
       decisionDeadlineIso: inserted.decision_deadline as string,
       whaleNurture: !!inserted.whale_nurture,
       intakeLanguage: state.language ?? 'en',
+      lifecycleStatus: inserted.status as 'triaging' | 'declined',
     }).catch((err) => {
       console.error('[channel-intake] notifyLawyersOfNewLead failed:', err);
     });

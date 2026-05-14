@@ -30,11 +30,18 @@ const state: MockState = {
   session: null,
 };
 
+// Capture which status value the route is filtering by so the
+// ?status=declined branch can be asserted.
+const capturedStatus: { values: string[] } = { values: [] };
+
 vi.mock("@/lib/supabase-admin", () => {
   const makeQuery = () => ({
     select: (_cols: string, _opts?: { count?: string; head?: boolean }) => ({
       eq: (_field: string, _v: unknown) => ({
-        eq: (_f2: string, _v2: unknown) => {
+        eq: (f2: string, v2: unknown) => {
+          if (f2 === "status" && typeof v2 === "string") {
+            capturedStatus.values.push(v2);
+          }
           // count path: terminates here (no order/limit/maybeSingle)
           return Object.assign(Promise.resolve(state.countResult), {
             order: (_orderBy: string, _opts: unknown) => ({
@@ -63,9 +70,9 @@ import { GET } from "../route";
 const FIRM_ID = "11111111-1111-1111-1111-111111111111";
 const OTHER_FIRM_ID = "22222222-2222-2222-2222-222222222222";
 
-function makeReq(): Request {
+function makeReq(query: string = ""): Request {
   return new Request(
-    `https://app.caseloadselect.ca/api/portal/${FIRM_ID}/triage/stream-check`,
+    `https://app.caseloadselect.ca/api/portal/${FIRM_ID}/triage/stream-check${query}`,
     { method: "GET" },
   );
 }
@@ -78,6 +85,7 @@ beforeEach(() => {
   state.session = null;
   state.countResult = { count: 0, error: null };
   state.latestResult = { data: null, error: null };
+  capturedStatus.values = [];
 });
 
 describe("GET /api/portal/[firmId]/triage/stream-check", () => {
@@ -136,5 +144,39 @@ describe("GET /api/portal/[firmId]/triage/stream-check", () => {
     state.countResult = { count: null, error: { message: "connection refused" } };
     const res = await GET(makeReq() as never, makeParams());
     expect(res.status).toBe(500);
+  });
+
+  it("defaults to filtering by status='triaging' when no ?status param", async () => {
+    state.session = { firm_id: FIRM_ID, role: "lawyer" };
+    state.countResult = { count: 4, error: null };
+    const res = await GET(makeReq() as never, makeParams());
+    expect(res.status).toBe(200);
+    // The route applies .eq("status", X) twice: once for the count, once
+    // for the latest_updated_at lookup. Both should be 'triaging'.
+    expect(capturedStatus.values.every((v) => v === "triaging")).toBe(true);
+    expect(capturedStatus.values.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("filters by status='declined' when ?status=declined is passed", async () => {
+    state.session = { firm_id: FIRM_ID, role: "lawyer" };
+    state.countResult = { count: 2, error: null };
+    const res = await GET(
+      makeReq("?status=declined") as never,
+      makeParams(),
+    );
+    expect(res.status).toBe(200);
+    expect(capturedStatus.values.every((v) => v === "declined")).toBe(true);
+    expect(capturedStatus.values.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("ignores unknown ?status values and falls back to triaging (no enum drift)", async () => {
+    state.session = { firm_id: FIRM_ID, role: "lawyer" };
+    state.countResult = { count: 0, error: null };
+    const res = await GET(
+      makeReq("?status=garbage") as never,
+      makeParams(),
+    );
+    expect(res.status).toBe(200);
+    expect(capturedStatus.values.every((v) => v === "triaging")).toBe(true);
   });
 });

@@ -15,16 +15,23 @@ import { getOperatorSession } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   const session = await getOperatorSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Lifecycle filter — see portal stream-check for the 2026-05-14 doctrine
+  // background. Defaults to 'triaging' for back-compat; the admin triage
+  // page passes ?status=declined when the Declined tab is open.
+  const statusParam = new URL(req.url).searchParams.get("status");
+  const status: "triaging" | "declined" =
+    statusParam === "declined" ? "declined" : "triaging";
+
   const { count, error: countErr } = await supabase
     .from("screened_leads")
     .select("id", { count: "exact", head: true })
-    .eq("status", "triaging");
+    .eq("status", status);
   if (countErr) {
     return NextResponse.json({ error: countErr.message }, { status: 500 });
   }
@@ -32,7 +39,7 @@ export async function GET(_req: NextRequest) {
   const { data: latestRow, error: latestErr } = await supabase
     .from("screened_leads")
     .select("updated_at")
-    .eq("status", "triaging")
+    .eq("status", status)
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();

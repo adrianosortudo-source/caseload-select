@@ -221,6 +221,7 @@ Versioned artifact at `docs/ghl-webhook-contract.md`. Four actions (`taken`, `pa
 | Lifecycle states | `triaging` / `taken` / `passed` / `declined` (hard-enforced via DB CHECK constraint) |
 | Decline copy resolution | per-lead override → per-PA → firm default → system fallback |
 | Webhook delivery | At-least-once via `webhook_outbox`, exponential backoff, max 5 attempts |
+| Lead visibility (2026-05-14 doctrine) | The system filters attention, never visibility. Both `triaging` and `declined` leads surface to the lawyer via email notification. The triage portal exposes declined leads behind a separate "Declined" tab so the active queue stays focused. Auto-declines still fire the `declined_oos` GHL re-engagement webhook in addition to the lawyer email. |
 
 ### Source files (key map)
 
@@ -279,9 +280,16 @@ Auth: routes accept either `CRON_SECRET` or `PG_CRON_TOKEN` via Bearer token (`l
 
 Run history is visible via `cron.job_run_details` and pg_net responses via `net._http_response`.
 
-### New-lead notification
+### Lead notifications (visibility doctrine)
 
-`/api/intake-v2` fires a fan-out email to all `firm_lawyers` rows with `role='lawyer'` for the firm whenever it lands a row with `status='triaging'`. Builders are pure (`lib/lead-notify-pure.ts`); I/O wrapper (`lib/lead-notify.ts`) resolves recipients and dispatches via Resend. Best-effort — failure does not block intake. Falls back to legacy `branding.lawyer_email` when no firm_lawyers row exists.
+Every persisted lead — whether the engine routes it to `status='triaging'` (lawyer decides) or `status='declined'` (engine auto-filtered as out-of-scope) — fires a fan-out email to all `firm_lawyers` rows with `role='lawyer'` for the firm. Doctrine (2026-05-14): "The system filters attention, never visibility." The lawyer must be aware of every person who tried to contact them so they can catch engine misclassifications and handle relationship-level edge cases personally.
+
+The two lifecycle states render differently in the inbox so the lawyer's attention stays on triaging leads:
+
+- **Triaging email** — subject prefix `Priority A —` / `New lead —`. Shows decision-window countdown, prompts Take / Pass. CTA: "Open the brief".
+- **Declined email** — subject prefix `[Auto-filtered]`. Explains what the engine flagged and why, states that the contact already received the standard decline-with-grace response, and tells the lawyer how to override if the engine got it wrong. CTA: "Review the brief".
+
+All four entry points fire notifications for both states: `/api/intake-v2` (web), `/api/voice-intake` (GHL Voice AI), and the three Meta-channel receivers via `lib/channel-intake-processor`. Builders are pure (`lib/lead-notify-pure.ts`); I/O wrapper (`lib/lead-notify.ts`) resolves recipients and dispatches via Resend. Best-effort — failure does not block intake. Falls back to legacy `branding.lawyer_email` when no firm_lawyers row exists. OOS leads ALSO fire the `declined_oos` GHL re-engagement webhook in addition to the email — the two paths are independent.
 
 ### Compliance pages
 

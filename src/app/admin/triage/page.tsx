@@ -47,15 +47,18 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type BandFilter = "all" | "A" | "B" | "C";
+type LifecycleView = "active" | "declined";
 
 export default async function AdminTriagePage({
   searchParams,
 }: {
-  searchParams: Promise<{ band?: string; firm_id?: string }>;
+  searchParams: Promise<{ band?: string; firm_id?: string; status?: string }>;
 }) {
-  const { band: bandRaw, firm_id: firmIdRaw } = await searchParams;
+  const { band: bandRaw, firm_id: firmIdRaw, status: statusRaw } = await searchParams;
   const bandFilter: BandFilter =
     bandRaw === "A" || bandRaw === "B" || bandRaw === "C" ? bandRaw : "all";
+  const view: LifecycleView = statusRaw === "declined" ? "declined" : "active";
+  const dbStatus = view === "declined" ? "declined" : "triaging";
 
   let query = supabase
     .from("screened_leads")
@@ -66,13 +69,21 @@ export default async function AdminTriagePage({
       decision_deadline, contact_name, submitted_at, brief_json,
       intake_firms!inner(id, name, branding)
     `)
-    .eq("status", "triaging");
+    .eq("status", dbStatus);
 
   if (firmIdRaw) query = query.eq("firm_id", firmIdRaw);
 
   const { data, error } = await query.returns<QueueRow[]>();
 
   if (error) return <ErrorState message={`Could not load the queue: ${error.message}`} />;
+
+  // Off-tab count (cross-firm, no firm filter) for the tab strip totals so
+  // the operator sees absolute counts on both tabs.
+  const offTabStatus = view === "declined" ? "triaging" : "declined";
+  const { count: offTabCount } = await supabase
+    .from("screened_leads")
+    .select("id", { count: "exact", head: true })
+    .eq("status", offTabStatus);
 
   // Load all firms for the filter dropdown — small set, single query.
   const { data: firms } = await supabase
@@ -82,7 +93,11 @@ export default async function AdminTriagePage({
 
   const allRows = sortTriageRows((data ?? []) as QueueRow[]);
   const totalCount = allRows.length;
-  const rows = bandFilter === "all" ? allRows : allRows.filter((r) => r.band === bandFilter);
+  // Band filter is only meaningful on the Active tab — declined rows are
+  // mostly band=null since the engine filters before band assignment.
+  const rows = view === "declined" || bandFilter === "all"
+    ? allRows
+    : allRows.filter((r) => r.band === bandFilter);
 
   const counts = {
     all: totalCount,
@@ -91,10 +106,17 @@ export default async function AdminTriagePage({
     C: allRows.filter((r) => r.band === "C").length,
   };
 
+  const activeCount = view === "declined" ? (offTabCount ?? 0) : totalCount;
+  const declinedCount = view === "declined" ? totalCount : (offTabCount ?? 0);
+  const streamCheckUrl = view === "declined"
+    ? "/api/admin/triage/stream-check?status=declined"
+    : "/api/admin/triage/stream-check";
+
   return (
     <div className="space-y-5">
-      <TriageRefresh streamCheckUrl="/api/admin/triage/stream-check" />
-      <Header count={totalCount} />
+      <TriageRefresh streamCheckUrl={streamCheckUrl} />
+      <Header count={totalCount} view={view} />
+      <LifecycleTabRow view={view} activeCount={activeCount} declinedCount={declinedCount} firmIdActive={firmIdRaw ?? null} />
       <FilterRow
         active={bandFilter}
         counts={counts}
@@ -103,18 +125,68 @@ export default async function AdminTriagePage({
           name: ((f.branding as { firm_name?: string } | null)?.firm_name ?? f.name ?? "Unknown firm") as string,
         }))}
         firmIdActive={firmIdRaw ?? null}
+        view={view}
       />
       {rows.length === 0 ? (
-        <EmptyState filtered={bandFilter !== "all" || !!firmIdRaw} />
+        <EmptyState view={view} filtered={bandFilter !== "all" || !!firmIdRaw} />
       ) : (
         <ul className="space-y-3">
           {rows.map((row) => (
             <li key={`${row.firm_id}:${row.lead_id}`}>
-              <QueueCard row={row} />
+              <QueueCard row={row} view={view} />
             </li>
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function LifecycleTabRow({
+  view,
+  activeCount,
+  declinedCount,
+  firmIdActive,
+}: {
+  view: LifecycleView;
+  activeCount: number;
+  declinedCount: number;
+  firmIdActive: string | null;
+}) {
+  function tabHref(v: LifecycleView): string {
+    const params = new URLSearchParams();
+    if (v === "declined") params.set("status", "declined");
+    if (firmIdActive) params.set("firm_id", firmIdActive);
+    const qs = params.toString();
+    return qs ? `/admin/triage?${qs}` : "/admin/triage";
+  }
+  const tabs: Array<{ key: LifecycleView; label: string; count: number }> = [
+    { key: "active", label: "Active", count: activeCount },
+    { key: "declined", label: "Declined", count: declinedCount },
+  ];
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap border-b border-black/10 pb-3">
+      {tabs.map((t) => {
+        const isActive = view === t.key;
+        return (
+          <Link
+            key={t.key}
+            href={tabHref(t.key)}
+            className={`
+              inline-flex items-center gap-2 px-4 py-2 sm:py-1.5 text-xs font-bold uppercase tracking-wider border transition-colors min-h-[40px] sm:min-h-0
+              ${isActive
+                ? "border-navy bg-navy text-white"
+                : "border-black/20 bg-white text-black/80 hover:border-navy hover:text-navy"
+              }
+            `}
+          >
+            <span>{t.label}</span>
+            <span className={`font-mono text-[10px] ${isActive ? "text-white/70" : "text-black/40"}`}>
+              {t.count}
+            </span>
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -124,12 +196,27 @@ function FilterRow({
   counts,
   firms,
   firmIdActive,
+  view,
 }: {
   active: BandFilter;
   counts: Record<BandFilter, number>;
   firms: Array<{ id: string; name: string }>;
   firmIdActive: string | null;
+  view: LifecycleView;
 }) {
+  // Band sub-filter is only meaningful on the Active (triaging) tab.
+  // Declined rows are mostly band=null. Hide the band row entirely on
+  // the Declined view.
+  if (view === "declined") {
+    return (
+      <FirmFilter
+        action="/admin/triage"
+        firms={firms}
+        active={firmIdActive}
+        extraParams={[{ name: "status", value: "declined" }]}
+      />
+    );
+  }
   const tabs: Array<{ key: BandFilter; label: string }> = [
     { key: "all", label: "All bands" },
     { key: "A", label: "Band A" },
@@ -181,28 +268,36 @@ function FilterRow({
   );
 }
 
-function Header({ count }: { count: number }) {
+function Header({ count, view }: { count: number; view: LifecycleView }) {
+  const title = view === "declined" ? "Auto-filtered cross-firm" : "Cross-firm triage";
+  const totalNoun = view === "declined" ? "auto-filtered" : "waiting";
   return (
     <div className="flex items-end justify-between">
       <div>
         <p className="text-xs uppercase tracking-wider font-semibold text-gold">Operator console</p>
-        <h1 className="text-2xl font-bold text-navy mt-1">Cross-firm triage</h1>
+        <h1 className="text-2xl font-bold text-navy mt-1">{title}</h1>
       </div>
       <div className="text-xs text-black/50 uppercase tracking-wider">
-        {count === 0 ? "No leads waiting" : `${count} lead${count === 1 ? "" : "s"} waiting`}
+        {count === 0 ? "Nothing here yet" : `${count} lead${count === 1 ? "" : "s"} ${totalNoun}`}
       </div>
     </div>
   );
 }
 
-function EmptyState({ filtered }: { filtered?: boolean }) {
+function EmptyState({ view, filtered }: { view: LifecycleView; filtered?: boolean }) {
+  let message: string;
+  if (view === "declined") {
+    message = filtered
+      ? "No auto-filtered leads match these filters. Try clearing them."
+      : "No auto-filtered leads across any firm.";
+  } else if (filtered) {
+    message = "No leads match these filters. Try clearing them.";
+  } else {
+    message = "No leads currently in triage across any firm.";
+  }
   return (
     <div className="bg-white border border-black/8 px-6 py-10 text-center">
-      <p className="text-sm text-black/60">
-        {filtered
-          ? "No leads match these filters. Try clearing them."
-          : "No leads currently in triage across any firm."}
-      </p>
+      <p className="text-sm text-black/60">{message}</p>
     </div>
   );
 }
@@ -215,16 +310,21 @@ function ErrorState({ message }: { message: string }) {
   );
 }
 
-function QueueCard({ row }: { row: QueueRow }) {
+function QueueCard({ row, view }: { row: QueueRow; view: LifecycleView }) {
   const snapshot = row.brief_json?.matter_snapshot ?? matterLabel(row.matter_type);
   const subtrack = subtrackLabel(row.band_c_subtrack);
   const simplicity = row.complexity_score === null ? null : 10 - row.complexity_score;
   const firmName = row.intake_firms?.branding?.firm_name ?? row.intake_firms?.name ?? "Unknown firm";
+  const isDeclined = view === "declined";
 
   return (
     <Link
       href={`/portal/${row.firm_id}/triage/${row.lead_id}`}
-      className="block bg-white border border-black/10 hover:border-navy transition-colors"
+      className={`block bg-white border transition-colors ${
+        isDeclined
+          ? "border-black/10 hover:border-stone-400 opacity-80 hover:opacity-100"
+          : "border-black/10 hover:border-navy"
+      }`}
     >
       <div className="px-5 py-4 grid gap-4 md:grid-cols-[auto_1fr_auto] md:items-center">
         <BandBadge band={row.band} />
@@ -234,6 +334,11 @@ function QueueCard({ row }: { row: QueueRow }) {
             <span className="text-[10px] uppercase tracking-wider font-bold bg-navy/5 text-navy px-2 py-0.5 border border-navy/15">
               {firmName}
             </span>
+            {isDeclined && (
+              <span className="text-[10px] uppercase tracking-wider font-bold bg-stone-100 text-stone-700 px-2 py-0.5 border border-stone-300">
+                Auto-filtered
+              </span>
+            )}
             <span className="text-xs uppercase tracking-wider font-semibold text-black/60">
               {matterLabel(row.matter_type)}
             </span>
@@ -267,10 +372,16 @@ function QueueCard({ row }: { row: QueueRow }) {
         </div>
 
         <div className="flex flex-col items-start md:items-end gap-2 min-w-[140px]">
-          <DecisionTimer
-            deadlineIso={row.decision_deadline}
-            submittedAtIso={row.submitted_at}
-          />
+          {isDeclined ? (
+            <span className="text-[10px] uppercase tracking-wider font-bold text-stone-500">
+              No decision needed
+            </span>
+          ) : (
+            <DecisionTimer
+              deadlineIso={row.decision_deadline}
+              submittedAtIso={row.submitted_at}
+            />
+          )}
           <AxisRow
             value={row.value_score}
             simplicity={simplicity}

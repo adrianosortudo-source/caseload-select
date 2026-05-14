@@ -403,8 +403,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── New-lead notification email (best-effort) ──────────────────────────
-  if (inserted.status === 'triaging') {
+  // ── Lead notification email (best-effort) ──────────────────────────────
+  // Doctrine (2026-05-14): "The system filters attention, never visibility."
+  // Both 'triaging' and 'declined' notify the lawyer. See lib/lead-notify-pure
+  // for the rendering split between the two lifecycle states.
+  if (inserted.status === 'triaging' || inserted.status === 'declined') {
     waitUntil(notifyLawyersOfNewLead({
       firmId: firmIdParam,
       leadId: inserted.lead_id,
@@ -415,6 +418,7 @@ export async function POST(req: NextRequest) {
       decisionDeadlineIso: inserted.decision_deadline,
       whaleNurture: !!inserted.whale_nurture,
       intakeLanguage: state.language ?? 'en',
+      lifecycleStatus: inserted.status as 'triaging' | 'declined',
     }).catch((err) => {
       console.error('[voice-intake] notifyLawyersOfNewLead failed:', err);
     }));

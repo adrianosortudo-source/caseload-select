@@ -22,6 +22,7 @@ import {
   buildNewLeadEmail,
   deriveFirstName,
   type NewLeadEmailInput,
+  type LifecycleStatus,
 } from "@/lib/lead-notify-pure";
 
 interface FirmLawyerRecipient {
@@ -45,6 +46,13 @@ export interface NotifyArgs {
   decisionDeadlineIso: string;
   whaleNurture: boolean;
   intakeLanguage?: string | null;
+  /**
+   * Drives the email's visual treatment and subject prefix. Defaults to
+   * 'triaging' for backward compat with legacy callers; new call sites must
+   * pass 'triaging' or 'declined' explicitly so the doctrine fix (2026-05-14)
+   * surfaces declined leads to lawyers too.
+   */
+  lifecycleStatus?: LifecycleStatus;
 }
 
 export interface NotifyResult {
@@ -133,6 +141,7 @@ export async function notifyLawyersOfNewLead(args: NotifyArgs): Promise<NotifyRe
     whaleNurture: args.whaleNurture,
     briefUrl,
     intakeLanguage: args.intakeLanguage ?? null,
+    lifecycleStatus: args.lifecycleStatus ?? "triaging",
   };
 
   const email = buildNewLeadEmail(emailInput);

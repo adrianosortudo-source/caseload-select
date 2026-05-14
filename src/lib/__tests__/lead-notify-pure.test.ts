@@ -19,6 +19,15 @@ const baseInput: NewLeadEmailInput = {
   briefUrl: "https://app.caseloadselect.ca/portal/firm-x/triage/L-2026-05-06-001",
 };
 
+const declinedInput: NewLeadEmailInput = {
+  ...baseInput,
+  firstName: "Mike",
+  matterType: "out_of_scope",
+  practiceArea: "family",
+  band: null,
+  lifecycleStatus: "declined",
+};
+
 describe("buildNewLeadSubject", () => {
   it("prefixes with priority band when band is known", () => {
     expect(buildNewLeadSubject(baseInput)).toBe(
@@ -41,6 +50,22 @@ describe("buildNewLeadSubject", () => {
   it("renders 'this lead' when first name is missing", () => {
     expect(buildNewLeadSubject({ ...baseInput, firstName: "this lead" })).toBe(
       "Priority A — this lead · Shareholder Dispute",
+    );
+  });
+
+  it("renders the declined-state subject with [Auto-filtered] prefix + practice area", () => {
+    expect(buildNewLeadSubject(declinedInput)).toBe(
+      "[Auto-filtered] Mike · matter flagged as Family Law",
+    );
+  });
+
+  it("defaults to triaging subject when lifecycleStatus is omitted", () => {
+    const { lifecycleStatus, ...withoutStatus } = declinedInput;
+    void lifecycleStatus; // suppress unused-var warning
+    // The screened-leads label map renders 'out_of_scope' as
+    // "Out of Scope · Forwarded" — see lib/screened-leads-labels.
+    expect(buildNewLeadSubject(withoutStatus)).toBe(
+      "New lead — Mike · Out of Scope · Forwarded",
     );
   });
 });
@@ -125,6 +150,47 @@ describe("buildNewLeadHtml", () => {
     });
     expect(html).toContain("Smith &amp; Co &lt;Esq&gt;");
     expect(html).not.toContain("Smith & Co <Esq>");
+  });
+
+  it("renders the triaging eyebrow + 'Open the brief' CTA by default", () => {
+    const html = buildNewLeadHtml({ ...baseInput, decisionDeadlineIso: deadline, now });
+    expect(html).toContain("New lead in triage");
+    expect(html).toContain("Open the brief");
+    expect(html).toContain("Decision window");
+  });
+
+  it("renders the declined eyebrow + 'Review the brief' CTA when lifecycleStatus='declined'", () => {
+    const html = buildNewLeadHtml({
+      ...declinedInput,
+      decisionDeadlineIso: deadline,
+      now,
+    });
+    expect(html).toContain("Auto-filtered lead");
+    expect(html).toContain("Review the brief");
+    // Declined emails omit the decision-window line; the engine already
+    // sent the contact a decline-with-grace, no clock for the lawyer.
+    expect(html).not.toContain("Decision window");
+  });
+
+  it("declined body explains override path so engine misclassifications can be corrected", () => {
+    const html = buildNewLeadHtml({
+      ...declinedInput,
+      decisionDeadlineIso: deadline,
+      now,
+    });
+    expect(html).toContain("out of scope");
+    expect(html).toContain("If the engine got it wrong");
+  });
+
+  it("declined emails still surface the intake-language note for non-English contacts", () => {
+    const html = buildNewLeadHtml({
+      ...declinedInput,
+      intakeLanguage: "pt",
+      decisionDeadlineIso: deadline,
+      now,
+    });
+    expect(html).toContain("Intake language");
+    expect(html).toContain("Portuguese");
   });
 });
 

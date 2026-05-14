@@ -46,18 +46,33 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type BandFilter = "all" | "A" | "B" | "C";
+/**
+ * Two top-level views:
+ *   active   — status='triaging' (default). The lawyer's primary surface.
+ *   declined — status='declined'. Auto-filtered leads, kept behind a tab so
+ *              the active queue stays focused, but visible per the
+ *              2026-05-14 doctrine: "The system filters attention, never
+ *              visibility." Lawyer must be aware of every contact attempt.
+ */
+type LifecycleView = "active" | "declined";
 
 export default async function TriageQueuePage({
   params,
   searchParams,
 }: {
   params: Promise<{ firmId: string }>;
-  searchParams: Promise<{ band?: string }>;
+  searchParams: Promise<{ band?: string; status?: string }>;
 }) {
   const { firmId } = await params;
-  const { band: bandRaw } = await searchParams;
+  const { band: bandRaw, status: statusRaw } = await searchParams;
   const bandFilter: BandFilter =
     bandRaw === "A" || bandRaw === "B" || bandRaw === "C" ? bandRaw : "all";
+  const view: LifecycleView = statusRaw === "declined" ? "declined" : "active";
+
+  // Single round-trip: load both active + declined counts and the current
+  // view's rows. Two simple queries — count-only for the OFF tab so we can
+  // display its total in the tab strip without paying for full rows.
+  const dbStatus = view === "declined" ? "declined" : "triaging";
 
   const { data, error } = await supabase
     .from("screened_leads")
@@ -69,7 +84,7 @@ export default async function TriageQueuePage({
       intake_language
     `)
     .eq("firm_id", firmId)
-    .eq("status", "triaging");
+    .eq("status", dbStatus);
 
   if (error) {
     return (
@@ -77,14 +92,24 @@ export default async function TriageQueuePage({
     );
   }
 
+  // Off-tab count (the one not currently rendered) so the lifecycle tabs
+  // show absolute totals not "self-filtered" zeros.
+  const offTabStatus = view === "declined" ? "triaging" : "declined";
+  const { count: offTabCount } = await supabase
+    .from("screened_leads")
+    .select("id", { count: "exact", head: true })
+    .eq("firm_id", firmId)
+    .eq("status", offTabStatus);
+
   const allRows = sortTriageRows((data ?? []) as QueueRow[]);
   const totalCount = allRows.length;
-  const rows = bandFilter === "all"
+  // Band filter is meaningful only on the Active tab. Declined rows are
+  // mostly band=null (the engine filtered before band assignment) so we
+  // skip the band filter row entirely on the Declined view.
+  const rows = view === "declined" || bandFilter === "all"
     ? allRows
     : allRows.filter((r) => r.band === bandFilter);
 
-  // Counts per band for the filter row, computed off the unfiltered list so
-  // the buttons always show absolute totals not "self-filtered" zeros.
   const counts = {
     all: totalCount,
     A: allRows.filter((r) => r.band === "A").length,
@@ -92,22 +117,73 @@ export default async function TriageQueuePage({
     C: allRows.filter((r) => r.band === "C").length,
   };
 
+  const activeCount = view === "declined" ? (offTabCount ?? 0) : totalCount;
+  const declinedCount = view === "declined" ? totalCount : (offTabCount ?? 0);
+  const streamCheckUrl = view === "declined"
+    ? `/api/portal/${firmId}/triage/stream-check?status=declined`
+    : `/api/portal/${firmId}/triage/stream-check`;
+
   return (
     <div className="space-y-5">
-      <TriageRefresh streamCheckUrl={`/api/portal/${firmId}/triage/stream-check`} />
-      <Header count={totalCount} />
-      <BandFilterRow firmId={firmId} active={bandFilter} counts={counts} />
+      <TriageRefresh streamCheckUrl={streamCheckUrl} />
+      <Header count={totalCount} view={view} />
+      <LifecycleTabRow firmId={firmId} view={view} activeCount={activeCount} declinedCount={declinedCount} />
+      {view === "active" && (
+        <BandFilterRow firmId={firmId} active={bandFilter} counts={counts} />
+      )}
       {rows.length === 0 ? (
-        <EmptyState filtered={bandFilter !== "all"} />
+        <EmptyState view={view} filtered={view === "active" && bandFilter !== "all"} />
       ) : (
         <ul className="space-y-3">
           {rows.map((row) => (
             <li key={row.lead_id}>
-              <QueueCard firmId={firmId} row={row} />
+              <QueueCard firmId={firmId} row={row} view={view} />
             </li>
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function LifecycleTabRow({
+  firmId,
+  view,
+  activeCount,
+  declinedCount,
+}: {
+  firmId: string;
+  view: LifecycleView;
+  activeCount: number;
+  declinedCount: number;
+}) {
+  const tabs: Array<{ key: LifecycleView; label: string; count: number; href: string }> = [
+    { key: "active", label: "Active", count: activeCount, href: `/portal/${firmId}/triage` },
+    { key: "declined", label: "Declined", count: declinedCount, href: `/portal/${firmId}/triage?status=declined` },
+  ];
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap border-b border-black/10 pb-3">
+      {tabs.map((t) => {
+        const isActive = view === t.key;
+        return (
+          <Link
+            key={t.key}
+            href={t.href}
+            className={`
+              inline-flex items-center gap-2 px-4 py-2 sm:py-1.5 text-xs font-bold uppercase tracking-wider border transition-colors min-h-[40px] sm:min-h-0
+              ${isActive
+                ? "border-navy bg-navy text-white"
+                : "border-black/20 bg-white text-black/80 hover:border-navy hover:text-navy"
+              }
+            `}
+          >
+            <span>{t.label}</span>
+            <span className={`font-mono text-[10px] ${isActive ? "text-white/70" : "text-black/40"}`}>
+              {t.count}
+            </span>
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -157,28 +233,35 @@ function BandFilterRow({
   );
 }
 
-function Header({ count }: { count: number }) {
+function Header({ count, view }: { count: number; view: LifecycleView }) {
+  const title = view === "declined" ? "Declined queue" : "Active queue";
+  const eyebrow = view === "declined" ? "Auto-filtered leads" : "Lawyer triage";
+  const totalNoun = view === "declined" ? "auto-filtered" : "waiting";
   return (
     <div className="flex items-end justify-between">
       <div>
-        <p className="text-xs uppercase tracking-wider font-semibold text-gold">Lawyer triage</p>
-        <h1 className="text-2xl font-bold text-navy mt-1">Active queue</h1>
+        <p className="text-xs uppercase tracking-wider font-semibold text-gold">{eyebrow}</p>
+        <h1 className="text-2xl font-bold text-navy mt-1">{title}</h1>
       </div>
       <div className="text-xs text-black/50 uppercase tracking-wider">
-        {count === 0 ? "No leads waiting" : `${count} lead${count === 1 ? "" : "s"} waiting`}
+        {count === 0 ? "Nothing here yet" : `${count} lead${count === 1 ? "" : "s"} ${totalNoun}`}
       </div>
     </div>
   );
 }
 
-function EmptyState({ filtered }: { filtered?: boolean }) {
+function EmptyState({ view, filtered }: { view: LifecycleView; filtered?: boolean }) {
+  let message: string;
+  if (view === "declined") {
+    message = "No auto-filtered leads yet. Out-of-scope inbound shows up here.";
+  } else if (filtered) {
+    message = "No leads in this band currently in triage. Try clearing the filter.";
+  } else {
+    message = "No leads currently in triage. New screenings land here as they arrive.";
+  }
   return (
     <div className="bg-white border border-black/8 px-6 py-10 text-center">
-      <p className="text-sm text-black/60">
-        {filtered
-          ? "No leads in this band currently in triage. Try clearing the filter."
-          : "No leads currently in triage. New screenings land here as they arrive."}
-      </p>
+      <p className="text-sm text-black/60">{message}</p>
     </div>
   );
 }
@@ -191,22 +274,40 @@ function ErrorState({ message }: { message: string }) {
   );
 }
 
-function QueueCard({ firmId, row }: { firmId: string; row: QueueRow }) {
+function QueueCard({
+  firmId,
+  row,
+  view,
+}: {
+  firmId: string;
+  row: QueueRow;
+  view: LifecycleView;
+}) {
   const snapshot = row.brief_json?.matter_snapshot ?? matterLabel(row.matter_type);
   const subtrack = subtrackLabel(row.band_c_subtrack);
   const simplicity = row.complexity_score === null ? null : 10 - row.complexity_score;
   const langLabel = intakeLanguageLabel(row.intake_language);
+  const isDeclined = view === "declined";
 
   return (
     <Link
       href={`/portal/${firmId}/triage/${row.lead_id}`}
-      className="block bg-white border border-black/10 hover:border-navy transition-colors"
+      className={`block bg-white border transition-colors ${
+        isDeclined
+          ? "border-black/10 hover:border-stone-400 opacity-80 hover:opacity-100"
+          : "border-black/10 hover:border-navy"
+      }`}
     >
       <div className="px-5 py-4 grid gap-4 md:grid-cols-[auto_1fr_auto] md:items-center">
         <BandBadge band={row.band} />
 
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
+            {isDeclined && (
+              <span className="text-[10px] uppercase tracking-wider font-bold bg-stone-100 text-stone-700 px-2 py-0.5 border border-stone-300">
+                Auto-filtered
+              </span>
+            )}
             <span className="text-xs uppercase tracking-wider font-semibold text-black/60">
               {matterLabel(row.matter_type)}
             </span>
@@ -245,10 +346,21 @@ function QueueCard({ firmId, row }: { firmId: string; row: QueueRow }) {
         </div>
 
         <div className="flex flex-col items-start md:items-end gap-2 min-w-[140px]">
-          <DecisionTimer
-            deadlineIso={row.decision_deadline}
-            submittedAtIso={row.submitted_at}
-          />
+          {/*
+            DecisionTimer is only meaningful on triaging rows — declined
+            rows have a deadline that already passed (or never mattered).
+            Show a static "Auto-filtered" stamp instead.
+          */}
+          {isDeclined ? (
+            <span className="text-[10px] uppercase tracking-wider font-bold text-stone-500">
+              No decision needed
+            </span>
+          ) : (
+            <DecisionTimer
+              deadlineIso={row.decision_deadline}
+              submittedAtIso={row.submitted_at}
+            />
+          )}
           <AxisRow
             value={row.value_score}
             simplicity={simplicity}

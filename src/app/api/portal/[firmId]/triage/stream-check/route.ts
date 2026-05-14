@@ -42,14 +42,22 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Count triaging rows + latest updated_at for the firm. These two
-  // numbers fingerprint the queue's state cheaply; if neither changes,
-  // the client doesn't need to refetch the full server-rendered page.
+  // Lifecycle filter — defaults to 'triaging' (the active queue) for
+  // back-compat. The 2026-05-14 visibility doctrine added a Declined tab
+  // to the portal, so the client now passes ?status=declined when that
+  // tab is open. Anything else falls through to triaging.
+  const statusParam = new URL(req.url).searchParams.get("status");
+  const status: "triaging" | "declined" =
+    statusParam === "declined" ? "declined" : "triaging";
+
+  // Count rows + latest updated_at for the firm at this lifecycle state.
+  // These two numbers fingerprint the queue's state cheaply; if neither
+  // changes, the client doesn't refetch the full server-rendered page.
   const { count, error: countErr } = await supabase
     .from("screened_leads")
     .select("id", { count: "exact", head: true })
     .eq("firm_id", firmId)
-    .eq("status", "triaging");
+    .eq("status", status);
 
   if (countErr) {
     return NextResponse.json({ error: countErr.message }, { status: 500 });
@@ -59,7 +67,7 @@ export async function GET(
     .from("screened_leads")
     .select("updated_at")
     .eq("firm_id", firmId)
-    .eq("status", "triaging")
+    .eq("status", status)
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();

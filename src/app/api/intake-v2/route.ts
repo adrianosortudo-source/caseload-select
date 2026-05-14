@@ -332,15 +332,14 @@ export async function POST(req: NextRequest) {
     waitUntil(fireGhlWebhook(firmIdParam, payload));
   }
 
-  // New-lead notification email. Only fires for triaging rows — OOS leads
-  // were already handled above with the decline-with-grace cadence, and
-  // pre-decided rows would not arrive through this endpoint. Best effort,
-  // never blocks the response. Recipient list comes from firm_lawyers
-  // (role='lawyer'); legacy branding.lawyer_email is the fallback.
-  if (inserted.status === "triaging") {
-    // Narrow band to the email-render shape. D/E/X arrive here via the
-    // out-of-scope path which already returned before the notification
-    // fires, so realistic values are A/B/C/null only.
+  // Lead notification email. Doctrine (2026-05-14): "The system filters
+  // attention, never visibility." Both 'triaging' and 'declined' notify the
+  // lawyer so they have full visibility of who tried to contact them.
+  // Different subject + body copy per lifecycle state — see
+  // lib/lead-notify-pure for the rendering split. The OOS decline-with-grace
+  // GHL webhook still fires above, this email is additive.
+  if (inserted.status === "triaging" || inserted.status === "declined") {
+    // Narrow band to the email-render shape. Declined OOS rows have band=null.
     const notifyBand: "A" | "B" | "C" | null =
       band === "A" || band === "B" || band === "C" ? band : null;
     waitUntil(notifyLawyersOfNewLead({
@@ -353,6 +352,7 @@ export async function POST(req: NextRequest) {
       decisionDeadlineIso: inserted.decision_deadline,
       whaleNurture: !!inserted.whale_nurture,
       intakeLanguage: v.intake_language ?? 'en',
+      lifecycleStatus: inserted.status as "triaging" | "declined",
     }).catch((err) => {
       // Visible in Vercel function logs; not surfaced to the screen.
       console.error("[intake-v2] notifyLawyersOfNewLead failed:", err);
