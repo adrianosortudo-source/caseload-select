@@ -18,15 +18,14 @@
  *          app secret (X-Hub-Signature-256 header). Must verify before
  *          processing or anyone can post fake events.
  *
- * Status: scaffold. HMAC verification + Meta verification challenge are
- * complete and production-grade. Engine integration (running the screen
- * engine on the inbound text, building the brief, persisting to
- * screened_leads, firing the new-lead notification) is stubbed pending
- * Meta App Review approval — the receiver MUST exist and respond
- * correctly before App Review can be submitted, but the downstream
- * processing won't fire real leads until Meta grants the elevated
- * permissions. Stub returns 200 to acknowledge receipt (Meta requires
- * fast 200s; anything else gets the webhook subscription disabled).
+ * Status: production-wired (Block 2 of Meta App Review prep, 2026-05-14).
+ * HMAC verification + Meta verification challenge run inline. Engine
+ * integration runs the screen engine on the inbound text via
+ * `lib/channel-intake-processor`, builds the brief, persists to
+ * screened_leads, fires the new-lead notification. The receiver ACKs 200
+ * within ~1-2s and runs the engine in `waitUntil` so Meta does not
+ * retry on the 5-15s LLM call. Multi-turn follow-up via the Messenger
+ * Send API is out of scope until App Review approves pages_messaging.
  *
  * Env vars:
  *   META_APP_SECRET            App Secret from the Meta developer console.
@@ -37,10 +36,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 import {
   verifyMetaSignature,
   handleVerificationChallenge,
 } from '@/lib/meta-webhook-auth';
+import { resolveFirmByFacebookPageId } from '@/lib/firm-resolver';
+import {
+  processChannelInbound,
+  type MessengerSender,
+} from '@/lib/channel-intake-processor';
 
 const APP_SECRET = process.env.META_APP_SECRET ?? '';
 const VERIFY_TOKEN = process.env.META_MESSENGER_VERIFY_TOKEN ?? '';
@@ -142,9 +147,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // STUB: log the inbound messages for now. Engine integration lands once
-  // Meta App Review approves the pages_messaging permission. Until then,
-  // we acknowledge receipt and let the events drain.
+  // Engine integration. For each inbound message event:
+  //   1. Resolve pageId → firm via intake_firms.facebook_page_id (unique).
+  //   2. Run the channel-intake-processor in waitUntil so Meta gets a
+  //      fast 200 ACK (within ~1-2s) while the engine + LLM work (5-15s)
+  //      runs in the background.
+  //   3. If no firm matches the Page ID, log a warning and drop the
+  //      event. Meta delivers events for any Page the App is connected
+  //      to, including Pages we have not mapped to a firm yet.
+  //
+  // Multi-turn conversational follow-up (sending a Question back via the
+  // Messenger Send API) is out of scope for the App Review demo and lands
+  // in a separate `channel-send` patch.
   if (messageEvents.length > 0) {
     console.log(
       '[messenger-intake] received',
@@ -154,20 +168,58 @@ export async function POST(req: NextRequest) {
         page: e.pageId,
         sender: e.senderId,
         preview: e.text.slice(0, 80),
-      }))
+      })),
     );
-    // TODO (post App Review approval):
-    //   1. Resolve pageId → firmId via intake_firms.branding or a new
-    //      firm_facebook_pages table.
-    //   2. Initialise the screen engine with channel='facebook_messenger'.
-    //   3. Feed the inbound text through extraction + slot evidence + LLM.
-    //   4. Build the brief HTML and JSON.
-    //   5. Insert into screened_leads with channel='facebook_messenger'.
-    //   6. Fire the new-lead notification email.
-    //   7. Send the lawyer-determined reply back via Meta's Send API.
+
+    for (const event of messageEvents) {
+      // Resolve at the route boundary so we can decide whether to enqueue
+      // engine work or drop the event cleanly. This is one DB roundtrip;
+      // the heavy work (engine + LLM + insert) runs in waitUntil below.
+      const firm = await resolveFirmByFacebookPageId(event.pageId);
+      if (!firm) {
+        console.warn(
+          `[messenger-intake] no firm mapped to facebook_page_id=${event.pageId}; dropping mid=${event.mid}`,
+        );
+        continue;
+      }
+
+      const sender: MessengerSender = {
+        channel: 'facebook',
+        senderPsid: event.senderId,
+        senderName: null, // Messenger inbound has no profile name; would
+        // require a Graph API call with the Page token.
+        messageMid: event.mid,
+        pageId: event.pageId,
+      };
+
+      waitUntil(
+        processChannelInbound({
+          firmId: firm.firmId,
+          text: event.text,
+          sender,
+        })
+          .then((res) => {
+            if (res.persisted) {
+              console.log(
+                `[messenger-intake] persisted lead=${res.leadId} firm=${firm.firmName} status=${res.status} band=${res.band ?? '-'}`,
+              );
+            } else {
+              console.warn(
+                `[messenger-intake] not persisted firm=${firm.firmName} reason=${res.reason ?? 'unknown'}`,
+              );
+            }
+          })
+          .catch((err) => {
+            console.error(
+              `[messenger-intake] processChannelInbound threw firm=${firm.firmName} mid=${event.mid}:`,
+              err,
+            );
+          }),
+      );
+    }
   }
 
   // Meta requires 200 within ~20 seconds or the subscription gets
-  // disabled. Acknowledge first, do work async via waitUntil when wired.
+  // disabled. We ACK now; engine work runs in waitUntil above.
   return NextResponse.json({ ok: true });
 }

@@ -17,10 +17,10 @@
  *   POST — Incoming message event from Meta. Body is signed with the
  *          app secret (X-Hub-Signature-256). Must verify before processing.
  *
- * Status: scaffold. HMAC verification + Meta verification challenge are
- * production-grade. Engine integration is stubbed pending Meta App Review
- * approval of the instagram_business_manage_messages permission. The
- * receiver MUST respond correctly before App Review can be submitted.
+ * Status: production-wired (Block 2 of Meta App Review prep, 2026-05-14).
+ * HMAC verification + verification challenge run inline. Engine
+ * integration runs the screen engine via `lib/channel-intake-processor`.
+ * The receiver ACKs 200 within ~1-2s and runs the engine in `waitUntil`.
  *
  * Instagram payload shape differs from Messenger — IG Business sends
  * events under `entry[].changes[]` with a `field` of `messages`, NOT
@@ -36,10 +36,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 import {
   verifyMetaSignature,
   handleVerificationChallenge,
 } from '@/lib/meta-webhook-auth';
+import { resolveFirmByInstagramBusinessAccountId } from '@/lib/firm-resolver';
+import {
+  processChannelInbound,
+  type InstagramSender,
+} from '@/lib/channel-intake-processor';
 
 const APP_SECRET = process.env.META_APP_SECRET ?? '';
 const VERIFY_TOKEN = process.env.META_INSTAGRAM_VERIFY_TOKEN ?? '';
@@ -160,7 +166,14 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // STUB: log inbound messages. Engine integration lands post-App-Review.
+  // Engine integration. For each inbound DM:
+  //   1. Resolve igUserId (IG Business Account ID) → firm via
+  //      intake_firms.instagram_business_account_id (unique).
+  //   2. Run channel-intake-processor in waitUntil. Meta gets a fast 200
+  //      ACK; the engine + LLM work (5-15s) runs in the background.
+  //   3. If no firm matches, log and drop. Meta delivers events for any
+  //      IG account the App is connected to, including ones not yet
+  //      mapped to a firm in our system.
   if (messageEvents.length > 0) {
     console.log(
       '[instagram-intake] received',
@@ -170,17 +183,52 @@ export async function POST(req: NextRequest) {
         ig: e.igUserId,
         sender: e.senderId,
         preview: e.text.slice(0, 80),
-      }))
+      })),
     );
-    // TODO (post App Review approval):
-    //   1. Resolve igUserId → firmId via intake_firms.branding or a new
-    //      firm_instagram_accounts table.
-    //   2. Initialise the screen engine with channel='instagram_dm'.
-    //   3. Feed the inbound text through extraction + slot evidence + LLM.
-    //   4. Build the brief HTML and JSON.
-    //   5. Insert into screened_leads with channel='instagram_dm'.
-    //   6. Fire the new-lead notification email.
-    //   7. Send the lawyer-determined reply back via Meta's IG Messaging API.
+
+    for (const event of messageEvents) {
+      const firm = await resolveFirmByInstagramBusinessAccountId(event.igUserId);
+      if (!firm) {
+        console.warn(
+          `[instagram-intake] no firm mapped to instagram_business_account_id=${event.igUserId}; dropping mid=${event.mid}`,
+        );
+        continue;
+      }
+
+      const sender: InstagramSender = {
+        channel: 'instagram',
+        senderIgsid: event.senderId,
+        senderName: null, // IG inbound DM has no sender username/name; a
+        // Graph API call with the linked Page token can fetch it later.
+        messageMid: event.mid,
+        igBusinessAccountId: event.igUserId,
+      };
+
+      waitUntil(
+        processChannelInbound({
+          firmId: firm.firmId,
+          text: event.text,
+          sender,
+        })
+          .then((res) => {
+            if (res.persisted) {
+              console.log(
+                `[instagram-intake] persisted lead=${res.leadId} firm=${firm.firmName} status=${res.status} band=${res.band ?? '-'}`,
+              );
+            } else {
+              console.warn(
+                `[instagram-intake] not persisted firm=${firm.firmName} reason=${res.reason ?? 'unknown'}`,
+              );
+            }
+          })
+          .catch((err) => {
+            console.error(
+              `[instagram-intake] processChannelInbound threw firm=${firm.firmName} mid=${event.mid}:`,
+              err,
+            );
+          }),
+      );
+    }
   }
 
   // Meta requires 200 within ~20 seconds.

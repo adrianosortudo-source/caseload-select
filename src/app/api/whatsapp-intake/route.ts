@@ -18,14 +18,12 @@
  *          app secret (X-Hub-Signature-256 header). Must verify before
  *          processing or anyone can post fake events.
  *
- * Status: scaffold. HMAC verification + Meta verification challenge are
- * production-grade. Engine integration (running the screen engine on the
- * inbound text, building the brief, persisting to screened_leads, firing
- * the new-lead notification) is stubbed pending Meta App Review approval
- * of whatsapp_business_messaging + whatsapp_business_management. The
- * receiver MUST exist and respond correctly before App Review can be
- * submitted, and Block 2 provisions a test WABA + test number that will
- * exercise this endpoint.
+ * Status: production-wired (Block 2 of Meta App Review prep, 2026-05-14).
+ * HMAC verification + verification challenge run inline. Engine
+ * integration runs via `lib/channel-intake-processor`. The receiver ACKs
+ * 200 within ~1-2s and runs the engine in `waitUntil`. Non-text inbound
+ * (image/audio/document) and statuses-only payloads (delivery receipts)
+ * are logged but not processed — text is the only intake input shape.
  *
  * Channel shape (different from Messenger/IG, which both use the
  * messaging[] envelope):
@@ -52,10 +50,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 import {
   verifyMetaSignature,
   handleVerificationChallenge,
 } from '@/lib/meta-webhook-auth';
+import { resolveFirmByWhatsappPhoneNumberId } from '@/lib/firm-resolver';
+import {
+  processChannelInbound,
+  type WhatsAppSender,
+} from '@/lib/channel-intake-processor';
 
 const APP_SECRET = process.env.META_APP_SECRET ?? '';
 const VERIFY_TOKEN = process.env.META_WHATSAPP_VERIFY_TOKEN ?? '';
@@ -236,23 +240,64 @@ export async function POST(req: NextRequest) {
         preview: e.text.slice(0, 80),
       })),
     );
-    // TODO (Block 2 Phase 5 + post App Review approval):
-    //   1. Resolve phoneNumberId → firmId via a new firm_whatsapp_numbers
-    //      table (or intake_firms.whatsapp_phone_number_id column).
-    //   2. Resolve/create a per-sender screened_leads row in 'in_progress'
-    //      status, keyed on (firm_id, senderWaId).
-    //   3. Initialise the screen engine with channel='whatsapp' on the
-    //      first inbound, or load persisted EngineState on subsequent ones.
-    //   4. Feed the inbound text through extraction + slot evidence + LLM
-    //      via screen-llm-server.
-    //   5. If the engine returns a next question, send it back via the
-    //      Cloud API messages endpoint (POST /<phone-number-id>/messages
-    //      with the WABA access token).
-    //   6. When the engine finalises, build the brief HTML + JSON, flip
-    //      the screened_leads row to status='triaging', fire the new-lead
-    //      notification email.
-    //   7. Idempotency: skip processing if Meta retried the same mid
-    //      (dedup via a per-firm mid cache or upsert with mid as key).
+
+    // Engine integration. For each inbound text message:
+    //   1. Resolve phoneNumberId → firm via
+    //      intake_firms.whatsapp_phone_number_id (unique).
+    //   2. Run channel-intake-processor in waitUntil. Meta gets a fast
+    //      200 ACK while the engine + LLM work runs in the background.
+    //   3. If no firm matches, log and drop.
+    //
+    // Multi-turn follow-up via the Cloud API Send endpoint
+    // (POST /<phone-number-id>/messages) is out of scope for the App
+    // Review demo. Single-shot brief generation from the first inbound
+    // message is enough for the reviewer to see a lead appear in triage.
+    for (const event of messageEvents) {
+      // Only process inbound text (we logged non-text inbound above).
+      if (event.messageType !== 'text') continue;
+
+      const firm = await resolveFirmByWhatsappPhoneNumberId(event.phoneNumberId);
+      if (!firm) {
+        console.warn(
+          `[whatsapp-intake] no firm mapped to whatsapp_phone_number_id=${event.phoneNumberId}; dropping mid=${event.mid}`,
+        );
+        continue;
+      }
+
+      const sender: WhatsAppSender = {
+        channel: 'whatsapp',
+        senderWaId: event.senderWaId,
+        senderName: event.senderName,
+        messageMid: event.mid,
+        phoneNumberId: event.phoneNumberId,
+        displayPhoneNumber: null,
+      };
+
+      waitUntil(
+        processChannelInbound({
+          firmId: firm.firmId,
+          text: event.text,
+          sender,
+        })
+          .then((res) => {
+            if (res.persisted) {
+              console.log(
+                `[whatsapp-intake] persisted lead=${res.leadId} firm=${firm.firmName} status=${res.status} band=${res.band ?? '-'}`,
+              );
+            } else {
+              console.warn(
+                `[whatsapp-intake] not persisted firm=${firm.firmName} reason=${res.reason ?? 'unknown'}`,
+              );
+            }
+          })
+          .catch((err) => {
+            console.error(
+              `[whatsapp-intake] processChannelInbound threw firm=${firm.firmName} mid=${event.mid}:`,
+              err,
+            );
+          }),
+      );
+    }
   }
 
   if (statusEvents.length > 0) {

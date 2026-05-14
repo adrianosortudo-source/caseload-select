@@ -184,6 +184,9 @@ The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), 
 | `/portal/[firmId]/triage/[leadId]` | Single brief view. Renders `brief_html` verbatim, sticky Take/Pass action bar at bottom. |
 | `POST /api/intake-v2` | Persistence endpoint — Screen 2.0 POSTs here. Demo skip on missing/invalid firmId. Fires `declined_oos` webhook for OOS leads. |
 | `POST /api/voice-intake` | Voice channel persistence endpoint (DR-033). Receives the GHL Voice AI post-call webhook payload, runs the screen engine server-side on the transcript, inserts a `screened_leads` row with `channel='voice'`, fires the new-lead notification. Sibling to `/api/intake-v2`, not a modification of it. Requires `@google/generative-ai` and `GEMINI_API_KEY` for LLM extraction (best-effort; regex-only if the key is missing). |
+| `GET/POST /api/messenger-intake` | Meta Messenger webhook. GET is the hub.verify_token handshake; POST verifies HMAC, resolves firm by Page ID via `intake_firms.facebook_page_id`, runs the engine via `channel-intake-processor` in `waitUntil` so Meta gets a fast 200 ACK while engine + LLM work (5-15s) happen in the background. `screened_leads.slot_answers.channel='facebook'`. Wired to engine end-to-end as of Block 2 of Meta App Review prep. |
+| `GET/POST /api/instagram-intake` | Meta Instagram DM webhook. Same shape as Messenger. Resolves firm by IG Business Account ID via `intake_firms.instagram_business_account_id`. `channel='instagram'`. |
+| `GET/POST /api/whatsapp-intake` | Meta WhatsApp Cloud API webhook. Different payload shape (entry.changes[].value.messages[]). Resolves firm by Phone Number ID via `intake_firms.whatsapp_phone_number_id`. Ignores non-text inbound (image/audio/document) and statuses-only payloads (delivery receipts). `channel='whatsapp'`. |
 | `POST /api/portal/request-link` | Lawyer-initiated magic link. Resolves email via `intake_firms.branding.lawyer_email`. Always 200 to block enumeration. |
 | `GET /api/portal/[firmId]/triage` | Queue API endpoint. Same data as the page. |
 | `GET /api/portal/[firmId]/triage/[leadId]` | Brief API endpoint. |
@@ -257,7 +260,10 @@ src/
     ├── webhook-outbox.ts / -pure.ts                    # At-least-once delivery + backoff
     ├── triage-sort.ts                                  # Pure queue comparator
     ├── decision-timer.ts                               # Pure timer math
-    └── screened-leads-labels.ts                        # Display labels
+    ├── screened-leads-labels.ts                        # Display labels
+    ├── firm-resolver.ts                                # Meta asset ID → firm lookup (3 channels)
+    ├── channel-intake-processor.ts                     # Shared server-side engine pipeline for Meta inbound (Block 2)
+    └── oos-area-labels.ts                              # OOS practice-area display labels (shared)
 ```
 
 ### Cron scheduling — Supabase pg_cron + pg_net
@@ -297,8 +303,13 @@ Screen 2.0 produces lead briefs from seven input channels. The engine is the sam
 | Channel | Inbound surface | Engine where it runs | Endpoint |
 |---|---|---|---|
 | Web widget | Vite SPA (`caseload-screen-v2.vercel.app`) | Client-side (sandbox engine) | `POST /api/intake-v2` (this app, receives pre-rendered brief) |
-| WhatsApp / SMS / Instagram / Facebook / GBP | Vite SPA tabs (production handlers TBD per channel) | Client-side (sandbox engine) | `POST /api/intake-v2` (same persistence path) |
+| Facebook Messenger | Meta webhook to a connected FB Page | Server-side via `lib/channel-intake-processor` | `POST /api/messenger-intake` (resolves firm by `intake_firms.facebook_page_id`) |
+| Instagram DM | Meta webhook to a connected IG Business Account | Server-side via `lib/channel-intake-processor` | `POST /api/instagram-intake` (resolves firm by `intake_firms.instagram_business_account_id`) |
+| WhatsApp | Meta Cloud API webhook to a connected Phone Number | Server-side via `lib/channel-intake-processor` | `POST /api/whatsapp-intake` (resolves firm by `intake_firms.whatsapp_phone_number_id`) |
+| SMS / GBP | Vite SPA tabs (production handlers TBD per channel) | Client-side (sandbox engine) | `POST /api/intake-v2` (same persistence path) |
 | Voice | GHL Voice AI inbound calls | Server-side (this app at `src/lib/screen-engine/`, mirrored from sandbox) | `POST /api/voice-intake` (this app, builds brief from transcript) |
+
+The three Meta-channel receivers share `lib/channel-intake-processor.ts` so the engine pipeline (initialiseState → seed sender → evidence pass → LLM extract → buildReport → render brief HTML → insert into `screened_leads` → fire new-lead notification → fire OOS webhook if needed) is identical across them. Firm resolution lives in `lib/firm-resolver.ts`. Asset-ID columns on `intake_firms` (added 2026-05-14): `facebook_page_id`, `instagram_business_account_id`, `whatsapp_phone_number_id`, each with a partial unique index. Receivers HMAC-verify via `lib/meta-webhook-auth.ts`, ACK 200 within ~1-2s, and run the engine in `waitUntil` so Meta does not retry on the 5-15s LLM call.
 
 The engine port at `src/lib/screen-engine/` is a byte-for-byte mirror of the sandbox `src/engine/`. Discipline: changes land in both repos in the same commit, enforced by `bash scripts/check-engine-sync.sh`. See CRM Bible DR-033 for the architecture decision.
 
