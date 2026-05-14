@@ -1,16 +1,28 @@
 /**
- * Admin domain management  -  no CRON_SECRET needed (admin UI is operator-only).
+ * Admin domain management — operator-only.
  *
  * POST   /api/admin/domain   { firm_id, domain } → add domain
  * DELETE /api/admin/domain   { firm_id }         → remove domain
  * GET    /api/admin/domain   ?firmId=xxx         → get domain + Vercel status
+ *
+ * Auth: requireOperator() on every method. Closes Jim Manico audit
+ * APP-001 (the route was the gate, not the UI; previously anyone on the
+ * public internet could POST to hijack a firm's custom_domain, redirect
+ * the firm's portal to attacker-controlled DNS, and exfil lawyer
+ * sessions on the path-'/' cookie). Domain ownership verification
+ * (TXT-record challenge before write) is a follow-up; current gate
+ * relies on operator trust.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { addVercelDomain, removeVercelDomain, getVercelDomainStatus } from "@/lib/vercel-domains";
+import { requireOperator } from "@/lib/admin-auth";
 
 export async function GET(req: NextRequest) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const firmId = req.nextUrl.searchParams.get("firmId");
   if (!firmId) return NextResponse.json({ error: "firmId required" }, { status: 400 });
 
@@ -35,6 +47,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { firm_id, domain } = await req.json() as { firm_id?: string; domain?: string };
   if (!firm_id || !domain) {
     return NextResponse.json({ error: "firm_id and domain required" }, { status: 400 });
@@ -78,6 +93,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { firm_id } = await req.json() as { firm_id?: string };
   if (!firm_id) return NextResponse.json({ error: "firm_id required" }, { status: 400 });
 

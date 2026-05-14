@@ -13,6 +13,7 @@
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import type { WebhookPayload } from "@/lib/ghl-webhook-pure";
 import { enqueueWebhook, recordAttempt } from "@/lib/webhook-outbox";
+import { safeFetch } from "@/lib/safe-outbound-fetch";
 
 export {
   buildTakenPayload,
@@ -50,27 +51,26 @@ export async function postToWebhookUrl(
   payload: WebhookPayload,
 ): Promise<WebhookDeliveryResult> {
   if (!url || !url.trim()) return { fired: false, reason: "no webhook url" };
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    return {
-      fired: res.ok,
-      reason: res.ok ? undefined : `http ${res.status}`,
-      http_status: res.status,
-    };
-  } catch (err) {
-    return {
-      fired: false,
-      reason: err instanceof Error ? err.message : String(err),
-    };
-  }
+
+  // SSRF protection — Jim Manico audit APP-003. The firm's webhook URL
+  // is operator-controlled and stored in intake_firms.ghl_webhook_url.
+  // safeFetch resolves the hostname, blocks RFC 1918 / link-local /
+  // loopback / cloud-metadata IPs, enforces an http(s)-only scheme
+  // allow-list, and bounds the timeout. Without this, a tampered
+  // intake_firms row could redirect lead PII into a private network
+  // service or the cloud metadata endpoint.
+  const result = await safeFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    timeoutMs: HTTP_TIMEOUT_MS,
+  });
+
+  return {
+    fired: result.ok,
+    reason: result.ok ? undefined : (result.reason ?? undefined),
+    http_status: result.status ?? undefined,
+  };
 }
 
 /**
