@@ -103,14 +103,19 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // /widget/* matched first so the more-specific rule wins. Next.js
-        // headers() ordering: routes are matched in declaration order, so
-        // putting /widget/:path* before the catch-all gives it precedence.
+        // /widget/* gets the embeddable header set (no frame-ancestors lock,
+        // no X-Frame-Options).
         source: "/widget/:path*",
         headers: widgetSecurityHeaders,
       },
       {
-        source: "/:path*",
+        // Catch-all for EVERYTHING that is NOT /widget/*. Negative lookahead
+        // is required here because Next.js headers() MERGES headers from
+        // every matching rule rather than letting the more-specific rule win
+        // outright — without this exclusion, the widget would receive both
+        // its embeddable set AND the strict main-app set, and the latter's
+        // X-Frame-Options: DENY would block iframe embedding by firms.
+        source: "/((?!widget/).*)",
         headers: mainSecurityHeaders,
       },
     ];
