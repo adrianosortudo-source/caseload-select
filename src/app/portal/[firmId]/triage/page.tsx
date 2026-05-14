@@ -21,7 +21,7 @@ import { matterLabel, subtrackLabel } from "@/lib/screened-leads-labels";
 import { sortTriageRows } from "@/lib/triage-sort";
 import { intakeLanguageLabel } from "@/lib/intake-language-label";
 import DecisionTimer from "@/components/portal/DecisionTimer";
-import RefreshOnFocus from "@/components/portal/RefreshOnFocus";
+import TriageRefresh from "@/components/portal/TriageRefresh";
 
 interface QueueRow {
   lead_id: string;
@@ -94,7 +94,7 @@ export default async function TriageQueuePage({
 
   return (
     <div className="space-y-5">
-      <RefreshOnFocus />
+      <TriageRefresh streamCheckUrl={`/api/portal/${firmId}/triage/stream-check`} />
       <Header count={totalCount} />
       <BandFilterRow firmId={firmId} active={bandFilter} counts={counts} />
       {rows.length === 0 ? (

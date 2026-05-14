@@ -20,7 +20,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { matterLabel, subtrackLabel } from "@/lib/screened-leads-labels";
 import { sortTriageRows } from "@/lib/triage-sort";
 import DecisionTimer from "@/components/portal/DecisionTimer";
-import RefreshOnFocus from "@/components/portal/RefreshOnFocus";
+import TriageRefresh from "@/components/portal/TriageRefresh";
 import FirmFilter from "@/components/admin/FirmFilter";
 
 interface QueueRow {
@@ -93,7 +93,7 @@ export default async function AdminTriagePage({
 
   return (
     <div className="space-y-5">
-      <RefreshOnFocus />
+      <TriageRefresh streamCheckUrl="/api/admin/triage/stream-check" />
       <Header count={totalCount} />
       <FilterRow
         active={bandFilter}
