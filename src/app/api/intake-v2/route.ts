@@ -236,6 +236,11 @@ export async function POST(req: NextRequest) {
       screen_version: 2,
       status: initialStatus,
       status_changed_by: initialChangedBy,
+      // APP-006: role column added 2026-05-14. New rows are
+      // created by the system (or system:backstop on declined OOS);
+      // a lawyer or operator only enters the picture on later
+      // take/pass.
+      status_changed_by_role: "system",
       brief_json: v.brief_json,
       brief_html: sanitizedBriefHtml,
       slot_answers: v.slot_answers,

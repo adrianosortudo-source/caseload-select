@@ -97,12 +97,22 @@ export async function POST(
   // re-fire. The reverse would leave the cadence engaged for a row still
   // showing as triaging.
   const now = new Date();
+  // APP-006 (Jim Manico audit): persist the lawyer_id from the session
+  // token (or "operator" for operator-actor calls) so the audit trail
+  // is identity-bound, not just role-bound. Falls back to "lawyer"
+  // string when an old token without lawyer_id is presented (no
+  // session migration needed; lawyer_id was added later).
+  const actorId: string =
+    session.role === "operator"
+      ? "operator"
+      : (session.lawyer_id ?? "lawyer");
   const { error: updateErr } = await supabase
     .from("screened_leads")
     .update({
       status: "taken",
       status_changed_at: now.toISOString(),
-      status_changed_by: actor,
+      status_changed_by: actorId,
+      status_changed_by_role: actor,
     })
     .eq("lead_id", leadId)
     .eq("firm_id", firmId)

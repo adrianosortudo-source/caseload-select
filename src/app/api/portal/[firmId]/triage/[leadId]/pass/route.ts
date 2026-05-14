@@ -103,12 +103,19 @@ export async function POST(
 
   // Update first.
   const now = new Date();
+  // APP-006 (Jim Manico audit): identity-bound audit trail. Mirrors
+  // the take route's actorId resolution.
+  const actorId: string =
+    session.role === "operator"
+      ? "operator"
+      : (session.lawyer_id ?? "lawyer");
   const { error: updateErr } = await supabase
     .from("screened_leads")
     .update({
       status: "passed",
       status_changed_at: now.toISOString(),
-      status_changed_by: actor,
+      status_changed_by: actorId,
+      status_changed_by_role: actor,
       status_note: note, // null when not provided; lookup honours empty as no override
     })
     .eq("lead_id", leadId)

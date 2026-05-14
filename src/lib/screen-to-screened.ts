@@ -296,6 +296,9 @@ export async function writeScreenedLeadFromScreen(
     screen_version: 1,
     status: initialStatus,
     status_changed_by: "system:legacy-screen",
+    // APP-006: role column added 2026-05-14. The dual-write at
+    // /api/screen finalize is a system-initiated row.
+    status_changed_by_role: "system",
     brief_json: briefJson,
     brief_html: briefHtml,
     slot_answers: slotAnswers,

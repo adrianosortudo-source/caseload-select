@@ -99,6 +99,7 @@ export async function GET(req: NextRequest) {
           status: "declined",
           status_changed_at: nowIso,
           status_changed_by: "system:backstop",
+          status_changed_by_role: "system:backstop",
         },
         { count: "exact" },
       )

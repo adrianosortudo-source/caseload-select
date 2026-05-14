@@ -297,6 +297,8 @@ export async function POST(req: NextRequest) {
       screen_version: 2,
       status: initialStatus,
       status_changed_by: initialChangedBy,
+      // APP-006: see intake-v2/route.ts companion comment.
+      status_changed_by_role: "system",
       brief_json: report,
       brief_html: briefHtml,
       slot_answers: slotAnswers,
