@@ -116,10 +116,26 @@ const COOKIE_BASE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "lax" as const,
-  // Path "/" so the cookie rides along on /api/portal/* fetches from client
-  // components (Take/Pass action bar). Earlier "/portal" caused 401 on
-  // /api/* fetches. The cookie is httpOnly + HMAC-signed; broader path does
-  // not widen the attack surface.
+  // Path "/" — DEFENSE-IN-DEPTH NOTE (Jim Manico audit APP-010).
+  //
+  // Cookie rides along on /api/portal/* and /api/admin/* fetches from
+  // client components (Take/Pass action bar, operator console actions).
+  // An earlier "/portal" scope caused 401 on /api/* fetches because the
+  // browser would not attach the cookie to the API origin path.
+  //
+  // The cookie is httpOnly + HMAC-signed + 30-day-max so a stolen
+  // cookie is bounded by signature validity, but the broad path means:
+  //
+  //   ANY future /api/* route that reads session-derived data MUST
+  //   verify the firm scope on the loaded row, not just trust the
+  //   cookie's presence. The Take/Pass routes do exactly this: they
+  //   reload the screened_leads row, compare row.firm_id to URL.firmId,
+  //   and return 404 on mismatch. Mirror that pattern on any new route.
+  //
+  // If you add an /api/* route under a different concern (e.g. a public
+  // /api/webhooks/* with no session needs), the cookie still rides
+  // along; that route must ignore the session cookie entirely rather
+  // than treat it as authorization.
   path: "/",
 } as const;
 
