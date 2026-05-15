@@ -961,12 +961,45 @@ const FRANC_TO_LANG: Record<string, SupportedLanguage> = {
 // confirms the language on the same turn-1 call via __detected_language.
 const FRANC_CONFIDENCE_THRESHOLD = 0.7;
 
+// Short-text English tie-breaker constants. franc's score is RELATIVE (top
+// result always 1.0, rest are scaled ratios), so the confidence threshold
+// above never filters anything in practice. On short inputs the trigram
+// signal is weak and franc routinely ranks Spanish, Catalan, or Portuguese
+// above English on obviously-English text. When the input is short and
+// English sits anywhere in the result list with a score close to the
+// leader, prefer English.
+//
+// Calibration: genuine non-English short inputs cap English's relative score
+// at roughly 0.72; misranked English inputs keep English's relative score
+// at 0.93 or higher. A tie-breaker score of 0.85 sits safely in the gap.
+// Char limit 60 covers the longest observed misranked English (54 chars,
+// "I want a lawyer to review my preconstruction agreement"); past that
+// length franc reliably puts English at rank 1 with no need for a fallback.
+//
+// Asymmetry rationale: a false positive (real French marked English) costs
+// one LLM round-trip via the existing Gemini __detected_language confirmation
+// path. A false negative (real English marked Spanish, the current bug)
+// skips the regex classifier entirely per DR-029 + DR-035, sending every
+// short English lead through the slow LLM-only routing path forever.
+const SHORT_TEXT_THRESHOLD_CHARS = 60;
+const ENGLISH_TIEBREAKER_SCORE = 0.85;
+
 function detectLanguage(input: string): { language: SupportedLanguage; confirmed: boolean } {
   // francAll returns [[code, score], ...] ordered by descending confidence.
   // The 'only' filter restricts to our six languages for accuracy on short inputs.
   const results = francAll(input, { only: [...SUPPORTED_FRANC_CODES], minLength: 5 });
   if (!results.length) return { language: 'en', confirmed: false };
+
   const [topCode, topScore] = results[0] as [string, number];
+
+  // Short-text English bias (see constants above for rationale).
+  if (input.length < SHORT_TEXT_THRESHOLD_CHARS) {
+    const englishCandidate = results.find(([code]) => code === 'eng');
+    if (englishCandidate && (englishCandidate[1] as number) >= ENGLISH_TIEBREAKER_SCORE) {
+      return { language: 'en', confirmed: true };
+    }
+  }
+
   const mapped = FRANC_TO_LANG[topCode];
   if (!mapped) return { language: 'en', confirmed: false };
   return { language: mapped, confirmed: topScore >= FRANC_CONFIDENCE_THRESHOLD };
