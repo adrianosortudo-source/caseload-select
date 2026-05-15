@@ -40,8 +40,6 @@ import {
   clampAxis,
 } from '@/lib/intake-v2-derive';
 import { notifyLawyersOfNewLead } from '@/lib/lead-notify';
-import { loadDeclineCandidates, resolveDecline } from '@/lib/decline-resolver';
-import { buildDeclinedOosPayload, fireGhlWebhook, type LeadFacts } from '@/lib/ghl-webhook';
 import { waitUntil } from '@vercel/functions';
 import { initialiseState } from '@/lib/screen-engine/extractor';
 import { runEvidencePass } from '@/lib/screen-engine/slotEvidence';
@@ -59,21 +57,6 @@ import {
   VOICE_SIGNATURE_HEADER,
 } from '@/lib/voice-webhook-auth';
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from '@/lib/rate-limit';
-
-// Practice-area display labels for the OOS decline copy interpolation.
-// Mirrors the same constant in intake-v2/route.ts (duplicated rather than
-// extracted to a shared file because the directive on this patch is "do
-// not modify intake-v2"; if the duplicate ever drifts, the doctrine fix
-// is to lift this into `lib/oos-area-labels.ts` and have both routes
-// import from there).
-const OOS_AREA_LABELS: Record<string, string> = {
-  family: 'family law',
-  immigration: 'immigration',
-  employment: 'employment',
-  criminal: 'criminal',
-  personal_injury: 'personal injury',
-  estates: 'wills and estates',
-};
 
 interface VoiceIntakeBody {
   caller_phone?: string;
@@ -277,12 +260,14 @@ export async function POST(req: NextRequest) {
   const briefHtml = renderBriefHtmlServer(report, 'voice', state.language);
   const completeness = computeCoreCompleteness(state);
   const bandResult = computeBand(state);
-  const band: Band | null = state.matter_type === 'out_of_scope' ? null : bandResult.band;
+  // OOS now carries band='D' per the 2026-05-15 doctrine flip; the engine
+  // assigns the band, the route doesn't override it.
+  const band: Band | null = bandResult.band;
 
   // ── Derived flags (same helpers as intake-v2) ──────────────────────────
   const now = new Date();
   const axes = report.four_axis;
-  const decisionDeadline = computeDecisionDeadline(axes.urgency, now);
+  const decisionDeadline = computeDecisionDeadline(axes.urgency, now, state.matter_type);
   const whaleNurture = computeWhaleNurture(axes.value, axes.readiness);
   const { status: initialStatus, changedBy: initialChangedBy } =
     computeInitialStatus(state.matter_type);
@@ -351,62 +336,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ── OOS auto-decline webhook (parity with /api/intake-v2) ───────────────
-  // Fired AFTER insert succeeds so the webhook never goes out for a row
-  // that did not land. Same payload shape as intake-v2's declined_oos path
-  // so the GHL workflow downstream sees an identical body regardless of
-  // whether the source was web or voice. Best-effort delivery; failure
-  // does not roll back the insert.
-  if (state.matter_type === 'out_of_scope') {
-    try {
-      const practiceArea = state.practice_area;
-      const candidates = await loadDeclineCandidates({
-        firmId: firmIdParam,
-        practiceArea,
-        perLeadOverride: null,
-      });
-      const areaLabel = OOS_AREA_LABELS[practiceArea] ?? 'this practice area';
-      const verdict = resolveDecline(candidates, 'oos', areaLabel);
-
-      const facts: LeadFacts = {
-        lead_id: state.lead_id,
-        firm_id: firmIdParam,
-        band: null,
-        matter_type: state.matter_type,
-        practice_area: practiceArea,
-        submitted_at: state.submitted_at ?? now.toISOString(),
-        contact_name: state.slots['client_name'] ?? callerName ?? null,
-        contact_email: state.slots['client_email'] ?? null,
-        contact_phone: state.slots['client_phone'] ?? callerPhone ?? null,
-        // Voice OOS path: include the caller's language so the envelope is
-        // not silently defaulted to English by buildEnvelope (DR-036). Voice
-        // calls in non-English get correct intake_language in the webhook
-        // common envelope so GHL workflows can branch on language for
-        // translated decline templates.
-        intake_language: state.language ?? 'en',
-      };
-      const payload = buildDeclinedOosPayload({
-        facts,
-        statusChangedAt: now,
-        declineSubject: verdict.subject,
-        declineBody: verdict.body,
-        declineSource: verdict.source,
-        detectedAreaLabel: areaLabel,
-      });
-      // Fire and forget. Observable via the firm's GHL inbox or (Phase 3)
-      // the webhook_outbox table; never surfaced to the Voice AI caller.
-      waitUntil(fireGhlWebhook(firmIdParam, payload));
-    } catch (err) {
-      // Webhook resolution or dispatch failed; the row still persists. Log
-      // for Vercel function logs; do not abort the response.
-      console.error('[voice-intake] declined_oos webhook failed:', err);
-    }
-  }
-
   // ── Lead notification email (best-effort) ──────────────────────────────
-  // Doctrine (2026-05-14): "The system filters attention, never visibility."
-  // Both 'triaging' and 'declined' notify the lawyer. See lib/lead-notify-pure
-  // for the rendering split between the two lifecycle states.
+  // Doctrine (2026-05-15): "The engine sorts attention, the lawyer decides
+  // outcome." OOS voice calls now carry band='D' and status='triaging' so
+  // the lawyer can Refer / Take / Pass. The decline-with-grace GHL cadence
+  // fires only on lawyer-initiated Pass or the deadline backstop.
   if (inserted.status === 'triaging' || inserted.status === 'declined') {
     waitUntil(notifyLawyersOfNewLead({
       firmId: firmIdParam,
@@ -418,6 +352,7 @@ export async function POST(req: NextRequest) {
       decisionDeadlineIso: inserted.decision_deadline,
       whaleNurture: !!inserted.whale_nurture,
       intakeLanguage: state.language ?? 'en',
+      channel: 'voice',
       lifecycleStatus: inserted.status as 'triaging' | 'declined',
     }).catch((err) => {
       console.error('[voice-intake] notifyLawyersOfNewLead failed:', err);

@@ -1,19 +1,20 @@
 /**
  * Triage queue sort key.
  *
- * Lawyers see Band A first, then B, then C, then anything unbanded (which
- * should not happen for in-scope rows; out-of-scope leads auto-decline at
- * intake and never enter the queue, but the fallback keeps the comparator
- * total when the column is unexpectedly null).
+ * Lawyers see Band A first, then B, then C, then D (refer-eligible OOS),
+ * then anything unbanded (should not happen for live rows; the fallback
+ * keeps the comparator total in case the column is unexpectedly null).
  *
- * Within each band, earliest decision_deadline ranks first — the most
- * urgent matter at the top regardless of how recently it was submitted.
+ * Band D ranks below A/B/C because OOS / refer-eligible matters are the
+ * lowest priority for "act now" attention. Within each band, earliest
+ * decision_deadline ranks first — the most urgent matter at the top
+ * regardless of how recently it was submitted.
  */
 
-const BAND_ORDER: Record<string, number> = { A: 0, B: 1, C: 2 };
+const BAND_ORDER: Record<string, number> = { A: 0, B: 1, C: 2, D: 3 };
 
 export interface TriageSortable {
-  band: "A" | "B" | "C" | null;
+  band: "A" | "B" | "C" | "D" | null;
   decision_deadline: string;
 }
 

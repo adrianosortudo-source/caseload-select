@@ -20,12 +20,13 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { matterLabel, subtrackLabel } from "@/lib/screened-leads-labels";
 import { sortTriageRows } from "@/lib/triage-sort";
 import { intakeLanguageLabel } from "@/lib/intake-language-label";
+import { channelLabel, channelBadgeClasses } from "@/lib/channel-labels";
 import DecisionTimer from "@/components/portal/DecisionTimer";
 import TriageRefresh from "@/components/portal/TriageRefresh";
 
 interface QueueRow {
   lead_id: string;
-  band: "A" | "B" | "C" | null;
+  band: "A" | "B" | "C" | "D" | null;
   matter_type: string;
   practice_area: string;
   value_score: number | null;
@@ -39,6 +40,7 @@ interface QueueRow {
   contact_name: string | null;
   submitted_at: string;
   brief_json: { matter_snapshot?: string; fee_estimate?: string } | null;
+  slot_answers: { channel?: string } | null;
   intake_language: string | null;
 }
 
@@ -81,7 +83,7 @@ export default async function TriageQueuePage({
       value_score, complexity_score, urgency_score, readiness_score,
       readiness_answered, whale_nurture, band_c_subtrack,
       decision_deadline, contact_name, submitted_at, brief_json,
-      intake_language
+      slot_answers, intake_language
     `)
     .eq("firm_id", firmId)
     .eq("status", dbStatus);
@@ -286,6 +288,7 @@ function QueueCard({
   const snapshot = row.brief_json?.matter_snapshot ?? matterLabel(row.matter_type);
   const subtrack = subtrackLabel(row.band_c_subtrack);
   const simplicity = row.complexity_score === null ? null : 10 - row.complexity_score;
+  const channel = row.slot_answers?.channel ?? null;
   const langLabel = intakeLanguageLabel(row.intake_language);
   const isDeclined = view === "declined";
 
@@ -319,6 +322,11 @@ function QueueCard({
             {subtrack && (
               <span className="text-[10px] uppercase tracking-wider font-semibold bg-parchment-2 text-black/70 px-2 py-0.5 border border-black/10">
                 {subtrack}
+              </span>
+            )}
+            {channel && (
+              <span className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 border ${channelBadgeClasses(channel)}`}>
+                {channelLabel(channel)}
               </span>
             )}
             {langLabel && (
@@ -374,11 +382,12 @@ function QueueCard({
   );
 }
 
-function BandBadge({ band }: { band: "A" | "B" | "C" | null }) {
+function BandBadge({ band }: { band: "A" | "B" | "C" | "D" | null }) {
   const colour =
     band === "A" ? "bg-emerald-100 text-emerald-900 border-emerald-300"
     : band === "B" ? "bg-amber-100 text-amber-900 border-amber-300"
     : band === "C" ? "bg-stone-100 text-stone-700 border-stone-300"
+    : band === "D" ? "bg-slate-100 text-slate-700 border-slate-300"
                    : "bg-stone-50 text-stone-500 border-stone-200";
   return (
     <span

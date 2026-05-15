@@ -18,6 +18,7 @@ import { notFound } from "next/navigation";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { matterLabel, subtrackLabel } from "@/lib/screened-leads-labels";
 import { intakeLanguageLabel } from "@/lib/intake-language-label";
+import { channelLabel, channelBadgeClasses } from "@/lib/channel-labels";
 import DecisionTimer from "@/components/portal/DecisionTimer";
 import TriageActionBar from "@/components/portal/TriageActionBar";
 import "./brief.css";
@@ -25,10 +26,10 @@ import "./brief.css";
 interface LeadRow {
   lead_id: string;
   firm_id: string;
-  status: "triaging" | "taken" | "passed" | "declined";
+  status: "triaging" | "taken" | "passed" | "declined" | "referred";
   brief_html: string;
   brief_json: { matter_snapshot?: string } | null;
-  band: "A" | "B" | "C" | null;
+  band: "A" | "B" | "C" | "D" | null;
   matter_type: string;
   whale_nurture: boolean;
   band_c_subtrack: string | null;
@@ -36,6 +37,7 @@ interface LeadRow {
   submitted_at: string;
   contact_name: string | null;
   intake_language: string | null;
+  slot_answers: { channel?: string; voice_meta?: { recording_url?: string | null } } | null;
 }
 
 export const dynamic = "force-dynamic";
@@ -53,7 +55,8 @@ export default async function TriageLeadPage({
     .select(`
       lead_id, firm_id, status, brief_html, brief_json,
       band, matter_type, whale_nurture, band_c_subtrack,
-      decision_deadline, submitted_at, contact_name, intake_language
+      decision_deadline, submitted_at, contact_name, intake_language,
+      slot_answers
     `)
     .eq("lead_id", leadId)
     .maybeSingle();
@@ -70,13 +73,15 @@ export default async function TriageLeadPage({
 
   const row = data as LeadRow;
   const subtrack = subtrackLabel(row.band_c_subtrack);
+  const channel = row.slot_answers?.channel ?? null;
+  const recordingUrl = row.slot_answers?.voice_meta?.recording_url ?? null;
 
   const langLabel = intakeLanguageLabel(row.intake_language);
 
   return (
     <div className="space-y-4 pb-32">
       <BackLink firmId={firmId} />
-      <Header row={row} subtrack={subtrack} />
+      <Header row={row} subtrack={subtrack} channel={channel} recordingUrl={recordingUrl} />
       {row.status !== "triaging" && <StatusBanner status={row.status} />}
       {langLabel && <LanguageCallout label={langLabel} />}
       <BriefFrame html={row.brief_html} />
@@ -101,7 +106,17 @@ function BackLink({ firmId }: { firmId: string }) {
   );
 }
 
-function Header({ row, subtrack }: { row: LeadRow; subtrack: string | null }) {
+function Header({
+  row,
+  subtrack,
+  channel,
+  recordingUrl,
+}: {
+  row: LeadRow;
+  subtrack: string | null;
+  channel: string | null;
+  recordingUrl: string | null;
+}) {
   return (
     <div className="bg-white border border-black/10 px-4 sm:px-6 py-4 sm:py-5">
       <div className="flex items-start justify-between gap-4 sm:gap-6 flex-wrap">
@@ -130,6 +145,22 @@ function Header({ row, subtrack }: { row: LeadRow; subtrack: string | null }) {
               </span>
             )}
           </div>
+          <div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-wider">
+            <span className="text-black/50">Inbound via</span>
+            <span className={`px-2 py-0.5 border ${channelBadgeClasses(channel)}`}>
+              {channelLabel(channel)}
+            </span>
+            {channel === 'voice' && recordingUrl && (
+              <a
+                href={recordingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] font-semibold text-black/50 hover:text-navy underline"
+              >
+                Listen to recording
+              </a>
+            )}
+          </div>
         </div>
         <div className="shrink-0">
           <DecisionTimer
@@ -143,11 +174,12 @@ function Header({ row, subtrack }: { row: LeadRow; subtrack: string | null }) {
   );
 }
 
-function BandBadge({ band }: { band: "A" | "B" | "C" | null }) {
+function BandBadge({ band }: { band: "A" | "B" | "C" | "D" | null }) {
   const colour =
     band === "A" ? "bg-emerald-100 text-emerald-900 border-emerald-300"
     : band === "B" ? "bg-amber-100 text-amber-900 border-amber-300"
     : band === "C" ? "bg-stone-100 text-stone-700 border-stone-300"
+    : band === "D" ? "bg-slate-100 text-slate-700 border-slate-300"
                    : "bg-stone-50 text-stone-500 border-stone-200";
   return (
     <span
@@ -176,7 +208,8 @@ function StatusBanner({ status }: { status: LeadRow["status"] }) {
   const text =
     status === "taken"    ? "This lead has been taken. Cadence engaged."
     : status === "passed"  ? "This lead has been passed. Decline-with-grace fired."
-    : status === "declined" ? "This lead was auto-declined."
+    : status === "referred" ? "This lead has been referred. Awaiting downstream cadence."
+    : status === "declined" ? "This lead was declined by the engine."
                             : "";
   return (
     <div className="bg-parchment-2 border border-black/10 px-4 py-3 text-sm text-black/70">

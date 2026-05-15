@@ -22,7 +22,7 @@ interface CommonEnvelope {
   action: WebhookAction;
   lead_id: string;
   firm_id: string;
-  band: "A" | "B" | "C" | null;
+  band: "A" | "B" | "C" | "D" | null;
   matter_type: string;
   practice_area: string;
   submitted_at: string;
@@ -36,7 +36,7 @@ interface CommonEnvelope {
 export interface LeadFacts {
   lead_id: string;
   firm_id: string;
-  band: "A" | "B" | "C" | null;
+  band: "A" | "B" | "C" | "D" | null;
   matter_type: string;
   practice_area: string;
   submitted_at: string;
@@ -74,15 +74,19 @@ function buildEnvelope(
 
 // ─── Cadence target mapping ──────────────────────────────────────────────────
 
-export function cadenceTargetForBand(band: "A" | "B" | "C" | null): "band_a" | "band_b" | "band_c" {
+export function cadenceTargetForBand(
+  band: "A" | "B" | "C" | "D" | null,
+): "band_a" | "band_b" | "band_c" | "band_d" {
   if (band === "A") return "band_a";
   if (band === "B") return "band_b";
+  if (band === "D") return "band_d";
   return "band_c";
 }
 
-export function lawyerActionForBand(band: "A" | "B" | "C" | null): string {
+export function lawyerActionForBand(band: "A" | "B" | "C" | "D" | null): string {
   if (band === "A") return "Call same day";
   if (band === "B") return "Send a booking link";
+  if (band === "D") return "Refer to a colleague or pass";
   return "Lawyer choice: booking link or pass";
 }
 
@@ -91,7 +95,7 @@ export function lawyerActionForBand(band: "A" | "B" | "C" | null): string {
 export interface TakenPayload extends CommonEnvelope {
   action: "taken";
   taken: {
-    cadence_target: "band_a" | "band_b" | "band_c";
+    cadence_target: "band_a" | "band_b" | "band_c" | "band_d";
     lawyer_recommended_action: string;
     fee_estimate: string | null;
     matter_snapshot: string | null;

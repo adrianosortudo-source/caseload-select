@@ -6,17 +6,18 @@ import { useRouter } from "next/navigation";
 interface Props {
   firmId: string;
   leadId: string;
-  band: "A" | "B" | "C" | null;
-  initialStatus: "triaging" | "taken" | "passed" | "declined";
+  band: "A" | "B" | "C" | "D" | null;
+  initialStatus: "triaging" | "taken" | "passed" | "declined" | "referred";
 }
 
 type Mode = "idle" | "submitting" | "pass-modal" | "error";
 
-const ACTION_LABEL = {
+const ACTION_LABEL: Record<string, string> = {
   A: "Take · Call same day",
   B: "Take · Send booking link",
   C: "Take · Engage cadence",
-} as const;
+  D: "Take · Engage cadence",
+};
 
 export default function TriageActionBar({ firmId, leadId, band, initialStatus }: Props) {
   const [status, setStatus] = useState(initialStatus);

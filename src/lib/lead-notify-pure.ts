@@ -13,6 +13,7 @@
 import { matterLabel, practiceAreaLabel } from "@/lib/screened-leads-labels";
 import { formatRemaining } from "@/lib/decision-timer";
 import { intakeLanguageLabel } from "@/lib/intake-language-label";
+import { channelLabel } from "@/lib/channel-labels";
 
 /**
  * Lifecycle status that drives the email's visual treatment AND subject prefix.
@@ -37,11 +38,13 @@ export interface NewLeadEmailInput {
   firstName: string;            // contact first name; "this lead" if unknown
   matterType: string;
   practiceArea: string;
-  band: "A" | "B" | "C" | null;
+  band: "A" | "B" | "C" | "D" | null;
   decisionDeadlineIso: string;
   whaleNurture: boolean;
   briefUrl: string;             // absolute URL to /portal/[firmId]/triage/[leadId]
   intakeLanguage?: string | null; // ISO 639-1 code; omitted / null for English
+  /** Inbound channel. Omit or null for web (default, no suffix in subject). */
+  channel?: string | null;
   /** Defaults to 'triaging' for backward compat with older callers. */
   lifecycleStatus?: LifecycleStatus;
   now?: Date;
@@ -68,14 +71,17 @@ export interface NewLeadEmail {
  * the inbox so the lawyer's primary triage queue surface is not diluted.
  */
 export function buildNewLeadSubject(input: NewLeadEmailInput): string {
-  const { firstName, matterType, practiceArea, band, lifecycleStatus } = input;
+  const { firstName, matterType, practiceArea, band, lifecycleStatus, channel } = input;
   const matter = matterLabel(matterType);
+  const channelSuffix = (channel && channel !== 'web')
+    ? ` (via ${channelLabel(channel)})`
+    : '';
   if (lifecycleStatus === "declined") {
     const area = practiceAreaLabel(practiceArea);
-    return `[Auto-filtered] ${firstName} · matter flagged as ${area}`;
+    return `[Auto-filtered] ${firstName} · matter flagged as ${area}${channelSuffix}`;
   }
   const prefix = band ? `Priority ${band}` : "New lead";
-  return `${prefix} — ${firstName} · ${matter}`;
+  return `${prefix} — ${firstName} · ${matter}${channelSuffix}`;
 }
 
 /**
@@ -102,6 +108,7 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
     whaleNurture,
     briefUrl,
     intakeLanguage,
+    channel,
     lifecycleStatus = "triaging",
     now = new Date(),
   } = input;
@@ -111,6 +118,9 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
   const langLabel = intakeLanguageLabel(intakeLanguage ?? null);
   const langNote = langLabel
     ? `<div style="margin-top:6px;font-size:12px;color:#1E3A5F;font-family:'Oxanium',Arial,sans-serif;letter-spacing:0.08em;text-transform:uppercase;">Intake language: ${escapeHtml(langLabel)} · Brief translated to English</div>`
+    : "";
+  const channelNote = (channel && channel !== 'web')
+    ? `<div style="margin-top:6px;font-size:12px;color:#1E3A5F;font-family:'Oxanium',Arial,sans-serif;letter-spacing:0.08em;text-transform:uppercase;">Inbound via: ${escapeHtml(channelLabel(channel))}</div>`
     : "";
 
   // Two distinct visual treatments. Triaging is the "act now" email; declined
@@ -137,6 +147,7 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
     <div style="margin-top:10px;font-family:'DM Sans',Arial,sans-serif;font-size:13px;line-height:1.5;color:#0D1520;">
       The screen engine classified this matter as out of scope for your practice and sent the contact a polite decline-with-grace response. No action required from you. If the engine got it wrong, open the brief and move the lead back to triage.
     </div>
+    ${channelNote}
     ${langNote}`;
   } else {
     const remainingMs = new Date(decisionDeadlineIso).getTime() - now.getTime();
@@ -154,6 +165,7 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
     <div style="margin-top:10px;font-family:'DM Sans',Arial,sans-serif;font-size:13px;line-height:1.5;color:#0D1520;">
       Decision window: <strong style="font-weight:700;color:#1E2F58;">${escapeHtml(remaining)}</strong> left to Take or Pass before the backstop fires the decline-with-grace cadence.
     </div>
+    ${channelNote}
     ${langNote}
     ${whaleNote}`;
   }

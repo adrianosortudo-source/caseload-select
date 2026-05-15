@@ -448,9 +448,9 @@ function bandOutOfScope(state: EngineState): BandResult {
   };
   const area = areaLabels[state.practice_area] ?? 'this practice area';
   return {
-    band: 'C',
+    band: 'D',
     confidence: 30,
-    reasoning: `Lead detected as ${area}. Outside the matter packs currently configured. Forward to the firm with the area flagged so triage staff can route it manually.`,
+    reasoning: `Lead detected as ${area}. Out of scope for the firm's configured matter packs. Refer-eligible: pass to a colleague who handles this area, take if the engine misclassified, or decline-with-grace.`,
     coreCompleteness: 0,
   };
 }
@@ -533,6 +533,7 @@ export function bandLabel(band: Band): string {
     A: 'High Priority · Call first',
     B: 'Mid Priority · Standard callback',
     C: 'Low Priority · Standard follow-up cadence',
+    D: 'Refer-eligible · Out of scope for this firm',
   };
   return labels[band];
 }

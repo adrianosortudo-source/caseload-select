@@ -68,6 +68,36 @@ describe("buildNewLeadSubject", () => {
       "New lead — Mike · Out of Scope · Forwarded",
     );
   });
+
+  it("appends '(via WhatsApp)' to triaging subject when channel is whatsapp", () => {
+    expect(buildNewLeadSubject({ ...baseInput, channel: "whatsapp" })).toBe(
+      "Priority A — Sarah · Shareholder Dispute (via WhatsApp)",
+    );
+  });
+
+  it("appends channel suffix to declined subject when channel is non-web", () => {
+    expect(buildNewLeadSubject({ ...declinedInput, channel: "instagram" })).toBe(
+      "[Auto-filtered] Mike · matter flagged as Family Law (via Instagram DM)",
+    );
+  });
+
+  it("does not append channel suffix when channel is 'web'", () => {
+    expect(buildNewLeadSubject({ ...baseInput, channel: "web" })).toBe(
+      "Priority A — Sarah · Shareholder Dispute",
+    );
+  });
+
+  it("does not append channel suffix when channel is null", () => {
+    expect(buildNewLeadSubject({ ...baseInput, channel: null })).toBe(
+      "Priority A — Sarah · Shareholder Dispute",
+    );
+  });
+
+  it("does not append channel suffix when channel is omitted", () => {
+    expect(buildNewLeadSubject(baseInput)).toBe(
+      "Priority A — Sarah · Shareholder Dispute",
+    );
+  });
 });
 
 describe("buildNewLeadHtml", () => {
@@ -191,6 +221,47 @@ describe("buildNewLeadHtml", () => {
     });
     expect(html).toContain("Intake language");
     expect(html).toContain("Portuguese");
+  });
+
+  it("includes 'Inbound via' and the channel name in the body for non-web channels", () => {
+    const html = buildNewLeadHtml({
+      ...baseInput,
+      channel: "whatsapp",
+      decisionDeadlineIso: deadline,
+      now,
+    });
+    expect(html).toContain("Inbound via");
+    expect(html).toContain("WhatsApp");
+  });
+
+  it("omits the 'Inbound via' note when channel is 'web'", () => {
+    const html = buildNewLeadHtml({
+      ...baseInput,
+      channel: "web",
+      decisionDeadlineIso: deadline,
+      now,
+    });
+    expect(html).not.toContain("Inbound via");
+  });
+
+  it("omits the 'Inbound via' note when channel is omitted", () => {
+    const html = buildNewLeadHtml({
+      ...baseInput,
+      decisionDeadlineIso: deadline,
+      now,
+    });
+    expect(html).not.toContain("Inbound via");
+  });
+
+  it("includes channel note in declined emails for non-web channels", () => {
+    const html = buildNewLeadHtml({
+      ...declinedInput,
+      channel: "facebook",
+      decisionDeadlineIso: deadline,
+      now,
+    });
+    expect(html).toContain("Inbound via");
+    expect(html).toContain("Facebook Messenger");
   });
 });
 

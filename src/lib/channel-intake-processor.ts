@@ -49,9 +49,6 @@ import {
   clampAxis,
 } from '@/lib/intake-v2-derive';
 import { notifyLawyersOfNewLead } from '@/lib/lead-notify';
-import { loadDeclineCandidates, resolveDecline } from '@/lib/decline-resolver';
-import { buildDeclinedOosPayload, fireGhlWebhook, type LeadFacts } from '@/lib/ghl-webhook';
-import { OOS_AREA_LABELS } from '@/lib/oos-area-labels';
 import { initialiseState } from '@/lib/screen-engine/extractor';
 import { runEvidencePass } from '@/lib/screen-engine/slotEvidence';
 import { mergeLlmResults } from '@/lib/screen-engine/llm/extractor';
@@ -233,12 +230,14 @@ export async function processChannelInbound(
   const report = buildReport(state);
   const briefHtml = renderBriefHtmlServer(report, channel, state.language);
   const bandResult = computeBand(state);
-  const band: Band | null = state.matter_type === 'out_of_scope' ? null : bandResult.band;
+  // OOS now carries band='D' (refer-eligible) per the 2026-05-15 doctrine
+  // flip; the engine owns the band assignment.
+  const band: Band | null = bandResult.band;
 
   // ── Derived flags (same helpers as intake-v2 + voice-intake) ───────────
   const now = new Date();
   const axes = report.four_axis;
-  const decisionDeadline = computeDecisionDeadline(axes.urgency, now);
+  const decisionDeadline = computeDecisionDeadline(axes.urgency, now, state.matter_type);
   const whaleNurture = computeWhaleNurture(axes.value, axes.readiness);
   const { status: initialStatus, changedBy: initialChangedBy } =
     computeInitialStatus(state.matter_type);
@@ -339,63 +338,12 @@ export async function processChannelInbound(
     };
   }
 
-  // ── OOS auto-decline webhook (parity with /api/intake-v2, voice-intake) ─
-  // Fired AFTER insert succeeds so the webhook never goes out for a row
-  // that did not land. Same payload shape so GHL workflows downstream
-  // process channel-sourced OOS identically to web/voice OOS.
-  if (state.matter_type === 'out_of_scope') {
-    try {
-      const practiceArea = state.practice_area;
-      const candidates = await loadDeclineCandidates({
-        firmId,
-        practiceArea,
-        perLeadOverride: null,
-      });
-      const areaLabel = OOS_AREA_LABELS[practiceArea] ?? 'this practice area';
-      const verdict = resolveDecline(candidates, 'oos', areaLabel);
-
-      const facts: LeadFacts = {
-        lead_id: state.lead_id,
-        firm_id: firmId,
-        band: null,
-        matter_type: state.matter_type,
-        practice_area: practiceArea,
-        submitted_at: state.submitted_at ?? now.toISOString(),
-        contact_name: state.slots['client_name'] ?? sender.senderName ?? null,
-        contact_email: state.slots['client_email'] ?? null,
-        contact_phone:
-          state.slots['client_phone'] ??
-          (sender.channel === 'whatsapp'
-            ? `+${sender.senderWaId.replace(/^\+/, '')}`
-            : null),
-        intake_language: state.language ?? 'en',
-      };
-      const payload = buildDeclinedOosPayload({
-        facts,
-        statusChangedAt: now,
-        declineSubject: verdict.subject,
-        declineBody: verdict.body,
-        declineSource: verdict.source,
-        detectedAreaLabel: areaLabel,
-      });
-      // Fire-and-forget. Logged in webhook_outbox; never surfaced to Meta.
-      // No waitUntil here: the caller already wraps processChannelInbound in
-      // waitUntil at the route boundary, so this nested promise is awaited
-      // by the same outer waitUntil.
-      await fireGhlWebhook(firmId, payload).catch((err) => {
-        console.error('[channel-intake] declined_oos webhook failed:', err);
-      });
-    } catch (err) {
-      console.error('[channel-intake] declined_oos resolution failed:', err);
-    }
-  }
-
   // ── Lead notification (best-effort) ────────────────────────────────────
-  // Doctrine (2026-05-14): "The system filters attention, never visibility."
-  // Both 'triaging' and 'declined' notify the lawyer. Subject + body copy
-  // differ so the lawyer's inbox makes the distinction obvious without
-  // forcing them to open every auto-filtered message. See
-  // `lib/lead-notify-pure.ts` for the rendering split.
+  // Doctrine (2026-05-15): "The engine sorts attention, the lawyer decides
+  // outcome." OOS leads now carry band='D' and status='triaging'; the
+  // notification still fires so the lawyer sees the matter and can Refer /
+  // Take / Pass. The decline-with-grace GHL cadence only fires on lawyer-
+  // initiated Pass (or the deadline backstop), no longer at intake.
   if (inserted.status === 'triaging' || inserted.status === 'declined') {
     await notifyLawyersOfNewLead({
       firmId,
@@ -407,6 +355,7 @@ export async function processChannelInbound(
       decisionDeadlineIso: inserted.decision_deadline as string,
       whaleNurture: !!inserted.whale_nurture,
       intakeLanguage: state.language ?? 'en',
+      channel: sender.channel,
       lifecycleStatus: inserted.status as 'triaging' | 'declined',
     }).catch((err) => {
       console.error('[channel-intake] notifyLawyersOfNewLead failed:', err);

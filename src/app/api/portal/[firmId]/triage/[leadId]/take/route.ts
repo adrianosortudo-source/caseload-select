@@ -29,8 +29,8 @@ interface BriefJson {
 interface LeadRow {
   lead_id: string;
   firm_id: string;
-  status: "triaging" | "taken" | "passed" | "declined";
-  band: "A" | "B" | "C" | null;
+  status: "triaging" | "taken" | "passed" | "declined" | "referred";
+  band: "A" | "B" | "C" | "D" | null;
   matter_type: string;
   practice_area: string;
   submitted_at: string;

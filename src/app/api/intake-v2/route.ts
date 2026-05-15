@@ -26,7 +26,7 @@
  *     submitted_at:   ISO timestamp string,
  *     matter_type:    string,
  *     practice_area:  string,
- *     band:           "A" | "B" | "C" | null,
+ *     band:           "A" | "B" | "C" | "D" | null,
  *     axes: {
  *       value:              0-10,
  *       complexity:         0-10,    -- engine-internal (drag); displayed as Simplicity
@@ -63,23 +63,10 @@ import {
   computeInitialStatus,
   clampAxis,
 } from "@/lib/intake-v2-derive";
-import { loadDeclineCandidates, resolveDecline } from "@/lib/decline-resolver";
-import { buildDeclinedOosPayload, fireGhlWebhook, type LeadFacts } from "@/lib/ghl-webhook";
 import { waitUntil } from "@vercel/functions";
 import { notifyLawyersOfNewLead } from "@/lib/lead-notify";
 import { originAllowed, validateIntakeBody, sanitizeBriefHtml } from "@/lib/intake-v2-security";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
-
-// Practice-area display labels for the OOS decline copy interpolation. Matches
-// the engine's labels in the screen for consistency with what the lead saw.
-const OOS_AREA_LABELS: Record<string, string> = {
-  family: "family law",
-  immigration: "immigration",
-  employment: "employment",
-  criminal: "criminal",
-  personal_injury: "personal injury",
-  estates: "wills and estates",
-};
 
 interface IntakeAxes {
   value: number;
@@ -94,7 +81,7 @@ interface IntakeBody {
   submitted_at?: string;
   matter_type?: string;
   practice_area?: string;
-  band?: 'A' | 'B' | 'C' | null;
+  band?: 'A' | 'B' | 'C' | 'D' | null;
   axes?: IntakeAxes;
   brief_json?: unknown;
   brief_html?: string;
@@ -225,14 +212,18 @@ export async function POST(req: NextRequest) {
   const matterType = v.matter_type;
   const band = v.band;
 
+  // Channel is stored inside slot_answers by the Vite SPA. Extract it here
+  // so we can pass it to the notification without a second DB read.
+  const inboundChannel =
+    ((v.slot_answers as { channel?: string } | null)?.channel) ?? 'web';
+
   // ── Derived flags ──────────────────────────────────────────────────────────
   const now = new Date();
-  const decisionDeadline = computeDecisionDeadline(axes.urgency, now);
+  const decisionDeadline = computeDecisionDeadline(axes.urgency, now, matterType);
   const whaleNurture = computeWhaleNurture(axes.value, axes.readiness);
-  // OOS auto-fires decline immediately (CRM Bible v5 DR-006). The decline-
-  // with-grace cadence trigger to GHL is fired by the same mechanism that
-  // handles lawyer-initiated Pass; that wiring lives in the portal sprint,
-  // not this endpoint. Here we only set the initial lifecycle status.
+  // Doctrine (2026-05-15): every lead lands as `triaging`. OOS matters carry
+  // band='D' so the lawyer can Refer / Take / Pass. Decline-with-grace only
+  // fires on lawyer-initiated Pass or the deadline backstop, never at intake.
   const { status: initialStatus, changedBy: initialChangedBy } = computeInitialStatus(matterType);
 
   // band_c_subtrack: deferred. The Bible defines three sub-tracks qualitatively
@@ -294,54 +285,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // OOS auto-decline webhook (CRM Bible v5 DR-006). Fired AFTER insert succeeds
-  // so a webhook never goes out for a row that did not land. Best-effort
-  // delivery; failure does not roll back the insert.
-  if (matterType === 'out_of_scope') {
-    const candidates = await loadDeclineCandidates({
-      firmId: firmIdParam,
-      practiceArea: v.practice_area,
-      perLeadOverride: null,
-    });
-    const areaLabel = OOS_AREA_LABELS[v.practice_area] ?? "this practice area";
-    const verdict = resolveDecline(candidates, "oos", areaLabel);
-
-    const facts: LeadFacts = {
-      lead_id: v.lead_id,
-      firm_id: firmIdParam,
-      band: null,
-      matter_type: matterType,
-      practice_area: v.practice_area,
-      submitted_at: v.submitted_at ?? now.toISOString(),
-      contact_name: v.contact?.name ?? null,
-      contact_email: v.contact?.email ?? null,
-      contact_phone: v.contact?.phone ?? null,
-      intake_language: v.intake_language ?? 'en',
-    };
-    const payload = buildDeclinedOosPayload({
-      facts,
-      statusChangedAt: now,
-      declineSubject: verdict.subject,
-      declineBody: verdict.body,
-      declineSource: verdict.source,
-      detectedAreaLabel: areaLabel,
-    });
-    // Fire and forget — we don't surface delivery state to the screen, which
-    // already moved on. The result is observable via the firm's GHL inbox or
-    // (Phase 3) the webhook_outbox table.
-    waitUntil(fireGhlWebhook(firmIdParam, payload));
-  }
-
-  // Lead notification email. Doctrine (2026-05-14): "The system filters
-  // attention, never visibility." Both 'triaging' and 'declined' notify the
-  // lawyer so they have full visibility of who tried to contact them.
-  // Different subject + body copy per lifecycle state — see
-  // lib/lead-notify-pure for the rendering split. The OOS decline-with-grace
-  // GHL webhook still fires above, this email is additive.
+  // Lead notification email. Doctrine (2026-05-15): "The engine sorts
+  // attention, the lawyer decides outcome." OOS leads now carry band='D'
+  // and status='triaging' so the lawyer can Refer / Take / Pass. The
+  // decline-with-grace GHL cadence fires only on lawyer-initiated Pass
+  // or the deadline backstop, never at intake.
   if (inserted.status === "triaging" || inserted.status === "declined") {
     // Narrow band to the email-render shape. Declined OOS rows have band=null.
-    const notifyBand: "A" | "B" | "C" | null =
-      band === "A" || band === "B" || band === "C" ? band : null;
+    const notifyBand: "A" | "B" | "C" | "D" | null =
+      band === "A" || band === "B" || band === "C" || band === "D" ? band : null;
     waitUntil(notifyLawyersOfNewLead({
       firmId: firmIdParam,
       leadId: inserted.lead_id,
@@ -352,6 +304,7 @@ export async function POST(req: NextRequest) {
       decisionDeadlineIso: inserted.decision_deadline,
       whaleNurture: !!inserted.whale_nurture,
       intakeLanguage: v.intake_language ?? 'en',
+      channel: inboundChannel,
       lifecycleStatus: inserted.status as "triaging" | "declined",
     }).catch((err) => {
       // Visible in Vercel function logs; not surfaced to the screen.

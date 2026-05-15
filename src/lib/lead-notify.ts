@@ -42,10 +42,12 @@ export interface NotifyArgs {
   contactName: string | null;
   matterType: string;
   practiceArea: string;
-  band: "A" | "B" | "C" | null;
+  band: "A" | "B" | "C" | "D" | null;
   decisionDeadlineIso: string;
   whaleNurture: boolean;
   intakeLanguage?: string | null;
+  /** Inbound channel code. Omit or null for web (default). */
+  channel?: string | null;
   /**
    * Drives the email's visual treatment and subject prefix. Defaults to
    * 'triaging' for backward compat with legacy callers; new call sites must
@@ -141,6 +143,7 @@ export async function notifyLawyersOfNewLead(args: NotifyArgs): Promise<NotifyRe
     whaleNurture: args.whaleNurture,
     briefUrl,
     intakeLanguage: args.intakeLanguage ?? null,
+    channel: args.channel ?? null,
     lifecycleStatus: args.lifecycleStatus ?? "triaging",
   };
 

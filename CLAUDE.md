@@ -289,6 +289,8 @@ The two lifecycle states render differently in the inbox so the lawyer's attenti
 - **Triaging email** — subject prefix `Priority A —` / `New lead —`. Shows decision-window countdown, prompts Take / Pass. CTA: "Open the brief".
 - **Declined email** — subject prefix `[Auto-filtered]`. Explains what the engine flagged and why, states that the contact already received the standard decline-with-grace response, and tells the lawyer how to override if the engine got it wrong. CTA: "Review the brief".
 
+**Channel-aware subject suffix:** when the inbound channel is anything other than `web`, the subject appends ` (via <label>)` — e.g. `Priority B — Sarah · Wrongful Dismissal (via WhatsApp)`. Web leads are silent (most common channel). The status panel in the email body also shows an "Inbound via" line for non-web channels. Implemented in `lib/lead-notify-pure.ts` using `lib/channel-labels.ts`.
+
 All four entry points fire notifications for both states: `/api/intake-v2` (web), `/api/voice-intake` (GHL Voice AI), and the three Meta-channel receivers via `lib/channel-intake-processor`. Builders are pure (`lib/lead-notify-pure.ts`); I/O wrapper (`lib/lead-notify.ts`) resolves recipients and dispatches via Resend. Best-effort — failure does not block intake. Falls back to legacy `branding.lawyer_email` when no firm_lawyers row exists. OOS leads ALSO fire the `declined_oos` GHL re-engagement webhook in addition to the email — the two paths are independent.
 
 ### Compliance pages

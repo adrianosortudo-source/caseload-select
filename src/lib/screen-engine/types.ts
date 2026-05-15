@@ -45,7 +45,7 @@ export type DisputeFamily =
   | 'general_real_estate'
   | 'unknown';
 
-export type Band = 'A' | 'B' | 'C';
+export type Band = 'A' | 'B' | 'C' | 'D';
 
 export type StepType =
   | 'clarify'
