@@ -175,6 +175,10 @@ The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), 
 | `screened_leads` | Main store for Screen 2.0 output. Brief JSON + brief HTML + slot answers, four-axis scores, lifecycle status, decision deadline, derived flags (whale_nurture, band_c_subtrack). Migration: `20260505_screened_leads.sql`. Lifecycle enum hard-enforced: `triaging` / `taken` / `passed` / `declined`. |
 | `firm_decline_templates` | Per-firm and per-practice-area decline copy. Three-layer resolver: `screened_leads.status_note` (per-lead override) → per-PA → firm default → system fallback in `lib/decline-resolver-pure`. Migration: `20260505_firm_decline_templates.sql`. |
 | `webhook_outbox` | At-least-once delivery store for outbound GHL webhooks. Idempotency-keyed on `(lead_id, action)`. Migration: `20260505_webhook_outbox.sql`. |
+| `unconfirmed_inquiries` | Contact-capture doctrine reject store. Rows that fail the gate (missing name AND/OR reachability) land here, NEVER in `screened_leads`, NEVER in the triage portal. Ops visibility only. Reasons: `no_contact_provided` / `abandoned` / `engine_refused`. Migration: `20260516_unconfirmed_inquiries.sql`. |
+| `channel_intake_sessions` | Multi-turn intake sessions for Meta channels (Messenger / Instagram / WhatsApp). Distinct from `public.intake_sessions` which powers the web widget. Holds `engine_state` (serialized `EngineState`) for resume on next inbound from the same `(firm_id, channel, sender_id)`. Finalised once contact is captured (screened lead created) or `max_follow_ups=3` exhausted (moved to `unconfirmed_inquiries`). Migration: `20260516_channel_intake_sessions.sql`. |
+| `intake_firms.facebook_page_access_token` | Meta Page access token used by Messenger Send + Instagram Send (IG inherits the linked Page's token). SECRET. service-role read only. Migration: `20260516_intake_firms_meta_access_tokens.sql`. |
+| `intake_firms.whatsapp_cloud_api_access_token` | WhatsApp Cloud API access token. SECRET. service-role read only. Migration: `20260516_intake_firms_meta_access_tokens.sql`. |
 
 ### Routes
 
@@ -226,6 +230,7 @@ Versioned artifact at `docs/ghl-webhook-contract.md`. Five actions (`taken`, `pa
 | Decline copy resolution | per-lead override → per-PA → firm default → system fallback |
 | Webhook delivery | At-least-once via `webhook_outbox`, exponential backoff, max 5 attempts |
 | Band D doctrine (2026-05-15) | **Engine sorts attention, lawyer decides outcome.** All inbound — in-scope and OOS — lands as `status='triaging'`. OOS carries `band='D'` (refer-eligible) with a 96h decision window. Auto-decline is removed from the intake path; decline-with-grace fires only on lawyer-initiated Pass or the deadline backstop. Band D card surfaces **Refer · Take · Pass**. `'declined'` is reserved for future engine-spam / abuse handling. The triage portal swaps the prior "Declined" tab for a "History" tab covering `passed / referred / declined`. Supersedes the 2026-05-14 visibility doctrine. |
+| Contact-capture doctrine (2026-05-15) | **No contact, no lead.** Triggered by a Family Law smoke test that produced a "Forwarded to firm" brief with zero contact fields populated — the lawyer had no way to reach the person. Required for persistence: `client_name` AND (`client_email` OR `client_phone`). Briefs that fail the gate land in `unconfirmed_inquiries`, NEVER in `screened_leads`, NEVER in the triage portal. Engine `buildReport()` computes `LawyerReport.contact_complete`; every route (`/api/intake-v2`, `/api/voice-intake`, Meta receivers via `channel-intake-processor`) checks it before insert. Meta channels add multi-turn follow-up: state persists in `channel_intake_sessions`, a follow-up question is sent via the channel's Send API (Messenger / Instagram / WhatsApp), and after `MAX_FOLLOW_UPS=3` failed attempts the row moves to `unconfirmed_inquiries` with `reason='engine_refused'`. Hourly cron `/api/cron/expire-channel-intake-sessions` sweeps abandoned sessions to `unconfirmed_inquiries` with `reason='abandoned'`. Engine system prompt rule 9 instructs the LLM to ask for name + (email OR phone) and never finalise without them. Voice auto-passes via caller-ID phone seeding; if Voice AI fails to capture the name the row lands as `unconfirmed_inquiry` (SMS follow-back deferred). |
 
 ### Source files (key map)
 
@@ -245,7 +250,8 @@ src/
 │   │   │           └── refer/route.ts                  # Refer action (Band D primary)
 │   │   ├── cron/
 │   │   │   ├── triage-backstop/route.ts                # Deadline-expiry sweeper
-│   │   │   └── webhook-retry/route.ts                  # Outbox retry sweeper
+│   │   │   ├── webhook-retry/route.ts                  # Outbox retry sweeper
+│   │   │   └── expire-channel-intake-sessions/route.ts # Abandoned multi-turn session sweeper (contact-doctrine, hourly)
 │   │   └── admin/webhook-outbox/
 │   │       ├── route.ts                                # Operator listing
 │   │       └── [outboxId]/retry/route.ts               # Manual retry
@@ -268,7 +274,14 @@ src/
     ├── decision-timer.ts                               # Pure timer math
     ├── screened-leads-labels.ts                        # Display labels
     ├── firm-resolver.ts                                # Meta asset ID → firm lookup (3 channels)
-    ├── channel-intake-processor.ts                     # Shared server-side engine pipeline for Meta inbound (Block 2)
+    ├── channel-intake-processor.ts                     # Shared server-side engine pipeline + multi-turn contact-capture loop
+    ├── channel-intake-session-store.ts                 # Load/save/finalise channel_intake_sessions
+    ├── channel-send.ts                                 # Channel-agnostic Send dispatcher + follow-up phrasing
+    ├── messenger-send.ts                               # Messenger Send API client
+    ├── instagram-send.ts                               # Instagram Send API client (inherits Page token)
+    ├── whatsapp-send.ts                                # WhatsApp Cloud API Send client
+    ├── unconfirmed-inquiry.ts                          # persist to unconfirmed_inquiries (contact-doctrine reject path)
+    ├── screen-engine/contact-doctrine.ts               # isContactComplete / evaluateContactGate (byte-for-byte mirror with sandbox)
     └── oos-area-labels.ts                              # OOS practice-area display labels (shared)
 ```
 
@@ -531,6 +544,9 @@ All migrations idempotent. Run in order:
 11. `20260414_j7_welcome_onboarding.sql` — seeds J7 Welcome/Onboarding template (4-touch, client_won trigger)
 12. `20260512_intake_language_and_raw_transcript.sql` — adds `intake_language TEXT` and `raw_transcript TEXT` to `screened_leads` (multilingual build, Ses.8)
 13. `20260515_band_d_and_referred_status.sql` — extends `band` CHECK to include `'D'`, extends `status` CHECK to include `'referred'`, backfills pre-existing OOS-declined rows to `band='D', status='triaging'` (Band D doctrine flip, 2026-05-15)
+14. `20260516_unconfirmed_inquiries.sql` — contact-capture doctrine reject store (APPLIED 2026-05-15)
+15. `20260516_channel_intake_sessions.sql` — Meta-channel multi-turn intake sessions (APPLIED 2026-05-15)
+16. `20260516_intake_firms_meta_access_tokens.sql` — `facebook_page_access_token` + `whatsapp_cloud_api_access_token` columns on `intake_firms` (APPLIED 2026-05-15). Tokens must be populated manually per firm (Messenger API Settings → Page access token; WhatsApp API Setup → access token).
 
 ## Retainer Agreement Automation (DEPRECATED — REMOVED FROM SCOPE 2026-05-06)
 

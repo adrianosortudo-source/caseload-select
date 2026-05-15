@@ -1,6 +1,7 @@
 import type { EngineState, LawyerReport, Band, ResolvedFact } from './types';
 import { computeBand, bandLabel, scoreFourAxes, buildAxisReasoning } from './band';
 import { selectNextSlot, getDecisionGap } from './selector';
+import { isContactComplete } from './contact-doctrine';
 
 // ─── Provenance helpers ───────────────────────────────────────────────────
 
@@ -937,6 +938,11 @@ export function buildReport(state: EngineState): LawyerReport {
     inferred_signals: buildInferredSignals(state),
     open_questions: buildOpenQuestions(state),
     risk_flags: buildRiskFlags(state),
+    contact_complete: isContactComplete({
+      client_name: state.slots['client_name'],
+      client_email: state.slots['client_email'],
+      client_phone: state.slots['client_phone'],
+    }),
   };
 }
 

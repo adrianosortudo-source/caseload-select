@@ -375,4 +375,18 @@ export interface LawyerReport {
   inferred_signals: string[];
   open_questions: string[];
   risk_flags: string[];
+  /**
+   * Contact-capture doctrine gate (adopted 2026-05-15).
+   *
+   * True when the engine has captured client_name AND at least one of
+   * client_email or client_phone. False otherwise.
+   *
+   * Receivers branch on this:
+   *   - true  → row is a screened lead, lands in `screened_leads`, lawyer sees it
+   *   - false → row is an unconfirmed inquiry, lands in `unconfirmed_inquiries`,
+   *             NEVER reaches the lawyer's triage portal
+   *
+   * Computed by `buildReport()` via `lib/contact-doctrine.isContactComplete`.
+   */
+  contact_complete: boolean;
 }

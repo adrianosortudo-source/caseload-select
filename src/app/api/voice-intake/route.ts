@@ -57,6 +57,7 @@ import {
   VOICE_SIGNATURE_HEADER,
 } from '@/lib/voice-webhook-auth';
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from '@/lib/rate-limit';
+import { persistUnconfirmedInquiry } from '@/lib/unconfirmed-inquiry';
 
 interface VoiceIntakeBody {
   caller_phone?: string;
@@ -263,6 +264,39 @@ export async function POST(req: NextRequest) {
   // OOS now carries band='D' per the 2026-05-15 doctrine flip; the engine
   // assigns the band, the route doesn't override it.
   const band: Band | null = bandResult.band;
+
+  // ── Contact-capture doctrine gate (2026-05-15) ─────────────────────────
+  // "No contact, no lead." Voice almost always passes — caller_phone is
+  // auto-seeded from caller ID by seedVoiceState, and the Voice AI agent
+  // is expected to ask for the caller's name during the call. But if both
+  // name and phone are still missing at brief-build time (rare: blocked
+  // caller ID + Voice AI failed to capture name), persist as unconfirmed
+  // and skip the screened_leads insert.
+  if (!report.contact_complete) {
+    await persistUnconfirmedInquiry({
+      firmId: firmIdParam,
+      channel: 'voice',
+      senderId: callerPhone ?? null,
+      senderMeta: {
+        call_id: body.call_id ?? null,
+        call_duration_sec: body.call_duration_sec ?? null,
+        recording_url: body.recording_url ?? null,
+        caller_name: callerName,
+      },
+      rawTranscript: transcript,
+      matterType: state.matter_type,
+      practiceArea: state.practice_area,
+      intakeLanguage: state.language ?? 'en',
+      reason: 'no_contact_provided',
+    });
+    return NextResponse.json(
+      {
+        persisted: false,
+        reason: 'awaiting_contact',
+      },
+      { status: 200, headers: CORS_HEADERS },
+    );
+  }
 
   // ── Derived flags (same helpers as intake-v2) ──────────────────────────
   const now = new Date();
