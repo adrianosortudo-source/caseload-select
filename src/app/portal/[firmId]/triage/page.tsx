@@ -27,6 +27,7 @@ import TriageRefresh from "@/components/portal/TriageRefresh";
 interface QueueRow {
   lead_id: string;
   band: "A" | "B" | "C" | "D" | null;
+  status: "triaging" | "taken" | "passed" | "declined" | "referred";
   matter_type: string;
   practice_area: string;
   value_score: number | null;
@@ -47,46 +48,50 @@ interface QueueRow {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type BandFilter = "all" | "A" | "B" | "C";
+type BandFilter = "all" | "A" | "B" | "C" | "D";
 /**
  * Two top-level views:
  *   active   — status='triaging' (default). The lawyer's primary surface.
- *   declined — status='declined'. Auto-filtered leads, kept behind a tab so
- *              the active queue stays focused, but visible per the
- *              2026-05-14 doctrine: "The system filters attention, never
- *              visibility." Lawyer must be aware of every contact attempt.
+ *              OOS leads land here as Band D (refer-eligible) per the
+ *              2026-05-15 doctrine.
+ *   history  — status IN ('passed', 'referred', 'declined'). All terminal
+ *              dispositions. Lawyer audit trail across every finalised
+ *              lead — passes, referrals, and (future) engine-spam declines.
  */
-type LifecycleView = "active" | "declined";
+type LifecycleView = "active" | "history";
+
+const HISTORY_STATUSES = ["passed", "referred", "declined"] as const;
 
 export default async function TriageQueuePage({
   params,
   searchParams,
 }: {
   params: Promise<{ firmId: string }>;
-  searchParams: Promise<{ band?: string; status?: string }>;
+  searchParams: Promise<{ band?: string; view?: string }>;
 }) {
   const { firmId } = await params;
-  const { band: bandRaw, status: statusRaw } = await searchParams;
+  const { band: bandRaw, view: viewRaw } = await searchParams;
   const bandFilter: BandFilter =
-    bandRaw === "A" || bandRaw === "B" || bandRaw === "C" ? bandRaw : "all";
-  const view: LifecycleView = statusRaw === "declined" ? "declined" : "active";
+    bandRaw === "A" || bandRaw === "B" || bandRaw === "C" || bandRaw === "D" ? bandRaw : "all";
+  const view: LifecycleView = viewRaw === "history" ? "history" : "active";
 
-  // Single round-trip: load both active + declined counts and the current
-  // view's rows. Two simple queries — count-only for the OFF tab so we can
-  // display its total in the tab strip without paying for full rows.
-  const dbStatus = view === "declined" ? "declined" : "triaging";
-
-  const { data, error } = await supabase
+  // Active tab: single-status equality query. History tab: IN-list across the
+  // three terminal statuses. Both queries return the same row shape.
+  let query = supabase
     .from("screened_leads")
     .select(`
-      lead_id, band, matter_type, practice_area,
+      lead_id, band, status, matter_type, practice_area,
       value_score, complexity_score, urgency_score, readiness_score,
       readiness_answered, whale_nurture, band_c_subtrack,
       decision_deadline, contact_name, submitted_at, brief_json,
       slot_answers, intake_language
     `)
-    .eq("firm_id", firmId)
-    .eq("status", dbStatus);
+    .eq("firm_id", firmId);
+  query = view === "history"
+    ? query.in("status", HISTORY_STATUSES as unknown as string[])
+    : query.eq("status", "triaging");
+
+  const { data, error } = await query;
 
   if (error) {
     return (
@@ -94,21 +99,20 @@ export default async function TriageQueuePage({
     );
   }
 
-  // Off-tab count (the one not currently rendered) so the lifecycle tabs
-  // show absolute totals not "self-filtered" zeros.
-  const offTabStatus = view === "declined" ? "triaging" : "declined";
-  const { count: offTabCount } = await supabase
+  // Off-tab count so the lifecycle tabs show absolute totals.
+  let offTabQuery = supabase
     .from("screened_leads")
     .select("id", { count: "exact", head: true })
-    .eq("firm_id", firmId)
-    .eq("status", offTabStatus);
+    .eq("firm_id", firmId);
+  offTabQuery = view === "history"
+    ? offTabQuery.eq("status", "triaging")
+    : offTabQuery.in("status", HISTORY_STATUSES as unknown as string[]);
+  const { count: offTabCount } = await offTabQuery;
 
   const allRows = sortTriageRows((data ?? []) as QueueRow[]);
   const totalCount = allRows.length;
-  // Band filter is meaningful only on the Active tab. Declined rows are
-  // mostly band=null (the engine filtered before band assignment) so we
-  // skip the band filter row entirely on the Declined view.
-  const rows = view === "declined" || bandFilter === "all"
+  // Band filter is meaningful only on the Active tab.
+  const rows = view === "history" || bandFilter === "all"
     ? allRows
     : allRows.filter((r) => r.band === bandFilter);
 
@@ -117,19 +121,20 @@ export default async function TriageQueuePage({
     A: allRows.filter((r) => r.band === "A").length,
     B: allRows.filter((r) => r.band === "B").length,
     C: allRows.filter((r) => r.band === "C").length,
+    D: allRows.filter((r) => r.band === "D").length,
   };
 
-  const activeCount = view === "declined" ? (offTabCount ?? 0) : totalCount;
-  const declinedCount = view === "declined" ? totalCount : (offTabCount ?? 0);
-  const streamCheckUrl = view === "declined"
-    ? `/api/portal/${firmId}/triage/stream-check?status=declined`
+  const activeCount = view === "history" ? (offTabCount ?? 0) : totalCount;
+  const historyCount = view === "history" ? totalCount : (offTabCount ?? 0);
+  const streamCheckUrl = view === "history"
+    ? `/api/portal/${firmId}/triage/stream-check?view=history`
     : `/api/portal/${firmId}/triage/stream-check`;
 
   return (
     <div className="space-y-5">
       <TriageRefresh streamCheckUrl={streamCheckUrl} />
       <Header count={totalCount} view={view} />
-      <LifecycleTabRow firmId={firmId} view={view} activeCount={activeCount} declinedCount={declinedCount} />
+      <LifecycleTabRow firmId={firmId} view={view} activeCount={activeCount} historyCount={historyCount} />
       {view === "active" && (
         <BandFilterRow firmId={firmId} active={bandFilter} counts={counts} />
       )}
@@ -152,16 +157,16 @@ function LifecycleTabRow({
   firmId,
   view,
   activeCount,
-  declinedCount,
+  historyCount,
 }: {
   firmId: string;
   view: LifecycleView;
   activeCount: number;
-  declinedCount: number;
+  historyCount: number;
 }) {
   const tabs: Array<{ key: LifecycleView; label: string; count: number; href: string }> = [
     { key: "active", label: "Active", count: activeCount, href: `/portal/${firmId}/triage` },
-    { key: "declined", label: "Declined", count: declinedCount, href: `/portal/${firmId}/triage?status=declined` },
+    { key: "history", label: "History", count: historyCount, href: `/portal/${firmId}/triage?view=history` },
   ];
   return (
     <div className="flex items-center gap-1.5 flex-wrap border-b border-black/10 pb-3">
@@ -204,6 +209,7 @@ function BandFilterRow({
     { key: "A",   label: "Band A" },
     { key: "B",   label: "Band B" },
     { key: "C",   label: "Band C" },
+    { key: "D",   label: "Band D" },
   ];
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
@@ -236,9 +242,9 @@ function BandFilterRow({
 }
 
 function Header({ count, view }: { count: number; view: LifecycleView }) {
-  const title = view === "declined" ? "Declined queue" : "Active queue";
-  const eyebrow = view === "declined" ? "Auto-filtered leads" : "Lawyer triage";
-  const totalNoun = view === "declined" ? "auto-filtered" : "waiting";
+  const title = view === "history" ? "Lead history" : "Active queue";
+  const eyebrow = view === "history" ? "Finalised leads" : "Lawyer triage";
+  const totalNoun = view === "history" ? "finalised" : "waiting";
   return (
     <div className="flex items-end justify-between">
       <div>
@@ -254,8 +260,8 @@ function Header({ count, view }: { count: number; view: LifecycleView }) {
 
 function EmptyState({ view, filtered }: { view: LifecycleView; filtered?: boolean }) {
   let message: string;
-  if (view === "declined") {
-    message = "No auto-filtered leads yet. Out-of-scope inbound shows up here.";
+  if (view === "history") {
+    message = "No finalised leads yet. Leads you Take, Pass, or Refer land here.";
   } else if (filtered) {
     message = "No leads in this band currently in triage. Try clearing the filter.";
   } else {
@@ -290,13 +296,25 @@ function QueueCard({
   const simplicity = row.complexity_score === null ? null : 10 - row.complexity_score;
   const channel = row.slot_answers?.channel ?? null;
   const langLabel = intakeLanguageLabel(row.intake_language);
-  const isDeclined = view === "declined";
+  const isHistory = view === "history";
+  // Status chip label for History rows.
+  const statusChip = !isHistory
+    ? null
+    : row.status === "passed"
+    ? { label: "Passed", classes: "bg-stone-100 text-stone-700 border-stone-300" }
+    : row.status === "referred"
+    ? { label: "Referred", classes: "bg-slate-100 text-slate-700 border-slate-300" }
+    : row.status === "declined"
+    ? { label: "Declined", classes: "bg-stone-100 text-stone-700 border-stone-300" }
+    : row.status === "taken"
+    ? { label: "Taken", classes: "bg-emerald-100 text-emerald-900 border-emerald-300" }
+    : null;
 
   return (
     <Link
       href={`/portal/${firmId}/triage/${row.lead_id}`}
       className={`block bg-white border transition-colors ${
-        isDeclined
+        isHistory
           ? "border-black/10 hover:border-stone-400 opacity-80 hover:opacity-100"
           : "border-black/10 hover:border-navy"
       }`}
@@ -306,9 +324,9 @@ function QueueCard({
 
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            {isDeclined && (
-              <span className="text-[10px] uppercase tracking-wider font-bold bg-stone-100 text-stone-700 px-2 py-0.5 border border-stone-300">
-                Auto-filtered
+            {statusChip && (
+              <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 border ${statusChip.classes}`}>
+                {statusChip.label}
               </span>
             )}
             <span className="text-xs uppercase tracking-wider font-semibold text-black/60">
@@ -355,11 +373,10 @@ function QueueCard({
 
         <div className="flex flex-col items-start md:items-end gap-2 min-w-[140px]">
           {/*
-            DecisionTimer is only meaningful on triaging rows — declined
-            rows have a deadline that already passed (or never mattered).
-            Show a static "Auto-filtered" stamp instead.
+            DecisionTimer is only meaningful on triaging rows. History rows
+            have a finalised disposition; show a static "Closed" stamp.
           */}
-          {isDeclined ? (
+          {isHistory ? (
             <span className="text-[10px] uppercase tracking-wider font-bold text-stone-500">
               No decision needed
             </span>

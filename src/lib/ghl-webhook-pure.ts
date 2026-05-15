@@ -8,7 +8,12 @@
  * Contract: docs/ghl-webhook-contract.md (the human-readable spec).
  */
 
-export type WebhookAction = "taken" | "passed" | "declined_oos" | "declined_backstop";
+export type WebhookAction =
+  | "taken"
+  | "passed"
+  | "referred"
+  | "declined_oos"
+  | "declined_backstop";
 
 export type DeclineSource = "per_lead_override" | "per_pa" | "firm_default" | "system_fallback";
 
@@ -112,6 +117,16 @@ export interface PassedPayload extends CommonEnvelope {
   };
 }
 
+export interface ReferredPayload extends CommonEnvelope {
+  action: "referred";
+  referred: {
+    /** Freeform recipient name / firm / email — whatever the lawyer typed. */
+    referred_to: string | null;
+    /** Optional internal note attached to the referral. */
+    note: string | null;
+  };
+}
+
 export interface DeclinedOosPayload extends CommonEnvelope {
   action: "declined_oos";
   declined_oos: {
@@ -136,6 +151,7 @@ export interface DeclinedBackstopPayload extends CommonEnvelope {
 export type WebhookPayload =
   | TakenPayload
   | PassedPayload
+  | ReferredPayload
   | DeclinedOosPayload
   | DeclinedBackstopPayload;
 
@@ -179,6 +195,24 @@ export function buildPassedPayload(args: {
       decline_body: args.declineBody,
       decline_template_source: args.declineSource,
       lawyer_note_present: args.lawyerNotePresent,
+    },
+  };
+}
+
+export function buildReferredPayload(args: {
+  facts: LeadFacts;
+  statusChangedAt: Date;
+  statusChangedBy: string;
+  referredTo: string | null;
+  note: string | null;
+}): ReferredPayload {
+  const env = buildEnvelope("referred", args.facts, args.statusChangedAt, args.statusChangedBy);
+  return {
+    ...env,
+    action: "referred",
+    referred: {
+      referred_to: args.referredTo,
+      note: args.note,
     },
   };
 }

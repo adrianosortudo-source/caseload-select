@@ -192,7 +192,8 @@ The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), 
 | `GET /api/portal/[firmId]/triage/[leadId]` | Brief API endpoint. |
 | `POST /api/portal/[firmId]/triage/[leadId]/take` | Take action — flips status to `taken`, fires `taken` webhook. |
 | `POST /api/portal/[firmId]/triage/[leadId]/pass` | Pass action — flips status to `passed`, body `{ note? }`, fires `passed` webhook with resolved decline copy. |
-| `GET /api/cron/triage-backstop` | Backstop sweeper for expired triaging rows. Wired, not scheduled (Hobby plan caps daily). |
+| `POST /api/portal/[firmId]/triage/[leadId]/refer` | Refer action (Band D primary affordance) — flips status to `referred`, body `{ referredTo?, note? }`, fires `referred` webhook. No decline-with-grace cadence; the firm's GHL workflow decides downstream. |
+| `GET /api/cron/triage-backstop` | Backstop sweeper for expired triaging rows. Branches on band: A/B/C expiry → status='declined'; Band D expiry → status='passed' (per 2026-05-15 doctrine). Both fire `declined_backstop`. Wired, not scheduled (Hobby plan caps daily). |
 | `GET /api/cron/webhook-retry` | Outbox retry sweeper. Wired, not scheduled. |
 | `GET /api/admin/webhook-outbox` | Operator-visible delivery log. Accepts CRON_SECRET / PG_CRON_TOKEN bearer or operator session. Filters: `firm_id`, `status`. |
 | `POST /api/admin/webhook-outbox/[outboxId]/retry` | Operator manual retry. Resets attempts to 0. Same auth shape as the listing route. |
@@ -210,18 +211,21 @@ Same HMAC magic-link pattern as the legacy Client Portal (`portal-auth.ts`). 48h
 
 ### GHL webhook contract
 
-Versioned artifact at `docs/ghl-webhook-contract.md`. Four actions (`taken`, `passed`, `declined_oos`, `declined_backstop`), one common envelope, action-specific extension keyed by action name. Idempotency: `<lead_id>:<action>`. Delivery: at-least-once via the outbox.
+Versioned artifact at `docs/ghl-webhook-contract.md`. Five actions (`taken`, `passed`, `referred`, `declined_oos`, `declined_backstop`), one common envelope, action-specific extension keyed by action name. Idempotency: `<lead_id>:<action>`. Delivery: at-least-once via the outbox.
+
+`declined_oos` is dormant in the intake path as of 2026-05-15 — OOS leads now land as Band D triaging and only fire decline-with-grace through lawyer-initiated Pass or the deadline backstop (`declined_backstop`). The action remains in the contract for the deadline-backstop path and any future engine-spam handling.
 
 ### Locked decisions (CRM Bible v5)
 
 | Decision | Value |
 |---|---|
 | Whale nurture trigger | `value_score ≥ 7 AND readiness_score ≤ 4` |
-| Decision-deadline tiers | 48h default; 24h at urgency ≥ 6; 12h at urgency ≥ 8 |
-| Lifecycle states | `triaging` / `taken` / `passed` / `declined` (hard-enforced via DB CHECK constraint) |
+| Decision-deadline tiers | 48h default; 24h at urgency ≥ 6; 12h at urgency ≥ 8; 96h for Band D OOS (urgency overrides apply) |
+| Lifecycle states | `triaging` / `taken` / `passed` / `referred` / `declined` (hard-enforced via DB CHECK constraint) |
+| Bands | `A` / `B` / `C` (in-scope axis lift) / `D` (refer-eligible OOS) |
 | Decline copy resolution | per-lead override → per-PA → firm default → system fallback |
 | Webhook delivery | At-least-once via `webhook_outbox`, exponential backoff, max 5 attempts |
-| Lead visibility (2026-05-14 doctrine) | The system filters attention, never visibility. Both `triaging` and `declined` leads surface to the lawyer via email notification. The triage portal exposes declined leads behind a separate "Declined" tab so the active queue stays focused. Auto-declines still fire the `declined_oos` GHL re-engagement webhook in addition to the lawyer email. |
+| Band D doctrine (2026-05-15) | **Engine sorts attention, lawyer decides outcome.** All inbound — in-scope and OOS — lands as `status='triaging'`. OOS carries `band='D'` (refer-eligible) with a 96h decision window. Auto-decline is removed from the intake path; decline-with-grace fires only on lawyer-initiated Pass or the deadline backstop. Band D card surfaces **Refer · Take · Pass**. `'declined'` is reserved for future engine-spam / abuse handling. The triage portal swaps the prior "Declined" tab for a "History" tab covering `passed / referred / declined`. Supersedes the 2026-05-14 visibility doctrine. |
 
 ### Source files (key map)
 
@@ -237,7 +241,8 @@ src/
 │   │   │       └── [leadId]/
 │   │   │           ├── route.ts                        # Brief API
 │   │   │           ├── take/route.ts                   # Take action
-│   │   │           └── pass/route.ts                   # Pass action
+│   │   │           ├── pass/route.ts                   # Pass action
+│   │   │           └── refer/route.ts                  # Refer action (Band D primary)
 │   │   ├── cron/
 │   │   │   ├── triage-backstop/route.ts                # Deadline-expiry sweeper
 │   │   │   └── webhook-retry/route.ts                  # Outbox retry sweeper
@@ -280,18 +285,19 @@ Auth: routes accept either `CRON_SECRET` or `PG_CRON_TOKEN` via Bearer token (`l
 
 Run history is visible via `cron.job_run_details` and pg_net responses via `net._http_response`.
 
-### Lead notifications (visibility doctrine)
+### Lead notifications (Band D doctrine, 2026-05-15)
 
-Every persisted lead — whether the engine routes it to `status='triaging'` (lawyer decides) or `status='declined'` (engine auto-filtered as out-of-scope) — fires a fan-out email to all `firm_lawyers` rows with `role='lawyer'` for the firm. Doctrine (2026-05-14): "The system filters attention, never visibility." The lawyer must be aware of every person who tried to contact them so they can catch engine misclassifications and handle relationship-level edge cases personally.
+Every persisted lead lands as `status='triaging'` with a band assigned by the engine and fires a fan-out email to all `firm_lawyers` rows with `role='lawyer'` for the firm. Doctrine: "The engine sorts attention, the lawyer decides outcome." OOS matters carry `band='D'` (refer-eligible) with a 96h decision window so the lawyer can Refer / Take / Pass. Auto-decline is removed from the intake path; decline-with-grace fires only on lawyer-initiated Pass or backstop expiry.
 
-The two lifecycle states render differently in the inbox so the lawyer's attention stays on triaging leads:
+Three notification treatments share the navy header band but differ at the subject, eyebrow, status panel, and CTA:
 
-- **Triaging email** — subject prefix `Priority A —` / `New lead —`. Shows decision-window countdown, prompts Take / Pass. CTA: "Open the brief".
-- **Declined email** — subject prefix `[Auto-filtered]`. Explains what the engine flagged and why, states that the contact already received the standard decline-with-grace response, and tells the lawyer how to override if the engine got it wrong. CTA: "Review the brief".
+- **Band A/B/C triaging** — subject prefix `Priority A —` / `New lead —`. Shows decision-window countdown, prompts Take / Pass. CTA: "Open the brief".
+- **Band D triaging (refer-eligible OOS)** — subject `Priority D — Name · Refer opportunity · <Practice Area>`. Status panel explains the matter is outside the firm's practice areas, surfaces the 96h window, and offers Refer / Take / Pass. CTA: "Open the brief".
+- **Declined** (dormant intake-path-wise; reserved for future engine-spam / abuse handling) — subject prefix `[Auto-filtered]`. Builder retained so a future spam-block path can engage it without re-writing.
 
-**Channel-aware subject suffix:** when the inbound channel is anything other than `web`, the subject appends ` (via <label>)` — e.g. `Priority B — Sarah · Wrongful Dismissal (via WhatsApp)`. Web leads are silent (most common channel). The status panel in the email body also shows an "Inbound via" line for non-web channels. Implemented in `lib/lead-notify-pure.ts` using `lib/channel-labels.ts`.
+**Channel-aware subject suffix:** when the inbound channel is anything other than `web`, the subject appends ` (via <label>)` — e.g. `Priority B — Sarah · Wrongful Dismissal (via WhatsApp)`. Web leads are silent (most common channel). The status panel in the email body also shows an "Inbound via" line for non-web channels.
 
-All four entry points fire notifications for both states: `/api/intake-v2` (web), `/api/voice-intake` (GHL Voice AI), and the three Meta-channel receivers via `lib/channel-intake-processor`. Builders are pure (`lib/lead-notify-pure.ts`); I/O wrapper (`lib/lead-notify.ts`) resolves recipients and dispatches via Resend. Best-effort — failure does not block intake. Falls back to legacy `branding.lawyer_email` when no firm_lawyers row exists. OOS leads ALSO fire the `declined_oos` GHL re-engagement webhook in addition to the email — the two paths are independent.
+All four entry points fire notifications: `/api/intake-v2` (web), `/api/voice-intake` (GHL Voice AI), and the three Meta-channel receivers via `lib/channel-intake-processor`. Builders are pure (`lib/lead-notify-pure.ts`); I/O wrapper (`lib/lead-notify.ts`) resolves recipients and dispatches via Resend. Best-effort — failure does not block intake. Falls back to legacy `branding.lawyer_email` when no firm_lawyers row exists.
 
 ### Compliance pages
 
@@ -524,6 +530,7 @@ All migrations idempotent. Run in order:
 10. `20260414_retainer_agreements.sql` — creates retainer_agreements table
 11. `20260414_j7_welcome_onboarding.sql` — seeds J7 Welcome/Onboarding template (4-touch, client_won trigger)
 12. `20260512_intake_language_and_raw_transcript.sql` — adds `intake_language TEXT` and `raw_transcript TEXT` to `screened_leads` (multilingual build, Ses.8)
+13. `20260515_band_d_and_referred_status.sql` — extends `band` CHECK to include `'D'`, extends `status` CHECK to include `'referred'`, backfills pre-existing OOS-declined rows to `band='D', status='triaging'` (Band D doctrine flip, 2026-05-15)
 
 ## Retainer Agreement Automation (DEPRECATED — REMOVED FROM SCOPE 2026-05-06)
 

@@ -34,26 +34,48 @@ const state: MockState = {
 // ?status=declined branch can be asserted.
 const capturedStatus: { values: string[] } = { values: [] };
 
+// Capture both .eq("status", X) AND .in("status", [...]) calls so the
+// view=history branch (which uses .in) can be asserted alongside the
+// existing .eq paths.
+const capturedStatusIn: { values: string[][] } = { values: [] };
+
 vi.mock("@/lib/supabase-admin", () => {
-  const makeQuery = () => ({
-    select: (_cols: string, _opts?: { count?: string; head?: boolean }) => ({
-      eq: (_field: string, _v: unknown) => ({
-        eq: (f2: string, v2: unknown) => {
-          if (f2 === "status" && typeof v2 === "string") {
-            capturedStatus.values.push(v2);
-          }
-          // count path: terminates here (no order/limit/maybeSingle)
-          return Object.assign(Promise.resolve(state.countResult), {
-            order: (_orderBy: string, _opts: unknown) => ({
-              limit: (_n: number) => ({
-                maybeSingle: () => Promise.resolve(state.latestResult),
-              }),
-            }),
-          });
-        },
-      }),
-    }),
-  });
+  const makeQuery = () => {
+    // Terminal that the route awaits — for count queries it is the
+    // initial result; for latest queries the chain goes through order/limit/
+    // maybeSingle below.
+    const terminal = (kind: "count" | "latest") =>
+      Object.assign(Promise.resolve(kind === "count" ? state.countResult : state.latestResult), {
+        order: (_orderBy: string, _opts: unknown) => ({
+          limit: (_n: number) => ({
+            maybeSingle: () => Promise.resolve(state.latestResult),
+          }),
+        }),
+      });
+
+    return {
+      select: (_cols: string, opts?: { count?: string; head?: boolean }) => {
+        const kind: "count" | "latest" = opts?.count === "exact" ? "count" : "latest";
+        const afterFirmEq = {
+          eq: (f2: string, v2: unknown) => {
+            if (f2 === "status" && typeof v2 === "string") {
+              capturedStatus.values.push(v2);
+            }
+            return terminal(kind);
+          },
+          in: (f2: string, v2: string[]) => {
+            if (f2 === "status" && Array.isArray(v2)) {
+              capturedStatusIn.values.push(v2);
+            }
+            return terminal(kind);
+          },
+        };
+        return {
+          eq: (_field: string, _v: unknown) => afterFirmEq,
+        };
+      },
+    };
+  };
   return {
     supabaseAdmin: {
       from: (_table: string) => makeQuery(),
@@ -86,6 +108,7 @@ beforeEach(() => {
   state.countResult = { count: 0, error: null };
   state.latestResult = { data: null, error: null };
   capturedStatus.values = [];
+  capturedStatusIn.values = [];
 });
 
 describe("GET /api/portal/[firmId]/triage/stream-check", () => {
@@ -178,5 +201,39 @@ describe("GET /api/portal/[firmId]/triage/stream-check", () => {
     );
     expect(res.status).toBe(200);
     expect(capturedStatus.values.every((v) => v === "triaging")).toBe(true);
+  });
+
+  it("?view=history queries the three terminal statuses with .in()", async () => {
+    state.session = { firm_id: FIRM_ID, role: "lawyer" };
+    state.countResult = { count: 9, error: null };
+    state.latestResult = {
+      data: { updated_at: "2026-05-15T18:00:00.000Z" },
+      error: null,
+    };
+    const res = await GET(makeReq("?view=history") as never, makeParams());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.count).toBe(9);
+    // Should have captured the IN-list, not an eq(status, ...) call.
+    expect(capturedStatusIn.values.length).toBeGreaterThanOrEqual(1);
+    expect(capturedStatusIn.values[0]).toEqual(["passed", "referred", "declined"]);
+    expect(capturedStatus.values.every((v) => v !== "triaging" && v !== "declined")).toBe(true);
+  });
+
+  it("?view=active falls back to status='triaging' (.eq)", async () => {
+    state.session = { firm_id: FIRM_ID, role: "lawyer" };
+    state.countResult = { count: 4, error: null };
+    const res = await GET(makeReq("?view=active") as never, makeParams());
+    expect(res.status).toBe(200);
+    expect(capturedStatus.values.every((v) => v === "triaging")).toBe(true);
+    expect(capturedStatusIn.values).toEqual([]);
+  });
+
+  it("accepts ?status=referred for completeness", async () => {
+    state.session = { firm_id: FIRM_ID, role: "lawyer" };
+    state.countResult = { count: 2, error: null };
+    const res = await GET(makeReq("?status=referred") as never, makeParams());
+    expect(res.status).toBe(200);
+    expect(capturedStatus.values.every((v) => v === "referred")).toBe(true);
   });
 });

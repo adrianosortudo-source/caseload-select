@@ -21,25 +21,47 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Lifecycle filter — see portal stream-check for the 2026-05-14 doctrine
-  // background. Defaults to 'triaging' for back-compat; the admin triage
-  // page passes ?status=declined when the Declined tab is open.
-  const statusParam = new URL(req.url).searchParams.get("status");
-  const status: "triaging" | "declined" =
-    statusParam === "declined" ? "declined" : "triaging";
+  // Lifecycle filter — view=active (default, triaging) or view=history
+  // (passed/referred/declined). See portal stream-check for the full
+  // doctrine (2026-05-15 Band D refactor). Back-compat: ?status=X also
+  // accepted when X is a valid lifecycle state.
+  const url = new URL(req.url);
+  const viewParam = url.searchParams.get("view");
+  const statusParam = url.searchParams.get("status");
+  const VALID_STATUSES = ["triaging", "taken", "passed", "declined", "referred"] as const;
+  const isHistoryView = viewParam === "history";
+  const singleStatus = VALID_STATUSES.includes(statusParam as (typeof VALID_STATUSES)[number])
+    ? (statusParam as (typeof VALID_STATUSES)[number])
+    : null;
 
-  const { count, error: countErr } = await supabase
+  let countQuery = supabase
     .from("screened_leads")
-    .select("id", { count: "exact", head: true })
-    .eq("status", status);
+    .select("id", { count: "exact", head: true });
+  if (isHistoryView) {
+    countQuery = countQuery.in("status", ["passed", "referred", "declined"]);
+  } else if (singleStatus) {
+    countQuery = countQuery.eq("status", singleStatus);
+  } else {
+    countQuery = countQuery.eq("status", "triaging");
+  }
+
+  const { count, error: countErr } = await countQuery;
   if (countErr) {
     return NextResponse.json({ error: countErr.message }, { status: 500 });
   }
 
-  const { data: latestRow, error: latestErr } = await supabase
+  let latestQuery = supabase
     .from("screened_leads")
-    .select("updated_at")
-    .eq("status", status)
+    .select("updated_at");
+  if (isHistoryView) {
+    latestQuery = latestQuery.in("status", ["passed", "referred", "declined"]);
+  } else if (singleStatus) {
+    latestQuery = latestQuery.eq("status", singleStatus);
+  } else {
+    latestQuery = latestQuery.eq("status", "triaging");
+  }
+
+  const { data: latestRow, error: latestErr } = await latestQuery
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();

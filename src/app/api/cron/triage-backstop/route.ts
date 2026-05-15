@@ -88,6 +88,15 @@ export async function GET(req: NextRequest) {
   const outcomes: BackstopOutcome[] = [];
 
   for (const row of rows) {
+    // Doctrine (2026-05-15): Band D backstop expiry lands at status='passed'
+    // (not 'declined'). The new doctrine reserves 'declined' for future
+    // engine-spam handling and treats lawyer-initiated 'passed' as the
+    // normal "won't proceed" terminal state. Both branches fire the same
+    // declined_backstop webhook so the decline-with-grace cadence runs
+    // identically; GHL workflows can branch on band='D' if they want a
+    // different downstream treatment.
+    const backstopStatus: "passed" | "declined" = row.band === "D" ? "passed" : "declined";
+
     // Update first, fire webhook second. The conditional WHERE clauses guard
     // against a race with a lawyer-initiated Take/Pass landing concurrently —
     // if the row already moved out of 'triaging', the update affects 0 rows
@@ -96,7 +105,7 @@ export async function GET(req: NextRequest) {
       .from("screened_leads")
       .update(
         {
-          status: "declined",
+          status: backstopStatus,
           status_changed_at: nowIso,
           status_changed_by: "system:backstop",
           status_changed_by_role: "system:backstop",

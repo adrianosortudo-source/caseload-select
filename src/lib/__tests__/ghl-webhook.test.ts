@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildTakenPayload,
   buildPassedPayload,
+  buildReferredPayload,
   buildDeclinedOosPayload,
   buildDeclinedBackstopPayload,
   cadenceTargetForBand,
@@ -31,6 +32,7 @@ describe("cadenceTargetForBand", () => {
     expect(cadenceTargetForBand("A")).toBe("band_a");
     expect(cadenceTargetForBand("B")).toBe("band_b");
     expect(cadenceTargetForBand("C")).toBe("band_c");
+    expect(cadenceTargetForBand("D")).toBe("band_d");
   });
   it("falls through to band_c on null (defensive; should not occur for taken)", () => {
     expect(cadenceTargetForBand(null)).toBe("band_c");
@@ -42,6 +44,7 @@ describe("lawyerActionForBand", () => {
     expect(lawyerActionForBand("A")).toBe("Call same day");
     expect(lawyerActionForBand("B")).toBe("Send a booking link");
     expect(lawyerActionForBand("C")).toMatch(/booking link or pass/i);
+    expect(lawyerActionForBand("D")).toMatch(/refer/i);
   });
 });
 
@@ -123,6 +126,51 @@ describe("buildPassedPayload", () => {
   });
 });
 
+describe("buildReferredPayload", () => {
+  it("produces a 'referred' envelope with referred_to + note", () => {
+    const p = buildReferredPayload({
+      facts: facts({ band: "D", matter_type: "out_of_scope", practice_area: "family" }),
+      statusChangedAt: NOW,
+      statusChangedBy: "lawyer",
+      referredTo: "Jane Doe at Acme Family Law",
+      note: "Long-standing referral partner; she handles these well.",
+    });
+    expect(p.action).toBe("referred");
+    expect(p.band).toBe("D");
+    expect(p.referred.referred_to).toBe("Jane Doe at Acme Family Law");
+    expect(p.referred.note).toBe("Long-standing referral partner; she handles these well.");
+    expect(p.idempotency_key).toBe("L-2026-05-05-A1B:referred");
+    expect(p.status_changed_by).toBe("lawyer");
+  });
+
+  it("accepts null referred_to and null note (lawyer marks as referred without naming)", () => {
+    const p = buildReferredPayload({
+      facts: facts({ band: "D" }),
+      statusChangedAt: NOW,
+      statusChangedBy: "lawyer",
+      referredTo: null,
+      note: null,
+    });
+    expect(p.referred.referred_to).toBeNull();
+    expect(p.referred.note).toBeNull();
+  });
+
+  it("preserves the band in the envelope (refer doesn't force band=null)", () => {
+    // Unlike declined_oos which forces band=null, refer can fire on any
+    // band — the engine misclassification edge case lets the lawyer take
+    // a non-Band-D lead and choose to refer instead.
+    const p = buildReferredPayload({
+      facts: facts({ band: "B" }),
+      statusChangedAt: NOW,
+      statusChangedBy: "operator",
+      referredTo: "Colleague",
+      note: null,
+    });
+    expect(p.band).toBe("B");
+    expect(p.status_changed_by).toBe("operator");
+  });
+});
+
 describe("buildDeclinedOosPayload", () => {
   it("forces band=null and uses system:oos as the changed_by", () => {
     const p = buildDeclinedOosPayload({
@@ -194,6 +242,10 @@ describe("envelope fields stay consistent across actions", () => {
       declineSubject: "x", declineBody: "y",
       declineSource: "system_fallback", lawyerNotePresent: false,
     });
+    const referred = buildReferredPayload({
+      facts: f, statusChangedAt: NOW, statusChangedBy: "lawyer",
+      referredTo: null, note: null,
+    });
     const oos = buildDeclinedOosPayload({
       facts: f, statusChangedAt: NOW,
       declineSubject: "x", declineBody: "y",
@@ -207,6 +259,7 @@ describe("envelope fields stay consistent across actions", () => {
     });
     expect(taken.idempotency_key).toBe("L-2026-05-05-A1B:taken");
     expect(passed.idempotency_key).toBe("L-2026-05-05-A1B:passed");
+    expect(referred.idempotency_key).toBe("L-2026-05-05-A1B:referred");
     expect(oos.idempotency_key).toBe("L-2026-05-05-A1B:declined_oos");
     expect(backstop.idempotency_key).toBe("L-2026-05-05-A1B:declined_backstop");
   });

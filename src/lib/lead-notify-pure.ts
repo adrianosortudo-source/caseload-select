@@ -18,18 +18,18 @@ import { channelLabel } from "@/lib/channel-labels";
 /**
  * Lifecycle status that drives the email's visual treatment AND subject prefix.
  *
- *   triaging — standard new-lead notification. Lawyer decides Take or Pass
- *              within the decision window before the backstop fires.
- *   declined — the engine auto-filtered the matter as out-of-scope. The
- *              lawyer still receives the email so they have full visibility
- *              of who tried to contact them; copy explains what happened
- *              and how to override if the engine got it wrong.
+ *   triaging — standard new-lead notification. Lawyer decides Take / Pass /
+ *              (for Band D) Refer within the decision window. Band D leads
+ *              get a "refer opportunity" subject + body so the lawyer
+ *              recognises them at a glance.
+ *   declined — reserved for future engine-spam / abuse handling. Not
+ *              reached from the routine intake path as of 2026-05-15.
+ *              Copy explains what happened and how to override.
  *
- * Doctrine (CRM Bible 2026-05-14): "The system filters attention, never
- * visibility." Both lifecycle states surface to the lawyer; the email's
- * subject and body make the distinction obvious so the lawyer's primary
- * attention stays on triaging leads while still being aware of every
- * declined contact.
+ * Doctrine (CRM Bible 2026-05-15, supersedes 2026-05-14): "The engine
+ * sorts attention, the lawyer decides outcome." Out-of-scope matters
+ * land as Band D triaging (not declined). The `declined` branch in this
+ * file is dormant intake-path-wise but kept for future spam-block use.
  */
 export type LifecycleStatus = "triaging" | "declined";
 
@@ -56,29 +56,34 @@ export interface NewLeadEmail {
 }
 
 /**
- * Subject line. Two shapes depending on lifecycle status:
+ * Subject line. Three shapes:
  *
- *   triaging:
+ *   triaging, Band A/B/C:
  *     Priority A — Sarah · Wrongful dismissal
  *     Priority B — this lead · Real Estate Litigation
  *     New lead — Mike · Contract Dispute  (when band is null)
  *
- *   declined:
- *     [Auto-filtered] Sarah · matter flagged as Family Law
- *     [Auto-filtered] this lead · matter flagged as Immigration & Refugee
+ *   triaging, Band D (refer-eligible OOS):
+ *     Priority D — Mike · Refer opportunity · Family Law
  *
- * The "[Auto-filtered]" prefix makes the difference obvious at a glance in
- * the inbox so the lawyer's primary triage queue surface is not diluted.
+ *   declined (dormant; reserved for engine-spam):
+ *     [Auto-filtered] Sarah · matter flagged as Family Law
+ *
+ * The Band D subject leads with the practice area the engine detected so
+ * the lawyer sees at a glance whether they have a colleague to refer to.
  */
 export function buildNewLeadSubject(input: NewLeadEmailInput): string {
   const { firstName, matterType, practiceArea, band, lifecycleStatus, channel } = input;
   const matter = matterLabel(matterType);
+  const area = practiceAreaLabel(practiceArea);
   const channelSuffix = (channel && channel !== 'web')
     ? ` (via ${channelLabel(channel)})`
     : '';
   if (lifecycleStatus === "declined") {
-    const area = practiceAreaLabel(practiceArea);
     return `[Auto-filtered] ${firstName} · matter flagged as ${area}${channelSuffix}`;
+  }
+  if (band === "D") {
+    return `Priority D — ${firstName} · Refer opportunity · ${area}${channelSuffix}`;
   }
   const prefix = band ? `Priority ${band}` : "New lead";
   return `${prefix} — ${firstName} · ${matter}${channelSuffix}`;
@@ -123,19 +128,22 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
     ? `<div style="margin-top:6px;font-size:12px;color:#1E3A5F;font-family:'Oxanium',Arial,sans-serif;letter-spacing:0.08em;text-transform:uppercase;">Inbound via: ${escapeHtml(channelLabel(channel))}</div>`
     : "";
 
-  // Two distinct visual treatments. Triaging is the "act now" email; declined
-  // is the "for your awareness" email. They share the navy header band and
-  // brand chrome so the inbox looks coherent, but the eyebrow label, headline
-  // colour, status panel copy, and CTA wording differ.
+  // Three distinct visual treatments share the navy header band and brand
+  // chrome so the inbox looks coherent, but eyebrow / status panel / CTA
+  // differ. The Band D treatment is the new "refer opportunity" surface;
+  // declined is retained for future engine-spam / abuse use (dormant
+  // intake-path-wise as of 2026-05-15).
   const isDeclined = lifecycleStatus === "declined";
+  const isBandD = !isDeclined && band === "D";
 
-  // Eyebrow label above the headline.
-  const eyebrow = isDeclined ? "Auto-filtered lead" : "New lead in triage";
-  const eyebrowColor = isDeclined ? "#7A4A20" : "#7A6638";
+  const eyebrow = isDeclined
+    ? "Auto-filtered lead"
+    : isBandD
+    ? "New refer-eligible lead"
+    : "New lead in triage";
+  const eyebrowColor = isDeclined ? "#7A4A20" : isBandD ? "#3F5878" : "#7A6638";
 
-  // The status panel content varies. Triaging shows the decision timer +
-  // priority band. Declined shows what the engine flagged + an "override"
-  // affordance message so the lawyer knows the engine can be overridden.
+  // The status panel content varies per treatment.
   let statusPanel: string;
   if (isDeclined) {
     statusPanel = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -145,7 +153,21 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
       </tr>
     </table>
     <div style="margin-top:10px;font-family:'DM Sans',Arial,sans-serif;font-size:13px;line-height:1.5;color:#0D1520;">
-      The screen engine classified this matter as out of scope for your practice and sent the contact a polite decline-with-grace response. No action required from you. If the engine got it wrong, open the brief and move the lead back to triage.
+      The screen engine flagged this matter as out of scope. If the engine got it wrong, open the brief and move the lead back to triage.
+    </div>
+    ${channelNote}
+    ${langNote}`;
+  } else if (isBandD) {
+    const remainingMs = new Date(decisionDeadlineIso).getTime() - now.getTime();
+    const remaining = formatRemaining(remainingMs);
+    statusPanel = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#3F5878;">Priority D · Refer-eligible</td>
+        <td align="right" style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#5C5850;">${escapeHtml(area)}</td>
+      </tr>
+    </table>
+    <div style="margin-top:10px;font-family:'DM Sans',Arial,sans-serif;font-size:13px;line-height:1.5;color:#0D1520;">
+      The screen engine classified this matter as outside your practice areas. Decision window: <strong style="font-weight:700;color:#1E2F58;">${escapeHtml(remaining)}</strong> to Refer to a colleague, Take (if the engine misclassified), or Pass.
     </div>
     ${channelNote}
     ${langNote}`;
@@ -170,9 +192,7 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
     ${whaleNote}`;
   }
 
-  const bodyParagraph = isDeclined
-    ? "The brief is rendered in your portal queue. Open it, scan the case file, decide."
-    : "The brief is rendered in your portal queue. Open it, scan the case file, decide.";
+  const bodyParagraph = "The brief is rendered in your portal queue. Open it, scan the case file, decide.";
   const ctaLabel = isDeclined ? "Review the brief" : "Open the brief";
 
   return `<!doctype html>

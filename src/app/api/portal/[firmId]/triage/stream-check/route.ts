@@ -42,32 +42,55 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Lifecycle filter — defaults to 'triaging' (the active queue) for
-  // back-compat. The 2026-05-14 visibility doctrine added a Declined tab
-  // to the portal, so the client now passes ?status=declined when that
-  // tab is open. Anything else falls through to triaging.
-  const statusParam = new URL(req.url).searchParams.get("status");
-  const status: "triaging" | "declined" =
-    statusParam === "declined" ? "declined" : "triaging";
+  // Lifecycle filter. Two surfaces:
+  //   ?view=active   (default) → status='triaging'
+  //   ?view=history             → status IN ('passed','referred','declined')
+  //
+  // Back-compat: a single ?status=X is also honoured when X is one of the
+  // valid lifecycle states. The triage queue page passes view=; other
+  // callers (operator scripts, ad-hoc) can still pass status=.
+  const url = new URL(req.url);
+  const viewParam = url.searchParams.get("view");
+  const statusParam = url.searchParams.get("status");
+  const VALID_STATUSES = ["triaging", "taken", "passed", "declined", "referred"] as const;
+  const isHistoryView = viewParam === "history";
+  const singleStatus = VALID_STATUSES.includes(statusParam as (typeof VALID_STATUSES)[number])
+    ? (statusParam as (typeof VALID_STATUSES)[number])
+    : null;
 
-  // Count rows + latest updated_at for the firm at this lifecycle state.
-  // These two numbers fingerprint the queue's state cheaply; if neither
-  // changes, the client doesn't refetch the full server-rendered page.
-  const { count, error: countErr } = await supabase
+  // Build the count query.
+  let countQuery = supabase
     .from("screened_leads")
     .select("id", { count: "exact", head: true })
-    .eq("firm_id", firmId)
-    .eq("status", status);
+    .eq("firm_id", firmId);
+  if (isHistoryView) {
+    countQuery = countQuery.in("status", ["passed", "referred", "declined"]);
+  } else if (singleStatus) {
+    countQuery = countQuery.eq("status", singleStatus);
+  } else {
+    countQuery = countQuery.eq("status", "triaging");
+  }
+
+  const { count, error: countErr } = await countQuery;
 
   if (countErr) {
     return NextResponse.json({ error: countErr.message }, { status: 500 });
   }
 
-  const { data: latestRow, error: latestErr } = await supabase
+  // Build the latest-updated-at fingerprint query with the same filter.
+  let latestQuery = supabase
     .from("screened_leads")
     .select("updated_at")
-    .eq("firm_id", firmId)
-    .eq("status", status)
+    .eq("firm_id", firmId);
+  if (isHistoryView) {
+    latestQuery = latestQuery.in("status", ["passed", "referred", "declined"]);
+  } else if (singleStatus) {
+    latestQuery = latestQuery.eq("status", singleStatus);
+  } else {
+    latestQuery = latestQuery.eq("status", "triaging");
+  }
+
+  const { data: latestRow, error: latestErr } = await latestQuery
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();

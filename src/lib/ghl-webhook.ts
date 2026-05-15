@@ -18,6 +18,7 @@ import { safeFetch } from "@/lib/safe-outbound-fetch";
 export {
   buildTakenPayload,
   buildPassedPayload,
+  buildReferredPayload,
   buildDeclinedOosPayload,
   buildDeclinedBackstopPayload,
   cadenceTargetForBand,
@@ -26,6 +27,7 @@ export {
   type WebhookPayload,
   type TakenPayload,
   type PassedPayload,
+  type ReferredPayload,
   type DeclinedOosPayload,
   type DeclinedBackstopPayload,
   type LeadFacts,

@@ -28,6 +28,15 @@ const declinedInput: NewLeadEmailInput = {
   lifecycleStatus: "declined",
 };
 
+const bandDInput: NewLeadEmailInput = {
+  ...baseInput,
+  firstName: "Mike",
+  matterType: "out_of_scope",
+  practiceArea: "family",
+  band: "D",
+  lifecycleStatus: "triaging",
+};
+
 describe("buildNewLeadSubject", () => {
   it("prefixes with priority band when band is known", () => {
     expect(buildNewLeadSubject(baseInput)).toBe(
@@ -57,6 +66,18 @@ describe("buildNewLeadSubject", () => {
     expect(buildNewLeadSubject(declinedInput)).toBe(
       "[Auto-filtered] Mike · matter flagged as Family Law",
     );
+  });
+
+  it("renders the Band D 'Refer opportunity' subject for refer-eligible triaging leads", () => {
+    expect(buildNewLeadSubject(bandDInput)).toBe(
+      "Priority D — Mike · Refer opportunity · Family Law",
+    );
+  });
+
+  it("Band D subject still appends channel suffix when non-web", () => {
+    expect(
+      buildNewLeadSubject({ ...bandDInput, channel: "whatsapp" }),
+    ).toBe("Priority D — Mike · Refer opportunity · Family Law (via WhatsApp)");
   });
 
   it("defaults to triaging subject when lifecycleStatus is omitted", () => {
@@ -197,9 +218,29 @@ describe("buildNewLeadHtml", () => {
     });
     expect(html).toContain("Auto-filtered lead");
     expect(html).toContain("Review the brief");
-    // Declined emails omit the decision-window line; the engine already
-    // sent the contact a decline-with-grace, no clock for the lawyer.
+    // Declined emails omit the decision-window line; this branch is dormant
+    // intake-path-wise as of 2026-05-15 (reserved for future engine-spam).
     expect(html).not.toContain("Decision window");
+  });
+
+  it("renders the Band D 'refer-eligible' eyebrow + refer-aware copy", () => {
+    const html = buildNewLeadHtml({
+      ...bandDInput,
+      decisionDeadlineIso: deadline,
+      now,
+    });
+    expect(html).toContain("New refer-eligible lead");
+    expect(html).toContain("Priority D");
+    expect(html).toContain("Refer-eligible");
+    expect(html).toContain("Open the brief");
+    // The body mentions all three affordances.
+    expect(html).toContain("Refer");
+    expect(html).toContain("Take");
+    expect(html).toContain("Pass");
+    // Band D has a real decision window (96h default).
+    expect(html).toContain("Decision window");
+    // Band D is NOT auto-filtered.
+    expect(html).not.toContain("Auto-filtered lead");
   });
 
   it("declined body explains override path so engine misclassifications can be corrected", () => {
