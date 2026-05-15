@@ -93,6 +93,16 @@ interface IntakeBody {
   };
   intake_language?: string;
   raw_transcript?: string;
+  // Lead enrichment Module 1 — passive web-attribution. The Vite SPA reads
+  // these from window.location at widget load and the parent document
+  // referrer, then passes them through here. Voice / Meta channels do not
+  // populate these (no URL).
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_term?: string | null;
+  utm_content?: string | null;
+  referrer?: string | null;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -217,6 +227,15 @@ export async function POST(req: NextRequest) {
   const inboundChannel =
     ((v.slot_answers as { channel?: string } | null)?.channel) ?? 'web';
 
+  // Referrer: body wins when the Vite SPA sent it (which carries the parent
+  // page's document.referrer when the widget is iframed on the firm's site).
+  // Fall back to the HTTP Referer header, which at least tells us the origin
+  // hosting the screen. Header value is unset for server-to-server callers.
+  const referrer =
+    v.referrer && v.referrer.length > 0
+      ? v.referrer
+      : req.headers.get('referer');
+
   // ── Derived flags ──────────────────────────────────────────────────────────
   const now = new Date();
   const decisionDeadline = computeDecisionDeadline(axes.urgency, now, matterType);
@@ -266,6 +285,15 @@ export async function POST(req: NextRequest) {
       submitted_at: v.submitted_at ?? now.toISOString(),
       intake_language: v.intake_language ?? 'en',
       raw_transcript: v.raw_transcript ?? null,
+      // Module 1 lead enrichment — passive web-attribution. Each is null
+      // when the widget URL had no corresponding ?utm_* param or the
+      // request had no Referer header.
+      utm_source: v.utm_source ?? null,
+      utm_medium: v.utm_medium ?? null,
+      utm_campaign: v.utm_campaign ?? null,
+      utm_term: v.utm_term ?? null,
+      utm_content: v.utm_content ?? null,
+      referrer: referrer ?? null,
     })
     .select('id, lead_id, status, decision_deadline, whale_nurture')
     .single();

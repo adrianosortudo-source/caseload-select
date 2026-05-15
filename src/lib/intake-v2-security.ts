@@ -124,6 +124,13 @@ export interface ValidatedIntakeBody {
   intake_language?: string | null;
   raw_transcript?: string | null;
   submitted_at?: string | null;
+  // Lead enrichment Module 1 — passive web-attribution. All optional.
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_term?: string | null;
+  utm_content?: string | null;
+  referrer?: string | null;
 }
 
 // Caps to bound DoS-via-large-body. Each cap is far above any realistic
@@ -137,6 +144,11 @@ const MAX_SLOT_ANSWER_KEYS = 200;
 const MAX_CONTACT_FIELD_LEN = 200;
 const MAX_INTAKE_LANGUAGE_LEN = 8;
 const MAX_RAW_TRANSCRIPT_LEN = 16_000;       // 16 KB of original-language text
+// UTM caps: Google's de-facto attribution params. utm_term tends to be longer
+// (full search query strings); the rest are short identifiers.
+const MAX_UTM_FIELD_LEN = 200;
+const MAX_UTM_TERM_LEN = 500;
+const MAX_REFERRER_LEN = 2_048;              // URL spec practical ceiling
 
 const LANGUAGE_RE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/i;
 const LEAD_ID_RE = /^[A-Za-z0-9._:\\-]+$/;
@@ -278,6 +290,29 @@ export function validateIntakeBody(raw: unknown): { ok: true; body: ValidatedInt
     }
   }
 
+  // UTM + referrer (Module 1 lead enrichment). All optional; nothing breaks
+  // when absent. Coerce empty strings to null so the column reads cleanly.
+  function okOptStrCapped(v: unknown, name: string, cap: number): string | null | undefined {
+    if (v === undefined) return undefined;
+    if (v === null) return null;
+    if (typeof v !== 'string') {
+      errors.push(`${name} must be string or null`);
+      return undefined;
+    }
+    if (v.length > cap) {
+      errors.push(`${name} too long`);
+      return undefined;
+    }
+    const trimmed = v.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  const utm_source = okOptStrCapped(raw.utm_source, 'utm_source', MAX_UTM_FIELD_LEN);
+  const utm_medium = okOptStrCapped(raw.utm_medium, 'utm_medium', MAX_UTM_FIELD_LEN);
+  const utm_campaign = okOptStrCapped(raw.utm_campaign, 'utm_campaign', MAX_UTM_FIELD_LEN);
+  const utm_term = okOptStrCapped(raw.utm_term, 'utm_term', MAX_UTM_TERM_LEN);
+  const utm_content = okOptStrCapped(raw.utm_content, 'utm_content', MAX_UTM_FIELD_LEN);
+  const referrer = okOptStrCapped(raw.referrer, 'referrer', MAX_REFERRER_LEN);
+
   if (errors.length > 0 || !axes || !brief_json || !slot_answers) {
     return { ok: false, errors: errors.length > 0 ? errors : ['missing required object fields'] };
   }
@@ -297,6 +332,12 @@ export function validateIntakeBody(raw: unknown): { ok: true; body: ValidatedInt
       intake_language,
       raw_transcript,
       submitted_at,
+      utm_source,
+      utm_medium,
+      utm_campaign,
+      utm_term,
+      utm_content,
+      referrer,
     },
   };
 }

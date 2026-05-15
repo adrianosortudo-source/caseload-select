@@ -19,6 +19,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { matterLabel, subtrackLabel } from "@/lib/screened-leads-labels";
 import { intakeLanguageLabel } from "@/lib/intake-language-label";
 import { channelLabel, channelBadgeClasses } from "@/lib/channel-labels";
+import { buildInboundContext } from "@/lib/inbound-context";
 import DecisionTimer from "@/components/portal/DecisionTimer";
 import TriageActionBar from "@/components/portal/TriageActionBar";
 import "./brief.css";
@@ -38,6 +39,15 @@ interface LeadRow {
   contact_name: string | null;
   intake_language: string | null;
   slot_answers: { channel?: string; voice_meta?: { recording_url?: string | null } } | null;
+  // Module 1 lead enrichment — passive web-attribution. All null for
+  // non-web channels and legacy rows.
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_term: string | null;
+  utm_content: string | null;
+  referrer: string | null;
+  intake_firms: { location: string | null } | null;
 }
 
 export const dynamic = "force-dynamic";
@@ -56,7 +66,9 @@ export default async function TriageLeadPage({
       lead_id, firm_id, status, brief_html, brief_json,
       band, matter_type, whale_nurture, band_c_subtrack,
       decision_deadline, submitted_at, contact_name, intake_language,
-      slot_answers
+      slot_answers,
+      utm_source, utm_medium, utm_campaign, utm_term, utm_content, referrer,
+      intake_firms!inner(location)
     `)
     .eq("lead_id", leadId)
     .maybeSingle();
@@ -78,10 +90,32 @@ export default async function TriageLeadPage({
 
   const langLabel = intakeLanguageLabel(row.intake_language);
 
+  // Inbound context (Module 1 lead enrichment): "Day, Time · Source · 'Term'"
+  // for web leads, omitted entirely for Voice / Messenger / Instagram /
+  // WhatsApp (those have their own "Inbound via" treatment).
+  const firmLocation = row.intake_firms?.location ?? null;
+  const inboundContext = buildInboundContext({
+    submittedAtIso: row.submitted_at,
+    firmLocation,
+    channel,
+    utmSource: row.utm_source,
+    utmMedium: row.utm_medium,
+    utmCampaign: row.utm_campaign,
+    utmTerm: row.utm_term,
+    utmContent: row.utm_content,
+    referrer: row.referrer,
+  });
+
   return (
     <div className="space-y-4 pb-32">
       <BackLink firmId={firmId} />
-      <Header row={row} subtrack={subtrack} channel={channel} recordingUrl={recordingUrl} />
+      <Header
+        row={row}
+        subtrack={subtrack}
+        channel={channel}
+        recordingUrl={recordingUrl}
+        inboundContextText={inboundContext.show ? inboundContext.text : null}
+      />
       {row.status !== "triaging" && <StatusBanner status={row.status} />}
       {langLabel && <LanguageCallout label={langLabel} />}
       <BriefFrame html={row.brief_html} />
@@ -111,11 +145,13 @@ function Header({
   subtrack,
   channel,
   recordingUrl,
+  inboundContextText,
 }: {
   row: LeadRow;
   subtrack: string | null;
   channel: string | null;
   recordingUrl: string | null;
+  inboundContextText: string | null;
 }) {
   return (
     <div className="bg-white border border-black/10 px-4 sm:px-6 py-4 sm:py-5">
@@ -161,6 +197,11 @@ function Header({
               </a>
             )}
           </div>
+          {inboundContextText && (
+            <p className="mt-1.5 text-xs text-black/50">
+              {inboundContextText}
+            </p>
+          )}
         </div>
         <div className="shrink-0">
           <DecisionTimer
