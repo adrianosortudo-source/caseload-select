@@ -48,6 +48,59 @@ export function getFirmIdFromUrl(): string | null {
   return v.length > 0 ? v : null;
 }
 
+export interface WebAttribution {
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_term: string | null;
+  utm_content: string | null;
+  referrer: string | null;
+}
+
+/**
+ * Read passive web-attribution from the widget URL + document.referrer.
+ * Used by /api/intake-v2 to populate the screened_leads enrichment columns
+ * so the lawyer sees an "Inbound context" line on the brief.
+ *
+ * For iframe embeds, UTM only flows when the firm passes the parent page's
+ * UTM params through to the iframe src (caseload-screen-v2.vercel.app/
+ * ?firmId=...&utm_source=...). The embedding script on the firm's site is
+ * responsible for that pass-through; this function just reads what arrived.
+ *
+ * document.referrer behaviour in iframes depends on Referrer-Policy. Best
+ * effort — null when unavailable.
+ */
+export function getWebAttribution(): WebAttribution {
+  if (typeof window === 'undefined') {
+    return {
+      utm_source: null,
+      utm_medium: null,
+      utm_campaign: null,
+      utm_term: null,
+      utm_content: null,
+      referrer: null,
+    };
+  }
+  const params = new URLSearchParams(window.location.search);
+  const trim = (raw: string | null): string | null => {
+    if (raw === null) return null;
+    const t = raw.trim();
+    return t.length > 0 ? t : null;
+  };
+  const docReferrer =
+    typeof document !== 'undefined' && typeof document.referrer === 'string'
+      ? document.referrer
+      : null;
+  return {
+    utm_source: trim(params.get('utm_source')),
+    utm_medium: trim(params.get('utm_medium')),
+    utm_campaign: trim(params.get('utm_campaign')),
+    utm_term: trim(params.get('utm_term')),
+    utm_content: trim(params.get('utm_content')),
+    referrer: trim(docReferrer),
+  };
+}
+
 /**
  * POST the screened lead to the persistence endpoint. The function is
  * tolerant: any failure (network, HTTP, timeout, missing firmId) resolves
@@ -64,6 +117,7 @@ export async function persistScreenedLead(
   firmId: string | null,
 ): Promise<PersistResult> {
   const report = buildReport(state);
+  const attribution = getWebAttribution();
 
   // intake_language is the ISO 639-1 code of the language the lead used to
   // converse with the screen. Defaults to 'en' if franc never ran for any
@@ -110,6 +164,13 @@ export async function persistScreenedLead(
       email: state.slots['client_email'] ?? undefined,
       phone: state.slots['client_phone'] ?? undefined,
     },
+    // Lead enrichment Module 1 — passive web-attribution signals.
+    utm_source: attribution.utm_source,
+    utm_medium: attribution.utm_medium,
+    utm_campaign: attribution.utm_campaign,
+    utm_term: attribution.utm_term,
+    utm_content: attribution.utm_content,
+    referrer: attribution.referrer,
   };
 
   // firmId rides on the query string so the endpoint can short-circuit demo

@@ -71,7 +71,8 @@ export default async function TriageLeadPage({
       intake_firms!inner(location)
     `)
     .eq("lead_id", leadId)
-    .maybeSingle();
+    .maybeSingle()
+    .returns<LeadRow>();
 
   if (error) {
     return (
@@ -83,7 +84,7 @@ export default async function TriageLeadPage({
   // Hide cross-firm existence: 404 even when the row exists for another firm.
   if (!data || data.firm_id !== firmId) notFound();
 
-  const row = data as LeadRow;
+  const row = data;
   const subtrack = subtrackLabel(row.band_c_subtrack);
   const channel = row.slot_answers?.channel ?? null;
   const recordingUrl = row.slot_answers?.voice_meta?.recording_url ?? null;
