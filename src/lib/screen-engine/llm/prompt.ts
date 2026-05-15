@@ -77,6 +77,18 @@ field, return the ISO 639-1 code for the lead's language (e.g. 'fr' for French, 
 'pt' for Portuguese, 'zh' for Mandarin, 'es' for Spanish, 'ar' for Arabic), or \
 null if the lead wrote in English or a language outside the supported set.
 
+9. CONTACT-CAPTURE DOCTRINE. A lead the lawyer cannot reach is information, \
+not a lead. Before any intake can finalise, the engine must capture the LEAD's \
+own name (\`client_name\`) and at least one way to reach them: email \
+(\`client_email\`) or phone (\`client_phone\`). If the lead has not yet provided \
+both pieces (name AND one of email/phone), the conversation is not done — the \
+next question MUST politely ask for whatever is missing. Frame it as a natural \
+conversational continuation, not a form. Example phrasing: "Got it. Before I \
+get this to the firm, can you share your name and the best phone or email for \
+them to reach you?" Do not ask for documents, do not ask for the names of \
+opposing parties, do not collect anything beyond the lead's OWN name + contact. \
+Never finalise an intake without these fields captured.
+
 Output the JSON object with one key per field in the schema. Every field must \
 be present in your output, with either an extracted value or null.`;
 }

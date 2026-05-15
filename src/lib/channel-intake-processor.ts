@@ -2,43 +2,21 @@
  * channel-intake-processor — shared server-side engine pipeline for
  * inbound Meta channel webhooks (Messenger, Instagram, WhatsApp Cloud API).
  *
- * The voice-intake route at /api/voice-intake established the pattern for
- * running the screen engine server-side: initialiseState → seed sender →
- * evidence pass → LLM extraction → buildReport → render brief HTML → insert
- * into `screened_leads`. This helper extracts that pipeline so all three
- * Meta channels (and voice, in a future refactor) call ONE function instead
- * of repeating ~250 lines of glue per route.
+ * Two-phase architecture:
  *
- * What this does NOT do:
+ *   Phase A: contact-capture doctrine gate (2026-05-15). After running
+ *            the engine, check `report.contact_complete`. If false, the
+ *            row is NOT a screened lead — never reaches the lawyer.
  *
- *   - Verify HMAC. Each Meta channel uses the same `x-hub-signature-256`
- *     header signed with `META_APP_SECRET`, but verification happens at the
- *     route boundary BEFORE the body is parsed. See `lib/meta-webhook-auth`.
- *   - Resolve firm. Caller passes `firmId`; resolution happens at the route
- *     boundary via `lib/firm-resolver`. Different channels carry different
- *     asset IDs (Page ID vs IG Business ID vs Phone Number ID); the resolver
- *     hides that detail from this processor.
- *   - Dedup. Meta retries on non-200; if the route ACKs 200 quickly (within
- *     ~1-2s) and runs this in `waitUntil`, retries are rare. A future patch
- *     can add a `(channel, message_id)` dedup table; for now, double-fires
- *     could produce duplicate `screened_leads` rows. Documented in the
- *     receiver TODOs.
- *   - Send-back. The engine currently produces a brief from a SINGLE inbound
- *     message (single-shot mode). Multi-turn conversational follow-up via
- *     Meta's Send APIs is out of scope for the Meta App Review demo and
- *     lands in a follow-up patch (`channel-send.ts`).
+ *   Phase B: multi-turn follow-up. When the gate fails, send a follow-up
+ *            via the channel's Send API asking for name + contact, and
+ *            persist EngineState in `channel_intake_sessions` so the
+ *            NEXT inbound from the same sender resumes mid-conversation.
+ *            After `MAX_FOLLOW_UPS` attempts without contact, give up
+ *            and move the data to `unconfirmed_inquiries`.
  *
- * Channel naming follows the engine's `Channel` type (defined in
- * `lib/screen-engine/types`): `facebook` | `instagram` | `whatsapp`. The
- * longer CRM-Bible DR-022 surface names (facebook_messenger,
- * instagram_dm) are NOT used here because the engine and the brief
- * renderer expect the compact names. Persistence in screened_leads
- * uses the same compact form (consistent with voice-intake's `channel:
- * 'voice'`).
- *
- * Voice keeps its own route for now because it carries non-Meta metadata
- * — call_id, recording_url, call_duration_sec — that doesn't generalise.
- * A future refactor can fold voice into this helper too.
+ * Voice keeps its own route (`/api/voice-intake`) because it carries
+ * non-Meta metadata (call_id, recording_url, call_duration_sec).
  */
 
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
@@ -57,53 +35,48 @@ import { computeBand } from '@/lib/screen-engine/band';
 import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
 import type { EngineState, Band } from '@/lib/screen-engine/types';
+import { evaluateContactGate } from '@/lib/screen-engine/contact-doctrine';
+import { persistUnconfirmedInquiry } from '@/lib/unconfirmed-inquiry';
+import {
+  loadOpenChannelSession,
+  createChannelSession,
+  updateChannelSession,
+  finalizeChannelSession,
+} from '@/lib/channel-intake-session-store';
+import { sendChannelMessage, buildContactCaptureFollowUp } from '@/lib/channel-send';
 
 // ── Channel type ────────────────────────────────────────────────────────
-// Matches the engine's `Channel` type (lib/screen-engine/types). The
-// `Channel` union also has 'web' | 'sms' | 'gbp' | 'voice' — those are
-// handled elsewhere; the Meta channels are this helper's scope.
 
 export type MetaChannel = 'facebook' | 'instagram' | 'whatsapp';
 
+const MAX_FOLLOW_UPS = 3;
+
 // ── Sender metadata ─────────────────────────────────────────────────────
-// Channel-specific shape so callers cannot drop a Messenger PSID into a
-// WhatsApp field by accident. The processor only USES the universal bits
-// (senderId, senderName, phone if present) but keeping the discriminator
-// preserves channel context in logs and persisted JSON.
 
 export interface MessengerSender {
   channel: 'facebook';
   /** PSID — Page-Scoped ID. Stable per (Page, user) pair. */
   senderPsid: string;
-  /** Set if we have a profile-API result; usually null without an extra call. */
   senderName: string | null;
-  /** Messenger message ID, for future dedup. */
   messageMid: string;
-  /** Page ID the user messaged. */
   pageId: string;
 }
 
 export interface InstagramSender {
   channel: 'instagram';
-  /** IG-scoped sender ID. Stable per (IG account, user) pair. */
   senderIgsid: string;
   senderName: string | null;
   messageMid: string;
-  /** IG Business Account ID the user DM'd. */
   igBusinessAccountId: string;
 }
 
 export interface WhatsAppSender {
   channel: 'whatsapp';
-  /** wa_id — Meta-side identifier for the WhatsApp user (E.164-like). */
+  /** wa_id — Meta-side identifier (E.164 without leading +). */
   senderWaId: string;
-  /** WhatsApp profile name if the contacts[] block carried it. */
   senderName: string | null;
-  /** WhatsApp message ID, for future dedup. */
   messageMid: string;
-  /** WhatsApp Cloud API Phone Number ID the user texted. */
   phoneNumberId: string;
-  /** Display phone number (humans-readable) if known. */
   displayPhoneNumber?: string | null;
 }
 
@@ -119,30 +92,67 @@ export interface ProcessChannelInboundArgs {
 
 export interface ProcessChannelInboundResult {
   persisted: boolean;
-  /** L-YYYY-MM-DD-XXX engine identifier (if a row was created). */
   leadId?: string;
-  /** screened_leads.id (uuid PK). */
   briefId?: string;
   status?: 'triaging' | 'declined';
   band?: Band | null;
-  /** Set when persisted=false. */
   reason?: string;
+  /** Set when a follow-up message was sent to the lead. */
+  followUpSent?: boolean;
 }
 
-// ── Channel-specific seeding ────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────────
+
+/** Channel-specific sender identifier used as the session key. */
+function getSenderId(sender: ChannelSender): string {
+  switch (sender.channel) {
+    case 'facebook':
+      return sender.senderPsid;
+    case 'instagram':
+      return sender.senderIgsid;
+    case 'whatsapp':
+      return sender.senderWaId;
+  }
+}
+
+/** Channel-specific metadata blob persisted with screened_leads / unconfirmed_inquiries. */
+function buildChannelMeta(sender: ChannelSender): Record<string, unknown> {
+  switch (sender.channel) {
+    case 'facebook':
+      return {
+        page_id: sender.pageId,
+        sender_psid: sender.senderPsid,
+        message_mid: sender.messageMid,
+        sender_name: sender.senderName,
+      };
+    case 'instagram':
+      return {
+        ig_business_account_id: sender.igBusinessAccountId,
+        sender_igsid: sender.senderIgsid,
+        message_mid: sender.messageMid,
+        sender_name: sender.senderName,
+      };
+    case 'whatsapp':
+      return {
+        phone_number_id: sender.phoneNumberId,
+        sender_wa_id: sender.senderWaId,
+        message_mid: sender.messageMid,
+        sender_name: sender.senderName,
+        display_phone_number: sender.displayPhoneNumber ?? null,
+      };
+  }
+}
 
 /**
- * Drop sender contact fields into the engine state's slots so the brief
- * shows them. Mirrors the seedVoiceState() helper in /api/voice-intake.
+ * Drop sender contact fields into the engine state's slots. Mirrors
+ * `seedVoiceState` in `/api/voice-intake`.
  *
  * Messenger / IG do not carry a phone number on inbound DMs. WhatsApp
- * carries the sender's `wa_id` which IS the phone number in E.164 form
- * (without the leading +).
+ * carries `wa_id` which IS the phone number in E.164 form (no leading +).
  */
 function seedSlots(state: EngineState, sender: ChannelSender): EngineState {
   let s = state;
 
-  // Name — only set if we have one AND the slot is empty.
   if (sender.senderName && !s.slots['client_name']) {
     s = {
       ...s,
@@ -154,7 +164,6 @@ function seedSlots(state: EngineState, sender: ChannelSender): EngineState {
     };
   }
 
-  // Phone — only WhatsApp carries one inbound. wa_id is the digits, no '+'.
   if (sender.channel === 'whatsapp' && sender.senderWaId && !s.slots['client_phone']) {
     const e164 = sender.senderWaId.startsWith('+')
       ? sender.senderWaId
@@ -175,16 +184,12 @@ function seedSlots(state: EngineState, sender: ChannelSender): EngineState {
 // ── Main processor ──────────────────────────────────────────────────────
 
 /**
- * Run the screen engine on an inbound channel message and persist the result.
+ * Run the screen engine on an inbound channel message, branch on the
+ * contact-capture doctrine, and either finalise into screened_leads OR
+ * send a follow-up + persist state in channel_intake_sessions.
  *
- * Returns a structured result rather than an HTTP response so the caller
- * (the route handler) can wrap the call in `waitUntil` and ACK 200 to Meta
- * before this finishes. Meta requires a fast 200; the engine pipeline
- * (especially the LLM call) takes 5-15s.
- *
- * Channel processor is best-effort: if the LLM extraction fails the brief
- * is still built from regex-extracted slots, and the row still lands. The
- * only failure path that bails is a DB insert error (returned in result).
+ * Returns a structured result (not an HTTP response) so the receiver
+ * can wrap the call in `waitUntil` and ACK 200 to Meta first.
  */
 export async function processChannelInbound(
   args: ProcessChannelInboundArgs,
@@ -192,26 +197,52 @@ export async function processChannelInbound(
   const { firmId, text, sender } = args;
   const channel = sender.channel;
   const trimmed = text.trim();
+  const senderId = getSenderId(sender);
 
   if (!trimmed) {
     return { persisted: false, reason: 'empty inbound text' };
   }
 
-  // ── Engine pipeline (parity with /api/voice-intake) ────────────────────
+  // ── Resume-or-start ────────────────────────────────────────────────────
+  // Phase B: if there's an open session for (firmId, channel, sender) the
+  // lead is mid-conversation. Restore engine state, run the new turn
+  // through the slot-extraction layers (evidence + LLM), and KEEP the
+  // turn-1 classification (matter_type, practice_area, intent_family).
+  const existing = await loadOpenChannelSession({ firmId, channel, senderId });
 
-  // 1. Regex classification + raw signals.
-  let state = initialiseState(trimmed);
+  let state: EngineState;
+  let priorFollowUpCount = 0;
+  let sessionId: string | undefined;
+  let isResume = false;
 
-  // 2. Stamp the channel BEFORE anything reads state.channel.
-  state = { ...state, channel };
+  if (existing) {
+    isResume = true;
+    sessionId = existing.id;
+    priorFollowUpCount = existing.follow_up_count;
+    // Restore prior state. Stamp the channel defensively.
+    state = { ...existing.engine_state, channel };
+    // Append new turn text to the running transcript for audit.
+    state = {
+      ...state,
+      input: state.input ? `${state.input}\n\n${trimmed}` : trimmed,
+    };
+  } else {
+    // Fresh first turn — regex classification + raw signals.
+    state = initialiseState(trimmed);
+    state = { ...state, channel };
+    state = seedSlots(state, sender);
+  }
 
-  // 3. Seed slots from sender metadata.
-  state = seedSlots(state, sender);
-
-  // 4. Evidence pass (regex deepening).
+  // Evidence pass — regex deepening on the NEW turn text. Slot
+  // extraction layer; does not re-classify matter_type / practice_area
+  // (those are owned by initialiseState on turn 1 and preserved on resume).
   state = runEvidencePass(trimmed, state);
 
-  // 5. LLM extraction — best-effort, never aborts.
+  // LLM extraction — best-effort, never aborts. Runs on the new turn text
+  // and merges into existing state. On a resume turn, the LLM sees just
+  // the new text; on first turn it sees the full inbound. The doctrine
+  // rule in the system prompt (rule 9) primes the LLM to extract
+  // client_name / client_email / client_phone aggressively.
   if (state.matter_type !== 'out_of_scope') {
     try {
       const llm = await llmExtractServer(trimmed, state);
@@ -230,11 +261,106 @@ export async function processChannelInbound(
   const report = buildReport(state);
   const briefHtml = renderBriefHtmlServer(report, channel, state.language);
   const bandResult = computeBand(state);
-  // OOS now carries band='D' (refer-eligible) per the 2026-05-15 doctrine
-  // flip; the engine owns the band assignment.
   const band: Band | null = bandResult.band;
 
-  // ── Derived flags (same helpers as intake-v2 + voice-intake) ───────────
+  // ── Contact-capture doctrine gate (2026-05-15) ──────────────────────────
+  if (!report.contact_complete) {
+    const channelMeta = buildChannelMeta(sender);
+    const gate = evaluateContactGate({
+      client_name: state.slots['client_name'] ?? null,
+      client_email: state.slots['client_email'] ?? null,
+      client_phone: state.slots['client_phone'] ?? null,
+    });
+
+    // Already exhausted the follow-up budget? Give up. Move to
+    // unconfirmed_inquiries with reason='engine_refused' and finalise the
+    // session so a future inbound starts fresh.
+    if (priorFollowUpCount >= MAX_FOLLOW_UPS) {
+      await persistUnconfirmedInquiry({
+        firmId,
+        channel,
+        senderId,
+        senderMeta: channelMeta,
+        rawTranscript: state.input ?? trimmed,
+        matterType: state.matter_type,
+        practiceArea: state.practice_area,
+        intakeLanguage: state.language ?? 'en',
+        reason: 'engine_refused',
+        followUpAttempts: priorFollowUpCount,
+      });
+      if (sessionId) await finalizeChannelSession(sessionId);
+      console.log(
+        `[channel-intake] follow-up budget exhausted firm=${firmId} channel=${channel} attempts=${priorFollowUpCount} → engine_refused`,
+      );
+      return {
+        persisted: false,
+        reason: 'max_follow_ups_exhausted',
+      };
+    }
+
+    // Send the follow-up question.
+    const followUpText = buildContactCaptureFollowUp(gate.missing ?? 'both');
+    const sendResult = await sendChannelMessage({
+      firmId,
+      sender,
+      text: followUpText,
+    });
+
+    if (!sendResult.sent) {
+      // Send failed (no token / Graph 4xx / network error). We cannot ask
+      // the lead for contact, so fall back to unconfirmed_inquiries with
+      // reason='no_contact_provided' and finalise (if a session existed).
+      console.warn(
+        `[channel-intake] follow-up send failed firm=${firmId} channel=${channel}: ${sendResult.reason ?? 'unknown'}`,
+      );
+      await persistUnconfirmedInquiry({
+        firmId,
+        channel,
+        senderId,
+        senderMeta: channelMeta,
+        rawTranscript: state.input ?? trimmed,
+        matterType: state.matter_type,
+        practiceArea: state.practice_area,
+        intakeLanguage: state.language ?? 'en',
+        reason: 'no_contact_provided',
+        followUpAttempts: priorFollowUpCount,
+      });
+      if (sessionId) await finalizeChannelSession(sessionId);
+      return {
+        persisted: false,
+        reason: `send_failed: ${sendResult.reason ?? 'unknown'}`,
+      };
+    }
+
+    // Send succeeded. Persist state in channel_intake_sessions so the
+    // NEXT inbound from this sender resumes mid-conversation.
+    const newCount = priorFollowUpCount + 1;
+    if (sessionId) {
+      await updateChannelSession({
+        sessionId,
+        engineState: state,
+        followUpCount: newCount,
+      });
+    } else {
+      await createChannelSession({
+        firmId,
+        channel,
+        senderId,
+        engineState: state,
+        maxFollowUps: MAX_FOLLOW_UPS,
+      });
+    }
+    console.log(
+      `[channel-intake] follow-up sent firm=${firmId} channel=${channel} attempt=${newCount}/${MAX_FOLLOW_UPS} missing=${gate.missing}`,
+    );
+    return {
+      persisted: false,
+      reason: 'awaiting_contact',
+      followUpSent: true,
+    };
+  }
+
+  // ── Gate passed: finalise into screened_leads ──────────────────────────
   const now = new Date();
   const axes = report.four_axis;
   const decisionDeadline = computeDecisionDeadline(axes.urgency, now, state.matter_type);
@@ -242,47 +368,26 @@ export async function processChannelInbound(
   const { status: initialStatus, changedBy: initialChangedBy } =
     computeInitialStatus(state.matter_type);
 
-  // ── Channel-specific meta for slot_answers (audit, future re-render) ───
-  const channelMeta = (() => {
+  // Channel-specific meta for slot_answers (audit, future re-render).
+  const channelMetaForSlotAnswers = (() => {
     switch (sender.channel) {
       case 'facebook':
-        return {
-          messenger_meta: {
-            page_id: sender.pageId,
-            sender_psid: sender.senderPsid,
-            message_mid: sender.messageMid,
-            sender_name: sender.senderName,
-          },
-        };
+        return { messenger_meta: buildChannelMeta(sender) };
       case 'instagram':
-        return {
-          instagram_meta: {
-            ig_business_account_id: sender.igBusinessAccountId,
-            sender_igsid: sender.senderIgsid,
-            message_mid: sender.messageMid,
-            sender_name: sender.senderName,
-          },
-        };
+        return { instagram_meta: buildChannelMeta(sender) };
       case 'whatsapp':
-        return {
-          whatsapp_meta: {
-            phone_number_id: sender.phoneNumberId,
-            sender_wa_id: sender.senderWaId,
-            message_mid: sender.messageMid,
-            sender_name: sender.senderName,
-            display_phone_number: sender.displayPhoneNumber ?? null,
-          },
-        };
+        return { whatsapp_meta: buildChannelMeta(sender) };
     }
   })();
 
-  // ── Insert into screened_leads ─────────────────────────────────────────
   const slotAnswers = {
     slots: state.slots,
     slot_meta: state.slot_meta,
     slot_evidence: state.slot_evidence,
     channel,
-    ...channelMeta,
+    multi_turn: isResume,
+    follow_up_count: priorFollowUpCount,
+    ...channelMetaForSlotAnswers,
   };
 
   const { data: inserted, error: insertErr } = await supabase
@@ -318,7 +423,7 @@ export async function processChannelInbound(
         (sender.channel === 'whatsapp' ? `+${sender.senderWaId.replace(/^\+/, '')}` : null),
       submitted_at: state.submitted_at ?? now.toISOString(),
       intake_language: state.language ?? 'en',
-      raw_transcript: trimmed,
+      raw_transcript: state.input ?? trimmed,
     })
     .select('id, lead_id, status, decision_deadline, whale_nurture')
     .single();
@@ -326,6 +431,7 @@ export async function processChannelInbound(
   if (insertErr) {
     if (insertErr.code === '23505') {
       // Duplicate lead_id — engine generator collided. Treat as idempotent.
+      if (sessionId) await finalizeChannelSession(sessionId);
       return {
         persisted: false,
         reason: 'duplicate lead_id',
@@ -336,6 +442,11 @@ export async function processChannelInbound(
       persisted: false,
       reason: `insert failed: ${insertErr.message}`,
     };
+  }
+
+  // Finalise the multi-turn session if one was open.
+  if (sessionId) {
+    await finalizeChannelSession(sessionId);
   }
 
   // ── Lead notification (best-effort) ────────────────────────────────────

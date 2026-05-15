@@ -67,6 +67,8 @@ import { waitUntil } from "@vercel/functions";
 import { notifyLawyersOfNewLead } from "@/lib/lead-notify";
 import { originAllowed, validateIntakeBody, sanitizeBriefHtml } from "@/lib/intake-v2-security";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
+import { evaluateContactGate } from "@/lib/screen-engine/contact-doctrine";
+import { persistUnconfirmedInquiry } from "@/lib/unconfirmed-inquiry";
 
 interface IntakeAxes {
   value: number;
@@ -221,6 +223,48 @@ export async function POST(req: NextRequest) {
   const axes = v.axes as IntakeAxes;
   const matterType = v.matter_type;
   const band = v.band;
+
+  // ── Contact-capture doctrine gate (2026-05-15) ─────────────────────────────
+  // "No contact, no lead." The SPA gate (Phase C) is the primary control,
+  // but defense-in-depth: if a brief reaches us with missing name AND
+  // missing (email OR phone), persist as unconfirmed_inquiry and return
+  // a 200 acknowledging the rejection without inserting into screened_leads.
+  //
+  // The SPA already validates contact-complete client-side; this server-side
+  // gate catches direct posts (curl / scripted abuse / SPA regression).
+  const contactGate = evaluateContactGate({
+    client_name: v.contact?.name ?? null,
+    client_email: v.contact?.email ?? null,
+    client_phone: v.contact?.phone ?? null,
+  });
+  if (!contactGate.complete) {
+    const inboundChannelForUnconfirmed =
+      ((v.slot_answers as { channel?: string } | null)?.channel) ?? 'web';
+    await persistUnconfirmedInquiry({
+      firmId: firmIdParam,
+      channel: inboundChannelForUnconfirmed as 'web',
+      senderId: null,
+      senderMeta: {
+        utm_source: v.utm_source ?? null,
+        utm_medium: v.utm_medium ?? null,
+        utm_campaign: v.utm_campaign ?? null,
+        referrer: v.referrer ?? null,
+      },
+      rawTranscript: v.raw_transcript ?? null,
+      matterType,
+      practiceArea: v.practice_area,
+      intakeLanguage: v.intake_language ?? 'en',
+      reason: 'no_contact_provided',
+    });
+    return NextResponse.json(
+      {
+        persisted: false,
+        reason: 'awaiting_contact',
+        missing: contactGate.missing,
+      },
+      { status: 200, headers: corsHeaders },
+    );
+  }
 
   // Channel is stored inside slot_answers by the Vite SPA. Extract it here
   // so we can pass it to the notification without a second DB read.

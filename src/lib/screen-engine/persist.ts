@@ -117,6 +117,19 @@ export async function persistScreenedLead(
   firmId: string | null,
 ): Promise<PersistResult> {
   const report = buildReport(state);
+
+  // Contact-capture doctrine (2026-05-15). A brief without name AND
+  // (email OR phone) is NOT a lead. Refuse to POST and let the caller
+  // know — the engine's capture_contact step should drive the
+  // conversation back into contact-capture mode.
+  if (!report.contact_complete) {
+    return {
+      ok: false,
+      persisted: false,
+      reason: 'contact_incomplete',
+    };
+  }
+
   const attribution = getWebAttribution();
 
   // intake_language is the ISO 639-1 code of the language the lead used to
