@@ -332,3 +332,97 @@ describe('sanitizeBriefHtml — XSS vectors', () => {
     expect(out).not.toContain('<script>');
   });
 });
+
+// ─── UTM + referrer (Module 1 lead enrichment) ─────────────────────────────
+
+describe('validateIntakeBody — UTM + referrer (enrichment fields)', () => {
+  it('accepts a body with all UTM fields populated', () => {
+    const b = validBody();
+    b.utm_source = 'google';
+    b.utm_medium = 'cpc';
+    b.utm_campaign = 'toronto-pi-may2026';
+    b.utm_term = 'toronto immigration lawyer';
+    b.utm_content = 'ad-variant-A';
+    b.referrer = 'https://caseflowblog.ca/post/123';
+    const r = validateIntakeBody(b);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.body.utm_source).toBe('google');
+      expect(r.body.utm_medium).toBe('cpc');
+      expect(r.body.utm_campaign).toBe('toronto-pi-may2026');
+      expect(r.body.utm_term).toBe('toronto immigration lawyer');
+      expect(r.body.utm_content).toBe('ad-variant-A');
+      expect(r.body.referrer).toBe('https://caseflowblog.ca/post/123');
+    }
+  });
+
+  it('accepts a body with no UTM fields (back-compat)', () => {
+    const r = validateIntakeBody(validBody());
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.body.utm_source).toBeUndefined();
+      expect(r.body.referrer).toBeUndefined();
+    }
+  });
+
+  it('accepts explicit nulls for UTM fields', () => {
+    const b = validBody();
+    b.utm_source = null;
+    b.referrer = null;
+    const r = validateIntakeBody(b);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.body.utm_source).toBeNull();
+      expect(r.body.referrer).toBeNull();
+    }
+  });
+
+  it('coerces whitespace-only UTM strings to null', () => {
+    const b = validBody();
+    b.utm_source = '   ';
+    b.utm_medium = '\t\n';
+    const r = validateIntakeBody(b);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.body.utm_source).toBeNull();
+      expect(r.body.utm_medium).toBeNull();
+    }
+  });
+
+  it('rejects oversized utm_source (DoS bound)', () => {
+    const b = validBody();
+    b.utm_source = 'x'.repeat(201);
+    const r = validateIntakeBody(b);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.some((e) => e.includes('utm_source'))).toBe(true);
+  });
+
+  it('allows long utm_term (search queries can be lengthy)', () => {
+    const b = validBody();
+    b.utm_term = 'x'.repeat(500);
+    expect(validateIntakeBody(b).ok).toBe(true);
+  });
+
+  it('rejects utm_term over 500 chars', () => {
+    const b = validBody();
+    b.utm_term = 'x'.repeat(501);
+    const r = validateIntakeBody(b);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.some((e) => e.includes('utm_term'))).toBe(true);
+  });
+
+  it('rejects oversized referrer (over 2048 chars)', () => {
+    const b = validBody();
+    b.referrer = 'https://example.com/' + 'x'.repeat(2049);
+    const r = validateIntakeBody(b);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.some((e) => e.includes('referrer'))).toBe(true);
+  });
+
+  it('rejects non-string UTM types', () => {
+    const b = validBody();
+    b.utm_source = 12345 as unknown as string;
+    const r = validateIntakeBody(b);
+    expect(r.ok).toBe(false);
+  });
+});
