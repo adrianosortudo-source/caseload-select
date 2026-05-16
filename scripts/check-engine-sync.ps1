@@ -43,20 +43,52 @@ Write-Host "  app:     $appEngine"
 Write-Host "  sandbox: $sandboxEngine"
 Write-Host ""
 
-# Collect every file under each tree, hash each, build a relative-path => hash map.
+# Files with legitimate per-repo divergence — excluded from byte-for-byte check.
+# Keep this list in sync with the bash counterpart (check-engine-sync.sh).
+#
+#   persist.ts: sandbox POSTs to /api/intake-v2; app inserts to Supabase
+#               directly. Different responsibilities by design.
+$excludedFiles = @("persist.ts")
+
+# Skip __tests__ subdirectory (app-side test fixtures, never in sandbox engine).
+$excludedDirs = @("__tests__")
+
+# Hash file contents with line-ending normalisation (LF). This way CRLF vs
+# LF drift does not register as a diff — both repos run the same logic
+# regardless of how Git or the editor terminated lines.
+function Get-NormalizedHash {
+    param([string]$path)
+    $bytes = [System.IO.File]::ReadAllBytes($path)
+    $text = [System.Text.Encoding]::UTF8.GetString($bytes)
+    $normalised = $text -replace "`r`n", "`n" -replace "`r", "`n"
+    $stream = New-Object System.IO.MemoryStream
+    $writer = New-Object System.IO.StreamWriter $stream, ([System.Text.Encoding]::UTF8)
+    $writer.Write($normalised)
+    $writer.Flush()
+    $stream.Position = 0
+    $hash = (Get-FileHash -InputStream $stream -Algorithm SHA256).Hash
+    $writer.Dispose()
+    return $hash
+}
+
+# Collect every file under each tree, hash each (normalised), build a
+# relative-path => hash map. Excluded files and __tests__ are skipped.
 function Get-FileHashMap {
-    param([string]$root)
+    param([string]$root, [string[]]$excludedFiles, [string[]]$excludedDirs)
     $map = @{}
     Get-ChildItem -Path $root -Recurse -File | ForEach-Object {
         $relative = $_.FullName.Substring($root.Length).TrimStart("\", "/").Replace("\", "/")
-        $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash
-        $map[$relative] = $hash
+        if ($excludedFiles -contains $_.Name) { return }
+        $skip = $false
+        foreach ($d in $excludedDirs) { if ($relative -match "(^|/)$d(/|$)") { $skip = $true; break } }
+        if ($skip) { return }
+        $map[$relative] = Get-NormalizedHash -path $_.FullName
     }
     $map
 }
 
-$sandboxMap = Get-FileHashMap -root $sandboxEngine
-$appMap = Get-FileHashMap -root $appEngine
+$sandboxMap = Get-FileHashMap -root $sandboxEngine -excludedFiles $excludedFiles -excludedDirs $excludedDirs
+$appMap = Get-FileHashMap -root $appEngine -excludedFiles $excludedFiles -excludedDirs $excludedDirs
 
 $drifted = New-Object System.Collections.ArrayList
 $onlyInSandbox = New-Object System.Collections.ArrayList
@@ -77,7 +109,7 @@ foreach ($key in $appMap.Keys) {
 }
 
 if ($drifted.Count -eq 0 -and $onlyInSandbox.Count -eq 0 -and $onlyInApp.Count -eq 0) {
-    Write-Host "OK: app/src/lib/screen-engine/ matches sandbox/src/engine/ byte-for-byte."
+    Write-Host "OK: app/src/lib/screen-engine/ matches sandbox/src/engine/ (content; line endings ignored; persist.ts excluded by design)."
     exit 0
 }
 
