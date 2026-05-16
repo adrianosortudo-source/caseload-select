@@ -1,4 +1,3 @@
-import { francAll } from 'franc';
 import type {
   EngineState, PracticeArea, MatterType, IntentFamily,
   RawSignals, AdvisorySubtrack, DisputeFamily, SupportedLanguage,
@@ -948,81 +947,145 @@ export function classify(input: string): {
   };
 }
 
-// ─── Language detection (DR-035) ──────────────────────────────────────────
-
-// ISO 639-3 codes for the six supported languages (restricts franc search space)
-const SUPPORTED_FRANC_CODES = ['eng', 'fra', 'spa', 'por', 'cmn', 'arb'] as const;
-
-const FRANC_TO_LANG: Record<string, SupportedLanguage> = {
-  eng: 'en', fra: 'fr', spa: 'es', por: 'pt', cmn: 'zh', arb: 'ar',
-};
-
-// Threshold below which franc's top result is considered uncertain; Gemini
-// confirms the language on the same turn-1 call via __detected_language.
-const FRANC_CONFIDENCE_THRESHOLD = 0.7;
-
-// Short-text English tie-breaker constants. franc's score is RELATIVE (top
-// result always 1.0, rest are scaled ratios), so the confidence threshold
-// above never filters anything in practice. On short inputs the trigram
-// signal is weak and franc routinely ranks Spanish, Catalan, or Portuguese
-// above English on obviously-English text. When the input is short and
-// English sits anywhere in the result list with a score close to the
-// leader, prefer English.
+// ─── Language detection (DR-039 — unified classification pipeline) ───────
 //
-// Calibration: genuine non-English short inputs cap English's relative score
-// at roughly 0.72; misranked English inputs keep English's relative score
-// at 0.93 or higher. A tie-breaker score of 0.85 sits safely in the gap.
-// Char limit 60 covers the longest observed misranked English (54 chars,
-// "I want a lawyer to review my preconstruction agreement"); past that
-// length franc reliably puts English at rank 1 with no need for a fallback.
+// Language detection is the LLM's job. The engine no longer runs a
+// statistical pre-call detector. `state.language` defaults to 'en' at
+// `initialiseState`; on the first LLM call the schema's
+// `__detected_language` field returns the lead's actual ISO 639-1 code
+// (one of: en, fr, es, pt, zh, ar) and `mergeLlmResults` writes it back
+// into `state.language`. This eliminates the brittle franc-detected vs
+// LLM-detected split that previously gated the regex classifier path.
 //
-// Asymmetry rationale: a false positive (real French marked English) costs
-// one LLM round-trip via the existing Gemini __detected_language confirmation
-// path. A false negative (real English marked Spanish, the current bug)
-// skips the regex classifier entirely per DR-029 + DR-035, sending every
-// short English lead through the slow LLM-only routing path forever.
-const SHORT_TEXT_THRESHOLD_CHARS = 60;
-const ENGLISH_TIEBREAKER_SCORE = 0.85;
+// Superseded: DR-029 (LLM-as-classifier when regex falls through) and
+// DR-035 (franc + Gemini hybrid detection). See DR-039 for the
+// rationale: a single classification pipeline runs for every intake
+// regardless of language; the LLM is authoritative for both language
+// detection and matter classification; regex augments the LLM (English
+// keyword fast-path) but never gates it.
 
-function detectLanguage(input: string): { language: SupportedLanguage; confirmed: boolean } {
-  // francAll returns [[code, score], ...] ordered by descending confidence.
-  // The 'only' filter restricts to our six languages for accuracy on short inputs.
-  const results = francAll(input, { only: [...SUPPORTED_FRANC_CODES], minLength: 5 });
-  if (!results.length) return { language: 'en', confirmed: false };
+// ─── Contact-name regex extraction ────────────────────────────────────────
+//
+// Detects names the lead types in the kickoff message body. The patterns
+// cover the common English self-introductions:
+//   "I'm Adriano"        "I am Adriano"
+//   "my name is Adriano" "this is Adriano"
+//
+// Why this lives in the regex extractor and not the LLM: client_name is on
+// the LLM exclusion list (see schema.ts EXCLUDED_FROM_LLM) so the LLM
+// never tries to fill it. On Meta channels the WhatsApp/IG/FB profile
+// name is pre-seeded into client_name with source:'metadata' (see
+// channel-intake-processor.seedSlots). Profile names are often initials
+// or display handles ("A D", "ad12") which read off as a greeting. When
+// the lead's text body contains an explicit self-introduction, that wins
+// over the channel pre-fill — regex-extracted name carries
+// source:'explicit', and seedSlots only fills when client_name is empty.
+//
+// Patterns are intentionally narrow: avoid matching common false
+// positives ("I am sad", "I am writing about", "this is urgent"). The
+// name token is required to start with a capital letter and contain no
+// digits or punctuation other than apostrophe / hyphen (handles "O'Brien",
+// "Jean-Claude"). Length cap of 30 chars prevents runaway matches.
+//
+// Implementation notes:
+//   • No trailing `\b`. JavaScript `\b` treats apostrophe as a word
+//     boundary, so `\bO'Brien\b` would short-circuit the capture at the
+//     apostrophe and return just "O". The trailing match is bounded
+//     instead by the character class itself — the next non-name
+//     character (space, comma, period, end of input) simply does not
+//     match `[a-zA-Z'’\-]` and the regex stops.
+//   • The intro phrase is normalised to lowercase before matching against
+//     a lowercased copy of the input, so "My name is" / "i'm" / "I am"
+//     all trigger. The captured name token, however, is read from the
+//     ORIGINAL input via the same start index — keeping the original
+//     casing so "Adriano" stays "Adriano". The capital-letter requirement
+//     is enforced on the original-case token before returning it.
+const NAME_INTRO_PATTERNS: { lead: RegExp; nameOffset: number }[] = [
+  { lead: /\bmy name is\s+/, nameOffset: 0 },
+  { lead: /\bi(?:'|’)m\s+/, nameOffset: 0 },
+  { lead: /\bi am\s+/, nameOffset: 0 },
+  { lead: /\bthis is\s+/, nameOffset: 0 },
+];
 
-  const [topCode, topScore] = results[0] as [string, number];
+// Name token regex — capital letter followed by 0-29 name chars. No `\b`
+// at end (see note above). Matches against the ORIGINAL-case substring
+// starting where the intro phrase ended.
+const NAME_TOKEN_RE = /^([A-Z][a-zA-Z'’\-]{0,29})/;
 
-  // Short-text English bias (see constants above for rationale).
-  if (input.length < SHORT_TEXT_THRESHOLD_CHARS) {
-    const englishCandidate = results.find(([code]) => code === 'eng');
-    if (englishCandidate && (englishCandidate[1] as number) >= ENGLISH_TIEBREAKER_SCORE) {
-      return { language: 'en', confirmed: true };
-    }
+// Tokens that look like a capitalised proper noun after the intro phrase
+// but are NOT names. Anchored to lowercase so the lookups are cheap.
+const NAME_BLOCKLIST = new Set<string>([
+  'sad', 'sorry', 'tired', 'angry', 'frustrated', 'concerned', 'worried',
+  'looking', 'writing', 'reaching', 'asking', 'wondering', 'seeking',
+  'urgent', 'here', 'about', 'the', 'a', 'an',
+  'mr', 'mrs', 'ms', 'dr', // honorifics alone aren't names
+]);
+
+/**
+ * Extract a self-stated contact name from the lead's kickoff text.
+ * Returns the captured name in its original casing, or null when no
+ * pattern matches or the captured token is in the blocklist.
+ *
+ * Exported for tests; called by `initialiseState` on turn 1.
+ */
+export function extractContactName(input: string): string | null {
+  if (!input) return null;
+  const lowered = input.toLowerCase();
+  for (const { lead } of NAME_INTRO_PATTERNS) {
+    const m = lead.exec(lowered);
+    if (!m) continue;
+    // Take the substring of the ORIGINAL input starting where the intro
+    // phrase ended; the name-token regex enforces the capital-letter rule
+    // and the name character class.
+    const tail = input.slice(m.index + m[0].length);
+    const nameMatch = NAME_TOKEN_RE.exec(tail);
+    if (!nameMatch) continue;
+    const candidate = nameMatch[1]?.trim();
+    if (!candidate) continue;
+    if (NAME_BLOCKLIST.has(candidate.toLowerCase())) continue;
+    return candidate;
   }
-
-  const mapped = FRANC_TO_LANG[topCode];
-  if (!mapped) return { language: 'en', confirmed: false };
-  return { language: mapped, confirmed: topScore >= FRANC_CONFIDENCE_THRESHOLD };
+  return null;
 }
 
 // ─── State initialiser ────────────────────────────────────────────────────
 
 export function initialiseState(input: string): EngineState {
   const raw = extractRawSignals(input);
-  const { language, confirmed } = detectLanguage(input);
 
-  // Non-English: skip the regex classifier entirely; LLM handles routing (DR-029 + DR-035).
-  // English retains the fast regex path with no regression.
+  // DR-039: single classification pipeline. The regex classifier runs for
+  // EVERY intake regardless of language. For non-English text it returns
+  // matter_type='unknown' (the keyword patterns are English-only); the
+  // LLM then classifies via the synthetic __matter_type field. For
+  // English text the regex provides a fast, deterministic fast-path; the
+  // LLM extracts slots and confirms language via __detected_language.
+  //
+  // No language-based bypass. No franc gating. The LLM is authoritative
+  // for both language detection and matter classification; regex is a
+  // redundant English-only signal that augments but never gates the
+  // pipeline.
   const { intent_family, practice_area, matter_type, dispute_family, advisory_subtrack } =
-    language === 'en'
-      ? classify(input)
-      : {
-          intent_family: 'unknown' as IntentFamily,
-          practice_area: 'unknown' as PracticeArea,
-          matter_type: 'unknown' as MatterType,
-          dispute_family: 'unknown' as DisputeFamily,
-          advisory_subtrack: 'unknown' as AdvisorySubtrack,
-        };
+    classify(input);
+
+  // Contact-name regex pass. Runs language-agnostic for simplicity (the
+  // patterns are anchored on English phrasings; the false-positive cost on
+  // non-English input is zero — no match, no slot filled).
+  const seededName = extractContactName(input);
+  const slots: Record<string, string | null> = {};
+  const slotMeta: Record<string, EngineState['slot_meta'][string]> = {};
+  if (seededName) {
+    slots.client_name = seededName;
+    slotMeta.client_name = {
+      source: 'explicit',
+      evidence: 'self-introduction in kickoff text',
+      confidence: 0.95,
+    };
+  }
+
+  // Default language is English. The LLM's __detected_language field on
+  // the first extraction call overwrites this via mergeLlmResults if the
+  // lead wrote in another supported language.
+  const language: SupportedLanguage = 'en';
 
   return {
     input,
@@ -1032,9 +1095,8 @@ export function initialiseState(input: string): EngineState {
     dispute_family,
     advisory_subtrack,
     language,
-    ...(confirmed ? {} : { language_needs_confirm: true }),
-    slots: {},
-    slot_meta: {},
+    slots,
+    slot_meta: slotMeta,
     slot_evidence: {},
     raw,
     confidence: 0,

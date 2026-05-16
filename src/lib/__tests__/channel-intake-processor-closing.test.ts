@@ -144,15 +144,88 @@ beforeEach(() => {
   };
 });
 
+// Build a resumed session whose engine state has already hit the
+// discovery follow-up cap. Used by the closing tests so the processor
+// finalises on this turn rather than asking another discovery question.
+//
+// Mirrors the shape returned by `loadOpenChannelSession` — `engine_state`
+// is a partial EngineState (the field set the processor needs to skip
+// the discovery loop and finalise into screened_leads).
+function discoveryCapExhaustedSession(channel: 'whatsapp' | 'facebook' | 'instagram') {
+  return {
+    id: 'session-uuid-resume',
+    firm_id: FIRM_ID,
+    channel,
+    sender_id: 'sender-id',
+    engine_state: {
+      input: 'prior turn transcript',
+      practice_area: 'corporate',
+      matter_type: 'contract_dispute',
+      intent_family: 'business_dispute',
+      dispute_family: 'agreement_performance',
+      advisory_subtrack: 'unknown',
+      slots: {
+        client_name: 'Adriano',
+        client_phone: '+16475492106',
+      },
+      slot_meta: {
+        client_name: { source: 'answered', confidence: 1.0 },
+        client_phone: { source: 'answered', confidence: 1.0 },
+      },
+      slot_evidence: {},
+      raw: {
+        mentions_urgency: false,
+        mentions_money: true,
+        mentions_access: false,
+        mentions_ownership: false,
+        mentions_documents: false,
+        mentions_payment: true,
+        mentions_agreement: true,
+        mentions_vendor: false,
+        mentions_fraud: false,
+        mentions_property: false,
+        mentions_closing: false,
+        mentions_lease: false,
+        mentions_construction: false,
+        mentions_mortgage: false,
+        mentions_preconstruction: false,
+        input_length: 20,
+      },
+      confidence: 0,
+      coreCompleteness: 0,
+      answeredQuestionGroups: [],
+      questionHistory: [],
+      insightShown: false,
+      contactCaptureStarted: true,
+      lead_id: 'L-2026-05-16-AAA',
+      submitted_at: '2026-05-16T00:00:00.000Z',
+      language: 'en',
+      // Discovery cap already exhausted on previous turns.
+      discoveryFollowUpCount: 3,
+    },
+    follow_up_count: 0,
+    max_follow_ups: 3,
+    finalized: false,
+    expires_at: '2026-05-17T00:00:00.000Z',
+    created_at: '2026-05-16T00:00:00.000Z',
+  };
+}
+
 describe('processChannelInbound — closing message dispatch', () => {
-  it('sends a closing acknowledgment on whatsapp after successful persist', async () => {
+  it('sends a closing acknowledgment on whatsapp after the discovery cap is reached', async () => {
     // Adriano's smoke-test scenario: contract dispute, WhatsApp pre-fills
-    // both contact slots, gate passes, lead is persisted. The processor
-    // must follow up with a 1-2 sentence acknowledgment.
+    // both contact slots, contact gate passes — but the processor now
+    // runs a discovery follow-up phase BEFORE the closing. To exercise
+    // the closing path itself, the test simulates the final resume turn:
+    // session state already has `discoveryFollowUpCount === DISCOVERY_FOLLOW_UP_CAP`,
+    // so the processor skips the discovery loop and finalises directly.
+    mocks.loadOpenChannelSession.mockResolvedValueOnce(
+      discoveryCapExhaustedSession('whatsapp') as never,
+    );
+
     const r = await processChannelInbound({
       firmId: FIRM_ID,
-      text:
-        'Hi, my business partner and I have a contract dispute. We supplied roughly 75k of product to a vendor in Mississauga back in March, they paid the deposit then defaulted on the balance. We need legal help to recover the money.',
+      text: 'About $75k. Closing date is next month.',
       sender: whatsappSenderWithContact(),
     });
 
@@ -160,48 +233,43 @@ describe('processChannelInbound — closing message dispatch', () => {
     expect(r.status).toBe('triaging');
 
     // Only ONE sendChannelMessage call — the closing acknowledgment.
-    // No follow-up question was sent because the gate passed on turn 1.
+    // No follow-up question was sent because discovery is exhausted.
     expect(mocks.sendChannelMessage).toHaveBeenCalledTimes(1);
     const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
-    // Channel-aware phrasing: name + window. The matter label is optional —
-    // it depends on whether the regex extractor classified the matter
-    // confidently (e.g. corporate_general falls through to a generic "your
-    // matter" phrasing). Both shapes are valid.
     expect(sentText).toMatch(/^Thanks Adriano,/);
     expect(sentText).toMatch(/a lawyer is reviewing your /);
     expect(sentText).toMatch(/will reach out (shortly|promptly)\.$/);
   });
 
-  it('sends a closing acknowledgment on messenger after successful persist', async () => {
-    // Messenger pre-fill only seeds client_name — Meta IG / FB don't carry
-    // a phone on the inbound. Use the LLM mock to surface a phone so the
-    // contact-doctrine gate passes and the processor reaches the closing
-    // dispatch. (Outside of tests, the gate-pass case on Messenger is the
-    // multi-turn follow-up flow that lands contact via a separate Send;
-    // this single-turn LLM-fill path mirrors what happens when the lead's
-    // first message volunteers a phone number.)
-    mocks.llmExtractServer.mockResolvedValueOnce({
-      mode: 'live',
-      extracted: { client_phone: '+14161234567' } as Record<string, string | null>,
-    });
+  it('sends a closing acknowledgment on messenger after the discovery cap is reached', async () => {
+    // Messenger has no inbound phone, but the contact gate on resume
+    // sees client_name + client_phone (provisioned via LLM extraction on
+    // a prior turn — same fixture for simplicity). Discovery is
+    // exhausted, so the processor finalises and sends the closing.
+    mocks.loadOpenChannelSession.mockResolvedValueOnce(
+      discoveryCapExhaustedSession('facebook') as never,
+    );
+
     const r = await processChannelInbound({
       firmId: FIRM_ID,
-      text:
-        'My business partner is hiding money from me and I cannot access the company bank account or any of the books. Reach me at 416-123-4567.',
+      text: 'Yes, the contract was in writing.',
       sender: messengerSenderWithName(),
     });
 
     expect(r.persisted).toBe(true);
-
-    // Only the closing — no follow-up question.
     expect(mocks.sendChannelMessage).toHaveBeenCalledTimes(1);
     const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
-    expect(sentText).toMatch(/^Thanks Adriano,/); // first token of the name
+    expect(sentText).toMatch(/^Thanks Adriano,/);
   });
 
   it('does not unwind the persist when the closing-message send fails', async () => {
     // Send rejects (token revoked, Graph 4xx, network error). The lead
     // is already in screened_leads; we must surface persisted=true.
+    // Resume turn with discovery cap exhausted so the processor reaches
+    // the closing-send path.
+    mocks.loadOpenChannelSession.mockResolvedValueOnce(
+      discoveryCapExhaustedSession('whatsapp') as never,
+    );
     mocks.sendChannelMessage.mockResolvedValueOnce({
       sent: false,
       reason: 'no whatsapp_cloud_api_access_token configured',
@@ -209,8 +277,7 @@ describe('processChannelInbound — closing message dispatch', () => {
 
     const r = await processChannelInbound({
       firmId: FIRM_ID,
-      text:
-        'I have a contract dispute about $75k worth of unpaid product delivered to a vendor.',
+      text: 'It was about 75k worth of product unpaid.',
       sender: whatsappSenderWithContact(),
     });
 
@@ -221,14 +288,16 @@ describe('processChannelInbound — closing message dispatch', () => {
   it('does not unwind the persist when the closing-message send throws', async () => {
     // Pathological: send helper itself blows up (programmer error, not a
     // Graph response). The lead is already saved; the persist must stick.
+    mocks.loadOpenChannelSession.mockResolvedValueOnce(
+      discoveryCapExhaustedSession('whatsapp') as never,
+    );
     mocks.sendChannelMessage.mockImplementationOnce(() => {
       throw new Error('unexpected boom');
     });
 
     const r = await processChannelInbound({
       firmId: FIRM_ID,
-      text:
-        'I have a contract dispute about $75k worth of unpaid product delivered to a vendor.',
+      text: 'It was about 75k worth of product unpaid.',
       sender: whatsappSenderWithContact(),
     });
 

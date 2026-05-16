@@ -247,6 +247,26 @@ export interface EngineState {
   language: SupportedLanguage;
   /** True when franc confidence < threshold; triggers Gemini language confirm on turn 1 (DR-035). */
   language_needs_confirm?: boolean;
+  /**
+   * Discovery follow-up counter (channel-intake-processor only).
+   *
+   * Increments each time the processor sends a discovery question to the
+   * lead AFTER the contact-capture doctrine gate has already passed. Caps
+   * brief depth on uncapped Meta channels (whatsapp / facebook / instagram)
+   * so a lead with full contact pre-filled from sender metadata still
+   * answers 2-3 enrichment questions instead of getting persisted on a
+   * single-pass extraction.
+   *
+   * Distinct from `follow_up_count` on `channel_intake_sessions` which
+   * tracks contact-capture follow-up attempts (max 3). The two counters
+   * are separate phases — contact-capture runs to completion first; only
+   * after the gate passes does discovery start with its own budget.
+   *
+   * Web / SMS / GBP / Voice never set this; their flows do not call the
+   * channel processor's discovery loop (web/sms/gbp drive their own
+   * dialogue client-side, voice is single-pass on the transcript).
+   */
+  discoveryFollowUpCount?: number;
   debug?: Record<string, unknown>;
 }
 
