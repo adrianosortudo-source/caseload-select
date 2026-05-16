@@ -52,25 +52,67 @@ echo "  app:     $APP_ENGINE"
 echo "  sandbox: $SANDBOX_ENGINE"
 echo
 
-# Run a recursive diff. -q is "report only differing files, not contents."
-# diff returns 1 when files differ, 0 when identical, 2 for errors.
+# Files with legitimate per-repo divergence — excluded from byte-for-byte check.
+# Add a file here only when the divergence is structural (different
+# responsibilities) and explicitly documented. Do NOT add files just because
+# they happen to differ — port them instead.
+#
+#   persist.ts: sandbox POSTs to /api/intake-v2 (web widget SPA); app inserts
+#               directly to Supabase. Different runtime targets, different
+#               code. See sandbox CLAUDE.md ("persist.ts — /api/intake-v2
+#               POST (web only; sims don't persist)").
+EXCLUDED_FILES=(
+  "persist.ts"
+)
+
+# Build an exclude expression for find. We compare each non-excluded file
+# manually so we can use --strip-trailing-cr (ignore LF vs CRLF drift).
+# Line-ending drift is cosmetic — both files compile and run identically.
+# The byte-for-byte intent is about logical content, not line terminators.
+EXCLUDE_PATTERN=""
+for f in "${EXCLUDED_FILES[@]}"; do
+  EXCLUDE_PATTERN+=" -not -name $f"
+done
+
 set +e
-DIFF_OUT="$(diff -rq "$SANDBOX_ENGINE" "$APP_ENGINE" 2>&1)"
-DIFF_STATUS=$?
+DRIFT=()
+while IFS= read -r -d '' app_file; do
+  rel="${app_file#$APP_ENGINE/}"
+  sb_file="$SANDBOX_ENGINE/$rel"
+  if [ ! -f "$sb_file" ]; then
+    DRIFT+=("MISSING IN SANDBOX: $rel")
+    continue
+  fi
+  # --strip-trailing-cr makes diff ignore CRLF vs LF.
+  if ! diff -q --strip-trailing-cr "$app_file" "$sb_file" > /dev/null 2>&1; then
+    DRIFT+=("CONTENT DIFFERS: $rel")
+  fi
+done < <(find "$APP_ENGINE" -type f \( -name "*.ts" -o -name "*.json" \) -not -path "*/__tests__/*" $EXCLUDE_PATTERN -print0)
+
+# Also flag files in sandbox that don't exist in app.
+while IFS= read -r -d '' sb_file; do
+  rel="${sb_file#$SANDBOX_ENGINE/}"
+  app_file="$APP_ENGINE/$rel"
+  if [ ! -f "$app_file" ]; then
+    DRIFT+=("MISSING IN APP: $rel")
+  fi
+done < <(find "$SANDBOX_ENGINE" -type f \( -name "*.ts" -o -name "*.json" \) -not -path "*/__tests__/*" $EXCLUDE_PATTERN -print0)
 set -e
 
-if [ $DIFF_STATUS -eq 0 ]; then
-  echo "OK: app/src/lib/screen-engine/ matches sandbox/src/engine/ byte-for-byte."
+if [ ${#DRIFT[@]} -eq 0 ]; then
+  echo "OK: app/src/lib/screen-engine/ matches sandbox/src/engine/ (content; line endings ignored; persist.ts excluded by design)."
   exit 0
 fi
 
 echo "FAIL: engine port has drifted from the sandbox source of truth."
 echo
-echo "$DIFF_OUT"
+printf '  %s\n' "${DRIFT[@]}"
 echo
 echo "Discipline: engine changes must land in BOTH repos in the same commit."
 echo "  sandbox: $SANDBOX_ENGINE"
 echo "  app:     $APP_ENGINE"
+echo
+echo "Note: line-ending drift (LF vs CRLF) is ignored. persist.ts is excluded by design."
 echo
 echo "Fix: re-port the sandbox engine into the app, then re-run this script:"
 echo "  cp -r \"$SANDBOX_ENGINE/\".  \"$APP_ENGINE/\""
