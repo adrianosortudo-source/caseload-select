@@ -73,7 +73,20 @@ jobs:
       - name: Run brief-equality eval
         # Explicit run as a separate job surfaces this regression guard
         # as its own status check. Branch protection should require this
-        # check to pass before merge. DR-039 codifies language-agnostic
-        # intake; a failure here means brief structure diverged across
-        # languages and the doctrine is broken.
-        run: npx vitest run src/lib/__evals__/brief-equality-eval.test.ts
+        # check to pass before merge once the eval file is on main.
+        # DR-039 codifies language-agnostic intake; a failure here means
+        # brief structure diverged across languages and the doctrine is
+        # broken.
+        #
+        # The if-exists guard handles the bootstrap case: this CI workflow
+        # lands in its own PR before the DR-039 PR that ships the eval
+        # file. On branches that pre-date the eval (the CI bootstrap PR
+        # itself, plus any branch cut from main before DR-039 merged),
+        # the job logs a notice and passes. Once the eval lands in main,
+        # every branch with the file in scope runs the assertion.
+        run: |
+          if [ -f src/lib/__evals__/brief-equality-eval.test.ts ]; then
+            npx vitest run src/lib/__evals__/brief-equality-eval.test.ts
+          else
+            echo "brief-equality-eval.test.ts is not present on this branch yet — skipping. The eval ships with DR-039 (PR #7). Once that lands in main, this job will run the assertion on every PR."
+          fi
