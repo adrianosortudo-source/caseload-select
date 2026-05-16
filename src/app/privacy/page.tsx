@@ -25,7 +25,7 @@ export default function PrivacyPage() {
         <div>
           <p className="text-xs uppercase tracking-[0.18em] font-semibold text-gold">CaseLoad Select</p>
           <h1 className="text-3xl font-bold text-navy mt-2">Privacy Policy</h1>
-          <p className="mt-2 text-sm text-black/50">Last updated: 2026-05-13</p>
+          <p className="mt-2 text-sm text-black/50">Last updated: 2026-05-15</p>
         </div>
 
         <Section title="Who we are">
@@ -70,8 +70,8 @@ export default function PrivacyPage() {
                 </tr>
                 <tr>
                   <td className="px-3 py-2 font-medium">WhatsApp</td>
-                  <td className="px-3 py-2">Text conversation via the firm&rsquo;s GoHighLevel-connected WhatsApp number</td>
-                  <td className="px-3 py-2">Message text, WhatsApp phone number</td>
+                  <td className="px-3 py-2">Text conversation via the firm&rsquo;s WhatsApp Business Account on Meta&rsquo;s Cloud API</td>
+                  <td className="px-3 py-2">Message text, sender phone number, WhatsApp profile name</td>
                 </tr>
                 <tr>
                   <td className="px-3 py-2 font-medium">SMS</td>
@@ -85,13 +85,13 @@ export default function PrivacyPage() {
                 </tr>
                 <tr>
                   <td className="px-3 py-2 font-medium">Instagram DM</td>
-                  <td className="px-3 py-2">Direct message on the firm&rsquo;s Instagram account, routed through GoHighLevel</td>
-                  <td className="px-3 py-2">Message text, Instagram handle</td>
+                  <td className="px-3 py-2">Direct message on the firm&rsquo;s Instagram Business account; received via the Meta Instagram webhook</td>
+                  <td className="px-3 py-2">Message text, sender Instagram-Scoped ID</td>
                 </tr>
                 <tr>
                   <td className="px-3 py-2 font-medium">Facebook Messenger</td>
-                  <td className="px-3 py-2">Message on the firm&rsquo;s Facebook page, routed through GoHighLevel</td>
-                  <td className="px-3 py-2">Message text, Facebook profile name</td>
+                  <td className="px-3 py-2">Direct message on the firm&rsquo;s Facebook Page; received via the Meta Messenger webhook</td>
+                  <td className="px-3 py-2">Message text, sender Page-Scoped ID</td>
                 </tr>
                 <tr>
                   <td className="px-3 py-2 font-medium">Google Business Profile chat</td>
@@ -122,11 +122,11 @@ export default function PrivacyPage() {
           <ul className="list-disc pl-5 space-y-1.5">
             <li>The lawyer or staff at the firm whose form you submitted to.</li>
             <li>Adriano Domingues, in the role of CaseLoad Select operator, for system administration, support, and quality control.</li>
-            <li>The firm&rsquo;s CRM and communication service provider (GoHighLevel) and transactional email provider (Resend), which deliver the firm&rsquo;s automated replies. GoHighLevel also handles WhatsApp, SMS, Voice, Instagram DM, Facebook Messenger, and Google Business Profile chat channels on the firm&rsquo;s behalf.</li>
+            <li>The firm&rsquo;s CRM and communication service provider (GoHighLevel) and transactional email provider (Resend), which deliver the firm&rsquo;s automated replies. GoHighLevel handles SMS, voice, and Google Business Profile chat channels on the firm&rsquo;s behalf. WhatsApp, Facebook Messenger, and Instagram DM intakes are received directly by CaseLoad Select from Meta&rsquo;s APIs; the platform does not route those channels through GoHighLevel.</li>
             <li>Supabase Inc. (database hosting, Toronto region) and Vercel Inc. (application hosting), under written service agreements limited to processing on our instructions.</li>
             <li>Google LLC (intake screening via Gemini 2.5 Flash for Screen 2.0 and the voice channel), under Google&rsquo;s data processing terms.</li>
             <li>OpenAI, L.L.C. (intake screening assistance for legacy web widget sessions), under OpenAI&rsquo;s data processing terms.</li>
-            <li>Meta Platforms, Inc., for intake that arrives via Instagram DM or Facebook Messenger. Meta processes the conversation before it reaches our systems. Their data processing terms apply to that layer.</li>
+            <li>Meta Platforms, Inc., for intake that arrives via Facebook Messenger, Instagram Direct, or WhatsApp Cloud API. Meta processes the conversation before it reaches our systems and stores its own copy under Meta&rsquo;s own retention rules. Our policy applies from the point of receipt into the CaseLoad Select webhook. We use Meta&rsquo;s Page Send API and Cloud API messages endpoint to reply within the standard 24-hour customer-service window only.</li>
           </ul>
           <p>
             We do not sell or rent your information. We do not use your information for advertising.

@@ -23,7 +23,7 @@ export default function TermsPage() {
         <div>
           <p className="text-xs uppercase tracking-[0.18em] font-semibold text-gold">CaseLoad Select</p>
           <h1 className="text-3xl font-bold text-navy mt-2">Terms of Service</h1>
-          <p className="mt-2 text-sm text-black/50">Last updated: 2026-05-06</p>
+          <p className="mt-2 text-sm text-black/50">Last updated: 2026-05-15</p>
         </div>
 
         <Section title="What CaseLoad Select is">
@@ -53,6 +53,15 @@ export default function TermsPage() {
           </ul>
         </Section>
 
+        <Section title="Use of Meta channels">
+          <p>
+            When you message a firm through Facebook Messenger, Instagram Direct, or WhatsApp using a number the firm has connected to CaseLoad Select, you initiate a conversation on a Meta surface. CaseLoad Select does not send unsolicited messages on Meta channels; the platform replies only inside the standard 24-hour customer-service window opened by your inbound message. Messages sent through Meta channels are received via Meta&rsquo;s webhooks under the firm&rsquo;s authorisation; data captured is described in the <Link href="/privacy" className="text-navy underline underline-offset-2">Privacy Policy</Link> and is governed by both Meta&rsquo;s own platform terms and our policy.
+          </p>
+          <p>
+            The platform does not use Meta channels to send promotional content, distribute bulk messages, or aggregate user data across firms. If you wish to stop receiving messages from a firm on a Meta channel, reply STOP, block the firm&rsquo;s account on the relevant Meta product, or contact <a href="mailto:privacy@caseloadselect.ca" className="text-navy underline underline-offset-2">privacy@caseloadselect.ca</a> to request removal of your record from CaseLoad Select per the Data Deletion process.
+          </p>
+        </Section>
+
         <Section title="Lawyer and operator portal">
           <p>
             The portal at <code>app.caseloadselect.ca</code> is reserved for lawyers and operators who have been authorised by their firm or by CaseLoad Select. Access requires a magic link sent to a registered email address. Sharing the link, the resulting session, or your credentials with anyone else violates these terms.
@@ -64,7 +73,7 @@ export default function TermsPage() {
 
         <Section title="Service availability">
           <p>
-            CaseLoad Select runs on third-party infrastructure (Supabase, Vercel, Resend, OpenAI, GoHighLevel) and inherits their availability. We do not promise specific uptime numbers and do not warrant that the service will be free of interruption or error. Maintenance windows and provider incidents may briefly affect intake form availability.
+            CaseLoad Select runs on third-party infrastructure: Supabase (database), Vercel (application hosting), Resend (transactional email), Google LLC (Gemini 2.5 Flash for AI screening), OpenAI (legacy widget screening), GoHighLevel (CRM, SMS, voice, Google Business Profile chat), and Meta Platforms (Facebook Messenger, Instagram Direct, and WhatsApp Cloud API). The service inherits the availability of these providers. We do not promise specific uptime numbers and do not warrant that the service will be free of interruption or error. Maintenance windows and provider incidents may briefly affect intake form availability.
           </p>
         </Section>
 
@@ -80,6 +89,9 @@ export default function TermsPage() {
         <Section title="Limitation of liability">
           <p>
             To the fullest extent permitted by Ontario law, neither CaseLoad Select nor Adriano Domingues is liable for indirect, incidental, special, consequential, or punitive damages arising from your use of the service, even if advised of the possibility of those damages. Liability for direct damages is limited to the fees, if any, that you have paid to CaseLoad Select directly in the twelve months preceding the event giving rise to the claim. CaseLoad Select does not collect fees from prospective clients; this clause is included for completeness.
+          </p>
+          <p>
+            Where Meta Platforms, Inc. provides the messaging infrastructure (Facebook Messenger, Instagram Direct, WhatsApp Cloud API), Meta&rsquo;s own terms govern the conversation surface and its availability. CaseLoad Select is not liable for outages, rate-limits, account-level restrictions, or message-delivery failures imposed by Meta on its platforms.
           </p>
         </Section>
 

@@ -244,10 +244,12 @@ Permissions to request at App Review for Block 3 (per the master CLAUDE.md):
 | `pages_messaging` | Messenger | Send/receive DMs through the test Page |
 | `pages_manage_metadata` | Messenger | Subscribe the Page to webhooks |
 | `pages_show_list` | Messenger | List Pages the firm owns |
-| `instagram_basic` | Instagram | Read IG Business account info |
-| `instagram_manage_messages` | Instagram | Read/respond to IG DMs |
+| `instagram_business_basic` (or legacy `instagram_basic`) | Instagram | Read IG Business account info |
+| `instagram_business_manage_messages` (or legacy `instagram_manage_messages`) | Instagram | Read/respond to IG DMs |
 | `business_management` | Both | Access Business Portfolio data |
 | `whatsapp_business_messaging` | WhatsApp | Send/receive WhatsApp messages |
 | `whatsapp_business_management` | WhatsApp | Manage WABA settings |
 
 `public_profile` is auto-granted; `email` is optional (we don't request user email through these channels in the intake flow).
+
+**IG scope naming note (2026-05-15):** Meta renamed the Instagram-side scopes in 2024 as the API moved to Business Login. The current names are `instagram_business_basic` and `instagram_business_manage_messages`; the older names (`instagram_basic` / `instagram_manage_messages`) still appear on some legacy apps. Reconcile against the actual labels shown in the App Review dashboard for App ID `1007304805285554` at paste time. The operational use does not change between the two name sets.
