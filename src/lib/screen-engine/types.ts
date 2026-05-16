@@ -243,10 +243,14 @@ export interface EngineState {
   submitted_at: string;
   /** Input channel; defaults to 'web' on extractor.initialiseState. */
   channel?: Channel;
-  /** Detected lead language. Defaults to 'en'. Set by franc on turn 1 (DR-035). */
+  /**
+   * Detected lead language. Defaults to 'en' at `initialiseState`. The LLM
+   * is authoritative: the schema's `__detected_language` field is always
+   * required and the LLM's response sets this on every extraction call
+   * (DR-039 — unified classification pipeline). The previous franc-based
+   * pre-detection (DR-035) is removed.
+   */
   language: SupportedLanguage;
-  /** True when franc confidence < threshold; triggers Gemini language confirm on turn 1 (DR-035). */
-  language_needs_confirm?: boolean;
   /**
    * Discovery follow-up counter (channel-intake-processor only).
    *
@@ -259,7 +263,7 @@ export interface EngineState {
    *
    * Distinct from `follow_up_count` on `channel_intake_sessions` which
    * tracks contact-capture follow-up attempts (max 3). The two counters
-   * are separate phases — contact-capture runs to completion first; only
+   * are separate phases: contact-capture runs to completion first; only
    * after the gate passes does discovery start with its own budget.
    *
    * Web / SMS / GBP / Voice never set this; their flows do not call the
