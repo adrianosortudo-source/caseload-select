@@ -1,0 +1,79 @@
+# CaseLoad Select — Continuous Integration
+#
+# Validates every pull request and every push to main against:
+#   1. TypeScript type correctness (npx tsc --noEmit)
+#   2. Full vitest suite (1894+ tests)
+#   3. DR-039 brief-equality eval (explicit regression guard for
+#      language-agnostic intake parity across en/fr/es/pt/zh)
+#
+# Engine sandbox-vs-app drift check (scripts/check-engine-sync.sh) is
+# NOT run here because the sandbox repo lives on disk alongside this
+# repo and is not in version control. That check stays operator-local
+# until the sandbox is promoted to its own git repo (separate work
+# item — see DR-033 long-term).
+#
+# Required status checks (set in GitHub branch protection):
+#   - typecheck
+#   - test
+#   - brief-equality-eval
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  typecheck:
+    name: TypeScript typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tsc --noEmit
+        run: npx tsc --noEmit
+
+  test:
+    name: Full vitest suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run vitest
+        run: npx vitest run
+
+  brief-equality-eval:
+    name: DR-039 brief-equality eval (language parity)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run brief-equality eval
+        # Explicit run as a separate job surfaces this regression guard
+        # as its own status check. Branch protection should require this
+        # check to pass before merge. DR-039 codifies language-agnostic
+        # intake; a failure here means brief structure diverged across
+        # languages and the doctrine is broken.
+        run: npx vitest run src/lib/__evals__/brief-equality-eval.test.ts
