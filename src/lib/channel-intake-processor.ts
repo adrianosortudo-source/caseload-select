@@ -36,6 +36,7 @@ import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
 import type { EngineState, Band } from '@/lib/screen-engine/types';
 import { evaluateContactGate } from '@/lib/screen-engine/contact-doctrine';
+import { buildClosingMessage } from '@/lib/screen-engine/closing';
 import { persistUnconfirmedInquiry } from '@/lib/unconfirmed-inquiry';
 import {
   loadOpenChannelSession,
@@ -471,6 +472,34 @@ export async function processChannelInbound(
     }).catch((err) => {
       console.error('[channel-intake] notifyLawyersOfNewLead failed:', err);
     });
+  }
+
+  // ── Closing acknowledgment (best-effort) ───────────────────────────────
+  // The lead is saved; surface a 1-2 sentence confirmation on the same
+  // channel so the conversation closes cleanly. This is what fires the
+  // first outbound `pages_messaging` / `whatsapp_business_messaging` /
+  // `instagram_basic` Send API call on single-turn intakes — App Review
+  // needs to see this exercised. Channel-aware: web and voice return
+  // empty (web has its own done page; voice closes verbally).
+  //
+  // Failure here MUST NOT unwind the persist. The brief is already in
+  // screened_leads and the lawyer notification has already been queued.
+  try {
+    const closing = buildClosingMessage(state);
+    if (closing) {
+      const sendResult = await sendChannelMessage({
+        firmId,
+        sender,
+        text: closing,
+      });
+      if (!sendResult.sent) {
+        console.warn(
+          `[channel-intake] closing message send failed firm=${firmId} channel=${channel}: ${sendResult.reason ?? 'unknown'}`,
+        );
+      }
+    }
+  } catch (err) {
+    console.warn('[channel-intake] closing message dispatch failed:', err);
   }
 
   return {

@@ -307,6 +307,14 @@ export interface NextStep {
   slot?: SlotDefinition;
   message?: string;
   bridgeText?: string;
+  /**
+   * Channel-aware closing acknowledgment to send to the lead at the
+   * terminal `stop` step. Populated by `buildClosingMessage(state)` in
+   * `closing.ts`. Empty for web and voice (web renders its own done
+   * page; voice closes verbally). Callers on Meta / SMS / GBP channels
+   * surface this via the channel's Send API after persistence.
+   */
+  closingMessage?: string;
 }
 
 export interface BandResult {
