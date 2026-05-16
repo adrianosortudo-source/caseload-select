@@ -6,6 +6,7 @@ import { computeBand } from './band';
 import { SLOT_REGISTRY } from './slotRegistry';
 import { updateAdvisorySubtrack, rerouteFromCorporateGeneral, rerouteFromRealEstateGeneral } from './extractor';
 import { deriveAdvisorySpecificTask } from './slotEvidence';
+import { buildClosingMessage } from './closing';
 
 const INSIGHT_THRESHOLD_COMPLETENESS = 75;
 const BAND_A_COMPLETENESS = 65;
@@ -689,6 +690,7 @@ export function getNextStep(state: EngineState): NextStep {
   const bandResult = computeBand(state);
   const completeness = computeCoreCompleteness(state);
   const gap = getDecisionGap(state);
+  const channel = state.channel ?? 'web';
 
   // Out-of-scope: stop immediately with a polite message; lead still goes to the firm
   if (state.matter_type === 'out_of_scope') {
@@ -696,6 +698,7 @@ export function getNextStep(state: EngineState): NextStep {
       type: 'stop',
       message: 'Lead captured. Forwarded to the firm.',
       bridgeText: getBridgeText(state),
+      closingMessage: buildClosingMessage(state),
     };
   }
 
@@ -708,11 +711,36 @@ export function getNextStep(state: EngineState): NextStep {
         if (realSlot) return { type: 'capture_contact', slot: realSlot };
       }
     }
-    return { type: 'stop', message: 'All details captured. Report is ready.' };
+    // All contact slots filled.
+    //
+    // Web: the SPA's contact form was the terminal step; return stop so
+    // the done page renders next.
+    //
+    // Non-web channels (WhatsApp, Messenger, Instagram, GBP, SMS): contact
+    // pre-fill from sender metadata (DR-023) can satisfy this block on
+    // turn 1 before any discovery slot is asked. Fall through so the
+    // regular flow can keep offering high-priority slots while the
+    // channel budget allows. Stop is reached only when readyToStop / the
+    // post-insight loop / slot saturation says so. Without the fall-
+    // through, channels that pre-fill contact short-circuit to stop on
+    // turn 1 and produce shallow briefs.
+    if (channel === 'web') {
+      return {
+        type: 'stop',
+        message: 'All details captured. Report is ready.',
+        closingMessage: buildClosingMessage(state),
+      };
+    }
+    // Fall through.
   }
 
   if (readyToStop(state, bandResult.band, completeness)) {
-    return { type: 'stop', message: 'Qualification complete.', bridgeText: getBridgeText(state) };
+    return {
+      type: 'stop',
+      message: 'Qualification complete.',
+      bridgeText: getBridgeText(state),
+      closingMessage: buildClosingMessage(state),
+    };
   }
 
   if (!state.insightShown && shouldPresentInsight(state, bandResult.band, completeness, gap)) {
@@ -722,7 +750,12 @@ export function getNextStep(state: EngineState): NextStep {
   if (state.insightShown) {
     const next = selectNextSlot(state);
     if (!next || gap === 'none') {
-      return { type: 'stop', message: 'Qualification complete.', bridgeText: getBridgeText(state) };
+      return {
+        type: 'stop',
+        message: 'Qualification complete.',
+        bridgeText: getBridgeText(state),
+        closingMessage: buildClosingMessage(state),
+      };
     }
     if (bandResult.band === 'A' && next.tier === 'strategic') return { type: 'deepen', slot: next };
     return { type: 'continue', slot: next };
