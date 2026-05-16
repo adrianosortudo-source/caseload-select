@@ -133,9 +133,11 @@ export async function persistScreenedLead(
   const attribution = getWebAttribution();
 
   // intake_language is the ISO 639-1 code of the language the lead used to
-  // converse with the screen. Defaults to 'en' if franc never ran for any
-  // reason. The endpoint uses this to set screened_leads.intake_language
-  // (DR-036: language-agnostic at intake, English at the lawyer surface).
+  // converse with the screen. Defaults to 'en' (the LLM is authoritative
+  // for language detection per DR-039; state.language is set on the first
+  // LLM call via __detected_language). The endpoint uses this to set
+  // screened_leads.intake_language (DR-036: language-agnostic at intake,
+  // English at the lawyer surface).
   const intakeLanguage = state.language ?? 'en';
 
   // raw_transcript: the lead's original natural-language description as

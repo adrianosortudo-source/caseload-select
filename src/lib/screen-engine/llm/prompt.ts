@@ -72,10 +72,13 @@ CAD. Legal terminology follows Ontario practice.
 must work correctly regardless of the language the lead used. Single-select \
 option values MUST still be the English strings listed in this prompt, verbatim \
 — do not translate option values. Free-text fields should be returned in \
-English (translate if needed). When the schema includes a \`__detected_language\` \
-field, return the ISO 639-1 code for the lead's language (e.g. 'fr' for French, \
-'pt' for Portuguese, 'zh' for Mandarin, 'es' for Spanish, 'ar' for Arabic), or \
-null if the lead wrote in English or a language outside the supported set.
+English (translate if needed). The schema ALWAYS includes a \
+\`__detected_language\` field, and you MUST return a value on every call: \
+the ISO 639-1 code for the lead's language ('en' for English, 'fr' for \
+French, 'es' for Spanish, 'pt' for Portuguese, 'zh' for Mandarin or \
+Simplified Chinese, 'ar' for Arabic). Return null only if the lead wrote \
+in a language outside this supported set; do not return null when the \
+lead wrote in English — return 'en' explicitly.
 
 9. CONTACT-CAPTURE DOCTRINE. A lead the lawyer cannot reach is information, \
 not a lead. Before any intake can finalise, the engine must capture the LEAD's \

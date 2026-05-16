@@ -86,7 +86,7 @@ export async function llmExtractServer(
     return { extracted: {}, mode: 'live', reason: 'out_of_scope' };
   }
 
-  const slots = getExtractableSlots(matterType, state.language_needs_confirm);
+  const slots = getExtractableSlots(matterType);
   if (slots.length === 0) {
     return { extracted: {}, mode: 'live', reason: 'no_applicable_slots' };
   }

@@ -39,7 +39,6 @@ export async function llmExtract(
         description,
         matter_type: state.matter_type,
         already_extracted: state.slots,
-        language_needs_confirm: state.language_needs_confirm,
       }),
       signal: controller.signal,
     });
@@ -99,27 +98,27 @@ export function mergeLlmResults(
   state: EngineState,
   extracted: Record<string, string | null>,
 ): EngineState {
-  // ── Classifier field first ────────────────────────────────────────────
-  // When state.matter_type was 'unknown', the schema injected a synthetic
-  // __matter_type field. If the LLM picked a valid bucket, update the
-  // matter-type-driven state fields BEFORE merging slots so subsequent
-  // logic (selectNextSlot, completeness) reads the new matter type.
   let working: EngineState = state;
 
-  // ── Language confirm field ────────────────────────────────────────────────
-  // When franc was uncertain, the schema injected __detected_language. Update
-  // state.language if the LLM returned a valid supported language code.
-  if (working.language_needs_confirm) {
-    const llmLang = extracted[LANGUAGE_DETECTOR_FIELD];
-    if (llmLang && typeof llmLang === 'string' && isValidSupportedLanguage(llmLang)) {
-      working = {
-        ...working,
-        language: llmLang as SupportedLanguage,
-        language_needs_confirm: undefined,
-      };
-    }
+  // ── Language field (DR-039) ──────────────────────────────────────────
+  // The LLM is authoritative for language detection. The schema's
+  // __detected_language field is ALWAYS present (see schema.ts) and the
+  // LLM returns the ISO 639-1 code on every call. Update state.language
+  // when the LLM returned a valid supported code. Null / unsupported is
+  // a no-op (state.language stays as initialised, defaulting to 'en').
+  const llmLang = extracted[LANGUAGE_DETECTOR_FIELD];
+  if (llmLang && typeof llmLang === 'string' && isValidSupportedLanguage(llmLang)) {
+    working = { ...working, language: llmLang as SupportedLanguage };
   }
 
+  // ── Classifier field ──────────────────────────────────────────────────
+  // When state.matter_type was 'unknown', the schema injected the
+  // synthetic __matter_type field. If the LLM picked a valid bucket,
+  // update the matter-type-driven state fields BEFORE merging slots so
+  // subsequent logic (selectNextSlot, completeness) reads the new matter
+  // type. The LLM wins over a regex 'unknown' because the LLM
+  // understands multilingual context and synonyms the keyword patterns
+  // miss.
   if (state.matter_type === 'unknown') {
     const llmMatter = extracted[MATTER_TYPE_CLASSIFIER_FIELD];
     if (

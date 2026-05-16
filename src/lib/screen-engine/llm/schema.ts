@@ -34,10 +34,21 @@ export interface ExtractionSlot {
 export const MATTER_TYPE_CLASSIFIER_FIELD = '__matter_type';
 
 /**
- * Injected when franc language confidence < threshold on turn 1. Asks the LLM
- * to confirm the detected language from the supported set. Returns null for
- * English (no indicator needed) or languages outside the supported set.
- * Same double-underscore convention as MATTER_TYPE_CLASSIFIER_FIELD.
+ * Always-injected synthetic field. The LLM is authoritative for language
+ * detection (DR-039 — unified classification pipeline). On EVERY
+ * extraction call, the LLM returns the lead's language as an ISO 639-1
+ * code from the supported set, or 'en' as the default for English /
+ * unrecognised input. `mergeLlmResults` writes this back into
+ * `state.language` on every call.
+ *
+ * Supersedes DR-035 (franc + Gemini hybrid detection) and DR-029 (LLM
+ * only fires when regex misses). Now the LLM extraction always runs and
+ * always reports the language.
+ *
+ * Same double-underscore convention as MATTER_TYPE_CLASSIFIER_FIELD: the
+ * field is engine-internal, doesn't render in any UI, and gets
+ * special-cased in mergeLlmResults to update state.language instead of
+ * state.slots.
  */
 export const LANGUAGE_DETECTOR_FIELD = '__detected_language';
 
@@ -81,15 +92,16 @@ function isLlmAllowed(slot: SlotDefinition): boolean {
   return !TIERS_BLOCKED_BY_DEFAULT.has(slot.tier);
 }
 
-export function getExtractableSlots(matterType: MatterType, languageNeedsConfirm?: boolean): ExtractionSlot[] {
-  // Language confirm slot goes first so the LLM resolves language before
-  // attempting slot extraction. Only injected when franc was uncertain.
-  const prefix: ExtractionSlot[] = languageNeedsConfirm ? [languageDetectorSlot()] : [];
+export function getExtractableSlots(matterType: MatterType): ExtractionSlot[] {
+  // Language detector slot is ALWAYS at the head of the catalogue (DR-039).
+  // The LLM resolves language on every call, not just when an upstream
+  // detector was uncertain.
+  const prefix: ExtractionSlot[] = [languageDetectorSlot()];
 
   // For unknown matter, return routing-level slots so the LLM can help
   // disambiguate within an area. Plus inject the special matter-type
-  // classifier field at the head of the catalogue so the LLM picks the
-  // top-level bucket from the canonical list.
+  // classifier field so the LLM picks the top-level bucket from the
+  // canonical list.
   if (matterType === 'unknown') {
     const slots = SLOT_REGISTRY.filter(
       (s) => s.tier === 'core' || s.question_group === 'routing',
@@ -108,16 +120,20 @@ export function getExtractableSlots(matterType: MatterType, languageNeedsConfirm
 }
 
 /**
- * The synthetic language detector slot. Injected when franc confidence is low.
- * Options are the five non-English supported languages; null means English.
+ * The synthetic language detector slot. Always injected (DR-039). The
+ * option set includes English explicitly so the LLM can confirm 'en'
+ * rather than returning null and relying on the engine's default.
+ * Returning null on this field is reserved for languages outside the
+ * supported set; mergeLlmResults treats null as "keep state.language as
+ * is" (defaults to 'en' from initialiseState).
  */
 function languageDetectorSlot(): ExtractionSlot {
   return {
     id: LANGUAGE_DETECTOR_FIELD,
     question:
-      "Identify the language of the lead's description. Return one of the option codes if the lead wrote in that language; return null if English or if the language is not in the supported set.",
+      "Identify the language of the lead's description. Return the ISO 639-1 code of the lead's language: 'en' for English, 'fr' for French, 'es' for Spanish, 'pt' for Portuguese, 'zh' for Mandarin or Simplified Chinese, 'ar' for Arabic. Return null only if the language is outside this supported set.",
     input_type: 'single_select',
-    options: ['fr', 'es', 'pt', 'zh', 'ar'],
+    options: ['en', 'fr', 'es', 'pt', 'zh', 'ar'],
     description: 'Tier: classifier. Group: routing.',
   };
 }
