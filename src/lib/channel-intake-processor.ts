@@ -2,18 +2,29 @@
  * channel-intake-processor — shared server-side engine pipeline for
  * inbound Meta channel webhooks (Messenger, Instagram, WhatsApp Cloud API).
  *
- * Two-phase architecture:
+ * Three-phase architecture:
  *
  *   Phase A: contact-capture doctrine gate (2026-05-15). After running
  *            the engine, check `report.contact_complete`. If false, the
  *            row is NOT a screened lead — never reaches the lawyer.
  *
- *   Phase B: multi-turn follow-up. When the gate fails, send a follow-up
- *            via the channel's Send API asking for name + contact, and
- *            persist EngineState in `channel_intake_sessions` so the
- *            NEXT inbound from the same sender resumes mid-conversation.
- *            After `MAX_FOLLOW_UPS` attempts without contact, give up
- *            and move the data to `unconfirmed_inquiries`.
+ *   Phase B: contact-capture multi-turn follow-up. When the gate fails,
+ *            send a follow-up via the channel's Send API asking for name
+ *            + contact, and persist EngineState in `channel_intake_sessions`
+ *            so the NEXT inbound from the same sender resumes mid-conversation.
+ *            After `MAX_FOLLOW_UPS` attempts without contact, give up and
+ *            move the data to `unconfirmed_inquiries`.
+ *
+ *   Phase C: discovery follow-up loop (2026-05-16). When the contact gate
+ *            passes but the engine still has discovery questions queued
+ *            (`getNextStep` returns `continue`/`deepen`/`recover`), the
+ *            processor asks `DISCOVERY_FOLLOW_UP_CAP` additional questions
+ *            before finalising. Closes the "anemic brief" failure mode
+ *            where channel-metadata pre-fill satisfied the contact gate on
+ *            turn 1 and the engine never got to ask urgency / complexity /
+ *            readiness slots. Counter lives in `state.discoveryFollowUpCount`
+ *            (engine state field) so the existing `follow_up_count` column
+ *            stays semantically scoped to contact-capture attempts.
  *
  * Voice keeps its own route (`/api/voice-intake`) because it carries
  * non-Meta metadata (call_id, recording_url, call_duration_sec).
@@ -32,9 +43,10 @@ import { runEvidencePass } from '@/lib/screen-engine/slotEvidence';
 import { mergeLlmResults } from '@/lib/screen-engine/llm/extractor';
 import { buildReport } from '@/lib/screen-engine/report';
 import { computeBand } from '@/lib/screen-engine/band';
+import { getNextStep } from '@/lib/screen-engine/control';
 import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
-import type { EngineState, Band } from '@/lib/screen-engine/types';
+import type { EngineState, Band, SlotDefinition } from '@/lib/screen-engine/types';
 import { evaluateContactGate } from '@/lib/screen-engine/contact-doctrine';
 import { buildClosingMessage } from '@/lib/screen-engine/closing';
 import { persistUnconfirmedInquiry } from '@/lib/unconfirmed-inquiry';
@@ -51,6 +63,40 @@ import { sendChannelMessage, buildContactCaptureFollowUp } from '@/lib/channel-s
 export type MetaChannel = 'facebook' | 'instagram' | 'whatsapp';
 
 const MAX_FOLLOW_UPS = 3;
+
+// ── Discovery follow-up budget (Phase C) ─────────────────────────────────
+//
+// Number of additional questions the processor asks AFTER the contact-
+// capture gate has passed, before finalising the lead. Matches the brand
+// commitment of "a few short follow-ups" in the hero copy. Two is the
+// floor that lets the brief carry urgency or complexity signal on top of
+// the value signal that turn 1 typically provides; three is the ceiling
+// past which retention drops on uncapped Meta channels (research-backed,
+// same rationale as the SMS budget DR-024).
+//
+// Applied to whatsapp / facebook / instagram only. SMS and GBP are
+// handled by the QUESTION_BUDGET_BY_CHANNEL map in engine/control.ts;
+// voice is single-pass on the transcript.
+const DISCOVERY_FOLLOW_UP_CAP = 3;
+const DISCOVERY_CHANNELS = new Set<MetaChannel>(['whatsapp', 'facebook', 'instagram']);
+
+/**
+ * Render the prompt the lead reads for a discovery slot. Adds an option
+ * list for single-select slots so the lead knows what answers map. The
+ * processor then extracts the lead's free-text reply via the next turn's
+ * regex/LLM pass; the lead does not need to type an option verbatim, but
+ * surfacing the options gives the LLM a strong target on the resume turn.
+ */
+function formatDiscoveryQuestion(slot: SlotDefinition): string {
+  const base = slot.question.trim();
+  if (slot.input_type !== 'single_select' || !slot.options || slot.options.length === 0) {
+    return base;
+  }
+  const labels = slot.options
+    .map((o, idx) => `${idx + 1}. ${o.label}`)
+    .join('\n');
+  return `${base}\n\n${labels}`;
+}
 
 // ── Sender metadata ─────────────────────────────────────────────────────
 
@@ -361,7 +407,91 @@ export async function processChannelInbound(
     };
   }
 
-  // ── Gate passed: finalise into screened_leads ──────────────────────────
+  // ── Phase C: discovery follow-up loop ───────────────────────────────────
+  // Contact-capture gate has passed. Before finalising, give the engine a
+  // chance to ask 2-3 discovery questions on uncapped Meta channels. Cap
+  // is enforced via `state.discoveryFollowUpCount`; out-of-scope and
+  // single-turn channels (sms / gbp / voice) skip this phase. Skipped also
+  // for out_of_scope: the bridgeText routing copy is already sufficient.
+  const discoveryCount = state.discoveryFollowUpCount ?? 0;
+  const inDiscoveryPhase =
+    DISCOVERY_CHANNELS.has(channel) &&
+    state.matter_type !== 'out_of_scope' &&
+    discoveryCount < DISCOVERY_FOLLOW_UP_CAP;
+
+  if (inDiscoveryPhase) {
+    // Drive the engine to the next step. We do NOT set contactCaptureStarted
+    // here: the engine's contact-capture branch demands all THREE contact
+    // slots (name + phone + email) before falling through, which would
+    // make the engine ask for email on whatsapp where phone is already
+    // captured from sender metadata. The contact-doctrine gate above has
+    // already confirmed name + (phone OR email), which is what counts as
+    // a complete lead per `evaluateContactGate`. From here we want
+    // discovery slots only.
+    const nextStep = getNextStep(state);
+
+    if (
+      (nextStep.type === 'continue' ||
+        nextStep.type === 'deepen' ||
+        nextStep.type === 'recover') &&
+      nextStep.slot
+    ) {
+      const questionText = formatDiscoveryQuestion(nextStep.slot);
+      const sendResult = await sendChannelMessage({
+        firmId,
+        sender,
+        text: questionText,
+      });
+
+      if (sendResult.sent) {
+        const newDiscoveryCount = discoveryCount + 1;
+        const persistedState: EngineState = {
+          ...state,
+          contactCaptureStarted: true,
+          discoveryFollowUpCount: newDiscoveryCount,
+        };
+
+        // Re-use the existing channel_intake_sessions store. The
+        // follow_up_count column on the table continues to track the
+        // contact-capture attempts (priorFollowUpCount); discovery count
+        // lives inside engine_state. On resume, the processor reads
+        // discoveryFollowUpCount from engine_state, not from the column.
+        if (sessionId) {
+          await updateChannelSession({
+            sessionId,
+            engineState: persistedState,
+            followUpCount: priorFollowUpCount,
+          });
+        } else {
+          await createChannelSession({
+            firmId,
+            channel,
+            senderId,
+            engineState: persistedState,
+            maxFollowUps: MAX_FOLLOW_UPS,
+          });
+        }
+        console.log(
+          `[channel-intake] discovery question sent firm=${firmId} channel=${channel} attempt=${newDiscoveryCount}/${DISCOVERY_FOLLOW_UP_CAP} slot=${nextStep.slot.id}`,
+        );
+        return {
+          persisted: false,
+          reason: 'awaiting_discovery_answer',
+          followUpSent: true,
+        };
+      }
+
+      // Send failed: fall through to finalise. We have contact, the brief
+      // is buildable; better to land a thin brief than to drop the lead.
+      console.warn(
+        `[channel-intake] discovery question send failed firm=${firmId} channel=${channel}: ${sendResult.reason ?? 'unknown'}; finalising with what we have`,
+      );
+    }
+    // nextStep was stop / present_insight / clarify / capture_contact:
+    // engine has nothing more to ask. Fall through to finalise.
+  }
+
+  // ── Gate passed (and discovery complete or skipped): finalise ──────────
   const now = new Date();
   const axes = report.four_axis;
   const decisionDeadline = computeDecisionDeadline(axes.urgency, now, state.matter_type);
@@ -381,13 +511,23 @@ export async function processChannelInbound(
     }
   })();
 
+  // multi_turn reflects ANY multi-turn activity — contact-capture
+  // follow-ups OR discovery follow-ups. follow_up_count rolls up both
+  // phases so the lawyer's audit blob shows the total turn count
+  // regardless of which phase consumed them. Phase A tracking lives in
+  // `priorFollowUpCount` (session column); Phase C tracking lives in
+  // `discoveryFollowUpCount` (engine state).
+  const discoveryTotal = state.discoveryFollowUpCount ?? 0;
+  const totalFollowUps = priorFollowUpCount + discoveryTotal;
+  const wasMultiTurn = isResume || totalFollowUps > 0;
+
   const slotAnswers = {
     slots: state.slots,
     slot_meta: state.slot_meta,
     slot_evidence: state.slot_evidence,
     channel,
-    multi_turn: isResume,
-    follow_up_count: priorFollowUpCount,
+    multi_turn: wasMultiTurn,
+    follow_up_count: totalFollowUps,
     ...channelMetaForSlotAnswers,
   };
 
