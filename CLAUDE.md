@@ -42,7 +42,7 @@ The Client Portal (S8) IS client-facing but configured and deployed by Adriano.
 | Hosting | Vercel |
 | Legal PMS | Clio Manage (API v4) |
 
-Supabase URL: https://qpzopweonveumvuqkqgw.supabase.co
+Supabase URL: https://ssxryjxifwiivghglqer.supabase.co (region: ca-central-1, Montreal). Migrated from `qpzopweonveumvuqkqgw` (us-east-2, Ohio) on 2026-05-18 to unblock the "client lead data is stored in Canadian data centers" residency line. Migration runbook at `docs/runbooks/supabase-migration.md`. Future schema migrations apply via `supabase db push` (project linked in `supabase/config.toml`). Weekly backup discipline via `scripts/backup-supabase.sh`.
 
 ## Architecture
 

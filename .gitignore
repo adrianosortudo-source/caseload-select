@@ -46,3 +46,6 @@ round2-verified.png
 turn*.json
 
 .vercel
+
+# Supabase backups (created by scripts/backup-supabase.sh)
+backups/

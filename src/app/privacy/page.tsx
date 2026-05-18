@@ -159,7 +159,7 @@ export default function PrivacyPage() {
 
         <Section title="Where it lives">
           <p>
-            Your data is stored on Supabase infrastructure with Canadian residency, encrypted at rest. Access requires a service-role key held only by the application and by the operator. Backups are retained per Supabase&rsquo;s standard policy. We use TLS for every connection.
+            Your data is stored on Supabase infrastructure in Montreal, Canada (AWS ca-central-1), encrypted at rest. Access requires a service-role key held only by the application and by the operator. Backups are retained per Supabase&rsquo;s standard policy. We use TLS for every connection.
           </p>
         </Section>
 
