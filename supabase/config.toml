@@ -1,0 +1,51 @@
+# Supabase project link for `supabase` CLI.
+#
+# This file lets `supabase db push`, `supabase db diff`, `supabase db dump`
+# (with --linked) and related commands target the right project without
+# repeating the --project-ref flag every invocation.
+#
+# Migration history: until 2026-05-18 the production project lived in
+# AWS us-east-2 (Ohio). It was migrated to AWS ca-central-1 (Montreal)
+# to unblock the "client lead data is stored in Canadian data centers"
+# residency claim used in client-facing copy. See
+# docs/runbooks/supabase-migration.md for the playbook.
+
+project_id = "ssxryjxifwiivghglqer"
+
+[api]
+# REST and Auth API ports for local development. The production project
+# runs Supabase-managed values; these are only used when `supabase start`
+# spins up the local stack via Docker. Defaults documented for the next
+# operator who runs the local stack.
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[studio]
+port = 54323
+
+[inbucket]
+port = 54324
+
+[storage]
+file_size_limit = "50MiB"
+
+[auth]
+# Production project uses HMAC magic-link auth (lib/portal-auth.ts) and does
+# NOT use Supabase Auth. These keys exist only so the local stack starts.
+# Real auth happens in app code, not Supabase.
+site_url = "https://app.caseloadselect.ca"
+additional_redirect_urls = []
+enable_signup = false
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = false
+double_confirm_changes = false
+enable_confirmations = false
