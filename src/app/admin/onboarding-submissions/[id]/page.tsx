@@ -26,6 +26,9 @@ interface Submission {
   authorized_rep_title: string | null;
   authorized_rep_email: string | null;
   authorized_rep_phone: string | null;
+  authorized_rep_year_of_call: number | null;
+  authorized_rep_province_of_call: string | null;
+  previous_business_names: string | null;
   sms_vertical: string | null;
   sms_sender_phone_preference: string | null;
   whatsapp_number_decision: string | null;
@@ -54,7 +57,13 @@ interface Submission {
   notes: string | null;
   booking_url: string | null;
   office_hours: string | null;
-  additional_lawyers: Array<{ name?: string; email?: string; role?: string }> | null;
+  additional_lawyers: Array<{
+    name?: string;
+    email?: string;
+    role?: string;
+    year_of_call?: number | string | null;
+    province_of_call?: string | null;
+  }> | null;
   practice_areas: string[] | null;
   practice_areas_other: string | null;
   service_area: string | null;
@@ -145,6 +154,18 @@ export default async function SubmissionDetailPage({
           <Field label="Title" value={row.authorized_rep_title} />
           <Field label="Rep email" value={row.authorized_rep_email} link={row.authorized_rep_email ? `mailto:${row.authorized_rep_email}` : undefined} />
           <Field label="Rep phone" value={row.authorized_rep_phone} />
+          <Field
+            label="Rep bar of call"
+            value={prettifyYearProvince(
+              row.authorized_rep_year_of_call,
+              row.authorized_rep_province_of_call,
+            )}
+          />
+          <Field
+            label="Previous business names"
+            value={row.previous_business_names}
+            multiline
+          />
           <Field label="Calendar booking URL" value={row.booking_url} link />
           <Field label="Office hours" value={row.office_hours} />
           <Field
@@ -444,13 +465,42 @@ function prettifyChannels(v: string[] | null): string | null {
 }
 
 function prettifyAdditionalLawyers(
-  v: Array<{ name?: string; email?: string; role?: string }> | null
+  v: Array<{
+    name?: string;
+    email?: string;
+    role?: string;
+    year_of_call?: number | string | null;
+    province_of_call?: string | null;
+  }> | null,
 ): string | null {
   if (!v || v.length === 0) return null;
-  return v
+  const lines = v
     .filter((l) => (l.name && l.name.trim()) || (l.email && l.email.trim()))
-    .map((l) => `${l.name?.trim() ?? "(no name)"} — ${l.email?.trim() ?? "(no email)"}`)
-    .join("\n");
+    .map((l) => {
+      const head = `${l.name?.trim() ?? "(no name)"} — ${l.email?.trim() ?? "(no email)"}`;
+      const tail: string[] = [];
+      if (l.role && l.role.trim()) tail.push(l.role.trim());
+      if (l.year_of_call !== undefined && l.year_of_call !== null && String(l.year_of_call).trim() !== "") {
+        tail.push(`called ${l.year_of_call}`);
+      }
+      if (l.province_of_call && l.province_of_call.trim()) {
+        tail.push(l.province_of_call.trim());
+      }
+      return tail.length > 0 ? `${head} (${tail.join(", ")})` : head;
+    });
+  return lines.length > 0 ? lines.join("\n") : null;
+}
+
+function prettifyYearProvince(
+  year: number | string | null,
+  province: string | null,
+): string | null {
+  const parts: string[] = [];
+  if (year !== null && year !== undefined && String(year).trim() !== "") {
+    parts.push(`Called ${year}`);
+  }
+  if (province && province.trim()) parts.push(province.trim());
+  return parts.length > 0 ? parts.join(", ") : null;
 }
 
 function prettifyPracticeAreas(v: string[] | null): string | null {

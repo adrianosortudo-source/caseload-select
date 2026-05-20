@@ -18,6 +18,15 @@ interface FormState {
   authorized_rep_title: string;
   authorized_rep_email: string;
   authorized_rep_phone: string;
+  // Bar-of-call data, used by directory submissions and lawyer-profile fields.
+  // Captured here for the authorized rep; the equivalent fields for additional
+  // lawyers live on each row of `additional_lawyers`.
+  authorized_rep_year_of_call: string;
+  authorized_rep_province_of_call: string;
+  // Prior business names / d/b/a, free text. Used by directory cleanup
+  // (Yellow Pages dedup, GBP name history audit) and "previously known as"
+  // profile fields. Blank by default.
+  previous_business_names: string;
   booking_url: string;
   sms_vertical: string;
   sms_sender_phone_preference: string;
@@ -41,7 +50,13 @@ interface FormState {
   // Section 1 extensions (operating hours + additional lawyers beyond the
   // authorized rep).
   office_hours: string;
-  additional_lawyers: Array<{ name: string; email: string; role: string }>;
+  additional_lawyers: Array<{
+    name: string;
+    email: string;
+    role: string;
+    year_of_call: string;
+    province_of_call: string;
+  }>;
   // Section 2: Practice scope. The arrays + free-text "other" capture the
   // condensed-list-plus-free-text input pattern used in the form.
   practice_areas: string[];
@@ -82,6 +97,9 @@ const INITIAL: FormState = {
   authorized_rep_title: "",
   authorized_rep_email: "",
   authorized_rep_phone: "",
+  authorized_rep_year_of_call: "",
+  authorized_rep_province_of_call: "",
+  previous_business_names: "",
   booking_url: "",
   sms_vertical: "LEGAL_SERVICES",
   sms_sender_phone_preference: "",
@@ -319,6 +337,60 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
             />
           </Field>
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <Field
+            label="Authorized representative — year of call"
+            hint="Year you were called to the bar (4 digits). Used on Canadian Law List, Yellow Pages Canada, and other directory profiles. Find on your LSO certificate or LSO directory listing."
+          >
+            <input
+              type="number"
+              min="1950"
+              max="2100"
+              step="1"
+              inputMode="numeric"
+              value={form.authorized_rep_year_of_call}
+              onChange={(e) =>
+                update("authorized_rep_year_of_call", e.target.value)
+              }
+              style={inputStyle}
+              placeholder="e.g. 2015"
+            />
+          </Field>
+          <Field
+            label="Authorized representative — province of call"
+            hint="The provincial / territorial bar where you were called. Ontario is the default for most Toronto firms; pick the one that matches your LSO/bar registration."
+          >
+            <select
+              value={form.authorized_rep_province_of_call}
+              onChange={(e) =>
+                update("authorized_rep_province_of_call", e.target.value)
+              }
+              style={inputStyle}
+            >
+              <option value="">Select province / territory</option>
+              {PROVINCES.map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        <Field
+          label="Previous business names (optional)"
+          hint="Any prior firm names, d/b/a names, or predecessor firm names you have traded under. Used to dedupe stale directory listings (Yellow Pages, Martindale, etc.) and to populate 'previously known as' fields. One per line, or comma-separated."
+        >
+          <textarea
+            value={form.previous_business_names}
+            onChange={(e) =>
+              update("previous_business_names", e.target.value)
+            }
+            style={{ ...inputStyle, minHeight: "70px", resize: "vertical" }}
+            placeholder="e.g. Smith & Associates · Smith Law Office · Smith Legal Services"
+          />
+        </Field>
 
         <Field
           label="Calendar booking link (optional)"
@@ -1105,20 +1177,31 @@ function FileUploadBlock({
 
 // ── Additional lawyers block (Section 1 extension) ──────────────────────
 
+type AdditionalLawyer = {
+  name: string;
+  email: string;
+  role: string;
+  year_of_call: string;
+  province_of_call: string;
+};
+
 function AdditionalLawyersBlock({
   lawyers,
   onChange,
 }: {
-  lawyers: Array<{ name: string; email: string; role: string }>;
-  onChange: (next: Array<{ name: string; email: string; role: string }>) => void;
+  lawyers: AdditionalLawyer[];
+  onChange: (next: AdditionalLawyer[]) => void;
 }) {
   function addRow() {
-    onChange([...lawyers, { name: "", email: "", role: "" }]);
+    onChange([
+      ...lawyers,
+      { name: "", email: "", role: "", year_of_call: "", province_of_call: "" },
+    ]);
   }
   function removeRow(idx: number) {
     onChange(lawyers.filter((_, i) => i !== idx));
   }
-  function updateRow(idx: number, key: "name" | "email" | "role", value: string) {
+  function updateRow(idx: number, key: keyof AdditionalLawyer, value: string) {
     onChange(lawyers.map((l, i) => (i === idx ? { ...l, [key]: value } : l)));
   }
 
@@ -1132,49 +1215,99 @@ function AdditionalLawyersBlock({
             border: "1px solid #E4E2DB",
             borderRadius: "4px",
             padding: "14px 16px",
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr auto",
-            gap: "12px",
-            alignItems: "flex-end",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
           }}
         >
-          <div>
-            <label style={subFieldLabelStyle}>Name</label>
-            <input
-              type="text"
-              value={lawyer.name}
-              onChange={(e) => updateRow(idx, "name", e.target.value)}
-              style={inputStyle}
-              placeholder="Full name"
-            />
-          </div>
-          <div>
-            <label style={subFieldLabelStyle}>Email</label>
-            <input
-              type="email"
-              value={lawyer.email}
-              onChange={(e) => updateRow(idx, "email", e.target.value)}
-              style={inputStyle}
-              placeholder="lawyer@yourfirm.ca"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => removeRow(idx)}
+          <div
             style={{
-              background: "transparent",
-              border: "1px solid #C4B49A",
-              color: "#1E2F58",
-              padding: "10px 14px",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontFamily: "var(--font-dm-sans), sans-serif",
-              fontSize: "0.82rem",
-              whiteSpace: "nowrap",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "12px",
             }}
           >
-            Remove
-          </button>
+            <div>
+              <label style={subFieldLabelStyle}>Name</label>
+              <input
+                type="text"
+                value={lawyer.name}
+                onChange={(e) => updateRow(idx, "name", e.target.value)}
+                style={inputStyle}
+                placeholder="Full name"
+              />
+            </div>
+            <div>
+              <label style={subFieldLabelStyle}>Email</label>
+              <input
+                type="email"
+                value={lawyer.email}
+                onChange={(e) => updateRow(idx, "email", e.target.value)}
+                style={inputStyle}
+                placeholder="lawyer@yourfirm.ca"
+              />
+            </div>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "12px",
+            }}
+          >
+            <div>
+              <label style={subFieldLabelStyle}>Year of call</label>
+              <input
+                type="number"
+                min="1950"
+                max="2100"
+                step="1"
+                inputMode="numeric"
+                value={lawyer.year_of_call}
+                onChange={(e) =>
+                  updateRow(idx, "year_of_call", e.target.value)
+                }
+                style={inputStyle}
+                placeholder="e.g. 2018"
+              />
+            </div>
+            <div>
+              <label style={subFieldLabelStyle}>Province of call</label>
+              <select
+                value={lawyer.province_of_call}
+                onChange={(e) =>
+                  updateRow(idx, "province_of_call", e.target.value)
+                }
+                style={inputStyle}
+              >
+                <option value="">Select province / territory</option>
+                {PROVINCES.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={() => removeRow(idx)}
+              style={{
+                background: "transparent",
+                border: "1px solid #C4B49A",
+                color: "#1E2F58",
+                padding: "8px 14px",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontFamily: "var(--font-dm-sans), sans-serif",
+                fontSize: "0.82rem",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Remove
+            </button>
+          </div>
         </div>
       ))}
       <button
@@ -1198,6 +1331,25 @@ function AdditionalLawyersBlock({
     </div>
   );
 }
+
+// Canadian provinces and territories, ordered by population for the dropdown.
+// Used by the authorized-rep "province of call" select and the additional-
+// lawyers block. Free TEXT in the DB; this list is the UI affordance only.
+const PROVINCES: Array<{ key: string; label: string }> = [
+  { key: "ON", label: "Ontario" },
+  { key: "QC", label: "Quebec" },
+  { key: "BC", label: "British Columbia" },
+  { key: "AB", label: "Alberta" },
+  { key: "MB", label: "Manitoba" },
+  { key: "SK", label: "Saskatchewan" },
+  { key: "NS", label: "Nova Scotia" },
+  { key: "NB", label: "New Brunswick" },
+  { key: "NL", label: "Newfoundland and Labrador" },
+  { key: "PE", label: "Prince Edward Island" },
+  { key: "NT", label: "Northwest Territories" },
+  { key: "NU", label: "Nunavut" },
+  { key: "YT", label: "Yukon" },
+];
 
 const subFieldLabelStyle: React.CSSProperties = {
   fontFamily: "var(--font-oxanium), sans-serif",
