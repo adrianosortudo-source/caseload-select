@@ -90,13 +90,12 @@ interface SubmitBody {
   pms_integration_preference?: string;
 }
 
-// Operator-notification recipient now lives in
-// src/lib/firm-onboarding-notification.ts. The previous hardcoded fallback
-// (adriano@caseloadselect.ca) was undeliverable for the operator's actual
-// inbox; the new fallback is adrianosortudo@gmail.com per the 2026-05-20
-// audit. OPERATOR_NOTIFICATION_EMAIL is set in Vercel for Production and
-// Development; set Preview via the dashboard (the CLI cannot add Preview
-// env vars non-interactively).
+// Operator-notification recipient lives in
+// src/lib/firm-onboarding-notification.ts. Canonical recipient is
+// adriano@caseloadselect.ca (set via OPERATOR_NOTIFICATION_EMAIL in Vercel
+// for Production / Preview / Development). Personal inboxes (gmail or
+// anything outside @caseloadselect.ca) are NEVER substituted here — all
+// CaseLoad Select operator comms flow through the company domain.
 
 export async function POST(
   req: NextRequest,
