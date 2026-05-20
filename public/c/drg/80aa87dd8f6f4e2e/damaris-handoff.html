@@ -1,0 +1,1904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRG Law Directory Cleanup, Action Brief</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --c-deep-black: #0D1520;
+  --c-navy: #1E2F58;
+  --c-gold: #C4B49A;
+  --c-parchment: #F4F3EF;
+  --c-off-white: #F9F8F5;
+  --c-white: #FFFFFF;
+
+  --c-body: #4A5A72;
+  --c-muted: #8090A8;
+  --c-muted-readable: #5E6D82;
+  --c-gold-on-light: #8B7A5E;
+
+  --c-border: #E0DDD6;
+  --c-row-alt: #ECEAE4;
+
+  --c-red-fail: #C0564E;
+  --c-green-pass: #27834A;
+
+  --font-display: 'Oxanium', 'Rajdhani', sans-serif;
+  --font-heading: 'Manrope', 'Inter', sans-serif;
+  --font-body: 'DM Sans', 'Inter', sans-serif;
+
+  --fs-10: 10px;
+  --fs-11: 11px;
+  --fs-12: 12px;
+  --fs-13: 13px;
+  --fs-14: 14px;
+  --fs-15: 15px;
+  --fs-16: 16px;
+  --fs-18: 18px;
+  --fs-20: 20px;
+  --fs-22: 22px;
+  --fs-24: 24px;
+  --fs-28: 28px;
+  --fs-32: 32px;
+  --fs-40: 40px;
+  --fs-48: 48px;
+  --fs-56: 56px;
+  --fs-64: 64px;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+  --sp-24: 96px;
+  --sp-32: 128px;
+
+  --ls-label: 0.12em;
+  --ls-ultra: 0.14em;
+  --ls-footer: 0.2em;
+
+  --sidebar-w: 280px;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--c-parchment);
+  color: var(--c-body);
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--fs-15);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================
+   SIDEBAR
+   ============================================ */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--sidebar-w);
+  height: 100vh;
+  background: var(--c-parchment);
+  border-right: 1px solid var(--c-border);
+  padding: var(--sp-10) var(--sp-8);
+  overflow-y: auto;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-logo {
+  margin-bottom: var(--sp-10);
+}
+.sidebar-logo img {
+  height: 22px;
+  width: auto;
+  display: block;
+  border: 0;
+}
+
+.sidebar-doc {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-10);
+  letter-spacing: var(--ls-ultra);
+  text-transform: uppercase;
+  color: var(--c-gold-on-light);
+  margin-bottom: var(--sp-2);
+}
+.sidebar-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--fs-16);
+  line-height: 1.25;
+  color: var(--c-navy);
+  margin: 0 0 var(--sp-8) 0;
+  letter-spacing: -0.01em;
+}
+
+.sidebar-nav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex-grow: 1;
+}
+.sidebar-nav li {
+  margin: 0;
+  padding: 0;
+}
+.sidebar-nav a {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: var(--sp-3);
+  align-items: baseline;
+  padding: var(--sp-3) 0;
+  text-decoration: none;
+  border-top: 1px solid transparent;
+  transition: color 120ms cubic-bezier(0.2,0,0.2,1);
+}
+.sidebar-nav li + li a {
+  border-top: 1px solid var(--c-border);
+}
+.sidebar-nav .num {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-11);
+  letter-spacing: var(--ls-label);
+  color: var(--c-gold-on-light);
+  font-variant-numeric: tabular-nums;
+}
+.sidebar-nav .label {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: var(--fs-13);
+  line-height: 1.4;
+  color: var(--c-navy);
+}
+.sidebar-nav a:hover .label { color: var(--c-deep-black); }
+.sidebar-nav a:hover .num { color: var(--c-deep-black); }
+.sidebar-nav a.active .label {
+  color: var(--c-deep-black);
+  font-weight: 700;
+}
+.sidebar-nav a.active .num {
+  color: var(--c-deep-black);
+}
+
+.sidebar-foot {
+  margin-top: var(--sp-8);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--c-border);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-10);
+  letter-spacing: var(--ls-footer);
+  text-transform: uppercase;
+  color: var(--c-muted-readable);
+  line-height: 1.6;
+}
+
+/* ============================================
+   MAIN COLUMN
+   ============================================ */
+.main {
+  margin-left: var(--sidebar-w);
+  min-height: 100vh;
+}
+
+.content {
+  max-width: 880px;
+  padding: var(--sp-20) var(--sp-16) var(--sp-24) var(--sp-16);
+}
+
+/* ============================================
+   HERO
+   ============================================ */
+.hero {
+  background: var(--c-deep-black);
+  color: var(--c-white);
+  padding: var(--sp-24) var(--sp-16) var(--sp-20) var(--sp-16);
+  border-bottom: 4px solid var(--c-gold);
+}
+
+.hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--sp-20);
+}
+.hero-logo img {
+  height: 26px;
+  width: auto;
+  display: block;
+  border: 0;
+}
+.hero-chip {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-10);
+  letter-spacing: var(--ls-ultra);
+  text-transform: uppercase;
+  color: var(--c-gold);
+  padding: 6px 14px;
+  border: 1px solid var(--c-gold);
+}
+
+.hero-eyebrow {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-12);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--c-gold);
+  margin-bottom: var(--sp-5);
+}
+.hero h1 {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: var(--fs-64);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  color: var(--c-white);
+  margin: 0 0 var(--sp-6) 0;
+  max-width: 800px;
+}
+.hero-sub {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--fs-20);
+  line-height: 1.5;
+  color: rgba(255,255,255,0.78);
+  max-width: 720px;
+  margin: 0 0 var(--sp-16) 0;
+}
+
+.hero-meta {
+  display: flex;
+  gap: var(--sp-12);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-10);
+  letter-spacing: var(--ls-footer);
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+}
+.hero-meta .row { display: flex; flex-direction: column; gap: var(--sp-1); }
+.hero-meta .key { color: rgba(255,255,255,0.4); }
+.hero-meta .val { color: var(--c-gold); }
+
+/* ============================================
+   SECTIONS
+   ============================================ */
+section.block {
+  padding: var(--sp-20) var(--sp-16);
+  border-bottom: 1px solid var(--c-border);
+  scroll-margin-top: var(--sp-6);
+}
+section.block:last-of-type { border-bottom: none; }
+
+.block-inner { max-width: 880px; }
+
+.section-num {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-12);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--c-gold-on-light);
+  margin-bottom: var(--sp-4);
+}
+
+h2 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--fs-40);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--c-navy);
+  margin: 0 0 var(--sp-6) 0;
+  max-width: 800px;
+}
+h3 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--fs-22);
+  line-height: 1.25;
+  color: var(--c-navy);
+  margin: var(--sp-10) 0 var(--sp-3) 0;
+  letter-spacing: -0.005em;
+}
+
+p {
+  font-family: var(--font-body);
+  font-size: var(--fs-15);
+  line-height: 1.7;
+  color: var(--c-body);
+  margin: 0 0 var(--sp-4) 0;
+  max-width: 720px;
+}
+
+.lead {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--fs-20);
+  line-height: 1.5;
+  color: var(--c-navy);
+  max-width: 760px;
+  margin: 0 0 var(--sp-10) 0;
+}
+
+strong { font-weight: 700; color: var(--c-navy); }
+
+/* Oxanium number runs */
+.num,
+.data .v {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-navy);
+}
+
+/* ============================================
+   CARDS
+   ============================================ */
+.card {
+  background: var(--c-white);
+  border: 1px solid var(--c-border);
+  border-radius: 0;
+  padding: var(--sp-6) var(--sp-8);
+  margin: var(--sp-5) 0 var(--sp-8) 0;
+}
+.card .card-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-10);
+  letter-spacing: var(--ls-ultra);
+  text-transform: uppercase;
+  color: var(--c-muted-readable);
+  margin-bottom: var(--sp-2);
+}
+.card .card-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--fs-18);
+  color: var(--c-navy);
+  line-height: 1.3;
+  margin-bottom: var(--sp-4);
+}
+
+.selection-card {
+  background: var(--c-deep-black);
+  color: var(--c-white);
+  border: 2px solid var(--c-gold);
+  border-radius: 0;
+  padding: var(--sp-8) var(--sp-10);
+  margin: var(--sp-6) 0 var(--sp-10) 0;
+}
+.selection-card .card-label { color: var(--c-gold); }
+.selection-card .card-title { color: var(--c-white); }
+
+.navy-panel {
+  background: var(--c-navy);
+  color: var(--c-white);
+  padding: var(--sp-8) var(--sp-10);
+  margin: var(--sp-8) 0;
+  border-radius: 0;
+}
+.navy-panel .card-label {
+  color: var(--c-gold);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-10);
+  letter-spacing: var(--ls-ultra);
+  text-transform: uppercase;
+  margin-bottom: var(--sp-3);
+}
+.navy-panel p {
+  color: rgba(255,255,255,0.88);
+  margin: 0;
+  max-width: 720px;
+  font-size: var(--fs-15);
+}
+
+/* ============================================
+   FORM PREVIEW
+   ============================================ */
+.form-preview {
+  background: var(--c-white);
+  border: 1px solid var(--c-border);
+  padding: var(--sp-6) var(--sp-8) var(--sp-8) var(--sp-8);
+  margin: var(--sp-6) 0 var(--sp-10) 0;
+}
+.form-preview + .form-preview { margin-top: var(--sp-10); }
+.form-preview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sp-6);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-5);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--c-border);
+}
+.form-preview-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--fs-22);
+  color: var(--c-navy);
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  margin: 0;
+}
+.form-preview-url {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-10);
+  letter-spacing: var(--ls-label);
+  color: var(--c-muted-readable);
+  text-transform: lowercase;
+  word-break: break-all;
+  text-align: right;
+}
+.form-preview-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--c-border);
+  margin: var(--sp-3) 0 var(--sp-5) 0;
+  background: var(--c-off-white);
+}
+.form-preview-note {
+  font-family: var(--font-body);
+  font-size: var(--fs-14);
+  line-height: 1.6;
+  color: var(--c-body);
+  margin: 0 0 var(--sp-3) 0;
+  max-width: 720px;
+}
+.form-preview-note:last-child { margin-bottom: 0; }
+.form-preview-note strong { color: var(--c-navy); }
+.form-preview-fields {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: var(--sp-2) var(--sp-5);
+  margin: var(--sp-4) 0 0 0;
+  padding: var(--sp-5);
+  background: var(--c-off-white);
+  border: 1px solid var(--c-border);
+}
+.form-preview-fields dt {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-10);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--c-muted-readable);
+  margin: 0;
+}
+.form-preview-fields dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-navy);
+  font-size: var(--fs-13);
+}
+
+/* ============================================
+   DATA GRID
+   ============================================ */
+.data {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: var(--sp-3) var(--sp-6);
+  font-size: var(--fs-14);
+}
+.data dt {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-10);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--c-muted-readable);
+  padding-top: 3px;
+  margin: 0;
+}
+.data dd {
+  margin: 0;
+  color: var(--c-navy);
+  font-weight: 500;
+  line-height: 1.5;
+}
+.data dd.v {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.selection-card .data dt { color: rgba(196,180,154,0.85); }
+.selection-card .data dd,
+.selection-card .data dd.v { color: var(--c-white); }
+
+.flag {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--c-red-fail);
+  margin-left: var(--sp-3);
+}
+
+/* ============================================
+   DIRECTORY TABLE
+   ============================================ */
+table.dirs {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--sp-5) 0 var(--sp-8) 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-14);
+}
+table.dirs thead th {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-10);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--c-white);
+  background: var(--c-navy);
+  padding: var(--sp-3) var(--sp-4);
+  text-align: left;
+  vertical-align: middle;
+}
+table.dirs tbody td {
+  padding: var(--sp-4);
+  background: var(--c-white);
+  border-bottom: 1px solid var(--c-border);
+  color: var(--c-body);
+  vertical-align: top;
+}
+table.dirs tbody tr:nth-child(even) td { background: var(--c-row-alt); }
+table.dirs tbody td.num-col {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--c-navy);
+  width: 40px;
+}
+table.dirs tbody td.dir-col {
+  color: var(--c-navy);
+  font-weight: 500;
+}
+table.dirs tbody tr.skip td { color: var(--c-muted); }
+
+/* ============================================
+   CHIPS (Priority-Band style, square)
+   ============================================ */
+.chip {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-10);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 0;
+  line-height: 1.2;
+}
+.chip-live { background: var(--c-green-pass); color: var(--c-white); }
+.chip-submit { background: var(--c-gold); color: var(--c-deep-black); }
+.chip-skip { background: transparent; color: var(--c-muted-readable); border: 1px solid var(--c-border); }
+.chip-defer { background: var(--c-navy); color: var(--c-white); }
+
+/* ============================================
+   ASKS
+   ============================================ */
+.ask {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: var(--sp-8);
+  margin: var(--sp-10) 0;
+  padding-top: var(--sp-8);
+  border-top: 1px solid var(--c-border);
+}
+.ask:first-of-type {
+  border-top: none;
+  padding-top: 0;
+  margin-top: var(--sp-6);
+}
+.ask-num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-56);
+  color: var(--c-gold-on-light);
+  line-height: 1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ask-body h3 {
+  margin: 0 0 var(--sp-3) 0;
+  font-size: var(--fs-24);
+}
+
+.options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-3);
+  margin: var(--sp-5) 0;
+  max-width: 720px;
+}
+.option {
+  background: var(--c-white);
+  border: 1px solid var(--c-border);
+  border-radius: 0;
+  padding: var(--sp-5) var(--sp-6);
+}
+.option.recommended { border: 2px solid var(--c-gold); }
+.option .option-tag {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: var(--ls-ultra);
+  text-transform: uppercase;
+  color: var(--c-muted-readable);
+  margin-bottom: var(--sp-2);
+}
+.option.recommended .option-tag { color: var(--c-gold-on-light); }
+.option .option-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--fs-16);
+  color: var(--c-navy);
+  margin-bottom: var(--sp-2);
+}
+.option p {
+  font-size: var(--fs-14);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 720px;
+}
+
+/* ============================================
+   STEP LIST
+   ============================================ */
+.steps {
+  list-style: none;
+  margin: var(--sp-6) 0;
+  padding: 0;
+  counter-reset: step;
+  max-width: 800px;
+}
+.steps li {
+  counter-increment: step;
+  padding: var(--sp-5) 0 var(--sp-5) 56px;
+  position: relative;
+  border-top: 1px solid var(--c-border);
+  font-size: var(--fs-15);
+  line-height: 1.65;
+  color: var(--c-body);
+}
+.steps li:first-child { border-top: none; padding-top: 0; }
+.steps li::before {
+  content: counter(step, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: var(--sp-5);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-14);
+  color: var(--c-gold-on-light);
+  letter-spacing: var(--ls-label);
+}
+.steps li:first-child::before { top: 0; }
+.steps li strong { color: var(--c-navy); }
+
+/* ============================================
+   PRACTICE AREAS
+   ============================================ */
+.areas {
+  list-style: none;
+  counter-reset: area;
+  padding: 0;
+  margin: 0;
+}
+.areas li {
+  counter-increment: area;
+  padding: var(--sp-3) 0 var(--sp-3) 40px;
+  position: relative;
+  border-bottom: 1px solid var(--c-border);
+  font-size: var(--fs-15);
+  color: var(--c-navy);
+  font-weight: 500;
+}
+.areas li:last-child { border-bottom: none; }
+.areas li::before {
+  content: counter(area, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: var(--sp-3);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-12);
+  color: var(--c-gold-on-light);
+  letter-spacing: var(--ls-label);
+}
+.areas li .note {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--fs-13);
+  color: var(--c-muted-readable);
+  margin-left: var(--sp-2);
+}
+
+/* ============================================
+   INLINE LINK (tertiary CTA, brand text-action)
+   ============================================ */
+.inline-link {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--fs-14);
+  color: var(--c-navy);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--c-gold);
+  display: inline-block;
+  margin-top: var(--sp-3);
+}
+.inline-link:hover {
+  color: var(--c-deep-black);
+  text-decoration-color: var(--c-navy);
+}
+
+/* ============================================
+   STEP-BY-STEP GUIDE (redesigned, scannable)
+   ============================================ */
+
+/* Roadmap at top */
+.roadmap {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--sp-3);
+  margin: var(--sp-8) 0 var(--sp-10) 0;
+  max-width: 880px;
+}
+.roadmap-card {
+  background: var(--c-white);
+  border: 1px solid var(--c-border);
+  padding: var(--sp-5) var(--sp-5) var(--sp-4) var(--sp-5);
+  position: relative;
+}
+.roadmap-letter {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-32);
+  color: var(--c-gold-on-light);
+  line-height: 1;
+  margin-bottom: var(--sp-3);
+  font-variant-numeric: tabular-nums;
+}
+.roadmap-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--fs-14);
+  color: var(--c-navy);
+  margin-bottom: var(--sp-2);
+  letter-spacing: -0.005em;
+}
+.roadmap-meta {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-10);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--c-muted-readable);
+}
+
+/* Phase marker between step groups */
+.phase {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: var(--sp-5);
+  align-items: baseline;
+  margin: var(--sp-12) 0 var(--sp-6) 0;
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--c-gold);
+}
+.phase:first-of-type { margin-top: var(--sp-6); }
+.phase-letter {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-28);
+  color: var(--c-gold-on-light);
+  line-height: 1;
+}
+.phase-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.phase-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-12);
+  letter-spacing: var(--ls-ultra);
+  text-transform: uppercase;
+  color: var(--c-navy);
+}
+.phase-desc {
+  font-family: var(--font-body);
+  font-size: var(--fs-14);
+  color: var(--c-muted-readable);
+  line-height: 1.5;
+}
+
+/* Step row, two-column layout: text left, mock right */
+.step {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: var(--sp-5);
+  margin: var(--sp-6) 0;
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--c-border);
+}
+.step:first-of-type,
+.phase + .step {
+  border-top: none;
+  padding-top: var(--sp-2);
+}
+.step-num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-32);
+  color: var(--c-gold-on-light);
+  line-height: 1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.step-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sp-6);
+  align-items: start;
+}
+.step-content.solo { grid-template-columns: 1fr; }
+.step-text h3 {
+  margin: 0 0 var(--sp-3) 0;
+  font-size: var(--fs-20);
+  line-height: 1.2;
+}
+.step-text p {
+  font-size: var(--fs-14);
+  line-height: 1.6;
+  margin-bottom: var(--sp-3);
+}
+.step-text p:last-child { margin-bottom: 0; }
+.step-time {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--c-muted-readable);
+  margin-bottom: var(--sp-2);
+}
+
+/* Verb chip, small action-word badge */
+.verb {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--c-deep-black);
+  background: var(--c-gold);
+  padding: 2px 7px;
+  margin-right: var(--sp-2);
+  vertical-align: 1px;
+}
+
+/* Click target inline highlight */
+.ct {
+  font-weight: 600;
+  color: var(--c-navy);
+  border-bottom: 1.5px solid var(--c-gold);
+  padding-bottom: 1px;
+  white-space: nowrap;
+}
+
+/* Breadcrumb (Settings > Filters > Create) */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-2);
+  margin: var(--sp-3) 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-11);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--c-navy);
+}
+.breadcrumb-step {
+  background: var(--c-parchment);
+  border: 1px solid var(--c-border);
+  padding: 4px 10px;
+}
+.breadcrumb-sep {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  background: var(--c-gold);
+}
+
+/* Mock cards */
+.mock {
+  background: var(--c-off-white);
+  border: 1px solid var(--c-border);
+  padding: var(--sp-4);
+  position: relative;
+}
+.mock-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: var(--ls-ultra);
+  text-transform: uppercase;
+  color: var(--c-muted-readable);
+  margin-bottom: var(--sp-3);
+}
+
+/* Mock: tab strip */
+.mock-tabs {
+  display: flex;
+  gap: 1px;
+  background: var(--c-border);
+  padding: 1px;
+  margin-bottom: var(--sp-3);
+}
+.mock-tab {
+  flex: 1;
+  background: var(--c-white);
+  padding: 8px 6px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 10px;
+  color: var(--c-muted-readable);
+  text-align: center;
+  line-height: 1.2;
+}
+.mock-tab.active {
+  background: var(--c-navy);
+  color: var(--c-white);
+  font-weight: 600;
+}
+
+/* Mock: form rows */
+.mock-form-row {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 7px 0;
+  border-bottom: 1px solid var(--c-border);
+}
+.mock-form-row:last-child { border-bottom: none; }
+.mock-form-row .field-label {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--c-muted-readable);
+  text-align: right;
+}
+.mock-form-row .field-input {
+  background: var(--c-white);
+  border: 1px solid var(--c-border);
+  padding: 6px 8px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--c-muted);
+  min-height: 22px;
+}
+.mock-form-row.active .field-input {
+  border: 1.5px solid var(--c-gold);
+  background: var(--c-white);
+  color: var(--c-navy);
+  font-family: 'SF Mono', 'Courier New', monospace;
+  font-size: 10.5px;
+  word-break: break-all;
+  font-weight: 500;
+}
+.mock-form-row.active .field-label {
+  color: var(--c-navy);
+  font-weight: 600;
+}
+
+/* Mock: actions screen */
+.mock-action-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 6px 0;
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--c-muted);
+  border-bottom: 1px solid var(--c-border);
+}
+.mock-action-row:last-of-type { border-bottom: none; }
+.mock-action-row.active { color: var(--c-navy); font-weight: 600; }
+.mock-checkbox {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--c-muted);
+  position: relative;
+  flex-shrink: 0;
+}
+.mock-action-row.active .mock-checkbox {
+  border-color: var(--c-navy);
+  background: var(--c-navy);
+}
+.mock-action-row.active .mock-checkbox::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 3px;
+  width: 3px;
+  height: 7px;
+  border-right: 2px solid var(--c-white);
+  border-bottom: 2px solid var(--c-white);
+  transform: rotate(45deg);
+}
+.mock-dropdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: var(--c-white);
+  border: 1px solid var(--c-border);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 10px;
+  color: var(--c-navy);
+}
+.mock-dropdown::after {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 4px solid var(--c-muted-readable);
+}
+.mock-button {
+  display: inline-block;
+  background: var(--c-navy);
+  color: var(--c-white);
+  padding: 5px 11px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 9.5px;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  margin-top: var(--sp-3);
+}
+
+/* Mock: gear icon header strip */
+.mock-header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 6px 10px;
+  background: var(--c-white);
+  border: 1px solid var(--c-border);
+}
+.mock-gear {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--c-navy);
+  border-radius: 50%;
+  position: relative;
+  background: var(--c-white);
+}
+.mock-gear::before,
+.mock-gear::after {
+  content: "";
+  position: absolute;
+  background: var(--c-navy);
+}
+.mock-gear::before {
+  width: 2px; height: 5px;
+  top: -3px; left: 6px;
+  box-shadow: 0 16px var(--c-navy);
+}
+.mock-gear::after {
+  width: 5px; height: 2px;
+  top: 6px; left: -3px;
+  box-shadow: 16px 0 var(--c-navy);
+}
+.mock-menu {
+  background: var(--c-parchment);
+  border: 1px solid var(--c-border);
+  padding: 6px 10px;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--c-navy);
+}
+
+/* Test result confirmation mock */
+.mock-test-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 8px 10px;
+  background: var(--c-white);
+  border: 1px solid var(--c-border);
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--c-navy);
+  font-weight: 500;
+}
+.mock-test-row + .mock-test-row { margin-top: 4px; }
+.mock-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--c-green-pass);
+  flex-shrink: 0;
+}
+.mock-test-arrow {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  background: var(--c-gold);
+  position: relative;
+}
+.mock-test-arrow::after {
+  content: "";
+  position: absolute;
+  right: -2px;
+  top: -3px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid var(--c-gold);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+/* Guide fallback callout */
+.guide-callout {
+  background: var(--c-white);
+  border: 1px solid var(--c-border);
+  padding: var(--sp-5) var(--sp-6);
+  margin: var(--sp-10) 0 0 0;
+  max-width: 720px;
+}
+.guide-callout .card-label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--fs-10);
+  letter-spacing: var(--ls-ultra);
+  text-transform: uppercase;
+  color: var(--c-gold-on-light);
+  margin-bottom: var(--sp-2);
+}
+.guide-callout p {
+  font-size: var(--fs-14);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ============================================
+   COMPLIANCE FOOTER
+   ============================================ */
+.compliance {
+  font-family: var(--font-body);
+  font-size: var(--fs-13);
+  line-height: 1.6;
+  color: var(--c-muted-readable);
+  border-top: 1px solid var(--c-border);
+  padding-top: var(--sp-6);
+  margin-top: var(--sp-10);
+  max-width: 760px;
+}
+.compliance strong { color: var(--c-navy); }
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 960px) {
+  .sidebar {
+    position: relative;
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--c-border);
+    padding: var(--sp-6);
+  }
+  .main { margin-left: 0; }
+  .hero { padding: var(--sp-12) var(--sp-8); }
+  .hero h1 { font-size: var(--fs-40); }
+  .hero-sub { font-size: var(--fs-16); }
+  section.block { padding: var(--sp-12) var(--sp-8); }
+  h2 { font-size: var(--fs-28); }
+  .ask { grid-template-columns: 60px 1fr; gap: var(--sp-5); }
+  .ask-num { font-size: var(--fs-40); }
+  .data { grid-template-columns: 1fr; gap: var(--sp-1); }
+  .data dt { margin-top: var(--sp-2); }
+  .roadmap { grid-template-columns: 1fr; }
+  .step-content { grid-template-columns: 1fr; gap: var(--sp-4); }
+  .step { grid-template-columns: 50px 1fr; gap: var(--sp-4); }
+  .step-num { font-size: var(--fs-24); }
+  .phase { grid-template-columns: 50px 1fr; gap: var(--sp-4); }
+  .phase-letter { font-size: var(--fs-24); }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================
+     SIDEBAR
+     ============================================ -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <img src="https://caseload-select.vercel.app/brand/logos/lockup-horizontal-tagline-light-transparent.png" alt="CaseLoad Select">
+  </div>
+
+  <div class="sidebar-doc">Client Deliverable · Capture</div>
+  <div class="sidebar-title">DRG Law Directory Cleanup, Action Brief</div>
+
+  <ol class="sidebar-nav" id="sidebar-nav">
+    <li><a href="#top"><span class="num">00</span><span class="label">Overview</span></a></li>
+    <li><a href="#bottom-line"><span class="num">01</span><span class="label">Bottom line</span></a></li>
+    <li><a href="#status"><span class="num">02</span><span class="label">Status at a glance</span></a></li>
+    <li><a href="#recon"><span class="num">03</span><span class="label">Recon findings</span></a></li>
+    <li><a href="#preview"><span class="num">04</span><span class="label">Form preview</span></a></li>
+    <li><a href="#asks"><span class="num">05</span><span class="label">The four-item ask</span></a></li>
+    <li><a href="#execution"><span class="num">06</span><span class="label">Execution model</span></a></li>
+    <li><a href="#reference"><span class="num">07</span><span class="label">NAP reference</span></a></li>
+    <li><a href="#email-setup"><span class="num">08</span><span class="label">Forwarding setup guide</span></a></li>
+  </ol>
+
+  <div class="sidebar-foot">
+    Prepared for<br>
+    Damaris Regina Guimaraes<br>
+    20 May 2026 · v3
+  </div>
+</aside>
+
+<!-- ============================================
+     MAIN
+     ============================================ -->
+<main class="main">
+
+  <!-- HERO -->
+  <header class="hero" id="top">
+    <div class="hero-top">
+      <div class="hero-logo">
+        <img src="https://caseload-select.vercel.app/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select, Sign Better Cases">
+      </div>
+      <div class="hero-chip">Client Deliverable</div>
+    </div>
+
+    <div class="hero-eyebrow">Capture Phase Brief · May 2026</div>
+    <h1>DRG Law Directory Cleanup<svg viewBox="0 0 6 6" style="width:0.22em;height:0.22em;margin-left:0.12em;vertical-align:top;display:inline-block;position:relative;top:0.1em;flex-shrink:0;"><rect width="6" height="6" fill="#C4B49A"/></svg></h1>
+    <p class="hero-sub">What we found, what we will do, and the four things we need from you to run the rest without further interruption.</p>
+
+    <div class="hero-meta">
+      <div class="row"><span class="key">Prepared for</span><span class="val">Damaris Regina Guimaraes</span></div>
+      <div class="row"><span class="key">Date</span><span class="val">20 May 2026</span></div>
+      <div class="row"><span class="key">Version</span><span class="val">v3</span></div>
+    </div>
+  </header>
+
+  <!-- 01 BOTTOM LINE -->
+  <section class="block" id="bottom-line">
+    <div class="block-inner">
+      <div class="section-num">01 · Bottom Line</div>
+      <h2>Two directories, four asks, ten minutes of your time</h2>
+
+      <p class="lead">CaseLoad Select ran a full audit of the external citation graph for DRG Law on 20 May 2026. The audit narrowed an original list of eight directories down to two that are worth submitting this round. The submissions will be run by us. You provide four pieces of information once, then the work happens without you.</p>
+
+      <h3>What is happening</h3>
+      <p>Local search ranking for a Toronto solo practice depends on consistent business data across the directories that Google trusts. Your Law Society of Ontario record was aligned by you on 12 to 13 May 2026 and now reads correctly. The next step is to push that same record into the other directories that matter for Ontario, so that the citation graph agrees with the LSO and reinforces your local-search signal.</p>
+
+      <h3>What we found during the audit</h3>
+      <p>Three of the original directories on our shortlist (Martindale-Hubbell, Avvo, Justia) are now operationally US-only and add no value in Ontario. Two directories (Canadian Law List and Yellow Pages Canada) are the realistic free Canadian options. Two more (LawyerLocate, FindLaw Canada) are paid-only and have been deferred for a 60-day review.</p>
+
+      <p>The audit also surfaced two legacy "LexTransact Law" stub listings already in the directories, both showing a Markham address and contact details that do not match your current data. These need a yes-or-no decision from you in this round.</p>
+
+      <h3>What we need from you</h3>
+      <p>Four items, detailed in section 05: your year of call to the Ontario Bar, a preference on how verification emails should reach us, a 30-minute window in the next 5 to 7 business days for one short sales callback (two callbacks actually, one from each directory, but they can land in the same window), and a confirmation on whether LexTransact was your own corporation or a firm you worked at with others.</p>
+    </div>
+  </section>
+
+  <!-- 02 STATUS -->
+  <section class="block" id="status">
+    <div class="block-inner">
+      <div class="section-num">02 · Status at a Glance</div>
+      <h2>Where each directory stands</h2>
+
+      <p class="lead">Eight directories were assessed. Only two warrant a free submission this round. The rest are either dead, US-only, paid-deferred, or already aligned.</p>
+
+      <table class="dirs">
+        <thead>
+          <tr>
+            <th style="width: 50px;">#</th>
+            <th style="width: 28%;">Directory</th>
+            <th style="width: 18%;">Status</th>
+            <th>Action this round</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="num-col">01</td><td class="dir-col">Law Society of Ontario</td><td><span class="chip chip-live">Live</span></td><td>None. Source-of-truth. Verified 13 May 2026.</td></tr>
+          <tr><td class="num-col">02</td><td class="dir-col">Canadian Law List</td><td><span class="chip chip-submit">Submit</span></td><td>Free basic listing via the new-listing form. Sales callback to confirm.</td></tr>
+          <tr><td class="num-col">03</td><td class="dir-col">Yellow Pages Canada</td><td><span class="chip chip-submit">Submit</span></td><td>Free listing via short request form. YP callback to gather the rest.</td></tr>
+          <tr class="skip"><td class="num-col">04</td><td class="dir-col">Martindale-Hubbell</td><td><span class="chip chip-skip">Skip</span></td><td>Now part of Martindale-Avvo (same network as Avvo). US-only.</td></tr>
+          <tr class="skip"><td class="num-col">05</td><td class="dir-col">Avvo</td><td><span class="chip chip-skip">Skip</span></td><td>US-only. No Canadian section.</td></tr>
+          <tr class="skip"><td class="num-col">06</td><td class="dir-col">Justia</td><td><span class="chip chip-skip">Skip</span></td><td>US-only. Canadian pages do not rank.</td></tr>
+          <tr><td class="num-col">07</td><td class="dir-col">LawyerLocate.ca</td><td><span class="chip chip-defer">Defer</span></td><td>Paid, <span class="num">$90</span> per month, three-month minimum. Review at Day 60.</td></tr>
+          <tr><td class="num-col">08</td><td class="dir-col">FindLaw Canada</td><td><span class="chip chip-defer">Defer</span></td><td>Paid, <span class="num">$250</span> to <span class="num">$5,000</span> per month, multi-year. Review at Day 60.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="navy-panel">
+        <div class="card-label">Why the original eight was cut to two</div>
+        <p>Martindale, Avvo, and Justia have all consolidated around US-only coverage. Martindale.ca is dead. Their search filters list only US states. Submitting an Ontario lawyer to any of them produces a US-targeted profile with near-zero Canadian local-SEO weight. LawyerLocate and FindLaw are paid-only with multi-year terms; they are worth considering at Day 60 if the free-tier submissions do not move the needle. That leaves Canadian Law List and Yellow Pages as the two free Canadian directories that actually carry weight for an Ontario solo practice.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 RECON -->
+  <section class="block" id="recon">
+    <div class="block-inner">
+      <div class="section-num">03 · Recon Findings</div>
+      <h2>What the directories currently show for DRG Law</h2>
+
+      <p class="lead">CaseLoad Select searched every relevant directory on 20 May 2026 for any existing record tied to Damaris Guimaraes, DRG Law, or the legacy LexTransact entity. The results below summarize what is already published and what needs to change.</p>
+
+      <h3>Canadian Law List</h3>
+      <p>No listing exists for "Damaris Guimaraes" or "DRG Law." One legacy stub exists for LexTransact Law with data that no longer matches your current NAP.</p>
+
+      <div class="card">
+        <div class="card-label">Found · canadianlawlist.com · listing 741911</div>
+        <div class="card-title">LexTransact Law</div>
+        <dl class="data">
+          <dt>Address</dt><dd class="v">4-205 Torbay Rd. Markham, Ontario L3R 3W4 <span class="flag">retired</span></dd>
+          <dt>Phone</dt><dd class="v">647-609-3845 <span class="flag">does not match 647-598-2537</span></dd>
+          <dt>Email</dt><dd class="v">info@lextransact.com <span class="flag">retired</span></dd>
+          <dt>Listed individual</dt><dd class="v">Francis Fan <span class="flag">not Damaris</span></dd>
+        </dl>
+      </div>
+
+      <h3>Yellow Pages Canada</h3>
+      <p>No listing exists for DRG Law in Toronto. A search for "Damaris Guimaraes" returns one unrelated bookkeeping business. A second legacy LexTransact stub exists with a different Markham address than the Canadian Law List record.</p>
+
+      <div class="card">
+        <div class="card-label">Found · yellowpages.ca</div>
+        <div class="card-title">LexTransact Law</div>
+        <dl class="data">
+          <dt>Address</dt><dd class="v">400-3601 Highway 7 E, Markham, ON L3R 0M3 <span class="flag">different from CLL stub</span></dd>
+        </dl>
+      </div>
+
+      <h3>Martindale-Hubbell</h3>
+      <p>No listing exists for "Damaris Guimaraes." The platform itself has consolidated into the Martindale-Avvo network and no longer maintains a Canadian section.</p>
+
+      <div class="navy-panel">
+        <div class="card-label">Quoted · martindale.com/marketyourfirm</div>
+        <p>Per Martindale's own marketing page: the network "comprises the flagship legal brands Martindale-Hubbell, Martindale-Nolo, Ngage, Avvo and Captorra." Search filters list only US states (California, Texas, Florida, New York, Georgia). The historical martindale.ca subdomain is dead.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 FORM PREVIEW -->
+  <section class="block" id="preview">
+    <div class="block-inner">
+      <div class="section-num">04 · Form Preview</div>
+      <h2>What the forms look like and what we will fill</h2>
+
+      <p class="lead">Captured live on 20 May 2026. Each preview below shows the exact page Damaris would otherwise be filling herself. CaseLoad Select handles the submission on her behalf; the field-by-field values below the screenshot show what we will enter.</p>
+
+      <div class="form-preview">
+        <div class="form-preview-head">
+          <h3 class="form-preview-title">Canadian Law List, Submit a New Listing</h3>
+          <div class="form-preview-url">canadianlawlist.com/submitnewlisting/</div>
+        </div>
+
+        <p class="form-preview-note">A single-page self-service form with two sections: Basic Fields (required, NAP plus year of call) and Paid Fields (optional, profile bio plus practice areas plus logo). We fill the entire form ourselves with the canonical NAP, the year of call you provide, and the LSO-compliant 50-word bio. The footer of the page reads: <strong>"A customer representative will call to confirm your order and method of payment."</strong> That callback is item 03 of the four-item ask.</p>
+
+        <img class="form-preview-shot" src="screenshots/cll_new_listing_form.png" alt="Canadian Law List, Submit a New Listing form, captured 20 May 2026">
+
+        <p class="form-preview-note"><strong>Values we will submit:</strong></p>
+        <dl class="form-preview-fields">
+          <dt>Name</dt><dd>Damaris Regina Guimaraes</dd>
+          <dt>Company</dt><dd>DRG Law</dd>
+          <dt>Address(1)</dt><dd>PO Box 26033 Rpo Broadway</dd>
+          <dt>City</dt><dd>Toronto</dd>
+          <dt>Province</dt><dd>ON</dd>
+          <dt>Postal Code</dt><dd>M4P 0A8</dd>
+          <dt>Telephone</dt><dd>647-598-2537</dd>
+          <dt>Email</dt><dd>info@drglaw.ca</dd>
+          <dt>Called to the Bar</dt><dd>(year you provide)</dd>
+          <dt>Website</dt><dd>https://drglaw.ca</dd>
+          <dt>Profile (50 words max)</dt><dd>LSO Rule 4.2-1 bio, locked</dd>
+          <dt>Practice areas (5 slots)</dt><dd>Real Estate · Corporate &amp; Commercial · Employment · Labour · Estates &amp; Trusts</dd>
+        </dl>
+      </div>
+
+      <div class="form-preview">
+        <div class="form-preview-head">
+          <h3 class="form-preview-title">Yellow Pages Canada, Free Online Listing Request</h3>
+          <div class="form-preview-url">solutions.yp.ca/free-online-listing</div>
+        </div>
+
+        <p class="form-preview-note">Yellow Pages does not run a self-service listing catalog. The "Free Online Listing" page is a <strong>short request form</strong>, six fields total. After we submit, YP's team builds the listing on their side and follows up by phone to gather the rest of the data (address, hours, category, description) and to pitch paid upgrades. Same callback-window logic as Canadian Law List: Damaris answers, declines all upgrades, confirms basic free listing only.</p>
+
+        <img class="form-preview-shot" src="screenshots/yp_free_online_listing_form.png" alt="Yellow Pages, Request your Free Online Listing form, captured 20 May 2026">
+
+        <p class="form-preview-note"><strong>Values we will submit on the request form:</strong></p>
+        <dl class="form-preview-fields">
+          <dt>Business Name</dt><dd>DRG Law</dd>
+          <dt>Telephone</dt><dd>647-598-2537</dd>
+          <dt>Email Address</dt><dd>info@drglaw.ca</dd>
+          <dt>First Name</dt><dd>Damaris</dd>
+          <dt>Last Name</dt><dd>Guimaraes</dd>
+          <dt>CAPTCHA</dt><dd>handled at submission time</dd>
+        </dl>
+        <p class="form-preview-note">During the YP callback we provide: PO Box 26033 Rpo Broadway, Toronto, ON M4P 0A8; category "Lawyers"; remote-only practice; English and Portuguese; the 50-word bio; languages; the four LSO-registered practice areas. We decline every paid tier and confirm free listing only.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 ASKS -->
+  <section class="block" id="asks">
+    <div class="block-inner">
+      <div class="section-num">05 · The Four-Item Ask</div>
+      <h2>What we need from you</h2>
+
+      <p class="lead">Four items. Two are data, two are decisions. Total effort on your side: about 10 minutes, plus one 30-minute callback window we schedule together.</p>
+
+      <div class="ask">
+        <div class="ask-num">01</div>
+        <div class="ask-body">
+          <h3>Your year of call to the Ontario Bar</h3>
+          <p>One integer. The Canadian Law List form requires it and it is not visible on your public LSO page. The year is shown inside your LSO Connects login (private portal). Send the number back to Adriano on WhatsApp.</p>
+        </div>
+      </div>
+
+      <div class="ask">
+        <div class="ask-num">02</div>
+        <div class="ask-body">
+          <h3>How verification emails should reach us</h3>
+          <p>Both directories will send verification messages to info@drglaw.ca. Yellow Pages also creates an ongoing account on that email. CaseLoad Select needs a way to receive these without interrupting you each time. Pick one option below.</p>
+
+          <div class="options">
+            <div class="option recommended">
+              <div class="option-tag">Recommended · Option A</div>
+              <div class="option-title">Email forwarding rule</div>
+              <p>You add a rule in info@drglaw.ca that forwards any email containing "verification," "confirm," "Yellow Pages," or "Canadian Law List" to adriano@caseloadselect.ca. Two-minute setup. You keep full control of your inbox; we receive only what we need.</p>
+              <a class="inline-link" href="#email-setup">See the step-by-step setup guide</a>
+            </div>
+            <div class="option">
+              <div class="option-tag">Option B</div>
+              <div class="option-title">Share the inbox password</div>
+              <p>You share the info@drglaw.ca password with CaseLoad Select through a secure channel. We log in only as needed for verifications and log out. Faster setup, requires more trust.</p>
+            </div>
+            <div class="option">
+              <div class="option-tag">Option C</div>
+              <div class="option-title">Forward codes manually in real time</div>
+              <p>During the submission window, you watch your inbox and forward codes to Adriano as they arrive. Highest involvement on your side; we recommend this only if Options A and B do not work for you.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ask">
+        <div class="ask-num">03</div>
+        <div class="ask-body">
+          <h3>A 30-minute phone window</h3>
+          <p>Both Canadian Law List and Yellow Pages call back to confirm the listing and pitch paid upgrades. Two short calls, roughly <span class="num">5</span> minutes each, both to your number (<span class="num">647-598-2537</span>). For Canadian Law List the call confirms order and payment method for the free basic listing. For Yellow Pages the call gathers the rest of the listing data (address, category, description) since the request form is short on purpose.</p>
+          <p>Script for both: "Basic free listing only, decline all upgrades, thank you." The reps will lean in on paid tiers; you decline.</p>
+          <p>You pick a 30-minute window in the next 5 to 7 business days when you are reachable. We submit both forms at the start of that window so the callbacks land inside it.</p>
+        </div>
+      </div>
+
+      <div class="ask">
+        <div class="ask-num">04</div>
+        <div class="ask-body">
+          <h3>The LexTransact question</h3>
+          <p>We found two legacy LexTransact Law stubs. Neither matches your current NAP. The Canadian Law List version names Francis Fan as the listed individual. Confirm which is true:</p>
+
+          <div class="options">
+            <div class="option">
+              <div class="option-tag">Answer A</div>
+              <div class="option-title">LexTransact was a firm I worked at with others</div>
+              <p>Francis Fan and others were involved. It was not my own corporation. Action: leave the legacy stubs alone.</p>
+            </div>
+            <div class="option">
+              <div class="option-tag">Answer B</div>
+              <div class="option-title">LexTransact Law Professional Corporation was my own retired entity</div>
+              <p>CaseLoad Select drafts and sends removal-request emails to Canadian Law List and Yellow Pages on your behalf. We confirm removal in the tracker.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 EXECUTION -->
+  <section class="block" id="execution">
+    <div class="block-inner">
+      <div class="section-num">06 · Execution Model</div>
+      <h2>What happens after you reply</h2>
+
+      <p class="lead">Once we have your four answers, the rest is on us. No more pings to you until each listing is live, at which point we send a confirmation with the URL.</p>
+
+      <ol class="steps">
+        <li><strong>Canadian Law List submission.</strong> We fill the new-listing form with your canonical NAP, your year of call, and the locked LSO-compliant bio. We take the sales callback inside your window, decline all upgrades, and log the confirmation number in the tracker.</li>
+        <li><strong>Yellow Pages Canada request.</strong> We submit the short Free Online Listing request form (six fields: business name, phone, email, first name, last name, CAPTCHA). YP's team then calls to gather the rest of the listing data (address, category, description, languages, practice areas) and to pitch paid upgrades. We take that callback inside your phone window, give them the canonical data, decline every paid tier, and log the confirmation in the tracker.</li>
+        <li><strong>LexTransact stubs.</strong> If you answered B, we send removal-request emails to the Canadian Law List admin and Yellow Pages admin from info@drglaw.ca. If you answered A, we leave them alone and record the decision in the tracker.</li>
+        <li><strong>Listing verification.</strong> Within 1 to 2 weeks of submission, both listings should be live. We verify both, capture the live URLs, and log them.</li>
+        <li><strong>Confirmation back to you.</strong> A short WhatsApp message when each listing goes live, with the URL and the next-review date.</li>
+        <li><strong>Quarterly review.</strong> Every 90 days, CaseLoad Select re-checks the LSO record plus all three external citations (Canadian Law List, Yellow Pages, and the upcoming Google Business Profile) to make sure nothing has drifted.</li>
+      </ol>
+
+      <h3>Adjacent work, no decision needed from you today</h3>
+      <p>Google Business Profile is the next external citation workstream and will use the same NAP block. The drglaw.ca website footer currently shows a Yonge Street address that does not match your LSO record; that footer is scheduled to be corrected as part of the website rebuild after brand positioning completes. No action needed from you on either of these today.</p>
+    </div>
+  </section>
+
+  <!-- 06 NAP REFERENCE -->
+  <section class="block" id="reference">
+    <div class="block-inner">
+      <div class="section-num">07 · Reference</div>
+      <h2>The NAP block we will submit</h2>
+
+      <p class="lead">For your reference, this is the canonical data we will use on every directory form. It mirrors your Law Society of Ontario record verified on 13 May 2026.</p>
+
+      <div class="selection-card">
+        <div class="card-label">Canonical NAP · LSO-aligned</div>
+        <dl class="data" style="grid-template-columns: 220px 1fr;">
+          <dt>Trade name</dt><dd class="v">DRG Law</dd>
+          <dt>Legal entity</dt><dd class="v">DRG Law Professional Corporation</dd>
+          <dt>LSO Reg. No.</dt><dd class="v">91022I</dd>
+          <dt>Class of licence</dt><dd class="v">Lawyer L1, In Private Practice, Real Estate Insured, Limited Scope Retainers</dd>
+          <dt>Public-facing name</dt><dd class="v">Damaris Regina Guimaraes</dd>
+          <dt>Address</dt><dd class="v">PO Box 26033 Rpo Broadway, Toronto, ON M4P 0A8</dd>
+          <dt>Phone</dt><dd class="v">647-598-2537</dd>
+          <dt>Email</dt><dd class="v">info@drglaw.ca</dd>
+          <dt>Website</dt><dd class="v">https://drglaw.ca</dd>
+          <dt>Languages</dt><dd class="v">English, Portuguese</dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Practice areas, public-facing priority order</div>
+        <div class="card-title">Submitted exactly as registered on LSO, in this order</div>
+        <ol class="areas">
+          <li>Real Estate Law <span class="note">(primary, equal weight)</span></li>
+          <li>Corporate/Commercial Law <span class="note">(primary, equal weight)</span></li>
+          <li>Employment/Labour Law</li>
+          <li>Wills/Estates/Trusts Law <span class="note">(registered, launching 2026)</span></li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Bio · 50 words · LSO Rule 4.2-1 compliant</div>
+        <p style="margin: 0; color: var(--c-navy); font-size: var(--fs-15); line-height: 1.65;">DRG Law is a Toronto solo practice advising Ontario business owners and homeowners on real estate, corporate, employment, and estate matters. Damaris Regina Guimaraes is the principal lawyer, licensed by the Law Society of Ontario (Reg. No. 91022I), offering services in English and Portuguese. The practice is remote-only.</p>
+      </div>
+
+      <div class="compliance">
+        <strong>Compliance and methodology.</strong> All copy submitted to external directories complies with Law Society of Ontario Rule 4.2-1: no specialist, expert, leading, premier, best, or award-winning language; no outcome promises; practice areas listed exactly as registered. Source-of-truth for the NAP block is the LSO public directory record, verified live on 13 May 2026. CaseLoad Select is acting as marketing operator for DRG Law under the 4 May 2026 pilot kickoff. Tracker reference: 06_Clients/DRGLaw/04_Capture/DRGLaw_DirectorySubmission_Tracker_v1.md.
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 EMAIL FORWARDING SETUP GUIDE -->
+  <section class="block" id="email-setup">
+    <div class="block-inner">
+      <div class="section-num">08 · Setup Guide</div>
+      <h2>How to add the email forwarding rule</h2>
+
+      <p class="lead">Step-by-step for Gmail and Google Workspace, the most common host for a custom-domain inbox like info@drglaw.ca. Three phases, six steps, about five minutes total.</p>
+
+      <!-- Roadmap overview -->
+      <div class="roadmap">
+        <div class="roadmap-card">
+          <div class="roadmap-letter">A</div>
+          <div class="roadmap-title">Prerequisite</div>
+          <div class="roadmap-meta">2 steps · 3 min · one-time</div>
+        </div>
+        <div class="roadmap-card">
+          <div class="roadmap-letter">B</div>
+          <div class="roadmap-title">Filter and action</div>
+          <div class="roadmap-meta">3 steps · 2 min</div>
+        </div>
+        <div class="roadmap-card">
+          <div class="roadmap-letter">C</div>
+          <div class="roadmap-title">Verify</div>
+          <div class="roadmap-meta">1 step · 1 min</div>
+        </div>
+      </div>
+
+      <!-- PHASE A -->
+      <div class="phase">
+        <div class="phase-letter">A</div>
+        <div class="phase-text">
+          <div class="phase-label">Prerequisite</div>
+          <div class="phase-desc">One-time setup. Adds adriano@caseloadselect.ca as an allowed forwarding target inside info@drglaw.ca.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">01</div>
+        <div class="step-content">
+          <div class="step-text">
+            <div class="step-time">about 1 minute</div>
+            <h3>Open Gmail settings</h3>
+            <p>Sign in to info@drglaw.ca in a web browser.</p>
+            <p><span class="verb">click</span> the <span class="ct">gear icon</span> in the top-right corner of the inbox, then <span class="verb">click</span> <span class="ct">See all settings</span>.</p>
+          </div>
+          <div class="step-visual">
+            <div class="mock">
+              <div class="mock-label">Inbox · top-right corner</div>
+              <div class="mock-header">
+                <span class="mock-gear"></span>
+                <span class="mock-menu">See all settings</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">02</div>
+        <div class="step-content">
+          <div class="step-text">
+            <div class="step-time">about 2 minutes</div>
+            <h3>Add the forwarding address</h3>
+            <div class="breadcrumb">
+              <span class="breadcrumb-step">Settings</span>
+              <span class="breadcrumb-sep"></span>
+              <span class="breadcrumb-step">Forwarding and POP/IMAP</span>
+              <span class="breadcrumb-sep"></span>
+              <span class="breadcrumb-step">Add a forwarding address</span>
+            </div>
+            <p><span class="verb">paste</span> the address shown on the right into the dialog, then click <span class="ct">Next</span>, <span class="ct">Proceed</span>, <span class="ct">OK</span>.</p>
+            <p>Gmail sends a verification email to that address. Adriano confirms it on his side and lets you know when done.</p>
+          </div>
+          <div class="step-visual">
+            <div class="mock">
+              <div class="mock-label">Add a forwarding address</div>
+              <div class="mock-form-row active">
+                <div class="field-label">Address</div>
+                <div class="field-input">adriano@caseloadselect.ca</div>
+              </div>
+              <div style="margin-top: 12px;">
+                <span class="mock-button">Next</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PHASE B -->
+      <div class="phase">
+        <div class="phase-letter">B</div>
+        <div class="phase-text">
+          <div class="phase-label">Filter and action</div>
+          <div class="phase-desc">Create the rule that matches verification emails and forwards them.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">03</div>
+        <div class="step-content">
+          <div class="step-text">
+            <div class="step-time">about 30 seconds</div>
+            <h3>Open the Filters tab</h3>
+            <p>Still inside Settings, the tab strip across the top lists all categories.</p>
+            <p><span class="verb">click</span> <span class="ct">Filters and Blocked Addresses</span>.</p>
+          </div>
+          <div class="step-visual">
+            <div class="mock">
+              <div class="mock-label">Settings · tab strip</div>
+              <div class="mock-tabs">
+                <div class="mock-tab">General</div>
+                <div class="mock-tab">Labels</div>
+                <div class="mock-tab active">Filters &amp; Blocked</div>
+                <div class="mock-tab">Forwarding</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">04</div>
+        <div class="step-content">
+          <div class="step-text">
+            <div class="step-time">about 1 minute</div>
+            <h3>Paste the filter criteria</h3>
+            <p>Scroll to the bottom of the Filters page and <span class="verb">click</span> <span class="ct">Create a new filter</span>. A form opens with several fields.</p>
+            <p>Leave every field blank except <span class="ct">Has the words</span>. <span class="verb">paste</span> the line on the right into that one field. The quotes around the directory names matter; they tell Gmail to treat each as a phrase.</p>
+            <p><span class="verb">click</span> <span class="ct">Create filter</span> (bottom right).</p>
+          </div>
+          <div class="step-visual">
+            <div class="mock">
+              <div class="mock-label">Create a new filter</div>
+              <div class="mock-form-row">
+                <div class="field-label">From</div>
+                <div class="field-input"></div>
+              </div>
+              <div class="mock-form-row">
+                <div class="field-label">To</div>
+                <div class="field-input"></div>
+              </div>
+              <div class="mock-form-row">
+                <div class="field-label">Subject</div>
+                <div class="field-input"></div>
+              </div>
+              <div class="mock-form-row active">
+                <div class="field-label">Has the words</div>
+                <div class="field-input">verification OR confirm OR "Yellow Pages" OR "Canadian Law List"</div>
+              </div>
+              <div class="mock-form-row">
+                <div class="field-label">Size</div>
+                <div class="field-input"></div>
+              </div>
+              <div style="text-align: right; margin-top: 12px;">
+                <span class="mock-button">Create filter</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">05</div>
+        <div class="step-content">
+          <div class="step-text">
+            <div class="step-time">about 30 seconds</div>
+            <h3>Set the forwarding action</h3>
+            <p>A new screen appears with a list of checkbox actions.</p>
+            <p><span class="verb">check</span> <span class="ct">Forward it to:</span> and select adriano@caseloadselect.ca from the dropdown.</p>
+            <p>Do not check any other box. Do not skip the inbox, do not delete, do not mark as read. Then <span class="verb">click</span> <span class="ct">Create filter</span>.</p>
+          </div>
+          <div class="step-visual">
+            <div class="mock">
+              <div class="mock-label">Filter actions · Apply</div>
+              <div class="mock-action-row">
+                <span class="mock-checkbox"></span>
+                <span>Skip the Inbox</span>
+              </div>
+              <div class="mock-action-row">
+                <span class="mock-checkbox"></span>
+                <span>Mark as read</span>
+              </div>
+              <div class="mock-action-row">
+                <span class="mock-checkbox"></span>
+                <span>Star it</span>
+              </div>
+              <div class="mock-action-row active">
+                <span class="mock-checkbox"></span>
+                <span>Forward it to:</span>
+                <span class="mock-dropdown">adriano@caseloadselect.ca</span>
+              </div>
+              <div class="mock-action-row">
+                <span class="mock-checkbox"></span>
+                <span>Delete it</span>
+              </div>
+              <div style="text-align: right; margin-top: 10px;">
+                <span class="mock-button">Create filter</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PHASE C -->
+      <div class="phase">
+        <div class="phase-letter">C</div>
+        <div class="phase-text">
+          <div class="phase-label">Verify</div>
+          <div class="phase-desc">Confirm the rule works before walking away.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">06</div>
+        <div class="step-content">
+          <div class="step-text">
+            <div class="step-time">about 1 minute</div>
+            <h3>Test the rule</h3>
+            <p>From your personal address (or any other inbox), send a test email to info@drglaw.ca with the word <span class="ct">verification</span> in the subject.</p>
+            <p>Wait 60 seconds. The email lands in your info@drglaw.ca inbox; a copy lands at adriano@caseloadselect.ca. Adriano confirms on his side and the rule is verified.</p>
+            <p style="margin-top: 12px;"><strong>Done.</strong> Any email at info@drglaw.ca mentioning verification, confirm, Yellow Pages, or Canadian Law List now auto-forwards. Your inbox is unchanged. The rule can be removed at any time from the same Filters tab.</p>
+          </div>
+          <div class="step-visual">
+            <div class="mock">
+              <div class="mock-label">Expected result</div>
+              <div class="mock-test-row">
+                <span class="mock-dot"></span>
+                <span>info@drglaw.ca</span>
+                <span class="mock-test-arrow"></span>
+                <span style="color: var(--c-muted-readable); font-size: 10px;">test email received</span>
+              </div>
+              <div class="mock-test-row">
+                <span class="mock-dot"></span>
+                <span>adriano@caseloadselect.ca</span>
+                <span class="mock-test-arrow"></span>
+                <span style="color: var(--c-muted-readable); font-size: 10px;">forwarded copy received</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="guide-callout">
+        <div class="card-label">If info@drglaw.ca is on Wix Mail</div>
+        <p>Wix Mail does not expose the same filter-and-forward UI as Gmail. The cleanest equivalent on Wix is a routing rule set inside Wix's email management panel, or you switch to Option B (share the password) or Option C (forward manually) workflow. Message Adriano with what email platform you use and we will send the matching steps.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(function() {
+  var navLinks = document.querySelectorAll('#sidebar-nav a');
+  var sections = [];
+  navLinks.forEach(function(link) {
+    var id = link.getAttribute('href').substring(1);
+    var el = document.getElementById(id);
+    if (el) sections.push({ id: id, el: el, link: link });
+  });
+
+  function setActive(activeId) {
+    navLinks.forEach(function(link) {
+      var id = link.getAttribute('href').substring(1);
+      if (id === activeId) link.classList.add('active');
+      else link.classList.remove('active');
+    });
+  }
+
+  if ('IntersectionObserver' in window) {
+    var observer = new IntersectionObserver(function(entries) {
+      var visible = entries.filter(function(e) { return e.isIntersecting; });
+      if (visible.length === 0) return;
+      visible.sort(function(a, b) { return b.intersectionRatio - a.intersectionRatio; });
+      setActive(visible[0].target.id);
+    }, { rootMargin: '-30% 0px -50% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] });
+    sections.forEach(function(s) { observer.observe(s.el); });
+  }
+
+  // Initial state
+  setActive('top');
+})();
+</script>
+
+</body>
+</html>
