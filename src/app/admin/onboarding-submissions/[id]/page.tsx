@@ -13,6 +13,7 @@
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OnboardingNotificationPanel } from "@/components/admin/OnboardingNotificationPanel";
 
 interface Submission {
   id: string;
@@ -77,6 +78,13 @@ interface Submission {
   submitted_at: string;
   ip_address: string | null;
   user_agent: string | null;
+  // Operator-notification delivery state. NULL on rows that pre-date the
+  // 2026-05-20 notification-tracking migration; the panel treats those as
+  // "Pending — never attempted".
+  notification_sent_at: string | null;
+  notification_error: string | null;
+  notification_attempts: number | null;
+  notification_last_attempt_at: string | null;
 }
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
@@ -142,6 +150,16 @@ export default async function SubmissionDetailPage({
           ← All submissions
         </Link>
       </div>
+
+      <Section title="Notification status">
+        <OnboardingNotificationPanel
+          submissionId={row.id}
+          notificationSentAt={row.notification_sent_at}
+          notificationError={row.notification_error}
+          notificationAttempts={row.notification_attempts ?? 0}
+          notificationLastAttemptAt={row.notification_last_attempt_at}
+        />
+      </Section>
 
       <Section title="1. Business identity">
         <Fields>
