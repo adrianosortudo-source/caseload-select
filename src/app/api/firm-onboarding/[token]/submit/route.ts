@@ -25,6 +25,13 @@ interface SubmitBody {
   authorized_rep_title?: string;
   authorized_rep_email?: string;
   authorized_rep_phone?: string;
+  // Bar-of-call data for the authorized rep. Both are used by directory
+  // submission prep. Year is a string on the wire to keep the form input
+  // permissive; we coerce to integer at insert time.
+  authorized_rep_year_of_call?: string | number | null;
+  authorized_rep_province_of_call?: string;
+  // Prior business names / d/b/a, free text. Used by directory cleanup work.
+  previous_business_names?: string;
   sms_vertical?: string;
   sms_sender_phone_preference?: string;
   whatsapp_number_decision?: string;
@@ -62,7 +69,13 @@ interface SubmitBody {
   booking_url?: string;
   // Section 1 extensions
   office_hours?: string;
-  additional_lawyers?: Array<{ name: string; email: string; role?: string }>;
+  additional_lawyers?: Array<{
+    name?: string;
+    email?: string;
+    role?: string;
+    year_of_call?: string | number | null;
+    province_of_call?: string;
+  }>;
   // Section 2: Practice scope
   practice_areas?: string[];
   practice_areas_other?: string;
@@ -136,6 +149,50 @@ export async function POST(
   const toBool = (v: string | undefined): boolean | null =>
     v === "yes" ? true : v === "no" ? false : null;
 
+  // Year-of-call is captured as a string in the form (the input is type=number
+  // but values arrive serialized). Coerce to integer if the value parses
+  // cleanly and lies in a plausible bar-call range; otherwise persist null.
+  // SMALLINT in Postgres covers -32768..32767 — well past any plausible year.
+  const toYearOfCall = (v: string | number | null | undefined): number | null => {
+    if (v === null || v === undefined || v === "") return null;
+    const n = typeof v === "number" ? v : Number.parseInt(String(v), 10);
+    if (!Number.isInteger(n)) return null;
+    if (n < 1900 || n > 2100) return null;
+    return n;
+  };
+
+  // Normalise the additional_lawyers JSONB so the stored shape always has
+  // the five known keys and drops rows that are completely empty. Keeps
+  // old `{name, email, role}` rows working without errors.
+  const normaliseAdditionalLawyers = (
+    rows: SubmitBody["additional_lawyers"]
+  ): Array<{
+    name: string;
+    email: string;
+    role: string;
+    year_of_call: number | null;
+    province_of_call: string;
+  }> | null => {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const cleaned = rows
+      .map((l) => ({
+        name: (l.name ?? "").trim(),
+        email: (l.email ?? "").trim(),
+        role: (l.role ?? "").trim(),
+        year_of_call: toYearOfCall(l.year_of_call ?? null),
+        province_of_call: (l.province_of_call ?? "").trim(),
+      }))
+      .filter(
+        (l) =>
+          l.name ||
+          l.email ||
+          l.role ||
+          l.year_of_call !== null ||
+          l.province_of_call,
+      );
+    return cleaned.length > 0 ? cleaned : null;
+  };
+
   const { data: inserted, error: insertErr } = await supabase
     .from("firm_onboarding_intake")
     .insert({
@@ -149,6 +206,10 @@ export async function POST(
       authorized_rep_title: body.authorized_rep_title ?? null,
       authorized_rep_email: body.authorized_rep_email ?? null,
       authorized_rep_phone: body.authorized_rep_phone ?? null,
+      authorized_rep_year_of_call: toYearOfCall(body.authorized_rep_year_of_call),
+      authorized_rep_province_of_call:
+        body.authorized_rep_province_of_call?.trim() || null,
+      previous_business_names: body.previous_business_names?.trim() || null,
       sms_vertical: body.sms_vertical ?? null,
       sms_sender_phone_preference: body.sms_sender_phone_preference ?? null,
       whatsapp_number_decision: body.whatsapp_number_decision ?? null,
@@ -188,10 +249,7 @@ export async function POST(
       notes: body.notes ?? null,
       booking_url: body.booking_url?.trim() || null,
       office_hours: body.office_hours?.trim() || null,
-      additional_lawyers:
-        Array.isArray(body.additional_lawyers) && body.additional_lawyers.length > 0
-          ? body.additional_lawyers.filter((l) => l.name?.trim() || l.email?.trim())
-          : null,
+      additional_lawyers: normaliseAdditionalLawyers(body.additional_lawyers),
       practice_areas:
         Array.isArray(body.practice_areas) && body.practice_areas.length > 0
           ? body.practice_areas
@@ -284,13 +342,40 @@ function buildNotificationHtml({
   };
 
   const prettifyAdditionalLawyers = (
-    v: Array<{ name: string; email: string; role?: string }> | undefined | null
+    v:
+      | Array<{
+          name?: string;
+          email?: string;
+          role?: string;
+          year_of_call?: string | number | null;
+          province_of_call?: string;
+        }>
+      | undefined
+      | null,
   ): string | null => {
     if (!v || v.length === 0) return null;
-    return v
+    const rendered = v
       .filter((l) => l.name?.trim() || l.email?.trim())
-      .map((l) => `${l.name ?? "(no name)"} <${l.email ?? "(no email)"}>`)
-      .join(", ");
+      .map((l) => {
+        const head = `${l.name?.trim() || "(no name)"} <${l.email?.trim() || "(no email)"}>`;
+        const tail: string[] = [];
+        if (l.year_of_call) tail.push(`called ${l.year_of_call}`);
+        if (l.province_of_call?.trim()) tail.push(l.province_of_call.trim());
+        return tail.length > 0 ? `${head} — ${tail.join(", ")}` : head;
+      });
+    return rendered.length > 0 ? rendered.join("; ") : null;
+  };
+
+  const prettifyYearProvince = (
+    year: string | number | null | undefined,
+    province: string | null | undefined,
+  ): string | null => {
+    const parts: string[] = [];
+    if (year !== null && year !== undefined && String(year).trim() !== "") {
+      parts.push(`Called ${year}`);
+    }
+    if (province?.trim()) parts.push(province.trim());
+    return parts.length > 0 ? parts.join(", ") : null;
   };
 
   const prettifyPracticeAreas = (v: string[] | undefined | null): string | null => {
@@ -385,6 +470,14 @@ function buildNotificationHtml({
         ${row("Title", body.authorized_rep_title)}
         ${row("Rep email", body.authorized_rep_email)}
         ${row("Rep phone", body.authorized_rep_phone)}
+        ${row(
+          "Rep bar of call",
+          prettifyYearProvince(
+            body.authorized_rep_year_of_call,
+            body.authorized_rep_province_of_call,
+          ),
+        )}
+        ${row("Previous business names", body.previous_business_names)}
         ${row("Calendar booking URL", body.booking_url)}
         ${row("Office hours", body.office_hours)}
         ${row("Additional lawyers", prettifyAdditionalLawyers(body.additional_lawyers))}
