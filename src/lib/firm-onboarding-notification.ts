@@ -23,18 +23,21 @@
  * replay a failed or pending notification on demand.
  *
  * The recipient defaults to OPERATOR_NOTIFICATION_EMAIL. If that env var
- * is missing, we fall back to adrianosortudo@gmail.com (the canonical
- * operator inbox per the 2026-05-20 audit). The previous fallback
- * (adriano@caseloadselect.ca) was undeliverable for the operator's actual
- * inbox and is retired.
+ * is missing, we fall back to adriano@caseloadselect.ca — the canonical
+ * operator inbox for all CaseLoad Select operations. Personal email
+ * addresses (e.g. the operator's gmail) are NEVER used for CaseLoad Select
+ * communications, no matter how convenient. Use only the @caseloadselect.ca
+ * domain inboxes.
  */
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 
-// Canonical operator inbox. If you change this, also update the Vercel env
-// var OPERATOR_NOTIFICATION_EMAIL across Production / Preview / Development.
-const FALLBACK_OPERATOR_EMAIL = "adrianosortudo@gmail.com";
+// Canonical operator inbox for CaseLoad Select. If you change this, also
+// update the Vercel env var OPERATOR_NOTIFICATION_EMAIL across Production /
+// Preview / Development. NEVER substitute a personal inbox here — CaseLoad
+// Select operator comms only flow through the @caseloadselect.ca domain.
+const FALLBACK_OPERATOR_EMAIL = "adriano@caseloadselect.ca";
 
 export type SendNotificationResult =
   | { ok: true; messageId: string | undefined; sentTo: string; replay: boolean }
