@@ -25,6 +25,9 @@ interface SubmissionRow {
   verification_doc_storage_path: string | null;
   verification_doc_original_name: string | null;
   submitted_at: string;
+  notification_sent_at: string | null;
+  notification_error: string | null;
+  notification_attempts: number | null;
 }
 
 export const dynamic = "force-dynamic";
@@ -38,7 +41,8 @@ export default async function OnboardingSubmissionsListPage() {
       whatsapp_number_decision, has_meta_business_manager,
       will_add_operator_as_admin, consent_acknowledged,
       verification_doc_storage_path, verification_doc_original_name,
-      submitted_at
+      submitted_at,
+      notification_sent_at, notification_error, notification_attempts
     `)
     .order("submitted_at", { ascending: false })
     .limit(100)
@@ -62,6 +66,7 @@ export default async function OnboardingSubmissionsListPage() {
                 <th className="px-3 py-2 font-semibold">Firm</th>
                 <th className="px-3 py-2 font-semibold">Rep</th>
                 <th className="px-3 py-2 font-semibold">Token</th>
+                <th className="px-3 py-2 font-semibold">Notify</th>
                 <th className="px-3 py-2 font-semibold">WhatsApp</th>
                 <th className="px-3 py-2 font-semibold">Meta MBM</th>
                 <th className="px-3 py-2 font-semibold">Admin?</th>
@@ -91,6 +96,13 @@ export default async function OnboardingSubmissionsListPage() {
                   </td>
                   <td className="px-3 py-2 align-top">
                     <code className="text-[10px] text-black/60">{row.submission_token}</code>
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <NotificationBadge
+                      sentAt={row.notification_sent_at}
+                      error={row.notification_error}
+                      attempts={row.notification_attempts ?? 0}
+                    />
                   </td>
                   <td className="px-3 py-2 align-top text-black/70">
                     {row.whatsapp_number_decision === "provision_new_ghl_number" ? (
@@ -151,6 +163,45 @@ function Header({ total }: { total: number }) {
         {total} submission{total === 1 ? "" : "s"}
       </div>
     </div>
+  );
+}
+
+function NotificationBadge({
+  sentAt,
+  error,
+  attempts,
+}: {
+  sentAt: string | null;
+  error: string | null;
+  attempts: number;
+}) {
+  if (sentAt) {
+    return (
+      <span
+        className="inline-flex items-center font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 border bg-emerald-100 text-emerald-900 border-emerald-300"
+        title={`Sent ${sentAt}${attempts > 0 ? ` · ${attempts} attempt${attempts === 1 ? "" : "s"}` : ""}`}
+      >
+        Sent
+      </span>
+    );
+  }
+  if (error) {
+    return (
+      <span
+        className="inline-flex items-center font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 border bg-red-50 text-red-900 border-red-300"
+        title={`Last error: ${error} · ${attempts} attempt${attempts === 1 ? "" : "s"}`}
+      >
+        Failed
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex items-center font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 border bg-amber-50 text-amber-900 border-amber-300"
+      title={attempts > 0 ? `${attempts} attempt${attempts === 1 ? "" : "s"} so far` : "Never attempted"}
+    >
+      Pending
+    </span>
   );
 }
 
