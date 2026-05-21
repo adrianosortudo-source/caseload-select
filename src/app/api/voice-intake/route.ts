@@ -71,6 +71,7 @@ import {
 } from '@/lib/voice-webhook-auth';
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from '@/lib/rate-limit';
 import { persistUnconfirmedInquiry } from '@/lib/unconfirmed-inquiry';
+import { fetchVoiceAITranscript } from '@/lib/ghl-voice-ai-api';
 
 interface VoiceIntakeBody {
   caller_phone?: string;
@@ -199,16 +200,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const transcriptResolved = resolveTranscript(body);
-  const transcript = transcriptResolved.text;
-  if (!transcript) {
-    return NextResponse.json(
-      { error: 'transcript is required (transcript_full, transcript_summary, or transcript field must be present and non-placeholder)' },
-      { status: 400, headers: CORS_HEADERS },
-    );
-  }
-  console.log(`[voice-intake] transcript source=${transcriptResolved.source} length=${transcript.length}`);
-
   // ── firmId resolution (same pattern as intake-v2) ──────────────────────
   const firmIdParam = (body.firmId ?? '').trim();
 
@@ -228,7 +219,7 @@ export async function POST(req: NextRequest) {
 
   const { data: firm, error: firmErr } = await supabase
     .from('intake_firms')
-    .select('id')
+    .select('id, voice_api_token')
     .eq('id', firmIdParam)
     .maybeSingle();
   if (firmErr) {
@@ -243,6 +234,60 @@ export async function POST(req: NextRequest) {
       { status: 200, headers: CORS_HEADERS },
     );
   }
+
+  // ── Transcript resolution: API-first, body-fallback ───────────────────
+  //
+  // Primary path: fetch the verbatim transcript from GHL's Voice AI
+  // Public API using the firm's Private Integration Token + the
+  // call_id from the webhook body. Workflow custom values do not
+  // expose the verbatim transcript (confirmed by GHL's own AI 2026-05-21
+  // PM), so this server-side fetch is the only reliable way to get
+  // digits and exact phrasing the engine needs for the contact-doctrine
+  // gate (DR-038).
+  //
+  // Fallback path: if the firm has no token, or the call_id is missing,
+  // or the API fetch fails for any reason, fall through to
+  // `resolveTranscript(body)` which picks the best of transcript_full
+  // / transcript_summary / legacy transcript fields. The summary is
+  // strictly degraded (paraphrased, digits stripped) but at least lets
+  // the engine attempt matter classification and avoid silent drops.
+  let transcript = '';
+  let transcriptSource: 'voice-ai-api' | 'full' | 'summary' | 'legacy' | 'none' = 'none';
+  let apiFetchTelemetry: string = 'skipped';
+
+  const callId = (body.call_id ?? '').trim();
+  const firmToken = (firm as { voice_api_token?: string | null }).voice_api_token ?? null;
+
+  if (callId && firmToken) {
+    const apiResult = await fetchVoiceAITranscript(callId, firmToken);
+    if (apiResult.ok) {
+      transcript = apiResult.transcript;
+      transcriptSource = 'voice-ai-api';
+      apiFetchTelemetry = `ok len=${apiResult.transcript.length}`;
+    } else {
+      apiFetchTelemetry = `fail reason=${apiResult.reason}${apiResult.status ? ` status=${apiResult.status}` : ''}${apiResult.detail ? ` detail=${apiResult.detail.slice(0, 200)}` : ''}`;
+    }
+  } else {
+    apiFetchTelemetry = `skipped reason=${!callId ? 'no_call_id' : 'no_firm_token'}`;
+  }
+
+  if (!transcript) {
+    const fallback = resolveTranscript(body);
+    if (fallback.text) {
+      transcript = fallback.text;
+      transcriptSource = fallback.source;
+    }
+  }
+
+  if (!transcript) {
+    console.warn(`[voice-intake] no transcript available firm=${firmIdParam} api=${apiFetchTelemetry}`);
+    return NextResponse.json(
+      { error: 'transcript is required (no transcript via Voice AI API, no usable transcript field in body)' },
+      { status: 400, headers: CORS_HEADERS },
+    );
+  }
+
+  console.log(`[voice-intake] transcript source=${transcriptSource} length=${transcript.length} api=${apiFetchTelemetry}`);
 
   // ── HMAC verification (Codex audit HIGH #7) ───────────────────────────
   // GHL Voice AI is expected to send X-CLS-Voice-Signature: sha256=<hex>
