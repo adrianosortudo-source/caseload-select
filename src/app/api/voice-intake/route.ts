@@ -219,7 +219,7 @@ export async function POST(req: NextRequest) {
 
   const { data: firm, error: firmErr } = await supabase
     .from('intake_firms')
-    .select('id, voice_api_token')
+    .select('id, voice_api_token, ghl_location_id')
     .eq('id', firmIdParam)
     .maybeSingle();
   if (firmErr) {
@@ -237,16 +237,27 @@ export async function POST(req: NextRequest) {
 
   // ── Transcript resolution: API-first, body-fallback ───────────────────
   //
-  // Primary path: fetch the verbatim transcript from GHL's Voice AI
-  // Public API using the firm's Private Integration Token + the
-  // call_id from the webhook body. Workflow custom values do not
-  // expose the verbatim transcript (confirmed by GHL's own AI 2026-05-21
-  // PM), so this server-side fetch is the only reliable way to get
-  // digits and exact phrasing the engine needs for the contact-doctrine
-  // gate (DR-038).
+  // Primary path: list call logs for the GHL contact via the Voice AI
+  // Public API and take the most recent one. The list response includes
+  // the full verbatim `transcript` field inline; no per-call round-trip
+  // needed. Workflow custom values do not reliably expose the verbatim
+  // transcript (variable rendering produces literal placeholders, empty
+  // strings, or paraphrases — confirmed empirically 2026-05-21 PM), so
+  // this server-side fetch is the only reliable way to get digits and
+  // exact phrasing the engine needs for the contact-doctrine gate
+  // (DR-038).
   //
-  // Fallback path: if the firm has no token, or the call_id is missing,
-  // or the API fetch fails for any reason, fall through to
+  // Identifiers used:
+  //   - contactId    ← `call_id` from the webhook body (which is
+  //                    `{{contact.id}}` from the GHL workflow). This is
+  //                    the GHL contact id, NOT the dashboard call-log
+  //                    id. Listing by contactId sidesteps the call-log
+  //                    id format problem entirely.
+  //   - locationId   ← per-firm `intake_firms.ghl_location_id`.
+  //   - token        ← per-firm `intake_firms.voice_api_token` (PIT).
+  //
+  // Fallback path: if any of the three identifiers is missing, or the
+  // API fetch fails for any reason, fall through to
   // `resolveTranscript(body)` which picks the best of transcript_full
   // / transcript_summary / legacy transcript fields. The summary is
   // strictly degraded (paraphrased, digits stripped) but at least lets
@@ -255,20 +266,29 @@ export async function POST(req: NextRequest) {
   let transcriptSource: 'voice-ai-api' | 'full' | 'summary' | 'legacy' | 'none' = 'none';
   let apiFetchTelemetry: string = 'skipped';
 
-  const callId = (body.call_id ?? '').trim();
-  const firmToken = (firm as { voice_api_token?: string | null }).voice_api_token ?? null;
+  const contactId = (body.call_id ?? '').trim();
+  const firmRow = firm as {
+    voice_api_token?: string | null;
+    ghl_location_id?: string | null;
+  };
+  const firmToken = firmRow.voice_api_token ?? null;
+  const firmLocationId = firmRow.ghl_location_id ?? null;
 
-  if (callId && firmToken) {
-    const apiResult = await fetchVoiceAITranscript(callId, firmToken);
+  if (contactId && firmToken && firmLocationId) {
+    const apiResult = await fetchVoiceAITranscript(contactId, firmLocationId, firmToken);
     if (apiResult.ok) {
       transcript = apiResult.transcript;
       transcriptSource = 'voice-ai-api';
-      apiFetchTelemetry = `ok len=${apiResult.transcript.length}`;
+      apiFetchTelemetry = `ok len=${apiResult.transcript.length} callLogId=${apiResult.callLogId ?? 'unknown'}`;
     } else {
       apiFetchTelemetry = `fail reason=${apiResult.reason}${apiResult.status ? ` status=${apiResult.status}` : ''}${apiResult.detail ? ` detail=${apiResult.detail.slice(0, 200)}` : ''}`;
     }
   } else {
-    apiFetchTelemetry = `skipped reason=${!callId ? 'no_call_id' : 'no_firm_token'}`;
+    const missing: string[] = [];
+    if (!contactId) missing.push('contact_id');
+    if (!firmToken) missing.push('firm_token');
+    if (!firmLocationId) missing.push('firm_location_id');
+    apiFetchTelemetry = `skipped reason=missing:${missing.join(',')}`;
   }
 
   if (!transcript) {

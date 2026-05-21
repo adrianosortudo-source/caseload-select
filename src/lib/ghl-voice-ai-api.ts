@@ -4,16 +4,29 @@ import 'server-only';
  * GHL Voice AI Public API client.
  *
  * Why this exists: GHL's workflow custom values (e.g.
- * `{{transcript_generated.call_transcript}}`) DO NOT expose the
- * verbatim transcript of a Voice AI call. GHL's own AI assistant
- * confirmed this on 2026-05-21 PM. The only way to get the verbatim
- * transcript is the Voice AI Public API:
+ * `{{transcript_generated.call_transcript}}`) DO NOT reliably expose the
+ * verbatim transcript of a Voice AI call — variable resolution either
+ * returns the literal placeholder, an empty string, or a paraphrase. The
+ * canonical path for the verbatim transcript is the Voice AI Public API:
  *
- *   GET https://services.leadconnectorhq.com/voice-ai/dashboard/call-logs/{callId}
+ *   GET https://services.leadconnectorhq.com/voice-ai/dashboard/call-logs
+ *     ?locationId={ghl_location_id}
+ *     &contactId={ghl_contact_id}
+ *
+ * Confirmed via empirical test 2026-05-21 PM: the LIST endpoint above
+ * returns `callLogs[]` with the full verbatim `transcript` field inline.
+ * The single-resource endpoint
+ * `GET /voice-ai/dashboard/call-logs/{callLogId}` requires the dashboard
+ * call-log id (not GHL contact id, not workflow-emitted call_id) and is
+ * rejected with `422 "Call ID is invalid"` when fed the wrong id format.
+ * Listing by contactId sidesteps that — the webhook delivers
+ * `{{contact.id}}` reliably, the list returns the call with transcript
+ * attached, no second round-trip required.
  *
  * Authenticated via a per-firm Private Integration Token (PIT) stored
- * in `intake_firms.voice_api_token` (migration
- * `20260521_intake_firms_voice_api_token.sql`).
+ * in `intake_firms.voice_api_token`. Location ID stored in
+ * `intake_firms.ghl_location_id` (migration
+ * `20260521_intake_firms_ghl_location_id.sql`).
  *
  * Required PIT scopes:
  *   - voice-ai-dashboard.readonly
@@ -34,15 +47,20 @@ export type VoiceAITranscriptResult =
   | {
       ok: true;
       transcript: string;
-      source: 'voice-ai-dashboard';
+      source: 'voice-ai-dashboard-list';
+      callLogId?: string;
+      callCreatedAt?: string;
+      callDurationSec?: number;
       raw: unknown;
     }
   | {
       ok: false;
       reason:
         | 'no_token'
-        | 'no_call_id'
+        | 'no_location_id'
+        | 'no_contact_id'
         | 'http_error'
+        | 'no_call_logs'
         | 'no_transcript_field'
         | 'empty_transcript'
         | 'network_error';
@@ -51,7 +69,12 @@ export type VoiceAITranscriptResult =
     };
 
 /**
- * Fetch the verbatim transcript of a Voice AI call by callId.
+ * Fetch the verbatim transcript of the most recent Voice AI call for a
+ * given GHL contact.
+ *
+ * Lists call logs filtered by locationId + contactId, picks the most
+ * recent entry (by `createdAt` desc; the API typically returns this
+ * order but we sort defensively), and returns its `transcript` field.
  *
  * Returns the transcript text on success, or a structured failure
  * reason so the caller can decide whether to fall back to a paraphrase
@@ -61,17 +84,24 @@ export type VoiceAITranscriptResult =
  * empty response, missing fields all return {ok: false, ...}.
  */
 export async function fetchVoiceAITranscript(
-  callId: string | null | undefined,
+  contactId: string | null | undefined,
+  locationId: string | null | undefined,
   token: string | null | undefined,
 ): Promise<VoiceAITranscriptResult> {
-  if (!callId || !callId.trim()) {
-    return { ok: false, reason: 'no_call_id' };
+  if (!contactId || !contactId.trim()) {
+    return { ok: false, reason: 'no_contact_id' };
+  }
+  if (!locationId || !locationId.trim()) {
+    return { ok: false, reason: 'no_location_id' };
   }
   if (!token || !token.trim()) {
     return { ok: false, reason: 'no_token' };
   }
 
-  const url = `${GHL_API_BASE}/voice-ai/dashboard/call-logs/${encodeURIComponent(callId.trim())}`;
+  const url =
+    `${GHL_API_BASE}/voice-ai/dashboard/call-logs` +
+    `?locationId=${encodeURIComponent(locationId.trim())}` +
+    `&contactId=${encodeURIComponent(contactId.trim())}`;
 
   let res: Response;
   try {
@@ -121,113 +151,136 @@ export async function fetchVoiceAITranscript(
     };
   }
 
-  const transcript = extractTranscriptFromCallLog(body);
-  if (transcript === null) {
-    return { ok: false, reason: 'no_transcript_field', detail: describeShape(body) };
+  const callLogs = extractCallLogs(body);
+  if (callLogs === null || callLogs.length === 0) {
+    return { ok: false, reason: 'no_call_logs', detail: describeShape(body) };
   }
-  if (transcript === '') {
-    return { ok: false, reason: 'empty_transcript' };
+
+  // Pick the most recent call. The API typically returns desc-by-createdAt
+  // but we sort defensively because that contract isn't documented.
+  const sorted = [...callLogs].sort((a, b) => {
+    const ta = parseTimestamp(a.createdAt) ?? 0;
+    const tb = parseTimestamp(b.createdAt) ?? 0;
+    return tb - ta;
+  });
+
+  const latest = sorted[0];
+  const transcript = (latest.transcript ?? '').trim();
+
+  if (!transcript) {
+    // No transcript on the latest call — could be a brand-new call that
+    // GHL hasn't finished transcribing yet, or a hangup with no speech.
+    // Still report no_transcript_field so the caller falls back.
+    return {
+      ok: false,
+      reason: 'empty_transcript',
+      detail: `callLogId=${latest.id ?? 'unknown'} duration=${latest.duration ?? 'unknown'}`,
+    };
   }
 
   return {
     ok: true,
     transcript,
-    source: 'voice-ai-dashboard',
-    raw: body,
+    source: 'voice-ai-dashboard-list',
+    callLogId: latest.id,
+    callCreatedAt: latest.createdAt,
+    callDurationSec: latest.duration,
+    raw: latest,
   };
 }
 
+interface NormalizedCallLog {
+  id?: string;
+  createdAt?: string;
+  duration?: number;
+  transcript?: string;
+}
+
 /**
- * Walks the call log response looking for the transcript field.
+ * Extract the callLogs array from the API response. The API returns:
  *
- * GHL's response shape isn't fully documented in the public marketplace
- * docs; the field name might be `transcript`, `messages`, `segments`,
- * or under a nested `callLog.transcript`. This walker tries common
- * shapes in priority order. If GHL changes their schema, this is the
- * one place to update.
+ *   { "callLogs": [ { contactId, fromNumber, createdAt, duration,
+ *                     agentId, summary, transcript }, ... ] }
  *
- * Returns:
- *   - string: the verbatim transcript text (concatenated from segments
- *     if needed)
- *   - "": transcript field exists but is empty
- *   - null: no recognizable transcript field anywhere in the response
+ * Tolerates a few variant shapes (top-level array, `data.callLogs`,
+ * etc.) so future schema tweaks don't silently break the path.
  */
-function extractTranscriptFromCallLog(body: unknown): string | null {
-  if (!body || typeof body !== 'object') return null;
+function extractCallLogs(body: unknown): NormalizedCallLog[] | null {
+  if (!body) return null;
+  if (Array.isArray(body)) {
+    return body.map(normalizeCallLog).filter(Boolean) as NormalizedCallLog[];
+  }
+  if (typeof body !== 'object') return null;
   const root = body as Record<string, unknown>;
-
-  // Top-level direct string field
-  const direct = pickString(root, ['transcript', 'callTranscript', 'fullTranscript']);
-  if (direct !== undefined) return direct;
-
-  // Nested under common containers
-  const containers: Array<Record<string, unknown>> = [];
-  for (const key of ['callLog', 'data', 'call', 'result']) {
+  for (const key of ['callLogs', 'call_logs', 'data', 'result', 'items']) {
     const v = root[key];
-    if (v && typeof v === 'object') containers.push(v as Record<string, unknown>);
-  }
-
-  for (const c of containers) {
-    const v = pickString(c, ['transcript', 'callTranscript', 'fullTranscript']);
-    if (v !== undefined) return v;
-  }
-
-  // Array-of-segments shape: messages[] / transcript_segments[] / etc.
-  const arrays: Array<unknown[]> = [];
-  for (const obj of [root, ...containers]) {
-    for (const key of ['messages', 'transcriptSegments', 'transcript_segments', 'turns', 'segments']) {
-      const v = obj[key];
-      if (Array.isArray(v)) arrays.push(v);
+    if (Array.isArray(v)) {
+      return v.map(normalizeCallLog).filter(Boolean) as NormalizedCallLog[];
     }
-  }
-
-  for (const arr of arrays) {
-    if (arr.length === 0) continue;
-    const joined = joinSegments(arr);
-    if (joined !== null) return joined;
-  }
-
-  return null;
-}
-
-function pickString(obj: Record<string, unknown>, keys: string[]): string | undefined {
-  for (const k of keys) {
-    const v = obj[k];
-    if (typeof v === 'string') return v.trim();
-  }
-  return undefined;
-}
-
-/**
- * Try to flatten an array of conversation segments into a single string.
- * Returns null if the shape isn't recognized.
- */
-function joinSegments(arr: unknown[]): string | null {
-  const lines: string[] = [];
-  for (const item of arr) {
-    if (typeof item === 'string') {
-      lines.push(item);
-      continue;
-    }
-    if (item && typeof item === 'object') {
-      const obj = item as Record<string, unknown>;
-      const speaker = pickString(obj, ['speaker', 'role', 'speakerLabel']) ?? '';
-      const text = pickString(obj, ['text', 'content', 'message', 'transcript']) ?? '';
-      if (text) {
-        lines.push(speaker ? `${speaker}: ${text}` : text);
+    // Sometimes containers wrap the array one level deeper.
+    if (v && typeof v === 'object') {
+      const nested = v as Record<string, unknown>;
+      for (const innerKey of ['callLogs', 'call_logs', 'items']) {
+        const iv = nested[innerKey];
+        if (Array.isArray(iv)) {
+          return iv.map(normalizeCallLog).filter(Boolean) as NormalizedCallLog[];
+        }
       }
     }
   }
-  if (lines.length === 0) return null;
-  return lines.join('\n');
+  return null;
+}
+
+function normalizeCallLog(item: unknown): NormalizedCallLog | null {
+  if (!item || typeof item !== 'object') return null;
+  const obj = item as Record<string, unknown>;
+  const out: NormalizedCallLog = {};
+  for (const k of ['id', 'callLogId', '_id']) {
+    const v = obj[k];
+    if (typeof v === 'string' && v) {
+      out.id = v;
+      break;
+    }
+  }
+  for (const k of ['createdAt', 'created_at', 'dateAdded', 'date_added']) {
+    const v = obj[k];
+    if (typeof v === 'string' && v) {
+      out.createdAt = v;
+      break;
+    }
+  }
+  for (const k of ['duration', 'callDuration', 'durationSec', 'duration_sec']) {
+    const v = obj[k];
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      out.duration = v;
+      break;
+    }
+  }
+  for (const k of ['transcript', 'callTranscript', 'fullTranscript']) {
+    const v = obj[k];
+    if (typeof v === 'string') {
+      out.transcript = v;
+      break;
+    }
+  }
+  // If we have nothing useful, skip the row entirely.
+  if (!out.transcript && !out.id && !out.createdAt) return null;
+  return out;
+}
+
+function parseTimestamp(s: string | undefined): number | null {
+  if (!s) return null;
+  const n = Date.parse(s);
+  return Number.isFinite(n) ? n : null;
 }
 
 /**
  * Describe an unknown body shape for telemetry, without leaking values.
- * Returns a short string like "{callLog: object, status: 'completed'}".
+ * Returns a short string like "{callLogs: array[3], status: 'completed'}".
  */
 function describeShape(body: unknown): string {
   if (!body || typeof body !== 'object') return typeof body;
+  if (Array.isArray(body)) return `array[${body.length}]`;
   const root = body as Record<string, unknown>;
   const keys = Object.keys(root).slice(0, 10);
   const summary = keys.map((k) => {
