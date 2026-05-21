@@ -109,6 +109,14 @@ function resolveTranscript(body: VoiceIntakeBody): {
     // resolved). Catches `{{transcript_generated.call_transcript}}`,
     // `{{contact.call_summary}}`, and similar.
     if (/^\{\{[^{}]+\}\}$/.test(c.text)) continue;
+    // Skip if GHL rendered the variable as the literal string "null" or
+    // "undefined" — observed on 2026-05-21 PM when a web-call test fired
+    // the Transcript Generated trigger but the transcription pipeline
+    // had not populated the call_transcript field. Treating these as
+    // missing lets the resolver fall through to the next source instead
+    // of feeding "null" into the engine as the transcript.
+    const lower = c.text.toLowerCase();
+    if (lower === 'null' || lower === 'undefined' || lower === '(null)') continue;
     return c;
   }
   return { text: '', source: 'none' };
