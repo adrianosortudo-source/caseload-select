@@ -187,7 +187,7 @@ The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), 
 | `/portal/[firmId]/triage` | Triage queue page. Sorted Band A → B → C with deadline tiebreaker. `?band=A\|B\|C` filter. |
 | `/portal/[firmId]/triage/[leadId]` | Single brief view. Renders `brief_html` verbatim, sticky Take/Pass action bar at bottom. |
 | `POST /api/intake-v2` | Persistence endpoint — Screen 2.0 POSTs here. Demo skip on missing/invalid firmId. Fires `declined_oos` webhook for OOS leads. |
-| `POST /api/voice-intake` | Voice channel persistence endpoint (DR-033). Receives the GHL Voice AI post-call webhook payload, runs the screen engine server-side on the transcript, inserts a `screened_leads` row with `channel='voice'`, fires the new-lead notification. Sibling to `/api/intake-v2`, not a modification of it. Requires `@google/generative-ai` and `GEMINI_API_KEY` for LLM extraction (best-effort; regex-only if the key is missing). |
+| `POST /api/voice-intake` | Voice channel persistence endpoint (DR-033). Receives the GHL Voice AI post-call webhook payload, runs the screen engine server-side on the transcript, inserts a `screened_leads` row with `channel='voice'`, fires the new-lead notification. Sibling to `/api/intake-v2`, not a modification of it. Requires `@google/generative-ai` and `GEMINI_API_KEY` for LLM extraction (best-effort; regex-only if the key is missing). **Live for DRG since 2026-05-21.** GHL workflow webhook body shape: `{ firmId, caller_phone, caller_name, transcript, call_id }`. Transcript field uses `{{contact.call_summary}}` (NOT `{{contact.notes}}` which silently fails GHL save validation per DR-042). Voice agent doctrine: CRM Bible DR-040 through DR-045. |
 | `GET/POST /api/messenger-intake` | Meta Messenger webhook. GET is the hub.verify_token handshake; POST verifies HMAC, resolves firm by Page ID via `intake_firms.facebook_page_id`, runs the engine via `channel-intake-processor` in `waitUntil` so Meta gets a fast 200 ACK while engine + LLM work (5-15s) happen in the background. `screened_leads.slot_answers.channel='facebook'`. Wired to engine end-to-end as of Block 2 of Meta App Review prep. |
 | `GET/POST /api/instagram-intake` | Meta Instagram DM webhook. Same shape as Messenger. Resolves firm by IG Business Account ID via `intake_firms.instagram_business_account_id`. `channel='instagram'`. |
 | `GET/POST /api/whatsapp-intake` | Meta WhatsApp Cloud API webhook. Different payload shape (entry.changes[].value.messages[]). Resolves firm by Phone Number ID via `intake_firms.whatsapp_phone_number_id`. Ignores non-text inbound (image/audio/document) and statuses-only payloads (delivery receipts). `channel='whatsapp'`. |
@@ -311,6 +311,8 @@ Three notification treatments share the navy header band but differ at the subje
 **Channel-aware subject suffix:** when the inbound channel is anything other than `web`, the subject appends ` (via <label>)` — e.g. `Priority B — Sarah · Wrongful Dismissal (via WhatsApp)`. Web leads are silent (most common channel). The status panel in the email body also shows an "Inbound via" line for non-web channels.
 
 All four entry points fire notifications: `/api/intake-v2` (web), `/api/voice-intake` (GHL Voice AI), and the three Meta-channel receivers via `lib/channel-intake-processor`. Builders are pure (`lib/lead-notify-pure.ts`); I/O wrapper (`lib/lead-notify.ts`) resolves recipients and dispatches via Resend. Best-effort — failure does not block intake. Falls back to legacy `branding.lawyer_email` when no firm_lawyers row exists.
+
+**Operator inbox is `adriano@caseloadselect.ca` only (CRM Bible DR-047).** `OPERATOR_NOTIFICATION_EMAIL` env var and the `FALLBACK_OPERATOR_EMAIL` constant in `firm-onboarding-notification.ts` (and any sibling notification helper) point to that address. Personal addresses such as `adrianosortudo@gmail.com` are never substituted as fallback defaults, regardless of which env var is unset or what debugging context is active. The Claude Code profile-level `userEmail` is a separate identity (operator's Claude product login), not an operational inbox for CaseLoad Select.
 
 ### Compliance pages
 
@@ -438,6 +440,17 @@ Full spec: CRM Bible v3.0, Section 9. Build prompt: `05_Product/prompts/PROMPT_C
 ## Onboarding Checklist
 
 `/onboarding` — operator setup validator. 4 required + 5 optional checks per intake_firms record. Required: practice_areas, geo_config, branding, ghl_webhook. Optional: Clio OAuth, widget live, custom domain, scoring weights, conflict register loaded.
+
+## Firm Onboarding Notification (CRM Bible DR-046)
+
+When a firm fills out the public firm onboarding form (e.g. Damaris for DRG), the submit endpoint persists the intake row and notifies the operator. The notification path obeys four reliability invariants:
+
+1. **Persistent delivery state.** The `firm_onboarding_intake` row carries `notification_sent_at`, `notification_error`, `notification_attempts`, `notification_last_attempt_at`. Migrations `20260520_firm_onboarding_directory_prep.sql` plus `20260520_firm_onboarding_notification_tracking.sql` applied.
+2. **No silent error swallowing.** `src/lib/firm-onboarding-notification.ts` `sendOperatorNotification()` is the single helper; errors are logged to the row's `notification_error` field and surfaced in the API response. The submit route (`src/app/api/firm-onboarding/[token]/submit/route.ts`) delegates to the helper and does not wrap with a hiding try/catch.
+3. **Manual retry endpoint.** `POST /api/admin/onboarding-submissions/[id]/retry-notification` reuses the same builder with a `[REPLAY]` subject prefix and an in-body callout.
+4. **Admin UI visibility.** Each submission's detail page at `/admin/onboarding-submissions/[id]` renders `OnboardingNotificationPanel.tsx` showing a Pending / Sent / Failed badge with a "Send again" button.
+
+`FALLBACK_OPERATOR_EMAIL` in `firm-onboarding-notification.ts` is hardcoded to `adriano@caseloadselect.ca` (DR-047).
 
 ## Clio Manage Integration
 

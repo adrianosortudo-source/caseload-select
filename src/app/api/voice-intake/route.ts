@@ -18,14 +18,27 @@
  * Body contract (from GHL Voice AI post-call webhook):
  *
  *   {
- *     caller_phone:      string,     // E.164 from caller ID
- *     caller_name?:      string,     // captured by Voice AI if asked
- *     transcript:        string,     // full call transcript
- *     recording_url?:    string,     // GHL recording URL
- *     call_duration_sec: number,
- *     call_id:           string,     // GHL-side call identifier
- *     firmId:            string,     // staging or client sub-account uuid
+ *     caller_phone:        string,   // E.164 from caller ID
+ *     caller_name?:        string,   // captured by Voice AI if asked
+ *     transcript_full?:    string,   // full call transcript ({{transcript_generated.call_transcript}})
+ *     transcript_summary?: string,   // GHL's call summary ({{contact.call_summary}})
+ *     transcript?:         string,   // legacy field (pre-2026-05-21); accepted for backwards compat
+ *     recording_url?:      string,   // GHL recording URL
+ *     call_duration_sec?:  number,
+ *     call_id?:            string,   // GHL-side call identifier
+ *     firmId:              string,   // staging or client sub-account uuid
  *   }
+ *
+ * Transcript resolution (2026-05-21): the workflow now triggers on the
+ * "Transcript Generated" event (per GHL docs at help.gohighlevel.com/...
+ * /workflow-trigger-transcript-generated), which exposes the full
+ * verbatim transcript via `{{transcript_generated.call_transcript}}`. The
+ * older `{{contact.call_summary}}` variable is a paraphrased summary that
+ * strips digits (phone numbers, dates) the engine needs for the
+ * contact-doctrine gate (DR-038). Resolution order is:
+ *   1. transcript_full  (preferred — full verbatim)
+ *   2. transcript_summary (fallback — paraphrased)
+ *   3. transcript (legacy field for old deployments)
  *
  * LLM extraction is best-effort. Failure to reach Gemini leaves the brief
  * regex-only; the row still persists.
@@ -62,11 +75,43 @@ import { persistUnconfirmedInquiry } from '@/lib/unconfirmed-inquiry';
 interface VoiceIntakeBody {
   caller_phone?: string;
   caller_name?: string;
-  transcript?: string;
+  transcript_full?: string;
+  transcript_summary?: string;
+  transcript?: string; // legacy field; pre-2026-05-21 deployments
   recording_url?: string;
   call_duration_sec?: number;
   call_id?: string;
   firmId?: string;
+}
+
+/**
+ * Resolve which transcript text to feed the engine. Prefer full verbatim
+ * (from the Transcript Generated trigger) over GHL's call_summary
+ * paraphrase, falling back to the legacy `transcript` field.
+ *
+ * GHL renders unresolved variables as empty strings or the literal
+ * placeholder text — both are treated as "missing" here. We also reject
+ * strings that are obviously placeholder noise (just braces, just the
+ * variable token) so a misconfigured webhook doesn't poison the engine.
+ */
+function resolveTranscript(body: VoiceIntakeBody): {
+  text: string;
+  source: 'full' | 'summary' | 'legacy' | 'none';
+} {
+  const candidates: Array<{ text: string; source: 'full' | 'summary' | 'legacy' }> = [
+    { text: (body.transcript_full ?? '').trim(), source: 'full' },
+    { text: (body.transcript_summary ?? '').trim(), source: 'summary' },
+    { text: (body.transcript ?? '').trim(), source: 'legacy' },
+  ];
+  for (const c of candidates) {
+    if (!c.text) continue;
+    // Skip if GHL rendered the literal template placeholder (variable not
+    // resolved). Catches `{{transcript_generated.call_transcript}}`,
+    // `{{contact.call_summary}}`, and similar.
+    if (/^\{\{[^{}]+\}\}$/.test(c.text)) continue;
+    return c;
+  }
+  return { text: '', source: 'none' };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -146,13 +191,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const transcript = (body.transcript ?? '').trim();
+  const transcriptResolved = resolveTranscript(body);
+  const transcript = transcriptResolved.text;
   if (!transcript) {
     return NextResponse.json(
-      { error: 'transcript is required' },
+      { error: 'transcript is required (transcript_full, transcript_summary, or transcript field must be present and non-placeholder)' },
       { status: 400, headers: CORS_HEADERS },
     );
   }
+  console.log(`[voice-intake] transcript source=${transcriptResolved.source} length=${transcript.length}`);
 
   // ── firmId resolution (same pattern as intake-v2) ──────────────────────
   const firmIdParam = (body.firmId ?? '').trim();
