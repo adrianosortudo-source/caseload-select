@@ -148,7 +148,7 @@ function matterTypeClassifierSlot(): ExtractionSlot {
   return {
     id: MATTER_TYPE_CLASSIFIER_FIELD,
     question:
-      "Top-level classification task. Pick the matter-type bucket that best fits the lead's description, even if the lead used a synonym, typo, or layperson phrasing. Return null only if the description is genuinely too vague to map to any bucket. For 'I want to start a corporation' or 'opening a business' or 'incorporating with a partner', pick business_setup_advisory. For 'closing on a house' or 'buying a condo' or 'selling our home', pick residential_purchase_sale. For 'family matter' or 'divorce' or 'custody' or 'criminal' or 'personal injury', pick out_of_scope.",
+      "Top-level classification task. Pick the matter-type bucket that best fits the lead's description, even if the lead used a synonym, typo, or layperson phrasing. Return null only if the description is genuinely too vague to map to any bucket. Examples: 'I want to start a corporation' / 'opening a business' / 'incorporating with a partner' → business_setup_advisory. 'closing on a house' / 'buying a condo' / 'selling our home' → residential_purchase_sale. 'I was fired' / 'wrongful dismissal' / 'severance package' / 'workplace harassment' / 'unpaid wages' / 'employment contract' → employment_general. 'need a will' / 'estate planning' / 'power of attorney' / 'applying for probate' / 'contest a will' / 'when my mother passed' → estates_general. 'family matter' / 'divorce' / 'custody' / 'criminal charges' / 'car accident injury' → out_of_scope.",
     input_type: 'single_select',
     options: [...ALL_CANONICAL_MATTER_TYPES],
     description: 'Tier: classifier. Group: routing.',

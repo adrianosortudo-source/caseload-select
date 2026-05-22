@@ -495,6 +495,16 @@ export function computeBand(state: EngineState): BandResult {
     }
     return bandRoutingLane('Real estate', state, !!problem);
   }
+  // Employment and estates routing lanes (Phase A). Same shape as the
+  // corporate / real-estate routing lanes — start at B, lift on completeness
+  // via the four-axis scorer. Phase B will add sub-type packs that route
+  // directly to their own matter_types and skip this lane.
+  if (state.matter_type === 'employment_general') {
+    return bandRoutingLane('Employment', state, false);
+  }
+  if (state.matter_type === 'estates_general') {
+    return bandRoutingLane('Estates', state, false);
+  }
 
   const scores = scoreFourAxes(state);
   const result = bandFromAxes(scores);

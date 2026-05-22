@@ -485,7 +485,12 @@ const ESTATES_SIGNALS = [
 ];
 
 interface OutOfScopeMatch {
-  area: 'family' | 'immigration' | 'employment' | 'criminal' | 'personal_injury' | 'estates';
+  area: 'family' | 'immigration' | 'criminal' | 'personal_injury';
+  signal: string;
+}
+
+interface InScopeAreaMatch {
+  area: 'employment' | 'estates';
   signal: string;
 }
 
@@ -502,6 +507,30 @@ function detectOutOfScope(input: string): OutOfScopeMatch | null {
   if ((m = hit(IMMIGRATION_SIGNALS))) return { area: 'immigration', signal: m };
   if ((m = hit(CRIMINAL_SIGNALS))) return { area: 'criminal', signal: m };
   if ((m = hit(PERSONAL_INJURY_SIGNALS))) return { area: 'personal_injury', signal: m };
+  return null;
+}
+
+/**
+ * Detect inquiries in employment or estates areas. These areas are IN SCOPE
+ * for firms whose LSO practice-area registration includes them (e.g. DRG Law
+ * has all four: corporate, real_estate, employment, estates). The engine
+ * routes these to the corresponding `*_general` matter type with a real
+ * matter pack and proper banding instead of the thin Band D OOS template.
+ *
+ * Added 2026-05-21 in response to Call 10 feedback ("the brief must be as
+ * rich and complete as all of them"). Phase A ships the catch-all general
+ * lane; Phase B adds sub-type packs (wrongful_dismissal, will_drafting,
+ * probate, etc.).
+ */
+function detectInScopeArea(input: string): InScopeAreaMatch | null {
+  const t = lower(input);
+  const hit = (patterns: string[]): string | null => {
+    for (const p of patterns) {
+      if (t.includes(lower(p))) return p;
+    }
+    return null;
+  };
+  let m: string | null;
   if ((m = hit(ESTATES_SIGNALS))) return { area: 'estates', signal: m };
   if ((m = hit(EMPLOYMENT_SIGNALS))) return { area: 'employment', signal: m };
   return null;
@@ -706,6 +735,24 @@ export function classificationForMatterType(mt: MatterType): {
       advisory_subtrack: 'unknown',
     };
   }
+  if (mt === 'employment_general') {
+    return {
+      intent_family: 'employment',
+      practice_area: 'employment',
+      matter_type: 'employment_general',
+      dispute_family: 'general_employment',
+      advisory_subtrack: 'unknown',
+    };
+  }
+  if (mt === 'estates_general') {
+    return {
+      intent_family: 'estates',
+      practice_area: 'estates',
+      matter_type: 'estates_general',
+      dispute_family: 'general_estates',
+      advisory_subtrack: 'unknown',
+    };
+  }
   if (mt === 'out_of_scope') {
     // OOS keeps practice_area to whatever the LLM sees in the
     // description; we mark practice_area 'unknown' here and the OOS
@@ -744,6 +791,8 @@ const ALL_CANONICAL_MATTER_TYPES: ReadonlyArray<MatterType> = [
   'preconstruction_condo',
   'mortgage_dispute',
   'real_estate_general',
+  'employment_general',
+  'estates_general',
   'out_of_scope',
 ];
 
@@ -860,8 +909,12 @@ export function classify(input: string): {
   advisory_subtrack: AdvisorySubtrack;
 } {
   // Out-of-scope detection runs first. Real estate / corporate signals do not
-  // override a clear family / immigration / criminal / etc. match because
-  // those areas are not yet covered by our matter-type packs.
+  // override a clear family / immigration / criminal / personal-injury match
+  // because those areas are not yet covered by our matter-type packs.
+  //
+  // Employment and estates were previously in this set but moved to the
+  // in-scope detector on 2026-05-21 — they have their own *_general matter
+  // packs now (Phase A) and full sub-type packs are coming in Phase B.
   const oos = detectOutOfScope(input);
   if (oos) {
     return {
@@ -871,6 +924,34 @@ export function classify(input: string): {
       dispute_family: 'unknown',
       advisory_subtrack: 'unknown',
     };
+  }
+
+  // In-scope area detection (employment + estates). These route to their own
+  // general matter packs with proper banding instead of the OOS thin template.
+  // Per-firm scope filtering (so a firm that doesn't do estates gets the OOS
+  // treatment instead) is a Phase C consideration; for now we treat both as
+  // in-scope universally because the engine's current consumer (DRG and
+  // similar Toronto solo / 2-lawyer firms) routinely handles both.
+  const inScopeArea = detectInScopeArea(input);
+  if (inScopeArea) {
+    if (inScopeArea.area === 'employment') {
+      return {
+        intent_family: 'employment',
+        practice_area: 'employment',
+        matter_type: 'employment_general',
+        dispute_family: 'general_employment',
+        advisory_subtrack: 'unknown',
+      };
+    }
+    if (inScopeArea.area === 'estates') {
+      return {
+        intent_family: 'estates',
+        practice_area: 'estates',
+        matter_type: 'estates_general',
+        dispute_family: 'general_estates',
+        advisory_subtrack: 'unknown',
+      };
+    }
   }
 
   const intent = detectIntent(input);

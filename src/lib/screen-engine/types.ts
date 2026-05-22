@@ -26,6 +26,14 @@ export type MatterType =
   | 'preconstruction_condo'
   | 'mortgage_dispute'
   | 'real_estate_general'
+  // Employment (added 2026-05-21 to support DRG and any firm with employment
+  // in their LSO primary practice areas). Sub-types are deferred to Phase B;
+  // employment_general is the routing-lane catch-all for now.
+  | 'employment_general'
+  // Estates (added 2026-05-21 to support DRG and any firm with wills /
+  // estates / trusts in their LSO primary practice areas). Sub-types are
+  // deferred to Phase B; estates_general is the routing-lane catch-all.
+  | 'estates_general'
   // Out of scope (detected but not yet supported)
   | 'out_of_scope'
   | 'unknown';
@@ -43,6 +51,10 @@ export type DisputeFamily =
   | 'tenancy'
   | 'construction_payment'
   | 'general_real_estate'
+  // Employment family (Phase A: single catch-all)
+  | 'general_employment'
+  // Estates family (Phase A: single catch-all)
+  | 'general_estates'
   | 'unknown';
 
 export type Band = 'A' | 'B' | 'C' | 'D';
@@ -164,6 +176,8 @@ export type IntentFamily =
   | 'business_dispute'
   | 'real_estate_transaction'
   | 'real_estate_dispute'
+  | 'employment'
+  | 'estates'
   | 'unknown';
 
 export interface SlotMeta {

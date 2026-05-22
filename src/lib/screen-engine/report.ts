@@ -53,17 +53,19 @@ function buildMatterSnapshot(state: EngineState): string {
       return 'Mortgage matter — power-of-sale, default, refinance, or discharge dispute.';
     case 'real_estate_general':
       return 'Real estate matter — problem type not yet fully determined. Routing questions pending.';
+    case 'employment_general':
+      return 'Employment matter — workplace dispute, termination, severance, harassment, wages owed, or contract review. Sub-type not yet fully determined; routing questions pending.';
+    case 'estates_general':
+      return 'Wills, estates, or planning matter — drafting a will or power of attorney, applying for probate, or dealing with an estate dispute. Sub-type not yet fully determined; routing questions pending.';
     case 'out_of_scope': {
       const areaLabels: Record<string, string> = {
         family: 'family law',
         immigration: 'immigration',
-        employment: 'employment',
         criminal: 'criminal',
         personal_injury: 'personal injury',
-        estates: 'wills and estates',
       };
       const area = areaLabels[state.practice_area] ?? 'an unsupported practice area';
-      return `Lead detected as ${area}. Outside the corporate / real estate matter packs currently configured. Forwarded to the firm with the area flagged for manual triage.`;
+      return `Lead detected as ${area}. Outside the matter packs currently configured for this firm. Forwarded to the firm with the area flagged for manual triage.`;
     }
     default:
       return 'Matter type not classified.';
@@ -195,11 +197,62 @@ function buildLikelyServices(state: EngineState): string[] {
     }
     case 'real_estate_general':
       return ['Real estate legal consultation', 'Matter routing to appropriate legal service'];
+    case 'employment_general': {
+      const services: string[] = [];
+      const t = lower(state.input);
+      // Recognise sub-shapes from the transcript even before we have full sub-type packs.
+      if (/(fired|terminated|let go|laid off|lost my job|dismissed)/.test(t)) {
+        services.push('Wrongful or constructive dismissal claim assessment');
+        services.push('Severance package review and negotiation');
+      }
+      if (/severance/.test(t)) {
+        services.push('Severance package review and negotiation');
+      }
+      if (/(harassment|discriminat|human rights)/.test(t)) {
+        services.push('Workplace harassment or human rights complaint advice');
+      }
+      if (/(unpaid wages|overtime|wages owed|esa)/.test(t)) {
+        services.push('Employment Standards Act claim or wage recovery');
+      }
+      if (/(contract|employment agreement|non-compete|nda)/.test(t)) {
+        services.push('Employment contract review and advice');
+      }
+      services.push('Employment law consultation and matter routing');
+      return [...new Set(services)];
+    }
+    case 'estates_general': {
+      const services: string[] = [];
+      const t = lower(state.input);
+      if (/(make a will|need a will|write a will|update.*will|new will)/.test(t)) {
+        services.push('Will drafting or update');
+        services.push('Power of attorney for property and personal care');
+      }
+      if (/(power of attorney|poa)/.test(t)) {
+        services.push('Power of attorney drafting (property and personal care)');
+      }
+      if (/(probate|estate trustee|executor|apply for probate)/.test(t)) {
+        services.push('Probate application and estate administration');
+      }
+      if (/(contest|challenge|dispute|fight over).*will/.test(t) || /(inheritance dispute|beneficiary dispute)/.test(t)) {
+        services.push('Estate litigation: will challenge or beneficiary dispute');
+      }
+      if (/(passed away|died|deceased|when my (mother|father|parent))/.test(t)) {
+        services.push('Estate administration and asset distribution');
+      }
+      services.push('Estate planning consultation and matter routing');
+      return [...new Set(services)];
+    }
     case 'out_of_scope':
       return ['Manual triage by firm staff', 'Refer or accept based on firm scope of practice'];
     default:
       return ['Legal consultation'];
   }
+}
+
+// Local helper for matter-pack heuristics that need lowercase scanning of
+// state.input. Mirrors the same shape used in extractor.ts.
+function lower(s: string): string {
+  return (s ?? '').toLowerCase();
 }
 
 // ─── Fee estimate ─────────────────────────────────────────────────────────
@@ -380,6 +433,42 @@ function buildFeeEstimate(state: EngineState): string {
     }
     case 'real_estate_general':
       return `${prefix} Scope not yet determined. Depends on matter type once routing is complete.`;
+    case 'employment_general': {
+      const t = lower(state.input);
+      // Common employment matter ranges (Ontario). Tightens as sub-type packs land in Phase B.
+      if (/severance/.test(t) || /(fired|terminated|let go|laid off|dismissed|lost my job)/.test(t)) {
+        return `${prefix} Termination or severance review typically $1,500–$5,000 for assessment + negotiation. Contingency on the back end of any settlement is common for plaintiff-side work. If litigation is required, $10,000–$40,000+ depending on complexity.`;
+      }
+      if (/(harassment|discriminat|human rights)/.test(t)) {
+        return `${prefix} Human rights or harassment claims often $5,000–$25,000 for initial filing and negotiation. Contingency at HRTO is common.`;
+      }
+      if (/(unpaid wages|overtime|wages owed|esa)/.test(t)) {
+        return `${prefix} ESA wage recovery $1,000–$3,000 for filing. Many leads pursue this through the Ministry of Labour directly at no cost; confirm before quoting.`;
+      }
+      if (/(contract|employment agreement|non-compete|nda)/.test(t)) {
+        return `${prefix} Contract review $500–$2,000. Negotiation $1,500–$5,000.`;
+      }
+      return `${prefix} Scope depends on matter type once routing is complete. Common ranges: $1,500–$5,000 for assessment, $10,000–$40,000+ if litigation is needed.`;
+    }
+    case 'estates_general': {
+      const t = lower(state.input);
+      if (/(make a will|need a will|write a will|new will)/.test(t) && !/(update|change|revise)/.test(t)) {
+        return `${prefix} Basic will and POA package $750–$2,000 depending on complexity (assets, blended family, business interests). Add roughly $500–$1,500 for testamentary trust planning.`;
+      }
+      if (/(update.*will|revise.*will|change.*will)/.test(t)) {
+        return `${prefix} Will update or codicil $500–$1,500. A new will may be cleaner if multiple changes are needed.`;
+      }
+      if (/(power of attorney|poa)/.test(t)) {
+        return `${prefix} Continuing POA for property + POA for personal care $300–$800 as a pair, often bundled with a will.`;
+      }
+      if (/(probate|estate trustee|executor|apply for probate)/.test(t)) {
+        return `${prefix} Probate application $3,000–$8,000+ depending on estate complexity. Estate Administration Tax is a separate cost (roughly 1.5% of estate value above $50,000).`;
+      }
+      if (/(contest|challenge|dispute|fight over).*will/.test(t) || /(inheritance dispute|beneficiary dispute|estate dispute)/.test(t)) {
+        return `${prefix} Estate litigation $10,000–$50,000+ depending on whether discovery and trial are reached. Many estate disputes resolve at mediation before that.`;
+      }
+      return `${prefix} Scope depends on matter type once routing is complete. Common ranges: $750–$2,000 for a will and POA package, $3,000–$8,000+ for probate, $10,000–$50,000+ for estate litigation.`;
+    }
     case 'out_of_scope':
       return `${prefix} Out-of-scope lead. No fee estimate generated by the screen.`;
     default:
@@ -481,6 +570,10 @@ function buildBestNextQuestion(state: EngineState): string {
     }
     case 'real_estate_general':
       return 'Can you describe the real estate matter in more detail — property type, role, and what needs to be resolved?';
+    case 'employment_general':
+      return 'What specifically happened, who is the employer, and what outcome are you hoping for — a settlement, reinstatement, or wages owed?';
+    case 'estates_general':
+      return 'Is this about planning ahead (will, power of attorney), administering an estate after someone has passed, or a dispute over an existing will or estate?';
     case 'out_of_scope':
       return 'Decide whether the firm accepts this area, refers it out, or holds for triage. The screen will not pursue qualification questions for this area until a matter pack is added.';
     default:
@@ -701,6 +794,46 @@ function buildBandReasoningBullets(state: EngineState): string[] {
     }
   }
 
+  if (matter === 'employment_general') {
+    const t = lower(state.input);
+    bullets.push('Employment matter — in-scope for firms with employment law in their LSO practice areas.');
+    if (/(fired|terminated|let go|laid off|dismissed|lost my job)/.test(t)) {
+      bullets.push('Termination signal detected. Wrongful or constructive dismissal lane likely.');
+    }
+    if (/severance/.test(t)) {
+      bullets.push('Severance discussion mentioned. Common money trigger; assess whether the offer is reasonable.');
+    }
+    if (/(harassment|discriminat|human rights)/.test(t)) {
+      bullets.push('Harassment or discrimination signal. Human rights or HRTO path may apply.');
+    }
+    if (/(unpaid wages|overtime|wages owed|esa)/.test(t)) {
+      bullets.push('Wage or ESA claim signal. Confirm whether to file with the Ministry of Labour or pursue civil claim.');
+    }
+    if (/(non-compete|nda|restrictive covenant)/.test(t)) {
+      bullets.push('Restrictive covenant signal. Enforceability is fact-specific and often a strong defendant-side argument.');
+    }
+  }
+
+  if (matter === 'estates_general') {
+    const t = lower(state.input);
+    bullets.push('Wills and estates matter — in-scope for firms with wills / estates / trusts in their LSO practice areas.');
+    if (/(make a will|need a will|write a will|new will)/.test(t)) {
+      bullets.push('Will drafting signal. Standard planning matter; family situation and asset complexity drive scope.');
+    }
+    if (/(power of attorney|poa)/.test(t)) {
+      bullets.push('Power of attorney signal. Often bundled with will drafting.');
+    }
+    if (/(probate|estate trustee|executor|apply for probate)/.test(t)) {
+      bullets.push('Probate signal. Estate Administration Tax and asset complexity drive scope.');
+    }
+    if (/(contest|challenge|dispute|fight over).*will/.test(t) || /(inheritance dispute|beneficiary dispute|estate dispute)/.test(t)) {
+      bullets.push('Estate dispute signal. Capacity, undue influence, or interpretation issues drive strategy.');
+    }
+    if (/(passed away|died|deceased|when my (mother|father|parent))/.test(t)) {
+      bullets.push('Bereavement context. Sensitivity in the callback approach matters.');
+    }
+  }
+
   if (matter === 'out_of_scope') {
     bullets.push('Outside the matter packs currently configured.');
     bullets.push('Forwarded to the firm for manual triage.');
@@ -757,6 +890,8 @@ function matterTypeLabel(mt: string): string {
     preconstruction_condo: 'Pre-Construction Condo',
     mortgage_dispute: 'Mortgage or Power of Sale',
     real_estate_general: 'Real Estate (routing)',
+    employment_general: 'Employment (routing)',
+    estates_general: 'Wills and Estates (routing)',
     out_of_scope: 'Out of scope',
   };
   return labels[mt] ?? mt;
@@ -868,6 +1003,34 @@ function buildRiskFlags(state: EngineState): string[] {
 
   if (state.matter_type === 'corporate_general') {
     flags.push('Problem type not yet mapped to a specific corporate matter — routing question needed before assessment.');
+  }
+
+  if (state.matter_type === 'employment_general') {
+    const t = lower(state.input);
+    flags.push('Employment matter — sub-type pack not yet wired (Phase B). Confirm routing on the call.');
+    if (/(fired|terminated|let go|laid off|dismissed|lost my job)/.test(t)) {
+      flags.push('Limitation periods are tight for employment claims (2 years for wrongful dismissal in Ontario). Confirm event date before turning down.');
+    }
+    if (/severance/.test(t) && /(deadline|signed|sign by|signed already)/.test(t)) {
+      flags.push('Severance offer with a signing window. Review before signing — releases waive future claims.');
+    }
+    if (/(harassment|discriminat|human rights)/.test(t)) {
+      flags.push('HRTO has a 1-year limitation from the last incident. Time-sensitive if recent.');
+    }
+  }
+
+  if (state.matter_type === 'estates_general') {
+    const t = lower(state.input);
+    flags.push('Estates matter — sub-type pack not yet wired (Phase B). Confirm routing on the call.');
+    if (/(contest|challenge|dispute|fight over).*will/.test(t)) {
+      flags.push('Estate litigation flagged. Limitation periods under the Estates Act are short; confirm dates of grant of probate before turning down.');
+    }
+    if (/(power of attorney|poa)/.test(t) && /(refused|denied|misused|stealing|theft)/.test(t)) {
+      flags.push('POA misuse alleged — potential urgent application to revoke or pass accounts.');
+    }
+    if (/(passed away|died|deceased)/.test(t) && /(no will|without a will|intestate)/.test(t)) {
+      flags.push('Intestacy signal. Succession Law Reform Act default distribution applies; confirm family tree.');
+    }
   }
 
   if (state.raw.mentions_urgency) flags.push('Urgency signals detected in client input.');
@@ -1210,6 +1373,49 @@ function buildStrategicConsiderations(state: EngineState): string[] {
       }
       break;
     }
+    case 'employment_general': {
+      const t = lower(state.input);
+      if (/(fired|terminated|let go|laid off|dismissed|lost my job)/.test(t)) {
+        out.push('Wrongful dismissal standard tools: common-law reasonable notice (Bardal factors), ESA minimums as the floor, mitigation duty on the employee. Most matters settle pre-claim.');
+        out.push('Confirm the employment contract carefully — a valid termination clause that meets ESA can cap notice at the statutory minimum.');
+      }
+      if (/severance/.test(t)) {
+        out.push('Severance offers: never sign at the table. Review the release language for what claims are being waived (human rights, WSIB, bonus, equity) before signing.');
+      }
+      if (/(harassment|discriminat|human rights)/.test(t)) {
+        out.push('Human rights claims: HRTO is the primary forum; civil courts have concurrent jurisdiction but procedure is different. Choice of forum drives strategy.');
+      }
+      if (/(unpaid wages|overtime|wages owed|esa)/.test(t)) {
+        out.push('Wage recovery: Ministry of Labour ESA claim is free but caps recovery (currently $10k after 6 months back). Civil claim has higher ceiling but costs more.');
+      }
+      if (/(non-compete|nda|restrictive covenant)/.test(t)) {
+        out.push('Restrictive covenants: presumptively unenforceable in Ontario without proper consideration and reasonableness. Defendant-side often has strong arguments.');
+      }
+      out.push('Employer side vs employee side determines tone. Confirm which seat the client sits in before any external communication.');
+      break;
+    }
+    case 'estates_general': {
+      const t = lower(state.input);
+      if (/(make a will|need a will|write a will|new will)/.test(t)) {
+        out.push('Standard will package usually includes: primary will, secondary will (if business interests warrant probate avoidance), continuing POA for property, POA for personal care. Sequence the conversation around family and asset map.');
+        out.push('Blended families, dependants, or beneficiaries with capacity issues materially change the scope and risk profile.');
+      }
+      if (/(power of attorney|poa)/.test(t) && !/(misused|stealing|theft|refused|denied)/.test(t)) {
+        out.push('POA drafting: continuing POA for property + POA for personal care, separately or in one document. Confirm whether the client wants the property POA to be effective on signing or on triggering events.');
+      }
+      if (/(probate|estate trustee|executor|apply for probate)/.test(t)) {
+        out.push('Probate application (Certificate of Appointment of Estate Trustee) requires Estate Information Return within 180 days of issuance. Estate Administration Tax is 1.5% above $50k.');
+        out.push('If assets pass outside probate (joint accounts, designations), confirm what is actually in the estate before quoting; this drives both EAT and complexity.');
+      }
+      if (/(contest|challenge|dispute|fight over).*will/.test(t) || /(inheritance dispute|beneficiary dispute|estate dispute)/.test(t)) {
+        out.push('Estate litigation tools: notice of objection, application to pass accounts, will challenge on capacity / undue influence / suspicious circumstances. Discovery and mediation are common steps before trial.');
+        out.push('Limitation periods are matter-specific (notice of objection: before certificate issued; dependant support claim: 6 months from grant). Confirm timing early.');
+      }
+      if (/(passed away|died|deceased|when my (mother|father|parent))/.test(t)) {
+        out.push('Sensitivity matters: bereavement context calls for warmth in the callback. Confirm location and timing of any service before pushing into procedure.');
+      }
+      break;
+    }
   }
   return out;
 }
@@ -1292,6 +1498,51 @@ function buildWhatToConfirm(state: EngineState): string[] {
       out.push('What evidence has been preserved (originals, emails, bank statements) and whether the suspected party still has access.');
       out.push('Whether other directors are aware; coordinated action vs unilateral changes the strategy.');
       break;
+    case 'employment_general': {
+      const t = lower(state.input);
+      out.push('Which side of the matter the client sits on (employee or employer).');
+      if (/(fired|terminated|let go|laid off|dismissed|lost my job)/.test(t)) {
+        out.push('Termination date, written notice or termination letter, and what the employer has paid out so far.');
+        out.push('Length of service, age, role, and salary — Bardal factors that drive reasonable notice.');
+        out.push('Whether the employment contract has a termination clause and whether it complies with ESA minimums.');
+      }
+      if (/severance/.test(t)) {
+        out.push('Whether a severance offer is on the table, the signing deadline, and the full release language.');
+      }
+      if (/(harassment|discriminat|human rights)/.test(t)) {
+        out.push('Whether the client has filed an internal complaint and what the employer\'s response has been.');
+        out.push('Documentation of the conduct (dates, witnesses, written communications).');
+      }
+      if (/(unpaid wages|overtime|wages owed|esa)/.test(t)) {
+        out.push('Exact unpaid amount, pay period covered, and whether ESA standards were ever in writing.');
+      }
+      out.push('Whether the client has spoken to another lawyer about this matter.');
+      break;
+    }
+    case 'estates_general': {
+      const t = lower(state.input);
+      if (/(make a will|need a will|write a will|update.*will|new will)/.test(t)) {
+        out.push('Family situation (spouse, children, dependants, blended family).');
+        out.push('Asset map (home, registered accounts, business interests, beneficiary designations).');
+        out.push('Whether there is an existing will or POA being replaced.');
+      }
+      if (/(probate|estate trustee|executor|apply for probate)/.test(t)) {
+        out.push('Whether the deceased had a will (testate vs intestate).');
+        out.push('Approximate estate value and whether assets pass outside the estate (joint, designated).');
+        out.push('Whether there are any disputes among beneficiaries or with the executor.');
+      }
+      if (/(contest|challenge|dispute|fight over).*will/.test(t) || /(inheritance dispute|beneficiary dispute|estate dispute)/.test(t)) {
+        out.push('Date of death, date of grant of probate (if issued), and what claim is being made.');
+        out.push('Whether a notice of objection has been filed or any application is pending.');
+        out.push('The standing of the person disputing (beneficiary, dependant, creditor).');
+      }
+      if (/(power of attorney|poa)/.test(t)) {
+        out.push('Whether the grantor still has decision-making capacity.');
+        out.push('Whether existing POAs need to be revoked and replaced.');
+      }
+      out.push('Whether the client wants probate avoidance considered (secondary wills, joint ownership, designated beneficiaries).');
+      break;
+    }
   }
   return out;
 }
@@ -1347,6 +1598,35 @@ function buildCrossSell(state: EngineState): string[] {
       out.push('Internal controls review and director and officer training.');
       out.push('Updated bylaws and signing authorities.');
       break;
+    case 'employment_general': {
+      const t = lower(state.input);
+      if (/(fired|terminated|let go|laid off|dismissed|lost my job|severance)/.test(t)) {
+        out.push('Will and POA update on settlement (life-event trigger).');
+        out.push('Tax structuring on settlement amounts (retiring allowance, RRSP rollover).');
+        out.push('Employment contract review for the next role to avoid the same exposure.');
+      }
+      if (/(harassment|discriminat|human rights)/.test(t)) {
+        out.push('Tort claim against individual harasser may run alongside HRTO claim.');
+      }
+      out.push('Estate planning if the client has children or a spouse and no current will.');
+      break;
+    }
+    case 'estates_general': {
+      const t = lower(state.input);
+      if (/(make a will|need a will|write a will|new will|update.*will)/.test(t)) {
+        out.push('Real estate transactions: confirm whether title is held in a way that supports the estate plan.');
+        out.push('Corporate matter: if the client owns a business, secondary will and shareholder-direction docs avoid probate on the shares.');
+        out.push('Family law: marriage contract or cohabitation agreement may affect what the will can do.');
+      }
+      if (/(probate|estate administration)/.test(t)) {
+        out.push('Sale of real estate held by the estate (transactional matter).');
+        out.push('Tax filings for the deceased and the estate (refer to accountant or in-house).');
+      }
+      if (/(contest|challenge|dispute|fight over).*will/.test(t)) {
+        out.push('Mediation services if estate litigation is opened — most disputes resolve before trial.');
+      }
+      break;
+    }
   }
   return out;
 }
@@ -1453,6 +1733,57 @@ function buildCallOpeners(state: EngineState): string[] {
         'Confirm what specifically went wrong and when.',
         'Confirm the client\'s preferred outcome.',
       ];
+    case 'employment_general': {
+      const t = lower(state.input);
+      const out: string[] = [];
+      out.push('Confirm which side the client is on (employee or employer) and what specifically happened.');
+      if (/(fired|terminated|let go|laid off|dismissed|lost my job)/.test(t)) {
+        out.push('Confirm termination date, length of service, role, age, and salary. These drive any notice analysis.');
+        out.push('Confirm whether there is a written employment contract and whether the termination clause is in it.');
+        out.push('Confirm what the employer has offered so far, in writing.');
+      } else if (/severance/.test(t)) {
+        out.push('Confirm whether the client has received a severance offer in writing.');
+        out.push('Confirm the signing deadline and whether any consideration has been paid.');
+        out.push('Confirm what the client understands they are giving up by signing.');
+      } else if (/(harassment|discriminat|human rights)/.test(t)) {
+        out.push('Confirm whether the client has filed an internal complaint and what the employer\'s response has been.');
+        out.push('Confirm dates and documentation of the incidents.');
+        out.push('Confirm whether the client is still employed there.');
+      } else if (/(unpaid wages|overtime|wages owed|esa)/.test(t)) {
+        out.push('Confirm exact unpaid amount and the pay period it covers.');
+        out.push('Confirm whether the client has filed an ESA claim with the Ministry of Labour.');
+      } else {
+        out.push('Confirm what specifically the client needs help with: termination, severance, harassment, wages, contract, or something else.');
+        out.push('Confirm timeline — is anything imminent (sign by date, hearing date, last day of work)?');
+      }
+      out.push('Confirm whether the client has spoken to another lawyer about this matter.');
+      return out;
+    }
+    case 'estates_general': {
+      const t = lower(state.input);
+      const out: string[] = [];
+      out.push('Confirm what specifically the client needs: planning (will and POA), administering an estate, or disputing one.');
+      if (/(make a will|need a will|write a will|new will|update.*will)/.test(t)) {
+        out.push('Confirm family situation: spouse, children, dependants, blended family.');
+        out.push('Confirm asset map: home, registered accounts, business interests, real estate elsewhere.');
+        out.push('Confirm whether the client wants the firm to be the named executor or to act as solicitor for an external executor.');
+      } else if (/(probate|estate trustee|executor|apply for probate)/.test(t)) {
+        out.push('Confirm whether the deceased had a will (testate vs intestate).');
+        out.push('Confirm approximate estate value and what assets are involved.');
+        out.push('Confirm date of death and whether any application has been started.');
+      } else if (/(contest|challenge|dispute|fight over).*will/.test(t)) {
+        out.push('Confirm the basis of the challenge: capacity, undue influence, suspicious circumstances, or interpretation.');
+        out.push('Confirm date of death, date of grant (if issued), and what relief the client is seeking.');
+        out.push('Confirm the client\'s standing (beneficiary, dependant, prior beneficiary in earlier will, creditor).');
+      } else if (/(power of attorney|poa)/.test(t)) {
+        out.push('Confirm whether the grantor still has decision-making capacity.');
+        out.push('Confirm whether existing POAs need to be revoked.');
+      } else {
+        out.push('Confirm whether the matter is planning ahead, administration, or a dispute.');
+      }
+      out.push('Confirm whether the client has prior wills or estate documents that need review.');
+      return out;
+    }
     case 'out_of_scope':
       return [
         'Decide whether the firm accepts this area, refers it out, or holds for triage.',
