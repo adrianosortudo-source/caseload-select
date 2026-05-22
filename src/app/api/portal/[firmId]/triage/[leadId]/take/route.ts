@@ -20,6 +20,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { buildTakenPayload, fireGhlWebhook, type LeadFacts } from "@/lib/ghl-webhook";
+import { createMatterFromBandATake } from "@/lib/matter-stage";
 
 interface BriefJson {
   matter_snapshot?: string;
@@ -142,10 +143,51 @@ export async function POST(
   });
   const delivery = await fireGhlWebhook(firmId, payload);
 
+  // S8 Phase 1 Story 3: on Band A take, create a client_matters row
+  // at matter_stage='intake' so the matter is queryable in the
+  // lawyer's active-clients home + the client surface. Best-effort:
+  // the matter creation is logged on failure but does not roll back
+  // the take. The screened_lead row remains in 'taken' state with the
+  // webhook fired; the operator can re-trigger matter creation via
+  // a backfill endpoint if needed.
+  //
+  // Only Band A takes create a matter. Band B/C are pipeline-managed
+  // via the legacy `leads` table; Band D is OOS / refer-eligible (no
+  // matter expected).
+  let matterId: string | null = null;
+  if (lead.band === 'A') {
+    // Read the actual screened_leads row id (UUID) for the FK to
+    // source_screened_lead_id. The lead_id column is the human-
+    // readable string id (e.g. L-2026-05-22-SX4), not the UUID PK.
+    const { data: leadRow } = await supabase
+      .from('screened_leads')
+      .select('id')
+      .eq('lead_id', leadId)
+      .eq('firm_id', firmId)
+      .maybeSingle();
+    if (leadRow?.id && lead.contact_name && (lead.contact_email || lead.contact_phone)) {
+      const matterResult = await createMatterFromBandATake({
+        firm_id: firmId,
+        source_screened_lead_id: leadRow.id,
+        matter_type: lead.matter_type,
+        practice_area: lead.practice_area,
+        primary_name: lead.contact_name,
+        primary_email: lead.contact_email,
+        primary_phone: lead.contact_phone,
+      });
+      if (matterResult.ok) {
+        matterId = matterResult.matter.id;
+      } else {
+        console.warn('[take] Band A matter creation failed:', matterResult.error);
+      }
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     lead_id: leadId,
     status: "taken",
     webhook: delivery,
+    matter_id: matterId,
   });
 }

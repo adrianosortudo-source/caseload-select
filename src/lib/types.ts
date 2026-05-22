@@ -101,3 +101,92 @@ export const STAGES: { key: Stage; label: string }[] = [
 ];
 
 export const BANDS: Band[] = ["A", "B", "C", "D", "E"];
+
+// ─── S8 Phase 1 ───────────────────────────────────────────────────────────
+// Client matter state machine, messages, role model. See migrations
+// 20260520_s8p1_*.sql and docs/stories/S8.Phase1.*.md.
+
+export type MatterStage = "intake" | "retainer_pending" | "active" | "closing" | "closed";
+export const MATTER_STAGES: { key: MatterStage; label: string }[] = [
+  { key: "intake", label: "Intake" },
+  { key: "retainer_pending", label: "Retainer pending" },
+  { key: "active", label: "Active" },
+  { key: "closing", label: "Closing" },
+  { key: "closed", label: "Closed" },
+];
+
+export type ActorRole = "admin" | "staff" | "operator" | "client" | "system";
+export type ChannelType = "client" | "internal";
+export type RecipientScope = "individual" | "group" | "company";
+
+export interface ClientMatter {
+  id: string;
+  firm_id: string;
+  source_screened_lead_id: string | null;
+  lead_id: string | null;
+  assignee_ids: string[];
+  matter_stage: MatterStage;
+  matter_stage_changed_at: string;
+  matter_type: string;
+  practice_area: string;
+  primary_name: string;
+  primary_email: string | null;
+  primary_phone: string | null;
+  welcome_draft_html: string | null;
+  welcome_draft_plain_text: string | null;
+  welcome_draft_edited_html: string | null;
+  welcome_draft_sent_at: string | null;
+  welcome_draft_sent_body: string | null;
+  embed_url: string | null;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MatterStageEvent {
+  id: string;
+  matter_id: string;
+  firm_id: string;
+  from_stage: MatterStage | null;
+  to_stage: MatterStage;
+  actor_role: "admin" | "staff" | "operator" | "system";
+  actor_id: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+export interface MatterMessage {
+  id: string;
+  matter_id: string;
+  firm_id: string;
+  channel_type: ChannelType;
+  recipient_scope: RecipientScope;
+  sender_role: "admin" | "staff" | "client" | "system";
+  sender_lawyer_id: string | null;
+  sender_client_email: string | null;
+  body: string;
+  attachments: Array<{ url: string; name: string; size?: number; mime?: string }>;
+  broadcast_id: string | null;
+  created_at: string;
+}
+
+export interface ExplainerArticle {
+  id: string;
+  slug: string;
+  title: string;
+  body_html: string;
+  practice_area: string;
+  matter_stage: MatterStage;
+  ordering: number;
+  published: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MatterExplainerAssignment {
+  id: string;
+  matter_id: string;
+  article_id: string;
+  assigned_by_lawyer_id: string | null;
+  assigned_at: string;
+}

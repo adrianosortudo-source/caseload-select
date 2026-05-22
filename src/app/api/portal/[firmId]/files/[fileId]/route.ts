@@ -26,7 +26,7 @@ export async function GET(
 ) {
   const { firmId, fileId } = await params;
   const session = await getPortalSession();
-  const isAuthorized = !!session && (session.role === "operator" || session.firm_id === firmId);
+  const isAuthorized = !!session && session.role !== "client" && (session.role === "operator" || session.firm_id === firmId);
   if (!session || !isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -39,7 +39,10 @@ export async function GET(
     return NextResponse.json({ error: "File is archived" }, { status: 410 });
   }
 
-  const actor: ActorContext = { role: session.role, lawyer_id: session.lawyer_id ?? null };
+  const actor: ActorContext = {
+    role: session.role as "operator" | "lawyer",
+    lawyer_id: session.lawyer_id ?? null,
+  };
   const signed = await getFirmFileSignedUrl({ file, actor });
   if (!signed.ok) {
     return NextResponse.json({ error: signed.message }, { status: 500 });
@@ -60,7 +63,7 @@ export async function DELETE(
 ) {
   const { firmId, fileId } = await params;
   const session = await getPortalSession();
-  const isAuthorized = !!session && (session.role === "operator" || session.firm_id === firmId);
+  const isAuthorized = !!session && session.role !== "client" && (session.role === "operator" || session.firm_id === firmId);
   if (!session || !isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -70,7 +73,10 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const actor: ActorContext = { role: session.role, lawyer_id: session.lawyer_id ?? null };
+  const actor: ActorContext = {
+    role: session.role as "operator" | "lawyer",
+    lawyer_id: session.lawyer_id ?? null,
+  };
   const result = await archiveFirmFile({ file, actor });
   if (!result.ok) {
     return NextResponse.json({ error: result.message }, { status: 500 });

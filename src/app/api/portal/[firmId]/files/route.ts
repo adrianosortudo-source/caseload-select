@@ -29,7 +29,7 @@ export async function GET(
 ) {
   const { firmId } = await params;
   const session = await getPortalSession();
-  const isAuthorized = !!session && (session.role === "operator" || session.firm_id === firmId);
+  const isAuthorized = !!session && session.role !== "client" && (session.role === "operator" || session.firm_id === firmId);
   if (!session || !isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -70,7 +70,7 @@ export async function POST(
 ) {
   const { firmId } = await params;
   const session = await getPortalSession();
-  const isAuthorized = !!session && (session.role === "operator" || session.firm_id === firmId);
+  const isAuthorized = !!session && session.role !== "client" && (session.role === "operator" || session.firm_id === firmId);
   if (!session || !isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -96,7 +96,7 @@ export async function POST(
   const description = descriptionRaw.slice(0, MAX_DESCRIPTION_LEN).trim();
 
   const actor: ActorContext = {
-    role: session.role,
+    role: session.role as "operator" | "lawyer",
     lawyer_id: session.lawyer_id ?? null,
   };
 

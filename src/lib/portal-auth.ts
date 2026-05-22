@@ -29,12 +29,14 @@ const COOKIE_NAME = "portal_session";
 const LINK_TTL_HOURS = 48;
 const SESSION_TTL_HOURS = 720; // 30 days
 
-export type PortalRole = "lawyer" | "operator";
+export type PortalRole = "lawyer" | "operator" | "client";
 
 export interface PortalSession {
   firm_id: string;
   role: PortalRole;
   lawyer_id?: string;        // firm_lawyers.id when known; absent for legacy tokens and operator-only tokens not tied to a row
+  matter_id?: string;        // client_matters.id; ONLY set on role='client' tokens. Client sessions are scoped to ONE matter.
+  client_email?: string;     // primary_email on the matter at invite time; carried for audit and welcome routing
   exp: number;
 }
 
@@ -61,6 +63,8 @@ function decode<T>(encoded: string): T {
 export interface TokenOptions {
   role?: PortalRole;
   lawyer_id?: string;
+  matter_id?: string;
+  client_email?: string;
   ttlHours?: number;
 }
 
@@ -71,6 +75,8 @@ export function generatePortalToken(firmId: string, options: TokenOptions = {}):
     firm_id: firmId,
     role,
     lawyer_id: options.lawyer_id,
+    matter_id: options.matter_id,
+    client_email: options.client_email,
     exp: Date.now() + ttlHours * 3600 * 1000,
   });
   const sig = sign(payload);
@@ -102,10 +108,16 @@ export function verifyPortalToken(token: string): PortalSession | null {
   }
   if (!data.firm_id || typeof data.exp !== "number") return null;
   if (Date.now() > data.exp) return null;
+  const role: PortalRole =
+    data.role === "operator" ? "operator"
+      : data.role === "client" ? "client"
+      : "lawyer";
   return {
     firm_id: data.firm_id,
-    role: (data.role === "operator" ? "operator" : "lawyer") as PortalRole,
+    role,
     lawyer_id: data.lawyer_id,
+    matter_id: data.matter_id,
+    client_email: data.client_email,
     exp: data.exp,
   };
 }
@@ -141,13 +153,20 @@ const COOKIE_BASE_OPTIONS = {
 
 export function createSessionCookie(
   firmId: string,
-  options: { role?: PortalRole; lawyer_id?: string } = {},
+  options: {
+    role?: PortalRole;
+    lawyer_id?: string;
+    matter_id?: string;
+    client_email?: string;
+  } = {},
 ): { name: string; value: string; options: object } {
   const role: PortalRole = options.role ?? "lawyer";
   const payload = encode({
     firm_id: firmId,
     role,
     lawyer_id: options.lawyer_id,
+    matter_id: options.matter_id,
+    client_email: options.client_email,
     exp: Date.now() + SESSION_TTL_HOURS * 3600 * 1000,
   });
   const sig = sign(payload);
@@ -187,6 +206,25 @@ export async function getFirmSession(firmId: string): Promise<PortalSession | nu
   const session = await getPortalSession();
   if (!session) return null;
   if (session.role === "operator") return null; // operators use /admin/*
+  if (session.role === "client") return null;   // clients use /portal/[firmId]/m/[matterId]
   if (session.firm_id !== firmId) return null;
+  return session;
+}
+
+/**
+ * Convenience: return the session ONLY if it has client role AND the
+ * matter_id matches. Used by the client-facing matter surfaces at
+ * /portal/[firmId]/m/[matterId]/*. The session is scoped to a single
+ * matter; cross-matter access requires a separate token per matter.
+ */
+export async function getClientMatterSession(
+  firmId: string,
+  matterId: string,
+): Promise<PortalSession | null> {
+  const session = await getPortalSession();
+  if (!session) return null;
+  if (session.role !== "client") return null;
+  if (session.firm_id !== firmId) return null;
+  if (session.matter_id !== matterId) return null;
   return session;
 }
