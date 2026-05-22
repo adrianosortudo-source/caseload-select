@@ -633,6 +633,7 @@ const SLOT_LABELS: Record<string, string> = {
   client_name: 'Name',
   client_phone: 'Phone',
   client_email: 'Email',
+  client_postal_code: 'Postal code',
 };
 
 function buildResolvedFacts(state: EngineState): Record<string, string> {

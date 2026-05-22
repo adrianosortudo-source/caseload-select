@@ -199,6 +199,64 @@
 .brief-frame .brief-group[data-group="callprep"]   { background: var(--bf-white); }
 .brief-frame .brief-group[data-group="facts"]      { background: #F7F6F1; }
 .brief-frame .brief-group[data-group="routing"]    { background: var(--bf-parchment-2); }
+.brief-frame .brief-group[data-group="contact"]    {
+  background: var(--bf-white);
+  border-color: var(--bf-navy);
+  border-width: 1px 1px 1px 4px;
+}
+
+/* ─── NAP block (contact strip at top of brief) ────────────────────────── */
+
+.brief-frame .nap-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.brief-frame .nap-cell {
+  padding: 10px 12px;
+  background: var(--bf-parchment-2, #F4F3EF);
+  border-radius: 4px;
+  border-left: 3px solid var(--bf-navy, #1E2F58);
+}
+.brief-frame .nap-cell-missing {
+  background: #FBF5F0;
+  border-left-color: #C97A4A;
+}
+.brief-frame .nap-label {
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bf-gray-400, #888);
+  margin: 0 0 6px 0;
+}
+.brief-frame .nap-value {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--bf-black, #0D1520);
+  margin: 0 0 4px 0;
+  word-break: break-word;
+}
+.brief-frame .nap-value-missing {
+  color: var(--bf-gray-400, #888);
+  font-style: normal;
+  font-weight: 500;
+}
+.brief-frame .nap-source {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 0.72rem;
+  color: var(--bf-gray-600, #555);
+  margin: 0;
+}
+.brief-frame .nap-source-missing {
+  color: #C97A4A;
+}
+@media (max-width: 720px) {
+  .brief-frame .nap-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 .brief-frame .brief-group-title {
   font-family: 'Manrope', system-ui, sans-serif;

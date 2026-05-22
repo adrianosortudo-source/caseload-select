@@ -97,6 +97,59 @@ function factsWithProvenance(facts: ResolvedFact[]): string {
   return `<ul class="fact-list">${rows}</ul>`;
 }
 
+// ─── NAP block (top-of-brief contact strip) ────────────────────────────────
+//
+// Renders Name + Phone + Postal code + Email as a prominent four-cell strip
+// at the top of every brief. Pulled from resolved_facts_v2 (which carries
+// provenance source chips). Missing fields render "Not captured" so the
+// gap is visible to the lawyer at a glance.
+//
+// Why this section exists: the lawyer's first read on a brief is "can I
+// call this person back?". Hiding name/phone/postal code 800px down the
+// page (in Facts and reasoning) forced an extra scroll to verify. The
+// NAP block surfaces that first.
+//
+// Note: this block COMPLEMENTS the bottom "Resolved facts" section — it
+// doesn't replace it. The bottom section still shows the full set of
+// extracted facts including matter-specific slots; this top block is the
+// contact triad only.
+const NAP_FIELD_ORDER: { label: string; key: string }[] = [
+  { label: 'Name', key: 'Name' },
+  { label: 'Phone', key: 'Phone' },
+  { label: 'Postal code', key: 'Postal code' },
+  { label: 'Email', key: 'Email' },
+];
+
+function napBlock(facts: ResolvedFact[]): string {
+  // Index facts by label for fast lookup
+  const byLabel = new Map<string, ResolvedFact>();
+  for (const f of facts ?? []) {
+    if (f && f.label) byLabel.set(f.label, f);
+  }
+  const cells = NAP_FIELD_ORDER.map(({ label, key }) => {
+    const fact = byLabel.get(key);
+    if (fact) {
+      return `
+        <div class="nap-cell">
+          <p class="nap-label">${esc(label)}</p>
+          <p class="nap-value">${esc(fact.value)}</p>
+          <p class="nap-source ${FACT_SOURCE_CLASS[fact.source] ?? ''}">${esc(FACT_SOURCE_LABEL[fact.source] ?? fact.source)}</p>
+        </div>`;
+    }
+    return `
+      <div class="nap-cell nap-cell-missing">
+        <p class="nap-label">${esc(label)}</p>
+        <p class="nap-value nap-value-missing">Not captured</p>
+        <p class="nap-source nap-source-missing">Follow up on the call</p>
+      </div>`;
+  }).join('');
+  return `
+    <section class="brief-group brief-group-nap" data-group="contact">
+      <h3 class="brief-group-title">Contact (NAP)</h3>
+      <div class="nap-grid">${cells}</div>
+    </section>`;
+}
+
 function riskFlagsBlock(flags: readonly string[]): string {
   if (!flags || flags.length === 0) {
     return `<p class="section-body muted">No risk flags raised based on what has been shared so far.</p>`;
@@ -181,6 +234,13 @@ export function renderBriefHtmlServer(
   if (!isOOS && report.confidence_calibration) {
     sections.push(`<p class="brief-calibration">${esc(report.confidence_calibration)}</p>`);
   }
+
+  // NAP block — prominent contact strip at the top of every brief
+  // (both in-scope and OOS). The lawyer's first scan answers "can I
+  // reach this person back?"; surfacing name + phone + postal code +
+  // email here removes the scroll-to-the-bottom step that the
+  // pre-2026-05-21 layout forced.
+  sections.push(napBlock(report.resolved_facts_v2));
 
   if (isOOS) {
     sections.push(`

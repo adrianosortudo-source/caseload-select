@@ -43,6 +43,26 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     required: true,
     priority: 102,
   },
+  {
+    // Postal code: Canadian A1A 1A1 format. Captured by regex from any
+    // transcript that mentions a postal code (caller statement or bot
+    // confirmation in the "M as in Mike, 5, T as in Tango..." form).
+    // Surfaced in the NAP block at the top of the brief alongside name
+    // and phone. Not part of the contact-doctrine gate (DR-038) — that
+    // gate only requires name + (email OR phone) — but agent-level CALL
+    // COMPLETION GATE requires it before closing.
+    id: 'client_postal_code',
+    question: 'What is your postal code?',
+    input_type: 'free_text',
+    applies_to: ['business_setup_advisory', 'shareholder_dispute', 'unpaid_invoice', 'contract_dispute', 'vendor_supplier_dispute', 'corporate_money_control', 'corporate_general'],
+    tier: 'contact',
+    question_group: 'contact',
+    resolves: 'contact',
+    decision_value: 1,
+    abstraction_level: 'concrete',
+    required: false,
+    priority: 103,
+  },
 
   // ─── CORPORATE GENERAL (intermediate routing lane) ────────────────────────
 

@@ -1093,6 +1093,15 @@ const NAME_INTRO_PATTERNS: { lead: RegExp; nameOffset: number }[] = [
 // starting where the intro phrase ended.
 const NAME_TOKEN_RE = /^([A-Z][a-zA-Z'’\-]{0,29})/;
 
+// Multi-word name token regex — captures up to 3 capitalised name tokens
+// separated by spaces (covers "Adriano Dominguez", "Mary Ann O'Brien",
+// "Jean-Claude Van Damme"). Used to upgrade a single-token capture when
+// the lead's intro phrase contained a full first+last name. Anchored
+// like NAME_TOKEN_RE — no trailing \b for the apostrophe / hyphen
+// reason described above. The 1-2 trailing tokens are optional so this
+// still matches "Adriano" alone.
+const FULL_NAME_TOKEN_RE = /^([A-Z][a-zA-Z'’\-]{0,29}(?:\s+[A-Z][a-zA-Z'’\-]{0,29}){0,2})/;
+
 // Tokens that look like a capitalised proper noun after the intro phrase
 // but are NOT names. Anchored to lowercase so the lookups are cheap.
 const NAME_BLOCKLIST = new Set<string>([
@@ -1107,6 +1116,17 @@ const NAME_BLOCKLIST = new Set<string>([
  * Returns the captured name in its original casing, or null when no
  * pattern matches or the captured token is in the blocklist.
  *
+ * Two-pass capture:
+ *   1. Multi-word try (FULL_NAME_TOKEN_RE): captures "Adriano Dominguez"
+ *      from "My name is Adriano Dominguez."
+ *   2. Single-word fallback (NAME_TOKEN_RE): captures "Adriano" alone
+ *      when the lead only said the first name initially. The voice-intake
+ *      path (single-pass transcript extraction) then runs
+ *      `upgradeNameFromBotConfirmation` to promote "Adriano" to
+ *      "Adriano Dominguez" when the bot's acknowledgment line shows the
+ *      full name (e.g. "Thank you, Adriano Dominguez. I've noted that
+ *      down.").
+ *
  * Exported for tests; called by `initialiseState` on turn 1.
  */
 export function extractContactName(input: string): string | null {
@@ -1119,12 +1139,146 @@ export function extractContactName(input: string): string | null {
     // phrase ended; the name-token regex enforces the capital-letter rule
     // and the name character class.
     const tail = input.slice(m.index + m[0].length);
+    // First: try to capture a multi-word name (first + last, optional
+    // middle). If the intro is followed by "Adriano Dominguez" we want
+    // both tokens.
+    const fullMatch = FULL_NAME_TOKEN_RE.exec(tail);
+    if (fullMatch && fullMatch[1]) {
+      const candidate = fullMatch[1].trim();
+      // Validate ONLY the first token against the blocklist — false
+      // positives like "I am sad" produce candidate="Sad" which we drop.
+      // Subsequent tokens are pre-filtered by the multi-word regex's
+      // capital-first-letter requirement.
+      const firstToken = candidate.split(/\s+/)[0]?.toLowerCase() ?? '';
+      if (firstToken && NAME_BLOCKLIST.has(firstToken)) continue;
+      return candidate;
+    }
+    // Fallback: single-token capture for "My name is Adriano." (period
+    // immediately after, no last name).
     const nameMatch = NAME_TOKEN_RE.exec(tail);
     if (!nameMatch) continue;
     const candidate = nameMatch[1]?.trim();
     if (!candidate) continue;
     if (NAME_BLOCKLIST.has(candidate.toLowerCase())) continue;
     return candidate;
+  }
+  return null;
+}
+
+// ─── Bot-confirmation name upgrade (voice-intake) ─────────────────────────
+//
+// When a single-token name was captured from the caller's intro ("My name
+// is Adriano.") but the bot later said the full name back as part of an
+// acknowledgment, the bot's confirmation is reliable ground truth.
+// Patterns we look for inside the transcript:
+//
+//   "Thank you, Adriano Dominguez. I've noted that down."
+//   "Thanks, Adriano Dominguez."
+//   "Got it, Adriano Dominguez."
+//   "Perfect, Adriano Dominguez."
+//
+// The bot's casing is consistent (always capital-first-letter on names),
+// so the same FULL_NAME_TOKEN_RE works on the tail after the lead-in
+// phrase.
+//
+// Why only voice-intake: this is single-pass transcript extraction, so
+// the engine sees both the lead's intro AND the bot's confirmation in
+// the same string. On web / Meta channels the engine sees only the
+// lead's text, so there's no bot confirmation to mine.
+const BOT_NAME_CONFIRMATION_PATTERNS: RegExp[] = [
+  /\bthank you,?\s+/i,
+  /\bthanks,?\s+/i,
+  /\bgot it,?\s+/i,
+  /\bperfect,?\s+/i,
+  /\bnoted,?\s+/i,
+  // "I've noted that down, Adriano Dominguez."
+  /\bnoted (?:that )?(?:down,?\s+)?/i,
+];
+
+/**
+ * Upgrade an existing single-token client_name to the bot-confirmed
+ * full name (first + last, optionally middle) when the transcript
+ * contains an acknowledgment line.
+ *
+ * Returns the upgraded name string, or null if no upgrade was found
+ * or the existing name is already multi-word.
+ *
+ * Idempotent and safe to call multiple times; only returns a longer
+ * version if one exists.
+ */
+export function upgradeNameFromBotConfirmation(
+  transcript: string,
+  existingName: string | null | undefined,
+): string | null {
+  if (!transcript) return null;
+  if (existingName && /\s/.test(existingName.trim())) {
+    // Already multi-word; nothing to upgrade.
+    return null;
+  }
+  // The existing first-name anchor — only upgrade matches that start
+  // with the same first-name token to avoid hijacking the field with a
+  // different person's name that may appear elsewhere in the transcript.
+  const anchorFirst = (existingName ?? '').trim().split(/\s+/)[0];
+  for (const pattern of BOT_NAME_CONFIRMATION_PATTERNS) {
+    let match: RegExpExecArray | null;
+    const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g');
+    while ((match = re.exec(transcript)) !== null) {
+      const tail = transcript.slice(match.index + match[0].length);
+      const nameMatch = FULL_NAME_TOKEN_RE.exec(tail);
+      if (!nameMatch || !nameMatch[1]) continue;
+      const candidate = nameMatch[1].trim();
+      if (!/\s/.test(candidate)) continue; // single token; no upgrade
+      const firstToken = candidate.split(/\s+/)[0];
+      // If we have an existing first name, only upgrade if the
+      // confirmation matches it (case-insensitive).
+      if (anchorFirst && firstToken?.toLowerCase() !== anchorFirst.toLowerCase()) {
+        continue;
+      }
+      // Reject obviously-bogus first-token matches (blocklist).
+      if (firstToken && NAME_BLOCKLIST.has(firstToken.toLowerCase())) continue;
+      return candidate;
+    }
+  }
+  return null;
+}
+
+// ─── Postal code extraction (Canadian) ────────────────────────────────────
+//
+// Canadian postal codes follow the pattern letter-digit-letter SPACE
+// digit-letter-digit (e.g. "M5T 1B3"). Three transcript forms to
+// detect:
+//
+//   1. Canonical: "M5T 1B3" or "M5T1B3" — exact, easy regex.
+//   2. Phonetic (bot confirmation): "M as in Mike, 5, T as in Tango,
+//      1, B as in Bravo, 3" — bot reads back digit / letter form for
+//      audio clarity. The bot's phrasing is consistent ("X as in
+//      <word>, <digit>") so we can reconstruct the postal code from
+//      the sequence of capitalised letters and digits.
+//   3. Words: "M five t one b three" — caller speaks digits as words.
+//      Less reliable; skipped for now (caller form is usually echoed
+//      back by the bot in canonical or phonetic form within the same
+//      transcript).
+//
+// Returns the canonical "A1A 1A1" form (with space, all uppercase) or
+// null when no postal code is detected.
+const CANONICAL_POSTAL_RE = /\b([A-Z])(\d)([A-Z])\s?(\d)([A-Z])(\d)\b/i;
+const PHONETIC_POSTAL_RE = /([A-Z])\s+as in\s+\w+,\s*(\d),\s*([A-Z])\s+as in\s+\w+,\s*(\d),\s*([A-Z])\s+as in\s+\w+,\s*(\d)/i;
+
+export function extractPostalCode(transcript: string): string | null {
+  if (!transcript) return null;
+  // 1. Canonical form, anywhere in transcript. Use the FIRST match —
+  //    if the bot read it back multiple times (initial confirmation
+  //    plus summary), they should all agree.
+  const canonical = CANONICAL_POSTAL_RE.exec(transcript);
+  if (canonical) {
+    const [, a, b, c, d, e, f] = canonical;
+    return `${a.toUpperCase()}${b}${c.toUpperCase()} ${d}${e.toUpperCase()}${f}`;
+  }
+  // 2. Phonetic form ("M as in Mike, 5, T as in Tango, 1, B as in Bravo, 3")
+  const phonetic = PHONETIC_POSTAL_RE.exec(transcript);
+  if (phonetic) {
+    const [, a, b, c, d, e, f] = phonetic;
+    return `${a.toUpperCase()}${b}${c.toUpperCase()} ${d}${e.toUpperCase()}${f}`;
   }
   return null;
 }
@@ -1151,15 +1305,42 @@ export function initialiseState(input: string): EngineState {
   // Contact-name regex pass. Runs language-agnostic for simplicity (the
   // patterns are anchored on English phrasings; the false-positive cost on
   // non-English input is zero — no match, no slot filled).
-  const seededName = extractContactName(input);
+  let seededName = extractContactName(input);
+
+  // Voice-intake bot-confirmation upgrade: if the regex captured a single
+  // first name from the caller's intro, look at the bot's acknowledgment
+  // lines in the same transcript for "Thank you, Adriano Dominguez" style
+  // confirmations. The bot only says the full name back after the caller
+  // confirmed it, so it's reliable ground truth. Same call for web text
+  // is a no-op (no bot lines in the input).
+  if (seededName) {
+    const upgraded = upgradeNameFromBotConfirmation(input, seededName);
+    if (upgraded) seededName = upgraded;
+  }
+
+  // Postal code regex pass. Detects canonical (A1A 1A1, A1A1A1) and bot
+  // phonetic ("M as in Mike, 5, T as in Tango, 1, B as in Bravo, 3")
+  // forms. Mostly populated on voice intake (the bot reads it back for
+  // audio clarity); web / Meta intake captures it via the lead's text
+  // when present.
+  const seededPostal = extractPostalCode(input);
+
   const slots: Record<string, string | null> = {};
   const slotMeta: Record<string, EngineState['slot_meta'][string]> = {};
   if (seededName) {
     slots.client_name = seededName;
     slotMeta.client_name = {
       source: 'explicit',
-      evidence: 'self-introduction in kickoff text',
+      evidence: /\s/.test(seededName) ? 'self-introduction + bot confirmation in transcript' : 'self-introduction in kickoff text',
       confidence: 0.95,
+    };
+  }
+  if (seededPostal) {
+    slots.client_postal_code = seededPostal;
+    slotMeta.client_postal_code = {
+      source: 'explicit',
+      evidence: 'postal code detected in transcript (canonical or bot phonetic confirmation)',
+      confidence: 0.9,
     };
   }
 
