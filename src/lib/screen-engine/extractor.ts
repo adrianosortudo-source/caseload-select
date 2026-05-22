@@ -899,6 +899,35 @@ function deriveAdvisorySubtrack(
   return 'unknown';
 }
 
+// ─── Voice transcript prep ────────────────────────────────────────────────
+//
+// Voice transcripts arrive in line-prefixed "bot: ..." / "human: ..."
+// format. The classifier should only see what the CALLER said — not
+// the bot's narration. Otherwise the bot's opening line ("we help with
+// corporate, real estate, wills and estates, and employment matters")
+// would trigger the in-scope-area detector on every call regardless of
+// what the matter actually is.
+//
+// This stripper runs at the top of `classify(input)`. Inputs without
+// the "bot:" / "human:" convention (web text, Meta DMs) are returned
+// unchanged. Voice transcripts have the "bot:" lines removed and the
+// "human:" prefix stripped so the classifier reads only caller speech.
+//
+// Note: `extractRawSignals(input)` and the kickoff name / postal-code
+// regexes still see the FULL transcript — those signal scanners benefit
+// from seeing both sides of the conversation (the bot may echo back a
+// confirmed postal code in canonical form, and the caller's own
+// statements are intact in the human lines). Only the classifier
+// pipeline below uses the human-only slice.
+function stripBotLinesForClassification(input: string): string {
+  if (!/^(bot|human):/im.test(input)) return input;
+  return input
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*bot:/i.test(line))
+    .map((line) => line.replace(/^\s*human:\s*/i, ''))
+    .join('\n');
+}
+
 // ─── Main classifier ───────────────────────────────────────────────────────
 
 export function classify(input: string): {
@@ -908,6 +937,10 @@ export function classify(input: string): {
   dispute_family: DisputeFamily;
   advisory_subtrack: AdvisorySubtrack;
 } {
+  // For voice transcripts, classify only on what the caller said.
+  // See `stripBotLinesForClassification` for rationale.
+  input = stripBotLinesForClassification(input);
+
   // Out-of-scope detection runs first. Real estate / corporate signals do not
   // override a clear family / immigration / criminal / personal-injury match
   // because those areas are not yet covered by our matter-type packs.
