@@ -15,7 +15,7 @@
  * channel-shape, not lead-shape (DR-026).
  */
 
-import type { Channel, LawyerReport, ResolvedFact } from './screen-engine/types';
+import type { AxisReasoning, Channel, LawyerReport, ResolvedFact } from './screen-engine/types';
 import { getI18n } from './screen-engine/i18n/loader';
 import { getChannelChipData } from './screen-engine/i18n/display';
 import { intakeLanguageLabel } from './intake-language-label';
@@ -150,6 +150,72 @@ function napBlock(facts: ResolvedFact[]): string {
     </section>`;
 }
 
+// ─── Four-axis breakdown (Why this is Band X) ──────────────────────────────
+//
+// Ports the sandbox's `renderAxisBreakdown` (DOM-based in `brief-render.ts`)
+// to a server-side string renderer. Renders the four-axis scorer's output
+// (Value · Simplicity · Urgency · Readiness) as four cards inside the
+// Decision section, each with a 0-10 score and the contributing reasons.
+//
+// Complexity is presented to the lawyer as "Simplicity" with the score
+// inverted (10 - complexity.score) so all four axes read positively (higher
+// is better). This matches the sandbox display and keeps the lawyer from
+// having to remember which axis runs which direction.
+//
+// The card's `kind` (positive / pending / drag) drives the left border
+// colour via `brief.css`:
+//   - positive → navy/gold confidence
+//   - pending  → dashed gold, "answered but not yet a strong signal"
+//   - drag     → red-ish for axes that hurt the band
+//
+// CSS lives in `src/app/portal/[firmId]/triage/[leadId]/brief.css` under
+// `.brief-frame .axis-breakdown` and `.axis-block*`. The classes are
+// already defined; this renderer just emits the matching HTML.
+function simplicityKind(complexityScore: number): string {
+  const s = 10 - complexityScore;
+  if (s >= 7) return 'positive';
+  if (s >= 4) return 'pending';
+  return 'drag';
+}
+
+function axisCard(name: string, score: number, kind: string, reasons: readonly string[]): string {
+  const reasonsHtml =
+    reasons && reasons.length > 0
+      ? `<ul class="axis-block-reasons">${reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>`
+      : `<ul class="axis-block-reasons"><li class="muted">No contributing signal recorded yet.</li></ul>`;
+  return `
+    <div class="axis-block axis-block-${esc(kind)}">
+      <div class="axis-block-head">
+        <span class="axis-block-name">${esc(name)}</span>
+        <span class="axis-block-score">${score}/10</span>
+      </div>
+      ${reasonsHtml}
+    </div>`;
+}
+
+function axisBreakdown(reasoning: AxisReasoning): string {
+  const cards: string[] = [];
+  cards.push(axisCard('Value', reasoning.value.score, 'positive', reasoning.value.reasons));
+  cards.push(
+    axisCard(
+      'Simplicity',
+      10 - reasoning.complexity.score,
+      simplicityKind(reasoning.complexity.score),
+      reasoning.complexity.reasons,
+    ),
+  );
+  cards.push(axisCard('Urgency', reasoning.urgency.score, 'positive', reasoning.urgency.reasons));
+  cards.push(
+    axisCard(
+      'Readiness',
+      reasoning.readiness.score,
+      reasoning.readinessAnswered ? 'positive' : 'pending',
+      reasoning.readiness.reasons,
+    ),
+  );
+  return `<div class="axis-breakdown">${cards.join('')}</div>`;
+}
+
 function riskFlagsBlock(flags: readonly string[]): string {
   if (!flags || flags.length === 0) {
     return `<p class="section-body muted">No risk flags raised based on what has been shared so far.</p>`;
@@ -257,6 +323,7 @@ export function renderBriefHtmlServer(
         <h3 class="brief-group-title">Decision</h3>
         <div class="section"><p class="section-title">Matter snapshot</p>${textBlock(report.matter_snapshot)}</div>
         <div class="section"><p class="section-title">Why this matters</p>${textBlock(report.why_it_matters)}</div>
+        <div class="section"><p class="section-title">Why this is Band ${esc(report.band)}</p>${axisBreakdown(report.axis_reasoning)}</div>
       </section>
 
       <section class="brief-group" data-group="commercial">
