@@ -131,8 +131,26 @@ function describeMatter(matterType: string, practiceArea: string): MatterDescrip
       return { short: 'mortgage matter', long: 'mortgage matter' };
     case 'real_estate_general':
       return { short: 'real estate matter', long: 'real estate matter' };
+    case 'wrongful_dismissal':
+      return { short: 'employment matter', long: 'wrongful dismissal claim' };
+    case 'severance_review':
+      return { short: 'employment matter', long: 'severance package review' };
+    case 'harassment_complaint':
+      return { short: 'employment matter', long: 'workplace harassment matter' };
+    case 'wage_recovery':
+      return { short: 'employment matter', long: 'unpaid wages or wage-recovery matter' };
+    case 'employment_contract_review':
+      return { short: 'employment matter', long: 'employment contract review' };
     case 'employment_general':
       return { short: 'employment matter', long: 'workplace or employment matter' };
+    case 'will_drafting':
+      return { short: 'estates matter', long: 'will and estate-planning matter' };
+    case 'power_of_attorney':
+      return { short: 'estates matter', long: 'power of attorney drafting' };
+    case 'probate':
+      return { short: 'estates matter', long: 'probate or estate-administration matter' };
+    case 'estate_dispute':
+      return { short: 'estates matter', long: 'estate dispute' };
     case 'estates_general':
       return { short: 'estates matter', long: 'will, estate, or planning matter' };
     default:
