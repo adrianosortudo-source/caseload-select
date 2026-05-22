@@ -23,6 +23,7 @@ import { getMatterById } from '@/lib/matter-stage';
 import { listMessagesForMatter } from '@/lib/matter-messages';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import type { ExplainerArticle, MatterStage } from '@/lib/types';
+import ComposeForm from './ComposeForm';
 
 const STAGE_COPY: Record<MatterStage, { label: string; client_blurb: string }> = {
   intake: {
@@ -102,9 +103,13 @@ export default async function ClientMatterHomePage({ params }: PageProps) {
         <p style={cardBodyStyle}>{stage.client_blurb}</p>
       </section>
 
-      {messages.length > 0 && (
-        <section style={cardStyle}>
-          <p style={sectionEyebrow}>Messages from your lawyer</p>
+      <section style={cardStyle}>
+        <p style={sectionEyebrow}>Messages</p>
+        {messages.length === 0 ? (
+          <p style={{ color: '#888', fontSize: '0.92rem', marginBottom: 14 }}>
+            No messages yet. Your lawyer will reach out shortly. You can also reach out first using the form below.
+          </p>
+        ) : (
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {messages.map((m) => (
               <li key={m.id} style={messageRowStyle}>
@@ -121,8 +126,9 @@ export default async function ClientMatterHomePage({ params }: PageProps) {
               </li>
             ))}
           </ul>
-        </section>
-      )}
+        )}
+        <ComposeForm firmId={firmId} matterId={matterId} />
+      </section>
 
       {articles.length > 0 && (
         <section style={cardStyle}>
@@ -217,6 +223,7 @@ const messageBodyStyle = {
   color: '#222',
   lineHeight: 1.5,
 };
+
 
 function escapeHtml(s: string): string {
   return String(s ?? '')

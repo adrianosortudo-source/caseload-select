@@ -37,6 +37,8 @@ import type {
   MatterStageEvent,
 } from '@/lib/types';
 import { nextStage } from '@/lib/matter-stage-pure';
+import WelcomeEditor from './WelcomeEditor';
+import MessageThreads from './MessageThreads';
 
 const STAGE_LABEL: Record<MatterStage, string> = {
   intake: 'Intake',
@@ -109,12 +111,15 @@ export default async function LawyerMatterDetailPage({ params }: PageProps) {
 
       <WelcomePanel matter={matter} firmId={firmId} matterId={matterId} />
 
-      <MessagesPanel
-        clientMessages={clientMessages}
-        internalMessages={internalMessages}
-        firmId={firmId}
-        matterId={matterId}
-      />
+      <section style={cardStyle}>
+        <p style={sectionEyebrowStyle}>Messages</p>
+        <MessageThreads
+          firmId={firmId}
+          matterId={matterId}
+          initialClientMessages={clientMessages}
+          initialInternalMessages={internalMessages}
+        />
+      </section>
 
       <ExplainersPanel
         articles={assignedExplainers}
@@ -265,8 +270,7 @@ function WelcomePanel({
   firmId: string;
   matterId: string;
 }) {
-  const draftBody = matter.welcome_draft_edited_html ?? matter.welcome_draft_html;
-  if (!draftBody) {
+  if (!matter.welcome_draft_html) {
     return (
       <section style={cardStyle}>
         <p style={sectionEyebrowStyle}>Welcome draft</p>
@@ -279,127 +283,32 @@ function WelcomePanel({
     <section style={cardStyle}>
       <p style={sectionEyebrowStyle}>Welcome draft</p>
       {matter.welcome_draft_sent_at ? (
-        <p style={{ color: '#4a7d4a', fontSize: '0.88rem', marginBottom: 12 }}>
-          ✓ Sent {formatDate(matter.welcome_draft_sent_at)}
-        </p>
+        <>
+          <p style={{ color: '#4a7d4a', fontSize: '0.88rem', marginBottom: 12 }}>
+            ✓ Sent {formatDate(matter.welcome_draft_sent_at)}
+          </p>
+          <div
+            style={welcomeBodyStyle}
+            dangerouslySetInnerHTML={{
+              __html: matter.welcome_draft_sent_body ?? matter.welcome_draft_html,
+            }}
+          />
+        </>
       ) : (
-        <p style={{ color: '#666', fontSize: '0.88rem', marginBottom: 12 }}>
-          Draft is ready to send. Review below, then use the Send button (or use Kickoff to send + advance stage in one click).
-        </p>
-      )}
-      <div style={welcomeBodyStyle} dangerouslySetInnerHTML={{ __html: draftBody }} />
-      {!matter.welcome_draft_sent_at && (
-        <form
-          action={`/api/portal/${firmId}/matters/${matterId}/welcome/send`}
-          method="POST"
-          style={{ marginTop: 16 }}
-        >
-          <button type="submit" style={primaryButtonStyle}>Send welcome</button>
-        </form>
+        <>
+          <p style={{ color: '#666', fontSize: '0.88rem', marginBottom: 12 }}>
+            Draft is ready. Edit the HTML on the left; preview on the right. Save edits whenever; click Send when ready (Kickoff sends + advances stage in one click).
+          </p>
+          <WelcomeEditor
+            firmId={firmId}
+            matterId={matterId}
+            originalHtml={matter.welcome_draft_html}
+            initialEditedHtml={matter.welcome_draft_edited_html}
+            isSent={false}
+          />
+        </>
       )}
     </section>
-  );
-}
-
-// ─── Messages Panel ────────────────────────────────────────────────────
-
-function MessagesPanel({
-  clientMessages,
-  internalMessages,
-  firmId,
-  matterId,
-}: {
-  clientMessages: MatterMessage[];
-  internalMessages: MatterMessage[];
-  firmId: string;
-  matterId: string;
-}) {
-  return (
-    <section style={cardStyle}>
-      <p style={sectionEyebrowStyle}>Messages</p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <MessageColumn
-          title="Client thread"
-          messages={clientMessages}
-          firmId={firmId}
-          matterId={matterId}
-          channelType="client"
-        />
-        <MessageColumn
-          title="Internal team"
-          messages={internalMessages}
-          firmId={firmId}
-          matterId={matterId}
-          channelType="internal"
-        />
-      </div>
-    </section>
-  );
-}
-
-function MessageColumn({
-  title,
-  messages,
-  firmId,
-  matterId,
-  channelType,
-}: {
-  title: string;
-  messages: MatterMessage[];
-  firmId: string;
-  matterId: string;
-  channelType: 'client' | 'internal';
-}) {
-  return (
-    <div>
-      <h3 style={{ fontSize: '0.94rem', fontWeight: 700, margin: '0 0 8px 0', color: '#1E2F58' }}>
-        {title} <span style={{ color: '#888', fontWeight: 400 }}>({messages.length})</span>
-      </h3>
-      <ul style={{ listStyle: 'none', padding: 0, margin: 0, maxHeight: 280, overflowY: 'auto' }}>
-        {messages.length === 0 ? (
-          <li style={{ color: '#888', fontSize: '0.86rem', fontStyle: 'italic' }}>No messages yet.</li>
-        ) : (
-          messages.map((m) => (
-            <li key={m.id} style={{ padding: '6px 0', borderBottom: '1px solid #E0DDD3', fontSize: '0.84rem' }}>
-              <p style={{ margin: 0, color: '#888', fontSize: '0.72rem' }}>
-                {m.sender_role === 'client' ? 'Client' : m.sender_role} · {formatDate(m.created_at)}
-              </p>
-              <div
-                style={{ margin: '2px 0 0 0', color: '#222', lineHeight: 1.4 }}
-                dangerouslySetInnerHTML={{
-                  __html: m.body.includes('<') ? m.body : escapeHtml(m.body).replace(/\n/g, '<br>'),
-                }}
-              />
-            </li>
-          ))
-        )}
-      </ul>
-      <form
-        action={`/api/portal/${firmId}/matters/${matterId}/messages`}
-        method="POST"
-        style={{ marginTop: 8 }}
-      >
-        <input type="hidden" name="channel_type" value={channelType} />
-        <textarea
-          name="body"
-          placeholder={`Message to ${title.toLowerCase()}…`}
-          required
-          rows={2}
-          style={{
-            width: '100%',
-            padding: 6,
-            fontFamily: 'inherit',
-            fontSize: '0.86rem',
-            border: '1px solid #C4B49A',
-            borderRadius: 3,
-            resize: 'vertical',
-          }}
-        />
-        <button type="submit" style={{ ...secondaryButtonStyle, marginTop: 4 }}>
-          Send
-        </button>
-      </form>
-    </div>
   );
 }
 
