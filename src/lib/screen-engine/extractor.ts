@@ -536,6 +536,102 @@ function detectInScopeArea(input: string): InScopeAreaMatch | null {
   return null;
 }
 
+// ─── Phase B: employment + estates sub-type classification ──────────────
+//
+// Once detectInScopeArea identifies the area, these classifiers narrow to
+// a specific matter_type. Order matters — more specific signals are
+// checked before less specific ones. Falls back to the *_general routing
+// lane when no sub-shape is confident.
+
+const EMPLOYMENT_TERMINATION_SIGNALS = [
+  'wrongful dismissal', 'wrongfully dismissed', 'fired without cause',
+  'fired from my job', 'just got fired', 'i got fired', 'i was fired',
+  'constructive dismissal', 'fired for no reason', 'let go from my job',
+  'laid off', 'lost my job', 'i lost my job', 'just lost my job',
+  'terminated', 'termination letter', 'just terminated',
+];
+
+const EMPLOYMENT_SEVERANCE_SIGNALS = [
+  'severance package', 'severance pay', 'severance offer', 'about severance',
+  'know about severance', 'asking about severance', 'severance review',
+  'review my severance', 'severance amount',
+];
+
+const EMPLOYMENT_HARASSMENT_SIGNALS = [
+  'workplace harassment', 'workplace discrimination', 'discriminat',
+  'harassment at work', 'sexual harassment', 'human rights at work',
+  'human rights complaint', 'hostile work environment', 'bullying at work',
+  'racial discrimination', 'gender discrimination', 'age discrimination',
+];
+
+const EMPLOYMENT_WAGES_SIGNALS = [
+  'unpaid wages', 'overtime not paid', 'overtime pay', 'wages owed',
+  'esa claim', 'employment standards', 'minimum wage', 'vacation pay owed',
+  'not paying me', 'they owe me', 'paycheck bounced', 'final pay',
+];
+
+const EMPLOYMENT_CONTRACT_SIGNALS = [
+  'employment contract', 'employment agreement', 'job offer', 'offer letter',
+  'review my contract', 'review the contract', 'sign this contract',
+  'non-compete', 'non compete', 'restrictive covenant', 'nda at work',
+  'confidentiality agreement at work',
+];
+
+function classifyEmploymentSubType(input: string): MatterType {
+  const t = lower(input);
+  const hit = (patterns: string[]): boolean => patterns.some((p) => t.includes(lower(p)));
+  // Order: most-specific actionable signals first.
+  if (hit(EMPLOYMENT_TERMINATION_SIGNALS)) return 'wrongful_dismissal';
+  if (hit(EMPLOYMENT_SEVERANCE_SIGNALS)) return 'severance_review';
+  if (hit(EMPLOYMENT_HARASSMENT_SIGNALS)) return 'harassment_complaint';
+  if (hit(EMPLOYMENT_WAGES_SIGNALS)) return 'wage_recovery';
+  if (hit(EMPLOYMENT_CONTRACT_SIGNALS)) return 'employment_contract_review';
+  return 'employment_general';
+}
+
+const ESTATES_WILL_DRAFTING_SIGNALS = [
+  'make a will', 'need a will', 'write a will', 'update my will',
+  'i need a will', 'i want a will', 'i want to make a will', 'new will',
+  'updating my will', 'revising my will', 'will and estate planning',
+  'who gets what when i', 'leaving things to my', 'leave things to my kids',
+];
+
+const ESTATES_POA_SIGNALS = [
+  'power of attorney for property', 'power of attorney for personal care',
+  'poa for property', 'poa for personal care',
+  'power of attorney', 'continuing power of attorney',
+  'guardianship of person', 'guardianship of property',
+];
+
+const ESTATES_PROBATE_SIGNALS = [
+  'probate', 'apply for probate', 'applying for probate',
+  'estate trustee', 'executor of an estate', 'executor of the estate',
+  'estate administration', 'certificate of appointment',
+  'when my mother passed', 'when my father passed', 'when my parent passed',
+  'after my father died', 'after my mother died', 'after my husband died',
+  'after my wife died', 'estate of my',
+];
+
+const ESTATES_DISPUTE_SIGNALS = [
+  'contested will', 'challenge a will', 'contesting a will',
+  'fight over the will', 'fight over the estate', 'inheritance dispute',
+  'beneficiary dispute', 'beneficiary of an estate',
+  'capacity assessment', 'undue influence', 'will challenge',
+  'dependant support', 'dependent support', 'pass accounts',
+];
+
+function classifyEstatesSubType(input: string): MatterType {
+  const t = lower(input);
+  const hit = (patterns: string[]): boolean => patterns.some((p) => t.includes(lower(p)));
+  // Order: disputes before probate (because "challenge a will" includes
+  // "will" and might also match drafting; explicit dispute wins).
+  if (hit(ESTATES_DISPUTE_SIGNALS)) return 'estate_dispute';
+  if (hit(ESTATES_PROBATE_SIGNALS)) return 'probate';
+  if (hit(ESTATES_POA_SIGNALS)) return 'power_of_attorney';
+  if (hit(ESTATES_WILL_DRAFTING_SIGNALS)) return 'will_drafting';
+  return 'estates_general';
+}
+
 // ─── Raw signal extraction ─────────────────────────────────────────────────
 
 export function extractRawSignals(input: string): RawSignals {
@@ -735,20 +831,22 @@ export function classificationForMatterType(mt: MatterType): {
       advisory_subtrack: 'unknown',
     };
   }
-  if (mt === 'employment_general') {
+  if (mt === 'employment_general' || mt === 'wrongful_dismissal' || mt === 'severance_review'
+      || mt === 'harassment_complaint' || mt === 'wage_recovery' || mt === 'employment_contract_review') {
     return {
       intent_family: 'employment',
       practice_area: 'employment',
-      matter_type: 'employment_general',
+      matter_type: mt,
       dispute_family: 'general_employment',
       advisory_subtrack: 'unknown',
     };
   }
-  if (mt === 'estates_general') {
+  if (mt === 'estates_general' || mt === 'will_drafting' || mt === 'power_of_attorney'
+      || mt === 'probate' || mt === 'estate_dispute') {
     return {
       intent_family: 'estates',
       practice_area: 'estates',
-      matter_type: 'estates_general',
+      matter_type: mt,
       dispute_family: 'general_estates',
       advisory_subtrack: 'unknown',
     };
@@ -791,7 +889,16 @@ const ALL_CANONICAL_MATTER_TYPES: ReadonlyArray<MatterType> = [
   'preconstruction_condo',
   'mortgage_dispute',
   'real_estate_general',
+  'wrongful_dismissal',
+  'severance_review',
+  'harassment_complaint',
+  'wage_recovery',
+  'employment_contract_review',
   'employment_general',
+  'will_drafting',
+  'power_of_attorney',
+  'probate',
+  'estate_dispute',
   'estates_general',
   'out_of_scope',
 ];
@@ -960,27 +1067,30 @@ export function classify(input: string): {
   }
 
   // In-scope area detection (employment + estates). These route to their own
-  // general matter packs with proper banding instead of the OOS thin template.
-  // Per-firm scope filtering (so a firm that doesn't do estates gets the OOS
-  // treatment instead) is a Phase C consideration; for now we treat both as
-  // in-scope universally because the engine's current consumer (DRG and
-  // similar Toronto solo / 2-lawyer firms) routinely handles both.
+  // matter packs (Phase A general lane + Phase B sub-type packs) with proper
+  // banding instead of the OOS thin template. Per-firm scope filtering (so a
+  // firm that doesn't do estates gets the OOS treatment instead) is a Phase C
+  // consideration; for now we treat both as in-scope universally because the
+  // engine's current consumer (DRG and similar Toronto solo / 2-lawyer firms)
+  // routinely handles both.
   const inScopeArea = detectInScopeArea(input);
   if (inScopeArea) {
     if (inScopeArea.area === 'employment') {
+      const subType = classifyEmploymentSubType(input);
       return {
         intent_family: 'employment',
         practice_area: 'employment',
-        matter_type: 'employment_general',
+        matter_type: subType,
         dispute_family: 'general_employment',
         advisory_subtrack: 'unknown',
       };
     }
     if (inScopeArea.area === 'estates') {
+      const subType = classifyEstatesSubType(input);
       return {
         intent_family: 'estates',
         practice_area: 'estates',
-        matter_type: 'estates_general',
+        matter_type: subType,
         dispute_family: 'general_estates',
         advisory_subtrack: 'unknown',
       };

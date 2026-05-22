@@ -495,16 +495,21 @@ export function computeBand(state: EngineState): BandResult {
     }
     return bandRoutingLane('Real estate', state, !!problem);
   }
-  // Employment and estates routing lanes (Phase A). Same shape as the
+  // Employment and estates routing lanes (Phase A general). Same shape as the
   // corporate / real-estate routing lanes — start at B, lift on completeness
-  // via the four-axis scorer. Phase B will add sub-type packs that route
-  // directly to their own matter_types and skip this lane.
+  // via the four-axis scorer. Phase B sub-types skip this lane and go to the
+  // main scorer below for matter-specific band lift.
   if (state.matter_type === 'employment_general') {
     return bandRoutingLane('Employment', state, false);
   }
   if (state.matter_type === 'estates_general') {
     return bandRoutingLane('Estates', state, false);
   }
+  // Phase B sub-types fall through to the four-axis scorer (no special-case
+  // override needed — the scorer's defaults produce reasonable bands for
+  // these matter shapes without per-sub-type tuning. Future tuning per
+  // matter_type can land as additional override clauses here as we learn
+  // from real lead data.
 
   const scores = scoreFourAxes(state);
   const result = bandFromAxes(scores);

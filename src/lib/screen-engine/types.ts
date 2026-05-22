@@ -26,13 +26,22 @@ export type MatterType =
   | 'preconstruction_condo'
   | 'mortgage_dispute'
   | 'real_estate_general'
-  // Employment (added 2026-05-21 to support DRG and any firm with employment
-  // in their LSO primary practice areas). Sub-types are deferred to Phase B;
-  // employment_general is the routing-lane catch-all for now.
+  // Employment (Phase A general lane added 2026-05-21; Phase B sub-types
+  // added 2026-05-22). Routing: keyword extractor maps sub-shape signals
+  // to the specific sub-type when confident; falls back to
+  // employment_general when the matter shape isn't clear enough yet.
+  | 'wrongful_dismissal'
+  | 'severance_review'
+  | 'harassment_complaint'
+  | 'wage_recovery'
+  | 'employment_contract_review'
   | 'employment_general'
-  // Estates (added 2026-05-21 to support DRG and any firm with wills /
-  // estates / trusts in their LSO primary practice areas). Sub-types are
-  // deferred to Phase B; estates_general is the routing-lane catch-all.
+  // Estates (Phase A general lane added 2026-05-21; Phase B sub-types
+  // added 2026-05-22).
+  | 'will_drafting'
+  | 'power_of_attorney'
+  | 'probate'
+  | 'estate_dispute'
   | 'estates_general'
   // Out of scope (detected but not yet supported)
   | 'out_of_scope'
