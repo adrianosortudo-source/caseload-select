@@ -73,6 +73,32 @@ async function firmIdForDomain(hostname: string): Promise<string | null> {
   }
 }
 
+/**
+ * S8 Phase 1 Story 12: branded subdomain lookup.
+ *
+ * Distinct from custom_domain (full apex like client.drglaw.ca). The
+ * subdomain column stores just the leftmost segment ("drglaw" for
+ * "drglaw.caseloadselect.ca"). Per-firm unique when set.
+ */
+async function firmIdForSubdomain(subdomain: string): Promise<string | null> {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/intake_firms?select=id&subdomain=eq.${encodeURIComponent(subdomain)}&limit=1`;
+    const res = await fetch(url, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      next: { revalidate: 60 },
+    });
+    if (!res.ok) return null;
+    const rows = await res.json() as Array<{ id: string }>;
+    return rows[0]?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function rewriteForFirm(req: NextRequest, firmId: string): NextResponse {
   const { pathname } = req.nextUrl;
 
@@ -116,8 +142,13 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
       return NextResponse.next();
     }
 
-    // Firm subdomain — look up firm by exact hostname match
-    const firmId = await firmIdForDomain(hostname);
+    // S8 Phase 1 Story 12: try the branded-subdomain column first
+    // (the new path; just the segment is stored). Fall back to the
+    // legacy custom_domain match (full hostname) if no subdomain row
+    // exists. This lets old custom_domain firms keep working
+    // unchanged while new firms onboard via the subdomain column.
+    let firmId = await firmIdForSubdomain(subdomain);
+    if (!firmId) firmId = await firmIdForDomain(hostname);
     if (!firmId) return NextResponse.next();
     return rewriteForFirm(req, firmId);
   }
