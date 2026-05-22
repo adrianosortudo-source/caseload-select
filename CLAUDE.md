@@ -119,6 +119,83 @@ sequence_templates (id, name, trigger_event, is_active)
 sequence_steps (id, sequence_id, step_number, delay_hours, channels, is_active)
 review_requests (id, lead_id, law_firm_id, status, sent_at)
 lead_activities (id, lead_id, activity_type, metadata, created_at)
+
+-- S8 Phase 1 (added 2026-05-22, see migrations 20260520_s8p1_*.sql)
+
+client_matters (
+  id, firm_id,
+  source_screened_lead_id,                    -- FK to screened_leads.id (Band A take origin)
+  lead_id,                                    -- snapshot of firm_lawyers.id at take time
+  assignee_ids JSONB,                         -- array of firm_lawyers.id (snapshot)
+  matter_stage,                               -- intake | retainer_pending | active | closing | closed
+  matter_stage_changed_at,
+  matter_type, practice_area,                 -- snapshot from screened_leads
+  primary_name, primary_email, primary_phone,
+  welcome_draft_html, welcome_draft_plain_text,
+  welcome_draft_edited_html, welcome_draft_sent_at, welcome_draft_sent_body,
+  embed_url,                                  -- per-matter iframe slot (S16)
+  closed_at, created_at, updated_at
+)
+
+matter_stage_events (
+  id, matter_id, firm_id, from_stage, to_stage,
+  actor_role,                                 -- admin | staff | operator | system
+  actor_id,                                   -- firm_lawyers.id
+  note, created_at
+)
+
+matter_messages (
+  id, matter_id, firm_id,
+  channel_type,                               -- client | internal
+  recipient_scope,                            -- individual | group | company (Phase 1: individual only in UI)
+  sender_role,                                -- admin | staff | client | system
+  sender_lawyer_id, sender_client_email,
+  body, attachments JSONB,
+  broadcast_id,                               -- set on mass-message fan-out (S11)
+  created_at
+)
+
+matter_message_recipients (
+  id, message_id, matter_id, read_at, created_at  -- per-recipient state for fan-out
+)
+
+explainer_articles (
+  id, slug, title, body_html,
+  practice_area, matter_stage, ordering, published,
+  created_at, updated_at
+)
+
+matter_explainer_assignments (
+  id, matter_id, article_id, assigned_by_lawyer_id, assigned_at
+)
+
+notification_outbox (
+  id, recipient_user_id, recipient_email, firm_id, matter_id,
+  event_type,                                 -- message_new | message_internal_new | file_uploaded |
+                                              -- matter_stage_changed | explainer_assigned | welcome_draft_ready | broadcast_received
+  event_payload JSONB,
+  status,                                     -- queued | sent | failed | dropped
+  batch_id, attempts,
+  created_at, sent_at, failed_at, last_error
+)
+
+-- intake_firms extensions (S8 Phase 1)
+intake_firms.default_lead_by_practice_area JSONB  -- map practice_area → firm_lawyers.id
+intake_firms.default_lead_id UUID                  -- fallback lead lawyer
+intake_firms.default_assignees JSONB               -- array of firm_lawyers.id snapshotted onto each new matter
+intake_firms.client_files_locked BOOLEAN           -- S10 folder-lock toggle
+intake_firms.subdomain TEXT                        -- branded subdomain (S12)
+intake_firms.embed_origins JSONB                   -- CSP allow-list for iframe embeds (S16)
+
+-- firm_lawyers extensions (S8 Phase 1)
+firm_lawyers.role                               -- extended: lawyer (legacy) | admin | staff | operator
+firm_lawyers.display_name                       -- used by welcome-draft template
+firm_lawyers.title                              -- e.g. "Principal", "Associate"
+firm_lawyers.email_notifications_enabled        -- per-staff toggle for batched notification outbox
+
+-- Voice channel (added 2026-05-21)
+intake_firms.voice_api_token                    -- GHL Voice AI Private Integration Token (SECRET)
+intake_firms.ghl_location_id                    -- GHL sub-account location ID (per-firm, not secret)
 ```
 
 ## Scoring Engine (scoring.ts)
@@ -204,14 +281,34 @@ The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), 
 | `/admin/triage` | Operator-only cross-firm triage queue. Firm filter + band filter. Rows link to /portal/[firmId]/triage/[leadId]. |
 | `/admin/webhook-outbox` | Operator-only delivery log UI with manual retry button. |
 
+### S8 Phase 1 routes (added 2026-05-22)
+
+| Route | Purpose |
+|---|---|
+| `POST /api/portal/[firmId]/matters/[matterId]/stage` | Advance matter stage (validates transition, fires journey cadence) |
+| `GET/POST /api/portal/[firmId]/matters/[matterId]/messages` | List + send messages (channel_type discriminator gates client vs internal) |
+| `GET/PATCH /api/portal/[firmId]/matters/[matterId]/welcome` | View / edit the welcome draft built at matter creation |
+| `POST /api/portal/[firmId]/matters/[matterId]/welcome/send` | Send the welcome draft as a client-channel message + stamp sent_at |
+| `POST /api/portal/[firmId]/matters/[matterId]/invite` | Generate + email a magic-link invite to the client (48h TTL) |
+| `GET/POST/DELETE /api/portal/[firmId]/matters/[matterId]/explainers` | List + assign + unassign explainer articles for the matter |
+| `GET/PATCH /api/portal/[firmId]/matters/[matterId]/embed` | Read / set the matter's iframe embed_url (CSP-validated against firm allow-list) |
+| `POST /api/portal/[firmId]/matters/[matterId]/kickoff` | S14 composition — sends welcome, auto-assigns explainers, advances stage, generates client invite |
+| `POST /api/portal/[firmId]/broadcast` | Mass-message fan-out (S11) — one body, many matters, one broadcast_id |
+| `GET/PATCH /api/portal/[firmId]/config/folder-lock` | S10 firm-level client_files_locked toggle |
+| `GET /api/cron/notification-batch` | Drain notification_outbox every 5 min into per-recipient digest emails |
+| `/portal/[firmId]/m/[matterId]` | Client matter-stage home (S04 — magic-link gated) |
+| `/portal/[firmId]/m/[matterId]/accept` | Magic-link landing — verifies token, plants client session cookie |
+| `/portal/[firmId]/clients` | Lawyer active-clients home (S05) |
+
 ### Auth model
 
-Same HMAC magic-link pattern as the legacy Client Portal (`portal-auth.ts`). 48h link, 30-day session cookie, root-scoped (path `/`). Two role tiers on the token:
+Same HMAC magic-link pattern as the legacy Client Portal (`portal-auth.ts`). 48h link, 30-day session cookie, root-scoped (path `/`). Three role tiers on the token (S8 Phase 1 added the client role):
 
 - `lawyer` (default): firm-scoped. Token's `firm_id` must match the requested route's firmId. Lands at /portal/[firmId]/triage.
 - `operator`: cross-firm. Bypasses the firm match. Lands at /admin/triage. Operators can also view any firm's portal pages with an "Operator view" banner.
+- `client` (S8 Phase 1): matter-scoped. Token carries `matter_id` + `client_email`. Only valid for routes under `/portal/[firmId]/m/[matterId]/*`. `getClientMatterSession(firmId, matterId)` is the helper. The session does NOT match `getFirmSession()` — clients have their own surfaces.
 
-`firm_lawyers` table holds the canonical mapping of email → firm + role. Multi-lawyer per firm supported. Legacy `intake_firms.branding.lawyer_email` remains as a fallback. Inserting a row into `firm_lawyers` automatically fires a magic-link invitation email via the `trg_firm_lawyers_invite` pg_net trigger.
+`firm_lawyers` table holds the canonical mapping of email → firm + role. The role column extends to `admin | staff | operator | lawyer` (legacy alias). New rows should use `admin` or `staff`. Multi-lawyer per firm supported. Legacy `intake_firms.branding.lawyer_email` remains as a fallback. Inserting a row into `firm_lawyers` automatically fires a magic-link invitation email via the `trg_firm_lawyers_invite` pg_net trigger.
 
 ### GHL webhook contract
 
@@ -540,6 +637,11 @@ Implementation notes:
 | Ses.6 | Conflict check system, J2, J8–J12, send-sequences processor | DONE |
 | Ses.7 | CaseLoad Screen 35-area expansion (interfaces, complexity indicators, value tiers, inference rules, default-question-modules, onboarding seeder), J7 Welcome/Onboarding migration + stage trigger | DONE |
 | Ses.8 | Multilingual Screen Engine — language-agnostic intake, English at lawyer surface. i18n Steps 1-10 (slot options, summary labels, summary text, prompts, bridge text, chip catalogue, engine sync) + full multilingual build (schema migration, prompt rule 8, intake_language + raw_transcript persistence, triage portal language badges, notification email language note, GHL webhook v2 envelope, intake-language-label utility). Sandbox engine byte-for-byte mirror maintained. | DONE |
+| Ses.9 voice | Voice channel build-out — GHL Voice AI agent for DRG, /api/voice-intake architecture (API-fetch primary via Voice AI Public API list endpoint, body-fallback for resilience), voice agent prompt iterations v1→v2.5 (CALL COMPLETION GATE + GATE ATTEMPT LIMITS + mandatory surname spelling + bot-line classifier strip + ACTIVE LISTENING + caller-ID lead + no-third-party-names + decision-maker question fix). Per-firm `voice_api_token` + `ghl_location_id` columns on intake_firms. | DONE |
+| Ses.9 engine Phase A | Engine expansion — employment + estates moved from out_of_scope hard-route into in-scope `*_general` matter packs with proper banding (routes through `bandRoutingLane` not forced D). Adds `employment_general` and `estates_general` matter_types with full matter packs (snapshot, services, fee, strategic, openers, what-to-confirm, cross-sell, risk flags). | DONE |
+| Ses.9 engine Phase B | Sub-type packs deepen Phase A — 9 new matter_types: wrongful_dismissal, severance_review, harassment_complaint, wage_recovery, employment_contract_review for employment; will_drafting, power_of_attorney, probate, estate_dispute for estates. Each carries Ontario-tuned fee ranges, Bardal/Waksdale/HRTO/EAT/SLRA-aware flags, sub-shape strategic considerations and call openers. Routes through the four-axis scorer for proper A/B/C/D banding. | DONE |
+| Ses.9 brief | NAP block at top of every brief (Name + Phone + Postal code + Email, source-provenance chips). Full-name extraction (multi-word regex + bot-confirmation upgrade for voice transcripts). Postal-code extraction (canonical + bot phonetic forms). New `client_postal_code` slot. Admin reclassify route + backfill. Bot-line classifier strip prevents bot opening narration from polluting matter classification. | DONE |
+| Ses.9 S8 Phase 1 | All 16 stories shipped — client_matters state machine + matter_messages + welcome draft + client magic-link + matter-stage home + lawyer active-clients home + per-client internal chat data plane + notification batching cron + explainer library + folder-lock + mass-message broadcast + branded subdomain middleware + Band A post-OTP kickoff composition + iframe embed slot. 7 SQL migrations applied. PortalRole widened to include `client` with matter-scoped session helper. Take handler creates client_matters on Band A. 1894/1894 tests pass. | DONE |
 
 ## Pending: Run in Supabase SQL Editor
 
