@@ -25,7 +25,7 @@ export default function PrivacyPage() {
         <div>
           <p className="text-xs uppercase tracking-[0.18em] font-semibold text-gold">CaseLoad Select</p>
           <h1 className="text-3xl font-bold text-navy mt-2">Privacy Policy</h1>
-          <p className="mt-2 text-sm text-black/50">Last updated: 2026-05-15</p>
+          <p className="mt-2 text-sm text-black/50">Last updated: 2026-05-24</p>
         </div>
 
         <Section title="Who we are">

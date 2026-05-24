@@ -27,7 +27,7 @@ export default function DataDeletionPage() {
         <div>
           <p className="text-xs uppercase tracking-[0.18em] font-semibold text-gold">CaseLoad Select</p>
           <h1 className="text-3xl font-bold text-navy mt-2">Data Deletion<span className="text-gold">▪</span></h1>
-          <p className="mt-2 text-sm text-black/50">Last updated: 2026-05-13</p>
+          <p className="mt-2 text-sm text-black/50">Last updated: 2026-05-24</p>
         </div>
 
         <Section title="What this page is">

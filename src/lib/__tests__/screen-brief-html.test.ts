@@ -64,13 +64,15 @@ function buildFakeReport(overrides: Partial<LawyerReport> = {}): LawyerReport {
     call_openers: ['Walk me through what happened on the termination day'],
     best_next_question: 'Tenure in years',
     resolved_facts_v2: [
-      { label: 'Name', value: 'Smoke Test Caller', source: 'answered' },
-      { label: 'Phone', value: '+1 416 555 0143', source: 'answered' },
+      { label: 'Name', value: 'Smoke Test Caller', source: 'stated' },
+      { label: 'Phone', value: '+1 416 555 0143', source: 'confirmed' },
     ],
     resolved_facts: {},
     inferred_signals: [],
     open_questions: ['Pension or RRSP contributions'],
     risk_flags: [],
+    band_reasoning_bullets: ['Wrongful dismissal lane; standard arc'],
+    contact_complete: true,
   } as LawyerReport;
   return { ...base, ...overrides };
 }
