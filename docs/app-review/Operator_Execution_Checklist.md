@@ -322,7 +322,7 @@ Check the App Review status daily at `https://developers.facebook.com/apps/10073
 
 ---
 
-## State at hand-off back to operator (right now)
+## State at hand-off back to operator (updated 2026-05-24 after agent session)
 
 | Item | Status |
 |---|---|
@@ -331,18 +331,35 @@ Check the App Review status daily at `https://developers.facebook.com/apps/10073
 | Privacy + Terms + Data Deletion pages | UPDATED 2026-05-24, all remediations from Phase11 Section 4.5 + 5.1/5.2/5.3 applied |
 | `Phase11_Submission_Package.md` | COMPLETE — paste-ready for every permission slot |
 | `screencasts/README.md` | COMPLETE — shot list per clip, naming, spec |
-| `Operator_Execution_Checklist.md` (this file) | COMPLETE |
-| `deletion-flow-verification.md` template | CREATED (below in this directory) |
+| `deletion-flow-verification.md` | COMPLETE — exercised against L-2026-05-14-5EQ, all 5 fields anonymized |
 | `META_MESSENGER_VERIFY_TOKEN` in Vercel | SET (Block 1) |
 | `META_INSTAGRAM_VERIFY_TOKEN` in Vercel | SET (Block 1) |
-| `META_WHATSAPP_VERIFY_TOKEN` in Vercel | NOT SET — operator generates in Step 7 |
+| `META_WHATSAPP_VERIFY_TOKEN` in Vercel | SET — rotated 2026-05-24 to `cls_wa_1af45ec0eaf7646385a3fd88f1c16f3dcdb9893d5efe2b2b`, handshake returns 200, Meta side matches |
 | `META_APP_SECRET` in Vercel | SET (Block 1) |
-| Test firm row in Supabase | NOT CREATED — operator runs INSERT in Step 1 |
-| Test Facebook Page | NOT CREATED — Step 2 |
-| Test IG Business | NOT CREATED — Step 3 |
-| Test WhatsApp WABA + phone | NOT PROVISIONED — Step 6 |
-| Screencasts (4 clips) | NOT RECORDED — Step 10 |
-| Deletion flow verification | NOT RUN — Step 11 |
-| App Review submission | NOT SUBMITTED — Step 16 onwards |
+| Test firm row in Supabase | DONE — wired to DRG production row `eec1d25e-a047-4827-8e4a-6eb96becca2b` (Block 2 attempts on 2026-05-14 used DRG as the test tenant; the redundant standalone test firm row from 2026-05-24 was deleted) |
+| Test Facebook Page | DONE — `DRG Law Test`, Page ID `1179834051874177`, under CaseLoad Select Business Portfolio |
+| Test IG Business | DONE — `17841411029834507`, linked to DRG Law Test Page |
+| Test WhatsApp WABA + phone | DONE — phone_number_id `1135653749626764`, test WABA provisioned |
+| Smoke tests | DONE — 8 real Meta-channel leads landed 2026-05-14 to 2026-05-16 (5 WhatsApp + 1 Instagram + 2 Facebook) |
+| Screencasts (4 clips) | NOT RECORDED — operator records following `screencasts/README.md` |
+| **App Review submission** — Tech Provider gate | CONTINUE clicked. Per-permission "Add to App Review" path active. |
+| App Review · App settings step | ✓ green — App domain `caseloadselect.ca`, Website platform `https://app.caseloadselect.ca`, all URLs, app icon |
+| App Review · Allowed usage step (10 permissions) | DESCRIPTIONS + COMPLIANCE CHECKBOXES SAVED for all 10 (pages_messaging, pages_show_list, pages_manage_metadata, business_management, instagram_basic, instagram_manage_messages, whatsapp_business_messaging, whatsapp_business_management, pages_read_engagement, public_profile). SCREENCAST UPLOADS PENDING — operator uploads 4 MP4s after recording. |
+| App Review · Data handling step | PARTIAL. Done: processor-0 (Yes), processor-2 (4 sub-processors: Supabase Inc., Vercel Inc., Google LLC, Resend Inc.), responsible-1 (Adriano Domingues sole proprietor), responsible-2 (Canada). Pending: ~5-10 more questions including national security requests (requests-3 — answer No), legal authority request policies (requests-4), user-count-shared (No), and any retention / breach / transfer questions below. |
+| App Review · Reviewer instructions step | NOT STARTED |
+| App Review · Verification (Business + Access) | NOT STARTED — operator must upload business docs (incorporation, utility bill matching address) |
+| Final Submit for review button | GRAYED until all above turn green |
+| Submission ID (for the App Review form URL) | `1016624077686960` |
 
-**Estimated operator time end-to-end:** 2-3 hours for Block 2 (Steps 1-11), 1-2 hours for Block 3 (Steps 12-20). Plus 3-7 business days waiting for Meta's review.
+**Estimated remaining operator time:** 30-60 min Data handling form completion, 10 min Reviewer instructions paste, 30-60 min Verification doc uploads + business profile, 45 min screencast recording. Plus 3-7 business days waiting for Meta's review (longer for first-time Tech Provider applications — could be 2-3 weeks).
+
+**Important post-Tech-Provider note:** The "Add to App Review" button now requires Tech Provider status which Adriano accepted (2026-05-24, irreversible). This is the correct architectural fit for the multi-tenant operator model, but adds Business + Access verification on top of standard App Review. The 8 permission descriptions are already saved on the submission draft (id `1016624077686960`).
+
+**Cross-permission Data handling assertions worth keeping in mind as you fill remaining questions:**
+
+- We have NEVER provided personal data to public authorities (national security or otherwise) — answer "No" to such questions.
+- We have NEVER shared personal data with any third party except the 4 documented processors (Supabase, Vercel, Google, Resend).
+- Retention: band-based per Privacy Policy. 1095d / 365d / 180d / 30d / 90d. Anonymization (not deletion) once retention period elapses.
+- Encryption at rest (Supabase) + TLS in transit. No special EU residency since we're Canadian; data is stored in Montreal (Supabase ca-central-1).
+- Breach protocol: notify affected users within 72 hours of becoming aware; notify the firm whose tenant was affected; notify the Office of the Privacy Commissioner of Canada if there is real risk of significant harm (PIPEDA breach standard).
+- User deletion: instructions URL at `/data-deletion`, response within 5 business days, completion within 30 days. Exercised end-to-end on 2026-05-24.
