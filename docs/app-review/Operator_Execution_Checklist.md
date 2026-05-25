@@ -345,8 +345,8 @@ Check the App Review status daily at `https://developers.facebook.com/apps/10073
 | **App Review submission** — Tech Provider gate | CONTINUE clicked. Per-permission "Add to App Review" path active. |
 | App Review · App settings step | ✓ green — App domain `caseloadselect.ca`, Website platform `https://app.caseloadselect.ca`, all URLs, app icon |
 | App Review · Allowed usage step (10 permissions) | DESCRIPTIONS + COMPLIANCE CHECKBOXES SAVED for all 10 (pages_messaging, pages_show_list, pages_manage_metadata, business_management, instagram_basic, instagram_manage_messages, whatsapp_business_messaging, whatsapp_business_management, pages_read_engagement, public_profile). SCREENCAST UPLOADS PENDING — operator uploads 4 MP4s after recording. |
-| App Review · Data handling step | PARTIAL. Done: processor-0 (Yes), processor-2 (4 sub-processors: Supabase Inc., Vercel Inc., Google LLC, Resend Inc.), responsible-1 (Adriano Domingues sole proprietor), responsible-2 (Canada). Pending: ~5-10 more questions including national security requests (requests-3 — answer No), legal authority request policies (requests-4), user-count-shared (No), and any retention / breach / transfer questions below. |
-| App Review · Reviewer instructions step | NOT STARTED |
+| App Review · Data handling step | ✓ GREEN — all questions answered. Processor list, responsible entity (Adriano Domingues sole prop, Canada), requests-3 No (no national-security data shares), requests-4 all 4 policies checked. |
+| App Review · Reviewer instructions step | IN PROGRESS — pasteable block in `docs/app-review/Reviewer_Instructions_Paste.md`. The agent-driven type into the textarea hung the Chrome extension on the large paste; operator pastes manually. |
 | App Review · Verification (Business + Access) | NOT STARTED — operator must upload business docs (incorporation, utility bill matching address) |
 | Final Submit for review button | GRAYED until all above turn green |
 | Submission ID (for the App Review form URL) | `1016624077686960` |
