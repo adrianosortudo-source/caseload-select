@@ -58,6 +58,7 @@ import {
 } from '@/lib/channel-intake-session-store';
 import { sendChannelMessage, buildContactCaptureFollowUp } from '@/lib/channel-send';
 import { applyContactExtractionToState } from '@/lib/contact-extraction';
+import { applyNumericAnswerMapping } from '@/lib/numeric-option-mapping';
 
 // ── Channel type ────────────────────────────────────────────────────────
 
@@ -296,6 +297,15 @@ export async function processChannelInbound(
   // the turn text. Pre-filled slots (channel metadata, voice caller-ID,
   // turn-1 self-introduction) take precedence.
   state = applyContactExtractionToState(trimmed, state);
+
+  // Numeric-option mapping — when Phase C asks a numbered single_select
+  // ("1. X / 2. Y / 3. Z") and the lead replies with a bare digit, the
+  // LLM call on the new turn sees only "2" with no question context and
+  // cannot extract. Loop. This helper maps the digit to the option
+  // value of whichever slot getNextStep currently waits on. No-op if
+  // the reply isn't a clean digit or the next-step slot isn't a
+  // single_select.
+  state = applyNumericAnswerMapping(trimmed, state);
 
   // LLM extraction — best-effort, never aborts. Runs on the new turn text
   // and merges into existing state. On a resume turn, the LLM sees just
