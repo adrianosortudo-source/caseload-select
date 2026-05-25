@@ -29,6 +29,13 @@
 
 import type { EngineState } from './screen-engine/types';
 
+/** Shared first-name extraction. */
+function firstNameFrom(state: EngineState): string {
+  const fullName = state.slots['client_name'];
+  if (!fullName || typeof fullName !== 'string') return '';
+  return fullName.trim().split(/\s+/)[0] ?? '';
+}
+
 /**
  * Build the secretary-style reply for a returning lead whose intake
  * has already finalized.
@@ -42,13 +49,61 @@ import type { EngineState } from './screen-engine/types';
 export function buildPostFinalizationFollowUpMessage(
   finalizedEngineState: EngineState,
 ): string {
-  const fullName = finalizedEngineState.slots['client_name'];
-  const firstName =
-    fullName && typeof fullName === 'string'
-      ? fullName.trim().split(/\s+/)[0]
-      : '';
-
+  const firstName = firstNameFrom(finalizedEngineState);
   const greeting = firstName ? `Hi ${firstName} —` : 'Hi —';
 
   return `${greeting} thanks for following up. We received your earlier message and a lawyer is reviewing your matter now. Once they've had a chance to look at it, they'll reach out to you directly using the contact info you shared. Most replies happen within a business day. If your situation is time-sensitive, please feel free to call the firm directly. Thanks for your patience.`;
+}
+
+// ── New-matter intent detection (Codex review follow-up) ────────────────
+//
+// The plain matter_type === 'unknown' gate is too generous when the
+// lead's reply CLEARLY hints at a new matter ("another issue came up",
+// "different problem", "new question") but doesn't carry enough matter
+// keywords for the regex extractor to classify. Without this guard, the
+// secretary-mode reply ("a lawyer is reviewing your matter") is a wrong
+// answer — the lead wants to START a NEW intake, not check on the old
+// one.
+//
+// Instead, when this guard fires, send a brief disambiguation:
+//
+//   "Quick check — is this about the matter you already submitted, or
+//    a new issue you want to bring to the firm?"
+//
+// The lead's NEXT message either describes the new matter (regex picks
+// up keywords → fresh intake) or signals "same" (which won't match any
+// new-matter pattern → secretary-mode reply fires the original way).
+
+const NEW_MATTER_INTENT_PATTERNS: RegExp[] = [
+  /\banother\s+(?:issue|matter|problem|question|thing|case)\b/i,
+  /\bdifferent\s+(?:issue|matter|problem|question|thing|case)\b/i,
+  /\bnew\s+(?:issue|matter|problem|question|thing|case)\b/i,
+  /\b(?:second|third|other)\s+(?:issue|matter|problem|question|thing|case)\b/i,
+  /\balso\s+(?:need\s+help|need\s+a\s+lawyer|have\s+a)\b/i,
+  /\bone\s+more\s+(?:question|thing|issue|matter)\b/i,
+  /\bquick\s+question\b/i,
+  /\bunrelated\b/i,
+];
+
+export function looksLikeNewMatterIntent(text: string): boolean {
+  if (!text || typeof text !== 'string') return false;
+  return NEW_MATTER_INTENT_PATTERNS.some((re) => re.test(text));
+}
+
+/**
+ * Disambiguation reply for the borderline case: matter_type='unknown'
+ * AND a recent finalized session exists AND the message signals a
+ * possible new matter. Don't lock the lead into the secretary reply
+ * (which would be wrong if they're flagging a new matter), don't
+ * start fresh intake either (which would be wrong if they're just
+ * following up on the existing one). Ask which it is and let the
+ * next inbound route accordingly.
+ */
+export function buildPostFinalizationDisambiguationMessage(
+  finalizedEngineState: EngineState,
+): string {
+  const firstName = firstNameFrom(finalizedEngineState);
+  const greeting = firstName ? `Hi ${firstName} —` : 'Hi —';
+
+  return `${greeting} quick check before I route this. Is this about the matter you already submitted (the lawyer is reviewing that one), or is this a new issue you'd like help with?`;
 }

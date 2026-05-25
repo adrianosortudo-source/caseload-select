@@ -8,7 +8,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildPostFinalizationFollowUpMessage } from '../post-finalization-followup';
+import {
+  buildPostFinalizationFollowUpMessage,
+  buildPostFinalizationDisambiguationMessage,
+  looksLikeNewMatterIntent,
+} from '../post-finalization-followup';
 import type { EngineState } from '../screen-engine/types';
 
 function finalizedState(overrides: Partial<EngineState> = {}): EngineState {
@@ -82,5 +86,68 @@ describe('buildPostFinalizationFollowUpMessage', () => {
     const text = buildPostFinalizationFollowUpMessage(finalizedState());
     expect(text).toContain('thanks for following up');
     expect(text).toContain('patience');
+  });
+});
+
+// ── New-matter intent detection (Codex review follow-up) ────────────────
+
+describe('looksLikeNewMatterIntent', () => {
+  it.each([
+    'another issue came up',
+    'I have a different matter',
+    'this is a new problem',
+    'second question about something else',
+    'unrelated thing happened',
+    'quick question',
+    'I also need help with',
+    'one more thing',
+    'another case',
+  ])('detects "%s" as a new-matter intent', (text) => {
+    expect(looksLikeNewMatterIntent(text)).toBe(true);
+  });
+
+  it.each([
+    'when is she calling me?',
+    'thanks',
+    'any update?',
+    'still waiting',
+    'just checking in',
+    "what's the timeline?",
+    'ok thanks',
+    'who will call me?',
+  ])('does NOT match "%s" — these are follow-up questions on the existing matter', (text) => {
+    expect(looksLikeNewMatterIntent(text)).toBe(false);
+  });
+
+  it('handles empty/null input defensively', () => {
+    expect(looksLikeNewMatterIntent('')).toBe(false);
+    expect(looksLikeNewMatterIntent(null as unknown as string)).toBe(false);
+    expect(looksLikeNewMatterIntent(undefined as unknown as string)).toBe(false);
+  });
+});
+
+describe('buildPostFinalizationDisambiguationMessage', () => {
+  it('greets by first name when available', () => {
+    const text = buildPostFinalizationDisambiguationMessage(finalizedState());
+    expect(text).toContain('Hi Sarah');
+  });
+
+  it('falls back to "Hi —" when no name', () => {
+    const text = buildPostFinalizationDisambiguationMessage(
+      finalizedState({ slots: {} }),
+    );
+    expect(text.startsWith('Hi —')).toBe(true);
+  });
+
+  it('asks the clarifying question without locking the lead into either path', () => {
+    const text = buildPostFinalizationDisambiguationMessage(finalizedState());
+    expect(text).toContain('matter you already submitted');
+    expect(text).toContain('new issue');
+    // Doesn't pre-commit to fresh intake (which would be wrong if the
+    // lead is following up on the prior matter).
+    expect(text).not.toContain('share your name');
+    expect(text).not.toContain('best phone or email');
+    // Ends in a question mark — the lead's next reply routes them.
+    expect(text.trim().endsWith('?')).toBe(true);
   });
 });

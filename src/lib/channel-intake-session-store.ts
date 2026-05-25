@@ -134,6 +134,16 @@ export interface LoadRecentFinalizedArgs extends LoadSessionArgs {
  * lead asked "when is she calling me?", engine spun up a new session
  * and asked for contact again. Bot needs a "this person is already
  * a lead in our system" branch.
+ *
+ * Recency clock is `last_activity_at`, not `created_at`. A session
+ * created days ago but only finalized recently (long multi-turn
+ * intake) should count as a recent submission — and finalize Channel
+ * Session bumps `last_activity_at` to NOW() at finalize time, so for
+ * a finalized session, `last_activity_at` IS effectively "finalized at".
+ *
+ * Backed by partial index idx_channel_intake_sessions_recent_finalized
+ * (migration 20260525_channel_intake_sessions_recent_finalized_index.sql)
+ * for O(log n) lookup at scale.
  */
 export async function loadRecentFinalizedSession(
   args: LoadRecentFinalizedArgs,
@@ -144,14 +154,14 @@ export async function loadRecentFinalizedSession(
   const { data, error } = await supabase
     .from('channel_intake_sessions')
     .select(
-      'id, firm_id, channel, sender_id, engine_state, follow_up_count, max_follow_ups, finalized, expires_at, created_at',
+      'id, firm_id, channel, sender_id, engine_state, follow_up_count, max_follow_ups, finalized, expires_at, created_at, last_activity_at',
     )
     .eq('firm_id', args.firmId)
     .eq('channel', args.channel)
     .eq('sender_id', args.senderId)
     .eq('finalized', true)
-    .gte('created_at', cutoff)
-    .order('created_at', { ascending: false })
+    .gte('last_activity_at', cutoff)
+    .order('last_activity_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 

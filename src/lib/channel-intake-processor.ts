@@ -57,7 +57,11 @@ import {
   updateChannelSession,
   finalizeChannelSession,
 } from '@/lib/channel-intake-session-store';
-import { buildPostFinalizationFollowUpMessage } from '@/lib/post-finalization-followup';
+import {
+  buildPostFinalizationFollowUpMessage,
+  buildPostFinalizationDisambiguationMessage,
+  looksLikeNewMatterIntent,
+} from '@/lib/post-finalization-followup';
 import { sendChannelMessage, buildContactCaptureFollowUp } from '@/lib/channel-send';
 import { applyContactExtractionToState } from '@/lib/contact-extraction';
 import {
@@ -317,20 +321,32 @@ export async function processChannelInbound(
         withinDays: 7,
       });
       if (recentFinalized) {
-        const reply = buildPostFinalizationFollowUpMessage(
-          recentFinalized.engine_state,
-        );
+        // Codex review follow-up: when the lead's reply hints at a NEW
+        // matter ("another issue", "different problem", "new question"),
+        // don't lock them into the secretary reply (which would be a
+        // wrong answer about their old matter). Send a brief
+        // disambiguation; the next inbound either describes the new
+        // matter (regex picks up keywords → fresh intake) or signals
+        // "same" (matter_type stays 'unknown' but
+        // looksLikeNewMatterIntent doesn't match → secretary reply
+        // fires the normal way).
+        const isNewIntent = looksLikeNewMatterIntent(trimmed);
+        const reply = isNewIntent
+          ? buildPostFinalizationDisambiguationMessage(recentFinalized.engine_state)
+          : buildPostFinalizationFollowUpMessage(recentFinalized.engine_state);
         const sendResult = await sendChannelMessage({
           firmId,
           sender,
           text: reply,
         });
         console.log(
-          `[channel-intake] post-finalization follow-up firm=${firmId} channel=${channel} prior_session=${recentFinalized.id} sent=${sendResult.sent}`,
+          `[channel-intake] post-finalization ${isNewIntent ? 'disambiguation' : 'follow-up'} firm=${firmId} channel=${channel} prior_session=${recentFinalized.id} sent=${sendResult.sent}`,
         );
         return {
           persisted: false,
-          reason: 'post_finalization_followup',
+          reason: isNewIntent
+            ? 'post_finalization_disambiguation'
+            : 'post_finalization_followup',
           followUpSent: sendResult.sent,
         };
       }
