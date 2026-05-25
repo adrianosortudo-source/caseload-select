@@ -57,6 +57,7 @@ import {
   finalizeChannelSession,
 } from '@/lib/channel-intake-session-store';
 import { sendChannelMessage, buildContactCaptureFollowUp } from '@/lib/channel-send';
+import { applyContactExtractionToState } from '@/lib/contact-extraction';
 
 // ── Channel type ────────────────────────────────────────────────────────
 
@@ -284,6 +285,17 @@ export async function processChannelInbound(
   // extraction layer; does not re-classify matter_type / practice_area
   // (those are owned by initialiseState on turn 1 and preserved on resume).
   state = runEvidencePass(trimmed, state);
+
+  // Contact extraction — email + phone + (gated) bare-name from the
+  // NEW turn text. Closes the multi-turn loop gap (2026-05-24): the bot
+  // asks for contact when contact_complete is false, the lead replies
+  // with bare contact info, but the engine had no path to capture it
+  // (LLM excluded from contact slots, slot evidence has no patterns,
+  // extractContactName only fires on turn 1 with an intro phrase). This
+  // helper fills empty client_name / client_email / client_phone from
+  // the turn text. Pre-filled slots (channel metadata, voice caller-ID,
+  // turn-1 self-introduction) take precedence.
+  state = applyContactExtractionToState(trimmed, state);
 
   // LLM extraction — best-effort, never aborts. Runs on the new turn text
   // and merges into existing state. On a resume turn, the LLM sees just
