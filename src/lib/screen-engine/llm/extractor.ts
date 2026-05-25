@@ -3,13 +3,23 @@
 // EngineState, and gracefully degrades to regex-only when the endpoint is
 // unavailable or no API key is configured.
 
-import type { EngineState, SupportedLanguage } from '../types';
+import type { EngineState, MatterType, SupportedLanguage } from '../types';
 import { computeBand } from '../band';
 import { computeCoreCompleteness, getDecisionGap } from '../selector';
 import { classificationForMatterType, isValidMatterType } from '../extractor';
 import { MATTER_TYPE_CLASSIFIER_FIELD, LANGUAGE_DETECTOR_FIELD } from './schema';
 
 const VALID_SUPPORTED_LANGUAGES = new Set<string>(['en', 'fr', 'es', 'pt', 'zh', 'ar']);
+
+// Matter types that act as routing catch-alls — the LLM's __matter_type
+// classifier is allowed to PROMOTE these to a more specific sub-type
+// when the schema injected the classifier slot. Mirrors the chip-UI
+// routing question that the web widget asks on these matter types.
+const ROUTING_CATCH_ALL_MATTER_TYPES: ReadonlySet<MatterType> = new Set([
+  'unknown',
+  'corporate_general',
+  'real_estate_general',
+]);
 
 function isValidSupportedLanguage(value: string): boolean {
   return VALID_SUPPORTED_LANGUAGES.has(value);
@@ -112,20 +122,34 @@ export function mergeLlmResults(
   }
 
   // ── Classifier field ──────────────────────────────────────────────────
-  // When state.matter_type was 'unknown', the schema injected the
-  // synthetic __matter_type field. If the LLM picked a valid bucket,
-  // update the matter-type-driven state fields BEFORE merging slots so
-  // subsequent logic (selectNextSlot, completeness) reads the new matter
-  // type. The LLM wins over a regex 'unknown' because the LLM
+  // When state.matter_type was a routing catch-all (unknown, or one of
+  // the *_general buckets like corporate_general / real_estate_general),
+  // the schema injected the synthetic __matter_type field. If the LLM
+  // picked a valid SPECIFIC bucket, update the matter-type-driven state
+  // fields BEFORE merging slots so subsequent logic (selectNextSlot,
+  // completeness) reads the new matter type.
+  //
+  // The LLM wins over a regex routing catch-all because the LLM
   // understands multilingual context and synonyms the keyword patterns
-  // miss.
-  if (state.matter_type === 'unknown') {
+  // miss. For *_general buckets specifically, this mirrors the chip-UI
+  // path: applyAnswer(state, routingSlotId, value) calls
+  // rerouteFromCorporateGeneral / rerouteFromRealEstateGeneral when a
+  // chip is clicked. classificationForMatterType reproduces the same
+  // intent_family + dispute_family + advisory_subtrack derivation.
+  //
+  // Safety: schema.ts ROUTING_PEER_SETS scopes the LLM's choice to
+  // within-practice-area sub-types, so Gemini cannot hijack a corporate
+  // matter into wrongful_dismissal. The isValidMatterType guard here is
+  // a belt-and-suspenders check; the practice-area filter in the
+  // schema's option list is the primary defence.
+  if (ROUTING_CATCH_ALL_MATTER_TYPES.has(state.matter_type)) {
     const llmMatter = extracted[MATTER_TYPE_CLASSIFIER_FIELD];
     if (
       llmMatter &&
       typeof llmMatter === 'string' &&
       isValidMatterType(llmMatter) &&
       llmMatter !== 'unknown' &&
+      llmMatter !== state.matter_type &&
       !isNonAnswer(llmMatter)
     ) {
       const classification = classificationForMatterType(llmMatter);

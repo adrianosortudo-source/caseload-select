@@ -92,6 +92,43 @@ function isLlmAllowed(slot: SlotDefinition): boolean {
   return !TIERS_BLOCKED_BY_DEFAULT.has(slot.tier);
 }
 
+// ── Routing catch-all promotion (Phase C parity with chip UI) ───────────
+//
+// When the regex classifier landed at a *_general routing catch-all
+// (corporate_general / real_estate_general), inject a SCOPED classifier
+// slot so the LLM can promote to a specific sub-type from the lead's
+// turn-1 free text. Mirrors what the web widget achieves via the chip-
+// based routing question: the chip-click feeds `applyAnswer(state,
+// routingSlotId, value)` which invokes rerouteFromCorporateGeneral /
+// rerouteFromRealEstateGeneral. With this schema change, Gemini gets
+// the same promotion path from turn 1 without waiting for a follow-up
+// question.
+//
+// Peer sets mirror the chip routing slots in extractor.ts
+// rerouteFromCorporateGeneral / rerouteFromRealEstateGeneral. The
+// current matter type is included so the LLM can confidently STAY at
+// the catch-all when the lead's description is genuinely ambiguous.
+const ROUTING_PEER_SETS: Partial<Record<MatterType, MatterType[]>> = {
+  corporate_general: [
+    'corporate_general',
+    'shareholder_dispute',
+    'unpaid_invoice',
+    'vendor_supplier_dispute',
+    'corporate_money_control',
+    'contract_dispute',
+  ],
+  real_estate_general: [
+    'real_estate_general',
+    'commercial_real_estate',
+    'residential_purchase_sale',
+    'real_estate_litigation',
+    'landlord_tenant',
+    'construction_lien',
+    'preconstruction_condo',
+    'mortgage_dispute',
+  ],
+};
+
 export function getExtractableSlots(matterType: MatterType): ExtractionSlot[] {
   // Language detector slot is ALWAYS at the head of the catalogue (DR-039).
   // The LLM resolves language on every call, not just when an upstream
@@ -113,10 +150,45 @@ export function getExtractableSlots(matterType: MatterType): ExtractionSlot[] {
     return result;
   }
 
+  // Routing catch-all: inject a SCOPED classifier so the LLM can promote
+  // to a specific sub-type from turn-1 text. Mergelogic in
+  // llm/extractor.ts gates on routing catch-alls and applies
+  // classificationForMatterType when the LLM picks a different
+  // (specific) sub-type from the peer set.
+  const peers = ROUTING_PEER_SETS[matterType];
+  if (peers) {
+    return [
+      ...prefix,
+      routingClassifierSlot(matterType, peers),
+      ...getSlotsForMatter(matterType).filter(isLlmAllowed).map(slotToExtractionSlot),
+    ];
+  }
+
   return [
     ...prefix,
     ...getSlotsForMatter(matterType).filter(isLlmAllowed).map(slotToExtractionSlot),
   ];
+}
+
+/**
+ * Scoped classifier slot for routing catch-alls. The peer set is the
+ * routing slot's destinations from extractor.ts (rerouteFromXGeneral)
+ * plus the routing catch-all itself (so the LLM can confidently stay
+ * at the catch-all when the description is genuinely ambiguous).
+ *
+ * The peer-set scoping prevents Gemini from hijacking a corporate
+ * matter into an unrelated practice area — the only legal transitions
+ * are within the same practice area, plus staying put.
+ */
+function routingClassifierSlot(currentMatterType: MatterType, peers: MatterType[]): ExtractionSlot {
+  return {
+    id: MATTER_TYPE_CLASSIFIER_FIELD,
+    question:
+      `The lead's matter was initially classified as '${currentMatterType}', which is a routing catch-all. Based on the lead's specific description, can you narrow to a more concrete sub-type? Pick from this scoped list. Return '${currentMatterType}' (the catch-all itself) if the description does not yet clearly fit a specific sub-type; the engine will follow up with a routing question. Examples: "my business partner and I are in a dispute about a buyout" → shareholder_dispute. "the contractor never finished the work" → contract_dispute. "the tenant stopped paying rent" → landlord_tenant. "closing on a condo next month" → residential_purchase_sale.`,
+    input_type: 'single_select',
+    options: peers,
+    description: 'Tier: classifier. Group: routing.',
+  };
 }
 
 /**
