@@ -107,6 +107,8 @@ be present in your output, with either an extracted value or null.`;
 const ROUTING_CATCH_ALL_MATTER_TYPES: ReadonlySet<MatterType> = new Set<MatterType>([
   'corporate_general',
   'real_estate_general',
+  'employment_general',
+  'estates_general',
 ]);
 
 export function buildUserPrompt(

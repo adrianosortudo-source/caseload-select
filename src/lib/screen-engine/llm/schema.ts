@@ -127,6 +127,21 @@ const ROUTING_PEER_SETS: Partial<Record<MatterType, MatterType[]>> = {
     'preconstruction_condo',
     'mortgage_dispute',
   ],
+  employment_general: [
+    'employment_general',
+    'wrongful_dismissal',
+    'severance_review',
+    'harassment_complaint',
+    'wage_recovery',
+    'employment_contract_review',
+  ],
+  estates_general: [
+    'estates_general',
+    'will_drafting',
+    'power_of_attorney',
+    'probate',
+    'estate_dispute',
+  ],
 };
 
 export function getExtractableSlots(matterType: MatterType): ExtractionSlot[] {

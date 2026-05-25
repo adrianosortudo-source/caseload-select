@@ -19,6 +19,8 @@ const ROUTING_CATCH_ALL_MATTER_TYPES: ReadonlySet<MatterType> = new Set([
   'unknown',
   'corporate_general',
   'real_estate_general',
+  'employment_general',
+  'estates_general',
 ]);
 
 function isValidSupportedLanguage(value: string): boolean {
