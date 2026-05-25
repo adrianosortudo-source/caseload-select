@@ -29,6 +29,39 @@ Per Meta's own instructions in the rejection dialog:
 >
 > 3. Upload the new supporting document.
 
+## What we have on hand (2026-05-24)
+
+Four documents reviewed against Meta's two requirements (legal name AND phone `+16475492106` on the same doc):
+
+| Document | CASELOAD SELECT | Phone +16475492106 | Notes |
+|---|---|---|---|
+| Ontario MBL Certificate (`Certificate_of_Business_Name_for_a_Sole_Proprietorship_Registration.pdf`) | ✓ | ✗ | Business licence, accepted type |
+| Ontario MBL Registration Info (`Registration_Information_of_a_Sole_Proprietorship_EN.pdf`) | ✓ | ✗ | Companion to the certificate, has address |
+| CRA HST profile (`HST Address Phone.pdf`) | ✗ (shows "Adriano Domingues") | ✓ | CRA My Business Account export; profile page says "There are no operating names on file for this business" — that's what to fix |
+| Sole Proprietor DRAFT (`SoleProprietor.pdf`) | ✓ | ✗ | Pre-filing review draft; not an official document for submission |
+
+**Critical observation:** the CRA HST profile shows "There are no operating names on file for this business" under business number 760575068. That's why the document shows "ADRIANO DOMINGUES" alone instead of "ADRIANO DOMINGUES o/a CASELOAD SELECT". Linking the operating name to the CRA business number fixes that — the next pull of the profile PDF will show both the operating name AND the phone on a single document.
+
+## Chosen path (2026-05-24): add operating name in CRA, re-pull profile
+
+1. Log into [CRA My Business Account](https://www.canada.ca/en/revenue-agency/services/e-services/digital-services-businesses/business-account.html) as Adriano (business number 760575068).
+2. From the profile page, click **Manage operating names**.
+3. Add operating name: **CASELOAD SELECT** (uppercase exactly as it appears on the Ontario MBL).
+4. Save. CRA usually applies operating-name changes immediately.
+5. Return to the profile page (refresh). Verify it now shows:
+   - Profile for ADRIANO DOMINGUES
+   - Operating names: **CASELOAD SELECT** (effective today)
+   - Phone numbers: ADRIANO DOMINGUES — **647-549-2106**
+   - Address: 110 - 50 STEPHANIE ST, TORONTO ON M5T1B3
+6. Print the profile to PDF (browser print → save as PDF). Save as `CRA_BusinessProfile_with_OperatingName.pdf`.
+7. Open the Meta Business Portfolio settings → Security Centre → Business verification.
+8. The verification form will ask for the business' legal name. Enter exactly as it appears on the CRA PDF: `ADRIANO DA SILVA DOMINGUES` (the registrant name; the operating name "CASELOAD SELECT" gets entered in a separate "DBA" or "operating name" field if Meta surfaces one).
+9. Enter phone `+1 647 549 2106`.
+10. Upload the CRA profile PDF.
+11. Submit. Meta typically responds within 1-3 business days.
+
+If Meta rejects with the same "isn't an accepted type" error, fall back to the phone-bill approach: download a recent Rogers/Bell/Telus invoice for `+16475492106`, which is explicitly on Meta's accepted list, and re-upload that instead.
+
 ## Path for CaseLoad Select (sole proprietorship)
 
 Adriano operates CaseLoad Select as a sole proprietorship (no incorporation, no separate legal entity). The cleanest documents that satisfy "business legal name AND `+16475492106`":
