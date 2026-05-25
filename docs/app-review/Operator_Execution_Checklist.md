@@ -346,7 +346,7 @@ Check the App Review status daily at `https://developers.facebook.com/apps/10073
 | App Review · App settings step | ✓ green — App domain `caseloadselect.ca`, Website platform `https://app.caseloadselect.ca`, all URLs, app icon |
 | App Review · Allowed usage step (10 permissions) | DESCRIPTIONS + COMPLIANCE CHECKBOXES SAVED for all 10 (pages_messaging, pages_show_list, pages_manage_metadata, business_management, instagram_basic, instagram_manage_messages, whatsapp_business_messaging, whatsapp_business_management, pages_read_engagement, public_profile). SCREENCAST UPLOADS PENDING — operator uploads 4 MP4s after recording. |
 | App Review · Data handling step | ✓ GREEN — all questions answered. Processor list, responsible entity (Adriano Domingues sole prop, Canada), requests-3 No (no national-security data shares), requests-4 all 4 policies checked. |
-| App Review · Reviewer instructions step | IN PROGRESS — pasteable block in `docs/app-review/Reviewer_Instructions_Paste.md`. The agent-driven type into the textarea hung the Chrome extension on the large paste; operator pastes manually. |
+| App Review · Reviewer instructions step | ✓ GREEN — full reviewer instructions block saved (tenant separation, no-Facebook-Login disclaimer, per-channel reviewer steps, WhatsApp allowlist coordination, portal access path, operator contact, deletion of reviewer test data). |
 | App Review · Verification (Business + Access) | NOT STARTED — operator must upload business docs (incorporation, utility bill matching address) |
 | Final Submit for review button | GRAYED until all above turn green |
 | Submission ID (for the App Review form URL) | `1016624077686960` |
