@@ -59,6 +59,7 @@ import {
 import { sendChannelMessage, buildContactCaptureFollowUp } from '@/lib/channel-send';
 import { applyContactExtractionToState } from '@/lib/contact-extraction';
 import { applyNumericAnswerMapping } from '@/lib/numeric-option-mapping';
+import { applyFreeTextFuzzyMatch } from '@/lib/free-text-fuzzy-match';
 import {
   rerouteFromCorporateGeneral,
   rerouteFromRealEstateGeneral,
@@ -314,6 +315,13 @@ export async function processChannelInbound(
   // the reply isn't a clean digit or the next-step slot isn't a
   // single_select.
   state = applyNumericAnswerMapping(trimmed, state);
+
+  // Free-text fuzzy match — when Phase C asks a single_select and the
+  // lead replies in natural language ("dont know" / "yes" / "no"), map
+  // to the matching canonical option via applyAnswer. Same trick as
+  // numeric mapping but for word sentinels. Without this, "dont know"
+  // gets dropped by the LLM denylist (DR-025) and the engine re-asks.
+  state = applyFreeTextFuzzyMatch(trimmed, state);
 
   // LLM extraction — best-effort, never aborts. Runs on the new turn text
   // and merges into existing state. On a resume turn, the LLM sees just
