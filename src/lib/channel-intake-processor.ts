@@ -59,6 +59,10 @@ import {
 import { sendChannelMessage, buildContactCaptureFollowUp } from '@/lib/channel-send';
 import { applyContactExtractionToState } from '@/lib/contact-extraction';
 import { applyNumericAnswerMapping } from '@/lib/numeric-option-mapping';
+import {
+  rerouteFromCorporateGeneral,
+  rerouteFromRealEstateGeneral,
+} from '@/lib/screen-engine/extractor';
 
 // ── Channel type ────────────────────────────────────────────────────────
 
@@ -69,17 +73,21 @@ const MAX_FOLLOW_UPS = 3;
 // ── Discovery follow-up budget (Phase C) ─────────────────────────────────
 //
 // Number of additional questions the processor asks AFTER the contact-
-// capture gate has passed, before finalising the lead. Matches the brand
-// commitment of "a few short follow-ups" in the hero copy. Two is the
-// floor that lets the brief carry urgency or complexity signal on top of
-// the value signal that turn 1 typically provides; three is the ceiling
-// past which retention drops on uncapped Meta channels (research-backed,
-// same rationale as the SMS budget DR-024).
+// capture gate has passed, before finalising the lead. Doctrine update
+// (2026-05-24): brief depth on Meta channels should match the web widget,
+// not be capped at 3. The previous ceiling of 3 produced anemic briefs
+// missing complexity / urgency / readiness signal on multi-slot matter
+// types like corporate disputes (3 slots covers contact_complete +
+// 2 enrichment questions only). The 12-question ceiling lets the engine
+// walk the same depth as the web widget while bounding worst-case
+// retention drop at 12 turns. Phase A contact-capture follow-ups are
+// still capped at MAX_FOLLOW_UPS=3 (those are about getting the lead
+// to share contact, not enrichment).
 //
 // Applied to whatsapp / facebook / instagram only. SMS and GBP are
 // handled by the QUESTION_BUDGET_BY_CHANNEL map in engine/control.ts;
 // voice is single-pass on the transcript.
-const DISCOVERY_FOLLOW_UP_CAP = 3;
+const DISCOVERY_FOLLOW_UP_CAP = 12;
 const DISCOVERY_CHANNELS = new Set<MetaChannel>(['whatsapp', 'facebook', 'instagram']);
 
 /**
@@ -324,6 +332,31 @@ export async function processChannelInbound(
     } catch (err) {
       console.warn(`[channel-intake] llmExtractServer failed channel=${channel}:`, err);
     }
+  }
+
+  // Matter-type reroute after LLM merge — covers the case where Gemini
+  // (not the numeric-option mapper) fills the routing slot. The engine
+  // already side-effects on chip answers via applyAnswer (control.ts:
+  // applyAnswer calls rerouteFromCorporateGeneral / rerouteFromRealEstate
+  // General when the routing slot is filled). The numeric-option mapper
+  // routes through applyAnswer too. But mergeLlmResults does NOT yet
+  // invoke those side effects, so an LLM-only fill of corporate_problem
+  // _type leaves matter_type at the routing catch-all. This explicit
+  // call closes that gap until the engine fix lands (task #99 — teach
+  // mergeLlmResults to side-effect like applyAnswer; needs sandbox sync).
+  if (
+    state.matter_type === 'corporate_general' &&
+    typeof state.slots['corporate_problem_type'] === 'string' &&
+    state.slots['corporate_problem_type']
+  ) {
+    state = rerouteFromCorporateGeneral(state, state.slots['corporate_problem_type']);
+  }
+  if (
+    state.matter_type === 'real_estate_general' &&
+    typeof state.slots['real_estate_problem_type'] === 'string' &&
+    state.slots['real_estate_problem_type']
+  ) {
+    state = rerouteFromRealEstateGeneral(state, state.slots['real_estate_problem_type']);
   }
 
   // ── Build the brief ─────────────────────────────────────────────────────

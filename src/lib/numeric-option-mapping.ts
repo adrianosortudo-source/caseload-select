@@ -17,18 +17,21 @@
  *      pure on state, and the bot just asked the SAME slot it is
  *      still waiting on, since the slot is unfilled).
  *   3. If that slot is single_select with options, maps digit → option
- *      value and writes it directly to `state.slots[slot.id]` with
- *      slot_meta source='explicit' / evidence='numeric option reply'.
+ *      value and routes through the engine's `applyAnswer` helper —
+ *      same canonical write path used by chip answers in the web
+ *      widget. That gives us, for free, the matter-type reroute
+ *      (rerouteFromCorporateGeneral / rerouteFromRealEstateGeneral),
+ *      questionHistory + answeredQuestionGroups updates, advisory
+ *      subtrack derivation, and band/completeness recompute.
  *
  * Lives OUTSIDE src/lib/screen-engine/ so the engine remains
  * byte-for-byte mirrored with the sandbox (DR-033). This is a
- * server-only patch — the web sandbox uses chip-based UI for
- * single_select slots, not free-text typing, so no equivalent fix is
- * needed there.
+ * server-only adapter helper — the web sandbox uses chip-based UI for
+ * single_select slots, not free-text typing.
  *
  * Defensive guards:
- *   - Only fills slots that are currently empty (preserves prior
- *     extraction; never overwrites).
+ *   - Only fires when the next-step slot is currently empty (no
+ *     overwrite of prior answer).
  *   - Validates the digit is in range [1, options.length].
  *   - Tolerates a few common phrasings: "2", "2.", " 2 ", "option 2",
  *     "Option 2.", "#2".
@@ -39,7 +42,7 @@
  *     that should go through LLM).
  */
 
-import { getNextStep } from './screen-engine/control';
+import { getNextStep, applyAnswer } from './screen-engine/control';
 import type { EngineState } from './screen-engine/types';
 
 // Matches a reply that is JUST a digit (with optional "option" / "#" /
@@ -87,16 +90,15 @@ export function applyNumericAnswerMapping(
   const optionValue = slot.options[digit - 1]?.value;
   if (!optionValue) return state;
 
-  return {
-    ...state,
-    slots: { ...state.slots, [slot.id]: optionValue },
-    slot_meta: {
-      ...state.slot_meta,
-      [slot.id]: {
-        source: 'explicit',
-        evidence: `numeric option reply: ${digit}`,
-        confidence: 0.95,
-      },
-    },
-  };
+  // Route through the engine's canonical answer-apply helper instead of
+  // writing slots/slot_meta directly. applyAnswer mirrors the web
+  // widget's chip-click path: writes the slot + meta, appends to
+  // questionHistory, adds the question_group to answeredQuestionGroups,
+  // derives advisory subtrack, auto-populates advisory_specific_task,
+  // reroutes corporate_general → sub-type (rerouteFromCorporateGeneral)
+  // when slot is corporate_problem_type, reroutes real_estate_general
+  // when slot is real_estate_problem_type, and recomputes
+  // coreCompleteness + band + currentGap. Calling it here gives Meta
+  // numeric replies the same effect as web chip clicks.
+  return applyAnswer(state, slot.id, optionValue);
 }

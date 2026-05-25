@@ -5,20 +5,26 @@
  * field-detected on 2026-05-24 (DRG Messenger: bot asks numbered
  * single_select, lead replies with bare digit, LLM can't extract
  * context-free digit, bot loops asking same question).
+ *
+ * Implementation routes through the engine's `applyAnswer` (same
+ * canonical write path as web-widget chip clicks), so tests mock both
+ * `getNextStep` and `applyAnswer` to keep the assertions on the
+ * adapter logic (not on the engine helper's full re-derivation).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { applyNumericAnswerMapping } from '../numeric-option-mapping';
 import type { EngineState, SlotDefinition } from '../screen-engine/types';
 
-// Mock getNextStep so the tests can pin exactly what slot is "currently
-// being asked" without spinning up the full slot registry resolver.
+// Mock the engine helpers used by applyNumericAnswerMapping.
 vi.mock('../screen-engine/control', () => ({
   getNextStep: vi.fn(),
+  applyAnswer: vi.fn(),
 }));
 
-import { getNextStep } from '../screen-engine/control';
+import { getNextStep, applyAnswer } from '../screen-engine/control';
 const getNextStepMock = vi.mocked(getNextStep);
+const applyAnswerMock = vi.mocked(applyAnswer);
 
 function baseState(overrides: Partial<EngineState> = {}): EngineState {
   return {
@@ -61,53 +67,91 @@ function corporateProblemTypeSlot(): SlotDefinition {
   } as SlotDefinition;
 }
 
+/** Default applyAnswer mock returns the state with the slot written so
+ *  downstream assertions can read it back. The real applyAnswer does
+ *  much more (reroute, band recompute, etc.) — tests of THAT belong in
+ *  control.ts's own test file; here we only verify the adapter calls
+ *  it with the right (slotId, value) pair. */
+function configureApplyAnswerMockToWriteSlot(): void {
+  applyAnswerMock.mockImplementation((state, slotId, value) => ({
+    ...state,
+    slots: { ...state.slots, [slotId]: value },
+    slot_meta: {
+      ...state.slot_meta,
+      [slotId]: { source: 'answered', confidence: 1.0 },
+    },
+  }));
+}
+
 describe('applyNumericAnswerMapping', () => {
   beforeEach(() => {
     getNextStepMock.mockReset();
+    applyAnswerMock.mockReset();
+    configureApplyAnswerMockToWriteSlot();
   });
 
-  it('maps "2" to options[1].value when next slot is single_select', () => {
+  it('maps "2" to options[1].value and routes through applyAnswer', () => {
     getNextStepMock.mockReturnValue({
       type: 'continue',
       slot: corporateProblemTypeSlot(),
     });
     const before = baseState();
     const after = applyNumericAnswerMapping('2', before);
+    expect(applyAnswerMock).toHaveBeenCalledTimes(1);
+    expect(applyAnswerMock).toHaveBeenCalledWith(
+      before,
+      'corporate_problem_type',
+      'I have a dispute with a business partner or co-owner',
+    );
     expect(after.slots['corporate_problem_type']).toBe(
       'I have a dispute with a business partner or co-owner',
     );
-    expect(after.slot_meta['corporate_problem_type']?.source).toBe('explicit');
-    expect(after.slot_meta['corporate_problem_type']?.evidence).toContain('numeric option reply: 2');
   });
 
   it('tolerates "2." (trailing period)', () => {
     getNextStepMock.mockReturnValue({ type: 'continue', slot: corporateProblemTypeSlot() });
-    const after = applyNumericAnswerMapping('2.', baseState());
-    expect(after.slots['corporate_problem_type']).toBe(
+    applyNumericAnswerMapping('2.', baseState());
+    expect(applyAnswerMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'corporate_problem_type',
       'I have a dispute with a business partner or co-owner',
     );
   });
 
   it('tolerates " 2 " (whitespace)', () => {
     getNextStepMock.mockReturnValue({ type: 'continue', slot: corporateProblemTypeSlot() });
-    const after = applyNumericAnswerMapping('  2  ', baseState());
-    expect(after.slots['corporate_problem_type']).toBe(
+    applyNumericAnswerMapping('  2  ', baseState());
+    expect(applyAnswerMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'corporate_problem_type',
       'I have a dispute with a business partner or co-owner',
     );
   });
 
   it('tolerates "Option 2" / "option 2"', () => {
     getNextStepMock.mockReturnValue({ type: 'continue', slot: corporateProblemTypeSlot() });
-    expect(applyNumericAnswerMapping('Option 2', baseState()).slots['corporate_problem_type'])
-      .toBe('I have a dispute with a business partner or co-owner');
-    expect(applyNumericAnswerMapping('option 2', baseState()).slots['corporate_problem_type'])
-      .toBe('I have a dispute with a business partner or co-owner');
+    applyNumericAnswerMapping('Option 2', baseState());
+    expect(applyAnswerMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'corporate_problem_type',
+      'I have a dispute with a business partner or co-owner',
+    );
+    applyAnswerMock.mockClear();
+    configureApplyAnswerMockToWriteSlot();
+    applyNumericAnswerMapping('option 2', baseState());
+    expect(applyAnswerMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'corporate_problem_type',
+      'I have a dispute with a business partner or co-owner',
+    );
   });
 
   it('tolerates "#2"', () => {
     getNextStepMock.mockReturnValue({ type: 'continue', slot: corporateProblemTypeSlot() });
-    const after = applyNumericAnswerMapping('#2', baseState());
-    expect(after.slots['corporate_problem_type']).toBe(
+    applyNumericAnswerMapping('#2', baseState());
+    expect(applyAnswerMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'corporate_problem_type',
       'I have a dispute with a business partner or co-owner',
     );
   });
@@ -116,8 +160,8 @@ describe('applyNumericAnswerMapping', () => {
     getNextStepMock.mockReturnValue({ type: 'continue', slot: corporateProblemTypeSlot() });
     const before = baseState();
     const after = applyNumericAnswerMapping('2 because that fits best', before);
-    // Free-text after the digit must NOT trigger mapping — let LLM handle it.
     expect(after).toBe(before);
+    expect(applyAnswerMock).not.toHaveBeenCalled();
   });
 
   it('returns same state when digit exceeds option count', () => {
@@ -125,6 +169,7 @@ describe('applyNumericAnswerMapping', () => {
     const before = baseState();
     const after = applyNumericAnswerMapping('99', before);
     expect(after).toBe(before);
+    expect(applyAnswerMock).not.toHaveBeenCalled();
   });
 
   it('returns same state when next-step slot is free_text', () => {
@@ -138,6 +183,7 @@ describe('applyNumericAnswerMapping', () => {
     const before = baseState();
     const after = applyNumericAnswerMapping('2', before);
     expect(after).toBe(before);
+    expect(applyAnswerMock).not.toHaveBeenCalled();
   });
 
   it('returns same state when getNextStep returns no slot', () => {
@@ -145,6 +191,7 @@ describe('applyNumericAnswerMapping', () => {
     const before = baseState();
     const after = applyNumericAnswerMapping('2', before);
     expect(after).toBe(before);
+    expect(applyAnswerMock).not.toHaveBeenCalled();
   });
 
   it('returns same state when reply is not a digit', () => {
@@ -152,6 +199,7 @@ describe('applyNumericAnswerMapping', () => {
     const before = baseState();
     const after = applyNumericAnswerMapping('I have a dispute', before);
     expect(after).toBe(before);
+    expect(applyAnswerMock).not.toHaveBeenCalled();
   });
 
   it('does NOT overwrite slot when it is already filled', () => {
@@ -161,32 +209,7 @@ describe('applyNumericAnswerMapping', () => {
     });
     const after = applyNumericAnswerMapping('2', before);
     expect(after).toBe(before);
-    expect(after.slots['corporate_problem_type']).toBe('Something else');
-  });
-
-  it('handles the exact field-detected case (Sarah Patel, "2" reply)', () => {
-    // Reproduces the loop trigger from 2026-05-24:
-    //   bot: "What best describes the problem you are facing? 1. … / 2. I
-    //         have a dispute with a business partner or co-owner / …"
-    //   lead: "2"
-    //   (before fix: engine looped; after fix: slot fills, engine advances)
-    getNextStepMock.mockReturnValue({ type: 'continue', slot: corporateProblemTypeSlot() });
-    const before = baseState({
-      slots: {
-        client_name: 'Sarah Patel',
-        client_email: 'sarah.patel.test@example.com',
-        client_phone: '+16475559999',
-      },
-      discoveryFollowUpCount: 1,
-    });
-    const after = applyNumericAnswerMapping('2', before);
-    expect(after.slots['corporate_problem_type']).toBe(
-      'I have a dispute with a business partner or co-owner',
-    );
-    // Existing contact slots unchanged.
-    expect(after.slots['client_name']).toBe('Sarah Patel');
-    expect(after.slots['client_email']).toBe('sarah.patel.test@example.com');
-    expect(after.slots['client_phone']).toBe('+16475559999');
+    expect(applyAnswerMock).not.toHaveBeenCalled();
   });
 
   it('survives a getNextStep that throws (defensive — never break the turn)', () => {
@@ -195,7 +218,21 @@ describe('applyNumericAnswerMapping', () => {
     });
     const before = baseState();
     const after = applyNumericAnswerMapping('2', before);
-    // No mapping applied, but no exception bubbles.
     expect(after).toBe(before);
+    expect(applyAnswerMock).not.toHaveBeenCalled();
+  });
+
+  it('passes the right call shape so applyAnswer can reroute corporate_general', () => {
+    // This is the architectural assertion: the digit map MUST go through
+    // applyAnswer (not write state.slots directly), because applyAnswer
+    // is what triggers rerouteFromCorporateGeneral / band recompute /
+    // questionHistory update.
+    getNextStepMock.mockReturnValue({ type: 'continue', slot: corporateProblemTypeSlot() });
+    applyNumericAnswerMapping('2', baseState());
+    expect(applyAnswerMock).toHaveBeenCalledTimes(1);
+    const [stateArg, slotIdArg, valueArg] = applyAnswerMock.mock.calls[0];
+    expect(slotIdArg).toBe('corporate_problem_type');
+    expect(valueArg).toBe('I have a dispute with a business partner or co-owner');
+    expect(stateArg.matter_type).toBe('corporate_general'); // pre-reroute
   });
 });
