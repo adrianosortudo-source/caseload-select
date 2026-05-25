@@ -96,6 +96,19 @@ Output the JSON object with one key per field in the schema. Every field must \
 be present in your output, with either an extracted value or null.`;
 }
 
+/**
+ * Matter types that ACT AS routing catch-alls — when the regex classifier
+ * lands here, the LLM gets a scoped __matter_type classifier to promote
+ * to a specific sub-type. The user prompt's matterContext must signal
+ * this to Gemini explicitly; otherwise the strict null rule in the
+ * system prompt makes Gemini hedge ("return catch-all when in doubt")
+ * and the routing question still has to be asked as a follow-up.
+ */
+const ROUTING_CATCH_ALL_MATTER_TYPES: ReadonlySet<MatterType> = new Set<MatterType>([
+  'corporate_general',
+  'real_estate_general',
+]);
+
 export function buildUserPrompt(
   description: string,
   matterType: MatterType,
@@ -103,6 +116,8 @@ export function buildUserPrompt(
 ): string {
   const matterContext = matterType === 'unknown'
     ? 'Matter type has not yet been classified. Help identify it through the routing fields.'
+    : ROUTING_CATCH_ALL_MATTER_TYPES.has(matterType)
+    ? `Matter type initially classified as: ${matterType} (a ROUTING CATCH-ALL). The schema includes a \`__matter_type\` classifier with a scoped list of sub-types. Be DECISIVE: if the description contains ANY signal pointing to a specific sub-type (e.g. "shareholder", "buyout", "partner dispute" → shareholder_dispute; "unpaid invoice", "client owes us" → unpaid_invoice; "tenant", "landlord", "rent dispute" → landlord_tenant), pick that sub-type. Only return '${matterType}' itself when the description is GENUINELY too vague to point at any sub-type. The strict null rule does NOT apply to this classifier — classification is the whole point of this field.`
     : `Matter type already classified as: ${matterType}.`;
 
   const slotCatalogue = slots.map(slotToCatalogueEntry).join('\n\n');
