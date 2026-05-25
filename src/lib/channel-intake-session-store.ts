@@ -116,3 +116,49 @@ export async function finalizeChannelSession(
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
+
+export interface LoadRecentFinalizedArgs extends LoadSessionArgs {
+  /** Look back this many days. Default 7. */
+  withinDays?: number;
+}
+
+/**
+ * Return the most recent FINALIZED session for (firm, channel, sender)
+ * within the look-back window. Used by channel-intake-processor to
+ * recognise a returning lead who already submitted an intake and
+ * answer their follow-up like a secretary — instead of triggering a
+ * brand-new intake (which would silently ask for contact again per
+ * the contact-doctrine gate, looking confused from the lead's side).
+ *
+ * Field-detected 2026-05-25: lead's first intake finalized cleanly,
+ * lead asked "when is she calling me?", engine spun up a new session
+ * and asked for contact again. Bot needs a "this person is already
+ * a lead in our system" branch.
+ */
+export async function loadRecentFinalizedSession(
+  args: LoadRecentFinalizedArgs,
+): Promise<ChannelSessionRow | null> {
+  const days = args.withinDays ?? 7;
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('channel_intake_sessions')
+    .select(
+      'id, firm_id, channel, sender_id, engine_state, follow_up_count, max_follow_ups, finalized, expires_at, created_at',
+    )
+    .eq('firm_id', args.firmId)
+    .eq('channel', args.channel)
+    .eq('sender_id', args.senderId)
+    .eq('finalized', true)
+    .gte('created_at', cutoff)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[channel-session-store] loadRecentFinalized failed:', error);
+    return null;
+  }
+  if (!data) return null;
+  return data as ChannelSessionRow;
+}

@@ -52,10 +52,12 @@ import { buildClosingMessage } from '@/lib/screen-engine/closing';
 import { persistUnconfirmedInquiry } from '@/lib/unconfirmed-inquiry';
 import {
   loadOpenChannelSession,
+  loadRecentFinalizedSession,
   createChannelSession,
   updateChannelSession,
   finalizeChannelSession,
 } from '@/lib/channel-intake-session-store';
+import { buildPostFinalizationFollowUpMessage } from '@/lib/post-finalization-followup';
 import { sendChannelMessage, buildContactCaptureFollowUp } from '@/lib/channel-send';
 import { applyContactExtractionToState } from '@/lib/contact-extraction';
 import {
@@ -293,6 +295,46 @@ export async function processChannelInbound(
     state = initialiseState(trimmed);
     state = { ...state, channel };
     state = seedSlots(state, sender);
+
+    // ── Post-finalization follow-up check ─────────────────────────────
+    // Before treating this as a brand-new intake, check if this sender
+    // recently submitted an intake that already finalized. If yes AND
+    // the new message carries no clear matter signal (matter_type
+    // landed at 'unknown'), respond like a secretary would — instead
+    // of triggering the contact-doctrine gate which would ask for
+    // contact again and confuse the lead who already shared it.
+    //
+    // Genuinely-new matter descriptions DO bypass this branch: they
+    // classify via the regex extractor to a specific matter type
+    // (e.g. wrongful_dismissal) or to out_of_scope, not 'unknown'.
+    // Only "unknown" replies — questions, thank-yous, status pings —
+    // route through the secretary path.
+    if (state.matter_type === 'unknown') {
+      const recentFinalized = await loadRecentFinalizedSession({
+        firmId,
+        channel,
+        senderId,
+        withinDays: 7,
+      });
+      if (recentFinalized) {
+        const reply = buildPostFinalizationFollowUpMessage(
+          recentFinalized.engine_state,
+        );
+        const sendResult = await sendChannelMessage({
+          firmId,
+          sender,
+          text: reply,
+        });
+        console.log(
+          `[channel-intake] post-finalization follow-up firm=${firmId} channel=${channel} prior_session=${recentFinalized.id} sent=${sendResult.sent}`,
+        );
+        return {
+          persisted: false,
+          reason: 'post_finalization_followup',
+          followUpSent: sendResult.sent,
+        };
+      }
+    }
   }
 
   // Evidence pass — regex deepening on the NEW turn text. Slot

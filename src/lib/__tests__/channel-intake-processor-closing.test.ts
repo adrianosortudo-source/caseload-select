@@ -58,6 +58,7 @@ vi.mock('@/lib/lead-notify', () => ({
 
 vi.mock('@/lib/channel-intake-session-store', () => ({
   loadOpenChannelSession: mocks.loadOpenChannelSession,
+  loadRecentFinalizedSession: vi.fn().mockResolvedValue(null),
   createChannelSession: mocks.createChannelSession,
   updateChannelSession: mocks.updateChannelSession,
   finalizeChannelSession: mocks.finalizeChannelSession,
