@@ -43,7 +43,7 @@
  */
 
 import { getNextStep, applyAnswer } from './screen-engine/control';
-import type { EngineState } from './screen-engine/types';
+import type { EngineState, SlotDefinition } from './screen-engine/types';
 
 // Matches a reply that is JUST a digit (with optional "option" / "#" /
 // trailing period / whitespace). Captures the digit in group 1.
@@ -101,4 +101,87 @@ export function applyNumericAnswerMapping(
   // coreCompleteness + band + currentGap. Calling it here gives Meta
   // numeric replies the same effect as web chip clicks.
   return applyAnswer(state, slot.id, optionValue);
+}
+
+// ── Out-of-range digit detection ───────────────────────────────────────
+
+export interface OutOfRangeDigitDetection {
+  /** The slot the engine was waiting on (next-step). */
+  slot: SlotDefinition;
+  /** The digit the lead typed. */
+  digit: number;
+  /** Max valid option index for that slot (= options.length). */
+  maxOption: number;
+  /** Reason the digit was rejected. */
+  reason: 'out_of_range' | 'zero_or_negative';
+}
+
+/**
+ * Detect a digit-shaped reply that the numeric mapper REJECTED because
+ * the digit was out of range for the current single_select slot.
+ *
+ * Field-detected 2026-05-25: lead typed "11" when bot showed options
+ * 1-5, numeric mapper returned state unchanged (silent), engine
+ * re-asked the same question without any acknowledgment. From the
+ * lead's perspective: confusing loop.
+ *
+ * Returns `null` for any of:
+ *   - Reply isn't a digit pattern
+ *   - Next-step slot isn't single_select
+ *   - Digit is in valid range (1 to options.length)
+ *   - Slot is already filled
+ *
+ * Caller (channel-intake-processor) uses the returned info to send an
+ * acknowledgment message via channel-send AND short-circuit the rest
+ * of the turn so the bot doesn't proceed to re-ask the same slot
+ * (which is what produced the loop). The session state is preserved
+ * unchanged so the next inbound resumes from the same question.
+ */
+export function detectOutOfRangeDigitReply(
+  text: string,
+  state: EngineState,
+): OutOfRangeDigitDetection | null {
+  if (!text || typeof text !== 'string') return null;
+
+  const m = DIGIT_REPLY_RE.exec(text);
+  if (!m) return null;
+
+  const digit = parseInt(m[1], 10);
+  if (!Number.isFinite(digit)) return null;
+
+  let next: ReturnType<typeof getNextStep>;
+  try {
+    next = getNextStep(state);
+  } catch {
+    return null;
+  }
+
+  const slot = next.slot;
+  if (!slot) return null;
+  if (slot.input_type !== 'single_select') return null;
+  if (!slot.options || slot.options.length === 0) return null;
+  if (state.slots[slot.id]) return null;
+
+  if (digit < 1) {
+    return { slot, digit, maxOption: slot.options.length, reason: 'zero_or_negative' };
+  }
+  if (digit > slot.options.length) {
+    return { slot, digit, maxOption: slot.options.length, reason: 'out_of_range' };
+  }
+
+  // In range — normal numeric mapping handles it.
+  return null;
+}
+
+/**
+ * Build the acknowledgment message sent back to the lead when their
+ * digit reply was out of range. Friendly + actionable. Re-lists the
+ * slot's question and options so the lead has the context inline.
+ */
+export function buildOutOfRangeDigitReply(detection: OutOfRangeDigitDetection): string {
+  const { slot, digit, maxOption } = detection;
+  const optionList = slot.options!
+    .map((o, idx) => `${idx + 1}. ${o.label}`)
+    .join('\n');
+  return `I didn't catch that — "${digit}" isn't one of the options. Please reply with a number from 1 to ${maxOption}, or describe your answer in words.\n\n${slot.question.trim()}\n\n${optionList}`;
 }

@@ -13,7 +13,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { applyNumericAnswerMapping } from '../numeric-option-mapping';
+import {
+  applyNumericAnswerMapping,
+  detectOutOfRangeDigitReply,
+  buildOutOfRangeDigitReply,
+} from '../numeric-option-mapping';
 import type { EngineState, SlotDefinition } from '../screen-engine/types';
 
 // Mock the engine helpers used by applyNumericAnswerMapping.
@@ -234,5 +238,98 @@ describe('applyNumericAnswerMapping', () => {
     expect(slotIdArg).toBe('corporate_problem_type');
     expect(valueArg).toBe('I have a dispute with a business partner or co-owner');
     expect(stateArg.matter_type).toBe('corporate_general'); // pre-reroute
+  });
+});
+
+// ── Out-of-range digit detection ────────────────────────────────────────
+
+describe('detectOutOfRangeDigitReply', () => {
+  beforeEach(() => {
+    getNextStepMock.mockReset();
+    applyAnswerMock.mockReset();
+  });
+
+  it('detects "11" as out-of-range for a 6-option slot (field-case 2026-05-25)', () => {
+    getNextStepMock.mockReturnValue({ type: 'continue', slot: corporateProblemTypeSlot() });
+    const detection = detectOutOfRangeDigitReply('11', baseState());
+    expect(detection).not.toBeNull();
+    expect(detection!.digit).toBe(11);
+    expect(detection!.maxOption).toBe(6);
+    expect(detection!.reason).toBe('out_of_range');
+    expect(detection!.slot.id).toBe('corporate_problem_type');
+  });
+
+  it('detects "99" as out-of-range', () => {
+    getNextStepMock.mockReturnValue({ type: 'continue', slot: corporateProblemTypeSlot() });
+    const detection = detectOutOfRangeDigitReply('99', baseState());
+    expect(detection?.reason).toBe('out_of_range');
+  });
+
+  it('detects "0" as zero-or-negative (digit < 1)', () => {
+    getNextStepMock.mockReturnValue({ type: 'continue', slot: corporateProblemTypeSlot() });
+    const detection = detectOutOfRangeDigitReply('0', baseState());
+    expect(detection?.reason).toBe('zero_or_negative');
+  });
+
+  it('returns null when digit is in valid range (normal flow handles it)', () => {
+    getNextStepMock.mockReturnValue({ type: 'continue', slot: corporateProblemTypeSlot() });
+    expect(detectOutOfRangeDigitReply('3', baseState())).toBeNull();
+    expect(detectOutOfRangeDigitReply('1', baseState())).toBeNull();
+    expect(detectOutOfRangeDigitReply('6', baseState())).toBeNull();
+  });
+
+  it('returns null for non-digit replies', () => {
+    getNextStepMock.mockReturnValue({ type: 'continue', slot: corporateProblemTypeSlot() });
+    expect(detectOutOfRangeDigitReply('I have a dispute', baseState())).toBeNull();
+  });
+
+  it('returns null when next-step slot is not single_select', () => {
+    const freeTextSlot: SlotDefinition = {
+      ...corporateProblemTypeSlot(),
+      input_type: 'free_text',
+      options: undefined,
+    } as SlotDefinition;
+    getNextStepMock.mockReturnValue({ type: 'continue', slot: freeTextSlot });
+    expect(detectOutOfRangeDigitReply('99', baseState())).toBeNull();
+  });
+
+  it('returns null when slot is already filled', () => {
+    getNextStepMock.mockReturnValue({ type: 'continue', slot: corporateProblemTypeSlot() });
+    const before = baseState({ slots: { corporate_problem_type: 'Something else' } });
+    expect(detectOutOfRangeDigitReply('99', before)).toBeNull();
+  });
+
+  it('survives getNextStep throwing (defensive)', () => {
+    getNextStepMock.mockImplementation(() => {
+      throw new Error('boom');
+    });
+    expect(detectOutOfRangeDigitReply('99', baseState())).toBeNull();
+  });
+});
+
+describe('buildOutOfRangeDigitReply', () => {
+  it('formats a friendly clarification with re-listed options', () => {
+    const text = buildOutOfRangeDigitReply({
+      slot: corporateProblemTypeSlot(),
+      digit: 11,
+      maxOption: 6,
+      reason: 'out_of_range',
+    });
+    expect(text).toContain('"11"');
+    expect(text).toContain('1 to 6');
+    expect(text).toContain('What best describes the problem you are facing?');
+    expect(text).toContain('1. Someone owes my company money');
+    expect(text).toContain('6. Something else');
+  });
+
+  it('handles digit=0 (zero_or_negative reason) with the same friendly framing', () => {
+    const text = buildOutOfRangeDigitReply({
+      slot: corporateProblemTypeSlot(),
+      digit: 0,
+      maxOption: 6,
+      reason: 'zero_or_negative',
+    });
+    expect(text).toContain('"0"');
+    expect(text).toContain('1 to 6');
   });
 });

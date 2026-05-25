@@ -58,7 +58,11 @@ import {
 } from '@/lib/channel-intake-session-store';
 import { sendChannelMessage, buildContactCaptureFollowUp } from '@/lib/channel-send';
 import { applyContactExtractionToState } from '@/lib/contact-extraction';
-import { applyNumericAnswerMapping } from '@/lib/numeric-option-mapping';
+import {
+  applyNumericAnswerMapping,
+  detectOutOfRangeDigitReply,
+  buildOutOfRangeDigitReply,
+} from '@/lib/numeric-option-mapping';
 import { applyFreeTextFuzzyMatch } from '@/lib/free-text-fuzzy-match';
 import {
   rerouteFromCorporateGeneral,
@@ -306,6 +310,43 @@ export async function processChannelInbound(
   // the turn text. Pre-filled slots (channel metadata, voice caller-ID,
   // turn-1 self-introduction) take precedence.
   state = applyContactExtractionToState(trimmed, state);
+
+  // Out-of-range digit detection — BEFORE numeric mapping. When the
+  // lead typed a digit that doesn't match any option ("11" for a
+  // 5-option slot, or "0"), send a polite clarification and short-
+  // circuit this turn. Without this, the engine would silently re-ask
+  // the same question with no acknowledgment of the typo, which from
+  // the lead's perspective looks like an infinite loop.
+  if (isResume) {
+    const oorDigit = detectOutOfRangeDigitReply(trimmed, state);
+    if (oorDigit) {
+      const clarificationText = buildOutOfRangeDigitReply(oorDigit);
+      const sendResult = await sendChannelMessage({
+        firmId,
+        sender,
+        text: clarificationText,
+      });
+      // Persist state UNCHANGED so the next inbound resumes from the
+      // same getNextStep slot. follow_up_count is NOT incremented —
+      // the lead's typo shouldn't count against the contact-capture
+      // budget or the discovery budget.
+      if (sessionId) {
+        await updateChannelSession({
+          sessionId,
+          engineState: state,
+          followUpCount: priorFollowUpCount,
+        });
+      }
+      console.log(
+        `[channel-intake] out-of-range digit "${oorDigit.digit}" for slot=${oorDigit.slot.id} (max=${oorDigit.maxOption}); sent clarification`,
+      );
+      return {
+        persisted: false,
+        reason: `out_of_range_digit: ${oorDigit.digit} for slot ${oorDigit.slot.id}`,
+        followUpSent: sendResult.sent,
+      };
+    }
+  }
 
   // Numeric-option mapping — when Phase C asks a numbered single_select
   // ("1. X / 2. Y / 3. Z") and the lead replies with a bare digit, the
