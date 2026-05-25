@@ -673,13 +673,23 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     question: 'What percentage of the company do you own, if you know?',
     input_type: 'free_text',
     applies_to: ['shareholder_dispute'],
-    tier: 'core',
+    // Demoted 2026-05-25 per operator review (#102): asking a stranger
+    // for an exact ownership percentage on a first-contact channel is
+    // in the "asking for SSN" category — invasive, drops contact. The
+    // slot stays in registry for back-compat (brief generators can
+    // consume it if filled via web chip UI), but the auto-selector
+    // ranks it very low (priority 999) and the LLM never extracts it
+    // (llm_extractable: false). Practical effect: Meta channels and
+    // web widget skip the question entirely; the brief uses other
+    // signals (qualitative shareholder_dispute slots) for value.
+    tier: 'qualification',
+    llm_extractable: false,
     question_group: 'standing',
     resolves: 'ownership',
     decision_value: 8,
     abstraction_level: 'concrete',
     required: false,
-    priority: 32,
+    priority: 999,
     evidence_patterns: {
       'known': ['%', 'percent', 'half', '50', '33', '25', '40', '60', 'equal shares'],
     },
