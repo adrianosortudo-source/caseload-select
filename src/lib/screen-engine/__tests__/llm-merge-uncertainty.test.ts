@@ -69,9 +69,15 @@ describe("leadExpressedUncertainty", () => {
 });
 
 describe("mergeLlmResults — Not-sure preservation when lead expressed uncertainty", () => {
+  // Real slot ids that have "Not sure" listed as an explicit option in the
+  // registry. These are the only candidates the slot-aware gate (Codex
+  // pushback) will preserve a non-answer for.
+  //   amount_at_stake             — Corporate, options include "Not sure"
+  //   hiring_timeline             — universal, options include "Not sure"
+  //   other_counsel               — universal, options include "Not sure"
+
   function makeState(input: string) {
-    const base = initialiseState(input);
-    return base;
+    return initialiseState(input);
   }
 
   it("drops 'Not sure' when the lead's text is confident", () => {
@@ -82,12 +88,12 @@ describe("mergeLlmResults — Not-sure preservation when lead expressed uncertai
     );
     const merged = mergeLlmResults(state, {
       amount_at_stake: "Not sure",
-      relationship_to_other_party: "Business partner",
+      hiring_timeline: "Within the next 30 days",
     });
     // "Not sure" was dropped; the slot stays empty.
     expect(merged.slots["amount_at_stake"]).toBeUndefined();
-    // The other value (legitimate) was merged.
-    expect(merged.slots["relationship_to_other_party"]).toBe("Business partner");
+    // The legitimate value was merged.
+    expect(merged.slots["hiring_timeline"]).toBe("Within the next 30 days");
   });
 
   it("preserves 'Not sure' when the lead explicitly said 'not sure'", () => {
@@ -113,28 +119,61 @@ describe("mergeLlmResults — Not-sure preservation when lead expressed uncertai
     expect(merged.slots["amount_at_stake"]).toBe("Not sure");
   });
 
-  it("preserves 'Not sure' across multiple slots when uncertainty marker is present", () => {
+  it("preserves 'Not sure' across multiple slots whose option sets include it", () => {
     const state = makeState(
-      "Got a notice of breach of contract. Not sure on the amount, the relationship, or what they want from me.",
+      "Got a notice of breach of contract. Not sure on the amount, the timeline to hire, or whether I want to talk to other lawyers.",
     );
     const merged = mergeLlmResults(state, {
       amount_at_stake: "Not sure",
-      relationship_to_other_party: "Not sure",
-      desired_outcome: "Not sure",
+      hiring_timeline: "Not sure",
+      other_counsel: "Not sure",
     });
     expect(merged.slots["amount_at_stake"]).toBe("Not sure");
-    expect(merged.slots["relationship_to_other_party"]).toBe("Not sure");
-    expect(merged.slots["desired_outcome"]).toBe("Not sure");
+    expect(merged.slots["hiring_timeline"]).toBe("Not sure");
+    expect(merged.slots["other_counsel"]).toBe("Not sure");
+  });
+
+  // Codex pushback 2026-05-26: even when the lead expressed uncertainty,
+  // "Not sure" should NOT be preserved on a slot whose option set does
+  // not legitimise that value. Previously, the merge was too permissive:
+  // "I'm not sure about the amount" would preserve "Not sure" for
+  // *every* slot the LLM hedged on, including ones where the canonical
+  // answer is e.g. "Business partner" / "Yes" / "No".
+  it("DROPS 'Not sure' when the slot's option set does not include 'Not sure'", () => {
+    const state = makeState(
+      "I have a contract dispute. Not sure on the dollar amount.",
+    );
+    // `corporate_problem_type` is a routing classifier with concrete
+    // option phrases — its options do NOT include "Not sure". The
+    // LLM's "Not sure" hedge for this slot must still be dropped,
+    // regardless of the uncertainty marker about a different slot.
+    const merged = mergeLlmResults(state, {
+      amount_at_stake: "Not sure",         // preserve (option set includes it)
+      corporate_problem_type: "Not sure",  // drop (option set does not)
+    });
+    expect(merged.slots["amount_at_stake"]).toBe("Not sure");
+    expect(merged.slots["corporate_problem_type"]).toBeUndefined();
+  });
+
+  it("drops 'Not sure' on unknown slot ids even with uncertainty marker", () => {
+    // Defensive: if the LLM returns a slotId that isn't in the registry,
+    // the slot-options gate fails closed (no slot → no options to
+    // legitimise the value).
+    const state = makeState("Not sure about a lot of things.");
+    const merged = mergeLlmResults(state, {
+      this_slot_does_not_exist: "Not sure",
+    });
+    expect(merged.slots["this_slot_does_not_exist"]).toBeUndefined();
   });
 
   it("still drops empty / null / undefined regardless of uncertainty marker", () => {
     const state = makeState("Not sure about anything here.");
     const merged = mergeLlmResults(state, {
       amount_at_stake: null,
-      relationship_to_other_party: "",
+      hiring_timeline: "",
     });
     expect(merged.slots["amount_at_stake"]).toBeUndefined();
-    expect(merged.slots["relationship_to_other_party"]).toBeUndefined();
+    expect(merged.slots["hiring_timeline"]).toBeUndefined();
   });
 
   it("does not overwrite regex-found values even when uncertainty marker is present", () => {

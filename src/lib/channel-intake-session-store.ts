@@ -26,6 +26,14 @@ export interface ChannelSessionRow {
   follow_up_count: number;
   max_follow_ups: number;
   finalized: boolean;
+  /**
+   * Set when the session finalized because a screened_lead row was
+   * successfully created. NULL when the session was finalized because
+   * contact-capture exhausted, the Send API failed, or the cron sweep
+   * marked it abandoned. Distinguishing the two states gates the
+   * post-finalization secretary mode (Codex review, 2026-05-26).
+   */
+  screened_lead_id: string | null;
   expires_at: string;
   created_at: string;
 }
@@ -42,7 +50,7 @@ export async function loadOpenChannelSession(
   const { data, error } = await supabase
     .from('channel_intake_sessions')
     .select(
-      'id, firm_id, channel, sender_id, engine_state, follow_up_count, max_follow_ups, finalized, expires_at, created_at',
+      'id, firm_id, channel, sender_id, engine_state, follow_up_count, max_follow_ups, finalized, screened_lead_id, expires_at, created_at',
     )
     .eq('firm_id', args.firmId)
     .eq('channel', args.channel)
@@ -106,12 +114,30 @@ export async function updateChannelSession(
   return { ok: true };
 }
 
+/**
+ * Mark a channel intake session as finalized.
+ *
+ * Pass `screenedLeadId` ONLY when finalization corresponds to a
+ * successful screened_leads insert. Leave it undefined / null for
+ * abandoned, exhausted, or send-failure paths — those finalizations
+ * close the session but did NOT produce a brief. The post-finalization
+ * secretary mode (DR-104) gates on screened_lead_id IS NOT NULL so a
+ * lead who timed out on contact capture does NOT later receive a
+ * "lawyer is reviewing your matter" reply (Codex pushback, 2026-05-26).
+ */
 export async function finalizeChannelSession(
   sessionId: string,
+  screenedLeadId?: string | null,
 ): Promise<{ ok: boolean; error?: string }> {
+  const update: Record<string, unknown> = {
+    finalized: true,
+    last_activity_at: new Date().toISOString(),
+  };
+  if (screenedLeadId) update.screened_lead_id = screenedLeadId;
+
   const { error } = await supabase
     .from('channel_intake_sessions')
-    .update({ finalized: true, last_activity_at: new Date().toISOString() })
+    .update(update)
     .eq('id', sessionId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
@@ -151,15 +177,22 @@ export async function loadRecentFinalizedSession(
   const days = args.withinDays ?? 7;
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
+  // Codex pushback 2026-05-26: only finalized sessions that produced an
+  // actual screened_lead are eligible for the secretary mode. An
+  // abandoned / contact-exhausted / send-failed session has finalized=
+  // true but screened_lead_id IS NULL — replying as if a brief exists
+  // would be a factual lie ("your lawyer is reviewing it" when no brief
+  // was ever created).
   const { data, error } = await supabase
     .from('channel_intake_sessions')
     .select(
-      'id, firm_id, channel, sender_id, engine_state, follow_up_count, max_follow_ups, finalized, expires_at, created_at, last_activity_at',
+      'id, firm_id, channel, sender_id, engine_state, follow_up_count, max_follow_ups, finalized, screened_lead_id, expires_at, created_at, last_activity_at',
     )
     .eq('firm_id', args.firmId)
     .eq('channel', args.channel)
     .eq('sender_id', args.senderId)
     .eq('finalized', true)
+    .not('screened_lead_id', 'is', null)
     .gte('last_activity_at', cutoff)
     .order('last_activity_at', { ascending: false })
     .limit(1)

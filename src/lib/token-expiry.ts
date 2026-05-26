@@ -75,8 +75,24 @@ export const ALERT_SUPPRESSION_DAYS = 3;
 
 const MS_PER_DAY = 86_400_000;
 
-function diffInDays(future: number, now: number): number {
-  return Math.floor((future - now) / MS_PER_DAY);
+/**
+ * Days until expiry, rounded UP. A token expiring in 6 hours reports
+ * "1 day remaining" — operator-friendly. Used for human-readable
+ * status strings. Note: this can return 0 only if `future == now`
+ * exactly. Codex pushback 2026-05-26: previous code used Math.floor
+ * which made any sub-24h remaining read as "0 days" and flipped the
+ * status to "expired" even when the token was still valid.
+ */
+function daysUntilCeil(future: number, now: number): number {
+  return Math.ceil((future - now) / MS_PER_DAY);
+}
+
+/**
+ * Days since a past timestamp, rounded down. Used for the
+ * "expired N days ago" phrasing in the alert body.
+ */
+function daysSinceFloor(past: number, now: number): number {
+  return Math.floor((now - past) / MS_PER_DAY);
 }
 
 function computeEntry(
@@ -113,10 +129,23 @@ function computeEntry(
   }
 
   const nowMs = now.getTime();
-  const days = diffInDays(expiresAtMs, nowMs);
+  const remainingMs = expiresAtMs - nowMs;
+  // Codex pushback 2026-05-26: compare timestamps directly, not days,
+  // for the expired check. A token expiring in 6 hours is NOT expired
+  // even though Math.floor(0.25) = 0.
+  const isExpired = remainingMs <= 0;
+  // `-0` is a thing in JS, and `0 !== -0` under Object.is (which is
+  // what vitest's .toBe() uses). The `|| 0` normalises a freshly-zero
+  // result to positive zero.
+  const days = isExpired
+    ? -daysSinceFloor(expiresAtMs, nowMs) || 0 // negative or zero
+    : daysUntilCeil(expiresAtMs, nowMs);        // positive, sub-24h → 1
 
-  const status: TokenStatus =
-    days <= 0 ? "expired" : days <= EXPIRING_SOON_DAYS ? "expiring_soon" : "valid";
+  const status: TokenStatus = isExpired
+    ? "expired"
+    : days <= EXPIRING_SOON_DAYS
+    ? "expiring_soon"
+    : "valid";
 
   // Alert iff status is actionable AND we haven't recently alerted.
   let shouldAlert = false;
@@ -126,7 +155,7 @@ function computeEntry(
     } else {
       const lastAlertMs = new Date(alertSentAtIso).getTime();
       if (!Number.isNaN(lastAlertMs)) {
-        const daysSinceAlert = diffInDays(nowMs, lastAlertMs);
+        const daysSinceAlert = daysSinceFloor(lastAlertMs, nowMs);
         if (daysSinceAlert >= ALERT_SUPPRESSION_DAYS) shouldAlert = true;
       } else {
         shouldAlert = true;
@@ -199,12 +228,21 @@ export function buildTokenAlertBody(status: FirmTokenStatus): string {
 
   for (const t of status.tokens) {
     if (!t.shouldAlert) continue;
-    const daysPart =
-      t.daysUntilExpiry === null
-        ? ""
-        : t.status === "expired"
-        ? ` (expired ${Math.abs(t.daysUntilExpiry)} day${Math.abs(t.daysUntilExpiry) === 1 ? "" : "s"} ago)`
-        : ` (${t.daysUntilExpiry} day${t.daysUntilExpiry === 1 ? "" : "s"} remaining)`;
+    let daysPart = "";
+    if (t.daysUntilExpiry !== null) {
+      if (t.status === "expired") {
+        const ago = Math.abs(t.daysUntilExpiry);
+        // Codex pushback: handle sub-24h expiry. A token that expired
+        // 2 hours ago should not read "expired 0 days ago" — say
+        // "expired today" instead.
+        daysPart =
+          ago === 0
+            ? " (expired today)"
+            : ` (expired ${ago} day${ago === 1 ? "" : "s"} ago)`;
+      } else {
+        daysPart = ` (${t.daysUntilExpiry} day${t.daysUntilExpiry === 1 ? "" : "s"} remaining)`;
+      }
+    }
     const statusLabel = t.status === "expired" ? "EXPIRED" : "Expiring soon";
     lines.push(`  - ${t.label}: ${statusLabel}${daysPart}`);
     if (t.expiresAt) lines.push(`    expires_at: ${t.expiresAt}`);

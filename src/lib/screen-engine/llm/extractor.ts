@@ -7,6 +7,7 @@ import type { EngineState, MatterType, SupportedLanguage } from '../types';
 import { computeBand } from '../band';
 import { computeCoreCompleteness, getDecisionGap } from '../selector';
 import { classificationForMatterType, isValidMatterType } from '../extractor';
+import { SLOT_REGISTRY } from '../slotRegistry';
 import { MATTER_TYPE_CLASSIFIER_FIELD, LANGUAGE_DETECTOR_FIELD } from './schema';
 
 const VALID_SUPPORTED_LANGUAGES = new Set<string>(['en', 'fr', 'es', 'pt', 'zh', 'ar']);
@@ -152,6 +153,34 @@ export function leadExpressedUncertainty(text: string | null | undefined): boole
   return UNCERTAINTY_MARKERS.some((m) => lower.includes(m));
 }
 
+/**
+ * True when the given slot has the given value listed as one of its
+ * `single_select` options (case-insensitive). The preservation gate
+ * for non-answer literals (Codex pushback 2026-05-26): we only keep an
+ * LLM-extracted "Not sure" / "Unknown" / etc. when (a) the lead's text
+ * shows uncertainty AND (b) the slot's own option set legitimises that
+ * value. Without the second check, "I'm not sure on the amount" would
+ * incorrectly preserve "Not sure" for every slot the LLM hedged on
+ * (e.g. relationship_to_other_party = "Not sure" when the lead already
+ * said "my business partner").
+ *
+ * Free-text slots return false here because there's no option set to
+ * validate against — the historical filter behaviour is preserved for
+ * those (drop non-answer literals).
+ */
+function slotOptionsIncludeValue(slotId: string, value: string): boolean {
+  const slot = SLOT_REGISTRY.find((s) => s.id === slotId);
+  if (!slot) return false;
+  if (slot.input_type !== 'single_select') return false;
+  if (!slot.options || slot.options.length === 0) return false;
+  const target = value.trim().toLowerCase();
+  for (const opt of slot.options) {
+    const optValue = typeof opt === 'string' ? opt : opt.value;
+    if (typeof optValue === 'string' && optValue.toLowerCase() === target) return true;
+  }
+  return false;
+}
+
 export function mergeLlmResults(
   state: EngineState,
   extracted: Record<string, string | null>,
@@ -226,11 +255,17 @@ export function mergeLlmResults(
     if (slotId === LANGUAGE_DETECTOR_FIELD) continue;
 
     if (value === null || value === '' || value === undefined) continue;
-    // Drop non-answer literals — except when the lead's own text shows
-    // uncertainty, in which case the "Not sure" extraction is preserved
-    // as the lead's actual answer.
+    // Drop non-answer literals — except when BOTH (a) the lead's own
+    // text shows uncertainty AND (b) the slot's own option set
+    // explicitly includes this value. The two-gate check (Codex
+    // pushback 2026-05-26) prevents an uncertainty marker about one
+    // topic from preserving "Not sure" hedges across every other
+    // slot the LLM might have returned a non-answer for.
     const nonAnswer = isNonAnswer(value);
-    if (nonAnswer && !leadUncertain) continue;
+    if (nonAnswer) {
+      if (!leadUncertain) continue;
+      if (!slotOptionsIncludeValue(slotId, value)) continue;
+    }
 
     // Don't override regex-found values
     const existing = slots[slotId];

@@ -17,54 +17,57 @@ import type { MatterType, SlotDefinition } from './types';
  * because the slot system never queued the contact question. Fix is to
  * universalise the applies_to list.
  *
- * When a new MatterType union member is added in types.ts, add it here.
- * The compile-time check below catches drift in either direction.
+ * Drift guard: ALL_MATTER_TYPES_RECORD is `Record<MatterType, true>`,
+ * which is the canonical source of truth. ALL_MATTER_TYPES is derived
+ * from its keys. Adding a new MatterType to the union without adding
+ * it as a key here is a hard compile error — TS will reject the
+ * Record initializer because the new key would be missing.
+ *
+ * Codex pushback 2026-05-26: the previous pattern used
+ * `Object.fromEntries(...) as Record<MatterType, true>`, which is a
+ * type assertion that bypassed the check. Switched to the inline
+ * literal pattern so the type system actually enforces exhaustiveness.
  */
-const ALL_MATTER_TYPES: readonly MatterType[] = [
+const ALL_MATTER_TYPES_RECORD: Record<MatterType, true> = {
   // Corporate
-  'business_setup_advisory',
-  'shareholder_dispute',
-  'unpaid_invoice',
-  'contract_dispute',
-  'vendor_supplier_dispute',
-  'corporate_money_control',
-  'corporate_general',
+  business_setup_advisory: true,
+  shareholder_dispute: true,
+  unpaid_invoice: true,
+  contract_dispute: true,
+  vendor_supplier_dispute: true,
+  corporate_money_control: true,
+  corporate_general: true,
   // Real estate
-  'commercial_real_estate',
-  'residential_purchase_sale',
-  'real_estate_litigation',
-  'landlord_tenant',
-  'construction_lien',
-  'preconstruction_condo',
-  'mortgage_dispute',
-  'real_estate_general',
+  commercial_real_estate: true,
+  residential_purchase_sale: true,
+  real_estate_litigation: true,
+  landlord_tenant: true,
+  construction_lien: true,
+  preconstruction_condo: true,
+  mortgage_dispute: true,
+  real_estate_general: true,
   // Employment
-  'wrongful_dismissal',
-  'severance_review',
-  'harassment_complaint',
-  'wage_recovery',
-  'employment_contract_review',
-  'employment_general',
+  wrongful_dismissal: true,
+  severance_review: true,
+  harassment_complaint: true,
+  wage_recovery: true,
+  employment_contract_review: true,
+  employment_general: true,
   // Estates
-  'will_drafting',
-  'power_of_attorney',
-  'probate',
-  'estate_dispute',
-  'estates_general',
+  will_drafting: true,
+  power_of_attorney: true,
+  probate: true,
+  estate_dispute: true,
+  estates_general: true,
   // Routing states (contact still applies — we want to capture lead info
   // even before classification and even on OOS matters that the firm
   // may forward elsewhere).
-  'out_of_scope',
-  'unknown',
-] as const;
+  out_of_scope: true,
+  unknown: true,
+};
 
-// Compile-time exhaustiveness guard: if a new MatterType is added to the
-// union in types.ts but forgotten here, this assignment fails to compile,
-// surfacing the drift in CI rather than at runtime.
-const _ALL_MATTER_TYPES_EXHAUSTIVENESS: Record<MatterType, true> = Object.fromEntries(
-  ALL_MATTER_TYPES.map((t) => [t, true as const]),
-) as Record<MatterType, true>;
-void _ALL_MATTER_TYPES_EXHAUSTIVENESS;
+const ALL_MATTER_TYPES: readonly MatterType[] =
+  Object.keys(ALL_MATTER_TYPES_RECORD) as MatterType[];
 
 /** Concrete `applies_to` array for the universal contact slots. */
 const CONTACT_APPLIES_TO: MatterType[] = [...ALL_MATTER_TYPES];

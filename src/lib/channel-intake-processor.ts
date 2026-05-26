@@ -776,9 +776,15 @@ export async function processChannelInbound(
     };
   }
 
-  // Finalise the multi-turn session if one was open.
+  // Finalise the multi-turn session if one was open. PASS the
+  // screened_leads.id so the row is tagged as "this finalization
+  // produced a real brief." The post-finalization secretary mode
+  // (DR-104) gates on screened_lead_id IS NOT NULL — without this
+  // link, the abandoned-session paths above would be indistinguishable
+  // from the successful path, and a returning lead from an abandoned
+  // session would falsely be told a lawyer is reviewing their matter.
   if (sessionId) {
-    await finalizeChannelSession(sessionId);
+    await finalizeChannelSession(sessionId, inserted.id as string);
   }
 
   // ── Lead notification (best-effort) ────────────────────────────────────

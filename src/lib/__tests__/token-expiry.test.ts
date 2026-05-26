@@ -30,6 +30,61 @@ function isoFromNow(days: number): string {
   return new Date(NOW.getTime() + days * DAY_MS).toISOString();
 }
 
+// Codex pushback 2026-05-26: lock down the sub-day behaviour.
+describe("computeFirmTokenStatus — sub-day boundary (Codex fix)", () => {
+  it("token expiring in 6 hours is 'expiring_soon', NOT 'expired'", () => {
+    const sixHoursMs = 6 * 60 * 60 * 1000;
+    const status = computeFirmTokenStatus(
+      fakeRow({
+        facebook_page_token_expires_at: new Date(NOW.getTime() + sixHoursMs).toISOString(),
+      }),
+      NOW,
+    );
+    const fb = status.tokens.find((t) => t.key === "facebook_page")!;
+    expect(fb.status).toBe("expiring_soon");
+    // daysUntilExpiry uses Math.ceil — 6 hours rounds up to 1 day for
+    // the operator-facing string.
+    expect(fb.daysUntilExpiry).toBe(1);
+  });
+
+  it("token expiring in 1 minute is still 'expiring_soon'", () => {
+    const status = computeFirmTokenStatus(
+      fakeRow({
+        whatsapp_cloud_token_expires_at: new Date(NOW.getTime() + 60_000).toISOString(),
+      }),
+      NOW,
+    );
+    const wa = status.tokens.find((t) => t.key === "whatsapp_cloud")!;
+    expect(wa.status).toBe("expiring_soon");
+    expect(wa.daysUntilExpiry).toBe(1);
+  });
+
+  it("token that expired 2 hours ago reports 'expired today' in the body", () => {
+    const twoHoursMs = 2 * 60 * 60 * 1000;
+    const status = computeFirmTokenStatus(
+      fakeRow({
+        name: "DRG Law",
+        voice_api_token_expires_at: new Date(NOW.getTime() - twoHoursMs).toISOString(),
+      }),
+      NOW,
+    );
+    const v = status.tokens.find((t) => t.key === "voice_api")!;
+    expect(v.status).toBe("expired");
+    expect(v.daysUntilExpiry).toBe(0);
+    const body = buildTokenAlertBody(status);
+    expect(body).toContain("expired today");
+  });
+
+  it("token expiring exactly at now() is 'expired'", () => {
+    const status = computeFirmTokenStatus(
+      fakeRow({ facebook_page_token_expires_at: NOW.toISOString() }),
+      NOW,
+    );
+    const fb = status.tokens.find((t) => t.key === "facebook_page")!;
+    expect(fb.status).toBe("expired");
+  });
+});
+
 describe("computeFirmTokenStatus", () => {
   it("returns 'not_tracked' for all three tokens when no expires_at is set", () => {
     const status = computeFirmTokenStatus(fakeRow(), NOW);
