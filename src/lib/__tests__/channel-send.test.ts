@@ -40,7 +40,11 @@ vi.mock('@/lib/supabase-admin', () => ({
   },
 }));
 
-import { sendChannelMessage, buildContactCaptureFollowUp } from '../channel-send';
+import {
+  sendChannelMessage,
+  buildContactCaptureFollowUp,
+  buildContactCaptureExhaustedMessage,
+} from '../channel-send';
 
 beforeEach(() => {
   mocks.sendMessengerMessage.mockReset();
@@ -175,5 +179,49 @@ describe('buildContactCaptureFollowUp', () => {
     const msg = buildContactCaptureFollowUp('both');
     expect(msg.toLowerCase()).toMatch(/name/);
     expect(msg.toLowerCase()).toMatch(/phone|email/);
+  });
+});
+
+describe('buildContactCaptureExhaustedMessage', () => {
+  it('acknowledges the inbound and names what is still missing (both)', () => {
+    const msg = buildContactCaptureExhaustedMessage('both');
+    expect(msg.toLowerCase()).toMatch(/thanks/);
+    expect(msg.toLowerCase()).toMatch(/name/);
+    expect(msg.toLowerCase()).toMatch(/phone|email/);
+  });
+
+  it('asks only for name on the name-only branch', () => {
+    const msg = buildContactCaptureExhaustedMessage('name');
+    expect(msg.toLowerCase()).toMatch(/name/);
+    expect(msg.toLowerCase()).not.toMatch(/phone or email/);
+  });
+
+  it('asks only for reachability on the reachability-only branch', () => {
+    const msg = buildContactCaptureExhaustedMessage('reachability');
+    expect(msg.toLowerCase()).toMatch(/phone or email/);
+  });
+
+  it('keeps the conversation door open ("reply with that when you\'re ready")', () => {
+    const msg = buildContactCaptureExhaustedMessage('both');
+    expect(msg.toLowerCase()).toMatch(/reply/);
+  });
+
+  it('has no LSO-prohibited "specialist" / "expert" / "guarantee" wording', () => {
+    const cases: Array<'name' | 'reachability' | 'both'> = ['name', 'reachability', 'both'];
+    for (const c of cases) {
+      const msg = buildContactCaptureExhaustedMessage(c).toLowerCase();
+      expect(msg).not.toContain('specialist');
+      expect(msg).not.toContain('expert');
+      expect(msg).not.toContain('guarantee');
+      expect(msg).not.toContain('promise');
+    }
+  });
+
+  it('contains no em dashes (brand rule)', () => {
+    const cases: Array<'name' | 'reachability' | 'both'> = ['name', 'reachability', 'both'];
+    for (const c of cases) {
+      const msg = buildContactCaptureExhaustedMessage(c);
+      expect(msg).not.toContain('—');
+    }
   });
 });

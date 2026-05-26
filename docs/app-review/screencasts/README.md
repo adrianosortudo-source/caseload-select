@@ -47,7 +47,7 @@ Each shot list below is a literal sequence the operator follows during recording
 |---|---|---|
 | 0:00 | Title card (3 sec) | "CaseLoad Select — Facebook Messenger intake demo" on a navy background with the gold-on-navy logo |
 | 0:03 | Facebook Messenger on a phone or desktop (logged in as a personal account, NOT the test Page admin) | Search for `DRG Law Test`, open conversation |
-| 0:10 | Compose the inbound message | Type: "Hi, I just received a study permit refusal letter from IRCC. I need help filing an appeal before the deadline." |
+| 0:10 | Compose the inbound message | Type: "I was let go from my job last week after 6 years. They offered me 8 weeks of severance but I'm not sure if that's fair. I want to understand my options before I sign anything." |
 | 0:18 | Hit send | Message lands; the Page indicator shows the AI processing (5-15 seconds of waiting) |
 | 0:30 | Cut to inbound reply | The Page replies with the clarifying question asking for name and a reachable email or phone |
 | 0:40 | Compose the contact reply | Type: "Sarah Patel, sarah.patel.test@example.com" |
@@ -67,7 +67,7 @@ Duration target: ~90 seconds
 |---|---|---|
 | 0:00 | Title card (3 sec) | "CaseLoad Select — Instagram DM intake demo" |
 | 0:03 | Instagram app on a phone (logged in as a personal IG account, NOT the test Business account admin) | Search for `@drg_law_test`, open DM |
-| 0:10 | Compose the inbound message | Type: "Hi, I just received a study permit refusal letter from IRCC. I need help filing an appeal before the deadline." |
+| 0:10 | Compose the inbound message | Type: "I was let go from my job last week after 6 years. They offered me 8 weeks of severance but I'm not sure if that's fair. I want to understand my options before I sign anything." |
 | 0:18 | Hit send | Same processing delay as Messenger |
 | 0:30 | Cut to inbound reply | Clarifying question asking for name and a reachable email or phone |
 | 0:40 | Compose the contact reply | Type: "Sarah Patel, sarah.patel.test@example.com" |
@@ -86,7 +86,7 @@ Duration target: ~80 seconds
 |---|---|---|
 | 0:00 | Title card (3 sec) | "CaseLoad Select — WhatsApp Cloud API intake demo" |
 | 0:03 | WhatsApp on an allowlisted phone | Open the contact for the Meta-provisioned test number, start a new conversation |
-| 0:10 | Compose the inbound message | Type: "Hi, I just received a study permit refusal letter from IRCC. I need help filing an appeal before the deadline." |
+| 0:10 | Compose the inbound message | Type: "I was let go from my job last week after 6 years. They offered me 8 weeks of severance but I'm not sure if that's fair. I want to understand my options before I sign anything." |
 | 0:18 | Hit send | Same processing delay as the other two |
 | 0:30 | Cut to inbound reply | Clarifying question |
 | 0:40 | Compose contact reply | Type: "Sarah Patel, sarah.patel.test@example.com" |

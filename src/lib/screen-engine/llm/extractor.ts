@@ -87,6 +87,15 @@ export async function llmExtract(
 //    a literal "Not sure" option as a safe fallback. Treating those as
 //    null keeps the brief honest — slots stay empty rather than filling
 //    the lawyer view with low-signal "inferred" non-answers.
+//
+//  Exception (task #96 fix, 2026-05-26): when the lead's own text contains
+//  explicit uncertainty markers ("not sure", "don't know", "no idea",
+//  "haven't decided", "still figuring out", etc.), the LLM's "Not sure"
+//  extraction IS the lead's literal answer — keep it. Filtering in that
+//  case is what produced the felt-bug "Phase C discovery asks slots
+//  already inferred from turn 1": the lead said "not sure on amount",
+//  the LLM correctly extracted "Not sure" for amount_at_stake, the
+//  merge dropped it, and the discovery loop then asked the same question.
 const NON_ANSWER_LITERALS = new Set([
   'not sure',
   'not sure yet',
@@ -104,6 +113,43 @@ const NON_ANSWER_LITERALS = new Set([
 
 function isNonAnswer(value: string): boolean {
   return NON_ANSWER_LITERALS.has(value.trim().toLowerCase());
+}
+
+/**
+ * Detect explicit uncertainty in the lead's own text. When present, the
+ * LLM's "Not sure" / "Unknown" / "I don't know" extractions are treated
+ * as the lead's actual answer and are PRESERVED through the merge,
+ * rather than filtered as Gemini hedging. See the comment block above
+ * NON_ANSWER_LITERALS for full rationale.
+ *
+ * Markers cover common phrasings of uncertainty. Word-boundary-ish:
+ * matches as substrings inside the lowered text. False positive risk is
+ * low because these phrases are conversationally rare outside a true
+ * uncertainty context.
+ */
+const UNCERTAINTY_MARKERS: readonly string[] = [
+  'not sure',
+  "don't know",
+  'dont know',
+  'no idea',
+  "haven't decided",
+  'havent decided',
+  'still figuring',
+  "haven't figured",
+  'havent figured',
+  'unsure',
+  'unclear',
+  'tbd',
+  'to be determined',
+  "can't say",
+  'cant say',
+  'no clue',
+];
+
+export function leadExpressedUncertainty(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  return UNCERTAINTY_MARKERS.some((m) => lower.includes(m));
 }
 
 export function mergeLlmResults(
@@ -163,6 +209,13 @@ export function mergeLlmResults(
   const slotMeta = { ...working.slot_meta };
   let touched = 0;
 
+  // Pre-compute: does the lead's text show explicit uncertainty? If yes,
+  // "Not sure" extractions are preserved as legitimate answers (the lead
+  // literally said they don't know). If no, "Not sure" is treated as
+  // Gemini hedging and dropped, preserving the historical behaviour.
+  // See NON_ANSWER_LITERALS comment block + task #96.
+  const leadUncertain = leadExpressedUncertainty(working.input);
+
   for (const [slotId, value] of Object.entries(extracted)) {
     // Skip the synthetic classifier field — already handled above.
     if (slotId === MATTER_TYPE_CLASSIFIER_FIELD) continue;
@@ -173,8 +226,11 @@ export function mergeLlmResults(
     if (slotId === LANGUAGE_DETECTOR_FIELD) continue;
 
     if (value === null || value === '' || value === undefined) continue;
-    // Drop non-answer literals — see comment block above.
-    if (isNonAnswer(value)) continue;
+    // Drop non-answer literals — except when the lead's own text shows
+    // uncertainty, in which case the "Not sure" extraction is preserved
+    // as the lead's actual answer.
+    const nonAnswer = isNonAnswer(value);
+    if (nonAnswer && !leadUncertain) continue;
 
     // Don't override regex-found values
     const existing = slots[slotId];
@@ -186,8 +242,10 @@ export function mergeLlmResults(
     slots[slotId] = value;
     slotMeta[slotId] = {
       source: 'inferred',
-      evidence: 'LLM extraction from initial description',
-      confidence: 0.7,
+      evidence: nonAnswer
+        ? 'LLM extraction — lead expressed uncertainty in text'
+        : 'LLM extraction from initial description',
+      confidence: nonAnswer ? 0.6 : 0.7,
     };
     touched++;
   }

@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/channel-send', () => ({
   sendChannelMessage: mocks.sendChannelMessage,
   buildContactCaptureFollowUp: mocks.buildContactCaptureFollowUp,
+  buildContactCaptureExhaustedMessage: vi.fn(() => 'exhausted text'),
 }));
 
 vi.mock('@/lib/screen-llm-server', () => ({
@@ -332,5 +333,154 @@ describe('processChannelInbound — discovery follow-up phase', () => {
     expect(mocks.sendChannelMessage).toHaveBeenCalledTimes(1);
     const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
     expect(sentText).toBe('follow-up text');
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// Task #92 — contact-capture exhaustion graceful close
+// ════════════════════════════════════════════════════════════════════
+//
+// Before this fix, when a Meta-channel lead had already received 3
+// contact-capture asks AND was still missing contact details, the
+// processor silently dropped them to unconfirmed_inquiries with no
+// final message. From the lead's perspective: 3 polite asks, then
+// nothing. The OOS classification path made this especially visible
+// because OOS leads have no other slot machinery to chew on. The fix
+// sends a graceful "I still need <missing>, reply when ready" close
+// before the unconfirmed_inquiries persist.
+
+describe('processChannelInbound — contact-capture exhaustion graceful close', () => {
+  it('sends the exhausted-message before persisting to unconfirmed_inquiries when MAX is reached', async () => {
+    // Resume an OOS session that already burned all 3 follow-ups.
+    mocks.loadOpenChannelSession.mockResolvedValueOnce({
+      id: 'session-exhausted',
+      firm_id: FIRM_ID,
+      channel: 'facebook',
+      sender_id: 'psid_anon',
+      engine_state: {
+        input: 'previous transcript',
+        channel: 'facebook',
+        matter_type: 'out_of_scope',
+        practice_area: 'family',
+        intent_family: 'unknown',
+        dispute_family: 'unknown',
+        advisory_subtrack: 'unknown',
+        slots: {},
+        slot_meta: {},
+        slot_evidence: {},
+        raw: {
+          mentions_urgency: false, mentions_money: false, mentions_access: false,
+          mentions_ownership: false, mentions_documents: false, mentions_payment: false,
+          mentions_agreement: false, mentions_vendor: false, mentions_fraud: false,
+          mentions_property: false, mentions_closing: false, mentions_lease: false,
+          mentions_construction: false, mentions_mortgage: false,
+          mentions_preconstruction: false, input_length: 30,
+        },
+        confidence: 0,
+        coreCompleteness: 0,
+        answeredQuestionGroups: [],
+        questionHistory: [],
+        insightShown: false,
+        contactCaptureStarted: false,
+        lead_id: 'L-2026-05-26-EXH',
+        submitted_at: '2026-05-26T00:00:00.000Z',
+        language: 'en',
+        discoveryFollowUpCount: 0,
+      },
+      follow_up_count: 3, // = MAX_FOLLOW_UPS
+      max_follow_ups: 3,
+      finalized: false,
+      expires_at: '2026-05-27T00:00:00.000Z',
+      created_at: '2026-05-26T00:00:00.000Z',
+    } as never);
+
+    const r = await processChannelInbound({
+      firmId: FIRM_ID,
+      text: 'still no contact info from me',
+      sender: {
+        channel: 'facebook',
+        senderPsid: 'psid_anon',
+        senderName: null,
+        messageMid: 'mid_exhausted',
+        pageId: 'page-1',
+      },
+    });
+
+    // Lead is NOT screened — goes to unconfirmed_inquiries.
+    expect(r.persisted).toBe(false);
+    expect(r.reason).toBe('max_follow_ups_exhausted');
+    expect(mocks.persistUnconfirmedInquiry).toHaveBeenCalledTimes(1);
+    const ucCall = (mocks.persistUnconfirmedInquiry.mock.calls as unknown as Array<Array<{ reason: string; followUpAttempts: number }>>)[0][0];
+    expect(ucCall.reason).toBe('engine_refused');
+    expect(ucCall.followUpAttempts).toBe(3);
+
+    // BEFORE the unconfirmed_inquiries persist, the graceful exhausted
+    // message went out — exactly once, with the mocked "exhausted text".
+    expect(mocks.sendChannelMessage).toHaveBeenCalledTimes(1);
+    const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
+    expect(sentText).toBe('exhausted text');
+
+    // Session is finalized so a future inbound starts fresh.
+    expect(mocks.finalizeChannelSession).toHaveBeenCalledWith('session-exhausted');
+  });
+
+  it('exhausted-message send failure does NOT block the unconfirmed_inquiries persist', async () => {
+    mocks.sendChannelMessage.mockResolvedValueOnce({ sent: false, reason: 'no token' });
+    mocks.loadOpenChannelSession.mockResolvedValueOnce({
+      id: 'session-exhausted-2',
+      firm_id: FIRM_ID,
+      channel: 'whatsapp',
+      sender_id: '16475555555',
+      engine_state: {
+        input: 'previous transcript',
+        channel: 'whatsapp',
+        matter_type: 'out_of_scope',
+        practice_area: 'immigration',
+        intent_family: 'unknown',
+        dispute_family: 'unknown',
+        advisory_subtrack: 'unknown',
+        slots: {},
+        slot_meta: {},
+        slot_evidence: {},
+        raw: {
+          mentions_urgency: false, mentions_money: false, mentions_access: false,
+          mentions_ownership: false, mentions_documents: false, mentions_payment: false,
+          mentions_agreement: false, mentions_vendor: false, mentions_fraud: false,
+          mentions_property: false, mentions_closing: false, mentions_lease: false,
+          mentions_construction: false, mentions_mortgage: false,
+          mentions_preconstruction: false, input_length: 30,
+        },
+        confidence: 0,
+        coreCompleteness: 0,
+        answeredQuestionGroups: [],
+        questionHistory: [],
+        insightShown: false,
+        contactCaptureStarted: false,
+        lead_id: 'L-2026-05-26-EXH2',
+        submitted_at: '2026-05-26T00:00:00.000Z',
+        language: 'en',
+        discoveryFollowUpCount: 0,
+      },
+      follow_up_count: 5, // beyond MAX
+      max_follow_ups: 3,
+      finalized: false,
+      expires_at: '2026-05-27T00:00:00.000Z',
+      created_at: '2026-05-26T00:00:00.000Z',
+    } as never);
+
+    const r = await processChannelInbound({
+      firmId: FIRM_ID,
+      text: 'help',
+      sender: whatsappSender(null),
+    });
+
+    expect(r.persisted).toBe(false);
+    expect(r.reason).toBe('max_follow_ups_exhausted');
+    // Send was attempted (and failed).
+    expect(mocks.sendChannelMessage).toHaveBeenCalledTimes(1);
+    // The unconfirmed_inquiries persist still happens regardless of the send result.
+    expect(mocks.persistUnconfirmedInquiry).toHaveBeenCalledTimes(1);
+    // Session still finalized so the lead can re-engage with a fresh start.
+    expect(mocks.finalizeChannelSession).toHaveBeenCalledWith('session-exhausted-2');
   });
 });

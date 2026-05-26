@@ -13,7 +13,7 @@ WE DO NOT USE FACEBOOK LOGIN. There is no Facebook Login integration anywhere in
 
 REVIEWER STEPS (Facebook Messenger):
 1. From any personal Facebook account, open Messenger and search for the Page named "DRG Law Test".
-2. Open a conversation and send: Hi, I just received a study permit refusal letter from IRCC. I need help filing an appeal before the deadline.
+2. Open a conversation and send: I was let go from my job last week after 6 years. They offered me 8 weeks of severance but I'm not sure if that's fair. I want to understand my options before I sign anything.
 3. Within 5-15 seconds the Page replies with a clarifying question asking for your name and a reachable email or phone.
 4. Reply with a placeholder name and email (e.g., Test Reviewer, test@example.com).
 5. The Page sends a brief acknowledgment confirming a lawyer will review the inquiry. End-to-end Messenger flow demonstrated.

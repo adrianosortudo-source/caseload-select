@@ -80,3 +80,59 @@ export function baselineHoursFromSubmit(submittedAtIso: string, deadlineIso: str
   if (hours <= 30) return 24;
   return 48;
 }
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Relative-time label for the lead arrival timestamp on the triage queue card.
+ *
+ *   < 60s          "just now"
+ *   < 60 min       "12 min ago"
+ *   < 24h          "5 hours ago" / "1 hour ago"
+ *   yesterday      "yesterday at 10:33 PM"
+ *   < 7 days       "Mon at 10:33 PM"
+ *   beyond 7 days  "May 14, 2026"
+ *
+ * Pure — pass `now` for deterministic snapshots in tests. Returns a phrase
+ * the lawyer can read at a glance to gauge staleness without parsing a
+ * datetime.
+ */
+export function formatRelativeArrival(submittedAtIso: string, now: Date = new Date()): string {
+  const submitted = new Date(submittedAtIso);
+  if (Number.isNaN(submitted.getTime())) return "";
+  const diffMs = now.getTime() - submitted.getTime();
+  if (diffMs < 60_000) return "just now";
+  if (diffMs < HOUR_MS) {
+    const mins = Math.floor(diffMs / MINUTE_MS);
+    return `${mins} min ago`;
+  }
+  if (diffMs < DAY_MS) {
+    const hours = Math.floor(diffMs / HOUR_MS);
+    return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  }
+  // Past 24h but same calendar yesterday or within the past 7 days — show day
+  // + time. We compute "yesterday" by calendar day, not by 24h window, so a
+  // lead from 23h ago at 11pm still reads "yesterday" the next morning.
+  const submittedDay = new Date(submitted.getFullYear(), submitted.getMonth(), submitted.getDate());
+  const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayDiff = Math.round((nowDay.getTime() - submittedDay.getTime()) / DAY_MS);
+  const timePart = submitted.toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" });
+  if (dayDiff === 1) return `yesterday at ${timePart}`;
+  if (dayDiff < 7) {
+    const dayName = submitted.toLocaleDateString("en-CA", { weekday: "short" });
+    return `${dayName} at ${timePart}`;
+  }
+  return submitted.toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" });
+}
+
+/**
+ * Absolute timestamp for the lead arrival, formatted for the secondary line
+ * under the relative time. Example: "May 25, 2026 · 10:33 PM".
+ */
+export function formatAbsoluteArrival(submittedAtIso: string): string {
+  const submitted = new Date(submittedAtIso);
+  if (Number.isNaN(submitted.getTime())) return "";
+  const date = submitted.toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" });
+  const time = submitted.toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" });
+  return `${date} · ${time}`;
+}

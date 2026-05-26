@@ -62,7 +62,11 @@ import {
   buildPostFinalizationDisambiguationMessage,
   looksLikeNewMatterIntent,
 } from '@/lib/post-finalization-followup';
-import { sendChannelMessage, buildContactCaptureFollowUp } from '@/lib/channel-send';
+import {
+  sendChannelMessage,
+  buildContactCaptureFollowUp,
+  buildContactCaptureExhaustedMessage,
+} from '@/lib/channel-send';
 import { applyContactExtractionToState } from '@/lib/contact-extraction';
 import {
   applyNumericAnswerMapping,
@@ -484,7 +488,32 @@ export async function processChannelInbound(
     // Already exhausted the follow-up budget? Give up. Move to
     // unconfirmed_inquiries with reason='engine_refused' and finalise the
     // session so a future inbound starts fresh.
+    //
+    // Task #92 follow-up (2026-05-26): before the silent drop, send the
+    // lead a graceful closing message so the conversation doesn't read
+    // as a broken loop. Without this, the bot asks 3 times then goes
+    // silent, which is exactly how the "OOS infinite loop" symptom
+    // manifests in production logs (May 25 immigration row in
+    // unconfirmed_inquiries with follow_up_attempts=0 + the prior
+    // pattern of repeated asks). The graceful close is best-effort —
+    // a send failure does not block the unconfirmed_inquiries persist
+    // (the lead still moves to ops visibility either way).
     if (priorFollowUpCount >= MAX_FOLLOW_UPS) {
+      try {
+        const exhaustedText = buildContactCaptureExhaustedMessage(gate.missing ?? 'both');
+        const exhaustedSend = await sendChannelMessage({
+          firmId,
+          sender,
+          text: exhaustedText,
+        });
+        if (!exhaustedSend.sent) {
+          console.warn(
+            `[channel-intake] exhausted-message send failed firm=${firmId} channel=${channel}: ${exhaustedSend.reason ?? 'unknown'}`,
+          );
+        }
+      } catch (err) {
+        console.warn('[channel-intake] exhausted-message dispatch failed:', err);
+      }
       await persistUnconfirmedInquiry({
         firmId,
         channel,

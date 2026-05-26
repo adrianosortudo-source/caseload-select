@@ -13,6 +13,7 @@
  */
 
 export const MATTER_LABELS: Record<string, string> = {
+  // Corporate (Phase A + earlier)
   business_setup_advisory: "Business Setup Advisory",
   shareholder_dispute: "Shareholder Dispute",
   unpaid_invoice: "Unpaid Invoice",
@@ -20,6 +21,7 @@ export const MATTER_LABELS: Record<string, string> = {
   vendor_supplier_dispute: "Vendor / Supplier Dispute",
   corporate_money_control: "Corporate Financial Concern",
   corporate_general: "Corporate Matter · Routing",
+  // Real estate (Phase A + earlier)
   commercial_real_estate: "Commercial Real Estate",
   residential_purchase_sale: "Residential Purchase / Sale",
   real_estate_litigation: "Real Estate Litigation",
@@ -28,6 +30,20 @@ export const MATTER_LABELS: Record<string, string> = {
   preconstruction_condo: "Pre-Construction Condo",
   mortgage_dispute: "Mortgage / Power of Sale",
   real_estate_general: "Real Estate Matter · Routing",
+  // Employment (Phase A + Phase B)
+  employment_general: "Employment Matter · Routing",
+  wrongful_dismissal: "Wrongful Dismissal",
+  severance_review: "Severance Review",
+  harassment_complaint: "Workplace Harassment",
+  wage_recovery: "Wage Recovery",
+  employment_contract_review: "Employment Contract Review",
+  // Estates (Phase A + Phase B)
+  estates_general: "Wills and Estates · Routing",
+  will_drafting: "Will Drafting",
+  power_of_attorney: "Power of Attorney",
+  probate: "Probate",
+  estate_dispute: "Estate Dispute",
+  // System
   out_of_scope: "Out of Scope · Forwarded",
   unknown: "Awaiting Classification",
 };

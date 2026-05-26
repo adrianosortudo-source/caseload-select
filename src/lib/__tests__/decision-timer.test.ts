@@ -4,6 +4,8 @@ import {
   urgencyForRemaining,
   snapshot,
   baselineHoursFromSubmit,
+  formatRelativeArrival,
+  formatAbsoluteArrival,
 } from "../decision-timer";
 
 const HOUR = 3_600_000;
@@ -112,5 +114,58 @@ describe("baselineHoursFromSubmit", () => {
     // 22h later — closest to 24h
     const mid = new Date(new Date(submit).getTime() + 22 * HOUR).toISOString();
     expect(baselineHoursFromSubmit(submit, mid)).toBe(24);
+  });
+});
+
+describe("formatRelativeArrival", () => {
+  // Anchor "now" so test snapshots are deterministic.
+  const now = new Date("2026-05-26T15:00:00Z");
+
+  it("renders 'just now' for sub-minute deltas", () => {
+    expect(formatRelativeArrival(new Date(now.getTime() - 30_000).toISOString(), now)).toBe("just now");
+    expect(formatRelativeArrival(now.toISOString(), now)).toBe("just now");
+  });
+
+  it("renders 'X min ago' under an hour", () => {
+    expect(formatRelativeArrival(new Date(now.getTime() - 5 * MIN).toISOString(), now)).toBe("5 min ago");
+    expect(formatRelativeArrival(new Date(now.getTime() - 59 * MIN).toISOString(), now)).toBe("59 min ago");
+  });
+
+  it("renders '1 hour ago' singular and '5 hours ago' plural", () => {
+    expect(formatRelativeArrival(new Date(now.getTime() - HOUR).toISOString(), now)).toBe("1 hour ago");
+    expect(formatRelativeArrival(new Date(now.getTime() - 5 * HOUR).toISOString(), now)).toBe("5 hours ago");
+  });
+
+  it("renders 'yesterday at <time>' for the previous calendar day", () => {
+    const result = formatRelativeArrival(new Date(now.getTime() - 24 * HOUR).toISOString(), now);
+    expect(result).toMatch(/^yesterday at /);
+  });
+
+  it("renders '<weekday> at <time>' within the past week", () => {
+    const result = formatRelativeArrival(new Date(now.getTime() - 3 * 24 * HOUR).toISOString(), now);
+    expect(result).toMatch(/^[A-Z][a-z]+ at /);
+  });
+
+  it("renders absolute month-day-year beyond a week", () => {
+    const result = formatRelativeArrival(new Date(now.getTime() - 30 * 24 * HOUR).toISOString(), now);
+    expect(result).toMatch(/\d{4}/);
+    expect(result).not.toMatch(/ago/);
+  });
+
+  it("returns empty string for unparseable input", () => {
+    expect(formatRelativeArrival("not-a-date", now)).toBe("");
+  });
+});
+
+describe("formatAbsoluteArrival", () => {
+  it("renders 'Mon DD, YYYY · H:MM AM/PM' format", () => {
+    const result = formatAbsoluteArrival("2026-05-25T22:33:00Z");
+    // Locale formatting varies; just assert structure.
+    expect(result).toMatch(/\d{4}/);
+    expect(result).toContain(" · ");
+  });
+
+  it("returns empty string for unparseable input", () => {
+    expect(formatAbsoluteArrival("not-a-date")).toBe("");
   });
 });

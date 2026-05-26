@@ -1,4 +1,73 @@
-import type { SlotDefinition } from './types';
+import type { MatterType, SlotDefinition } from './types';
+
+/**
+ * Every contact slot (client_name / client_phone / client_email /
+ * client_postal_code) applies to every matter type without exception.
+ * Contact capture is the system's universal precondition — the
+ * contact-capture doctrine (DR-038, "no contact, no lead") covers every
+ * inbound channel and every matter type, including the unclassified
+ * (`unknown`) and out-of-scope buckets.
+ *
+ * Before 2026-05-26 these slots restricted `applies_to` to the seven
+ * Corporate matter types, which left the post-Phase-A/B matter packs
+ * (real estate, employment, estates) without proactive contact ask in
+ * the slot machinery. The multi-turn contact-capture loop on Meta
+ * channels masked the bug at the channel layer, but the web channel
+ * silently dropped non-Corporate inbound into `unconfirmed_inquiries`
+ * because the slot system never queued the contact question. Fix is to
+ * universalise the applies_to list.
+ *
+ * When a new MatterType union member is added in types.ts, add it here.
+ * The compile-time check below catches drift in either direction.
+ */
+const ALL_MATTER_TYPES: readonly MatterType[] = [
+  // Corporate
+  'business_setup_advisory',
+  'shareholder_dispute',
+  'unpaid_invoice',
+  'contract_dispute',
+  'vendor_supplier_dispute',
+  'corporate_money_control',
+  'corporate_general',
+  // Real estate
+  'commercial_real_estate',
+  'residential_purchase_sale',
+  'real_estate_litigation',
+  'landlord_tenant',
+  'construction_lien',
+  'preconstruction_condo',
+  'mortgage_dispute',
+  'real_estate_general',
+  // Employment
+  'wrongful_dismissal',
+  'severance_review',
+  'harassment_complaint',
+  'wage_recovery',
+  'employment_contract_review',
+  'employment_general',
+  // Estates
+  'will_drafting',
+  'power_of_attorney',
+  'probate',
+  'estate_dispute',
+  'estates_general',
+  // Routing states (contact still applies — we want to capture lead info
+  // even before classification and even on OOS matters that the firm
+  // may forward elsewhere).
+  'out_of_scope',
+  'unknown',
+] as const;
+
+// Compile-time exhaustiveness guard: if a new MatterType is added to the
+// union in types.ts but forgotten here, this assignment fails to compile,
+// surfacing the drift in CI rather than at runtime.
+const _ALL_MATTER_TYPES_EXHAUSTIVENESS: Record<MatterType, true> = Object.fromEntries(
+  ALL_MATTER_TYPES.map((t) => [t, true as const]),
+) as Record<MatterType, true>;
+void _ALL_MATTER_TYPES_EXHAUSTIVENESS;
+
+/** Concrete `applies_to` array for the universal contact slots. */
+const CONTACT_APPLIES_TO: MatterType[] = [...ALL_MATTER_TYPES];
 
 export const SLOT_REGISTRY: SlotDefinition[] = [
 
@@ -8,7 +77,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     id: 'client_name',
     question: 'What is your name?',
     input_type: 'free_text',
-    applies_to: ['business_setup_advisory', 'shareholder_dispute', 'unpaid_invoice', 'contract_dispute', 'vendor_supplier_dispute', 'corporate_money_control', 'corporate_general'],
+    applies_to: CONTACT_APPLIES_TO,
     tier: 'contact',
     question_group: 'contact',
     resolves: 'contact',
@@ -21,7 +90,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     id: 'client_phone',
     question: 'What is the best phone number to reach you?',
     input_type: 'free_text',
-    applies_to: ['business_setup_advisory', 'shareholder_dispute', 'unpaid_invoice', 'contract_dispute', 'vendor_supplier_dispute', 'corporate_money_control', 'corporate_general'],
+    applies_to: CONTACT_APPLIES_TO,
     tier: 'contact',
     question_group: 'contact',
     resolves: 'contact',
@@ -34,7 +103,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     id: 'client_email',
     question: 'What email address should the firm use to follow up?',
     input_type: 'free_text',
-    applies_to: ['business_setup_advisory', 'shareholder_dispute', 'unpaid_invoice', 'contract_dispute', 'vendor_supplier_dispute', 'corporate_money_control', 'corporate_general'],
+    applies_to: CONTACT_APPLIES_TO,
     tier: 'contact',
     question_group: 'contact',
     resolves: 'contact',
@@ -54,7 +123,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     id: 'client_postal_code',
     question: 'What is your postal code?',
     input_type: 'free_text',
-    applies_to: ['business_setup_advisory', 'shareholder_dispute', 'unpaid_invoice', 'contract_dispute', 'vendor_supplier_dispute', 'corporate_money_control', 'corporate_general'],
+    applies_to: CONTACT_APPLIES_TO,
     tier: 'contact',
     question_group: 'contact',
     resolves: 'contact',

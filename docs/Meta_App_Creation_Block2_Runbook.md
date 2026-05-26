@@ -165,7 +165,7 @@ For each channel, send a DM to the test asset from a personal account, then chec
 **Messenger test:**
 1. Open Facebook Messenger (logged in as a personal account NOT the page owner).
 2. Search for the test FB Page (Phase 1) — message it.
-3. Send: "Hi, I need help with an immigration matter. Just got my study permit denial letter."
+3. Send: "I was let go from my job last week after 6 years. They offered me 8 weeks of severance but I'm not sure if that's fair. I want to understand my options before I sign anything."
 4. Open `https://app.caseloadselect.ca/portal/<firm-id>/triage` for the test firm.
 5. The lead should appear within seconds. Click into the brief. Confirm:
    - `channel='messenger'`

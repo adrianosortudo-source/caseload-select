@@ -143,7 +143,7 @@ Open the triage portal in one browser tab:
 `https://app.caseloadselect.ca/portal/<testFirmId>/triage` (request a magic link via `/api/portal/request-link` if not already authed).
 
 **Messenger:**
-1. From a personal Facebook account (NOT the test Page admin), search for `DRG Law Test` and message: "Hi, I just received a study permit refusal letter from IRCC. I need help filing an appeal before the deadline."
+1. From a personal Facebook account (NOT the test Page admin), search for `DRG Law Test` and message: "I was let go from my job last week after 6 years. They offered me 8 weeks of severance but I'm not sure if that's fair. I want to understand my options before I sign anything."
 2. Wait 5-15 sec for the clarifying-question reply.
 3. Reply: "Sarah Patel, sarah.patel.test@example.com"
 4. Wait for the routing acknowledgment.

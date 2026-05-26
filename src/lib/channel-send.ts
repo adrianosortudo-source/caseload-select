@@ -123,3 +123,30 @@ export function buildContactCaptureFollowUp(
       return "Got it. Before I get this to the firm, can you share your name and the best phone or email for them to reach you?";
   }
 }
+
+/**
+ * Final acknowledgment when the contact-capture follow-up budget is
+ * exhausted (MAX_FOLLOW_UPS reached). Without this message the bot
+ * goes silent after 3 unsuccessful asks, which from the lead's side
+ * reads as a broken loop — task #92, OOS classification creates
+ * (felt-)infinite contact-capture loop.
+ *
+ * The closing acknowledges the inbound, names what's still missing,
+ * and leaves the door open for the lead to reply with contact info
+ * later (the next inbound creates a fresh session). No LSO-non-compliant
+ * outcome promises, no "specialist" or "expert" language.
+ */
+export function buildContactCaptureExhaustedMessage(
+  missing: 'name' | 'reachability' | 'both',
+): string {
+  const what =
+    missing === 'name'
+      ? "a name the firm can use"
+      : missing === 'reachability'
+      ? "the best phone or email to reach you"
+      : "your name and the best phone or email to reach you";
+  return (
+    `Thanks for the messages. The firm needs ${what} before they can follow up. ` +
+    "Reply with that when you're ready and I'll pass it along."
+  );
+}

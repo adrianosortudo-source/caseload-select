@@ -104,7 +104,7 @@ Test Page: DRG Law Test (Page ID supplied separately in the Credentials section)
 
 1. From a personal Facebook account that does not administer the test Page, open Facebook Messenger.
 2. Search for the DRG Law Test Page and open a new conversation.
-3. Send: "Hi, I just received a study permit refusal letter from IRCC. I need help filing an appeal before the deadline."
+3. Send: "I was let go from my job last week after 6 years. They offered me 8 weeks of severance but I'm not sure if that's fair. I want to understand my options before I sign anything."
 4. Wait 5 to 15 seconds. The Page will reply with a clarifying question similar to: "Thanks for reaching out. Before a lawyer reviews this, could you share your full name and an email or phone number where the firm can reach you?"
 5. Reply with a name and a reachable email address.
 6. The Page will send a brief acknowledgment confirming the matter has been routed to a lawyer.
@@ -267,7 +267,7 @@ Test IG Business account: @drg_law_test (username supplied separately).
 
 1. From a personal Instagram account (the username does not matter; any account that can DM @drg_law_test will do), open the IG mobile app.
 2. Navigate to @drg_law_test and open a new DM.
-3. Send: "Hi, I just received a study permit refusal letter from IRCC. I need help filing an appeal before the deadline."
+3. Send: "I was let go from my job last week after 6 years. They offered me 8 weeks of severance but I'm not sure if that's fair. I want to understand my options before I sign anything."
 4. Wait 5 to 15 seconds. The account replies with a clarifying question similar to: "Thanks for reaching out. Could you share your full name and an email or phone number where the firm can reach you?"
 5. Reply with a name and an email address.
 6. The account sends a brief acknowledgment confirming the matter has been routed to a lawyer.
@@ -309,7 +309,7 @@ Once allowlisted:
 
 3. From the allowlisted phone, save +1 555 629 8048 as a contact.
 4. Open WhatsApp and start a new conversation with that number.
-5. Send: "Hi, I just received a study permit refusal letter from IRCC. I need help filing an appeal before the deadline."
+5. Send: "I was let go from my job last week after 6 years. They offered me 8 weeks of severance but I'm not sure if that's fair. I want to understand my options before I sign anything."
 6. Wait 5 to 15 seconds. The number replies with a clarifying question asking for name and an email or phone.
 7. Reply with name and an email address.
 8. The number sends a brief acknowledgment confirming routing to a lawyer.

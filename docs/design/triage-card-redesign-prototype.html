@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Triage Queue Card — Redesign Prototype</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  /* ─── CaseLoad Select brand tokens ──────────────────────────── */
+  :root {
+    --navy: #1E2F58;
+    --navy-soft: #2c4072;
+    --gold: #C4B49A;
+    --gold-soft: #d6caaf;
+    --parchment: #F4F3EF;
+    --black: #0D1520;
+    --white: #ffffff;
+    --ink: #1a2438;
+    --ink-soft: #50607a;
+    --ink-mute: #8a98ad;
+    --hairline: #e3dfd6;
+    --hairline-soft: #ede9df;
+    --band-a-bg: #d5e9d3;
+    --band-a-ink: #2f5b2c;
+    --band-b-bg: #f0e2c4;
+    --band-b-ink: #6b551d;
+    --band-c-bg: #f7d8c4;
+    --band-c-ink: #743618;
+    --band-d-bg: #e6dff2;
+    --band-d-ink: #4a3e72;
+    --signal-ok: #2f6b3a;
+    --signal-warn: #b06e1a;
+    --signal-mute: #98a4b8;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--parchment);
+    color: var(--ink);
+    font-family: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    min-height: 100vh;
+    padding: 48px 24px 96px;
+  }
+  .wrap {
+    max-width: 1240px;
+    margin: 0 auto;
+  }
+  h1, h2, h3, h4, h5, h6, .display {
+    font-family: 'Manrope', 'DM Sans', system-ui, sans-serif;
+    color: var(--navy);
+    margin: 0;
+  }
+  .eyebrow {
+    font-family: 'Oxanium', 'Manrope', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-mute);
+  }
+  .doc-h {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 32px;
+  }
+  .doc-h h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .doc-h .meta {
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    margin-top: 16px;
+  }
+  @media (max-width: 1024px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+  .col h2 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .col h2 .terminal { color: var(--navy); }
+  .col .col-sub {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-bottom: 16px;
+  }
+
+  /* ─── CARD SHARED CHROME ─────────────────────────────────────── */
+  .card {
+    background: var(--white);
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  /* ─── BAND CHIP ──────────────────────────────────────────────── */
+  .band-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 4px;
+    font-family: 'Oxanium', 'Manrope', sans-serif;
+    font-weight: 700;
+    font-size: 20px;
+    line-height: 1;
+  }
+  .band-chip.band-a { background: var(--band-a-bg); color: var(--band-a-ink); }
+  .band-chip.band-b { background: var(--band-b-bg); color: var(--band-b-ink); }
+  .band-chip.band-c { background: var(--band-c-bg); color: var(--band-c-ink); }
+  .band-chip.band-d { background: var(--band-d-bg); color: var(--band-d-ink); }
+  .band-chip.lg { width: 56px; height: 56px; font-size: 26px; }
+
+  /* ─── CURRENT CARD (left column — what's in production today) ── */
+  .card-current { padding: 16px 20px 18px; }
+  .card-current .row1 {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .card-current .row1 .labels {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .card-current .matter-label {
+    font-family: 'Oxanium', 'Manrope', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--navy);
+  }
+  .channel-chip {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 2px;
+    font-family: 'Oxanium', 'Manrope', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 10px;
+    font-weight: 600;
+    background: #e4ecf7;
+    color: #2c5298;
+  }
+  .card-current .snapshot {
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0 0 12px;
+  }
+  .card-current .micro-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    align-items: baseline;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-bottom: 12px;
+  }
+  .card-current .micro-row .lead-id {
+    font-family: 'Oxanium', 'Manrope', sans-serif;
+    color: var(--ink-mute);
+    letter-spacing: 0.04em;
+  }
+  .card-current .micro-row .dot { color: var(--ink-mute); }
+  .card-current .micro-row .name {
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .card-current .micro-row .fee {
+    color: var(--ink-soft);
+  }
+  .card-current .countdown {
+    font-family: 'Oxanium', 'Manrope', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--navy);
+    margin-bottom: 12px;
+  }
+  .card-current .axes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    font-family: 'Oxanium', 'Manrope', sans-serif;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-mute);
+  }
+  .card-current .axes .axis-val { color: var(--ink); }
+  .card-current .axes b { font-weight: 700; color: var(--navy); }
+
+  /* ─── NEW CARD (right column — proposed) ─────────────────────── */
+  .card-new {
+    padding: 20px 22px 18px;
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    grid-template-rows: auto auto auto auto auto;
+    gap: 4px 16px;
+    align-items: start;
+  }
+  /* PRIMARY ROW: band + name + countdown */
+  .card-new .band-cell {
+    grid-row: 1 / span 2;
+    grid-column: 1 / 2;
+    align-self: start;
+  }
+  .card-new .name {
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+    font-family: 'Manrope', sans-serif;
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: -0.01em;
+    color: var(--navy);
+    line-height: 1.2;
+  }
+  .card-new .countdown-cell {
+    grid-column: 3 / 4;
+    grid-row: 1 / 3;
+    text-align: right;
+    align-self: start;
+  }
+  .card-new .countdown-cell .label {
+    font-family: 'Oxanium', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--ink-mute);
+    margin-bottom: 2px;
+  }
+  .card-new .countdown-cell .clock {
+    font-family: 'Oxanium', 'Manrope', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--navy);
+    line-height: 1;
+  }
+  .card-new .countdown-cell .clock.urgent { color: #a8451d; }
+  /* CONTACT (under name) */
+  .card-new .contact {
+    grid-column: 2 / 3;
+    grid-row: 2 / 3;
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+    line-height: 1.4;
+  }
+  .card-new .contact a {
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .card-new .contact a:hover { text-decoration: underline; }
+  .card-new .contact .dot { color: var(--ink-mute); margin: 0 4px; }
+
+  /* SECONDARY ROW: arrival timestamp */
+  .card-new .arrival {
+    grid-column: 2 / 4;
+    grid-row: 3 / 4;
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid var(--hairline-soft);
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 13px;
+  }
+  .card-new .arrival .item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .card-new .arrival .item .lbl {
+    font-family: 'Oxanium', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--ink-mute);
+  }
+  .card-new .arrival .item .val {
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .card-new .arrival .item .val.muted { color: var(--ink-soft); }
+
+  /* TERTIARY ROW: matter type + channel + lead id */
+  .card-new .tags {
+    grid-column: 2 / 4;
+    grid-row: 4 / 5;
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .card-new .matter-tag {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 2px;
+    background: var(--parchment);
+    border: 1px solid var(--hairline);
+    font-family: 'Oxanium', 'Manrope', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--navy);
+  }
+  .card-new .lead-id-tag {
+    font-family: 'Oxanium', 'Manrope', sans-serif;
+    color: var(--ink-mute);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    margin-left: auto;
+  }
+
+  /* BODY: snapshot + fee + axes */
+  .card-new .body {
+    grid-column: 2 / 4;
+    grid-row: 5 / 6;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--hairline-soft);
+  }
+  .card-new .body .snapshot {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--ink);
+    margin: 0 0 10px;
+  }
+  .card-new .body .fee {
+    font-size: 13px;
+    color: var(--ink-soft);
+    line-height: 1.5;
+    margin: 0 0 12px;
+  }
+  .card-new .body .fee .accent {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .card-new .body .axes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    font-family: 'Oxanium', 'Manrope', sans-serif;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-mute);
+  }
+  .card-new .body .axes .axis { display: inline-flex; gap: 6px; }
+  .card-new .body .axes .axis b { font-weight: 700; color: var(--navy); }
+  .card-new .body .axes .axis.zero b { color: var(--ink-mute); }
+
+  /* ─── HEADER STRIP (mimics portal context) ───────────────────── */
+  .portal-strip {
+    background: var(--navy);
+    color: var(--white);
+    padding: 14px 22px;
+    border-radius: 4px 4px 0 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    font-family: 'Manrope', sans-serif;
+  }
+  .portal-strip .firm-name {
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .portal-strip .firm-tag {
+    font-family: 'Oxanium', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--gold-soft);
+  }
+
+  /* ─── NOTES BLOCK ────────────────────────────────────────────── */
+  .notes {
+    margin-top: 32px;
+    padding: 16px 18px;
+    background: var(--white);
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+  }
+  .notes h3 {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+  .notes ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+  }
+  .notes ul li { margin-bottom: 4px; }
+  .notes b { color: var(--ink); }
+
+  /* ─── QUEUE HEADER (search + filter chrome) ─────────────────── */
+  .queue-header {
+    background: var(--white);
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .queue-header .row-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .queue-header .title {
+    font-family: 'Oxanium', 'Manrope', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--navy);
+  }
+  .queue-header .count {
+    font-family: 'Oxanium', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+  .queue-header .count b {
+    color: var(--navy);
+    font-weight: 700;
+  }
+  .search-input-wrap {
+    position: relative;
+    margin-bottom: 12px;
+  }
+  .search-input-wrap .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--ink-mute);
+    pointer-events: none;
+  }
+  .search-input {
+    width: 100%;
+    padding: 10px 36px 10px 36px;
+    background: var(--parchment);
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .search-input:focus {
+    border-color: var(--navy);
+    background: var(--white);
+  }
+  .search-input::placeholder {
+    color: var(--ink-mute);
+  }
+  .search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--ink-mute);
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 16px;
+    line-height: 1;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .search-clear:hover { color: var(--navy); }
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .filter-row .filter-label {
+    font-family: 'Oxanium', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--ink-mute);
+    margin-right: 4px;
+    min-width: 56px;
+  }
+  .filter-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--parchment);
+    border: 1px solid var(--hairline);
+    border-radius: 2px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    color: var(--ink);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    line-height: 1.4;
+  }
+  .filter-chip:hover { background: var(--hairline-soft); }
+  .filter-chip.active {
+    background: var(--navy);
+    color: var(--white);
+    border-color: var(--navy);
+  }
+  .filter-chip.active .chip-count { color: var(--gold-soft); }
+  .filter-chip .chip-count {
+    font-family: 'Oxanium', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--ink-mute);
+  }
+  .search-results-meta {
+    margin-top: 6px;
+    padding-top: 10px;
+    border-top: 1px solid var(--hairline-soft);
+    font-family: 'Oxanium', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 10px;
+    color: var(--ink-soft);
+  }
+  .search-results-meta b { color: var(--navy); font-weight: 700; }
+  .search-results-meta .reset {
+    color: var(--navy);
+    text-decoration: underline;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-left: 8px;
+  }
+
+  /* ─── SHARED LIGHT BANNER ────────────────────────────────────── */
+  .label-banner {
+    display: inline-block;
+    padding: 3px 10px;
+    background: var(--gold-soft);
+    color: var(--navy);
+    border-radius: 2px;
+    font-family: 'Oxanium', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 10px;
+    font-weight: 700;
+    margin-bottom: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="doc-h">
+    <h1>Triage Queue Card — Redesign Prototype<span style="color:var(--navy);">▪</span></h1>
+    <div class="meta">2026-05-26 · CaseLoad Select brand · static HTML preview</div>
+  </div>
+
+  <p class="eyebrow">Hierarchy change + search affordance</p>
+  <p style="margin: 6px 0 0; max-width: 780px; color: var(--ink-soft);">
+    The lawyer's daily mental model is "who reached out and when," not "what category of matter." Today's card leads with the matter-type label
+    (SHAREHOLDER DISPUTE / WRONGFUL DISMISSAL), pushing the lead's name and arrival time into small metadata. Proposed redesign: name as primary,
+    arrival timestamp as secondary, matter type and channel as tertiary tags. Because the queue is now scannable by person, the proposed view adds a
+    queue header with a one-field search (name, phone, email, postal, lead ref, matter type) plus filter chips for band and channel.
+  </p>
+
+  <div class="grid">
+
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- LEFT COLUMN — current production card                    -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <div class="col">
+      <span class="label-banner">Current — production today</span>
+      <h2>Matter-type-first hierarchy</h2>
+      <p class="col-sub">Matter category dominates. Lead name buried in 12px text.</p>
+
+      <div class="card card-current">
+        <div class="row1">
+          <span class="band-chip band-a">A</span>
+          <div class="labels">
+            <span class="matter-label">SHAREHOLDER DISPUTE</span>
+            <span class="channel-chip">FACEBOOK MESSENGER</span>
+          </div>
+        </div>
+        <p class="snapshot">
+          Corporate dispute — shareholder or co-owner conflict involving access to records, company control, or financial conduct.
+        </p>
+        <div class="micro-row">
+          <span class="lead-id">L-2026-05-25-77P</span>
+          <span class="dot">·</span>
+          <span class="name">Sarah Patel</span>
+          <span class="dot">·</span>
+          <span class="fee">Internal estimate based on likely scope, not a quote. $3,000–$10,000+ depending on urgency and dispute complexity.</span>
+        </div>
+        <div class="countdown">24h 19m</div>
+        <div class="axes">
+          <span class="axis-val">VAL <b>7</b>/10</span>
+          <span class="axis-val">SMP <b>10</b>/10</span>
+          <span class="axis-val">URG <b>0</b>/10</span>
+          <span class="axis-val">RDY <b>8</b>/10</span>
+        </div>
+      </div>
+
+      <div class="card card-current">
+        <div class="row1">
+          <span class="band-chip band-b">B</span>
+          <div class="labels">
+            <span class="matter-label">WRONGFUL DISMISSAL</span>
+            <span class="channel-chip">FACEBOOK MESSENGER</span>
+          </div>
+        </div>
+        <p class="snapshot">
+          Employment — wrongful or constructive dismissal claim. Caller has been let go (or treated such that they had to resign) and is exploring notice, severance, or damages.
+        </p>
+        <div class="micro-row">
+          <span class="lead-id">L-2026-05-26-Z3A</span>
+          <span class="dot">·</span>
+          <span class="name">Sarah Patel</span>
+          <span class="dot">·</span>
+          <span class="fee">Internal estimate based on likely scope, not a quote. Initial assessment + demand letter $1,500–$4,000. Negotiated settlement (most common outcome) $3,000–$8,000+. If proceeding to litigation, $15,000–$50,000+ depending on whether discovery and trial are reached.</span>
+        </div>
+        <div class="countdown">47h 02m</div>
+        <div class="axes">
+          <span class="axis-val">VAL <b>0</b>/10</span>
+          <span class="axis-val">SMP <b>10</b>/10</span>
+          <span class="axis-val">URG <b>0</b>/10</span>
+          <span class="axis-val">RDY <b>10</b>/10</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- RIGHT COLUMN — proposed redesign                         -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <div class="col">
+      <span class="label-banner" style="background: var(--navy); color: var(--gold-soft);">Proposed</span>
+      <h2>NAP-first hierarchy</h2>
+      <p class="col-sub">Name + contact = primary. Arrival time = secondary. Matter type + channel = tertiary tags.</p>
+
+      <!-- ── QUEUE HEADER (search + filter chrome) ───────── -->
+      <div class="queue-header">
+        <div class="row-top">
+          <span class="title">Queue</span>
+          <span class="count"><b>47</b> leads · sorted band, then deadline</span>
+        </div>
+        <div class="search-input-wrap">
+          <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input class="search-input" type="text" placeholder="Search by name, phone, email, postal code, lead ref, or matter type" value="" />
+          <button class="search-clear" aria-label="Clear search" title="Clear">&times;</button>
+        </div>
+        <div class="filter-row">
+          <span class="filter-label">Band</span>
+          <button class="filter-chip active">All <span class="chip-count">47</span></button>
+          <button class="filter-chip">A <span class="chip-count">12</span></button>
+          <button class="filter-chip">B <span class="chip-count">18</span></button>
+          <button class="filter-chip">C <span class="chip-count">11</span></button>
+          <button class="filter-chip">D <span class="chip-count">6</span></button>
+        </div>
+        <div class="filter-row">
+          <span class="filter-label">Channel</span>
+          <button class="filter-chip active">All</button>
+          <button class="filter-chip">Web</button>
+          <button class="filter-chip">Voice</button>
+          <button class="filter-chip">Messenger</button>
+          <button class="filter-chip">Instagram</button>
+          <button class="filter-chip">WhatsApp</button>
+          <button class="filter-chip">SMS</button>
+        </div>
+        <div class="search-results-meta">
+          Showing <b>2</b> of <b>47</b> · band A + B
+        </div>
+      </div>
+
+      <div class="card card-new">
+        <div class="band-cell">
+          <span class="band-chip band-a lg">A</span>
+        </div>
+        <div class="name">Sarah Patel</div>
+        <div class="contact">
+          <a href="tel:+16475559999">647 555 9999</a>
+          <span class="dot">·</span>
+          <a href="mailto:sarah.patel.test@example.com">sarah.patel.test@example.com</a>
+          <span class="dot">·</span>
+          <span style="color: var(--ink-mute);">M5T 1B3</span>
+        </div>
+        <div class="countdown-cell">
+          <div class="label">Decision in</div>
+          <div class="clock">24h 19m</div>
+        </div>
+        <div class="arrival">
+          <div class="item">
+            <span class="lbl">Arrived</span>
+            <span class="val">May 25, 2026 · 10:33 PM</span>
+          </div>
+          <div class="item">
+            <span class="lbl">·</span>
+            <span class="val muted">2 hours ago</span>
+          </div>
+        </div>
+        <div class="tags">
+          <span class="matter-tag">Shareholder Dispute</span>
+          <span class="channel-chip">Facebook Messenger</span>
+          <span class="lead-id-tag">L-2026-05-25-77P</span>
+        </div>
+        <div class="body">
+          <p class="snapshot">
+            Corporate dispute — shareholder or co-owner conflict involving access to records, company control, or financial conduct.
+          </p>
+          <p class="fee">
+            <span class="accent">$3,000–$10,000+</span> · likely scope, not a quote · depends on urgency and dispute complexity.
+          </p>
+          <div class="axes">
+            <span class="axis">VAL <b>7</b>/10</span>
+            <span class="axis">SMP <b>10</b>/10</span>
+            <span class="axis zero">URG <b>0</b>/10</span>
+            <span class="axis">RDY <b>8</b>/10</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-new">
+        <div class="band-cell">
+          <span class="band-chip band-b lg">B</span>
+        </div>
+        <div class="name">Sarah Patel</div>
+        <div class="contact">
+          <a href="tel:+16475559999">647 555 9999</a>
+          <span class="dot">·</span>
+          <a href="mailto:sarah.patel.test@example.com">sarah.patel.test@example.com</a>
+          <span class="dot">·</span>
+          <span style="color: var(--ink-mute);">M5T 1B3</span>
+        </div>
+        <div class="countdown-cell">
+          <div class="label">Decision in</div>
+          <div class="clock">47h 02m</div>
+        </div>
+        <div class="arrival">
+          <div class="item">
+            <span class="lbl">Arrived</span>
+            <span class="val">May 26, 2026 · 10:34 AM</span>
+          </div>
+          <div class="item">
+            <span class="lbl">·</span>
+            <span class="val muted">just now</span>
+          </div>
+        </div>
+        <div class="tags">
+          <span class="matter-tag">Wrongful Dismissal</span>
+          <span class="channel-chip">Facebook Messenger</span>
+          <span class="lead-id-tag">L-2026-05-26-Z3A</span>
+        </div>
+        <div class="body">
+          <p class="snapshot">
+            Employment — wrongful or constructive dismissal claim. Caller has been let go (or treated such that they had to resign) and is exploring notice, severance, or damages.
+          </p>
+          <p class="fee">
+            <span class="accent">$1,500–$4,000</span> initial assessment ·
+            <span class="accent">$3,000–$8,000+</span> negotiated settlement ·
+            <span class="accent">$15,000–$50,000+</span> if proceeding to litigation.
+          </p>
+          <div class="axes">
+            <span class="axis zero">VAL <b>0</b>/10</span>
+            <span class="axis">SMP <b>10</b>/10</span>
+            <span class="axis zero">URG <b>0</b>/10</span>
+            <span class="axis">RDY <b>10</b>/10</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ──────────────────────────────────────────────────────────── -->
+  <div class="notes">
+    <h3>Design notes for review</h3>
+    <ul>
+      <li><b>Band chip stays primary signal of priority.</b> Bigger on the new card (56×56 vs 44×44) — anchors the row visually.</li>
+      <li><b>Name as the lead's identity.</b> 22px Manrope 700, matches the brand header weight. The lawyer scans the queue by person; reading "Sarah Patel" first means they can recognise repeat callers, family connections, or referrals at a glance.</li>
+      <li><b>Contact right under the name</b>, click-to-call and mailto links. The lawyer's natural action after picking a card is to call; one click should do it.</li>
+      <li><b>Arrival timestamp gets its own row</b> with absolute + relative ("May 25, 2026 · 10:33 PM" · "2 hours ago"). Operator review feedback: response time is the single most important metric — surfacing it on the card lets lawyers triage stale leads at a glance.</li>
+      <li><b>Decision-window countdown moves top-right</b>, separated from the name. "Decision in 24h 19m" reads as a clock, not a status word. The countdown turns red-ish when under 6h (handled by <code>.clock.urgent</code> class).</li>
+      <li><b>Matter type becomes a tag</b>, not the headline. Same with channel. Lead ID drops to the right of the tag row in small Oxanium — useful for ops but not for the lawyer's first read.</li>
+      <li><b>Snapshot, fee estimate, and four-axis</b> stay below a thin hairline separator. Body is still the diagnostic content, just no longer competing with the identity row.</li>
+      <li><b>Four-axis row</b>: zero scores grey out (axis.zero class) so the lawyer's eye is drawn to the live signal. VAL/SMP/URG/RDY column ordering preserved (operator habit).</li>
+      <li><b>Square corners + parchment palette preserved.</b> Border-radius 4px matches the brand book; no rounded card shapes.</li>
+      <li><b>Queue header adds a search field and filter chips.</b> Today's portal has only a band filter as a URL param. With the NAP-first card, searching by lead name (or phone, email, postal, lead ref) becomes the natural way to find a specific person. Filter chips for band + channel sit below the search, mirroring the way operators already think about the queue.</li>
+      <li><b>Search is one input, multi-field match.</b> One field, lower-cased substring match across name + phone + email + postal + lead ref + matter type. No advanced syntax, no separate fields. The lawyer types what they remember; the queue narrows.</li>
+      <li><b>Filter chip counts.</b> Each band chip shows the lead count in that band (A 12, B 18, etc.). Operator sees workload distribution at a glance without scrolling.</li>
+      <li><b>Result count + reset.</b> "Showing 2 of 47 · band A + B" reads back the active filters and total. A reset link clears search + filters in one click.</li>
+    </ul>
+  </div>
+
+  <div class="notes">
+    <h3>If approved — implementation scope</h3>
+    <ul>
+      <li>File to change: <code>src/app/portal/[firmId]/triage/page.tsx</code> (queue list rendering) and possibly a new <code>components/portal/TriageQueueCard.tsx</code> if we want to extract.</li>
+      <li>Data already in the screened_leads row: <code>contact_name</code>, <code>contact_phone</code>, <code>contact_email</code>, <code>contact_postal_code</code> (NAP), <code>created_at</code> (arrival timestamp), <code>decision_deadline</code> (countdown), <code>band</code>, <code>matter_type</code>, <code>slot_answers.channel</code>, <code>brief_json.matter_snapshot</code>, <code>brief_json.fee_estimate</code>, <code>brief_json.four_axis</code>.</li>
+      <li>Relative-time formatting helper: add a small <code>formatRelativeArrival(created_at)</code> in <code>src/lib/decision-timer.ts</code> or sibling. "Just now" / "2 hours ago" / "Yesterday at 10:33 PM" / "May 14, 2026" beyond a week.</li>
+      <li>Click targets: card stays clickable as a whole (navigates to brief view). Phone + email links inside the contact row should <code>stopPropagation</code> so they don't accidentally open the brief.</li>
+      <li>Mobile: the 3-column grid collapses to single column at &lt;640px; band chip + name + countdown stack vertically.</li>
+      <li><b>Search + filter implementation:</b> client-side filter is sufficient (queue page already loads all <code>triaging</code> rows). New <code>components/portal/TriageQueueHeader.tsx</code> owns the search input + filter chip state. Debounce the search input 100ms to keep keystroke latency low. Filter state syncs to URL params so the lawyer can bookmark a filtered view: <code>?q=patel&amp;band=A,B&amp;channel=messenger,whatsapp</code>. The existing <code>?band=</code> param keeps working (single-value form), with the comma-separated form supported on top.</li>
+      <li><b>Searchable fields</b> (lower-cased substring match): <code>contact_name</code>, <code>contact_phone</code> (digits-only stripped before match, so "647-555-9999" finds "(647) 555 9999"), <code>contact_email</code>, <code>contact_postal_code</code> (whitespace stripped), <code>lead_ref</code> (the L-2026-05-26-Z3A short code), <code>matter_type</code> (matched against the human-readable label, not the enum string).</li>
+      <li><b>Chip counts</b> computed once per render from the full queue array: <code>const counts = { A: leads.filter(l =&gt; l.band === 'A').length, ... }</code>. No extra fetch. Counts reflect the full queue, NOT the search-narrowed list (operator wants to see the workload, not the search result distribution).</li>
+      <li><b>Empty state</b> when search returns zero matches: "No leads match 'patel' in this view. <button>Clear search</button> to see all 47."</li>
+      <li><b>Out of scope for v1:</b> language filter, practice-area filter, date range. Matter-type filter is technically possible but the matter-type list is long; defer until the queue grows large enough to need it.</li>
+      <li>No engine changes. No sandbox sync. Pure portal UX.</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

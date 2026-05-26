@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/channel-send', () => ({
   sendChannelMessage: mocks.sendChannelMessage,
   buildContactCaptureFollowUp: mocks.buildContactCaptureFollowUp,
+  buildContactCaptureExhaustedMessage: vi.fn(() => 'exhausted text'),
 }));
 
 vi.mock('@/lib/screen-llm-server', () => ({
