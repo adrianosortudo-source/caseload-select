@@ -1,0 +1,112 @@
+/* ════════════════════════════════════════════════════════════════════
+   CaseLoad Select · Marketing Design Tokens
+   Ported from CaseFlow_Website_v45.html. Brand-aligned to BrandBook ACTS V1.
+   Scoped to .cls-marketing so we don't leak into the admin app's Tailwind.
+═══════════════════════════════════════════════════════════════════════ */
+
+.cls-marketing {
+  /* ── Color tokens ─────────────────────────────────────────────────── */
+  --navy:         #1E2F58;
+  --navy-deep:    #0D1520;
+  --navy-deeper:  #080F1C;
+  --stone:        #C4B49A;
+  --stone-light:  #D8CAAE;
+  --stone-soft:   #DCD0BB;
+  --stone-on-light: #9E9070;
+  --parchment:    #F4F3EF;
+  --parchment-warm: #EDEAD9;
+  --slate:        #8090B0;
+  --white:        #FFFFFF;
+  --off-white:    #F9F8F5;
+  --text:         #1C2B3A;
+  --text-muted:   #6B7A8D;
+  --border:       #E8E4DA;
+  --border-soft:  rgba(196,180,154,0.18);
+  --danger:       #C0392B;
+
+  /* ── Type families ────────────────────────────────────────────────── */
+  --font-display: 'Oxanium', system-ui, sans-serif;
+  --font-body:    'Manrope', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+  /* ── Fluid type scale (clamp: min, fluid, max) ────────────────────── */
+  --fs-hero:    clamp(34px, 5vw, 64px);
+  --fs-h2:      clamp(26px, 3.2vw, 42px);
+  --fs-h3:      clamp(20px, 2.4vw, 28px);
+  --fs-anchor:  clamp(18px, 2.2vw, 26px);
+  --fs-lead:    clamp(15px, 1.8vw, 18px);
+  --fs-body:    15px;
+  --fs-body-sm: 13.5px;
+  --fs-small:   12px;
+  --fs-micro:   11px;
+  --fs-eyebrow: 10px;
+
+  /* ── Letter-spacing scale ─────────────────────────────────────────── */
+  --ls-headline:  -0.5px;
+  --ls-body:      0px;
+  --ls-eyebrow:   3px;
+  --ls-eyebrow-l: 3.5px;
+  --ls-ticker:    2.5px;
+  --ls-button:    1.2px;
+  --ls-label:     2px;
+
+  /* ── Spacing scale (4 / 8 / 16 / 24 / 32 / 48 / 64 / 96 / 128) ───── */
+  --sp-1:   4px;
+  --sp-2:   8px;
+  --sp-3:   12px;
+  --sp-4:   16px;
+  --sp-5:   24px;
+  --sp-6:   32px;
+  --sp-7:   48px;
+  --sp-8:   64px;
+  --sp-9:   96px;
+  --sp-10:  128px;
+
+  /* ── Section padding (responsive via media query at the bottom) ───── */
+  --section-pad-v: 100px;
+  --section-pad-h: 60px;
+
+  /* ── Border radius ────────────────────────────────────────────────── */
+  --r-tight: 3px;
+  --r-card:  10px;
+  --r-pill:  999px;
+
+  /* ── Elevation shadows (subtle / medium / prominent) ──────────────── */
+  --shadow-1: 0 2px 16px rgba(30,47,88,0.05);
+  --shadow-2: 0 8px 40px rgba(30,47,88,0.12);
+  --shadow-3: 0 16px 48px rgba(30,47,88,0.18);
+
+  /* ── Motion ───────────────────────────────────────────────────────── */
+  --ease-out-soft:  cubic-bezier(0.2, 0, 0.1, 1);
+  --ease-out-cubic: cubic-bezier(0.33, 1, 0.68, 1);
+  --t-fast:   0.2s;
+  --t-medium: 0.4s;
+  --t-slow:   0.65s;
+}
+
+/* ── Tablet: shrink section padding ─────────────────────────────────── */
+@media (max-width: 1024px) {
+  .cls-marketing {
+    --section-pad-v: 72px;
+    --section-pad-h: 32px;
+  }
+}
+
+/* ── Mobile: shrink further ─────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .cls-marketing {
+    --section-pad-v: 56px;
+    --section-pad-h: 20px;
+  }
+}
+
+/* ── Respect motion preferences ─────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .cls-marketing *,
+  .cls-marketing *::before,
+  .cls-marketing *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -20,6 +20,13 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const isPrivacy = path === "/privacy";
   const isTerms = path === "/terms";
   const isFirmOnboarding = path.startsWith("/firm-onboarding");
+  // Public marketing site at /home (and any future marketing routes) must not
+  // get the operator sidebar. Lives in src/app/(marketing)/.
+  const isMarketing =
+    path === "/home" ||
+    path === "/about" ||
+    path === "/pricing" ||
+    path.startsWith("/screen-demo");
 
   if (
     isPortal ||
@@ -28,7 +35,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     isOperatorConsole ||
     isPrivacy ||
     isTerms ||
-    isFirmOnboarding
+    isFirmOnboarding ||
+    isMarketing
   ) {
     return <>{children}</>;
   }

@@ -44,6 +44,91 @@ The Client Portal (S8) IS client-facing but configured and deployed by Adriano.
 
 Supabase URL: https://ssxryjxifwiivghglqer.supabase.co (region: ca-central-1, Montreal). Migrated from `qpzopweonveumvuqkqgw` (us-east-2, Ohio) on 2026-05-18 to unblock the "client lead data is stored in Canadian data centers" residency line. Migration runbook at `docs/runbooks/supabase-migration.md`. Future schema migrations apply via `supabase db push` (project linked in `supabase/config.toml`). Weekly backup discipline via `scripts/backup-supabase.sh`.
 
+## Public Marketing Site (2026-05-26)
+
+The public-facing marketing site at `caseloadselect.ca/home` and the interactive Screen demo at `caseloadselect.ca/screen-demo` both live inside this Next.js project, in the `(marketing)` route group. Independent layout, independent CSS scope, zero crosstalk with the operator-facing admin shell.
+
+### Routes
+
+| Route | Purpose |
+|---|---|
+| `/home` | Marketing homepage — Hero, Ticker, Problem, ACTS System, CPI Wham Moment, Client Result (Damaris testimonial + stat counters), Why, FAQ + JSON-LD, Final CTA |
+| `/screen-demo` | Entry page — case picker (3 sample cases + "use your own") |
+| `/screen-demo/quiz/[caseId]` | Five-question quiz flow → email gate → inline Sample Report |
+| `POST /api/screen-demo/report` | Computes the score, renders the Sample Report PDF via @react-pdf/renderer, delivers via Resend with cover note |
+
+### Architecture
+
+```
+src/app/(marketing)/
+├── layout.tsx                  marketing scope, no AdminShell
+├── home/page.tsx               homepage at /home (root SEO surface)
+├── styles/
+│   ├── tokens.css              12 brand color tokens, fluid type clamp(), spacing/motion scales
+│   └── marketing.css           section variants, hero composite, buttons, reveal-on-scroll
+├── components/
+│   ├── RevealOnScroll.tsx      single IntersectionObserver for the whole page
+│   ├── StatCounter.tsx         scroll-triggered count-up, prefers-reduced-motion aware
+│   ├── MarketingNav.tsx        sticky nav, logo swap on scroll
+│   ├── ActsIcons.tsx           four bespoke SVG icons (A/C/T/S)
+│   ├── Hero.tsx                layered hero composite + choreographed entrance
+│   ├── Ticker.tsx              auto-scrolling navy strip, hover-pauses
+│   ├── ProblemSection.tsx      three problem cards
+│   ├── ActsSystemSection.tsx   four ACTS phase cards
+│   ├── CpiSection.tsx          five-band Wham Moment strip + interactive demo CTA
+│   ├── ClientResultSection.tsx Damaris testimonial + three stat counters
+│   ├── WhySection.tsx          four RTB cards
+│   └── FaqSection.tsx          accordion + FAQPage JSON-LD
+└── screen-demo/
+    ├── page.tsx                entry + case picker
+    ├── quiz/[caseId]/page.tsx  quiz mount per case
+    ├── _data/
+    │   ├── questions.ts        5 marketing-calibrated questions + ScoreDelta types
+    │   └── cases.ts            4 case fixtures (Immigration A, Criminal B, Real Estate C, custom)
+    ├── _lib/
+    │   ├── scoring.ts          pure CPI scoring engine + narrative builder + a/an article picker
+    │   └── report-pdf.tsx      @react-pdf/renderer template, Font.register for branded TTFs
+    └── _components/
+        ├── DemoNav.tsx         minimal brand-only nav (no distractions)
+        ├── CasePicker.tsx      4 cards with Band-coloured chips
+        ├── ScreenQuiz.tsx      quiz state machine + email gate + API submit
+        └── ReportView.tsx      inline sample report + emailDelivered banner
+
+src/app/api/screen-demo/report/route.ts   PDF render + Resend delivery
+public/fonts/                              Manrope-VF.ttf, Oxanium-VF.ttf (variable fonts)
+public/marketing/adriano-portrait.jpg     operator headshot for hero block
+```
+
+### Doctrine
+
+- **CSS scope.** Marketing styles live under the `cls-marketing` class on the route-group layout. Admin Tailwind never bleeds in; marketing tokens never bleed out. `AdminShell` bypasses the operator sidebar for any path starting with `/home`, `/about`, `/pricing`, or `/screen-demo`.
+- **Brand discipline.** No em dashes anywhere in marketing copy (zero-exception brand rule). No banned vocabulary. Sage operating register; Hero language ("Sign Better Cases") reserved for promise-level surfaces only. Terminal squares on section headlines only.
+- **Demonstration footer band.** The Sample Screen Report PDF carries a "DEMONSTRATION REPORT — NOT FROM A REAL INQUIRY" band fixed at the top and bottom of every page. LSO Rule 4.2-1 compliance device. The inline ReportView mirrors the band top-and-bottom too. Do not strip or restyle the band; it is the artifact's compliance signature.
+- **PDF fonts.** Local variable-font TTFs in `public/fonts/`. `Font.register` resolves them with an absolute `path.join(process.cwd(), "public", "fonts", ...)` so dev and Vercel both work. Never reach the Google Fonts CDN at runtime for PDF rendering; the 404s are reproducible.
+- **CPI band thresholds.** Production v2.1: A ≥ 90, B ≥ 75, C ≥ 60, D ≥ 45, E < 45. The marketing demo's `scoring.ts` and the homepage CPI section both use these thresholds. Drift between display ranges and scoring thresholds is a bug.
+- **PDF scoring drift is acceptable, threshold drift is not.** The marketing demo questions are not the Layer 2 production questions. The scoring math is purpose-built for the demo. But the banding thresholds and the band labels must match the product so the artifact reads as an authentic product output.
+
+### Dev script lock — webpack, not Turbopack (2026-05-26)
+
+Turbopack on this project's D: drive cannot create junction-point symlinks for transitive dev dependencies (specifically `prettier`, brought in by `@react-pdf/renderer`). Symptom: `TurbopackInternalError: failed to create junction point at .next\dev\node_modules\prettier-<hash>` with `os error 1: Incorrect function`. Webpack does not have this issue.
+
+`package.json` scripts:
+
+```jsonc
+{
+  "dev": "next dev --webpack",     // canonical local dev — works on D:
+  "dev:turbo": "next dev --turbopack"  // escape hatch, currently broken on D:
+}
+```
+
+The project is not moving off D:. The lock is permanent until either (a) Turbopack drops the symlink approach or (b) the D: filesystem gains junction-point support. Vercel's prod build uses its own toolchain and is unaffected.
+
+### Resend config for screen-demo emails
+
+- `RESEND_FROM` (default: `CaseLoad Select <noreply@caseloadselect.ca>`) — sender address
+- `RESEND_API_KEY` — required to actually deliver mail; if missing, the API still generates the PDF and returns it, just `emailed: false`
+- Domain verification: `caseloadselect.ca` must be verified at resend.com/domains for production. Until verified, Resend test mode only delivers to the account-verified address.
+
 ## Architecture
 
 ```
