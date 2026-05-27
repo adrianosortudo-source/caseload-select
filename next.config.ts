@@ -120,6 +120,19 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Apex / catches visitors at the bare domain (caseloadselect.ca) once the
+  // GHL-hosted marketing site is cut over. The Next.js marketing route group
+  // lives at /home; without this redirect the apex would 404. Permanent (308)
+  // so search engines treat /home as canonical.
+  async redirects() {
+    return [
+      {
+        source: "/",
+        destination: "/home",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
