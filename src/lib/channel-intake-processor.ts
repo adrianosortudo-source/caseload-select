@@ -74,6 +74,7 @@ import {
   buildOutOfRangeDigitReply,
 } from '@/lib/numeric-option-mapping';
 import { applyFreeTextFuzzyMatch } from '@/lib/free-text-fuzzy-match';
+import { applyFreeTextAnswerMapping } from '@/lib/free-text-answer-mapping';
 import {
   rerouteFromCorporateGeneral,
   rerouteFromRealEstateGeneral,
@@ -425,6 +426,16 @@ export async function processChannelInbound(
   // numeric mapping but for word sentinels. Without this, "dont know"
   // gets dropped by the LLM denylist (DR-025) and the engine re-asks.
   state = applyFreeTextFuzzyMatch(trimmed, state);
+
+  // Free-text answer mapping — when Phase C asks a free_text slot
+  // (e.g. business_location "Which city or region?"), the lead types
+  // a short non-sentinel reply ("toronto"), and there's no path to
+  // fill the slot. The LLM's strict NULL rule often returns null on
+  // a bare 1-2 word reply, so the slot stays empty and the engine
+  // re-asks. This adapter fills the current open free_text slot
+  // with the trimmed reply via applyAnswer. Field-detected
+  // 2026-05-27 on DRG Messenger lead L-2026-05-27-R2X.
+  state = applyFreeTextAnswerMapping(trimmed, state);
 
   // LLM extraction — best-effort, never aborts. Runs on the new turn text
   // and merges into existing state. On a resume turn, the LLM sees just
