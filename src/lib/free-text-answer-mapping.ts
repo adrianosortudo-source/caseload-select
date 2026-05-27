@@ -45,20 +45,33 @@ import type { EngineState } from './screen-engine/types';
 /** Replies longer than this are probably matter descriptions, not slot answers. */
 const MAX_FREE_TEXT_ANSWER_LENGTH = 60;
 
-/** Bare digit-only replies are handled by numeric-option-mapping. */
-const DIGIT_ONLY_RE = /^\s*\d+\s*\.?\s*$/;
-
 /**
- * Sentinels handled by free-text-fuzzy-match. Kept inline here (not
- * imported) so this module stays independent — both adapters can run
- * in any order without circular detection logic.
+ * Sentinels that DO NOT apply to free-text slots. yes/no answers don't
+ * make sense for "What's your postal code?" or "Which city?" — they're
+ * for single_select slots and free-text-fuzzy-match handles them. If
+ * one slips through (slot definition is free_text but the question is
+ * binary), we still bail to avoid filling a city slot with "Yes".
  */
 const SENTINEL_AFFIRMATIVE_RE =
   /^\s*(yes|yeah|yep|yup|y|sure|ok|okay|correct|right|absolutely|definitely)\s*\.?\s*$/i;
 const SENTINEL_NEGATIVE_RE =
   /^\s*(no|nope|nah|n|not\s+really|negative)\s*\.?\s*$/i;
+
+/**
+ * Non-answer sentinels DO apply to free-text slots. Many free-text
+ * questions explicitly accept "if you know" / "if applicable" framing
+ * (ownership_percentage: "What percentage do you own, if you know?").
+ * When the lead replies "not sure" / "dont know" / "idk", the engine
+ * should record that as a legitimate answer (canonical "Not sure")
+ * rather than re-asking. Codex pushback 2026-05-27: previously this
+ * adapter bailed on these, free-text-fuzzy-match also bailed (it
+ * only handles single_select), so the free-text slot looped.
+ */
 const SENTINEL_NON_ANSWER_RE =
   /^\s*((i\s+)?(don'?t|do\s*not)\s+know|dont\s+know|idk|no\s+idea|not\s+sure|unsure|unknown|n\s*\/\s*a|not\s+applicable)\s*\.?\s*$/i;
+
+/** The canonical value we write when a non-answer sentinel matches a free-text slot. */
+const NON_ANSWER_CANONICAL = 'Not sure';
 
 /** Looks like an email — let contact-extraction handle it. */
 const EMAIL_LIKE_RE = /@/;
@@ -66,22 +79,39 @@ const EMAIL_LIKE_RE = /@/;
 /**
  * Looks like a phone — let contact-extraction handle it. Matches +1
  * prefix, parens, dashes, dots, spaces between digits. Requires at
- * least 7 digits total to avoid catching things like a unit number.
+ * least 7 digits total to avoid catching things like a unit number
+ * or a percentage figure ("40").
  */
 const PHONE_LIKE_RE = /^\+?[\d().\s-]{7,}$/;
 
-function isShortNonSentinelReply(text: string): boolean {
-  if (!text || typeof text !== 'string') return false;
+/**
+ * Reply classification: 'fill_verbatim' (normal text answer or short
+ * digit), 'fill_not_sure' (non-answer sentinel — write canonical
+ * "Not sure"), or 'skip' (bail to a different adapter).
+ *
+ * Note (Codex pushback 2026-05-27): digit-only replies are now in the
+ * fill_verbatim bucket, not skip. The numeric-option-mapping adapter
+ * runs FIRST in the processor pipeline; if the next-step slot is
+ * single_select, it consumes the digit and updates state. By the time
+ * THIS adapter runs and sees a digit, the next-step slot is free_text
+ * (otherwise numeric mapping would have fired), and the digit IS the
+ * answer ("40" for ownership_percentage "if you know?"). Excluding
+ * digits here left a coverage gap for free-text matter slots that
+ * naturally take numeric answers.
+ */
+type ReplyDisposition = 'fill_verbatim' | 'fill_not_sure' | 'skip';
+
+function classifyReply(text: string): { disposition: ReplyDisposition; trimmed: string } {
+  if (!text || typeof text !== 'string') return { disposition: 'skip', trimmed: '' };
   const trimmed = text.trim();
-  if (!trimmed) return false;
-  if (trimmed.length > MAX_FREE_TEXT_ANSWER_LENGTH) return false;
-  if (DIGIT_ONLY_RE.test(trimmed)) return false;
-  if (SENTINEL_AFFIRMATIVE_RE.test(trimmed)) return false;
-  if (SENTINEL_NEGATIVE_RE.test(trimmed)) return false;
-  if (SENTINEL_NON_ANSWER_RE.test(trimmed)) return false;
-  if (EMAIL_LIKE_RE.test(trimmed)) return false;
-  if (PHONE_LIKE_RE.test(trimmed)) return false;
-  return true;
+  if (!trimmed) return { disposition: 'skip', trimmed: '' };
+  if (trimmed.length > MAX_FREE_TEXT_ANSWER_LENGTH) return { disposition: 'skip', trimmed };
+  if (SENTINEL_AFFIRMATIVE_RE.test(trimmed)) return { disposition: 'skip', trimmed };
+  if (SENTINEL_NEGATIVE_RE.test(trimmed)) return { disposition: 'skip', trimmed };
+  if (SENTINEL_NON_ANSWER_RE.test(trimmed)) return { disposition: 'fill_not_sure', trimmed };
+  if (EMAIL_LIKE_RE.test(trimmed)) return { disposition: 'skip', trimmed };
+  if (PHONE_LIKE_RE.test(trimmed)) return { disposition: 'skip', trimmed };
+  return { disposition: 'fill_verbatim', trimmed };
 }
 
 // ── Main entry ──────────────────────────────────────────────────────────
@@ -101,7 +131,8 @@ export function applyFreeTextAnswerMapping(
   text: string,
   state: EngineState,
 ): EngineState {
-  if (!isShortNonSentinelReply(text)) return state;
+  const { disposition, trimmed } = classifyReply(text);
+  if (disposition === 'skip') return state;
 
   let next: ReturnType<typeof getNextStep>;
   try {
@@ -121,5 +152,6 @@ export function applyFreeTextAnswerMapping(
   if (slot.tier === 'contact') return state;
   if (state.slots[slot.id]) return state;
 
-  return applyAnswer(state, slot.id, text.trim());
+  const valueToWrite = disposition === 'fill_not_sure' ? NON_ANSWER_CANONICAL : trimmed;
+  return applyAnswer(state, slot.id, valueToWrite);
 }
