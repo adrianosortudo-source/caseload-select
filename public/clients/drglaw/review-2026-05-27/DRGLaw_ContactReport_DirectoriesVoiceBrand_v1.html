@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CaseLoad Select / DRG Law &middot; Contact Report &middot; Directories, Voice Agent, Brand &middot; 27 May 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700&family=Manrope:wght@700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --c-deep-black: #0D1520;
+    --c-navy: #1E2F58;
+    --c-gold: #C4B49A;
+    --c-parchment: #F4F3EF;
+    --c-white: #FFFFFF;
+    --c-body: #4A5A72;
+    --c-muted: #8090A8;
+    --c-muted-readable: #5E6D82;
+    --c-gold-on-light: #8B7A5E;
+    --c-border: #E0DDD6;
+    --c-success: #27834A;
+    --font-display: 'Oxanium','Rajdhani',sans-serif;
+    --font-heading: 'Manrope','Inter',sans-serif;
+    --font-body: 'DM Sans','Inter',sans-serif;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { font-family:var(--font-body); background:#e0ddd8; color:var(--c-body); }
+
+  .page { width:210mm; min-height:297mm; margin:0 auto 24px; position:relative; overflow:hidden; background:var(--c-white); box-shadow:0 4px 32px rgba(0,0,0,0.18); display:flex; flex-direction:column; }
+
+  @media print {
+    body { background:var(--c-white); }
+    .page { margin:0; box-shadow:none; height:297mm; overflow:hidden; page-break-after:always; }
+    .page:last-child { page-break-after:auto; }
+  }
+
+  .header-bar { background:var(--c-deep-black); height:48px; flex-shrink:0; padding:14px 32px; display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--c-gold); }
+  .hb-logo { height:17px; width:auto; display:block; }
+  .hb-title { font-family:var(--font-display); font-size:9.5px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:rgba(255,255,255,0.6); }
+
+  .sp { padding:22px 28px 18px; flex:1; display:flex; flex-direction:column; gap:14px; }
+
+  .hero { background:var(--c-deep-black); color:var(--c-white); padding:24px 28px; }
+  .hero .eyebrow { font-family:var(--font-display); font-size:9.5px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold); margin-bottom:11px; }
+  .hero h1 { font-family:var(--font-heading); font-size:22px; font-weight:800; line-height:1.15; letter-spacing:-0.02em; color:var(--c-white); margin-bottom:13px; }
+  .hero h1 .accent { color:var(--c-gold); }
+  .hero h1 .terminal-sq { display:inline-block; width:6px; height:6px; background:var(--c-gold); margin-left:5px; vertical-align:top; position:relative; top:4px; }
+  .hero p { font-family:var(--font-body); font-size:11.5px; line-height:1.6; color:rgba(255,255,255,0.88); max-width:680px; }
+  .hero p strong { color:var(--c-white); font-weight:600; }
+
+  .meta-band { background:var(--c-parchment); border:1px solid var(--c-border); padding:13px 16px; display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .meta-item { font-family:var(--font-body); font-size:10px; line-height:1.5; color:var(--c-body); }
+  .meta-item .key { font-family:var(--font-display); font-size:8.5px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); display:block; margin-bottom:4px; }
+  .meta-item strong { color:var(--c-navy); font-weight:600; }
+
+  .sect-h { font-family:var(--font-heading); font-size:14px; font-weight:700; color:var(--c-navy); margin-bottom:8px; line-height:1.3; }
+  .sect-eyebrow { font-family:var(--font-display); font-size:9px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); margin-bottom:5px; }
+
+  .dec-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .dec-tile { background:var(--c-white); border:1px solid var(--c-border); padding:12px 14px; }
+  .dec-tile.feature { border-top:3px solid var(--c-navy); }
+  .dec-tile .num { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; color:var(--c-gold-on-light); margin-bottom:4px; display:block; }
+  .dec-tile .t { font-family:var(--font-heading); font-weight:700; font-size:11px; color:var(--c-navy); margin-bottom:4px; line-height:1.3; }
+  .dec-tile .d { font-family:var(--font-body); font-size:9.75px; line-height:1.5; color:var(--c-body); }
+  .dec-tile .d strong { color:var(--c-navy); font-weight:600; }
+
+  .owe-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .owe-card { background:var(--c-white); border:1px solid var(--c-border); padding:16px 18px; }
+  .owe-card .label { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); margin-bottom:6px; }
+  .owe-card h3 { font-family:var(--font-heading); font-weight:700; font-size:13px; color:var(--c-navy); margin-bottom:9px; }
+  .owe-card ul { list-style:none; padding:0; margin:0; }
+  .owe-card li { font-family:var(--font-body); font-size:10.25px; line-height:1.5; color:var(--c-body); padding:5px 0 5px 12px; position:relative; display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+  .owe-card li::before { content:''; position:absolute; left:0; top:11px; width:4px; height:4px; background:var(--c-gold); }
+  .owe-card li .text { flex:1; }
+  .owe-card li strong { color:var(--c-navy); font-weight:600; }
+  .owe-card li .due { font-family:var(--font-display); font-size:8.25px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--c-navy); background:var(--c-parchment); padding:2px 6px; border:1px solid var(--c-border); white-space:nowrap; flex-shrink:0; line-height:1.3; }
+  .owe-card li .due.urgent { background:var(--c-navy); color:var(--c-gold); border-color:var(--c-navy); }
+  .owe-card li .due.done { background:var(--c-success); color:var(--c-white); border-color:var(--c-success); }
+
+  .hold-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .hold-tile { background:var(--c-white); border:1px solid var(--c-border); padding:13px 14px; display:flex; flex-direction:column; }
+  .hold-tile .key { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; color:var(--c-gold-on-light); margin-bottom:6px; text-transform:uppercase; }
+  .hold-tile .t { font-family:var(--font-heading); font-weight:700; font-size:11.5px; color:var(--c-navy); line-height:1.25; margin-bottom:6px; }
+  .hold-tile .d { font-family:var(--font-body); font-size:9.5px; line-height:1.5; color:var(--c-body); flex:1; }
+  .hold-tile .d strong { color:var(--c-navy); font-weight:600; }
+
+  .scope-band { background:var(--c-parchment); border:1px solid var(--c-border); padding:14px 18px; }
+  .scope-band .label { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); margin-bottom:6px; }
+  .scope-band h3 { font-family:var(--font-heading); font-weight:700; font-size:13px; color:var(--c-navy); margin-bottom:8px; }
+  .scope-band p { font-family:var(--font-body); font-size:10.25px; line-height:1.55; color:var(--c-body); }
+  .scope-band p strong { color:var(--c-navy); font-weight:600; }
+
+  .cadence { background:var(--c-navy); color:var(--c-white); padding:18px 22px; margin-top:auto; }
+  .cadence .label { font-family:var(--font-display); font-size:9px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold); margin-bottom:7px; }
+  .cadence h3 { font-family:var(--font-heading); font-weight:700; font-size:13px; color:var(--c-white); margin-bottom:10px; }
+  .cadence-row { font-family:var(--font-body); font-size:10.25px; line-height:1.55; color:rgba(255,255,255,0.92); padding:4px 0; display:grid; grid-template-columns:110px 1fr; gap:14px; }
+  .cadence-row .key { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold); padding-top:1px; }
+  .cadence-row strong { color:var(--c-white); font-weight:600; }
+
+  .footer { padding:11px 28px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--c-border); background:var(--c-white); }
+  .footer-brand { font-family:var(--font-display); font-size:9px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-muted); }
+  .footer-page { font-family:var(--font-display); font-size:9px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-muted); }
+
+  strong { font-weight:600; color:var(--c-navy); }
+</style>
+</head>
+<body>
+
+<!-- ============== PAGE 1 ============== -->
+<div class="page">
+  <div class="header-bar">
+    <img class="hb-logo" src="https://caseload-select.vercel.app/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select &middot; Sign Better Cases">
+    <div class="hb-title">DRG Law &middot; Contact Report &middot; 27 May 2026</div>
+  </div>
+
+  <div class="sp">
+
+    <div class="hero">
+      <div class="eyebrow">Contact Report &middot; Directories, Voice Agent, Brand &middot; DRG Law &times; CaseLoad Select</div>
+      <h1>Listings out the door. Voice agent live and listening. Brand strategy approved for full read<span class="terminal-sq"></span></h1>
+      <p>This report records what was decided in the working call on <strong>27 May 2026</strong>, what landed in the field already, and what each side owes before tonight&rsquo;s visual identity preview at 4&nbsp;PM. Directory submissions are in motion, the AI intake line went live and was tested live on the call, and the full brand strategy is approved for D&acirc;maris&rsquo;s end-to-end&nbsp;read.</p>
+    </div>
+
+    <div class="meta-band">
+      <div class="meta-item"><span class="key">Date</span><strong>27 May 2026</strong>, morning</div>
+      <div class="meta-item"><span class="key">Channel</span><strong>Video call</strong>, recorded via Tactiq</div>
+      <div class="meta-item"><span class="key">Attendees</span>Adriano Domingues, D&acirc;maris Regina Dias Guimar&atilde;es da&nbsp;Rocha</div>
+      <div class="meta-item"><span class="key">Next checkpoint</span><strong>Same day, 4:00 PM</strong>, visual identity preview (30&nbsp;min)</div>
+    </div>
+
+    <div>
+      <div class="sect-eyebrow">Decisions Recorded &middot; Ten Items</div>
+      <h2 class="sect-h">What was decided in the&nbsp;room.</h2>
+      <div class="dec-grid">
+
+        <div class="dec-tile feature">
+          <span class="num">01 &middot; Directories</span>
+          <div class="t">Canadian Law List submission&nbsp;sent</div>
+          <div class="d">Free listing form completed and submitted earlier this week. Editorial review pending on the CLL side. No client action&nbsp;needed.</div>
+        </div>
+
+        <div class="dec-tile feature">
+          <span class="num">02 &middot; Directories</span>
+          <div class="t">Yellow Pages free listing request&nbsp;submitted</div>
+          <div class="d">YP free listing is request-only via solutions.yp.ca. Form submitted. A YP rep will call back to gather the remaining detail before the listing goes live. Adriano fields the callback when it&nbsp;lands.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">03 &middot; NAP</span>
+          <div class="t">Registered name confirmed for citation&nbsp;graph</div>
+          <div class="d"><strong>Damaris Regina Dias Guimaraes da Rocha</strong> is the LSO-registered legal name. It carries on the LSO entry, engagement letters, and any official directory record that asks for the full legal&nbsp;name.</div>
+        </div>
+
+        <div class="dec-tile feature">
+          <span class="num">04 &middot; NAP</span>
+          <div class="t">Directory phone number switched to D&acirc;maris&rsquo;s Google&nbsp;Voice</div>
+          <div class="d">Listings now publish <strong>647-947-9554</strong>, D&acirc;maris&rsquo;s personal Google Voice line. The 647-598-2537 LSO line stays on the LSO record but does not propagate to the public citation graph during the&nbsp;pilot.</div>
+        </div>
+
+        <div class="dec-tile feature">
+          <span class="num">05 &middot; Voice agent</span>
+          <div class="t">Live AI intake line tested on&nbsp;call</div>
+          <div class="d">D&acirc;maris dialed <strong>647-584-0998</strong> live during the session. Greeting clean, pacing right, conversational handoff working. Transcript captured. The line is operationally&nbsp;live.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">06 &middot; Voice agent</span>
+          <div class="t">Conversation flow held under a real&nbsp;scenario</div>
+          <div class="d">D&acirc;maris ran an incorporation scenario end-to-end. The agent asked relevant follow-ups, captured timeline and decision-makers, and closed cleanly. Flow itself rates as production&nbsp;quality.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">07 &middot; Voice agent</span>
+          <div class="t">Practice-area classification missed on the test&nbsp;call</div>
+          <div class="d">An incorporation matter resolved as the wrong matter type in the brief. Classifier and extractor need tuning against corporate sub-types. Logged for the engine&nbsp;backlog.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">08 &middot; Voice agent</span>
+          <div class="t">Priority-band example needs a residential Real Estate&nbsp;lens</div>
+          <div class="d">D&acirc;maris flagged that the C-band sample brief reads through a Corporate lens and undersells the residential Real Estate client. Update the sample matter library so each priority band has a Real Estate variant alongside the corporate&nbsp;one.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">09 &middot; Voice agent</span>
+          <div class="t">Pricing anchor recorded for the engine and the&nbsp;brief</div>
+          <div class="d">D&acirc;maris confirmed <strong>$1,200 baseline for a standard incorporation</strong>. Anchor used by the engine when building the price-fit signal on the lawyer brief and when training expected-value classification across&nbsp;matter&nbsp;types.</div>
+        </div>
+
+        <div class="dec-tile feature">
+          <span class="num">10 &middot; Brand</span>
+          <div class="t">Strategy section approved for full&nbsp;read</div>
+          <div class="d">D&acirc;maris green-lit the strategy section of the brand book and committed to reading it end-to-end before the 4&nbsp;PM session. Visual identity preview unlocks once she lands on the&nbsp;document.</div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="footer-brand">CaseLoad Select &middot; Sign Better Cases</div>
+    <div class="footer-page">Page 1 of 2</div>
+  </div>
+</div>
+
+<!-- ============== PAGE 2 ============== -->
+<div class="page">
+  <div class="header-bar">
+    <img class="hb-logo" src="https://caseload-select.vercel.app/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select &middot; Sign Better Cases">
+    <div class="hb-title">DRG Law &middot; Contact Report &middot; 27 May 2026</div>
+  </div>
+
+  <div class="sp">
+
+    <div>
+      <div class="sect-eyebrow">Action Items &middot; Owners and Dates</div>
+      <h2 class="sect-h">What each side owes between now and the next&nbsp;session.</h2>
+      <div class="owe-grid">
+
+        <div class="owe-card">
+          <div class="label">CaseLoad Select &middot; Adriano</div>
+          <h3>Tune, ship, present</h3>
+          <ul>
+            <li><span class="text">Field the <strong>Yellow Pages</strong> sales callback when it lands; close out the free listing details</span><span class="due urgent">This week</span></li>
+            <li><span class="text">Tune the engine on the <strong>practice-area classifier</strong> and the <strong>matter-type extractor</strong>; rerun the incorporation case as a regression check</span><span class="due urgent">This week</span></li>
+            <li><span class="text">Add a <strong>Real Estate variant</strong> to each priority-band sample brief in the engine&rsquo;s reference library</span><span class="due">Next week</span></li>
+            <li><span class="text">Lock <strong>$1,200 incorporation anchor</strong> into the engine price-fit signal and the pricing reference table</span><span class="due">This week</span></li>
+            <li><span class="text">Present <strong>visual identity preview</strong> (logo, palette, type) for D&acirc;maris&rsquo;s review</span><span class="due urgent">Today 4 PM</span></li>
+            <li><span class="text">Confirm <strong>647-947-9554 propagation</strong> across Canadian Law List, Yellow Pages, and the next directory wave</span><span class="due">Ongoing</span></li>
+          </ul>
+        </div>
+
+        <div class="owe-card">
+          <div class="label">DRG Law &middot; D&acirc;maris</div>
+          <h3>Read, decide, return</h3>
+          <ul>
+            <li><span class="text">Read the <strong>brand strategy section</strong> end-to-end ahead of the 4 PM preview</span><span class="due urgent">Today before 4 PM</span></li>
+            <li><span class="text">Join the <strong>visual identity preview</strong> (30 min)</span><span class="due urgent">Today 4 PM</span></li>
+            <li><span class="text">Surface any <strong>Real Estate edge cases</strong> the engine should know about, beyond the residential lens already flagged</span><span class="due">This week</span></li>
+            <li><span class="text">Confirm whether <strong>647-947-9554</strong> stays as the public directory line past the pilot, or transitions to a dedicated firm line later</span><span class="due">Pilot review</span></li>
+            <li><span class="text">Flag any <strong>availability gaps</strong> tied to the 3 June apartment move so cadence absorbs the&nbsp;week</span><span class="due">This week</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="sect-eyebrow">Holds and Returns &middot; What Came Back to the&nbsp;Workbench</div>
+      <h2 class="sect-h">Three items return for the next&nbsp;round.</h2>
+      <div class="hold-grid">
+        <div class="hold-tile">
+          <div class="key">Hold 01 &middot; Engine tuning</div>
+          <div class="t">Classifier and extractor missed on the live test&nbsp;call</div>
+          <div class="d">Incorporation matter resolved to the wrong matter type. Engine layer at fault, not voice flow. Targeted tuning on corporate sub-types and a regression rerun before the next live&nbsp;demo.</div>
+        </div>
+        <div class="hold-tile">
+          <div class="key">Hold 02 &middot; Sample briefs</div>
+          <div class="t">Priority-band library skews&nbsp;corporate</div>
+          <div class="d">C-band sample reads through a Corporate frame. Build a Real Estate variant for each band so residential clients see themselves on the brief. Carries into the engine&rsquo;s reference&nbsp;corpus.</div>
+        </div>
+        <div class="hold-tile">
+          <div class="key">Hold 03 &middot; Visual identity</div>
+          <div class="t">Preview gated on the brand strategy&nbsp;read</div>
+          <div class="d">D&acirc;maris reads the strategy section first, then sits in the 4 PM preview. Visual work opens for her live reaction once the strategy has been&nbsp;internalized.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scope-band">
+      <div class="label">Operational context &middot; capacity awareness</div>
+      <h3>Apartment move on 3&nbsp;June.</h3>
+      <p>D&acirc;maris moves apartments on <strong>3 June 2026</strong>. Cadence the week of the move absorbs limited availability on her side. CaseLoad-side work continues without dependency on her calendar that week; client-facing checkpoints reschedule&nbsp;accordingly.</p>
+    </div>
+
+    <div class="cadence">
+      <div class="label">Next checkpoint</div>
+      <h3>What happens between now and the next live&nbsp;session.</h3>
+      <div class="cadence-row"><div class="key">Today 4 PM</div><div><strong>Visual identity preview</strong>, 30 minutes. Logo direction, palette, type. D&acirc;maris arrives having read the brand strategy&nbsp;section.</div></div>
+      <div class="cadence-row"><div class="key">This week</div><div>Engine tuning on the <strong>practice-area classifier</strong> and <strong>matter-type extractor</strong>. YP callback handled. <strong>$1,200 incorporation anchor</strong> locked into the price-fit&nbsp;signal.</div></div>
+      <div class="cadence-row"><div class="key">Next week</div><div>Real Estate variants added to the <strong>priority-band sample brief library</strong>. Directory wave progresses to the next pair of citation&nbsp;targets.</div></div>
+      <div class="cadence-row"><div class="key">Week of 1 June</div><div>Lighter cadence around D&acirc;maris&rsquo;s <strong>3 June apartment move</strong>. CaseLoad-side build continues; client checkpoints reschedule into the following&nbsp;week.</div></div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="footer-brand">CaseLoad Select &middot; Sign Better Cases</div>
+    <div class="footer-page">Page 2 of 2</div>
+  </div>
+</div>
+
+</body>
+</html>

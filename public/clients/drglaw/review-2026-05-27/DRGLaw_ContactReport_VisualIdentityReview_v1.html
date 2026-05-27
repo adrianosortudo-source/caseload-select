@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CaseLoad Select / DRG Law &middot; Contact Report &middot; Visual Identity Review &middot; 27 May 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700&family=Manrope:wght@700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --c-deep-black: #0D1520;
+    --c-navy: #1E2F58;
+    --c-gold: #C4B49A;
+    --c-parchment: #F4F3EF;
+    --c-white: #FFFFFF;
+    --c-body: #4A5A72;
+    --c-muted: #8090A8;
+    --c-muted-readable: #5E6D82;
+    --c-gold-on-light: #8B7A5E;
+    --c-border: #E0DDD6;
+    --c-success: #27834A;
+    --font-display: 'Oxanium','Rajdhani',sans-serif;
+    --font-heading: 'Manrope','Inter',sans-serif;
+    --font-body: 'DM Sans','Inter',sans-serif;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { font-family:var(--font-body); background:#e0ddd8; color:var(--c-body); }
+
+  .page { width:210mm; min-height:297mm; margin:0 auto 24px; position:relative; overflow:hidden; background:var(--c-white); box-shadow:0 4px 32px rgba(0,0,0,0.18); display:flex; flex-direction:column; }
+
+  @media print {
+    body { background:var(--c-white); }
+    .page { margin:0; box-shadow:none; height:297mm; overflow:hidden; page-break-after:always; }
+    .page:last-child { page-break-after:auto; }
+  }
+
+  .header-bar { background:var(--c-deep-black); height:48px; flex-shrink:0; padding:14px 32px; display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--c-gold); }
+  .hb-logo { height:17px; width:auto; display:block; }
+  .hb-title { font-family:var(--font-display); font-size:9.5px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:rgba(255,255,255,0.6); }
+
+  .sp { padding:22px 28px 18px; flex:1; display:flex; flex-direction:column; gap:14px; }
+
+  .hero { background:var(--c-deep-black); color:var(--c-white); padding:24px 28px; }
+  .hero .eyebrow { font-family:var(--font-display); font-size:9.5px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold); margin-bottom:11px; }
+  .hero h1 { font-family:var(--font-heading); font-size:22px; font-weight:800; line-height:1.15; letter-spacing:-0.02em; color:var(--c-white); margin-bottom:13px; }
+  .hero h1 .accent { color:var(--c-gold); }
+  .hero h1 .terminal-sq { display:inline-block; width:6px; height:6px; background:var(--c-gold); margin-left:5px; vertical-align:top; position:relative; top:4px; }
+  .hero p { font-family:var(--font-body); font-size:11.5px; line-height:1.6; color:rgba(255,255,255,0.88); max-width:680px; }
+  .hero p strong { color:var(--c-white); font-weight:600; }
+
+  .meta-band { background:var(--c-parchment); border:1px solid var(--c-border); padding:13px 16px; display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .meta-item { font-family:var(--font-body); font-size:10px; line-height:1.5; color:var(--c-body); }
+  .meta-item .key { font-family:var(--font-display); font-size:8.5px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); display:block; margin-bottom:4px; }
+  .meta-item strong { color:var(--c-navy); font-weight:600; }
+
+  .sect-h { font-family:var(--font-heading); font-size:14px; font-weight:700; color:var(--c-navy); margin-bottom:8px; line-height:1.3; }
+  .sect-eyebrow { font-family:var(--font-display); font-size:9px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); margin-bottom:5px; }
+
+  .terr-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .terr-card { background:var(--c-white); border:1px solid var(--c-border); padding:13px 14px; display:flex; flex-direction:column; }
+  .terr-card.lead { border-top:3px solid var(--c-navy); background:var(--c-parchment); }
+  .terr-card .key { font-family:var(--font-display); font-size:8.5px; font-weight:700; letter-spacing:0.14em; color:var(--c-gold-on-light); text-transform:uppercase; margin-bottom:6px; }
+  .terr-card .ttl { font-family:var(--font-heading); font-weight:800; font-size:13px; color:var(--c-navy); line-height:1.2; margin-bottom:4px; }
+  .terr-card .sub { font-family:var(--font-display); font-size:9.5px; font-weight:600; letter-spacing:0.05em; color:var(--c-gold-on-light); text-transform:uppercase; margin-bottom:8px; }
+  .terr-card .d { font-family:var(--font-body); font-size:9.75px; line-height:1.5; color:var(--c-body); flex:1; margin-bottom:8px; }
+  .terr-card .d strong { color:var(--c-navy); font-weight:600; }
+  .terr-card .verdict { font-family:var(--font-display); font-size:8.5px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--c-navy); padding-top:8px; border-top:1px solid var(--c-border); }
+  .terr-card.lead .verdict { color:var(--c-navy); }
+  .terr-card .verdict .dot { display:inline-block; width:6px; height:6px; background:var(--c-gold); margin-right:6px; vertical-align:middle; }
+
+  .dec-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .dec-tile { background:var(--c-white); border:1px solid var(--c-border); padding:12px 14px; }
+  .dec-tile.feature { border-top:3px solid var(--c-navy); }
+  .dec-tile .num { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; color:var(--c-gold-on-light); margin-bottom:4px; display:block; }
+  .dec-tile .t { font-family:var(--font-heading); font-weight:700; font-size:11px; color:var(--c-navy); margin-bottom:4px; line-height:1.3; }
+  .dec-tile .d { font-family:var(--font-body); font-size:9.75px; line-height:1.5; color:var(--c-body); }
+  .dec-tile .d strong { color:var(--c-navy); font-weight:600; }
+
+  .owe-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .owe-card { background:var(--c-white); border:1px solid var(--c-border); padding:16px 18px; }
+  .owe-card .label { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); margin-bottom:6px; }
+  .owe-card h3 { font-family:var(--font-heading); font-weight:700; font-size:13px; color:var(--c-navy); margin-bottom:9px; }
+  .owe-card ul { list-style:none; padding:0; margin:0; }
+  .owe-card li { font-family:var(--font-body); font-size:10.25px; line-height:1.5; color:var(--c-body); padding:5px 0 5px 12px; position:relative; display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+  .owe-card li::before { content:''; position:absolute; left:0; top:11px; width:4px; height:4px; background:var(--c-gold); }
+  .owe-card li .text { flex:1; }
+  .owe-card li strong { color:var(--c-navy); font-weight:600; }
+  .owe-card li .due { font-family:var(--font-display); font-size:8.25px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--c-navy); background:var(--c-parchment); padding:2px 6px; border:1px solid var(--c-border); white-space:nowrap; flex-shrink:0; line-height:1.3; }
+  .owe-card li .due.urgent { background:var(--c-navy); color:var(--c-gold); border-color:var(--c-navy); }
+  .owe-card li .due.done { background:var(--c-success); color:var(--c-white); border-color:var(--c-success); }
+
+  .hold-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .hold-tile { background:var(--c-white); border:1px solid var(--c-border); padding:13px 14px; display:flex; flex-direction:column; }
+  .hold-tile .key { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; color:var(--c-gold-on-light); margin-bottom:6px; text-transform:uppercase; }
+  .hold-tile .t { font-family:var(--font-heading); font-weight:700; font-size:11.5px; color:var(--c-navy); line-height:1.25; margin-bottom:6px; }
+  .hold-tile .d { font-family:var(--font-body); font-size:9.5px; line-height:1.5; color:var(--c-body); flex:1; }
+  .hold-tile .d strong { color:var(--c-navy); font-weight:600; }
+
+  .scope-band { background:var(--c-parchment); border:1px solid var(--c-border); padding:14px 18px; }
+  .scope-band .label { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); margin-bottom:6px; }
+  .scope-band h3 { font-family:var(--font-heading); font-weight:700; font-size:13px; color:var(--c-navy); margin-bottom:8px; }
+  .scope-band p { font-family:var(--font-body); font-size:10.25px; line-height:1.55; color:var(--c-body); }
+  .scope-band p strong { color:var(--c-navy); font-weight:600; }
+
+  .cadence { background:var(--c-navy); color:var(--c-white); padding:18px 22px; margin-top:auto; }
+  .cadence .label { font-family:var(--font-display); font-size:9px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold); margin-bottom:7px; }
+  .cadence h3 { font-family:var(--font-heading); font-weight:700; font-size:13px; color:var(--c-white); margin-bottom:10px; }
+  .cadence-row { font-family:var(--font-body); font-size:10.25px; line-height:1.55; color:rgba(255,255,255,0.92); padding:4px 0; display:grid; grid-template-columns:110px 1fr; gap:14px; }
+  .cadence-row .key { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold); padding-top:1px; }
+  .cadence-row strong { color:var(--c-white); font-weight:600; }
+
+  .footer { padding:11px 28px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--c-border); background:var(--c-white); }
+  .footer-brand { font-family:var(--font-display); font-size:9px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-muted); }
+  .footer-page { font-family:var(--font-display); font-size:9px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-muted); }
+
+  strong { font-weight:600; color:var(--c-navy); }
+</style>
+</head>
+<body>
+
+<!-- ============== PAGE 1 ============== -->
+<div class="page">
+  <div class="header-bar">
+    <img class="hb-logo" src="https://caseload-select.vercel.app/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select &middot; Sign Better Cases">
+    <div class="hb-title">DRG Law &middot; Contact Report &middot; Visual Identity Review &middot; 27 May 2026</div>
+  </div>
+
+  <div class="sp">
+
+    <div class="hero">
+      <div class="eyebrow">Contact Report &middot; Visual Identity Preview &middot; DRG Law &times; CaseLoad Select</div>
+      <h1>The Counsel territory leads. Tertio yields oxblood as the colour anchor. Decision lock by Friday<span class="terminal-sq"></span></h1>
+      <p>This report records what was decided in the visual identity preview on the afternoon of <strong>27 May 2026</strong>, the territory D&acirc;maris leaned toward, the holds returning for the lock-in, and what each side owes between now and the close-out on&nbsp;Friday.</p>
+    </div>
+
+    <div class="meta-band">
+      <div class="meta-item"><span class="key">Date</span><strong>27 May 2026</strong>, 4:00 PM</div>
+      <div class="meta-item"><span class="key">Channel</span><strong>Video call</strong>, recorded via Tactiq</div>
+      <div class="meta-item"><span class="key">Attendees</span>Adriano Domingues, D&acirc;maris Regina Dias Guimar&atilde;es da&nbsp;Rocha</div>
+      <div class="meta-item"><span class="key">Format</span>Three full territory presentations, side-by-side&nbsp;comparison</div>
+    </div>
+
+    <div>
+      <div class="sect-eyebrow">Three Territories on the Table</div>
+      <h2 class="sect-h">What was shown, and where D&acirc;maris&nbsp;landed.</h2>
+      <div class="terr-grid">
+
+        <div class="terr-card lead">
+          <div class="key">Territory 01</div>
+          <div class="ttl">The Counsel</div>
+          <div class="sub">Editorial &middot; Founder-led</div>
+          <div class="d">Sage-led territory built around clarity and considered authority. Serif typeface for headlines, oxblood as the colour anchor, a typographic medallion as signature element. Logo options included <strong>DG monogram</strong>, <strong>DG Law with circular dot</strong>, and <strong>DG Law inside horizontal rules</strong>. Reads as classy without ostentation. Closest in posture to an editorial publication.</div>
+          <div class="verdict"><span class="dot"></span>D&acirc;maris&rsquo;s leading choice</div>
+        </div>
+
+        <div class="terr-card">
+          <div class="key">Territory 02</div>
+          <div class="ttl">The Wayfinder</div>
+          <div class="sub">Architect of Decision</div>
+          <div class="d">Directional territory. Arrow as signature element, navy and amber palette, blueprint grid background. Space Grotesk headlines, JetBrains Mono for metadata. Reads as confident and contemporary, with a startup register. D&acirc;maris noted it would suit a startup audience perfectly but pulls away from her preferred client&nbsp;profile.</div>
+          <div class="verdict"><span class="dot"></span>Set aside</div>
+        </div>
+
+        <div class="terr-card">
+          <div class="key">Territory 03</div>
+          <div class="ttl">The Architect</div>
+          <div class="sub">Modern &middot; Restrained</div>
+          <div class="d">Most modern of the three. Terminal square as signature element, black and paper contrast, Inter as the typographic spine. Logo options included <strong>DG Law with terminal dot</strong>, <strong>DG in moss panel</strong>, and <strong>DG Law with complementary text above</strong>. Strongest Instagram application of the set. D&acirc;maris read it as classical in posture, second to Counsel on overall&nbsp;preference.</div>
+          <div class="verdict"><span class="dot"></span>Runner-up</div>
+        </div>
+
+      </div>
+    </div>
+
+    <div>
+      <div class="sect-eyebrow">Decisions Recorded &middot; Eight Items</div>
+      <h2 class="sect-h">What was decided in the&nbsp;room.</h2>
+      <div class="dec-grid">
+
+        <div class="dec-tile feature">
+          <span class="num">01 &middot; Territory direction</span>
+          <div class="t">The Counsel emerged as D&acirc;maris&rsquo;s leading&nbsp;choice</div>
+          <div class="d">Read as classy and sophisticated. Aligns with the ICP frame she stated in the room: <strong>fewer clients, willing to pay more</strong>, served at a higher&nbsp;register.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">02 &middot; Colour anchor</span>
+          <div class="t">Oxblood called out as the standout&nbsp;colour</div>
+          <div class="d">D&acirc;maris singled out the oxblood from Territory 1&rsquo;s palette as the colour she liked most. Anchors the direction even before final&nbsp;lock-in.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">03 &middot; Logo preference</span>
+          <div class="t">DG Law inside horizontal rules was the favoured&nbsp;mark</div>
+          <div class="d">Of the three Counsel logo options, the horizontal-rule treatment won. The bottom descriptor must read <strong>&ldquo;Professional Corporation&rdquo;</strong>, not &ldquo;Corp&rdquo;, because of the registered legal&nbsp;entity.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">04 &middot; Wayfinder set aside</span>
+          <div class="t">Right register, wrong&nbsp;audience</div>
+          <div class="d">D&acirc;maris named the Wayfinder as ideal for a startup clientele. Because her preferred client is more traditional and higher-fee, the territory does not&nbsp;fit.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">05 &middot; Architect retained as comparison</span>
+          <div class="t">Close to Counsel in posture, second on&nbsp;preference</div>
+          <div class="d">D&acirc;maris read Architect and Counsel as adjacent territories. Counsel won on the colour direction and the editorial&nbsp;tone.</div>
+        </div>
+
+        <div class="dec-tile feature">
+          <span class="num">06 &middot; Decision deadline</span>
+          <div class="t">Friday lock-in, possibly&nbsp;tomorrow</div>
+          <div class="d">D&acirc;maris committed to a written decision by <strong>29 May</strong>, with the option to come back sooner. Both documents (strategy and design territories) go to her on&nbsp;WhatsApp&nbsp;tonight.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">07 &middot; Website timeline reset</span>
+          <div class="t">Original month-one target slips by one&nbsp;week</div>
+          <div class="d">Plan was Website done in month one of the pilot. Actual: one week and a half more after lock-in. <strong>Target completion: 10 June</strong>. Brand decision is the gate that&nbsp;controls&nbsp;it.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">08 &middot; Word template promised</span>
+          <div class="t">Branded engagement-letter template after logo&nbsp;lock</div>
+          <div class="d">Once the logo is locked, Adriano produces an editable Word template that carries the visual identity. D&acirc;maris keeps her own content per client; the template carries the&nbsp;style.</div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="footer-brand">CaseLoad Select &middot; Sign Better Cases</div>
+    <div class="footer-page">Page 1 of 2</div>
+  </div>
+</div>
+
+<!-- ============== PAGE 2 ============== -->
+<div class="page">
+  <div class="header-bar">
+    <img class="hb-logo" src="https://caseload-select.vercel.app/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select &middot; Sign Better Cases">
+    <div class="hb-title">DRG Law &middot; Contact Report &middot; Visual Identity Review &middot; 27 May 2026</div>
+  </div>
+
+  <div class="sp">
+
+    <div>
+      <div class="sect-eyebrow">Action Items &middot; Owners and Dates</div>
+      <h2 class="sect-h">What each side owes between now and Friday&nbsp;lock-in.</h2>
+      <div class="owe-grid">
+
+        <div class="owe-card">
+          <div class="label">CaseLoad Select &middot; Adriano</div>
+          <h3>Send, prepare, build</h3>
+          <ul>
+            <li><span class="text">Send the <strong>strategy document</strong> and the <strong>three territories document</strong> via WhatsApp</span><span class="due done">Tonight</span></li>
+            <li><span class="text">Stand by for D&acirc;maris&rsquo;s <strong>territory decision</strong> and any clarifying questions before Friday</span><span class="due urgent">By 29 May</span></li>
+            <li><span class="text">On lock-in, render the chosen logo with <strong>&ldquo;Professional Corporation&rdquo;</strong> as the descriptor, not &ldquo;Corp&rdquo;</span><span class="due">On lock-in</span></li>
+            <li><span class="text">Begin <strong>Website build</strong> against the locked territory the same week as the decision</span><span class="due">Week of 1 June</span></li>
+            <li><span class="text">Produce an editable <strong>Word template</strong> for engagement letters carrying the locked visual identity</span><span class="due">After logo lock</span></li>
+            <li><span class="text">Hold the <strong>Yellow Pages</strong> SEO upsell open for review; do not commit on the call from the YP rep</span><span class="due">Pending</span></li>
+          </ul>
+        </div>
+
+        <div class="owe-card">
+          <div class="label">DRG Law &middot; D&acirc;maris</div>
+          <h3>Sit with it, decide, return</h3>
+          <ul>
+            <li><span class="text">Sit with the <strong>two documents</strong> and the three territories</span><span class="due urgent">This week</span></li>
+            <li><span class="text">Return a <strong>territory decision</strong>, with comments on logo and colour preferences</span><span class="due urgent">By 29 May</span></li>
+            <li><span class="text">Confirm the <strong>&ldquo;Professional Corporation&rdquo;</strong> rendering requirement holds across every brand surface</span><span class="due">With decision</span></li>
+            <li><span class="text">Watch for the <strong>Yellow Pages confirmation email</strong>; flag if it does not land in inbox or junk by week&rsquo;s end</span><span class="due">This week</span></li>
+            <li><span class="text">Note any <strong>engagement-letter structural needs</strong> that should shape the Word template once logo&nbsp;is&nbsp;locked</span><span class="due">After decision</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="sect-eyebrow">Holds and Returns &middot; What Comes Back Next</div>
+      <h2 class="sect-h">Three items return for the next&nbsp;round.</h2>
+      <div class="hold-grid">
+        <div class="hold-tile">
+          <div class="key">Hold 01 &middot; Territory lock</div>
+          <div class="t">Counsel direction stands until D&acirc;maris confirms in&nbsp;writing</div>
+          <div class="d">Leaning indicator from the call is clear, but the lock-in itself is the gating event. Friday <strong>29 May</strong> is the deadline; D&acirc;maris flagged she may return&nbsp;sooner.</div>
+        </div>
+        <div class="hold-tile">
+          <div class="key">Hold 02 &middot; Logo descriptor</div>
+          <div class="t">Bottom line must say Professional&nbsp;Corporation</div>
+          <div class="d">All future renders carry <strong>&ldquo;Professional Corporation&rdquo;</strong>, never &ldquo;Corp.&rdquo; The registered legal entity does not allow the abbreviated form. Same rule across logo, footer, and engagement&nbsp;letter.</div>
+        </div>
+        <div class="hold-tile">
+          <div class="key">Hold 03 &middot; Yellow Pages confirmation</div>
+          <div class="t">Verbal confirmation from the YP rep, no email&nbsp;yet</div>
+          <div class="d">Sales callback happened the same afternoon. Rep confirmed data verbally; no confirmation email had landed by call&rsquo;s end. Adriano monitors this week. If the email never arrives, the listing gets&nbsp;re-requested.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scope-band">
+      <div class="label">Operating note &middot; tone alignment</div>
+      <h3>The sophistication frame.</h3>
+      <p>D&acirc;maris stated the working principle on the call: <strong>not every client is the right client</strong>. The brand has to do the screening at first impression. The Counsel territory does that work because it reads as considered and selective rather than aggressive or volume-coded. This frame carries into every downstream surface, including Website&nbsp;copy.</p>
+    </div>
+
+    <div class="cadence">
+      <div class="label">Next checkpoint</div>
+      <h3>What happens between now and Website&nbsp;build.</h3>
+      <div class="cadence-row"><div class="key">Tonight</div><div>Adriano sends both <strong>strategy</strong> and <strong>three-territories</strong> documents via WhatsApp. D&acirc;maris reviews on her own&nbsp;time.</div></div>
+      <div class="cadence-row"><div class="key">By 29 May</div><div>D&acirc;maris returns the <strong>territory decision</strong>. Counsel is the leading indicator from the call. Anything else triggers a same-day&nbsp;reread.</div></div>
+      <div class="cadence-row"><div class="key">Week of 1 June</div><div><strong>Website build</strong> begins against the locked territory. Logo finalized with the &ldquo;Professional Corporation&rdquo;&nbsp;descriptor.</div></div>
+      <div class="cadence-row"><div class="key">10 June</div><div>Target <strong>Website draft</strong> ready for D&acirc;maris&rsquo;s review. <strong>Word engagement-letter template</strong> delivered alongside, carrying the locked&nbsp;identity.</div></div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="footer-brand">CaseLoad Select &middot; Sign Better Cases</div>
+    <div class="footer-page">Page 2 of 2</div>
+  </div>
+</div>
+
+</body>
+</html>

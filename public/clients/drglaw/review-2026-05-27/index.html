@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex, nofollow"/>
+<title>DRG Law · Strategic Review · 27 May 2026 · CaseLoad Select</title>
+<style>
+@font-face {
+  font-family: 'Manrope';
+  src: url('/fonts/Manrope-VF.ttf') format('truetype-variations');
+  font-weight: 200 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Oxanium';
+  src: url('/fonts/Oxanium-VF.ttf') format('truetype-variations');
+  font-weight: 400 700;
+  font-display: swap;
+}
+
+:root {
+  --deep-black: #0D1520;
+  --gold: #C4B49A;
+  --gold-on-light: #8B7A5E;
+  --navy: #1E2F58;
+  --parchment: #F4F3EF;
+  --off-white: #F9F8F5;
+  --white: #FFFFFF;
+  --body: #4A5A72;
+  --muted: #8090A8;
+  --border: #E0DDD6;
+  --font-display: 'Oxanium', sans-serif;
+  --font-heading: 'Manrope', sans-serif;
+  --font-body: 'Manrope', sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; font-size: 16px; }
+body {
+  font-family: var(--font-body);
+  font-weight: 400;
+  color: var(--body);
+  background: var(--off-white);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ===== TERMINAL SQUARE ===== */
+.sq {
+  display: inline-block;
+  width: 0.22em; height: 0.22em;
+  background: var(--gold);
+  vertical-align: top;
+  position: relative;
+  top: 0.1em;
+  margin-left: 0.12em;
+  flex-shrink: 0;
+}
+.sq.lg { width: 0.18em; height: 0.18em; }
+
+/* ===== COVER ===== */
+.cover {
+  background: var(--deep-black);
+  color: var(--white);
+  padding: 56px 80px 80px;
+  position: relative;
+  border-bottom: 1px solid rgba(196,180,154,0.20);
+}
+.cover-rule {
+  position: absolute; top: 0; left: 0; height: 4px; width: 168px;
+  background: linear-gradient(90deg, var(--gold), var(--navy));
+}
+.cover-top {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding-bottom: 28px;
+  border-bottom: 1px solid rgba(196,180,154,0.18);
+  margin-bottom: 76px;
+}
+.cover-mark {
+  font-family: var(--font-display);
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 0.28em; text-transform: uppercase;
+  color: var(--gold);
+  display: inline-flex; align-items: baseline;
+}
+.cover-meta {
+  font-family: var(--font-display);
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.30em; text-transform: uppercase;
+  color: rgba(196,180,154,0.65);
+}
+.cover-meta .sep { color: var(--gold); margin: 0 10px; }
+.cover-eyebrow {
+  font-family: var(--font-display);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.36em; text-transform: uppercase;
+  color: var(--gold);
+  display: inline-flex; align-items: center; gap: 16px;
+  margin-bottom: 28px;
+}
+.cover-eyebrow::before { content: ""; width: 56px; height: 1px; background: var(--gold); }
+.cover h1 {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 72px; line-height: 1.04;
+  letter-spacing: -0.022em;
+  color: var(--white);
+  max-width: 1100px;
+  margin-bottom: 28px;
+  display: inline-block;
+}
+.cover-lead {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 20px; line-height: 1.6;
+  color: rgba(255,255,255,0.82);
+  max-width: 800px;
+  margin-bottom: 40px;
+}
+.cover-lead strong { color: var(--gold); font-weight: 600; }
+.cover-summary {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px;
+  max-width: 1100px;
+  padding-top: 36px;
+  border-top: 1px solid rgba(196,180,154,0.18);
+}
+.cover-summary .cs-cell { display: flex; flex-direction: column; gap: 6px; }
+.cover-summary .cs-num {
+  font-family: var(--font-heading);
+  font-weight: 800; font-size: 36px;
+  color: var(--white);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.cover-summary .cs-num .acc { color: var(--gold); }
+.cover-summary .cs-lab {
+  font-family: var(--font-display);
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 0.24em; text-transform: uppercase;
+  color: rgba(196,180,154,0.78);
+  margin-top: 4px;
+}
+.cover-summary .cs-sub {
+  font-size: 13px;
+  color: rgba(255,255,255,0.65);
+  line-height: 1.45;
+}
+
+/* ===== SECTION BAND ===== */
+.section {
+  padding: 92px 80px 72px;
+  background: var(--off-white);
+}
+.section.parchment { background: var(--parchment); }
+.section + .section { padding-top: 72px; }
+.section-head {
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 56px;
+  max-width: 1500px;
+  margin: 0 auto 52px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+  align-items: end;
+}
+.section-num {
+  font-family: var(--font-display);
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.32em; text-transform: uppercase;
+  color: var(--gold-on-light);
+  margin-bottom: 18px;
+}
+.section-head h2 {
+  font-family: var(--font-heading);
+  font-weight: 800; font-size: 44px;
+  color: var(--navy);
+  line-height: 1.1;
+  letter-spacing: -0.020em;
+  max-width: 720px;
+}
+.section-intro {
+  font-family: var(--font-body);
+  font-size: 16px; line-height: 1.65;
+  color: var(--body);
+  max-width: 520px;
+}
+.section-intro strong { color: var(--navy); font-weight: 600; }
+
+/* ===== CARDS ===== */
+.cards {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  max-width: 1500px;
+  margin: 0 auto;
+}
+.cards.two-up { grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1500px; }
+
+.card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  padding: 36px 38px 28px;
+  display: flex; flex-direction: column;
+  position: relative;
+  transition: transform 220ms cubic-bezier(.2,.7,.2,1), box-shadow 220ms ease, border-color 220ms ease;
+}
+.card::before {
+  content: ""; position: absolute; top: 0; left: 0; width: 80px; height: 3px;
+  background: var(--gold);
+}
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 22px 44px -16px rgba(30,47,88,0.20), 0 8px 18px -8px rgba(30,47,88,0.08);
+  border-color: var(--gold);
+}
+.card-meta {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 22px;
+  font-family: var(--font-display);
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.28em; text-transform: uppercase;
+}
+.card-meta .card-num { color: var(--gold-on-light); }
+.card-meta .card-tag { color: var(--navy); }
+.card h3 {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 26px; line-height: 1.18;
+  letter-spacing: -0.018em;
+  color: var(--navy);
+  margin-bottom: 14px;
+  max-width: 480px;
+}
+.card-body {
+  font-family: var(--font-body);
+  font-size: 15px; line-height: 1.65;
+  color: var(--body);
+  margin-bottom: 18px;
+}
+.card-body strong { color: var(--navy); font-weight: 600; }
+.card-look {
+  font-family: var(--font-body);
+  font-size: 13.5px; line-height: 1.55;
+  color: var(--body);
+  background: var(--off-white);
+  border-left: 2px solid var(--gold);
+  padding: 12px 16px;
+  margin-bottom: 22px;
+}
+.card-look .l-lab {
+  font-family: var(--font-display);
+  font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.26em; text-transform: uppercase;
+  color: var(--gold-on-light);
+  display: block; margin-bottom: 6px;
+}
+.card-look strong { color: var(--navy); font-weight: 600; }
+.card-foot {
+  margin-top: auto;
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.card-open {
+  font-family: var(--font-display);
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--navy);
+  text-decoration: none;
+  display: inline-flex; align-items: center; gap: 10px;
+  transition: color 180ms ease;
+}
+.card-open .arr {
+  font-family: var(--font-heading);
+  font-size: 14px; font-weight: 700;
+  color: var(--gold-on-light);
+  transition: transform 220ms ease, color 180ms ease;
+}
+.card-open:hover { color: var(--gold-on-light); }
+.card-open:hover .arr { transform: translate(3px, -3px); color: var(--navy); }
+.card-href {
+  font-family: 'Courier New', monospace;
+  font-size: 11px; font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+/* ===== CLOSER ===== */
+.closer {
+  background: var(--navy);
+  color: var(--white);
+  padding: 76px 80px;
+  border-top: 1px solid rgba(196,180,154,0.20);
+}
+.closer-inner { max-width: 1500px; margin: 0 auto; }
+.closer-eyebrow {
+  font-family: var(--font-display);
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.32em; text-transform: uppercase;
+  color: var(--gold);
+  display: inline-flex; align-items: center; gap: 16px;
+  margin-bottom: 26px;
+}
+.closer-eyebrow::before { content: ""; width: 48px; height: 1px; background: var(--gold); }
+.closer h2 {
+  font-family: var(--font-heading);
+  font-weight: 800; font-size: 38px;
+  color: var(--white);
+  line-height: 1.18;
+  letter-spacing: -0.020em;
+  max-width: 1000px;
+  margin-bottom: 22px;
+}
+.closer p {
+  font-size: 16.5px; line-height: 1.65;
+  color: rgba(255,255,255,0.82);
+  max-width: 920px;
+  margin-bottom: 14px;
+}
+.closer p strong { color: var(--gold); font-weight: 600; }
+.closer-footer {
+  margin-top: 44px;
+  padding-top: 28px;
+  border-top: 1px solid rgba(196,180,154,0.20);
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--font-display);
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.28em; text-transform: uppercase;
+  color: rgba(196,180,154,0.70);
+}
+
+@media (max-width: 1100px) {
+  .cover, .section, .closer { padding-left: 48px; padding-right: 48px; }
+  .cover h1 { font-size: 56px; }
+  .cover-summary { grid-template-columns: repeat(2, 1fr); }
+  .section-head { grid-template-columns: 1fr; gap: 18px; }
+  .cards { grid-template-columns: 1fr; }
+}
+
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: var(--off-white); }
+::-webkit-scrollbar-thumb { background: rgba(139,122,94,0.35); }
+::-webkit-scrollbar-thumb:hover { background: rgba(139,122,94,0.60); }
+</style>
+</head>
+<body>
+
+<!-- ===== COVER ===== -->
+<header class="cover">
+<div class="cover-rule"></div>
+<div class="cover-top">
+<div class="cover-mark">CaseLoad Select<span class="sq"></span></div>
+<div class="cover-meta">For Damaris <span class="sep">·</span> DRG Law <span class="sep">·</span> 27 May 2026</div>
+</div>
+
+<div class="cover-eyebrow">Today's review</div>
+<h1>DRG Law strategic review<span class="sq lg"></span></h1>
+<p class="cover-lead">One link, six pieces of work. The strategy and visual identity deliverables you saw today, plus the two contact reports from this morning and afternoon. <strong>Open any card to read in full.</strong></p>
+
+<div class="cover-summary">
+<div class="cs-cell">
+<div class="cs-num">06</div>
+<div class="cs-lab">Documents</div>
+<div class="cs-sub">Strategy, identity, logos, website surface, and two contact reports.</div>
+</div>
+<div class="cs-cell">
+<div class="cs-num">02</div>
+<div class="cs-lab">Sessions today</div>
+<div class="cs-sub">Morning: directories, voice, brand. Afternoon: visual identity.</div>
+</div>
+<div class="cs-cell">
+<div class="cs-num">03</div>
+<div class="cs-lab">Territories explored</div>
+<div class="cs-sub">The Counsel, The Wayfinder, The Practice. Pick one for the rollout.</div>
+</div>
+<div class="cs-cell">
+<div class="cs-num">01</div>
+<div class="cs-lab">Decision queued</div>
+<div class="cs-sub">Visual territory direction returns for the next session.</div>
+</div>
+</div>
+</header>
+
+<!-- ===== SECTION 1 · STRATEGY & VISUAL IDENTITY ===== -->
+<section class="section">
+<div class="section-head">
+<div>
+<div class="section-num">Part I <span style="color:var(--border);margin:0 6px;">·</span> Strategy &amp; visual identity</div>
+<h2>The strategic foundation and what carries it visually<span class="sq lg"></span></h2>
+</div>
+<div class="section-intro">Four documents. Read in the order below: <strong>strategy first, then how it looks on the surfaces it has to live on</strong>. Each opens in a new tab.</div>
+</div>
+
+<div class="cards">
+
+<!-- Card 1 · Brand Strategy -->
+<article class="card">
+<div class="card-meta"><span class="card-num">No. 01</span><span class="card-tag">Brand Strategy</span></div>
+<h3>The brand strategy beneath the surface<span class="sq"></span></h3>
+<p class="card-body">Brand on a Page, archetype, doctrine, authority frame, positioning, values, and points of difference. The strategic core that the visual identity, the website, and the voice agent all have to express. <strong>Start here</strong> to align on the foundation before judging anything visual.</p>
+<div class="card-look">
+<span class="l-lab">What to look for</span>
+Part III opens with the <strong>Brand on a Page</strong>, the whole strategy on a single slide. Read through Part VI for what most directly shapes the website and intake.
+</div>
+<div class="card-foot">
+<a href="DRGLaw_BrandBook_v9.html#p03" target="_blank" rel="noopener" class="card-open">
+Open the brand book <span class="arr">&#8599;</span>
+</a>
+<span class="card-href">v9 · 12 parts</span>
+</div>
+</article>
+
+<!-- Card 2 · Visual Identity -->
+<article class="card">
+<div class="card-meta"><span class="card-num">No. 02</span><span class="card-tag">Visual Identity</span></div>
+<h3>Three proprietary visual territories<span class="sq"></span></h3>
+<p class="card-body">The same brand strategy, expressed three different ways. <strong>The Counsel</strong> (editorial founder-led), <strong>The Wayfinder</strong> (architectural decision-map), <strong>The Practice</strong> (modern editorial). Each is a full system: typography, palette, signature mark, discipline rules, and applied surfaces.</p>
+<div class="card-look">
+<span class="l-lab">What to look for</span>
+Scroll through to see all three territories. Each chapter contains a mood board, mark exploration, signature element, palette, type system, discipline rules, and before/after surface applications.
+</div>
+<div class="card-foot">
+<a href="DRGLaw_VisualIdentityPresentation_Slides_v1.html" target="_blank" rel="noopener" class="card-open">
+Open the visual identity <span class="arr">&#8599;</span>
+</a>
+<span class="card-href">Three acts · 3 territories</span>
+</div>
+</article>
+
+<!-- Card 3 · Logo Options -->
+<article class="card">
+<div class="card-meta"><span class="card-num">No. 03</span><span class="card-tag">Logo Lockups</span></div>
+<h3>Twelve lockup options across the three territories<span class="sq"></span></h3>
+<p class="card-body">Four lockup types per territory: primary horizontal, founder lockup, monogram, and stacked. <strong>Use this view to choose</strong> which mark carries the brand on documents, signage, and the website. Best read with the visual identity deck open in another tab.</p>
+<div class="card-look">
+<span class="l-lab">What to look for</span>
+The compare view shows all twelve options side by side. The primary lockup and the founder lockup are the two most active on the website and engagement letters; the monogram does the social-avatar and document-seal work.
+</div>
+<div class="card-foot">
+<a href="DRGLaw_LogoOptions_All_v1.html#compare" target="_blank" rel="noopener" class="card-open">
+Open the logo options <span class="arr">&#8599;</span>
+</a>
+<span class="card-href">3 territories · 4 lockups</span>
+</div>
+</article>
+
+<!-- Card 4 · Website Sections -->
+<article class="card">
+<div class="card-meta"><span class="card-num">No. 04</span><span class="card-tag">Website Surface</span></div>
+<h3>The current homepage hero, rebuilt three ways<span class="sq"></span></h3>
+<p class="card-body">The current <strong>drglaw.ca</strong> hero and the "Why Choose DRG Law" section, reconstructed under each of the three territories. Same strategic content, three structurally different reading experiences. This is the most direct way to feel which territory you want carrying the firm.</p>
+<div class="card-look">
+<span class="l-lab">What to look for</span>
+Counsel uses a <strong>full-bleed editorial cover</strong> with a long-form column for the Why section. Wayfinder is a <strong>system view</strong> with a route diagram on the page itself. Practice is a <strong>Stripe-style product page</strong> with an asymmetric bento grid.
+</div>
+<div class="card-foot">
+<a href="DRGLaw_WebsiteSections_3Territories_v1.html#intro" target="_blank" rel="noopener" class="card-open">
+Open the website sections <span class="arr">&#8599;</span>
+</a>
+<span class="card-href">Three readings · before / after</span>
+</div>
+</article>
+
+</div>
+</section>
+
+<!-- ===== SECTION 2 · TODAY'S SESSIONS ===== -->
+<section class="section parchment">
+<div class="section-head">
+<div>
+<div class="section-num">Part II <span style="color:var(--border);margin:0 6px;">·</span> Today's sessions</div>
+<h2>Contact reports from the morning and afternoon<span class="sq lg"></span></h2>
+</div>
+<div class="section-intro">Two short documents capturing <strong>what was decided in the room, what each side owes between now and the next session</strong>, and which items return for the next round. Useful before the next call.</div>
+</div>
+
+<div class="cards two-up">
+
+<!-- Card 5 · Morning Contact Report -->
+<article class="card">
+<div class="card-meta"><span class="card-num">No. 05</span><span class="card-tag">Morning Session</span></div>
+<h3>Directories, voice agent, brand<span class="sq"></span></h3>
+<p class="card-body">The morning working session. Lawyer directory listings, the voice intake agent prompt, and brand alignment topics. Decisions, action items, and what carries forward.</p>
+<div class="card-look">
+<span class="l-lab">What to look for</span>
+The "<strong>What was decided in the room</strong>" section at the top is the quick read. Owners and dates for each owed item are listed below.
+</div>
+<div class="card-foot">
+<a href="DRGLaw_ContactReport_DirectoriesVoiceBrand_v1.html" target="_blank" rel="noopener" class="card-open">
+Open the morning report <span class="arr">&#8599;</span>
+</a>
+<span class="card-href">27 May 2026 · AM</span>
+</div>
+</article>
+
+<!-- Card 6 · Afternoon Contact Report -->
+<article class="card">
+<div class="card-meta"><span class="card-num">No. 06</span><span class="card-tag">Afternoon Session</span></div>
+<h3>Visual identity review<span class="sq"></span></h3>
+<p class="card-body">The afternoon working session. Visual identity review across the three territories, where Damaris landed on the day's choices, and what's queued for the Friday lock-in.</p>
+<div class="card-look">
+<span class="l-lab">What to look for</span>
+The "<strong>What was shown, and where Damaris landed</strong>" section captures the live reaction. The Friday lock-in items list what needs a final answer before the next round.
+</div>
+<div class="card-foot">
+<a href="DRGLaw_ContactReport_VisualIdentityReview_v1.html" target="_blank" rel="noopener" class="card-open">
+Open the afternoon report <span class="arr">&#8599;</span>
+</a>
+<span class="card-href">27 May 2026 · PM</span>
+</div>
+</article>
+
+</div>
+</section>
+
+<!-- ===== CLOSER ===== -->
+<section class="closer">
+<div class="closer-inner">
+<div class="closer-eyebrow">What happens next</div>
+<h2>One decision returns for the next session: which visual territory carries the brand into production<span class="sq lg"></span></h2>
+<p>The brand strategy is locked. The three visual territories are fully built out and applied to the website hero. <strong>The Friday lock-in decision</strong> is which of the three territories goes into the website rebuild, the engagement letterhead, the social cards, and the voice agent's visual surfaces.</p>
+<p>If a single document had to be read first, it is the <strong>Visual Identity</strong>: three readings of the same strategic position. The Website Sections deliverable is the fastest way to feel which one fits the practice you want DRG Law to be.</p>
+
+<div class="closer-footer">
+<span>CaseLoad Select <span style="color:rgba(255,255,255,0.30);margin:0 8px;">·</span> Sign Better Cases<span class="sq"></span></span>
+<span>Strategic Review <span style="color:rgba(196,180,154,0.40);margin:0 8px;">·</span> 27 May 2026</span>
+</div>
+</div>
+</section>
+
+</body>
+</html>
