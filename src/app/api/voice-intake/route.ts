@@ -58,6 +58,7 @@ import { initialiseState } from '@/lib/screen-engine/extractor';
 import { runEvidencePass } from '@/lib/screen-engine/slotEvidence';
 import { mergeLlmResults } from '@/lib/screen-engine/llm/extractor';
 import { buildReport } from '@/lib/screen-engine/report';
+import { normalizeVoiceTranscript } from '@/lib/voice-transcript-normalization';
 import { computeBand } from '@/lib/screen-engine/band';
 import { computeCoreCompleteness } from '@/lib/screen-engine/selector';
 import { llmExtractServer } from '@/lib/screen-llm-server';
@@ -351,19 +352,42 @@ export async function POST(req: NextRequest) {
   const callerPhone = normalizePhone(body.caller_phone);
   const callerName = (body.caller_name ?? '').trim() || null;
 
+  // Voice-channel transcript repair (task #109, Codex pushback 2026-05-27):
+  // apply ASR corrections (state→estate, "planning a bill"→"planning a will")
+  // and confirmation preservation (bot canonical-readback + human "yes" →
+  // synthetic confirmation line) before the engine classifier runs. Lives
+  // outside src/lib/screen-engine/ so the engine remains byte-for-byte
+  // mirrored with the sandbox (DR-033). The ORIGINAL transcript still
+  // persists to `raw_transcript` for audit; only the engine's classifier
+  // input is normalised.
+  const { normalized: normalizedTranscript, changes: normalizationChanges } =
+    normalizeVoiceTranscript(transcript);
+  if (normalizationChanges.length > 0) {
+    console.log(
+      `[voice-intake] transcript-normalization applied: ${normalizationChanges.length} change(s) — ${normalizationChanges.map((c) => c.detail).join(' | ')}`,
+    );
+  }
+
   // 1. initialiseState — regex classification + raw signals
-  let state = initialiseState(transcript);
+  let state = initialiseState(normalizedTranscript);
   // 2. tag the channel before anything reads state.channel
   state = { ...state, channel: 'voice' };
   // 3. seed phone + name from caller ID
   state = seedVoiceState(state, callerPhone, callerName);
-  // 4. evidence pass (regex deepening)
-  state = runEvidencePass(transcript, state);
+  // 4. evidence pass (regex deepening) — use the NORMALIZED transcript so
+  // slot extraction sees "estate planning" / "planning a will" rather than
+  // the raw ASR-corrupted "state planning" / "planning a bill". Codex
+  // pushback 2026-05-27: classification was already on normalized text but
+  // slot extraction was leaking the raw transcript, which could mis-fill
+  // downstream fields (e.g. miss an estate-related slot entirely).
+  state = runEvidencePass(normalizedTranscript, state);
 
-  // 5. LLM extraction (best-effort; failure does not abort)
+  // 5. LLM extraction (best-effort; failure does not abort) — same
+  // rationale: feed the normalized transcript so Gemini extracts against
+  // the corrected text, not the raw ASR output.
   if (state.matter_type !== 'out_of_scope') {
     try {
-      const llm = await llmExtractServer(transcript, state);
+      const llm = await llmExtractServer(normalizedTranscript, state);
       const filledIds = Object.keys(llm.extracted).filter(
         (k) => llm.extracted[k] !== null && llm.extracted[k] !== '',
       );
