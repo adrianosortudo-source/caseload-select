@@ -51,6 +51,16 @@ export type VoiceAITranscriptResult =
       callLogId?: string;
       callCreatedAt?: string;
       callDurationSec?: number;
+      /**
+       * E.164 (or normalised) caller phone as reported by the API's
+       * `fromNumber` field. Used as a fallback when the workflow webhook
+       * body's `caller_phone` is empty because GHL's
+       * `{{contact.phone}}` template did not resolve. Field-detected
+       * 2026-05-31 (Adriano test call landed as Guest Visitor 001 with
+       * `{{contact.phone}}` resolving to empty; the API's `fromNumber`
+       * still carried the correct caller-ID digits).
+       */
+      callerPhone?: string;
       raw: unknown;
     }
   | {
@@ -185,6 +195,7 @@ export async function fetchVoiceAITranscript(
     callLogId: latest.id,
     callCreatedAt: latest.createdAt,
     callDurationSec: latest.duration,
+    callerPhone: latest.fromNumber,
     raw: latest,
   };
 }
@@ -194,6 +205,8 @@ interface NormalizedCallLog {
   createdAt?: string;
   duration?: number;
   transcript?: string;
+  /** Caller phone (from-number) as reported by the API. May be E.164 or otherwise; consumers should normalise before use. */
+  fromNumber?: string;
 }
 
 /**
@@ -260,6 +273,17 @@ function normalizeCallLog(item: unknown): NormalizedCallLog | null {
     const v = obj[k];
     if (typeof v === 'string') {
       out.transcript = v;
+      break;
+    }
+  }
+  // GHL Voice AI Public API returns the caller-ID phone as `fromNumber`.
+  // We accept a few variant snake-case spellings so future schema tweaks
+  // don't silently break the fallback path documented in
+  // /api/voice-intake/route.ts (see the body.caller_phone fallback).
+  for (const k of ['fromNumber', 'from_number', 'fromPhone', 'from_phone', 'callerPhone', 'caller_phone']) {
+    const v = obj[k];
+    if (typeof v === 'string' && v.trim()) {
+      out.fromNumber = v.trim();
       break;
     }
   }

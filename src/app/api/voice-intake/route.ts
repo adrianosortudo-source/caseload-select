@@ -266,6 +266,12 @@ export async function POST(req: NextRequest) {
   let transcript = '';
   let transcriptSource: 'voice-ai-api' | 'full' | 'summary' | 'legacy' | 'none' = 'none';
   let apiFetchTelemetry: string = 'skipped';
+  // API-fetched caller phone, used as fallback when body.caller_phone is
+  // empty because GHL's `{{contact.phone}}` template did not resolve.
+  // Field-detected 2026-05-31 (Adriano test call landed as
+  // "Guest Visitor 001" with body.caller_phone empty; the Voice AI Public
+  // API's `fromNumber` still carried the correct caller-ID digits).
+  let apiCallerPhone: string | null = null;
 
   const contactId = (body.call_id ?? '').trim();
   const firmRow = firm as {
@@ -280,7 +286,8 @@ export async function POST(req: NextRequest) {
     if (apiResult.ok) {
       transcript = apiResult.transcript;
       transcriptSource = 'voice-ai-api';
-      apiFetchTelemetry = `ok len=${apiResult.transcript.length} callLogId=${apiResult.callLogId ?? 'unknown'}`;
+      apiCallerPhone = apiResult.callerPhone ?? null;
+      apiFetchTelemetry = `ok len=${apiResult.transcript.length} callLogId=${apiResult.callLogId ?? 'unknown'} fromNumber=${apiResult.callerPhone ? 'present' : 'absent'}`;
     } else {
       apiFetchTelemetry = `fail reason=${apiResult.reason}${apiResult.status ? ` status=${apiResult.status}` : ''}${apiResult.detail ? ` detail=${apiResult.detail.slice(0, 200)}` : ''}`;
     }
@@ -349,8 +356,21 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Engine pipeline ────────────────────────────────────────────────────
-  const callerPhone = normalizePhone(body.caller_phone);
+  // Caller phone resolution: prefer body.caller_phone (from the GHL workflow
+  // webhook), fall back to the Voice AI Public API's `fromNumber` when the
+  // body field is empty. The fallback covers the case where GHL's
+  // `{{contact.phone}}` template did not resolve at workflow-execution time
+  // (typically because the inbound contact was created as "Guest Visitor
+  // 001" without the phone field populated on the contact record).
+  // Field-detected 2026-05-31 — without this fallback the contact-capture
+  // doctrine gate rejects every voice call from new contacts with
+  // reason=no_contact_provided.
+  const bodyCallerPhone = normalizePhone(body.caller_phone);
+  const callerPhone = bodyCallerPhone ?? normalizePhone(apiCallerPhone);
   const callerName = (body.caller_name ?? '').trim() || null;
+  if (!bodyCallerPhone && callerPhone) {
+    console.log(`[voice-intake] caller_phone fallback firm=${firmIdParam} source=voice-ai-api`);
+  }
 
   // Voice-channel transcript repair (task #109, Codex pushback 2026-05-27):
   // apply ASR corrections (state→estate, "planning a bill"→"planning a will")
@@ -426,6 +446,11 @@ export async function POST(req: NextRequest) {
         call_duration_sec: body.call_duration_sec ?? null,
         recording_url: body.recording_url ?? null,
         caller_name: callerName,
+        // Both the body field AND the API fallback so the operator can see
+        // which path resolved (or both null) when triaging unconfirmed
+        // inquiries. Added 2026-05-31 after the fromNumber fallback work.
+        caller_phone: callerPhone,
+        caller_phone_source: bodyCallerPhone ? 'body' : (apiCallerPhone ? 'voice-ai-api' : 'none'),
       },
       rawTranscript: transcript,
       matterType: state.matter_type,
