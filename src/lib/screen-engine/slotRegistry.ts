@@ -66,8 +66,56 @@ const ALL_MATTER_TYPES_RECORD: Record<MatterType, true> = {
   unknown: true,
 };
 
-const ALL_MATTER_TYPES: readonly MatterType[] =
+/**
+ * Canonical runtime list of every MatterType in the union (including the
+ * two non-in-scope discriminators `out_of_scope` and `unknown`).
+ * Exhaustiveness is enforced by the `Record<MatterType, true>` literal
+ * above — adding a new MatterType to the type union without adding it
+ * here is a compile error.
+ *
+ * Use `IN_SCOPE_MATTER_TYPES` (below) when you need to iterate every
+ * matter type EXCEPT the two disqualifiers. That's the right list for
+ * scoring-coverage contracts, completeness checks, etc.
+ */
+export const ALL_MATTER_TYPES: readonly MatterType[] =
   Object.keys(ALL_MATTER_TYPES_RECORD) as MatterType[];
+
+/**
+ * The two disqualifier MatterTypes. Special-cased at the top of
+ * `computeBand()` and excluded from the scoring-coverage contract.
+ * Kept as a type so the filter predicate below is type-checked: if
+ * either name changes (rename, removal, addition of a new
+ * disqualifier), the predicate stops compiling instead of silently
+ * letting the wrong type into `IN_SCOPE_MATTER_TYPES`.
+ */
+export type DisqualifierMatterType = Extract<MatterType, 'out_of_scope' | 'unknown'>;
+
+/**
+ * Every MatterType that is NOT a disqualifier. The engine is expected
+ * to extract slots for these, score them on four axes, and route them
+ * into the lawyer's queue.
+ */
+export type InScopeMatterType = Exclude<MatterType, DisqualifierMatterType>;
+
+/**
+ * Every in-scope MatterType (excludes `out_of_scope` and `unknown`).
+ *
+ * The type guard `(t): t is InScopeMatterType` narrows the array
+ * element type so the result is genuinely `readonly InScopeMatterType[]`,
+ * not a `MatterType[]` cast that lies. Exhaustiveness flows from
+ * `ALL_MATTER_TYPES_RECORD` above; the disqualifier exclusion flows
+ * from the `Extract` / `Exclude` types. Adding a new in-scope matter
+ * type to the union → Record forces it in → filter keeps it in →
+ * scoring-coverage contract iterates over it automatically.
+ *
+ * Adding a new disqualifier requires widening
+ * `DisqualifierMatterType` (and the predicate body), at which point
+ * TS forces the change at compile time. No silent drift.
+ */
+export const IN_SCOPE_MATTER_TYPES: readonly InScopeMatterType[] =
+  ALL_MATTER_TYPES.filter(
+    (t): t is InScopeMatterType => t !== 'out_of_scope' && t !== 'unknown',
+  );
 
 /** Concrete `applies_to` array for the universal contact slots. */
 const CONTACT_APPLIES_TO: MatterType[] = [...ALL_MATTER_TYPES];
