@@ -73,6 +73,12 @@ import {
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from '@/lib/rate-limit';
 import { persistUnconfirmedInquiry } from '@/lib/unconfirmed-inquiry';
 import { fetchVoiceAITranscript } from '@/lib/ghl-voice-ai-api';
+import {
+  buildVoiceCallbackMessage,
+  reconcileVoiceBranch,
+} from '@/lib/voice-branch-classifier';
+import { classifyVoiceBranchServer } from '@/lib/voice-branch-classifier-server';
+import { notifyOperatorOfVoiceCallback } from '@/lib/voice-callback-notify';
 
 interface VoiceIntakeBody {
   caller_phone?: string;
@@ -388,6 +394,91 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // ── Multi-intent voice front desk (DR-054 candidate) ──────────────────
+  // The public voice line is not intake-only. The GHL agent emits a coarse
+  // RECORD_BRANCH marker, and the app independently classifies the transcript.
+  // Non-intake calls persist to voice_callback_requests, never screened_leads.
+  const appBranch = await classifyVoiceBranchServer(normalizedTranscript);
+  const branchDecision = reconcileVoiceBranch({
+    transcript: normalizedTranscript,
+    classifierBranch: appBranch.branch,
+    strictMissingMarker: process.env.VOICE_ROUTER_STRICT_MARKER === 'true',
+  });
+
+  if (branchDecision.route === 'callback') {
+    const callbackBranch = branchDecision.callbackBranch ?? 'unclear';
+    const callbackMessage = buildVoiceCallbackMessage(normalizedTranscript);
+    const voiceMeta = {
+      call_id: body.call_id ?? null,
+      call_duration_sec: body.call_duration_sec ?? null,
+      recording_url: body.recording_url ?? null,
+      caller_phone_source: bodyCallerPhone ? 'body' : (apiCallerPhone ? 'voice-ai-api' : 'none'),
+      transcript_source: transcriptSource,
+      api_fetch: apiFetchTelemetry,
+      marker: branchDecision.marker?.value ?? null,
+      marker_raw: branchDecision.marker?.raw ?? null,
+      classifier_branch: branchDecision.classifierBranch,
+      classifier_mode: appBranch.mode,
+      classifier_reason: appBranch.reason ?? null,
+      reconciliation_reason: branchDecision.reason,
+      operator_review: branchDecision.operatorReview,
+      urgency_triggers: branchDecision.urgencyTriggers,
+    };
+
+    const { data: callbackRow, error: callbackErr } = await supabase
+      .from('voice_callback_requests')
+      .insert({
+        firm_id: firmIdParam,
+        call_id: body.call_id ?? null,
+        branch: callbackBranch,
+        urgency: branchDecision.urgency,
+        caller_name: callerName,
+        caller_phone: callerPhone,
+        organization: null,
+        message: callbackMessage,
+        raw_transcript: transcript,
+        voice_meta: voiceMeta,
+      })
+      .select('id')
+      .single();
+
+    if (callbackErr) {
+      return NextResponse.json(
+        { error: `voice callback insert failed: ${callbackErr.message}` },
+        { status: 500, headers: CORS_HEADERS },
+      );
+    }
+
+    waitUntil(notifyOperatorOfVoiceCallback({
+      id: callbackRow.id,
+      firmId: firmIdParam,
+      branch: callbackBranch,
+      urgency: branchDecision.urgency,
+      callerName,
+      callerPhone,
+      organization: null,
+      message: callbackMessage,
+      callId: body.call_id ?? null,
+      operatorReview: branchDecision.operatorReview,
+      reason: branchDecision.reason,
+    }).catch((err) => {
+      console.error('[voice-router] notifyOperatorOfVoiceCallback failed:', err);
+    }));
+
+    return NextResponse.json(
+      {
+        persisted: true,
+        mode: 'callback',
+        id: callbackRow.id,
+        branch: callbackBranch,
+        urgency: branchDecision.urgency,
+        operator_review: branchDecision.operatorReview,
+        reason: branchDecision.reason,
+      },
+      { status: 200, headers: CORS_HEADERS },
+    );
+  }
+
   // 1. initialiseState — regex classification + raw signals
   let state = initialiseState(normalizedTranscript);
   // 2. tag the channel before anything reads state.channel
@@ -487,6 +578,13 @@ export async function POST(req: NextRequest) {
       recording_url: body.recording_url ?? null,
       caller_phone: callerPhone,
       caller_name: callerName,
+      branch_marker: branchDecision.marker?.value ?? null,
+      classifier_branch: branchDecision.classifierBranch,
+      classifier_mode: appBranch.mode,
+      classifier_reason: appBranch.reason ?? null,
+      branch_reconciliation_reason: branchDecision.reason,
+      branch_operator_review: branchDecision.operatorReview,
+      urgency_triggers: branchDecision.urgencyTriggers,
     },
   };
 

@@ -64,6 +64,24 @@ vi.mock('@/lib/lead-notify', () => ({
   notifyLawyersOfNewLead: vi.fn(() => Promise.resolve()),
 }));
 
+vi.mock('@/lib/voice-callback-notify', () => ({
+  notifyOperatorOfVoiceCallback: vi.fn(() => Promise.resolve({ email: 'skipped', sms: 'skipped', errors: [] })),
+}));
+
+vi.mock('@/lib/voice-branch-classifier-server', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/voice-branch-classifier')>(
+    '@/lib/voice-branch-classifier',
+  );
+  return {
+    classifyVoiceBranchServer: vi.fn((transcript: string) =>
+      Promise.resolve({
+        branch: actual.classifyVoiceBranchHeuristic(transcript),
+        mode: 'heuristic',
+      }),
+    ),
+  };
+});
+
 vi.mock('@vercel/functions', () => ({
   waitUntil: (p: Promise<unknown>) => {
     void p.catch(() => undefined);
@@ -148,7 +166,7 @@ describe('/api/voice-intake contact-capture gate', () => {
     const req = makeRequest({
       firmId: FIRM_ID,
       caller_phone: '+14165550143',
-      transcript: 'Hi, I have a question.',
+      transcript: 'I need help making a will and planning my estate.',
       call_id: 'call_123',
       call_duration_sec: 12,
     });
@@ -156,5 +174,81 @@ describe('/api/voice-intake contact-capture gate', () => {
     const body = (await res.json()) as { persisted: boolean; reason?: string };
     expect(body.persisted).toBe(false);
     expect(body.reason).toBe('awaiting_contact');
+  });
+
+  it('routes existing-client calls to voice_callback_requests instead of screened_leads', async () => {
+    const req = makeRequest({
+      firmId: FIRM_ID,
+      caller_phone: '+14165550143',
+      caller_name: 'Existing Client',
+      transcript: [
+        'human: I am an existing client calling for an update on my case.',
+        'bot: Thanks. I will pass this message to the firm.',
+        'bot: RECORD_BRANCH: OTHER',
+      ].join('\n'),
+      call_id: 'call_existing',
+      call_duration_sec: 37,
+    });
+    const res = await POST(req as never);
+    const body = (await res.json()) as { mode?: string; branch?: string };
+    expect(res.status).toBe(200);
+    expect(body.mode).toBe('callback');
+    expect(body.branch).toBe('existing_client');
+
+    const screened = captured.inserts.find((c) => c.table === 'screened_leads');
+    const callback = captured.inserts.find((c) => c.table === 'voice_callback_requests');
+    expect(screened).toBeUndefined();
+    expect(callback).toBeDefined();
+    expect(callback?.payload.branch).toBe('existing_client');
+    expect(callback?.payload.caller_phone).toBe('+14165550143');
+  });
+
+  it.each([
+    {
+      label: 'court clerk',
+      transcript: 'human: This is the court clerk. There is a hearing tomorrow.\nbot: RECORD_BRANCH: OTHER',
+      branch: 'court_or_counsel',
+      urgency: 'urgent',
+    },
+    {
+      label: 'vendor',
+      transcript: 'human: We sell SEO and lead generation services for law firms.\nbot: RECORD_BRANCH: OTHER',
+      branch: 'vendor',
+      urgency: 'normal',
+    },
+    {
+      label: 'wrong number',
+      transcript: 'human: Sorry, wrong number.\nbot: RECORD_BRANCH: OTHER',
+      branch: 'wrong_number',
+      urgency: 'normal',
+    },
+    {
+      label: 'unclear',
+      transcript: 'human: I need to talk to someone about something.\nbot: RECORD_BRANCH: UNCLEAR',
+      branch: 'unclear',
+      urgency: 'normal',
+    },
+  ])('routes $label calls to voice_callback_requests', async ({ transcript, branch, urgency }) => {
+    const req = makeRequest({
+      firmId: FIRM_ID,
+      caller_phone: '+14165550143',
+      caller_name: 'Caller Person',
+      transcript,
+      call_id: `call_${branch}`,
+      call_duration_sec: 44,
+    });
+    const res = await POST(req as never);
+    const body = (await res.json()) as { mode?: string; branch?: string; urgency?: string };
+    expect(res.status).toBe(200);
+    expect(body.mode).toBe('callback');
+    expect(body.branch).toBe(branch);
+    expect(body.urgency).toBe(urgency);
+
+    const screened = captured.inserts.find((c) => c.table === 'screened_leads');
+    const callback = captured.inserts.find((c) => c.table === 'voice_callback_requests');
+    expect(screened).toBeUndefined();
+    expect(callback).toBeDefined();
+    expect(callback?.payload.branch).toBe(branch);
+    expect(callback?.payload.urgency).toBe(urgency);
   });
 });
