@@ -13,9 +13,16 @@
  * Mirrors `CaseLoadScreen_2.0_2026-05-03/api/extract.ts` request shape:
  *   { description, matter_type, already_extracted } → { extracted, mode }
  *
- * Graceful degradation: if GEMINI_API_KEY is missing, returns
+ * Graceful degradation: if no Gemini API key is configured, returns
  * `{ extracted: {}, mode: 'disabled' }`. The caller proceeds with
  * regex-only extraction and the brief is best-effort.
+ *
+ * Env var resolution: accepts either GOOGLE_AI_API_KEY (the existing
+ * operator standard, also used by lib/openrouter.ts for the web channel)
+ * or GEMINI_API_KEY (legacy name from the sandbox). GOOGLE_AI_API_KEY
+ * wins when both are set. Field-detected 2026-06-01 — voice-intake had
+ * been silently regex-only since 2026-05-21 because this file read
+ * GEMINI_API_KEY while the operator had only set GOOGLE_AI_API_KEY.
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -71,9 +78,16 @@ export async function llmExtractServer(
   description: string,
   state: EngineState,
 ): Promise<LlmExtractionResponse> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  // GOOGLE_AI_API_KEY first (operator standard, also used by openrouter.ts
+  // for the web channel /api/screen). GEMINI_API_KEY accepted as a
+  // fallback for backward compatibility with the sandbox naming.
+  const apiKey = process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return { extracted: {}, mode: 'disabled', reason: 'GEMINI_API_KEY not configured' };
+    return {
+      extracted: {},
+      mode: 'disabled',
+      reason: 'No Gemini API key configured (set GOOGLE_AI_API_KEY or GEMINI_API_KEY)',
+    };
   }
 
   const trimmed = (description ?? '').slice(0, MAX_DESCRIPTION_LENGTH);

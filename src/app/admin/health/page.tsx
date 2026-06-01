@@ -65,7 +65,17 @@ interface RecentOutboxFailure {
   attempts: number;
 }
 
-const REQUIRED_ENV_VARS = [
+/**
+ * Required env var spec. A plain string requires that exact variable to
+ * be set. An object with `{ primary, alias }` is satisfied when EITHER
+ * name is set in process.env — used for synonym situations like the
+ * Gemini API key (GOOGLE_AI_API_KEY is the operator standard; the
+ * sandbox + voice-intake originally used GEMINI_API_KEY before the
+ * code was reconciled 2026-06-01).
+ */
+type EnvVarSpec = string | { primary: string; alias: string };
+
+const REQUIRED_ENV_VARS: readonly EnvVarSpec[] = [
   // Supabase
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
@@ -75,8 +85,8 @@ const REQUIRED_ENV_VARS = [
   "CRON_SECRET",
   // App config
   "NEXT_PUBLIC_APP_DOMAIN",
-  // Gemini (engine)
-  "GEMINI_API_KEY",
+  // Gemini (engine) — either name satisfies the requirement
+  { primary: "GOOGLE_AI_API_KEY", alias: "GEMINI_API_KEY" },
   // Resend (transactional email)
   "RESEND_API_KEY",
   // Meta (webhooks — added 2026-05-13 in Block 1)
@@ -102,10 +112,15 @@ export default async function AdminHealthPage() {
     branch: process.env.VERCEL_GIT_COMMIT_REF ?? null,
   };
 
-  const envChecks = REQUIRED_ENV_VARS.map((name) => ({
-    name,
-    present: !!process.env[name],
-  }));
+  const envChecks = REQUIRED_ENV_VARS.map((spec) => {
+    if (typeof spec === "string") {
+      return { name: spec, present: !!process.env[spec] };
+    }
+    return {
+      name: `${spec.primary} or ${spec.alias}`,
+      present: !!process.env[spec.primary] || !!process.env[spec.alias],
+    };
+  });
 
   return (
     <div className="space-y-6">
