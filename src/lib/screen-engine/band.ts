@@ -132,6 +132,24 @@ function scoreValue(state: EngineState): number {
     return clamp(s);
   }
   if (t === 'corporate_general' || t === 'real_estate_general') return 3;
+
+  // ─── ESTATES — will_drafting (Phase B sub-type) ───────────────────
+  // Field-detected 2026-06-01: this branch was missing. Phase B added the
+  // matter type for extraction + reporting but left scoring at 0. The
+  // value signal here comes from the scope of work the caller wants
+  // (simple will vs. full estate plan) and the underlying asset shape
+  // (one home vs. business / cross-border).
+  if (t === 'will_drafting') {
+    let s = 4; // baseline: real matter, basic drafting fee floor
+    const desired = slotValue(state, 'desired_outcome_will_drafting');
+    if (desired === 'Full estate plan (will, POAs, trusts)') s += 4;
+    else if (desired === 'Will and power of attorney') s += 2;
+    const complexity = slotValue(state, 'estate_complexity');
+    if (complexity === 'Business or company ownership' ||
+        complexity === 'Cross-border assets') s += 3;
+    else if (complexity === 'Multiple properties or investments') s += 2;
+    return clamp(s);
+  }
   return 0;
 }
 
@@ -227,6 +245,20 @@ function scoreComplexity(state: EngineState): number {
         irreg === 'Unauthorized payments or transfers') s += 2;
     if (slotValue(state, 'evidence_of_irregularity') === 'Not sure' ||
         slotValue(state, 'evidence_of_irregularity') === 'No') s += 2;
+    return clamp(s);
+  }
+  // ─── ESTATES — will_drafting (Phase B sub-type) ───────────────────
+  // Field-detected 2026-06-01: this branch was missing. Asset shape and
+  // beneficiary count drive drafting complexity for wills.
+  if (t === 'will_drafting') {
+    s = 1; // baseline drafting complexity
+    const complexity = slotValue(state, 'estate_complexity');
+    if (complexity === 'Business or company ownership' ||
+        complexity === 'Cross-border assets') s += 6;
+    else if (complexity === 'Multiple properties or investments') s += 3;
+    const children = slotValue(state, 'children_count');
+    if (children === 'Four or more') s += 2;
+    else if (children === 'Two or three') s += 1;
     return clamp(s);
   }
   return 0;
@@ -354,13 +386,36 @@ function scoreReadiness(state: EngineState): number {
   else if (auth === 'Someone else decides') s -= 1; // proxy lead: harder to convert
   else if (auth === 'Not sure') s += 0;
 
+  // ─── Matter-specific readiness signals ─────────────────────────────
+  // Some matter types carry readiness signals in their domain-specific
+  // slots that the universal triple (hiring_timeline, other_counsel,
+  // decision_authority) does not capture. Layer these on top of the
+  // universal score.
+  // Field-detected 2026-06-01: will_drafting had readiness=0 even when
+  // existing_will_status was populated. The "no prior paperwork" answer
+  // is a strong engagement signal for wills specifically.
+  if (state.matter_type === 'will_drafting') {
+    const existing = slotValue(state, 'existing_will_status');
+    if (existing === 'No, I have never had one') s += 4;
+    else if (existing === 'Yes, but it is outdated') s += 3;
+    else if (existing === 'Yes, and it just needs an update') s += 2;
+    else if (existing === 'Not sure') s += 1;
+  }
+
   return clamp(s);
 }
 
 function readinessAnswered(state: EngineState): boolean {
-  return !!(slotValue(state, 'hiring_timeline') ||
-            slotValue(state, 'other_counsel') ||
-            slotValue(state, 'decision_authority'));
+  if (!!(slotValue(state, 'hiring_timeline') ||
+         slotValue(state, 'other_counsel') ||
+         slotValue(state, 'decision_authority'))) return true;
+  // Matter-specific readiness signals also satisfy the "answered" flag,
+  // so the four-axis scorer applies its readinessWeight rather than
+  // suppressing it. Without this, a will_drafting lead with rich
+  // existing_will_status answer would still show readiness as "pending".
+  if (state.matter_type === 'will_drafting' &&
+      slotValue(state, 'existing_will_status')) return true;
+  return false;
 }
 
 // ─── Band derivation from four axes ───────────────────────────────────────
@@ -505,11 +560,43 @@ export function computeBand(state: EngineState): BandResult {
   if (state.matter_type === 'estates_general') {
     return bandRoutingLane('Estates', state, false);
   }
-  // Phase B sub-types fall through to the four-axis scorer (no special-case
-  // override needed — the scorer's defaults produce reasonable bands for
-  // these matter shapes without per-sub-type tuning. Future tuning per
-  // matter_type can land as additional override clauses here as we learn
-  // from real lead data.
+  // Phase B sub-types: which ones have real four-axis scoring vs. which
+  // fall back to the practice-area routing lane.
+  //
+  // History: this block previously claimed "Phase B sub-types fall through
+  // to the four-axis scorer (no special-case override needed — the
+  // scorer's defaults produce reasonable bands)". That was wrong.
+  // Field-detected 2026-06-01: the four-axis scorer has no branches for
+  // any Phase B sub-type, so every lead returned 0/0/0/0 and collapsed to
+  // Band C regardless of actual signal quality.
+  //
+  // The will_drafting matter type now has full per-axis scoring above
+  // (value, complexity, readiness; urgency rides on the universal
+  // mentions_urgency base). Other Phase B sub-types still lack their own
+  // scoring rules and are routed through bandRoutingLane to hold a
+  // Band B baseline (lifted on completeness) until their per-matter
+  // scoring lands. Tracked as a follow-up.
+  //
+  // Guardrail: the OOS / unknown gates above fire BEFORE this fallback.
+  // Disqualifiers (out_of_scope, unknown, contact-gate failures) are
+  // never bypassed by this lane. Only in-scope Phase B sub-types reach
+  // this code path.
+  const PHASE_B_ESTATES_FALLBACK = new Set<string>([
+    'power_of_attorney', 'probate', 'estate_dispute',
+  ]);
+  const PHASE_B_EMPLOYMENT_FALLBACK = new Set<string>([
+    'wrongful_dismissal', 'severance_review', 'harassment_complaint',
+    'wage_recovery', 'employment_contract_review',
+  ]);
+  if (PHASE_B_ESTATES_FALLBACK.has(state.matter_type as string)) {
+    return bandRoutingLane('Estates', state, true);
+  }
+  if (PHASE_B_EMPLOYMENT_FALLBACK.has(state.matter_type as string)) {
+    return bandRoutingLane('Employment', state, true);
+  }
+  // will_drafting and the matter types with real four-axis branches
+  // (commercial_real_estate, residential_purchase_sale, etc.) fall
+  // through to the scorer below.
 
   const scores = scoreFourAxes(state);
   const result = bandFromAxes(scores);
