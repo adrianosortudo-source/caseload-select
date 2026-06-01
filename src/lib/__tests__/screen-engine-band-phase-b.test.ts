@@ -161,73 +161,77 @@ describe("Phase B fix — will_drafting four-axis scoring", () => {
   });
 });
 
-describe("Phase B fix — non-will sub-types route through bandRoutingLane", () => {
-  // The 4 non-will estates sub-types and the 5 employment sub-types
-  // don't yet have per-matter scoring rules. They used to collapse to
-  // all-zero Band C. After the fix they hold Band B baseline via the
-  // practice-area routing lane (lifted on completeness).
-
-  it("probate (estates sub-type) holds Band B baseline via routing lane", () => {
+describe("Phase B fix — non-will sub-types use slotRegistry-driven baseline scoring", () => {
+  it("probate with estate value answered gets baseline value and complexity lift", () => {
     const state = baseState({
       matter_type: "probate" as MatterType,
       practice_area: "estates",
-      slots: { client_name: "Test User", client_phone: "+14165551212" },
+      slots: {
+        estate_value_band: "$500,000 to $2 million",
+        relationship_to_deceased: "Spouse or partner",
+      },
     });
+    const scores = scoreFourAxes(state);
     const result = computeBand(state);
-    expect(result.band).toBe("B");
-    expect(result.reasoning.toLowerCase()).toMatch(/estates/);
+
+    expect(scores.value).toBeGreaterThan(0);
+    expect(scores.complexity).toBeGreaterThan(0);
+    expect(result.reasoning).not.toMatch(/Weighted 0\.0.*Weak signal/i);
   });
 
-  it("wrongful_dismissal (employment sub-type) holds Band B baseline via routing lane", () => {
+  it("wrongful_dismissal with salary and tenure answered gets baseline lift", () => {
     const state = baseState({
       matter_type: "wrongful_dismissal" as MatterType,
       practice_area: "employment",
       intent_family: "employment",
-      slots: { client_name: "Test User", client_phone: "+14165551212" },
+      slots: {
+        salary_band: "$100,000 to $200,000",
+        tenure_band: "4 to 7 years",
+      },
     });
+    const scores = scoreFourAxes(state);
     const result = computeBand(state);
-    expect(result.band).toBe("B");
-    expect(result.reasoning.toLowerCase()).toMatch(/employment/);
+
+    expect(scores.value).toBeGreaterThan(0);
+    expect(scores.complexity).toBeGreaterThan(0);
+    expect(result.reasoning).not.toMatch(/Weighted 0\.0.*Weak signal/i);
   });
 
-  it("severance_review, harassment_complaint, wage_recovery, employment_contract_review all hold Band B", () => {
-    const employmentSubTypes: MatterType[] = [
-      "severance_review",
-      "harassment_complaint",
-      "wage_recovery",
-      "employment_contract_review",
+  it("employment and estates sub-types no longer need practice-area routing fallback", () => {
+    const fixtures: Array<{ matter_type: MatterType; slots: Record<string, string> }> = [
+      { matter_type: "severance_review", slots: { severance_offer_amount: "3 to 6 months of pay" } },
+      { matter_type: "harassment_complaint", slots: { harassment_type: "Discrimination" } },
+      { matter_type: "wage_recovery", slots: { wages_owed_band: "$10,000 to $50,000" } },
+      { matter_type: "employment_contract_review", slots: { contract_review_type: "A new job offer" } },
+      { matter_type: "power_of_attorney", slots: { poa_type: "Both" } },
+      { matter_type: "estate_dispute", slots: { estate_dispute_type: "The executor is not acting properly" } },
     ];
-    for (const matter_type of employmentSubTypes) {
-      const state = baseState({
-        matter_type,
-        practice_area: "employment",
-        intent_family: "employment",
-      });
-      const result = computeBand(state);
-      expect(result.band).toBe("B");
-    }
-  });
 
-  it("power_of_attorney and estate_dispute (estates non-will) hold Band B", () => {
-    const estatesSubTypes: MatterType[] = ["power_of_attorney", "estate_dispute"];
-    for (const matter_type of estatesSubTypes) {
+    for (const fixture of fixtures) {
+      const isEmployment = fixture.matter_type.includes("severance") ||
+        fixture.matter_type.includes("harassment") ||
+        fixture.matter_type.includes("wage") ||
+        fixture.matter_type.includes("employment");
       const state = baseState({
-        matter_type,
-        practice_area: "estates",
-        intent_family: "estates",
+        matter_type: fixture.matter_type,
+        practice_area: isEmployment ? "employment" : "estates",
+        intent_family: isEmployment ? "employment" : "estates",
+        slots: fixture.slots,
       });
+      const scores = scoreFourAxes(state);
       const result = computeBand(state);
-      expect(result.band).toBe("B");
+      expect(scores.value + scores.complexity).toBeGreaterThan(0);
+      expect(result.reasoning).not.toMatch(/Weighted 0\.0.*Weak signal/i);
     }
   });
 });
 
-describe("Phase B fix — disqualifier gates fire above the fallback", () => {
-  // The operator's guardrail: the Phase B routing-lane fallback only
-  // runs AFTER classification has already cleared OOS / unknown gates.
+describe("Phase B fix — disqualifier gates fire above baseline scoring", () => {
+  // The operator's guardrail: baseline scoring only runs AFTER
+  // classification has already cleared OOS / unknown gates.
   // These tests prove disqualifiers still take precedence.
 
-  it("out_of_scope still returns Band D, not the Phase B fallback Band B", () => {
+  it("out_of_scope still returns Band D, not a baseline-scored in-scope band", () => {
     const state = baseState({
       matter_type: "out_of_scope",
       practice_area: "family",

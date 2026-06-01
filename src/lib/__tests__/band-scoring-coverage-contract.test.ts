@@ -37,9 +37,9 @@
  * THIS test, not a future production call.
  *
  * Doctrine: this is a capability-layer contract, not a matter-specific
- * patch. The dispatch pattern in band.ts uses `{ score, handled }` so
- * `score: 0` from a specific scorer does NOT automatically mean
- * "missing branch" — only `handled: false` does. The contract proves
+ * patch. The dispatch pattern in band.ts uses `null` to mean
+ * "unhandled by a tuned scorer", so `score: 0` from a specific scorer
+ * does NOT automatically mean "missing branch". The contract proves
  * the dispatch produces non-collapsed scoring per matter type.
  */
 
@@ -63,9 +63,18 @@ function isContactSlot(slot: SlotDefinition): boolean {
   return slot.tier === 'contact';
 }
 
+const UNIVERSAL_READINESS_SLOT_IDS = new Set([
+  'hiring_timeline',
+  'other_counsel',
+  'decision_authority',
+]);
+
 function applicableMatterSlots(matter: MatterType): SlotDefinition[] {
   return SLOT_REGISTRY.filter(
-    (s) => !isContactSlot(s) && (s.applies_to ?? []).includes(matter),
+    (s) =>
+      !isContactSlot(s) &&
+      !UNIVERSAL_READINESS_SLOT_IDS.has(s.id) &&
+      (s.applies_to ?? []).includes(matter),
   );
 }
 

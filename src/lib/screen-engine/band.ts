@@ -1,4 +1,13 @@
-import type { EngineState, Band, BandResult, FourAxisScores, AxisReasoning, AxisBreakdown } from './types';
+import { SLOT_REGISTRY } from './slotRegistry';
+import type {
+  EngineState,
+  Band,
+  BandResult,
+  FourAxisScores,
+  AxisReasoning,
+  AxisBreakdown,
+  SlotDefinition,
+} from './types';
 
 // ─── Slot helpers ─────────────────────────────────────────────────────────
 
@@ -13,9 +22,170 @@ function isAnswered(state: EngineState, slotId: string): boolean {
 
 const clamp = (n: number, lo = 0, hi = 10) => Math.max(lo, Math.min(hi, n));
 
+const UNIVERSAL_READINESS_SLOT_IDS = new Set([
+  'hiring_timeline',
+  'other_counsel',
+  'decision_authority',
+]);
+
+const WEAK_OR_NON_SIGNAL_VALUES = new Set([
+  'not sure',
+  'not sure yet',
+  'unknown',
+  'n/a',
+  'na',
+  'none',
+  'other',
+  'something else',
+  'just exploring',
+  'nothing yet, just exploring options',
+]);
+
+function isWeakOrNonSignal(value: string | null): boolean {
+  if (!value) return true;
+  return WEAK_OR_NON_SIGNAL_VALUES.has(value.trim().toLowerCase());
+}
+
+function answeredMatterSlots(state: EngineState): SlotDefinition[] {
+  return SLOT_REGISTRY.filter((slot) => {
+    if (slot.tier === 'contact') return false;
+    if (UNIVERSAL_READINESS_SLOT_IDS.has(slot.id)) return false;
+    if (!slot.applies_to.includes(state.matter_type)) return false;
+    const value = slotValue(state, slot.id);
+    return !!value && value.trim().length > 0;
+  });
+}
+
+function valueMagnitudeLift(value: string | null): number {
+  if (!value) return 0;
+  const lower = value.toLowerCase();
+  if (/\bover\b/.test(lower)) return 1;
+  if (/\b(?:million|m)\b/.test(lower)) return 1;
+  if (/\$[0-9]/.test(value)) return 1;
+  return 0;
+}
+
+function baselineValuePoints(slot: SlotDefinition, value: string | null): number {
+  let points = 0;
+  if (slot.resolves === 'value' || slot.question_group === 'value') {
+    points = 2 + Math.ceil(slot.decision_value / 4);
+  } else if (slot.question_group === 'routing') {
+    points = 2;
+  } else if (slot.tier === 'strategic' || slot.question_group === 'control') {
+    points = 2;
+  } else if (slot.tier === 'core') {
+    points = 1;
+  } else if (slot.tier === 'proof' || slot.tier === 'qualification') {
+    points = 1;
+  }
+
+  if (isWeakOrNonSignal(value)) points = Math.min(points, 1);
+  else points += valueMagnitudeLift(value);
+
+  return clamp(points, 0, 7);
+}
+
+function baselineValueScore(state: EngineState): number {
+  const slots = answeredMatterSlots(state);
+  const maxSlotScore = Math.max(
+    0,
+    ...slots.map((slot) => baselineValuePoints(slot, slotValue(state, slot.id))),
+  );
+  if (maxSlotScore === 0) return 0;
+  const breadthLift = Math.min(2, Math.floor(Math.max(0, slots.length - 1) / 2));
+  return clamp(maxSlotScore + breadthLift, 0, 7);
+}
+
+function baselineComplexityPoints(slot: SlotDefinition, value: string | null): number {
+  const complexityGroups = new Set([
+    'proof',
+    'risk',
+    'status',
+    'control',
+    'ownership_proof',
+    'agreement_proof',
+    'payment_proof',
+    'delivery_proof',
+    'access_proof',
+    'parties',
+    'property',
+    'closing',
+    'lien',
+    'tenancy_terms',
+    'tenancy_dispute',
+    'preconstruction',
+    'irregularity',
+    'standing',
+  ]);
+  const complexityResolves = new Set([
+    'ownership',
+    'ownership_proof',
+    'access',
+    'money_misuse',
+    'delivery_proof',
+    'agreement_proof',
+    'payment',
+    'risk',
+    'financial_irregularity',
+    'irregularity_evidence',
+    'party_role',
+    'lease_proof',
+  ]);
+
+  let points = 0;
+  if (complexityGroups.has(slot.question_group) || complexityResolves.has(slot.resolves)) {
+    points = Math.max(1, Math.ceil(slot.decision_value / 6));
+  } else if (slot.tier === 'proof' || slot.tier === 'strategic') {
+    points = 1;
+  }
+
+  if (slot.abstraction_level === 'abstract') points += 2;
+  else if (slot.abstraction_level === 'medium') points += 1;
+
+  if (isWeakOrNonSignal(value)) points = Math.min(points, 1);
+  return clamp(points, 0, 6);
+}
+
+function baselineComplexityScore(state: EngineState): number {
+  const slots = answeredMatterSlots(state);
+  const maxSlotScore = Math.max(
+    0,
+    ...slots.map((slot) => baselineComplexityPoints(slot, slotValue(state, slot.id))),
+  );
+  if (maxSlotScore === 0) return 0;
+  const breadthLift = Math.min(3, Math.floor(Math.max(0, slots.length - 1) / 2));
+  return clamp(maxSlotScore + breadthLift, 0, 8);
+}
+
+function baselineValueReasons(state: EngineState): string[] {
+  const valueSlots = answeredMatterSlots(state).filter((slot) =>
+    baselineValuePoints(slot, slotValue(state, slot.id)) > 0,
+  );
+  if (valueSlots.length === 0) return [];
+  return [
+    `Baseline value signal from answered ${valueSlots
+      .slice(0, 3)
+      .map((slot) => slot.question_group.replace(/_/g, ' '))
+      .join(', ')} slot${valueSlots.length === 1 ? '' : 's'}.`,
+  ];
+}
+
+function baselineComplexityReasons(state: EngineState): string[] {
+  const complexitySlots = answeredMatterSlots(state).filter((slot) =>
+    baselineComplexityPoints(slot, slotValue(state, slot.id)) > 0,
+  );
+  if (complexitySlots.length === 0) return [];
+  return [
+    `Baseline complexity signal from answered ${complexitySlots
+      .slice(0, 3)
+      .map((slot) => slot.question_group.replace(/_/g, ' '))
+      .join(', ')} slot${complexitySlots.length === 1 ? '' : 's'}.`,
+  ];
+}
+
 // ─── VALUE axis (per matter type) ─────────────────────────────────────────
 
-function scoreValue(state: EngineState): number {
+function scoreValueSpecific(state: EngineState): number | null {
   const t = state.matter_type;
 
   if (t === 'commercial_real_estate') {
@@ -150,12 +320,17 @@ function scoreValue(state: EngineState): number {
     else if (complexity === 'Multiple properties or investments') s += 2;
     return clamp(s);
   }
-  return 0;
+  return null;
+}
+
+function scoreValue(state: EngineState): number {
+  const specific = scoreValueSpecific(state);
+  return specific ?? baselineValueScore(state);
 }
 
 // ─── COMPLEXITY axis (per matter type) ────────────────────────────────────
 
-function scoreComplexity(state: EngineState): number {
+function scoreComplexitySpecific(state: EngineState): number | null {
   const t = state.matter_type;
   let s = 0;
 
@@ -261,7 +436,12 @@ function scoreComplexity(state: EngineState): number {
     else if (children === 'Two or three') s += 1;
     return clamp(s);
   }
-  return 0;
+  return null;
+}
+
+function scoreComplexity(state: EngineState): number {
+  const specific = scoreComplexitySpecific(state);
+  return specific ?? baselineComplexityScore(state);
 }
 
 // ─── URGENCY axis ─────────────────────────────────────────────────────────
@@ -550,54 +730,16 @@ export function computeBand(state: EngineState): BandResult {
     }
     return bandRoutingLane('Real estate', state, !!problem);
   }
-  // Employment and estates routing lanes (Phase A general). Same shape as the
-  // corporate / real-estate routing lanes — start at B, lift on completeness
-  // via the four-axis scorer. Phase B sub-types skip this lane and go to the
-  // main scorer below for matter-specific band lift.
+  // Employment and estates general lanes still route while the subtype is
+  // unknown. Specific sub-types fall through to the four-axis scorer below.
   if (state.matter_type === 'employment_general') {
     return bandRoutingLane('Employment', state, false);
   }
   if (state.matter_type === 'estates_general') {
     return bandRoutingLane('Estates', state, false);
   }
-  // Phase B sub-types: which ones have real four-axis scoring vs. which
-  // fall back to the practice-area routing lane.
-  //
-  // History: this block previously claimed "Phase B sub-types fall through
-  // to the four-axis scorer (no special-case override needed — the
-  // scorer's defaults produce reasonable bands)". That was wrong.
-  // Field-detected 2026-06-01: the four-axis scorer has no branches for
-  // any Phase B sub-type, so every lead returned 0/0/0/0 and collapsed to
-  // Band C regardless of actual signal quality.
-  //
-  // The will_drafting matter type now has full per-axis scoring above
-  // (value, complexity, readiness; urgency rides on the universal
-  // mentions_urgency base). Other Phase B sub-types still lack their own
-  // scoring rules and are routed through bandRoutingLane to hold a
-  // Band B baseline (lifted on completeness) until their per-matter
-  // scoring lands. Tracked as a follow-up.
-  //
-  // Guardrail: the OOS / unknown gates above fire BEFORE this fallback.
-  // Disqualifiers (out_of_scope, unknown, contact-gate failures) are
-  // never bypassed by this lane. Only in-scope Phase B sub-types reach
-  // this code path.
-  const PHASE_B_ESTATES_FALLBACK = new Set<string>([
-    'power_of_attorney', 'probate', 'estate_dispute',
-  ]);
-  const PHASE_B_EMPLOYMENT_FALLBACK = new Set<string>([
-    'wrongful_dismissal', 'severance_review', 'harassment_complaint',
-    'wage_recovery', 'employment_contract_review',
-  ]);
-  if (PHASE_B_ESTATES_FALLBACK.has(state.matter_type as string)) {
-    return bandRoutingLane('Estates', state, true);
-  }
-  if (PHASE_B_EMPLOYMENT_FALLBACK.has(state.matter_type as string)) {
-    return bandRoutingLane('Employment', state, true);
-  }
-  // will_drafting and the matter types with real four-axis branches
-  // (commercial_real_estate, residential_purchase_sale, etc.) fall
-  // through to the scorer below.
-
+  // If a subtype has no tuned scorer branch, scoreValue/scoreComplexity use
+  // the slotRegistry-driven baseline rather than a practice-area hardcode.
   const scores = scoreFourAxes(state);
   const result = bandFromAxes(scores);
 
@@ -706,6 +848,7 @@ function valueReasons(state: EngineState): string[] {
     if (sub === 'buy_in_or_joining') out.push('Buy-in or joining adds value (due diligence on existing entity).');
   }
 
+  if (out.length === 0) out.push(...baselineValueReasons(state));
   if (out.length === 0) out.push('Value drivers not yet captured.');
   return out;
 }
@@ -786,6 +929,7 @@ function complexityReasons(state: EngineState): string[] {
     if (slotValue(state, 'evidence_of_irregularity') === 'Not sure' || slotValue(state, 'evidence_of_irregularity') === 'No') out.push('Evidence in hand not yet confirmed.');
   }
 
+  if (out.length === 0) out.push(...baselineComplexityReasons(state));
   if (out.length === 0) out.push('No complicating factors; matter is straightforward.');
   return out;
 }
