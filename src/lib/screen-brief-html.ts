@@ -20,18 +20,42 @@ import { getI18n } from './screen-engine/i18n/loader';
 import { getChannelChipData } from './screen-engine/i18n/display';
 import { intakeLanguageLabel } from './intake-language-label';
 
+/**
+ * Lawyer-facing labels for the 6 locked provenance values (2026-06-02 taxonomy)
+ * plus the 3 legacy keys still present in older DB rows.
+ *
+ * Per operator direction: do NOT overclaim. The label "Confirmed by caller"
+ * is reserved for the readback-detection code path. Code that promotes a
+ * later candidate value without true readback detection MUST emit
+ * 'explicit_from_caller' (which renders as "Stated during call"), not the
+ * stronger 'confirmed_by_caller_after_readback'.
+ */
 const FACT_SOURCE_LABEL: Record<string, string> = {
-  stated: 'Stated in description',
-  confirmed: 'Confirmed by lead',
-  inferred: 'Inferred from context',
-  unknown: 'Unconfirmed',
+  // Locked 2026-06-02 taxonomy
+  confirmed_by_caller_after_readback: 'Confirmed by caller',
+  spelled_by_caller: 'Spelled by caller',
+  explicit_from_caller: 'Stated during call',
+  system_metadata: 'System metadata',
+  inferred_from_transcript: 'Inferred from transcript',
+  unknown: 'Not confirmed',
+  // Legacy DB-row backward-compat
+  stated: 'Stated during call',
+  confirmed: 'Confirmed by caller',
+  inferred: 'Inferred from transcript',
 };
 
 const FACT_SOURCE_CLASS: Record<string, string> = {
+  // Locked 2026-06-02 taxonomy
+  confirmed_by_caller_after_readback: 'src-confirmed',
+  spelled_by_caller: 'src-confirmed',
+  explicit_from_caller: 'src-stated',
+  system_metadata: 'src-confirmed',
+  inferred_from_transcript: 'src-inferred',
+  unknown: 'src-unknown',
+  // Legacy DB-row backward-compat
   stated: 'src-stated',
   confirmed: 'src-confirmed',
   inferred: 'src-inferred',
-  unknown: 'src-unknown',
 };
 
 

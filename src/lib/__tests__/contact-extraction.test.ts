@@ -172,19 +172,26 @@ describe('applyContactExtractionToState', () => {
     expect(after).toBe(before);
   });
 
-  it('returns the same state reference when extracted fields collide with already-filled slots', () => {
+  it('returns the same state reference when extracted fields are identical to already-filled slots', () => {
+    // #137 contract change (2026-06-02): when an existing slot value equals
+    // the newly extracted value, the state object is preserved (no rewrite).
+    // The "all-three-already-filled-blocks-overwrite" contract was REMOVED
+    // by #137 — see the precedence-aware merge tests below. Identical-value
+    // collisions still short-circuit so we don't churn the state object on
+    // repeated turns of the same contact info.
     const before = emptyState({
       slots: {
-        client_name: 'Pre-Filled',
-        client_email: 'prefilled@example.com',
-        client_phone: '+14165550000',
+        client_name: 'Sarah Patel',
+        client_email: 'sarah.patel.test@example.com',
+        client_phone: '+16475559999',
       },
     });
     const after = applyContactExtractionToState(
       'Sarah Patel, 647-555-9999, sarah.patel.test@example.com',
       before,
     );
-    // Nothing changed because all three slots were already filled.
+    // All three extracted values match what's already in slots, so no
+    // promotion fires for any of them and the state object is unchanged.
     expect(after).toBe(before);
   });
 
@@ -203,5 +210,124 @@ describe('applyContactExtractionToState', () => {
     expect(after.slots['client_name']).toBe('Sarah Patel');
     expect(after.slots['client_email']).toBe('sarah.patel.test@example.com');
     expect(after.slots['client_phone']).toBe('+16475559999');
+  });
+});
+
+/**
+ * Bug #137 regression coverage (2026-06-02 voice smoke 1).
+ *
+ * Field-detected pattern: operator called the live DRG Voice AI line, the
+ * agent extracted "Adriano Dominguez" from the first turn, the operator
+ * verbally corrected to "Adriano Domingues" later in the call, but the
+ * lawyer brief showed the misspelled version with provenance label "Stated
+ * in description". Root cause: contact-extraction.ts checked
+ * `!slots['client_name']` and skipped any later extraction once the slot
+ * was filled. Fix (option a per operator direction): if a later extracted
+ * value differs from the current value, promote the later one. Tag the
+ * new value as source 'explicit' (renders as "Stated during call" in the
+ * brief). Do NOT overclaim provenance as readback-confirmed; that label
+ * is reserved for future readback-detection logic.
+ */
+describe('precedence-aware merge (#137 option-a slice)', () => {
+  // Note: bare-name extraction is gated on the same message containing an
+  // email or phone match (the contact-reply context). So test turns include
+  // a phone alongside the name. The phone correction case can drop the name
+  // since phone extraction has no gate.
+
+  it('later differing client_name overrides earlier extraction', () => {
+    // Initial state: nothing captured yet.
+    let state = emptyState();
+
+    // First turn: caller gives wrong-spelling name + phone (contact-reply
+    // context). Name chunk must be its own comma-split segment.
+    const firstTurn = 'Adriano Dominguez, 416-555-1212';
+    state = applyContactExtractionToState(firstTurn, state);
+    expect(state.slots['client_name']).toBe('Adriano Dominguez');
+    expect(state.slot_meta['client_name']?.source).toBe('explicit');
+
+    // Later turn: caller spells the surname correctly. Phone present again
+    // to keep the bare-name gate satisfied.
+    const correctionTurn = 'Adriano Domingues, 416-555-1212';
+    state = applyContactExtractionToState(correctionTurn, state);
+
+    // The corrected value MUST win, not the original.
+    expect(state.slots['client_name']).toBe('Adriano Domingues');
+
+    // Provenance stays as 'explicit' (renders as "Stated during call").
+    // It must NOT be promoted to 'confirmed_by_caller_after_readback'
+    // because the extraction layer has not actually detected readback.
+    expect(state.slot_meta['client_name']?.source).toBe('explicit');
+
+    // Evidence string should note the correction, not just "bare-name regex".
+    const evidence = state.slot_meta['client_name']?.evidence ?? '';
+    expect(evidence).toContain('corrected from');
+    expect(evidence).toContain('Adriano Dominguez');
+  });
+
+  it('identical re-extraction preserves the existing slot_meta object', () => {
+    let state = emptyState();
+    state = applyContactExtractionToState(
+      'Sarah Patel, 416-555-9999',
+      state,
+    );
+    expect(state.slots['client_name']).toBe('Sarah Patel');
+    const firstMeta = state.slot_meta['client_name'];
+
+    // Same name extracted again. Should not rewrite slot_meta.
+    const after = applyContactExtractionToState(
+      'Sarah Patel, 416-555-9999',
+      state,
+    );
+
+    expect(after.slots['client_name']).toBe('Sarah Patel');
+    // shouldPromote = (current !== extracted) = false for the name slot,
+    // so slot_meta['client_name'] is preserved verbatim (no rewrite to
+    // "corrected from" evidence).
+    expect(after.slot_meta['client_name']).toBe(firstMeta);
+  });
+
+  it('later differing client_phone overrides earlier extraction', () => {
+    let state = emptyState();
+
+    // First turn: phone captured (no name gate for phone extraction).
+    state = applyContactExtractionToState(
+      'You can reach me at 416-555-1212.',
+      state,
+    );
+    expect(state.slots['client_phone']).toBe('+14165551212');
+
+    // Later turn: caller gives a different (corrected) number.
+    state = applyContactExtractionToState(
+      'Actually, use 647-549-2106 instead.',
+      state,
+    );
+
+    // The corrected number MUST win.
+    expect(state.slots['client_phone']).toBe('+16475492106');
+    expect(state.slot_meta['client_phone']?.source).toBe('explicit');
+    expect(state.slot_meta['client_phone']?.evidence ?? '').toContain(
+      'corrected from',
+    );
+  });
+
+  it('later differing client_email overrides earlier extraction', () => {
+    let state = emptyState();
+
+    state = applyContactExtractionToState(
+      'My email is adriano@example.com.',
+      state,
+    );
+    expect(state.slots['client_email']).toBe('adriano@example.com');
+
+    state = applyContactExtractionToState(
+      'Actually, please use adriano@caseloadselect.ca.',
+      state,
+    );
+
+    expect(state.slots['client_email']).toBe('adriano@caseloadselect.ca');
+    expect(state.slot_meta['client_email']?.source).toBe('explicit');
+    expect(state.slot_meta['client_email']?.evidence ?? '').toContain(
+      'corrected from',
+    );
   });
 });

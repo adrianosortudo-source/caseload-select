@@ -154,34 +154,96 @@ export function applyContactExtractionToState(
   const slot_meta = { ...state.slot_meta };
   let changed = false;
 
-  if (extracted.name && !slots['client_name']) {
-    slots['client_name'] = extracted.name;
-    slot_meta['client_name'] = {
-      source: 'explicit',
-      evidence: 'bare-name regex from contact-reply turn',
-      confidence: 0.85,
-    };
-    changed = true;
+  // -------------------------------------------------------------------------
+  // Bug fix 2026-06-02 (#137 minimum viable slice, per operator direction):
+  //
+  // The previous guards (`!slots['client_name']`, etc.) blocked later
+  // corrections from overriding earlier captures. When the caller corrects
+  // their name spelling, phone number, or email later in the call, the
+  // extractor's first-extract-wins behavior meant the lawyer brief showed
+  // the incorrect early value with provenance label "Stated in description".
+  //
+  // For tonight's slice (option a): if a later extracted candidate value
+  // differs from the current slot value AND the current source is at
+  // 'explicit'-or-lower precedence, promote the later one.
+  //
+  // Precedence respect — stronger sources are NOT overwritten by later
+  // turn-text extraction:
+  //   - 'answered' (channel pre-fill, e.g. Facebook sender display name):
+  //     more trusted than a bare-name from message body. KEEP.
+  //   - 'explicit' (a previous turn extracted it from user text): same-
+  //     strength as the new candidate, so a later correction wins. OVERWRITE.
+  //   - 'inferred' (LLM derived it): weaker than explicit. OVERWRITE.
+  //   - 'unknown' / unset: nothing to protect. OVERWRITE.
+  //
+  // IMPORTANT - do NOT overclaim provenance. The agent has NOT actually
+  // performed readback-confirmation at this layer. We continue to tag the
+  // captured source as 'explicit' (renders as "Stated during call" in the
+  // brief), NOT as 'confirmed_by_caller_after_readback'. The stronger label
+  // is reserved for the future readback-detection logic (#137 phase 2).
+  // -------------------------------------------------------------------------
+
+  // SlotMetaSource values that are MORE TRUSTED than mid-conversation text
+  // extraction, and which this layer must NOT overwrite. Future-proof: if
+  // SlotMetaSource gets extended (e.g. with 'confirmed_by_caller_after_readback'),
+  // add new sentinel values here so the precedence guard still holds.
+  const PROTECTED_SOURCES = new Set(['answered']);
+
+  if (extracted.name) {
+    const current = slots['client_name'];
+    const currentSource = slot_meta['client_name']?.source;
+    const isProtected =
+      currentSource !== undefined && PROTECTED_SOURCES.has(currentSource);
+    const shouldPromote = !current || (current !== extracted.name && !isProtected);
+    if (shouldPromote) {
+      slots['client_name'] = extracted.name;
+      slot_meta['client_name'] = {
+        source: 'explicit',
+        evidence: current
+          ? `corrected from "${current}" via later turn (#137 option-a precedence)`
+          : 'bare-name regex from contact-reply turn',
+        confidence: 0.85,
+      };
+      changed = true;
+    }
   }
 
-  if (extracted.email && !slots['client_email']) {
-    slots['client_email'] = extracted.email;
-    slot_meta['client_email'] = {
-      source: 'explicit',
-      evidence: 'email regex from turn text',
-      confidence: 0.95,
-    };
-    changed = true;
+  if (extracted.email) {
+    const current = slots['client_email'];
+    const currentSource = slot_meta['client_email']?.source;
+    const isProtected =
+      currentSource !== undefined && PROTECTED_SOURCES.has(currentSource);
+    const shouldPromote = !current || (current !== extracted.email && !isProtected);
+    if (shouldPromote) {
+      slots['client_email'] = extracted.email;
+      slot_meta['client_email'] = {
+        source: 'explicit',
+        evidence: current
+          ? `corrected from "${current}" via later turn (#137 option-a precedence)`
+          : 'email regex from turn text',
+        confidence: 0.95,
+      };
+      changed = true;
+    }
   }
 
-  if (extracted.phone && !slots['client_phone']) {
-    slots['client_phone'] = extracted.phone;
-    slot_meta['client_phone'] = {
-      source: 'explicit',
-      evidence: 'phone regex from turn text',
-      confidence: 0.95,
-    };
-    changed = true;
+  if (extracted.phone) {
+    const current = slots['client_phone'];
+    const currentSource = slot_meta['client_phone']?.source;
+    const isProtected =
+      currentSource !== undefined && PROTECTED_SOURCES.has(currentSource);
+    const shouldPromote = !current || (current !== extracted.phone && !isProtected);
+    if (shouldPromote) {
+      slots['client_phone'] = extracted.phone;
+      slot_meta['client_phone'] = {
+        source: 'explicit',
+        evidence: current
+          ? `corrected from "${current}" via later turn (#137 option-a precedence)`
+          : 'phone regex from turn text',
+        confidence: 0.95,
+      };
+      changed = true;
+    }
   }
 
   if (!changed) return state;

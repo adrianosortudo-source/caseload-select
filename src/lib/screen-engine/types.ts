@@ -371,7 +371,64 @@ export interface BandResult {
   coreCompleteness: number;
 }
 
-export type FactSource = 'stated' | 'confirmed' | 'inferred' | 'unknown';
+/**
+ * Provenance taxonomy for captured facts (locked 2026-06-02).
+ *
+ * The 6 canonical values, in PRECEDENCE order (highest trust first):
+ *   1. confirmed_by_caller_after_readback - agent readback + explicit caller "yes"
+ *   2. spelled_by_caller                  - caller spelled it out character-by-character
+ *   3. explicit_from_caller               - caller spoke it verbatim in this call
+ *   4. system_metadata                    - from telephony metadata (e.g. GHL caller-ID fromNumber)
+ *   5. inferred_from_transcript           - app classifier derived from transcript context
+ *   6. unknown                            - no signal captured
+ *
+ * Legacy values ('stated', 'confirmed', 'inferred') remain as type members for
+ * backward compatibility with persisted screened_leads rows. New writes should
+ * use the canonical 6 values. The brief renderer (screen-brief-html.ts) maps
+ * both old and new values to lawyer-facing labels.
+ *
+ * Per operator direction 2026-06-02: do NOT overclaim. Code that promotes a
+ * later candidate value over an earlier one without true readback-confirmation
+ * detection should tag the result as 'explicit_from_caller', NOT as
+ * 'confirmed_by_caller_after_readback'. The stronger label is reserved for
+ * code paths that have detected readback + caller affirmation in the transcript.
+ */
+export type FactSource =
+  | 'confirmed_by_caller_after_readback'
+  | 'spelled_by_caller'
+  | 'explicit_from_caller'
+  | 'system_metadata'
+  | 'inferred_from_transcript'
+  | 'unknown'
+  // Legacy values, kept for backward compatibility with existing DB rows.
+  // New code should NOT emit these. The brief renderer maps them to lawyer
+  // labels.
+  | 'stated'
+  | 'confirmed'
+  | 'inferred';
+
+/**
+ * Precedence map for FactSource. Higher number wins when reconciling multiple
+ * candidate values for the same field.
+ *
+ * Used by the finalization/merge layer (e.g. contact-extraction.ts) to decide
+ * whether a later candidate should overwrite an earlier captured value.
+ *
+ * Legacy values are mapped to their nearest canonical equivalent so existing
+ * DB rows participate correctly in precedence comparisons during read.
+ */
+export const FACT_SOURCE_PRECEDENCE: Record<FactSource, number> = {
+  confirmed_by_caller_after_readback: 5,
+  spelled_by_caller: 4,
+  explicit_from_caller: 3,
+  system_metadata: 2,
+  inferred_from_transcript: 1,
+  unknown: 0,
+  // Legacy mappings (read-only, never emitted by new code):
+  confirmed: 5,      // old 'confirmed' implied readback acknowledgement
+  stated: 3,         // old 'stated' was "caller said it"
+  inferred: 1,       // old 'inferred' was app-derived
+};
 
 export interface ResolvedFact {
   label: string;

@@ -786,8 +786,24 @@ function buildResolvedFactsV2(state: EngineState): ResolvedFact[] {
     }
     out.push({ label, value: val, source });
   }
-  // Order: stated first (most credible), then confirmed, then inferred
-  const rank: Record<ResolvedFact['source'], number> = { stated: 0, confirmed: 1, inferred: 2, unknown: 3 };
+  // Order: most credible provenance first.
+  // Updated 2026-06-02 for the 6-value FactSource taxonomy (#137).
+  // Per locked taxonomy: confirmed_by_caller_after_readback > spelled_by_caller
+  // > system_metadata > explicit_from_caller > inferred_from_transcript > unknown.
+  // Legacy values mapped to nearest canonical rank for backward compat with
+  // existing screened_leads rows.
+  const rank: Record<ResolvedFact['source'], number> = {
+    confirmed_by_caller_after_readback: 0,
+    spelled_by_caller: 1,
+    system_metadata: 2,
+    explicit_from_caller: 3,
+    inferred_from_transcript: 4,
+    unknown: 5,
+    // Legacy values - present in older DB rows
+    confirmed: 0,
+    stated: 3,
+    inferred: 4,
+  };
   out.sort((a, b) => rank[a.source] - rank[b.source]);
   return out;
 }
