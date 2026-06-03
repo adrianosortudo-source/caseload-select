@@ -380,6 +380,17 @@ export async function POST(req: NextRequest) {
   const bodyCallerPhone = normalizePhone(body.caller_phone);
   const callerPhone = bodyCallerPhone ?? normalizePhone(apiCallerPhone);
   const callerName = (body.caller_name ?? '').trim() || null;
+  // Transport-origin provenance for the caller phone: did it arrive on the
+  // webhook body, get fetched from the Voice AI API, or never resolve? Recorded
+  // in voice_meta on ALL THREE persistence paths (callback request, unconfirmed
+  // inquiry, screened lead) so an operator triaging any voice row can see how
+  // the number was obtained. This is distinct from the conversational provenance
+  // on resolved_facts_v2 (stated / confirmed-after-readback / spelled).
+  const callerPhoneSource: 'body' | 'voice-ai-api' | 'none' = bodyCallerPhone
+    ? 'body'
+    : apiCallerPhone
+      ? 'voice-ai-api'
+      : 'none';
   if (!bodyCallerPhone && callerPhone) {
     console.log(`[voice-intake] caller_phone fallback firm=${firmIdParam} source=voice-ai-api`);
   }
@@ -418,7 +429,7 @@ export async function POST(req: NextRequest) {
       call_id: body.call_id ?? null,
       call_duration_sec: body.call_duration_sec ?? null,
       recording_url: body.recording_url ?? null,
-      caller_phone_source: bodyCallerPhone ? 'body' : (apiCallerPhone ? 'voice-ai-api' : 'none'),
+      caller_phone_source: callerPhoneSource,
       transcript_source: transcriptSource,
       api_fetch: apiFetchTelemetry,
       marker: branchDecision.marker?.value ?? null,
@@ -557,7 +568,7 @@ export async function POST(req: NextRequest) {
         // which path resolved (or both null) when triaging unconfirmed
         // inquiries. Added 2026-05-31 after the fromNumber fallback work.
         caller_phone: callerPhone,
-        caller_phone_source: bodyCallerPhone ? 'body' : (apiCallerPhone ? 'voice-ai-api' : 'none'),
+        caller_phone_source: callerPhoneSource,
       },
       rawTranscript: transcript,
       matterType: state.matter_type,
