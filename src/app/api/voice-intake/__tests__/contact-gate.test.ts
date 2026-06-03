@@ -175,6 +175,42 @@ describe('/api/voice-intake contact-capture gate', () => {
     expect(notifyArg.reason).toBe('no_contact_provided');
   });
 
+  it('LOCKED REGRESSION (2026-06-03): name given + confirmed on a "name right:" readback enters the normal lead queue', async () => {
+    // The exact DRG smoke-call shape that regressed: caller states a bare name
+    // (engine misses it), the bot reads it back with "I have your name right:
+    // X", caller confirms, phone arrives via caller ID. Must become a
+    // screened_lead with the recovered name, NOT a dropped unconfirmed inquiry.
+    const req = makeRequest({
+      firmId: FIRM_ID,
+      caller_phone: '+16475492106',
+      // caller_name omitted in the webhook body — name only exists in-transcript.
+      transcript: [
+        'bot:Got it. Can I get your full name?',
+        'human:Adriana Dominguez.',
+        'bot:Let me make sure I have your name right: Adriana Dominguez. Is that correct?',
+        'human:Correct.',
+        "bot:Great. Could you describe what's going on, in your own words?",
+        'human:I need help with incorporating my business. I am a freelancer and I want to set up a corporation.',
+        "bot:Thank you, Adriana. I'll pass this along.",
+        'RECORD_BRANCH: NEW_MATTER',
+      ].join('\n'),
+      call_id: 'call_namedrop_regression',
+      call_duration_sec: 60,
+    });
+    const res = await POST(req as never);
+    expect(res.status).toBe(200);
+
+    const screened = captured.inserts.find((c) => c.table === 'screened_leads');
+    const unconfirmed = captured.inserts.find((c) => c.table === 'unconfirmed_inquiries');
+    // Enters the normal queue, is NOT dropped, and does NOT fire the alert.
+    expect(unconfirmed).toBeUndefined();
+    expect(screened).toBeDefined();
+    expect(notifyOperatorOfUnconfirmedVoiceIntake).not.toHaveBeenCalled();
+    // The recovered name is on the persisted record.
+    const slots = (screened?.payload.slot_answers as { slots?: Record<string, unknown> })?.slots ?? {};
+    expect(slots.client_name).toBe('Adriana Dominguez');
+  });
+
   it('returns persisted=false with reason=awaiting_contact when gate fails', async () => {
     const req = makeRequest({
       firmId: FIRM_ID,

@@ -260,15 +260,20 @@ export function detectReadbackConfirmation(
 // READBACK_CUE_RE) so a matter description is never mistaken for a name.
 //
 // After "name" the bot may insert a QUALIFIER (right / down / recorded / noted /
-// spelled), an optional connector (is / as), and an optional colon before the
-// name itself. The live DRG agent says "I have your name right: Adriana
-// Dominguez. Is that correct?" — the qualifier + colon must be consumed by the
-// lead-in, otherwise the capture starts at "right:" and cleanNameTokens stops on
-// the "right" stopword, dropping a caller who clearly gave + confirmed a name
-// into unconfirmed_inquiries (DRG voice smoke, 2026-06-03). The [\s:]+ separator
-// handles both "name as X" (space) and "name right: X" (colon).
+// spelled), an optional connector (is / as), and a separator (space, colon, or
+// comma) before the name itself. The matcher must consume all of that so the
+// capture starts at the actual name; otherwise the capture begins on a filler
+// token ("right:", "right,") and cleanNameTokens stops on it, dropping a caller
+// who clearly gave + confirmed a name into unconfirmed_inquiries (DRG voice
+// smoke, 2026-06-03). Broadened (not keyed to one phrase shape) to handle the
+// confirmation forms the live agent + plausible variants produce:
+//   "I have your name as Adriana Dominguez. Is that correct?"
+//   "I have your name right: Adriana Dominguez. Is that correct?"
+//   "Let me make sure I have your name right, Adriana Dominguez. Is that correct?"
+//   "Let me confirm your name: Adriana Dominguez. Is that right?"
+// The [\s:,]+ separator covers space / colon / comma after the lead-in.
 const NAME_READBACK_CAPTURE_RE =
-  /\b(?:have your name|your name|name)(?:\s+(?:right|down|recorded|noted|spelled))?(?:\s+(?:is|as))?[\s:]+(.+)$/i;
+  /\b(?:have your name|your name|name)(?:\s+(?:right|down|recorded|noted|spelled))?(?:\s+(?:is|as))?[\s:,]+(.+)$/i;
 
 // Tokens that terminate a name span. When the capture runs past the name
 // ("...name as Adriano and you are calling about a will"), the span stops at the

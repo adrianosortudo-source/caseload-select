@@ -228,6 +228,33 @@ describe('extractReadbackConfirmedName (#122 name recovery)', () => {
     expect(extractReadbackConfirmedName(transcript)?.value).toBe('Marcus Bell');
   });
 
+  // The confirmation-shape variants the operator listed (2026-06-03). The
+  // extractor must not key too tightly on one phrasing: qualifier + colon OR
+  // comma OR a "confirm your name:" lead-in must all reach the name.
+  it('recovers from the comma form "...name right, X. Is that correct?"', () => {
+    const transcript = [
+      'bot: Let me make sure I have your name right, Adriana Dominguez. Is that correct?',
+      'human: Correct.',
+    ].join('\n');
+    expect(extractReadbackConfirmedName(transcript)?.value).toBe('Adriana Dominguez');
+  });
+
+  it('recovers from "Let me confirm your name: X. Is that right?"', () => {
+    const transcript = [
+      'bot: Let me confirm your name: Adriana Dominguez. Is that right?',
+      'human: Right.',
+    ].join('\n');
+    expect(extractReadbackConfirmedName(transcript)?.value).toBe('Adriana Dominguez');
+  });
+
+  it('recovers from "I have your name as X. Is that correct?"', () => {
+    const transcript = [
+      'bot: I have your name as Adriana Dominguez. Is that correct?',
+      'human: Correct.',
+    ].join('\n');
+    expect(extractReadbackConfirmedName(transcript)?.value).toBe('Adriana Dominguez');
+  });
+
   it('stops the name span at the readback cue / trailing clause', () => {
     const transcript = [
       'bot: Let me confirm, I have your name as John Smith and you are calling about a will. Is that correct?',
