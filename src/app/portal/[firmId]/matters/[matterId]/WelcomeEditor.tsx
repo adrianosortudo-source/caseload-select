@@ -1,31 +1,17 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useRef, useState } from 'react';
+import RichTextEditor, { type RichTextEditorHandle } from '@/components/RichTextEditor';
 
 /**
- * Lawyer-side inline rich-text editor for the welcome draft (S8 Phase 2).
+ * Lawyer-side welcome-draft editor (S8 Phase 2). Thin wrapper over the shared
+ * RichTextEditor: this owns the save / reset / send flow; the editing surface +
+ * toolbar live in RichTextEditor.
  *
- * Replaces the Phase 1 HTML-source textarea + separate preview with a single
- * WYSIWYG surface: a contenteditable region that IS the preview, plus a narrow
- * formatting toolbar (bold, italic, bulleted/numbered list, link, clear). The
- * lawyer edits visually; no HTML source.
- *
- * Saved-output compatibility: the editor emits the same tag set the generated
- * draft uses (p, ul/ol/li, a, br, strong/em). On save the server SANITIZES the
- * HTML authoritatively (lib/welcome-html-sanitize) and returns the canonical
- * result, which this component adopts — so the lawyer always sees exactly what
- * will be stored and sent, and nothing reaches the client unsanitized.
- *
- * Explicit save (no autosave). Send is unchanged: POST /welcome/send, with a
- * save-first confirm when there are unsaved edits.
- *
- * Implementation notes:
- * - The contenteditable is UNCONTROLLED: initialized imperatively via ref and
- *   never re-rendered from React state (that would fight the cursor). After a
- *   save/reset we set innerHTML imperatively and re-read it as the new baseline.
- * - Toolbar uses document.execCommand. It is deprecated but universally
- *   supported and zero-dependency, which fits a narrow first slice. A heavier
- *   editor (TipTap/Slate) is a later upgrade if formatting needs grow.
+ * Saved-output compatibility: the server SANITIZES on PATCH (lib/welcome-html
+ * -sanitize) and returns the canonical HTML, which the editor adopts via
+ * setHtml — so the lawyer always sees exactly what's stored/sent and nothing
+ * reaches the client unsanitized. Explicit save (no autosave).
  */
 export default function WelcomeEditor({
   firmId,
@@ -40,74 +26,46 @@ export default function WelcomeEditor({
   initialEditedHtml: string | null;
   isSent: boolean;
 }) {
-  const editorRef = useRef<HTMLDivElement>(null);
-  // Browser-normalized canonical HTML (what's saved). Both sides of the dirty
-  // comparison are read from the DOM so normalization doesn't cause false-dirty.
-  const baselineRef = useRef<string>('');
+  const editorRef = useRef<RichTextEditorHandle>(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const busy = saving || sending;
 
-  // Initialize the editor content once.
-  useEffect(() => {
-    const el = editorRef.current;
-    if (!el) return;
-    el.innerHTML = initialEditedHtml ?? originalHtml ?? '';
-    baselineRef.current = el.innerHTML;
-  }, [initialEditedHtml, originalHtml]);
-
-  const recomputeDirty = useCallback(() => {
-    const el = editorRef.current;
-    if (!el) return;
-    setDirty(el.innerHTML !== baselineRef.current);
-    setSavedAt(null);
-  }, []);
-
-  function exec(command: string, value?: string) {
-    if (isSent || saving || sending) return;
-    editorRef.current?.focus();
-    document.execCommand(command, false, value);
-    recomputeDirty();
-  }
-
-  function onLink() {
-    if (isSent || saving || sending) return;
-    const url = window.prompt('Link URL (https://… or mailto:…)');
-    if (!url) return;
-    const trimmed = url.trim();
-    if (!/^(https?:|mailto:)/i.test(trimmed)) {
-      setError('Links must start with https://, http://, or mailto:.');
-      return;
-    }
-    setError(null);
-    editorRef.current?.focus();
-    document.execCommand('createLink', false, trimmed);
-    recomputeDirty();
+  // Sent matters render read-only. (The matter page only mounts this editor
+  // for unsent matters, so this is a defensive branch; the body shown is the
+  // firm-authored draft, server-sanitized on save.)
+  if (isSent) {
+    return (
+      <div>
+        <p style={labelStyle}>Sent welcome (read-only)</p>
+        <div
+          style={readOnlyStyle}
+          dangerouslySetInnerHTML={{ __html: initialEditedHtml ?? originalHtml ?? '' }}
+        />
+      </div>
+    );
   }
 
   async function save(): Promise<boolean> {
-    const el = editorRef.current;
-    if (!el || isSent) return false;
+    const html = editorRef.current?.getHtml() ?? '';
     setSaving(true);
     setError(null);
     try {
       const res = await fetch(`/api/portal/${firmId}/matters/${matterId}/welcome`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ edited_html: el.innerHTML }),
+        body: JSON.stringify({ edited_html: html }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
         setError(json.error ?? 'Could not save. Please try again.');
         return false;
       }
-      // Adopt the server's canonical sanitized HTML so the lawyer sees exactly
-      // what's stored (and any disallowed markup they pasted is now gone).
-      el.innerHTML = typeof json.edited_html === 'string' ? json.edited_html : '';
-      baselineRef.current = el.innerHTML;
-      setDirty(false);
+      // Adopt the server's canonical sanitized HTML (clears dirty via setHtml).
+      editorRef.current?.setHtml(typeof json.edited_html === 'string' ? json.edited_html : '');
       setSavedAt(new Date().toLocaleTimeString('en-CA', { timeStyle: 'short' }));
       return true;
     } catch (err) {
@@ -124,17 +82,12 @@ export default function WelcomeEditor({
   }
 
   function onReset() {
-    const el = editorRef.current;
-    if (!el || isSent) return;
-    el.innerHTML = originalHtml ?? '';
-    baselineRef.current = el.innerHTML;
-    setDirty(false);
+    editorRef.current?.setHtml(originalHtml ?? '');
     setSavedAt(null);
     setError(null);
   }
 
   async function onSend() {
-    if (isSent) return;
     if (dirty) {
       const ok = window.confirm(
         'You have unsaved edits. Save them and send the welcome to the client?',
@@ -163,42 +116,20 @@ export default function WelcomeEditor({
     }
   }
 
-  const busy = saving || sending;
-
-  if (isSent) {
-    return (
-      <div>
-        <p style={labelStyle}>Sent welcome (read-only)</p>
-        <div ref={editorRef} style={readOnlyStyle} />
-      </div>
-    );
-  }
-
   return (
     <form onSubmit={onSaveSubmit}>
       <p style={labelStyle}>Welcome message</p>
 
-      <div style={toolbarStyle} role="toolbar" aria-label="Formatting">
-        <ToolButton label="B" title="Bold" onClick={() => exec('bold')} disabled={busy} bold />
-        <ToolButton label="I" title="Italic" onClick={() => exec('italic')} disabled={busy} italic />
-        <Divider />
-        <ToolButton label="• List" title="Bulleted list" onClick={() => exec('insertUnorderedList')} disabled={busy} />
-        <ToolButton label="1. List" title="Numbered list" onClick={() => exec('insertOrderedList')} disabled={busy} />
-        <Divider />
-        <ToolButton label="Link" title="Add link to selected text" onClick={onLink} disabled={busy} />
-        <ToolButton label="Clear" title="Clear formatting" onClick={() => exec('removeFormat')} disabled={busy} />
-      </div>
-
-      <div
+      <RichTextEditor
         ref={editorRef}
-        contentEditable={!busy}
-        suppressContentEditableWarning
-        onInput={recomputeDirty}
-        spellCheck
-        role="textbox"
-        aria-multiline="true"
-        aria-label="Welcome message editor"
-        style={editorStyle(busy)}
+        initialHtml={initialEditedHtml ?? originalHtml ?? ''}
+        disabled={busy}
+        ariaLabel="Welcome message editor"
+        onError={setError}
+        onDirtyChange={(d) => {
+          setDirty(d);
+          if (d) setSavedAt(null);
+        }}
       />
 
       <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -225,54 +156,6 @@ export default function WelcomeEditor({
   );
 }
 
-function ToolButton({
-  label,
-  title,
-  onClick,
-  disabled,
-  bold,
-  italic,
-}: {
-  label: string;
-  title: string;
-  onClick: () => void;
-  disabled: boolean;
-  bold?: boolean;
-  italic?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      title={title}
-      aria-label={title}
-      // Preserve the editor's text selection: don't let the button steal focus
-      // before execCommand runs.
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        background: '#fff',
-        color: '#1E2F58',
-        border: '1px solid #C4B49A',
-        borderRadius: 3,
-        padding: '4px 9px',
-        fontSize: '0.8rem',
-        fontWeight: bold ? 800 : 600,
-        fontStyle: italic ? 'italic' : 'normal',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-        lineHeight: 1.2,
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
-function Divider() {
-  return <span aria-hidden style={{ width: 1, alignSelf: 'stretch', background: '#E0DDD3', margin: '0 2px' }} />;
-}
-
 const labelStyle = {
   fontFamily: "'Oxanium', system-ui, sans-serif",
   fontSize: '0.66rem',
@@ -281,35 +164,6 @@ const labelStyle = {
   color: '#888',
   marginBottom: 6,
 };
-
-const toolbarStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 5,
-  padding: 6,
-  border: '1px solid #C4B49A',
-  borderBottom: 'none',
-  borderRadius: '4px 4px 0 0',
-  background: '#F4F3EF',
-  flexWrap: 'wrap',
-};
-
-function editorStyle(busy: boolean): React.CSSProperties {
-  return {
-    width: '100%',
-    padding: 12,
-    fontSize: '0.9rem',
-    border: '1px solid #C4B49A',
-    borderRadius: '0 0 4px 4px',
-    background: busy ? '#FAFAF8' : '#fff',
-    color: '#222',
-    lineHeight: 1.55,
-    minHeight: 260,
-    boxSizing: 'border-box',
-    overflow: 'auto',
-    outline: 'none',
-  };
-}
 
 const readOnlyStyle: React.CSSProperties = {
   width: '100%',

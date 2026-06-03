@@ -367,6 +367,8 @@ The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), 
 | `/admin/webhook-outbox` | Operator-only delivery log UI with manual retry button. |
 | `/admin/routing` | Operator-only lead-routing config UI (2026-06-02). Firm picker (FirmFilter, `?firm_id=`) → per-practice-area lead, firm fallback lead, default assignees. Honest unconfigured states + live "a lead taken now goes to" preview + snapshot-at-take caveat. Edits the live `intake_firms` routing fields; no deploy needed for routing changes. |
 | `GET/PATCH /api/admin/firms/[firmId]/routing` | Operator-gated. GET returns the firm's routing config + selectable lawyers; PATCH validates every id belongs to the firm, normalizes (drops blank PA defaults, de-dupes assignees), writes the three columns. |
+| `/admin/explainers` + `/admin/explainers/[id]` | Operator-only explainer-article authoring UI (2026-06-03, S8 Phase 2). List + per-article editor (title, body via the shared `RichTextEditor`, practice area, matter stage, ordering, publish toggle). Lets the operator author the seed explainers (published=false, empty body) without a deploy. `explainer_articles` is global (no firm_id). |
+| `GET /api/admin/explainers` + `GET/PATCH /api/admin/explainers/[id]` | Operator-gated. PATCH sanitizes `body_html` via `lib/explainer-html-sanitize` (broader allowlist than welcome: adds h2-h4 + blockquote) and validates matter_stage; returns the canonical article. body_html renders into the client portal, so it is never stored unsanitized. |
 
 ### S8 Phase 1 routes (added 2026-05-22)
 
