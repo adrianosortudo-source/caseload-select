@@ -65,6 +65,7 @@ import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
 import { resolveFirmTimezone } from '@/lib/firm-timezone';
 import { promoteContactProvenance } from '@/lib/promote-contact-provenance';
+import { recoverNameIfMissing } from '@/lib/readback-detection';
 import type { EngineState, Band } from '@/lib/screen-engine/types';
 import {
   verifyVoiceWebhookSignature,
@@ -571,6 +572,33 @@ export async function POST(req: NextRequest) {
         console.error('[voice-intake] notifyOperatorOfLlmDisabled failed:', err);
       }),
     );
+  }
+
+  // #122: defense-in-depth name recovery. If the engine captured no client
+  // name but a bot read one back and the caller cleanly affirmed it, recover
+  // that name before the contact gate so a caller who DID give (and confirm)
+  // their name isn't dropped into unconfirmed_inquiries on an extraction miss.
+  // Only fills an empty slot, only from a confirmed readback (extractor returns
+  // null on any doubt), so it can never overwrite or invent. seedVoiceState's
+  // 'answered' source means buildResolvedFactsV2 floors it at
+  // explicit_from_caller; promoteContactProvenance below then upgrades it to
+  // confirmed_by_caller_after_readback off the same transcript evidence.
+  const recoveredName = recoverNameIfMissing(
+    state.slots['client_name'] as string | null,
+    normalizedTranscript,
+  );
+  if (recoveredName) {
+    console.log(
+      `[voice-intake] #122 recovered name from confirmed readback firm=${firmIdParam} call=${body.call_id ?? 'unknown'}`,
+    );
+    state = {
+      ...state,
+      slots: { ...state.slots, client_name: recoveredName },
+      slot_meta: {
+        ...state.slot_meta,
+        client_name: { source: 'answered', confidence: 1.0 },
+      },
+    };
   }
 
   // ── Build the brief ─────────────────────────────────────────────────────

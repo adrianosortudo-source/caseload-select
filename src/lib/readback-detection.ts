@@ -240,3 +240,116 @@ export function detectReadbackConfirmation(
 
   return { kind: 'none', evidence: '' };
 }
+
+// ── Name recovery from a confirmed readback (#122) ───────────────────────────
+//
+// detectReadbackConfirmation above answers "did the caller confirm THIS value?"
+// #122 needs the complement: "the engine captured NO name -- did the caller
+// confirm one on a bot readback we can recover?" That requires EXTRACTING the
+// name span from the bot's readback line, not just confirming a known value.
+//
+// High precision by construction (a wrong name in the brief is worse than a
+// dropped-but-alerted lead): a bot turn must (a) carry a readback cue, (b) match
+// a name-specific lead-in, and (c) be followed by a clean caller affirmative
+// with no correction; the captured span must then pass name-shape validation.
+// Any failure returns null, so the caller falls through to the contact gate and
+// the #125 unconfirmed-voice alert rather than backfilling a guess.
+
+// Bot lead-ins that introduce the caller's NAME. Captures the rest of the line;
+// cleanNameTokens trims it down to the name span. Name-specific (not the shared
+// READBACK_CUE_RE) so a matter description is never mistaken for a name.
+const NAME_READBACK_CAPTURE_RE =
+  /\b(?:have your name(?: down)?(?: as)?|your name(?: is| as)?|name(?: is| as))\s+(.+)$/i;
+
+// Tokens that terminate a name span. When the capture runs past the name
+// ("...name as Adriano and you are calling about a will"), the span stops at the
+// first of these. Deliberately broad: better to under-capture than to absorb
+// non-name words.
+const NAME_STOPWORDS = new Set([
+  'is', 'was', 'are', 'am', 'as', 'the', 'a', 'an', 'and', 'or', 'but', 'you',
+  'your', 'my', 'me', 'i', 'it', 'that', 'this', 'these', 'those', 'calling',
+  'call', 'about', 'for', 'to', 'with', 'please', 'yes', 'no', 'correct',
+  'right', 'so', 'then', 'ok', 'okay', 'um', 'uh', 'sir', 'maam', 'mr', 'mrs',
+  'ms', 'dr', 'here', 'there', 'they', 'we', 'he', 'she', 'do', 'does', 'did',
+  'have', 'has', 'had', 'will', 'would', 'can', 'could', 'should', 'regarding',
+  'concerning', 're', 'spelled', 'spelt', 'spelling',
+]);
+
+/**
+ * Trim a captured span to a name: leading name-shaped tokens only, stopping at
+ * the first digit, punctuation gap, single stray letter, or stopword. Caps at
+ * 4 tokens. Returns a title-cased name, or null when nothing name-shaped leads.
+ */
+function cleanNameTokens(raw: string): string | null {
+  const tokens = raw.trim().split(/\s+/);
+  const kept: string[] = [];
+  for (const tok of tokens) {
+    if (/\d/.test(tok)) break; // names carry no digits
+    // Strip surrounding punctuation; keep internal apostrophes/hyphens.
+    const letters = tok.replace(/^[^a-z'’-]+/i, '').replace(/[^a-z'’-]+$/i, '');
+    if (!letters) break; // pure punctuation → span ended
+    const core = letters.toLowerCase().replace(/['’-]/g, '');
+    if (!core) break;
+    if (NAME_STOPWORDS.has(core)) break;
+    if (core.length < 2 && kept.length > 0) break; // stray trailing initial
+    kept.push(letters);
+    if (kept.length >= 4) break;
+  }
+  if (kept.length === 0) return null;
+  const joined = kept.join(' ');
+  if (joined.length > 60) return null; // runaway capture guard
+  return kept
+    .map((t) => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase())
+    .join(' ');
+}
+
+export interface ReadbackNameResult {
+  value: string;
+  /** The bot readback turn the name was recovered from, for audit. */
+  evidence: string;
+}
+
+/**
+ * Recover a caller name from a confirmed bot readback (#122). Returns null
+ * unless a single bot turn carries both a readback cue and a name lead-in, the
+ * next human turn is a clean affirmative, and the captured span is name-shaped.
+ */
+export function extractReadbackConfirmedName(transcript: string): ReadbackNameResult | null {
+  if (!transcript || !transcript.trim()) return null;
+  const turns = parseTranscriptTurns(transcript);
+  if (turns.length === 0) return null;
+
+  for (let i = 0; i < turns.length; i++) {
+    const turn = turns[i];
+    if (turn.speaker !== 'bot') continue;
+    if (!READBACK_CUE_RE.test(turn.text)) continue;
+    const capture = NAME_READBACK_CAPTURE_RE.exec(turn.text);
+    if (!capture) continue;
+    const name = cleanNameTokens(capture[1]);
+    if (!name) continue;
+
+    const next = turns.slice(i + 1).find((t) => t.speaker === 'human');
+    if (!next) continue;
+    if (!AFFIRMATIVE_RE.test(next.text.trim())) continue;
+    if (CORRECTION_MARKER_RE.test(next.text)) continue;
+
+    return { value: name, evidence: turn.text };
+  }
+  return null;
+}
+
+/**
+ * The #122 wiring decision, isolated so the safety invariant is testable:
+ * recover a readback-confirmed name ONLY when the current slot is empty. Never
+ * overwrites an existing name (the engine's extraction wins; this is a pure
+ * fallback). Returns the recovered name, or null when the slot is already
+ * filled or no confirmed readback name exists.
+ */
+export function recoverNameIfMissing(
+  currentName: string | null | undefined,
+  transcript: string,
+): string | null {
+  if (currentName && currentName.trim()) return null;
+  const result = extractReadbackConfirmedName(transcript);
+  return result ? result.value : null;
+}

@@ -14,6 +14,8 @@ import { describe, it, expect } from 'vitest';
 import {
   detectReadbackConfirmation,
   parseTranscriptTurns,
+  extractReadbackConfirmedName,
+  recoverNameIfMissing,
 } from '../readback-detection';
 
 describe('parseTranscriptTurns', () => {
@@ -185,5 +187,103 @@ describe('detectReadbackConfirmation - precedence', () => {
     expect(detectReadbackConfirmation(transcript, 'Adriano Domingues').kind).toBe(
       'confirmed_after_readback',
     );
+  });
+});
+
+describe('extractReadbackConfirmedName (#122 name recovery)', () => {
+  it('recovers a name from "name as X ... is that correct?" + clean affirmative', () => {
+    const transcript = [
+      'bot: I have your name as Adriano Domingues, is that correct?',
+      'human: Yes.',
+    ].join('\n');
+    const out = extractReadbackConfirmedName(transcript);
+    expect(out?.value).toBe('Adriano Domingues');
+  });
+
+  it('recovers from "your name is X. did I get that right?"', () => {
+    const transcript = [
+      'bot: So your name is Sarah Chen. Did I get that right?',
+      'human: Correct.',
+    ].join('\n');
+    expect(extractReadbackConfirmedName(transcript)?.value).toBe('Sarah Chen');
+  });
+
+  it('stops the name span at the readback cue / trailing clause', () => {
+    const transcript = [
+      'bot: Let me confirm, I have your name as John Smith and you are calling about a will. Is that correct?',
+      'human: Yes that is right.',
+    ].join('\n');
+    // "and you are calling about a will" must not be absorbed into the name.
+    expect(extractReadbackConfirmedName(transcript)?.value).toBe('John Smith');
+  });
+
+  it('returns null when the caller corrects instead of confirming', () => {
+    const transcript = [
+      'bot: I have your name as John Smith, is that correct?',
+      'human: No, it is actually John Smithe.',
+    ].join('\n');
+    expect(extractReadbackConfirmedName(transcript)).toBeNull();
+  });
+
+  it('returns null when the bot states the name without a readback cue', () => {
+    const transcript = [
+      'bot: Thanks, your name is John Smith.',
+      'human: Yes.',
+    ].join('\n');
+    expect(extractReadbackConfirmedName(transcript)).toBeNull();
+  });
+
+  it('returns null when there is no clean affirmative after the readback', () => {
+    const transcript = [
+      'bot: I have your name as John Smith, is that correct?',
+      'human: Well, I have a question about fees first.',
+    ].join('\n');
+    expect(extractReadbackConfirmedName(transcript)).toBeNull();
+  });
+
+  it('does not mistake a matter readback for a name', () => {
+    const transcript = [
+      'bot: So your matter is about a wrongful dismissal, is that correct?',
+      'human: Yes.',
+    ].join('\n');
+    expect(extractReadbackConfirmedName(transcript)).toBeNull();
+  });
+
+  it('returns null for an empty or speakerless transcript', () => {
+    expect(extractReadbackConfirmedName('')).toBeNull();
+    expect(extractReadbackConfirmedName('just some text with no turns')).toBeNull();
+  });
+
+  it('caps the recovered name at four tokens', () => {
+    const transcript = [
+      'bot: I have your name as Maria Isabel De La Cruz Rodriguez Garcia, is that correct?',
+      'human: Yes.',
+    ].join('\n');
+    const out = extractReadbackConfirmedName(transcript);
+    expect(out).not.toBeNull();
+    expect(out!.value.split(' ').length).toBeLessThanOrEqual(4);
+  });
+});
+
+describe('recoverNameIfMissing (#122 wiring invariant)', () => {
+  const transcript = [
+    'bot: I have your name as Priya Venkatesan, is that correct?',
+    'human: Yes.',
+  ].join('\n');
+
+  it('recovers the confirmed readback name when the slot is empty', () => {
+    expect(recoverNameIfMissing(null, transcript)).toBe('Priya Venkatesan');
+    expect(recoverNameIfMissing('', transcript)).toBe('Priya Venkatesan');
+    expect(recoverNameIfMissing('   ', transcript)).toBe('Priya Venkatesan');
+  });
+
+  it('NEVER overwrites a name the engine already captured', () => {
+    // Even with a different confirmed name in the transcript, a present slot
+    // wins. This is the safety invariant: the fallback must not clobber.
+    expect(recoverNameIfMissing('Existing Name', transcript)).toBeNull();
+  });
+
+  it('returns null when the slot is empty but there is no confirmed readback', () => {
+    expect(recoverNameIfMissing(null, 'human: I need help with a will.')).toBeNull();
   });
 });
