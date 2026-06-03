@@ -83,7 +83,9 @@ import { classifyVoiceBranchServer } from '@/lib/voice-branch-classifier-server'
 import {
   notifyOperatorOfVoiceCallback,
   notifyOperatorOfUnconfirmedVoiceIntake,
+  notifyOperatorOfLlmDisabled,
 } from '@/lib/voice-callback-notify';
+import { shouldAlertLlmDisabled } from '@/lib/llm-health-alert';
 
 interface VoiceIntakeBody {
   caller_phone?: string;
@@ -231,7 +233,7 @@ export async function POST(req: NextRequest) {
 
   const { data: firm, error: firmErr } = await supabase
     .from('intake_firms')
-    .select('id, voice_api_token, ghl_location_id, location')
+    .select('id, name, voice_api_token, ghl_location_id, location, gemini_disabled_alert_sent_at')
     .eq('id', firmIdParam)
     .maybeSingle();
   if (firmErr) {
@@ -286,9 +288,11 @@ export async function POST(req: NextRequest) {
 
   const contactId = (body.call_id ?? '').trim();
   const firmRow = firm as {
+    name?: string | null;
     voice_api_token?: string | null;
     ghl_location_id?: string | null;
     location?: string | null;
+    gemini_disabled_alert_sent_at?: string | null;
   };
   const firmToken = firmRow.voice_api_token ?? null;
   const firmLocationId = firmRow.ghl_location_id ?? null;
@@ -516,9 +520,14 @@ export async function POST(req: NextRequest) {
   // 5. LLM extraction (best-effort; failure does not abort) — same
   // rationale: feed the normalized transcript so Gemini extracts against
   // the corrected text, not the raw ASR output.
+  // llmMode is hoisted so the brief metadata + the LLM-disabled alert (#128)
+  // can both see what the extractor returned. null = LLM was not attempted
+  // (out_of_scope) or threw before returning a mode.
+  let llmMode: 'live' | 'disabled' | 'error' | 'degraded' | null = null;
   if (state.matter_type !== 'out_of_scope') {
     try {
       const llm = await llmExtractServer(normalizedTranscript, state);
+      llmMode = llm.mode;
       const filledIds = Object.keys(llm.extracted).filter(
         (k) => llm.extracted[k] !== null && llm.extracted[k] !== '',
       );
@@ -529,6 +538,39 @@ export async function POST(req: NextRequest) {
       // best-effort; carry on with regex-only state
       console.warn('[voice-intake] llmExtractServer failed:', err);
     }
+  }
+
+  // #128: alert the operator when LLM extraction is disabled (GEMINI_API_KEY
+  // missing/invalid). Every brief degrades to regex-only until it's fixed, with
+  // no other signal. Throttled per firm via intake_firms.gemini_disabled_alert
+  // _sent_at so a sustained outage doesn't email once per inbound call.
+  // Fires before the contact gate so it covers both the screened-lead and the
+  // unconfirmed-inquiry outcomes. Best-effort, non-blocking.
+  if (llmMode === 'disabled' && shouldAlertLlmDisabled(firmRow.gemini_disabled_alert_sent_at)) {
+    const llmAlertStamp = new Date().toISOString();
+    console.error(
+      `[voice-intake][llm-disabled] GEMINI extraction disabled firm=${firmIdParam} call=${body.call_id ?? 'unknown'}`,
+    );
+    waitUntil(
+      (async () => {
+        const sendResult = await notifyOperatorOfLlmDisabled({
+          firmId: firmIdParam,
+          firmName: firmRow.name ?? null,
+          mode: 'disabled',
+          channel: 'voice',
+          callId: body.call_id ?? null,
+          occurredAtIso: llmAlertStamp,
+        });
+        if (sendResult.email === 'sent') {
+          await supabase
+            .from('intake_firms')
+            .update({ gemini_disabled_alert_sent_at: llmAlertStamp })
+            .eq('id', firmIdParam);
+        }
+      })().catch((err) => {
+        console.error('[voice-intake] notifyOperatorOfLlmDisabled failed:', err);
+      }),
+    );
   }
 
   // ── Build the brief ─────────────────────────────────────────────────────
@@ -572,6 +614,9 @@ export async function POST(req: NextRequest) {
         // inquiries. Added 2026-05-31 after the fromNumber fallback work.
         caller_phone: callerPhone,
         caller_phone_source: callerPhoneSource,
+        // #128: a disabled LLM can itself cause the contact gate to fail
+        // (regex missed the name), so record what extraction ran.
+        llm_mode: llmMode,
       },
       rawTranscript: transcript,
       matterType: state.matter_type,
@@ -632,6 +677,13 @@ export async function POST(req: NextRequest) {
       recording_url: body.recording_url ?? null,
       caller_phone: callerPhone,
       caller_name: callerName,
+      // Transport-origin provenance for the phone (#126). The callback and
+      // unconfirmed paths already record this; the screened_leads path is the
+      // one the lawyer brief is built from, so it carries it too.
+      caller_phone_source: callerPhoneSource,
+      // What extraction actually ran (#128). 'disabled' means the brief is
+      // regex-only because GEMINI_API_KEY was missing/invalid.
+      llm_mode: llmMode,
       branch_marker: branchDecision.marker?.value ?? null,
       classifier_branch: branchDecision.classifierBranch,
       classifier_mode: appBranch.mode,

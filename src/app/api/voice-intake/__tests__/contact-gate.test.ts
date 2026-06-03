@@ -67,6 +67,7 @@ vi.mock('@/lib/lead-notify', () => ({
 vi.mock('@/lib/voice-callback-notify', () => ({
   notifyOperatorOfVoiceCallback: vi.fn(() => Promise.resolve({ email: 'skipped', sms: 'skipped', errors: [] })),
   notifyOperatorOfUnconfirmedVoiceIntake: vi.fn(() => Promise.resolve({ email: 'skipped', errors: [] })),
+  notifyOperatorOfLlmDisabled: vi.fn(() => Promise.resolve({ email: 'skipped', errors: [] })),
 }));
 
 vi.mock('@/lib/voice-branch-classifier-server', async () => {

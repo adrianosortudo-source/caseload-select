@@ -9,6 +9,7 @@ import {
   type UnconfirmedVoiceNotifyArgs,
   type OperatorEmailResult,
 } from '@/lib/voice-callback-notify-pure';
+import { buildLlmDisabledAlertEmail, type LlmDisabledAlertArgs } from '@/lib/llm-health-alert';
 
 const FALLBACK_OPERATOR_EMAIL = 'adriano@caseloadselect.ca';
 
@@ -146,6 +147,30 @@ export async function notifyOperatorOfUnconfirmedVoiceIntake(
 ): Promise<OperatorEmailResult> {
   const result: OperatorEmailResult = { email: 'skipped', errors: [] };
   const email = buildUnconfirmedVoiceEmail(args);
+
+  try {
+    const dispatch = await sendEmail(resolveOperatorEmail(), email.subject, email.html);
+    result.email = dispatch.skipped ? 'skipped' : 'sent';
+  } catch (err) {
+    result.email = 'error';
+    result.errors.push(err instanceof Error ? err.message : String(err));
+  }
+
+  return result;
+}
+
+// ── LLM extraction disabled (#128) ───────────────────────────────────────────
+// Operator alert when llmExtractServer returns mode=disabled (GEMINI_API_KEY
+// missing/invalid). The cooldown decision + email body are pure
+// (lib/llm-health-alert.ts); this is the I/O wrapper. The caller is responsible
+// for the suppression-window check and for stamping
+// intake_firms.gemini_disabled_alert_sent_at after a successful send.
+
+export async function notifyOperatorOfLlmDisabled(
+  args: LlmDisabledAlertArgs,
+): Promise<OperatorEmailResult> {
+  const result: OperatorEmailResult = { email: 'skipped', errors: [] };
+  const email = buildLlmDisabledAlertEmail(args);
 
   try {
     const dispatch = await sendEmail(resolveOperatorEmail(), email.subject, email.html);
