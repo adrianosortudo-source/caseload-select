@@ -778,10 +778,19 @@ function buildResolvedFactsV2(state: EngineState): ResolvedFact[] {
     if (!meta) continue;
     const label = SLOT_LABELS[id] ?? id;
     let source: ResolvedFact['source'];
+    // Honest BASE provenance from the engine's SlotMetaSource (#139, 2026-06-02).
+    // This is the floor. The transcript-aware promotion to the stronger
+    // ranks (confirmed_by_caller_after_readback / spelled_by_caller) happens
+    // in the app wiring layer via promoteContactProvenance(), which calls the
+    // readback detector. The engine deliberately does NOT claim confirmation:
+    //   - 'answered' was previously mapped to 'confirmed' -> "Confirmed by
+    //     caller", an OVERCLAIM (channel pre-fill and caller-answered-a-
+    //     question are not readback-confirmed). It now floors at
+    //     explicit_from_caller ("Stated during call").
     switch (meta.source) {
-      case 'explicit': source = 'stated'; break;
-      case 'answered': source = 'confirmed'; break;
-      case 'inferred': source = 'inferred'; break;
+      case 'explicit': source = 'explicit_from_caller'; break;
+      case 'answered': source = 'explicit_from_caller'; break;
+      case 'inferred': source = 'inferred_from_transcript'; break;
       default: source = 'unknown';
     }
     out.push({ label, value: val, source });

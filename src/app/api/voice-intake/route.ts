@@ -64,6 +64,7 @@ import { computeCoreCompleteness } from '@/lib/screen-engine/selector';
 import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
 import { resolveFirmTimezone } from '@/lib/firm-timezone';
+import { promoteContactProvenance } from '@/lib/promote-contact-provenance';
 import type { EngineState, Band } from '@/lib/screen-engine/types';
 import {
   verifyVoiceWebhookSignature,
@@ -518,6 +519,16 @@ export async function POST(req: NextRequest) {
 
   // ── Build the brief ─────────────────────────────────────────────────────
   const report = buildReport(state);
+  // #137 phase 2 / #139: promote contact-fact provenance using transcript
+  // readback/spelling evidence (e.g. bot read the name back + caller said
+  // "yes" -> "Confirmed by caller"; caller spelled the surname ->
+  // "Spelled by caller"). Voice is the only channel with bot turns in the
+  // transcript; the detector returns 'none' otherwise. Floor stays
+  // "Stated during call" when no confirmation evidence exists.
+  report.resolved_facts_v2 = promoteContactProvenance(
+    report.resolved_facts_v2,
+    normalizedTranscript,
+  );
   const briefHtml = renderBriefHtmlServer(report, 'voice', state.language, firmTimezone);
   const completeness = computeCoreCompleteness(state);
   const bandResult = computeBand(state);

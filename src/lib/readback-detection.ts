@@ -55,7 +55,7 @@ const READBACK_CUE_RE =
 // in a long sentence does not qualify (the bot's readback asks for a clean
 // yes/no). Kept in sync with extractor.ts AFFIRMATIVE_RE.
 const AFFIRMATIVE_RE =
-  /^(yes|yeah|yep|yup|right|correct|that(?:'|’)?s (?:right|correct)|exactly|uh ?huh|mm ?hmm|sure|that(?:'|’)?s it|perfect)\b/i;
+  /^(yes|yeah|yep|yup|right|correct|that(?:(?:'|’)?s| is) (?:right|correct)|exactly|uh ?huh|mm ?hmm|sure|that(?:(?:'|’)?s| is) it|perfect)\b/i;
 
 // Correction markers that DISQUALIFY an otherwise-affirmative line. Codex
 // pushback 2026-05-27: "Yes, but actually it's Domingues" starts with "yes"
@@ -130,8 +130,30 @@ function looseContains(haystack: string, needle: string): boolean {
  * of `value`'s letters, to avoid false positives on incidental initialisms.
  */
 function detectSpelling(humanTurns: Turn[], value: string): string | null {
-  const valueLetters = value.toLowerCase().replace(/[^a-z]/g, '');
-  if (valueLetters.length < 4) return null;
+  const wholeLetters = value.toLowerCase().replace(/[^a-z]/g, '');
+  if (wholeLetters.length < 4) return null;
+
+  // Candidate letter-strings the spelling may match: the whole value AND
+  // each whitespace-delimited token. A caller commonly spells just the
+  // SURNAME ("D O M I N G U E S") while the captured value is the full
+  // name ("Adriano Domingues") -- the surname token must match.
+  const candidates = new Set<string>([wholeLetters]);
+  for (const tok of value.toLowerCase().split(/\s+/)) {
+    const letters = tok.replace(/[^a-z]/g, '');
+    if (letters.length >= 4) candidates.add(letters);
+  }
+
+  const matches = (spelled: string): boolean => {
+    if (spelled.length < 4) return false;
+    for (const cand of candidates) {
+      // Exact, or one is a prefix of the other (partial spelling / value
+      // carries extra tokens). Both directions covered.
+      if (cand === spelled || cand.startsWith(spelled) || spelled.startsWith(cand)) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   for (const turn of humanTurns) {
     const text = turn.text;
@@ -140,11 +162,8 @@ function detectSpelling(humanTurns: Turn[], value: string): string | null {
     const phonetic = [...text.matchAll(/\b([a-z])\s+as in\s+\w+/gi)].map((m) =>
       m[1].toLowerCase(),
     );
-    if (phonetic.length >= 4) {
-      const spelled = phonetic.join('');
-      if (valueLetters.startsWith(spelled) || spelled.startsWith(valueLetters)) {
-        return turn.text;
-      }
+    if (phonetic.length >= 4 && matches(phonetic.join(''))) {
+      return turn.text;
     }
 
     // Separated letters: "D O M I N G U E S" or "D-O-M-I-N-G-U-E-S".
@@ -152,12 +171,7 @@ function detectSpelling(humanTurns: Turn[], value: string): string | null {
     const sepRun = /\b([a-z](?:[\s-]+[a-z]){3,})\b/i.exec(text);
     if (sepRun) {
       const spelled = sepRun[1].toLowerCase().replace(/[^a-z]/g, '');
-      if (
-        spelled.length >= 4 &&
-        (valueLetters.startsWith(spelled) || spelled.startsWith(valueLetters))
-      ) {
-        return turn.text;
-      }
+      if (matches(spelled)) return turn.text;
     }
   }
   return null;
