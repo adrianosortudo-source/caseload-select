@@ -15,6 +15,7 @@ import type {
 import { validateStageTransition, journeyTriggerForTransition } from './matter-stage-pure';
 import { triggerSequence, type TriggerEvent } from './sequence-engine';
 import { buildWelcomeDraft } from './welcome-draft-pure';
+import { resolveMatterLead, resolveMatterAssignees } from './firm-routing-pure';
 
 /**
  * Create a new client_matters row from a Band A take. Snapshots
@@ -62,14 +63,11 @@ export async function createMatterFromBandATake(input: {
     .eq('id', input.firm_id)
     .maybeSingle();
 
-  let leadId: string | null = null;
-  const paLeadMap = (firm?.default_lead_by_practice_area ?? {}) as Record<string, string>;
-  if (paLeadMap[input.practice_area]) {
-    leadId = paLeadMap[input.practice_area];
-  } else if (firm?.default_lead_id) {
-    leadId = firm.default_lead_id;
-  }
-  const assigneeIds = Array.isArray(firm?.default_assignees) ? firm!.default_assignees : [];
+  // Routing resolution shares one source of truth with the operator routing
+  // admin UI (lib/firm-routing-pure.ts) so the UI's "what happens now" preview
+  // matches what a real take produces.
+  const leadId = resolveMatterLead(firm, input.practice_area);
+  const assigneeIds = resolveMatterAssignees(firm);
 
   // Welcome draft (Story 8). Built at matter creation so the lawyer
   // sees a draft on the first open. Lead-lawyer identity is pulled

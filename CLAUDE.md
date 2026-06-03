@@ -365,6 +365,8 @@ The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), 
 | `POST /api/admin/webhook-outbox/[outboxId]/retry` | Operator manual retry. Resets attempts to 0. Same auth shape as the listing route. |
 | `/admin/triage` | Operator-only cross-firm triage queue. Firm filter + band filter. Rows link to /portal/[firmId]/triage/[leadId]. |
 | `/admin/webhook-outbox` | Operator-only delivery log UI with manual retry button. |
+| `/admin/routing` | Operator-only lead-routing config UI (2026-06-02). Firm picker (FirmFilter, `?firm_id=`) → per-practice-area lead, firm fallback lead, default assignees. Honest unconfigured states + live "a lead taken now goes to" preview + snapshot-at-take caveat. Edits the live `intake_firms` routing fields; no deploy needed for routing changes. |
+| `GET/PATCH /api/admin/firms/[firmId]/routing` | Operator-gated. GET returns the firm's routing config + selectable lawyers; PATCH validates every id belongs to the firm, normalizes (drops blank PA defaults, de-dupes assignees), writes the three columns. |
 
 ### S8 Phase 1 routes (added 2026-05-22)
 
