@@ -32,6 +32,8 @@
 
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { resolveFirmTimezone } from '@/lib/firm-timezone';
+import { notifyOperatorOfLlmDisabled } from '@/lib/voice-callback-notify';
+import { shouldAlertLlmDisabled } from '@/lib/llm-health-alert';
 import {
   computeDecisionDeadline,
   computeWhaleNurture,
@@ -443,9 +445,13 @@ export async function processChannelInbound(
   // the new text; on first turn it sees the full inbound. The doctrine
   // rule in the system prompt (rule 9) primes the LLM to extract
   // client_name / client_email / client_phone aggressively.
+  // Hoisted so the LLM-disabled alert (#128, global across channels per the
+  // fixes-are-global doctrine) can see what extraction returned.
+  let llmMode: 'live' | 'disabled' | 'error' | 'degraded' | null = null;
   if (state.matter_type !== 'out_of_scope') {
     try {
       const llm = await llmExtractServer(trimmed, state);
+      llmMode = llm.mode;
       const filledIds = Object.keys(llm.extracted).filter(
         (k) => llm.extracted[k] !== null && llm.extracted[k] !== '',
       );
@@ -488,10 +494,43 @@ export async function processChannelInbound(
   // back to America/Toronto via resolveFirmTimezone(null).
   const { data: firmRow } = await supabase
     .from('intake_firms')
-    .select('location')
+    .select('name, location, gemini_disabled_alert_sent_at')
     .eq('id', firmId)
     .maybeSingle();
   const firmTimezone = resolveFirmTimezone({ location: firmRow?.location ?? null });
+
+  // #128 (global): GEMINI_API_KEY missing/invalid disables LLM extraction on
+  // EVERY channel, not just voice. Alert the operator from the Meta pipeline
+  // too, throttled per firm via the shared gemini_disabled_alert_sent_at column.
+  // Awaited (best-effort) because this already runs inside the receiver's
+  // waitUntil; a floating promise could be cut off when processing returns.
+  if (
+    llmMode === 'disabled' &&
+    shouldAlertLlmDisabled(firmRow?.gemini_disabled_alert_sent_at ?? null)
+  ) {
+    const llmAlertStamp = new Date().toISOString();
+    console.error(
+      `[channel-intake][llm-disabled] GEMINI extraction disabled firm=${firmId} channel=${channel}`,
+    );
+    try {
+      const sendResult = await notifyOperatorOfLlmDisabled({
+        firmId,
+        firmName: firmRow?.name ?? null,
+        mode: 'disabled',
+        channel,
+        callId: null,
+        occurredAtIso: llmAlertStamp,
+      });
+      if (sendResult.email === 'sent') {
+        await supabase
+          .from('intake_firms')
+          .update({ gemini_disabled_alert_sent_at: llmAlertStamp })
+          .eq('id', firmId);
+      }
+    } catch (err) {
+      console.error('[channel-intake] notifyOperatorOfLlmDisabled failed:', err);
+    }
+  }
 
   const report = buildReport(state);
   const briefHtml = renderBriefHtmlServer(report, channel, state.language, firmTimezone);
