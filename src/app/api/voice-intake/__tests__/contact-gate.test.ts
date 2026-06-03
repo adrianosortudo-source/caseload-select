@@ -66,6 +66,7 @@ vi.mock('@/lib/lead-notify', () => ({
 
 vi.mock('@/lib/voice-callback-notify', () => ({
   notifyOperatorOfVoiceCallback: vi.fn(() => Promise.resolve({ email: 'skipped', sms: 'skipped', errors: [] })),
+  notifyOperatorOfUnconfirmedVoiceIntake: vi.fn(() => Promise.resolve({ email: 'skipped', errors: [] })),
 }));
 
 vi.mock('@/lib/voice-branch-classifier-server', async () => {
@@ -108,6 +109,7 @@ vi.mock('@/lib/screen-llm-server', () => ({
 }));
 
 import { POST } from '../route';
+import { notifyOperatorOfUnconfirmedVoiceIntake } from '@/lib/voice-callback-notify';
 
 const FIRM_ID = '11111111-1111-1111-1111-111111111111';
 
@@ -121,6 +123,7 @@ function makeRequest(body: Record<string, unknown>): Request {
 
 beforeEach(() => {
   captured.inserts = [];
+  vi.mocked(notifyOperatorOfUnconfirmedVoiceIntake).mockClear();
 });
 
 describe('/api/voice-intake contact-capture gate', () => {
@@ -160,6 +163,15 @@ describe('/api/voice-intake contact-capture gate', () => {
     expect(unconfirmed).toBeDefined();
     expect(unconfirmed?.payload.channel).toBe('voice');
     expect(unconfirmed?.payload.reason).toBe('no_contact_provided');
+
+    // #125: the operator is alerted so a missing-name voice call doesn't
+    // vanish silently. The call carries enough to follow up manually.
+    expect(notifyOperatorOfUnconfirmedVoiceIntake).toHaveBeenCalledTimes(1);
+    const notifyArg = vi.mocked(notifyOperatorOfUnconfirmedVoiceIntake).mock.calls[0][0];
+    expect(notifyArg.firmId).toBe(FIRM_ID);
+    expect(notifyArg.callerName).toBeNull();
+    expect(notifyArg.callerPhone).toBeTruthy();
+    expect(notifyArg.reason).toBe('no_contact_provided');
   });
 
   it('returns persisted=false with reason=awaiting_contact when gate fails', async () => {

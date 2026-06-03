@@ -3,6 +3,12 @@ import 'server-only';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { sendEmail } from '@/lib/email';
 import type { VoiceCallbackBranch, VoiceUrgency } from '@/lib/voice-branch-classifier';
+import {
+  buildUnconfirmedVoiceEmail,
+  htmlEscape,
+  type UnconfirmedVoiceNotifyArgs,
+  type OperatorEmailResult,
+} from '@/lib/voice-callback-notify-pure';
 
 const FALLBACK_OPERATOR_EMAIL = 'adriano@caseloadselect.ca';
 
@@ -28,15 +34,6 @@ export interface VoiceCallbackNotifyResult {
 
 function resolveOperatorEmail(): string {
   return process.env.OPERATOR_NOTIFICATION_EMAIL || FALLBACK_OPERATOR_EMAIL;
-}
-
-function htmlEscape(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function branchLabel(branch: VoiceCallbackBranch): string {
@@ -126,6 +123,36 @@ export async function notifyOperatorOfVoiceCallback(
       .update({ notified_at: new Date().toISOString() })
       .eq('id', args.id);
     if (error) result.errors.push(`notified_at update failed: ${error.message}`);
+  }
+
+  return result;
+}
+
+// ── Unconfirmed voice intake (#125) ──────────────────────────────────────────
+// A caller reached the voice line but the contact-capture gate rejected the
+// intake: the brief had no name and no reachable contact, so it landed in
+// unconfirmed_inquiries instead of the lawyer triage queue. On every other
+// channel the engine can re-ask (multi-turn follow-up); on voice the call is
+// already over. Without an alert the inbound call vanishes silently, which for
+// a firm measured on signed cases is the worst failure mode. This notifies the
+// operator so they can listen to the recording and call back manually.
+//
+// The email builder + arg/result types are pure (no I/O) and live in
+// voice-callback-notify-pure.ts so they can be unit-tested without the
+// server-only / Resend dependency. This is the I/O wrapper.
+
+export async function notifyOperatorOfUnconfirmedVoiceIntake(
+  args: UnconfirmedVoiceNotifyArgs,
+): Promise<OperatorEmailResult> {
+  const result: OperatorEmailResult = { email: 'skipped', errors: [] };
+  const email = buildUnconfirmedVoiceEmail(args);
+
+  try {
+    const dispatch = await sendEmail(resolveOperatorEmail(), email.subject, email.html);
+    result.email = dispatch.skipped ? 'skipped' : 'sent';
+  } catch (err) {
+    result.email = 'error';
+    result.errors.push(err instanceof Error ? err.message : String(err));
   }
 
   return result;

@@ -80,7 +80,10 @@ import {
   reconcileVoiceBranch,
 } from '@/lib/voice-branch-classifier';
 import { classifyVoiceBranchServer } from '@/lib/voice-branch-classifier-server';
-import { notifyOperatorOfVoiceCallback } from '@/lib/voice-callback-notify';
+import {
+  notifyOperatorOfVoiceCallback,
+  notifyOperatorOfUnconfirmedVoiceIntake,
+} from '@/lib/voice-callback-notify';
 
 interface VoiceIntakeBody {
   caller_phone?: string;
@@ -555,7 +558,7 @@ export async function POST(req: NextRequest) {
   // caller ID + Voice AI failed to capture name), persist as unconfirmed
   // and skip the screened_leads insert.
   if (!report.contact_complete) {
-    await persistUnconfirmedInquiry({
+    const unconfirmed = await persistUnconfirmedInquiry({
       firmId: firmIdParam,
       channel: 'voice',
       senderId: callerPhone ?? null,
@@ -576,6 +579,30 @@ export async function POST(req: NextRequest) {
       intakeLanguage: state.language ?? 'en',
       reason: 'no_contact_provided',
     });
+    // #125: alert the operator. On every other channel the engine re-asks for
+    // contact; on voice the call is already over, so an unconfirmed inbound
+    // would otherwise vanish silently. Best-effort, non-blocking — never holds
+    // up the webhook ACK, never affects the persisted row. Operator inbox only
+    // (adriano@caseloadselect.ca), never the lawyer queue.
+    waitUntil(
+      notifyOperatorOfUnconfirmedVoiceIntake({
+        inquiryId: unconfirmed.id ?? null,
+        firmId: firmIdParam,
+        callId: body.call_id ?? null,
+        callerName,
+        callerPhone,
+        callerPhoneSource,
+        recordingUrl: body.recording_url ?? null,
+        callDurationSec: body.call_duration_sec ?? null,
+        matterType: state.matter_type,
+        practiceArea: state.practice_area,
+        intakeLanguage: state.language ?? 'en',
+        reason: 'no_contact_provided',
+        transcript,
+      }).catch((err) => {
+        console.error('[voice-intake] notifyOperatorOfUnconfirmedVoiceIntake failed:', err);
+      }),
+    );
     return NextResponse.json(
       {
         persisted: false,
