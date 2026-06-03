@@ -255,11 +255,20 @@ export function detectReadbackConfirmation(
 // Any failure returns null, so the caller falls through to the contact gate and
 // the #125 unconfirmed-voice alert rather than backfilling a guess.
 
-// Bot lead-ins that introduce the caller's NAME. Captures the rest of the line;
-// cleanNameTokens trims it down to the name span. Name-specific (not the shared
+// Bot lead-ins that introduce the caller's NAME, then the rest of the line
+// (cleanNameTokens trims it to the name span). Name-specific (not the shared
 // READBACK_CUE_RE) so a matter description is never mistaken for a name.
+//
+// After "name" the bot may insert a QUALIFIER (right / down / recorded / noted /
+// spelled), an optional connector (is / as), and an optional colon before the
+// name itself. The live DRG agent says "I have your name right: Adriana
+// Dominguez. Is that correct?" — the qualifier + colon must be consumed by the
+// lead-in, otherwise the capture starts at "right:" and cleanNameTokens stops on
+// the "right" stopword, dropping a caller who clearly gave + confirmed a name
+// into unconfirmed_inquiries (DRG voice smoke, 2026-06-03). The [\s:]+ separator
+// handles both "name as X" (space) and "name right: X" (colon).
 const NAME_READBACK_CAPTURE_RE =
-  /\b(?:have your name(?: down)?(?: as)?|your name(?: is| as)?|name(?: is| as))\s+(.+)$/i;
+  /\b(?:have your name|your name|name)(?:\s+(?:right|down|recorded|noted|spelled))?(?:\s+(?:is|as))?[\s:]+(.+)$/i;
 
 // Tokens that terminate a name span. When the capture runs past the name
 // ("...name as Adriano and you are calling about a will"), the span stops at the

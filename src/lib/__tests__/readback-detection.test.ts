@@ -208,6 +208,26 @@ describe('extractReadbackConfirmedName (#122 name recovery)', () => {
     expect(extractReadbackConfirmedName(transcript)?.value).toBe('Sarah Chen');
   });
 
+  it('recovers from the live "have your name right: X" form (DRG voice 2026-06-03 regression)', () => {
+    // The bot inserts a qualifier + colon between "name" and the name. Before
+    // the fix this dropped a confirmed-name caller into unconfirmed_inquiries.
+    const transcript = [
+      'bot:Got it. Can I get your full name?',
+      'human:Adriana Dominguez.',
+      'bot:Let me make sure I have your name right: Adriana Dominguez. Is that correct?',
+      'human:Correct.',
+    ].join('\n');
+    expect(extractReadbackConfirmedName(transcript)?.value).toBe('Adriana Dominguez');
+  });
+
+  it('recovers from "have your name down as X" (qualifier + connector)', () => {
+    const transcript = [
+      'bot: I have your name down as Marcus Bell, is that correct?',
+      'human: Yes.',
+    ].join('\n');
+    expect(extractReadbackConfirmedName(transcript)?.value).toBe('Marcus Bell');
+  });
+
   it('stops the name span at the readback cue / trailing clause', () => {
     const transcript = [
       'bot: Let me confirm, I have your name as John Smith and you are calling about a will. Is that correct?',
@@ -275,6 +295,14 @@ describe('recoverNameIfMissing (#122 wiring invariant)', () => {
     expect(recoverNameIfMissing(null, transcript)).toBe('Priya Venkatesan');
     expect(recoverNameIfMissing('', transcript)).toBe('Priya Venkatesan');
     expect(recoverNameIfMissing('   ', transcript)).toBe('Priya Venkatesan');
+  });
+
+  it('recovers the live "have your name right: X" form when the slot is empty (regression)', () => {
+    const liveTranscript = [
+      'bot:Let me make sure I have your name right: Adriana Dominguez. Is that correct?',
+      'human:Correct.',
+    ].join('\n');
+    expect(recoverNameIfMissing(null, liveTranscript)).toBe('Adriana Dominguez');
   });
 
   it('NEVER overwrites a name the engine already captured', () => {
