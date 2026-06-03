@@ -24,6 +24,7 @@ import { getFirmSession } from '@/lib/portal-auth';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getMatterById } from '@/lib/matter-stage';
 import { insertMessage } from '@/lib/matter-messages';
+import { sanitizeWelcomeHtml } from '@/lib/welcome-html-sanitize';
 
 export async function POST(
   _req: NextRequest,
@@ -50,7 +51,13 @@ export async function POST(
     );
   }
 
-  const bodyToSend = matter.welcome_draft_edited_html ?? matter.welcome_draft_html;
+  // Sanitize the body we are about to send into the client thread + email.
+  // edited_html is already sanitized on save, but the original draft and any
+  // rows saved before Phase 2 sanitization existed pass through here too, so
+  // this is the uniform last gate before client-facing rendering.
+  const bodyToSend = sanitizeWelcomeHtml(
+    matter.welcome_draft_edited_html ?? matter.welcome_draft_html,
+  );
   if (!bodyToSend || !bodyToSend.trim()) {
     return NextResponse.json(
       { error: 'no welcome draft body to send' },

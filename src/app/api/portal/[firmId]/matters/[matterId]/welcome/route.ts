@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getFirmSession } from '@/lib/portal-auth';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getMatterById } from '@/lib/matter-stage';
+import { sanitizeWelcomeHtml } from '@/lib/welcome-html-sanitize';
 
 export async function GET(
   _req: NextRequest,
@@ -79,9 +80,16 @@ export async function PATCH(
     );
   }
 
+  // Authoritative sanitization: the editor produces HTML, but the stored value
+  // is rendered into the CLIENT's portal + email, so it never lands unsanitized
+  // regardless of what the editor (or a direct API call) submits. The client
+  // adopts the returned `edited_html` as canonical so the lawyer sees exactly
+  // what will be stored/sent.
+  const sanitized = sanitizeWelcomeHtml(body.edited_html);
+
   const { error: updateErr } = await supabase
     .from('client_matters')
-    .update({ welcome_draft_edited_html: body.edited_html })
+    .update({ welcome_draft_edited_html: sanitized })
     .eq('id', matterId);
 
   if (updateErr) {
@@ -91,6 +99,6 @@ export async function PATCH(
   return NextResponse.json({
     ok: true,
     matter_id: matterId,
-    edited_html: body.edited_html,
+    edited_html: sanitized,
   });
 }

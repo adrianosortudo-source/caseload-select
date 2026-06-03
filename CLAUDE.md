@@ -374,8 +374,8 @@ The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), 
 |---|---|
 | `POST /api/portal/[firmId]/matters/[matterId]/stage` | Advance matter stage (validates transition, fires journey cadence) |
 | `GET/POST /api/portal/[firmId]/matters/[matterId]/messages` | List + send messages (channel_type discriminator gates client vs internal) |
-| `GET/PATCH /api/portal/[firmId]/matters/[matterId]/welcome` | View / edit the welcome draft built at matter creation |
-| `POST /api/portal/[firmId]/matters/[matterId]/welcome/send` | Send the welcome draft as a client-channel message + stamp sent_at |
+| `GET/PATCH /api/portal/[firmId]/matters/[matterId]/welcome` | View / edit the welcome draft built at matter creation. PATCH sanitizes `edited_html` server-side via `lib/welcome-html-sanitize` (S8 Phase 2) and returns the canonical sanitized HTML. |
+| `POST /api/portal/[firmId]/matters/[matterId]/welcome/send` | Send the welcome draft as a client-channel message + stamp sent_at. Sanitizes the body before insert (uniform last gate, also cleans any pre-Phase-2 unsanitized rows). |
 | `POST /api/portal/[firmId]/matters/[matterId]/invite` | Generate + email a magic-link invite to the client (48h TTL) |
 | `GET/POST/DELETE /api/portal/[firmId]/matters/[matterId]/explainers` | List + assign + unassign explainer articles for the matter |
 | `GET/PATCH /api/portal/[firmId]/matters/[matterId]/embed` | Read / set the matter's iframe embed_url (CSP-validated against firm allow-list) |
