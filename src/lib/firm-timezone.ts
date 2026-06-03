@@ -181,3 +181,90 @@ export function resolveFirmTimezone(
   }
   return firmTimezone(firm?.location);
 }
+
+/**
+ * Single chokepoint for rendering a stored UTC timestamp in a firm-local
+ * display string (#138 / #140). Always applies an explicit `timeZone`, so
+ * it can NEVER leak server-local (UTC on Vercel) or browser-local time the
+ * way a bare `toLocaleString` does. Default timezone is America/Toronto
+ * (the entire current client base); callers holding a firm record pass
+ * `resolveFirmTimezone(firm)`.
+ *
+ * Use this everywhere a lawyer- or client-facing timestamp is rendered.
+ * Replaces ad-hoc `new Date(iso).toLocaleString(...)` calls that omitted
+ * `timeZone`.
+ *
+ *   formatTimestamp('2026-06-02T20:55:00Z')                       -> "Jun 2, 2026, 4:55 p.m."  (Toronto)
+ *   formatTimestamp('2026-06-02T20:55:00Z', 'America/Vancouver')  -> "Jun 2, 2026, 1:55 p.m."
+ *   formatTimestamp(iso, resolveFirmTimezone(firm))               -> firm-local
+ *
+ * Returns the raw input on unparseable timestamps (defensive; mirrors the
+ * prior try/catch behaviour of the call sites it replaces).
+ */
+export function formatTimestamp(
+  isoTimestamp: string | null | undefined,
+  timezone: string = DEFAULT_TIMEZONE,
+  opts: { dateStyle?: 'full' | 'long' | 'medium' | 'short'; timeStyle?: 'full' | 'long' | 'medium' | 'short' } = {},
+): string {
+  if (!isoTimestamp) return '';
+  // Honor exactly the styles requested. When the caller passes neither,
+  // default to date + time. Passing only `dateStyle` yields a date-only
+  // string (e.g. "Added Jun 2, 2026"); only `timeStyle` yields time-only.
+  const styles =
+    opts.dateStyle || opts.timeStyle
+      ? opts
+      : { dateStyle: 'medium' as const, timeStyle: 'short' as const };
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      ...styles,
+    }).format(new Date(isoTimestamp));
+  } catch {
+    return String(isoTimestamp);
+  }
+}
+
+/**
+ * Render a DATE-ONLY value (a Postgres `date` column such as
+ * `intake_firms.engagement_start_date`, returned by the Supabase client as a
+ * plain `"YYYY-MM-DD"` string) without any timezone conversion.
+ *
+ * This is the counterpart to `formatTimestamp`, and the distinction matters:
+ *
+ *   - A `timestamptz` is a real instant in time. It must be rendered in the
+ *     firm's timezone -> use `formatTimestamp`.
+ *   - A `date` has NO time and NO timezone. Passing it through `new Date(...)`
+ *     parses it as UTC midnight, so a naive `toLocaleDateString` (or even
+ *     `formatTimestamp` with a firm tz) shifts it a day backwards for any
+ *     timezone west of UTC -- e.g. "2026-06-01" renders as "May 31" / "May
+ *     2026" in America/Toronto. That is the bug this function exists to avoid.
+ *
+ * The fix is to construct the Date from the literal calendar parts using the
+ * local-time constructor and format with NO `timeZone`, so construction and
+ * formatting cancel out and the same calendar day renders in every runtime
+ * (UTC server, Toronto browser, anywhere).
+ *
+ *   formatDateOnly('2026-06-01', { month: 'long', year: 'numeric' })  -> "June 2026"  (everywhere)
+ *   formatDateOnly('2026-06-01')                                       -> "Jun 1, 2026"
+ *
+ * Falls back to `new Date(value)` for non-date-only inputs and returns the raw
+ * value when it cannot parse, mirroring `formatTimestamp`.
+ */
+export function formatDateOnly(
+  dateString: string | null | undefined,
+  opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium' },
+): string {
+  if (!dateString) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateString);
+  try {
+    const date = m
+      ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      : new Date(dateString);
+    if (Number.isNaN(date.getTime())) return String(dateString);
+    // No timeZone: the value carries no tz, so local-construct + local-format
+    // round-trips to the same calendar day regardless of where this runs.
+    return new Intl.DateTimeFormat('en-CA', opts).format(date);
+  } catch {
+    return String(dateString);
+  }
+}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, type FormEvent } from 'react';
 import type { MatterMessage } from '@/lib/types';
+import { formatTimestamp } from '@/lib/firm-timezone';
 
 /**
  * Lawyer-side dual-thread message panel with auto-refresh + inline
@@ -181,7 +182,7 @@ function ThreadColumn({
             >
               <p style={{ margin: 0, color: '#888', fontSize: '0.72rem' }}>
                 {m.sender_role === 'client' ? 'Client' : m.sender_role} ·{' '}
-                {new Date(m.created_at).toLocaleString('en-CA', {
+                {formatTimestamp(m.created_at, undefined, {
                   dateStyle: 'short',
                   timeStyle: 'short',
                 })}

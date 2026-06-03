@@ -13,6 +13,7 @@
  */
 
 import { useState } from "react";
+import { formatTimestamp } from "@/lib/firm-timezone";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -127,7 +128,7 @@ export default function DossierPanel({
           <div className="text-sm font-semibold text-black/80">Intelligence Brief</div>
           {dossier ? (
             <div className="text-xs text-black/40 mt-0.5">
-              Generated {new Date(dossier.generated_at).toLocaleString("en-CA")}
+              Generated {formatTimestamp(dossier.generated_at)}
             </div>
           ) : (
             <div className="text-xs text-black/40 mt-0.5">

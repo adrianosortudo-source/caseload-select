@@ -10,6 +10,7 @@
  */
 
 import { useState } from "react";
+import { formatDateOnly } from "@/lib/firm-timezone";
 
 interface MonthPoint {
   label: string;   // e.g. "Jan 2026"
@@ -85,7 +86,7 @@ export default function EngagementPanel({
   const [open, setOpen] = useState(false);
 
   const startLabel = engagementStartDate
-    ? new Date(engagementStartDate).toLocaleDateString("en-CA", { month: "long", year: "numeric" })
+    ? formatDateOnly(engagementStartDate, { month: "long", year: "numeric" })
     : null;
 
   const qualRate = totalInquiries > 0

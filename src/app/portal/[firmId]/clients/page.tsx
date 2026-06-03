@@ -16,6 +16,7 @@
 import { redirect } from 'next/navigation';
 import { getFirmSession } from '@/lib/portal-auth';
 import { listActiveMattersForFirm } from '@/lib/matter-stage';
+import { formatTimestamp } from '@/lib/firm-timezone';
 import type { ClientMatter, MatterStage } from '@/lib/types';
 
 const STAGE_ORDER: MatterStage[] = ['intake', 'retainer_pending', 'active', 'closing'];
@@ -74,7 +75,7 @@ export default async function LawyerClientsHomePage({ params }: PageProps) {
                       <p style={rowSubStyle}>{m.practice_area} · {m.matter_type}</p>
                     </div>
                     <p style={rowTimeStyle}>
-                      {new Date(m.updated_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}
+                      {formatTimestamp(m.updated_at, undefined, { dateStyle: 'medium' })}
                     </p>
                   </a>
                 </li>

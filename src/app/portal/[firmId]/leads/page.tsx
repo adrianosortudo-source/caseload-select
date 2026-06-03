@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getPortalSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { formatTimestamp } from "@/lib/firm-timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -301,7 +302,7 @@ export default async function PortalLeadsPage({
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs text-black/50">
-                      {new Date(lead.created_at).toLocaleDateString("en-CA")}
+                      {formatTimestamp(lead.created_at, undefined, { dateStyle: "medium" })}
                     </td>
                   </tr>
                 );

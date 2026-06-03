@@ -26,6 +26,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getPortalSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { formatTimestamp } from "@/lib/firm-timezone";
 import { getFollowupSteps } from "@/lib/intake-memo";
 import DossierPanel, { type ConversationTurn, type Dossier } from "@/components/portal/DossierPanel";
 
@@ -307,7 +308,7 @@ export default async function PortalLeadDetailPage({
             <h1 className="text-xl font-semibold text-navy">{lead.name}</h1>
             <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-black/50">
               {lead.case_type && <span className="capitalize">{lead.case_type as string}</span>}
-              <span>Added {new Date(lead.created_at).toLocaleDateString("en-CA")}</span>
+              <span>Added {formatTimestamp(lead.created_at, undefined, { dateStyle: "medium" })}</span>
               {timeToFinalizeSec != null && (
                 <span>
                   Intake completed in{" "}
@@ -650,7 +651,7 @@ export default async function PortalLeadDetailPage({
               <div className="text-sm font-semibold">Case Intake Memo</div>
               {sessionMemo?.memo_generated_at && (
                 <div className="text-xs text-black/40 mt-0.5">
-                  Generated {new Date(sessionMemo.memo_generated_at).toLocaleString("en-CA")}
+                  Generated {formatTimestamp(sessionMemo.memo_generated_at)}
                 </div>
               )}
             </div>

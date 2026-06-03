@@ -21,6 +21,7 @@ import { redirect } from 'next/navigation';
 import { getClientMatterSession } from '@/lib/portal-auth';
 import { getMatterById } from '@/lib/matter-stage';
 import { listMessagesForMatter } from '@/lib/matter-messages';
+import { formatTimestamp } from '@/lib/firm-timezone';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import type { ExplainerArticle, MatterStage } from '@/lib/types';
 import ComposeForm from './ComposeForm';
@@ -115,7 +116,7 @@ export default async function ClientMatterHomePage({ params }: PageProps) {
               <li key={m.id} style={messageRowStyle}>
                 <p style={messageMetaStyle}>
                   {m.sender_role === 'client' ? 'You' : 'Your lawyer'} ·{' '}
-                  {new Date(m.created_at).toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' })}
+                  {formatTimestamp(m.created_at, undefined, { dateStyle: 'medium', timeStyle: 'short' })}
                 </p>
                 <div
                   style={messageBodyStyle}

@@ -27,6 +27,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getFirmSession } from '@/lib/portal-auth';
 import { getMatterById } from '@/lib/matter-stage';
+import { formatTimestamp } from '@/lib/firm-timezone';
 import { listMessagesForMatter } from '@/lib/matter-messages';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import type {
@@ -487,11 +488,11 @@ const secondaryButtonStyle = {
 };
 
 function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' });
-  } catch {
-    return iso;
-  }
+  // #140: render in firm-local time (default America/Toronto) via the
+  // shared chokepoint, never server/UTC. Per-firm timezone threading lands
+  // when the firm record is plumbed into this page; until then the Toronto
+  // default is correct for the current client base.
+  return formatTimestamp(iso, undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 function escapeHtml(s: string): string {
