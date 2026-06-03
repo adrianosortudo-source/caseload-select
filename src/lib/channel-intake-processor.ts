@@ -31,6 +31,7 @@
  */
 
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { resolveFirmTimezone } from '@/lib/firm-timezone';
 import {
   computeDecisionDeadline,
   computeWhaleNurture,
@@ -482,8 +483,18 @@ export async function processChannelInbound(
   }
 
   // ── Build the brief ─────────────────────────────────────────────────────
+  // Resolve firm timezone so submitted_at renders firm-local, matching the
+  // voice + reclassify paths (#140). Best effort: missing firm/location falls
+  // back to America/Toronto via resolveFirmTimezone(null).
+  const { data: firmRow } = await supabase
+    .from('intake_firms')
+    .select('location')
+    .eq('id', firmId)
+    .maybeSingle();
+  const firmTimezone = resolveFirmTimezone({ location: firmRow?.location ?? null });
+
   const report = buildReport(state);
-  const briefHtml = renderBriefHtmlServer(report, channel, state.language);
+  const briefHtml = renderBriefHtmlServer(report, channel, state.language, firmTimezone);
   const bandResult = computeBand(state);
   const band: Band | null = bandResult.band;
 

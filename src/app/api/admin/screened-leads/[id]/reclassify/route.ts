@@ -33,6 +33,7 @@ import { buildReport } from '@/lib/screen-engine/report';
 import { computeBand } from '@/lib/screen-engine/band';
 import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
+import { resolveFirmTimezone } from '@/lib/firm-timezone';
 import { computeDecisionDeadline, computeWhaleNurture, clampAxis } from '@/lib/intake-v2-derive';
 import type { EngineState, Band } from '@/lib/screen-engine/types';
 
@@ -96,6 +97,18 @@ export async function POST(
   if (!row) {
     return NextResponse.json({ error: 'not found' }, { status: 404 });
   }
+
+  // ── Resolve the firm timezone so the rebuilt brief renders submitted_at in
+  // firm-local time, matching the live /api/voice-intake path (#140). Best
+  // effort: a missing firm row or location falls back to America/Toronto via
+  // resolveFirmTimezone(null).
+  const { data: firmRow } = await supabase
+    .from('intake_firms')
+    .select('location')
+    .eq('id', row.firm_id)
+    .maybeSingle();
+  const firmTimezone = resolveFirmTimezone({ location: firmRow?.location ?? null });
+
   const transcript = row.raw_transcript ?? '';
   if (!transcript.trim()) {
     return NextResponse.json(
@@ -148,7 +161,7 @@ export async function POST(
 
   // ── Build the new report + brief ───────────────────────────────────────
   const report = buildReport(state);
-  const briefHtml = renderBriefHtmlServer(report, channel, state.language);
+  const briefHtml = renderBriefHtmlServer(report, channel, state.language, firmTimezone);
   const bandResult = computeBand(state);
   const band: Band | null = bandResult.band;
 
