@@ -144,3 +144,40 @@ export function formatDayAndTime(isoTimestamp: string, timezone: string): string
   });
   return `${dayFmt.format(date)}, ${timeFmt.format(date)}`;
 }
+
+/**
+ * Default firm timezone. The entire current client base is Toronto-area
+ * (DRG), so this is the correct answer when no firm record is available.
+ */
+export const DEFAULT_FIRM_TIMEZONE = DEFAULT_TIMEZONE;
+
+/**
+ * Resolve the IANA timezone for a firm, following the locked precedence
+ * chain (2026-06-02):
+ *
+ *   intake_firms.timezone  (explicit column, if/when added)
+ *     ?? firmTimezone(intake_firms.location)   (city/province inference)
+ *     ?? 'America/Toronto'                      (default; baked into firmTimezone)
+ *
+ * `intake_firms.timezone` does NOT exist as a column today. The `timezone`
+ * field is accepted here so the resolver is forward-compatible: when the
+ * column is added and selected, an explicit value wins. Until then, every
+ * firm resolves through `firmTimezone(location)`, which already defaults to
+ * America/Toronto for unmatched or missing input.
+ *
+ * Pure. Safe to call on every brief / queue-card render.
+ *
+ *   resolveFirmTimezone({ location: 'Vancouver, BC' })       -> 'America/Vancouver'
+ *   resolveFirmTimezone({ timezone: 'America/Halifax' })     -> 'America/Halifax'
+ *   resolveFirmTimezone({ location: null })                  -> 'America/Toronto'
+ *   resolveFirmTimezone(null)                                -> 'America/Toronto'
+ */
+export function resolveFirmTimezone(
+  firm: { timezone?: string | null; location?: string | null } | null | undefined,
+): string {
+  const explicit = firm?.timezone;
+  if (explicit && typeof explicit === 'string' && explicit.trim()) {
+    return explicit.trim();
+  }
+  return firmTimezone(firm?.location);
+}

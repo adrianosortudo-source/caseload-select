@@ -19,6 +19,7 @@ import type { AxisReasoning, Channel, LawyerReport, ResolvedFact } from './scree
 import { getI18n } from './screen-engine/i18n/loader';
 import { getChannelChipData } from './screen-engine/i18n/display';
 import { intakeLanguageLabel } from './intake-language-label';
+import { DEFAULT_FIRM_TIMEZONE } from './firm-timezone';
 
 /**
  * Lawyer-facing labels for the 6 locked provenance values (2026-06-02 taxonomy)
@@ -69,9 +70,24 @@ function esc(s: string | null | undefined): string {
     .replace(/'/g, '&#39;');
 }
 
-function formatTime(iso: string): string {
+/**
+ * Format the lead-arrival timestamp for the brief header.
+ *
+ * Bug fix 2026-06-02 (#138): the previous implementation called
+ * `toLocaleString` with NO `timeZone`, so on Vercel (server runs UTC) a
+ * call placed at 4:55 PM Eastern rendered as "8:55 PM" in the lawyer
+ * brief and email. Timestamps are stored UTC; we now render on read in
+ * the firm's timezone. Default is America/Toronto (the entire current
+ * client base), overridable per firm via the `timezone` param threaded
+ * from the caller (resolveFirmTimezone).
+ */
+function formatTime(iso: string, timezone: string = DEFAULT_FIRM_TIMEZONE): string {
   try {
-    return new Date(iso).toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' });
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(iso));
   } catch {
     return iso;
   }
@@ -294,6 +310,7 @@ export function renderBriefHtmlServer(
   report: LawyerReport,
   channel: Channel,
   intakeLanguage?: string | null,
+  timezone: string = DEFAULT_FIRM_TIMEZONE,
 ): string {
   const isOOS = report.band == null; // OOS reports do not band-rank
   const sections: string[] = [];
@@ -303,7 +320,7 @@ export function renderBriefHtmlServer(
     <div class="brief-meta-header">
       <div class="brief-lead-strip">
         <span class="brief-lead-id">${esc(report.lead_id)}</span>
-        <span class="brief-lead-time">${esc(formatTime(report.submitted_at))}</span>
+        <span class="brief-lead-time">${esc(formatTime(report.submitted_at, timezone))}</span>
       </div>
       ${channelChipHtml(channel)}
       <p class="brief-notice">Internal lawyer-facing reference. Not legal advice provided to the lead. The screen organises the lead's description into a triage brief; a lawyer must independently confirm facts and exercise professional judgment before contacting the lead.</p>

@@ -169,3 +169,29 @@ describe("formatAbsoluteArrival", () => {
     expect(formatAbsoluteArrival("not-a-date")).toBe("");
   });
 });
+
+describe("arrival timezone rendering (#138)", () => {
+  // Same instant as the voice smoke-test bug: 4:55 PM Eastern stored UTC.
+  const ISO_455PM_EASTERN = "2026-06-02T20:55:00Z"; // 16:55 America/Toronto (EDT)
+
+  it("formatAbsoluteArrival renders the time in America/Toronto by default", () => {
+    const result = formatAbsoluteArrival(ISO_455PM_EASTERN);
+    expect(result).toContain("4:55");
+    expect(result).not.toContain("8:55"); // would be the unconverted UTC time
+  });
+
+  it("formatAbsoluteArrival honors an explicit firm timezone", () => {
+    const vancouver = formatAbsoluteArrival(ISO_455PM_EASTERN, "America/Vancouver");
+    expect(vancouver).toContain("1:55"); // UTC-7 PDT
+    expect(vancouver).not.toContain("4:55");
+  });
+
+  it("formatRelativeArrival renders the clock part in America/Toronto by default", () => {
+    // now = 3 days after, so we hit the "<weekday> at <time>" branch which
+    // includes a clock time rendered in the firm timezone.
+    const now = new Date("2026-06-05T18:00:00Z");
+    const result = formatRelativeArrival(ISO_455PM_EASTERN, now);
+    expect(result).toMatch(/at 4:55/);
+    expect(result).not.toMatch(/at 8:55/);
+  });
+});

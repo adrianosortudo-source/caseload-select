@@ -181,3 +181,36 @@ describe('renderBriefHtmlServer — four-axis breakdown', () => {
     expect(html).not.toContain('Why this is Band');
   });
 });
+
+describe('renderBriefHtmlServer — timezone rendering (#138)', () => {
+  // Reproduces the exact bug from the 2026-06-02 voice smoke test: a call
+  // placed at 4:55 PM Eastern was stored UTC (20:55Z) and rendered as
+  // "8:55 PM" in the lawyer brief because formatTime had no timeZone.
+  const ISO_455PM_EASTERN = '2026-06-02T20:55:00Z'; // 16:55 America/Toronto (EDT, UTC-4)
+
+  it('renders the arrival time in America/Toronto by default (4:55 PM, not 8:55 PM)', () => {
+    const html = renderBriefHtmlServer(
+      buildFakeReport({ submitted_at: ISO_455PM_EASTERN }),
+      'voice',
+      'en',
+      // no explicit timezone -> default America/Toronto
+    );
+    // en-CA short time renders as "4:55 p.m." (lowercase with periods on
+    // some ICU builds) or "4:55 PM". Assert the hour:minute, and that it is
+    // NOT the unconverted UTC 8:55.
+    expect(html).toContain('4:55');
+    expect(html).not.toContain('8:55');
+  });
+
+  it('honors an explicit firm timezone (Vancouver renders 1:55 PM for the same instant)', () => {
+    const html = renderBriefHtmlServer(
+      buildFakeReport({ submitted_at: ISO_455PM_EASTERN }),
+      'voice',
+      'en',
+      'America/Vancouver', // UTC-7 PDT -> 13:55
+    );
+    expect(html).toContain('1:55');
+    expect(html).not.toContain('8:55');
+    expect(html).not.toContain('4:55');
+  });
+});

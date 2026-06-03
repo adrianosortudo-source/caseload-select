@@ -63,6 +63,7 @@ import { computeBand } from '@/lib/screen-engine/band';
 import { computeCoreCompleteness } from '@/lib/screen-engine/selector';
 import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
+import { resolveFirmTimezone } from '@/lib/firm-timezone';
 import type { EngineState, Band } from '@/lib/screen-engine/types';
 import {
   verifyVoiceWebhookSignature,
@@ -226,7 +227,7 @@ export async function POST(req: NextRequest) {
 
   const { data: firm, error: firmErr } = await supabase
     .from('intake_firms')
-    .select('id, voice_api_token, ghl_location_id')
+    .select('id, voice_api_token, ghl_location_id, location')
     .eq('id', firmIdParam)
     .maybeSingle();
   if (firmErr) {
@@ -283,9 +284,13 @@ export async function POST(req: NextRequest) {
   const firmRow = firm as {
     voice_api_token?: string | null;
     ghl_location_id?: string | null;
+    location?: string | null;
   };
   const firmToken = firmRow.voice_api_token ?? null;
   const firmLocationId = firmRow.ghl_location_id ?? null;
+  // Resolve the firm's display timezone for the brief (#138). Stored
+  // timestamps are UTC; the lawyer brief renders on read in firm-local time.
+  const firmTimezone = resolveFirmTimezone({ location: firmRow.location });
 
   if (contactId && firmToken && firmLocationId) {
     const apiResult = await fetchVoiceAITranscript(contactId, firmLocationId, firmToken);
@@ -513,7 +518,7 @@ export async function POST(req: NextRequest) {
 
   // ── Build the brief ─────────────────────────────────────────────────────
   const report = buildReport(state);
-  const briefHtml = renderBriefHtmlServer(report, 'voice', state.language);
+  const briefHtml = renderBriefHtmlServer(report, 'voice', state.language, firmTimezone);
   const completeness = computeCoreCompleteness(state);
   const bandResult = computeBand(state);
   // OOS now carries band='D' per the 2026-05-15 doctrine flip; the engine

@@ -20,6 +20,30 @@ const HOUR_MS = 3_600_000;
 const MINUTE_MS = 60_000;
 
 /**
+ * Default display timezone for arrival timestamps (#138). The entire
+ * current client base is Toronto-area, so this is correct when no firm
+ * timezone is threaded. Callers with a firm record should pass the
+ * resolved IANA timezone (resolveFirmTimezone) so non-Ontario firms
+ * render correctly. Kept as a literal here to avoid a cross-module import
+ * into this pure presentational helper.
+ */
+const DEFAULT_DISPLAY_TIMEZONE = "America/Toronto";
+
+/**
+ * Calendar day (YYYY-MM-DD) as seen in a given IANA timezone. Used so the
+ * "yesterday" / "Mon" buckets are computed in the firm's local day, not
+ * the server's UTC day. en-CA formats as YYYY-MM-DD.
+ */
+function calendarDayInTz(date: Date, timezone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+/**
  * Format remaining time as "Xh Ym" when an hour or more remains, "Ym" when
  * under an hour. Negative values surface as "expired" to make the lifecycle
  * mismatch loud (a triaging row past its deadline should not exist; the
@@ -97,7 +121,11 @@ const DAY_MS = 86_400_000;
  * the lawyer can read at a glance to gauge staleness without parsing a
  * datetime.
  */
-export function formatRelativeArrival(submittedAtIso: string, now: Date = new Date()): string {
+export function formatRelativeArrival(
+  submittedAtIso: string,
+  now: Date = new Date(),
+  timezone: string = DEFAULT_DISPLAY_TIMEZONE,
+): string {
   const submitted = new Date(submittedAtIso);
   if (Number.isNaN(submitted.getTime())) return "";
   const diffMs = now.getTime() - submitted.getTime();
@@ -113,26 +141,53 @@ export function formatRelativeArrival(submittedAtIso: string, now: Date = new Da
   // Past 24h but same calendar yesterday or within the past 7 days — show day
   // + time. We compute "yesterday" by calendar day, not by 24h window, so a
   // lead from 23h ago at 11pm still reads "yesterday" the next morning.
-  const submittedDay = new Date(submitted.getFullYear(), submitted.getMonth(), submitted.getDate());
-  const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const dayDiff = Math.round((nowDay.getTime() - submittedDay.getTime()) / DAY_MS);
-  const timePart = submitted.toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" });
+  // #138: calendar days are computed in the firm timezone (YYYY-MM-DD via
+  // en-CA), so the bucket and the displayed clock time agree near midnight.
+  const submittedDayStr = calendarDayInTz(submitted, timezone);
+  const nowDayStr = calendarDayInTz(now, timezone);
+  const dayDiff = Math.round(
+    (Date.parse(`${nowDayStr}T00:00:00Z`) - Date.parse(`${submittedDayStr}T00:00:00Z`)) / DAY_MS,
+  );
+  const timePart = submitted.toLocaleTimeString("en-CA", {
+    timeZone: timezone,
+    hour: "numeric",
+    minute: "2-digit",
+  });
   if (dayDiff === 1) return `yesterday at ${timePart}`;
   if (dayDiff < 7) {
-    const dayName = submitted.toLocaleDateString("en-CA", { weekday: "short" });
+    const dayName = submitted.toLocaleDateString("en-CA", { timeZone: timezone, weekday: "short" });
     return `${dayName} at ${timePart}`;
   }
-  return submitted.toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" });
+  return submitted.toLocaleDateString("en-CA", {
+    timeZone: timezone,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 /**
  * Absolute timestamp for the lead arrival, formatted for the secondary line
  * under the relative time. Example: "May 25, 2026 · 10:33 PM".
  */
-export function formatAbsoluteArrival(submittedAtIso: string): string {
+export function formatAbsoluteArrival(
+  submittedAtIso: string,
+  timezone: string = DEFAULT_DISPLAY_TIMEZONE,
+): string {
   const submitted = new Date(submittedAtIso);
   if (Number.isNaN(submitted.getTime())) return "";
-  const date = submitted.toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" });
-  const time = submitted.toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" });
+  // #138: render in the firm timezone (default America/Toronto). Stored
+  // timestamps are UTC; this is the on-read conversion.
+  const date = submitted.toLocaleDateString("en-CA", {
+    timeZone: timezone,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const time = submitted.toLocaleTimeString("en-CA", {
+    timeZone: timezone,
+    hour: "numeric",
+    minute: "2-digit",
+  });
   return `${date} · ${time}`;
 }
