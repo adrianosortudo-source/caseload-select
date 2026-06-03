@@ -387,6 +387,7 @@ The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), 
 | `GET /api/cron/notification-batch` | Drain notification_outbox every 5 min into per-recipient digest emails |
 | `/portal/[firmId]/m/[matterId]` | Client matter-stage home (S04 — magic-link gated) |
 | `/portal/[firmId]/m/[matterId]/accept` | Magic-link landing — verifies token, plants client session cookie |
+| `/portal/[firmId]/m/[matterId]/explainers/[slug]` | Client explainer reader (2026-06-03, S8 Phase 2). Renders one article's body, gated three ways: client session for this matter + article `published=true` + assigned to this matter (matter_explainer_assignments). Uniform "not available" on any miss (no leak). body_html sanitized again on render (defense in depth). Completes the explainer loop the matter home links into. |
 | `/portal/[firmId]/clients` | Lawyer active-clients home (S05) |
 
 ### Auth model
