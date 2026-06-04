@@ -352,18 +352,85 @@ export function extractReadbackConfirmedName(transcript: string): ReadbackNameRe
   return null;
 }
 
+// ── Name recovery from the bare answer to the name question (2026-06-04) ─────
+//
+// v2.0 of the voice agent dropped the scripted name readback ("Let me make
+// sure I have your name right: X"). Without that cue extractReadbackConfirmedName
+// returns null, and the engine's own patterns do not reliably catch a bare-name
+// answer ("Can I get your name?" -> "Adriana."). A reachable caller was then
+// dropped into unconfirmed_inquiries on a name miss (DRG voice smoke 2026-06-04,
+// inquiry 3aff8961, compounded by llm_mode=degraded so the LLM did not extract
+// it either). This recovers the name from the human turn immediately following
+// the bot's name question, with the same high-precision posture as the readback
+// path: strip conversational lead-ins, reject refusals / questions, then
+// name-shape the remainder. Returns null on any doubt, so the caller still
+// falls through to the contact gate rather than backfilling a guess.
+
+// Bot turns that explicitly ask for the caller's name.
+const NAME_QUESTION_RE =
+  /\b(?:can|could|may)\s+i\s+(?:get|have|take|ask(?:\s+for)?)\s+your\s+(?:full\s+)?name\b|\bwhat(?:'|’)?s\s+your\s+(?:full\s+)?name\b|\bwhat\s+is\s+your\s+(?:full\s+)?name\b|\bmay\s+i\s+(?:please\s+)?have\s+your\s+name\b|\byour\s+(?:full\s+)?name\s*\?\s*$/i;
+
+// Conversational lead-ins to strip off the front of the answer before the name
+// span begins ("It's Adriana", "My name is Adriana Dominguez", "Sure, it's
+// Adriana"). Applied repeatedly via the trailing +.
+const NAME_ANSWER_LEADIN_RE =
+  /^(?:(?:it(?:'|’)?s|it is|i(?:'|’)?m|i am|my name(?:'|’)?s|my name is|the name(?:'|’)?s|the name is|name(?:'|’)?s|name is|this is|sure|yeah|yep|yes|ok|okay|hi|hello|um|uh|well)[\s,]+)+/i;
+
+// First-token signals that the human did NOT give a name (refusal, question,
+// hesitation). If the stripped answer begins with any of these, recover nothing.
+const NON_NAME_ANSWER_RE =
+  /^(?:why|what|who|how|where|when|which|whose|sorry|pardon|excuse|huh|rather|prefer|not|no|nope|nah|wait|hold|please|i(?:'|’)?d|i would|i do(?:n(?:'|’)?t| not)|cannot|can(?:'|’)?t|won(?:'|’)?t|maybe|dunno)\b/i;
+
+/**
+ * Recover a caller name from the bare answer to the bot's name question (no
+ * readback required). Walks the turns: for each bot turn that asks for the
+ * name, the next human turn is the candidate. Lead-ins are stripped, refusals /
+ * questions are rejected, and the remainder is name-shaped. Returns null unless
+ * a clean name results. Lower-trust than a confirmed readback (provenance stays
+ * "stated during call"), but enough to keep a reachable lead out of the
+ * unconfirmed bin.
+ */
+export function extractNameFromNameQuestion(transcript: string): ReadbackNameResult | null {
+  if (!transcript || !transcript.trim()) return null;
+  const turns = parseTranscriptTurns(transcript);
+  if (turns.length === 0) return null;
+
+  for (let i = 0; i < turns.length; i++) {
+    const turn = turns[i];
+    if (turn.speaker !== 'bot') continue;
+    if (!NAME_QUESTION_RE.test(turn.text)) continue;
+
+    const next = turns.slice(i + 1).find((t) => t.speaker === 'human');
+    if (!next) continue;
+
+    const stripped = next.text.replace(NAME_ANSWER_LEADIN_RE, '').trim();
+    if (!stripped) continue;
+    if (NON_NAME_ANSWER_RE.test(stripped)) continue;
+
+    const name = cleanNameTokens(stripped);
+    if (!name) continue;
+    return { value: name, evidence: turn.text };
+  }
+  return null;
+}
+
 /**
  * The #122 wiring decision, isolated so the safety invariant is testable:
- * recover a readback-confirmed name ONLY when the current slot is empty. Never
- * overwrites an existing name (the engine's extraction wins; this is a pure
- * fallback). Returns the recovered name, or null when the slot is already
- * filled or no confirmed readback name exists.
+ * recover a name ONLY when the current slot is empty. Never overwrites an
+ * existing name (the engine's extraction wins; this is a pure fallback).
+ * Tries the strongest signal first: a confirmed bot readback (rank 5, can be
+ * promoted to confirmed_by_caller_after_readback downstream), then the bare
+ * answer to the bot's name question (stays "stated"). Returns the recovered
+ * name, or null when the slot is already filled or neither signal is present.
  */
 export function recoverNameIfMissing(
   currentName: string | null | undefined,
   transcript: string,
 ): string | null {
   if (currentName && currentName.trim()) return null;
-  const result = extractReadbackConfirmedName(transcript);
-  return result ? result.value : null;
+  const readback = extractReadbackConfirmedName(transcript);
+  if (readback) return readback.value;
+  const fromQuestion = extractNameFromNameQuestion(transcript);
+  if (fromQuestion) return fromQuestion.value;
+  return null;
 }

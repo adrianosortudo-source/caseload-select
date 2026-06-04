@@ -66,6 +66,7 @@ import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
 import { resolveFirmTimezone } from '@/lib/firm-timezone';
 import { promoteContactProvenance } from '@/lib/promote-contact-provenance';
 import { recoverNameIfMissing } from '@/lib/readback-detection';
+import { evaluateContactGate } from '@/lib/screen-engine/contact-doctrine';
 import type { EngineState, Band } from '@/lib/screen-engine/types';
 import {
   verifyVoiceWebhookSignature,
@@ -574,22 +575,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // #122: defense-in-depth name recovery. If the engine captured no client
-  // name but a bot read one back and the caller cleanly affirmed it, recover
-  // that name before the contact gate so a caller who DID give (and confirm)
-  // their name isn't dropped into unconfirmed_inquiries on an extraction miss.
-  // Only fills an empty slot, only from a confirmed readback (extractor returns
-  // null on any doubt), so it can never overwrite or invent. seedVoiceState's
-  // 'answered' source means buildResolvedFactsV2 floors it at
-  // explicit_from_caller; promoteContactProvenance below then upgrades it to
-  // confirmed_by_caller_after_readback off the same transcript evidence.
+  // Defense-in-depth name recovery (#122 + 2026-06-04). If the engine captured
+  // no client name, recover one from the transcript before the contact gate so
+  // a caller who DID give their name isn't dropped on an extraction miss (the
+  // exact Call #1 failure: LLM degraded, no readback, bare "Adriana" un-parsed).
+  // Two signals, strongest first: a bot readback the caller cleanly affirmed
+  // (rank 5, promoted to confirmed_by_caller_after_readback below), or the bare
+  // answer to the bot's name question (stays "stated during call"). Only fills
+  // an empty slot, never overwrites or invents (recoverNameIfMissing returns
+  // null on any doubt). seedVoiceState's 'answered' source floors it at
+  // explicit_from_caller; promoteContactProvenance upgrades only when readback
+  // evidence exists.
   const recoveredName = recoverNameIfMissing(
     state.slots['client_name'] as string | null,
     normalizedTranscript,
   );
   if (recoveredName) {
     console.log(
-      `[voice-intake] #122 recovered name from confirmed readback firm=${firmIdParam} call=${body.call_id ?? 'unknown'}`,
+      `[voice-intake] recovered missing client name (readback or name-question) firm=${firmIdParam} call=${body.call_id ?? 'unknown'}`,
     );
     state = {
       ...state,
@@ -620,14 +623,29 @@ export async function POST(req: NextRequest) {
   // assigns the band, the route doesn't override it.
   const band: Band | null = bandResult.band;
 
-  // ── Contact-capture doctrine gate (2026-05-15) ─────────────────────────
-  // "No contact, no lead." Voice almost always passes — caller_phone is
-  // auto-seeded from caller ID by seedVoiceState, and the Voice AI agent
-  // is expected to ask for the caller's name during the call. But if both
-  // name and phone are still missing at brief-build time (rare: blocked
-  // caller ID + Voice AI failed to capture name), persist as unconfirmed
-  // and skip the screened_leads insert.
-  if (!report.contact_complete) {
+  // ── Contact-capture gate — voice reachability doctrine (2026-06-04) ────
+  // The shared contact doctrine (contact-doctrine.ts, mirrored to the sandbox)
+  // is "name AND reachability". For VOICE specifically we relax it to
+  // "reachability is enough": a call with a caller-ID phone (or a captured
+  // email) belongs in the lawyer queue even when the NAME never parsed. The
+  // lawyer gets the name on the callback, and reachability-over-completeness
+  // is the v2.0 voice doctrine. Only a voice call with NO way to reach the
+  // caller (blocked caller-ID AND no spoken number AND no email) is an
+  // unconfirmed inquiry. The shared gate for web/Meta is untouched.
+  //
+  // Trigger: DRG voice smoke 2026-06-04 (inquiry 3aff8961). A will-drafting
+  // caller with a caller-ID number was dropped to unconfirmed_inquiries purely
+  // because the name did not extract (the agent asked it, the caller said it,
+  // but llm_mode=degraded and there was no readback). Fix A recovers the name
+  // in that exact shape; this gate is the safety net for every other
+  // name-miss so a reachable lead never becomes an operator chore.
+  const voiceGate = evaluateContactGate({
+    client_name: (state.slots['client_name'] as string | null | undefined) ?? null,
+    client_email: (state.slots['client_email'] as string | null | undefined) ?? null,
+    client_phone: (state.slots['client_phone'] as string | null | undefined) ?? null,
+  });
+  const voiceReachable = voiceGate.hasPhone || voiceGate.hasEmail;
+  if (!voiceReachable) {
     const unconfirmed = await persistUnconfirmedInquiry({
       firmId: firmIdParam,
       channel: 'voice',

@@ -15,6 +15,7 @@ import {
   detectReadbackConfirmation,
   parseTranscriptTurns,
   extractReadbackConfirmedName,
+  extractNameFromNameQuestion,
   recoverNameIfMissing,
 } from '../readback-detection';
 
@@ -340,5 +341,67 @@ describe('recoverNameIfMissing (#122 wiring invariant)', () => {
 
   it('returns null when the slot is empty but there is no confirmed readback', () => {
     expect(recoverNameIfMissing(null, 'human: I need help with a will.')).toBeNull();
+  });
+
+  it('recovers the bare-name answer when the slot is empty and there is no readback (2026-06-04)', () => {
+    // v2.0 dropped the readback, so the only signal is the name question + answer.
+    const transcript = [
+      'bot:Alright. Can I get your name?',
+      'human:Adriana.',
+      'bot:Thanks, Adriana.',
+    ].join('\n');
+    expect(recoverNameIfMissing(null, transcript)).toBe('Adriana');
+  });
+});
+
+describe('extractNameFromNameQuestion (bare-name recovery, no readback)', () => {
+  it('recovers a bare first name answered to "Can I get your name?" (DRG Call #1, 2026-06-04)', () => {
+    const transcript = [
+      'bot:Alright. Can I get your name?',
+      'human:Adriana.',
+      "bot:Thanks, Adriana. Is the number you're calling from the best one to reach you?",
+    ].join('\n');
+    expect(extractNameFromNameQuestion(transcript)?.value).toBe('Adriana');
+  });
+
+  it('recovers a full name from "what\'s your name?" with a "my name is" lead-in', () => {
+    const transcript = [
+      "bot: What's your name?",
+      'human: My name is Adriana Dominguez.',
+    ].join('\n');
+    expect(extractNameFromNameQuestion(transcript)?.value).toBe('Adriana Dominguez');
+  });
+
+  it("strips an \"it's\" lead-in", () => {
+    const transcript = ['bot: Can I get your full name?', "human: It's Sarah Chen."].join('\n');
+    expect(extractNameFromNameQuestion(transcript)?.value).toBe('Sarah Chen');
+  });
+
+  it('stops the span at a trailing clause', () => {
+    const transcript = [
+      'bot: Can I get your name?',
+      'human: Adriana, I need help with a will.',
+    ].join('\n');
+    expect(extractNameFromNameQuestion(transcript)?.value).toBe('Adriana');
+  });
+
+  it('returns null on a refusal', () => {
+    const transcript = ['bot: Can I get your name?', "human: I'd rather not say."].join('\n');
+    expect(extractNameFromNameQuestion(transcript)).toBeNull();
+  });
+
+  it('returns null on a counter-question', () => {
+    const transcript = ['bot: Can I get your name?', 'human: Why do you need that?'].join('\n');
+    expect(extractNameFromNameQuestion(transcript)).toBeNull();
+  });
+
+  it('returns null when the bot never asked for a name', () => {
+    const transcript = ['bot: How can I help?', 'human: Adriana.'].join('\n');
+    expect(extractNameFromNameQuestion(transcript)).toBeNull();
+  });
+
+  it('does not overwrite via recoverNameIfMissing when a name already exists', () => {
+    const transcript = ['bot: Can I get your name?', 'human: Adriana.'].join('\n');
+    expect(recoverNameIfMissing('Existing Name', transcript)).toBeNull();
   });
 });

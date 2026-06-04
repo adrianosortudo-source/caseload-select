@@ -146,11 +146,15 @@ describe('/api/voice-intake contact-capture gate', () => {
     expect(unconfirmed).toBeUndefined();
   });
 
-  it('lands in unconfirmed_inquiries when caller_phone present but caller_name missing', async () => {
+  it('VOICE REACHABILITY (2026-06-04): caller_phone present but name never parses -> enters the lawyer queue, not unconfirmed', async () => {
+    // v2.0 doctrine: a voice call we can reach (caller-ID phone) belongs in the
+    // lawyer queue even when the name did not extract. The lawyer gets the name
+    // on the callback. Only a call with NO reachable contact is unconfirmed.
+    // Here there is no name anywhere AND no bot name-question, so neither the
+    // engine nor Fix A recovers a name — the phone alone must route it.
     const req = makeRequest({
       firmId: FIRM_ID,
       caller_phone: '+14165550143',
-      // caller_name omitted — Voice AI failed to capture or lead refused to give it
       transcript: 'Hi, I have a legal question about a real estate purchase.',
       call_id: 'call_xyz',
       call_duration_sec: 18,
@@ -160,19 +164,10 @@ describe('/api/voice-intake contact-capture gate', () => {
 
     const screened = captured.inserts.find((c) => c.table === 'screened_leads');
     const unconfirmed = captured.inserts.find((c) => c.table === 'unconfirmed_inquiries');
-    expect(screened).toBeUndefined();
-    expect(unconfirmed).toBeDefined();
-    expect(unconfirmed?.payload.channel).toBe('voice');
-    expect(unconfirmed?.payload.reason).toBe('no_contact_provided');
-
-    // #125: the operator is alerted so a missing-name voice call doesn't
-    // vanish silently. The call carries enough to follow up manually.
-    expect(notifyOperatorOfUnconfirmedVoiceIntake).toHaveBeenCalledTimes(1);
-    const notifyArg = vi.mocked(notifyOperatorOfUnconfirmedVoiceIntake).mock.calls[0][0];
-    expect(notifyArg.firmId).toBe(FIRM_ID);
-    expect(notifyArg.callerName).toBeNull();
-    expect(notifyArg.callerPhone).toBeTruthy();
-    expect(notifyArg.reason).toBe('no_contact_provided');
+    expect(screened).toBeDefined();
+    expect(unconfirmed).toBeUndefined();
+    // Reachable, so the operator-unconfirmed alert must NOT fire.
+    expect(notifyOperatorOfUnconfirmedVoiceIntake).not.toHaveBeenCalled();
   });
 
   it('LOCKED REGRESSION (2026-06-03): name given + confirmed on a "name right:" readback enters the normal lead queue', async () => {
@@ -211,10 +206,51 @@ describe('/api/voice-intake contact-capture gate', () => {
     expect(slots.client_name).toBe('Adriana Dominguez');
   });
 
-  it('returns persisted=false with reason=awaiting_contact when gate fails', async () => {
+  it('LOCKED REGRESSION (2026-06-04): bare name answered to "Can I get your name?" (no readback) enters the queue with the recovered name', async () => {
+    // The exact Call #1 shape that dropped to unconfirmed: the agent asked
+    // "Can I get your name?", the caller said a bare "Adriana", there was NO
+    // readback, and llm_mode was degraded. Fix A recovers "Adriana" from the
+    // name-question answer; Fix B (caller-ID phone) is the safety net. The lead
+    // must enter the lawyer queue with the name, not drop to unconfirmed.
     const req = makeRequest({
       firmId: FIRM_ID,
-      caller_phone: '+14165550143',
+      caller_phone: '+16475492106',
+      transcript: [
+        "bot:Thanks for calling DRG Law. I'm an automated assistant for the firm, and this call may be recorded.",
+        'bot:Are you already a client of the firm, looking for legal help for the first time, or calling about something else today?',
+        'human:The first time.',
+        'bot:Alright. Can I get your name?',
+        'human:Adriana.',
+        "bot:Thanks, Adriana. Is the number you're calling from the best one to reach you?",
+        'human:Yes.',
+        "bot:Great. Could you describe what's going on, in your own words?",
+        'human:I need a will. I have two kids, a house, and some savings.',
+        "bot:Just to confirm, you're looking for help to create a will, correct?",
+        'human:Yeah.',
+        "bot:Thank you, Adriana. I'll pass this along to our team.",
+        'RECORD_BRANCH: NEW_MATTER',
+      ].join('\n'),
+      call_id: 'call_barename_regression',
+      call_duration_sec: 70,
+    });
+    const res = await POST(req as never);
+    expect(res.status).toBe(200);
+
+    const screened = captured.inserts.find((c) => c.table === 'screened_leads');
+    const unconfirmed = captured.inserts.find((c) => c.table === 'unconfirmed_inquiries');
+    expect(unconfirmed).toBeUndefined();
+    expect(screened).toBeDefined();
+    expect(notifyOperatorOfUnconfirmedVoiceIntake).not.toHaveBeenCalled();
+    const slots = (screened?.payload.slot_answers as { slots?: Record<string, unknown> })?.slots ?? {};
+    expect(slots.client_name).toBe('Adriana');
+  });
+
+  it('no caller_phone AND no name -> unconfirmed + awaiting_contact + operator alert (truly unreachable)', async () => {
+    // The only case still unconfirmed under the voice reachability doctrine:
+    // blocked/absent caller-ID, no spoken number, no email, no name.
+    const req = makeRequest({
+      firmId: FIRM_ID,
+      // caller_phone omitted -> callerPhone null -> not seeded -> unreachable
       transcript: 'I need help making a will and planning my estate.',
       call_id: 'call_123',
       call_duration_sec: 12,
@@ -223,6 +259,13 @@ describe('/api/voice-intake contact-capture gate', () => {
     const body = (await res.json()) as { persisted: boolean; reason?: string };
     expect(body.persisted).toBe(false);
     expect(body.reason).toBe('awaiting_contact');
+
+    const screened = captured.inserts.find((c) => c.table === 'screened_leads');
+    const unconfirmed = captured.inserts.find((c) => c.table === 'unconfirmed_inquiries');
+    expect(screened).toBeUndefined();
+    expect(unconfirmed).toBeDefined();
+    expect(unconfirmed?.payload.reason).toBe('no_contact_provided');
+    expect(notifyOperatorOfUnconfirmedVoiceIntake).toHaveBeenCalledTimes(1);
   });
 
   it('routes existing-client calls to voice_callback_requests instead of screened_leads', async () => {
