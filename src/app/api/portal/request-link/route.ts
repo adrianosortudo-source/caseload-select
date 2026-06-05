@@ -42,6 +42,10 @@ interface FirmLawyerRow {
 }
 
 export async function POST(req: NextRequest) {
+  // TEMP DIAG 2026-06-05: trace each branch so we can find where the operator
+  // magic-link is being silently dropped. Marker: REQLINK_TRACE.
+  console.log("[REQLINK_TRACE] enter");
+
   // Rate limit (APP-007): magic-link send is the highest-value enumeration
   // surface. Always returns 200 anyway (anti-enumeration), so we silently
   // drop the email send when the bucket is empty — attackers can't tell
@@ -50,6 +54,7 @@ export async function POST(req: NextRequest) {
   const ip = ipFromRequest(req);
   const rl = await checkRateLimit("requestLink", ip);
   if (!rl.ok) {
+    console.log("[REQLINK_TRACE] silent return: rate_limit");
     // Silent drop — same response shape as a malformed email.
     return NextResponse.json({ ok: true });
   }
@@ -58,13 +63,16 @@ export async function POST(req: NextRequest) {
   try {
     body = (await req.json()) as { email?: string };
   } catch {
+    console.log("[REQLINK_TRACE] silent return: json_parse");
     return NextResponse.json({ ok: true }); // silent
   }
 
   const email = (body.email ?? "").trim().toLowerCase();
   if (!email || !EMAIL_RE.test(email)) {
+    console.log("[REQLINK_TRACE] silent return: email_invalid email_len=" + email.length);
     return NextResponse.json({ ok: true }); // silent
   }
+  console.log("[REQLINK_TRACE] email_ok=" + email);
 
   // Resolve email → firm + role. Two paths:
   //
@@ -81,13 +89,14 @@ export async function POST(req: NextRequest) {
   let lawyerId: string | undefined;
   let role: "lawyer" | "operator" = "lawyer";
 
-  const { data: lawyerRows } = await supabase
+  const { data: lawyerRows, error: lawyerErr } = await supabase
     .from("firm_lawyers")
     .select("id, firm_id, email, role, intake_firms!inner(id, name, branding)")
     .ilike("email", email)
     .order("last_signed_in_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .returns<FirmLawyerRow[]>();
+  console.log("[REQLINK_TRACE] lawyer_query rows=" + (lawyerRows?.length ?? 0) + " err=" + (lawyerErr ? lawyerErr.message : "none"));
 
   if (lawyerRows && lawyerRows.length > 0) {
     const row = lawyerRows[0];
@@ -95,6 +104,7 @@ export async function POST(req: NextRequest) {
     firmRow = row.intake_firms;
     lawyerId = row.id;
     role = row.role;
+    console.log("[REQLINK_TRACE] lawyer_path firmId=" + firmId + " firmRow_type=" + (Array.isArray(firmRow) ? "array" : typeof firmRow) + " role=" + role);
   } else {
     // Legacy fallback: branding.lawyer_email
     const { data: firms } = await supabase
@@ -105,13 +115,22 @@ export async function POST(req: NextRequest) {
       firmRow = firms[0] as FirmRow;
       firmId = firmRow.id;
     }
+    console.log("[REQLINK_TRACE] fallback_path firmId=" + firmId);
   }
 
   if (!firmId || !firmRow) {
+    console.log("[REQLINK_TRACE] silent return: no_firm firmId=" + firmId + " firmRow=" + (firmRow ? "present" : "null"));
     return NextResponse.json({ ok: true }); // silent
   }
 
-  const token = generatePortalToken(firmId, { role, lawyer_id: lawyerId });
+  let token: string;
+  try {
+    token = generatePortalToken(firmId, { role, lawyer_id: lawyerId });
+    console.log("[REQLINK_TRACE] token_generated len=" + token.length);
+  } catch (e) {
+    console.log("[REQLINK_TRACE] silent return: token_throw err=" + (e instanceof Error ? e.message : String(e)));
+    return NextResponse.json({ ok: true });
+  }
   const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN;
   const origin =
     (appDomain ? `https://app.${appDomain}` : null) ??
@@ -125,12 +144,15 @@ export async function POST(req: NextRequest) {
   const html = renderMagicLinkEmail({ firmName, magicLink, role });
 
   try {
-    await sendEmail(email, subject, html);
-  } catch {
+    const r = await sendEmail(email, subject, html);
+    console.log("[REQLINK_TRACE] sendEmail_ok skipped=" + ("skipped" in r ? r.skipped : "n/a"));
+  } catch (e) {
+    console.log("[REQLINK_TRACE] sendEmail_threw err=" + (e instanceof Error ? e.message : String(e)));
     // Don't surface email failures to the caller. Operator can re-send via
     // /api/portal/generate if needed.
   }
 
+  console.log("[REQLINK_TRACE] returning ok");
   return NextResponse.json({ ok: true });
 }
 
