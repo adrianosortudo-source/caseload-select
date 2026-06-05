@@ -533,7 +533,14 @@ export async function processChannelInbound(
   }
 
   const report = buildReport(state);
-  const briefHtml = renderBriefHtmlServer(report, channel, state.language, firmTimezone);
+  const briefHtml = renderBriefHtmlServer(
+    report,
+    channel,
+    state.language,
+    firmTimezone,
+    state.matter_type,
+    state.practice_area,
+  );
   const bandResult = computeBand(state);
   const band: Band | null = bandResult.band;
 

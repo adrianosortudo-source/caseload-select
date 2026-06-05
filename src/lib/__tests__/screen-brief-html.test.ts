@@ -7,8 +7,11 @@
  *
  *   - NAP block at the top (Name + Phone + Postal code + Email)
  *   - "Why this is Band X" four-axis breakdown inside the Decision section
- *     (Value · Simplicity · Urgency · Readiness), each card carrying a
- *     0-10 score and the contributing reasons
+ *     (Value · Complexity · Urgency · Readiness), each card carrying a
+ *     0-10 score, a qualitative band (Low / Moderate / High), and a single
+ *     lawyer-facing prose sentence. v2 rewrite (2026-06-05): the engine's
+ *     raw `reasons` strings are no longer surfaced; the renderer synthesises
+ *     matter-aware prose from the score band + matter family.
  *   - Commercial angle, Call preparation, Facts and reasoning sections
  *
  * If any of these silently drop out of the renderer, this test fails loud
@@ -93,15 +96,17 @@ describe('renderBriefHtmlServer — four-axis breakdown', () => {
     expect(html).toContain('axis-breakdown');
   });
 
-  it('renders four axis cards: Value, Simplicity, Urgency, Readiness', () => {
+  it('renders four axis cards: Value, Complexity, Urgency, Readiness', () => {
     const html = renderBriefHtmlServer(buildFakeReport(), 'web', 'en');
     expect(html).toContain('>Value<');
-    expect(html).toContain('>Simplicity<');
+    expect(html).toContain('>Complexity<');
     expect(html).toContain('>Urgency<');
     expect(html).toContain('>Readiness<');
+    // The v1 "Simplicity" rename is gone — the brief now shows raw Complexity.
+    expect(html).not.toContain('>Simplicity<');
   });
 
-  it('inverts complexity to simplicity (high complexity → low simplicity)', () => {
+  it('shows the raw complexity score (no longer inverted to simplicity)', () => {
     const html = renderBriefHtmlServer(
       buildFakeReport({
         axis_reasoning: {
@@ -115,16 +120,17 @@ describe('renderBriefHtmlServer — four-axis breakdown', () => {
       'web',
       'en',
     );
-    // Complexity 9 → Simplicity 1
-    expect(html).toMatch(/Simplicity[\s\S]*?1\/10/);
+    // Complexity 9/10 (raw, no inversion). And the v1 "1/10" inversion never appears.
+    expect(html).toMatch(/Complexity[\s\S]*?9\/10/);
+    expect(html).not.toMatch(/Simplicity[\s\S]*?1\/10/);
   });
 
-  it('marks a low-simplicity axis as drag (red-ish border)', () => {
+  it('marks a high-complexity axis as drag (red-ish border)', () => {
     const html = renderBriefHtmlServer(
       buildFakeReport({
         axis_reasoning: {
           value: { score: 5, reasons: [] },
-          complexity: { score: 9, reasons: ['Multi-party'] }, // simplicity = 1, drag
+          complexity: { score: 9, reasons: ['Multi-party'] }, // complexity High → drag
           urgency: { score: 5, reasons: [] },
           readiness: { score: 5, reasons: [] },
           readinessAnswered: true,
@@ -134,6 +140,24 @@ describe('renderBriefHtmlServer — four-axis breakdown', () => {
       'en',
     );
     expect(html).toContain('axis-block-drag');
+  });
+
+  it('marks a low-complexity axis as positive (favourable border)', () => {
+    const html = renderBriefHtmlServer(
+      buildFakeReport({
+        axis_reasoning: {
+          value: { score: 5, reasons: [] },
+          complexity: { score: 2, reasons: [] }, // complexity Low → positive
+          urgency: { score: 5, reasons: [] },
+          readiness: { score: 5, reasons: [] },
+          readinessAnswered: true,
+        },
+      }),
+      'web',
+      'en',
+    );
+    // The Complexity card must carry the positive border class.
+    expect(html).toMatch(/axis-block-positive[\s\S]*?Complexity/);
   });
 
   it('marks an unanswered Readiness axis as pending (dashed border)', () => {
@@ -155,20 +179,72 @@ describe('renderBriefHtmlServer — four-axis breakdown', () => {
     expect(html).toMatch(/axis-block-pending[\s\S]*?Readiness/);
   });
 
-  it('renders the contributing reasons as bullet items inside each axis card', () => {
+  it('does NOT leak the engine raw reason strings into the brief', () => {
+    // The v1 renderer passed engine reasons (e.g. "Baseline complexity signal
+    // from answered standing, standing, standing slots.") through verbatim.
+    // The v2 renderer must NOT do this — those strings are internal ontology
+    // and read as debug output to a lawyer. Source-of-truth fix:
+    // 2026-06-05 brief regression flagged by operator.
     const html = renderBriefHtmlServer(buildFakeReport(), 'web', 'en');
-    expect(html).toContain('<li>Mid-range fee opportunity</li>');
-    expect(html).toContain('<li>Standard Bardal analysis</li>');
-    expect(html).toContain('<li>Termination date within 60 days</li>');
-    expect(html).toContain('<li>Decision-maker confirmed</li>');
+    expect(html).not.toContain('Mid-range fee opportunity');
+    expect(html).not.toContain('Standard Bardal analysis');
+    expect(html).not.toContain('Termination date within 60 days');
+    expect(html).not.toContain('Decision-maker confirmed');
+    expect(html).not.toContain('Baseline value signal');
+    expect(html).not.toContain('Baseline complexity signal');
+    expect(html).not.toContain('answered ');
+    expect(html).not.toContain(' slots.');
   });
 
-  it('emits the score as N/10 for each axis', () => {
+  it('emits the raw axis score as N/10 for each axis (Complexity no longer inverted)', () => {
     const html = renderBriefHtmlServer(buildFakeReport(), 'web', 'en');
-    expect(html).toContain('6/10'); // value
-    expect(html).toContain('5/10'); // urgency
-    expect(html).toContain('7/10'); // readiness
-    expect(html).toContain('6/10'); // simplicity = 10 - 4
+    // Each axis renders a raw 0-10 score inside its own card.
+    expect(html).toMatch(/Value[\s\S]*?6\/10/);
+    expect(html).toMatch(/Complexity[\s\S]*?4\/10/);
+    expect(html).toMatch(/Urgency[\s\S]*?5\/10/);
+    expect(html).toMatch(/Readiness[\s\S]*?7\/10/);
+  });
+
+  it('renders a qualitative band label (Low / Moderate / High) per axis card', () => {
+    const html = renderBriefHtmlServer(buildFakeReport(), 'web', 'en');
+    // Value 6 → Moderate, Complexity 4 → Moderate, Urgency 5 → Moderate, Readiness 7 → High
+    expect(html).toMatch(/data-axis="value"[\s\S]*?Moderate/);
+    expect(html).toMatch(/data-axis="complexity"[\s\S]*?Moderate/);
+    expect(html).toMatch(/data-axis="urgency"[\s\S]*?Moderate/);
+    expect(html).toMatch(/data-axis="readiness"[\s\S]*?High/);
+  });
+
+  it('renders matter-aware prose for an employment matter (value)', () => {
+    const html = renderBriefHtmlServer(
+      buildFakeReport(),
+      'web',
+      'en',
+      undefined,
+      'wrongful_dismissal',
+      'employment',
+    );
+    // The Value card must carry an employment-family sentence at the Moderate band.
+    expect(html).toMatch(/data-axis="value"[\s\S]*?employment matter/i);
+  });
+
+  it('renders matter-aware prose for an estates matter (value)', () => {
+    const html = renderBriefHtmlServer(
+      buildFakeReport(),
+      'web',
+      'en',
+      undefined,
+      'will_drafting',
+      'estates',
+    );
+    // The Value card must carry an estate-planning-family sentence.
+    expect(html).toMatch(/data-axis="value"[\s\S]*?estate-planning/);
+  });
+
+  it('falls back to family-agnostic prose when matter_type is not provided', () => {
+    const html = renderBriefHtmlServer(buildFakeReport(), 'web', 'en');
+    // With no family hook, the renderer uses generic prose — never the old
+    // engine-reasons garble.
+    expect(html).toMatch(/data-axis="value"[\s\S]*?Moderate value signal/i);
   });
 
   it('omits the axis breakdown for out-of-scope reports (no band)', () => {

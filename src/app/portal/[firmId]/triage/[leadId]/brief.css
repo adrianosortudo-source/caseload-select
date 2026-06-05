@@ -372,6 +372,39 @@
   opacity: 0.6;
 }
 
+/* v2 axis card (2026-06-05): qualitative band label + matter-aware prose.
+   Replaces the bullet list of engine reasons. */
+.brief-frame .axis-block-band {
+  margin: 6px 0 4px 0;
+}
+.brief-frame .axis-block-band-label {
+  display: inline-block;
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bf-navy);
+  padding: 2px 8px;
+  border: 1px solid var(--bf-navy);
+  border-radius: 999px;
+  background: transparent;
+}
+.brief-frame .axis-block-drag .axis-block-band-label {
+  color: var(--bf-band-c);
+  border-color: var(--bf-band-c);
+}
+.brief-frame .axis-block-pending .axis-block-band-label {
+  color: var(--bf-gold-2);
+  border-color: var(--bf-gold-2);
+}
+.brief-frame .axis-block-prose {
+  margin: 4px 0 0 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--bf-black);
+}
+
 /* ─── Bullet lists (services, openers, what to confirm, etc.) ─────────── */
 
 .brief-frame .bullet-list li {

@@ -616,7 +616,14 @@ export async function POST(req: NextRequest) {
     report.resolved_facts_v2,
     normalizedTranscript,
   );
-  const briefHtml = renderBriefHtmlServer(report, 'voice', state.language, firmTimezone);
+  const briefHtml = renderBriefHtmlServer(
+    report,
+    'voice',
+    state.language,
+    firmTimezone,
+    state.matter_type,
+    state.practice_area,
+  );
   const completeness = computeCoreCompleteness(state);
   const bandResult = computeBand(state);
   // OOS now carries band='D' per the 2026-05-15 doctrine flip; the engine
@@ -794,8 +801,18 @@ export async function POST(req: NextRequest) {
   // outcome." OOS voice calls now carry band='D' and status='triaging' so
   // the lawyer can Refer / Take / Pass. The decline-with-grace GHL cadence
   // fires only on lawyer-initiated Pass or the deadline backstop.
+  //
+  // Dev vs prod dispatch policy (added 2026-06-04, mirrors /api/intake-v2):
+  //   - Production: waitUntil() lets the email continue after the response
+  //     returns. Vercel keeps the function instance alive for it.
+  //   - Non-production (local Next.js dev): waitUntil() is unreliable
+  //     because the dev server (especially Turbopack on Windows / D: with
+  //     constant HMR restarts) tears down in-flight work before the Resend
+  //     call lands. To keep operator parity between dev and prod, await the
+  //     call directly in dev — guarantees the email completes before the
+  //     request closes.
   if (inserted.status === 'triaging' || inserted.status === 'declined') {
-    waitUntil(notifyLawyersOfNewLead({
+    const notifyPromise = notifyLawyersOfNewLead({
       firmId: firmIdParam,
       leadId: inserted.lead_id,
       contactName: state.slots['client_name'] ?? callerName ?? null,
@@ -809,7 +826,14 @@ export async function POST(req: NextRequest) {
       lifecycleStatus: inserted.status as 'triaging' | 'declined',
     }).catch((err) => {
       console.error('[voice-intake] notifyLawyersOfNewLead failed:', err);
-    }));
+    });
+
+    if (process.env.NODE_ENV === 'production') {
+      waitUntil(notifyPromise);
+    } else {
+      // Block the response until the email completes — only in dev.
+      await notifyPromise;
+    }
   }
 
   return NextResponse.json(
