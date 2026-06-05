@@ -25,25 +25,76 @@ import { DEFAULT_FIRM_TIMEZONE } from './firm-timezone';
  * Lawyer-facing labels for the 6 locked provenance values (2026-06-02 taxonomy)
  * plus the 3 legacy keys still present in older DB rows.
  *
+ * Channel-aware (2026-06-05): voice-shape phrases ("Stated during call",
+ * "Inferred from transcript") were previously global defaults. They are
+ * categorically wrong for web-widget, Messenger, Instagram, WhatsApp, SMS,
+ * and GBP intake — those leads are typed in a form or thread, not spoken on
+ * a call. Per operator direction the renderer now picks phrasing based on
+ * the inbound channel. Voice keeps its existing language; every other
+ * channel gets a channel-specific phrase. Missing channel falls back to web
+ * (the product's default channel; voice/Meta intake paths always set it
+ * explicitly, so a missing value means the SPA widget didn't include it).
+ *
  * Per operator direction: do NOT overclaim. The label "Confirmed by caller"
- * is reserved for the readback-detection code path. Code that promotes a
- * later candidate value without true readback detection MUST emit
- * 'explicit_from_caller' (which renders as "Stated during call"), not the
- * stronger 'confirmed_by_caller_after_readback'.
+ * is reserved for the voice readback-detection code path. Non-voice channels
+ * degrade 'confirmed_by_caller_after_readback' and 'spelled_by_caller' to
+ * the channel-appropriate "Provided in {channel}" phrasing — they are voice-
+ * only concepts and should never appear on a non-voice brief, but the
+ * renderer is defensive in case engine state drifts.
  */
-const FACT_SOURCE_LABEL: Record<string, string> = {
-  // Locked 2026-06-02 taxonomy
-  confirmed_by_caller_after_readback: 'Confirmed by caller',
-  spelled_by_caller: 'Spelled by caller',
-  explicit_from_caller: 'Stated during call',
-  system_metadata: 'System metadata',
-  inferred_from_transcript: 'Inferred from transcript',
-  unknown: 'Not confirmed',
-  // Legacy DB-row backward-compat
-  stated: 'Stated during call',
-  confirmed: 'Confirmed by caller',
-  inferred: 'Inferred from transcript',
+const CHANNEL_PROVENANCE_PHRASE: Record<
+  string,
+  { stated: string; inferred: string }
+> = {
+  voice:     { stated: 'Stated during call',           inferred: 'Inferred from transcript' },
+  web:       { stated: 'Provided in web intake',       inferred: 'Inferred from web intake' },
+  facebook:  { stated: 'Provided in Messenger thread', inferred: 'Inferred from Messenger thread' },
+  instagram: { stated: 'Provided in Instagram DM',     inferred: 'Inferred from Instagram DM' },
+  whatsapp:  { stated: 'Provided in WhatsApp thread',  inferred: 'Inferred from WhatsApp thread' },
+  sms:       { stated: 'Provided in SMS thread',       inferred: 'Inferred from SMS thread' },
+  gbp:       { stated: 'Provided in GBP chat',         inferred: 'Inferred from GBP chat' },
 };
+
+const FALLBACK_PROVENANCE_PHRASE = {
+  stated: 'Provided in intake',
+  inferred: 'Inferred from intake',
+};
+
+function provenancePhraseFor(channel: string | null | undefined): {
+  stated: string;
+  inferred: string;
+} {
+  const c = (channel ?? 'web').toLowerCase();
+  return CHANNEL_PROVENANCE_PHRASE[c] ?? FALLBACK_PROVENANCE_PHRASE;
+}
+
+function factSourceLabel(source: string, channel: string | null | undefined): string {
+  const phrase = provenancePhraseFor(channel);
+  const isVoice = (channel ?? 'web').toLowerCase() === 'voice';
+  switch (source) {
+    case 'confirmed_by_caller_after_readback':
+    case 'confirmed':
+      // Voice-only "Confirmed by caller" via readback detector. On any other
+      // channel, degrade to the channel-appropriate stated phrase — we never
+      // overclaim a readback confirmation outside voice.
+      return isVoice ? 'Confirmed by caller' : phrase.stated;
+    case 'spelled_by_caller':
+      // Voice-only too (caller spells the surname). Degrade off-voice.
+      return isVoice ? 'Spelled by caller' : phrase.stated;
+    case 'explicit_from_caller':
+    case 'stated':
+      return phrase.stated;
+    case 'system_metadata':
+      return 'System metadata';
+    case 'inferred_from_transcript':
+    case 'inferred':
+      return phrase.inferred;
+    case 'unknown':
+      return 'Not confirmed';
+    default:
+      return source;
+  }
+}
 
 const FACT_SOURCE_CLASS: Record<string, string> = {
   // Locked 2026-06-02 taxonomy
@@ -58,6 +109,19 @@ const FACT_SOURCE_CLASS: Record<string, string> = {
   confirmed: 'src-confirmed',
   inferred: 'src-inferred',
 };
+
+/**
+ * Lawyer-facing text for the NAP block's "field not captured" chip.
+ *
+ * The previous default ("Follow up on the call") assumed voice. For widget,
+ * Meta, SMS, and GBP intakes the follow-up channel may differ, and even when
+ * the lawyer plans to call back the lead never had a call. "Confirm on
+ * follow-up" is neutral, accurate across all six channels, and never implies
+ * a phone call took place.
+ */
+function napMissingFollowupLabel(_channel: string | null | undefined): string {
+  return 'Confirm on follow-up';
+}
 
 
 function esc(s: string | null | undefined): string {
@@ -120,7 +184,7 @@ function feeBlock(text: string): string {
   return html;
 }
 
-function factsWithProvenance(facts: ResolvedFact[]): string {
+function factsWithProvenance(facts: ResolvedFact[], channel: string | null | undefined): string {
   if (!facts || facts.length === 0) {
     return `<p class="section-body muted">No confirmed facts yet.</p>`;
   }
@@ -130,7 +194,7 @@ function factsWithProvenance(facts: ResolvedFact[]): string {
       <li class="fact-row">
         <span class="fact-label">${esc(f.label)}</span>
         <span class="fact-value">${esc(f.value)}</span>
-        <span class="fact-source ${FACT_SOURCE_CLASS[f.source] ?? ''}">${esc(FACT_SOURCE_LABEL[f.source] ?? f.source)}</span>
+        <span class="fact-source ${FACT_SOURCE_CLASS[f.source] ?? ''}">${esc(factSourceLabel(f.source, channel))}</span>
       </li>`,
     )
     .join('');
@@ -160,12 +224,13 @@ const NAP_FIELD_ORDER: { label: string; key: string }[] = [
   { label: 'Email', key: 'Email' },
 ];
 
-function napBlock(facts: ResolvedFact[]): string {
+function napBlock(facts: ResolvedFact[], channel: string | null | undefined): string {
   // Index facts by label for fast lookup
   const byLabel = new Map<string, ResolvedFact>();
   for (const f of facts ?? []) {
     if (f && f.label) byLabel.set(f.label, f);
   }
+  const followupLabel = napMissingFollowupLabel(channel);
   const cells = NAP_FIELD_ORDER.map(({ label, key }) => {
     const fact = byLabel.get(key);
     if (fact) {
@@ -173,14 +238,14 @@ function napBlock(facts: ResolvedFact[]): string {
         <div class="nap-cell">
           <p class="nap-label">${esc(label)}</p>
           <p class="nap-value">${esc(fact.value)}</p>
-          <p class="nap-source ${FACT_SOURCE_CLASS[fact.source] ?? ''}">${esc(FACT_SOURCE_LABEL[fact.source] ?? fact.source)}</p>
+          <p class="nap-source ${FACT_SOURCE_CLASS[fact.source] ?? ''}">${esc(factSourceLabel(fact.source, channel))}</p>
         </div>`;
     }
     return `
       <div class="nap-cell nap-cell-missing">
         <p class="nap-label">${esc(label)}</p>
         <p class="nap-value nap-value-missing">Not captured</p>
-        <p class="nap-source nap-source-missing">Follow up on the call</p>
+        <p class="nap-source nap-source-missing">${esc(followupLabel)}</p>
       </div>`;
   }).join('');
   return `
@@ -612,7 +677,7 @@ export function renderBriefHtmlServer(
   // reach this person back?"; surfacing name + phone + postal code +
   // email here removes the scroll-to-the-bottom step that the
   // pre-2026-05-21 layout forced.
-  sections.push(napBlock(report.resolved_facts_v2));
+  sections.push(napBlock(report.resolved_facts_v2, channel));
 
   if (isOOS) {
     sections.push(`
@@ -648,7 +713,7 @@ export function renderBriefHtmlServer(
 
       <section class="brief-group" data-group="facts">
         <h3 class="brief-group-title">Facts and reasoning</h3>
-        <div class="section"><p class="section-title">Resolved facts</p>${factsWithProvenance(report.resolved_facts_v2)}</div>
+        <div class="section"><p class="section-title">Resolved facts</p>${factsWithProvenance(report.resolved_facts_v2, channel)}</div>
         <div class="section"><p class="section-title">Inferred signals</p>${bullets(report.inferred_signals)}</div>
         <div class="section"><p class="section-title">Open questions</p>${bullets(report.open_questions)}</div>
         <div class="section"><p class="section-title">Risk flags</p>${riskFlagsBlock(report.risk_flags)}</div>

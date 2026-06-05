@@ -17,12 +17,17 @@ describe("channelLabel", () => {
     expect(channelLabel("custom_channel")).toBe("custom_channel");
   });
 
-  it("returns 'Unknown' for null", () => {
-    expect(channelLabel(null)).toBe("Unknown");
+  it("defaults to 'Website widget' for null (web is the product default channel)", () => {
+    // 2026-06-05: previously returned 'Unknown', which surfaced as "INBOUND
+    // VIA UNKNOWN" on legitimate web rows when the SPA widget POST omitted
+    // slot_answers.channel. Defaulting to 'web' is the correct semantics:
+    // voice/Meta/SMS intake paths always set the channel explicitly, so a
+    // missing value means the website widget.
+    expect(channelLabel(null)).toBe("Website widget");
   });
 
-  it("returns 'Unknown' for undefined", () => {
-    expect(channelLabel(undefined)).toBe("Unknown");
+  it("defaults to 'Website widget' for undefined", () => {
+    expect(channelLabel(undefined)).toBe("Website widget");
   });
 });
 

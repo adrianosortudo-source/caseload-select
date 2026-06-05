@@ -69,6 +69,9 @@ import { originAllowed, validateIntakeBody, sanitizeBriefHtml } from "@/lib/inta
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 import { evaluateContactGate } from "@/lib/screen-engine/contact-doctrine";
 import { persistUnconfirmedInquiry } from "@/lib/unconfirmed-inquiry";
+import { renderBriefHtmlServer } from "@/lib/screen-brief-html";
+import { resolveFirmTimezone } from "@/lib/firm-timezone";
+import type { LawyerReport, Channel } from "@/lib/screen-engine/types";
 
 interface IntakeAxes {
   value: number;
@@ -179,7 +182,7 @@ export async function POST(req: NextRequest) {
 
   const { data: firm, error: firmErr } = await supabase
     .from('intake_firms')
-    .select('id')
+    .select('id, location')
     .eq('id', firmIdParam)
     .maybeSingle();
   if (firmErr) {
@@ -266,10 +269,61 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Channel is stored inside slot_answers by the Vite SPA. Extract it here
-  // so we can pass it to the notification without a second DB read.
+  // Channel resolution + hydration (2026-06-05).
+  //
+  // The Vite SPA is SUPPOSED to set `slot_answers.channel = 'web'` on every
+  // widget POST, but some payloads have arrived with the field omitted —
+  // surfacing on the lawyer-facing triage header as "INBOUND VIA UNKNOWN"
+  // and producing voice-shaped provenance chips in the brief. We hydrate
+  // the field to 'web' (the product's default channel) at the writer here
+  // so every downstream reader sees a consistent channel value. Voice +
+  // Meta + SMS + GBP intakes all set channel explicitly at their writers;
+  // a missing value at /api/intake-v2 means the website widget.
   const inboundChannel =
     ((v.slot_answers as { channel?: string } | null)?.channel) ?? 'web';
+  const hydratedSlotAnswers = {
+    ...(v.slot_answers as Record<string, unknown>),
+    channel: inboundChannel,
+  };
+
+  // Server-rebuild the brief HTML so the channel-aware renderer is
+  // authoritative (2026-06-05).
+  //
+  // History: the SPA shipped `brief_html` as a moment-in-time client-side
+  // render and we persisted it verbatim. Channel-aware provenance phrases
+  // ("Provided in web intake" vs "Stated during call", etc.) only live in
+  // the server renderer though — the SPA's mirror has not been updated.
+  // Rebuilding the HTML server-side on every intake means every channel
+  // routes through one renderer, and the sandbox SPA can drift from the
+  // app without infecting the lawyer brief. The SPA's brief_json is the
+  // input; the SPA's brief_html is discarded.
+  //
+  // The renderer cannot throw under any contract path we control, but we
+  // try/catch so an unexpected shape (older brief_json missing a field)
+  // never breaks the intake — we fall back to the sanitized SPA-built
+  // HTML in that case and log a warning.
+  const firmTimezone = resolveFirmTimezone({ location: firm.location ?? null });
+  let serverRenderedHtml: string;
+  try {
+    serverRenderedHtml = renderBriefHtmlServer(
+      v.brief_json as unknown as LawyerReport,
+      inboundChannel as Channel,
+      v.intake_language ?? 'en',
+      firmTimezone,
+      matterType,
+      v.practice_area,
+    );
+  } catch (renderErr) {
+    console.warn(
+      '[intake-v2] server-side brief rebuild failed, falling back to SPA-built HTML:',
+      renderErr,
+    );
+    serverRenderedHtml = sanitizedBriefHtml;
+  }
+  // Sanitize the server-rendered output too — defense in depth even though
+  // every string it emits is escape()'d on construction. The same sanitizer
+  // is the last line of defense before the triage portal renders the HTML.
+  const persistedBriefHtml = sanitizeBriefHtml(serverRenderedHtml);
 
   // Referrer: body wins when the Vite SPA sent it (which carries the parent
   // page's document.referrer when the widget is iframed on the firm's site).
@@ -310,8 +364,8 @@ export async function POST(req: NextRequest) {
       // take/pass.
       status_changed_by_role: "system",
       brief_json: v.brief_json,
-      brief_html: sanitizedBriefHtml,
-      slot_answers: v.slot_answers,
+      brief_html: persistedBriefHtml,
+      slot_answers: hydratedSlotAnswers,
       band,
       matter_type: matterType,
       practice_area: v.practice_area,

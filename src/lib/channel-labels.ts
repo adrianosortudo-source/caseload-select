@@ -18,7 +18,22 @@ export const CHANNEL_LABELS: Record<string, string> = {
 };
 
 export function channelLabel(channel: string | null | undefined): string {
-  if (!channel) return 'Unknown';
+  // Default to 'web' (Website widget) when the channel is missing.
+  //
+  // Rationale (2026-06-05): the platform is web-first. The voice-intake,
+  // /api/screen, and every Meta/SMS/GBP intake path set `channel` explicitly
+  // when they persist the row. A missing channel value therefore means the
+  // SPA widget (which is the live website intake at caseload-screen-v2)
+  // didn't include `slot_answers.channel` in its POST body — i.e. it's a
+  // website-widget submission with channel attribution dropped.
+  //
+  // Previously this returned 'Unknown', which surfaced as "INBOUND VIA
+  // UNKNOWN" on the lawyer-facing triage header for legitimate web rows.
+  // That damages trust and is wrong: the channel IS known (it's web), the
+  // writer just forgot to set it. Defense-in-depth at the renderer means
+  // the lawyer always sees the correct channel name, and the data-path
+  // hydration in /api/intake-v2 backfills it for future writes.
+  if (!channel) return CHANNEL_LABELS.web;
   return CHANNEL_LABELS[channel] ?? channel;
 }
 

@@ -130,7 +130,16 @@ export async function POST(
   };
   const callerPhone = sa.voice_meta?.caller_phone ?? null;
   const callerName = sa.voice_meta?.caller_name ?? null;
-  const channel = (sa.channel ?? 'voice') as
+  // Default to 'web' (Website widget) when slot_answers.channel is missing.
+  //
+  // History: this route was first written as a voice-only backfill (Phase A
+  // matter-pack reclassify), so the default was 'voice'. After web/Meta
+  // channels started flowing through reclassify too, that default became
+  // wrong: a missing channel value silently relabelled web/Meta rows as
+  // voice and the renderer emitted call-shaped provenance for them. The
+  // rest of the codebase (intake-v2 reads, screen route writes) treats
+  // missing channel as 'web', so reclassify now aligns with that.
+  const channel = (sa.channel ?? 'web') as
     | 'web'
     | 'whatsapp'
     | 'sms'

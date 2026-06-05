@@ -258,6 +258,138 @@ describe('renderBriefHtmlServer — four-axis breakdown', () => {
   });
 });
 
+describe('renderBriefHtmlServer — channel-aware provenance labels (2026-06-05)', () => {
+  // Bug history: the renderer's provenance label map was voice-shaped
+  // ("Stated during call", "Inferred from transcript"). A website-widget
+  // submission flowed through the same renderer and surfaced as
+  //   "STATED DURING CALL"
+  // chips for fields the lead TYPED in the form. The fix made the label
+  // function channel-aware. Voice keeps its phrasing; every other channel
+  // gets channel-appropriate wording.
+  //
+  // These tests are the contract for the rendering layer: no matter what
+  // channel a brief is built for, the lawyer must never read text that
+  // implies a call happened when it didn't.
+
+  // A report with the four canonical provenance sources actually emitted
+  // by the engine pipeline: explicit_from_caller (stated), confirmed,
+  // spelled, inferred. We also add a system_metadata fact since voice
+  // intakes carry that for the GHL-provided caller_phone.
+  function reportWithAllProvenances(): LawyerReport {
+    return buildFakeReport({
+      resolved_facts_v2: [
+        { label: 'Name', value: 'Casey Lee', source: 'explicit_from_caller' },
+        { label: 'Phone', value: '+1 416 555 0143', source: 'confirmed_by_caller_after_readback' },
+        { label: 'Surname spelling', value: 'L-E-E', source: 'spelled_by_caller' },
+        { label: 'Termination date', value: '2026-04-30', source: 'inferred_from_transcript' },
+        { label: 'Caller-ID phone', value: '+1 647 555 0199', source: 'system_metadata' },
+      ],
+    });
+  }
+
+  it('voice brief uses call-language provenance ("Stated during call", "Confirmed by caller", "Inferred from transcript")', () => {
+    const html = renderBriefHtmlServer(reportWithAllProvenances(), 'voice', 'en');
+    expect(html).toContain('Stated during call');
+    expect(html).toContain('Confirmed by caller');
+    expect(html).toContain('Spelled by caller');
+    expect(html).toContain('Inferred from transcript');
+    expect(html).toContain('System metadata');
+  });
+
+  it('web brief never uses call-language provenance — uses "Provided in web intake" instead', () => {
+    const html = renderBriefHtmlServer(reportWithAllProvenances(), 'web', 'en');
+    // The lawyer must NOT read anything implying a phone call happened.
+    expect(html).not.toContain('Stated during call');
+    expect(html).not.toContain('Confirmed by caller');
+    expect(html).not.toContain('Spelled by caller');
+    expect(html).not.toContain('Inferred from transcript');
+    expect(html).not.toContain('Follow up on the call');
+    // Instead, channel-appropriate phrasing.
+    expect(html).toContain('Provided in web intake');
+    expect(html).toContain('Inferred from web intake');
+    // system_metadata is channel-agnostic.
+    expect(html).toContain('System metadata');
+  });
+
+  it('facebook (Messenger) brief uses Messenger-thread phrasing, not call-language', () => {
+    const html = renderBriefHtmlServer(reportWithAllProvenances(), 'facebook', 'en');
+    expect(html).not.toContain('Stated during call');
+    expect(html).not.toContain('Confirmed by caller');
+    expect(html).not.toContain('Inferred from transcript');
+    expect(html).toContain('Provided in Messenger thread');
+    expect(html).toContain('Inferred from Messenger thread');
+  });
+
+  it('instagram brief uses Instagram-DM phrasing', () => {
+    const html = renderBriefHtmlServer(reportWithAllProvenances(), 'instagram', 'en');
+    expect(html).not.toContain('Stated during call');
+    expect(html).toContain('Provided in Instagram DM');
+    expect(html).toContain('Inferred from Instagram DM');
+  });
+
+  it('whatsapp brief uses WhatsApp-thread phrasing', () => {
+    const html = renderBriefHtmlServer(reportWithAllProvenances(), 'whatsapp', 'en');
+    expect(html).not.toContain('Stated during call');
+    expect(html).toContain('Provided in WhatsApp thread');
+    expect(html).toContain('Inferred from WhatsApp thread');
+  });
+
+  it('sms brief uses SMS-thread phrasing', () => {
+    const html = renderBriefHtmlServer(reportWithAllProvenances(), 'sms', 'en');
+    expect(html).not.toContain('Stated during call');
+    expect(html).toContain('Provided in SMS thread');
+    expect(html).toContain('Inferred from SMS thread');
+  });
+
+  it('gbp brief uses GBP-chat phrasing', () => {
+    const html = renderBriefHtmlServer(reportWithAllProvenances(), 'gbp', 'en');
+    expect(html).not.toContain('Stated during call');
+    expect(html).toContain('Provided in GBP chat');
+    expect(html).toContain('Inferred from GBP chat');
+  });
+
+  it('legacy provenance keys ("stated", "confirmed", "inferred") still render channel-aware', () => {
+    // Older screened_leads rows carry the legacy values in resolved_facts_v2.
+    // The renderer maps them via the same channel-aware function.
+    const html = renderBriefHtmlServer(
+      buildFakeReport({
+        resolved_facts_v2: [
+          { label: 'Name', value: 'Casey Lee', source: 'stated' },
+          { label: 'Phone', value: '+1 416 555 0143', source: 'confirmed' },
+          { label: 'Termination date', value: '2026-04-30', source: 'inferred' },
+        ],
+      }),
+      'web',
+      'en',
+    );
+    // No call language.
+    expect(html).not.toContain('Stated during call');
+    expect(html).not.toContain('Confirmed by caller');
+    expect(html).not.toContain('Inferred from transcript');
+    // Web phrasing.
+    expect(html).toContain('Provided in web intake');
+    expect(html).toContain('Inferred from web intake');
+  });
+
+  it('NAP block missing-field chip is channel-agnostic ("Confirm on follow-up", not "Follow up on the call")', () => {
+    // Build a report with NO Name in resolved_facts_v2 so the NAP cell
+    // renders the missing chip.
+    const html = renderBriefHtmlServer(
+      buildFakeReport({
+        resolved_facts_v2: [
+          { label: 'Phone', value: '+1 416 555 0143', source: 'explicit_from_caller' },
+        ],
+      }),
+      'web',
+      'en',
+    );
+    // The missing-chip wording must not imply a call.
+    expect(html).not.toContain('Follow up on the call');
+    expect(html).toContain('Confirm on follow-up');
+    expect(html).toContain('Not captured');
+  });
+});
+
 describe('renderBriefHtmlServer — timezone rendering (#138)', () => {
   // Reproduces the exact bug from the 2026-06-02 voice smoke test: a call
   // placed at 4:55 PM Eastern was stored UTC (20:55Z) and rendered as
