@@ -42,10 +42,6 @@ interface FirmLawyerRow {
 }
 
 export async function POST(req: NextRequest) {
-  // TEMP DIAG 2026-06-05: trace each branch so we can find where the operator
-  // magic-link is being silently dropped. Marker: REQLINK_TRACE.
-  console.log("[REQLINK_TRACE] enter");
-
   // Rate limit (APP-007): magic-link send is the highest-value enumeration
   // surface. Always returns 200 anyway (anti-enumeration), so we silently
   // drop the email send when the bucket is empty — attackers can't tell
@@ -54,7 +50,6 @@ export async function POST(req: NextRequest) {
   const ip = ipFromRequest(req);
   const rl = await checkRateLimit("requestLink", ip);
   if (!rl.ok) {
-    console.log("[REQLINK_TRACE] silent return: rate_limit");
     // Silent drop — same response shape as a malformed email.
     return NextResponse.json({ ok: true });
   }
@@ -63,16 +58,13 @@ export async function POST(req: NextRequest) {
   try {
     body = (await req.json()) as { email?: string };
   } catch {
-    console.log("[REQLINK_TRACE] silent return: json_parse");
     return NextResponse.json({ ok: true }); // silent
   }
 
   const email = (body.email ?? "").trim().toLowerCase();
   if (!email || !EMAIL_RE.test(email)) {
-    console.log("[REQLINK_TRACE] silent return: email_invalid email_len=" + email.length);
     return NextResponse.json({ ok: true }); // silent
   }
-  console.log("[REQLINK_TRACE] email_ok=" + email);
 
   // Resolve email → firm + role. Two paths:
   //
@@ -83,20 +75,31 @@ export async function POST(req: NextRequest) {
   //
   // First match wins. Operator-role rows in firm_lawyers issue tokens that
   // unlock /admin/* surfaces; lawyer-role rows behave as before.
+  //
+  // Embed hint (2026-06-05 fix): PostgREST detects TWO foreign-key
+  // relationships between firm_lawyers and intake_firms:
+  //   - firm_lawyers.firm_id            → intake_firms.id (the lawyer's firm)
+  //   - intake_firms.default_lead_id    → firm_lawyers.id (firm's default lead;
+  //                                       added by the /admin/routing work)
+  // Without disambiguation the embed errors with "Could not embed because
+  // more than one relationship was found", returns zero rows, and the route
+  // silently 200s. We explicitly name the constraint to pick the
+  // firm-of-this-lawyer direction.
 
   let firmId: string | null = null;
   let firmRow: FirmRow | null = null;
   let lawyerId: string | undefined;
   let role: "lawyer" | "operator" = "lawyer";
 
-  const { data: lawyerRows, error: lawyerErr } = await supabase
+  const { data: lawyerRows } = await supabase
     .from("firm_lawyers")
-    .select("id, firm_id, email, role, intake_firms!inner(id, name, branding)")
+    .select(
+      "id, firm_id, email, role, intake_firms!firm_lawyers_firm_id_fkey!inner(id, name, branding)",
+    )
     .ilike("email", email)
     .order("last_signed_in_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .returns<FirmLawyerRow[]>();
-  console.log("[REQLINK_TRACE] lawyer_query rows=" + (lawyerRows?.length ?? 0) + " err=" + (lawyerErr ? lawyerErr.message : "none"));
 
   if (lawyerRows && lawyerRows.length > 0) {
     const row = lawyerRows[0];
@@ -104,7 +107,6 @@ export async function POST(req: NextRequest) {
     firmRow = row.intake_firms;
     lawyerId = row.id;
     role = row.role;
-    console.log("[REQLINK_TRACE] lawyer_path firmId=" + firmId + " firmRow_type=" + (Array.isArray(firmRow) ? "array" : typeof firmRow) + " role=" + role);
   } else {
     // Legacy fallback: branding.lawyer_email
     const { data: firms } = await supabase
@@ -115,22 +117,13 @@ export async function POST(req: NextRequest) {
       firmRow = firms[0] as FirmRow;
       firmId = firmRow.id;
     }
-    console.log("[REQLINK_TRACE] fallback_path firmId=" + firmId);
   }
 
   if (!firmId || !firmRow) {
-    console.log("[REQLINK_TRACE] silent return: no_firm firmId=" + firmId + " firmRow=" + (firmRow ? "present" : "null"));
     return NextResponse.json({ ok: true }); // silent
   }
 
-  let token: string;
-  try {
-    token = generatePortalToken(firmId, { role, lawyer_id: lawyerId });
-    console.log("[REQLINK_TRACE] token_generated len=" + token.length);
-  } catch (e) {
-    console.log("[REQLINK_TRACE] silent return: token_throw err=" + (e instanceof Error ? e.message : String(e)));
-    return NextResponse.json({ ok: true });
-  }
+  const token = generatePortalToken(firmId, { role, lawyer_id: lawyerId });
   const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN;
   const origin =
     (appDomain ? `https://app.${appDomain}` : null) ??
@@ -144,15 +137,12 @@ export async function POST(req: NextRequest) {
   const html = renderMagicLinkEmail({ firmName, magicLink, role });
 
   try {
-    const r = await sendEmail(email, subject, html);
-    console.log("[REQLINK_TRACE] sendEmail_ok skipped=" + ("skipped" in r ? r.skipped : "n/a"));
-  } catch (e) {
-    console.log("[REQLINK_TRACE] sendEmail_threw err=" + (e instanceof Error ? e.message : String(e)));
+    await sendEmail(email, subject, html);
+  } catch {
     // Don't surface email failures to the caller. Operator can re-send via
     // /api/portal/generate if needed.
   }
 
-  console.log("[REQLINK_TRACE] returning ok");
   return NextResponse.json({ ok: true });
 }
 
