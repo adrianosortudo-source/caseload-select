@@ -88,27 +88,42 @@ export function DecisionCard({ item, value, onChange }: Props) {
     return selected === optionValue;
   }
 
+  // Per-firm theme tokens drive every colour and font below. Fallbacks
+  // match the original CaseLoad Select chrome so an unthemed firm renders
+  // identically to the pre-theme system. See lib/widget-theme.ts.
+  const fontDisplay = "var(--cls-font-display, Manrope, sans-serif)";
+  const fontBody = "var(--cls-font-body, DM Sans, sans-serif)";
+
   return (
     <div className="flex flex-col gap-7">
       <div className="flex flex-col gap-2.5">
-        <h2 className="text-[26px] sm:text-[30px] leading-tight font-extrabold text-[#1E2F58]" style={{ fontFamily: "Manrope, sans-serif" }}>
+        <h2
+          className="text-[26px] sm:text-[30px] leading-tight font-extrabold text-[var(--cls-text,#1E2F58)]"
+          style={{ fontFamily: fontDisplay }}
+        >
           {item.question}
         </h2>
         {item.description && (
-          <p className="text-[15px] text-[#1E2F58]/65 leading-relaxed" style={{ fontFamily: "DM Sans, sans-serif" }}>
+          <p
+            className="text-[15px] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_65%,transparent)] leading-relaxed"
+            style={{ fontFamily: fontBody }}
+          >
             {item.description}
           </p>
         )}
       </div>
 
       {(!item.options || item.options.length === 0) && (
-        <div className="rounded-xl border border-[#1E2F58]/15 bg-white p-5 text-[14px] text-[#1E2F58]/65" style={{ fontFamily: "DM Sans, sans-serif" }}>
+        <div
+          className="rounded-xl border border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_15%,transparent)] bg-[var(--cls-surface,#FFFFFF)] p-5 text-[14px] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_65%,transparent)]"
+          style={{ fontFamily: fontBody }}
+        >
           This question came back without answer options. Tap continue to skip it.
           <button
             type="button"
             onClick={() => onChange("__skipped__")}
-            className="mt-3 inline-block px-5 py-2.5 rounded-full bg-[#1E2F58] text-white text-[14px] font-semibold"
-            style={{ fontFamily: "DM Sans, sans-serif" }}
+            className="mt-3 inline-block px-5 py-2.5 rounded-full bg-[var(--cls-accent,#1E2F58)] text-[var(--cls-accent-text,#FFFFFF)] text-[14px] font-semibold"
+            style={{ fontFamily: fontBody }}
           >
             Continue
           </button>
@@ -116,8 +131,11 @@ export function DecisionCard({ item, value, onChange }: Props) {
       )}
 
       {otherMode && (
-        <div className="flex flex-col gap-3 rounded-xl border border-[#1E2F58]/15 bg-white p-5">
-          <p className="text-[14px] font-semibold text-[#1E2F58]" style={{ fontFamily: "DM Sans, sans-serif" }}>
+        <div className="flex flex-col gap-3 rounded-xl border border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_15%,transparent)] bg-[var(--cls-surface,#FFFFFF)] p-5">
+          <p
+            className="text-[14px] font-semibold text-[var(--cls-text,#1E2F58)]"
+            style={{ fontFamily: fontBody }}
+          >
             In your own words:
           </p>
           <textarea
@@ -126,15 +144,15 @@ export function DecisionCard({ item, value, onChange }: Props) {
             value={otherText}
             placeholder="Describe what happened in your situation..."
             onChange={e => setOtherText(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg text-[15px] leading-relaxed resize-none bg-white border border-[#1E2F58]/20 focus:border-[#1E2F58] focus:outline-none text-[#1E2F58] placeholder:text-[#1E2F58]/35"
-            style={{ fontFamily: "DM Sans, sans-serif" }}
+            className="w-full px-4 py-3 rounded-lg text-[15px] leading-relaxed resize-none bg-[var(--cls-surface,#FFFFFF)] border border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] focus:border-[var(--cls-accent,#1E2F58)] focus:outline-none text-[var(--cls-text,#1E2F58)] placeholder:text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_35%,transparent)]"
+            style={{ fontFamily: fontBody }}
           />
           <div className="flex gap-2 justify-end">
             <button
               type="button"
               onClick={() => { setOtherMode(false); setOtherText(""); }}
-              className="px-5 py-2.5 rounded-full text-[#1E2F58] text-[14px] font-medium hover:bg-[#1E2F58]/5"
-              style={{ fontFamily: "DM Sans, sans-serif" }}
+              className="px-5 py-2.5 rounded-full text-[var(--cls-text,#1E2F58)] text-[14px] font-medium hover:bg-[color-mix(in_srgb,var(--cls-text,#1E2F58)_5%,transparent)]"
+              style={{ fontFamily: fontBody }}
             >
               Cancel
             </button>
@@ -145,10 +163,10 @@ export function DecisionCard({ item, value, onChange }: Props) {
               className={[
                 "px-6 py-2.5 rounded-full text-[14px] font-semibold transition",
                 otherText.trim().length > 0
-                  ? "bg-[#1E2F58] text-white"
-                  : "bg-[#1E2F58]/15 text-[#1E2F58]/40 cursor-not-allowed",
+                  ? "bg-[var(--cls-accent,#1E2F58)] text-[var(--cls-accent-text,#FFFFFF)]"
+                  : "bg-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_15%,transparent)] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_40%,transparent)] cursor-not-allowed",
               ].join(" ")}
-              style={{ fontFamily: "DM Sans, sans-serif" }}
+              style={{ fontFamily: fontBody }}
             >
               Continue
             </button>
@@ -174,22 +192,33 @@ export function DecisionCard({ item, value, onChange }: Props) {
                 "transition-all duration-150",
                 "border",
                 isOn
-                  ? "bg-[#1E2F58] text-white border-[#1E2F58] shadow-[0_4px_14px_rgba(30,47,88,0.18)]"
-                  : "bg-white text-[#1E2F58] border-[#1E2F58]/12 hover:border-[#C4B49A] hover:shadow-[0_2px_8px_rgba(30,47,88,0.06)]",
+                  ? "bg-[var(--cls-accent,#1E2F58)] text-[var(--cls-accent-text,#FFFFFF)] border-[var(--cls-accent,#1E2F58)] shadow-[0_4px_14px_rgba(30,47,88,0.18)]"
+                  : "bg-[var(--cls-surface,#FFFFFF)] text-[var(--cls-text,#1E2F58)] border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_12%,transparent)] hover:border-[var(--cls-border-hover,#C4B49A)] hover:shadow-[0_2px_8px_rgba(30,47,88,0.06)]",
                 isPressed ? "scale-[0.98]" : "scale-100",
               ].join(" ")}
-              style={{ fontFamily: "DM Sans, sans-serif" }}
+              style={{ fontFamily: fontBody }}
             >
               <span className="flex-1 text-[16px] font-medium leading-snug">{opt.label}</span>
               {multi && (
                 <span
                   className={[
                     "ml-3 w-5 h-5 rounded-md border flex items-center justify-center transition",
-                    isOn ? "border-white bg-white" : "border-[#1E2F58]/25 bg-transparent",
+                    isOn
+                      ? "border-[var(--cls-accent-text,#FFFFFF)] bg-[var(--cls-accent-text,#FFFFFF)]"
+                      : "border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_25%,transparent)] bg-transparent",
                   ].join(" ")}
                 >
                   {isOn && (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1E2F58" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="var(--cls-accent, #1E2F58)"
+                      strokeWidth="3.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   )}
@@ -206,9 +235,9 @@ export function DecisionCard({ item, value, onChange }: Props) {
             className={[
               "group relative flex items-center min-h-[64px] px-5 py-4 rounded-xl text-left",
               "transition-all duration-150 border border-dashed",
-              "bg-transparent text-[#1E2F58] border-[#1E2F58]/30 hover:border-[#C4B49A] hover:bg-white",
+              "bg-transparent text-[var(--cls-text,#1E2F58)] border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_30%,transparent)] hover:border-[var(--cls-border-hover,#C4B49A)] hover:bg-[var(--cls-surface,#FFFFFF)]",
             ].join(" ")}
-            style={{ fontFamily: "DM Sans, sans-serif" }}
+            style={{ fontFamily: fontBody }}
           >
             <span className="flex-1 text-[16px] font-medium leading-snug">Something else (I will explain)</span>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-2 opacity-60">

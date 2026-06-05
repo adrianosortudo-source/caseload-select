@@ -162,10 +162,10 @@ export function VoiceInput({ onTranscript, onError }: Props) {
         "transition-all border",
         isRecording
           ? "bg-red-50 border-red-300 text-red-700 hover:bg-red-100"
-          : "bg-white border-[#1E2F58]/15 text-[#1E2F58] hover:border-[#C4B49A]",
+          : "bg-[var(--cls-surface,#FFFFFF)] border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_15%,transparent)] text-[var(--cls-text,#1E2F58)] hover:border-[var(--cls-border-hover,#C4B49A)]",
         isBusy ? "opacity-60 cursor-wait" : "",
       ].join(" ")}
-      style={{ fontFamily: "DM Sans, sans-serif" }}
+      style={{ fontFamily: "var(--cls-font-body, DM Sans, sans-serif)" }}
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />

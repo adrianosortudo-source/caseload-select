@@ -1,5 +1,9 @@
 import type { NextConfig } from "next";
 
+const scriptSrc = process.env.NODE_ENV === "production"
+  ? "script-src 'self' 'unsafe-inline'"
+  : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
+
 /**
  * Security headers — Jim Manico audit (2026-05-14) APP-004.
  *
@@ -41,7 +45,7 @@ const mainSecurityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      scriptSrc,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: https:",
       "font-src 'self' data: https://fonts.gstatic.com",
@@ -70,7 +74,7 @@ const widgetSecurityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      scriptSrc,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: https:",
       "font-src 'self' data: https://fonts.gstatic.com",
@@ -109,13 +113,19 @@ const nextConfig: NextConfig = {
         headers: widgetSecurityHeaders,
       },
       {
+        // /widget-public/* gets the same embeddable header set for public
+        // law-firm website intake flows that should not use OTP.
+        source: "/widget-public/:path*",
+        headers: widgetSecurityHeaders,
+      },
+      {
         // Catch-all for EVERYTHING that is NOT /widget/*. Negative lookahead
         // is required here because Next.js headers() MERGES headers from
         // every matching rule rather than letting the more-specific rule win
         // outright — without this exclusion, the widget would receive both
         // its embeddable set AND the strict main-app set, and the latter's
         // X-Frame-Options: DENY would block iframe embedding by firms.
-        source: "/((?!widget/).*)",
+        source: "/((?!widget/|widget-public/).*)",
         headers: mainSecurityHeaders,
       },
     ];

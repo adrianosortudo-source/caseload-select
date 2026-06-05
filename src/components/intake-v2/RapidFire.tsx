@@ -56,16 +56,26 @@ export function RapidFire({ items, values, onChange }: Props) {
     }
   }
 
+  // Two modes:
+  //  - Multi-item (length > 1): batch header ("A few quick details / Tap an
+  //    answer for each / Less than 30 seconds") + per-row question label
+  //  - Single-item (length === 1): no batch preamble, question becomes the H2
+  //    so the screen matches DecisionCard's hierarchy. Otherwise the public
+  //    widget reads like a different product on every chip-rendered question.
+  const isSingleItem = items.length === 1;
+
   return (
     <div className="flex flex-col gap-7">
-      <div className="flex flex-col gap-2.5">
-        <h2 className="text-[26px] sm:text-[30px] leading-tight font-extrabold text-[#1E2F58]" style={{ fontFamily: "Manrope, sans-serif" }}>
-          A few quick details
-        </h2>
-        <p className="text-[15px] text-[#1E2F58]/65 leading-relaxed" style={{ fontFamily: "DM Sans, sans-serif" }}>
-          Tap an answer for each. Less than 30 seconds.
-        </p>
-      </div>
+      {!isSingleItem && (
+        <div className="flex flex-col gap-2.5">
+          <h2 className="text-[26px] sm:text-[30px] leading-tight font-extrabold text-[#1E2F58]" style={{ fontFamily: "Manrope, sans-serif" }}>
+            A few quick details
+          </h2>
+          <p className="text-[15px] text-[#1E2F58]/65 leading-relaxed" style={{ fontFamily: "DM Sans, sans-serif" }}>
+            Tap an answer for each. Less than 30 seconds.
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-col gap-6">
         {items.map(item => {
@@ -73,11 +83,19 @@ export function RapidFire({ items, values, onChange }: Props) {
           const value = values[item.id];
           return (
             <div key={item.id} className="flex flex-col gap-2.5">
-              <p className="text-[15px] sm:text-[16px] font-semibold text-[#1E2F58] leading-snug" style={{ fontFamily: "DM Sans, sans-serif" }}>
-                {item.question}
-              </p>
+              {isSingleItem ? (
+                <h2 className="text-[26px] sm:text-[30px] leading-tight font-extrabold text-[#1E2F58]" style={{ fontFamily: "Manrope, sans-serif" }}>
+                  {item.question}
+                </h2>
+              ) : (
+                <p className="text-[15px] sm:text-[16px] font-semibold text-[#1E2F58] leading-snug" style={{ fontFamily: "DM Sans, sans-serif" }}>
+                  {item.question}
+                </p>
+              )}
               {item.description && (
-                <p className="text-[13px] text-[#1E2F58]/55 leading-relaxed -mt-1" style={{ fontFamily: "DM Sans, sans-serif" }}>
+                <p className={isSingleItem
+                  ? "text-[15px] text-[#1E2F58]/65 leading-relaxed"
+                  : "text-[13px] text-[#1E2F58]/55 leading-relaxed -mt-1"} style={{ fontFamily: "DM Sans, sans-serif" }}>
                   {item.description}
                 </p>
               )}

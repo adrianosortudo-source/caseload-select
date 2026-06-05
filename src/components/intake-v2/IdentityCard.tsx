@@ -23,12 +23,14 @@ interface Props {
   firmName?: string;
   /** Absolute URL for the privacy policy link. */
   privacyUrl?: string;
+  /** Website intake submits directly; standard widget sends an OTP first. */
+  submitMode?: "otp" | "submit";
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[\d\s()+\-.]{7,}$/;
 
-export function IdentityCard({ initialName = "", initialEmail = "", initialPhone = "", onSubmit, loading, firmName, privacyUrl = "https://app.caseloadselect.ca/privacy" }: Props) {
+export function IdentityCard({ initialName = "", initialEmail = "", initialPhone = "", onSubmit, loading, firmName, privacyUrl = "https://app.caseloadselect.ca/privacy", submitMode = "otp" }: Props) {
   const [name, setName]   = useState(initialName);
   const [email, setEmail] = useState(initialEmail);
   const [phone, setPhone] = useState(initialPhone);
@@ -48,7 +50,7 @@ export function IdentityCard({ initialName = "", initialEmail = "", initialPhone
           Almost there. Where do we send it?
         </h2>
         <p className="text-[15px] text-[#1E2F58]/65 leading-relaxed" style={{ fontFamily: "DM Sans, sans-serif" }}>
-          A lawyer will review this case file. If your matter fits the firm&rsquo;s practice, the firm will reach out directly. We will text a quick code to confirm your number.
+          A lawyer will review what you shared. If your matter fits the firm&rsquo;s practice, the firm will reach out directly.
         </p>
       </div>
 
@@ -71,7 +73,7 @@ export function IdentityCard({ initialName = "", initialEmail = "", initialPhone
           className="text-[12px] text-[#1E2F58]/65 leading-relaxed cursor-pointer"
           style={{ fontFamily: "DM Sans, sans-serif" }}
         >
-          I agree that {firmName ? firmName : "this firm"} and CaseLoad Select may use my contact details to follow up on this inquiry and send related communications. Marketing messages will include an unsubscribe option. This is not legal advice and submitting does not create a lawyer-client relationship.{" "}
+          I agree that {firmName ? firmName : "this firm"} may use my contact details to follow up on this inquiry. This is not legal advice and submitting does not create a lawyer-client relationship.{" "}
           <a
             href={privacyUrl}
             target="_blank"
@@ -95,7 +97,7 @@ export function IdentityCard({ initialName = "", initialEmail = "", initialPhone
         ].join(" ")}
         style={{ fontFamily: "DM Sans, sans-serif" }}
       >
-        {loading ? "Sending code..." : "Send my code"}
+        {loading ? (submitMode === "otp" ? "Sending code..." : "Submitting...") : (submitMode === "otp" ? "Send my code" : "Submit matter review")}
       </button>
     </div>
   );

@@ -1,0 +1,414 @@
+"use client";
+
+import { useMemo, useRef, useState } from "react";
+import { Shell } from "@/components/intake-v2/Shell";
+import { TextCard } from "@/components/intake-v2/TextCard";
+import { DecisionCard } from "@/components/intake-v2/DecisionCard";
+import type { ScreenItem } from "@/components/intake-v2/types";
+import { initialiseState } from "@/lib/screen-engine/extractor";
+import { runEvidencePass } from "@/lib/screen-engine/slotEvidence";
+import { computeBand } from "@/lib/screen-engine/band";
+import { computeCoreCompleteness, getDecisionGap } from "@/lib/screen-engine/selector";
+import { applyAnswer, buildLeadSummary, getNextStep, markInsightShown, startContactCapture } from "@/lib/screen-engine/control";
+import { getI18n } from "@/lib/screen-engine/i18n/loader";
+import { getOptionDisplayLabel } from "@/lib/screen-engine/i18n/display";
+import { llmExtract, mergeLlmResults } from "@/lib/screen-engine/llm/extractor";
+import { buildReport } from "@/lib/screen-engine/report";
+import { renderBriefHtmlServer } from "@/lib/screen-brief-html";
+import type { EngineState, SlotDefinition } from "@/lib/screen-engine/types";
+
+interface Props {
+  firmId: string;
+  firmName: string;
+}
+
+type Stage = "kickoff" | "questions" | "contact" | "done";
+
+function scoreState(state: EngineState): EngineState {
+  const band = computeBand(state);
+  return {
+    ...state,
+    band: band.band,
+    confidence: band.confidence,
+    coreCompleteness: computeCoreCompleteness(state),
+    currentGap: getDecisionGap(state),
+  };
+}
+
+function slotToItem(slot: SlotDefinition): ScreenItem {
+  const language = "en";
+  const i18n = getI18n(language);
+  const options = (slot.options ?? []).map((opt) => ({
+    value: opt.value,
+    label: getOptionDisplayLabel(opt, slot.id, language, i18n),
+  }));
+
+  return {
+    id: slot.id,
+    question: slot.question,
+    presentation: options.length <= 3 ? "chip" : "card",
+    options,
+    allowFreeText: true,
+  };
+}
+
+function getContactValue(state: EngineState | null, key: string): string {
+  return state?.slots[key] ?? "";
+}
+
+/**
+ * Inline wrapper for free-text slots (no preset options + allowFreeText).
+ * Keeps its own text state so navigation between questions resets the
+ * textarea cleanly. Submits with the same "other:" prefix the chip/card
+ * "Other..." path uses, so the engine treats free-text answers uniformly.
+ *
+ * The wrapper has its own component identity so mounting it under a
+ * `key={currentItem.id}` in the parent guarantees a fresh state hook on
+ * every question change without a useEffect dance.
+ */
+function FreeTextAnswerCard({
+  item,
+  onSubmit,
+}: {
+  item: ScreenItem;
+  onSubmit: (value: string) => void;
+}) {
+  const [value, setValue] = useState("");
+  return (
+    <TextCard
+      item={item}
+      value={value}
+      onChange={setValue}
+      onSubmit={() => {
+        const trimmed = value.trim();
+        if (trimmed.length === 0) return;
+        onSubmit(trimmed);
+      }}
+      submitLabel="Continue"
+      minChars={1}
+    />
+  );
+}
+
+export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
+  const [stage, setStage] = useState<Stage>("kickoff");
+  const [description, setDescription] = useState("");
+  const [state, setState] = useState<EngineState | null>(null);
+  const [history, setHistory] = useState<EngineState[]>([]);
+  const [isReading, setIsReading] = useState(false);
+  const [persistStatus, setPersistStatus] = useState<string | null>(null);
+  const persistedRef = useRef(false);
+
+  const next = state ? getNextStep(state) : null;
+  const roundLabel = stage === "kickoff" ? "Your situation" : stage === "contact" ? "Your details" : "About your case";
+
+  const currentItem = useMemo(() => {
+    if (!next?.slot) return null;
+    return slotToItem(next.slot);
+  }, [next]);
+
+  async function start() {
+    const text = description.trim();
+    if (text.length < 10) return;
+
+    let nextState = initialiseState(text);
+    nextState = runEvidencePass(text, nextState);
+    nextState = scoreState(nextState);
+    setState(nextState);
+    setStage("questions");
+    setIsReading(true);
+
+    try {
+      const extracted = await llmExtract(text, nextState);
+      if (extracted.mode === "live") {
+        nextState = scoreState(mergeLlmResults(nextState, extracted.extracted));
+        setState(nextState);
+      }
+    } finally {
+      setIsReading(false);
+    }
+  }
+
+  function mutate(nextState: EngineState) {
+    setState(scoreState(nextState));
+  }
+
+  function answer(slotId: string, rawValue: string | string[]) {
+    if (!state) return;
+    const value = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
+    setHistory((items) => [...items, state]);
+    mutate(applyAnswer(state, slotId, value));
+  }
+
+  function back() {
+    const prev = history.at(-1);
+    if (!prev) {
+      setStage("kickoff");
+      return;
+    }
+    setHistory((items) => items.slice(0, -1));
+    setState(prev);
+    setStage("questions");
+  }
+
+  function skip() {
+    if (!next?.slot) return;
+    answer(next.slot.id, "Not sure");
+  }
+
+  async function persist(finalState: EngineState) {
+    if (persistedRef.current) return;
+    persistedRef.current = true;
+    const report = buildReport(finalState);
+    const briefHtml = renderBriefHtmlServer(report, "web", finalState.language ?? "en");
+
+    const payload = {
+      lead_id: report.lead_id,
+      submitted_at: report.submitted_at,
+      matter_type: finalState.matter_type,
+      practice_area: finalState.practice_area,
+      band: report.band,
+      axes: report.four_axis,
+      brief_json: report,
+      brief_html: briefHtml,
+      intake_language: finalState.language ?? "en",
+      raw_transcript: finalState.language === "en" ? null : finalState.input,
+      slot_answers: {
+        slots: finalState.slots,
+        slot_meta: finalState.slot_meta,
+        slot_evidence: finalState.slot_evidence,
+        raw: finalState.raw,
+        intent_family: finalState.intent_family,
+        dispute_family: finalState.dispute_family,
+        advisory_subtrack: finalState.advisory_subtrack,
+        questionHistory: finalState.questionHistory,
+      },
+      contact: {
+        name: finalState.slots.client_name ?? undefined,
+        email: finalState.slots.client_email ?? undefined,
+        phone: finalState.slots.client_phone ?? undefined,
+      },
+      referrer: typeof document !== "undefined" ? document.referrer : null,
+    };
+
+    try {
+      const res = await fetch(`/api/intake-v2?firmId=${encodeURIComponent(firmId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => ({}));
+      setPersistStatus(body.persisted ? "submitted" : body.reason ?? "submitted");
+    } catch (err) {
+      setPersistStatus(err instanceof Error ? err.message : "submission issue");
+    }
+  }
+
+  function submitContact(form: FormData) {
+    if (!state) return;
+    let nextState = state;
+    const answers = {
+      client_name: String(form.get("client_name") ?? "").trim(),
+      client_phone: String(form.get("client_phone") ?? "").trim(),
+      client_email: String(form.get("client_email") ?? "").trim(),
+    };
+    if (!answers.client_name || (!answers.client_phone && !answers.client_email)) return;
+    setHistory((items) => [...items, state]);
+    for (const [slotId, value] of Object.entries(answers)) {
+      if (value) nextState = applyAnswer(nextState, slotId, value);
+    }
+    nextState = scoreState(nextState);
+    setState(nextState);
+    setStage("done");
+    void persist(nextState);
+  }
+
+  if (stage === "kickoff") {
+    return (
+      <Shell totalScreens={1} currentScreen={0} roundLabel={roundLabel}>
+        <TextCard
+          item={{
+            id: "situation",
+            question: "Tell us what is going on.",
+            description: "A few sentences is enough. The firm will use this to understand the situation before the next step.",
+            presentation: "text",
+            placeholder: "Briefly describe your legal issue or what you need help with.",
+          }}
+          value={description}
+          onChange={setDescription}
+          onSubmit={start}
+          submitLabel="Continue"
+          minChars={10}
+          enableVoice
+        />
+      </Shell>
+    );
+  }
+
+  if (!state) return null;
+
+  // Per-firm theme tokens — see lib/widget-theme.ts. Fallbacks match
+  // the legacy CaseLoad Select chrome.
+  const fontDisplay = "var(--cls-font-display, Manrope, sans-serif)";
+  const fontBody = "var(--cls-font-body, DM Sans, sans-serif)";
+
+  if (stage === "done" || next?.type === "stop") {
+    if (next?.type === "stop") void persist(state);
+    return (
+      <Shell totalScreens={1} currentScreen={0} roundLabel="Submitted" onBack={back}>
+        <div className="flex flex-col items-center text-center gap-5 py-10">
+          <div className="w-16 h-16 rounded-full bg-[var(--cls-accent,#1E2F58)] text-[var(--cls-accent-text,#FFFFFF)] flex items-center justify-center">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </div>
+          <h2 className="text-[28px] font-extrabold text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
+            Your matter review was submitted.
+          </h2>
+          <p
+            className="max-w-[460px] text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
+            style={{ fontFamily: fontBody }}
+          >
+            A lawyer at {firmName} will review what you shared and reach out directly if the matter fits the firm&apos;s practice.
+          </p>
+          {persistStatus && (
+            <p className="text-[12px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_45%,transparent)]">{persistStatus}</p>
+          )}
+        </div>
+      </Shell>
+    );
+  }
+
+  if (next?.type === "present_insight") {
+    const summary = buildLeadSummary(state, getI18n(state.language ?? "en"));
+    return (
+      <Shell totalScreens={3} currentScreen={2} roundLabel="Review" onBack={back}>
+        <div className="flex flex-col gap-5">
+          <h2 className="text-[28px] font-extrabold text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
+            Here is what we understood.
+          </h2>
+          <p
+            className="text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
+            style={{ fontFamily: fontBody }}
+          >
+            {summary.intro}
+          </p>
+          {summary.points.length > 0 && (
+            <ul className="rounded-xl bg-[var(--cls-surface,#FFFFFF)] border border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_10%,transparent)] p-4 text-left text-[14px] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_75%,transparent)] space-y-2">
+              {summary.points.map((point) => <li key={point}>{point}</li>)}
+            </ul>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              const nextState = startContactCapture(markInsightShown(state));
+              mutate(nextState);
+              setStage("contact");
+            }}
+            className="min-h-[52px] rounded-full bg-[var(--cls-accent,#1E2F58)] px-8 text-[15px] font-semibold text-[var(--cls-accent-text,#FFFFFF)]"
+            style={{ fontFamily: fontBody }}
+          >
+            Yes, share my contact details
+          </button>
+        </div>
+      </Shell>
+    );
+  }
+
+  if (stage === "contact" || next?.type === "capture_contact") {
+    return (
+      <Shell totalScreens={1} currentScreen={0} roundLabel="Your details" onBack={back}>
+        <form action={submitContact} className="flex flex-col gap-5">
+          <div>
+            <h2 className="text-[28px] font-extrabold text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
+              How should the firm reach you?
+            </h2>
+            <p
+              className="mt-2 text-[15px] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_65%,transparent)]"
+              style={{ fontFamily: fontBody }}
+            >
+              Share your contact details so the team can follow up after review.
+            </p>
+          </div>
+          {[
+            ["client_name", "Full name", "Your name"],
+            ["client_phone", "Phone", "+1 416 555 0123"],
+            ["client_email", "Email", "you@example.com"],
+          ].map(([name, label, placeholder]) => (
+            <label
+              key={name}
+              className="flex flex-col gap-2 text-[12px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_55%,transparent)]"
+              style={{ fontFamily: fontBody }}
+            >
+              {label}
+              <input
+                name={name}
+                defaultValue={getContactValue(state, name)}
+                placeholder={placeholder}
+                className="h-12 rounded-xl border border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_15%,transparent)] bg-[var(--cls-surface,#FFFFFF)] px-4 text-[15px] normal-case tracking-normal text-[var(--cls-text,#1E2F58)] outline-none focus:border-[var(--cls-accent,#1E2F58)]"
+                style={{ fontFamily: fontBody }}
+              />
+            </label>
+          ))}
+          <button
+            type="submit"
+            className="min-h-[52px] rounded-full bg-[var(--cls-accent,#1E2F58)] px-8 text-[15px] font-semibold text-[var(--cls-accent-text,#FFFFFF)]"
+            style={{ fontFamily: fontBody }}
+          >
+            Submit matter review
+          </button>
+        </form>
+      </Shell>
+    );
+  }
+
+  // Hold the question render until the LLM extraction settles. Without this
+  // guard, the engine renders Question 1 from the evidence-pass state, then a
+  // few seconds later the LLM merge advances `getNextStep` to a different slot
+  // and the screen swaps without any user input — the symptom that reads as
+  // "two different versions of the widget flashing past." One loading screen,
+  // then exactly one question.
+  if (isReading || !currentItem) {
+    return (
+      <Shell totalScreens={5} currentScreen={Math.min(history.length, 4)} roundLabel={roundLabel} onBack={back}>
+        <div className="flex flex-col items-center justify-center text-center gap-4 py-16">
+          <div
+            aria-hidden="true"
+            className="w-10 h-10 rounded-full border-2 border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] border-t-[var(--cls-accent,#1E2F58)] animate-spin"
+          />
+          <p
+            className="text-[13px] uppercase tracking-[0.18em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_60%,transparent)]"
+            style={{ fontFamily: fontBody }}
+          >
+            {isReading ? "Reading your description..." : "Preparing the next question..."}
+          </p>
+        </div>
+      </Shell>
+    );
+  }
+
+  // Two render paths only — visual consistency across every option-bearing
+  // question. Previously the controller branched on option count (1-3 chips
+  // via RapidFire, 4+ rectangles via DecisionCard), which read as two
+  // different products inside the same flow. DecisionCard handles any option
+  // count cleanly: short lists land in a 2-column grid, longer lists wrap.
+  // The widget posts its height to the parent iframe so the extra vertical
+  // space taken by short rectangle answers (vs old pill chips) is absorbed
+  // without a scrollbar.
+  const optionCount = currentItem.options?.length ?? 0;
+  const isPureFreeText = optionCount === 0 && !!currentItem.allowFreeText;
+
+  return (
+    <Shell totalScreens={5} currentScreen={Math.min(history.length, 4)} roundLabel={roundLabel} onBack={back} onSkip={skip}>
+      {isPureFreeText ? (
+        <FreeTextAnswerCard
+          key={currentItem.id}
+          item={currentItem}
+          onSubmit={(text) => answer(currentItem.id, `other:${text}`)}
+        />
+      ) : (
+        <DecisionCard item={currentItem} onChange={(value) => answer(currentItem.id, value)} />
+      )}
+    </Shell>
+  );
+}

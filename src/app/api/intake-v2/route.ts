@@ -362,11 +362,25 @@ export async function POST(req: NextRequest) {
   // and status='triaging' so the lawyer can Refer / Take / Pass. The
   // decline-with-grace GHL cadence fires only on lawyer-initiated Pass
   // or the deadline backstop, never at intake.
+  //
+  // Dev vs prod dispatch policy (added 2026-06-04):
+  //   - Production: waitUntil() lets the email continue after the response
+  //     returns. Vercel keeps the function instance alive for it. Lower
+  //     perceived latency on the widget submit confirmation.
+  //   - Non-production (local Next.js dev): waitUntil() is unreliable
+  //     because the dev server (especially Turbopack on Windows / D: with
+  //     constant HMR restarts) tears down in-flight work before the Resend
+  //     call lands. Three widget tests landed in the DB on 2026-06-04 with
+  //     zero notification emails reaching the operator inbox because of
+  //     this. To keep operator parity between dev and prod, await the call
+  //     directly in dev — adds ~500ms to the dev-only response but
+  //     guarantees the email completes before the request closes.
   if (inserted.status === "triaging" || inserted.status === "declined") {
     // Narrow band to the email-render shape. Declined OOS rows have band=null.
     const notifyBand: "A" | "B" | "C" | "D" | null =
       band === "A" || band === "B" || band === "C" || band === "D" ? band : null;
-    waitUntil(notifyLawyersOfNewLead({
+
+    const notifyPromise = notifyLawyersOfNewLead({
       firmId: firmIdParam,
       leadId: inserted.lead_id,
       contactName: v.contact?.name ?? null,
@@ -379,9 +393,18 @@ export async function POST(req: NextRequest) {
       channel: inboundChannel,
       lifecycleStatus: inserted.status as "triaging" | "declined",
     }).catch((err) => {
-      // Visible in Vercel function logs; not surfaced to the screen.
+      // Visible in Vercel function logs (prod) and dev-server stdout (dev).
+      // Not surfaced to the screen — the lead is already persisted, so the
+      // user should still see success.
       console.error("[intake-v2] notifyLawyersOfNewLead failed:", err);
-    }));
+    });
+
+    if (process.env.NODE_ENV === "production") {
+      waitUntil(notifyPromise);
+    } else {
+      // Block the response until the email completes — only in dev.
+      await notifyPromise;
+    }
   }
 
   return NextResponse.json(
