@@ -229,10 +229,10 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
         <TextCard
           item={{
             id: "situation",
-            question: "Tell us what is going on.",
-            description: "A few sentences is enough. The firm will use this to understand the situation before the next step.",
+            question: "Describe your situation.",
+            description: "Include the dates that matter and the documents you have.",
             presentation: "text",
-            placeholder: "Briefly describe your legal issue or what you need help with.",
+            placeholder: "What is happening, the deadlines, the documents you have.",
           }}
           value={description}
           onChange={setDescription}
@@ -269,7 +269,11 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
             className="max-w-[460px] text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
             style={{ fontFamily: fontBody }}
           >
-            A lawyer at {firmName} will review what you shared and reach out directly if the matter fits the firm&apos;s practice.
+            {/* "Professional Corporation" is the formal LSO legal-entity
+                suffix on the firm's registered name; strip it for the
+                user-facing confirmation so the prospect sees the trade
+                name (e.g. "DRG Law") rather than the entity name. */}
+            A lawyer at {firmName?.replace(/\s+Professional Corporation\s*$/i, '').trim() || 'the firm'} will read what you shared and reach out directly to talk through the legal side.
           </p>
           {persistStatus && (
             <p className="text-[12px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_45%,transparent)]">{persistStatus}</p>

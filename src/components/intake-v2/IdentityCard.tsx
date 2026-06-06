@@ -50,7 +50,7 @@ export function IdentityCard({ initialName = "", initialEmail = "", initialPhone
           Almost there. Where do we send it?
         </h2>
         <p className="text-[15px] text-[#1E2F58]/65 leading-relaxed" style={{ fontFamily: "DM Sans, sans-serif" }}>
-          A lawyer will review what you shared. If your matter fits the firm&rsquo;s practice, the firm will reach out directly.
+          A lawyer will read what you shared and reach out directly to talk through the legal side.
         </p>
       </div>
 
