@@ -379,6 +379,129 @@ function buildLeadSummaryEn(state: EngineState): LeadSummary {
     };
   }
 
+  // ─── EMPLOYMENT — sub-types (Phase A/B) ────────────────────────────
+  // Added 2026-06-05: when the engine classifies an employment matter, the
+  // public widget recap was falling through to the generic "Thank you. Here
+  // is what we understood from your description." fallback because no case
+  // existed. Half of DRG's incoming traffic is employment.
+
+  if (t === 'wrongful_dismissal') {
+    const intro = 'You were let go from a job, and you want a lawyer to look at whether the termination and what was offered are fair.';
+    if (slot(state, 'tenure_band')) points.push(`How long you worked there: ${slot(state, 'tenure_band')!.toLowerCase()}.`);
+    if (slot(state, 'employment_problem_type')) points.push(`What happened: ${slot(state, 'employment_problem_type')!.toLowerCase()}.`);
+    if (slot(state, 'severance_offered')) points.push(`Severance offered: ${slot(state, 'severance_offered')!.toLowerCase()}.`);
+    if (slot(state, 'severance_offer_amount')) points.push(`Amount offered: ${slot(state, 'severance_offer_amount')}.`);
+    if (slot(state, 'severance_deadline')) points.push(`Deadline to respond: ${slot(state, 'severance_deadline')!.toLowerCase()}.`);
+    return {
+      intro,
+      points,
+      closing: 'A lawyer can assess your common-law entitlement, push back on a low offer, and pursue a better settlement before the deadline runs.',
+    };
+  }
+
+  if (t === 'severance_review') {
+    const intro = 'You received a severance offer and want a lawyer to review it before you sign.';
+    if (slot(state, 'tenure_band')) points.push(`How long you worked there: ${slot(state, 'tenure_band')!.toLowerCase()}.`);
+    if (slot(state, 'severance_offer_amount')) points.push(`Amount offered: ${slot(state, 'severance_offer_amount')}.`);
+    if (slot(state, 'severance_deadline')) points.push(`Deadline to respond: ${slot(state, 'severance_deadline')!.toLowerCase()}.`);
+    return {
+      intro,
+      points,
+      closing: 'A lawyer can compare what you have been offered to your common-law entitlement and negotiate for the right number.',
+    };
+  }
+
+  if (t === 'harassment_complaint') {
+    const intro = 'You have a workplace harassment matter and want a lawyer to advise you on your options.';
+    if (slot(state, 'harassment_type')) points.push(`The kind of harassment: ${slot(state, 'harassment_type')!.toLowerCase()}.`);
+    if (slot(state, 'harassment_employment_status')) points.push(`Your employment status: ${slot(state, 'harassment_employment_status')!.toLowerCase()}.`);
+    return {
+      intro,
+      points,
+      closing: 'A lawyer can guide you on internal complaints, human rights filings, and any related claims.',
+    };
+  }
+
+  if (t === 'wage_recovery') {
+    const intro = 'You are owed wages, overtime, or other pay and want a lawyer to help you recover them.';
+    if (slot(state, 'wages_owed_band')) points.push(`Amount owed: ${slot(state, 'wages_owed_band')}.`);
+    if (slot(state, 'wages_type')) points.push(`Type of pay: ${slot(state, 'wages_type')!.toLowerCase()}.`);
+    return {
+      intro,
+      points,
+      closing: 'A lawyer can pursue payment through Employment Standards or court, depending on the amount and the path that fits.',
+    };
+  }
+
+  if (t === 'employment_contract_review') {
+    const intro = 'You have an employment contract you want a lawyer to review before you commit.';
+    if (slot(state, 'tenure_band')) points.push(`Your situation: ${slot(state, 'tenure_band')!.toLowerCase()}.`);
+    return {
+      intro,
+      points,
+      closing: 'A lawyer can flag enforceability issues with termination clauses, non-competes, and bonus or commission terms.',
+    };
+  }
+
+  // ─── ESTATES — sub-types (Phase A/B) ───────────────────────────────
+
+  if (t === 'will_drafting') {
+    const intro = 'You want a lawyer to help you put a will in place.';
+    if (slot(state, 'estate_value_band')) points.push(`Approximate estate value: ${slot(state, 'estate_value_band')}.`);
+    if (slot(state, 'estate_complexity')) points.push(`What makes it more involved: ${slot(state, 'estate_complexity')!.toLowerCase()}.`);
+    return {
+      intro,
+      points,
+      closing: 'A lawyer can draft a will that reflects your wishes and meets the formal requirements that keep it from being challenged.',
+    };
+  }
+
+  if (t === 'power_of_attorney') {
+    const intro = 'You want a lawyer to help you put a power of attorney in place.';
+    if (slot(state, 'poa_type')) points.push(`Type of power of attorney: ${slot(state, 'poa_type')!.toLowerCase()}.`);
+    if (slot(state, 'poa_urgency')) points.push(`How time-sensitive: ${slot(state, 'poa_urgency')!.toLowerCase()}.`);
+    if (slot(state, 'poa_existing_documents')) points.push(`Existing documents: ${slot(state, 'poa_existing_documents')!.toLowerCase()}.`);
+    return {
+      intro,
+      points,
+      closing: 'A lawyer can prepare a power of attorney that fits your situation and runs cleanly when it is needed.',
+    };
+  }
+
+  if (t === 'probate') {
+    const intro = 'You are dealing with an estate that may need to go through probate, and you want a lawyer to guide the process.';
+    if (slot(state, 'will_status_probate')) points.push(`Will status: ${slot(state, 'will_status_probate')!.toLowerCase()}.`);
+    if (slot(state, 'estate_value_band')) points.push(`Approximate estate value: ${slot(state, 'estate_value_band')}.`);
+    return {
+      intro,
+      points,
+      closing: 'A lawyer can prepare the application, work with the court, and help you administer the estate without missteps.',
+    };
+  }
+
+  if (t === 'estate_dispute') {
+    const intro = 'You are in a dispute over an estate or a will, and you want a lawyer to assess your position.';
+    if (slot(state, 'estate_dispute_type')) points.push(`The dispute is about: ${slot(state, 'estate_dispute_type')!.toLowerCase()}.`);
+    if (slot(state, 'estate_dispute_role')) points.push(`Your role: ${slot(state, 'estate_dispute_role')!.toLowerCase()}.`);
+    if (slot(state, 'estate_court_status')) points.push(`Court status: ${slot(state, 'estate_court_status')!.toLowerCase()}.`);
+    return {
+      intro,
+      points,
+      closing: 'A lawyer can review the will, the estate, and the issue, and advise on the strongest way to protect what you are owed.',
+    };
+  }
+
+  // ─── Combined catch-all for employment_general + estates_general ───
+
+  if (t === 'employment_general' || t === 'estates_general') {
+    const family = t === 'employment_general' ? 'employment' : 'wills or estates';
+    return {
+      intro: `From what you described, this looks like ${t === 'employment_general' ? 'an' : 'a'} ${family} matter, but we need a bit more to know exactly which kind.`,
+      points: [],
+      closing: 'The firm will review the description and follow up to confirm what you need.',
+    };
+  }
+
   return {
     intro: 'Thank you. Here is what we understood from your description.',
     points: [],
