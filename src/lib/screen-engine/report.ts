@@ -20,61 +20,61 @@ function buildMatterSnapshot(state: EngineState): string {
   switch (state.matter_type) {
     case 'business_setup_advisory': {
       const sub = state.advisory_subtrack;
-      if (sub === 'buy_in_or_joining') return 'Corporate advisory — buying into or reviewing documents for an existing business.';
-      if (sub === 'partner_setup') return 'Corporate advisory — new business setup with one or more co-founders.';
-      if (sub === 'solo_setup') return 'Corporate advisory — sole-owner incorporation or structure guidance.';
-      return 'Corporate advisory — business setup matter.';
+      if (sub === 'buy_in_or_joining') return 'Corporate advisory: buying into or reviewing documents for an existing business.';
+      if (sub === 'partner_setup') return 'Corporate advisory: new business setup with one or more co-founders.';
+      if (sub === 'solo_setup') return 'Corporate advisory: sole-owner incorporation or structure guidance.';
+      return 'Corporate advisory: business setup matter.';
     }
     case 'shareholder_dispute':
-      return 'Corporate dispute — shareholder or co-owner conflict involving access to records, company control, or financial conduct.';
+      return 'Corporate dispute: shareholder or co-owner conflict involving access to records, company control, or financial conduct.';
     case 'unpaid_invoice':
-      return 'Commercial recovery — unpaid invoice or failure to pay for delivered work, goods, or services.';
+      return 'Commercial recovery: unpaid invoice or failure to pay for delivered work, goods, or services.';
     case 'contract_dispute':
-      return 'Commercial dispute — breach or denial of a business agreement.';
+      return 'Commercial dispute: breach or denial of a business agreement.';
     case 'vendor_supplier_dispute':
-      return 'Commercial dispute — billing error, overcharge, or non-delivery dispute with a vendor or supplier.';
+      return 'Commercial dispute: billing error, overcharge, or non-delivery dispute with a vendor or supplier.';
     case 'corporate_money_control':
-      return 'Corporate financial irregularity — concern about unauthorized transactions, missing funds, or financial misconduct within a company.';
+      return 'Corporate financial irregularity: concern about unauthorized transactions, missing funds, or financial misconduct within a company.';
     case 'corporate_general':
-      return 'Corporate/business matter — problem type not yet fully determined. Routing questions pending.';
+      return 'Corporate/business matter: problem type not yet fully determined. Routing questions pending.';
     case 'commercial_real_estate':
-      return 'Commercial real estate transaction — purchase, sale, or lease of office, retail, industrial, or investment property.';
+      return 'Commercial real estate transaction: purchase, sale, or lease of office, retail, industrial, or investment property.';
     case 'residential_purchase_sale':
-      return 'Residential real estate transaction — purchase or sale of a home, condo, or other dwelling.';
+      return 'Residential real estate transaction: purchase or sale of a home, condo, or other dwelling.';
     case 'real_estate_litigation':
-      return 'Real estate litigation — dispute over a transaction, deposit, title, boundary, or alleged misrepresentation.';
+      return 'Real estate litigation: dispute over a transaction, deposit, title, boundary, or alleged misrepresentation.';
     case 'landlord_tenant':
-      return 'Landlord-tenant matter — dispute over rent, possession, lease terms, or tenancy obligations.';
+      return 'Landlord-tenant matter: dispute over rent, possession, lease terms, or tenancy obligations.';
     case 'construction_lien':
-      return 'Construction Act matter — unpaid contractor or subcontractor seeking lien preservation, perfection, or recovery.';
+      return 'Construction Act matter: unpaid contractor or subcontractor seeking lien preservation, perfection, or recovery.';
     case 'preconstruction_condo':
-      return 'Pre-construction condo matter — issue with builder agreement, deposits, delayed closing, or assignment of a unit.';
+      return 'Pre-construction condo matter: issue with builder agreement, deposits, delayed closing, or assignment of a unit.';
     case 'mortgage_dispute':
-      return 'Mortgage matter — power-of-sale, default, refinance, or discharge dispute.';
+      return 'Mortgage matter: power-of-sale, default, refinance, or discharge dispute.';
     case 'real_estate_general':
-      return 'Real estate matter — problem type not yet fully determined. Routing questions pending.';
+      return 'Real estate matter: problem type not yet fully determined. Routing questions pending.';
     case 'wrongful_dismissal':
-      return 'Employment — wrongful or constructive dismissal claim. Caller has been let go (or treated such that they had to resign) and is exploring notice, severance, or damages.';
+      return 'Employment: wrongful or constructive dismissal claim. Caller has been let go (or treated such that they had to resign) and is exploring notice, severance, or damages.';
     case 'severance_review':
-      return 'Employment — severance package review and negotiation. Caller has been offered a severance package and wants legal review before signing.';
+      return 'Employment: severance package review and negotiation. Caller has been offered a severance package and wants legal review before signing.';
     case 'harassment_complaint':
-      return 'Employment — workplace harassment or human-rights complaint. May involve HRTO filing, civil action, or both.';
+      return 'Employment: workplace harassment or human-rights complaint. May involve HRTO filing, civil action, or both.';
     case 'wage_recovery':
-      return 'Employment — unpaid wages, overtime, vacation pay, or other ESA-governed amounts owed by an employer.';
+      return 'Employment: unpaid wages, overtime, vacation pay, or other ESA-governed amounts owed by an employer.';
     case 'employment_contract_review':
-      return 'Employment — contract review or negotiation (offer letter, restrictive covenant, NDA, or existing employment agreement).';
+      return 'Employment: contract review or negotiation (offer letter, restrictive covenant, NDA, or existing employment agreement).';
     case 'employment_general':
-      return 'Employment matter — workplace dispute, termination, severance, harassment, wages owed, or contract review. Sub-type not yet fully determined; routing questions pending.';
+      return 'Employment matter: workplace dispute, termination, severance, harassment, wages owed, or contract review. Sub-type not yet fully determined; routing questions pending.';
     case 'will_drafting':
-      return 'Estates — will drafting or update. May be a standalone will, a will + power of attorney package, or a more complex estate plan with trusts.';
+      return 'Estates: will drafting or update. Likely will-planning matter; scope may expand to include powers of attorney or trust planning depending on assets and family structure.';
     case 'power_of_attorney':
-      return 'Estates — power of attorney drafting (property and/or personal care). Often bundled with a will.';
+      return 'Estates: power of attorney drafting (property and/or personal care). Often bundled with a will.';
     case 'probate':
-      return 'Estates — probate application and estate administration. Includes Certificate of Appointment of Estate Trustee, Estate Information Return, and asset distribution.';
+      return 'Estates: probate application and estate administration. Includes Certificate of Appointment of Estate Trustee, Estate Information Return, and asset distribution.';
     case 'estate_dispute':
-      return 'Estates — dispute over a will, estate administration, or beneficiary entitlement. May involve will challenge, dependant support claim, pass-of-accounts, or beneficiary action against the executor.';
+      return 'Estates: dispute over a will, estate administration, or beneficiary entitlement. May involve will challenge, dependant support claim, pass-of-accounts, or beneficiary action against the executor.';
     case 'estates_general':
-      return 'Wills, estates, or planning matter — drafting a will or power of attorney, applying for probate, or dealing with an estate dispute. Sub-type not yet fully determined; routing questions pending.';
+      return 'Wills, estates, or planning matter: drafting a will or power of attorney, applying for probate, or dealing with an estate dispute. Sub-type not yet fully determined; routing questions pending.';
     case 'out_of_scope': {
       const areaLabels: Record<string, string> = {
         family: 'family law',
@@ -127,7 +127,7 @@ function buildLikelyServices(state: EngineState): string[] {
       const services = ['Demand letter to vendor'];
       const reason = slotVal(state, 'billing_dispute_reason');
       if (reason === 'Unauthorized or unexpected charges' || reason === 'Charged for something we did not receive') {
-        services.push('Commercial dispute — refund or chargeback strategy');
+        services.push('Commercial dispute: refund or chargeback strategy');
       }
       services.push('Contract review and advice on vendor terms');
       services.push('Civil claim or negotiated resolution');
@@ -430,20 +430,20 @@ function buildFeeEstimate(state: EngineState): string {
     }
     case 'unpaid_invoice': {
       const amount = slotVal(state, 'amount_at_stake');
-      if (!isConfirmed(state, 'amount_at_stake')) return `${prefix} Amount not confirmed — estimate not available.`;
+      if (!isConfirmed(state, 'amount_at_stake')) return `${prefix} Amount not confirmed: estimate not available.`;
       if (amount === 'Over $100,000' || amount === '$25,000–$100,000') return `${prefix} $4,000–$10,000+ (commercial dispute, meaningful amount).`;
       if (amount === '$5,000–$25,000') return `${prefix} $1,500–$4,000 (mid-range invoice recovery).`;
       return `${prefix} $500–$1,500 (lower-value claim).`;
     }
     case 'contract_dispute': {
       const amount = slotVal(state, 'amount_at_stake');
-      if (!isConfirmed(state, 'amount_at_stake')) return `${prefix} Amount not confirmed — estimate not available.`;
+      if (!isConfirmed(state, 'amount_at_stake')) return `${prefix} Amount not confirmed: estimate not available.`;
       if (amount === 'Over $100,000' || amount === '$25,000–$100,000') return `${prefix} $4,000–$10,000+`;
       return `${prefix} $1,500–$5,000 depending on complexity.`;
     }
     case 'vendor_supplier_dispute': {
       const amount = slotVal(state, 'amount_at_stake');
-      if (!isConfirmed(state, 'amount_at_stake')) return `${prefix} Amount not confirmed — estimate not available.`;
+      if (!isConfirmed(state, 'amount_at_stake')) return `${prefix} Amount not confirmed: estimate not available.`;
       if (amount === 'Over $100,000' || amount === '$25,000–$100,000') return `${prefix} $3,000–$8,000+ (commercial vendor dispute).`;
       if (amount === '$5,000–$25,000') return `${prefix} $1,000–$3,000 (mid-range billing dispute).`;
       return `${prefix} $500–$1,500 (lower-value vendor dispute).`;
@@ -453,13 +453,13 @@ function buildFeeEstimate(state: EngineState): string {
       if (!amount || amount === 'Unknown') return `${prefix} Amount unknown. Financial irregularity matters often involve $5,000–$50,000+ in legal fees depending on complexity and whether litigation is required.`;
       if (amount === 'Over $200,000') return `${prefix} $10,000–$30,000+ (major financial fraud matter with potential litigation).`;
       if (amount === '$50,000–$200,000') return `${prefix} $5,000–$15,000+ (significant irregularity requiring investigation and legal strategy).`;
-      return `${prefix} $3,000–$8,000 (financial irregularity — scope depends on whether civil or criminal action follows).`;
+      return `${prefix} $3,000–$8,000 (financial irregularity: scope depends on whether civil or criminal action follows).`;
     }
     case 'corporate_general':
       return `${prefix} Scope not yet determined. Depends on matter type once routing is complete.`;
     case 'commercial_real_estate': {
       const amt = slotVal(state, 'commercial_re_amount');
-      if (!amt || amt === 'Not sure') return `${prefix} Value not confirmed — typical commercial closing $4,000–$15,000+ depending on transaction size.`;
+      if (!amt || amt === 'Not sure') return `${prefix} Value not confirmed: typical commercial closing $4,000–$15,000+ depending on transaction size.`;
       if (amt === 'Over $10M') return `${prefix} $15,000–$50,000+ (large commercial transaction with full due diligence).`;
       if (amt === '$2M–$10M') return `${prefix} $8,000–$20,000 (mid-large commercial transaction).`;
       if (amt === '$500,000–$2M') return `${prefix} $4,000–$10,000 (commercial transaction with standard due diligence).`;
@@ -476,7 +476,7 @@ function buildFeeEstimate(state: EngineState): string {
     }
     case 'real_estate_litigation': {
       const amt = slotVal(state, 'litigation_amount');
-      if (!amt || amt === 'Not sure') return `${prefix} Amount not confirmed — estimate not available.`;
+      if (!amt || amt === 'Not sure') return `${prefix} Amount not confirmed: estimate not available.`;
       if (amt === 'Over $500,000') return `${prefix} $25,000–$75,000+ (high-value real estate litigation, full discovery and trial scope).`;
       if (amt === '$100,000–$500,000') return `${prefix} $10,000–$30,000+ (substantial real estate dispute).`;
       if (amt === '$25,000–$100,000') return `${prefix} $5,000–$12,000 (mid-range real estate dispute).`;
@@ -493,17 +493,17 @@ function buildFeeEstimate(state: EngineState): string {
     }
     case 'construction_lien': {
       const amt = slotVal(state, 'lien_amount');
-      if (!amt || amt === 'Not sure') return `${prefix} Amount not confirmed — estimate not available.`;
+      if (!amt || amt === 'Not sure') return `${prefix} Amount not confirmed: estimate not available.`;
       if (amt === 'Over $500,000') return `${prefix} $15,000–$50,000+ (large construction lien matter, possible reference proceeding).`;
       if (amt === '$100,000–$500,000') return `${prefix} $7,000–$20,000 (substantial lien matter).`;
       if (amt === '$25,000–$100,000') return `${prefix} $4,000–$10,000 (mid-range lien recovery).`;
-      return `${prefix} $2,000–$5,000 (lower-value lien — assess whether process cost is justified).`;
+      return `${prefix} $2,000–$5,000 (lower-value lien: assess whether process cost is justified).`;
     }
     case 'preconstruction_condo': {
       const amt = slotVal(state, 'precon_amount');
       const issue = slotVal(state, 'precon_issue');
       if (issue === 'Reviewing the contract before signing') return `${prefix} $750–$2,000 (pre-signing contract review).`;
-      if (!amt || amt === 'Not sure') return `${prefix} Amount not confirmed — typical preconstruction dispute $3,000–$10,000+.`;
+      if (!amt || amt === 'Not sure') return `${prefix} Amount not confirmed: typical preconstruction dispute $3,000–$10,000+.`;
       if (amt === 'Over $200,000') return `${prefix} $8,000–$25,000+ (significant builder dispute).`;
       if (amt === '$50,000–$200,000') return `${prefix} $4,000–$12,000 (mid-range preconstruction dispute).`;
       return `${prefix} $2,000–$5,000 (lower-value preconstruction matter).`;
@@ -514,7 +514,7 @@ function buildFeeEstimate(state: EngineState): string {
       if (status === 'The lender has started the power-of-sale process' || status === 'I received a Notice of Sale') {
         return `${prefix} $5,000–$25,000+ (urgent power-of-sale defence or restraint action).`;
       }
-      if (!amt || amt === 'Not sure') return `${prefix} Amount not confirmed — typical mortgage dispute $3,000–$10,000+.`;
+      if (!amt || amt === 'Not sure') return `${prefix} Amount not confirmed: typical mortgage dispute $3,000–$10,000+.`;
       if (amt === 'Over $5M') return `${prefix} $15,000–$50,000+ (major mortgage dispute).`;
       if (amt === '$1M–$5M') return `${prefix} $7,000–$20,000.`;
       return `${prefix} $3,000–$8,000 (standard mortgage dispute).`;
@@ -528,7 +528,7 @@ function buildFeeEstimate(state: EngineState): string {
     case 'harassment_complaint':
       return `${prefix} HRTO filing + initial pleadings $3,000–$7,000. Full case to mediation $7,000–$15,000. Hearing-stage prosecution $15,000–$40,000+. Many HRTO matters resolve at mediation. Civil action route is often higher cost; recommend a route analysis before committing.`;
     case 'wage_recovery':
-      return `${prefix} ESA claim filing $500–$1,500 (operator note: the lead can file directly with the Ministry of Labour at no cost — confirm whether they need representation or just guidance). Civil claim for amounts over the ESA cap $2,000–$5,000.`;
+      return `${prefix} ESA claim filing $500–$1,500 (operator note: the lead can file directly with the Ministry of Labour at no cost: confirm whether they need representation or just guidance). Civil claim for amounts over the ESA cap $2,000–$5,000.`;
     case 'employment_contract_review':
       return `${prefix} Contract review (offer letter or existing agreement) $500–$1,500. Negotiation of terms before signing $1,500–$4,000. Drafting a fully custom contract (employer-side) $2,000–$5,000.`;
     case 'employment_general': {
@@ -607,12 +607,12 @@ function buildBestNextQuestion(state: EngineState): string {
     }
     case 'shareholder_dispute': {
       if (!isConfirmed(state, 'proof_of_ownership') && !isConfirmed(state, 'shareholder_agreement')) {
-        return 'Do you have any documentation of your ownership stake — a shareholder agreement, share certificates, or emails confirming it?';
+        return 'Do you have any documentation of your ownership stake: a shareholder agreement, share certificates, or emails confirming it?';
       }
       if (!isConfirmed(state, 'corporate_records_available')) {
         return "Have you been able to access the company's financial records or bank accounts since this started?";
       }
-      return 'What outcome would resolve this for you — a buyout, restored access, or recovery of funds?';
+      return 'What outcome would resolve this for you: a buyout, restored access, or recovery of funds?';
     }
     case 'unpaid_invoice': {
       if (!isConfirmed(state, 'amount_at_stake')) return 'How much is owed, and do you have an invoice or statement showing the amount?';
@@ -621,7 +621,7 @@ function buildBestNextQuestion(state: EngineState): string {
     }
     case 'contract_dispute': {
       if (!isConfirmed(state, 'written_terms') && !isConfirmed(state, 'contract_exists')) {
-        return 'Do you have the agreement in writing — a signed contract, emails, or messages confirming the terms?';
+        return 'Do you have the agreement in writing: a signed contract, emails, or messages confirming the terms?';
       }
       if (!isConfirmed(state, 'amount_at_stake')) return 'What is the value of what was agreed and what has been lost?';
       return 'Has the other side put their denial or position in writing?';
@@ -632,30 +632,30 @@ function buildBestNextQuestion(state: EngineState): string {
       return 'Has the vendor responded to your dispute in writing?';
     }
     case 'corporate_money_control': {
-      if (!isConfirmed(state, 'irregularity_type')) return 'Can you describe what financial irregularity you have observed — missing funds, unauthorized transfers, or something else?';
+      if (!isConfirmed(state, 'irregularity_type')) return 'Can you describe what financial irregularity you have observed: missing funds, unauthorized transfers, or something else?';
       if (!isConfirmed(state, 'evidence_of_irregularity')) return 'Do you have bank statements, transaction records, or other documents showing the irregularity?';
       return 'Has this been reported to any other directors, your accountant, or law enforcement?';
     }
     case 'corporate_general':
-      return 'Can you describe the business problem in more detail — who is involved, what happened, and what you need resolved?';
+      return 'Can you describe the business problem in more detail: who is involved, what happened, and what you need resolved?';
     case 'commercial_real_estate': {
       if (!isConfirmed(state, 'commercial_re_amount')) return 'What is the approximate transaction or lease value, and what type of commercial property is involved?';
-      if (!isConfirmed(state, 'commercial_re_stage')) return 'Where are you in the deal — exploring, in negotiations, or closing scheduled?';
+      if (!isConfirmed(state, 'commercial_re_stage')) return 'Where are you in the deal: exploring, in negotiations, or closing scheduled?';
       return 'What is the closing date, and what specific concern brings you to a lawyer now?';
     }
     case 'residential_purchase_sale': {
-      if (!isConfirmed(state, 'residential_re_stage')) return 'Where are you in the process — offer made, conditions outstanding, or closing pending?';
+      if (!isConfirmed(state, 'residential_re_stage')) return 'Where are you in the process: offer made, conditions outstanding, or closing pending?';
       if (!isConfirmed(state, 'residential_re_amount')) return 'What is the approximate property value, and what is the closing date?';
-      return 'What specifically do you need help with most — agreement review, closing, or an issue that has come up?';
+      return 'What specifically do you need help with most: agreement review, closing, or an issue that has come up?';
     }
     case 'real_estate_litigation': {
-      if (!isConfirmed(state, 'litigation_subject')) return 'Can you describe the dispute — failed closing, deposit, misrepresentation, or boundary?';
+      if (!isConfirmed(state, 'litigation_subject')) return 'Can you describe the dispute: failed closing, deposit, misrepresentation, or boundary?';
       if (!isConfirmed(state, 'litigation_documents')) return 'Do you have the agreement of purchase and sale or other written documentation?';
       return 'Has anything been filed in court yet, and what outcome are you hoping for?';
     }
     case 'landlord_tenant': {
       if (!isConfirmed(state, 'tenancy_type')) return 'Is this a residential or commercial tenancy?';
-      if (!isConfirmed(state, 'tenancy_issue')) return 'What is the dispute about — unpaid rent, eviction, lease breach, or damage?';
+      if (!isConfirmed(state, 'tenancy_issue')) return 'What is the dispute about: unpaid rent, eviction, lease breach, or damage?';
       return 'Has notice been given or has an LTB or court application been started?';
     }
     case 'construction_lien': {
@@ -664,17 +664,17 @@ function buildBestNextQuestion(state: EngineState): string {
       return 'Has a lien been preserved (registered) yet?';
     }
     case 'preconstruction_condo': {
-      if (!isConfirmed(state, 'precon_issue')) return 'What is the issue — delayed closing, deposit, assignment, or Tarion warranty?';
+      if (!isConfirmed(state, 'precon_issue')) return 'What is the issue: delayed closing, deposit, assignment, or Tarion warranty?';
       if (!isConfirmed(state, 'precon_amount')) return 'How much is at stake, and do you have the builder agreement?';
       return 'How is the developer responding so far?';
     }
     case 'mortgage_dispute': {
-      if (!isConfirmed(state, 'mortgage_status')) return 'What is happening right now — default notice, notice of sale, or power-of-sale process?';
+      if (!isConfirmed(state, 'mortgage_status')) return 'What is happening right now: default notice, notice of sale, or power-of-sale process?';
       if (!isConfirmed(state, 'mortgage_amount')) return 'What is the mortgage balance and the lender type (bank, private, credit union)?';
       return 'What documents and notices have you received from the lender?';
     }
     case 'real_estate_general':
-      return 'Can you describe the real estate matter in more detail — property type, role, and what needs to be resolved?';
+      return 'Can you describe the real estate matter in more detail: property type, role, and what needs to be resolved?';
     case 'wrongful_dismissal':
       return 'When did the termination happen, how long had you been employed, and what (if anything) has the employer offered so far?';
     case 'severance_review':
@@ -682,13 +682,13 @@ function buildBestNextQuestion(state: EngineState): string {
     case 'harassment_complaint':
       return 'Are you still employed there, what has the employer done in response so far, and do you have documentation of the conduct?';
     case 'wage_recovery':
-      return 'How much is owed and over what pay period — and have you filed anything with the Ministry of Labour yet?';
+      return 'How much is owed and over what pay period: and have you filed anything with the Ministry of Labour yet?';
     case 'employment_contract_review':
       return 'When do you need to sign by, and what specifically concerns you about the contract?';
     case 'employment_general':
-      return 'What specifically happened, and what outcome are you hoping for — a settlement, reinstatement, or wages owed?';
+      return 'What specifically happened, and what outcome are you hoping for: a settlement, reinstatement, or wages owed?';
     case 'will_drafting':
-      return 'Tell me about your family situation — spouse, children, dependants, blended family — and what you own (home, business, registered accounts).';
+      return 'Tell me about your family situation: spouse, children, dependants, blended family: and what you own (home, business, registered accounts).';
     case 'power_of_attorney':
       return 'Does the grantor still have decision-making capacity, and do they have any existing POAs that need to be revoked?';
     case 'probate':
@@ -972,7 +972,7 @@ function buildBandReasoningBullets(state: EngineState): string[] {
   }
   if (matter === 'employment_general') {
     const t = lower(state.input);
-    bullets.push('Employment matter — in-scope for firms with employment law in their LSO practice areas.');
+    bullets.push('Employment matter: in-scope for firms with employment law in their LSO practice areas.');
     if (/(fired|terminated|let go|laid off|dismissed|lost my job)/.test(t)) {
       bullets.push('Termination signal detected. Wrongful or constructive dismissal lane likely.');
     }
@@ -992,7 +992,7 @@ function buildBandReasoningBullets(state: EngineState): string[] {
 
   if (matter === 'estates_general') {
     const t = lower(state.input);
-    bullets.push('Wills and estates matter — in-scope for firms with wills / estates / trusts in their LSO practice areas.');
+    bullets.push('Wills and estates matter: in-scope for firms with wills / estates / trusts in their LSO practice areas.');
     if (/(make a will|need a will|write a will|new will)/.test(t)) {
       bullets.push('Will drafting signal. Standard planning matter; family situation and asset complexity drive scope.');
     }
@@ -1044,7 +1044,7 @@ function buildConfidenceCalibration(state: EngineState): string {
   if (total === 0) return 'No facts captured yet.';
   const parts: string[] = [];
   if (stated > 0) parts.push(`${stated} stated in description`);
-  if (confirmed > 0) parts.push(`${confirmed} confirmed in conversation`);
+  if (confirmed > 0) parts.push(`${confirmed} captured in follow-ups`);
   if (inferred > 0) parts.push(`${inferred} inferred from context`);
   return `Brief built from ${total} facts: ${parts.join(', ')}.`;
 }
@@ -1096,7 +1096,7 @@ function buildInferredSignals(state: EngineState): string[] {
 
 function buildOpenQuestions(state: EngineState): string[] {
   // SMS (and any other budgeted channel) intentionally stops asking after
-  // a small number of questions — completing a thin brief beats abandoning
+  // a small number of questions: completing a thin brief beats abandoning
   // a deep one. Surface the channel context honestly so the lawyer reads
   // remaining gaps as "still to confirm on the call", not as "the lead
   // didn't bother to answer."
@@ -1132,7 +1132,7 @@ function buildOpenQuestions(state: EngineState): string[] {
     delivery_proof: 'Delivery or performance proof not confirmed.',
     agreement_proof: 'Written terms or agreement not confirmed.',
     risk: 'Counterparty position not confirmed.',
-    dispute_subtype: 'Problem type not yet determined — routing question pending.',
+    dispute_subtype: 'Problem type not yet determined: routing question pending.',
     financial_irregularity: 'Nature of financial concern not yet described.',
     irregularity_evidence: 'Documentary evidence of irregularity not confirmed.',
     vendor_billing: 'Nature of billing dispute not yet described.',
@@ -1149,45 +1149,45 @@ function buildRiskFlags(state: EngineState): string[] {
   const flags: string[] = [];
 
   if (state.matter_type === 'shareholder_dispute') {
-    if (slotVal(state, 'dividend_or_money_issue') === 'Yes') flags.push('Money misuse alleged — potential for urgent injunctive relief.');
-    if (slotVal(state, 'corporate_records_available') === 'No') flags.push('Client locked out of records or accounts — access remedy may be needed.');
-    if (!isConfirmed(state, 'proof_of_ownership') && !isConfirmed(state, 'shareholder_agreement')) flags.push('Ownership not documented — case viability depends on establishing standing.');
+    if (slotVal(state, 'dividend_or_money_issue') === 'Yes') flags.push('Money misuse alleged: potential for urgent injunctive relief.');
+    if (slotVal(state, 'corporate_records_available') === 'No') flags.push('Client locked out of records or accounts: access remedy may be needed.');
+    if (!isConfirmed(state, 'proof_of_ownership') && !isConfirmed(state, 'shareholder_agreement')) flags.push('Ownership not documented: case viability depends on establishing standing.');
   }
 
   if (state.matter_type === 'unpaid_invoice') {
     const reason = slotVal(state, 'dispute_reason');
-    if (reason === 'Says work was not done properly') flags.push('Quality dispute raised — delivery proof is essential before advancing.');
-    if (!isConfirmed(state, 'proof_of_performance')) flags.push('Delivery proof not confirmed — case may be vulnerable without it.');
+    if (reason === 'Says work was not done properly') flags.push('Quality dispute raised: delivery proof is essential before advancing.');
+    if (!isConfirmed(state, 'proof_of_performance')) flags.push('Delivery proof not confirmed: case may be vulnerable without it.');
   }
 
   if (state.matter_type === 'contract_dispute') {
-    if (!isConfirmed(state, 'written_terms') && !isConfirmed(state, 'contract_exists')) flags.push('No written terms confirmed — verbal contract claims face a higher bar.');
+    if (!isConfirmed(state, 'written_terms') && !isConfirmed(state, 'contract_exists')) flags.push('No written terms confirmed: verbal contract claims face a higher bar.');
   }
 
   if (state.matter_type === 'vendor_supplier_dispute') {
     const reason = slotVal(state, 'billing_dispute_reason');
-    if (reason === 'Unauthorized or unexpected charges') flags.push('Unauthorized charges alleged — may support urgent chargeback or injunction.');
-    if (!isConfirmed(state, 'vendor_contract_exists')) flags.push('No vendor contract confirmed — dispute may rest on implied terms.');
+    if (reason === 'Unauthorized or unexpected charges') flags.push('Unauthorized charges alleged: may support urgent chargeback or injunction.');
+    if (!isConfirmed(state, 'vendor_contract_exists')) flags.push('No vendor contract confirmed: dispute may rest on implied terms.');
   }
 
   if (state.matter_type === 'corporate_money_control') {
     const irregType = slotVal(state, 'irregularity_type');
     if (irregType === 'Fraudulent or inflated invoices' || irregType === 'Unauthorized payments or transfers') {
-      flags.push('Serious financial misconduct alleged — potential criminal exposure alongside civil remedies.');
+      flags.push('Serious financial misconduct alleged: potential criminal exposure alongside civil remedies.');
     }
     if (slotVal(state, 'reported_to_anyone') === 'No, not yet') {
-      flags.push('Not yet reported — lawyer should advise on timing and obligations before reporting.');
+      flags.push('Not yet reported: lawyer should advise on timing and obligations before reporting.');
     }
-    if (!isConfirmed(state, 'evidence_of_irregularity')) flags.push('No documentary evidence confirmed — forensic review may be needed.');
+    if (!isConfirmed(state, 'evidence_of_irregularity')) flags.push('No documentary evidence confirmed: forensic review may be needed.');
   }
 
   if (state.matter_type === 'business_setup_advisory') {
-    if (slotVal(state, 'signed_anything') === 'Yes') flags.push('Client has already signed — legal review of existing documents is a priority.');
-    if (state.advisory_subtrack === 'buy_in_or_joining' && slotVal(state, 'documents_exist') === 'Yes') flags.push('Documents exist for review — timeline to signing matters.');
+    if (slotVal(state, 'signed_anything') === 'Yes') flags.push('Client has already signed: legal review of existing documents is a priority.');
+    if (state.advisory_subtrack === 'buy_in_or_joining' && slotVal(state, 'documents_exist') === 'Yes') flags.push('Documents exist for review: timeline to signing matters.');
   }
 
   if (state.matter_type === 'corporate_general') {
-    flags.push('Problem type not yet mapped to a specific corporate matter — routing question needed before assessment.');
+    flags.push('Problem type not yet mapped to a specific corporate matter: routing question needed before assessment.');
   }
 
   if (state.matter_type === 'wrongful_dismissal') {
@@ -1200,11 +1200,11 @@ function buildRiskFlags(state: EngineState): string[] {
   }
   if (state.matter_type === 'harassment_complaint') {
     flags.push('HRTO has a 1-year limitation from the last incident. Confirm the most recent incident date before assessing the route.');
-    flags.push('If harassment forced resignation, this is also a constructive-dismissal matter — different limitation, different forum, additional remedies.');
+    flags.push('If harassment forced resignation, this is also a constructive-dismissal matter: different limitation, different forum, additional remedies.');
   }
   if (state.matter_type === 'wage_recovery') {
     flags.push('ESA filing has a 6-month-back limit on recovery. If the matter is older, civil claim is the only real route.');
-    flags.push('Verify the lead is correctly classified as an employee — many "independent contractors" are employees at law.');
+    flags.push('Verify the lead is correctly classified as an employee: many "independent contractors" are employees at law.');
   }
   if (state.matter_type === 'employment_contract_review') {
     flags.push('Most pre-2020 termination clauses are unenforceable post-Waksdale. Flag this as a key review point.');
@@ -1226,12 +1226,12 @@ function buildRiskFlags(state: EngineState): string[] {
   }
   if (state.matter_type === 'employment_general') {
     const t = lower(state.input);
-    flags.push('Employment matter — sub-type pack not yet wired (Phase B). Confirm routing on the call.');
+    flags.push('Employment matter: sub-type pack not yet wired (Phase B). Confirm routing on the call.');
     if (/(fired|terminated|let go|laid off|dismissed|lost my job)/.test(t)) {
       flags.push('Limitation periods are tight for employment claims (2 years for wrongful dismissal in Ontario). Confirm event date before turning down.');
     }
     if (/severance/.test(t) && /(deadline|signed|sign by|signed already)/.test(t)) {
-      flags.push('Severance offer with a signing window. Review before signing — releases waive future claims.');
+      flags.push('Severance offer with a signing window. Review before signing: releases waive future claims.');
     }
     if (/(harassment|discriminat|human rights)/.test(t)) {
       flags.push('HRTO has a 1-year limitation from the last incident. Time-sensitive if recent.');
@@ -1240,12 +1240,12 @@ function buildRiskFlags(state: EngineState): string[] {
 
   if (state.matter_type === 'estates_general') {
     const t = lower(state.input);
-    flags.push('Estates matter — sub-type pack not yet wired (Phase B). Confirm routing on the call.');
+    flags.push('Estates matter: sub-type pack not yet wired (Phase B). Confirm routing on the call.');
     if (/(contest|challenge|dispute|fight over).*will/.test(t)) {
       flags.push('Estate litigation flagged. Limitation periods under the Estates Act are short; confirm dates of grant of probate before turning down.');
     }
     if (/(power of attorney|poa)/.test(t) && /(refused|denied|misused|stealing|theft)/.test(t)) {
-      flags.push('POA misuse alleged — potential urgent application to revoke or pass accounts.');
+      flags.push('POA misuse alleged: potential urgent application to revoke or pass accounts.');
     }
     if (/(passed away|died|deceased)/.test(t) && /(no will|without a will|intestate)/.test(t)) {
       flags.push('Intestacy signal. Succession Law Reform Act default distribution applies; confirm family tree.');
@@ -1593,13 +1593,13 @@ function buildStrategicConsiderations(state: EngineState): string[] {
       break;
     }
     case 'wrongful_dismissal':
-      out.push('Standard tools: common-law reasonable notice (Bardal factors — age, length of service, character of employment, availability of similar work) sets the upper bound. ESA minimums are the floor.');
+      out.push('Standard tools: common-law reasonable notice (Bardal factors: age, length of service, character of employment, availability of similar work) sets the upper bound. ESA minimums are the floor.');
       out.push('Termination clause review is the first move. A valid ESA-compliant clause caps notice at the statutory minimum. Most clauses fail one of three tests: vagueness, failure-to-meet-ESA, or post-Waksdale unenforceability.');
-      out.push('Mitigation duty: the lead has to look for comparable work. Document the job search early — bad mitigation evidence becomes the employer\'s defence.');
+      out.push('Mitigation duty: the lead has to look for comparable work. Document the job search early: bad mitigation evidence becomes the employer\'s defence.');
       out.push('Most files settle pre-claim. Demand letter → counter → settlement is the typical arc. Litigation only when the employer refuses to engage.');
       break;
     case 'severance_review':
-      out.push('Never sign at the table. Releases waive ALL claims including human-rights, WSIB, unpaid wages, bonus, and equity entitlements — not just the dismissal claim.');
+      out.push('Never sign at the table. Releases waive ALL claims including human-rights, WSIB, unpaid wages, bonus, and equity entitlements: not just the dismissal claim.');
       out.push('The signing deadline is rarely as firm as the employer says. A polite "I\'m getting legal advice on this" extends most offers without prejudice.');
       out.push('Compare the offer against Bardal expectation: is this 70% of likely common-law notice, or 30%? That ratio drives whether to negotiate or accept.');
       out.push('Tax structuring matters: retiring allowance up to a cap can roll into RRSP without immediate tax. Coordinate with the lead\'s accountant.');
@@ -1613,11 +1613,11 @@ function buildStrategicConsiderations(state: EngineState): string[] {
     case 'wage_recovery':
       out.push('Ministry of Labour route is free but capped (currently $10,000 recovery cap, 6-month-back limit). For larger amounts the civil claim is the only real option.');
       out.push('Civil claim path: Small Claims if under $35k; Superior Court above. Wage-recovery cases under Small Claims are often paralegal-tier work.');
-      out.push('Independent contractor vs employee misclassification is a frequent finding — many "contractors" are employees at law. CRA misclassification has tax consequences for both sides.');
+      out.push('Independent contractor vs employee misclassification is a frequent finding: many "contractors" are employees at law. CRA misclassification has tax consequences for both sides.');
       out.push('Vacation pay and overtime are the most-commonly-owed and easiest-to-prove categories. Final pay (failure to pay on termination) triggers ESA penalties.');
       break;
     case 'employment_contract_review':
-      out.push('Termination clause is the single most important review point — it caps the lead\'s notice entitlement on exit. Waksdale (2020 ONCA) struck down many standard termination clauses; most pre-2020 templates are now unenforceable.');
+      out.push('Termination clause is the single most important review point: it caps the lead\'s notice entitlement on exit. Waksdale (2020 ONCA) struck down many standard termination clauses; most pre-2020 templates are now unenforceable.');
       out.push('Restrictive covenants (non-compete, non-solicit, NDA) are presumptively unenforceable in Ontario without proper consideration and reasonableness. Defendant-side often has strong arguments.');
       out.push('Bonus and commission entitlement clauses determine what happens to those amounts on dismissal. Often poorly drafted; advise the lead what to push for.');
       out.push('Probation periods: ESA still applies after 3 months. A "6-month probation" clause is often unenforceable.');
@@ -1626,7 +1626,7 @@ function buildStrategicConsiderations(state: EngineState): string[] {
       const t = lower(state.input);
       if (/(fired|terminated|let go|laid off|dismissed|lost my job)/.test(t)) {
         out.push('Wrongful dismissal standard tools: common-law reasonable notice (Bardal factors), ESA minimums as the floor, mitigation duty on the employee. Most matters settle pre-claim.');
-        out.push('Confirm the employment contract carefully — a valid termination clause that meets ESA can cap notice at the statutory minimum.');
+        out.push('Confirm the employment contract carefully: a valid termination clause that meets ESA can cap notice at the statutory minimum.');
       }
       if (/severance/.test(t)) {
         out.push('Severance offers: never sign at the table. Review the release language for what claims are being waived (human rights, WSIB, bonus, equity) before signing.');
@@ -1653,7 +1653,7 @@ function buildStrategicConsiderations(state: EngineState): string[] {
       out.push('Two documents, two purposes: Continuing POA for property (financial decisions) and POA for personal care (health + living decisions). Drafted separately or in one document.');
       out.push('Springing vs immediate: property POA can take effect immediately on signing OR only on a triggering event (e.g. medical certificate of incapacity). Confirm the grantor\'s preference.');
       out.push('Multiple attorneys: jointly (all must agree) vs jointly-and-severally (any one can act). Severally is more practical for day-to-day; jointly forces consensus on big decisions.');
-      out.push('Capacity at time of signing is critical. If the grantor\'s capacity is in question, get a capacity assessment before drafting — a POA signed by an incapable grantor is void.');
+      out.push('Capacity at time of signing is critical. If the grantor\'s capacity is in question, get a capacity assessment before drafting: a POA signed by an incapable grantor is void.');
       break;
     case 'probate':
       out.push('Estate Information Return (EIR) is due 180 days from issuance of the Certificate of Appointment. Late filing carries penalties.');
@@ -1783,7 +1783,7 @@ function buildWhatToConfirm(state: EngineState): string[] {
     case 'severance_review':
       out.push('Signing deadline on the offer.');
       out.push('Full text of the release language (not just the headline number).');
-      out.push('Length of service, role, total compensation — for the Bardal comparison.');
+      out.push('Length of service, role, total compensation: for the Bardal comparison.');
       out.push('Whether any consideration has already been paid (some employers pay a small amount up front; this becomes the "fresh consideration" argument).');
       break;
     case 'harassment_complaint':
@@ -1791,7 +1791,7 @@ function buildWhatToConfirm(state: EngineState): string[] {
       out.push('Whether the lead is still employed there.');
       out.push('Documentation of the conduct: dates, witnesses, written communications, voice notes.');
       out.push('Whether an internal complaint was made and what the employer\'s response was.');
-      out.push('Whether the conduct is tied to a protected ground (sex, race, age, disability, etc.) — required for HRTO jurisdiction.');
+      out.push('Whether the conduct is tied to a protected ground (sex, race, age, disability, etc.): required for HRTO jurisdiction.');
       break;
     case 'wage_recovery':
       out.push('Exact unpaid amount and the pay period it covers.');
@@ -1811,7 +1811,7 @@ function buildWhatToConfirm(state: EngineState): string[] {
       out.push('Which side of the matter the client sits on (employee or employer).');
       if (/(fired|terminated|let go|laid off|dismissed|lost my job)/.test(t)) {
         out.push('Termination date, written notice or termination letter, and what the employer has paid out so far.');
-        out.push('Length of service, age, role, and salary — Bardal factors that drive reasonable notice.');
+        out.push('Length of service, age, role, and salary: Bardal factors that drive reasonable notice.');
         out.push('Whether the employment contract has a termination clause and whether it complies with ESA minimums.');
       }
       if (/severance/.test(t)) {
@@ -1828,14 +1828,14 @@ function buildWhatToConfirm(state: EngineState): string[] {
       break;
     }
     case 'will_drafting':
-      out.push('Family situation (spouse, children, dependants, blended family — especially second marriage).');
+      out.push('Family situation (spouse, children, dependants, blended family: especially second marriage).');
       out.push('Asset map: home, registered accounts, business interests, properties elsewhere, foreign assets.');
       out.push('Existing wills or POAs being replaced (and whether they were drafted in another jurisdiction).');
       out.push('Whether the lead wants the firm to be named executor or to act as solicitor for an external executor.');
       out.push('Guardianship plans if there are minor children.');
       break;
     case 'power_of_attorney':
-      out.push('Whether the grantor still has decision-making capacity (critical — a POA signed by an incapable grantor is void).');
+      out.push('Whether the grantor still has decision-making capacity (critical: a POA signed by an incapable grantor is void).');
       out.push('Whether existing POAs need to be revoked.');
       out.push('Springing vs immediate effect on the property POA.');
       out.push('Single attorney vs joint vs jointly-and-severally.');
@@ -1975,7 +1975,7 @@ function buildCrossSell(state: EngineState): string[] {
       break;
     case 'probate':
       out.push('Sale of real estate held by the estate (transactional matter, separate engagement).');
-      out.push('Tax filings for the deceased (terminal return) and the estate (T3) — refer to accountant.');
+      out.push('Tax filings for the deceased (terminal return) and the estate (T3): refer to accountant.');
       out.push('Beneficiary planning for the receiving beneficiaries (their own wills + tax planning on inheritance).');
       break;
     case 'estate_dispute':
@@ -1994,7 +1994,7 @@ function buildCrossSell(state: EngineState): string[] {
         out.push('Tax filings for the deceased and the estate (refer to accountant or in-house).');
       }
       if (/(contest|challenge|dispute|fight over).*will/.test(t)) {
-        out.push('Mediation services if estate litigation is opened — most disputes resolve before trial.');
+        out.push('Mediation services if estate litigation is opened: most disputes resolve before trial.');
       }
       break;
     }
@@ -2114,7 +2114,7 @@ function buildCallOpeners(state: EngineState): string[] {
     case 'severance_review':
       return [
         'Confirm signing deadline on the offer.',
-        'Confirm the full release language — what is being waived beyond the dismissal claim.',
+        'Confirm the full release language: what is being waived beyond the dismissal claim.',
         'Confirm length of service + comp for the Bardal comparison.',
         'Confirm whether any consideration has already been paid for the release.',
       ];
@@ -2160,7 +2160,7 @@ function buildCallOpeners(state: EngineState): string[] {
         out.push('Confirm whether the client has filed an ESA claim with the Ministry of Labour.');
       } else {
         out.push('Confirm what specifically the client needs help with: termination, severance, harassment, wages, contract, or something else.');
-        out.push('Confirm timeline — is anything imminent (sign by date, hearing date, last day of work)?');
+        out.push('Confirm timeline: is anything imminent (sign by date, hearing date, last day of work)?');
       }
       out.push('Confirm whether the client has spoken to another lawyer about this matter.');
       return out;

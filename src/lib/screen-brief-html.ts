@@ -163,9 +163,9 @@ function textBlock(text: string | null | undefined): string {
   return `<p class="section-body">${esc(t)}</p>`;
 }
 
-function bullets(items: readonly string[]): string {
+function bullets(items: readonly string[], emptyText: string = 'None confirmed'): string {
   if (!items || items.length === 0) {
-    return `<p class="section-body muted">None confirmed</p>`;
+    return `<p class="section-body muted">${esc(emptyText)}</p>`;
   }
   return `<ul class="bullet-list">${items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`;
 }
@@ -714,9 +714,9 @@ export function renderBriefHtmlServer(
       <section class="brief-group" data-group="facts">
         <h3 class="brief-group-title">Facts and reasoning</h3>
         <div class="section"><p class="section-title">Resolved facts</p>${factsWithProvenance(report.resolved_facts_v2, channel)}</div>
-        <div class="section"><p class="section-title">Inferred signals</p>${bullets(report.inferred_signals)}</div>
-        <div class="section"><p class="section-title">Open questions</p>${bullets(report.open_questions)}</div>
-        <div class="section"><p class="section-title">Risk flags</p>${riskFlagsBlock(report.risk_flags)}</div>
+        <div class="section"><p class="section-title">Inferred signals</p>${bullets(report.inferred_signals, 'No additional inferred signals.')}</div>
+        <div class="section"><p class="section-title">Open questions</p>${bullets(report.open_questions, 'No specific open questions auto-generated. The callback will surface them.')}</div>
+        <div class="section"><p class="section-title">Standing watchpoints for this matter type</p>${riskFlagsBlock(report.risk_flags)}</div>
       </section>
     `);
   }
