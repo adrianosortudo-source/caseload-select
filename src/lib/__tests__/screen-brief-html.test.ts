@@ -121,8 +121,11 @@ describe('renderBriefHtmlServer — four-axis breakdown', () => {
       'en',
     );
     // Complexity 9/10 (raw, no inversion). And the v1 "1/10" inversion never appears.
-    expect(html).toMatch(/Complexity[\s\S]*?9\/10/);
-    expect(html).not.toMatch(/Simplicity[\s\S]*?1\/10/);
+    // The /10 denominator sits in its own span as of 2026-06-07 (CSS sizes it
+    // smaller than the numerator); the regex tolerates tags between the score
+    // and the denominator.
+    expect(html).toMatch(/Complexity[\s\S]*?9[\s\S]*?\/10/);
+    expect(html).not.toMatch(/Simplicity[\s\S]*?1[\s\S]*?\/10/);
   });
 
   it('marks a high-complexity axis as drag (red-ish border)', () => {
@@ -198,11 +201,17 @@ describe('renderBriefHtmlServer — four-axis breakdown', () => {
 
   it('emits the raw axis score as N/10 for each axis (Complexity no longer inverted)', () => {
     const html = renderBriefHtmlServer(buildFakeReport(), 'web', 'en');
-    // Each axis renders a raw 0-10 score inside its own card.
-    expect(html).toMatch(/Value[\s\S]*?6\/10/);
-    expect(html).toMatch(/Complexity[\s\S]*?4\/10/);
-    expect(html).toMatch(/Urgency[\s\S]*?5\/10/);
-    expect(html).toMatch(/Readiness[\s\S]*?7\/10/);
+    // Each axis renders a raw 0-10 score inside its own card. As of the
+    // 2026-06-07 scan-speed pass, the renderer wraps the "/10"
+    // denominator in its own span (.axis-block-score-denom) so the CSS
+    // can size it smaller than the numerator. The score number and the
+    // /10 are therefore not adjacent in the raw HTML; we match each
+    // axis name followed by the score number followed by /10 with
+    // arbitrary tags in between.
+    expect(html).toMatch(/Value[\s\S]*?6[\s\S]*?\/10/);
+    expect(html).toMatch(/Complexity[\s\S]*?4[\s\S]*?\/10/);
+    expect(html).toMatch(/Urgency[\s\S]*?5[\s\S]*?\/10/);
+    expect(html).toMatch(/Readiness[\s\S]*?7[\s\S]*?\/10/);
   });
 
   it('renders a qualitative band label (Low / Moderate / High) per axis card', () => {

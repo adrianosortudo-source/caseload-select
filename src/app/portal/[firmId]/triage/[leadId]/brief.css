@@ -1033,3 +1033,410 @@
     padding: 16px 18px;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Scan-speed pass (2026-06-07)
+   ════════════════════════════════════════════════════════════════════════
+
+   Goal: the brief should read as a triage instrument, not a memo. Each
+   section gains a sharper internal hierarchy and a tighter rhythm.
+
+   New primitives:
+
+     .kicker                       Oxanium 700, 0.65rem, 0.14em tracking,
+                                   uppercase. The micro-heading the eye
+                                   uses to bookmark a section without
+                                   reading the whole block.
+
+     .decision-snapshot            Compact lead sentence in the Decision
+                                   block. Reads in one beat.
+
+     .decision-why                 Single short paragraph immediately
+                                   below the snapshot.
+
+     .callback-scope-grid          3-column grid of compact items the
+                                   callback needs to confirm. Each item
+                                   is a flat panel with a top accent
+                                   rule, never a card.
+
+     .commercial-layout            Fee on the left, services on the right.
+     .commercial-services          Stack of two kicker-led lists
+                                   (Primary likely work / Likely add-ons).
+
+     .callprep-grid                3-column checklist: Open with /
+                                   Confirm next / Do not quote until.
+                                   Replaces the navy callout entirely.
+
+     .checklist li                 Tight, square-bullet checklist row.
+                                   Smaller than .bullet-list, sharper
+                                   tracking, less line height.
+
+     .fact-clusters                Container for the clustered facts.
+     .fact-cluster                 Single cluster (Matter / Family /
+                                   Timing / Contact) with a kicker.
+
+   Mobile reordering (under 1180px): the brief-main-grid flattens via
+   display:contents on its two children, putting all eight blocks into a
+   single flex column. `order` keys then put high-priority blocks (Decision,
+   Commercial, Call prep, Watchpoints, Open questions, Inferred signals)
+   above the audit-style content (Resolved facts, Queue posture). The
+   sticky right-rail stops being sticky in that layout.
+
+   Mobile under 760px: the cover collapses to a single tight strip, the
+   3-up grids stack to 1-column, and the action bar at the bottom of the
+   page (TriageActionBar.tsx) remains accessible because the whole brief
+   uses pb-32 on its wrapper page.
+ ════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Kicker (micro-heading) ─────────────────────────────────────────── */
+
+.brief-frame .kicker {
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bf-muted);
+  margin: 0 0 8px;
+  line-height: 1.2;
+}
+
+.brief-frame .checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.brief-frame .checklist li {
+  position: relative;
+  padding: 2px 0 2px 14px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--bf-black);
+}
+.brief-frame .checklist li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 9px;
+  width: 5px;
+  height: 5px;
+  background: var(--bf-navy);
+}
+
+/* ─── Decision section ───────────────────────────────────────────────── */
+
+.brief-frame .decision-snapshot {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1.4;
+  color: var(--bf-black);
+  margin: 0 0 8px;
+}
+
+.brief-frame .decision-why {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--bf-body);
+  margin: 0 0 18px;
+}
+
+.brief-frame .callback-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 18px;
+}
+
+.brief-frame .callback-scope-item {
+  background: var(--bf-white);
+  border-top: 2px solid var(--bf-navy);
+  padding: 10px 12px 12px;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--bf-black);
+}
+
+.brief-frame .decision-axis {
+  margin-top: 4px;
+}
+
+/* The headline group's old per-section dotted divider conflicts with the
+   new compact layout (it gave every nested .section a 14px margin). The
+   new structure no longer uses .section wrappers inside data-group=headline,
+   so this is a no-op for the new render path. */
+
+/* ─── Commercial Angle ───────────────────────────────────────────────── */
+
+.brief-frame .commercial-layout {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.brief-frame .commercial-fee {
+  /* Fee block keeps prominence; the kicker labels it without adding card chrome. */
+}
+
+.brief-frame .commercial-fee .kicker {
+  margin-bottom: 6px;
+}
+
+.brief-frame .commercial-services {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.brief-frame .commercial-block .kicker {
+  color: var(--bf-navy);
+}
+
+/* ─── Call preparation 3-up checklist ────────────────────────────────── */
+
+.brief-frame .callprep-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.brief-frame .callprep-block {
+  padding: 12px 14px;
+  background: var(--bf-white);
+  border-top: 2px solid var(--bf-navy);
+}
+
+.brief-frame .callprep-block .kicker {
+  color: var(--bf-navy);
+  margin-bottom: 8px;
+}
+
+/* ─── Axis card hierarchy ────────────────────────────────────────────── */
+
+/* Strengthen the score so it reads first, then the meta (axis + band)
+   then the prose. Override the brand-aligned rules above for the new
+   markup shape. */
+.brief-frame .axis-block-head {
+  align-items: flex-start;
+  padding-bottom: 8px;
+}
+.brief-frame .axis-block-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.brief-frame .axis-block-name {
+  color: var(--bf-muted);
+}
+.brief-frame .axis-block-band-label {
+  /* Status-label spec, kept square + Oxanium. Smaller here than as a
+     standalone tag (sits next to the score). */
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  letter-spacing: 0.14em;
+  border-width: 1px;
+}
+.brief-frame .axis-block-score {
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.7rem;
+  line-height: 1;
+  color: var(--bf-navy);
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.brief-frame .axis-block-score-denom {
+  font-size: 0.55em;
+  font-weight: 600;
+  color: var(--bf-muted);
+  letter-spacing: 0.04em;
+  margin-left: 1px;
+}
+.brief-frame .axis-block-prose {
+  font-size: 0.83rem;
+  line-height: 1.5;
+  color: var(--bf-body);
+  margin-top: 8px;
+}
+
+/* ─── Sidebar status modules (was: cards) ────────────────────────────── */
+
+/* The right rail goes from "stack of soft cards" to "stack of compact
+   status modules": top accent rule, no card frame, less padding, denser
+   information. The .sidebar-card class stays so the existing posture
+   block (lots of dt/dd rows) still has its own frame; the other three
+   (Watchpoints, Open questions, Inferred signals) become flush modules. */
+
+.brief-frame .sidebar-card-watchpoints,
+.brief-frame .sidebar-card-questions,
+.brief-frame .sidebar-card-signals {
+  background: transparent;
+  border: none;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--bf-border);
+}
+
+.brief-frame .sidebar-card-watchpoints .sidebar-title,
+.brief-frame .sidebar-card-questions .sidebar-title,
+.brief-frame .sidebar-card-signals .sidebar-title {
+  font-size: 0.62rem;
+  padding-bottom: 0;
+  border-bottom: none;
+  color: var(--bf-muted);
+}
+
+.brief-frame .sidebar-card-posture {
+  padding: 12px 14px;
+}
+
+.brief-frame .sidebar-card-posture .sidebar-title {
+  font-size: 0.62rem;
+}
+
+.brief-frame .brief-main-right {
+  gap: 12px;
+}
+
+/* ─── Facts clustering ───────────────────────────────────────────────── */
+
+.brief-frame .fact-clusters {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.brief-frame .fact-cluster .kicker {
+  color: var(--bf-navy);
+  margin-bottom: 6px;
+}
+
+.brief-frame .fact-cluster + .fact-cluster {
+  border-top: 1px solid var(--bf-border);
+  padding-top: 14px;
+}
+
+/* ─── Mobile reordering (under 1180px) ───────────────────────────────── */
+/*
+ * The brief-main-grid flattens its two children into a single flex column
+ * via display:contents, then explicit `order` values weave the right-rail
+ * content into the natural reading flow. Decision -> Commercial ->
+ * Call prep -> Watchpoints -> Open questions -> Inferred signals ->
+ * Resolved facts -> Queue posture. The lawyer sees triage-critical content
+ * first; audit-style content (facts table, queue meta) sits at the bottom.
+ */
+
+@media (max-width: 1180px) {
+  .brief-frame .brief-main-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .brief-frame .brief-main-left,
+  .brief-frame .brief-main-right {
+    display: contents;
+  }
+  .brief-frame .brief-group[data-group="headline"]   { order: 1; }
+  .brief-frame .brief-group[data-group="commercial"] { order: 2; }
+  .brief-frame .brief-group[data-group="callprep"]   { order: 3; }
+  .brief-frame .sidebar-card-watchpoints             { order: 4; }
+  .brief-frame .sidebar-card-questions               { order: 5; }
+  .brief-frame .sidebar-card-signals                 { order: 6; }
+  .brief-frame .brief-group[data-group="facts"]      { order: 7; }
+  .brief-frame .sidebar-card-posture                 { order: 8; }
+  /* When flattened, the demoted sidebar modules need a frame back; the
+     transparent-top-rule pattern reads as a divider mid-flow. */
+  .brief-frame .sidebar-card-watchpoints,
+  .brief-frame .sidebar-card-questions,
+  .brief-frame .sidebar-card-signals {
+    padding: 14px 16px;
+    border: 1px solid var(--bf-border);
+  }
+  .brief-frame .sidebar-card-watchpoints .sidebar-title,
+  .brief-frame .sidebar-card-questions .sidebar-title,
+  .brief-frame .sidebar-card-signals .sidebar-title {
+    border-bottom: 1px solid var(--bf-border);
+    padding-bottom: 6px;
+  }
+}
+
+/* ─── Mobile compaction (under 760px) ────────────────────────────────── */
+/*
+ * 3-up grids collapse to 1-column. Cover headline shrinks. Group padding
+ * tightens. Axis grid stacks. Fact rows already collapse via the earlier
+ * 640px breakpoint. The action bar lives outside .brief-frame (in the page
+ * wrapper) and stays accessible because the brief page already adds pb-32.
+ */
+
+@media (max-width: 760px) {
+  .brief-frame .brief-group {
+    padding: 16px 18px;
+  }
+  .brief-frame .decision-snapshot {
+    font-size: 1rem;
+  }
+  .brief-frame .decision-why {
+    font-size: 0.88rem;
+    margin-bottom: 14px;
+  }
+  .brief-frame .callback-scope-grid,
+  .brief-frame .callprep-grid,
+  .brief-frame .commercial-layout {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .brief-frame .commercial-fee {
+    /* Fee goes first on mobile (it's the dominant business signal); the
+       grid -> 1fr already stacks it above services in DOM order. */
+  }
+  .brief-frame .axis-block-score {
+    font-size: 1.5rem;
+  }
+}
+
+/* ─── Mobile compaction (under 480px, phone portrait) ─────────────────── */
+
+@media (max-width: 480px) {
+  .brief-frame .brief-cover {
+    margin: -8px -8px 14px;
+  }
+  .brief-frame .brief-cover-left {
+    padding: 18px 18px 16px;
+    gap: 8px;
+  }
+  .brief-frame .cover-eyebrow {
+    font-size: 0.66rem;
+  }
+  .brief-frame .cover-headline {
+    font-size: 1.4rem;
+    line-height: 1.15;
+  }
+  .brief-frame .cover-summary {
+    font-size: 0.88rem;
+  }
+  .brief-frame .brief-decision-band {
+    padding: 14px 18px 18px;
+    gap: 12px;
+  }
+  .brief-frame .brief-live-timer-cover {
+    font-size: 1.2rem;
+  }
+  .brief-frame .nap-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .brief-frame .brief-group {
+    padding: 14px 16px;
+  }
+  .brief-frame .brief-group-title {
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+  }
+  .brief-frame .callback-scope-item,
+  .brief-frame .callprep-block {
+    padding: 10px 12px;
+  }
+}

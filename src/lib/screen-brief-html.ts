@@ -216,6 +216,105 @@ function isDefaultProvenance(source: string): boolean {
   return source === 'stated' || source === 'explicit_from_caller';
 }
 
+/**
+ * Cluster a fact's label into one of four operational buckets so the
+ * Resolved facts section reads as a grouped list instead of a flat one.
+ * The buckets are matter / family / timing / contact: the eye finds
+ * Family-related info under Family, Timing-related info under Timing, etc.
+ *
+ * Conservative heuristic: contact labels are the four NAP fields (already
+ * surfaced at the top of the brief but kept here for the audit trail);
+ * family covers marital / children / executor / relationship slots;
+ * timing covers hiring_timeline / deadline / urgency / dates. Everything
+ * else falls into the matter bucket. The bucket is presentational only,
+ * so a miss-cluster is a UX nit, not a correctness defect.
+ */
+type FactCluster = 'matter' | 'family' | 'timing' | 'contact';
+
+function categorizeFact(label: string): FactCluster {
+  const l = (label ?? '').toLowerCase().trim();
+  if (
+    l === 'name' ||
+    l === 'phone' ||
+    l === 'email' ||
+    l === 'postal code' ||
+    l.includes('caller-id') ||
+    l.includes('caller id') ||
+    l === 'surname spelling'
+  ) {
+    return 'contact';
+  }
+  if (
+    l.includes('marital') ||
+    l.includes('children') ||
+    l.includes('dependant') ||
+    l.includes('spouse') ||
+    l.includes('relationship') ||
+    l.includes('executor') ||
+    l.includes('beneficiar') ||
+    l.includes('estate trustee')
+  ) {
+    return 'family';
+  }
+  if (
+    l.includes('timeline') ||
+    l.includes('deadline') ||
+    l.includes('urgency') ||
+    l.includes('date') ||
+    l.includes('hiring') ||
+    l.includes('closing') ||
+    l.includes('how soon') ||
+    l.includes('window')
+  ) {
+    return 'timing';
+  }
+  return 'matter';
+}
+
+const CLUSTER_LABELS: Record<FactCluster, string> = {
+  matter: 'Matter',
+  family: 'Family',
+  timing: 'Timing',
+  contact: 'Contact',
+};
+
+/**
+ * Render the Resolved facts list grouped into matter / family / timing /
+ * contact clusters with a small kicker subhead per group. Falls back to
+ * the flat rendering when there are fewer than 3 facts (clustering one or
+ * two items adds friction without benefit).
+ */
+function clusteredFacts(facts: ResolvedFact[], channel: string | null | undefined): string {
+  if (!facts || facts.length === 0) {
+    return `<p class="section-body muted">No confirmed facts yet.</p>`;
+  }
+  if (facts.length < 3) {
+    return factsWithProvenance(facts, channel);
+  }
+  const buckets: Record<FactCluster, ResolvedFact[]> = {
+    matter: [],
+    family: [],
+    timing: [],
+    contact: [],
+  };
+  for (const f of facts) {
+    if (!f || !f.label) continue;
+    buckets[categorizeFact(f.label)].push(f);
+  }
+  const order: FactCluster[] = ['matter', 'family', 'timing', 'contact'];
+  const blocks = order
+    .filter((k) => buckets[k].length > 0)
+    .map(
+      (k) => `
+        <div class="fact-cluster" data-cluster="${esc(k)}">
+          <p class="kicker">${esc(CLUSTER_LABELS[k])}</p>
+          ${factsWithProvenance(buckets[k], channel)}
+        </div>`,
+    )
+    .join('');
+  return `<div class="fact-clusters">${blocks}</div>`;
+}
+
 function factsWithProvenance(facts: ResolvedFact[], channel: string | null | undefined): string {
   if (!facts || facts.length === 0) {
     return `<p class="section-body muted">No confirmed facts yet.</p>`;
@@ -643,13 +742,19 @@ function axisCard(
   prose: string,
   kind: 'positive' | 'pending' | 'drag',
 ): string {
+  // 2026-06-07 hierarchy pass: score becomes the primary visual element,
+  // axis name retreats to a small kicker, band label sits next to it, and
+  // the matter-aware prose carries the explanation. The CSS does the heavy
+  // lifting; this template just sets the structural anchors.
   return `
     <div class="axis-block axis-block-${esc(kind)}" data-axis="${esc(axis)}">
       <div class="axis-block-head">
-        <span class="axis-block-name">${esc(name)}</span>
-        <span class="axis-block-score">${score}/10</span>
+        <div class="axis-block-meta">
+          <span class="axis-block-name">${esc(name)}</span>
+          <span class="axis-block-band-label">${esc(band)}</span>
+        </div>
+        <span class="axis-block-score">${score}<span class="axis-block-score-denom">/10</span></span>
       </div>
-      <p class="axis-block-band"><span class="axis-block-band-label">${esc(band)}</span></p>
       <p class="axis-block-prose">${esc(prose)}</p>
     </div>`;
 }
@@ -986,33 +1091,115 @@ export function renderBriefHtmlServer(
       ? `<p class="facts-counter">${esc(report.confidence_calibration)} Channel default for unflagged rows: ${esc(defaultProvenance)}.</p>`
       : `<p class="facts-counter">Channel default for unflagged rows: ${esc(defaultProvenance)}.</p>`;
 
+    // 2026-06-07 hierarchy + scan-speed pass: the Decision block compresses
+    // matter snapshot + why-it-matters into a tight pair, then surfaces the
+    // 3 most important scope checks as a compact grid (no nested section
+    // subtitles). The axis grid sits directly below as the "why this band"
+    // block, with its own internal hierarchy.
+    const scopeItems = (report.strategic_considerations ?? []).slice(0, 3);
+    const scopeGrid =
+      scopeItems.length > 0
+        ? `<div class="callback-scope-grid">${scopeItems.map((s) => `<div class="callback-scope-item">${esc(s)}</div>`).join('')}</div>`
+        : `<p class="section-body muted">No specific scope questions flagged. Confirm the standard onboarding facts on the callback.</p>`;
+
+    // Commercial Angle: fee remains prominent, services split into Primary
+    // (the first 2 items, treated as the most likely engagement shape) and
+    // Add-ons (the rest of likely_legal_services plus cross_sell_opportunities,
+    // both capped so the second column stays scannable, not a wall).
+    const primaryWork = (report.likely_legal_services ?? []).slice(0, 2);
+    const addOns = [
+      ...((report.likely_legal_services ?? []).slice(2)),
+      ...((report.cross_sell_opportunities ?? [])),
+    ].slice(0, 5);
+    const commercialServices = `
+      <div class="commercial-services">
+        ${
+          primaryWork.length > 0
+            ? `<div class="commercial-block">
+                <p class="kicker">Primary likely work</p>
+                <ul class="checklist">${primaryWork.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>
+              </div>`
+            : ''
+        }
+        ${
+          addOns.length > 0
+            ? `<div class="commercial-block">
+                <p class="kicker">Likely add-ons</p>
+                <ul class="checklist">${addOns.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>
+              </div>`
+            : ''
+        }
+      </div>`;
+
+    // Call Preparation: the navy callout is replaced by a 3-up checklist.
+    // Open with -> the call openers. Confirm next -> the strategic checks
+    // (the same items that drive the Decision scope grid; useful here as a
+    // callback walkthrough). Do not quote until -> the what-to-confirm
+    // gates that protect the fee quote from being premature.
+    const openWith = (report.call_openers ?? []).slice(0, 3);
+    const confirmNext = (report.strategic_considerations ?? []).slice(0, 4);
+    const doNotQuote = (report.what_to_confirm ?? []).slice(0, 4);
+    const callPrepGrid = `
+      <div class="callprep-grid">
+        <div class="callprep-block">
+          <p class="kicker">Open with</p>
+          ${
+            openWith.length > 0
+              ? `<ul class="checklist">${openWith.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>`
+              : '<p class="section-body muted">No openers flagged.</p>'
+          }
+        </div>
+        <div class="callprep-block">
+          <p class="kicker">Confirm next</p>
+          ${
+            confirmNext.length > 0
+              ? `<ul class="checklist">${confirmNext.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>`
+              : '<p class="section-body muted">No specific confirms flagged.</p>'
+          }
+        </div>
+        <div class="callprep-block">
+          <p class="kicker">Do not quote until</p>
+          ${
+            doNotQuote.length > 0
+              ? `<ul class="checklist">${doNotQuote.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>`
+              : '<p class="section-body muted">No quote-gating checks flagged.</p>'
+          }
+        </div>
+      </div>`;
+
     leftBody = `
       <section class="brief-group" data-group="headline">
         <h3 class="brief-group-title">Decision</h3>
-        <div class="section"><p class="section-title">Matter snapshot</p>${textBlock(report.matter_snapshot)}</div>
-        <div class="section"><p class="section-title">Why this matters</p>${textBlock(report.why_it_matters)}</div>
-        <div class="section"><p class="section-title">What the callback needs to resolve</p>${bullets(report.strategic_considerations, 'No specific scope questions flagged. Confirm the standard onboarding facts on the callback.')}</div>
-        <div class="section"><p class="section-title">Why this is Band ${esc(report.band)}</p><div class="axis-grid">${axisBreakdown(report.axis_reasoning, matterType, practiceArea)}</div></div>
+        <p class="decision-snapshot">${esc((report.matter_snapshot ?? '').trim())}</p>
+        ${report.why_it_matters ? `<p class="decision-why">${esc(report.why_it_matters.trim())}</p>` : ''}
+        <p class="kicker">Next call should confirm</p>
+        ${scopeGrid}
+        <div class="decision-axis">
+          <p class="kicker">Why this is Band ${esc(report.band)}</p>
+          <div class="axis-grid">${axisBreakdown(report.axis_reasoning, matterType, practiceArea)}</div>
+        </div>
       </section>
 
       <section class="brief-group" data-group="commercial">
         <h3 class="brief-group-title">Commercial angle</h3>
-        <div class="section"><p class="section-title">Likely legal services</p>${bullets(report.likely_legal_services)}</div>
-        <div class="section"><p class="section-title">Estimated fee opportunity</p>${feeBlock(report.fee_estimate)}</div>
-        <div class="section"><p class="section-title">Cross-sell or follow-up opportunities</p>${bullets(report.cross_sell_opportunities)}</div>
+        <div class="commercial-layout">
+          <div class="commercial-fee">
+            <p class="kicker">Fee range</p>
+            ${feeBlock(report.fee_estimate)}
+          </div>
+          ${commercialServices}
+        </div>
       </section>
 
       <section class="brief-group" data-group="callprep">
         <h3 class="brief-group-title">Call preparation</h3>
-        ${callStructureCallout()}
-        <div class="section"><p class="section-title">Ask first</p>${bullets(report.call_openers)}</div>
-        <div class="section"><p class="section-title">Confirm before quoting</p>${bullets(report.what_to_confirm)}</div>
+        ${callPrepGrid}
       </section>
 
       <section class="brief-group" data-group="facts">
         <h3 class="brief-group-title">Resolved facts</h3>
         ${factsCounterLine}
-        ${factsWithProvenance(report.resolved_facts_v2, channel)}
+        ${clusteredFacts(report.resolved_facts_v2, channel)}
       </section>
     `;
   }
