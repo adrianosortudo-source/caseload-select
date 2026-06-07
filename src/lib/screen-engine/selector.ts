@@ -441,10 +441,133 @@ function scoreSlot(slot: SlotDefinition, currentGap: DecisionGap): number {
   return score;
 }
 
+// ─── Matter-aware question order (2026-06-07) ─────────────────────────────
+//
+// The default `scoreSlot` ranks by decision_value + tier + priority. That
+// optimises for the SCORER (high decision_value first), not for the lead
+// experience. For will_drafting it asks `estate_complexity` (dv 8) before
+// `existing_will_status` (dv 6), which feels backwards to a user who just
+// typed "i need a will": they get a complexity-classification question
+// before being asked whether this is a first will or an update.
+//
+// MATTER_SPECIFIC_SLOT_ORDER lets us override the scorer for specific
+// matter types so the question sequence matches how a good intake
+// coordinator would think. Ordering criteria (per Codex/operator audit):
+//   1. Momentum: easiest meaningful answer first
+//   2. Scope before complexity: what they want, before how complex it is
+//   3. User language over legal framing
+//   4. Highest routing value early (sub-type indicators)
+//   5. Low regret: ask things rarely wasted, defer specialist questions
+//
+// When the matter type has an entry in this map, selectNextSlot walks the
+// list in order and returns the first unanswered, applicable slot. When
+// no entry exists, or the explicit order is exhausted (all listed slots
+// answered or N/A), the default scoreSlot path takes over so universal
+// readiness slots (hiring_timeline, other_counsel, decision_authority)
+// can still fire at the end.
+//
+// Adding new entries: study the matter's slot set in slotRegistry, list
+// IDs in the order a coordinator would ask them in conversation. The map
+// is launch-week-scoped to the 9 DRG matter types. Corporate / real
+// estate / business_setup_advisory keep the scorer-default order until
+// we audit each in the same way.
+
+const MATTER_SPECIFIC_SLOT_ORDER: Record<string, readonly string[]> = {
+  // ESTATES
+  will_drafting: [
+    'existing_will_status',          // "Is this your first will, or updating?"
+    'marital_status',                // family standing
+    'children_count',                // dependants
+    'estate_complexity',             // scope of assets (complexity last)
+    'desired_outcome_will_drafting', // strategic intent
+  ],
+  power_of_attorney: [
+    'poa_type',                      // what kind of POA
+    'poa_existing_documents',        // existing docs
+    'poa_urgency',                   // trigger / timing
+    'marital_status',                // family standing
+  ],
+  probate: [
+    'will_status_probate',           // is there a will (most decisive)
+    'relationship_to_deceased',      // standing
+    'executor_role',                 // role in estate
+    'estate_value_band',             // value (later, after standing)
+  ],
+  estate_dispute: [
+    'estate_dispute_role',           // who they are in the dispute
+    'estate_dispute_type',           // what the dispute is about
+    'estate_court_status',           // procedural posture
+    'estate_value_band',             // value (later)
+    'desired_outcome_estate_dispute',
+  ],
+
+  // EMPLOYMENT
+  wrongful_dismissal: [
+    'signed_release',                // most urgent: have they signed anything?
+    'tenure_band',                   // tenure (Bardal driver)
+    'dismissal_reason_given',        // why
+    'severance_offered',             // current state
+    'salary_band',                   // value (later)
+    'desired_outcome_wrongful_dismissal',
+  ],
+  severance_review: [
+    'signed_release',                // signed already?
+    'severance_deadline',            // urgency
+    'severance_offer_amount',        // the offer itself
+    'tenure_band',                   // context for adequacy
+    'salary_band',                   // value (later)
+    'desired_outcome_severance_review',
+  ],
+  harassment_complaint: [
+    'harassment_employment_status',  // are they still there
+    'harassment_type',               // what kind
+    'reported_to_hr',                // procedural posture
+    'desired_outcome_harassment',
+  ],
+  wage_recovery: [
+    'wages_type',                    // what kind of pay
+    'wages_owed_band',               // how much
+    'desired_outcome_wage_recovery',
+  ],
+  employment_contract_review: [
+    'contract_review_type',          // what kind of contract
+    'contract_review_timeline',      // urgency
+    'contract_review_concerns',      // specific concern
+    'desired_outcome_contract_review',
+  ],
+};
+
+function pickByExplicitOrder(state: EngineState): SlotDefinition | null {
+  const order = MATTER_SPECIFIC_SLOT_ORDER[state.matter_type];
+  if (!order) return null;
+  for (const slotId of order) {
+    const slot = SLOT_REGISTRY.find(s => s.id === slotId);
+    if (!slot) continue;
+    if (slot.tier === 'contact') continue;
+    if (!slot.applies_to.includes(state.matter_type as never)) continue;
+    if (!slotApplicableToSubtrack(state, slot)) continue;
+    // groupAlreadyAnswered is intentionally NOT consulted here: the
+    // explicit order is authoritative. resolves:'none' slots are already
+    // exempted from group-dedup, and matter-specific resolvers won't
+    // collide because each slot ID appears at most once in the order.
+    if (isUserAnswered(state, slot.id)) continue;
+    return slot;
+  }
+  // Order exhausted: every listed slot is either answered or N/A. Fall
+  // through to the default scoring path so universal slots can fire.
+  return null;
+}
+
 // ─── Select next slot ─────────────────────────────────────────────────────
 
 export function selectNextSlot(state: EngineState): SlotDefinition | null {
   if (state.matter_type === 'unknown') return null;
+
+  // Matter-aware explicit order takes precedence over scoreSlot for the
+  // listed matter types. This is how the user-facing question sequence
+  // matches a coordinator's mental model rather than the scorer's.
+  const explicit = pickByExplicitOrder(state);
+  if (explicit) return explicit;
 
   const currentGap = getDecisionGap(state);
 
