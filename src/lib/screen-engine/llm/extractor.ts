@@ -276,9 +276,15 @@ export function mergeLlmResults(
 
     slots[slotId] = value;
     slotMeta[slotId] = {
-      source: 'inferred',
+      // 2026-06-07 provenance split: every LLM extraction is tagged
+      // `llm_inferred`. This is THE key change: gating predicates
+      // (isUserAnswered) treat this source as NOT-answered, so the
+      // engine keeps asking the user, even when the model has a guess.
+      // The value stays in state for the brief and for downstream
+      // ranking, but it does not suppress a follow-up question.
+      source: 'llm_inferred',
       evidence: nonAnswer
-        ? 'LLM extraction — lead expressed uncertainty in text'
+        ? 'LLM extraction (lead expressed uncertainty in text)'
         : 'LLM extraction from initial description',
       confidence: nonAnswer ? 0.6 : 0.7,
     };

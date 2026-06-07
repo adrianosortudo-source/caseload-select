@@ -172,34 +172,34 @@ function getMatterGap(state: EngineState): DecisionGap {
   // existed. Same shape affects every matter type below.
 
   if (matter_type === 'will_drafting') {
-    if (!hasValue(state, 'marital_status')) return 'matter_qualification';
-    if (!hasValue(state, 'children_count')) return 'matter_qualification';
-    if (!hasValue(state, 'estate_complexity')) return 'value'; // resolves: 'value'
-    if (!hasValue(state, 'existing_will_status')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'marital_status')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'children_count')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'estate_complexity')) return 'value'; // resolves: 'value'
+    if (!isUserAnswered(state, 'existing_will_status')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'power_of_attorney') {
-    if (!hasValue(state, 'poa_type')) return 'matter_qualification';
-    if (!hasValue(state, 'poa_urgency')) return 'urgency'; // resolves: 'urgency'
-    if (!hasValue(state, 'marital_status')) return 'matter_qualification';
-    if (!hasValue(state, 'poa_existing_documents')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'poa_type')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'poa_urgency')) return 'urgency'; // resolves: 'urgency'
+    if (!isUserAnswered(state, 'marital_status')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'poa_existing_documents')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'probate') {
-    if (!hasValue(state, 'relationship_to_deceased')) return 'matter_qualification';
-    if (!hasValue(state, 'will_status_probate')) return 'matter_qualification';
-    if (!hasValue(state, 'estate_value_band')) return 'value'; // resolves: 'value'
-    if (!hasValue(state, 'executor_role')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'relationship_to_deceased')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'will_status_probate')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'estate_value_band')) return 'value'; // resolves: 'value'
+    if (!isUserAnswered(state, 'executor_role')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'estate_dispute') {
-    if (!hasValue(state, 'estate_dispute_type')) return 'matter_qualification';
-    if (!hasValue(state, 'estate_dispute_role')) return 'matter_qualification';
-    if (!hasValue(state, 'estate_value_band')) return 'value';
-    if (!hasValue(state, 'estate_court_status')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'estate_dispute_type')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'estate_dispute_role')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'estate_value_band')) return 'value';
+    if (!isUserAnswered(state, 'estate_court_status')) return 'matter_qualification';
     return 'none';
   }
 
@@ -208,54 +208,54 @@ function getMatterGap(state: EngineState): DecisionGap {
     // which triggers re-classification into a sub-type (will_drafting /
     // power_of_attorney / probate / estate_dispute) via the LLM extractor's
     // __matter_type. After re-routing, the sub-type's chain fires next turn.
-    if (!hasValue(state, 'estates_problem_type')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'estates_problem_type')) return 'matter_qualification';
     return 'none';
   }
 
   // ─── Employment Phase B ─────────────────────────────────────────────────
 
   if (matter_type === 'wrongful_dismissal') {
-    if (!hasValue(state, 'tenure_band')) return 'matter_qualification';
-    if (!hasValue(state, 'dismissal_reason_given')) return 'matter_qualification';
-    if (!hasValue(state, 'salary_band')) return 'value'; // resolves: 'value'
-    if (!hasValue(state, 'severance_offered')) return 'matter_qualification';
-    if (!hasValue(state, 'signed_release')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'tenure_band')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'dismissal_reason_given')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'salary_band')) return 'value'; // resolves: 'value'
+    if (!isUserAnswered(state, 'severance_offered')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'signed_release')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'severance_review') {
-    if (!hasValue(state, 'severance_offer_amount')) return 'matter_qualification';
-    if (!hasValue(state, 'severance_deadline')) return 'urgency'; // resolves: 'urgency'
-    if (!hasValue(state, 'tenure_band')) return 'matter_qualification';
-    if (!hasValue(state, 'salary_band')) return 'value';
-    if (!hasValue(state, 'signed_release')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'severance_offer_amount')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'severance_deadline')) return 'urgency'; // resolves: 'urgency'
+    if (!isUserAnswered(state, 'tenure_band')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'salary_band')) return 'value';
+    if (!isUserAnswered(state, 'signed_release')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'harassment_complaint') {
-    if (!hasValue(state, 'harassment_type')) return 'matter_qualification';
-    if (!hasValue(state, 'harassment_employment_status')) return 'matter_qualification';
-    if (!hasValue(state, 'reported_to_hr')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'harassment_type')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'harassment_employment_status')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'reported_to_hr')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'wage_recovery') {
-    if (!hasValue(state, 'wages_owed_band')) return 'value'; // resolves: 'value'
-    if (!hasValue(state, 'wages_type')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'wages_owed_band')) return 'value'; // resolves: 'value'
+    if (!isUserAnswered(state, 'wages_type')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'employment_contract_review') {
-    if (!hasValue(state, 'contract_review_type')) return 'matter_qualification';
-    if (!hasValue(state, 'contract_review_timeline')) return 'urgency'; // resolves: 'urgency'
-    if (!hasValue(state, 'contract_review_concerns')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'contract_review_type')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'contract_review_timeline')) return 'urgency'; // resolves: 'urgency'
+    if (!isUserAnswered(state, 'contract_review_concerns')) return 'matter_qualification';
     return 'none';
   }
 
   if (matter_type === 'employment_general') {
     // Routing catch-all — sub-type re-classification fires on the next turn
     // after employment_problem_type is answered.
-    if (!hasValue(state, 'employment_problem_type')) return 'matter_qualification';
+    if (!isUserAnswered(state, 'employment_problem_type')) return 'matter_qualification';
     return 'none';
   }
 
@@ -314,12 +314,54 @@ function isResolved(state: EngineState, gap: DecisionGap): boolean {
   const resolvers = SLOT_REGISTRY.filter(
     s => s.resolves === gap && s.applies_to.includes(state.matter_type as never),
   );
-  return resolvers.some(s => hasValue(state, s.id));
+  // Provenance-aware: a slot only counts as resolving the gap when the
+  // user actually answered it (or regex matched user text, or system
+  // metadata supplied it). LLM guesses do not resolve gaps. See
+  // isUserAnswered for the canonical predicate.
+  return resolvers.some(s => isUserAnswered(state, s.id));
 }
 
 function hasValue(state: EngineState, slotId: string): boolean {
   const val = state.slots[slotId];
   return val !== null && val !== undefined && val !== '';
+}
+
+/**
+ * The single canonical "is this slot answered" gate (2026-06-07 provenance
+ * split).
+ *
+ * Global engine rule: a slot is only "answered" if the user actually
+ * answered it. Not if the model guessed it. Not if it is the most likely
+ * next answer. Not if it is inferred from matter type. Not if it is a
+ * plausible package recommendation. See SlotMetaSource doc in types.ts
+ * for the full taxonomy.
+ *
+ * Counts as user-answered:
+ *  - `'answered'` (UI button press)
+ *  - `'explicit'` (regex evidence span from user's literal text)
+ *  - `'inferred'` (LEGACY: pre-2026-06-07 mixed bucket; retained for
+ *    backward compat with stored screened_leads rows whose engine_state
+ *    JSON carries this value)
+ *  - `'system_metadata'` (caller ID, channel pre-fill; carrier-confirmed)
+ *
+ * Does NOT count:
+ *  - `'llm_inferred'` (model guess from current intake; may have no span)
+ *  - `'unknown'` (defensive placeholder)
+ *
+ * Used everywhere a slot's filled-ness gates engine behaviour:
+ *  - slotIsAnswered (selectNextSlot candidate filter)
+ *  - groupAlreadyAnswered (sibling-suppression check)
+ *  - isResolved (decision-gap chain)
+ *  - computeCoreCompleteness (insight-presentation threshold)
+ *  - matter-specific getMatterGap blocks for estates + employment
+ */
+export function isUserAnswered(state: EngineState, slotId: string): boolean {
+  if (!hasValue(state, slotId)) return false;
+  const meta = state.slot_meta[slotId];
+  const source = meta?.source ?? 'unknown';
+  if (source === 'llm_inferred') return false;
+  if (source === 'unknown') return false;
+  return true;
 }
 
 // ─── Question group dedup — only blocks same-gap siblings ─────────────────
@@ -350,11 +392,17 @@ function groupAlreadyAnswered(state: EngineState, slot: SlotDefinition): boolean
          s.id !== slot.id &&
          s.applies_to.includes(state.matter_type as never),
   );
-  return siblings.some(s => hasValue(state, s.id));
+  // Provenance-aware: a sibling only suppresses this slot when the user
+  // actually answered the sibling. An LLM guess on a sibling does not
+  // count as "covered." See isUserAnswered.
+  return siblings.some(s => isUserAnswered(state, s.id));
 }
 
 function slotIsAnswered(state: EngineState, slot: SlotDefinition): boolean {
-  return hasValue(state, slot.id);
+  // Provenance-aware: only user-answered slots are filtered out of the
+  // candidate pool. LLM guesses leave the slot available so the engine
+  // can still ask the user to confirm.
+  return isUserAnswered(state, slot.id);
 }
 
 // ─── Subtrack applicability ───────────────────────────────────────────────
@@ -433,7 +481,11 @@ export function computeCoreCompleteness(state: EngineState): number {
     s => s.tier === 'core' && s.applies_to.includes(state.matter_type as never),
   );
   if (coreSlots.length === 0) return 0;
-  const filled = coreSlots.filter(s => hasValue(state, s.id)).length;
+  // Provenance-aware: completeness reflects only what the USER answered
+  // (UI press, regex evidence span, or system metadata). LLM guesses do
+  // not push the percentage upward, so insight-presentation does not
+  // fire prematurely on a thin description with a chatty model.
+  const filled = coreSlots.filter(s => isUserAnswered(state, s.id)).length;
   return Math.round((filled / coreSlots.length) * 100);
 }
 

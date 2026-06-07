@@ -180,7 +180,63 @@ export type DecisionGap =
   | 'matter_qualification'
   | 'none';
 
-export type SlotMetaSource = 'explicit' | 'answered' | 'inferred' | 'unknown';
+/**
+ * Provenance class for slot values in EngineState.slot_meta.
+ *
+ * The 2026-06-07 split (after the DRG launch-week "i need a will" failure
+ * mode): the engine must never let LLM-derived values masquerade as facts
+ * the user actually provided. The model can prefill a slot from a
+ * 4-word description, but that is a HINT, not an answered question.
+ *
+ * Global engine rule:
+ *   A slot is only "answered" (for the purpose of suppressing a follow-up
+ *   question, counting toward completeness, or rendering on the lawyer
+ *   brief as user-provided) if the user actually answered it. Not if the
+ *   model guessed it. Not if it is the most likely next answer. Not if it
+ *   is inferred from matter type.
+ *
+ * The `isUserAnswered` predicate in selector.ts is the single canonical
+ * gate. Every "is this filled" check (slotIsAnswered, groupAlreadyAnswered,
+ * isResolved, computeCoreCompleteness, getMatterGap blocks) routes through
+ * it.
+ *
+ * Values:
+ *
+ *  - `'explicit'`: regex evidence pass (slotEvidence.ts) and initial
+ *    classification (extractor.ts). The user's literal text matched a
+ *    pattern; the value is a span out of the user's input. Counts as
+ *    user-answered.
+ *
+ *  - `'answered'`: user pressed a UI button (control.ts:applyAnswer) or
+ *    answered a multi-turn channel question. The most direct form of
+ *    user-answered. Counts.
+ *
+ *  - `'inferred'`: LEGACY. Pre-2026-06-07 the LLM extractor used this
+ *    value, conflating LLM guesses with regex evidence. Existing
+ *    screened_leads rows still carry it. Treated as user-answered for
+ *    backward compat with stored rows; new code paths use the more
+ *    specific values below.
+ *
+ *  - `'llm_inferred'`: LLM extraction in mergeLlmResults. The model
+ *    returned a value, possibly without textual evidence in the user's
+ *    description. The engine records the value as a hint but DOES NOT
+ *    treat it as answered: the brief still surfaces it (clearly labelled
+ *    as inferred), but the follow-up question is still asked.
+ *
+ *  - `'system_metadata'`: system-provided (caller ID from telephony,
+ *    channel sender pre-fill, etc.). The user did not say it through the
+ *    intake channel, but the carrier confirmed it. Counts as answered.
+ *
+ *  - `'unknown'`: placeholder for slots with a value of unknown
+ *    provenance (defensive coding). Treated as NOT answered.
+ */
+export type SlotMetaSource =
+  | 'explicit'
+  | 'answered'
+  | 'inferred'
+  | 'llm_inferred'
+  | 'system_metadata'
+  | 'unknown';
 
 export type AdvisorySubtrack = 'solo_setup' | 'partner_setup' | 'buy_in_or_joining' | 'unknown';
 

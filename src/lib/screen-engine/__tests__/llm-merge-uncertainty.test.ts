@@ -105,7 +105,12 @@ describe("mergeLlmResults — Not-sure preservation when lead expressed uncertai
     });
     expect(merged.slots["amount_at_stake"]).toBe("Not sure");
     const meta = merged.slot_meta["amount_at_stake"];
-    expect(meta?.source).toBe("inferred");
+    // 2026-06-07 provenance split: LLM extractions are tagged
+    // `llm_inferred` so the engine does not let model guesses suppress
+    // a follow-up question. The value still merges into state so the
+    // brief can surface it, and the uncertainty-preservation logic
+    // still records its rationale on slot_meta.evidence.
+    expect(meta?.source).toBe("llm_inferred");
     expect(meta?.evidence).toMatch(/uncertainty/i);
   });
 

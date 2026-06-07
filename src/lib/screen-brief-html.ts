@@ -89,6 +89,13 @@ function factSourceLabel(source: string, channel: string | null | undefined): st
     case 'inferred_from_transcript':
     case 'inferred':
       return phrase.inferred;
+    case 'llm_inferred':
+      // 2026-06-07 provenance split: LLM-derived values carry their own
+      // label so the lawyer never reads "Provided in web intake" for a
+      // fact the lead never typed. We piggyback on the channel-aware
+      // inferred phrase for now; once the engine gates LLM inferences
+      // out of "answered" state, the brief surface this only as a hint.
+      return phrase.inferred;
     case 'unknown':
       return 'Not confirmed';
     default:
@@ -201,6 +208,11 @@ function feeBlock(text: string): string {
  * lawyer can still see where the bulk of the facts came from.
  */
 function isDefaultProvenance(source: string): boolean {
+  // The chip is suppressed only for default channel-stated provenance.
+  // LLM-inferred is NEVER suppressed: the lawyer must see the chip so it
+  // is visually distinct from facts the user actually stated. This is
+  // the brief-surface half of the 2026-06-07 provenance rule.
+  if (source === 'llm_inferred') return false;
   return source === 'stated' || source === 'explicit_from_caller';
 }
 
