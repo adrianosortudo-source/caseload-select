@@ -238,18 +238,29 @@ function factsWithProvenance(facts: ResolvedFact[], channel: string | null | und
 }
 
 /**
- * Add the brand terminal square (▪) to a canonical headline.
- * Per Brand Book Rule 6.18.1 and the operator's terminal-square memory rule,
- * the square replaces a final period only. Question marks and exclamation
- * points are preserved. Idempotent when the square is already present.
+ * Brand terminal-square mark on canonical headlines (Brand Book 6.18).
+ * The mark is the gold inline SVG square, always; we do NOT use the text
+ * character U+25AA because that inherits the headline color (typically
+ * white on a dark cover) and the brand spec is gold-on-anything.
+ *
+ * Behaviour: strips a trailing period if present, then appends the SVG.
+ * Headlines ending in ? or ! keep their punctuation and skip the square.
+ * Idempotent on a previously-appended text-char square (legacy).
+ *
+ * Returns HTML, not plain text. Callers MUST NOT wrap with esc() because
+ * the SVG markup is already safe by construction. The headline text is
+ * escaped internally.
  */
+const TERMINAL_SQUARE_SVG = '<svg viewBox="0 0 6 6" aria-hidden="true" style="width:0.22em;height:0.22em;margin-left:0.12em;vertical-align:top;display:inline-block;position:relative;top:0.1em;flex-shrink:0;"><rect width="6" height="6" fill="#C4B49A"/></svg>';
+
 function withTerminalSquare(text: string): string {
   let t = (text ?? '').trim();
-  if (!t) return t;
-  if (t.endsWith('▪')) return t;
-  if (t.endsWith('?') || t.endsWith('!')) return t;
+  if (!t) return '';
+  // Strip a previously-appended text-char square (legacy / idempotency).
+  if (t.endsWith('▪')) t = t.slice(0, -1).trimEnd();
+  if (t.endsWith('?') || t.endsWith('!')) return esc(t);
   if (t.endsWith('.')) t = t.slice(0, -1);
-  return t + '▪';
+  return esc(t) + TERMINAL_SQUARE_SVG;
 }
 
 /**
@@ -317,7 +328,7 @@ function callStructureCallout(): string {
   return `
     <div class="call-structure-callout">
       <p class="callout-eyebrow">Lead call structure</p>
-      <h4 class="callout-title">${esc(withTerminalSquare('Use the callback to scope, not to rediscover the problem'))}</h4>
+      <h4 class="callout-title">${withTerminalSquare('Use the callback to scope, not to rediscover the problem')}</h4>
       <ol class="callout-steps">
         <li><span class="step-num">1</span><span class="step-body">Confirm names, postal code, and how they found the firm.</span></li>
         <li><span class="step-num">2</span><span class="step-body">Walk through the open questions in order. The brief flags what is still unresolved.</span></li>
@@ -864,7 +875,7 @@ export function renderBriefHtmlServer(
     <section class="brief-cover">
       <div class="brief-cover-left">
         <p class="cover-eyebrow">CaseLoad Select · Lawyer triage</p>
-        <h1 class="cover-headline">${esc(headlineWithSquare)}</h1>
+        <h1 class="cover-headline">${headlineWithSquare}</h1>
         ${report.confidence_calibration ? `<p class="cover-summary">${esc(report.confidence_calibration)}</p>` : ''}
       </div>
       ${decisionBand}

@@ -136,22 +136,51 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
             {error && mode === "error" ? <span className="text-red-700">{error}</span> : "Decision required"}
           </div>
           <div className="flex gap-2 shrink-0">
+            {/* Brand CTA spec (Brand Book 6.18 + Ch 4): PASS is the secondary
+                action: white fill, 1px border-token border, navy text,
+                DM Sans 600, uppercase, 1.5px tracking, square corners. */}
             <button
               type="button"
               onClick={() => setMode("pass-modal")}
               disabled={mode === "submitting"}
-              className="bg-white border border-black/20 text-black/80 px-4 py-2.5 sm:py-2 text-sm font-semibold uppercase tracking-wider hover:border-navy hover:text-navy disabled:opacity-50 min-h-[44px] sm:min-h-0"
+              className="px-4 py-2.5 sm:py-2 text-sm font-semibold uppercase disabled:opacity-50 min-h-[44px] sm:min-h-0"
+              style={{
+                backgroundColor: "#FFFFFF",
+                border: "1px solid #E0DDD6",
+                color: "#1E2F58",
+                fontFamily: '"DM Sans", system-ui, sans-serif',
+                letterSpacing: "0.094em",
+                borderRadius: 0,
+              }}
             >
               Pass
             </button>
+            {/* TAKE is the primary CTA (Band A/B/C): gold fill, navy text. On
+                Band D the take is the SECONDARY action behind Refer, so
+                renders in the muted PASS style. */}
             <button
               type="button"
               onClick={onTake}
               disabled={mode === "submitting"}
-              className={
+              className="px-5 py-2.5 sm:py-2 text-sm font-semibold uppercase disabled:opacity-50 min-h-[44px] sm:min-h-0"
+              style={
                 isBandD
-                  ? "bg-white border border-black/20 text-black/80 px-4 py-2.5 sm:py-2 text-sm font-semibold uppercase tracking-wider hover:border-navy hover:text-navy disabled:opacity-50 min-h-[44px] sm:min-h-0"
-                  : "bg-navy text-white px-5 py-2.5 sm:py-2 text-sm font-semibold uppercase tracking-wider hover:bg-navy-deep disabled:opacity-50 min-h-[44px] sm:min-h-0"
+                  ? {
+                      backgroundColor: "#FFFFFF",
+                      border: "1px solid #E0DDD6",
+                      color: "#1E2F58",
+                      fontFamily: '"DM Sans", system-ui, sans-serif',
+                      letterSpacing: "0.094em",
+                      borderRadius: 0,
+                    }
+                  : {
+                      backgroundColor: "#C4B49A",
+                      border: "1px solid #C4B49A",
+                      color: "#1E2F58",
+                      fontFamily: '"DM Sans", system-ui, sans-serif',
+                      letterSpacing: "0.094em",
+                      borderRadius: 0,
+                    }
               }
             >
               {mode === "submitting" ? (
@@ -170,7 +199,15 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
                 type="button"
                 onClick={() => setMode("refer-modal")}
                 disabled={mode === "submitting"}
-                className="bg-navy text-white px-5 py-2.5 sm:py-2 text-sm font-semibold uppercase tracking-wider hover:bg-navy-deep disabled:opacity-50 min-h-[44px] sm:min-h-0"
+                className="px-5 py-2.5 sm:py-2 text-sm font-semibold uppercase disabled:opacity-50 min-h-[44px] sm:min-h-0"
+                style={{
+                  backgroundColor: "#C4B49A",
+                  border: "1px solid #C4B49A",
+                  color: "#1E2F58",
+                  fontFamily: '"DM Sans", system-ui, sans-serif',
+                  letterSpacing: "0.094em",
+                  borderRadius: 0,
+                }}
               >
                 Refer
               </button>
