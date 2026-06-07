@@ -323,8 +323,27 @@ function hasValue(state: EngineState, slotId: string): boolean {
 }
 
 // ─── Question group dedup — only blocks same-gap siblings ─────────────────
-
+//
+// The intent: when two slots ask redundant variants of the same decision-gap
+// question (e.g. two ways to confirm 'ownership_proof'), asking one should
+// suppress the other.
+//
+// BUT: slots with `resolves: 'none'` (the engine's "this slot is an
+// independent fact, not a gap resolver" marker) must NEVER be considered
+// siblings, even when they share a question_group label. Estates Phase B
+// uses `question_group: 'standing'` for marital_status, children_count, and
+// existing_will_status — three independent facts about the testator, all
+// `resolves: 'none'`. With the old check, one LLM-inferred slot in that
+// bucket would filter out the other two and the engine would skip them on
+// purpose. Bug surfaced 2026-06-07 on the DRG "i need a will" smoke test:
+// LLM inferred existing_will_status from a 1-word answer, and the engine
+// skipped marital_status + children_count to fall through to hiring_timeline.
+//
+// The early `resolves === 'none'` short-circuit fixes that without touching
+// any other matter chain (corporate/real_estate slots all carry specific
+// resolves fields, so this branch never fires for them).
 function groupAlreadyAnswered(state: EngineState, slot: SlotDefinition): boolean {
+  if (slot.resolves === 'none') return false;
   const siblings = SLOT_REGISTRY.filter(
     s => s.question_group === slot.question_group &&
          s.resolves === slot.resolves &&
