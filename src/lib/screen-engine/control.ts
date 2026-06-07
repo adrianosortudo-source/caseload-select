@@ -386,12 +386,22 @@ function buildLeadSummaryEn(state: EngineState): LeadSummary {
   // existed. Half of DRG's incoming traffic is employment.
 
   if (t === 'wrongful_dismissal') {
+    // Recap composition (2026-06-07): match the matter-aware question order
+    // so every answered slot shows up. Order here mirrors MATTER_SPECIFIC_SLOT_ORDER
+    // in selector.ts: signed_release, tenure_band, dismissal_reason_given,
+    // severance_offered, salary_band, desired_outcome.
     const intro = 'You were let go from a job, and you want a lawyer to look at whether the termination and what was offered are fair.';
+    if (slot(state, 'signed_release')) {
+      const v = slot(state, 'signed_release')!.toLowerCase();
+      if (v.includes('have not signed')) points.push('You have not signed anything yet.');
+      else if (v.includes('yes, i signed')) points.push('You already signed something.');
+      else points.push(`Whether you signed: ${v}.`);
+    }
     if (slot(state, 'tenure_band')) points.push(`How long you worked there: ${slot(state, 'tenure_band')!.toLowerCase()}.`);
-    if (slot(state, 'employment_problem_type')) points.push(`What happened: ${slot(state, 'employment_problem_type')!.toLowerCase()}.`);
+    if (slot(state, 'dismissal_reason_given')) points.push(`Reason given for dismissal: ${slot(state, 'dismissal_reason_given')!.toLowerCase()}.`);
     if (slot(state, 'severance_offered')) points.push(`Severance offered: ${slot(state, 'severance_offered')!.toLowerCase()}.`);
-    if (slot(state, 'severance_offer_amount')) points.push(`Amount offered: ${slot(state, 'severance_offer_amount')}.`);
-    if (slot(state, 'severance_deadline')) points.push(`Deadline to respond: ${slot(state, 'severance_deadline')!.toLowerCase()}.`);
+    if (slot(state, 'salary_band')) points.push(`Your annual compensation: ${slot(state, 'salary_band')!.toLowerCase()}.`);
+    if (slot(state, 'desired_outcome_wrongful_dismissal')) points.push(`What you hope to achieve: ${slot(state, 'desired_outcome_wrongful_dismissal')!.toLowerCase()}.`);
     return {
       intro,
       points,
@@ -401,9 +411,17 @@ function buildLeadSummaryEn(state: EngineState): LeadSummary {
 
   if (t === 'severance_review') {
     const intro = 'You received a severance offer and want a lawyer to review it before you sign.';
-    if (slot(state, 'tenure_band')) points.push(`How long you worked there: ${slot(state, 'tenure_band')!.toLowerCase()}.`);
-    if (slot(state, 'severance_offer_amount')) points.push(`Amount offered: ${slot(state, 'severance_offer_amount')}.`);
+    if (slot(state, 'signed_release')) {
+      const v = slot(state, 'signed_release')!.toLowerCase();
+      if (v.includes('have not signed')) points.push('You have not signed anything yet.');
+      else if (v.includes('yes, i signed')) points.push('You already signed something.');
+      else points.push(`Whether you signed: ${v}.`);
+    }
     if (slot(state, 'severance_deadline')) points.push(`Deadline to respond: ${slot(state, 'severance_deadline')!.toLowerCase()}.`);
+    if (slot(state, 'severance_offer_amount')) points.push(`Amount offered: ${slot(state, 'severance_offer_amount')!.toLowerCase()}.`);
+    if (slot(state, 'tenure_band')) points.push(`How long you worked there: ${slot(state, 'tenure_band')!.toLowerCase()}.`);
+    if (slot(state, 'salary_band')) points.push(`Your annual compensation: ${slot(state, 'salary_band')!.toLowerCase()}.`);
+    if (slot(state, 'desired_outcome_severance_review')) points.push(`What you hope to achieve: ${slot(state, 'desired_outcome_severance_review')!.toLowerCase()}.`);
     return {
       intro,
       points,
@@ -413,8 +431,10 @@ function buildLeadSummaryEn(state: EngineState): LeadSummary {
 
   if (t === 'harassment_complaint') {
     const intro = 'You have a workplace harassment matter and want a lawyer to advise you on your options.';
-    if (slot(state, 'harassment_type')) points.push(`The kind of harassment: ${slot(state, 'harassment_type')!.toLowerCase()}.`);
     if (slot(state, 'harassment_employment_status')) points.push(`Your employment status: ${slot(state, 'harassment_employment_status')!.toLowerCase()}.`);
+    if (slot(state, 'harassment_type')) points.push(`The kind of harassment: ${slot(state, 'harassment_type')!.toLowerCase()}.`);
+    if (slot(state, 'reported_to_hr')) points.push(`Whether you reported it: ${slot(state, 'reported_to_hr')!.toLowerCase()}.`);
+    if (slot(state, 'desired_outcome_harassment')) points.push(`What you hope to achieve: ${slot(state, 'desired_outcome_harassment')!.toLowerCase()}.`);
     return {
       intro,
       points,
@@ -424,8 +444,9 @@ function buildLeadSummaryEn(state: EngineState): LeadSummary {
 
   if (t === 'wage_recovery') {
     const intro = 'You are owed wages, overtime, or other pay and want a lawyer to help you recover them.';
-    if (slot(state, 'wages_owed_band')) points.push(`Amount owed: ${slot(state, 'wages_owed_band')}.`);
-    if (slot(state, 'wages_type')) points.push(`Type of pay: ${slot(state, 'wages_type')!.toLowerCase()}.`);
+    if (slot(state, 'wages_type')) points.push(`Type of pay owed: ${slot(state, 'wages_type')!.toLowerCase()}.`);
+    if (slot(state, 'wages_owed_band')) points.push(`Amount owed: ${slot(state, 'wages_owed_band')!.toLowerCase()}.`);
+    if (slot(state, 'desired_outcome_wage_recovery')) points.push(`What you hope to achieve: ${slot(state, 'desired_outcome_wage_recovery')!.toLowerCase()}.`);
     return {
       intro,
       points,
@@ -435,7 +456,10 @@ function buildLeadSummaryEn(state: EngineState): LeadSummary {
 
   if (t === 'employment_contract_review') {
     const intro = 'You have an employment contract you want a lawyer to review before you commit.';
-    if (slot(state, 'tenure_band')) points.push(`Your situation: ${slot(state, 'tenure_band')!.toLowerCase()}.`);
+    if (slot(state, 'contract_review_type')) points.push(`Type of contract: ${slot(state, 'contract_review_type')!.toLowerCase()}.`);
+    if (slot(state, 'contract_review_timeline')) points.push(`How soon you need it reviewed: ${slot(state, 'contract_review_timeline')!.toLowerCase()}.`);
+    if (slot(state, 'contract_review_concerns')) points.push(`Specific concern: ${slot(state, 'contract_review_concerns')!.toLowerCase()}.`);
+    if (slot(state, 'desired_outcome_contract_review')) points.push(`What you hope to achieve: ${slot(state, 'desired_outcome_contract_review')!.toLowerCase()}.`);
     return {
       intro,
       points,
@@ -446,9 +470,25 @@ function buildLeadSummaryEn(state: EngineState): LeadSummary {
   // ─── ESTATES — sub-types (Phase A/B) ───────────────────────────────
 
   if (t === 'will_drafting') {
+    // Recap composition (2026-06-07): match the matter-aware question order.
+    // Order mirrors MATTER_SPECIFIC_SLOT_ORDER: existing_will_status,
+    // marital_status, children_count, estate_complexity, desired_outcome.
     const intro = 'You want a lawyer to help you put a will in place.';
-    if (slot(state, 'estate_value_band')) points.push(`Approximate estate value: ${slot(state, 'estate_value_band')}.`);
-    if (slot(state, 'estate_complexity')) points.push(`What makes it more involved: ${slot(state, 'estate_complexity')!.toLowerCase()}.`);
+    const existingWill = slot(state, 'existing_will_status');
+    if (existingWill) {
+      const v = existingWill.toLowerCase();
+      if (v.includes('never had')) points.push('This appears to be your first will.');
+      else if (v.includes('outdated')) points.push('You already have a will, and it needs to be updated.');
+      else if (v.includes('just needs an update')) points.push('You have a will and want to update it.');
+      else points.push(`Existing will status: ${v}.`);
+    }
+    if (slot(state, 'marital_status')) points.push(`Marital status: ${slot(state, 'marital_status')!.toLowerCase()}.`);
+    if (slot(state, 'children_count')) {
+      const v = slot(state, 'children_count')!.toLowerCase();
+      points.push(v === 'none' ? 'No children or dependants to provide for.' : `Children or dependants: ${v}.`);
+    }
+    if (slot(state, 'estate_complexity')) points.push(`Estate complexity: ${slot(state, 'estate_complexity')!.toLowerCase()}.`);
+    if (slot(state, 'desired_outcome_will_drafting')) points.push(`What you want in place: ${slot(state, 'desired_outcome_will_drafting')!.toLowerCase()}.`);
     return {
       intro,
       points,
@@ -459,8 +499,9 @@ function buildLeadSummaryEn(state: EngineState): LeadSummary {
   if (t === 'power_of_attorney') {
     const intro = 'You want a lawyer to help you put a power of attorney in place.';
     if (slot(state, 'poa_type')) points.push(`Type of power of attorney: ${slot(state, 'poa_type')!.toLowerCase()}.`);
-    if (slot(state, 'poa_urgency')) points.push(`How time-sensitive: ${slot(state, 'poa_urgency')!.toLowerCase()}.`);
     if (slot(state, 'poa_existing_documents')) points.push(`Existing documents: ${slot(state, 'poa_existing_documents')!.toLowerCase()}.`);
+    if (slot(state, 'poa_urgency')) points.push(`What prompted this now: ${slot(state, 'poa_urgency')!.toLowerCase()}.`);
+    if (slot(state, 'marital_status')) points.push(`Marital status: ${slot(state, 'marital_status')!.toLowerCase()}.`);
     return {
       intro,
       points,
@@ -471,7 +512,9 @@ function buildLeadSummaryEn(state: EngineState): LeadSummary {
   if (t === 'probate') {
     const intro = 'You are dealing with an estate that may need to go through probate, and you want a lawyer to guide the process.';
     if (slot(state, 'will_status_probate')) points.push(`Will status: ${slot(state, 'will_status_probate')!.toLowerCase()}.`);
-    if (slot(state, 'estate_value_band')) points.push(`Approximate estate value: ${slot(state, 'estate_value_band')}.`);
+    if (slot(state, 'relationship_to_deceased')) points.push(`Your relationship to the person who passed: ${slot(state, 'relationship_to_deceased')!.toLowerCase()}.`);
+    if (slot(state, 'executor_role')) points.push(`Your role in the estate: ${slot(state, 'executor_role')!.toLowerCase()}.`);
+    if (slot(state, 'estate_value_band')) points.push(`Approximate estate value: ${slot(state, 'estate_value_band')!.toLowerCase()}.`);
     return {
       intro,
       points,
@@ -481,9 +524,11 @@ function buildLeadSummaryEn(state: EngineState): LeadSummary {
 
   if (t === 'estate_dispute') {
     const intro = 'You are in a dispute over an estate or a will, and you want a lawyer to assess your position.';
+    if (slot(state, 'estate_dispute_role')) points.push(`Your role in the dispute: ${slot(state, 'estate_dispute_role')!.toLowerCase()}.`);
     if (slot(state, 'estate_dispute_type')) points.push(`The dispute is about: ${slot(state, 'estate_dispute_type')!.toLowerCase()}.`);
-    if (slot(state, 'estate_dispute_role')) points.push(`Your role: ${slot(state, 'estate_dispute_role')!.toLowerCase()}.`);
     if (slot(state, 'estate_court_status')) points.push(`Court status: ${slot(state, 'estate_court_status')!.toLowerCase()}.`);
+    if (slot(state, 'estate_value_band')) points.push(`Approximate estate value: ${slot(state, 'estate_value_band')!.toLowerCase()}.`);
+    if (slot(state, 'desired_outcome_estate_dispute')) points.push(`What you hope to achieve: ${slot(state, 'desired_outcome_estate_dispute')!.toLowerCase()}.`);
     return {
       intro,
       points,
