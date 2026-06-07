@@ -170,6 +170,23 @@ export async function POST(
 
   // ── Build the new report + brief ───────────────────────────────────────
   const report = buildReport(state);
+
+  // Reclassify keeps the original decision_deadline by default (the lawyer
+  // still has the same window to act); we compute a fresh one only to stamp
+  // it onto the cover. The persisted column is left untouched below — the
+  // brief's data attribute reflects the existing deadline.
+  const reclassifyAxes = report.four_axis;
+  const reclassifyNow = new Date();
+  const reclassifyDeadline = computeDecisionDeadline(
+    reclassifyAxes.urgency,
+    reclassifyNow,
+    state.matter_type,
+  );
+  const reclassifyWhale = computeWhaleNurture(
+    reclassifyAxes.value,
+    reclassifyAxes.readiness,
+  );
+
   const briefHtml = renderBriefHtmlServer(
     report,
     channel,
@@ -177,14 +194,18 @@ export async function POST(
     firmTimezone,
     state.matter_type,
     state.practice_area,
+    {
+      decisionDeadlineIso: reclassifyDeadline.toISOString(),
+      whaleNurture: reclassifyWhale,
+    },
   );
   const bandResult = computeBand(state);
   const band: Band | null = bandResult.band;
 
-  const now = new Date();
-  const axes = report.four_axis;
-  const decisionDeadline = computeDecisionDeadline(axes.urgency, now, state.matter_type);
-  const whaleNurture = computeWhaleNurture(axes.value, axes.readiness);
+  const now = reclassifyNow;
+  const axes = reclassifyAxes;
+  const decisionDeadline = reclassifyDeadline;
+  const whaleNurture = reclassifyWhale;
 
   // Preserve original slot_answers; just refresh the engine-derived
   // pieces. (slot_answers.voice_meta + channel stays the same.)

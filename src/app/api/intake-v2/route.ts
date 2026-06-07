@@ -303,6 +303,20 @@ export async function POST(req: NextRequest) {
   // never breaks the intake — we fall back to the sanitized SPA-built
   // HTML in that case and log a warning.
   const firmTimezone = resolveFirmTimezone({ location: firm.location ?? null });
+
+  // Compute the decision deadline up front so the renderer can stamp it on
+  // the cover decision band + sidebar Queue posture. The live-timer hydrator
+  // (BriefLiveTimers) reads the data-deadline-iso attribute at view time so
+  // the countdown stays accurate even when the lawyer opens the brief hours
+  // after intake.
+  const intakeNow = new Date();
+  const intakeDecisionDeadline = computeDecisionDeadline(
+    axes.urgency,
+    intakeNow,
+    matterType,
+  );
+  const intakeWhaleNurture = computeWhaleNurture(axes.value, axes.readiness);
+
   let serverRenderedHtml: string;
   try {
     serverRenderedHtml = renderBriefHtmlServer(
@@ -312,6 +326,10 @@ export async function POST(req: NextRequest) {
       firmTimezone,
       matterType,
       v.practice_area,
+      {
+        decisionDeadlineIso: intakeDecisionDeadline.toISOString(),
+        whaleNurture: intakeWhaleNurture,
+      },
     );
   } catch (renderErr) {
     console.warn(
@@ -335,9 +353,15 @@ export async function POST(req: NextRequest) {
       : req.headers.get('referer');
 
   // ── Derived flags ──────────────────────────────────────────────────────────
-  const now = new Date();
-  const decisionDeadline = computeDecisionDeadline(axes.urgency, now, matterType);
-  const whaleNurture = computeWhaleNurture(axes.value, axes.readiness);
+  // `intakeNow` + `intakeDecisionDeadline` + `intakeWhaleNurture` were
+  // computed above so the renderer could stamp the deadline onto the brief
+  // cover. Reuse them here verbatim so the DB insert and the rendered brief
+  // never disagree on the deadline (the value persisted in the
+  // `decision_deadline` column is the value the live-timer hydrator reads
+  // from the brief's data attribute).
+  const now = intakeNow;
+  const decisionDeadline = intakeDecisionDeadline;
+  const whaleNurture = intakeWhaleNurture;
   // Doctrine (2026-05-15): every lead lands as `triaging`. OOS matters carry
   // band='D' so the lawyer can Refer / Take / Pass. Decline-with-grace only
   // fires on lawyer-initiated Pass or the deadline backstop, never at intake.

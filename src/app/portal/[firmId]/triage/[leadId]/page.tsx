@@ -21,6 +21,7 @@ import { intakeLanguageLabel } from "@/lib/intake-language-label";
 import { channelLabel, channelBadgeClasses } from "@/lib/channel-labels";
 import { buildInboundContext } from "@/lib/inbound-context";
 import DecisionTimer from "@/components/portal/DecisionTimer";
+import BriefLiveTimers from "@/components/portal/BriefLiveTimers";
 import TriageActionBar from "@/components/portal/TriageActionBar";
 import "./brief.css";
 
@@ -107,19 +108,30 @@ export default async function TriageLeadPage({
     referrer: row.referrer,
   });
 
+  // The v2 cover-layout brief HTML carries its own cover (matter title +
+  // band + decision window + sidebar Queue posture), so the page Header
+  // duplicates everything visually. Sniff for the cover class and skip the
+  // page Header when the new layout is present. Legacy briefs (pre-2026-06-06)
+  // do not contain `.brief-cover`, so they continue to render with the page
+  // Header providing matter title + band + DecisionTimer + meta.
+  const hasNewLayout = (row.brief_html ?? "").includes('class="brief-cover"');
+
   return (
     <div className="space-y-4 pb-32">
       <BackLink firmId={firmId} />
-      <Header
-        row={row}
-        subtrack={subtrack}
-        channel={channel}
-        recordingUrl={recordingUrl}
-        inboundContextText={inboundContext.show ? inboundContext.text : null}
-      />
+      {!hasNewLayout && (
+        <Header
+          row={row}
+          subtrack={subtrack}
+          channel={channel}
+          recordingUrl={recordingUrl}
+          inboundContextText={inboundContext.show ? inboundContext.text : null}
+        />
+      )}
       {row.status !== "triaging" && <StatusBanner status={row.status} />}
       {langLabel && <LanguageCallout label={langLabel} />}
       <BriefFrame html={row.brief_html} />
+      <BriefLiveTimers />
       <TriageActionBar
         firmId={firmId}
         leadId={row.lead_id}

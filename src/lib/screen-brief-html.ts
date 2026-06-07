@@ -184,21 +184,143 @@ function feeBlock(text: string): string {
   return html;
 }
 
+/**
+ * Provenance noise reduction (2026-06-06 cover-layout v2).
+ *
+ * The previous renderer emitted a source chip on every fact row, which meant
+ * the channel-default phrase (e.g. "Provided in web intake") repeated for
+ * every row in a typical brief. On a 9-fact brief, the same chip appeared
+ * nine times — drowning the actual signal, which is the EXCEPTION
+ * provenances (Inferred, Confirmed by caller, System metadata, Not confirmed)
+ * that the lawyer needs to flag.
+ *
+ * `isDefaultProvenance` returns true for the channel-default sources
+ * (`stated` / `explicit_from_caller`). The renderer suppresses the chip for
+ * those rows and emits chips only for exception provenances. The provenance
+ * legend in the facts-counter line restates the channel default so the
+ * lawyer can still see where the bulk of the facts came from.
+ */
+function isDefaultProvenance(source: string): boolean {
+  return source === 'stated' || source === 'explicit_from_caller';
+}
+
 function factsWithProvenance(facts: ResolvedFact[], channel: string | null | undefined): string {
   if (!facts || facts.length === 0) {
     return `<p class="section-body muted">No confirmed facts yet.</p>`;
   }
   const rows = facts
-    .map(
-      (f) => `
-      <li class="fact-row">
-        <span class="fact-label">${esc(f.label)}</span>
-        <span class="fact-value">${esc(f.value)}</span>
-        <span class="fact-source ${FACT_SOURCE_CLASS[f.source] ?? ''}">${esc(factSourceLabel(f.source, channel))}</span>
-      </li>`,
-    )
+    .map((f) => {
+      const showChip = !isDefaultProvenance(f.source);
+      const chip = showChip
+        ? `<span class="fact-source ${FACT_SOURCE_CLASS[f.source] ?? ''}">${esc(factSourceLabel(f.source, channel))}</span>`
+        : `<span class="fact-source-spacer" aria-hidden="true"></span>`;
+      return `
+        <li class="fact-row">
+          <span class="fact-label">${esc(f.label)}</span>
+          <span class="fact-value">${esc(f.value)}</span>
+          ${chip}
+        </li>`;
+    })
     .join('');
   return `<ul class="fact-list">${rows}</ul>`;
+}
+
+/**
+ * Add the brand terminal square (▪) to a canonical headline.
+ * Per Brand Book Rule 6.18.1 and the operator's terminal-square memory rule,
+ * the square replaces a final period only. Question marks and exclamation
+ * points are preserved. Idempotent when the square is already present.
+ */
+function withTerminalSquare(text: string): string {
+  let t = (text ?? '').trim();
+  if (!t) return t;
+  if (t.endsWith('▪')) return t;
+  if (t.endsWith('?') || t.endsWith('!')) return t;
+  if (t.endsWith('.')) t = t.slice(0, -1);
+  return t + '▪';
+}
+
+/**
+ * Humanize a snake_case matter type into a title-case display label.
+ * "business_setup_advisory" → "Business Setup Advisory". Falls back to
+ * "Lawyer brief" for empty / unknown inputs.
+ */
+function humanizeMatterType(matterType: string | null | undefined): string {
+  const m = (matterType ?? '').trim();
+  if (!m) return 'Lawyer brief';
+  return m
+    .split('_')
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join(' ');
+}
+
+/**
+ * Format the decision-window length at the moment of submission. This is the
+ * STATIC value baked into the rendered brief HTML so a non-JS reader still
+ * sees a sensible value. The live-timer hydrator (BriefLiveTimers.tsx)
+ * replaces the displayed text with the running countdown at view time —
+ * the data-deadline-iso + data-submitted-at attributes carry the truth.
+ */
+function formatWindowAtSubmit(deadlineIso: string, submittedAtIso: string): string {
+  try {
+    const deadline = new Date(deadlineIso).getTime();
+    const submit = new Date(submittedAtIso).getTime();
+    const ms = deadline - submit;
+    if (!Number.isFinite(ms) || ms <= 0) return 'Window set';
+    const totalMin = Math.floor(ms / 60_000);
+    const hours = Math.floor(totalMin / 60);
+    const mins = totalMin % 60;
+    if (hours >= 1) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+  } catch {
+    return 'Window set';
+  }
+}
+
+/**
+ * Emit a live-timer placeholder span. The element carries data attributes
+ * that `BriefLiveTimers` reads on mount to replace the inner text with the
+ * running countdown. Variant controls the CSS treatment (cover band vs
+ * sidebar row).
+ */
+function liveTimerSpan(
+  deadlineIso: string | null | undefined,
+  submittedAtIso: string,
+  variant: 'cover' | 'sidebar' = 'sidebar',
+): string {
+  if (!deadlineIso) {
+    return `<span class="brief-timer-static">Not set</span>`;
+  }
+  const initial = formatWindowAtSubmit(deadlineIso, submittedAtIso);
+  return `<span class="brief-live-timer brief-live-timer-${variant}" data-deadline-iso="${esc(deadlineIso)}" data-submitted-at="${esc(submittedAtIso)}">${esc(initial)}</span>`;
+}
+
+/**
+ * The navy callout panel inside Call preparation that frames the callback as
+ * scope-and-quote, not problem rediscovery. Numbered steps make the structure
+ * scannable. Per brand: no em dashes, no banned vocabulary, terminal square
+ * on the canonical h4.
+ */
+function callStructureCallout(): string {
+  return `
+    <div class="call-structure-callout">
+      <p class="callout-eyebrow">Lead call structure</p>
+      <h4 class="callout-title">${esc(withTerminalSquare('Use the callback to scope, not to rediscover the problem'))}</h4>
+      <ol class="callout-steps">
+        <li><span class="step-num">1</span><span class="step-body">Confirm names, postal code, and how they found the firm.</span></li>
+        <li><span class="step-num">2</span><span class="step-body">Walk through the open questions in order. The brief flags what is still unresolved.</span></li>
+        <li><span class="step-num">3</span><span class="step-body">Quote the fee range once the watchpoints are cleared, then confirm next steps before ending the call.</span></li>
+      </ol>
+    </div>`;
+}
+
+/**
+ * Channel-default provenance phrase for the facts-counter line. The renderer
+ * suppresses per-row chips for default provenances; this is the human-readable
+ * restatement so the lawyer still sees where the bulk of facts came from.
+ */
+function defaultProvenancePhraseFor(channel: string | null | undefined): string {
+  return provenancePhraseFor(channel).stated;
 }
 
 // ─── NAP block (top-of-brief contact strip) ────────────────────────────────
@@ -625,14 +747,55 @@ function truthWarningsHtml(warnings: readonly string[]): string {
 }
 
 /**
- * Render the report-area HTML for a server-built brief.
+ * Optional cover-layout extras (2026-06-06 prototype adoption).
  *
- * The portal's brief view wraps this output in its own header strip, so we
- * mirror only what the sandbox's `fillReportArea` produces — the meta
- * header (lead strip + channel chip + notice), then the band / sections.
+ * The renderer accepts a single optional opts object so the legacy positional
+ * signature stays callable from tests and ad-hoc spots. When the caller knows
+ * the decision deadline, subtrack, whale flag, recording URL, or inbound
+ * context, it threads them through here and the cover + sidebar render the
+ * full layout. When the caller passes nothing, those affordances degrade
+ * gracefully — the brief still renders end-to-end.
+ */
+export interface BriefRenderOptions {
+  /** ISO timestamp of the decision deadline. Drives the live timer attrs on
+   *  the cover decision band and the sidebar Queue posture row. */
+  decisionDeadlineIso?: string | null;
+  /** Band C subtrack label (already resolved to display form). */
+  subtrack?: string | null;
+  /** Whether the engine flagged this lead as a whale-nurture candidate. */
+  whaleNurture?: boolean;
+  /** Voice channel only: GHL recording URL for inline "Listen to recording". */
+  recordingUrl?: string | null;
+  /** Web channel only: rendered "Day, Time · Source · 'Term'" inbound context. */
+  inboundContextText?: string | null;
+}
+
+/**
+ * Render the lawyer-facing brief HTML.
  *
- * `channel` is passed separately so we don't need to plumb the full
- * EngineState into the renderer.
+ * Layout v2 (2026-06-06):
+ *
+ *   [ Brief cover — black hero | Decision band aside ]
+ *   [ Notice strip ]
+ *   [ Language callout (non-EN intakes) ]
+ *   [ Truth warnings (rare) ]
+ *   [ Contact strip — 4-cell NAP grid ]
+ *   [ Main grid 1.7fr / 0.95fr
+ *       Left: Decision / Commercial / Call prep / Resolved facts
+ *       Right: Queue posture / Watchpoints / Open questions / Inferred signals
+ *   ]
+ *
+ * The cover headline derives from `matterType` (humanised). The decision band
+ * uses the band chip + lawyer_time_priority + a live-timer placeholder span
+ * (BriefLiveTimers hydrates on mount). The right sidebar collapses meta info
+ * out of the page chrome and into the always-visible scroll pane.
+ *
+ * The brief HTML is stored verbatim at intake time; the live timer reads its
+ * data attributes at view time so the countdown is accurate even when the
+ * lawyer opens the brief hours later.
+ *
+ * OOS reports skip the band chip and the four-axis grid; they get a slim
+ * "Routing note" group inside the left column.
  */
 export function renderBriefHtmlServer(
   report: LawyerReport,
@@ -641,60 +804,172 @@ export function renderBriefHtmlServer(
   timezone: string = DEFAULT_FIRM_TIMEZONE,
   matterType?: string | null,
   practiceArea?: string | null,
+  options: BriefRenderOptions = {},
 ): string {
-  const isOOS = report.band == null; // OOS reports do not band-rank
-  const sections: string[] = [];
+  const isOOS = report.band == null;
+  const {
+    decisionDeadlineIso = null,
+    subtrack = null,
+    whaleNurture = false,
+    recordingUrl = null,
+    inboundContextText = null,
+  } = options;
 
-  // Meta header
-  sections.push(`
-    <div class="brief-meta-header">
-      <div class="brief-lead-strip">
-        <span class="brief-lead-id">${esc(report.lead_id)}</span>
-        <span class="brief-lead-time">${esc(formatTime(report.submitted_at, timezone))}</span>
+  const matterTitle = humanizeMatterType(matterType);
+  const headlineWithSquare = withTerminalSquare(matterTitle);
+  const submittedDisplay = formatTime(report.submitted_at, timezone);
+  const i18n = getI18n('en');
+  const channelMeta = getChannelChipData(channel ?? 'web', 'en', i18n);
+  const channelDisplay = channelMeta ? channelMeta.name : 'Web intake';
+  const defaultProvenance = defaultProvenancePhraseFor(channel);
+
+  // ─── Brief cover (black hero + decision band aside) ─────────────────────
+  const decisionBand = isOOS
+    ? `
+        <aside class="brief-decision-band">
+          <div class="decision-band-row">
+            <span class="band-badge band-D">Refer eligible</span>
+            <span class="decision-priority">${esc(report.lawyer_time_priority)}</span>
+          </div>
+          <div class="decision-band-timer">
+            <span class="timer-label">Decision window</span>
+            ${liveTimerSpan(decisionDeadlineIso, report.submitted_at, 'cover')}
+          </div>
+        </aside>`
+    : `
+        <aside class="brief-decision-band">
+          <div class="decision-band-row">
+            <span class="band-badge band-${esc(report.band)}">Band ${esc(report.band)}</span>
+            <span class="decision-priority">${esc(report.lawyer_time_priority)}</span>
+          </div>
+          <div class="decision-band-timer">
+            <span class="timer-label">Decision window</span>
+            ${liveTimerSpan(decisionDeadlineIso, report.submitted_at, 'cover')}
+          </div>
+        </aside>`;
+
+  const cover = `
+    <section class="brief-cover">
+      <div class="brief-cover-left">
+        <p class="cover-eyebrow">CaseLoad Select · Lawyer triage</p>
+        <h1 class="cover-headline">${esc(headlineWithSquare)}</h1>
+        ${report.confidence_calibration ? `<p class="cover-summary">${esc(report.confidence_calibration)}</p>` : ''}
       </div>
-      ${channelChipHtml(channel)}
+      ${decisionBand}
+    </section>
+  `;
+
+  // ─── Notice strip ────────────────────────────────────────────────────────
+  const noticeStrip = `
+    <div class="brief-notice-bar">
       <p class="brief-notice">Internal lawyer-facing reference. Not legal advice provided to the lead. The screen organises the lead's description into a triage brief; a lawyer must independently confirm facts and exercise professional judgment before contacting the lead.</p>
     </div>
-  `);
+  `;
 
-  sections.push(languageCalloutHtml(intakeLanguage));
-  sections.push(truthWarningsHtml(report.truth_warnings));
+  // ─── Contact strip (4-cell NAP grid) ─────────────────────────────────────
+  const contactStrip = napBlock(report.resolved_facts_v2, channel);
 
-  // Band row
-  sections.push(`
-    <div class="brief-band">
-      <span class="band-badge band-${esc(report.band)}">Band ${esc(report.band)}</span>
-      <span class="brief-priority">${esc(report.lawyer_time_priority)}</span>
-    </div>
-  `);
+  // ─── Sidebar cards ───────────────────────────────────────────────────────
+  const subtrackRow = subtrack
+    ? `<div class="sidebar-meta-row"><dt>Subtrack</dt><dd>${esc(subtrack)}</dd></div>`
+    : '';
+  const whaleRow = whaleNurture
+    ? `<div class="sidebar-meta-row sidebar-meta-row-whale"><dt>Whale nurture</dt><dd>Long-game cadence active</dd></div>`
+    : '';
+  const recordingRow = recordingUrl
+    ? `<div class="sidebar-meta-row"><dt>Recording</dt><dd><a class="sidebar-meta-link" href="${esc(recordingUrl)}" target="_blank" rel="noopener noreferrer">Listen</a></dd></div>`
+    : '';
+  const inboundRow = inboundContextText
+    ? `<div class="sidebar-meta-row sidebar-meta-row-inbound-detail"><dt>Detail</dt><dd>${esc(inboundContextText)}</dd></div>`
+    : '';
 
-  if (!isOOS && report.confidence_calibration) {
-    sections.push(`<p class="brief-calibration">${esc(report.confidence_calibration)}</p>`);
-  }
+  const posturedCard = `
+    <section class="sidebar-card sidebar-card-posture">
+      <h4 class="sidebar-title">Queue posture</h4>
+      <dl class="sidebar-meta-list">
+        <div class="sidebar-meta-row">
+          <dt>Decision window</dt>
+          <dd>${liveTimerSpan(decisionDeadlineIso, report.submitted_at, 'sidebar')}</dd>
+        </div>
+        <div class="sidebar-meta-row">
+          <dt>Lead ID</dt>
+          <dd class="sidebar-meta-mono">${esc(report.lead_id)}</dd>
+        </div>
+        <div class="sidebar-meta-row">
+          <dt>Inbound</dt>
+          <dd>${esc(channelDisplay)}</dd>
+        </div>
+        ${recordingRow}
+        ${inboundRow}
+        <div class="sidebar-meta-row">
+          <dt>Submitted</dt>
+          <dd>${esc(submittedDisplay)}</dd>
+        </div>
+        ${subtrackRow}
+        ${whaleRow}
+      </dl>
+    </section>`;
 
-  // NAP block — prominent contact strip at the top of every brief
-  // (both in-scope and OOS). The lawyer's first scan answers "can I
-  // reach this person back?"; surfacing name + phone + postal code +
-  // email here removes the scroll-to-the-bottom step that the
-  // pre-2026-05-21 layout forced.
-  sections.push(napBlock(report.resolved_facts_v2, channel));
+  const watchpointsCard = !isOOS
+    ? `
+      <section class="sidebar-card sidebar-card-watchpoints">
+        <h4 class="sidebar-title">Standing watchpoints for this matter type</h4>
+        ${riskFlagsBlock(report.risk_flags)}
+      </section>`
+    : '';
 
+  const questionsCard = !isOOS
+    ? `
+      <section class="sidebar-card sidebar-card-questions">
+        <h4 class="sidebar-title">Open questions</h4>
+        ${bullets(report.open_questions, 'No specific open questions auto-generated. The callback will surface them.')}
+      </section>`
+    : '';
+
+  const signalsCard = !isOOS
+    ? `
+      <section class="sidebar-card sidebar-card-signals">
+        <h4 class="sidebar-title">Inferred signals</h4>
+        ${bullets(report.inferred_signals, 'No additional inferred signals.')}
+      </section>`
+    : '';
+
+  const sidebar = `
+    <aside class="brief-main-right">
+      ${posturedCard}
+      ${watchpointsCard}
+      ${questionsCard}
+      ${signalsCard}
+    </aside>
+  `;
+
+  // ─── Left column body ────────────────────────────────────────────────────
+  let leftBody: string;
   if (isOOS) {
-    sections.push(`
+    leftBody = `
       <section class="brief-group" data-group="routing">
         <h3 class="brief-group-title">Routing note</h3>
         <div class="section"><p class="section-title">Matter detected</p>${textBlock(report.matter_snapshot)}</div>
         <div class="section"><p class="section-title">Action required</p>${textBlock(report.why_it_matters)}</div>
         <div class="section"><p class="section-title">Suggested steps</p>${bullets(report.what_to_confirm)}</div>
       </section>
-    `);
+    `;
   } else {
-    sections.push(`
+    // Facts counter line restates the provenance phrase the renderer
+    // suppressed at the row level (chip noise reduction). Capitalised so the
+    // phrase reads as it would on a chip — e.g. "Provided in web intake" —
+    // not "provided in web intake".
+    const factsCounterLine = report.confidence_calibration
+      ? `<p class="facts-counter">${esc(report.confidence_calibration)} Channel default for unflagged rows: ${esc(defaultProvenance)}.</p>`
+      : `<p class="facts-counter">Channel default for unflagged rows: ${esc(defaultProvenance)}.</p>`;
+
+    leftBody = `
       <section class="brief-group" data-group="headline">
         <h3 class="brief-group-title">Decision</h3>
         <div class="section"><p class="section-title">Matter snapshot</p>${textBlock(report.matter_snapshot)}</div>
         <div class="section"><p class="section-title">Why this matters</p>${textBlock(report.why_it_matters)}</div>
-        <div class="section"><p class="section-title">Why this is Band ${esc(report.band)}</p>${axisBreakdown(report.axis_reasoning, matterType, practiceArea)}</div>
+        <div class="section"><p class="section-title">What the callback needs to resolve</p>${bullets(report.strategic_considerations, 'No specific scope questions flagged. Confirm the standard onboarding facts on the callback.')}</div>
+        <div class="section"><p class="section-title">Why this is Band ${esc(report.band)}</p><div class="axis-grid">${axisBreakdown(report.axis_reasoning, matterType, practiceArea)}</div></div>
       </section>
 
       <section class="brief-group" data-group="commercial">
@@ -706,20 +981,33 @@ export function renderBriefHtmlServer(
 
       <section class="brief-group" data-group="callprep">
         <h3 class="brief-group-title">Call preparation</h3>
-        <div class="section"><p class="section-title">Strategic considerations for the call</p>${bullets(report.strategic_considerations)}</div>
-        <div class="section"><p class="section-title">Suggested call openers</p>${bullets(report.call_openers)}</div>
-        <div class="section"><p class="section-title">What to confirm before quoting</p>${bullets(report.what_to_confirm)}</div>
+        ${callStructureCallout()}
+        <div class="section"><p class="section-title">Ask first</p>${bullets(report.call_openers)}</div>
+        <div class="section"><p class="section-title">Confirm before quoting</p>${bullets(report.what_to_confirm)}</div>
       </section>
 
       <section class="brief-group" data-group="facts">
-        <h3 class="brief-group-title">Facts and reasoning</h3>
-        <div class="section"><p class="section-title">Resolved facts</p>${factsWithProvenance(report.resolved_facts_v2, channel)}</div>
-        <div class="section"><p class="section-title">Inferred signals</p>${bullets(report.inferred_signals, 'No additional inferred signals.')}</div>
-        <div class="section"><p class="section-title">Open questions</p>${bullets(report.open_questions, 'No specific open questions auto-generated. The callback will surface them.')}</div>
-        <div class="section"><p class="section-title">Standing watchpoints for this matter type</p>${riskFlagsBlock(report.risk_flags)}</div>
+        <h3 class="brief-group-title">Resolved facts</h3>
+        ${factsCounterLine}
+        ${factsWithProvenance(report.resolved_facts_v2, channel)}
       </section>
-    `);
+    `;
   }
 
-  return sections.join('\n');
+  // ─── Assemble final layout ───────────────────────────────────────────────
+  const mainGrid = `
+    <div class="brief-main-grid">
+      <div class="brief-main-left">${leftBody}</div>
+      ${sidebar}
+    </div>
+  `;
+
+  return [
+    cover,
+    noticeStrip,
+    languageCalloutHtml(intakeLanguage),
+    truthWarningsHtml(report.truth_warnings),
+    contactStrip,
+    mainGrid,
+  ].join('\n');
 }

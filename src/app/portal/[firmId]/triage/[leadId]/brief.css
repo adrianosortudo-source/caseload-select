@@ -575,3 +575,443 @@
     padding: 12px 14px;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   v2 cover layout (2026-06-06) — Codex prototype adoption
+   ════════════════════════════════════════════════════════════════════════
+
+   New top-level shapes:
+     .brief-cover       — black hero (eyebrow + h1 + calibration) + decision band aside
+     .brief-notice-bar  — parchment notice strip
+     .brief-main-grid   — 2-column grid (1.7fr left content / 0.95fr right sidebar)
+     .sidebar-card      — navy-bordered cards in the right column
+     .call-structure-callout — navy callout panel with numbered steps inside Call prep
+     .axis-grid         — 2-column grid for the four-axis breakdown
+     .facts-counter     — small provenance summary line above Resolved facts
+
+   The legacy meta-header / band-row / calibration rules above stay in place
+   so previously-stored briefs continue to render. New briefs emitted from
+   the v2 renderer use the rules below. */
+
+/* ─── Cover (hero + decision band) ───────────────────────────────────────── */
+
+.brief-frame .brief-cover {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 0;
+  background: var(--bf-black);
+  color: var(--bf-white);
+  margin: -8px -8px 18px;
+  border-radius: var(--bf-radius);
+  overflow: hidden;
+}
+
+.brief-frame .brief-cover-left {
+  padding: 28px 32px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.brief-frame .cover-eyebrow {
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bf-gold);
+  margin: 0;
+}
+
+.brief-frame .cover-headline {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 2.1rem;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--bf-white);
+  margin: 0;
+}
+
+.brief-frame .cover-summary {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 400;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.78);
+  margin: 0;
+}
+
+.brief-frame .brief-decision-band {
+  background: rgba(196, 180, 154, 0.08);
+  border-left: 1px solid rgba(196, 180, 154, 0.25);
+  padding: 28px 32px 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.brief-frame .decision-band-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.brief-frame .decision-band-row .band-badge {
+  font-size: 0.82rem;
+  padding: 6px 14px;
+}
+
+.brief-frame .decision-priority {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--bf-white);
+  letter-spacing: 0.01em;
+}
+
+.brief-frame .decision-band-timer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brief-frame .timer-label {
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bf-gold);
+}
+
+.brief-frame .brief-live-timer {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.005em;
+  font-variant-numeric: tabular-nums;
+}
+
+.brief-frame .brief-live-timer-cover {
+  font-size: 1.5rem;
+  color: var(--bf-white);
+}
+
+.brief-frame .brief-live-timer-sidebar {
+  font-size: 0.92rem;
+  color: var(--bf-navy);
+}
+
+.brief-frame .brief-timer-static {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 500;
+  color: var(--bf-gray-400);
+}
+
+.brief-frame .brief-live-timer.timer-warning  { color: #B07900; }
+.brief-frame .brief-live-timer.timer-critical { color: #A0271A; }
+.brief-frame .brief-live-timer.timer-expired  { color: #A0271A; }
+
+/* ─── Notice bar (parchment strip below cover) ───────────────────────────── */
+
+.brief-frame .brief-notice-bar {
+  background: var(--bf-parchment);
+  border-left: 3px solid var(--bf-gold);
+  padding: 12px 18px;
+  margin: 0 -8px 18px;
+  border-radius: var(--bf-radius);
+}
+
+.brief-frame .brief-notice-bar .brief-notice {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--bf-gray-700);
+  margin: 0;
+  background: transparent;
+  border-left: none;
+  padding: 0;
+}
+
+/* ─── Main grid (left content + right sidebar) ───────────────────────────── */
+
+.brief-frame .brief-main-grid {
+  display: grid;
+  grid-template-columns: 1.7fr 0.95fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.brief-frame .brief-main-left {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.brief-frame .brief-main-right {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: sticky;
+  top: 18px;
+}
+
+.brief-frame .brief-main-left .brief-group {
+  margin-bottom: 0;
+}
+
+/* ─── Sidebar cards ──────────────────────────────────────────────────────── */
+
+.brief-frame .sidebar-card {
+  background: var(--bf-white);
+  border: 1px solid var(--bf-gray-200);
+  border-left: 3px solid var(--bf-navy);
+  border-radius: var(--bf-radius);
+  padding: 16px 18px;
+}
+
+.brief-frame .sidebar-card-watchpoints {
+  border-left-color: var(--bf-gold);
+  background: #FBFAF6;
+}
+
+.brief-frame .sidebar-card-questions {
+  border-left-color: var(--bf-band-b);
+}
+
+.brief-frame .sidebar-card-signals {
+  border-left-color: var(--bf-gray-300);
+}
+
+.brief-frame .sidebar-title {
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bf-gray-700);
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--bf-gray-200);
+}
+
+.brief-frame .sidebar-meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.brief-frame .sidebar-meta-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.brief-frame .sidebar-meta-row dt {
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bf-gray-400);
+  margin: 0;
+}
+
+.brief-frame .sidebar-meta-row dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  color: var(--bf-black);
+  word-break: break-word;
+}
+
+.brief-frame .sidebar-meta-mono {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.brief-frame .sidebar-meta-link {
+  color: var(--bf-navy);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.brief-frame .sidebar-meta-link:hover {
+  color: var(--bf-gold-2);
+}
+
+.brief-frame .sidebar-meta-row-whale dd {
+  color: var(--bf-navy);
+}
+
+.brief-frame .sidebar-meta-row-inbound-detail dd {
+  font-weight: 500;
+  color: var(--bf-gray-600);
+  font-size: 0.78rem;
+}
+
+/* Sidebar bullet lists are tighter than left-column lists */
+.brief-frame .sidebar-card .bullet-list li {
+  font-size: 0.84rem;
+  padding: 3px 0 3px 14px;
+  line-height: 1.45;
+}
+
+.brief-frame .sidebar-card .section-body {
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.brief-frame .sidebar-card .tag-row {
+  gap: 5px;
+}
+
+.brief-frame .sidebar-card .tag {
+  font-size: 0.72rem;
+  padding: 2px 7px;
+}
+
+/* ─── Call structure callout (navy panel inside Call prep) ───────────────── */
+
+.brief-frame .call-structure-callout {
+  background: var(--bf-navy);
+  color: var(--bf-white);
+  border-radius: var(--bf-radius);
+  padding: 18px 22px;
+  margin-bottom: 16px;
+}
+
+.brief-frame .callout-eyebrow {
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bf-gold);
+  margin: 0 0 6px;
+}
+
+.brief-frame .callout-title {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1.35;
+  color: var(--bf-white);
+  margin: 0 0 14px;
+}
+
+.brief-frame .callout-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.brief-frame .callout-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.brief-frame .step-num {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bf-gold);
+  color: var(--bf-navy);
+  font-family: 'Oxanium', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.82rem;
+  border-radius: 50%;
+}
+
+.brief-frame .step-body {
+  flex: 1 1 auto;
+}
+
+/* ─── 2-column axis grid (Why this is Band X) ────────────────────────────── */
+
+.brief-frame .axis-grid .axis-breakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* ─── Facts counter (provenance summary above Resolved facts) ────────────── */
+
+.brief-frame .facts-counter {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--bf-gray-600);
+  margin: 0 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px dotted var(--bf-gray-200);
+}
+
+/* ─── Fact source spacer (when channel-default chip is suppressed) ───────── */
+
+.brief-frame .fact-source-spacer {
+  display: inline-block;
+  min-width: 1px;
+}
+
+/* ─── Responsive collapses ───────────────────────────────────────────────── */
+
+@media (max-width: 1180px) {
+  .brief-frame .brief-cover {
+    grid-template-columns: 1fr;
+  }
+  .brief-frame .brief-decision-band {
+    border-left: none;
+    border-top: 1px solid rgba(196, 180, 154, 0.25);
+  }
+  .brief-frame .brief-main-grid {
+    grid-template-columns: 1fr;
+  }
+  .brief-frame .brief-main-right {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .brief-frame .brief-cover-left {
+    padding: 22px 22px 24px;
+  }
+  .brief-frame .brief-decision-band {
+    padding: 22px 22px 24px;
+  }
+  .brief-frame .cover-headline {
+    font-size: 1.7rem;
+  }
+  .brief-frame .brief-main-grid {
+    gap: 14px;
+  }
+  .brief-frame .brief-main-left {
+    gap: 14px;
+  }
+  .brief-frame .axis-grid .axis-breakdown {
+    grid-template-columns: 1fr;
+  }
+  .brief-frame .call-structure-callout {
+    padding: 16px 18px;
+  }
+}

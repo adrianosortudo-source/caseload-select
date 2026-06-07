@@ -43,6 +43,7 @@ import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
 import { promoteContactProvenance } from '@/lib/promote-contact-provenance';
 import { recoverNameIfMissing } from '@/lib/readback-detection';
+import { computeDecisionDeadline, computeWhaleNurture } from '@/lib/intake-v2-derive';
 import type { EngineState, LawyerReport, Band } from '@/lib/screen-engine/types';
 
 export interface VoicePipelineInput {
@@ -50,12 +51,26 @@ export interface VoicePipelineInput {
   callerPhone: string | null;
   callerName: string | null;
   firmTimezone: string;
+  /**
+   * Optional recording URL to surface in the brief's Queue posture sidebar.
+   * Voice-only; absent for the promote-route replay path where the recording
+   * may not be available.
+   */
+  recordingUrl?: string | null;
 }
 
 export interface VoicePipelineResult {
   state: EngineState;
   report: LawyerReport;
   briefHtml: string;
+  /**
+   * The decision-window deadline computed during this pipeline run. The
+   * caller persists this as `screened_leads.decision_deadline` so the brief's
+   * live-timer placeholder (data-deadline-iso on the cover + sidebar) reads
+   * back exactly what the column holds.
+   */
+  decisionDeadlineIso: string;
+  whaleNurture: boolean;
   normalizedTranscript: string;
   llmMode: 'live' | 'disabled' | 'error' | 'degraded' | null;
   band: Band | null;
@@ -117,7 +132,7 @@ export function seedVoiceState(
 export async function runVoicePipeline(
   input: VoicePipelineInput,
 ): Promise<VoicePipelineResult> {
-  const { rawTranscript, callerPhone, callerName, firmTimezone } = input;
+  const { rawTranscript, callerPhone, callerName, firmTimezone, recordingUrl } = input;
 
   // Voice-channel transcript repair (task #109): ASR corrections + readback
   // confirmation preservation. The ORIGINAL transcript is what the caller
@@ -179,7 +194,22 @@ export async function runVoicePipeline(
     normalizedTranscript,
   );
 
-  // 8. Render the lawyer-facing brief (v2 prose renderer; matter-aware).
+  // 8a. Compute the decision deadline up front so the renderer can stamp it
+  // onto the cover decision band + sidebar Queue posture. The caller (live
+  // voice-intake route OR the promote route) persists this same value as
+  // `decision_deadline` so the live-timer reads back exactly what is stored.
+  const pipelineNow = new Date();
+  const pipelineDeadline = computeDecisionDeadline(
+    report.four_axis.urgency,
+    pipelineNow,
+    state.matter_type,
+  );
+  const pipelineWhale = computeWhaleNurture(
+    report.four_axis.value,
+    report.four_axis.readiness,
+  );
+
+  // 8b. Render the lawyer-facing brief (v2 cover layout; matter-aware).
   const briefHtml = renderBriefHtmlServer(
     report,
     'voice',
@@ -187,6 +217,11 @@ export async function runVoicePipeline(
     firmTimezone,
     state.matter_type,
     state.practice_area,
+    {
+      decisionDeadlineIso: pipelineDeadline.toISOString(),
+      whaleNurture: pipelineWhale,
+      recordingUrl: recordingUrl ?? null,
+    },
   );
 
   // 9. Band assignment + contact-doctrine result for the caller to inspect.
@@ -196,6 +231,8 @@ export async function runVoicePipeline(
     state,
     report,
     briefHtml,
+    decisionDeadlineIso: pipelineDeadline.toISOString(),
+    whaleNurture: pipelineWhale,
     normalizedTranscript,
     llmMode,
     band: bandResult.band,

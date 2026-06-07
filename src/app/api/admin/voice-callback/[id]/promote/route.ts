@@ -186,7 +186,15 @@ export async function POST(
     );
   }
 
-  const { state, report, briefHtml, llmMode, band } = pipeline;
+  const {
+    state,
+    report,
+    briefHtml,
+    llmMode,
+    band,
+    decisionDeadlineIso: pipelineDeadlineIso,
+    whaleNurture: pipelineWhale,
+  } = pipeline;
 
   // 7. Contact-doctrine voice-reachability gate — same rule as
   // /api/voice-intake (be5219d): a row needs phone OR email to count as
@@ -208,11 +216,15 @@ export async function POST(
     );
   }
 
-  // 8. Derived flags (same helpers /api/voice-intake calls).
+  // 8. Derived flags. The pipeline already computed `decisionDeadlineIso` and
+  // `whaleNurture` so the brief HTML and the persisted row never disagree on
+  // the deadline (the brief's data-deadline-iso must equal
+  // screened_leads.decision_deadline for the live-timer hydrator to read back
+  // a sensible value). Reuse the pipeline's values verbatim.
   const now = new Date();
   const axes = report.four_axis;
-  const decisionDeadline = computeDecisionDeadline(axes.urgency, now, state.matter_type);
-  const whaleNurture = computeWhaleNurture(axes.value, axes.readiness);
+  const decisionDeadline = new Date(pipelineDeadlineIso);
+  const whaleNurture = pipelineWhale;
   const { status: initialStatus } = computeInitialStatus(state.matter_type);
 
   // 9. Build slot_answers. Identical shape to the live intake route, plus

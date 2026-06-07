@@ -616,6 +616,19 @@ export async function POST(req: NextRequest) {
     report.resolved_facts_v2,
     normalizedTranscript,
   );
+  // Compute the decision deadline up front so the renderer can stamp it onto
+  // the cover decision band + sidebar Queue posture (the live-timer hydrator
+  // reads it back at view time). The DB insert below reuses the same value.
+  const voiceIntakeNow = new Date();
+  const voiceIntakeDeadline = computeDecisionDeadline(
+    report.four_axis.urgency,
+    voiceIntakeNow,
+    state.matter_type,
+  );
+  const voiceIntakeWhale = computeWhaleNurture(
+    report.four_axis.value,
+    report.four_axis.readiness,
+  );
   const briefHtml = renderBriefHtmlServer(
     report,
     'voice',
@@ -623,6 +636,11 @@ export async function POST(req: NextRequest) {
     firmTimezone,
     state.matter_type,
     state.practice_area,
+    {
+      decisionDeadlineIso: voiceIntakeDeadline.toISOString(),
+      whaleNurture: voiceIntakeWhale,
+      recordingUrl: body.recording_url ?? null,
+    },
   );
   const completeness = computeCoreCompleteness(state);
   const bandResult = computeBand(state);
@@ -711,10 +729,13 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Derived flags (same helpers as intake-v2) ──────────────────────────
-  const now = new Date();
+  // Reuse the deadline + whale flag computed above (before the renderer call
+  // so the brief and the persisted row never disagree on the deadline). The
+  // local `axes` alias kept for downstream readability.
+  const now = voiceIntakeNow;
   const axes = report.four_axis;
-  const decisionDeadline = computeDecisionDeadline(axes.urgency, now, state.matter_type);
-  const whaleNurture = computeWhaleNurture(axes.value, axes.readiness);
+  const decisionDeadline = voiceIntakeDeadline;
+  const whaleNurture = voiceIntakeWhale;
   const { status: initialStatus, changedBy: initialChangedBy } =
     computeInitialStatus(state.matter_type);
 

@@ -533,6 +533,22 @@ export async function processChannelInbound(
   }
 
   const report = buildReport(state);
+
+  // Compute the decision deadline up front so the renderer can stamp it onto
+  // the cover decision band + sidebar Queue posture. The DB insert below
+  // reuses the same value, so the live-timer hydrator reads back exactly
+  // what the persisted column holds.
+  const channelIntakeNow = new Date();
+  const channelIntakeDeadline = computeDecisionDeadline(
+    report.four_axis.urgency,
+    channelIntakeNow,
+    state.matter_type,
+  );
+  const channelIntakeWhale = computeWhaleNurture(
+    report.four_axis.value,
+    report.four_axis.readiness,
+  );
+
   const briefHtml = renderBriefHtmlServer(
     report,
     channel,
@@ -540,6 +556,10 @@ export async function processChannelInbound(
     firmTimezone,
     state.matter_type,
     state.practice_area,
+    {
+      decisionDeadlineIso: channelIntakeDeadline.toISOString(),
+      whaleNurture: channelIntakeWhale,
+    },
   );
   const bandResult = computeBand(state);
   const band: Band | null = bandResult.band;
@@ -751,10 +771,12 @@ export async function processChannelInbound(
   }
 
   // ── Gate passed (and discovery complete or skipped): finalise ──────────
-  const now = new Date();
+  // Reuse the deadline + whale flag computed above (before the renderer call)
+  // so the brief and the persisted row never disagree on the deadline.
+  const now = channelIntakeNow;
   const axes = report.four_axis;
-  const decisionDeadline = computeDecisionDeadline(axes.urgency, now, state.matter_type);
-  const whaleNurture = computeWhaleNurture(axes.value, axes.readiness);
+  const decisionDeadline = channelIntakeDeadline;
+  const whaleNurture = channelIntakeWhale;
   const { status: initialStatus, changedBy: initialChangedBy } =
     computeInitialStatus(state.matter_type);
 
