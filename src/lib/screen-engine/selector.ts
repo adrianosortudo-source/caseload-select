@@ -155,6 +155,110 @@ function getMatterGap(state: EngineState): DecisionGap {
     return 'none';
   }
 
+  // ─── Estates Phase B ────────────────────────────────────────────────────
+  //
+  // Gap shape: each required core slot is checked directly via `hasValue`
+  // rather than `isResolved(gap)` because none of these slots have a
+  // matter-specific `resolves` field (they were authored with
+  // `resolves: 'none'`). The chain returns the `'matter_qualification'`
+  // sentinel until every required core slot is filled, which blocks
+  // `shouldPresentInsight` from firing prematurely (it requires
+  // `gap === 'none'`). The selector still picks the right slot by
+  // tier+priority scoring (all gating slots are tier='core' with
+  // decision_value 7+).
+  //
+  // Bug surfaced 2026-06-07: "i need a will" → engine asked 1 universal slot
+  // (hiring_timeline) and jumped to REVIEW because no will-specific gap
+  // existed. Same shape affects every matter type below.
+
+  if (matter_type === 'will_drafting') {
+    if (!hasValue(state, 'marital_status')) return 'matter_qualification';
+    if (!hasValue(state, 'children_count')) return 'matter_qualification';
+    if (!hasValue(state, 'estate_complexity')) return 'value'; // resolves: 'value'
+    if (!hasValue(state, 'existing_will_status')) return 'matter_qualification';
+    return 'none';
+  }
+
+  if (matter_type === 'power_of_attorney') {
+    if (!hasValue(state, 'poa_type')) return 'matter_qualification';
+    if (!hasValue(state, 'poa_urgency')) return 'urgency'; // resolves: 'urgency'
+    if (!hasValue(state, 'marital_status')) return 'matter_qualification';
+    if (!hasValue(state, 'poa_existing_documents')) return 'matter_qualification';
+    return 'none';
+  }
+
+  if (matter_type === 'probate') {
+    if (!hasValue(state, 'relationship_to_deceased')) return 'matter_qualification';
+    if (!hasValue(state, 'will_status_probate')) return 'matter_qualification';
+    if (!hasValue(state, 'estate_value_band')) return 'value'; // resolves: 'value'
+    if (!hasValue(state, 'executor_role')) return 'matter_qualification';
+    return 'none';
+  }
+
+  if (matter_type === 'estate_dispute') {
+    if (!hasValue(state, 'estate_dispute_type')) return 'matter_qualification';
+    if (!hasValue(state, 'estate_dispute_role')) return 'matter_qualification';
+    if (!hasValue(state, 'estate_value_band')) return 'value';
+    if (!hasValue(state, 'estate_court_status')) return 'matter_qualification';
+    return 'none';
+  }
+
+  if (matter_type === 'estates_general') {
+    // Routing catch-all — the only required slot is estates_problem_type,
+    // which triggers re-classification into a sub-type (will_drafting /
+    // power_of_attorney / probate / estate_dispute) via the LLM extractor's
+    // __matter_type. After re-routing, the sub-type's chain fires next turn.
+    if (!hasValue(state, 'estates_problem_type')) return 'matter_qualification';
+    return 'none';
+  }
+
+  // ─── Employment Phase B ─────────────────────────────────────────────────
+
+  if (matter_type === 'wrongful_dismissal') {
+    if (!hasValue(state, 'tenure_band')) return 'matter_qualification';
+    if (!hasValue(state, 'dismissal_reason_given')) return 'matter_qualification';
+    if (!hasValue(state, 'salary_band')) return 'value'; // resolves: 'value'
+    if (!hasValue(state, 'severance_offered')) return 'matter_qualification';
+    if (!hasValue(state, 'signed_release')) return 'matter_qualification';
+    return 'none';
+  }
+
+  if (matter_type === 'severance_review') {
+    if (!hasValue(state, 'severance_offer_amount')) return 'matter_qualification';
+    if (!hasValue(state, 'severance_deadline')) return 'urgency'; // resolves: 'urgency'
+    if (!hasValue(state, 'tenure_band')) return 'matter_qualification';
+    if (!hasValue(state, 'salary_band')) return 'value';
+    if (!hasValue(state, 'signed_release')) return 'matter_qualification';
+    return 'none';
+  }
+
+  if (matter_type === 'harassment_complaint') {
+    if (!hasValue(state, 'harassment_type')) return 'matter_qualification';
+    if (!hasValue(state, 'harassment_employment_status')) return 'matter_qualification';
+    if (!hasValue(state, 'reported_to_hr')) return 'matter_qualification';
+    return 'none';
+  }
+
+  if (matter_type === 'wage_recovery') {
+    if (!hasValue(state, 'wages_owed_band')) return 'value'; // resolves: 'value'
+    if (!hasValue(state, 'wages_type')) return 'matter_qualification';
+    return 'none';
+  }
+
+  if (matter_type === 'employment_contract_review') {
+    if (!hasValue(state, 'contract_review_type')) return 'matter_qualification';
+    if (!hasValue(state, 'contract_review_timeline')) return 'urgency'; // resolves: 'urgency'
+    if (!hasValue(state, 'contract_review_concerns')) return 'matter_qualification';
+    return 'none';
+  }
+
+  if (matter_type === 'employment_general') {
+    // Routing catch-all — sub-type re-classification fires on the next turn
+    // after employment_problem_type is answered.
+    if (!hasValue(state, 'employment_problem_type')) return 'matter_qualification';
+    return 'none';
+  }
+
   if (matter_type === 'business_setup_advisory') {
     if (!isResolved(state, 'advisory_path')) return 'advisory_path';
     if (!isResolved(state, 'co_owner_count') && advisory_subtrack !== 'buy_in_or_joining') {

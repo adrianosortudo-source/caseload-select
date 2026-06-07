@@ -168,6 +168,16 @@ export type DecisionGap =
   | 'mortgage_status'
   | 'litigation_subject'
   | 'party_role'
+  // Generic matter-qualification sentinel for matter types whose core slots
+  // are not yet wired into the gap chain via their own resolve-by-id slot.
+  // Estates Phase B (will_drafting, power_of_attorney, probate, estate_dispute,
+  // estates_general) and employment Phase B (wrongful_dismissal,
+  // severance_review, harassment_complaint, wage_recovery,
+  // employment_contract_review, employment_general) gate on this. The selector
+  // never sees a `resolves: 'matter_qualification'` slot, so it picks by
+  // tier+priority — which is correct for these matter types because every
+  // gating slot is `tier: 'core'` with sane decision_value + priority.
+  | 'matter_qualification'
   | 'none';
 
 export type SlotMetaSource = 'explicit' | 'answered' | 'inferred' | 'unknown';
