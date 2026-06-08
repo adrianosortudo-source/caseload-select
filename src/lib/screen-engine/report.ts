@@ -791,6 +791,14 @@ function buildResolvedFactsV2(state: EngineState): ResolvedFact[] {
       case 'explicit': source = 'explicit_from_caller'; break;
       case 'answered': source = 'explicit_from_caller'; break;
       case 'inferred': source = 'inferred_from_transcript'; break;
+      case 'system_metadata': source = 'system_metadata'; break;
+      // 2026-06-08 provenance honesty (#169): profile-derived name
+      // pre-fill (WhatsApp/Messenger/IG profile name, voice caller_name)
+      // is recorded as profile_metadata. The brief renderer must surface
+      // honest provenance, not "Provided in thread" (which would imply
+      // the lead typed the name). screen-brief-html.ts maps this to
+      // channel-aware "From {channel} profile" phrasing.
+      case 'profile_metadata': source = 'profile_metadata'; break;
       default: source = 'unknown';
     }
     out.push({ label, value: val, source });
@@ -805,13 +813,20 @@ function buildResolvedFactsV2(state: EngineState): ResolvedFact[] {
     confirmed_by_caller_after_readback: 0,
     spelled_by_caller: 1,
     system_metadata: 2,
-    explicit_from_caller: 3,
-    inferred_from_transcript: 4,
-    unknown: 5,
+    // profile_metadata ranks below system_metadata and explicit_from_caller:
+    // it is reachability/identity from the profile system, weaker than
+    // carrier-verified phone (system_metadata) and weaker than the lead
+    // stating something in the thread (explicit_from_caller). Above
+    // inferred_from_transcript because the profile system did report it,
+    // even if the lead did not confirm it.
+    profile_metadata: 3,
+    explicit_from_caller: 4,
+    inferred_from_transcript: 5,
+    unknown: 6,
     // Legacy values - present in older DB rows
     confirmed: 0,
-    stated: 3,
-    inferred: 4,
+    stated: 4,
+    inferred: 5,
   };
   out.sort((a, b) => rank[a.source] - rank[b.source]);
   return out;

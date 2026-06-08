@@ -44,25 +44,27 @@ import { DEFAULT_FIRM_TIMEZONE } from './firm-timezone';
  */
 const CHANNEL_PROVENANCE_PHRASE: Record<
   string,
-  { stated: string; inferred: string }
+  { stated: string; inferred: string; profile: string }
 > = {
-  voice:     { stated: 'Stated during call',           inferred: 'Inferred from transcript' },
-  web:       { stated: 'Provided in web intake',       inferred: 'Inferred from web intake' },
-  facebook:  { stated: 'Provided in Messenger thread', inferred: 'Inferred from Messenger thread' },
-  instagram: { stated: 'Provided in Instagram DM',     inferred: 'Inferred from Instagram DM' },
-  whatsapp:  { stated: 'Provided in WhatsApp thread',  inferred: 'Inferred from WhatsApp thread' },
-  sms:       { stated: 'Provided in SMS thread',       inferred: 'Inferred from SMS thread' },
-  gbp:       { stated: 'Provided in GBP chat',         inferred: 'Inferred from GBP chat' },
+  voice:     { stated: 'Stated during call',           inferred: 'Inferred from transcript',     profile: 'From caller profile (unconfirmed)' },
+  web:       { stated: 'Provided in web intake',       inferred: 'Inferred from web intake',     profile: 'From web profile (unconfirmed)' },
+  facebook:  { stated: 'Provided in Messenger thread', inferred: 'Inferred from Messenger thread', profile: 'From Messenger profile (unconfirmed)' },
+  instagram: { stated: 'Provided in Instagram DM',     inferred: 'Inferred from Instagram DM',   profile: 'From Instagram profile (unconfirmed)' },
+  whatsapp:  { stated: 'Provided in WhatsApp thread',  inferred: 'Inferred from WhatsApp thread', profile: 'From WhatsApp profile (unconfirmed)' },
+  sms:       { stated: 'Provided in SMS thread',       inferred: 'Inferred from SMS thread',     profile: 'From SMS profile (unconfirmed)' },
+  gbp:       { stated: 'Provided in GBP chat',         inferred: 'Inferred from GBP chat',       profile: 'From Google profile (unconfirmed)' },
 };
 
 const FALLBACK_PROVENANCE_PHRASE = {
   stated: 'Provided in intake',
   inferred: 'Inferred from intake',
+  profile: 'From channel profile (unconfirmed)',
 };
 
 function provenancePhraseFor(channel: string | null | undefined): {
   stated: string;
   inferred: string;
+  profile: string;
 } {
   const c = (channel ?? 'web').toLowerCase();
   return CHANNEL_PROVENANCE_PHRASE[c] ?? FALLBACK_PROVENANCE_PHRASE;
@@ -85,7 +87,21 @@ function factSourceLabel(source: string, channel: string | null | undefined): st
     case 'stated':
       return phrase.stated;
     case 'system_metadata':
+      // Carrier-confirmed (caller-ID phone, WhatsApp wa_id). Reachable
+      // identity. Treated as answered.
       return 'System metadata';
+    case 'profile_metadata':
+      // 2026-06-08 provenance honesty (#169): the value came from the
+      // sender profile system (WhatsApp profile name, Messenger first+last,
+      // IG display name, voice agent caller_name). The lead did not type
+      // or confirm it. The label MUST NOT claim the lead provided it in
+      // the thread; it MUST mark identity as unconfirmed. When the value
+      // is weak (initials, single short token, generic placeholders) the
+      // engine's contact-capture branch triggers a name-capture step in
+      // the thread; once the lead types a real name, the contact-
+      // extraction pipeline upgrades the source to 'answered' and this
+      // case stops firing for that lead.
+      return phrase.profile;
     case 'inferred_from_transcript':
     case 'inferred':
       return phrase.inferred;
@@ -109,6 +125,12 @@ const FACT_SOURCE_CLASS: Record<string, string> = {
   spelled_by_caller: 'src-confirmed',
   explicit_from_caller: 'src-stated',
   system_metadata: 'src-confirmed',
+  // profile_metadata is provisional (#169, 2026-06-08): the value came
+  // from the sender profile system, not the user. Uses the "stated"
+  // style class which renders amber/provisional, never the green
+  // "confirmed" style. The lawyer reads the chip + value together and
+  // understands the captured name is provisional.
+  profile_metadata: 'src-stated',
   inferred_from_transcript: 'src-inferred',
   unknown: 'src-unknown',
   // Legacy DB-row backward-compat

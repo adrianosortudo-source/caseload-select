@@ -166,23 +166,35 @@ function normalizePhone(raw: string | undefined | null): string | null {
 
 function seedVoiceState(state: EngineState, callerPhone: string | null, callerName: string | null): EngineState {
   let s = state;
+  // Caller-ID phone is carrier-verified at telephony handshake. Source
+  // is `system_metadata` (reachability, counts as answered). Identity
+  // is the name slot, handled separately below.
   if (callerPhone && !s.slots['client_phone']) {
     s = {
       ...s,
       slots: { ...s.slots, client_phone: callerPhone },
       slot_meta: {
         ...s.slot_meta,
-        client_phone: { source: 'answered', confidence: 1.0 },
+        client_phone: { source: 'system_metadata', confidence: 1.0 },
       },
     };
   }
+  // Voice agent caller_name is what the agent captured during the call,
+  // either by asking the caller (in which case the readback recovery
+  // path in lib/readback-detection.ts upgrades the provenance to
+  // `confirmed_by_caller_after_readback`) or as a pre-fill from the
+  // Voice AI's profile data. The base seed records `profile_metadata`
+  // so weak captures (initials, single letters, generic "Customer")
+  // do not lock identity. promoteContactProvenance() in the readback
+  // helper upgrades provenance when the caller affirmatively confirmed
+  // a name readback during the call.
   if (callerName && !s.slots['client_name']) {
     s = {
       ...s,
       slots: { ...s.slots, client_name: callerName },
       slot_meta: {
         ...s.slot_meta,
-        client_name: { source: 'answered', confidence: 1.0 },
+        client_name: { source: 'profile_metadata', confidence: 1.0 },
       },
     };
   }

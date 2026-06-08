@@ -223,9 +223,25 @@ export type DecisionGap =
  *    treat it as answered: the brief still surfaces it (clearly labelled
  *    as inferred), but the follow-up question is still asked.
  *
- *  - `'system_metadata'`: system-provided (caller ID from telephony,
- *    channel sender pre-fill, etc.). The user did not say it through the
- *    intake channel, but the carrier confirmed it. Counts as answered.
+ *  - `'system_metadata'`: carrier-confirmed system-provided value. Used
+ *    for caller-ID phone numbers (voice intake) and WhatsApp wa_id (the
+ *    phone the carrier verified at handshake time). The user did not say
+ *    it through the intake channel but the carrier confirmed it. Counts
+ *    as answered: reachable identity.
+ *
+ *  - `'profile_metadata'`: profile-name pre-fill from a Meta channel
+ *    (WhatsApp profile name, Messenger first+last, Instagram display name)
+ *    or from a voice agent's caller_name field. The user did not type or
+ *    confirm this name; only the profile system reported it. Profile
+ *    names are routinely weak ("A D" initials, single first names, "User
+ *    1234"), so the engine does NOT treat profile_metadata as answered
+ *    when the captured value fails the weak-name heuristic in
+ *    `isWeakName` (selector.ts). A strong profile-metadata name passes
+ *    isUserAnswered so the engine doesn't ask twice, but the brief still
+ *    surfaces honest "From {channel} profile" provenance, never claiming
+ *    the lead typed it in the thread. Reachability vs identity: phone is
+ *    reachability (system_metadata, always answered); name is identity
+ *    (profile_metadata, answered only when not weak).
  *
  *  - `'unknown'`: placeholder for slots with a value of unknown
  *    provenance (defensive coding). Treated as NOT answered.
@@ -236,6 +252,7 @@ export type SlotMetaSource =
   | 'inferred'
   | 'llm_inferred'
   | 'system_metadata'
+  | 'profile_metadata'
   | 'unknown';
 
 export type AdvisorySubtrack = 'solo_setup' | 'partner_setup' | 'buy_in_or_joining' | 'unknown';
@@ -464,6 +481,7 @@ export type FactSource =
   | 'spelled_by_caller'
   | 'explicit_from_caller'
   | 'system_metadata'
+  | 'profile_metadata'
   | 'inferred_from_transcript'
   | 'unknown'
   // Legacy values, kept for backward compatibility with existing DB rows.
@@ -484,15 +502,21 @@ export type FactSource =
  * DB rows participate correctly in precedence comparisons during read.
  */
 export const FACT_SOURCE_PRECEDENCE: Record<FactSource, number> = {
-  confirmed_by_caller_after_readback: 5,
-  spelled_by_caller: 4,
-  explicit_from_caller: 3,
-  system_metadata: 2,
+  confirmed_by_caller_after_readback: 6,
+  spelled_by_caller: 5,
+  explicit_from_caller: 4,
+  system_metadata: 3,
+  // profile_metadata (2026-06-08, #169): below system_metadata (carrier
+  // verified) and explicit_from_caller (lead typed it), above
+  // inferred_from_transcript (no source signal at all). A later
+  // explicit_from_caller value, e.g. the lead typing their real name
+  // after the engine asked, overrides a weak profile_metadata seed.
+  profile_metadata: 2,
   inferred_from_transcript: 1,
   unknown: 0,
   // Legacy mappings (read-only, never emitted by new code):
-  confirmed: 5,      // old 'confirmed' implied readback acknowledgement
-  stated: 3,         // old 'stated' was "caller said it"
+  confirmed: 6,      // old 'confirmed' implied readback acknowledgement
+  stated: 4,         // old 'stated' was "caller said it"
   inferred: 1,       // old 'inferred' was app-derived
 };
 

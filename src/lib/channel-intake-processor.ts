@@ -243,17 +243,35 @@ function buildChannelMeta(sender: ChannelSender): Record<string, unknown> {
 function seedSlots(state: EngineState, sender: ChannelSender): EngineState {
   let s = state;
 
+  // Profile name pre-fill (2026-06-08 provenance honesty fix #169).
+  // The display name from the Meta sender profile (WhatsApp profile
+  // name, Messenger first+last, IG display name) is recorded with
+  // `source: 'profile_metadata'`, NOT `'answered'`. The lead did not
+  // type or confirm this name; only the profile system reported it.
+  // Downstream the engine's contact-capture branch in control.ts
+  // treats a profile_metadata name as NOT answered when it fails the
+  // weak-name heuristic (initials, single short token, generic
+  // placeholders like "WhatsApp User", etc.), which triggers a
+  // name-capture step in the thread. Strong profile names pass and
+  // satisfy the gate. The brief renderer surfaces honest "From
+  // {channel} profile" provenance, never claiming the lead typed it.
   if (sender.senderName && !s.slots['client_name']) {
     s = {
       ...s,
       slots: { ...s.slots, client_name: sender.senderName },
       slot_meta: {
         ...s.slot_meta,
-        client_name: { source: 'answered', confidence: 1.0 },
+        client_name: { source: 'profile_metadata', confidence: 1.0 },
       },
     };
   }
 
+  // WhatsApp wa_id is the lead's phone number in E.164 form (no
+  // leading +). The carrier verified it at handshake time, so we
+  // record it with `source: 'system_metadata'` (carrier-confirmed
+  // reachability). Identity vs reachability: the phone makes the
+  // lead reachable but does NOT establish identity. The name slot
+  // is the identity slot, with a separate, weaker provenance.
   if (sender.channel === 'whatsapp' && sender.senderWaId && !s.slots['client_phone']) {
     const e164 = sender.senderWaId.startsWith('+')
       ? sender.senderWaId
@@ -263,7 +281,7 @@ function seedSlots(state: EngineState, sender: ChannelSender): EngineState {
       slots: { ...s.slots, client_phone: e164 },
       slot_meta: {
         ...s.slot_meta,
-        client_phone: { source: 'answered', confidence: 1.0 },
+        client_phone: { source: 'system_metadata', confidence: 1.0 },
       },
     };
   }

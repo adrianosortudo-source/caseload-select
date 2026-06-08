@@ -358,6 +358,48 @@ describe('renderBriefHtmlServer — channel-aware provenance labels (2026-06-05)
     expect(html).toContain('Inferred from GBP chat');
   });
 
+  it('profile_metadata facts render channel-aware "From {channel} profile (unconfirmed)" labels (2026-06-08 #169)', () => {
+    // Field repro: a WhatsApp profile-derived name "A D" rendered as
+    // "Provided in WhatsApp thread" inside the NAP cell (overclaim).
+    // The renderer must surface honest provenance for profile_metadata
+    // values inside the NAP cell, showing "From {channel} profile
+    // (unconfirmed)" instead. The brief footer's channel-default
+    // counter line is a separate surface that describes what the
+    // default chip WOULD be for an unflagged row (not a claim about
+    // a specific fact); we don't gate that here.
+    const report = buildFakeReport({
+      resolved_facts_v2: [
+        { label: 'Name', value: 'A D', source: 'profile_metadata' },
+        { label: 'Phone', value: '+1 647 555 0199', source: 'system_metadata' },
+      ],
+    });
+
+    function napOf(channel: 'whatsapp' | 'facebook' | 'instagram' | 'voice') {
+      const html = renderBriefHtmlServer(report, channel, 'en');
+      const match = html.match(/<section class="brief-group brief-group-nap"[\s\S]*?<\/section>/);
+      if (!match) throw new Error(`NAP block not found in ${channel} brief`);
+      return match[0];
+    }
+
+    const waNap = napOf('whatsapp');
+    expect(waNap).toContain('From WhatsApp profile (unconfirmed)');
+    // The NAP block, where the chip sits next to "A D", must NOT
+    // overclaim that the lead typed the name in the thread.
+    expect(waNap).not.toContain('Provided in WhatsApp thread');
+    // Phone in the same NAP block keeps system_metadata phrasing
+    // (carrier-verified).
+    expect(waNap).toContain('System metadata');
+
+    expect(napOf('facebook')).toContain('From Messenger profile (unconfirmed)');
+    expect(napOf('facebook')).not.toContain('Provided in Messenger thread');
+
+    expect(napOf('instagram')).toContain('From Instagram profile (unconfirmed)');
+    expect(napOf('instagram')).not.toContain('Provided in Instagram DM');
+
+    expect(napOf('voice')).toContain('From caller profile (unconfirmed)');
+    expect(napOf('voice')).not.toContain('Stated during call');
+  });
+
   it('legacy provenance keys ("stated", "confirmed", "inferred") still render channel-aware', () => {
     // Older screened_leads rows carry the legacy values in resolved_facts_v2.
     // The renderer maps them via the same channel-aware function.

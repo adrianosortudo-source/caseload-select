@@ -1,7 +1,7 @@
 import type { EngineState, NextStep, Band, LeadSummary } from './types';
 import { getI18n } from './i18n/loader';
 import type { I18nBundle } from './i18n/loader';
-import { selectNextSlot, computeCoreCompleteness, getDecisionGap } from './selector';
+import { selectNextSlot, computeCoreCompleteness, getDecisionGap, isWeakName } from './selector';
 import { computeBand } from './band';
 import { SLOT_REGISTRY } from './slotRegistry';
 import { updateAdvisorySubtrack, rerouteFromCorporateGeneral, rerouteFromRealEstateGeneral } from './extractor';
@@ -890,7 +890,22 @@ export function getNextStep(state: EngineState): NextStep {
     // not treat as ask-another, so the engine fell through to finalize
     // after a single discovery question. evaluateContactGate is the
     // doctrine; this branch must agree with it.
-    const hasName = !!state.slots['client_name'];
+    //
+    // Weak-name treatment (2026-06-08): a profile-metadata-derived name
+    // (WhatsApp profile, Messenger first+last, IG display name, voice
+    // caller_name) counts as identity only when the captured value
+    // passes the isWeakName heuristic. A weak profile name like "A D"
+    // or "User 1234" triggers a name-capture step so the lead types a
+    // real name in the thread instead of the brief overclaiming
+    // identity. Phone seeded the same way stays answered because
+    // phone is reachability, not identity (the carrier verified the
+    // number; the profile system did not verify the display name).
+    const nameValue = state.slots['client_name'];
+    const nameMeta = state.slot_meta['client_name'];
+    const weakProfileName =
+      nameMeta?.source === 'profile_metadata' &&
+      isWeakName(typeof nameValue === 'string' ? nameValue : null);
+    const hasName = !!nameValue && !weakProfileName;
     const hasReachable = !!state.slots['client_phone'] || !!state.slots['client_email'];
     if (!hasName) {
       const realSlot = SLOT_REGISTRY.find(s => s.id === 'client_name');

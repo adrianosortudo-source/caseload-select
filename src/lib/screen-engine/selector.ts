@@ -327,6 +327,63 @@ function hasValue(state: EngineState, slotId: string): boolean {
 }
 
 /**
+ * Weak-name heuristic (2026-06-08). A captured "name" passes this check
+ * only when it looks like an actual human name the firm could read aloud
+ * and the lawyer could use to address the lead.
+ *
+ * Reachability vs identity: a metadata-derived phone number (WhatsApp
+ * wa_id, voice caller ID) makes the lead reachable and counts as
+ * answered. A metadata-derived NAME does not establish identity, because
+ * profile systems routinely report values like "A D" (initials), single
+ * letters, "WhatsApp User", or all-symbol handles. The engine treats
+ * a profile_metadata name as NOT user-answered when this returns true,
+ * so the bot asks for the name in the thread instead of overclaiming.
+ *
+ * Returns true when the name is weak (NOT answered). Returns false when
+ * the name is strong enough to use.
+ *
+ * Heuristics applied:
+ *  - empty / null / undefined → weak
+ *  - trimmed length < 3 → weak (too short for any meaningful name)
+ *  - every whitespace-separated token is a single character → weak
+ *    (catches "A D", "J K L", "A", "A B")
+ *  - single token of length <= 2 → weak (catches "Ad", "Jo", "Li")
+ *  - fewer than 3 letter characters across the whole string → weak
+ *    (catches "X1 2", "??!", "+1 416", numeric handles)
+ *  - matches a known generic profile placeholder → weak
+ *    ("user", "unknown", "{channel} user", "{channel} customer")
+ */
+export function isWeakName(name: string | null | undefined): boolean {
+  if (!name) return true;
+  const trimmed = String(name).trim();
+  if (trimmed.length < 3) return true;
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  if (tokens.every((t) => t.length === 1)) return true;
+  if (tokens.length === 1 && tokens[0].length <= 2) return true;
+  const letterCount = (trimmed.match(/[a-zA-ZÀ-ÖØ-öø-ÿ]/g) || []).length;
+  if (letterCount < 3) return true;
+  const lower = trimmed.toLowerCase();
+  const generic = new Set([
+    'user',
+    'unknown',
+    'anonymous',
+    'whatsapp user',
+    'facebook user',
+    'messenger user',
+    'instagram user',
+    'sms user',
+    'google user',
+    'gbp user',
+    'whatsapp customer',
+    'facebook customer',
+    'instagram customer',
+  ]);
+  if (generic.has(lower)) return true;
+  return false;
+}
+
+/**
  * The single canonical "is this slot answered" gate (2026-06-07 provenance
  * split).
  *
@@ -361,6 +418,17 @@ export function isUserAnswered(state: EngineState, slotId: string): boolean {
   const source = meta?.source ?? 'unknown';
   if (source === 'llm_inferred') return false;
   if (source === 'unknown') return false;
+  // Profile metadata identity check (2026-06-08): a profile-derived name
+  // (WhatsApp/Messenger/IG profile, voice agent caller_name) is NOT a
+  // user-answered identity when the captured value fails the weak-name
+  // heuristic. The phone leg of the same channel (system_metadata) stays
+  // answered because phone is reachability, not identity. Other slot ids
+  // pass through profile_metadata unchanged for forward compat in case
+  // future channels seed other fields.
+  if (source === 'profile_metadata' && slotId === 'client_name') {
+    const value = state.slots[slotId];
+    if (isWeakName(typeof value === 'string' ? value : null)) return false;
+  }
   return true;
 }
 
