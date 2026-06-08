@@ -246,7 +246,12 @@ describe('processChannelInbound — closing message dispatch', () => {
     const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
     expect(sentText).toMatch(/^Thanks Adriano,/);
     expect(sentText).toMatch(/a lawyer is reviewing your /);
-    expect(sentText).toMatch(/will reach out (shortly|promptly)\.$/);
+    expect(sentText).toMatch(/will be in touch using the contact details you shared/);
+    // Voice rule (DR-038): no time-relative reply promises in firm-voiced copy.
+    // See feedback_no_time_relative_reply_promises memory.
+    expect(sentText).not.toMatch(/\b(shortly|promptly|soon)\b/i);
+    expect(sentText).not.toMatch(/within (a|an|the|\d)\s/i);
+    expect(sentText).not.toMatch(/as soon as possible/i);
   });
 
   it('sends a closing acknowledgment on messenger after the discovery cap is reached', async () => {

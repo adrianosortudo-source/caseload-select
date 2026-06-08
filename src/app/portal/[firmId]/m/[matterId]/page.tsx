@@ -29,7 +29,7 @@ import ComposeForm from './ComposeForm';
 const STAGE_COPY: Record<MatterStage, { label: string; client_blurb: string }> = {
   intake: {
     label: 'We have your matter',
-    client_blurb: 'We have your inquiry and we are reviewing it. Your lawyer will reach out shortly to set up a call.',
+    client_blurb: 'We have your inquiry and we are reviewing it. Your lawyer will be in touch using the contact details you shared.',
   },
   retainer_pending: {
     label: 'Retainer in progress',
@@ -37,7 +37,7 @@ const STAGE_COPY: Record<MatterStage, { label: string; client_blurb: string }> =
   },
   active: {
     label: 'Matter active',
-    client_blurb: 'Your matter is active. Your lawyer is working on it. You can message them here and they will respond on the next business day at the latest.',
+    client_blurb: 'Your matter is active. Your lawyer is working on it. You can message them here and they will respond when they have an update.',
   },
   closing: {
     label: 'Wrapping up',
@@ -108,7 +108,7 @@ export default async function ClientMatterHomePage({ params }: PageProps) {
         <p style={sectionEyebrow}>Messages</p>
         {messages.length === 0 ? (
           <p style={{ color: '#888', fontSize: '0.92rem', marginBottom: 14 }}>
-            No messages yet. Your lawyer will reach out shortly. You can also reach out first using the form below.
+            No messages yet. Your lawyer will be in touch when they have an update. You can also reach out first using the form below.
           </p>
         ) : (
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>

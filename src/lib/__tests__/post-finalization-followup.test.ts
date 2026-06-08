@@ -48,22 +48,22 @@ describe('buildPostFinalizationFollowUpMessage', () => {
     const text = buildPostFinalizationFollowUpMessage(
       finalizedState({ slots: { client_name: 'Sarah Patel' } }),
     );
-    expect(text).toContain('Hi Sarah —');
+    expect(text).toContain('Hi Sarah,');
     expect(text).not.toContain('Hi Sarah Patel');
   });
 
-  it('falls back to "Hi —" when client_name is missing (defensive)', () => {
+  it('falls back to "Hi," when client_name is missing (defensive)', () => {
     const text = buildPostFinalizationFollowUpMessage(
       finalizedState({ slots: {} }),
     );
-    expect(text.startsWith('Hi —')).toBe(true);
+    expect(text.startsWith('Hi,')).toBe(true);
   });
 
-  it('falls back to "Hi —" when client_name is empty string', () => {
+  it('falls back to "Hi," when client_name is empty string', () => {
     const text = buildPostFinalizationFollowUpMessage(
       finalizedState({ slots: { client_name: '' } }),
     );
-    expect(text.startsWith('Hi —')).toBe(true);
+    expect(text.startsWith('Hi,')).toBe(true);
   });
 
   it('encourages calling the firm directly for time-sensitive matters', () => {
@@ -72,7 +72,7 @@ describe('buildPostFinalizationFollowUpMessage', () => {
     expect(text).toContain('call the firm directly');
   });
 
-  it('does not invent details — only mentions the lawyer is reviewing', () => {
+  it('does not invent details, only mentions the lawyer is reviewing', () => {
     // No specific time, no specific lawyer name, no specific firm details
     // baked into the template. Safe to ship across all firms.
     const text = buildPostFinalizationFollowUpMessage(finalizedState());
@@ -80,6 +80,21 @@ describe('buildPostFinalizationFollowUpMessage', () => {
     expect(text).not.toContain('Damaris');
     expect(text).not.toContain('Adriano');
     expect(text).not.toMatch(/by \d/);
+  });
+
+  it('contains no time-relative reply promises (DR-038 voice rule)', () => {
+    // No "within a business day", no "within X hours", no "shortly",
+    // no "promptly", no "soon", no "as soon as possible". CaseLoad
+    // Select does not control when the firm replies. See
+    // feedback_no_time_relative_reply_promises memory.
+    const text = buildPostFinalizationFollowUpMessage(finalizedState());
+    expect(text).not.toMatch(/within (a|an|the|\d)\s/i);
+    expect(text).not.toMatch(/\bshortly\b/i);
+    expect(text).not.toMatch(/\bpromptly\b/i);
+    expect(text).not.toMatch(/\bsoon\b/i);
+    expect(text).not.toMatch(/as soon as possible/i);
+    expect(text).not.toMatch(/most replies/i);
+    expect(text).not.toMatch(/business day/i);
   });
 
   it('warmth signals: "thanks for following up", "patience"', () => {
@@ -132,11 +147,11 @@ describe('buildPostFinalizationDisambiguationMessage', () => {
     expect(text).toContain('Hi Sarah');
   });
 
-  it('falls back to "Hi —" when no name', () => {
+  it('falls back to "Hi," when no name', () => {
     const text = buildPostFinalizationDisambiguationMessage(
       finalizedState({ slots: {} }),
     );
-    expect(text.startsWith('Hi —')).toBe(true);
+    expect(text.startsWith('Hi,')).toBe(true);
   });
 
   it('asks the clarifying question without locking the lead into either path', () => {

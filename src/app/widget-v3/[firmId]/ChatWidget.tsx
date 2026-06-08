@@ -302,13 +302,13 @@ function DoneScreen({
 }) {
   const copy = {
     priority: {
-      heading: "We'll be in touch shortly.",
-      body: "Your case has been reviewed and a member of our team will reach out within the hour.",
+      heading: "Submitted for review.",
+      body: "A lawyer from the team will review what you shared and be in touch using the contact details you provided. If your situation is time-sensitive, please call the firm directly.",
       cta: bookingUrl ? "Book a time now" : null,
     },
     standard: {
       heading: "Thank you for reaching out.",
-      body: "We'll review your details and be in touch within 1 business day.",
+      body: "We'll review your details and be in touch using the contact details you provided.",
       cta: bookingUrl ? "Schedule a consultation" : null,
     },
     review: {

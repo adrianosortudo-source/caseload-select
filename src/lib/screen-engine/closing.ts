@@ -21,52 +21,43 @@ import type { EngineState, Channel } from './types';
 //                             when captured and a matter label when the
 //                             engine has classified the conversation
 //
-// Lead-facing copy intentionally avoids promising a specific response
-// window. The decision_deadline is computed downstream of the engine
-// (see intake-v2-derive.computeDecisionDeadline) and the firm-side SLA
-// varies per matter urgency. The phrase "shortly" matches the brand
-// commitment in the hero copy ("Most replies within hours") without
-// over-committing. Urgent matter classes whose bridgeText already says
-// "promptly" use "promptly" here for consistency.
+// Lead-facing copy NEVER promises a specific response window. The rule
+// applies to every channel CaseLoad Screen runs on. CaseLoad Select does
+// not control when the firm actually replies; the lawyer chooses the
+// response cadence on every matter. A time promise in the firm's voice
+// creates a guarantee the platform cannot keep on the lawyer's behalf,
+// and the lawyer wears the breach. For time-sensitive matters the closer
+// adds a direct-call CTA so the lead can self-route, never a softer
+// pseudo-promise ("soon", "as soon as possible"). The decision_deadline
+// is still computed downstream of the engine for the LAWYER's queue (see
+// intake-v2-derive.computeDecisionDeadline); that is firm-internal SLA,
+// separate from the lead-facing copy.
 
 export function buildClosingMessage(state: EngineState): string {
   const channel: Channel = state.channel ?? 'web';
   if (channel === 'web' || channel === 'voice') return '';
 
   const first = pickFirstName(state.slots['client_name']);
-  const window = urgentMatter(state) ? 'promptly' : 'shortly';
 
   if (channel === 'sms' || channel === 'gbp') {
-    return `Thanks. A lawyer will reach out ${window}.`;
+    return `Thanks. A lawyer will be in touch using the contact details you shared.`;
   }
 
   // whatsapp / messenger / instagram
   const nameOrThere = first || 'there';
 
   if (state.matter_type === 'out_of_scope') {
-    return `Thanks ${nameOrThere}. Your matter has been forwarded to the firm. A team member will review and respond directly.`;
+    return `Thanks ${nameOrThere}. Your matter has been forwarded to the firm. A team member will review and respond using the contact details you shared.`;
   }
 
   const label = matterLabel(state.matter_type);
   if (label) {
-    return `Thanks ${nameOrThere}, a lawyer is reviewing your ${label} matter and will reach out ${window}.`;
+    return `Thanks ${nameOrThere}, a lawyer is reviewing your ${label} matter and will be in touch using the contact details you shared. If your situation is time-sensitive, please call the firm directly.`;
   }
-  return `Thanks ${nameOrThere}, a lawyer is reviewing your matter and will reach out ${window}.`;
+  return `Thanks ${nameOrThere}, a lawyer is reviewing your matter and will be in touch using the contact details you shared. If your situation is time-sensitive, please call the firm directly.`;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
-
-function urgentMatter(state: EngineState): boolean {
-  // Keep in lockstep with the bridgeText "promptly" set in control.ts:
-  // matter classes where the firm wants the lead to know the response
-  // window is faster than default. Construction Act timelines and
-  // power-of-sale notices are time-critical by nature; corporate money
-  // control is flagged urgent because financial-irregularity matters
-  // tend to move fast once disclosed.
-  return state.matter_type === 'corporate_money_control'
-    || state.matter_type === 'construction_lien'
-    || state.matter_type === 'mortgage_dispute';
-}
 
 function pickFirstName(raw: string | null | undefined): string {
   if (typeof raw !== 'string') return '';

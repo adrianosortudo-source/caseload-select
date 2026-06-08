@@ -50,9 +50,9 @@ export function buildPostFinalizationFollowUpMessage(
   finalizedEngineState: EngineState,
 ): string {
   const firstName = firstNameFrom(finalizedEngineState);
-  const greeting = firstName ? `Hi ${firstName} —` : 'Hi —';
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi,';
 
-  return `${greeting} thanks for following up. We received your earlier message and a lawyer is reviewing your matter now. Once they've had a chance to look at it, they'll reach out to you directly using the contact info you shared. Most replies happen within a business day. If your situation is time-sensitive, please feel free to call the firm directly. Thanks for your patience.`;
+  return `${greeting} thanks for following up. We received your earlier message and a lawyer is reviewing your matter now. Once they've had a chance to look at it, they'll reach out to you directly using the contact info you shared. If your situation is time-sensitive, please feel free to call the firm directly. Thanks for your patience.`;
 }
 
 // ── New-matter intent detection (Codex review follow-up) ────────────────
@@ -103,7 +103,7 @@ export function buildPostFinalizationDisambiguationMessage(
   finalizedEngineState: EngineState,
 ): string {
   const firstName = firstNameFrom(finalizedEngineState);
-  const greeting = firstName ? `Hi ${firstName} —` : 'Hi —';
+  const greeting = firstName ? `Hi ${firstName},` : 'Hi,';
 
   return `${greeting} quick check before I route this. Is this about the matter you already submitted (the lawyer is reviewing that one), or is this a new issue you'd like help with?`;
 }
