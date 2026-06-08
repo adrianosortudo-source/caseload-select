@@ -289,13 +289,23 @@ function scoreValueSpecific(state: EngineState): number | null {
     return 4;
   }
   if (t === 'business_setup_advisory') {
-    // No single "amount at stake"; use revenue + structural complexity proxies
+    // No single "amount at stake"; use revenue + structural complexity proxies.
+    //
+    // 2026-06-07 calibration pass: revenue is a weak proxy for legal fee
+    // value on advisory matters. A sole consultant grossing $30-100k/year
+    // typically hires $1,500-3,000 of incorporation work; that is not a
+    // 4/10 value file. The prior weights overcounted revenue against
+    // retainer scope, which contributed to small-ticket solo files
+    // landing in Band A via combined-lift with high readiness. Partner /
+    // buy-in bonuses are unchanged because those subtracks DO raise the
+    // legal scope materially (shareholders agreement, diligence on
+    // existing entity, etc.).
     const sub = state.advisory_subtrack;
     const revenue = slotValue(state, 'revenue_expectation');
     let s = 3;
     if (revenue === 'Over $500,000 (early-stage business with momentum)') s = 7;
-    else if (revenue === '$100,000–$500,000 (small team or busy practice)') s = 5;
-    else if (revenue === '$30,000–$100,000 (full-time, sole operator)') s = 4;
+    else if (revenue === '$100,000–$500,000 (small team or busy practice)') s = 4; // was 5
+    else if (revenue === '$30,000–$100,000 (full-time, sole operator)') s = 2;     // was 4
     else if (revenue === 'Under $30,000 (small or part-time)') s = 2;
     if (sub === 'partner_setup') s += 2;
     if (sub === 'buy_in_or_joining') s += 2;
@@ -456,7 +466,26 @@ function scoreUrgency(state: EngineState): number {
   if (t === 'business_setup_advisory') {
     if (slotValue(state, 'signed_anything') === 'Yes') s += 3;
     const stage = slotValue(state, 'business_stage');
-    if (stage === 'Already operating') s += 4; // operating without structure = exposure accumulating now
+    // 2026-06-07 calibration pass: "Already operating" used to add +4 flat,
+    // treating a sole consultant proprietorship the same as a staffed
+    // operating business accumulating tax + liability exposure. The
+    // exposure doctrine is real but proportional; lift to +4 only when
+    // the operating business carries material signal (revenue scale,
+    // employees planned, or already-signed exposure). Otherwise operating
+    // without structure is a slow-burn liability, not a call-today fire,
+    // and lifts urgency by +1.
+    if (stage === 'Already operating') {
+      const revenueOpStage = slotValue(state, 'revenue_expectation');
+      const employees = slotValue(state, 'employees_planned');
+      const signed = slotValue(state, 'signed_anything') === 'Yes';
+      const hasMaterialExposure =
+        signed ||
+        revenueOpStage === 'Over $500,000 (early-stage business with momentum)' ||
+        revenueOpStage === '$100,000–$500,000 (small team or busy practice)' ||
+        employees === 'Yes, three or more employees' ||
+        employees === 'Yes, one or two employees';
+      s += hasMaterialExposure ? 4 : 1;
+    }
     if (stage === 'Need to incorporate before launching') s += 3;
     const timing = slotValue(state, 'advisory_timing');
     if (timing === 'Urgent') s += 4;
@@ -759,6 +788,60 @@ export function computeBand(state: EngineState): BandResult {
         band: 'C',
         confidence: 35,
         reasoning: result.reasoning + ' Residential commodity matter; staying at Band C unless concern, urgency, or high value lifts it.',
+        coreCompleteness: state.coreCompleteness,
+      };
+    }
+  }
+
+  // 2026-06-07 small-ticket gate (bi-directional): business setup
+  // advisory files have a fee floor around $1,500-3,000. Two carve-outs
+  // both run on this matter type:
+  //
+  //   - SUPPRESSION: solo files with no crisis or high-scope signal
+  //     cannot sit in Band A. Band A means "drop everything and call
+  //     today"; that treatment does not match the work. Demote to B.
+  //
+  //   - PROMOTION: solo files WITH a crisis signal (signed exposure,
+  //     urgent timing, or this-week timing) must be capable of landing
+  //     in Band A even when the recalibrated value + urgency axes alone
+  //     do not clear the combined-lift threshold. The lead is signaling
+  //     material pressure; the lawyer needs to see the file in same-day
+  //     priority and exercise discretion. Promotes B / C to A.
+  //
+  // Together these enforce: solo + crisis = A, solo + nothing = B.
+  // Partner / buy-in subtracks bypass both branches; they carry real
+  // legal scope and ride the four-axis result as-is.
+  if (state.matter_type === 'business_setup_advisory') {
+    const sub = state.advisory_subtrack;
+    const signed = slotValue(state, 'signed_anything') === 'Yes';
+    const timing = slotValue(state, 'advisory_timing');
+    const isCrisis = signed || timing === 'Urgent' || timing === 'This week';
+    const isHighScope = sub === 'partner_setup' || sub === 'buy_in_or_joining';
+
+    if (result.band === 'A' && !isCrisis && !isHighScope) {
+      return {
+        band: 'B',
+        confidence: 50,
+        reasoning:
+          result.reasoning +
+          ' Solo advisory file with no signed exposure and no time pressure. ' +
+          'Fee floor is $1,500-3,000; demoted from Band A to Band B (call same week, not same day).',
+        coreCompleteness: state.coreCompleteness,
+      };
+    }
+
+    if (result.band !== 'A' && isCrisis) {
+      const trigger = signed
+        ? 'signed exposure'
+        : timing === 'Urgent'
+        ? 'urgent timing'
+        : 'this-week timing';
+      return {
+        band: 'A',
+        confidence: 75,
+        reasoning:
+          result.reasoning +
+          ` Explicit crisis signal (${trigger}); promoted to Band A for same-day callback.`,
         coreCompleteness: state.coreCompleteness,
       };
     }
