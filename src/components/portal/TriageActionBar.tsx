@@ -27,11 +27,8 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
 
   if (status !== "triaging") {
     return (
-      <div
-        className="fixed inset-x-0 bottom-0 bg-white border-t border-black/10 px-4 py-3 z-30"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0) + 0.75rem)" }}
-      >
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+      <div className="bg-white border-y border-black/10 px-4 sm:px-6 py-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm text-black/60 truncate">
             {status === "taken" && "Lead taken. Cadence engaged."}
             {status === "passed" && "Lead passed. Decline-with-grace fired."}
@@ -125,14 +122,31 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
   // Button row layout differs by band:
   //   A/B/C: Pass (outline) + Take (navy primary)
   //   D:     Pass (outline) + Take anyway (outline secondary) + Refer (navy primary)
+  //
+  // 2026-06-07 inline composition: this rail used to be fixed at the
+  // viewport bottom, which sliced through content mid-scroll. It now mounts
+  // inline between the brief's NAP block and the main reading grid (see
+  // ACTION_RAIL_SLOT marker in screen-brief-html.ts + the split in page.tsx),
+  // so it reads as a flush composition element. No fixed positioning, no
+  // shadow above, no z-index. The brand surface uses Oxanium for the
+  // "Decision required" eyebrow and pairs it with a heavier top accent rule
+  // so the rail registers as a Tier 1 action surface, not as a banner.
   return (
     <>
       <div
-        className="fixed inset-x-0 bottom-0 bg-white border-t border-black/10 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.04)] z-30"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0) + 0.75rem)" }}
+        className="bg-white border-y border-black/10 px-4 sm:px-6 py-4"
+        style={{ borderTop: "2px solid #1E2F58" }}
       >
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-          <div className="text-xs text-black/50 uppercase tracking-wider truncate min-w-0">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div
+            className="font-semibold uppercase truncate min-w-0"
+            style={{
+              fontFamily: '"Oxanium", system-ui, sans-serif',
+              fontSize: "0.7rem",
+              letterSpacing: "0.14em",
+              color: "#1E2F58",
+            }}
+          >
             {error && mode === "error" ? <span className="text-red-700">{error}</span> : "Decision required"}
           </div>
           <div className="flex gap-2 shrink-0">

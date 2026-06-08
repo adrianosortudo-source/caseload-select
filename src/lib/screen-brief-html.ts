@@ -1212,12 +1212,21 @@ export function renderBriefHtmlServer(
     </div>
   `;
 
+  // The ACTION_RAIL_SLOT marker is the split point for the React page
+  // (page.tsx). The TriageActionBar mounts between contactStrip and mainGrid
+  // so the action affordance sits directly under the header/NAP as a flush
+  // composition element, not as a fixed-bottom overlay slicing the brief
+  // mid-scroll. Legacy briefs that pre-date this marker fall through cleanly:
+  // the page splits on the marker and renders the entire brief as topHtml
+  // with the action bar at the end (same behaviour as the prior layout,
+  // minus the overlay slice).
   return [
     cover,
     noticeStrip,
     languageCalloutHtml(intakeLanguage),
     truthWarningsHtml(report.truth_warnings),
     contactStrip,
+    '<!-- ACTION_RAIL_SLOT -->',
     mainGrid,
   ].join('\n');
 }

@@ -116,8 +116,22 @@ export default async function TriageLeadPage({
   // Header providing matter title + band + DecisionTimer + meta.
   const hasNewLayout = (row.brief_html ?? "").includes('class="brief-cover"');
 
+  // Split the brief HTML on the ACTION_RAIL_SLOT marker (emitted by
+  // screen-brief-html.ts between contactStrip/NAP and mainGrid). The
+  // TriageActionBar mounts in that seam so it reads as a flush composition
+  // element directly under the header/NAP, not as a fixed-bottom overlay
+  // slicing through content mid-scroll. Legacy briefs (pre-marker) split
+  // as [whole, ""], which renders the action bar at the end of the brief,
+  // still flush, no overlay.
+  const ACTION_RAIL_MARKER = "<!-- ACTION_RAIL_SLOT -->";
+  const briefHtml = row.brief_html ?? "";
+  const splitIdx = briefHtml.indexOf(ACTION_RAIL_MARKER);
+  const briefTopHtml = splitIdx >= 0 ? briefHtml.slice(0, splitIdx) : briefHtml;
+  const briefBottomHtml =
+    splitIdx >= 0 ? briefHtml.slice(splitIdx + ACTION_RAIL_MARKER.length) : "";
+
   return (
-    <div className="space-y-4 pb-32">
+    <div className="space-y-4">
       <BackLink firmId={firmId} />
       {!hasNewLayout && (
         <Header
@@ -130,14 +144,15 @@ export default async function TriageLeadPage({
       )}
       {row.status !== "triaging" && <StatusBanner status={row.status} />}
       {langLabel && <LanguageCallout label={langLabel} />}
-      <BriefFrame html={row.brief_html} />
-      <BriefLiveTimers />
+      <BriefFrame html={briefTopHtml} />
       <TriageActionBar
         firmId={firmId}
         leadId={row.lead_id}
         band={row.band}
         initialStatus={row.status}
       />
+      {briefBottomHtml.length > 0 && <BriefFrame html={briefBottomHtml} />}
+      <BriefLiveTimers />
     </div>
   );
 }

@@ -459,11 +459,14 @@
 .brief-frame .fact-list li.fact-row {
   display: grid;
   grid-template-columns: 1fr 1fr auto;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
-  padding: 8px 0;
+  /* 2026-06-07 density pass: row padding 8 -> 11 and font 0.88 -> 0.92
+     so each fact row gains breathing room without changing the cluster
+     structure above. */
+  padding: 11px 0;
   border-bottom: 1px solid var(--bf-border);
-  font-size: 0.88rem;
+  font-size: 0.92rem;
 }
 .brief-frame .fact-list li.fact-row:last-child { border-bottom: none; }
 
@@ -762,8 +765,15 @@
 
 .brief-frame .brief-main-grid {
   display: grid;
-  grid-template-columns: 1.7fr 0.95fr;
-  gap: 18px;
+  /* 2026-06-07: rebalance main-vs-rail. The previous 1.7/0.95 split made
+     the main column 645px at the 1024px portal width, which forced the
+     3-up grids (scope, callprep) down to ~185px per cell. Shifting to
+     2.2/0.85 gives the main column an extra ~65px and brings each 3-up
+     cell to ~210px, restoring comfortable line lengths in the Decision,
+     Call prep, and Resolved facts blocks. The right rail loses ~78px but
+     stays above 270px, which is enough for the status modules. */
+  grid-template-columns: 2.2fr 0.85fr;
+  gap: 22px;
   align-items: start;
 }
 
@@ -1104,25 +1114,28 @@
 .brief-frame .checklist {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  /* 2026-06-07 density pass: bumped gap, padding, font-size, and line-height
+     so the 3-up callprep blocks read as a proper checklist rather than a
+     cramped list. */
+  gap: 9px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .brief-frame .checklist li {
   position: relative;
-  padding: 2px 0 2px 14px;
-  font-size: 0.85rem;
-  line-height: 1.45;
+  padding: 2px 0 2px 16px;
+  font-size: 0.92rem;
+  line-height: 1.55;
   color: var(--bf-black);
 }
 .brief-frame .checklist li::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 9px;
-  width: 5px;
-  height: 5px;
+  top: 10px;
+  width: 6px;
+  height: 6px;
   background: var(--bf-navy);
 }
 
@@ -1131,32 +1144,37 @@
 .brief-frame .decision-snapshot {
   font-family: 'Manrope', system-ui, sans-serif;
   font-weight: 700;
-  font-size: 1.05rem;
-  line-height: 1.4;
+  /* 2026-06-07 density pass: snapshot is the lead sentence; it gets the
+     headline weight so the eye anchors there before reading the why. */
+  font-size: 1.12rem;
+  line-height: 1.45;
   color: var(--bf-black);
-  margin: 0 0 8px;
+  margin: 0 0 10px;
 }
 
 .brief-frame .decision-why {
-  font-size: 0.9rem;
-  line-height: 1.5;
+  font-size: 0.95rem;
+  line-height: 1.6;
   color: var(--bf-body);
-  margin: 0 0 18px;
+  margin: 0 0 22px;
 }
 
 .brief-frame .callback-scope-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin: 0 0 18px;
+  /* Widened gap + per-item padding so each scope check breathes. The grid
+     itself sits on the wider main column (2.2fr), so each cell lands around
+     210px instead of the cramped 185px from the prior pass. */
+  gap: 14px;
+  margin: 0 0 22px;
 }
 
 .brief-frame .callback-scope-item {
   background: var(--bf-white);
   border-top: 2px solid var(--bf-navy);
-  padding: 10px 12px 12px;
-  font-size: 0.84rem;
-  line-height: 1.45;
+  padding: 14px 16px 16px;
+  font-size: 0.92rem;
+  line-height: 1.55;
   color: var(--bf-black);
 }
 
@@ -1201,18 +1219,23 @@
 .brief-frame .callprep-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  /* 2026-06-07 density pass: more inter-column gap and more inner padding
+     so each callprep block reads as a proper checklist surface, not as
+     three packed cells. Combined with the wider main column (2.2fr) and
+     the bumped .checklist font-size (0.92rem), this brings the section
+     into "useful on a callback" territory rather than fiddly. */
+  gap: 18px;
 }
 
 .brief-frame .callprep-block {
-  padding: 12px 14px;
+  padding: 16px 18px 18px;
   background: var(--bf-white);
   border-top: 2px solid var(--bf-navy);
 }
 
 .brief-frame .callprep-block .kicker {
   color: var(--bf-navy);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 /* ─── Axis card hierarchy ────────────────────────────────────────────── */
@@ -1265,23 +1288,52 @@
 
 /* ─── Sidebar status modules (was: cards) ────────────────────────────── */
 
-/* The right rail goes from "stack of soft cards" to "stack of compact
-   status modules": top accent rule, no card frame, less padding, denser
-   information. The .sidebar-card class stays so the existing posture
-   block (lots of dt/dd rows) still has its own frame; the other three
-   (Watchpoints, Open questions, Inferred signals) become flush modules. */
+/* 2026-06-07 hierarchy pass: the three rail modules used to share one
+   visual treatment (transparent bg + 1px top border-rule), which made
+   Watchpoints / Open questions / Inferred signals blur into one another.
+   They are semantically different ("caution to keep in mind" vs. "action
+   items to confirm on the callback" vs. "engine guesses"), so they now
+   carry three distinct weights:
+   - Watchpoints: full frame on row-alt with a 2px navy top accent. Heaviest.
+   - Open questions: 2px gold top accent rule, no frame. Action-flag weight.
+   - Inferred signals: 1px muted thin rule, no frame. Lowest weight.
+   This restores the right rail as a decision-support companion. */
 
-.brief-frame .sidebar-card-watchpoints,
-.brief-frame .sidebar-card-questions,
+.brief-frame .sidebar-card-watchpoints {
+  background: var(--bf-row-alt);
+  border: 1px solid var(--bf-border);
+  border-top: 2px solid var(--bf-navy);
+  padding: 14px 16px;
+}
+
+.brief-frame .sidebar-card-questions {
+  background: transparent;
+  border: none;
+  border-top: 2px solid var(--bf-gold);
+  padding: 14px 0 0;
+}
+
 .brief-frame .sidebar-card-signals {
   background: transparent;
   border: none;
-  padding: 12px 0 0;
   border-top: 1px solid var(--bf-border);
+  padding: 14px 0 0;
 }
 
-.brief-frame .sidebar-card-watchpoints .sidebar-title,
-.brief-frame .sidebar-card-questions .sidebar-title,
+.brief-frame .sidebar-card-watchpoints .sidebar-title {
+  font-size: 0.66rem;
+  padding-bottom: 0;
+  border-bottom: none;
+  color: var(--bf-navy);
+}
+
+.brief-frame .sidebar-card-questions .sidebar-title {
+  font-size: 0.66rem;
+  padding-bottom: 0;
+  border-bottom: none;
+  color: var(--bf-navy);
+}
+
 .brief-frame .sidebar-card-signals .sidebar-title {
   font-size: 0.62rem;
   padding-bottom: 0;
@@ -1298,7 +1350,7 @@
 }
 
 .brief-frame .brief-main-right {
-  gap: 12px;
+  gap: 14px;
 }
 
 /* ─── Facts clustering ───────────────────────────────────────────────── */
@@ -1347,13 +1399,30 @@
   .brief-frame .sidebar-card-signals                 { order: 6; }
   .brief-frame .brief-group[data-group="facts"]      { order: 7; }
   .brief-frame .sidebar-card-posture                 { order: 8; }
-  /* When flattened, the demoted sidebar modules need a frame back; the
-     transparent-top-rule pattern reads as a divider mid-flow. */
-  .brief-frame .sidebar-card-watchpoints,
-  .brief-frame .sidebar-card-questions,
-  .brief-frame .sidebar-card-signals {
+  /* When flattened, the demoted sidebar modules need a frame back, but
+     the per-module accent rule should survive (watchpoints stays navy-led,
+     questions stays gold-led, signals stays neutral). Redeclare each
+     explicitly so the shorthand `border` does not strip the accent. */
+  .brief-frame .sidebar-card-watchpoints {
+    background: var(--bf-row-alt);
+    border-left: 1px solid var(--bf-border);
+    border-right: 1px solid var(--bf-border);
+    border-bottom: 1px solid var(--bf-border);
+    border-top: 2px solid var(--bf-navy);
     padding: 14px 16px;
+  }
+  .brief-frame .sidebar-card-questions {
+    background: var(--bf-white);
+    border-left: 1px solid var(--bf-border);
+    border-right: 1px solid var(--bf-border);
+    border-bottom: 1px solid var(--bf-border);
+    border-top: 2px solid var(--bf-gold);
+    padding: 14px 16px;
+  }
+  .brief-frame .sidebar-card-signals {
+    background: var(--bf-white);
     border: 1px solid var(--bf-border);
+    padding: 14px 16px;
   }
   .brief-frame .sidebar-card-watchpoints .sidebar-title,
   .brief-frame .sidebar-card-questions .sidebar-title,
@@ -1367,8 +1436,10 @@
 /*
  * 3-up grids collapse to 1-column. Cover headline shrinks. Group padding
  * tightens. Axis grid stacks. Fact rows already collapse via the earlier
- * 640px breakpoint. The action bar lives outside .brief-frame (in the page
- * wrapper) and stays accessible because the brief page already adds pb-32.
+ * 640px breakpoint. The action bar lives in the page wrapper between the
+ * brief's top half (cover + NAP) and bottom half (main reading grid),
+ * mounted via the ACTION_RAIL_SLOT split in page.tsx. It is inline, not
+ * sticky, so no pb-32 is needed.
  */
 
 @media (max-width: 760px) {
