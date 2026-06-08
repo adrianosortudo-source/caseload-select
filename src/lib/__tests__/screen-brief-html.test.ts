@@ -76,6 +76,7 @@ function buildFakeReport(overrides: Partial<LawyerReport> = {}): LawyerReport {
     risk_flags: [],
     band_reasoning_bullets: ['Wrongful dismissal lane; standard arc'],
     contact_complete: true,
+    advisory_subtrack: 'unknown',
   } as LawyerReport;
   return { ...base, ...overrides };
 }

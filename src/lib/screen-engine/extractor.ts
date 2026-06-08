@@ -13,7 +13,9 @@ function matchesAny(text: string, patterns: string[]): boolean {
 // ─── Intent routing signals ────────────────────────────────────────────────
 
 const SETUP_ADVISORY_SIGNALS = [
-  'open a company', 'opening a company', 'start a business', 'starting a business',
+  'open a business', 'opening a business', 'open my business', 'opening my business',
+  'start a business', 'starting a business', 'start my business', 'starting my business',
+  'open a company', 'opening a company',
   'start a company', 'starting a company', 'set up a company', 'setting up a company',
   // Explicit "corporation" variants (the noun the lead may use instead of "company")
   'open a corporation', 'opening a corporation', 'start a corporation',
@@ -973,9 +975,11 @@ function deriveAdvisorySubtrack(
   advisoryPath: string | null | undefined,
   coOwnerCount: string | null | undefined,
   input: string,
+  decisionAuthority?: string | null | undefined,
 ): AdvisorySubtrack {
   const path = advisoryPath ?? '';
   const count = coOwnerCount ?? '';
+  const auth = decisionAuthority ?? '';
 
   if (
     path === 'Buying into an existing business' ||
@@ -1000,6 +1004,20 @@ function deriveAdvisorySubtrack(
       'freelancing', 'freelancer', 'sole proprietor', 'sole prop', 'self-employed',
       'self employed', 'consultant on my own'])
   ) return 'solo_setup';
+
+  // 2026-06-07: decision_authority is a tertiary signal. When the direct
+  // signals (advisory_path, co_owner_count, input keywords) all return
+  // unknown, fall back to the universal-readiness decision_authority slot.
+  // "Me with a partner or family member" and "Multiple owners or directors"
+  // strongly imply a multi-party setup; "Just me" implies solo. This is
+  // the fallback that catches cases where the engine never asked the
+  // direct co_owner_count slot but did capture decision_authority.
+  if (
+    auth === 'Me with a partner or family member' ||
+    auth === 'Multiple owners or directors'
+  ) return 'partner_setup';
+
+  if (auth === 'Just me') return 'solo_setup';
 
   if (count === 'Not sure yet') return 'unknown';
 
@@ -1533,6 +1551,7 @@ export function updateAdvisorySubtrack(state: EngineState): AdvisorySubtrack {
     state.slots['advisory_path'],
     state.slots['co_owner_count'],
     state.input,
+    state.slots['decision_authority'],
   );
 }
 

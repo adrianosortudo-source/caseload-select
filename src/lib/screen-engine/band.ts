@@ -1,5 +1,7 @@
 import { SLOT_REGISTRY } from './slotRegistry';
+import { updateAdvisorySubtrack } from './extractor';
 import type {
+  AdvisorySubtrack,
   EngineState,
   Band,
   BandResult,
@@ -811,8 +813,19 @@ export function computeBand(state: EngineState): BandResult {
   // Together these enforce: solo + crisis = A, solo + nothing = B.
   // Partner / buy-in subtracks bypass both branches; they carry real
   // legal scope and ride the four-axis result as-is.
+  //
+  // 2026-06-07 defense-in-depth: state.advisory_subtrack may arrive as
+  // 'unknown' on reconstruction paths (admin reclassify, future
+  // backfills) where slot answers exist but the state-mutating
+  // assignWithReDerive flow in control.ts did not run. Re-derive from
+  // raw slots before the gate reads sub, so the suppression cannot
+  // incorrectly demote a partner / buy-in file to B just because the
+  // subtrack field was not re-computed during state rebuild.
   if (state.matter_type === 'business_setup_advisory') {
-    const sub = state.advisory_subtrack;
+    const sub: AdvisorySubtrack =
+      state.advisory_subtrack && state.advisory_subtrack !== 'unknown'
+        ? state.advisory_subtrack
+        : updateAdvisorySubtrack(state);
     const signed = slotValue(state, 'signed_anything') === 'Yes';
     const timing = slotValue(state, 'advisory_timing');
     const isCrisis = signed || timing === 'Urgent' || timing === 'This week';

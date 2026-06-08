@@ -567,4 +567,17 @@ export interface LawyerReport {
    * Computed by `buildReport()` via `lib/contact-doctrine.isContactComplete`.
    */
   contact_complete: boolean;
+  /**
+   * Business setup advisory subtrack (added 2026-06-07).
+   *
+   * Mirrors `EngineState.advisory_subtrack` into the persisted brief so
+   * retrospective queries, admin reclassify, and band-recompute paths
+   * can see the subtrack without re-running the classifier from raw
+   * slots. Critical for the business_setup_advisory band gate (band.ts):
+   * the gate's suppression and promotion both depend on whether the
+   * file is solo_setup vs partner_setup vs buy_in_or_joining.
+   *
+   * For non-advisory matter types this is 'unknown' (the engine default).
+   */
+  advisory_subtrack: AdvisorySubtrack;
 }

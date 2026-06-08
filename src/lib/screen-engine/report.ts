@@ -1325,6 +1325,10 @@ export function buildReport(state: EngineState): LawyerReport {
       client_email: state.slots['client_email'],
       client_phone: state.slots['client_phone'],
     }),
+    // Persist advisory_subtrack into the brief so retrospective queries,
+    // admin reclassify, and band-recompute paths can see it without
+    // re-running the classifier (added 2026-06-07).
+    advisory_subtrack: state.advisory_subtrack,
   };
 }
 

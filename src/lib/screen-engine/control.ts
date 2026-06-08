@@ -964,8 +964,16 @@ export function applyAnswer(state: EngineState, slotId: string, value: string): 
     updated = { ...updated, answeredQuestionGroups: [...updated.answeredQuestionGroups, slot.question_group] };
   }
 
-  // Re-derive advisory subtrack
-  if (state.matter_type === 'business_setup_advisory' && (slotId === 'advisory_path' || slotId === 'co_owner_count')) {
+  // Re-derive advisory subtrack. decision_authority added 2026-06-07 as a
+  // tertiary trigger so files that never get co_owner_count asked (e.g.
+  // budget-constrained channels, or LLM extraction paths that skip it)
+  // still pick up partner / solo signal from the universal-readiness slot.
+  if (
+    state.matter_type === 'business_setup_advisory' &&
+    (slotId === 'advisory_path' ||
+      slotId === 'co_owner_count' ||
+      slotId === 'decision_authority')
+  ) {
     updated = { ...updated, advisory_subtrack: updateAdvisorySubtrack(updated) };
   }
 
