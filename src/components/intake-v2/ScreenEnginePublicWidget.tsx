@@ -46,12 +46,19 @@ export function slotToItem(
     label: getOptionDisplayLabel(opt, slot.id, language, i18n),
   }));
 
+  // Localized label for the synthetic "Something else (I will explain)"
+  // affordance DecisionCard renders. When the bundle's widget_strings is
+  // missing the key (e.g. EN, or a bundle authored before widget_strings
+  // existed), DecisionCard falls back to the English literal.
+  const freeTextLabel = i18n.widget_strings?.["free_text_other_label"];
+
   return {
     id: slot.id,
     question: getQuestionDisplayText(slot.id, slot.question, language, i18n),
     presentation: options.length <= 3 ? "chip" : "card",
     options,
     allowFreeText: true,
+    freeTextLabel,
   };
 }
 

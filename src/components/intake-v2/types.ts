@@ -33,6 +33,15 @@ export interface ScreenItem {
   placeholder?: string;
   /** When true, render an "Other" option that reveals a text input. */
   allowFreeText?: boolean;
+  /**
+   * Localized label for the "Something else (I will explain)" affordance
+   * that DecisionCard renders when allowFreeText is true. Falls back to
+   * the English literal when not provided. Wired through i18n by the
+   * widget that constructs the ScreenItem (e.g. ScreenEnginePublicWidget
+   * reads `widget_strings.free_text_other_label` from the lead's
+   * language bundle).
+   */
+  freeTextLabel?: string;
 }
 
 /** Sentinel value stored in the answers map when the user picks "Other". */

@@ -175,7 +175,8 @@ describe("PT bundle DRG launch coverage", () => {
     "client_email",
   ])("slot '%s' has a Portuguese translation", (slotId) => {
     const i18n = getI18n("pt");
-    expect(i18n.slot_questions[slotId]).toBeTruthy();
-    expect(i18n.slot_questions[slotId].length).toBeGreaterThan(5);
+    const translated = i18n.slot_questions?.[slotId];
+    expect(translated).toBeTruthy();
+    expect(translated!.length).toBeGreaterThan(5);
   });
 });

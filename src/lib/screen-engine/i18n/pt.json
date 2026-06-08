@@ -53,7 +53,17 @@
     "reported_to_anyone": "Isto já foi reportado a alguém (polícia, contador, outros diretores ou ao conselho)?",
     "hiring_timeline": "Quando você espera ter um advogado trabalhando neste caso?",
     "other_counsel": "Você já falou com outro advogado sobre este caso?",
-    "decision_authority": "Quem decide se contrata um advogado para isto?"
+    "decision_authority": "Quem decide se contrata um advogado para isto?",
+    "business_activity_type": "Que tipo de negócio você está planejando abrir?",
+    "business_stage": "Em que estágio você está?",
+    "setup_needs": "No que você mais precisa de ajuda?",
+    "ownership_split_discussed": "Vocês já conversaram sobre como dividir a sociedade, as responsabilidades ou os lucros?",
+    "business_location": "Em que cidade ou região o negócio vai operar?",
+    "revenue_expectation": "Que tipo de receita você espera no primeiro ano?",
+    "employees_planned": "Você está planejando contratar alguém no primeiro ano?",
+    "regulated_industry": "O seu setor é regulamentado?",
+    "cross_border_work": "Você vai vender ou trabalhar com clientes fora do Canadá?",
+    "ip_planned": "Você tem marca, software ou outra propriedade intelectual para proteger?"
   },
   "slot_options": {
     "corporate_problem_type": {
@@ -320,6 +330,70 @@
       "Multiple owners or directors": "Múltiplos donos ou diretores",
       "Someone else decides": "Outra pessoa decide",
       "Not sure": "Não tenho certeza"
+    },
+    "business_activity_type": {
+      "Professional services": "Serviços profissionais",
+      "Online business": "Negócio online",
+      "Retail or storefront": "Varejo ou loja física",
+      "Trades or construction": "Construção ou ofício",
+      "Holding company or investment": "Holding ou investimento",
+      "Not sure": "Não tenho certeza"
+    },
+    "business_stage": {
+      "Just researching": "Só pesquisando",
+      "Planning to start soon": "Planejando começar em breve",
+      "Already operating": "Já em operação",
+      "Need to incorporate before launching": "Preciso constituir a empresa antes de começar",
+      "Not sure": "Não tenho certeza"
+    },
+    "setup_needs": {
+      "Incorporating the company": "Constituir a empresa",
+      "Choosing the right business structure": "Escolher a estrutura societária certa",
+      "Reviewing documents": "Revisar documentos",
+      "Taxes or accounting setup": "Configuração de impostos ou contabilidade",
+      "Not sure": "Não tenho certeza"
+    },
+    "ownership_split_discussed": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "revenue_expectation": {
+      "Under $30,000 (small or part-time)": "Menos de $30.000 (pequeno ou meio período)",
+      "$30,000–$100,000 (full-time, sole operator)": "$30.000 a $100.000 (período integral, sócio único)",
+      "$100,000–$500,000 (small team or busy practice)": "$100.000 a $500.000 (pequena equipe ou negócio ativo)",
+      "Over $500,000 (early-stage business with momentum)": "Mais de $500.000 (negócio em fase inicial com tração)",
+      "Not sure yet": "Ainda não tenho certeza"
+    },
+    "employees_planned": {
+      "No, just me": "Não, só eu",
+      "Maybe one or two contractors": "Talvez um ou dois prestadores de serviço",
+      "Yes, one or two employees": "Sim, um ou dois funcionários",
+      "Yes, three or more employees": "Sim, três ou mais funcionários",
+      "Not sure yet": "Ainda não tenho certeza"
+    },
+    "regulated_industry": {
+      "No, general services or products": "Não, serviços ou produtos gerais",
+      "Yes, health or medical": "Sim, saúde ou área médica",
+      "Yes, financial or investment": "Sim, financeiro ou investimento",
+      "Yes, food or alcohol": "Sim, alimentos ou bebidas alcoólicas",
+      "Yes, legal or professional licensing": "Sim, jurídico ou licenciamento profissional",
+      "Yes, other regulated area": "Sim, outra área regulamentada",
+      "Not sure": "Não tenho certeza"
+    },
+    "cross_border_work": {
+      "No, Canada only": "Não, só Canadá",
+      "Mostly US clients": "Maioria de clientes nos EUA",
+      "Mostly other international": "Maioria de clientes internacionais (outros países)",
+      "Mixed Canadian and foreign": "Mistura de clientes canadenses e estrangeiros",
+      "Not sure yet": "Ainda não tenho certeza"
+    },
+    "ip_planned": {
+      "No, services only": "Não, só serviços",
+      "Yes, a brand name or logo to protect": "Sim, uma marca ou logotipo para proteger",
+      "Yes, software, code, or formulas": "Sim, software, código ou fórmulas",
+      "Yes, multiple types of IP": "Sim, vários tipos de propriedade intelectual",
+      "Not sure": "Não tenho certeza"
     }
   },
   "summary": {},
@@ -350,6 +424,7 @@
     "contact_field_email_placeholder": "voce@exemplo.com",
     "contact_submit": "Enviar matéria para revisão",
     "done_heading": "A sua matéria foi enviada para revisão.",
-    "done_body_template": "Um advogado em {firmName} vai ler o que você compartilhou e entrar em contato diretamente para conversar sobre a parte jurídica."
+    "done_body_template": "Um advogado em {firmName} vai ler o que você compartilhou e entrar em contato diretamente para conversar sobre a parte jurídica.",
+    "free_text_other_label": "Outra coisa (vou explicar)"
   }
 }
