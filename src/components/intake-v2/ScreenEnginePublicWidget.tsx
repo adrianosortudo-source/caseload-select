@@ -79,9 +79,11 @@ function getContactValue(state: EngineState | null, key: string): string {
 function FreeTextAnswerCard({
   item,
   onSubmit,
+  submitLabel = "Continue",
 }: {
   item: ScreenItem;
   onSubmit: (value: string) => void;
+  submitLabel?: string;
 }) {
   const [value, setValue] = useState("");
   return (
@@ -94,7 +96,7 @@ function FreeTextAnswerCard({
         if (trimmed.length === 0) return;
         onSubmit(trimmed);
       }}
-      submitLabel="Continue"
+      submitLabel={submitLabel}
       minChars={1}
     />
   );
@@ -503,6 +505,7 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
           key={currentItem.id}
           item={currentItem}
           onSubmit={(text) => answer(currentItem.id, `other:${text}`)}
+          submitLabel={ws("free_text_continue", "Continue")}
         />
       ) : (
         <DecisionCard item={currentItem} onChange={(value) => answer(currentItem.id, value)} />
