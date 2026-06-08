@@ -43,13 +43,22 @@ interface ShellProps {
   /** Callback when the skip-forward button is pressed. Hidden when undefined.
    * Lets the prospect bypass a question they don't have an answer for. */
   onSkip?: () => void;
+  /**
+   * Localized label for the back button. Defaults to "Back". Provided by
+   * the widget when state.language is non-English so the chrome stays
+   * coherent end-to-end. Back-compat: callers that omit this continue
+   * to render "Back" exactly as before.
+   */
+  backLabel?: string;
+  /** Localized label for the skip button. Defaults to "Skip". */
+  skipLabel?: string;
   /** Main content. */
   children: ReactNode;
   /** Sticky footer (e.g. Continue button for multi-select). */
   footer?: ReactNode;
 }
 
-export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip, children, footer }: ShellProps) {
+export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip, backLabel = "Back", skipLabel = "Skip", children, footer }: ShellProps) {
   const outerRef = useRef<HTMLDivElement | null>(null);
 
   // Default false on first render to match SSR. Promote to true after mount
@@ -158,7 +167,7 @@ export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip,
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
-            <span className="text-[13px] font-medium">Back</span>
+            <span className="text-[13px] font-medium">{backLabel}</span>
           </button>
         ) : (
           <span className="w-10" aria-hidden="true" />
@@ -205,7 +214,7 @@ export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip,
             className="flex items-center gap-1.5 h-10 px-3 -mr-3 rounded-full transition text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_65%,transparent)] hover:bg-[color-mix(in_srgb,var(--cls-text,#1E2F58)_8%,transparent)] hover:text-[var(--cls-text,#1E2F58)]"
             style={{ fontFamily: "var(--cls-font-body, DM Sans, sans-serif)" }}
           >
-            <span className="text-[13px] font-medium">Skip</span>
+            <span className="text-[13px] font-medium">{skipLabel}</span>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>

@@ -335,7 +335,7 @@
       "Professional services": "Serviços profissionais",
       "Online business": "Negócio online",
       "Retail or storefront": "Varejo ou loja física",
-      "Trades or construction": "Construção ou ofício",
+      "Trades or construction": "Construção ou serviços técnicos",
       "Holding company or investment": "Holding ou investimento",
       "Not sure": "Não tenho certeza"
     },
@@ -396,8 +396,25 @@
       "Not sure": "Não tenho certeza"
     }
   },
-  "summary": {},
-  "summary_labels": {},
+  "summary": {
+    "business_setup_advisory": {
+      "intro_default": "Você está pensando em abrir um negócio e quer um advogado para ajudar a fazer isso do jeito certo.",
+      "intro_partner_setup": "Você está abrindo um negócio com um ou mais sócios e quer um advogado para estruturar a sociedade corretamente.",
+      "intro_solo_setup": "Você está abrindo um negócio sozinho e quer um advogado para estruturar tudo corretamente.",
+      "intro_buy_in": "Você está comprando ou entrando em um negócio existente e quer um advogado para revisar os documentos e proteger a sua posição.",
+      "closing": "Um advogado pode ajudar você a escolher a estrutura societária certa, documentar a divisão da sociedade com clareza e colocar no papel os acordos que evitam problemas previsíveis no futuro."
+    }
+  },
+  "summary_labels": {
+    "what_you_do": "O que você faz",
+    "where_you_are": "Em que estágio você está",
+    "business_location": "Onde o negócio vai operar",
+    "revenue_expectation": "Receita esperada no primeiro ano",
+    "hiring_plans": "Planos de contratação",
+    "regulated_area": "Área regulamentada",
+    "clients_outside_canada": "Clientes fora do Canadá",
+    "ip_protection": "Marca ou propriedade intelectual a proteger"
+  },
   "prompts": {},
   "bridge_text": {},
   "chips": {},
@@ -425,6 +442,7 @@
     "contact_submit": "Enviar matéria para revisão",
     "done_heading": "A sua matéria foi enviada para revisão.",
     "done_body_template": "Um advogado em {firmName} vai ler o que você compartilhou e entrar em contato diretamente para conversar sobre a parte jurídica.",
-    "free_text_other_label": "Outra coisa (vou explicar)"
+    "free_text_other_label": "Outra coisa (vou explicar)",
+    "status_submitted": "enviado"
   }
 }

@@ -93,3 +93,74 @@ describe("PT coverage for the full business_setup_advisory path", () => {
     );
   });
 });
+
+describe("PT review screen coverage for business_setup_advisory", () => {
+  // buildLeadSummaryI18n reads from i18n.summary[matter_type] for the
+  // intro + closing strings, and from i18n.summary_labels for the
+  // recap point labels. Without these, a PT lead's review screen
+  // falls back to the English originals via the cascade and the user
+  // sees a mixed-language recap.
+
+  const summaryBlock = i18nPt.summary?.["business_setup_advisory"];
+
+  it("has summary intro variants for every advisory_subtrack the engine emits", () => {
+    expect(summaryBlock).toBeTruthy();
+    expect(summaryBlock!["intro_default"]).toBeTruthy();
+    expect(summaryBlock!["intro_partner_setup"]).toBeTruthy();
+    expect(summaryBlock!["intro_solo_setup"]).toBeTruthy();
+    expect(summaryBlock!["intro_buy_in"]).toBeTruthy();
+  });
+
+  it("has a closing string for the business_setup_advisory summary", () => {
+    expect(summaryBlock!["closing"]).toBeTruthy();
+    expect(summaryBlock!["closing"].length).toBeGreaterThan(20);
+  });
+
+  it.each([
+    "what_you_do",
+    "where_you_are",
+    "business_location",
+    "revenue_expectation",
+    "hiring_plans",
+    "regulated_area",
+    "clients_outside_canada",
+    "ip_protection",
+  ])("recap label '%s' is translated", (labelKey) => {
+    expect(i18nPt.summary_labels?.[labelKey]).toBeTruthy();
+  });
+});
+
+describe("PT widget chrome coverage", () => {
+  // Every UI chrome string the widget renders post-language-detection
+  // must be translated so the visible flow stays Portuguese end-to-end.
+  it.each([
+    "shell_round_about_your_case",
+    "shell_round_your_details",
+    "shell_round_submitted",
+    "shell_round_review",
+    "shell_back",
+    "shell_skip",
+    "loading_reading",
+    "loading_preparing",
+    "insight_heading",
+    "insight_cta",
+    "contact_heading",
+    "contact_sub",
+    "contact_field_name_label",
+    "contact_field_phone_label",
+    "contact_field_email_label",
+    "contact_submit",
+    "done_heading",
+    "done_body_template",
+    "status_submitted",
+    "free_text_other_label",
+  ])("widget_strings has key '%s'", (key) => {
+    expect(i18nPt.widget_strings?.[key]).toBeTruthy();
+  });
+
+  it("done_body_template contains the firmName placeholder", () => {
+    // Widget injects the firm name via .replace(/\{firmName\}/g, ...).
+    // If the placeholder is missing the live name never appears.
+    expect(i18nPt.widget_strings!["done_body_template"]).toContain("{firmName}");
+  });
+});

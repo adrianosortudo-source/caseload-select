@@ -110,14 +110,33 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
   const persistedRef = useRef(false);
 
   const next = state ? getNextStep(state) : null;
-  const roundLabel = stage === "kickoff" ? "Your situation" : stage === "contact" ? "Your details" : "About your case";
+
+  // Language-aware UI chrome. After the LLM extraction sets state.language
+  // (turn 1 finishes), every visible chrome string (round labels, button
+  // labels, headings, body copy, status badges) reads from the lead's
+  // language bundle. Pre-language-detection (kickoff stage) the bundle
+  // is the English fallback by design: state is null until the lead
+  // types something, and the kickoff prompt IS the signal that triggers
+  // language detection. The fallback cascade keeps every English string
+  // intact when no translation exists.
+  const language: SupportedLanguage = (state?.language ?? "en") as SupportedLanguage;
+  const i18n = getI18n(language);
+  const ws = (key: string, fallback: string): string =>
+    i18n.widget_strings?.[key] ?? fallback;
+
+  const roundLabel =
+    stage === "kickoff"
+      ? ws("shell_round_your_situation", "Your situation")
+      : stage === "contact"
+        ? ws("shell_round_your_details", "Your details")
+        : ws("shell_round_about_your_case", "About your case");
+  const backLabel = ws("shell_back", "Back");
+  const skipLabel = ws("shell_skip", "Skip");
 
   const currentItem = useMemo(() => {
     if (!next?.slot) return null;
-    const language: SupportedLanguage = (state?.language ?? "en") as SupportedLanguage;
-    const i18n = getI18n(language);
     return slotToItem(next.slot, language, i18n);
-  }, [next, state?.language]);
+  }, [next, language, i18n]);
 
   async function start() {
     const text = description.trim();
@@ -236,6 +255,10 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
   }
 
   if (stage === "kickoff") {
+    // Kickoff stays English by design: state.language is unset until
+    // the lead types the first message. The kickoff prompt is the
+    // signal that elicits the language detection that powers every
+    // subsequent screen.
     return (
       <Shell totalScreens={1} currentScreen={0} roundLabel={roundLabel}>
         <TextCard
@@ -266,8 +289,31 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
 
   if (stage === "done" || next?.type === "stop") {
     if (next?.type === "stop") void persist(state);
+    // "Professional Corporation" is the formal LSO legal-entity suffix
+    // on the firm's registered name; strip it for the user-facing
+    // confirmation so the prospect sees the trade name (e.g. "DRG Law")
+    // rather than the entity name.
+    const trimmedFirmName =
+      firmName?.replace(/\s+Professional Corporation\s*$/i, '').trim() || 'the firm';
+    const doneBodyTemplate = ws(
+      "done_body_template",
+      "A lawyer at {firmName} will read what you shared and reach out directly to talk through the legal side.",
+    );
+    const doneBody = doneBodyTemplate.replace(/\{firmName\}/g, trimmedFirmName);
+    // Translate the "submitted" sentinel; pass other reason strings
+    // through verbatim (they are server-supplied and not user-facing
+    // copy that we author).
+    const statusLabel = persistStatus === "submitted"
+      ? ws("status_submitted", "submitted")
+      : persistStatus;
     return (
-      <Shell totalScreens={1} currentScreen={0} roundLabel="Submitted" onBack={back}>
+      <Shell
+        totalScreens={1}
+        currentScreen={0}
+        roundLabel={ws("shell_round_submitted", "Submitted")}
+        onBack={back}
+        backLabel={backLabel}
+      >
         <div className="flex flex-col items-center text-center gap-5 py-10">
           <div className="w-16 h-16 rounded-full bg-[var(--cls-accent,#1E2F58)] text-[var(--cls-accent-text,#FFFFFF)] flex items-center justify-center">
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -275,20 +321,16 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
             </svg>
           </div>
           <h2 className="text-[28px] font-extrabold text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
-            Your matter review was submitted.
+            {ws("done_heading", "Your matter review was submitted.")}
           </h2>
           <p
             className="max-w-[460px] text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
             style={{ fontFamily: fontBody }}
           >
-            {/* "Professional Corporation" is the formal LSO legal-entity
-                suffix on the firm's registered name; strip it for the
-                user-facing confirmation so the prospect sees the trade
-                name (e.g. "DRG Law") rather than the entity name. */}
-            A lawyer at {firmName?.replace(/\s+Professional Corporation\s*$/i, '').trim() || 'the firm'} will read what you shared and reach out directly to talk through the legal side.
+            {doneBody}
           </p>
-          {persistStatus && (
-            <p className="text-[12px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_45%,transparent)]">{persistStatus}</p>
+          {statusLabel && (
+            <p className="text-[12px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_45%,transparent)]">{statusLabel}</p>
           )}
         </div>
       </Shell>
@@ -296,12 +338,18 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
   }
 
   if (next?.type === "present_insight") {
-    const summary = buildLeadSummary(state, getI18n(state.language ?? "en"));
+    const summary = buildLeadSummary(state, i18n);
     return (
-      <Shell totalScreens={3} currentScreen={2} roundLabel="Review" onBack={back}>
+      <Shell
+        totalScreens={3}
+        currentScreen={2}
+        roundLabel={ws("shell_round_review", "Review")}
+        onBack={back}
+        backLabel={backLabel}
+      >
         <div className="flex flex-col gap-5">
           <h2 className="text-[28px] font-extrabold text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
-            Here is what we understood.
+            {ws("insight_heading", "Here is what we understood.")}
           </h2>
           <p
             className="text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
@@ -324,7 +372,7 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
             className="min-h-[52px] rounded-full bg-[var(--cls-accent,#1E2F58)] px-8 text-[15px] font-semibold text-[var(--cls-accent-text,#FFFFFF)]"
             style={{ fontFamily: fontBody }}
           >
-            Yes, share my contact details
+            {ws("insight_cta", "Yes, share my contact details")}
           </button>
         </div>
       </Shell>
@@ -333,23 +381,41 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
 
   if (stage === "contact" || next?.type === "capture_contact") {
     return (
-      <Shell totalScreens={1} currentScreen={0} roundLabel="Your details" onBack={back}>
+      <Shell
+        totalScreens={1}
+        currentScreen={0}
+        roundLabel={ws("shell_round_your_details", "Your details")}
+        onBack={back}
+        backLabel={backLabel}
+      >
         <form action={submitContact} className="flex flex-col gap-5">
           <div>
             <h2 className="text-[28px] font-extrabold text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
-              How should the firm reach you?
+              {ws("contact_heading", "How should the firm reach you?")}
             </h2>
             <p
               className="mt-2 text-[15px] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_65%,transparent)]"
               style={{ fontFamily: fontBody }}
             >
-              Share your contact details so the team can follow up after review.
+              {ws("contact_sub", "Share your contact details so the team can follow up after review.")}
             </p>
           </div>
           {[
-            ["client_name", "Full name", "Your name"],
-            ["client_phone", "Phone", "+1 416 555 0123"],
-            ["client_email", "Email", "you@example.com"],
+            [
+              "client_name",
+              ws("contact_field_name_label", "Full name"),
+              ws("contact_field_name_placeholder", "Your name"),
+            ],
+            [
+              "client_phone",
+              ws("contact_field_phone_label", "Phone"),
+              ws("contact_field_phone_placeholder", "+1 416 555 0123"),
+            ],
+            [
+              "client_email",
+              ws("contact_field_email_label", "Email"),
+              ws("contact_field_email_placeholder", "you@example.com"),
+            ],
           ].map(([name, label, placeholder]) => (
             <label
               key={name}
@@ -371,7 +437,7 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
             className="min-h-[52px] rounded-full bg-[var(--cls-accent,#1E2F58)] px-8 text-[15px] font-semibold text-[var(--cls-accent-text,#FFFFFF)]"
             style={{ fontFamily: fontBody }}
           >
-            Submit matter review
+            {ws("contact_submit", "Submit matter review")}
           </button>
         </form>
       </Shell>
@@ -386,7 +452,13 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
   // then exactly one question.
   if (isReading || !currentItem) {
     return (
-      <Shell totalScreens={5} currentScreen={Math.min(history.length, 4)} roundLabel={roundLabel} onBack={back}>
+      <Shell
+        totalScreens={5}
+        currentScreen={Math.min(history.length, 4)}
+        roundLabel={roundLabel}
+        onBack={back}
+        backLabel={backLabel}
+      >
         <div className="flex flex-col items-center justify-center text-center gap-4 py-16">
           <div
             aria-hidden="true"
@@ -396,7 +468,9 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
             className="text-[13px] uppercase tracking-[0.18em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_60%,transparent)]"
             style={{ fontFamily: fontBody }}
           >
-            {isReading ? "Reading your description..." : "Preparing the next question..."}
+            {isReading
+              ? ws("loading_reading", "Reading your description...")
+              : ws("loading_preparing", "Preparing the next question...")}
           </p>
         </div>
       </Shell>
@@ -415,7 +489,15 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
   const isPureFreeText = optionCount === 0 && !!currentItem.allowFreeText;
 
   return (
-    <Shell totalScreens={5} currentScreen={Math.min(history.length, 4)} roundLabel={roundLabel} onBack={back} onSkip={skip}>
+    <Shell
+      totalScreens={5}
+      currentScreen={Math.min(history.length, 4)}
+      roundLabel={roundLabel}
+      onBack={back}
+      onSkip={skip}
+      backLabel={backLabel}
+      skipLabel={skipLabel}
+    >
       {isPureFreeText ? (
         <FreeTextAnswerCard
           key={currentItem.id}

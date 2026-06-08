@@ -565,13 +565,21 @@ function buildLeadSummaryI18n(state: EngineState, i18n: I18nBundle): LeadSummary
   const sm: Record<string, string> = (i18n.summary ?? {})[t] ?? {};
   const sl: Record<string, string> = i18n.summary_labels ?? {};
 
-  // ss: summary string — i18n.summary[matterType][key] with English fallback
+  // ss: summary string. i18n.summary[matterType][key] with English fallback.
   const ss = (key: string, fallback: string): string => sm[key] || fallback;
-  // lb: label — i18n.summary_labels[key] with English fallback
+  // lb: label. i18n.summary_labels[key] with English fallback.
   const lb = (key: string, fallback: string): string => sl[key] || fallback;
-  // pt: Pattern A/B labeled point — translated label, canonical value, trailing period
+  // pt: Pattern A/B labeled point. Translated label, canonical value, trailing period.
   const pt = (labelKey: string, labelEn: string, value: string): string =>
     `${lb(labelKey, labelEn)}: ${value}.`;
+  // tv: translate a slot's English value via i18n.slot_options for recap
+  // rendering (DRG WhatsApp PT smoke test follow-up, 2026-06-08). The
+  // canonical stored value stays English in state.slots; this only
+  // affects the display in the recap card. Falls back to the English
+  // value when no translation exists, so out-of-scope matter types
+  // continue to render today's English values.
+  const tv = (slotId: string, englishValue: string): string =>
+    i18n.slot_options?.[slotId]?.[englishValue] || englishValue;
 
   if (t === 'out_of_scope') {
     const areaLabels: Record<string, string> = {
@@ -600,21 +608,21 @@ function buildLeadSummaryI18n(state: EngineState, i18n: I18nBundle): LeadSummary
     else if (sub === 'buy_in_or_joining') intro = ss('intro_buy_in', 'You are buying into or joining an existing business and want a lawyer to review the documents and protect your position.');
 
     const activity = slot(state, 'business_activity_type');
-    if (activity) points.push(pt('what_you_do', 'What you do', activity.toLowerCase()));
+    if (activity) points.push(pt('what_you_do', 'What you do', tv('business_activity_type', activity).toLowerCase()));
     const stage = slot(state, 'business_stage');
-    if (stage) points.push(pt('where_you_are', 'Where you are', stage.toLowerCase()));
+    if (stage) points.push(pt('where_you_are', 'Where you are', tv('business_stage', stage).toLowerCase()));
     const location = slot(state, 'business_location');
     if (location) points.push(pt('business_location', 'Where the business will be based', location));
     const revenue = slot(state, 'revenue_expectation');
-    if (revenue) points.push(pt('revenue_expectation', 'Revenue you expect in year one', revenue.toLowerCase()));
+    if (revenue) points.push(pt('revenue_expectation', 'Revenue you expect in year one', tv('revenue_expectation', revenue).toLowerCase()));
     const employees = slot(state, 'employees_planned');
-    if (employees && employees !== 'No, just me') points.push(pt('hiring_plans', 'Hiring plans', employees.toLowerCase()));
+    if (employees && employees !== 'No, just me') points.push(pt('hiring_plans', 'Hiring plans', tv('employees_planned', employees).toLowerCase()));
     const regulated = slot(state, 'regulated_industry');
-    if (regulated && regulated.startsWith('Yes')) points.push(pt('regulated_area', 'Regulated area', regulated.replace(/^Yes,\s*/i, '')));
+    if (regulated && regulated.startsWith('Yes')) points.push(pt('regulated_area', 'Regulated area', tv('regulated_industry', regulated).replace(/^Yes,\s*/i, '').replace(/^Sim,\s*/i, '')));
     const crossBorder = slot(state, 'cross_border_work');
-    if (crossBorder && crossBorder !== 'No, Canada only' && crossBorder !== 'Not sure yet') points.push(pt('clients_outside_canada', 'Clients outside Canada', crossBorder.toLowerCase()));
+    if (crossBorder && crossBorder !== 'No, Canada only' && crossBorder !== 'Not sure yet') points.push(pt('clients_outside_canada', 'Clients outside Canada', tv('cross_border_work', crossBorder).toLowerCase()));
     const ip = slot(state, 'ip_planned');
-    if (ip && ip !== 'No, services only' && ip !== 'Not sure') points.push(pt('ip_protection', 'Brand or intellectual property to protect', ip.replace(/^Yes,\s*/i, '')));
+    if (ip && ip !== 'No, services only' && ip !== 'Not sure') points.push(pt('ip_protection', 'Brand or intellectual property to protect', tv('ip_planned', ip).replace(/^Yes,\s*/i, '').replace(/^Sim,\s*/i, '')));
 
     return {
       intro,
