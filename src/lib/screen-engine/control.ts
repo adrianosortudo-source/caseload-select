@@ -871,15 +871,28 @@ export function getNextStep(state: EngineState): NextStep {
   }
 
   if (state.contactCaptureStarted) {
-    const contactIds = ['client_name', 'client_phone', 'client_email'];
-    for (const id of contactIds) {
-      const val = state.slots[id];
-      if (!val) {
-        const realSlot = SLOT_REGISTRY.find(s => s.id === id);
-        if (realSlot) return { type: 'capture_contact', slot: realSlot };
-      }
+    // Contact-doctrine gate (DR-038): a complete lead is name + (email OR
+    // phone). The branch below mirrors that contract instead of demanding
+    // all three contact slots. The pre-2026-06-08 version of this block
+    // returned capture_contact whenever ANY of {name, phone, email} was
+    // empty, which collapsed every non-web channel that pre-fills a
+    // subset of contact (WhatsApp: name+phone, Messenger/IG: name only,
+    // voice: phone only). On resume turns those channels were dropping
+    // into capture_contact, which the channel processor's Phase C does
+    // not treat as ask-another, so the engine fell through to finalize
+    // after a single discovery question. evaluateContactGate is the
+    // doctrine; this branch must agree with it.
+    const hasName = !!state.slots['client_name'];
+    const hasReachable = !!state.slots['client_phone'] || !!state.slots['client_email'];
+    if (!hasName) {
+      const realSlot = SLOT_REGISTRY.find(s => s.id === 'client_name');
+      if (realSlot) return { type: 'capture_contact', slot: realSlot };
     }
-    // All contact slots filled.
+    if (!hasReachable) {
+      const realSlot = SLOT_REGISTRY.find(s => s.id === 'client_email');
+      if (realSlot) return { type: 'capture_contact', slot: realSlot };
+    }
+    // Name + reachable both satisfied.
     //
     // Web: the SPA's contact form was the terminal step; return stop so
     // the done page renders next.
@@ -888,10 +901,7 @@ export function getNextStep(state: EngineState): NextStep {
     // pre-fill from sender metadata (DR-023) can satisfy this block on
     // turn 1 before any discovery slot is asked. Fall through so the
     // regular flow can keep offering high-priority slots while the
-    // channel budget allows. Stop is reached only when readyToStop / the
-    // post-insight loop / slot saturation says so. Without the fall-
-    // through, channels that pre-fill contact short-circuit to stop on
-    // turn 1 and produce shallow briefs.
+    // channel budget allows.
     if (channel === 'web') {
       return {
         type: 'stop',

@@ -86,7 +86,7 @@ describe("Phase B fix — will_drafting four-axis scoring", () => {
         estates_problem_type: "I need a will drafted or updated",
         existing_will_status: "No, I have never had one",
         children_count: "Two or three",
-        estate_complexity: "Simple — one residence and savings",
+        estate_complexity: "Simple, one residence and savings",
       },
       slot_meta: {
         existing_will_status: { source: "answered" },
@@ -147,7 +147,7 @@ describe("Phase B fix — will_drafting four-axis scoring", () => {
         client_phone: "+16475492106",
         existing_will_status: "No, I have never had one",
         children_count: "Two or three",
-        estate_complexity: "Simple — one residence and savings",
+        estate_complexity: "Simple, one residence and savings",
       },
       slot_meta: {
         existing_will_status: { source: "answered" },

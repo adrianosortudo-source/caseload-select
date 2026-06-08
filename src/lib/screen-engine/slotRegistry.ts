@@ -1066,7 +1066,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     options: [
       { value: 'Nothing paid', label: 'Nothing paid' },
       { value: 'Partially paid', label: 'Partially paid' },
-      { value: 'Disputed — claims they paid', label: 'Disputed — claims they paid' },
+      { value: 'Disputed, claims they paid', label: 'Disputed, claims they paid' },
       { value: 'Not sure', label: 'Not sure' },
     ],
     applies_to: ['unpaid_invoice'],
@@ -1083,7 +1083,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
         'owes us', 'outstanding', 'unpaid', 'zero payment', 'no payment',
       ],
       'Partially paid': ['partially paid', 'partial payment', 'some payment', 'paid some', 'paid part', 'partial'],
-      'Disputed — claims they paid': ['says they paid', 'claims they paid', 'says it was paid', 'disputes the amount', 'denies the debt'],
+      'Disputed, claims they paid': ['says they paid', 'claims they paid', 'says it was paid', 'disputes the amount', 'denies the debt'],
     },
   },
   {
@@ -1170,7 +1170,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
 
   {
     id: 'written_terms',
-    question: 'Do you have anything in writing that shows what was agreed — like emails or messages?',
+    question: 'Do you have anything in writing that shows what was agreed, like emails or messages?',
     input_type: 'single_select',
     options: [
       { value: 'Yes', label: 'Yes' },
@@ -1480,7 +1480,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
   },
   {
     id: 'reported_to_anyone',
-    question: 'Has this been reported to anyone — police, accountant, other directors, or your board?',
+    question: 'Has this been reported to anyone (police, accountant, other directors, or your board)?',
     input_type: 'single_select',
     options: [
       { value: 'Yes, reported', label: 'Yes, reported' },
@@ -3111,7 +3111,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     question: 'How would you describe your estate?',
     input_type: 'single_select',
     options: [
-      { value: 'Simple — one residence and savings', label: 'Simple — one residence and savings' },
+      { value: 'Simple, one residence and savings', label: 'Simple, one residence and savings' },
       { value: 'Multiple properties or investments', label: 'Multiple properties or investments' },
       { value: 'Business or company ownership', label: 'Business or company ownership' },
       { value: 'Cross-border assets', label: 'Cross-border assets' },

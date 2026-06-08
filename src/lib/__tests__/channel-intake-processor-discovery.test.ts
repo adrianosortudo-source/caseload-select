@@ -259,7 +259,10 @@ describe('processChannelInbound — discovery follow-up phase', () => {
         lead_id: 'L-2026-05-16-AAA',
         submitted_at: '2026-05-16T00:00:00.000Z',
         language: 'en',
-        discoveryFollowUpCount: 3,
+        // Must equal DISCOVERY_FOLLOW_UP_CAP (12) so Phase C skips and
+        // the processor finalises. See sibling fixture in
+        // channel-intake-processor-closing.test.ts for the rationale.
+        discoveryFollowUpCount: 12,
       },
       follow_up_count: 0,
       max_follow_ups: 3,

@@ -202,8 +202,14 @@ function discoveryCapExhaustedSession(channel: 'whatsapp' | 'facebook' | 'instag
       lead_id: 'L-2026-05-16-AAA',
       submitted_at: '2026-05-16T00:00:00.000Z',
       language: 'en',
-      // Discovery cap already exhausted on previous turns.
-      discoveryFollowUpCount: 3,
+      // Discovery cap already exhausted on previous turns. Must equal
+      // DISCOVERY_FOLLOW_UP_CAP (12) for the processor's Phase C
+      // (discoveryCount < CAP) to skip and finalise directly. Bumped
+      // 2026-06-08: prior value of 3 was masked by the contact-capture
+      // branch bug that finalised any non-web channel missing email;
+      // with the doctrine-aligned fix in control.ts, the discovery
+      // loop now runs to the actual cap.
+      discoveryFollowUpCount: 12,
     },
     follow_up_count: 0,
     max_follow_ups: 3,

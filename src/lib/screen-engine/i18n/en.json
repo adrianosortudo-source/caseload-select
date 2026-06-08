@@ -203,7 +203,7 @@
     "payment_status": {
       "Nothing paid": "Nothing paid",
       "Partially paid": "Partially paid",
-      "Disputed — claims they paid": "Disputed — claims they paid",
+      "Disputed, claims they paid": "Disputed, claims they paid",
       "Not sure": "Not sure"
     },
     "proof_of_performance": {
