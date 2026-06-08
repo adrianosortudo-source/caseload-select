@@ -10,8 +10,9 @@ import { runEvidencePass } from "@/lib/screen-engine/slotEvidence";
 import { computeBand } from "@/lib/screen-engine/band";
 import { computeCoreCompleteness, getDecisionGap } from "@/lib/screen-engine/selector";
 import { applyAnswer, buildLeadSummary, getNextStep, markInsightShown, startContactCapture } from "@/lib/screen-engine/control";
-import { getI18n } from "@/lib/screen-engine/i18n/loader";
-import { getOptionDisplayLabel } from "@/lib/screen-engine/i18n/display";
+import { getI18n, type I18nBundle } from "@/lib/screen-engine/i18n/loader";
+import { getOptionDisplayLabel, getQuestionDisplayText } from "@/lib/screen-engine/i18n/display";
+import type { SupportedLanguage } from "@/lib/screen-engine/types";
 import { llmExtract, mergeLlmResults } from "@/lib/screen-engine/llm/extractor";
 import { buildReport } from "@/lib/screen-engine/report";
 import { renderBriefHtmlServer } from "@/lib/screen-brief-html";
@@ -35,9 +36,11 @@ function scoreState(state: EngineState): EngineState {
   };
 }
 
-function slotToItem(slot: SlotDefinition): ScreenItem {
-  const language = "en";
-  const i18n = getI18n(language);
+export function slotToItem(
+  slot: SlotDefinition,
+  language: SupportedLanguage,
+  i18n: I18nBundle,
+): ScreenItem {
   const options = (slot.options ?? []).map((opt) => ({
     value: opt.value,
     label: getOptionDisplayLabel(opt, slot.id, language, i18n),
@@ -45,7 +48,7 @@ function slotToItem(slot: SlotDefinition): ScreenItem {
 
   return {
     id: slot.id,
-    question: slot.question,
+    question: getQuestionDisplayText(slot.id, slot.question, language, i18n),
     presentation: options.length <= 3 ? "chip" : "card",
     options,
     allowFreeText: true,
@@ -104,8 +107,10 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
 
   const currentItem = useMemo(() => {
     if (!next?.slot) return null;
-    return slotToItem(next.slot);
-  }, [next]);
+    const language: SupportedLanguage = (state?.language ?? "en") as SupportedLanguage;
+    const i18n = getI18n(language);
+    return slotToItem(next.slot, language, i18n);
+  }, [next, state?.language]);
 
   async function start() {
     const text = description.trim();

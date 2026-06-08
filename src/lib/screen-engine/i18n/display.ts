@@ -2,6 +2,34 @@ import type { SlotOption, SupportedLanguage } from '../types';
 import type { I18nBundle } from './loader';
 
 /**
+ * Returns the display text for a slot's question in the lead's language.
+ *
+ * Fail-safe cascade:
+ *   1. language === 'en'                          → return englishQuestion (no lookup)
+ *   2. i18n.slot_questions[slotId] non-empty      → return the translated string
+ *   3. i18n.slot_questions missing the slot id    → return englishQuestion (fallback)
+ *   4. i18n.slot_questions[slotId] empty string   → return englishQuestion (defensive)
+ *
+ * Levels 3 and 4 protect against partial translations: a bundle that
+ * translates 30 of 110 slot questions still works correctly for those
+ * 30 and falls back to English for the rest. No throw, no empty render.
+ *
+ * Added 2026-06-08 to close the i18n propagation gap surfaced on the
+ * DRG WhatsApp PT smoke test ("quero abrir minha empresa no canada"
+ * was producing English follow-up questions).
+ */
+export function getQuestionDisplayText(
+  slotId: string,
+  englishQuestion: string,
+  language: SupportedLanguage,
+  i18n: I18nBundle,
+): string {
+  if (language === 'en') return englishQuestion;
+  const translated = i18n.slot_questions?.[slotId];
+  return translated || englishQuestion;
+}
+
+/**
  * Returns the display label for a slot option in the lead's language.
  *
  * Fail-safe cascade (5 levels):

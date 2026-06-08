@@ -82,6 +82,9 @@ import {
   rerouteFromCorporateGeneral,
   rerouteFromRealEstateGeneral,
 } from '@/lib/screen-engine/extractor';
+import { getI18n, type I18nBundle } from '@/lib/screen-engine/i18n/loader';
+import { getQuestionDisplayText, getOptionDisplayLabel } from '@/lib/screen-engine/i18n/display';
+import type { SupportedLanguage } from '@/lib/screen-engine/types';
 
 // ── Channel type ────────────────────────────────────────────────────────
 
@@ -115,14 +118,25 @@ const DISCOVERY_CHANNELS = new Set<MetaChannel>(['whatsapp', 'facebook', 'instag
  * processor then extracts the lead's free-text reply via the next turn's
  * regex/LLM pass; the lead does not need to type an option verbatim, but
  * surfacing the options gives the LLM a strong target on the resume turn.
+ *
+ * Language-aware (2026-06-08): the question text and option labels are
+ * routed through `getQuestionDisplayText` and `getOptionDisplayLabel`
+ * with the lead's detected language (`state.language`). When the bundle
+ * for that language is missing or the slot is not yet translated, the
+ * helpers cascade to English so the propagation contract holds even
+ * during partial translation rollouts.
  */
-function formatDiscoveryQuestion(slot: SlotDefinition): string {
-  const base = slot.question.trim();
+function formatDiscoveryQuestion(
+  slot: SlotDefinition,
+  language: SupportedLanguage,
+  i18n: I18nBundle,
+): string {
+  const base = getQuestionDisplayText(slot.id, slot.question, language, i18n).trim();
   if (slot.input_type !== 'single_select' || !slot.options || slot.options.length === 0) {
     return base;
   }
   const labels = slot.options
-    .map((o, idx) => `${idx + 1}. ${o.label}`)
+    .map((o, idx) => `${idx + 1}. ${getOptionDisplayLabel(o, slot.id, language, i18n)}`)
     .join('\n');
   return `${base}\n\n${labels}`;
 }
@@ -715,7 +729,9 @@ export async function processChannelInbound(
         nextStep.type === 'recover') &&
       nextStep.slot
     ) {
-      const questionText = formatDiscoveryQuestion(nextStep.slot);
+      const language: SupportedLanguage = (state.language ?? 'en') as SupportedLanguage;
+      const i18n = getI18n(language);
+      const questionText = formatDiscoveryQuestion(nextStep.slot, language, i18n);
       const sendResult = await sendChannelMessage({
         firmId,
         sender,

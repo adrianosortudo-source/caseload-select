@@ -1,0 +1,355 @@
+{
+  "_meta": {
+    "language": "pt",
+    "variant": "pt-BR (Brazilian Portuguese)",
+    "scope": "DRG launch-week priority slots only. In: business_setup_advisory, corporate_general routing, shareholder_dispute, unpaid_invoice, contract_dispute, vendor_supplier_dispute, corporate_money_control, universal readiness (hiring_timeline/other_counsel/decision_authority), contact (client_name/email/phone/postal). Out: employment Phase B, estates Phase B, real estate matter types, voice channel prompt. Out-of-scope matter types fall back to English question + option text via the getQuestionDisplayText / getOptionDisplayLabel cascade.",
+    "added": "2026-06-08",
+    "audit": "Authored after the DRG WhatsApp PT smoke test surfaced the i18n propagation gap. Brand voice: direct, professional, Damaris-tone. No em-dashes. No time-relative reply promises. Ontario legal terminology preserved where direct PT equivalent exists; ambiguous legal terms left in English with PT scaffolding."
+  },
+  "slot_questions": {
+    "client_name": "Qual é o seu nome?",
+    "client_phone": "Qual é o melhor telefone para contato?",
+    "client_email": "Qual e-mail o escritório deve usar para retornar?",
+    "client_postal_code": "Qual é o seu código postal?",
+    "corporate_problem_type": "Qual descreve melhor o problema que você está enfrentando?",
+    "company_involvement": "Qual é a sua relação com a empresa envolvida?",
+    "advisory_path": "Você está abrindo um novo negócio ou comprando participação em uma empresa existente?",
+    "co_owner_count": "Mais alguém vai ser dono ou tocar o negócio com você?",
+    "advisory_concern": "Qual é a sua maior preocupação no momento?",
+    "signed_anything": "Você já assinou ou se comprometeu com alguma coisa?",
+    "documents_exist": "Você já tem documentos para um advogado revisar?",
+    "advisory_actionability": "Você está planejando avançar logo ou ainda explorando?",
+    "advisory_specific_task": "Em que um advogado poderia ajudar primeiro?",
+    "advisory_timing": "Quando você precisa de ajuda?",
+    "client_role": "O que melhor descreve a sua posição nesta situação?",
+    "counterparty_type": "Com quem é a questão?",
+    "proof_of_ownership": "Você tem documentos, e-mails ou mensagens mostrando a sua participação ou papel de decisão na empresa?",
+    "shareholder_agreement": "Você tem um acordo de sócios ou documentos de participação?",
+    "corporate_records_available": "Você tem acesso aos registros financeiros ou às contas bancárias da empresa?",
+    "management_exclusion": "O seu sócio limitou o seu acesso a decisões, registros ou contas da empresa?",
+    "dividend_or_money_issue": "Dinheiro da empresa está sendo retirado ou usado de uma forma com a qual você não concorda?",
+    "company_profitable": "A empresa é lucrativa ou tem ativos significativos?",
+    "deadlock_status": "O negócio está paralisado ou sem conseguir tomar decisões?",
+    "desired_outcome_shareholder_dispute": "Qual seria o melhor resultado para você?",
+    "amount_at_stake": "Aproximadamente quanto dinheiro está envolvido?",
+    "invoice_exists": "Você tem uma fatura, conta ou demonstrativo mostrando o valor devido?",
+    "payment_status": "Algum valor já foi pago?",
+    "proof_of_performance": "Você tem como mostrar que o trabalho, os bens ou os serviços foram entregues?",
+    "dispute_reason": "O que a outra parte está dizendo sobre por que não paga?",
+    "desired_outcome_unpaid_invoice": "Qual seria o melhor resultado para você?",
+    "written_terms": "Você tem alguma coisa por escrito mostrando o que foi acordado, como e-mails ou mensagens?",
+    "contract_exists": "Existe um contrato assinado ou um acordo por escrito?",
+    "communications_exist": "Você tem alguma comunicação escrita sobre o que foi acordado?",
+    "desired_outcome_contract": "Qual seria o melhor resultado para você?",
+    "vendor_type": "Com quem é a disputa de cobrança?",
+    "billing_dispute_reason": "Sobre o que é a disputa de cobrança?",
+    "vendor_contract_exists": "Você tem um contrato, acordo ou termos de serviço com este fornecedor?",
+    "vendor_services_received": "Os bens ou serviços em disputa foram efetivamente entregues ou prestados?",
+    "desired_outcome_vendor": "Qual seria o melhor resultado para você?",
+    "reporter_role_money": "Qual é a sua função na empresa?",
+    "irregularity_type": "Que tipo de preocupação financeira você tem?",
+    "irregularity_amount": "Você tem uma estimativa de quanto dinheiro pode estar envolvido?",
+    "evidence_of_irregularity": "Você tem registros, demonstrativos ou documentos mostrando a irregularidade?",
+    "reported_to_anyone": "Isto já foi reportado a alguém (polícia, contador, outros diretores ou ao conselho)?",
+    "hiring_timeline": "Quando você espera ter um advogado trabalhando neste caso?",
+    "other_counsel": "Você já falou com outro advogado sobre este caso?",
+    "decision_authority": "Quem decide se contrata um advogado para isto?"
+  },
+  "slot_options": {
+    "corporate_problem_type": {
+      "Someone owes my company money": "Alguém deve dinheiro para a minha empresa",
+      "I have a dispute with a business partner or co-owner": "Tenho uma disputa com um sócio ou cosócio",
+      "A vendor or supplier has billed us incorrectly": "Um fornecedor cobrou de forma incorreta",
+      "I am concerned about financial irregularities in the company": "Estou preocupado com irregularidades financeiras na empresa",
+      "A contract or agreement was not honoured": "Um contrato ou acordo não foi cumprido",
+      "Something else": "Outra coisa"
+    },
+    "company_involvement": {
+      "I own or co-own the company": "Sou dono ou cosócio da empresa",
+      "I am a director or officer": "Sou diretor ou administrador",
+      "I am a customer or client of the company": "Sou cliente da empresa",
+      "I work for the company": "Trabalho na empresa",
+      "I am a vendor or supplier": "Sou fornecedor",
+      "Other": "Outro"
+    },
+    "advisory_path": {
+      "Starting a new business": "Abrindo um novo negócio",
+      "Buying into an existing business": "Comprando participação em uma empresa existente",
+      "Not sure": "Não tenho certeza"
+    },
+    "co_owner_count": {
+      "Just me": "Só eu",
+      "One partner": "Um sócio",
+      "Multiple partners": "Vários sócios",
+      "Not sure yet": "Ainda não tenho certeza"
+    },
+    "advisory_concern": {
+      "Knowing what kind of company to set up": "Saber que tipo de empresa abrir",
+      "Deciding who owns what": "Decidir quem é dono de quanto",
+      "Avoiding problems with a partner later": "Evitar problemas com sócio no futuro",
+      "Reviewing documents before signing": "Revisar os documentos antes de assinar",
+      "Not sure": "Não tenho certeza"
+    },
+    "signed_anything": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "documents_exist": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "advisory_actionability": {
+      "Just exploring": "Só explorando",
+      "Planning soon": "Planejando para logo",
+      "Ready to move forward": "Pronto para avançar",
+      "Need review now": "Preciso de revisão agora",
+      "Not sure": "Não tenho certeza"
+    },
+    "advisory_specific_task": {
+      "Choosing the right structure": "Escolher a estrutura certa",
+      "Reviewing documents": "Revisar documentos",
+      "Splitting ownership": "Dividir a sociedade",
+      "Protecting against future problems": "Proteger contra problemas futuros",
+      "Not sure": "Não tenho certeza"
+    },
+    "advisory_timing": {
+      "No rush": "Sem pressa",
+      "In the next 1-3 months": "Nos próximos 1-3 meses",
+      "This month": "Este mês",
+      "This week": "Esta semana",
+      "Urgent": "Urgente",
+      "Not sure": "Não tenho certeza"
+    },
+    "client_role": {
+      "Shareholder": "Sócio",
+      "Director/officer": "Diretor/administrador",
+      "Business partner": "Sócio do negócio",
+      "Employee": "Funcionário",
+      "Not sure": "Não tenho certeza"
+    },
+    "counterparty_type": {
+      "Business partner": "Sócio do negócio",
+      "Cofounder": "Cofundador",
+      "Other shareholder": "Outro sócio",
+      "Company management": "Administração da empresa",
+      "Not sure": "Não tenho certeza"
+    },
+    "proof_of_ownership": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "shareholder_agreement": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "corporate_records_available": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Partial access": "Acesso parcial",
+      "Not sure": "Não tenho certeza"
+    },
+    "management_exclusion": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "dividend_or_money_issue": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "company_profitable": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "deadlock_status": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "desired_outcome_shareholder_dispute": {
+      "Recover money taken from the company": "Recuperar dinheiro retirado da empresa",
+      "Regain access to records or accounts": "Recuperar acesso a registros ou contas",
+      "Stop unauthorized decisions": "Impedir decisões não autorizadas",
+      "Negotiate a buyout or exit": "Negociar saída ou compra de participação",
+      "Resolve ownership/control dispute": "Resolver disputa de participação ou controle",
+      "Not sure": "Não tenho certeza"
+    },
+    "amount_at_stake": {
+      "Under $5,000": "Menos de $5.000",
+      "$5,000–$25,000": "$5.000 a $25.000",
+      "$25,000–$100,000": "$25.000 a $100.000",
+      "Over $100,000": "Mais de $100.000",
+      "Not sure": "Não tenho certeza"
+    },
+    "invoice_exists": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "payment_status": {
+      "Nothing paid": "Nada foi pago",
+      "Partially paid": "Parcialmente pago",
+      "Disputed, claims they paid": "Em disputa, alega que pagou",
+      "Not sure": "Não tenho certeza"
+    },
+    "proof_of_performance": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "dispute_reason": {
+      "Says work was not done properly": "Diz que o trabalho não foi feito direito",
+      "Says there was no agreement": "Diz que não havia acordo",
+      "Says they already paid": "Diz que já pagou",
+      "No clear reason": "Sem razão clara",
+      "Not sure": "Não tenho certeza"
+    },
+    "desired_outcome_unpaid_invoice": {
+      "Get paid": "Receber o pagamento",
+      "Negotiate payment": "Negociar o pagamento",
+      "Send demand letter": "Enviar notificação de cobrança",
+      "Start claim": "Iniciar ação judicial",
+      "Not sure": "Não tenho certeza"
+    },
+    "written_terms": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "contract_exists": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "communications_exist": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "desired_outcome_contract": {
+      "Enforce agreement": "Fazer cumprir o acordo",
+      "Recover damages": "Recuperar perdas",
+      "Stop the other side from breaching": "Impedir o descumprimento pela outra parte",
+      "Negotiate settlement": "Negociar acordo",
+      "Not sure": "Não tenho certeza"
+    },
+    "vendor_type": {
+      "A supplier of goods": "Um fornecedor de produtos",
+      "A service provider": "Um prestador de serviços",
+      "A software or subscription vendor": "Um fornecedor de software ou assinatura",
+      "A contractor or subcontractor": "Um empreiteiro ou subempreiteiro",
+      "Another type of vendor": "Outro tipo de fornecedor",
+      "Not sure": "Não tenho certeza"
+    },
+    "billing_dispute_reason": {
+      "Overcharged for services or goods received": "Cobrança a mais por serviços ou produtos recebidos",
+      "Charged for something we did not receive": "Cobrado por algo que não recebemos",
+      "Dispute over contract terms or pricing": "Disputa sobre termos contratuais ou preço",
+      "Unauthorized or unexpected charges": "Cobranças não autorizadas ou inesperadas",
+      "Subscription or renewal dispute": "Disputa de assinatura ou renovação",
+      "Other": "Outro"
+    },
+    "vendor_contract_exists": {
+      "Yes, a signed contract": "Sim, um contrato assinado",
+      "Yes, terms of service or a purchase order": "Sim, termos de serviço ou ordem de compra",
+      "No formal agreement": "Sem acordo formal",
+      "Not sure": "Não tenho certeza"
+    },
+    "vendor_services_received": {
+      "Yes, fully delivered": "Sim, totalmente entregues",
+      "Partially delivered": "Parcialmente entregues",
+      "Not delivered": "Não entregues",
+      "Disputed": "Em disputa",
+      "Not sure": "Não tenho certeza"
+    },
+    "desired_outcome_vendor": {
+      "Refund or credit": "Reembolso ou crédito",
+      "Correct invoice and pay proper amount": "Corrigir a fatura e pagar o valor correto",
+      "Terminate the vendor relationship": "Encerrar a relação com o fornecedor",
+      "Damages for losses caused": "Indenização pelas perdas causadas",
+      "Not sure": "Não tenho certeza"
+    },
+    "reporter_role_money": {
+      "Owner or shareholder": "Dono ou sócio",
+      "Director or officer": "Diretor ou administrador",
+      "Employee or manager": "Funcionário ou gerente",
+      "Accountant or bookkeeper": "Contador ou auxiliar contábil",
+      "Other": "Outro"
+    },
+    "irregularity_type": {
+      "Money appears to be missing or unaccounted for": "Parece que há dinheiro sumido ou sem contabilização",
+      "Unauthorized payments or transfers": "Pagamentos ou transferências não autorizados",
+      "Fraudulent or inflated invoices": "Notas fiscais fraudulentas ou infladas",
+      "Someone is misusing company accounts or cards": "Alguém está usando contas ou cartões da empresa indevidamente",
+      "Other": "Outro"
+    },
+    "irregularity_amount": {
+      "Under $10,000": "Menos de $10.000",
+      "$10,000–$50,000": "$10.000 a $50.000",
+      "$50,000–$200,000": "$50.000 a $200.000",
+      "Over $200,000": "Mais de $200.000",
+      "Unknown": "Desconhecido"
+    },
+    "evidence_of_irregularity": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "hiring_timeline": {
+      "Now (this week)": "Agora (esta semana)",
+      "Within the next 30 days": "Nos próximos 30 dias",
+      "Within the next few months": "Nos próximos meses",
+      "Just exploring, no timeline yet": "Só explorando, sem prazo definido",
+      "Not sure": "Não tenho certeza"
+    },
+    "other_counsel": {
+      "No, you are the first": "Não, vocês são os primeiros",
+      "Yes, I am comparing options": "Sim, estou comparando opções",
+      "Yes, switching from a previous lawyer": "Sim, trocando de advogado",
+      "Not sure": "Não tenho certeza"
+    },
+    "decision_authority": {
+      "Just me": "Só eu",
+      "Me with a partner or family member": "Eu com um parceiro ou familiar",
+      "Multiple owners or directors": "Múltiplos donos ou diretores",
+      "Someone else decides": "Outra pessoa decide",
+      "Not sure": "Não tenho certeza"
+    }
+  },
+  "summary": {},
+  "summary_labels": {},
+  "prompts": {},
+  "bridge_text": {},
+  "chips": {},
+  "widget_strings": {
+    "shell_round_about_your_case": "Sobre o seu caso",
+    "shell_round_your_details": "Os seus dados",
+    "shell_round_your_situation": "A sua situação",
+    "shell_round_submitted": "Enviado",
+    "shell_round_review": "Revisão",
+    "shell_back": "Voltar",
+    "shell_skip": "Pular",
+    "loading_reading": "Lendo a sua descrição...",
+    "loading_preparing": "Preparando a próxima pergunta...",
+    "free_text_continue": "Continuar",
+    "insight_heading": "Veja o que entendemos.",
+    "insight_cta": "Sim, compartilhar meus dados de contato",
+    "contact_heading": "Como o escritório pode entrar em contato?",
+    "contact_sub": "Compartilhe seus dados de contato para que a equipe possa retornar após a revisão.",
+    "contact_field_name_label": "Nome completo",
+    "contact_field_phone_label": "Telefone",
+    "contact_field_email_label": "E-mail",
+    "contact_field_name_placeholder": "Seu nome",
+    "contact_field_phone_placeholder": "+1 416 555 0123",
+    "contact_field_email_placeholder": "voce@exemplo.com",
+    "contact_submit": "Enviar matéria para revisão",
+    "done_heading": "A sua matéria foi enviada para revisão.",
+    "done_body_template": "Um advogado em {firmName} vai ler o que você compartilhou e entrar em contato diretamente para conversar sobre a parte jurídica."
+  }
+}
