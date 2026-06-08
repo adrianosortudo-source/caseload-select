@@ -11,13 +11,14 @@ export interface I18nBundle {
    * being rendered raw from slot.question (English) because there was
    * no translation lookup for question text.
    *
-   * Fallback: when the slot id is missing from this map (e.g. matter
+   * Optional: bundles authored before this key existed keep working;
+   * `getQuestionDisplayText` uses optional chaining and falls back to
+   * the English question string when the bundle has no slot_questions
+   * map, or when the slot id is missing from the map (e.g. matter
    * types not yet translated, like employment/estates/real-estate
-   * Phase B), the renderer falls back to slot.question (English).
-   * That keeps existing behaviour stable while new languages roll
-   * out matter-type by matter-type.
+   * Phase B).
    */
-  slot_questions: Record<string, string>;
+  slot_questions?: Record<string, string>;
   slot_options: Record<string, Record<string, string>>;
   summary: Record<string, Record<string, string>>;
   summary_labels: Record<string, string>;
