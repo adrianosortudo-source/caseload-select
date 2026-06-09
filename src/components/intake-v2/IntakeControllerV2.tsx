@@ -35,7 +35,7 @@ import { IdentityCard } from "./IdentityCard";
 import { OtpCard } from "./OtpCard";
 import { RoundTransition } from "./RoundTransition";
 import { composeScreens, type ApiQuestion } from "./screen-composer";
-import type { Screen, AnswerMap } from "./types";
+import type { Screen, ScreenItem, AnswerMap } from "./types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API response shapes
@@ -113,6 +113,8 @@ export interface AnswerLogEntry {
 interface Props {
   firmId: string;
   firmName?: string;
+  /** Public website mode removes OTP and keeps the lead-facing flow shorter. */
+  mode?: "standard" | "publicWebsite";
   /** Fired after every /api/screen response with the engine's latest scoring state. */
   onScoreUpdate?: (snapshot: ScoreSnapshot) => void;
   /** Fired when the user answers a question, before the next API call. */
@@ -131,11 +133,13 @@ interface Props {
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLogged, onStepChange, kickoffSeed }: Props) {
+export function IntakeControllerV2({ firmId, firmName, mode = "standard", onScoreUpdate, onAnswerLogged, onStepChange, kickoffSeed }: Props) {
+  const isPublicWebsite = mode === "publicWebsite";
   // Core state
   const [step, setStep] = useState<Step>("kickoff");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<AnswerMap>({});
+  const answersRef = useRef<AnswerMap>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Guards against double-submission of a question batch when both the
@@ -148,6 +152,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
 
   // Round state
   const [screens, setScreens] = useState<Screen[]>([]);
+  const [screenHistory, setScreenHistory] = useState<ScreenItem[]>([]);
   const [screenIdx, setScreenIdx] = useState(0);
   const [roundLabel, setRoundLabel] = useState<RoundLabel>("Your situation");
   const [collectIdentityNext, setCollectIdentityNext] = useState(false);
@@ -199,8 +204,14 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
+  function updateAnswers(updater: AnswerMap | ((current: AnswerMap) => AnswerMap)) {
+    const next = typeof updater === "function" ? updater(answersRef.current) : updater;
+    answersRef.current = next;
+    setAnswers(next);
+  }
+
   function setAnswer(id: string, value: string | string[]) {
-    setAnswers(a => ({ ...a, [id]: value }));
+    updateAnswers(a => ({ ...a, [id]: value }));
 
     // Log for demo panel — find the question text + resolve option values
     // back to human labels so the answer log reads naturally.
@@ -249,9 +260,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     } else if (step === "round3") {
       if (r3Idx > 0) setR3Idx(i => i - 1);
       else {
-        // From R3 q1, go back to the OTP step. The session is already verified
-        // so re-entering the same code (or any code in demo mode) re-verifies.
-        setStep("otp");
+        setStep(isPublicWebsite ? "identity" : "otp");
       }
     } else if (step === "done") {
       // Back from Done returns to last R3 question (or identity if no R3).
@@ -271,13 +280,13 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
   function goForward() {
     if (step === "questions") {
       const item = screens[screenIdx]?.items?.[0];
-      if (item) setAnswers(a => ({ ...a, [item.id]: "__skipped__" }));
+      if (item) updateAnswers(a => ({ ...a, [item.id]: "__skipped__" }));
       const isLast = screenIdx === screens.length - 1;
       if (isLast) submitCurrentBatch();
       else setScreenIdx(i => i + 1);
     } else if (step === "round3") {
       const q = r3Questions[r3Idx];
-      if (q) setAnswers(a => ({ ...a, [q.id]: "__skipped__" }));
+      if (q) updateAnswers(a => ({ ...a, [q.id]: "__skipped__" }));
       if (r3Idx + 1 < r3Questions.length) setR3Idx(i => i + 1);
       else void submitR3();
     }
@@ -288,7 +297,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     if (situation.trim().length < 10) return;
     setErrorMessage(null);
     setRoundLabel("About your case");
-    setTransitionText({ loading: "Reading your situation...", reveal: "Got the basics. A few questions." });
+    setTransitionText({ loading: "Reading your situation...", reveal: "A few questions will help the firm understand the next step." });
     setTransitionPhase("loading");
     setStep("thinking");
 
@@ -357,6 +366,11 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
       // We have questions — compose into screens, render
       const composed = composeScreens(batch);
       setScreens(composed);
+      setScreenHistory(prev => {
+        const byId = new Map(prev.map(item => [item.id, item]));
+        for (const item of composed.flatMap(screen => screen.items)) byId.set(item.id, item);
+        return Array.from(byId.values());
+      });
       setScreenIdx(0);
       setTransitionPhase("reveal");
       // Brief pause then advance to questions
@@ -388,7 +402,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     if (batchSubmitInFlightRef.current) return;
     batchSubmitInFlightRef.current = true;
     setRoundLabel("A few more details");
-    setTransitionText({ loading: "Looking at your answers...", reveal: "One more round." });
+    setTransitionText({ loading: "Looking at your answers...", reveal: "A few more details." });
     setTransitionPhase("loading");
     setStep("thinking");
 
@@ -396,7 +410,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     const batchAnswers: AnswerMap = {};
     for (const s of screens) {
       for (const item of s.items) {
-        if (answers[item.id] !== undefined) batchAnswers[item.id] = answers[item.id];
+        if (answersRef.current[item.id] !== undefined) batchAnswers[item.id] = answersRef.current[item.id];
       }
     }
 
@@ -449,14 +463,14 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
       const firstName = firstSpace === -1 ? trimmedName : trimmedName.slice(0, firstSpace);
       const lastName  = firstSpace === -1 ? ""           : trimmedName.slice(firstSpace + 1).trim();
 
-      await fetch("/api/screen", {
+      const contactRes = await fetch("/api/screen", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session_id: sessionId,
           firm_id: firmId,
           channel: "widget",
-          message_type: "answer",
+          message_type: isPublicWebsite ? "contact" : "answer",
           message: "",
           structured_data: {
             first_name: firstName,
@@ -466,6 +480,13 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
           },
         }),
       });
+
+      if (isPublicWebsite) {
+        const data = (await contactRes.json()) as ScreenResponse;
+        setOtpLoading(false);
+        applyResponse(data);
+        return;
+      }
 
       // Send OTP
       await fetch("/api/otp/send", {
@@ -552,7 +573,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
 
   // ── 6. R3 advance + submit ─────────────────────────────────────────────────
   function setR3Answer(id: string, value: string | string[]) {
-    setAnswers(a => ({ ...a, [id]: value }));
+    updateAnswers(a => ({ ...a, [id]: value }));
     if (onAnswerLogged) {
       const q = r3Questions.find(qq => qq.id === id);
       const optionMap: Record<string, string> = q?.options
@@ -605,10 +626,10 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
         <TextCard
           item={{
             id: "situation",
-            question: "Tell us what happened.",
-            description: "A few sentences is enough. Type or use the mic. Your lawyer will see exactly what you write.",
+            question: "Describe your situation.",
+            description: "Include the dates that matter and the documents you have.",
             presentation: "text",
-            placeholder: "I was rear-ended on the QEW last Tuesday...",
+            placeholder: "What is happening, the deadlines, the documents you have.",
           }}
           value={situation}
           onChange={setSituation}
@@ -721,6 +742,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
           loading={otpLoading}
           firmName={firmName}
           privacyUrl="https://app.caseloadselect.ca/privacy"
+          submitMode={isPublicWebsite ? "submit" : "otp"}
         />
       </Shell>
     );
@@ -840,7 +862,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     const reviewRows: ReviewRow[] = [];
     const labelOf = (id: string, raw: string | string[]): string => {
       // Find option label by walking screens + r3Questions
-      const screenItem = screens.flatMap(s => s.items).find(i => i.id === id);
+      const screenItem = screenHistory.find(i => i.id === id);
       const r3Match = r3Questions.find(q => q.id === id);
       const optMap = new Map<string, string>();
       if (screenItem?.options) screenItem.options.forEach(o => optMap.set(o.value, o.label));
@@ -853,12 +875,10 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
       reviewRows.push({ id: "situation", question: "Your situation", answer: situation.trim() });
     }
     // R1/R2 answers (from screens)
-    for (const screen of screens) {
-      for (const item of screen.items) {
-        const v = answers[item.id];
-        if (v !== undefined && v !== "") {
-          reviewRows.push({ id: item.id, question: item.question, answer: labelOf(item.id, v) });
-        }
+    for (const item of screenHistory) {
+      const v = answers[item.id];
+      if (v !== undefined && v !== "") {
+        reviewRows.push({ id: item.id, question: item.question, answer: labelOf(item.id, v) });
       }
     }
     // R3 answers
@@ -886,14 +906,19 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     //     prospect. Those are internal lawyer-facing signals.
     //
     // We keep band-keyed copy for tone variation but the substance is uniform:
-    // a lawyer reviews the submission and reaches out directly if the matter
-    // fits the firm's practice.
-    const reviewCopy = firmName
-      ? `A lawyer at ${firmName} will review what you shared and reach out directly if your matter fits the firm's practice.`
-      : "A lawyer will review what you shared and reach out directly if your matter fits the firm's practice.";
+    // a lawyer reads the submission and reaches out directly to talk through
+    // the legal side. The "Professional Corporation" suffix is the formal LSO
+    // legal-entity name; strip it for user-facing copy so the prospect sees
+    // the trade name.
+    const displayFirmName = firmName
+      ? firmName.replace(/\s+Professional Corporation\s*$/i, '').trim()
+      : null;
+    const reviewCopy = displayFirmName
+      ? `A lawyer at ${displayFirmName} will read what you shared and reach out directly to talk through the legal side.`
+      : "A lawyer will read what you shared and reach out directly to talk through the legal side.";
 
-    const referralCopy = firmName
-      ? `Thanks for sharing your situation. ${firmName} will follow up with referral options if this matter is outside the firm's practice.`
+    const referralCopy = displayFirmName
+      ? `Thanks for sharing your situation. ${displayFirmName} will follow up with referral options if this matter is outside the firm's practice.`
       : "Thanks for sharing your situation. The firm will follow up with referral options if this matter is outside the firm's practice.";
 
     const bandLabel: Record<string, { name: string; tone: string; copy: string }> = {
@@ -906,7 +931,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
     const bandInfo = band ? bandLabel[band] : null;
 
     return (
-      <Shell totalScreens={1} currentScreen={0} roundLabel="Case file ready" onBack={goBack}>
+      <Shell totalScreens={1} currentScreen={0} roundLabel="Submitted" onBack={goBack}>
         <div className="flex flex-col gap-7">
           {/* Hero — checkmark + heading */}
           <div className="flex flex-col items-center text-center gap-4">
@@ -916,7 +941,7 @@ export function IntakeControllerV2({ firmId, firmName, onScoreUpdate, onAnswerLo
               </svg>
             </div>
             <h2 className="text-[26px] sm:text-[30px] font-extrabold text-[#1E2F58] leading-tight" style={{ fontFamily: "Manrope, sans-serif" }}>
-              Your case file is ready.
+              Your matter review was submitted.
             </h2>
             {bandInfo && (
               <p className="text-[15px] text-[#1E2F58]/75 leading-relaxed max-w-md" style={{ fontFamily: "DM Sans, sans-serif" }}>

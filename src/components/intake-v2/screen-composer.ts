@@ -49,7 +49,14 @@ export function composeScreens(questions: ApiQuestion[]): Screen[] {
 
   function flushChips() {
     if (chipBuffer.length === 0) return;
-    screens.push({ kind: "rapid_fire", items: chipBuffer });
+    if (chipBuffer.length === 1) {
+      screens.push({
+        kind: "solo",
+        items: [{ ...chipBuffer[0], presentation: "card" }],
+      });
+    } else {
+      screens.push({ kind: "rapid_fire", items: chipBuffer });
+    }
     chipBuffer = [];
   }
 
