@@ -155,6 +155,37 @@ function matchFreeTextReply(text: string): string | null {
  * Skips contact slots: those flow through `applyContactExtractionToState`
  * with its own validators (email regex, phone regex, weak-name guard).
  */
+/**
+ * Slot meta sources that do NOT count as a user-grounded answer.
+ * When the bot is actively asking a slot via pendingAskedSlotId and
+ * the slot is "filled" with one of these sources, the user's reply
+ * MUST be allowed to overwrite. Otherwise the loop fires: Gemini
+ * pre-fills the slot from the description on turn 1 (source
+ * 'llm_inferred'), the engine treats it as unanswered (correct, per
+ * the v2.2 provenance discipline), Phase C asks the question, the
+ * user replies, every adapter bails because the slot is "filled",
+ * the source stays 'llm_inferred', and the engine asks again.
+ * Field-detected 2026-06-09 (#172 follow-up).
+ */
+const WEAK_PROVENANCE_SOURCES: ReadonlySet<string> = new Set([
+  'llm_inferred',
+  'unknown',
+]);
+
+/**
+ * Returns true when the slot is filled with a value that the user
+ * grounded (answered button, regex evidence from their typed text).
+ * Returns false for empty slots OR slots only filled by LLM hint /
+ * unknown defensive bucket. Those should be overwritable when the
+ * bot is asking the same slot.
+ */
+function isUserGroundedFill(state: EngineState, slotId: string): boolean {
+  const value = state.slots[slotId];
+  if (!value) return false;
+  const source = state.slot_meta[slotId]?.source ?? 'unknown';
+  return !WEAK_PROVENANCE_SOURCES.has(source);
+}
+
 export function applyPendingSlotReply(
   text: string,
   state: EngineState,
@@ -175,8 +206,11 @@ export function applyPendingSlotReply(
   // pendingAskedSlotId === 'client_name' to lift the email/phone guard.
   if (slot.tier === 'contact') return state;
 
-  // Slot is already filled (non-contact). Clear the stale pointer.
-  if (state.slots[slotId]) {
+  // Slot is user-grounded already (answered / explicit / inferred from
+  // regex on user text). Don't overwrite via Phase C reply, clear the
+  // stale pointer, and pass through. Weak-provenance fills
+  // (llm_inferred, unknown) fall through so applyAnswer can upgrade them.
+  if (isUserGroundedFill(state, slotId)) {
     return { ...state, pendingAskedSlotId: null };
   }
 

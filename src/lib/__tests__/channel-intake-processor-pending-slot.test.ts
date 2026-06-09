@@ -340,7 +340,7 @@ describe('Pending-slot reply routing across the contact-capture detour (#172)', 
     // existing adapter chain (numeric / fuzzy / free-text / LLM)
     // handles the reply via getNextStep as before.
     const legacy = postTurn1State();
-    delete (legacy.engine_state as Record<string, unknown>).pendingAskedSlotId;
+    delete (legacy.engine_state as unknown as Record<string, unknown>).pendingAskedSlotId;
     mocks.loadOpenChannelSession.mockResolvedValueOnce(legacy as never);
 
     const r = await processChannelInbound({
@@ -353,6 +353,56 @@ describe('Pending-slot reply routing across the contact-capture detour (#172)', 
     // capture_contact without filling advisory_path. We assert it
     // does not crash and sends some response.
     expect(r.followUpSent).toBe(true);
+  });
+
+  it('llm_inferred-filled slot: user reply OVERWRITES the weak fill (DRG field bug, 2026-06-09)', async () => {
+    // Real-world repro from the second smoke retest. Gemini extracted
+    // advisory_path='Starting a new business' from "I need help to
+    // open my business" on turn 1 with source='llm_inferred'. The
+    // engine treated it as unanswered (correct per provenance
+    // discipline). Phase C asked advisory_path. The user replied "1".
+    // Before this fix: applyPendingSlotReply bailed because the slot
+    // was "filled" (with llm_inferred). applyAnswer never fired. The
+    // engine re-asked the same question. Infinite loop.
+    // After this fix: applyPendingSlotReply detects the weak
+    // provenance and lets applyAnswer upgrade source to 'answered'.
+    const llmFilled = postTurn1State();
+    llmFilled.engine_state = {
+      ...llmFilled.engine_state,
+      slots: {
+        ...llmFilled.engine_state.slots,
+        advisory_path: 'Starting a new business',
+      },
+      slot_meta: {
+        ...llmFilled.engine_state.slot_meta,
+        advisory_path: {
+          source: 'llm_inferred',
+          confidence: 0.7,
+          evidence: 'LLM extraction from initial description',
+        },
+      } as EngineState['slot_meta'],
+    };
+    mocks.loadOpenChannelSession.mockResolvedValueOnce(llmFilled as never);
+
+    await processChannelInbound({
+      firmId: FIRM_ID,
+      text: '1',
+      sender: whatsappSender('A D'),
+    });
+
+    const persisted = mocks.lastPersistedState as
+      | {
+          slots: Record<string, string>;
+          slot_meta: Record<string, { source: string }>;
+          pendingAskedSlotId?: string | null;
+        }
+      | null;
+    expect(persisted).toBeTruthy();
+    expect(persisted!.slots.advisory_path).toBe('Starting a new business');
+    // Source UPGRADED from llm_inferred to answered (the user confirmed it).
+    expect(persisted!.slot_meta.advisory_path.source).toBe('answered');
+    // Next pending pointer is NOT advisory_path (the engine has moved on).
+    expect(persisted!.pendingAskedSlotId).not.toBe('advisory_path');
   });
 
   it('garbage reply ("blah blah") does NOT fill advisory_path; pointer is preserved', async () => {
