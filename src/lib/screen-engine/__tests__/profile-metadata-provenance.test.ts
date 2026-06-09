@@ -44,8 +44,8 @@ function build(overrides: {
     slots: { ...base.slots, ...overrides.slots },
     slot_meta: {
       ...base.slot_meta,
-      ...(overrides.slot_meta as never),
-    },
+      ...(overrides.slot_meta as unknown as Record<string, { source: string; confidence?: number }>),
+    } as EngineState['slot_meta'],
     contactCaptureStarted: overrides.contactCaptureStarted ?? true,
     language: overrides.language ?? "en",
   };

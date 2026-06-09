@@ -85,6 +85,8 @@ import {
 import { getI18n, type I18nBundle } from '@/lib/screen-engine/i18n/loader';
 import { getQuestionDisplayText, getOptionDisplayLabel } from '@/lib/screen-engine/i18n/display';
 import type { SupportedLanguage } from '@/lib/screen-engine/types';
+import { selectNextSlot } from '@/lib/screen-engine/selector';
+import { meetsDiscoveryFloor } from '@/lib/discovery-floor';
 
 // ── Channel type ────────────────────────────────────────────────────────
 
@@ -732,24 +734,68 @@ export async function processChannelInbound(
 
   if (inDiscoveryPhase) {
     // Drive the engine to the next step. We do NOT set contactCaptureStarted
-    // here: the engine's contact-capture branch demands all THREE contact
-    // slots (name + phone + email) before falling through, which would
-    // make the engine ask for email on whatsapp where phone is already
-    // captured from sender metadata. The contact-doctrine gate above has
-    // already confirmed name + (phone OR email), which is what counts as
-    // a complete lead per `evaluateContactGate`. From here we want
-    // discovery slots only.
+    // before calling getNextStep: the engine's contact-capture branch
+    // gates on (name + reachable) per evaluateContactGate (DR-038); the
+    // gate above has already confirmed that, so from here we want
+    // discovery (with one exception: the engine may still return
+    // capture_contact when client_name is profile_metadata + weak,
+    // which IS an ask we want to honor).
     const nextStep = getNextStep(state);
+    const language: SupportedLanguage = (state.language ?? 'en') as SupportedLanguage;
+    const i18n = getI18n(language);
 
+    // Minimum-discovery floor (#170, 2026-06-08). The engine's stopping
+    // rule (readyToStop / shouldPresentInsight / matter-gap='none') can
+    // declare done after a single matter-specific answer. For async
+    // intake channels (WhatsApp / Messenger / Instagram) that's too
+    // shallow to ship a usable brief. The floor blocks finalize until
+    // the lead has answered enough substantive matter-discovery slots.
+    // Discipline:
+    //  - Only user-answered facts count (sources: answered / explicit /
+    //    legacy 'inferred'). Profile_metadata, system_metadata, and
+    //    llm_inferred do NOT count.
+    //  - Contact slots (name/email/phone/postal) do NOT count; that's
+    //    reachability, handled by the contact-doctrine gate above.
+    //  - Matter-specific floors (business_setup_advisory, contract_
+    //    dispute, will_drafting) restrict counting to a curated
+    //    candidate set so off-axis answers don't trigger early finalize.
+    //  - out_of_scope and unknown are explicit exceptions; finalize allowed.
+    const floorMet = meetsDiscoveryFloor(state);
+
+    // Build the slot-to-ask in priority order:
+    //   1. Engine's preferred next ask (continue / deepen / recover /
+    //      capture_contact). capture_contact lets the engine surface
+    //      e.g. a weak profile-name confirmation per #169.
+    //   2. If engine returned a non-asking type (stop / present_insight /
+    //      clarify) AND the floor isn't met, fall back to selectNextSlot
+    //      to keep pulling slots until we hit the floor or run out.
+    //   3. If floor IS met and engine wants to stop, let it finalize.
+    let slotToAsk: typeof nextStep.slot | undefined;
+    let askReason = 'awaiting_discovery_answer';
     if (
       (nextStep.type === 'continue' ||
         nextStep.type === 'deepen' ||
-        nextStep.type === 'recover') &&
+        nextStep.type === 'recover' ||
+        nextStep.type === 'capture_contact') &&
       nextStep.slot
     ) {
-      const language: SupportedLanguage = (state.language ?? 'en') as SupportedLanguage;
-      const i18n = getI18n(language);
-      const questionText = formatDiscoveryQuestion(nextStep.slot, language, i18n);
+      slotToAsk = nextStep.slot;
+      askReason = nextStep.type === 'capture_contact'
+        ? 'awaiting_contact_capture'
+        : 'awaiting_discovery_answer';
+    } else if (!floorMet) {
+      // Engine wants to stop / present insight / clarify, but we don't
+      // have enough substantive depth yet. Force-ask the next available
+      // slot via selectNextSlot, which bypasses the stopping rule.
+      const fallbackSlot = selectNextSlot(state);
+      if (fallbackSlot) {
+        slotToAsk = fallbackSlot;
+        askReason = 'awaiting_floor_discovery';
+      }
+    }
+
+    if (slotToAsk) {
+      const questionText = formatDiscoveryQuestion(slotToAsk, language, i18n);
       const sendResult = await sendChannelMessage({
         firmId,
         sender,
@@ -764,11 +810,6 @@ export async function processChannelInbound(
           discoveryFollowUpCount: newDiscoveryCount,
         };
 
-        // Re-use the existing channel_intake_sessions store. The
-        // follow_up_count column on the table continues to track the
-        // contact-capture attempts (priorFollowUpCount); discovery count
-        // lives inside engine_state. On resume, the processor reads
-        // discoveryFollowUpCount from engine_state, not from the column.
         if (sessionId) {
           await updateChannelSession({
             sessionId,
@@ -785,11 +826,11 @@ export async function processChannelInbound(
           });
         }
         console.log(
-          `[channel-intake] discovery question sent firm=${firmId} channel=${channel} attempt=${newDiscoveryCount}/${DISCOVERY_FOLLOW_UP_CAP} slot=${nextStep.slot.id}`,
+          `[channel-intake] discovery question sent firm=${firmId} channel=${channel} attempt=${newDiscoveryCount}/${DISCOVERY_FOLLOW_UP_CAP} slot=${slotToAsk.id} reason=${askReason} floorMet=${floorMet} engineType=${nextStep.type}`,
         );
         return {
           persisted: false,
-          reason: 'awaiting_discovery_answer',
+          reason: askReason,
           followUpSent: true,
         };
       }
@@ -800,8 +841,11 @@ export async function processChannelInbound(
         `[channel-intake] discovery question send failed firm=${firmId} channel=${channel}: ${sendResult.reason ?? 'unknown'}; finalising with what we have`,
       );
     }
-    // nextStep was stop / present_insight / clarify / capture_contact:
-    // engine has nothing more to ask. Fall through to finalise.
+    // Either:
+    //   - Floor met AND engine returned stop / present_insight / clarify
+    //     (legitimate finalize signal), OR
+    //   - Floor NOT met but selectNextSlot also returned null (truly out
+    //     of slots to ask). Fall through to finalise.
   }
 
   // ── Gate passed (and discovery complete or skipped): finalise ──────────
