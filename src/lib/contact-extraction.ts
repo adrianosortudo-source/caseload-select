@@ -36,6 +36,7 @@
  */
 
 import type { EngineState } from './screen-engine/types';
+import { isWeakName } from './screen-engine/selector';
 
 // ── Regex patterns ──────────────────────────────────────────────────────
 
@@ -80,18 +81,117 @@ export interface ExtractedContact {
 // ── Pure extractor ──────────────────────────────────────────────────────
 
 /**
+ * Options for extractContactFromTurn.
+ */
+export interface ExtractContactOpts {
+  /**
+   * Name-capture context (#171, 2026-06-09). When true, the caller has
+   * established that the bot just asked the lead for their name (e.g.
+   * via `capture_contact(client_name)` on an async channel). In that
+   * mode the bare-name extraction lifts the "email/phone must also be
+   * present" guard and accepts a name-only reply, AND uses a more
+   * permissive title-casing matcher so lowercase or all-caps inputs
+   * still parse. The matcher still filters via NAME_BLOCKLIST and the
+   * isWeakName heuristic; replies like "ok", "yes", "A D" still fail
+   * and leave client_name unchanged so the bot can re-ask.
+   *
+   * Default off. Turn-1 self-intro / casual matter descriptions never
+   * set this flag, so the original anti-false-positive guard still
+   * protects the upstream paths.
+   */
+  nameCaptureContext?: boolean;
+}
+
+/** "my name is X" / "I'm X" / "this is X" / "it's X" intro phrases. */
+const NAME_INTRO_RE =
+  /\b(?:my\s+name\s+is|i\s+am|i'?m|this\s+is|it'?s|name'?s|the\s+name'?s)\s+([A-Za-zÀ-ÖØ-öø-ÿ'’\-]{2,30}(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ'’\-]{2,30}){0,2})\b/i;
+
+/** Title-case each whitespace-separated token. */
+function titleCase(s: string): string {
+  return s
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/** Strip trailing punctuation from a candidate name reply. */
+function stripTrailingPunctuation(s: string): string {
+  return s.replace(/[!?.,;:]+\s*$/, '').trim();
+}
+
+/**
+ * Try to interpret a turn's text as a bare-name reply in name-capture
+ * context. Returns the normalised name (title-cased) or null when the
+ * text does not parse as a plausible human name.
+ *
+ * Filters:
+ *  - Strips trailing punctuation
+ *  - Tries the intro-phrase regex first ("my name is X", "I'm X")
+ *  - Falls back to bare 1-3 token reply, letter-only (allows accented,
+ *    hyphen, apostrophe), each token 2-30 chars
+ *  - Title-cases the output
+ *  - Rejects via NAME_BLOCKLIST on first token (mr/dr/yes/no/etc)
+ *  - Rejects via isWeakName (initials, single short token, generic
+ *    placeholders)
+ */
+function tryExtractCaptureContactName(text: string): string | null {
+  if (!text || typeof text !== 'string') return null;
+  const trimmed = stripTrailingPunctuation(text.trim());
+  if (!trimmed) return null;
+
+  let candidate: string | null = null;
+
+  // 1. Intro phrase: "my name is Adriano Domingues" / "I'm Adriano"
+  const intro = NAME_INTRO_RE.exec(trimmed);
+  if (intro && intro[1]) {
+    candidate = titleCase(intro[1]);
+  }
+
+  // 2. Bare reply: 1-3 letter-only tokens
+  if (!candidate) {
+    const tokens = trimmed.split(/\s+/).filter(Boolean);
+    if (tokens.length < 1 || tokens.length > 3) return null;
+    for (const t of tokens) {
+      if (!/^[A-Za-zÀ-ÖØ-öø-ÿ'’\-]{2,30}$/.test(t)) return null;
+    }
+    candidate = titleCase(trimmed);
+  }
+
+  if (!candidate) return null;
+
+  // Blocklist check on first token after title-casing.
+  const firstToken = candidate.split(/\s+/)[0]?.toLowerCase() ?? '';
+  if (NAME_BLOCKLIST.has(firstToken)) return null;
+
+  // Weak-name check (same heuristic the engine uses for profile_metadata).
+  if (isWeakName(candidate)) return null;
+
+  return candidate;
+}
+
+/**
  * Pull email / phone / bare-name from a single turn's text. Pure
- * function — no state, no I/O. Used by `applyContactExtractionToState`
+ * function, no state, no I/O. Used by `applyContactExtractionToState`
  * to update the engine state, and exported separately for testing.
  *
- * Bare-name extraction is gated on the same message containing an email
- * or phone match. This guard is what makes the function safe to run on
- * every turn including turn 1 — a casual matter description like
- * "My mother passed and the estate involves Sarah Patel as executor"
- * does NOT accidentally set client_name='Sarah Patel' because no email
- * or phone is in the same message.
+ * Bare-name extraction by default is gated on the same message
+ * containing an email or phone match. This guard makes the function
+ * safe to run on every turn including turn 1: a casual matter
+ * description like "My mother passed and the estate involves Sarah
+ * Patel as executor" does NOT accidentally set client_name='Sarah
+ * Patel' because no email or phone is in the same message.
+ *
+ * When opts.nameCaptureContext is true (the caller established that
+ * the bot just asked the lead's name on the previous turn), the
+ * email/phone guard is LIFTED for bare-name extraction. A bare reply
+ * like "Adriano Domingues" then parses correctly. The blocklist and
+ * weak-name filters still apply, so junk replies do not fill the slot.
  */
-export function extractContactFromTurn(text: string): ExtractedContact {
+export function extractContactFromTurn(
+  text: string,
+  opts?: ExtractContactOpts,
+): ExtractedContact {
   const result: ExtractedContact = {};
   if (!text || typeof text !== 'string') return result;
 
@@ -101,24 +201,34 @@ export function extractContactFromTurn(text: string): ExtractedContact {
     result.email = emailMatch[0];
   }
 
-  // Phone — normalise to E.164 NA format (+1 + 10 digits)
+  // Phone, normalised to E.164 NA format (+1 + 10 digits)
   const phoneMatch = PHONE_NA_RE.exec(text);
   if (phoneMatch) {
     result.phone = `+1${phoneMatch[1]}${phoneMatch[2]}${phoneMatch[3]}`;
   }
 
-  // Bare-name — only when this message also has email or phone (proves
-  // contact-reply context, not casual chat)
+  // Name-capture context: lift the email/phone guard, use the lenient
+  // capture-reply matcher (title-casing + intro phrase + blocklist +
+  // isWeakName filters). This is the path that closes the loop when
+  // the bot asks "What is your name?" and the lead replies with a
+  // bare name.
+  if (opts?.nameCaptureContext) {
+    const captured = tryExtractCaptureContactName(text);
+    if (captured) {
+      result.name = captured;
+      return result;
+    }
+  }
+
+  // Default path: bare-name extraction only when this message also
+  // has email or phone (proves contact-reply context, not casual chat)
   if (result.email || result.phone) {
-    // Split on commas / newlines / pipes / semicolons. Each chunk
-    // becomes a candidate for the bare-name pattern.
     const chunks = text
       .split(/[\n,|;]+/)
       .map((c) => c.trim())
       .filter(Boolean);
     for (const chunk of chunks) {
       if (!BARE_NAME_RE.test(chunk)) continue;
-      // Validate first token against blocklist.
       const firstToken = chunk.split(/\s+/)[0]?.toLowerCase() ?? '';
       if (NAME_BLOCKLIST.has(firstToken)) continue;
       result.name = chunk;
@@ -144,8 +254,9 @@ export function extractContactFromTurn(text: string): ExtractedContact {
 export function applyContactExtractionToState(
   text: string,
   state: EngineState,
+  opts?: ExtractContactOpts,
 ): EngineState {
-  const extracted = extractContactFromTurn(text);
+  const extracted = extractContactFromTurn(text, opts);
   if (!extracted.name && !extracted.email && !extracted.phone) {
     return state;
   }

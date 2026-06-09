@@ -395,29 +395,87 @@ export async function processChannelInbound(
     }
   }
 
-  // Evidence pass — regex deepening on the NEW turn text. Slot
+  // Evidence pass: regex deepening on the NEW turn text. Slot
   // extraction layer; does not re-classify matter_type / practice_area
   // (those are owned by initialiseState on turn 1 and preserved on resume).
   state = runEvidencePass(trimmed, state);
 
-  // Contact extraction — email + phone + (gated) bare-name from the
-  // NEW turn text. Closes the multi-turn loop gap (2026-05-24): the bot
-  // asks for contact when contact_complete is false, the lead replies
-  // with bare contact info, but the engine had no path to capture it
-  // (LLM excluded from contact slots, slot evidence has no patterns,
-  // extractContactName only fires on turn 1 with an intro phrase). This
-  // helper fills empty client_name / client_email / client_phone from
-  // the turn text. Pre-filled slots (channel metadata, voice caller-ID,
-  // turn-1 self-introduction) take precedence.
-  state = applyContactExtractionToState(trimmed, state);
+  // Name-capture context detection (#171, 2026-06-09). When the engine
+  // is currently asking the lead for their name (capture_contact with
+  // client_name slot), the lead's reply may be a bare name like
+  // "Adriano Domingues", with no email or phone in the same message.
+  // The default contact-extraction path gates bare-name extraction on
+  // an email/phone match, so the bare reply would not fill the slot,
+  // the engine would re-ask, and the conversation would loop. We
+  // detect the "engine wants name" condition by calling getNextStep
+  // on the PRE-extraction state and check whether the engine intends
+  // to ask capture_contact(client_name). If so,
+  // applyContactExtractionToState gets the nameCaptureContext flag
+  // and lifts the email/phone guard.
+  //
+  // Detection is gated to isResume only: on a fresh turn the lead
+  // never typed an answer to a question the bot has not asked. The
+  // pre-extraction getNextStep is the source of truth: if it would
+  // ask client_name now, the inbound IS the answer.
+  let nameCaptureContext = false;
+  if (isResume) {
+    try {
+      const pre = getNextStep(state);
+      if (pre.type === 'capture_contact' && pre.slot?.id === 'client_name') {
+        nameCaptureContext = true;
+      }
+    } catch {
+      // Engine introspection is best-effort; on failure proceed without
+      // the flag (existing behaviour).
+    }
+  }
 
-  // Out-of-range digit detection — BEFORE numeric mapping. When the
+  // Contact extraction: email + phone + (context-gated) bare-name from
+  // the NEW turn text. Closes the multi-turn loop gap (2026-05-24): the
+  // bot asks for contact when contact_complete is false, the lead
+  // replies with bare contact info. This helper fills empty client_name
+  // / client_email / client_phone from the turn text. Pre-filled slots
+  // (channel metadata, voice caller-ID, turn-1 self-introduction) take
+  // precedence except for weak profile_metadata names, which are
+  // explicitly overridable per #169.
+  //
+  // The nameCaptureContext flag lifts the email/phone guard for bare-
+  // name extraction so a reply like "Adriano Domingues" parses
+  // correctly when the bot just asked for the name (#171).
+  const nameBeforeExtract = state.slots['client_name'] ?? null;
+  state = applyContactExtractionToState(trimmed, state, { nameCaptureContext });
+  const nameCaptureConsumed =
+    nameCaptureContext && state.slots['client_name'] !== nameBeforeExtract;
+
+  // Short-circuit when the lead's text was a name-capture reply and the
+  // extractor consumed it (#171). The downstream adapters (numeric /
+  // fuzzy / free-text / LLM) target matter-discovery slots; running
+  // them on a name reply risks false positives like
+  // applyFreeTextAnswerMapping filling the next free-text discovery
+  // slot (e.g. business_location) with the lead's typed name. The
+  // engine's next getNextStep call picks the right discovery slot to
+  // ask on the next inbound; this turn is done at the name-capture
+  // layer and falls through to Phase C, which will send the deeper
+  // discovery question on the same webhook ACK.
+  if (nameCaptureConsumed) {
+    if (sessionId) {
+      await updateChannelSession({
+        sessionId,
+        engineState: { ...state, contactCaptureStarted: true },
+        followUpCount: priorFollowUpCount,
+      });
+    }
+  }
+
+  // Out-of-range digit detection, BEFORE numeric mapping. When the
   // lead typed a digit that doesn't match any option ("11" for a
   // 5-option slot, or "0"), send a polite clarification and short-
   // circuit this turn. Without this, the engine would silently re-ask
   // the same question with no acknowledgment of the typo, which from
-  // the lead's perspective looks like an infinite loop.
-  if (isResume) {
+  // the lead's perspective looks like an infinite loop. Skipped when
+  // the turn was already consumed by name-capture (#171); the text
+  // was a name, not a digit answer to a discovery slot.
+  if (isResume && !nameCaptureConsumed) {
     const oorDigit = detectOutOfRangeDigitReply(trimmed, state);
     if (oorDigit) {
       const clarificationText = buildOutOfRangeDigitReply(oorDigit);
@@ -448,41 +506,55 @@ export async function processChannelInbound(
     }
   }
 
-  // Numeric-option mapping — when Phase C asks a numbered single_select
+  // Numeric-option mapping: when Phase C asks a numbered single_select
   // ("1. X / 2. Y / 3. Z") and the lead replies with a bare digit, the
   // LLM call on the new turn sees only "2" with no question context and
   // cannot extract. Loop. This helper maps the digit to the option
   // value of whichever slot getNextStep currently waits on. No-op if
   // the reply isn't a clean digit or the next-step slot isn't a
-  // single_select.
-  state = applyNumericAnswerMapping(trimmed, state);
+  // single_select. Skipped on name-capture turns (#171): the text was
+  // a name, not a digit answer.
+  if (!nameCaptureConsumed) {
+    state = applyNumericAnswerMapping(trimmed, state);
+  }
 
-  // Free-text fuzzy match — when Phase C asks a single_select and the
+  // Free-text fuzzy match: when Phase C asks a single_select and the
   // lead replies in natural language ("dont know" / "yes" / "no"), map
   // to the matching canonical option via applyAnswer. Same trick as
   // numeric mapping but for word sentinels. Without this, "dont know"
   // gets dropped by the LLM denylist (DR-025) and the engine re-asks.
-  state = applyFreeTextFuzzyMatch(trimmed, state);
+  // Skipped on name-capture turns (#171).
+  if (!nameCaptureConsumed) {
+    state = applyFreeTextFuzzyMatch(trimmed, state);
+  }
 
-  // Free-text answer mapping — when Phase C asks a free_text slot
+  // Free-text answer mapping: when Phase C asks a free_text slot
   // (e.g. business_location "Which city or region?"), the lead types
   // a short non-sentinel reply ("toronto"), and there's no path to
   // fill the slot. The LLM's strict NULL rule often returns null on
   // a bare 1-2 word reply, so the slot stays empty and the engine
   // re-asks. This adapter fills the current open free_text slot
   // with the trimmed reply via applyAnswer. Field-detected
-  // 2026-05-27 on DRG Messenger lead L-2026-05-27-R2X.
-  state = applyFreeTextAnswerMapping(trimmed, state);
+  // 2026-05-27 on DRG Messenger lead L-2026-05-27-R2X. Skipped on
+  // name-capture turns (#171); otherwise the lead's typed name would
+  // fall through to the next free_text discovery slot (e.g.
+  // business_location) and corrupt it.
+  if (!nameCaptureConsumed) {
+    state = applyFreeTextAnswerMapping(trimmed, state);
+  }
 
-  // LLM extraction — best-effort, never aborts. Runs on the new turn text
+  // LLM extraction: best-effort, never aborts. Runs on the new turn text
   // and merges into existing state. On a resume turn, the LLM sees just
   // the new text; on first turn it sees the full inbound. The doctrine
   // rule in the system prompt (rule 9) primes the LLM to extract
-  // client_name / client_email / client_phone aggressively.
+  // client_name / client_email / client_phone aggressively. Skipped on
+  // name-capture turns (#171): the text was a bare name, the structured
+  // extractor already consumed it, and a stray LLM hint on a different
+  // slot could corrupt the brief.
   // Hoisted so the LLM-disabled alert (#128, global across channels per the
   // fixes-are-global doctrine) can see what extraction returned.
   let llmMode: 'live' | 'disabled' | 'error' | 'degraded' | null = null;
-  if (state.matter_type !== 'out_of_scope') {
+  if (state.matter_type !== 'out_of_scope' && !nameCaptureConsumed) {
     try {
       const llm = await llmExtractServer(trimmed, state);
       llmMode = llm.mode;
