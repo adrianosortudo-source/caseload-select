@@ -377,6 +377,25 @@ export interface EngineState {
    * dialogue client-side, voice is single-pass on the transcript).
    */
   discoveryFollowUpCount?: number;
+  /**
+   * Slot id the channel processor most recently asked the lead about,
+   * via Phase C question send or capture_contact. Used by
+   * `applyPendingSlotReply` on the NEXT inbound turn to route the
+   * reply to the slot we ACTUALLY asked, independent of what the
+   * engine's `getNextStep` currently prefers. Added 2026-06-09 (#172)
+   * after a field repro where the engine's preferred next slot shifted
+   * between turns (advisory_path asked → engine shifts to
+   * capture_contact(client_name) on resume because of weak profile
+   * name + contactCaptureStarted), and the user's reply to the
+   * originally asked slot got lost.
+   *
+   * Cleared by `applyPendingSlotReply` once the reply is consumed,
+   * and by the contact-extraction path once the name is captured.
+   * Always set by Phase C before persisting the post-send session.
+   *
+   * Optional; absent on web / sandbox states.
+   */
+  pendingAskedSlotId?: string | null;
   debug?: Record<string, unknown>;
 }
 

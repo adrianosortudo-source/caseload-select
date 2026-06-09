@@ -87,6 +87,7 @@ import { getQuestionDisplayText, getOptionDisplayLabel } from '@/lib/screen-engi
 import type { SupportedLanguage } from '@/lib/screen-engine/types';
 import { selectNextSlot } from '@/lib/screen-engine/selector';
 import { meetsDiscoveryFloor } from '@/lib/discovery-floor';
+import { applyPendingSlotReply } from '@/lib/pending-slot-reply';
 
 // ── Channel type ────────────────────────────────────────────────────────
 
@@ -400,33 +401,41 @@ export async function processChannelInbound(
   // (those are owned by initialiseState on turn 1 and preserved on resume).
   state = runEvidencePass(trimmed, state);
 
-  // Name-capture context detection (#171, 2026-06-09). When the engine
-  // is currently asking the lead for their name (capture_contact with
-  // client_name slot), the lead's reply may be a bare name like
-  // "Adriano Domingues", with no email or phone in the same message.
-  // The default contact-extraction path gates bare-name extraction on
-  // an email/phone match, so the bare reply would not fill the slot,
-  // the engine would re-ask, and the conversation would loop. We
-  // detect the "engine wants name" condition by calling getNextStep
-  // on the PRE-extraction state and check whether the engine intends
-  // to ask capture_contact(client_name). If so,
-  // applyContactExtractionToState gets the nameCaptureContext flag
-  // and lifts the email/phone guard.
+  // Pending-slot reply routing (#172, 2026-06-09). The bot tracks the
+  // last asked slot id in state.pendingAskedSlotId (set by Phase C
+  // when sending a question). On the inbound resume turn, route the
+  // reply to THAT slot before the engine's getNextStep gets a chance
+  // to shift its preferred next slot due to state changes
+  // (contactCaptureStarted, weak profile name, etc.). Without this,
+  // a reply to advisory_path can be lost when the engine has shifted
+  // to wanting capture_contact(client_name): every downstream adapter
+  // (numeric / fuzzy / free-text) routes via getNextStep, which now
+  // points at the new slot, and the original answer disappears.
   //
-  // Detection is gated to isResume only: on a fresh turn the lead
-  // never typed an answer to a question the bot has not asked. The
-  // pre-extraction getNextStep is the source of truth: if it would
-  // ask client_name now, the inbound IS the answer.
+  // applyPendingSlotReply is a no-op when pendingAskedSlotId is absent
+  // (fresh turn, legacy session, or web/voice path).
+  const stateBeforePending = state;
+  state = applyPendingSlotReply(trimmed, state);
+  const pendingConsumed = state !== stateBeforePending && !state.pendingAskedSlotId;
+
+  // Name-capture context detection (#171, refined by #172).
+  // pendingAskedSlotId is the source of truth: if Phase C asked
+  // client_name on the previous turn, that field is set and we know
+  // the reply IS the name. Fall back to pre-extraction getNextStep
+  // when pendingAskedSlotId is absent (legacy sessions, defensive).
   let nameCaptureContext = false;
-  if (isResume) {
-    try {
-      const pre = getNextStep(state);
-      if (pre.type === 'capture_contact' && pre.slot?.id === 'client_name') {
-        nameCaptureContext = true;
+  if (isResume && !pendingConsumed) {
+    if (state.pendingAskedSlotId === 'client_name') {
+      nameCaptureContext = true;
+    } else if (!state.pendingAskedSlotId) {
+      try {
+        const pre = getNextStep(state);
+        if (pre.type === 'capture_contact' && pre.slot?.id === 'client_name') {
+          nameCaptureContext = true;
+        }
+      } catch {
+        // Engine introspection is best-effort.
       }
-    } catch {
-      // Engine introspection is best-effort; on failure proceed without
-      // the flag (existing behaviour).
     }
   }
 
@@ -442,10 +451,22 @@ export async function processChannelInbound(
   // The nameCaptureContext flag lifts the email/phone guard for bare-
   // name extraction so a reply like "Adriano Domingues" parses
   // correctly when the bot just asked for the name (#171).
+  //
+  // Skipped when applyPendingSlotReply (#172) already consumed the
+  // turn: the reply was an answer to a NON-contact slot, not a name.
   const nameBeforeExtract = state.slots['client_name'] ?? null;
-  state = applyContactExtractionToState(trimmed, state, { nameCaptureContext });
+  if (!pendingConsumed) {
+    state = applyContactExtractionToState(trimmed, state, { nameCaptureContext });
+  }
   const nameCaptureConsumed =
-    nameCaptureContext && state.slots['client_name'] !== nameBeforeExtract;
+    !pendingConsumed &&
+    nameCaptureContext &&
+    state.slots['client_name'] !== nameBeforeExtract;
+  // Clear pendingAskedSlotId once name has been captured so the engine
+  // does not re-ask client_name on the next inbound.
+  if (nameCaptureConsumed && state.pendingAskedSlotId === 'client_name') {
+    state = { ...state, pendingAskedSlotId: null };
+  }
 
   // Short-circuit when the lead's text was a name-capture reply and the
   // extractor consumed it (#171). The downstream adapters (numeric /
@@ -475,7 +496,7 @@ export async function processChannelInbound(
   // the lead's perspective looks like an infinite loop. Skipped when
   // the turn was already consumed by name-capture (#171); the text
   // was a name, not a digit answer to a discovery slot.
-  if (isResume && !nameCaptureConsumed) {
+  if (isResume && !nameCaptureConsumed && !pendingConsumed) {
     const oorDigit = detectOutOfRangeDigitReply(trimmed, state);
     if (oorDigit) {
       const clarificationText = buildOutOfRangeDigitReply(oorDigit);
@@ -512,9 +533,10 @@ export async function processChannelInbound(
   // cannot extract. Loop. This helper maps the digit to the option
   // value of whichever slot getNextStep currently waits on. No-op if
   // the reply isn't a clean digit or the next-step slot isn't a
-  // single_select. Skipped on name-capture turns (#171): the text was
-  // a name, not a digit answer.
-  if (!nameCaptureConsumed) {
+  // single_select. Skipped on name-capture turns (#171) and on
+  // pendingSlot-consumed turns (#172): the reply was already routed
+  // to the right slot.
+  if (!nameCaptureConsumed && !pendingConsumed) {
     state = applyNumericAnswerMapping(trimmed, state);
   }
 
@@ -523,8 +545,9 @@ export async function processChannelInbound(
   // to the matching canonical option via applyAnswer. Same trick as
   // numeric mapping but for word sentinels. Without this, "dont know"
   // gets dropped by the LLM denylist (DR-025) and the engine re-asks.
-  // Skipped on name-capture turns (#171).
-  if (!nameCaptureConsumed) {
+  // Skipped on name-capture turns (#171) and on pendingSlot-consumed
+  // turns (#172).
+  if (!nameCaptureConsumed && !pendingConsumed) {
     state = applyFreeTextFuzzyMatch(trimmed, state);
   }
 
@@ -536,10 +559,11 @@ export async function processChannelInbound(
   // re-asks. This adapter fills the current open free_text slot
   // with the trimmed reply via applyAnswer. Field-detected
   // 2026-05-27 on DRG Messenger lead L-2026-05-27-R2X. Skipped on
-  // name-capture turns (#171); otherwise the lead's typed name would
+  // name-capture turns (#171) and pendingSlot-consumed turns (#172);
+  // otherwise the lead's typed name (or already-routed answer) would
   // fall through to the next free_text discovery slot (e.g.
   // business_location) and corrupt it.
-  if (!nameCaptureConsumed) {
+  if (!nameCaptureConsumed && !pendingConsumed) {
     state = applyFreeTextAnswerMapping(trimmed, state);
   }
 
@@ -554,7 +578,7 @@ export async function processChannelInbound(
   // Hoisted so the LLM-disabled alert (#128, global across channels per the
   // fixes-are-global doctrine) can see what extraction returned.
   let llmMode: 'live' | 'disabled' | 'error' | 'degraded' | null = null;
-  if (state.matter_type !== 'out_of_scope' && !nameCaptureConsumed) {
+  if (state.matter_type !== 'out_of_scope' && !nameCaptureConsumed && !pendingConsumed) {
     try {
       const llm = await llmExtractServer(trimmed, state);
       llmMode = llm.mode;
@@ -876,10 +900,17 @@ export async function processChannelInbound(
 
       if (sendResult.sent) {
         const newDiscoveryCount = discoveryCount + 1;
+        // pendingAskedSlotId (#172): record the slot we just asked so
+        // the NEXT inbound's applyPendingSlotReply can route the reply
+        // to this exact slot, independent of what getNextStep prefers
+        // by that point. Without this, a reply to advisory_path can be
+        // lost when the engine has shifted to wanting capture_contact
+        // by the time the lead responds.
         const persistedState: EngineState = {
           ...state,
           contactCaptureStarted: true,
           discoveryFollowUpCount: newDiscoveryCount,
+          pendingAskedSlotId: slotToAsk.id,
         };
 
         if (sessionId) {
