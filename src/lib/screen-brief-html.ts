@@ -206,7 +206,16 @@ function feeBlock(text: string): string {
     return `<div class="fee-block"><p class="section-body">${esc(t)}</p></div>`;
   }
   const range = match[0];
-  const rest = t.replace(range, '').replace(/^\s*[.,]?\s*/, '').trim();
+  // Extracting the range from mid-sentence leaves orphan punctuation behind
+  // ("not a quote. $750–$1,500. Drivers: ..." becomes "not a quote. .
+  // Drivers: ..."). Collapse a stranded period after existing punctuation,
+  // squeeze double spaces, then strip any leading punctuation (#176).
+  const rest = t
+    .replace(range, '')
+    .replace(/([.,])\s*\.(\s|$)/g, '$1$2')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^\s*[.,]?\s*/, '')
+    .trim();
   let html = `<div class="fee-block"><p class="fee-range">${esc(range)}</p>`;
   if (rest) html += `<p class="fee-supporting">${esc(rest)}</p>`;
   html += `</div>`;

@@ -212,7 +212,7 @@ describe('buildVoiceCallbackEmail wrong-number name provenance (the field bug)',
   it('labels other callback branches with a real name as unverified', () => {
     const { html } = buildVoiceCallbackEmail(
       baseCallbackArgs({
-        branch: 'other',
+        branch: 'vendor',
         callerName: 'Jane Vendor',
         callerNameSource: 'unverified',
       }),

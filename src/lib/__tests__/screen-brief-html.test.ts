@@ -474,3 +474,31 @@ describe('renderBriefHtmlServer — timezone rendering (#138)', () => {
     expect(html).not.toContain('4:55');
   });
 });
+
+describe('renderBriefHtmlServer fee block (#176 orphan-period regression)', () => {
+  it('extracting the range from mid-sentence leaves no stranded ". ." in the supporting text', () => {
+    const html = renderBriefHtmlServer(
+      buildFakeReport({
+        fee_estimate:
+          'Internal estimate based on likely scope, not a quote. $750–$1,500. Drivers: solo incorporation base.',
+      }),
+      'whatsapp',
+      'en',
+    );
+    expect(html).toContain('$750–$1,500');
+    expect(html).toContain('Internal estimate based on likely scope, not a quote. Drivers: solo incorporation base.');
+    expect(html).not.toContain('quote. .');
+    expect(html).not.toMatch(/\.\s+\.\s/);
+  });
+
+  it('range with no trailing drivers leaves a clean single period', () => {
+    const html = renderBriefHtmlServer(
+      buildFakeReport({
+        fee_estimate: 'Internal estimate based on likely scope, not a quote. $750–$1,500.',
+      }),
+      'whatsapp',
+      'en',
+    );
+    expect(html).not.toContain('quote. .');
+  });
+});

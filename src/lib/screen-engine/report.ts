@@ -706,7 +706,10 @@ function buildBestNextQuestion(state: EngineState): string {
 
 // ─── Resolved facts ───────────────────────────────────────────────────────
 
-const SLOT_LABELS: Record<string, string> = {
+// Exported for the slot-labels completeness gate (#176): every slot in
+// SLOT_REGISTRY must have an entry here, or the lawyer brief leaks the raw
+// snake_case id via the `SLOT_LABELS[id] ?? id` fallback.
+export const SLOT_LABELS: Record<string, string> = {
   advisory_path: 'Business path',
   co_owner_count: 'Co-owner count',
   advisory_concern: 'Primary concern',
@@ -757,6 +760,106 @@ const SLOT_LABELS: Record<string, string> = {
   client_phone: 'Phone',
   client_email: 'Email',
   client_postal_code: 'Postal code',
+  // Setup-advisory extras (#176, 2026-06-09): every registry slot needs a
+  // display label. The fallback `SLOT_LABELS[id] ?? id` leaks raw snake_case
+  // ids onto the lawyer brief; field-detected when a WhatsApp brief rendered
+  // cross_border_work / regulated_industry / revenue_expectation /
+  // employees_planned verbatim in Resolved Facts. Full-registry audit added
+  // the 89 missing entries below (real estate, employment, estates, universal
+  // readiness, setup extras).
+  revenue_expectation: 'Revenue expectation',
+  employees_planned: 'Hiring plans',
+  regulated_industry: 'Regulated industry',
+  cross_border_work: 'Cross-border work',
+  ip_planned: 'IP to protect',
+  communications_exist: 'Written communications',
+  // Universal readiness
+  hiring_timeline: 'Lawyer timeline',
+  other_counsel: 'Other counsel',
+  decision_authority: 'Decision authority',
+  // Real estate
+  real_estate_problem_type: 'Problem type',
+  commercial_re_role: 'Client role',
+  commercial_property_type: 'Property type',
+  commercial_re_amount: 'Amount involved',
+  commercial_re_stage: 'Deal stage',
+  commercial_re_concerns: 'Main concern',
+  residential_role: 'Client role',
+  residential_property_type: 'Property type',
+  residential_re_amount: 'Property value',
+  residential_re_stage: 'Deal stage',
+  residential_re_concern: 'Main concern',
+  residential_closing_timeline: 'Closing timeline',
+  residential_mortgage_situation: 'Mortgage situation',
+  residential_representation: 'Agent involved',
+  litigation_subject: 'Dispute subject',
+  litigation_role: 'Client role',
+  litigation_amount: 'Amount at stake',
+  litigation_documents: 'Documents available',
+  litigation_stage: 'Dispute stage',
+  litigation_when_event: 'When it happened',
+  litigation_settlement_attempted: 'Settlement attempted',
+  tenancy_party: 'Landlord or tenant',
+  tenancy_type: 'Tenancy type',
+  tenancy_issue: 'Tenancy issue',
+  tenancy_amount: 'Amount involved',
+  tenancy_lease_exists: 'Lease exists',
+  tenancy_notice_status: 'Notice status',
+  lien_role: 'Client role',
+  lien_amount: 'Amount owed',
+  lien_last_supply: 'Last work or supply',
+  lien_preserved: 'Lien preserved',
+  lien_documents: 'Documents available',
+  precon_role: 'Client role',
+  precon_issue: 'Issue type',
+  precon_developer_status: 'Developer status',
+  precon_amount: 'Amount involved',
+  precon_documents: 'Documents available',
+  mortgage_role: 'Client role',
+  mortgage_status: 'Mortgage status',
+  mortgage_amount: 'Amount involved',
+  mortgage_lender_type: 'Lender type',
+  mortgage_documents: 'Documents available',
+  // Employment
+  employment_problem_type: 'Problem type',
+  tenure_band: 'Tenure',
+  salary_band: 'Salary band',
+  dismissal_reason_given: 'Reason given',
+  severance_offered: 'Severance offered',
+  signed_release: 'Signed release',
+  desired_outcome_wrongful_dismissal: 'Desired outcome',
+  severance_offer_amount: 'Offer amount',
+  severance_deadline: 'Offer deadline',
+  desired_outcome_severance_review: 'Desired outcome',
+  harassment_type: 'Harassment type',
+  harassment_employment_status: 'Employment status',
+  reported_to_hr: 'Reported to HR',
+  desired_outcome_harassment: 'Desired outcome',
+  wages_owed_band: 'Wages owed',
+  wages_type: 'Pay type',
+  desired_outcome_wage_recovery: 'Desired outcome',
+  contract_review_type: 'Contract type',
+  contract_review_timeline: 'Review timeline',
+  contract_review_concerns: 'Main concern',
+  desired_outcome_contract_review: 'Desired outcome',
+  // Estates
+  estates_problem_type: 'Problem type',
+  marital_status: 'Marital status',
+  children_count: 'Children or dependants',
+  estate_complexity: 'Estate complexity',
+  existing_will_status: 'Existing will',
+  desired_outcome_will_drafting: 'Desired outcome',
+  poa_type: 'POA type',
+  poa_urgency: 'POA urgency',
+  poa_existing_documents: 'Existing documents',
+  relationship_to_deceased: 'Relationship to deceased',
+  will_status_probate: 'Will status',
+  estate_value_band: 'Estate value',
+  executor_role: 'Executor role',
+  estate_dispute_type: 'Dispute type',
+  estate_dispute_role: 'Client role',
+  estate_court_status: 'Court status',
+  desired_outcome_estate_dispute: 'Desired outcome',
 };
 
 function buildResolvedFacts(state: EngineState): Record<string, string> {
