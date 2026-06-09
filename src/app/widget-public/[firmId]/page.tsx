@@ -35,6 +35,7 @@ const sourceSerif = Source_Serif_4({
 
 interface PageProps {
   params: Promise<{ firmId: string }>;
+  searchParams: Promise<{ lang?: string }>;
 }
 
 interface FirmRow {
@@ -42,8 +43,21 @@ interface FirmRow {
   branding: FirmBranding | null;
 }
 
-export default async function PublicWidgetPage({ params }: PageProps) {
+// Languages the kickoff screen can render before the engine detects the
+// real language from typed text. Only "pt" has an authored kickoff
+// bundle today; anything else (or absent) falls back to English. The
+// engine still detects and serves every OTHER language fully once the
+// visitor types, regardless of this hint.
+const KICKOFF_LANGS = new Set(["en", "pt"]);
+
+export default async function PublicWidgetPage({ params, searchParams }: PageProps) {
   const { firmId } = await params;
+  const { lang } = await searchParams;
+
+  // Locale hint from the embedding page (e.g. DRG's /pt/contact passes
+  // ?lang=pt). Validated against the kickoff allow-list; unknown values
+  // fall back to English so a malformed query never breaks the screen.
+  const initialLang = lang && KICKOFF_LANGS.has(lang) ? (lang as "en" | "pt") : "en";
 
   const { data: firm } = await supabase
     .from("intake_firms")
@@ -72,7 +86,11 @@ export default async function PublicWidgetPage({ params }: PageProps) {
 
   return (
     <div className={rootClassName} style={themeStyle}>
-      <ScreenEnginePublicWidget firmId={firmId} firmName={displayName} />
+      <ScreenEnginePublicWidget
+        firmId={firmId}
+        firmName={displayName}
+        initialLang={initialLang}
+      />
     </div>
   );
 }

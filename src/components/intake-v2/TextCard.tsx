@@ -23,9 +23,25 @@ interface Props {
   minChars?: number;
   /** When true, show the voice-record button beside the textarea. Used for kickoff. */
   enableVoice?: boolean;
+  /** Optional short starter phrases shown below the textarea. Visually
+   *  quiet, secondary. Used on the kickoff prompt to help visitors
+   *  start without legal vocabulary. */
+  examplePrompts?: string[];
+  /** Label that introduces the example prompts. Defaults to "You can start with:". */
+  examplePromptsLabel?: string;
 }
 
-export function TextCard({ item, value, onChange, onSubmit, submitLabel = "Continue", minChars = 1, enableVoice = false }: Props) {
+export function TextCard({
+  item,
+  value,
+  onChange,
+  onSubmit,
+  submitLabel = "Continue",
+  minChars = 1,
+  enableVoice = false,
+  examplePrompts,
+  examplePromptsLabel = "You can start with:",
+}: Props) {
   const [focused, setFocused] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const text = typeof value === "string" ? value : "";
@@ -105,6 +121,32 @@ export function TextCard({ item, value, onChange, onSubmit, submitLabel = "Conti
               {voiceError}
             </p>
           )}
+        </div>
+      )}
+
+      {examplePrompts && examplePrompts.length > 0 && (
+        // Visually quiet starter prompts. Brand discipline: secondary
+        // typography, no card chrome, no icons, no "examples" framing
+        // that reads as a tutorial. The textarea remains the visual
+        // anchor; this block sits below as a quieter helper.
+        <div
+          className="flex flex-col gap-1 -mt-1"
+          aria-label="Starter phrases"
+        >
+          <p
+            className="text-[12px] uppercase tracking-[0.14em] font-medium text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_55%,transparent)]"
+            style={{ fontFamily: fontBody }}
+          >
+            {examplePromptsLabel}
+          </p>
+          <ul
+            className="flex flex-col gap-1 list-none p-0 m-0 text-[13.5px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_60%,transparent)]"
+            style={{ fontFamily: fontBody }}
+          >
+            {examplePrompts.map((prompt, i) => (
+              <li key={i}>&ldquo;{prompt}&rdquo;</li>
+            ))}
+          </ul>
         </div>
       )}
 

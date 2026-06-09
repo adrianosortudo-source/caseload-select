@@ -75,3 +75,45 @@ describe("ScreenEnginePublicWidget.slotToItem: language-aware rendering", () => 
     expect(item.question).not.toContain("Você");
   });
 });
+
+describe("Kickoff localization (initialLang hint, 2026-06-08)", () => {
+  // The kickoff screen renders before the engine detects language, so it
+  // reads the PT bundle's widget_strings via the embedding page's
+  // ?lang=pt hint. These keys MUST exist in pt.json or a PT embed shows
+  // English kickoff copy (the bug this guards against). The widget reads
+  // them through ws(key, englishFallback); EN intentionally has no keys
+  // and uses the fallbacks.
+  const KICKOFF_KEYS = [
+    "kickoff_heading",
+    "kickoff_helper",
+    "kickoff_placeholder",
+    "kickoff_submit",
+    "kickoff_examples_label",
+    "kickoff_example_1",
+    "kickoff_example_2",
+    "kickoff_example_3",
+  ];
+
+  it("pt bundle carries every kickoff_* widget string", () => {
+    const pt = getI18n("pt");
+    for (const key of KICKOFF_KEYS) {
+      expect(pt.widget_strings?.[key], `pt.json missing widget_strings.${key}`).toBeTruthy();
+    }
+  });
+
+  it("pt kickoff strings are actually Portuguese, not English passthrough", () => {
+    const pt = getI18n("pt");
+    expect(pt.widget_strings?.["kickoff_heading"]).toContain("decidir");
+    expect(pt.widget_strings?.["kickoff_submit"]).toContain("revisão");
+    expect(pt.widget_strings?.["kickoff_examples_label"]).toContain("começar");
+  });
+
+  it("en bundle has no kickoff keys (uses inline English fallbacks)", () => {
+    // EN intentionally relies on the ws() fallback literals in the
+    // component, keeping en.json free of widget_strings. If someone adds
+    // EN kickoff keys later this is not a failure, but the widget must
+    // still render, so we only assert the bundle resolves.
+    const en = getI18n("en");
+    expect(en).toBeTruthy();
+  });
+});

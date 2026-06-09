@@ -21,6 +21,21 @@ import type { EngineState, SlotDefinition } from "@/lib/screen-engine/types";
 interface Props {
   firmId: string;
   firmName: string;
+  /**
+   * Locale hint from the embedding page, passed through the iframe URL
+   * as `?lang=`. The kickoff screen renders before the engine has any
+   * typed text to detect language from, so without a hint it defaults
+   * to English. When a firm embeds the widget on a Portuguese route
+   * (e.g. DRG's /pt/contact), the embedding page passes `lang="pt"` so
+   * the very first screen the visitor sees is in their language.
+   *
+   * This is display-only for the kickoff. Once the visitor types and
+   * submits, the engine's own language detection (franc + LLM) sets
+   * `state.language` from the actual text, which then drives every
+   * subsequent screen. The lawyer brief stays English regardless
+   * (DR-036).
+   */
+  initialLang?: SupportedLanguage;
 }
 
 type Stage = "kickoff" | "questions" | "contact" | "done";
@@ -102,7 +117,7 @@ function FreeTextAnswerCard({
   );
 }
 
-export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
+export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" }: Props) {
   const [stage, setStage] = useState<Stage>("kickoff");
   const [description, setDescription] = useState("");
   const [state, setState] = useState<EngineState | null>(null);
@@ -117,11 +132,12 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
   // (turn 1 finishes), every visible chrome string (round labels, button
   // labels, headings, body copy, status badges) reads from the lead's
   // language bundle. Pre-language-detection (kickoff stage) the bundle
-  // is the English fallback by design: state is null until the lead
-  // types something, and the kickoff prompt IS the signal that triggers
-  // language detection. The fallback cascade keeps every English string
-  // intact when no translation exists.
-  const language: SupportedLanguage = (state?.language ?? "en") as SupportedLanguage;
+  // is seeded by `initialLang`, the locale hint from the embedding page:
+  // an English embed leaves it "en", a /pt route passes "pt" so the
+  // first screen matches the visitor's chosen site language. Once the
+  // visitor types and the engine detects the real language from the
+  // text, `state.language` takes over and drives every later screen.
+  const language: SupportedLanguage = (state?.language ?? initialLang) as SupportedLanguage;
   const i18n = getI18n(language);
   const ws = (key: string, fallback: string): string =>
     i18n.widget_strings?.[key] ?? fallback;
@@ -257,26 +273,50 @@ export function ScreenEnginePublicWidget({ firmId, firmName }: Props) {
   }
 
   if (stage === "kickoff") {
-    // Kickoff stays English by design: state.language is unset until
-    // the lead types the first message. The kickoff prompt is the
-    // signal that elicits the language detection that powers every
-    // subsequent screen.
+    // Kickoff language: seeded by `initialLang` (the embedding page's
+    // locale hint via ?lang=). English embeds default to "en"; a /pt
+    // route passes "pt" so the first screen matches the visitor's chosen
+    // site language. The strings read through `ws()` against the
+    // language bundle, so a PT embed shows PT kickoff copy. Once the
+    // visitor types and submits, the engine detects the real language
+    // from the text and drives every later screen.
+    //
+    // Copy revised 2026-06-08 per operator audit. The previous heading
+    // ("Describe your situation") was too passive. The new heading puts
+    // the visitor in decision mode, the helper gives explicit permission
+    // to use plain language, the placeholder models a real-world
+    // commercial-lease scenario, and three quiet starter prompts help
+    // visitors who do not know how to begin. The submit label reads as
+    // a workflow step ("Continue matter review"), not a generic CTA, so
+    // visitors understand they have not finished submitting yet.
     return (
       <Shell totalScreens={1} currentScreen={0} roundLabel={roundLabel}>
         <TextCard
           item={{
             id: "situation",
-            question: "Describe your situation.",
-            description: "Include the dates that matter and the documents you have.",
+            question: ws("kickoff_heading", "Start with what you need to decide."),
+            description: ws(
+              "kickoff_helper",
+              "A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have.",
+            ),
             presentation: "text",
-            placeholder: "What is happening, the deadlines, the documents you have.",
+            placeholder: ws(
+              "kickoff_placeholder",
+              "I am about to sign a commercial lease and want to know what risks I should check before committing.",
+            ),
           }}
           value={description}
           onChange={setDescription}
           onSubmit={start}
-          submitLabel="Continue"
+          submitLabel={ws("kickoff_submit", "Continue matter review")}
           minChars={10}
           enableVoice
+          examplePrompts={[
+            ws("kickoff_example_1", "I am about to sign..."),
+            ws("kickoff_example_2", "I received a document and need to know..."),
+            ws("kickoff_example_3", "I need to decide whether..."),
+          ]}
+          examplePromptsLabel={ws("kickoff_examples_label", "You can start with:")}
         />
       </Shell>
     );
