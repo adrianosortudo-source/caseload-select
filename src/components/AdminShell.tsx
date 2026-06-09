@@ -26,7 +26,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     path === "/home" ||
     path === "/about" ||
     path === "/pricing" ||
-    path.startsWith("/screen-demo");
+    path.startsWith("/screen-demo") ||
+    path.startsWith("/what-we-dont-do");
 
   if (
     isPortal ||

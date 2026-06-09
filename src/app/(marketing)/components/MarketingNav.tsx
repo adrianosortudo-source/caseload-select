@@ -50,6 +50,7 @@ export default function MarketingNav() {
         <li><a href="/screen-demo" className="cls-nav-link-emphasis">Try the Screen</a></li>
         <li><a href="#why">Why us</a></li>
         <li><a href="#faq">FAQ</a></li>
+        <li><a href="/what-we-dont-do">Scope</a></li>
       </ul>
       <a href="#cta" className="cls-nav-cta">Book a Call</a>
 

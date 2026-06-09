@@ -120,6 +120,13 @@ export default function WhySection() {
           marketing, accountable to one signed-case scorecard.
         </p>
 
+        <p className="section-sub reveal" style={{ marginBottom: "var(--sp-7)" }}>
+          Clear on what we do. Equally clear on what we don&apos;t.{" "}
+          <a href="/what-we-dont-do" style={{ color: "var(--stone-on-light, #9E9070)", fontWeight: 600, textDecoration: "underline", textUnderlineOffset: "3px" }}>
+            Read the scope
+          </a>.
+        </p>
+
         <div className="w-grid">
           <RtbCard
             icon={<IconShieldCheck />}
