@@ -311,6 +311,7 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
           submitLabel={ws("kickoff_submit", "Continue matter review")}
           minChars={10}
           enableVoice
+          voiceHint={ws("voice_hint", "speak your answer instead of typing it")}
           examplePrompts={[
             ws("kickoff_example_1", "I am about to sign..."),
             ws("kickoff_example_2", "I received a document and need to know..."),

@@ -29,6 +29,10 @@ interface Props {
   examplePrompts?: string[];
   /** Label that introduces the example prompts. Defaults to "You can start with:". */
   examplePromptsLabel?: string;
+  /** Caption beside the voice-record button. Describes what the button does
+   *  relative to the textarea. The previous copy ("or speak instead of
+   *  typing") read as a second option separate from the button (#177). */
+  voiceHint?: string;
 }
 
 export function TextCard({
@@ -41,6 +45,7 @@ export function TextCard({
   enableVoice = false,
   examplePrompts,
   examplePromptsLabel = "You can start with:",
+  voiceHint = "speak your answer instead of typing it",
 }: Props) {
   const [focused, setFocused] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -113,7 +118,7 @@ export function TextCard({
               className="text-[12px] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_55%,transparent)]"
               style={{ fontFamily: fontBody }}
             >
-              or speak instead of typing
+              {voiceHint}
             </span>
           </div>
           {voiceError && (

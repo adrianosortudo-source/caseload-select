@@ -452,6 +452,7 @@
     "done_body_template": "Um advogado em {firmName} vai ler o que você compartilhou e entrar em contato diretamente para conversar sobre a parte jurídica.",
     "free_text_other_label": "Outra coisa (vou explicar)",
     "status_submitted": "enviado",
-    "didnt_catch": "Desculpe, não consegui entender sua última resposta. Pode confirmar respondendo com o número da opção que se encaixa melhor?"
+    "didnt_catch": "Desculpe, não consegui entender sua última resposta. Pode confirmar respondendo com o número da opção que se encaixa melhor?",
+    "voice_hint": "fale a sua resposta em vez de digitar"
   }
 }
