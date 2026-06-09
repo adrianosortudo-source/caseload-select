@@ -41,7 +41,15 @@ import { estimateCaseValue } from "@/lib/case-value";
 import { extractEvents } from "@/lib/event-extractor";
 import { extractIntents } from "@/lib/intent-extractor";
 import { selectEvent } from "@/lib/event-selector";
-import { writeScreenedLeadFromScreen } from "@/lib/screen-to-screened";
+import {
+  computeDecisionDeadline,
+  computeWhaleNurture,
+  deriveFourAxis,
+  deriveMatterType,
+  type ScreenCpiSnapshot,
+  writeScreenedLeadFromScreen,
+} from "@/lib/screen-to-screened";
+import { notifyLawyersOfNewLead } from "@/lib/lead-notify";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 // event-question-generator: generateQuestion() and generatePreamble() removed.
 // Questions now come from the slot bank via selectSlots() → slotToApiQuestion().
@@ -162,12 +170,12 @@ async function sendToGHL(session: Record<string, unknown>, ghlWebhookUrl: string
   const entities = (session.extracted_entities as Record<string, unknown>) ?? {};
 
   const bandToCta: Record<string, string> = {
-    A: "A lawyer will contact you within 30 minutes. Book a same-day consultation to secure your spot.",
-    B: "We'll review your case and reach out within the hour. Pick a time to speak with a lawyer.",
-    C: "Your intake is complete. A member of our team will personally review your situation and be in touch as soon as possible.",
+    A: "A lawyer from our team will be in touch using the contact details you shared. If your situation is time-sensitive, please call the firm directly.",
+    B: "We'll review your case and be in touch using the contact details you shared. Pick a time to speak with a lawyer.",
+    C: "Your intake is complete. A member of our team will personally review your situation and be in touch using the contact details you shared.",
     D: "We've received everything. A member of our team will take a careful look and follow up with you.",
     E: "Based on what you've shared, this matter may fall outside our practice areas. We encourage you to seek appropriate legal help.",
-    X: "Thank you. We're reviewing your information and a member of the team will be in touch shortly.",
+    X: "Thank you. We're reviewing your information and a member of the team will be in touch using the contact details you shared.",
   };
 
   const bandToLeadState: Record<string, string> = {
@@ -280,7 +288,7 @@ function buildBandXResponse(practiceArea: string | null, reason: string): GptRes
     value_tier: null,
     prior_experience: null,
     flags: ["needs_human_review"],
-    response_text: "Thank you. We're reviewing your information and a member of the team will be in touch shortly.",
+    response_text: "Thank you. We're reviewing your information and a member of the team will be in touch using the contact details you shared.",
     finalize: true,
     collect_identity: false,
     situation_summary: null,
@@ -514,6 +522,11 @@ export async function POST(req: Request) {
       if (structured_data.last_name !== undefined) contact.last_name = structured_data.last_name;
       if (structured_data.email !== undefined) contact.email = structured_data.email;
       if (structured_data.phone !== undefined) contact.phone = structured_data.phone;
+      const contactName = [
+        typeof contact.first_name === "string" ? contact.first_name.trim() : "",
+        typeof contact.last_name === "string" ? contact.last_name.trim() : "",
+      ].filter(Boolean).join(" ");
+      contact.name = contactName || (typeof existingContact.name === "string" ? existingContact.name : null);
 
       await supabase
         .from("intake_sessions")
@@ -521,15 +534,90 @@ export async function POST(req: Request) {
         .eq("id", session.id);
 
       const bandToCta: Record<string, string> = {
-        A: "A lawyer from our team will contact you shortly. Book a same-day consultation.",
-        B: "We'll call you within the hour. Pick a consultation time.",
+        A: "A lawyer from our team will be in touch using the contact details you shared. If your situation is time-sensitive, please call the firm directly. Book a consultation to lock in a time.",
+        B: "We'll be in touch using the contact details you shared. Pick a consultation time.",
         C: "Book a consultation at your convenience.",
-        D: "Here is information relevant to your situation. We'll follow up within the week.",
+        D: "Here is information relevant to your situation. We'll follow up using the contact details you shared.",
         E: "Based on what you've shared, this may fall outside our practice areas. Here are other resources that may help.",
       };
 
       const existingScoringForContact = (session.scoring as Record<string, unknown>) ?? {};
       const existingEntitiesForContact = (session.extracted_entities as Record<string, unknown>) ?? {};
+
+      if (!demo) {
+        try {
+          const cpiSnapshot = (existingCpiForContact as unknown as ScreenCpiSnapshot) ?? {};
+          const practiceArea = (session.practice_area as string | null) ?? null;
+          const practiceSubType = (session.practice_sub_type as string | null) ?? null;
+          const dualWriteResult = await writeScreenedLeadFromScreen(supabase, {
+            sessionId: String(session.id),
+            firmId: firm_id,
+            cpi: cpiSnapshot,
+            practiceArea,
+            practiceSubType,
+            situationSummary: (session.situation_summary as string | null) ?? null,
+            confirmedAnswers: updatedConfirmed as Record<string, unknown>,
+            contact: {
+              name: typeof contact.name === "string" ? contact.name : null,
+              email: typeof contact.email === "string" ? contact.email : null,
+              phone: typeof contact.phone === "string" ? contact.phone : null,
+            },
+            caseValueLabel:
+              (existingScoringForContact._case_value as { label?: string } | undefined)?.label ?? null,
+            caseValueRationale:
+              (existingScoringForContact._case_value as { rationale?: string } | undefined)?.rationale ?? null,
+            intakeLanguage: (session.intake_language as string | null) ?? "en",
+          });
+          if (!dualWriteResult.ok) {
+            console.warn("[screen] screened_leads dual-write failed:", dualWriteResult.error, { session_id: session.id });
+          } else {
+            console.log(`[screen] dual-wrote screened_leads ${dualWriteResult.lead_id} status=${dualWriteResult.status}`);
+            if (dualWriteResult.status === "triaging" || dualWriteResult.status === "declined") {
+              const axes = deriveFourAxis(cpiSnapshot);
+              const notifyBand: "A" | "B" | "C" | "D" | null =
+                existingBand === "A" || existingBand === "B" || existingBand === "C" || existingBand === "D"
+                  ? existingBand
+                  : null;
+
+              await notifyLawyersOfNewLead({
+                firmId: firm_id,
+                leadId: dualWriteResult.lead_id ?? `L-S1-${session.id}`,
+                contactName: typeof contact.name === "string" ? contact.name : null,
+                matterType: deriveMatterType(practiceArea, practiceSubType),
+                practiceArea: practiceArea ?? "unknown",
+                band: notifyBand,
+                decisionDeadlineIso: computeDecisionDeadline(axes.urgency).toISOString(),
+                whaleNurture: computeWhaleNurture(axes.value, axes.readiness),
+                intakeLanguage: (session.intake_language as string | null) ?? "en",
+                channel: "web",
+                lifecycleStatus: dualWriteResult.status,
+              }).catch((err) => {
+                console.error("[screen] notifyLawyersOfNewLead failed:", err);
+              });
+            }
+          }
+        } catch (dualWriteErr) {
+          console.warn(
+            "[screen] screened_leads dual-write threw:",
+            dualWriteErr instanceof Error ? dualWriteErr.message : String(dualWriteErr),
+            { session_id: session.id },
+          );
+        }
+      }
+
+      if (firm.ghl_webhook_url && !demo) {
+        const routing = await getMatterRouting(firm_id, (session.practice_sub_type as string | null) ?? null).catch(() => null);
+        try {
+          await sendToGHL({ ...session, contact, status: "complete" }, firm.ghl_webhook_url, routing);
+          await supabase
+            .from("intake_sessions")
+            .update({ crm_synced: true })
+            .eq("id", session.id);
+        } catch (err) {
+          console.error("GHL delivery failed:", err);
+        }
+      }
+
       return NextResponse.json({
         session_id: session.id,
         practice_area: session.practice_area,
