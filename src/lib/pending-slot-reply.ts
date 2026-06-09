@@ -41,24 +41,17 @@
 import { applyAnswer } from './screen-engine/control';
 import { SLOT_REGISTRY } from './screen-engine/slotRegistry';
 import type { EngineState, SlotDefinition } from './screen-engine/types';
+import { fuzzyMatchOption } from './option-fuzzy-match';
 
-// ── Reply-shape patterns (parallel to numeric-option-mapping +
-//    free-text-answer-mapping; kept inline here to avoid coupling
-//    this slot-routed adapter to those getNextStep-driven ones) ──
+// ── Reply-shape patterns ──────────────────────────────────────────────────
+//
+// single_select option matching (digit with leading-junk tolerance,
+// word-number, yes/no/not-sure sentinel, token-subset, edit-distance) is
+// delegated to `fuzzyMatchOption` in option-fuzzy-match.ts (#174). The
+// sentinel + contact-shape regexes below remain only for free_text reply
+// shaping in matchFreeTextReply.
 
-/**
- * Bare digit reply: "1", "1.", "Option 1", "#1", " 1 ", etc.
- *
- * Leading-junk tolerance (#172 follow-up, observed 2026-06-09): a stray
- * leading backtick or quote (mobile autocorrect / fat-finger, seen as
- * "`1" on a live WhatsApp intake) must not break digit mapping. The
- * leading class tolerates whitespace, backtick, and straight or smart
- * quotes before the digit. The match stays anchored, so a digit buried
- * in a sentence ("I pick 1 of them") still does not map.
- */
-const DIGIT_REPLY_RE = /^[\s`'"‘’“”]*(?:option\s+|#|number\s+|choice\s+)?(\d+)\.?\s*$/i;
-
-/** yes / no / "not sure" sentinels for single_select fuzzy matching. */
+/** yes / no / "not sure" sentinels for free_text reply shaping. */
 const YES_SENTINEL_RE = /^\s*(yes|yeah|yep|yup|y|sure|ok|okay|correct|right|absolutely|definitely)\s*\.?\s*$/i;
 const NO_SENTINEL_RE = /^\s*(no|nope|nah|n|not\s+really|negative)\s*\.?\s*$/i;
 const NOT_SURE_SENTINEL_RE =
@@ -74,57 +67,15 @@ const PHONE_LIKE_RE = /^\+?[\d().\s-]{7,}$/;
 // ── Option matchers ─────────────────────────────────────────────────────
 
 /**
- * For a single_select slot, try to map the reply to a canonical option
- * value. Order: numeric (digit → options[N-1]), then yes/no/not-sure
- * sentinel mapping against option labels.
- *
- * Returns the option value string when matched, null otherwise.
+ * For a single_select slot, map the reply to a canonical option value via
+ * the shared typo-tolerant matcher (#174). Returns the option value or
+ * null when no single option is a confident match (caller re-asks).
  */
 function matchSingleSelectOption(
   text: string,
   slot: SlotDefinition,
 ): string | null {
-  const options = slot.options ?? [];
-  if (options.length === 0) return null;
-
-  // Numeric mapping ("1" → options[0])
-  const digitMatch = DIGIT_REPLY_RE.exec(text);
-  if (digitMatch) {
-    const digit = parseInt(digitMatch[1], 10);
-    if (Number.isFinite(digit) && digit >= 1 && digit <= options.length) {
-      return options[digit - 1]?.value ?? null;
-    }
-    // Digit out of range; do NOT fall through to fuzzy (the reply was
-    // unambiguously a digit, just an invalid one). Engine will re-ask.
-    return null;
-  }
-
-  // Fuzzy match against option labels (case-insensitive prefix or full).
-  const trimmed = text.trim().toLowerCase();
-  if (!trimmed) return null;
-
-  // Sentinel yes / no / not-sure mapping when the slot has matching
-  // option values.
-  if (YES_SENTINEL_RE.test(text)) {
-    const yes = options.find((o) => /^yes\b/i.test(o.value));
-    if (yes) return yes.value;
-  }
-  if (NO_SENTINEL_RE.test(text)) {
-    const no = options.find((o) => /^no\b/i.test(o.value));
-    if (no) return no.value;
-  }
-  if (NOT_SURE_SENTINEL_RE.test(text)) {
-    const notSure = options.find((o) => /not\s+sure|unknown|n\/a/i.test(o.value));
-    if (notSure) return notSure.value;
-  }
-
-  // Verbatim option-label match
-  for (const opt of options) {
-    if (opt.value.toLowerCase() === trimmed) return opt.value;
-    if (opt.label.toLowerCase() === trimmed) return opt.value;
-  }
-
-  return null;
+  return fuzzyMatchOption(text, slot.options ?? []);
 }
 
 /**

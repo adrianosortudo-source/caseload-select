@@ -930,7 +930,7 @@ export async function processChannelInbound(
         // em-dash, no banned vocabulary, no time-relative promise.
         const clarifier =
           i18n.widget_strings?.didnt_catch ||
-          "Sorry, I didn't catch that. Please reply with the number that matches your answer.";
+          "Sorry, I didn't get your last reply. Could you confirm by replying with the number of the option that fits best?";
         questionText = `${clarifier}\n\n${questionText}`;
       }
       const sendResult = await sendChannelMessage({

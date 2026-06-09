@@ -43,6 +43,7 @@
 
 import { getNextStep, applyAnswer } from './screen-engine/control';
 import type { EngineState, SlotDefinition } from './screen-engine/types';
+import { fuzzyMatchOption } from './option-fuzzy-match';
 
 // ── Sentinel patterns ───────────────────────────────────────────────────
 
@@ -152,9 +153,6 @@ export function applyFreeTextFuzzyMatch(
   text: string,
   state: EngineState,
 ): EngineState {
-  const cls = classifyReply(text);
-  if (!cls) return state;
-
   let next: ReturnType<typeof getNextStep>;
   try {
     next = getNextStep(state);
@@ -167,8 +165,21 @@ export function applyFreeTextFuzzyMatch(
   if (slot.input_type !== 'single_select') return state;
   if (state.slots[slot.id]) return state;
 
-  const optionValue = pickOptionForReplyClass(slot, cls);
-  if (!optionValue) return state;
+  // 1. Sentinel class (yes / no / non-answer) against the canonical
+  //    option labels. Preserved as the first path so existing behavior
+  //    is unchanged.
+  const cls = classifyReply(text);
+  if (cls) {
+    const optionValue = pickOptionForReplyClass(slot, cls);
+    if (optionValue) return applyAnswer(state, slot.id, optionValue);
+  }
 
-  return applyAnswer(state, slot.id, optionValue);
+  // 2. Typo-tolerant fallback (#174): digit (leading-junk tolerant),
+  //    word-number, token-subset, and edit-distance against the option
+  //    set. Returns null on ambiguity or no confident match, so a true
+  //    free-form description still falls through to the LLM.
+  const fuzzy = fuzzyMatchOption(text, slot.options ?? []);
+  if (fuzzy) return applyAnswer(state, slot.id, fuzzy);
+
+  return state;
 }

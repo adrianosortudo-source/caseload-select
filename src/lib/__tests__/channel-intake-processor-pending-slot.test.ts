@@ -458,8 +458,8 @@ describe('Pending-slot reply routing across the contact-capture detour (#172)', 
     // Re-asks advisory_path (the same question), NOT the name.
     expect(sentText.toLowerCase()).toContain('starting something new');
     expect(sentText.toLowerCase()).not.toContain('what is your name');
-    // Carries the clarifier prefix.
-    expect(sentText.toLowerCase()).toContain("didn't catch");
+    // Carries the clarifier prefix (#174 confirmation-framed copy).
+    expect(sentText.toLowerCase()).toContain("didn't get your last reply");
     // pendingAskedSlotId stays on advisory_path so the next reply routes
     // back to it.
     const persisted = mocks.lastPersistedState as
