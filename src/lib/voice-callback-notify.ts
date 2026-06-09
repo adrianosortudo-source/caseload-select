@@ -2,10 +2,10 @@ import 'server-only';
 
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { sendEmail } from '@/lib/email';
-import type { VoiceCallbackBranch, VoiceUrgency } from '@/lib/voice-branch-classifier';
 import {
   buildUnconfirmedVoiceEmail,
-  htmlEscape,
+  buildVoiceCallbackEmail,
+  type VoiceCallbackNotifyArgs,
   type UnconfirmedVoiceNotifyArgs,
   type OperatorEmailResult,
 } from '@/lib/voice-callback-notify-pure';
@@ -13,19 +13,9 @@ import { buildLlmDisabledAlertEmail, type LlmDisabledAlertArgs } from '@/lib/llm
 
 const FALLBACK_OPERATOR_EMAIL = 'adriano@caseloadselect.ca';
 
-export interface VoiceCallbackNotifyArgs {
-  id: string;
-  firmId: string;
-  branch: VoiceCallbackBranch;
-  urgency: VoiceUrgency;
-  callerName: string | null;
-  callerPhone: string | null;
-  organization: string | null;
-  message: string;
-  callId: string | null;
-  operatorReview: boolean;
-  reason: string;
-}
+// Re-exported so existing consumers (route, tests) can keep importing the
+// args type from this module after the builder moved to the pure file (#175).
+export type { VoiceCallbackNotifyArgs } from '@/lib/voice-callback-notify-pure';
 
 export interface VoiceCallbackNotifyResult {
   email: 'sent' | 'skipped' | 'error';
@@ -35,48 +25,6 @@ export interface VoiceCallbackNotifyResult {
 
 function resolveOperatorEmail(): string {
   return process.env.OPERATOR_NOTIFICATION_EMAIL || FALLBACK_OPERATOR_EMAIL;
-}
-
-function branchLabel(branch: VoiceCallbackBranch): string {
-  return branch
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-function buildEmail(args: VoiceCallbackNotifyArgs): { subject: string; html: string } {
-  const urgentPrefix = args.urgency === 'urgent' ? 'URGENT: ' : '';
-  const subject = `${urgentPrefix}Voice callback: ${branchLabel(args.branch)}`;
-  const rows: Array<[string, string | null]> = [
-    ['Firm ID', args.firmId],
-    ['Request ID', args.id],
-    ['Branch', args.branch],
-    ['Urgency', args.urgency],
-    ['Operator review', args.operatorReview ? 'yes' : 'no'],
-    ['Reason', args.reason],
-    ['Caller name', args.callerName],
-    ['Caller phone', args.callerPhone],
-    ['Organization', args.organization],
-    ['Call ID', args.callId],
-  ];
-
-  const rowHtml = rows
-    .map(
-      ([label, value]) =>
-        `<tr><td style="padding:6px 10px;color:#666;">${htmlEscape(label)}</td><td style="padding:6px 10px;"><strong>${htmlEscape(value || 'Not provided')}</strong></td></tr>`,
-    )
-    .join('');
-
-  const html = `
-    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111;">
-      <h2 style="margin:0 0 12px;">${htmlEscape(subject)}</h2>
-      <p style="margin:0 0 12px;">This is an operator-only callback request. It is not in the lawyer lead queue.</p>
-      <table style="border-collapse:collapse;margin:0 0 16px;">${rowHtml}</table>
-      <h3 style="margin:16px 0 8px;">Message</h3>
-      <p style="white-space:pre-wrap;border-left:3px solid #ddd;padding-left:12px;">${htmlEscape(args.message || 'No message captured.')}</p>
-    </div>
-  `;
-  return { subject, html };
 }
 
 async function sendUrgentSms(args: VoiceCallbackNotifyArgs): Promise<'sent' | 'skipped' | 'error'> {
@@ -105,7 +53,7 @@ export async function notifyOperatorOfVoiceCallback(
   args: VoiceCallbackNotifyArgs,
 ): Promise<VoiceCallbackNotifyResult> {
   const result: VoiceCallbackNotifyResult = { email: 'skipped', sms: 'skipped', errors: [] };
-  const email = buildEmail(args);
+  const email = buildVoiceCallbackEmail(args);
 
   try {
     const dispatch = await sendEmail(resolveOperatorEmail(), email.subject, email.html);

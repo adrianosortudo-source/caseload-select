@@ -10,9 +10,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildUnconfirmedVoiceEmail,
+  buildVoiceCallbackEmail,
   describeMissingContact,
   htmlEscape,
   type UnconfirmedVoiceNotifyArgs,
+  type VoiceCallbackNotifyArgs,
 } from '../voice-callback-notify-pure';
 
 function baseArgs(overrides: Partial<UnconfirmedVoiceNotifyArgs> = {}): UnconfirmedVoiceNotifyArgs {
@@ -131,6 +133,111 @@ describe('buildUnconfirmedVoiceEmail — content surfacing + safety', () => {
   it('omits the transcript section entirely when there is no transcript', () => {
     const { html } = buildUnconfirmedVoiceEmail(baseArgs({ transcript: null }));
     expect(html).not.toContain('Transcript excerpt');
+  });
+});
+
+describe('buildUnconfirmedVoiceEmail name provenance (#175)', () => {
+  it('labels a metadata-derived name as caller-ID only', () => {
+    const { html } = buildUnconfirmedVoiceEmail(
+      baseArgs({ callerName: 'Adriano Da Silva Domingues', callerNameSource: 'caller_id_only' }),
+    );
+    expect(html).toContain('Name source');
+    expect(html).toContain('from caller ID, the caller did not state a name on this call');
+  });
+
+  it('labels a caller-stated name as stated on the call', () => {
+    const { html } = buildUnconfirmedVoiceEmail(
+      baseArgs({ callerName: 'Jane Doe', callerNameSource: 'stated_on_call' }),
+    );
+    expect(html).toContain('stated on the call');
+  });
+
+  it('defaults an unset name source to caller-ID only (never overclaims)', () => {
+    const { html } = buildUnconfirmedVoiceEmail(baseArgs({ callerName: 'Jane Doe' }));
+    expect(html).toContain('from caller ID, the caller did not state a name on this call');
+  });
+});
+
+// Voice callback email (#175 wrong-number provenance)
+
+function baseCallbackArgs(
+  overrides: Partial<VoiceCallbackNotifyArgs> = {},
+): VoiceCallbackNotifyArgs {
+  return {
+    id: 'cb-123',
+    firmId: 'firm-abc',
+    branch: 'wrong_number',
+    urgency: 'normal',
+    callerName: null,
+    callerNameSource: 'none',
+    callerPhone: '+16475492106',
+    callerPhoneSource: 'body',
+    organization: null,
+    message: 'Thanks for calling New York.',
+    callId: 'qBx9Y2cM4fgwpb8eeTqm',
+    operatorReview: false,
+    reason: 'marker_other_classifier_non_intake',
+    ...overrides,
+  };
+}
+
+describe('buildVoiceCallbackEmail wrong-number name provenance (the field bug)', () => {
+  it('the exact repro: metadata name on a wrong-number call is labeled, not presented as confirmed', () => {
+    const { html } = buildVoiceCallbackEmail(
+      baseCallbackArgs({
+        callerName: 'Adriano Da Silva Domingues',
+        callerNameSource: 'caller_id_only',
+      }),
+    );
+    // The name still shows (the operator may want it), but with provenance.
+    expect(html).toContain('Adriano Da Silva Domingues');
+    expect(html).toContain('Name source');
+    expect(html).toContain('from caller ID, the caller did not state a name on this call');
+    // And a plain-language warning so it is not read as a confirmed identity.
+    expect(html).toContain('not a confirmed identity');
+  });
+
+  it('separates reachability (phone caller ID) from identity (name unverified)', () => {
+    const { html } = buildVoiceCallbackEmail(
+      baseCallbackArgs({
+        callerName: 'Adriano Da Silva Domingues',
+        callerNameSource: 'caller_id_only',
+      }),
+    );
+    // Phone source row present (reachability is solid).
+    expect(html).toContain('Phone source');
+    expect(html).toContain('from the call (caller ID)');
+  });
+
+  it('labels other callback branches with a real name as unverified', () => {
+    const { html } = buildVoiceCallbackEmail(
+      baseCallbackArgs({
+        branch: 'other',
+        callerName: 'Jane Vendor',
+        callerNameSource: 'unverified',
+      }),
+    );
+    expect(html).toContain('from the call or caller ID, not verified by the firm');
+    expect(html).toContain('not a confirmed identity');
+  });
+
+  it('a caller-stated name shows no unverified warning', () => {
+    const { html } = buildVoiceCallbackEmail(
+      baseCallbackArgs({
+        branch: 'existing_client',
+        callerName: 'Jane Doe',
+        callerNameSource: 'stated_on_call',
+      }),
+    );
+    expect(html).toContain('stated on the call');
+    expect(html).not.toContain('not a confirmed identity');
+  });
+
+  it('no name: no overclaim, no provenance warning', () => {
+    const { html } = buildVoiceCallbackEmail(
+      baseCallbackArgs({ callerName: null, callerNameSource: 'none' }),
+    );
+    expect(html).not.toContain('not a confirmed identity');
   });
 });
 

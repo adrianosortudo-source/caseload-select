@@ -87,6 +87,7 @@ import {
   notifyOperatorOfUnconfirmedVoiceIntake,
   notifyOperatorOfLlmDisabled,
 } from '@/lib/voice-callback-notify';
+import type { VoiceNameSource } from '@/lib/voice-callback-notify-pure';
 import { shouldAlertLlmDisabled } from '@/lib/llm-health-alert';
 
 interface VoiceIntakeBody {
@@ -199,6 +200,31 @@ function seedVoiceState(state: EngineState, callerPhone: string | null, callerNa
     };
   }
   return s;
+}
+
+// Caller-name provenance for voice operator alerts (#175). Identity is
+// separate from reachability: the phone is carrier caller ID, but the name
+// may be caller-ID / contact-record metadata the caller never said. A name
+// only counts as "stated on the call" when the engine recorded a
+// user-grounded slot source (caller spoke it, or a readback was confirmed).
+// profile_metadata / system_metadata / llm_inferred / unknown are NOT
+// caller-stated.
+const VOICE_NAME_METADATA_SOURCES = new Set([
+  'system_metadata',
+  'profile_metadata',
+  'llm_inferred',
+  'unknown',
+]);
+
+function deriveVoiceNameSourceFromState(
+  state: EngineState,
+  callerName: string | null,
+): VoiceNameSource {
+  const name = (state.slots['client_name'] as string | null | undefined) ?? callerName ?? null;
+  if (!name) return 'none';
+  const src = state.slot_meta['client_name']?.source;
+  if (src && !VOICE_NAME_METADATA_SOURCES.has(src)) return 'stated_on_call';
+  return 'caller_id_only';
 }
 
 export async function POST(req: NextRequest) {
@@ -446,11 +472,22 @@ export async function POST(req: NextRequest) {
   if (branchDecision.route === 'callback') {
     const callbackBranch = branchDecision.callbackBranch ?? 'unclear';
     const callbackMessage = buildVoiceCallbackMessage(normalizedTranscript);
+    // Name provenance (#175). The callback path never runs the contact-
+    // doctrine intake, so the name is never firm-verified. On a wrong-number
+    // call the agent short-circuits before any name ask (H8), so any name is
+    // pure caller-ID / contact-record metadata the caller did not state. Other
+    // callback branches may have asked, but nothing confirms it: unverified.
+    const callbackNameSource: VoiceNameSource = !callerName
+      ? 'none'
+      : callbackBranch === 'wrong_number'
+        ? 'caller_id_only'
+        : 'unverified';
     const voiceMeta = {
       call_id: body.call_id ?? null,
       call_duration_sec: body.call_duration_sec ?? null,
       recording_url: body.recording_url ?? null,
       caller_phone_source: callerPhoneSource,
+      caller_name_source: callbackNameSource,
       transcript_source: transcriptSource,
       api_fetch: apiFetchTelemetry,
       marker: branchDecision.marker?.value ?? null,
@@ -493,7 +530,9 @@ export async function POST(req: NextRequest) {
       branch: callbackBranch,
       urgency: branchDecision.urgency,
       callerName,
+      callerNameSource: callbackNameSource,
       callerPhone,
+      callerPhoneSource,
       organization: null,
       message: callbackMessage,
       callId: body.call_id ?? null,
@@ -683,6 +722,10 @@ export async function POST(req: NextRequest) {
   });
   const voiceReachable = voiceGate.hasPhone || voiceGate.hasEmail;
   if (!voiceReachable) {
+    // Name provenance (#175): did the caller actually state the name, or is it
+    // caller-ID / contact-record metadata? The operator alert must not present
+    // a metadata name as a confirmed identity.
+    const unconfirmedNameSource = deriveVoiceNameSourceFromState(state, callerName);
     const unconfirmed = await persistUnconfirmedInquiry({
       firmId: firmIdParam,
       channel: 'voice',
@@ -692,6 +735,7 @@ export async function POST(req: NextRequest) {
         call_duration_sec: body.call_duration_sec ?? null,
         recording_url: body.recording_url ?? null,
         caller_name: callerName,
+        caller_name_source: unconfirmedNameSource,
         // Both the body field AND the API fallback so the operator can see
         // which path resolved (or both null) when triaging unconfirmed
         // inquiries. Added 2026-05-31 after the fromNumber fallback work.
@@ -718,6 +762,7 @@ export async function POST(req: NextRequest) {
         firmId: firmIdParam,
         callId: body.call_id ?? null,
         callerName,
+        callerNameSource: unconfirmedNameSource,
         callerPhone,
         callerPhoneSource,
         recordingUrl: body.recording_url ?? null,
