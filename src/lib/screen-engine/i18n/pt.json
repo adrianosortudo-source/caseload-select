@@ -419,6 +419,14 @@
   "bridge_text": {},
   "chips": {},
   "widget_strings": {
+    "kickoff_heading": "Comece pelo que você precisa decidir.",
+    "kickoff_helper": "Algumas frases em linguagem simples já bastam. Inclua o que está acontecendo, qualquer prazo e os documentos que você tem.",
+    "kickoff_placeholder": "Estou prestes a assinar um aluguel comercial e quero saber quais riscos devo verificar antes de me comprometer.",
+    "kickoff_submit": "Continuar revisão do caso",
+    "kickoff_examples_label": "Você pode começar com:",
+    "kickoff_example_1": "Estou prestes a assinar...",
+    "kickoff_example_2": "Recebi um documento e preciso saber...",
+    "kickoff_example_3": "Preciso decidir se...",
     "shell_round_about_your_case": "Sobre o seu caso",
     "shell_round_your_details": "Os seus dados",
     "shell_round_your_situation": "A sua situação",
@@ -439,10 +447,11 @@
     "contact_field_name_placeholder": "Seu nome",
     "contact_field_phone_placeholder": "+1 416 555 0123",
     "contact_field_email_placeholder": "voce@exemplo.com",
-    "contact_submit": "Enviar matéria para revisão",
-    "done_heading": "A sua matéria foi enviada para revisão.",
+    "contact_submit": "Enviar caso para revisão",
+    "done_heading": "O seu caso foi enviado para revisão.",
     "done_body_template": "Um advogado em {firmName} vai ler o que você compartilhou e entrar em contato diretamente para conversar sobre a parte jurídica.",
     "free_text_other_label": "Outra coisa (vou explicar)",
-    "status_submitted": "enviado"
+    "status_submitted": "enviado",
+    "didnt_catch": "Desculpe, não entendi. Por favor responda com o número que corresponde à sua resposta."
   }
 }

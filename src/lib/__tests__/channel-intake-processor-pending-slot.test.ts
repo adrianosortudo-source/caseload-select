@@ -405,6 +405,69 @@ describe('Pending-slot reply routing across the contact-capture detour (#172)', 
     expect(persisted!.pendingAskedSlotId).not.toBe('advisory_path');
   });
 
+  it('backtick-prefixed digit "`1" still maps (leading-junk tolerance, the exact field input)', async () => {
+    // The live retest showed the lead typed "`1" (stray leading backtick,
+    // mobile artifact). The old digit regex required the string to START
+    // with the digit, so "`1" did not map, advisory_path stayed unfilled,
+    // and the bot re-asked it after the name. The hardened DIGIT_REPLY_RE
+    // tolerates leading whitespace / backtick / quotes.
+    const llmFilled = postTurn1State();
+    llmFilled.engine_state = {
+      ...llmFilled.engine_state,
+      slots: {
+        ...llmFilled.engine_state.slots,
+        advisory_path: 'Starting a new business',
+      },
+      slot_meta: {
+        ...llmFilled.engine_state.slot_meta,
+        advisory_path: { source: 'llm_inferred', confidence: 0.7 },
+      } as EngineState['slot_meta'],
+    };
+    mocks.loadOpenChannelSession.mockResolvedValueOnce(llmFilled as never);
+
+    await processChannelInbound({
+      firmId: FIRM_ID,
+      text: '`1',
+      sender: whatsappSender('A D'),
+    });
+
+    const persisted = mocks.lastPersistedState as
+      | { slots: Record<string, string>; slot_meta: Record<string, { source: string }> }
+      | null;
+    expect(persisted!.slots.advisory_path).toBe('Starting a new business');
+    expect(persisted!.slot_meta.advisory_path.source).toBe('answered');
+  });
+
+  it('unmappable reply re-asks the SAME slot with a clarifier, does NOT pivot to name', async () => {
+    // Sticky pending-slot guard. The bot asked advisory_path. The lead's
+    // reply does not map to any option (and is not a name). The bot must
+    // re-ask advisory_path with a clarifier, NOT jump to "What is your
+    // name?" and circle back. That pivot-then-repeat is what reads as a
+    // glitch.
+    mocks.loadOpenChannelSession.mockResolvedValueOnce(postTurn1State() as never);
+
+    const r = await processChannelInbound({
+      firmId: FIRM_ID,
+      text: 'what do you mean exactly',
+      sender: whatsappSender('A D'),
+    });
+
+    expect(r.followUpSent).toBe(true);
+    expect(r.reason).toBe('awaiting_clarification_reask');
+    const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
+    // Re-asks advisory_path (the same question), NOT the name.
+    expect(sentText.toLowerCase()).toContain('starting something new');
+    expect(sentText.toLowerCase()).not.toContain('what is your name');
+    // Carries the clarifier prefix.
+    expect(sentText.toLowerCase()).toContain("didn't catch");
+    // pendingAskedSlotId stays on advisory_path so the next reply routes
+    // back to it.
+    const persisted = mocks.lastPersistedState as
+      | { pendingAskedSlotId?: string | null }
+      | null;
+    expect(persisted!.pendingAskedSlotId).toBe('advisory_path');
+  });
+
   it('garbage reply ("blah blah") does NOT fill advisory_path; pointer is preserved', async () => {
     mocks.loadOpenChannelSession.mockResolvedValueOnce(postTurn1State() as never);
 

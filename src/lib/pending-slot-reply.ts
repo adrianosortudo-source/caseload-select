@@ -46,8 +46,17 @@ import type { EngineState, SlotDefinition } from './screen-engine/types';
 //    free-text-answer-mapping; kept inline here to avoid coupling
 //    this slot-routed adapter to those getNextStep-driven ones) ──
 
-/** Bare digit reply: "1", "1.", "Option 1", "#1", " 1 ", etc. */
-const DIGIT_REPLY_RE = /^\s*(?:option\s+|#|number\s+|choice\s+)?(\d+)\.?\s*$/i;
+/**
+ * Bare digit reply: "1", "1.", "Option 1", "#1", " 1 ", etc.
+ *
+ * Leading-junk tolerance (#172 follow-up, observed 2026-06-09): a stray
+ * leading backtick or quote (mobile autocorrect / fat-finger, seen as
+ * "`1" on a live WhatsApp intake) must not break digit mapping. The
+ * leading class tolerates whitespace, backtick, and straight or smart
+ * quotes before the digit. The match stays anchored, so a digit buried
+ * in a sentence ("I pick 1 of them") still does not map.
+ */
+const DIGIT_REPLY_RE = /^[\s`'"‘’“”]*(?:option\s+|#|number\s+|choice\s+)?(\d+)\.?\s*$/i;
 
 /** yes / no / "not sure" sentinels for single_select fuzzy matching. */
 const YES_SENTINEL_RE = /^\s*(yes|yeah|yep|yup|y|sure|ok|okay|correct|right|absolutely|definitely)\s*\.?\s*$/i;
@@ -179,7 +188,7 @@ const WEAK_PROVENANCE_SOURCES: ReadonlySet<string> = new Set([
  * unknown defensive bucket. Those should be overwritable when the
  * bot is asking the same slot.
  */
-function isUserGroundedFill(state: EngineState, slotId: string): boolean {
+export function isUserGroundedFill(state: EngineState, slotId: string): boolean {
   const value = state.slots[slotId];
   if (!value) return false;
   const source = state.slot_meta[slotId]?.source ?? 'unknown';

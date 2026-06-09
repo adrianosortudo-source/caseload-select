@@ -87,7 +87,8 @@ import { getQuestionDisplayText, getOptionDisplayLabel } from '@/lib/screen-engi
 import type { SupportedLanguage } from '@/lib/screen-engine/types';
 import { selectNextSlot } from '@/lib/screen-engine/selector';
 import { meetsDiscoveryFloor } from '@/lib/discovery-floor';
-import { applyPendingSlotReply } from '@/lib/pending-slot-reply';
+import { applyPendingSlotReply, isUserGroundedFill } from '@/lib/pending-slot-reply';
+import { SLOT_REGISTRY } from '@/lib/screen-engine/slotRegistry';
 
 // ── Channel type ────────────────────────────────────────────────────────
 
@@ -859,6 +860,16 @@ export async function processChannelInbound(
     const floorMet = meetsDiscoveryFloor(state);
 
     // Build the slot-to-ask in priority order:
+    //   0. STICKY PENDING SLOT (#172 follow-up, 2026-06-09). If the bot
+    //      asked a specific non-contact discovery slot last turn and the
+    //      lead's reply did NOT fill it (unmappable input), re-ask THAT
+    //      slot with a clarifier, rather than letting getNextStep pivot to
+    //      a different question. Without this, the lead sees: Q1 -> [junk]
+    //      -> "What is your name?" -> Q1 again, which reads as a glitchy
+    //      repeat (the capture_contact branch in getNextStep jumps ahead
+    //      of the still-open discovery question). A pending question is
+    //      sticky until it is answered, declined, or the discovery cap is
+    //      hit. The clarifier distinguishes the re-ask from a raw repeat.
     //   1. Engine's preferred next ask (continue / deepen / recover /
     //      capture_contact). capture_contact lets the engine surface
     //      e.g. a weak profile-name confirmation per #169.
@@ -868,30 +879,60 @@ export async function processChannelInbound(
     //   3. If floor IS met and engine wants to stop, let it finalize.
     let slotToAsk: typeof nextStep.slot | undefined;
     let askReason = 'awaiting_discovery_answer';
-    if (
-      (nextStep.type === 'continue' ||
-        nextStep.type === 'deepen' ||
-        nextStep.type === 'recover' ||
-        nextStep.type === 'capture_contact') &&
-      nextStep.slot
-    ) {
-      slotToAsk = nextStep.slot;
-      askReason = nextStep.type === 'capture_contact'
-        ? 'awaiting_contact_capture'
-        : 'awaiting_discovery_answer';
-    } else if (!floorMet) {
-      // Engine wants to stop / present insight / clarify, but we don't
-      // have enough substantive depth yet. Force-ask the next available
-      // slot via selectNextSlot, which bypasses the stopping rule.
-      const fallbackSlot = selectNextSlot(state);
-      if (fallbackSlot) {
-        slotToAsk = fallbackSlot;
-        askReason = 'awaiting_floor_discovery';
+    let clarifyReask = false;
+
+    const pendingId = state.pendingAskedSlotId;
+    if (pendingId && !pendingConsumed && !nameCaptureConsumed) {
+      const pendingSlot = SLOT_REGISTRY.find((s) => s.id === pendingId);
+      if (
+        pendingSlot &&
+        pendingSlot.tier !== 'contact' &&
+        pendingSlot.applies_to.includes(state.matter_type as never) &&
+        !isUserGroundedFill(state, pendingId)
+      ) {
+        // The lead replied, but the reply did not resolve the slot the bot
+        // just asked, and the slot still applies to the current matter.
+        // Re-ask it with a clarifier instead of pivoting.
+        slotToAsk = pendingSlot;
+        askReason = 'awaiting_clarification_reask';
+        clarifyReask = true;
+      }
+    }
+
+    if (!clarifyReask) {
+      if (
+        (nextStep.type === 'continue' ||
+          nextStep.type === 'deepen' ||
+          nextStep.type === 'recover' ||
+          nextStep.type === 'capture_contact') &&
+        nextStep.slot
+      ) {
+        slotToAsk = nextStep.slot;
+        askReason = nextStep.type === 'capture_contact'
+          ? 'awaiting_contact_capture'
+          : 'awaiting_discovery_answer';
+      } else if (!floorMet) {
+        // Engine wants to stop / present insight / clarify, but we don't
+        // have enough substantive depth yet. Force-ask the next available
+        // slot via selectNextSlot, which bypasses the stopping rule.
+        const fallbackSlot = selectNextSlot(state);
+        if (fallbackSlot) {
+          slotToAsk = fallbackSlot;
+          askReason = 'awaiting_floor_discovery';
+        }
       }
     }
 
     if (slotToAsk) {
-      const questionText = formatDiscoveryQuestion(slotToAsk, language, i18n);
+      let questionText = formatDiscoveryQuestion(slotToAsk, language, i18n);
+      if (clarifyReask) {
+        // Brand-safe clarifier, i18n-aware with English fallback. No
+        // em-dash, no banned vocabulary, no time-relative promise.
+        const clarifier =
+          i18n.widget_strings?.didnt_catch ||
+          "Sorry, I didn't catch that. Please reply with the number that matches your answer.";
+        questionText = `${clarifier}\n\n${questionText}`;
+      }
       const sendResult = await sendChannelMessage({
         firmId,
         sender,

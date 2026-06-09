@@ -51,7 +51,14 @@ import type { EngineState, SlotDefinition } from './screen-engine/types';
 //   "Number 2", "Choice 2"
 // Examples that DON'T match: "I'll pick 2", "2 of them", "2 because",
 //   "2 and 3" (multi-pick — punt to LLM / future fix).
-const DIGIT_REPLY_RE = /^\s*(?:option\s+|#|number\s+|choice\s+)?(\d+)\.?\s*$/i;
+// Leading-junk tolerance (#172 follow-up, observed 2026-06-09): a stray
+// leading backtick or quote (mobile autocorrect / fat-finger, seen as
+// "`1" on a live WhatsApp intake) must not break digit mapping. The
+// leading class tolerates whitespace, backtick, and straight or smart
+// quotes before the digit. The match stays anchored, so a digit buried
+// in a sentence ("I pick 1 of them") still does not map. Shared by
+// applyNumericAnswerMapping and detectOutOfRangeDigitReply.
+const DIGIT_REPLY_RE = /^[\s`'"‘’“”]*(?:option\s+|#|number\s+|choice\s+)?(\d+)\.?\s*$/i;
 
 export function applyNumericAnswerMapping(
   text: string,
