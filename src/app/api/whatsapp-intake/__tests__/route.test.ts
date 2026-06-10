@@ -31,6 +31,11 @@ vi.hoisted(() => {
 const mocks = vi.hoisted(() => ({
   resolveFirmByWhatsappPhoneNumberId: vi.fn(),
   processChannelInbound: vi.fn(),
+  claimChannelMessage: vi.fn(),
+  releaseChannelMessageClaim: vi.fn(),
+  // Promises handed to waitUntil, captured so tests can flush the
+  // background pipeline (including the crash-path claim release).
+  waited: [] as Promise<unknown>[],
 }));
 
 vi.mock("@/lib/firm-resolver", () => ({
@@ -41,11 +46,21 @@ vi.mock("@/lib/channel-intake-processor", () => ({
   processChannelInbound: mocks.processChannelInbound,
 }));
 
+vi.mock("@/lib/channel-message-dedup", () => ({
+  claimChannelMessage: mocks.claimChannelMessage,
+  releaseChannelMessageClaim: mocks.releaseChannelMessageClaim,
+}));
+
 vi.mock("@vercel/functions", () => ({
   waitUntil: (p: Promise<unknown>) => {
-    void p.catch(() => undefined);
+    mocks.waited.push(p.catch(() => undefined));
   },
 }));
+
+/** Awaits everything the route handed to waitUntil. */
+async function flushWaitUntil(): Promise<void> {
+  await Promise.all(mocks.waited);
+}
 
 import { GET, POST } from "../route";
 
@@ -155,6 +170,11 @@ beforeEach(() => {
     leadId: "L-test",
     status: "triaging",
   });
+  mocks.claimChannelMessage.mockReset();
+  mocks.claimChannelMessage.mockResolvedValue({ duplicate: false, reason: "claimed" });
+  mocks.releaseChannelMessageClaim.mockReset();
+  mocks.releaseChannelMessageClaim.mockResolvedValue(undefined);
+  mocks.waited.length = 0;
 });
 
 describe("GET /api/whatsapp-intake", () => {
@@ -252,5 +272,95 @@ describe("POST /api/whatsapp-intake", () => {
     const res = await POST(makePostRequest(body, sign(body)) as never);
     expect(res.status).toBe(200);
     expect(mocks.processChannelInbound).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/whatsapp-intake mid dedup (launch audit H1)", () => {
+  const FIRM = { firmId: "eec1d25e-a047-4827-8e4a-6eb96becca2b", firmName: "DRG Law Test" };
+
+  it("claims the mid before processing, with channel=whatsapp and the firm id", async () => {
+    mocks.resolveFirmByWhatsappPhoneNumberId.mockResolvedValue(FIRM);
+    const body = makeWaPayload({ mid: "wamid.claim-check" });
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+    expect(res.status).toBe(200);
+    expect(mocks.claimChannelMessage).toHaveBeenCalledTimes(1);
+    expect(mocks.claimChannelMessage).toHaveBeenCalledWith({
+      firmId: FIRM.firmId,
+      channel: "whatsapp",
+      messageMid: "wamid.claim-check",
+    });
+    expect(mocks.processChannelInbound).toHaveBeenCalledTimes(1);
+  });
+
+  it("ACKs 200 and skips the engine entirely on a duplicate mid", async () => {
+    mocks.resolveFirmByWhatsappPhoneNumberId.mockResolvedValue(FIRM);
+    mocks.claimChannelMessage.mockResolvedValue({ duplicate: true, reason: "duplicate" });
+    const body = makeWaPayload({ mid: "wamid.redelivered" });
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+    expect(res.status).toBe(200);
+    expect(mocks.claimChannelMessage).toHaveBeenCalledTimes(1);
+    expect(mocks.processChannelInbound).not.toHaveBeenCalled();
+  });
+
+  it("processes distinct mids independently (one claim each, both run the engine)", async () => {
+    mocks.resolveFirmByWhatsappPhoneNumberId.mockResolvedValue(FIRM);
+    const first = makeWaPayload({ mid: "wamid.one", text: "First message" });
+    const second = makeWaPayload({ mid: "wamid.two", text: "Second message" });
+    await POST(makePostRequest(first, sign(first)) as never);
+    await POST(makePostRequest(second, sign(second)) as never);
+    expect(mocks.claimChannelMessage).toHaveBeenCalledTimes(2);
+    const claimedMids = mocks.claimChannelMessage.mock.calls.map(
+      (c) => (c[0] as { messageMid: string }).messageMid,
+    );
+    expect(claimedMids).toEqual(["wamid.one", "wamid.two"]);
+    expect(mocks.processChannelInbound).toHaveBeenCalledTimes(2);
+  });
+
+  it("still processes a message whose mid is missing (claim skipped, reason no_mid)", async () => {
+    mocks.resolveFirmByWhatsappPhoneNumberId.mockResolvedValue(FIRM);
+    // The helper owns the blank-mid rule: it skips the DB claim and lets
+    // processing continue. The route must not drop the message.
+    mocks.claimChannelMessage.mockResolvedValue({ duplicate: false, reason: "no_mid" });
+    const body = makeWaPayload({ mid: "" });
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+    expect(res.status).toBe(200);
+    expect(mocks.processChannelInbound).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases the claim when processChannelInbound throws, so Meta redelivery can retry", async () => {
+    mocks.resolveFirmByWhatsappPhoneNumberId.mockResolvedValue(FIRM);
+    mocks.processChannelInbound.mockRejectedValue(new Error("engine crashed"));
+    const body = makeWaPayload({ mid: "wamid.crash" });
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+    expect(res.status).toBe(200);
+    await flushWaitUntil();
+    expect(mocks.releaseChannelMessageClaim).toHaveBeenCalledTimes(1);
+    expect(mocks.releaseChannelMessageClaim).toHaveBeenCalledWith({
+      firmId: FIRM.firmId,
+      channel: "whatsapp",
+      messageMid: "wamid.crash",
+    });
+  });
+
+  it("does not release the claim when processing succeeds", async () => {
+    mocks.resolveFirmByWhatsappPhoneNumberId.mockResolvedValue(FIRM);
+    const body = makeWaPayload({ mid: "wamid.success" });
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+    expect(res.status).toBe(200);
+    await flushWaitUntil();
+    expect(mocks.releaseChannelMessageClaim).not.toHaveBeenCalled();
+  });
+
+  it("does not release the claim on a non-throw not-persisted outcome (decision, not crash)", async () => {
+    mocks.resolveFirmByWhatsappPhoneNumberId.mockResolvedValue(FIRM);
+    mocks.processChannelInbound.mockResolvedValue({
+      persisted: false,
+      reason: "contact_gate",
+    });
+    const body = makeWaPayload({ mid: "wamid.not-persisted" });
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+    expect(res.status).toBe(200);
+    await flushWaitUntil();
+    expect(mocks.releaseChannelMessageClaim).not.toHaveBeenCalled();
   });
 });

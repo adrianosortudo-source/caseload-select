@@ -25,6 +25,11 @@ vi.hoisted(() => {
 const mocks = vi.hoisted(() => ({
   resolveFirmByInstagramBusinessAccountId: vi.fn(),
   processChannelInbound: vi.fn(),
+  claimChannelMessage: vi.fn(),
+  releaseChannelMessageClaim: vi.fn(),
+  // Promises handed to waitUntil, captured so tests can flush the
+  // background pipeline (including the crash-path claim release).
+  waited: [] as Promise<unknown>[],
 }));
 
 vi.mock("@/lib/firm-resolver", () => ({
@@ -35,11 +40,21 @@ vi.mock("@/lib/channel-intake-processor", () => ({
   processChannelInbound: mocks.processChannelInbound,
 }));
 
+vi.mock("@/lib/channel-message-dedup", () => ({
+  claimChannelMessage: mocks.claimChannelMessage,
+  releaseChannelMessageClaim: mocks.releaseChannelMessageClaim,
+}));
+
 vi.mock("@vercel/functions", () => ({
   waitUntil: (p: Promise<unknown>) => {
-    void p.catch(() => undefined);
+    mocks.waited.push(p.catch(() => undefined));
   },
 }));
+
+/** Awaits everything the route handed to waitUntil. */
+async function flushWaitUntil(): Promise<void> {
+  await Promise.all(mocks.waited);
+}
 
 import { GET, POST } from "../route";
 
@@ -108,6 +123,11 @@ beforeEach(() => {
     leadId: "L-test",
     status: "triaging",
   });
+  mocks.claimChannelMessage.mockReset();
+  mocks.claimChannelMessage.mockResolvedValue({ duplicate: false, reason: "claimed" });
+  mocks.releaseChannelMessageClaim.mockReset();
+  mocks.releaseChannelMessageClaim.mockResolvedValue(undefined);
+  mocks.waited.length = 0;
 });
 
 describe("GET /api/instagram-intake", () => {
@@ -172,5 +192,84 @@ describe("POST /api/instagram-intake", () => {
     const res = await POST(makePostRequest(body, sign(body)) as never);
     expect(res.status).toBe(200);
     expect(mocks.processChannelInbound).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/instagram-intake mid dedup (launch audit H1)", () => {
+  const FIRM = { firmId: "eec1d25e-a047-4827-8e4a-6eb96becca2b", firmName: "DRG Law Test" };
+
+  it("claims the mid before processing, with channel=instagram and the firm id", async () => {
+    mocks.resolveFirmByInstagramBusinessAccountId.mockResolvedValue(FIRM);
+    const body = makeIgPayload({ mid: "mid_ig_claim_check" });
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+    expect(res.status).toBe(200);
+    expect(mocks.claimChannelMessage).toHaveBeenCalledTimes(1);
+    expect(mocks.claimChannelMessage).toHaveBeenCalledWith({
+      firmId: FIRM.firmId,
+      channel: "instagram",
+      messageMid: "mid_ig_claim_check",
+    });
+    expect(mocks.processChannelInbound).toHaveBeenCalledTimes(1);
+  });
+
+  it("ACKs 200 and skips the engine entirely on a duplicate mid", async () => {
+    mocks.resolveFirmByInstagramBusinessAccountId.mockResolvedValue(FIRM);
+    mocks.claimChannelMessage.mockResolvedValue({ duplicate: true, reason: "duplicate" });
+    const body = makeIgPayload({ mid: "mid_ig_redelivered" });
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+    expect(res.status).toBe(200);
+    expect(mocks.claimChannelMessage).toHaveBeenCalledTimes(1);
+    expect(mocks.processChannelInbound).not.toHaveBeenCalled();
+  });
+
+  it("processes distinct mids independently (one claim each, both run the engine)", async () => {
+    mocks.resolveFirmByInstagramBusinessAccountId.mockResolvedValue(FIRM);
+    const first = makeIgPayload({ mid: "mid_ig_one", text: "First message" });
+    const second = makeIgPayload({ mid: "mid_ig_two", text: "Second message" });
+    await POST(makePostRequest(first, sign(first)) as never);
+    await POST(makePostRequest(second, sign(second)) as never);
+    expect(mocks.claimChannelMessage).toHaveBeenCalledTimes(2);
+    const claimedMids = mocks.claimChannelMessage.mock.calls.map(
+      (c) => (c[0] as { messageMid: string }).messageMid,
+    );
+    expect(claimedMids).toEqual(["mid_ig_one", "mid_ig_two"]);
+    expect(mocks.processChannelInbound).toHaveBeenCalledTimes(2);
+  });
+
+  it("releases the claim when processChannelInbound throws, so Meta redelivery can retry", async () => {
+    mocks.resolveFirmByInstagramBusinessAccountId.mockResolvedValue(FIRM);
+    mocks.processChannelInbound.mockRejectedValue(new Error("engine crashed"));
+    const body = makeIgPayload({ mid: "mid_ig_crash" });
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+    expect(res.status).toBe(200);
+    await flushWaitUntil();
+    expect(mocks.releaseChannelMessageClaim).toHaveBeenCalledTimes(1);
+    expect(mocks.releaseChannelMessageClaim).toHaveBeenCalledWith({
+      firmId: FIRM.firmId,
+      channel: "instagram",
+      messageMid: "mid_ig_crash",
+    });
+  });
+
+  it("does not release the claim when processing succeeds", async () => {
+    mocks.resolveFirmByInstagramBusinessAccountId.mockResolvedValue(FIRM);
+    const body = makeIgPayload({ mid: "mid_ig_success" });
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+    expect(res.status).toBe(200);
+    await flushWaitUntil();
+    expect(mocks.releaseChannelMessageClaim).not.toHaveBeenCalled();
+  });
+
+  it("does not release the claim on a non-throw not-persisted outcome (decision, not crash)", async () => {
+    mocks.resolveFirmByInstagramBusinessAccountId.mockResolvedValue(FIRM);
+    mocks.processChannelInbound.mockResolvedValue({
+      persisted: false,
+      reason: "contact_gate",
+    });
+    const body = makeIgPayload({ mid: "mid_ig_not_persisted" });
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+    expect(res.status).toBe(200);
+    await flushWaitUntil();
+    expect(mocks.releaseChannelMessageClaim).not.toHaveBeenCalled();
   });
 });

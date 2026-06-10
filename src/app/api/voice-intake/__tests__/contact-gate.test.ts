@@ -29,6 +29,10 @@ vi.mock('@/lib/supabase-admin', () => {
   const makeChain = (table: string) => ({
     select: (_cols: string) => makeChain(table),
     eq: (_field: string, _v: unknown) => makeChain(table),
+    // call_id dedup chain (launch audit H1): returns no match via the
+    // null maybeSingle below, so every call processes as a first delivery.
+    gte: (_field: string, _v: unknown) => makeChain(table),
+    limit: (_n: number) => makeChain(table),
     maybeSingle: () =>
       Promise.resolve(
         table === 'intake_firms'

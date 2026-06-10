@@ -414,6 +414,80 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // ── call_id window dedup (launch audit H1, per DR-042) ────────────────
+  // A GHL workflow re-fire (manual re-run, retry on a slow response) posts
+  // the same call_id again. Without this guard the re-fire runs the full
+  // engine a second time and produces a duplicate lead plus a second lawyer
+  // notification. DR-042 says call_id exists for idempotency; this is where
+  // it is enforced, for both persistence paths (screened lead + callback).
+  //
+  // The window MUST stay short. GHL currently maps the CONTACT id into
+  // call_id for DRG (FOLLOWUPS 2026-06-09: same call_id on every call from
+  // one contact), so an unconditional call_id dedup would swallow a genuine
+  // second call from the same person hours later. Ten minutes catches
+  // re-fires (which arrive seconds apart) without eating real calls.
+  //
+  // Skipped when call_id is missing, empty, or an unresolved GHL template
+  // placeholder; we never dedup on invented or junk identifiers.
+  const dedupCallId = (body.call_id ?? '').trim();
+  const dedupCallIdUsable =
+    dedupCallId.length > 0 &&
+    !/^\{\{[^{}]+\}\}$/.test(dedupCallId) &&
+    !['null', 'undefined', '(null)'].includes(dedupCallId.toLowerCase());
+  // Persisted call_id: always the trimmed form, null when absent. The dedup
+  // above compares the trimmed value against stored rows, so every
+  // persistence path must store the same bytes or the window never matches.
+  const storedCallId = dedupCallId.length > 0 ? dedupCallId : null;
+  if (dedupCallIdUsable) {
+    const dedupWindowStart = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+    const { data: recentLead, error: recentLeadErr } = await supabase
+      .from('screened_leads')
+      .select('id, lead_id')
+      .eq('firm_id', firmIdParam)
+      .eq('slot_answers->voice_meta->>call_id', dedupCallId)
+      .gte('created_at', dedupWindowStart)
+      .limit(1)
+      .maybeSingle();
+    if (recentLeadErr) {
+      // Fail-open: a missed dedup re-processes a call, a wrongly-skipped
+      // call drops a lead.
+      console.warn(
+        `[voice-intake] call_id dedup query failed (screened_leads), proceeding: ${recentLeadErr.message}`,
+      );
+    } else if (recentLead) {
+      console.log(
+        `[voice-intake] duplicate webhook fire call_id=${dedupCallId} firm=${firmIdParam}; lead=${recentLead.lead_id} already persisted, skipping`,
+      );
+      return NextResponse.json(
+        { ok: true, dedup: true, lead_id: recentLead.lead_id },
+        { status: 200, headers: CORS_HEADERS },
+      );
+    }
+
+    const { data: recentCallback, error: recentCallbackErr } = await supabase
+      .from('voice_callback_requests')
+      .select('id')
+      .eq('firm_id', firmIdParam)
+      .eq('call_id', dedupCallId)
+      .gte('created_at', dedupWindowStart)
+      .limit(1)
+      .maybeSingle();
+    if (recentCallbackErr) {
+      console.warn(
+        `[voice-intake] call_id dedup query failed (voice_callback_requests), proceeding: ${recentCallbackErr.message}`,
+      );
+    } else if (recentCallback) {
+      console.log(
+        `[voice-intake] duplicate webhook fire call_id=${dedupCallId} firm=${firmIdParam}; callback=${recentCallback.id} already persisted, skipping`,
+      );
+      return NextResponse.json(
+        { ok: true, dedup: true, id: recentCallback.id },
+        { status: 200, headers: CORS_HEADERS },
+      );
+    }
+  }
+
   // ── Engine pipeline ────────────────────────────────────────────────────
   // Caller phone resolution: prefer body.caller_phone (from the GHL workflow
   // webhook), fall back to the Voice AI Public API's `fromNumber` when the
@@ -483,7 +557,7 @@ export async function POST(req: NextRequest) {
         ? 'caller_id_only'
         : 'unverified';
     const voiceMeta = {
-      call_id: body.call_id ?? null,
+      call_id: storedCallId,
       call_duration_sec: body.call_duration_sec ?? null,
       recording_url: body.recording_url ?? null,
       caller_phone_source: callerPhoneSource,
@@ -504,7 +578,7 @@ export async function POST(req: NextRequest) {
       .from('voice_callback_requests')
       .insert({
         firm_id: firmIdParam,
-        call_id: body.call_id ?? null,
+        call_id: storedCallId,
         branch: callbackBranch,
         urgency: branchDecision.urgency,
         caller_name: callerName,
@@ -731,7 +805,7 @@ export async function POST(req: NextRequest) {
       channel: 'voice',
       senderId: callerPhone ?? null,
       senderMeta: {
-        call_id: body.call_id ?? null,
+        call_id: storedCallId,
         call_duration_sec: body.call_duration_sec ?? null,
         recording_url: body.recording_url ?? null,
         caller_name: callerName,
@@ -803,7 +877,7 @@ export async function POST(req: NextRequest) {
     slot_evidence: state.slot_evidence,
     channel: 'voice' as const,
     voice_meta: {
-      call_id: body.call_id ?? null,
+      call_id: storedCallId,
       call_duration_sec: body.call_duration_sec ?? null,
       recording_url: body.recording_url ?? null,
       caller_phone: callerPhone,

@@ -43,6 +43,10 @@ import {
 } from '@/lib/meta-webhook-auth';
 import { resolveFirmByFacebookPageId } from '@/lib/firm-resolver';
 import {
+  claimChannelMessage,
+  releaseChannelMessageClaim,
+} from '@/lib/channel-message-dedup';
+import {
   processChannelInbound,
   type MessengerSender,
 } from '@/lib/channel-intake-processor';
@@ -183,6 +187,22 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
+      // Idempotency claim (launch audit H1): Meta redelivers events and
+      // users double-tap, so the same mid can arrive twice. Claim before
+      // any engine work; the loser ACKs 200 and skips. Messages without
+      // a usable mid skip the claim and process as today.
+      const claim = await claimChannelMessage({
+        firmId: firm.firmId,
+        channel: 'facebook',
+        messageMid: event.mid,
+      });
+      if (claim.duplicate) {
+        console.log(
+          `[messenger-intake] duplicate delivery mid=${event.mid} firm=${firm.firmName}; skipping`,
+        );
+        continue;
+      }
+
       const sender: MessengerSender = {
         channel: 'facebook',
         senderPsid: event.senderId,
@@ -209,11 +229,19 @@ export async function POST(req: NextRequest) {
               );
             }
           })
-          .catch((err) => {
+          .catch(async (err) => {
             console.error(
               `[messenger-intake] processChannelInbound threw firm=${firm.firmName} mid=${event.mid}:`,
               err,
             );
+            // The crashed run produced no lead, so release the claim and
+            // let a Meta redelivery retry the message. Non-throw outcomes
+            // keep their claims so redeliveries stay skipped.
+            await releaseChannelMessageClaim({
+              firmId: firm.firmId,
+              channel: 'facebook',
+              messageMid: event.mid,
+            });
           }),
       );
     }
