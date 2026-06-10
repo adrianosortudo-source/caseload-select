@@ -377,6 +377,7 @@ The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), 
 | `GET /api/cron/webhook-retry` | Outbox retry sweeper. Wired, not scheduled. |
 | `GET /api/admin/webhook-outbox` | Operator-visible delivery log. Accepts CRON_SECRET / PG_CRON_TOKEN bearer or operator session. Filters: `firm_id`, `status`. |
 | `POST /api/admin/webhook-outbox/[outboxId]/retry` | Operator manual retry. Resets attempts to 0. Same auth shape as the listing route. |
+| `POST /api/admin/screened-leads/[id]/retry-notification` | Operator-gated `[REPLAY]` re-send of the new-lead notification (DR-066). |
 | `/admin/triage` | Operator-only cross-firm triage queue. Firm filter + band filter. Rows link to /portal/[firmId]/triage/[leadId]. |
 | `/admin/webhook-outbox` | Operator-only delivery log UI with manual retry button. |
 | `/admin/routing` | Operator-only lead-routing config UI (2026-06-02). Firm picker (FirmFilter, `?firm_id=`) → per-practice-area lead, firm fallback lead, default assignees. Honest unconfigured states + live "a lead taken now goes to" preview + snapshot-at-take caveat. Edits the live `intake_firms` routing fields; no deploy needed for routing changes. |
@@ -416,7 +417,7 @@ Same HMAC magic-link pattern as the legacy Client Portal (`portal-auth.ts`). 48h
 
 ### GHL webhook contract
 
-Versioned artifact at `docs/ghl-webhook-contract.md`. Five actions (`taken`, `passed`, `referred`, `declined_oos`, `declined_backstop`), one common envelope, action-specific extension keyed by action name. Idempotency: `<lead_id>:<action>`. Delivery: at-least-once via the outbox.
+Versioned artifact at `docs/ghl-webhook-contract.md`, now at v3. Six actions (`taken`, `passed`, `referred`, `declined_oos`, `declined_backstop`, `matter_stage_changed`), one common envelope, action-specific extension keyed by action name. Idempotency: `<lead_id>:<action>` (matter-stage events key on `<matter_id>:stage:<to_stage>`). Delivery: at-least-once via the outbox.
 
 `declined_oos` is dormant in the intake path as of 2026-05-15 — OOS leads now land as Band D triaging and only fire decline-with-grace through lawyer-initiated Pass or the deadline backstop (`declined_backstop`). The action remains in the contract for the deadline-backstop path and any future engine-spam handling.
 
@@ -438,6 +439,12 @@ Versioned artifact at `docs/ghl-webhook-contract.md`. Five actions (`taken`, `pa
 | Engine sync drift CI gate (DR-058, 2026-06-09) | **`check-engine-sync.sh` must run on every commit that touches the engine.** Sandbox-to-app mirror discipline (DR-033) is impossible to enforce manually across sessions. Pre-existing drift on `selector.ts` and `llm/extractor.ts` proved the point. Required GitHub Actions check + optional husky pre-commit hook with intentional-drift opt-out flag. Until the gate ships, the manual checklist on engine-touching commits is: edit app, diff against sandbox, matching sandbox edit, run sync script, run BOTH test suites, commit app (sandbox has no git; deploys via `vercel --prod`). |
 | Minimum discovery floor (DR-060, 2026-06-09) | **Async channels do not finalize after one substantive answer.** `business_setup_advisory` matter-gap bottoms out after `advisory_path`, so the engine stopping rule could finalize a WhatsApp lead on a single fact. `src/lib/discovery-floor.ts` `meetsDiscoveryFloor(state)` is consulted in Phase C before any finalize: 3 user-answered substantive slots required, matter-specific candidate sets for the 3 launch lanes, `GLOBAL_MIN_DISCOVERY=3` elsewhere. Counts only `answered` / `explicit` / legacy `inferred` provenance; excludes contact slots, `llm_inferred`, `profile_metadata`, `system_metadata`. `out_of_scope` / `unknown` exempt. When the engine returns a non-asking step but the floor is unmet, the processor falls back to `selectNextSlot`. Engine source unchanged; the floor is a processor-side guard in `lib/` (no sandbox mirror). |
 | Async reply turn integrity (DR-061, 2026-06-09) | **The reply goes to the slot the bot ASKED, overwrites weak fills, never silently pivots.** `EngineState.pendingAskedSlotId` records the last asked slot; `src/lib/pending-slot-reply.ts` `applyPendingSlotReply` routes the inbound to it before any `getNextStep`-driven adapter runs. `isUserGroundedFill` lets a user reply overwrite `llm_inferred` / `unknown` fills (upgrading source to `answered`). If the reply does not fill the pending non-contact slot, the processor re-asks THAT slot with a `didnt_catch` clarifier rather than pivoting (sticky). When `pendingAskedSlotId === 'client_name'`, the contact extractor lifts the email/phone guard to accept a bare name (still filtered by blocklist + `isWeakName`). `DIGIT_REPLY_RE` tolerates leading whitespace / backtick / quotes. All routing in `lib/`; `pendingAskedSlotId` is an optional field mirrored to sandbox types.ts but only the app sets it. |
+| The route is the gate (DR-063, 2026-06-09) | **Client-role sessions are excluded from every lawyer surface.** Triage endpoints, legacy data APIs, and pages all reject client sessions; the legacy operator surface and the entire `/api/admin` tree are gated; `legacy-surface-auth.test.ts` pins the posture. Take/Pass/Refer check the UPDATE row count and include `referred` in the already-actioned guards. |
+| Sliding channel-session expiry (DR-064, 2026-06-09) | **`expires_at` slides 24h on every state save.** The expiry sweeper finalizes contact-complete sessions into `screened_leads` as thin leads; only contact-incomplete sessions go to `unconfirmed_inquiries`. |
+| Inbound webhook idempotency (DR-065, 2026-06-09) | **Meta receivers claim message mids in `processed_channel_messages` before engine work** (release on throw, 7-day sweep via data-retention); voice dedupes `call_id` in a 10-minute window (GHL sends the contact id as `call_id`, so the window stays short). |
+| New-lead notification delivery state (DR-066, 2026-06-09) | **DR-046 invariants applied to the intake path.** Four `notification_*` columns on `screened_leads`; `[REPLAY]` retry at `POST /api/admin/screened-leads/[id]/retry-notification`; Sent/Failed/Pending chip on `/admin/triage`. |
+| Matter-stage cadences are GHL-owned (DR-067, 2026-06-09) | **Stage transitions enqueue `matter_stage_changed` through `webhook_outbox`** (idempotency `<matter_id>:stage:<to_stage>`); the dead in-app `triggerSequence` path is removed; the `webhook_outbox` CHECK is widened to six actions, also fixing the latent `referred` rejection; the operator must build the four GHL stage workflows. |
+| App engine is the leading edge (DR-068, 2026-06-09) | **Partially supersedes DR-028.** App-to-sandbox sync executed, all engine files byte-identical, sandbox redeployed. |
 | Contact-capture doctrine (2026-05-15) | **No contact, no lead.** Triggered by a Family Law smoke test that produced a "Forwarded to firm" brief with zero contact fields populated — the lawyer had no way to reach the person. Required for persistence: `client_name` AND (`client_email` OR `client_phone`). Briefs that fail the gate land in `unconfirmed_inquiries`, NEVER in `screened_leads`, NEVER in the triage portal. Engine `buildReport()` computes `LawyerReport.contact_complete`; every route (`/api/intake-v2`, `/api/voice-intake`, Meta receivers via `channel-intake-processor`) checks it before insert. Meta channels add multi-turn follow-up: state persists in `channel_intake_sessions`, a follow-up question is sent via the channel's Send API (Messenger / Instagram / WhatsApp), and after `MAX_FOLLOW_UPS=3` failed attempts the row moves to `unconfirmed_inquiries` with `reason='engine_refused'`. Hourly cron `/api/cron/expire-channel-intake-sessions` sweeps abandoned sessions to `unconfirmed_inquiries` with `reason='abandoned'`. Engine system prompt rule 9 instructs the LLM to ask for name + (email OR phone) and never finalise without them. Voice auto-passes via caller-ID phone seeding; if Voice AI fails to capture the name the row lands as `unconfirmed_inquiry` (SMS follow-back deferred). |
 
 ### Source files (key map)
@@ -497,10 +504,11 @@ src/
 
 ### Cron scheduling — Supabase pg_cron + pg_net
 
-Both crons are scheduled via Supabase pg_cron (no Vercel Pro dependency):
+Crons are scheduled via Supabase pg_cron (no Vercel Pro dependency):
 
 - `triage-backstop-hourly` — `7 * * * *`, calls `/api/cron/triage-backstop`
 - `webhook-retry-5m` — `*/5 * * * *`, calls `/api/cron/webhook-retry`
+- `token-expiry-check-daily` (`41 6 * * *`) calls `/api/cron/token-expiry-check`. Scheduled 2026-06-09 as pg_cron job 5; the four prior jobs verified green on the same pass.
 
 Migration `20260506_pg_cron_pg_net_setup.sql` enables `pg_cron` and `pg_net`, stores the bearer token in Supabase Vault as `pg_cron_token`, defines `cron_internal.call_cron_route(path)` (reads token from Vault, posts to `https://app.caseloadselect.ca` via pg_net), and schedules the two jobs.
 
@@ -543,7 +551,7 @@ Screen 2.0 produces lead briefs from seven input channels. The engine is the sam
 
 | Channel | Inbound surface | Engine where it runs | Endpoint |
 |---|---|---|---|
-| Web widget | Vite SPA (`caseload-screen-v2.vercel.app`) | Client-side (sandbox engine) | `POST /api/intake-v2` (this app, receives pre-rendered brief) |
+| Web widget | `ScreenEnginePublicWidget` at `/widget-public/[firmId]` (this app); the Vite SPA sandbox at `caseload-screen-v2.vercel.app` is the operator demo surface only | Client-side (app engine) | `POST /api/intake-v2` (server-persisted) |
 | Facebook Messenger | Meta webhook to a connected FB Page | Server-side via `lib/channel-intake-processor` | `POST /api/messenger-intake` (resolves firm by `intake_firms.facebook_page_id`) |
 | Instagram DM | Meta webhook to a connected IG Business Account | Server-side via `lib/channel-intake-processor` | `POST /api/instagram-intake` (resolves firm by `intake_firms.instagram_business_account_id`) |
 | WhatsApp | Meta Cloud API webhook to a connected Phone Number | Server-side via `lib/channel-intake-processor` | `POST /api/whatsapp-intake` (resolves firm by `intake_firms.whatsapp_phone_number_id`) |
@@ -741,7 +749,7 @@ Implementation notes:
 | S3 | Scoring + Sequences (CPI engine, email automation, Resend) | DONE |
 | S4 | Review + Recovery (WF-05 no-show, WF-06 stalled retainer, review requests) | DONE |
 | S5 | Persistence + Nurture (WF-03, 6 nurture tracks) | DONE |
-| S6 | Retainer Automation | **REMOVED FROM SCOPE 2026-05-06.** Code remains in tree (retainer.ts, docuseal.ts, docugenerate.ts, retainers/page.tsx, retainer_agreements table) but is dormant. Do not call from new code. The retainer document workflow is permanently lawyer-owned. |
+| S6 | Retainer Automation | **REMOVED FROM SCOPE 2026-05-06.** The dormant files (retainer.ts, docuseal.ts, docugenerate.ts, retainers/page.tsx, docuseal webhook) were deleted in commit c9b8cd2; only the dormant retainer_agreements table remains. The retainer document workflow is permanently lawyer-owned. |
 | S7 | Migration Lockdown + Cron (schema freeze, vercel.json crons) | DONE |
 | S8 | Client Portal (Clio API v4, magic link auth, firm dashboard) | DONE |
 | S9 | Custom Domains + White-Label (Vercel API, CNAME, middleware routing) | DONE |
@@ -759,6 +767,7 @@ Implementation notes:
 | Ses.10 engine + ops hygiene | #94 universal contact slots applies_to (covers all 26 matter types + unknown/OOS, was 7 Corporate only). #92 graceful contact-capture exhaustion message before unconfirmed_inquiries drop. #96 LLM uncertainty preservation through merge (lead said "not sure" → keep "Not sure" extracted, instead of dropping as Gemini hedging). #90 token-expiry monitoring (6 columns on intake_firms + `lib/token-expiry.ts` helper + `/api/cron/token-expiry-check` route). #91 purged 6 stale Adriano voice smoke-test rows from unconfirmed_inquiries (DRG, May 21-22). #93 Meta App Review screencast test message changed from immigration (OOS for DRG) to wrongful_dismissal (Phase B in-scope, rich brief). 2370/2370 tests pass. | DONE |
 | Ses.11 brief polish + calibration | Brief UX pass (commits `5cf8b65` brand alignment, `db89dfa` scan-speed + mobile, `e9fb789` inline action rail via DR-057). Action bar dropped fixed positioning, mounts inline via `ACTION_RAIL_SLOT` marker. Grid rebalanced 1.7fr/0.95fr to 2.2fr/0.85fr. Sidebar modules differentiated by semantic weight (navy caution / gold action / muted passive). Mobile reorder via `display:contents` + CSS `order`. Calibration pass (commit `34450d5` per DR-055 + DR-056): `business_setup_advisory` value tiers recalibrated ($30-100k 4→2, $100-500k 5→4), "Already operating" urgency gated on material exposure (+4 vs +1), bi-directional small-ticket gate. Subtrack persistence + hardening (commit `4867225` per DR-054): `LawyerReport.advisory_subtrack` required, `decision_authority` reads as tertiary signal, `band.ts` defense-in-depth re-derivation. 34 new regression tests across two new files (`business-setup-advisory-band.test.ts` + `advisory-subtrack-classification.test.ts`). Sandbox mirrored for the five touched engine files. 2789/2789 tests pass. | DONE |
 | Ses.12 async intake turn integrity | DRG WhatsApp launch-week repeat/loop class killed across five commits (`9fff6ce` minimum discovery floor, `148750a` name-capture context, `ea8a092` pending-slot routing, `0724950` provenance overwrite, `2335338` no-repeat sticky + leading-junk digit tolerance). One root-cause family: the engine's `getNextStep` prefers a different slot than the bot asked last turn, so the lead's reply was lost, mis-routed, or the slot was re-asked with a name question wedged between. New processor-side helpers `discovery-floor.ts` + `pending-slot-reply.ts` (both `lib/`, no engine mirror); `pendingAskedSlotId` added to types.ts (mirrored) and `didnt_catch` to pt.json (mirrored). CRM Bible DR-060 + DR-061. 32 new regression tests across three new files (min-discovery 15, name-capture-resume 7, pending-slot 8, plus the provenance-overwrite + leading-junk cases). App 3058/3058 + sandbox 382/382 pass. Engine logic untouched (the `screen-engine/*.ts` provenance drift from #169 remains DR-058 deferred). | DONE |
+| Ses.13 launch hardening | Full-app launch audit (`Version3_CaseLoadSelect/CaseLoad_Screen_Launch_Audit_2026-06-09.md`) + two fix waves: auth sweep (DR-063), sliding session expiry + contact-aware sweep (DR-064), webhook idempotency (DR-065), notification delivery state (DR-066), matter_stage_changed GHL event (DR-067), engine-sandbox sync + redeploy (DR-068), OTP attempt cap + LLM proxy rate limits, lockdown migration recovery, token-expiry cron scheduled. Suite 3090 to 3325 tests. | DONE |
 
 ## Pending: Run in Supabase SQL Editor
 
@@ -782,6 +791,11 @@ All migrations idempotent. Run in order:
 17. `20260525_channel_intake_sessions_recent_finalized_index.sql` — partial index on `(firm_id, channel, sender_id, last_activity_at DESC) WHERE finalized = true`. Supports the post-finalization secretary mode (DR-104 / Ses.9 fix #105).
 18. `20260526_intake_firms_token_expiry.sql` — adds 6 columns to `intake_firms` for token-expiry monitoring (`facebook_page_token_expires_at` + `_alert_sent_at` × 3 tokens) plus a partial index for the daily cron sweep. APPLIED 2026-05-26 via Supabase MCP. See `lib/token-expiry.ts` + `GET /api/cron/token-expiry-check`.
 19. `20260602_intake_firms_gemini_disabled_alert.sql` — adds `gemini_disabled_alert_sent_at timestamptz` to `intake_firms` (per-firm suppression for the LLM-disabled operator alert, #128). APPLIED 2026-06-02 via Supabase MCP. See `lib/llm-health-alert.ts`.
+20. `20260605175457_security_lockdown_anon_authenticated.sql`: anon column-scoped host resolution + `authenticated` grant revocation (Database Access Invariant). APPLIED 2026-06-05; the migration file was recovered from the ledger 2026-06-09.
+21. `20260609_processed_channel_messages.sql`: inbound webhook idempotency claim table (DR-065). APPLIED 2026-06-09 via Supabase MCP before the same-day deploy.
+22. `20260609_screened_leads_notification_state.sql`: four `notification_*` delivery-state columns on `screened_leads` (DR-066). APPLIED 2026-06-09 via Supabase MCP before the same-day deploy.
+23. `20260609_otp_attempt_cap.sql`: OTP brute-force attempt cap. APPLIED 2026-06-09 via Supabase MCP before the same-day deploy.
+24. `20260609_webhook_outbox_action_check_expand.sql`: widens the `webhook_outbox` action CHECK to six actions (DR-067; also fixes the latent `referred` rejection). APPLIED 2026-06-09 via Supabase MCP before the same-day deploy.
 
 ## Voice intake — observability + defense in depth (2026-06-02)
 
@@ -797,12 +811,7 @@ Hardening landed across `/api/voice-intake` so a live voice line does not lose l
 
 The retainer document workflow is permanently lawyer-owned. Retainer document generation and e-signature are explicitly out of scope. Use Clio (for Clio firms) or the lawyer's own tool of choice. CaseLoad Select fires the J6 follow-up cadence; the document itself is never touched by the platform.
 
-**Dormant code (do not call from new code; do not extend):**
-- `src/lib/docugenerate.ts` — PDF generation client. Dormant.
-- `src/lib/docuseal.ts` — e-signature client. Dormant.
-- `src/lib/retainer.ts` — orchestration. Dormant. The `triggerRetainerIfEligible()` call from `/api/otp/verify` should be removed in a follow-up cleanup; until then it is a no-op without the env vars set.
-- `src/app/retainers/page.tsx` — admin page. Dormant; should be removed in a follow-up cleanup.
-- `/api/webhooks/docuseal` — webhook receiver. Dormant.
+**Dormant code: DELETED in commit `c9b8cd2`.** The formerly dormant files (`src/lib/retainer.ts`, `src/lib/docuseal.ts`, `src/lib/docugenerate.ts`, `src/app/retainers/page.tsx`, the `/api/webhooks/docuseal` receiver) are gone from the tree. Do not reintroduce them.
 
 **Dormant table:** `retainer_agreements` is unused after 2026-05-06. Leave in place; do not run a destructive migration without explicit operator confirmation.
 
