@@ -331,7 +331,7 @@ The GPT-powered intake screening product. How it works:
 5. CPI score assigned automatically
 6. Lead enters pipeline pre-qualified with confidence rating
 
-CTA on all intake forms: **"Submit for review"** (revised 2026-05-06; the previous CTA "Start Your Consultation" implied the AI provided legal advice, which it does not). Hero headline: **"Book a call with the firm▪"** (revised 2026-05-06; replaces the firm's standard "Contact Us" form — the screen IS the contact path). Hero sub: *"Describe your situation in your own words, then answer a few short follow-ups. A lawyer reviews what you share and reaches out directly if your matter fits the firm's practice. Most replies within hours."*
+CTA on all intake forms: **"Submit for review"** (revised 2026-05-06; the previous CTA "Start Your Consultation" implied the AI provided legal advice, which it does not). Hero headline: **"Book a call with the firm▪"** (revised 2026-05-06; replaces the firm's standard "Contact Us" form — the screen IS the contact path). Hero sub: *"Describe your situation in your own words, then answer a few short follow-ups. A lawyer reviews what you share and reaches out directly if your matter fits the firm's practice."* (The earlier "Most replies within hours" closer was removed 2026-06-10: no time-relative reply promises on firm-voiced surfaces.)
 Product name: **CaseLoad Screen**. "Case Review" and "Intake OS" are deprecated names.
 
 Embeddable at `/widget/[firmId]` as iframe on firm websites.
