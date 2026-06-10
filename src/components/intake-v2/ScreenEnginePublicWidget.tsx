@@ -294,7 +294,7 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
         <TextCard
           item={{
             id: "situation",
-            question: ws("kickoff_heading", "Start with what you need to decide."),
+            question: ws("kickoff_heading", "Tell us how a lawyer can help you today."),
             description: ws(
               "kickoff_helper",
               "A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have.",

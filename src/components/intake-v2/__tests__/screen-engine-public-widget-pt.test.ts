@@ -103,7 +103,7 @@ describe("Kickoff localization (initialLang hint, 2026-06-08)", () => {
 
   it("pt kickoff strings are actually Portuguese, not English passthrough", () => {
     const pt = getI18n("pt");
-    expect(pt.widget_strings?.["kickoff_heading"]).toContain("decidir");
+    expect(pt.widget_strings?.["kickoff_heading"]).toContain("advogado");
     expect(pt.widget_strings?.["kickoff_submit"]).toContain("revisão");
     expect(pt.widget_strings?.["kickoff_examples_label"]).toContain("começar");
   });
