@@ -41,6 +41,8 @@ interface QueueRow {
   decision_deadline: string;
   contact_name: string | null;
   submitted_at: string;
+  notification_sent_at: string | null;
+  notification_error: string | null;
   brief_json: { matter_snapshot?: string; fee_estimate?: string } | null;
   slot_answers: { channel?: string } | null;
   intake_firms: { id: string; name: string | null; branding: { firm_name?: string } | null } | null;
@@ -70,7 +72,8 @@ export default async function AdminTriagePage({
       lead_id, firm_id, band, status, matter_type, practice_area,
       value_score, complexity_score, urgency_score, readiness_score,
       readiness_answered, whale_nurture, band_c_subtrack,
-      decision_deadline, contact_name, submitted_at, brief_json,
+      decision_deadline, contact_name, submitted_at,
+      notification_sent_at, notification_error, brief_json,
       slot_answers, intake_firms!inner(id, name, branding)
     `);
   query = view === "history"
@@ -377,6 +380,10 @@ function QueueCard({ row, view }: { row: QueueRow; view: LifecycleView }) {
                 {channelLabel(channel)}
               </span>
             )}
+            <NotificationChip
+              sentAt={row.notification_sent_at}
+              error={row.notification_error}
+            />
           </div>
           <p className="mt-1 text-sm text-black/80 line-clamp-2">{snapshot}</p>
           <div className="mt-2 flex items-center gap-3 text-xs text-black/50">
@@ -417,6 +424,29 @@ function QueueCard({ row, view }: { row: QueueRow; view: LifecycleView }) {
         </div>
       </div>
     </Link>
+  );
+}
+
+/**
+ * New-lead notification delivery state (DR-046 invariant 4). Derived from
+ * the screened_leads notification columns: Sent when a successful send is
+ * stamped, Failed when the last attempt errored, Pending otherwise (never
+ * attempted, or pre-tracking historical rows). The title carries the error
+ * text so a hover explains a failure without leaving the queue.
+ */
+function NotificationChip({ sentAt, error }: { sentAt: string | null; error: string | null }) {
+  const state = sentAt
+    ? { label: "Notify sent", classes: "bg-emerald-50 text-emerald-700 border-emerald-200" }
+    : error
+    ? { label: "Notify failed", classes: "bg-red-50 text-red-700 border-red-300" }
+    : { label: "Notify pending", classes: "bg-stone-50 text-stone-500 border-stone-200" };
+  return (
+    <span
+      className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 border ${state.classes}`}
+      title={error ?? undefined}
+    >
+      {state.label}
+    </span>
   );
 }
 
