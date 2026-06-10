@@ -48,8 +48,11 @@ export async function GET(
 ) {
   const { firmId } = await ctx.params;
 
+  // Lawyer-surface data. Client sessions (matter-scoped magic links) are
+  // excluded; their firm_id matches but they only get the matter surface.
   const session = await getPortalSession();
-  if (!session || session.firm_id !== firmId) {
+  const isAuthorized = !!session && session.role !== "client" && session.firm_id === firmId;
+  if (!isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

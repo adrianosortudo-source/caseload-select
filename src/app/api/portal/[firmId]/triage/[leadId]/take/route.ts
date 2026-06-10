@@ -48,8 +48,9 @@ export async function POST(
 ) {
   const { firmId, leadId } = await params;
   const session = await getPortalSession();
-  // Operators can act on any firm; lawyers only on their own.
-  const isAuthorized = !!session && (session.role === "operator" || session.firm_id === firmId);
+  // Operators can act on any firm; lawyers only on their own. Client
+  // sessions (matter-scoped magic links) never touch the triage surface.
+  const isAuthorized = !!session && session.role !== "client" && (session.role === "operator" || session.firm_id === firmId);
   if (!session || !isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -83,7 +84,7 @@ export async function POST(
       status: lead.status,
     });
   }
-  if (lead.status === "passed" || lead.status === "declined") {
+  if (lead.status === "passed" || lead.status === "declined" || lead.status === "referred") {
     return NextResponse.json(
       {
         error: `Lead is already ${lead.status}; cannot Take.`,
@@ -107,19 +108,51 @@ export async function POST(
     session.role === "operator"
       ? "operator"
       : (session.lawyer_id ?? "lawyer");
-  const { error: updateErr } = await supabase
+  const { error: updateErr, count: updatedCount } = await supabase
     .from("screened_leads")
-    .update({
-      status: "taken",
-      status_changed_at: now.toISOString(),
-      status_changed_by: actorId,
-      status_changed_by_role: actor,
-    })
+    .update(
+      {
+        status: "taken",
+        status_changed_at: now.toISOString(),
+        status_changed_by: actorId,
+        status_changed_by_role: actor,
+      },
+      { count: "exact" },
+    )
     .eq("lead_id", leadId)
     .eq("firm_id", firmId)
     .eq("status", "triaging"); // guard against race with another tab
 
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
+
+  // Lost-the-race check: the status guard above means a concurrent actor
+  // (backstop cron, another tab) who flipped the row between our SELECT and
+  // this UPDATE leaves the UPDATE matching zero rows. In that case fire NO
+  // side effects (no webhook, no matter creation); re-read and report truth.
+  if (!updatedCount) {
+    const { data: raced } = await supabase
+      .from("screened_leads")
+      .select("status")
+      .eq("lead_id", leadId)
+      .eq("firm_id", firmId)
+      .maybeSingle();
+    const currentStatus = (raced?.status as LeadRow["status"] | undefined) ?? null;
+    if (currentStatus === "taken") {
+      return NextResponse.json({
+        ok: true,
+        already: true,
+        lead_id: leadId,
+        status: "taken",
+      });
+    }
+    return NextResponse.json(
+      {
+        error: "Lead status changed before the Take completed.",
+        current_status: currentStatus,
+      },
+      { status: 409 },
+    );
+  }
 
   // Build and fire the webhook.
   const facts: LeadFacts = {

@@ -17,6 +17,8 @@
  */
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getPortalSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sortTriageRows } from "@/lib/triage-sort";
 import TriageRefresh from "@/components/portal/TriageRefresh";
@@ -49,6 +51,13 @@ export default async function TriageQueuePage({
   const { firmId } = await params;
   const { view: viewRaw } = await searchParams;
   const view: LifecycleView = viewRaw === "history" ? "history" : "active";
+
+  // The layout admits client sessions (for the /m/[matterId] subtree);
+  // this lawyer surface excludes them at page level.
+  const session = await getPortalSession();
+  if (session?.role === "client") {
+    redirect("/portal/login");
+  }
 
   // Active tab: single-status equality query. History tab: IN-list across the
   // three terminal statuses. Both queries return the same row shape.

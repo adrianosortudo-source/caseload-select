@@ -12,6 +12,8 @@
  */
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getPortalSession } from "@/lib/portal-auth";
 import { listFirmFiles } from "@/lib/firm-files";
 import {
   CATEGORY_LABELS,
@@ -38,6 +40,14 @@ export default async function FilesPage({
 }) {
   const { firmId } = await params;
   const { category: categoryRaw, archived } = await searchParams;
+
+  // The layout admits client sessions (for the /m/[matterId] subtree);
+  // this lawyer surface excludes them at page level.
+  const session = await getPortalSession();
+  if (session?.role === "client") {
+    redirect("/portal/login");
+  }
+
   const includeArchived = archived === "1";
   const categoryFilter: CategoryFilter =
     categoryRaw && isValidCategory(categoryRaw) ? (categoryRaw as FileCategory) : "all";

@@ -61,7 +61,8 @@ export default async function PipelinePage({
   const { firmId } = await params;
   const { practice_area: paFilter, date_from } = await searchParams;
 
-  if (!session || session.firm_id !== firmId) {
+  // Client sessions are matter-scoped; lawyer surfaces reject them.
+  if (!session || session.role === "client" || session.firm_id !== firmId) {
     redirect("/portal/login");
   }
 

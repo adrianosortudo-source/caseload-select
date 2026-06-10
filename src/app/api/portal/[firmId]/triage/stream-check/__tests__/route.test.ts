@@ -21,7 +21,12 @@ vi.mock("server-only", () => ({}));
 interface MockState {
   countResult: { count: number | null; error: { message: string } | null };
   latestResult: { data: { updated_at: string } | null; error: { message: string } | null };
-  session: { firm_id: string; role: "lawyer" | "operator"; lawyer_id?: string } | null;
+  session: {
+    firm_id: string;
+    role: "lawyer" | "operator" | "client";
+    lawyer_id?: string;
+    matter_id?: string;
+  } | null;
 }
 
 const state: MockState = {
@@ -120,6 +125,12 @@ describe("GET /api/portal/[firmId]/triage/stream-check", () => {
 
   it("returns 401 when the session firm_id mismatches the URL firmId", async () => {
     state.session = { firm_id: OTHER_FIRM_ID, role: "lawyer" };
+    const res = await GET(makeReq() as never, makeParams());
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 for a client session even when its firm_id matches (B1)", async () => {
+    state.session = { firm_id: FIRM_ID, role: "client", matter_id: "matter-1" };
     const res = await GET(makeReq() as never, makeParams());
     expect(res.status).toBe(401);
   });

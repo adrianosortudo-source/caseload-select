@@ -81,7 +81,8 @@ export default async function PortalLeadsPage({
   const { firmId } = await params;
   const { band: bandFilter, stage: stageFilter } = await searchParams;
 
-  if (!session || session.firm_id !== firmId) {
+  // Client sessions are matter-scoped; lawyer surfaces reject them.
+  if (!session || session.role === "client" || session.firm_id !== firmId) {
     redirect("/portal/login");
   }
 

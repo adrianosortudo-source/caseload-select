@@ -19,8 +19,9 @@ export async function GET(
 ) {
   const { firmId, leadId } = await params;
   const session = await getPortalSession();
-  // Operators can read any firm's brief; lawyers only their own.
-  const isAuthorized = !!session && (session.role === "operator" || session.firm_id === firmId);
+  // Operators can read any firm's brief; lawyers only their own. Client
+  // sessions (matter-scoped magic links) never touch the triage surface.
+  const isAuthorized = !!session && session.role !== "client" && (session.role === "operator" || session.firm_id === firmId);
   if (!session || !isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -184,7 +184,8 @@ export default async function PortalLeadDetailPage({
   const session = await getPortalSession();
   const { firmId, leadId } = await params;
 
-  if (!session || session.firm_id !== firmId) {
+  // Client sessions are matter-scoped; lawyer surfaces reject them.
+  if (!session || session.role === "client" || session.firm_id !== firmId) {
     redirect("/portal/login");
   }
 

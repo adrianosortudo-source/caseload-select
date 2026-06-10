@@ -36,9 +36,11 @@ export async function GET(
 ) {
   const { firmId } = await params;
 
-  // Standard portal route guard (matches the triage page's auth shape).
+  // Standard portal route guard (matches the triage queue API's auth shape).
+  // Client sessions (matter-scoped magic links) never touch the triage surface.
   const session = await getPortalSession();
-  if (!session || (session.role !== "operator" && session.firm_id !== firmId)) {
+  const isAuthorized = !!session && session.role !== "client" && (session.role === "operator" || session.firm_id === firmId);
+  if (!session || !isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

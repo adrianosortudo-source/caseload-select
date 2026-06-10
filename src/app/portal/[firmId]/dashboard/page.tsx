@@ -46,7 +46,8 @@ export default async function DashboardPage({
   const session = await getPortalSession();
   const { firmId } = await params;
 
-  if (!session || session.firm_id !== firmId) {
+  // Client sessions are matter-scoped; lawyer surfaces reject them.
+  if (!session || session.role === "client" || session.firm_id !== firmId) {
     redirect("/portal/login");
   }
 

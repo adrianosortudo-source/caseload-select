@@ -49,8 +49,9 @@ export async function POST(
 ) {
   const { firmId, leadId } = await params;
   const session = await getPortalSession();
-  // Operators can act on any firm; lawyers only on their own.
-  const isAuthorized = !!session && (session.role === "operator" || session.firm_id === firmId);
+  // Operators can act on any firm; lawyers only on their own. Client
+  // sessions (matter-scoped magic links) never touch the triage surface.
+  const isAuthorized = !!session && session.role !== "client" && (session.role === "operator" || session.firm_id === firmId);
   if (!session || !isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -112,22 +113,53 @@ export async function POST(
     session.role === "operator"
       ? "operator"
       : (session.lawyer_id ?? "lawyer");
-  const { error: updateErr } = await supabase
+  const { error: updateErr, count: updatedCount } = await supabase
     .from("screened_leads")
-    .update({
-      status: "referred",
-      status_changed_at: now.toISOString(),
-      status_changed_by: actorId,
-      status_changed_by_role: actor,
-      // Persist the lawyer's note (not the referredTo). The note is the
-      // free-text rationale; referredTo lives in the webhook payload only.
-      status_note: note,
-    })
+    .update(
+      {
+        status: "referred",
+        status_changed_at: now.toISOString(),
+        status_changed_by: actorId,
+        status_changed_by_role: actor,
+        // Persist the lawyer's note (not the referredTo). The note is the
+        // free-text rationale; referredTo lives in the webhook payload only.
+        status_note: note,
+      },
+      { count: "exact" },
+    )
     .eq("lead_id", leadId)
     .eq("firm_id", firmId)
     .eq("status", "triaging");
 
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
+
+  // Lost-the-race check: zero rows updated means a concurrent actor flipped
+  // the status between our SELECT and the guarded UPDATE. Fire NO side
+  // effects (no webhook); re-read and report truth.
+  if (!updatedCount) {
+    const { data: raced } = await supabase
+      .from("screened_leads")
+      .select("status")
+      .eq("lead_id", leadId)
+      .eq("firm_id", firmId)
+      .maybeSingle();
+    const currentStatus = (raced?.status as LeadRow["status"] | undefined) ?? null;
+    if (currentStatus === "referred") {
+      return NextResponse.json({
+        ok: true,
+        already: true,
+        lead_id: leadId,
+        status: "referred",
+      });
+    }
+    return NextResponse.json(
+      {
+        error: "Lead status changed before the Refer completed.",
+        current_status: currentStatus,
+      },
+      { status: 409 },
+    );
+  }
 
   // Build and fire the webhook.
   const facts: LeadFacts = {

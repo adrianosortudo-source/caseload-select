@@ -30,6 +30,11 @@ export default async function PortalLayout({
   // Auth gate. Operators can view ANY firm's portal pages (triage queue,
   // brief, etc.) — their session bypasses the firm_id match. Lawyers must
   // present a session whose firm_id matches the path.
+  // Client-role sessions (matter-scoped magic links) are admitted by this
+  // layout ON PURPOSE: the client matter home at /portal/[firmId]/m/[matterId]/*
+  // nests under it, and the firm_id match below is the right gate for those
+  // sessions. Lawyer-facing surfaces (triage, dashboard, pipeline, leads,
+  // files, clients, matters) exclude role='client' at page level instead.
   const isOperator = session?.role === "operator";
   if (!session || (!isOperator && session.firm_id !== firmId)) {
     redirect("/portal/login");

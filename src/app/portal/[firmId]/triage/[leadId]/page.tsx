@@ -14,7 +14,8 @@
  */
 
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { getPortalSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { matterLabel, subtrackLabel } from "@/lib/screened-leads-labels";
 import { intakeLanguageLabel } from "@/lib/intake-language-label";
@@ -60,6 +61,13 @@ export default async function TriageLeadPage({
   params: Promise<{ firmId: string; leadId: string }>;
 }) {
   const { firmId, leadId } = await params;
+
+  // The layout admits client sessions (for the /m/[matterId] subtree);
+  // this lawyer surface excludes them at page level.
+  const session = await getPortalSession();
+  if (session?.role === "client") {
+    redirect("/portal/login");
+  }
 
   const { data, error } = await supabase
     .from("screened_leads")
