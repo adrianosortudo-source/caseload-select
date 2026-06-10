@@ -17,6 +17,13 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import type { EngineState } from '@/lib/screen-engine/types';
 import type { MetaChannel } from '@/lib/channel-intake-processor';
 
+/**
+ * Session inactivity window. Mirrors the insert-time DB default on
+ * channel_intake_sessions.expires_at (now() + interval '24 hours',
+ * migration 20260516_channel_intake_sessions.sql). Keep the two in sync.
+ */
+export const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
 export interface ChannelSessionRow {
   id: string;
   firm_id: string;
@@ -108,6 +115,13 @@ export async function updateChannelSession(
       engine_state: args.engineState,
       follow_up_count: args.followUpCount,
       last_activity_at: new Date().toISOString(),
+      // Sliding expiry (launch audit B3, 2026-06-09). expires_at was set
+      // once at insert and never extended, so a lead actively answering
+      // discovery questions at WhatsApp latency crossed the 24h threshold
+      // mid-conversation and the hourly sweeper resolved them as
+      // abandoned. Every state save now pushes the window forward; only
+      // 24h of true silence expires a session.
+      expires_at: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
     })
     .eq('id', args.sessionId);
   if (error) return { ok: false, error: error.message };

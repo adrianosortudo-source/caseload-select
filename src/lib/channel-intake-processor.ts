@@ -49,7 +49,7 @@ import { computeBand } from '@/lib/screen-engine/band';
 import { getNextStep } from '@/lib/screen-engine/control';
 import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
-import type { EngineState, Band, SlotDefinition } from '@/lib/screen-engine/types';
+import type { EngineState, Band, SlotDefinition, LawyerReport } from '@/lib/screen-engine/types';
 import { evaluateContactGate } from '@/lib/screen-engine/contact-doctrine';
 import { buildClosingMessage } from '@/lib/screen-engine/closing';
 import { persistUnconfirmedInquiry } from '@/lib/unconfirmed-inquiry';
@@ -995,10 +995,82 @@ export async function processChannelInbound(
   // ── Gate passed (and discovery complete or skipped): finalise ──────────
   // Reuse the deadline + whale flag computed above (before the renderer call)
   // so the brief and the persisted row never disagree on the deadline.
-  const now = channelIntakeNow;
+  return finalizeChannelLead({
+    firmId,
+    sender,
+    state,
+    report,
+    briefHtml,
+    band,
+    now: channelIntakeNow,
+    decisionDeadline: channelIntakeDeadline,
+    whaleNurture: channelIntakeWhale,
+    sessionId,
+    priorFollowUpCount,
+    isResume,
+    fallbackTranscript: trimmed,
+  });
+}
+
+// ── Shared finalize pipeline ────────────────────────────────────────────
+
+export interface FinalizeChannelLeadArgs {
+  firmId: string;
+  sender: ChannelSender;
+  state: EngineState;
+  report: LawyerReport;
+  briefHtml: string;
+  band: Band | null;
+  now: Date;
+  decisionDeadline: Date;
+  whaleNurture: boolean;
+  sessionId?: string;
+  priorFollowUpCount: number;
+  isResume: boolean;
+  /**
+   * raw_transcript fallback when state.input is empty. The live inbound
+   * path passes the current turn's trimmed text; the expiry sweeper
+   * passes '' (state.input always carries the transcript on resume).
+   */
+  fallbackTranscript: string;
+}
+
+/**
+ * Persist a contact-complete engine state as a screened lead: insert the
+ * screened_leads row, finalize the multi-turn session (linking
+ * screened_lead_id), fire the new-lead notification, and send the
+ * best-effort closing message on the lead's channel.
+ *
+ * Extracted from processChannelInbound (launch audit B3, 2026-06-09) so
+ * the expiry sweeper at /api/cron/expire-channel-intake-sessions can
+ * finalize a contact-complete expired session into a thin lead instead
+ * of dropping it into unconfirmed_inquiries. DR-038: a reachable lead
+ * must reach the lawyer; a thin brief beats a dropped lead.
+ *
+ * The closing send never gates the persist: the lead is already saved
+ * and the notification queued before the send fires, and both send
+ * failure and send throw are swallowed with a warn.
+ */
+export async function finalizeChannelLead(
+  args: FinalizeChannelLeadArgs,
+): Promise<ProcessChannelInboundResult> {
+  const {
+    firmId,
+    sender,
+    state,
+    report,
+    briefHtml,
+    band,
+    now,
+    decisionDeadline,
+    whaleNurture,
+    sessionId,
+    priorFollowUpCount,
+    isResume,
+    fallbackTranscript,
+  } = args;
+  const channel = sender.channel;
   const axes = report.four_axis;
-  const decisionDeadline = channelIntakeDeadline;
-  const whaleNurture = channelIntakeWhale;
   const { status: initialStatus, changedBy: initialChangedBy } =
     computeInitialStatus(state.matter_type);
 
@@ -1067,7 +1139,7 @@ export async function processChannelInbound(
         (sender.channel === 'whatsapp' ? `+${sender.senderWaId.replace(/^\+/, '')}` : null),
       submitted_at: state.submitted_at ?? now.toISOString(),
       intake_language: state.language ?? 'en',
-      raw_transcript: state.input ?? trimmed,
+      raw_transcript: state.input ?? fallbackTranscript,
     })
     .select('id, lead_id, status, decision_deadline, whale_nurture')
     .single();
