@@ -517,7 +517,13 @@ export function IntakeControllerV2({ firmId, firmName, mode = "standard", onScor
       });
       const data = (await res.json()) as { verified: boolean; band?: string; reason?: string };
       if (!data.verified) {
-        setOtpError(data.reason ?? "That code didn't match. Try again.");
+        // "locked" means the attempt cap burned the code (HTTP 410); the raw
+        // reason string reads as jargon, so map it to a plain instruction.
+        const message =
+          data.reason === "locked"
+            ? "That code is no longer valid after too many attempts. Request a new code and try again."
+            : data.reason ?? "That code didn't match. Try again.";
+        setOtpError(message);
         setOtpLoading(false);
         return;
       }

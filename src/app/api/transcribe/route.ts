@@ -19,12 +19,34 @@
  */
 
 import { NextResponse } from "next/server";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const runtime = "nodejs"; // Required because Whisper SDK uses Node FormData
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
+// Content-Length guard bound: the audio cap plus headroom for multipart
+// framing. Rejecting on the header avoids buffering an oversize body
+// through formData() before the blob-size check can run.
+const MAX_REQUEST_BYTES = MAX_BYTES + 64 * 1024;
+
 export async function POST(req: Request) {
+  // Public route (the kickoff recorder calls it from the browser); the
+  // per-IP bucket is the only gate in front of the Whisper spend (H6).
+  const ip = ipFromRequest(req);
+  const rl = await checkRateLimit("transcribe", ip);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { ok: false, error: "rate limited", retry_after_seconds: Math.ceil((rl.reset - Date.now()) / 1000) },
+      { status: 429, headers: rateLimitHeaders(rl) }
+    );
+  }
+
+  const contentLength = Number(req.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES) {
+    return NextResponse.json({ ok: false, error: "audio exceeds 25 MB limit" }, { status: 413 });
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(

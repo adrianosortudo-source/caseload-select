@@ -39,6 +39,28 @@
  *       request frequency; tight bucket forces an attacker to
  *       slow-roll guesses.
  *
+ *   extract           30 per minute
+ *     - /api/extract. Public proxy in front of the Gemini extraction
+ *       call (the browser widget calls it, so it must stay public).
+ *       The widget makes a handful of calls per intake; 30/min stops
+ *       a script from running up the Gemini bill through this route.
+ *
+ *   transcribe        10 per minute
+ *     - /api/transcribe forwards audio to Whisper, billed per minute
+ *       of audio. A real intake produces one kickoff recording, maybe
+ *       a re-record; 10/min/IP is generous for humans and stops batch
+ *       abuse of the OpenAI spend.
+ *
+ *   otpSend            5 per 10 minutes
+ *     - /api/otp/send emails a verification code to an arbitrary
+ *       address on demand. Same shape as requestLink (on-demand email
+ *       send); tight bucket caps mail-bombing and Resend spend.
+ *
+ *   otpVerify         10 per 10 minutes
+ *     - /api/otp/verify. Second layer behind the per-code attempt cap
+ *       (5 wrong tries invalidates the code); the IP bucket slows a
+ *       distributed sweep across many sessions.
+ *
  * Per-route bucket selection is done by the caller. Caller passes the
  * bucket name + the IP. We never trust the request body for IP
  * resolution; the helper reads x-forwarded-for and x-real-ip in that
@@ -52,7 +74,15 @@ import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import type { NextRequest } from "next/server";
 
-export type RateLimitBucket = "requestLink" | "intake" | "screen" | "firmOnboarding";
+export type RateLimitBucket =
+  | "requestLink"
+  | "intake"
+  | "screen"
+  | "firmOnboarding"
+  | "extract"
+  | "transcribe"
+  | "otpSend"
+  | "otpVerify";
 
 interface BucketConfig {
   limit: number;
@@ -64,6 +94,10 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   intake:         { limit: 30, windowSeconds: 60 },    // 30 per minute
   screen:         { limit: 30, windowSeconds: 60 },    // 30 per minute
   firmOnboarding: { limit: 10, windowSeconds: 3600 },  // 10 per hour
+  extract:        { limit: 30, windowSeconds: 60 },    // 30 per minute
+  transcribe:     { limit: 10, windowSeconds: 60 },    // 10 per minute
+  otpSend:        { limit: 5,  windowSeconds: 600 },   // 5 per 10 minutes
+  otpVerify:      { limit: 10, windowSeconds: 600 },   // 10 per 10 minutes
 };
 
 /**

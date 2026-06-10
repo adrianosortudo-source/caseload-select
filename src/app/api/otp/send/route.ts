@@ -13,6 +13,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 const OTP_TTL_MINUTES = 15;
 
@@ -25,6 +26,17 @@ function generateOtp(): string {
 
 export async function POST(req: Request) {
   try {
+    // Public route that emails a code to an arbitrary address on demand;
+    // the per-IP bucket is the mail-bombing gate (H6).
+    const ip = ipFromRequest(req);
+    const rl = await checkRateLimit("otpSend", ip);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: "rate limited", retry_after_seconds: Math.ceil((rl.reset - Date.now()) / 1000) },
+        { status: 429, headers: rateLimitHeaders(rl) }
+      );
+    }
+
     const body = await req.json() as { session_id?: string; email?: string; firm_name?: string };
     const { session_id, email, firm_name = "the firm" } = body;
 
@@ -50,10 +62,12 @@ export async function POST(req: Request) {
     const otp = generateOtp();
     const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
 
-    // Store OTP in session (plaintext  -  6-digit, time-limited, session-scoped)
+    // Store OTP in session (plaintext  -  6-digit, time-limited, session-scoped).
+    // A fresh code starts with a clean attempt counter; the brute-force cap
+    // in /api/otp/verify is per code, not per session lifetime.
     const { error: updateErr } = await supabase
       .from("intake_sessions")
-      .update({ otp_code: otp, otp_expires_at: expiresAt })
+      .update({ otp_code: otp, otp_expires_at: expiresAt, otp_attempts: 0 })
       .eq("id", session_id);
 
     if (updateErr) {

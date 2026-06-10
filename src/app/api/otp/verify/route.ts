@@ -12,14 +12,32 @@
  *
  * Body: { session_id: string; code: string }
  * Returns: { verified: true; band: string } | { verified: false; reason: "invalid" | "expired" }
+ *          | { verified: false; reason: "locked" } with HTTP 410 after 5 failed
+ *          attempts (the code is invalidated; request a new one via /api/otp/send)
  */
 
 import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 import type { CpiBreakdown } from "@/lib/cpi-calculator";
+
+// Brute-force cap (H6): a 6-digit code has a 1e6 keyspace, so unlimited
+// tries inside the 15-minute TTL would be sweepable. Five wrong guesses
+// burns the code; the lead requests a fresh one via /api/otp/send.
+const MAX_OTP_ATTEMPTS = 5;
 
 export async function POST(req: Request) {
   try {
+    // Per-IP bucket as a second layer behind the per-code attempt cap.
+    const ip = ipFromRequest(req);
+    const rl = await checkRateLimit("otpVerify", ip);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: "rate limited", retry_after_seconds: Math.ceil((rl.reset - Date.now()) / 1000) },
+        { status: 429, headers: rateLimitHeaders(rl) }
+      );
+    }
+
     const body = await req.json() as { session_id?: string; code?: string };
     const { session_id, code } = body;
 
@@ -30,7 +48,7 @@ export async function POST(req: Request) {
     // Load session OTP fields + band + firm_id for retainer trigger
     const { data: session, error: sessionErr } = await supabase
       .from("intake_sessions")
-      .select("id, otp_code, otp_expires_at, otp_verified, band, firm_id, contact, practice_area, situation_summary, scoring")
+      .select("id, otp_code, otp_expires_at, otp_verified, otp_attempts, band, firm_id, contact, practice_area, situation_summary, scoring")
       .eq("id", session_id)
       .single();
 
@@ -61,6 +79,15 @@ export async function POST(req: Request) {
     if (isDemoFirm && /^\d{6}$/.test(code.trim())) {
       // Skip code/expiry check  -  demo firm accepts any 6-digit code.
     } else {
+      const attempts = (session.otp_attempts as number | null) ?? 0;
+
+      // Locked: the attempt cap was hit on a prior call and the code was
+      // invalidated. 410 (not 429) because retrying later cannot help;
+      // the client must request a fresh code via /api/otp/send.
+      if (attempts >= MAX_OTP_ATTEMPTS) {
+        return NextResponse.json({ verified: false, reason: "locked" }, { status: 410 });
+      }
+
       // Check expiry
       if (!session.otp_expires_at || new Date(session.otp_expires_at) < new Date()) {
         return NextResponse.json({ verified: false, reason: "expired" });
@@ -68,6 +95,27 @@ export async function POST(req: Request) {
 
       // Check code
       if (!session.otp_code || session.otp_code !== code.trim()) {
+        const nextAttempts = attempts + 1;
+        if (nextAttempts >= MAX_OTP_ATTEMPTS) {
+          // Burn the code so even a correct guess is dead from here on.
+          const { error: burnErr } = await supabase
+            .from("intake_sessions")
+            .update({ otp_code: null, otp_expires_at: null, otp_attempts: nextAttempts })
+            .eq("id", session_id);
+          if (burnErr) {
+            // The response is "locked" either way, but a silently unburned
+            // code would leave the brute-force cap unenforced in the DB.
+            console.error(`[otp/verify] code burn failed for session ${session_id}:`, burnErr.message);
+          }
+          return NextResponse.json({ verified: false, reason: "locked" }, { status: 410 });
+        }
+        const { error: attemptErr } = await supabase
+          .from("intake_sessions")
+          .update({ otp_attempts: nextAttempts })
+          .eq("id", session_id);
+        if (attemptErr) {
+          console.error(`[otp/verify] attempt increment failed for session ${session_id}:`, attemptErr.message);
+        }
         return NextResponse.json({ verified: false, reason: "invalid" });
       }
     }
@@ -75,7 +123,7 @@ export async function POST(req: Request) {
     // Mark verified, clear code
     await supabase
       .from("intake_sessions")
-      .update({ otp_verified: true, otp_code: null, otp_expires_at: null })
+      .update({ otp_verified: true, otp_code: null, otp_expires_at: null, otp_attempts: 0 })
       .eq("id", session_id);
 
     // Non-fatal downstream triggers
