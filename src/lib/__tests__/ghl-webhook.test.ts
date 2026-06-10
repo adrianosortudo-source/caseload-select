@@ -5,10 +5,13 @@ import {
   buildReferredPayload,
   buildDeclinedOosPayload,
   buildDeclinedBackstopPayload,
+  buildMatterStageChangedPayload,
   cadenceTargetForBand,
   lawyerActionForBand,
   type LeadFacts,
+  type MatterStageCadenceTrigger,
 } from "../ghl-webhook-pure";
+import type { MatterStage } from "../types";
 
 const NOW = new Date("2026-05-05T14:12:00.000Z");
 
@@ -276,5 +279,101 @@ describe("envelope fields stay consistent across actions", () => {
       email: null,
       phone: null,
     });
+  });
+});
+
+describe("buildMatterStageChangedPayload", () => {
+  const MATTER_ID = "7c0a4e9b-2f31-4d55-9be2-6f6f1f1d2ab3";
+  const SOURCE_UUID = "f37b1d80-9a51-4f3c-8a44-1f9adfe1c001";
+
+  function stageArgs(overrides: Partial<Parameters<typeof buildMatterStageChangedPayload>[0]> = {}) {
+    return {
+      matterId: MATTER_ID,
+      firmId: "1f5a2391-85d8-45a2-b427-90441e78a93c",
+      sourceScreenedLeadId: SOURCE_UUID,
+      sourceLeadPublicId: "L-2026-05-22-SX4",
+      intakeLanguage: "en",
+      fromStage: "intake" as MatterStage,
+      toStage: "retainer_pending" as MatterStage,
+      cadenceTrigger: "retainer_awaiting" as MatterStageCadenceTrigger,
+      matterType: "shareholder_dispute",
+      practiceArea: "corporate",
+      primaryName: "Jordan Reyes",
+      primaryEmail: "jreyes@example.com",
+      primaryPhone: "+14165550000",
+      transitionedAt: NOW,
+      actorRole: "admin" as const,
+      ...overrides,
+    };
+  }
+
+  it("produces the reduced envelope plus the full extension", () => {
+    const p = buildMatterStageChangedPayload(stageArgs());
+    expect(p.action).toBe("matter_stage_changed");
+    expect(p.lead_id).toBe("L-2026-05-22-SX4");
+    expect(p.firm_id).toBe("1f5a2391-85d8-45a2-b427-90441e78a93c");
+    expect(p.intake_language).toBe("en");
+    expect(p.matter_stage_changed).toEqual({
+      matter_id: MATTER_ID,
+      source_screened_lead_id: SOURCE_UUID,
+      from_stage: "intake",
+      to_stage: "retainer_pending",
+      cadence_trigger: "retainer_awaiting",
+      matter_type: "shareholder_dispute",
+      practice_area: "corporate",
+      primary_name: "Jordan Reyes",
+      primary_email: "jreyes@example.com",
+      primary_phone: "+14165550000",
+      transitioned_at: NOW.toISOString(),
+      actor_role: "admin",
+    });
+  });
+
+  it("idempotency key is <matter_id>:stage:<to_stage>", () => {
+    const p = buildMatterStageChangedPayload(stageArgs());
+    expect(p.idempotency_key).toBe(`${MATTER_ID}:stage:retainer_pending`);
+  });
+
+  it("covers all four DR-049 cadence triggers", () => {
+    const transitions: Array<{
+      from: MatterStage;
+      to: MatterStage;
+      trigger: MatterStageCadenceTrigger;
+    }> = [
+      { from: "intake", to: "retainer_pending", trigger: "retainer_awaiting" },
+      { from: "retainer_pending", to: "active", trigger: "client_won" },
+      { from: "active", to: "closing", trigger: "review_request" },
+      { from: "closing", to: "closed", trigger: "relationship_milestone" },
+    ];
+    for (const t of transitions) {
+      const p = buildMatterStageChangedPayload(
+        stageArgs({ fromStage: t.from, toStage: t.to, cadenceTrigger: t.trigger }),
+      );
+      expect(p.matter_stage_changed.cadence_trigger).toBe(t.trigger);
+      expect(p.matter_stage_changed.from_stage).toBe(t.from);
+      expect(p.matter_stage_changed.to_stage).toBe(t.to);
+      expect(p.idempotency_key).toBe(`${MATTER_ID}:stage:${t.to}`);
+    }
+  });
+
+  it("falls back to the matter UUID for lead_id when no source public id", () => {
+    const p = buildMatterStageChangedPayload(
+      stageArgs({ sourceLeadPublicId: null, sourceScreenedLeadId: null }),
+    );
+    expect(p.lead_id).toBe(MATTER_ID);
+    expect(p.matter_stage_changed.source_screened_lead_id).toBeNull();
+  });
+
+  it("defaults intake_language to en when the source row had none", () => {
+    const p = buildMatterStageChangedPayload(stageArgs({ intakeLanguage: null }));
+    expect(p.intake_language).toBe("en");
+  });
+
+  it("preserves null contact fields in the extension", () => {
+    const p = buildMatterStageChangedPayload(
+      stageArgs({ primaryEmail: null, primaryPhone: null }),
+    );
+    expect(p.matter_stage_changed.primary_email).toBeNull();
+    expect(p.matter_stage_changed.primary_phone).toBeNull();
   });
 });

@@ -13,7 +13,11 @@ import type {
   MatterStageEvent,
 } from './types';
 import { validateStageTransition, journeyTriggerForTransition } from './matter-stage-pure';
-import { triggerSequence, type TriggerEvent } from './sequence-engine';
+import {
+  buildMatterStageChangedPayload,
+  type MatterStageCadenceTrigger,
+} from './ghl-webhook-pure';
+import { deliverWebhook } from './ghl-webhook';
 import { buildWelcomeDraft } from './welcome-draft-pure';
 import { resolveMatterLead, resolveMatterAssignees } from './firm-routing-pure';
 
@@ -132,9 +136,20 @@ export async function createMatterFromBandATake(input: {
 }
 
 /**
+ * Webhook enqueue outcome surfaced on a successful transition. Best-effort
+ * relative to the stage write: the transition stands regardless, but the
+ * caller can see whether the cadence event reached the outbox.
+ */
+export interface StageWebhookOutcome {
+  enqueued: boolean;
+  delivered: boolean;
+  reason: string | null;
+}
+
+/**
  * Transition a matter to a new stage. Validates the transition, writes
- * the row, writes the audit event, and fires the appropriate journey
- * cadence on the legacy `leads` table if there's a matching lead.
+ * the row, writes the audit event, and enqueues the `matter_stage_changed`
+ * GHL webhook that carries the DR-049 journey cadence trigger.
  *
  * The caller must have already enforced role permissions via
  * `canAdvanceStage`.
@@ -146,12 +161,20 @@ export async function transitionMatterStage(input: {
   actor_id: string | null;
   note: string | null;
 }): Promise<
-  | { ok: true; from: MatterStage; to: MatterStage; event: MatterStageEvent }
+  | {
+      ok: true;
+      from: MatterStage;
+      to: MatterStage;
+      event: MatterStageEvent;
+      webhook?: StageWebhookOutcome | null;
+    }
   | { ok: false; error: string; code?: 'invalid_transition' | 'not_found' | 'db_error' }
 > {
   const { data: matter, error: fetchErr } = await supabase
     .from('client_matters')
-    .select('id, firm_id, matter_stage, source_screened_lead_id')
+    .select(
+      'id, firm_id, matter_stage, source_screened_lead_id, matter_type, practice_area, primary_name, primary_email, primary_phone',
+    )
     .eq('id', input.matter_id)
     .maybeSingle();
 
@@ -208,13 +231,86 @@ export async function transitionMatterStage(input: {
     console.warn('[matter-stage] event log insert failed:', eventErr.message);
   }
 
-  // Fire the journey cadence on the source lead, if there is one.
-  const triggerEvent = journeyTriggerForTransition(from, input.to);
-  if (triggerEvent && matter.source_screened_lead_id) {
+  // DR-049 cadence map, GHL-owned execution (operator decision 2026-06-09,
+  // CRM Bible section 12): GoHighLevel runs the journey cadences; Supabase
+  // notifies it. This block used to call triggerSequence with the
+  // screened_leads UUID, which the send processor resolved against the
+  // legacy leads table, so every scheduled row was skipped and the cadence
+  // map silently delivered nothing. Each transition now enqueues a
+  // matter_stage_changed event through the at-least-once webhook_outbox,
+  // the same path the five triage actions use:
+  //
+  //   intake → retainer_pending : retainer_awaiting (J6)
+  //   retainer_pending → active : client_won (J7)
+  //   active → closing          : review_request (J9)
+  //   closing → closed          : relationship_milestone (J11 + J12)
+  //
+  // Until the operator builds the matching GHL workflows the events queue
+  // and deliver harmlessly (workflow filters ignore unknown actions).
+  const cadenceTrigger = journeyTriggerForTransition(from, input.to);
+  let webhook: StageWebhookOutcome | null = null;
+  if (cadenceTrigger) {
+    // Resolve the source lead's public id + intake language so the envelope
+    // correlates with the earlier `taken` event. Best-effort: a missing
+    // source row falls back to the matter UUID and 'en'.
+    let sourceLeadPublicId: string | null = null;
+    let intakeLanguage: string | null = null;
+    if (matter.source_screened_lead_id) {
+      const { data: sourceLead } = await supabase
+        .from('screened_leads')
+        .select('lead_id, intake_language')
+        .eq('id', matter.source_screened_lead_id)
+        .maybeSingle();
+      sourceLeadPublicId = sourceLead?.lead_id ?? null;
+      intakeLanguage = sourceLead?.intake_language ?? null;
+    }
+
+    const payload = buildMatterStageChangedPayload({
+      matterId: input.matter_id,
+      firmId: matter.firm_id,
+      sourceScreenedLeadId: matter.source_screened_lead_id ?? null,
+      sourceLeadPublicId,
+      intakeLanguage,
+      fromStage: from,
+      toStage: input.to,
+      // journeyTriggerForTransition returns the DR-049 trigger names; the
+      // cast narrows its string return to the payload's literal union.
+      cadenceTrigger: cadenceTrigger as MatterStageCadenceTrigger,
+      matterType: matter.matter_type,
+      practiceArea: matter.practice_area,
+      primaryName: matter.primary_name,
+      primaryEmail: matter.primary_email,
+      primaryPhone: matter.primary_phone,
+      transitionedAt: new Date(now),
+      actorRole: input.actor_role,
+    });
+
     try {
-      await triggerSequence(matter.source_screened_lead_id, triggerEvent as TriggerEvent);
+      const delivery = await deliverWebhook(payload);
+      webhook = {
+        enqueued: Boolean(delivery.outbox_id),
+        delivered: delivery.fired,
+        reason: delivery.reason ?? null,
+      };
+      // A failed POST with an outbox row is fine (the retry cron owns it).
+      // A failed ENQUEUE means nothing owns delivery, so it is loud. An
+      // unconfigured webhook URL is the documented skip-silently case.
+      if (!delivery.fired && !delivery.outbox_id && delivery.reason !== 'ghl_webhook_url not configured') {
+        console.error(
+          `[matter-stage] matter_stage_changed webhook enqueue failed for matter ${input.matter_id}:`,
+          delivery.reason,
+        );
+      }
     } catch (err) {
-      console.warn('[matter-stage] journey trigger failed:', err);
+      webhook = {
+        enqueued: false,
+        delivered: false,
+        reason: err instanceof Error ? err.message : String(err),
+      };
+      console.error(
+        `[matter-stage] matter_stage_changed webhook enqueue threw for matter ${input.matter_id}:`,
+        err,
+      );
     }
   }
 
@@ -223,6 +319,7 @@ export async function transitionMatterStage(input: {
     from,
     to: input.to,
     event: (event ?? {}) as MatterStageEvent,
+    webhook,
   };
 }
 

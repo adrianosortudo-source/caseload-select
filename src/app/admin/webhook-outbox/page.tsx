@@ -17,7 +17,7 @@ interface OutboxRow {
   id: string;
   lead_id: string;
   firm_id: string;
-  action: "taken" | "passed" | "declined_oos" | "declined_backstop";
+  action: "taken" | "passed" | "referred" | "declined_oos" | "declined_backstop" | "matter_stage_changed";
   idempotency_key: string;
   status: "pending" | "sent" | "failed";
   attempts: number;
@@ -170,7 +170,7 @@ export default async function AdminWebhookOutboxPage({
       )}
 
       <p className="text-xs text-black/40">
-        Showing {items.length} most recent. Idempotency key format: <code>{`{lead_id}:{action}`}</code>. Backoff: 30s, 2m, 8m, 32m, 2h08m.
+        Showing {items.length} most recent. Idempotency key format: <code>{`{lead_id}:{action}`}</code> (matter-stage events use <code>{`{matter_id}:stage:{to_stage}`}</code>). Backoff: 30s, 2m, 8m, 32m, 2h08m.
       </p>
     </div>
   );

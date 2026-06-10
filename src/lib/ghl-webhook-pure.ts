@@ -8,12 +8,15 @@
  * Contract: docs/ghl-webhook-contract.md (the human-readable spec).
  */
 
+import type { MatterStage } from "./types";
+
 export type WebhookAction =
   | "taken"
   | "passed"
   | "referred"
   | "declined_oos"
-  | "declined_backstop";
+  | "declined_backstop"
+  | "matter_stage_changed";
 
 export type DeclineSource = "per_lead_override" | "per_pa" | "firm_default" | "system_fallback";
 
@@ -148,12 +151,68 @@ export interface DeclinedBackstopPayload extends CommonEnvelope {
   };
 }
 
+/** DR-049 journey trigger names, one per forward client_matters transition. */
+export type MatterStageCadenceTrigger =
+  | "retainer_awaiting"
+  | "client_won"
+  | "review_request"
+  | "relationship_milestone";
+
+/**
+ * Fired on every forward client_matters stage transition that carries a
+ * DR-049 journey cadence. Operator decision 2026-06-09 (CRM Bible
+ * section 12): GoHighLevel is the execution layer that runs cadences;
+ * Supabase notifies it. Stage transitions previously scheduled in-app
+ * email_sequences rows whose lead_id (a screened_leads UUID) resolved
+ * against the legacy leads table, so every row was skipped and the
+ * cadence map delivered nothing. This event replaces that path.
+ *
+ * Unlike the five triage actions this is not a screened_leads lifecycle
+ * event, so it does not extend CommonEnvelope: band / submitted_at /
+ * contact / status_changed_* cannot be honestly filled from the matter
+ * row. The envelope carries only the fields the matter can vouch for;
+ * the contact snapshot lives in the extension as primary_name / email /
+ * phone. GHL workflows MUST filter on `action` before consuming.
+ */
+export interface MatterStageChangedPayload {
+  action: "matter_stage_changed";
+  /**
+   * Source screened lead public id (L-YYYY-MM-DD-XXX) when resolvable,
+   * else the matter UUID. Kept on the envelope so webhook_outbox rows
+   * and GHL-side correlation with the earlier `taken` event work the
+   * same way as the triage actions.
+   */
+  lead_id: string;
+  firm_id: string;
+  /**
+   * `<matter_id>:stage:<to_stage>`. The stage machine is forward-only
+   * (matter-stage-pure.ts), so each transition fires exactly once.
+   */
+  idempotency_key: string;
+  intake_language: string;
+  matter_stage_changed: {
+    matter_id: string;
+    source_screened_lead_id: string | null;
+    from_stage: MatterStage;
+    to_stage: MatterStage;
+    cadence_trigger: MatterStageCadenceTrigger;
+    matter_type: string;
+    practice_area: string;
+    primary_name: string;
+    primary_email: string | null;
+    primary_phone: string | null;
+    transitioned_at: string;
+    actor_role: "admin" | "staff" | "operator" | "system";
+  };
+}
+
 export type WebhookPayload =
   | TakenPayload
   | PassedPayload
   | ReferredPayload
   | DeclinedOosPayload
-  | DeclinedBackstopPayload;
+  | DeclinedBackstopPayload
+  | MatterStageChangedPayload;
 
 // ─── Builders ────────────────────────────────────────────────────────────────
 
@@ -235,6 +294,47 @@ export function buildDeclinedOosPayload(args: {
       decline_body: args.declineBody,
       decline_template_source: args.declineSource,
       detected_area_label: args.detectedAreaLabel,
+    },
+  };
+}
+
+export function buildMatterStageChangedPayload(args: {
+  matterId: string;
+  firmId: string;
+  sourceScreenedLeadId: string | null;
+  /** screened_leads.lead_id for the source row, when the caller resolved it. */
+  sourceLeadPublicId: string | null;
+  intakeLanguage: string | null;
+  fromStage: MatterStage;
+  toStage: MatterStage;
+  cadenceTrigger: MatterStageCadenceTrigger;
+  matterType: string;
+  practiceArea: string;
+  primaryName: string;
+  primaryEmail: string | null;
+  primaryPhone: string | null;
+  transitionedAt: Date;
+  actorRole: "admin" | "staff" | "operator" | "system";
+}): MatterStageChangedPayload {
+  return {
+    action: "matter_stage_changed",
+    lead_id: args.sourceLeadPublicId ?? args.matterId,
+    firm_id: args.firmId,
+    idempotency_key: `${args.matterId}:stage:${args.toStage}`,
+    intake_language: args.intakeLanguage ?? "en",
+    matter_stage_changed: {
+      matter_id: args.matterId,
+      source_screened_lead_id: args.sourceScreenedLeadId,
+      from_stage: args.fromStage,
+      to_stage: args.toStage,
+      cadence_trigger: args.cadenceTrigger,
+      matter_type: args.matterType,
+      practice_area: args.practiceArea,
+      primary_name: args.primaryName,
+      primary_email: args.primaryEmail,
+      primary_phone: args.primaryPhone,
+      transitioned_at: args.transitionedAt.toISOString(),
+      actor_role: args.actorRole,
     },
   };
 }

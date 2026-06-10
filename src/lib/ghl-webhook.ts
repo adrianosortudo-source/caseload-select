@@ -5,9 +5,12 @@
  * function that hits the firm's ghl_webhook_url. Contract:
  * docs/ghl-webhook-contract.md.
  *
- * Delivery: at-most-once. Webhook fires AFTER the database update succeeds.
- * On HTTP failure or timeout, no retry; the DB row is in the correct state
- * regardless. Phase 3 hardening adds an outbox pattern.
+ * Delivery: at-least-once via webhook_outbox. The webhook fires AFTER the
+ * database update succeeds; a failed or timed-out POST leaves the outbox
+ * row pending and the retry cron re-attempts with exponential backoff
+ * (max 5 attempts), after which the row flips to failed and the operator
+ * can retry manually from /admin/webhook-outbox. Consumers dedupe on
+ * idempotency_key.
  */
 
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
