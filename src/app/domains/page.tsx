@@ -7,7 +7,9 @@
  * Middleware handles the actual routing at edge.
  */
 
+import { redirect } from "next/navigation";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getOperatorSession } from "@/lib/portal-auth";
 import DomainManager from "./DomainManager";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +22,9 @@ type FirmRow = {
 };
 
 export default async function DomainsPage() {
+  const session = await getOperatorSession();
+  if (!session) redirect("/portal/login?error=missing");
+
   const { data } = await supabase
     .from("intake_firms")
     .select("id, name, custom_domain, status")

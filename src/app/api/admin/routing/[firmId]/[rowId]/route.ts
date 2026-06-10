@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { requireOperator } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +8,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ firmId: string; rowId: string }> }
 ) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { firmId, rowId } = await params;
   const body = await req.json() as {
     ghl_pipeline_id?: string | null;
@@ -36,6 +40,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ firmId: string; rowId: string }> }
 ) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { firmId, rowId } = await params;
   const { error } = await supabase
     .from("matter_routing")

@@ -1,6 +1,11 @@
+import { redirect } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
+import { getOperatorSession } from "@/lib/portal-auth";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const session = await getOperatorSession();
+  if (!session) redirect("/portal/login?error=missing");
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const hasResend = !!process.env.RESEND_API_KEY;
   return (

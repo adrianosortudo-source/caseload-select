@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { requireOperator } from "@/lib/admin-auth";
 
 export async function GET() {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { data, error } = await supabase
     .from("sequence_templates")
     .select("id, name, trigger_event, description, is_active, created_at, sequence_steps(count)")
@@ -11,6 +15,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const body = await req.json();
   const { data, error } = await supabase
     .from("sequence_templates")

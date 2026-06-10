@@ -1,8 +1,9 @@
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getOperatorSession } from "@/lib/portal-auth";
 import PageHeader from "@/components/PageHeader";
 import Link from "next/link";
 import RoutingEditor from "./RoutingEditor";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,9 @@ export default async function FirmRoutingPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const session = await getOperatorSession();
+  if (!session) redirect("/portal/login?error=missing");
+
   const { id } = await params;
 
   const [firmRes, routingRes] = await Promise.all([

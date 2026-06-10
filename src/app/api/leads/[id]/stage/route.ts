@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { requireOperator } from "@/lib/admin-auth";
 import { triggerSequence } from "@/lib/sequence-engine";
 import { createClioMatter } from "@/lib/clio-conversion";
 import { isConflictClear, registerWonClient } from "@/lib/conflict-check";
 import { cancelSequenceByTrigger } from "@/lib/send-sequences";
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { id } = await ctx.params;
   const { stage } = await req.json();
 

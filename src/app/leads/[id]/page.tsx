@@ -8,9 +8,10 @@
  * Interactive actions (stage change, conflict check) handled by LeadActions.
  */
 
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getOperatorSession } from "@/lib/portal-auth";
 import { PRIORITY_BAND_COLORS, type PriorityBand } from "@/lib/scoring";
 import { BAND_COLORS } from "@/lib/cpi";
 import { STAGES } from "@/lib/types";
@@ -85,6 +86,9 @@ export default async function LeadDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const session = await getOperatorSession();
+  if (!session) redirect("/portal/login?error=missing");
+
   const { id } = await params;
 
   const [leadRes, firmRes, seqRes, conflictCheck, retainerRes, reviewRes, conflictChecksRes] = await Promise.all([

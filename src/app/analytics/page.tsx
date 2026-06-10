@@ -9,8 +9,10 @@
  * Data: live from intake_sessions. No RPC required  -  all client-side queries.
  */
 
+import { redirect } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getOperatorSession } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +56,9 @@ function Bar({ label, count, max, colorClass }: { label: string; count: number; 
 }
 
 export default async function AnalyticsPage() {
+  const session = await getOperatorSession();
+  if (!session) redirect("/portal/login?error=missing");
+
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();

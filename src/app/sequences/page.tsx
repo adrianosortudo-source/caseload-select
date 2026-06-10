@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getOperatorSession } from "@/lib/portal-auth";
 import Link from "next/link";
 import SequenceToggle from "./SequenceToggle";
 
@@ -24,6 +26,9 @@ const TRIGGER_LABELS: Record<string, string> = {
 };
 
 export default async function SequencesPage() {
+  const session = await getOperatorSession();
+  if (!session) redirect("/portal/login?error=missing");
+
   const { data: sequences, error } = await supabase
     .from("sequence_templates")
     .select("id, name, trigger_event, description, is_active, sequence_steps(count)")

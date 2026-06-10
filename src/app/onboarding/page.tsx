@@ -12,8 +12,10 @@
  * (which has Bearer auth) separately, so this page does not expose secrets.
  */
 
+import { redirect } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getOperatorSession } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -169,6 +171,9 @@ async function getFirmChecklists(): Promise<FirmChecklist[]> {
 }
 
 export default async function OnboardingPage() {
+  const session = await getOperatorSession();
+  if (!session) redirect("/portal/login?error=missing");
+
   const firms = await getFirmChecklists();
 
   const readyCount = firms.filter((f) => f.ready_to_launch).length;

@@ -6,7 +6,9 @@
  * name, email, phone, or matter type.
  */
 
+import { redirect } from "next/navigation";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getOperatorSession } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +54,9 @@ export default async function ConflictRegisterPage({
 }: {
   searchParams: Promise<{ q?: string; firm?: string }>;
 }) {
+  const session = await getOperatorSession();
+  if (!session) redirect("/portal/login?error=missing");
+
   const { q: rawQ, firm: firmFilter } = await searchParams;
   const q = rawQ?.trim() ?? "";
 

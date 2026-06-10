@@ -1,11 +1,16 @@
+import { redirect } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getOperatorSession } from "@/lib/portal-auth";
 import Board from "./Board";
 import type { Lead, LawFirm } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function PipelinePage() {
+  const session = await getOperatorSession();
+  if (!session) redirect("/portal/login?error=missing");
+
   const [leadsRes, firmsRes] = await Promise.all([
     supabase.from("leads").select("*").order("updated_at", { ascending: false }),
     supabase.from("law_firm_clients").select("*"),

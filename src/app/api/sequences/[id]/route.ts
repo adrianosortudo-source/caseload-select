@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { requireOperator } from "@/lib/admin-auth";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, ctx: Ctx) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { id } = await ctx.params;
   const { data, error } = await supabase
     .from("sequence_templates")
@@ -16,6 +20,9 @@ export async function GET(_req: Request, ctx: Ctx) {
 }
 
 export async function PATCH(req: Request, ctx: Ctx) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { id } = await ctx.params;
   const body = await req.json();
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };

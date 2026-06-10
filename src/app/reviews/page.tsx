@@ -1,10 +1,15 @@
+import { redirect } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getOperatorSession } from "@/lib/portal-auth";
 import ReviewsClient from "./ReviewsClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReviewsPage() {
+  const session = await getOperatorSession();
+  if (!session) redirect("/portal/login?error=missing");
+
   // Load review requests with lead + firm names
   const [revRes, leadRes, firmRes, seqRes, tmplRes] = await Promise.all([
     supabase

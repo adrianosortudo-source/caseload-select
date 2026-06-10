@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { requireOperator } from "@/lib/admin-auth";
 
 const ALLOWED = [
   "unaware",
@@ -11,6 +12,9 @@ const ALLOWED = [
 ];
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { id } = await ctx.params;
   const { lead_state } = await req.json();
 

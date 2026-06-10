@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getOperatorSession } from "@/lib/portal-auth";
 import { STAGES, BANDS } from "@/lib/types";
 import { BAND_COLORS } from "@/lib/cpi";
 
@@ -63,6 +65,9 @@ function Bar({ label, count, max, colorClass }: { label: string; count: number; 
 
 // ── Page ──────────────────────────────────────────────────────────────────
 export default async function Dashboard() {
+  const session = await getOperatorSession();
+  if (!session) redirect("/portal/login?error=missing");
+
   const { stats, error } = await getStats();
 
   if (!stats) {

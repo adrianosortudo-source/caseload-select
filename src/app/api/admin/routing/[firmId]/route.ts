@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { requireOperator } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +8,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ firmId: string }> }
 ) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { firmId } = await params;
   const { data, error } = await supabase
     .from("matter_routing")
@@ -22,6 +26,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ firmId: string }> }
 ) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { firmId } = await params;
   const body = await req.json() as {
     sub_type: string;

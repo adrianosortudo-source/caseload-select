@@ -10,9 +10,14 @@
  *   - Target: 2–3 questions served instead of 6–8
  *
  * No GPT calls. Pure server-side logic validation.
+ *
+ * Auth: requireOperator(). Diagnostic output only, but /api/admin/* routes
+ * carry the operator gate uniformly; ungated admin routes are the audit
+ * class this closes.
  */
 
 import { NextResponse } from "next/server";
+import { requireOperator } from "@/lib/admin-auth";
 import { autoConfirmFromContext } from "@/lib/auto-confirm";
 import { selectNextQuestions } from "@/lib/question-selector";
 import { DEFAULT_QUESTION_MODULES } from "@/lib/default-question-modules";
@@ -89,6 +94,9 @@ function baselineQuestionCount(paId: string): number {
 }
 
 export async function GET() {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const results = SCENARIOS.map(scenario => {
     const qs = DEFAULT_QUESTION_MODULES[scenario.pa];
     if (!qs) {

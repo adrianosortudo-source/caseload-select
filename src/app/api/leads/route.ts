@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { requireOperator } from "@/lib/admin-auth";
 import { computeScore } from "@/lib/scoring";
 import { intentToState } from "@/lib/state";
 import { sendEmail } from "@/lib/email";
 import { triggerSequence } from "@/lib/sequence-engine";
 
 export async function POST(req: Request) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const body = await req.json();
 
   const s = computeScore({

@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getOperatorSession } from "@/lib/portal-auth";
 import Link from "next/link";
 import FirmForm from "./FirmForm";
 import PortalLinkButton from "./PortalLinkButton";
@@ -7,6 +9,9 @@ import PortalLinkButton from "./PortalLinkButton";
 export const dynamic = "force-dynamic";
 
 export default async function FirmsPage() {
+  const session = await getOperatorSession();
+  if (!session) redirect("/portal/login?error=missing");
+
   const [firmsRes, leadsRes] = await Promise.all([
     supabase.from("law_firm_clients").select("*").order("created_at", { ascending: false }),
     supabase.from("leads").select("id,law_firm_id,stage,estimated_value"),

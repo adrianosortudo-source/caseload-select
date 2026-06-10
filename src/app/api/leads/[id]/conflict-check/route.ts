@@ -8,19 +8,24 @@
  *   {}                                -  run fresh check
  *   { override_reason: "..." }        -  override a potential_conflict result
  *
- * Auth: none  -  operator-only internal app, same trust level as the rest of the pipeline.
+ * Auth: requireOperator() on both methods (launch audit B2; the previous
+ * "operator-only internal app" assumption left the route open).
  * Override action (setting override_reason) is intentionally restricted to
  * potential_conflict only; confirmed_conflict cannot be self-overridden.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { requireOperator } from "@/lib/admin-auth";
 import { runConflictCheck, getLatestConflictCheck } from "@/lib/conflict-check";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { id } = await params;
   const check = await getLatestConflictCheck(id);
 
@@ -35,6 +40,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { id } = await params;
   const body = (await req.json().catch(() => ({}))) as { override_reason?: string };
 

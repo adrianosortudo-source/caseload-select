@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { requireOperator } from "@/lib/admin-auth";
 
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { id } = await params;
 
   const { data: existing } = await supabase
@@ -42,6 +46,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { id } = await params;
   const { step_ids } = await req.json() as { step_ids: string[] };
 

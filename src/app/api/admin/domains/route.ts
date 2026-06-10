@@ -21,14 +21,11 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { addVercelDomain, removeVercelDomain, getVercelDomainStatus } from "@/lib/vercel-domains";
 import { isCronAuthorized } from "@/lib/cron-auth";
 
-// Wrapper kept for call-site readability. The actual constant-time
-// compare lives in @/lib/cron-auth.
-function authorized(req: NextRequest): boolean {
-  return isCronAuthorized(req);
-}
+// Each handler calls isCronAuthorized directly (no local wrapper) so the
+// legacy-surface-auth discipline test can count one gate per handler.
 
 export async function GET(req: NextRequest) {
-  if (!authorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isCronAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { data, error } = await supabase
     .from("intake_firms")
@@ -40,7 +37,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!authorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isCronAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { firm_id, domain } = await req.json() as { firm_id?: string; domain?: string };
   if (!firm_id || !domain) {
@@ -81,7 +78,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!authorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isCronAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { firm_id } = await req.json() as { firm_id?: string };
   if (!firm_id) return NextResponse.json({ error: "firm_id required" }, { status: 400 });

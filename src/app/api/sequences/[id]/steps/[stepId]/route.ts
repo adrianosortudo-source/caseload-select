@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { requireOperator } from "@/lib/admin-auth";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; stepId: string }> }
 ) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { id, stepId } = await params;
   const body = await req.json();
 
@@ -27,6 +31,9 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; stepId: string }> }
 ) {
+  const denied = await requireOperator();
+  if (denied) return denied;
+
   const { id, stepId } = await params;
 
   const { error } = await supabase

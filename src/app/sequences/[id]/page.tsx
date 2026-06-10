@@ -1,10 +1,14 @@
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
-import { notFound } from "next/navigation";
+import { getOperatorSession } from "@/lib/portal-auth";
+import { notFound, redirect } from "next/navigation";
 import SequenceEditor from "./SequenceEditor";
 
 export const dynamic = "force-dynamic";
 
 export default async function SequenceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const session = await getOperatorSession();
+  if (!session) redirect("/portal/login?error=missing");
+
   const { id } = await params;
 
   const { data, error } = await supabase
