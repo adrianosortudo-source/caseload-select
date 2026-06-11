@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>DRG Law · Client Data Request · CaseLoad Select</title>
+<!--
+DOC-META v1
+  doc-type:       brief
+  pillar:         C (Capture)
+  scope:          one-page client data request sheet for DRG CRM activation; meeting artifact for the Damaris ask
+  status:         canonical
+  version:        v1
+  superseded-by:  null
+  use-when:       "asking DRG (or adapting for any client firm) for their past-client base to start CRM activation"
+  do-not:         "send without the pilot agreement in place; Section 7 is the anchor this sheet cites"
+  related:        [00_Engagement/PilotAgreement/PilotAgreement_Final_v1.html]
+  last-reviewed:  2026-06-10
+  last-edited:    2026-06-10
+-->
+<meta name="viewport" content="width=820"/>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700&family=Manrope:wght@700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --navy: #1E2F58;
+  --navy-deep: #0D1520;
+  --gold: #C4B49A;
+  --parchment: #F4F3EF;
+  --white: #FFFFFF;
+  --ink: #2A3447;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+@page { size: A4; margin: 0; }
+@media print {
+  body { width: 210mm; }
+  .page { width: 210mm; min-height: 297mm; page-break-after: avoid; }
+  .followups { display: none; }
+}
+body {
+  background: #E8E6E0;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--ink);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.page {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  background: var(--parchment);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.header {
+  background: var(--navy-deep);
+  padding: 18px 28px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--gold);
+}
+.logo-img { height: 17px; width: auto; display: block; flex-shrink: 0; }
+.header-label {
+  font-family: 'Oxanium', sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+/* Title */
+.title-block { padding: 34px 40px 22px; }
+h1 {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 1.15;
+  color: var(--navy);
+  text-wrap: balance;
+}
+.tsq {
+  display: inline-block;
+  width: 0.32em; height: 0.32em;
+  background: var(--gold);
+  margin-left: 0.18em;
+  vertical-align: baseline;
+}
+.lead {
+  margin-top: 12px;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--ink);
+  max-width: 165mm;
+  text-wrap: pretty;
+}
+.lead strong { font-weight: 600; color: var(--navy); }
+
+/* Unlock panels */
+.unlocks { display: flex; gap: 10px; padding: 0 40px; }
+.panel {
+  flex: 1;
+  background: var(--white);
+  border: 1px solid #E0DCD2;
+  border-top: 3px solid var(--gold);
+  border-radius: 4px;
+  padding: 14px 15px 15px;
+}
+.panel .num {
+  font-family: 'Oxanium', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+.panel h3 {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--navy);
+  margin: 5px 0 6px;
+  text-wrap: balance;
+}
+.panel p { font-size: 10.5px; line-height: 1.5; text-wrap: pretty; }
+
+/* Two-column body */
+.body-grid { display: flex; gap: 14px; padding: 20px 40px 0; }
+.col-left { flex: 1.25; }
+.col-right { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.sec-label {
+  font-family: 'Oxanium', sans-serif;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--navy);
+  border-bottom: 2px solid var(--gold);
+  padding-bottom: 5px;
+  margin-bottom: 9px;
+}
+table { width: 100%; border-collapse: collapse; }
+td, th {
+  font-size: 10.5px;
+  line-height: 1.45;
+  padding: 6px 8px;
+  border-bottom: 1px solid #E0DCD2;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  font-family: 'Oxanium', sans-serif;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--navy);
+  background: #ECEAE3;
+}
+.req {
+  font-family: 'Oxanium', sans-serif;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.req.must { color: var(--navy); }
+.req.nice { color: #8B8676; }
+.note-card {
+  background: var(--white);
+  border: 1px solid #E0DCD2;
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+.note-card h4 {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 800;
+  font-size: 11.5px;
+  color: var(--navy);
+  margin-bottom: 5px;
+}
+.note-card p { font-size: 10.5px; line-height: 1.5; text-wrap: pretty; }
+
+/* Protection strip */
+.protect {
+  margin: 20px 40px 0;
+  background: var(--navy);
+  border-radius: 4px;
+  padding: 16px 20px 14px;
+  color: var(--white);
+}
+.protect .sec-label { color: var(--gold); border-bottom-color: var(--gold); }
+.protect-grid { display: flex; gap: 16px; }
+.protect-item { flex: 1; }
+.protect-item h4 {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 800;
+  font-size: 10.5px;
+  color: var(--gold);
+  margin-bottom: 4px;
+  text-wrap: balance;
+}
+.protect-item p { font-size: 9.5px; line-height: 1.5; color: #E7E4DC; text-wrap: pretty; }
+
+/* Footer action row */
+.action-row {
+  margin: 18px 40px 0;
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+}
+.send-card {
+  flex: 1;
+  background: var(--white);
+  border: 1px solid #E0DCD2;
+  border-left: 3px solid var(--gold);
+  border-radius: 4px;
+  padding: 12px 16px;
+}
+.send-card .lab {
+  font-family: 'Oxanium', sans-serif;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--navy);
+}
+.send-card .email {
+  font-family: 'Oxanium', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
+  margin-top: 4px;
+}
+.seq-card { flex: 1.6; padding: 12px 4px; }
+.seq-card p { font-size: 10.5px; line-height: 1.55; text-wrap: pretty; }
+.seq-card strong { font-weight: 600; color: var(--navy); }
+
+.page-footer {
+  margin-top: auto;
+  padding: 14px 40px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-family: 'Oxanium', sans-serif;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #8B8676;
+}
+
+/* Internal followups (screen only) */
+.followups {
+  width: 210mm; margin: 16px auto; background: #FFF;
+  border: 1px dashed #B9B2A0; border-radius: 4px; padding: 14px 18px;
+  font-size: 10px;
+}
+.followups h5 {
+  font-family: 'Oxanium', sans-serif; font-size: 9px; font-weight: 700;
+  letter-spacing: 0.2em; text-transform: uppercase; color: #8B8676; margin-bottom: 8px;
+}
+.followups table td, .followups table th { font-size: 9px; padding: 4px 6px; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="header">
+    <img class="logo-img" src="https://caseload-select.vercel.app/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select · Sign Better Cases"/>
+    <div class="header-label">Client Data Request · DRG Law · June 2026</div>
+  </div>
+
+  <div class="title-block">
+    <h1>Put your client history to work<span class="tsq"></span></h1>
+    <p class="lead">One list unlocks three systems that are already built and waiting: <strong>conflict protection</strong> on every new lead, a <strong>review engine</strong> for the firm's Google profile, and a <strong>reactivation cadence</strong> for the clients who already trust you. This sheet covers exactly what to send and how it stays protected.</p>
+  </div>
+
+  <div class="unlocks">
+    <div class="panel">
+      <div class="num">01</div>
+      <h3>Conflict protection</h3>
+      <p>Every new lead is checked against your client history before a consultation is booked. Internal use only; nobody on the list is contacted for this.</p>
+    </div>
+    <div class="panel">
+      <div class="num">02</div>
+      <h3>Review engine</h3>
+      <p>Recent clients receive an invitation to review the firm on Google. You approve the wording before anything goes out. Reviews carry the local search profile.</p>
+    </div>
+    <div class="panel">
+      <div class="num">03</div>
+      <h3>Repeat and referral</h3>
+      <p>Leases renew, companies grow, wills age. A quiet cadence keeps the firm present when the next matter surfaces, and makes referring you easy.</p>
+    </div>
+  </div>
+
+  <div class="body-grid">
+    <div class="col-left">
+      <div class="sec-label">What to send</div>
+      <table>
+        <tr><th>Field</th><th></th></tr>
+        <tr><td>Full name</td><td class="req must">Required</td></tr>
+        <tr><td>Email or phone (one of the two is enough)</td><td class="req must">Required</td></tr>
+        <tr><td>Practice area or matter type</td><td class="req must">Required</td></tr>
+        <tr><td>Year the matter closed (approximate is fine)</td><td class="req must">Required</td></tr>
+        <tr><td>City</td><td class="req nice">Helpful</td></tr>
+        <tr><td>Language (English or Portuguese)</td><td class="req nice">Helpful</td></tr>
+        <tr><td>How they found you</td><td class="req nice">Helpful</td></tr>
+        <tr><td>Year the matter opened</td><td class="req nice">Helpful</td></tr>
+      </table>
+    </div>
+    <div class="col-right">
+      <div class="note-card">
+        <h4>Leave out</h4>
+        <p>No matter details, no documents, no privileged content. Contact details and relationship facts only; the work product stays at the firm.</p>
+      </div>
+      <div class="note-card">
+        <h4>Any format works</h4>
+        <p>Outlook export, spreadsheet, invoice list, even a photo of a printed list. Send whatever exists today. Cleaning and organizing it is our job, not yours.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="protect">
+    <div class="sec-label">How it stays protected</div>
+    <div class="protect-grid">
+      <div class="protect-item">
+        <h4>You own the data</h4>
+        <p>Pilot Agreement, Section 7: DRG Law is the sole owner. CaseLoad Select processes it only on the firm's behalf, under PIPEDA.</p>
+      </div>
+      <div class="protect-item">
+        <h4>Canadian servers</h4>
+        <p>Lead and intake records are stored in Montreal. Access is limited to the operator running your system.</p>
+      </div>
+      <div class="protect-item">
+        <h4>CASL by default</h4>
+        <p>Contacts past the two-year consent window receive no email or SMS. They stay in the conflict register only.</p>
+      </div>
+      <div class="protect-item">
+        <h4>Exit terms in writing</h4>
+        <p>Full export within 30 days of termination. Permanent deletion within 15 days after. Already signed, already binding.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="action-row">
+    <div class="send-card">
+      <div class="lab">Send the list to</div>
+      <div class="email">adriano@caseloadselect.ca</div>
+    </div>
+    <div class="seq-card">
+      <p><strong>What happens next.</strong> First, the conflict register goes live. Next, review invitations go to recent clients, with your approval on the wording. Then the reactivation cadence starts on the contacts whose consent window is open.</p>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>CaseLoad Select · Sign Better Cases</span>
+    <span>Prepared for DRG Law</span>
+  </div>
+
+</div>
+
+<!-- Internal followups live in the canonical copy at 06_Clients/DRGLaw/04_Capture/ and in 00_System/FOLLOWUPS.md. Stripped from this public share copy. -->
+
+</body>
+</html>
