@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=820">
+<title>CaseLoad Select / DRG Law &middot; Contact Report &middot; Website Walkthrough &middot; 11 June 2026</title>
+<!--
+DOC-META v1
+  doc-type:       report
+  pillar:         Ops
+  scope:          contact report for the 2026-06-11 DRG website walkthrough call; decisions, owes, consolidated input list
+  status:         canonical
+  version:        v1
+  superseded-by:  null
+  use-when:       "checking what was decided on the 11 June call and what each side owes before the drglaw.ca cutover"
+  do-not:         "treat the input list as fluid; it is the written list promised to Damaris on the call"
+  related:        [DRGLaw_ClientData_RequestSheet_v1.html, DRGLaw_ContactReport_Kickoff_v1.html]
+  last-reviewed:  2026-06-11
+  last-edited:    2026-06-11
+-->
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700&family=Manrope:wght@700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --c-deep-black: #0D1520;
+    --c-navy: #1E2F58;
+    --c-gold: #C4B49A;
+    --c-parchment: #F4F3EF;
+    --c-white: #FFFFFF;
+    --c-body: #4A5A72;
+    --c-muted: #8090A8;
+    --c-muted-readable: #5E6D82;
+    --c-gold-on-light: #8B7A5E;
+    --c-border: #E0DDD6;
+    --c-success: #27834A;
+    --font-display: 'Oxanium','Rajdhani',sans-serif;
+    --font-heading: 'Manrope','Inter',sans-serif;
+    --font-body: 'DM Sans','Inter',sans-serif;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { font-family:var(--font-body); background:#e0ddd8; color:var(--c-body); }
+
+  .page { width:210mm; min-height:297mm; margin:0 auto 24px; position:relative; overflow:hidden; background:var(--c-white); box-shadow:0 4px 32px rgba(0,0,0,0.18); display:flex; flex-direction:column; }
+
+  @media print {
+    body { background:var(--c-white); }
+    .page { margin:0; box-shadow:none; height:297mm; overflow:hidden; page-break-after:always; }
+    .page:last-child { page-break-after:auto; }
+  }
+
+  .header-bar { background:var(--c-deep-black); height:48px; flex-shrink:0; padding:14px 32px; display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--c-gold); }
+  .hb-logo { height:17px; width:auto; display:block; }
+  .hb-title { font-family:var(--font-display); font-size:9.5px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:rgba(255,255,255,0.6); }
+
+  .sp { padding:22px 28px 18px; flex:1; display:flex; flex-direction:column; gap:14px; }
+
+  .hero { background:var(--c-deep-black); color:var(--c-white); padding:24px 28px; }
+  .hero .eyebrow { font-family:var(--font-display); font-size:9.5px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold); margin-bottom:11px; }
+  .hero h1 { font-family:var(--font-heading); font-size:22px; font-weight:800; line-height:1.15; letter-spacing:-0.02em; color:var(--c-white); margin-bottom:13px; }
+  .hero h1 .accent { color:var(--c-gold); }
+  .hero h1 .terminal-sq { display:inline-block; width:6px; height:6px; background:var(--c-gold); margin-left:5px; vertical-align:top; position:relative; top:4px; }
+  .hero p { font-family:var(--font-body); font-size:11.5px; line-height:1.6; color:rgba(255,255,255,0.88); max-width:680px; }
+  .hero p strong { color:var(--c-white); font-weight:600; }
+
+  .meta-band { background:var(--c-parchment); border:1px solid var(--c-border); padding:13px 16px; display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .meta-item { font-family:var(--font-body); font-size:10px; line-height:1.5; color:var(--c-body); }
+  .meta-item .key { font-family:var(--font-display); font-size:8.5px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); display:block; margin-bottom:4px; }
+  .meta-item strong { color:var(--c-navy); font-weight:600; }
+
+  .sect-h { font-family:var(--font-heading); font-size:14px; font-weight:700; color:var(--c-navy); margin-bottom:8px; line-height:1.3; }
+  .sect-eyebrow { font-family:var(--font-display); font-size:9px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); margin-bottom:5px; }
+
+  .dec-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .dec-tile { background:var(--c-white); border:1px solid var(--c-border); padding:12px 14px; }
+  .dec-tile.feature { border-top:3px solid var(--c-navy); }
+  .dec-tile .num { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; color:var(--c-gold-on-light); margin-bottom:4px; display:block; }
+  .dec-tile .t { font-family:var(--font-heading); font-weight:700; font-size:11px; color:var(--c-navy); margin-bottom:4px; line-height:1.3; }
+  .dec-tile .d { font-family:var(--font-body); font-size:9.75px; line-height:1.5; color:var(--c-body); }
+  .dec-tile .d strong { color:var(--c-navy); font-weight:600; }
+
+  .owe-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .owe-card { background:var(--c-white); border:1px solid var(--c-border); padding:16px 18px; }
+  .owe-card .label { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); margin-bottom:6px; }
+  .owe-card h3 { font-family:var(--font-heading); font-weight:700; font-size:13px; color:var(--c-navy); margin-bottom:9px; }
+  .owe-card ul { list-style:none; padding:0; margin:0; }
+  .owe-card li { font-family:var(--font-body); font-size:10.25px; line-height:1.5; color:var(--c-body); padding:5px 0 5px 12px; position:relative; display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+  .owe-card li::before { content:''; position:absolute; left:0; top:11px; width:4px; height:4px; background:var(--c-gold); }
+  .owe-card li .text { flex:1; }
+  .owe-card li strong { color:var(--c-navy); font-weight:600; }
+  .owe-card li .due { font-family:var(--font-display); font-size:8.25px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--c-navy); background:var(--c-parchment); padding:2px 6px; border:1px solid var(--c-border); white-space:nowrap; flex-shrink:0; line-height:1.3; }
+  .owe-card li .due.urgent { background:var(--c-navy); color:var(--c-gold); border-color:var(--c-navy); }
+  .owe-card li .due.done { background:var(--c-success); color:var(--c-white); border-color:var(--c-success); }
+
+  .inputs-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; align-items:start; }
+  .inputs-col { display:flex; flex-direction:column; gap:10px; }
+  .card-note { font-family:var(--font-body); font-size:9px; color:var(--c-muted-readable); margin-top:9px; line-height:1.5; }
+  .card-note .mono { font-family:var(--font-display); font-size:8px; font-weight:600; color:var(--c-navy); word-break:break-all; }
+
+  .hold-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .hold-tile { background:var(--c-white); border:1px solid var(--c-border); padding:13px 14px; display:flex; flex-direction:column; }
+  .hold-tile .key { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; color:var(--c-gold-on-light); margin-bottom:6px; text-transform:uppercase; }
+  .hold-tile .t { font-family:var(--font-heading); font-weight:700; font-size:11.5px; color:var(--c-navy); line-height:1.25; margin-bottom:6px; }
+  .hold-tile .d { font-family:var(--font-body); font-size:9.5px; line-height:1.5; color:var(--c-body); flex:1; }
+  .hold-tile .d strong { color:var(--c-navy); font-weight:600; }
+
+  .scope-band { background:var(--c-parchment); border:1px solid var(--c-border); padding:14px 18px; }
+  .scope-band .label { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); margin-bottom:6px; }
+  .scope-band h3 { font-family:var(--font-heading); font-weight:700; font-size:13px; color:var(--c-navy); margin-bottom:8px; }
+  .scope-band p { font-family:var(--font-body); font-size:10.25px; line-height:1.55; color:var(--c-body); }
+  .scope-band p strong { color:var(--c-navy); font-weight:600; }
+
+  .cadence { background:var(--c-navy); color:var(--c-white); padding:18px 22px; margin-top:auto; }
+  .cadence .label { font-family:var(--font-display); font-size:9px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold); margin-bottom:7px; }
+  .cadence h3 { font-family:var(--font-heading); font-weight:700; font-size:13px; color:var(--c-white); margin-bottom:10px; }
+  .cadence-row { font-family:var(--font-body); font-size:10.25px; line-height:1.55; color:rgba(255,255,255,0.92); padding:4px 0; display:grid; grid-template-columns:110px 1fr; gap:14px; }
+  .cadence-row .key { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold); padding-top:1px; }
+  .cadence-row strong { color:var(--c-white); font-weight:600; }
+
+  .footer { padding:11px 28px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--c-border); background:var(--c-white); }
+  .footer-brand { font-family:var(--font-display); font-size:9px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-muted); }
+  .footer-page { font-family:var(--font-display); font-size:9px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-muted); }
+
+  strong { font-weight:600; color:var(--c-navy); }
+</style>
+</head>
+<body>
+
+<!-- ============== PAGE 1 ============== -->
+<div class="page">
+  <div class="header-bar">
+    <img class="hb-logo" src="https://caseload-select.vercel.app/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select &middot; Sign Better Cases">
+    <div class="hb-title">DRG Law &middot; Contact Report &middot; Website Walkthrough &middot; 11 June 2026</div>
+  </div>
+
+  <div class="sp">
+
+    <div class="hero">
+      <div class="eyebrow">Contact Report &middot; Website Walkthrough &middot; DRG Law &times; CaseLoad Select</div>
+      <h1>Site approved to ship. Photos confirmed. Logo, tagline, and copy revisions stay in flight after launch<span class="terminal-sq"></span></h1>
+      <p>This report records what was decided in the working session on the morning of <strong>11 June 2026</strong>, what was tested live, and what each side owes between now and the drglaw.ca&nbsp;cutover.</p>
+    </div>
+
+    <div class="meta-band">
+      <div class="meta-item"><span class="key">Date</span><strong>11 June 2026</strong>, morning</div>
+      <div class="meta-item"><span class="key">Channel</span><strong>Video call</strong>, recorded via Tactiq</div>
+      <div class="meta-item"><span class="key">Attendees</span>Adriano Domingues, D&acirc;maris Regina Dias Guimar&atilde;es da&nbsp;Rocha</div>
+      <div class="meta-item"><span class="key">Focus</span>Website v3 walkthrough, intake widget live test, CRM next&nbsp;steps</div>
+    </div>
+
+    <div>
+      <div class="sect-eyebrow">Inputs Requested &middot; The Written List Promised on the Call</div>
+      <h2 class="sect-h">Everything DRG sends, in one&nbsp;place.</h2>
+      <div class="inputs-grid">
+
+        <div class="owe-card">
+          <div class="label">Group 1 &middot; Site content</div>
+          <h3>To finish the site itself</h3>
+          <ul>
+            <li><span class="text"><strong>New photos</strong> for the hero block, About page, and LinkedIn header</span><span class="due urgent">Today</span></li>
+            <li><span class="text"><strong>Logo pick</strong> from the three Counsel options</span><span class="due urgent">This week</span></li>
+            <li><span class="text"><strong>Tagline decision</strong>: first yes or no. If yes, Adriano returns options</span><span class="due">This week</span></li>
+            <li><span class="text"><strong>Flat-fee pricing table</strong>, updated to include Real Estate</span><span class="due">Weekend</span></li>
+            <li><span class="text"><strong>About-page personal line</strong>, if a stronger version exists</span><span class="due">Next week</span></li>
+            <li><span class="text"><strong>EN + PT review flags</strong> captured in a side doc and sent</span><span class="due">Next week</span></li>
+          </ul>
+        </div>
+
+        <div class="owe-card">
+          <div class="label">Group 2 &middot; Domain and email access</div>
+          <h3>To put the site at drglaw.ca</h3>
+          <ul>
+            <li><span class="text"><strong>Wix account login</strong>, or a screen-share session. The domain settings for drglaw.ca live inside the Wix dashboard</span><span class="due urgent">This week</span></li>
+            <li><span class="text"><strong>Where drglaw.ca was purchased</strong> (likely Wix; if elsewhere, access to that account)</span><span class="due urgent">This week</span></li>
+            <li><span class="text"><strong>Microsoft 365 admin access</strong>, or screenshots of the full domain-records page in Wix, so @drglaw.ca email keeps working through the move</span><span class="due urgent">This week</span></li>
+            <li><span class="text"><strong>Anything on the old Wix site worth keeping</strong> (stored form submissions, pages, files), flagged before it is retired</span><span class="due">This week</span></li>
+          </ul>
+        </div>
+
+        <div class="owe-card" style="grid-column:1 / -1;">
+          <div class="label">Group 3 &middot; Client database</div>
+          <h3>To start CRM activation</h3>
+          <ul>
+            <li><span class="text"><strong>Past-client list</strong>, organized as discussed: closed, active, mid-engagement. Per client: name, email or phone, practice area, year the matter closed. Any format works; cleaning and organizing is on CaseLoad</span><span class="due">Weekend / next week</span></li>
+          </ul>
+          <p class="card-note">Full one-page spec, including what to leave out and how the data is protected: <span class="mono">app.caseloadselect.ca/clients/drglaw/DRGLaw_ClientData_RequestSheet_v1.html</span></p>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="footer-brand">CaseLoad Select &middot; Sign Better Cases</div>
+    <div class="footer-page">Page 1 of 3</div>
+  </div>
+</div>
+
+<!-- ============== PAGE 2 ============== -->
+<div class="page">
+  <div class="header-bar">
+    <img class="hb-logo" src="https://caseload-select.vercel.app/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select &middot; Sign Better Cases">
+    <div class="hb-title">DRG Law &middot; Contact Report &middot; Website Walkthrough &middot; 11 June 2026</div>
+  </div>
+
+  <div class="sp">
+
+    <div>
+      <div class="sect-eyebrow">Decisions Recorded &middot; Eleven Items</div>
+      <h2 class="sect-h">What was decided in the&nbsp;room.</h2>
+      <div class="dec-grid">
+
+        <div class="dec-tile feature">
+          <span class="num">01 &middot; Website</span>
+          <div class="t">Site reviewed end-to-end, approved to ship</div>
+          <div class="d">D&acirc;maris read the full site ahead of the call. Reaction: <strong>&ldquo;achei bem bonito, gostei.&rdquo;</strong> Decision: push to drglaw.ca now so Google starts indexing. Copy revisions continue on the&nbsp;live&nbsp;site.</div>
+        </div>
+
+        <div class="dec-tile feature">
+          <span class="num">02 &middot; Photos</span>
+          <div class="t">Photos confirmed in&nbsp;hand</div>
+          <div class="d">D&acirc;maris confirmed she has the new photos. She sends them to Adriano post-call so the hero block, About page, and LinkedIn header can&nbsp;be&nbsp;applied.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">03 &middot; Logo</span>
+          <div class="t">Decision still in D&acirc;maris&rsquo;s&nbsp;court</div>
+          <div class="d">D&acirc;maris thought she had communicated the pick; she had not. Apartment move week was chaotic. She revisits the three Counsel logo options and confirms. Site currently carries a placeholder ready for&nbsp;swap.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">04 &middot; Pricing page</span>
+          <div class="t">Flat-fee table to populate from D&acirc;maris&rsquo;s reference&nbsp;sheet</div>
+          <div class="d">D&acirc;maris keeps an internal price table. She updates it (Real Estate missing) and sends. Rationale: <strong>&ldquo;how much does a lawyer cost&rdquo;</strong> is among the most-searched queries; published flat fees pull qualified&nbsp;visitors.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">05 &middot; Service line copy</span>
+          <div class="t">Current label rewrites to the industry standard, Fractional General&nbsp;Counsel</div>
+          <div class="d">D&acirc;maris flagged the existing service-line nomenclature as unfamiliar. The recognized term in market is <strong>Fractional General Counsel</strong>. Update the label, the page H1, and the URL slug so the page matches what prospects&nbsp;search.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">06 &middot; Bilingual</span>
+          <div class="t">Portuguese version needs a full revision&nbsp;pass</div>
+          <div class="d">EN reviewed thoroughly. PT received only partial review on the CaseLoad side and contains at least one nonsensical line D&acirc;maris flagged (&ldquo;Leia o contrato antes da assinatura se mover-se&rdquo;). Full PT pass before the next&nbsp;checkpoint.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">07 &middot; About page</span>
+          <div class="t">Personal quote and dates to&nbsp;refine</div>
+          <div class="d">About page draft is provisional on the bio paragraph and dates. D&acirc;maris reviews and substitutes a stronger personal line if she has one. Frame stays trust-building, not&nbsp;CV-style.</div>
+        </div>
+
+        <div class="dec-tile feature">
+          <span class="num">08 &middot; Voice intake</span>
+          <div class="t">Widget tested live; self-correction&nbsp;working</div>
+          <div class="d">D&acirc;maris tested the intake widget mid-call. First pass misread a commercial-lease query as M&amp;A; after a correction signal the agent recovered on retry and produced a sensible brief (<strong>moderate value, low complexity, commercial lease prep</strong>). Self-learning behaviour&nbsp;confirmed.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">09 &middot; Intake routing</span>
+          <div class="t">D&acirc;maris on the recipient list once site goes&nbsp;live</div>
+          <div class="d">Once drglaw.ca is in the air, intake briefs route to D&acirc;maris&rsquo;s inbox in addition to Adriano&rsquo;s for active review and&nbsp;calibration.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">10 &middot; CRM activation</span>
+          <div class="t">Google-review push is staged, not&nbsp;immediate</div>
+          <div class="d">Adriano proposed outreach to past clients for Google reviews (current count: three). D&acirc;maris pushed back on cold asks. Agreed plan: <strong>nurture first, ask second</strong>, through a CRM journey. D&acirc;maris sends client list (weekend or next week) so segmentation can&nbsp;begin.</div>
+        </div>
+
+        <div class="dec-tile">
+          <span class="num">11 &middot; WhatsApp intake</span>
+          <div class="t">Gated on Meta app approval, ~1 week&nbsp;in</div>
+          <div class="d">App submission to Meta is in review since last Thursday. Voice and Web intake remain live independently. WhatsApp channel activates once Meta&nbsp;clears.</div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="footer-brand">CaseLoad Select &middot; Sign Better Cases</div>
+    <div class="footer-page">Page 2 of 3</div>
+  </div>
+</div>
+
+<!-- ============== PAGE 3 ============== -->
+<div class="page">
+  <div class="header-bar">
+    <img class="hb-logo" src="https://caseload-select.vercel.app/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select &middot; Sign Better Cases">
+    <div class="hb-title">DRG Law &middot; Contact Report &middot; Website Walkthrough &middot; 11 June 2026</div>
+  </div>
+
+  <div class="sp">
+
+    <div>
+      <div class="sect-eyebrow">Action Items &middot; Owners and Dates</div>
+      <h2 class="sect-h">What each side owes between now and the drglaw.ca&nbsp;cutover.</h2>
+      <div class="owe-grid">
+
+        <div class="owe-card">
+          <div class="label">CaseLoad Select &middot; Adriano</div>
+          <h3>Ship, rewrite, route</h3>
+          <ul>
+            <li><span class="text">Send D&acirc;maris a <strong>written list</strong> of every input needed for the site cutover; the list is page 1 of this report</span><span class="due done">In this report</span></li>
+            <li><span class="text">Swap site copy: <strong>Fractional General Counsel</strong> label, H1, and URL slug across the service-line page</span><span class="due urgent">This week</span></li>
+            <li><span class="text">Run a full <strong>PT revision pass</strong> on every page before cutover; fix the &ldquo;assinatura se mover-se&rdquo; line and similar artifacts</span><span class="due urgent">This week</span></li>
+            <li><span class="text">Apply photos to <strong>hero, About, LinkedIn</strong> once D&acirc;maris sends them</span><span class="due">On receipt</span></li>
+            <li><span class="text">Cut over to <strong>drglaw.ca</strong> so Google starts indexing</span><span class="due urgent">This week</span></li>
+            <li><span class="text">Find a usable <strong>annotation channel</strong> for D&acirc;maris to flag copy issues (Google Slides screenshots was the past fallback)</span><span class="due">This week</span></li>
+            <li><span class="text">Monitor <strong>Meta app review</strong> and ship the WhatsApp intake the moment it clears</span><span class="due">Ongoing</span></li>
+            <li><span class="text">Build <strong>past-client nurture journey</strong> in the CRM, ready for review with D&acirc;maris after segmentation</span><span class="due">After client list</span></li>
+          </ul>
+        </div>
+
+        <div class="owe-card">
+          <div class="label">DRG Law &middot; D&acirc;maris</div>
+          <h3>Send, decide, review</h3>
+          <ul>
+            <li><span class="text">Send the <strong>new photos</strong> to Adriano</span><span class="due urgent">Today</span></li>
+            <li><span class="text">Confirm the <strong>logo pick</strong> from the three Counsel options</span><span class="due urgent">This week</span></li>
+            <li><span class="text">Decide on <strong>tagline</strong>, first whether to have one. If yes, Adriano returns options</span><span class="due">This week</span></li>
+            <li><span class="text">Update and send the <strong>flat-fee pricing table</strong>, including Real Estate</span><span class="due">This weekend</span></li>
+            <li><span class="text">Review the <strong>EN and PT site</strong> end-to-end; capture flags in a side doc and send</span><span class="due">Next week</span></li>
+            <li><span class="text">Provide an <strong>About-page personal line</strong> if a stronger version exists</span><span class="due">Next week</span></li>
+            <li><span class="text">Test the <strong>voice line</strong> (call-in intake) and report any rough edges</span><span class="due">This week</span></li>
+            <li><span class="text">Share the <strong>past-client list</strong> (organized: closed, active, mid-engagement) so CRM segmentation can start</span><span class="due">This weekend / next week</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="sect-eyebrow">Holds and Returns &middot; What Comes Back Next</div>
+      <h2 class="sect-h">Three items return for the next&nbsp;round.</h2>
+      <div class="hold-grid">
+        <div class="hold-tile">
+          <div class="key">Hold 01 &middot; Logo + tagline</div>
+          <div class="t">Two visual-identity decisions still in D&acirc;maris&rsquo;s&nbsp;hands</div>
+          <div class="d">Logo pick from the three Counsel options. Tagline: first the yes/no, then options if yes. Both should land before the drglaw.ca cutover so the live site carries the locked&nbsp;mark.</div>
+        </div>
+        <div class="hold-tile">
+          <div class="key">Hold 02 &middot; PT revision</div>
+          <div class="t">Portuguese version not yet fully&nbsp;passed</div>
+          <div class="d">CaseLoad-side PT pass is partial. At least one nonsensical line confirmed in flight. Full revision before cutover; D&acirc;maris&rsquo;s own pass folds in afterward as the live-correction&nbsp;loop&nbsp;starts.</div>
+        </div>
+        <div class="hold-tile">
+          <div class="key">Hold 03 &middot; WhatsApp channel</div>
+          <div class="t">Meta app approval still&nbsp;pending</div>
+          <div class="d">App submitted last Thursday. Approval queue is opaque (other platform reviews ran multi-week historically). Voice + Web intake stay live independently; WhatsApp activates the moment Meta&nbsp;clears.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scope-band">
+      <div class="label">Operational context &middot; capacity awareness</div>
+      <h3>Near-capacity admission, post-move&nbsp;week.</h3>
+      <p>D&acirc;maris reported she is approaching practice capacity and is considering an <strong>administrative or clerk-level hire</strong> to handle drafts and admin load. Two urgent client matters are due tomorrow. Apartment move finished but the home office is not fully set up. The weekend may absorb the pricing table and client list; Brazil and Canada have World Cup matches Saturday and&nbsp;Sunday.</p>
+    </div>
+
+    <div class="cadence">
+      <div class="label">Next checkpoint</div>
+      <h3>What happens between now and the drglaw.ca&nbsp;cutover.</h3>
+      <div class="cadence-row"><div class="key">Today</div><div>Adriano sends the <strong>written input list</strong>. D&acirc;maris sends <strong>photos</strong> and starts the logo&nbsp;decision.</div></div>
+      <div class="cadence-row"><div class="key">This week</div><div><strong>Fractional GC</strong> copy update, <strong>PT revision pass</strong>, photo application, and <strong>drglaw.ca cutover</strong>. Voice line tested by&nbsp;D&acirc;maris.</div></div>
+      <div class="cadence-row"><div class="key">Weekend</div><div>D&acirc;maris sends the <strong>pricing table</strong> and the <strong>past-client list</strong> as bandwidth allows around the urgent client&nbsp;matters.</div></div>
+      <div class="cadence-row"><div class="key">Next week</div><div>D&acirc;maris reviews EN + PT site end-to-end. Adriano builds <strong>CRM nurture journey</strong> from segmented list. WhatsApp intake activates if Meta&nbsp;clears.</div></div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="footer-brand">CaseLoad Select &middot; Sign Better Cases</div>
+    <div class="footer-page">Page 3 of 3</div>
+  </div>
+</div>
+
+</body>
+</html>
