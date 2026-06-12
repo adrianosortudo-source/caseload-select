@@ -159,10 +159,12 @@ describe('processChannelInbound: Portuguese intake propagates to outbound', () =
     expect(sentText).toContain('Você está abrindo um novo negócio');
     expect(sentText).not.toContain('Are you starting something new');
 
-    // The numbered option labels MUST also be PT.
+    // The numbered option labels MUST also be PT. (Option 3 became the
+    // DR-070 exit bucket on 2026-06-11; "Não tenho certeza" moved to 4.)
     expect(sentText).toContain('1. Abrindo um novo negócio');
     expect(sentText).toContain('2. Comprando participação em uma empresa existente');
-    expect(sentText).toContain('3. Não tenho certeza');
+    expect(sentText).toContain('3. Vendendo ou encerrando um negócio');
+    expect(sentText).toContain('4. Não tenho certeza');
 
     // Negative: no leakage of the English option labels.
     expect(sentText).not.toContain('1. Starting a new business');

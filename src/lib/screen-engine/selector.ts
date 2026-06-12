@@ -204,10 +204,13 @@ function getMatterGap(state: EngineState): DecisionGap {
   }
 
   if (matter_type === 'estates_general') {
-    // Routing catch-all — the only required slot is estates_problem_type,
-    // which triggers re-classification into a sub-type (will_drafting /
-    // power_of_attorney / probate / estate_dispute) via the LLM extractor's
-    // __matter_type. After re-routing, the sub-type's chain fires next turn.
+    // Routing catch-all: the only required slot is estates_problem_type.
+    // The lead's answer triggers re-classification via
+    // rerouteFromEstatesGeneral (control.ts applyAnswer), upgrading
+    // matter_type_provenance to 'user_routing_answer'. On single-pass
+    // channels (voice webhook, promote replay, reclassify), the LLM's
+    // __matter_type classifier can also promote, stamped 'llm_inferred'
+    // and flagged in the brief. DR-069.
     if (!isUserAnswered(state, 'estates_problem_type')) return 'matter_qualification';
     return 'none';
   }
@@ -253,8 +256,11 @@ function getMatterGap(state: EngineState): DecisionGap {
   }
 
   if (matter_type === 'employment_general') {
-    // Routing catch-all — sub-type re-classification fires on the next turn
-    // after employment_problem_type is answered.
+    // Routing catch-all: rerouteFromEmploymentGeneral fires inside
+    // applyAnswer once the lead answers employment_problem_type
+    // (user_routing_answer provenance). Single-pass channels may also
+    // be promoted by the LLM __matter_type classifier (llm_inferred).
+    // DR-069.
     if (!isUserAnswered(state, 'employment_problem_type')) return 'matter_qualification';
     return 'none';
   }

@@ -749,17 +749,25 @@ export function computeBand(state: EngineState): BandResult {
   }
   if (state.matter_type === 'corporate_general') {
     const problem = slotValue(state, 'corporate_problem_type');
-    if (problem === 'Something else') {
+    // DR-069/DR-070: the escape demotion and the "subtype identified"
+    // confidence lift both require the LEAD's answer. An llm_inferred
+    // "Something else" is the model honestly declining to force-fit (rule
+    // 2a), not the lead saying their matter is unsupported; demoting on it
+    // would punish the model for honesty. The routing question is still
+    // pending in both inferred cases.
+    const problemAnswered = isAnswered(state, 'corporate_problem_type');
+    if (problem === 'Something else' && problemAnswered) {
       return { band: 'C', confidence: 25, reasoning: 'Problem type could not be mapped to a supported corporate matter.', coreCompleteness: state.coreCompleteness };
     }
-    return bandRoutingLane('Corporate', state, !!problem);
+    return bandRoutingLane('Corporate', state, !!problem && problemAnswered);
   }
   if (state.matter_type === 'real_estate_general') {
     const problem = slotValue(state, 'real_estate_problem_type');
-    if (problem === 'Something else') {
+    const problemAnswered = isAnswered(state, 'real_estate_problem_type');
+    if (problem === 'Something else' && problemAnswered) {
       return { band: 'C', confidence: 25, reasoning: 'Problem type could not be mapped to a supported real estate matter.', coreCompleteness: state.coreCompleteness };
     }
-    return bandRoutingLane('Real estate', state, !!problem);
+    return bandRoutingLane('Real estate', state, !!problem && problemAnswered);
   }
   // Employment and estates general lanes still route while the subtype is
   // unknown. Specific sub-types fall through to the four-axis scorer below.

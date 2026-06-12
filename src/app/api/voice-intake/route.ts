@@ -659,7 +659,11 @@ export async function POST(req: NextRequest) {
         (k) => llm.extracted[k] !== null && llm.extracted[k] !== '',
       );
       if (llm.mode === 'live' && filledIds.length > 0) {
-        state = mergeLlmResults(state, llm.extracted);
+        // allowGeneralPromotion (DR-069): the post-call webhook is a
+        // single pass on the transcript, no follow-up question is
+        // possible, so the LLM's *_general promotion is the best
+        // available routing. The brief flags it as AI-inferred.
+        state = mergeLlmResults(state, llm.extracted, { allowGeneralPromotion: true });
       }
     } catch (err) {
       // best-effort; carry on with regex-only state

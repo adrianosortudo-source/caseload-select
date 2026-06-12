@@ -72,6 +72,8 @@
       "A vendor or supplier has billed us incorrectly": "Um fornecedor cobrou de forma incorreta",
       "I am concerned about financial irregularities in the company": "Estou preocupado com irregularidades financeiras na empresa",
       "A contract or agreement was not honoured": "Um contrato ou acordo não foi cumprido",
+      "Starting, buying, or restructuring a business": "Abrir, comprar ou reestruturar um negócio",
+      "A contract I need drafted or reviewed before signing": "Um contrato que preciso redigir ou revisar antes de assinar",
       "Something else": "Outra coisa"
     },
     "company_involvement": {
@@ -85,6 +87,7 @@
     "advisory_path": {
       "Starting a new business": "Abrindo um novo negócio",
       "Buying into an existing business": "Comprando participação em uma empresa existente",
+      "Selling or closing down a business": "Vendendo ou encerrando um negócio",
       "Not sure": "Não tenho certeza"
     },
     "co_owner_count": {

@@ -196,6 +196,11 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       { value: 'A vendor or supplier has billed us incorrectly', label: 'A vendor or supplier has billed us incorrectly' },
       { value: 'I am concerned about financial irregularities in the company', label: 'I am concerned about financial irregularities in the company' },
       { value: 'A contract or agreement was not honoured', label: 'A contract or agreement was not honoured' },
+      // Transactional buckets (2026-06-11, DR-070): every prior option was
+      // dispute-shaped, so setup / purchase / pre-signing review leads were
+      // force-fit into disputes. Both route to business_setup_advisory.
+      { value: 'Starting, buying, or restructuring a business', label: 'Starting, buying, or restructuring a business' },
+      { value: 'A contract I need drafted or reviewed before signing', label: 'A contract I need drafted or reviewed before signing' },
       { value: 'Something else', label: 'Something else' },
     ],
     applies_to: ['corporate_general'],
@@ -252,6 +257,9 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     options: [
       { value: 'Starting a new business', label: 'Starting a new business' },
       { value: 'Buying into an existing business', label: 'Buying into an existing business' },
+      // Exit bucket (2026-06-11, DR-070): the slot was forward-only, so a
+      // retiring owner selling the business had no honest path.
+      { value: 'Selling or closing down a business', label: 'Selling or closing down a business' },
       { value: 'Not sure', label: 'Not sure' },
     ],
     applies_to: ['business_setup_advisory'],
@@ -1526,7 +1534,12 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     input_type: 'single_select',
     options: [
       { value: 'Buying or selling commercial property', label: 'Buying or selling commercial property' },
+      // Leasing bucket (2026-06-11, DR-070): the field-defect gap. A lead
+      // leasing space for their business had no honest option and the LLM
+      // force-fit the purchase bucket.
+      { value: 'Leasing commercial space (new lease, renewal, or review)', label: 'Leasing commercial space (new lease, renewal, or review)' },
       { value: 'Buying or selling a home or condo', label: 'Buying or selling a home or condo' },
+      { value: 'Adding or removing someone on title (no sale)', label: 'Adding or removing someone on title (no sale)' },
       { value: 'A real estate deal that has gone wrong (deposit, closing, misrepresentation)', label: 'A real estate deal that has gone wrong (deposit, closing, misrepresentation)' },
       { value: 'A landlord or tenant dispute', label: 'A landlord or tenant dispute' },
       { value: 'Unpaid construction or renovation work', label: 'Unpaid construction or renovation work' },
@@ -1631,6 +1644,10 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     options: [
       { value: 'Just exploring', label: 'Just exploring' },
       { value: 'Talking with the other side', label: 'Talking with the other side' },
+      // Lease lifecycle stage (2026-06-11, DR-070): the prior options were
+      // purchase-deal framed; a lease renewal with a response deadline is a
+      // real urgency signal that had no accurate stage.
+      { value: 'A draft lease or renewal is on the table', label: 'A draft lease or renewal is on the table' },
       { value: 'Signed an offer or letter of intent', label: 'Signed an offer or letter of intent' },
       { value: 'Conditions still to clear', label: 'Conditions still to clear' },
       { value: 'Closing date set', label: 'Closing date set' },
@@ -1815,6 +1832,10 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       { value: 'Cash purchase, no financing', label: 'Cash purchase, no financing' },
       { value: 'Private or alternative lender', label: 'Private or alternative lender' },
       { value: 'Not started', label: 'Not started' },
+      // Escape option (2026-06-11, DR-070): this was the only in-scope
+      // single_select with no escape, forcing a wrong factual state on
+      // leads who do not know their financing status.
+      { value: 'Not sure', label: 'Not sure' },
     ],
     applies_to: ['residential_purchase_sale'],
     tier: 'core',
@@ -1858,6 +1879,10 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       { value: 'Title or boundary problem', label: 'Title or boundary problem' },
       { value: 'Disagreement over use of land (easement)', label: 'Disagreement over use of land (easement)' },
       { value: 'Real estate fraud', label: 'Real estate fraud' },
+      // Co-ownership / partition bucket (2026-06-11, DR-070): joint owners
+      // disagreeing about selling or dividing a property is staple Toronto
+      // small-firm litigation that previously force-fit into title/boundary.
+      { value: 'A dispute between co-owners of a property', label: 'A dispute between co-owners of a property' },
       { value: 'Not sure', label: 'Not sure' },
     ],
     applies_to: ['real_estate_litigation'],
@@ -2121,6 +2146,10 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     options: [
       { value: 'No, nothing started', label: 'No, nothing started' },
       { value: 'Formal notice given to the other side', label: 'Formal notice given to the other side' },
+      // Respondent side (2026-06-11, DR-070): a tenant SERVED with an N4 or
+      // N12 previously had to invert the direction or lose the urgency
+      // signal in "Not sure".
+      { value: 'I received a formal notice', label: 'I received a formal notice' },
       { value: 'Application filed at the Landlord and Tenant Board', label: 'Application filed at the Landlord and Tenant Board' },
       { value: 'Court action started (commercial)', label: 'Court action started (commercial)' },
       { value: 'Not sure', label: 'Not sure' },
@@ -2186,6 +2215,10 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       { value: 'Within the last 60 days', label: 'Within the last 60 days' },
       { value: '60–90 days ago', label: '60–90 days ago' },
       { value: 'More than 90 days ago', label: 'More than 90 days ago' },
+      // Owner-respondent side (2026-06-11, DR-070): an owner whose property
+      // was liened never supplied work; the 60-day clock is the claimant's,
+      // not theirs.
+      { value: 'Does not apply, a lien was registered against my property', label: 'Does not apply, a lien was registered against my property' },
       { value: 'Not sure', label: 'Not sure' },
     ],
     applies_to: ['construction_lien'],
@@ -2624,10 +2657,20 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     input_type: 'single_select',
     options: [
       { value: 'I was fired or let go', label: 'I was fired or let go' },
+      // Constructive dismissal + contractor buckets (2026-06-11, DR-070):
+      // a lead who resigned under changed conditions, or whose contractor
+      // arrangement ended, previously had to claim they were "fired" or
+      // stall at Something else.
+      { value: 'My job changed so much I had to leave, or I felt forced out', label: 'My job changed so much I had to leave, or I felt forced out' },
+      { value: 'I work as a contractor and the company ended or changed my contract', label: 'I work as a contractor and the company ended or changed my contract' },
       { value: 'I have a severance offer to review', label: 'I have a severance offer to review' },
       { value: 'I am being harassed or discriminated against', label: 'I am being harassed or discriminated against' },
       { value: 'I am owed wages that have not been paid', label: 'I am owed wages that have not been paid' },
       { value: 'I need an employment contract reviewed', label: 'I need an employment contract reviewed' },
+      // Employer-side bucket: stays employment_general (no employer pack
+      // yet) but stops the brief from reading the owner as a dismissed
+      // employee.
+      { value: 'I am an employer and need help with an employee matter', label: 'I am an employer and need help with an employee matter' },
       { value: 'Something else', label: 'Something else' },
     ],
     applies_to: ['employment_general'],
@@ -2974,6 +3017,10 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       { value: 'A promotion or role change', label: 'A promotion or role change' },
       { value: 'A severance or termination agreement', label: 'A severance or termination agreement' },
       { value: 'A non-compete or non-disclosure agreement', label: 'A non-compete or non-disclosure agreement' },
+      // Contractor bucket (2026-06-11, DR-070): employee-vs-contractor
+      // classification is the core legal question and was previously
+      // invisible behind "A new job offer".
+      { value: 'A contractor or consulting agreement', label: 'A contractor or consulting agreement' },
       { value: 'Other', label: 'Other' },
     ],
     applies_to: ['employment_contract_review'],
@@ -3051,9 +3098,16 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     input_type: 'single_select',
     options: [
       { value: 'I need a will drafted or updated', label: 'I need a will drafted or updated' },
+      // Trust, lost-capacity, and POA-misuse buckets (2026-06-11, DR-070).
+      // The lost-capacity option carries a dispositive fact: an incapable
+      // person cannot grant a POA, so the matter is guardianship-shaped,
+      // not routine drafting.
+      { value: 'I want to set up a trust', label: 'I want to set up a trust' },
       { value: 'I need a power of attorney', label: 'I need a power of attorney' },
+      { value: 'A family member can no longer manage their affairs and nothing is in place', label: 'A family member can no longer manage their affairs and nothing is in place' },
       { value: 'Someone has passed and I need help with probate', label: 'Someone has passed and I need help with probate' },
       { value: 'There is a dispute over a will or an estate', label: 'There is a dispute over a will or an estate' },
+      { value: 'Someone is misusing a power of attorney', label: 'Someone is misusing a power of attorney' },
       { value: 'Something else', label: 'Something else' },
     ],
     applies_to: ['estates_general'],
@@ -3191,6 +3245,10 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     input_type: 'single_select',
     options: [
       { value: 'Family member health crisis or recent diagnosis', label: 'Family member health crisis or recent diagnosis' },
+      // Lost-capacity bucket (2026-06-11, DR-070): dispositive fact. An
+      // incapable person cannot grant a POA; the matter may be a
+      // guardianship or capacity assessment, not routine drafting.
+      { value: 'The person may no longer be able to sign documents', label: 'The person may no longer be able to sign documents' },
       { value: 'Planning ahead, no immediate trigger', label: 'Planning ahead, no immediate trigger' },
       { value: 'Court application is being prepared', label: 'Court application is being prepared' },
       { value: 'Other', label: 'Other' },
@@ -3313,6 +3371,11 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       { value: 'The executor is not acting properly', label: 'The executor is not acting properly' },
       { value: 'Beneficiaries disagree', label: 'Beneficiaries disagree' },
       { value: 'Capacity of the deceased at the time of the will is at issue', label: 'Capacity of the deceased at the time of the will is at issue' },
+      // Dependant support bucket (2026-06-11, DR-070): an SLRA Part V claim
+      // does not attack the will's validity; force-fitting it into "The
+      // will is being challenged" framed the wrong cause of action with a
+      // different limitation clock.
+      { value: 'I was left out or not properly provided for', label: 'I was left out or not properly provided for' },
       { value: 'Other', label: 'Other' },
     ],
     applies_to: ['estate_dispute'],

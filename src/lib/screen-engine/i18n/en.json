@@ -6,6 +6,8 @@
       "A vendor or supplier has billed us incorrectly": "A vendor or supplier has billed us incorrectly",
       "I am concerned about financial irregularities in the company": "I am concerned about financial irregularities in the company",
       "A contract or agreement was not honoured": "A contract or agreement was not honoured",
+      "Starting, buying, or restructuring a business": "Starting, buying, or restructuring a business",
+      "A contract I need drafted or reviewed before signing": "A contract I need drafted or reviewed before signing",
       "Something else": "Something else"
     },
     "company_involvement": {
@@ -19,6 +21,7 @@
     "advisory_path": {
       "Starting a new business": "Starting a new business",
       "Buying into an existing business": "Buying into an existing business",
+      "Selling or closing down a business": "Selling or closing down a business",
       "Not sure": "Not sure"
     },
     "co_owner_count": {
@@ -324,7 +327,9 @@
     },
     "real_estate_problem_type": {
       "Buying or selling commercial property": "Buying or selling commercial property",
+      "Leasing commercial space (new lease, renewal, or review)": "Leasing commercial space (new lease, renewal, or review)",
       "Buying or selling a home or condo": "Buying or selling a home or condo",
+      "Adding or removing someone on title (no sale)": "Adding or removing someone on title (no sale)",
       "A real estate deal that has gone wrong (deposit, closing, misrepresentation)": "A real estate deal that has gone wrong (deposit, closing, misrepresentation)",
       "A landlord or tenant dispute": "A landlord or tenant dispute",
       "Unpaid construction or renovation work": "Unpaid construction or renovation work",
@@ -359,6 +364,7 @@
     "commercial_re_stage": {
       "Just exploring": "Just exploring",
       "Talking with the other side": "Talking with the other side",
+      "A draft lease or renewal is on the table": "A draft lease or renewal is on the table",
       "Signed an offer or letter of intent": "Signed an offer or letter of intent",
       "Conditions still to clear": "Conditions still to clear",
       "Closing date set": "Closing date set",
@@ -426,7 +432,8 @@
       "Application submitted, no answer yet": "Application submitted, no answer yet",
       "Cash purchase, no financing": "Cash purchase, no financing",
       "Private or alternative lender": "Private or alternative lender",
-      "Not started": "Not started"
+      "Not started": "Not started",
+      "Not sure": "Not sure"
     },
     "residential_representation": {
       "Yes, I have an agent": "Yes, I have an agent",
@@ -441,6 +448,7 @@
       "Title or boundary problem": "Title or boundary problem",
       "Disagreement over use of land (easement)": "Disagreement over use of land (easement)",
       "Real estate fraud": "Real estate fraud",
+      "A dispute between co-owners of a property": "A dispute between co-owners of a property",
       "Not sure": "Not sure"
     },
     "litigation_role": {
@@ -522,6 +530,7 @@
     "tenancy_notice_status": {
       "No, nothing started": "No, nothing started",
       "Formal notice given to the other side": "Formal notice given to the other side",
+      "I received a formal notice": "I received a formal notice",
       "Application filed at the Landlord and Tenant Board": "Application filed at the Landlord and Tenant Board",
       "Court action started (commercial)": "Court action started (commercial)",
       "Not sure": "Not sure"
@@ -545,6 +554,7 @@
       "Within the last 60 days": "Within the last 60 days",
       "60–90 days ago": "60–90 days ago",
       "More than 90 days ago": "More than 90 days ago",
+      "Does not apply, a lien was registered against my property": "Does not apply, a lien was registered against my property",
       "Not sure": "Not sure"
     },
     "lien_preserved": {

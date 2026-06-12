@@ -296,6 +296,14 @@ const COMMERCIAL_RE_SIGNALS = [
   'warehouse', 'plaza', 'investment property', 'apartment building',
   'multi-residential', 'mixed use', 'commercial building',
   'business premises', 'leasing commercial', 'commercial tenant',
+  // Business-scoped leasing phrasings (2026-06-11, DR-070). Field defect:
+  // "I need to lease a space for my business" matched none of the above,
+  // fell to real_estate_general, and the LLM force-fit the routing slot.
+  // These phrases are deliberately business-anchored so residential
+  // renters ("rent an apartment") never land here.
+  'lease a space', 'leasing a space', 'space for my business',
+  'lease an office', 'lease a storefront', 'lease commercial',
+  'commercial leasing', 'offer to lease',
 ];
 
 const RESIDENTIAL_RE_SIGNALS = [
@@ -1514,6 +1522,11 @@ export function initialiseState(input: string): EngineState {
     input,
     practice_area,
     matter_type,
+    // DR-069: the initial classification always comes from the regex
+    // classifier above, including its 'unknown' and 'out_of_scope'
+    // outcomes. Later setters (rerouteFrom*General, the LLM __matter_type
+    // promotion) upgrade this to 'user_routing_answer' / 'llm_inferred'.
+    matter_type_provenance: 'deterministic',
     intent_family,
     dispute_family,
     advisory_subtrack,
@@ -1555,48 +1568,173 @@ export function updateAdvisorySubtrack(state: EngineState): AdvisorySubtrack {
   );
 }
 
+// ─── Routing reroute provenance gate (DR-069) ─────────────────────────────
+//
+// "Inference informs; only the lead routes." A matter-type reroute driven
+// by a routing-slot value fires ONLY when the lead actually gave that
+// value: chip click, typed reply mapped by an adapter, or regex evidence.
+// An llm_inferred fill must NOT change the matter type: the selector
+// still treats the slot as unanswered (isUserAnswered) and asks the
+// routing question, and the lead's answer then routes with full authority.
+//
+// Field defect that locked this rule: "I need to lease a space for my
+// business" fell to real_estate_general; the LLM force-fit the routing
+// slot to "Buying or selling commercial property" (the taxonomy had no
+// leasing bucket); the processor rerouted on that guess; and because the
+// routing slot only applies_to the *_general lane, the routing question
+// became unaskable forever. The brief asserted a sale that did not exist.
+//
+// applyAnswer (control.ts) stamps source 'answered' on the same state
+// before invoking these functions, so every legitimate path passes.
+
+const USER_GROUNDED_ROUTING_SOURCES: ReadonlySet<string> = new Set([
+  'answered',
+  'explicit',
+  'inferred', // legacy pre-2026-06-07 bucket, treated as user-grounded
+]);
+
+function routingAnswerIsUserGrounded(state: EngineState, slotId: string): boolean {
+  const src = state.slot_meta[slotId]?.source;
+  return !!src && USER_GROUNDED_ROUTING_SOURCES.has(src);
+}
+
 // ─── Corporate general rerouting ──────────────────────────────────────────
 
 export function rerouteFromCorporateGeneral(state: EngineState, problemType: string): EngineState {
-  const routingMap: Partial<Record<string, MatterType>> = {
-    'Someone owes my company money': 'unpaid_invoice',
-    'I have a dispute with a business partner or co-owner': 'shareholder_dispute',
-    'A vendor or supplier has billed us incorrectly': 'vendor_supplier_dispute',
-    'I am concerned about financial irregularities in the company': 'corporate_money_control',
-    'A contract or agreement was not honoured': 'contract_dispute',
+  // Stale-answer guard: once the matter has left the catch-all, a late
+  // routing answer must not mutate a specific matter's classification.
+  if (state.matter_type !== 'corporate_general') return state;
+  if (!routingAnswerIsUserGrounded(state, 'corporate_problem_type')) return state;
+
+  const routingMap: Partial<Record<string, { matter: MatterType; intent: IntentFamily }>> = {
+    'Someone owes my company money': { matter: 'unpaid_invoice', intent: 'business_dispute' },
+    'I have a dispute with a business partner or co-owner': { matter: 'shareholder_dispute', intent: 'business_dispute' },
+    'A vendor or supplier has billed us incorrectly': { matter: 'vendor_supplier_dispute', intent: 'business_dispute' },
+    'I am concerned about financial irregularities in the company': { matter: 'corporate_money_control', intent: 'business_dispute' },
+    'A contract or agreement was not honoured': { matter: 'contract_dispute', intent: 'business_dispute' },
+    // Transactional destinations (2026-06-11, DR-070). Every prior option
+    // was dispute-shaped, so setup, purchase, and pre-signing review leads
+    // were force-fit into disputes the brief then asserted as fact.
+    'Starting, buying, or restructuring a business': { matter: 'business_setup_advisory', intent: 'setup_advisory' },
+    'A contract I need drafted or reviewed before signing': { matter: 'business_setup_advisory', intent: 'setup_advisory' },
   };
 
-  const newMatterType = routingMap[problemType];
-  if (!newMatterType) return state; // "Something else" — stays corporate_general
+  const target = routingMap[problemType];
+  if (!target) return state; // "Something else" stays corporate_general
 
   return {
     ...state,
-    matter_type: newMatterType,
-    intent_family: 'business_dispute',
-    dispute_family: matterTypeToDisputeFamily(newMatterType),
+    matter_type: target.matter,
+    matter_type_provenance: 'user_routing_answer',
+    intent_family: target.intent,
+    dispute_family: matterTypeToDisputeFamily(target.matter),
   };
 }
 
 // ─── Real estate general rerouting ────────────────────────────────────────
 
 export function rerouteFromRealEstateGeneral(state: EngineState, problemType: string): EngineState {
+  if (state.matter_type !== 'real_estate_general') return state;
+  if (!routingAnswerIsUserGrounded(state, 'real_estate_problem_type')) return state;
+
   const routingMap: Partial<Record<string, { matter: MatterType; intent: IntentFamily }>> = {
     'Buying or selling commercial property': { matter: 'commercial_real_estate', intent: 'real_estate_transaction' },
+    // Leasing bucket (2026-06-11, DR-070): the field-defect gap. The
+    // commercial_real_estate pack already handles leases (party_role
+    // landlord/tenant, "Tenant or lease structure" concern, lease value
+    // fee copy); only this routing option was missing.
+    'Leasing commercial space (new lease, renewal, or review)': { matter: 'commercial_real_estate', intent: 'real_estate_transaction' },
     'Buying or selling a home or condo': { matter: 'residential_purchase_sale', intent: 'real_estate_transaction' },
     'A real estate deal that has gone wrong (deposit, closing, misrepresentation)': { matter: 'real_estate_litigation', intent: 'real_estate_dispute' },
     'A landlord or tenant dispute': { matter: 'landlord_tenant', intent: 'real_estate_dispute' },
     'Unpaid construction or renovation work': { matter: 'construction_lien', intent: 'real_estate_dispute' },
     'A pre-construction condo or new build issue': { matter: 'preconstruction_condo', intent: 'real_estate_dispute' },
     'A mortgage or power-of-sale issue': { matter: 'mortgage_dispute', intent: 'real_estate_dispute' },
+    // 'Adding or removing someone on title (no sale)' has NO map entry on
+    // purpose: no existing pack fits a no-sale title transfer, and an
+    // honest thin real_estate_general brief beats a purchase-framed one.
   };
 
   const target = routingMap[problemType];
-  if (!target) return state; // "Something else" — stays real_estate_general
+  if (!target) return state; // "Something else" / unmapped stays real_estate_general
 
   return {
     ...state,
     matter_type: target.matter,
+    matter_type_provenance: 'user_routing_answer',
     intent_family: target.intent,
     dispute_family: matterTypeToDisputeFamily(target.matter),
+  };
+}
+
+// ─── Employment general rerouting (DR-069 parity) ─────────────────────────
+//
+// Until 2026-06-11 employment and estates had NO deterministic reroute:
+// the LLM __matter_type classifier was the ONLY promotion path, meaning a
+// chip click on the routing question never routed, and an AI guess routed
+// without confirmation, the exact inversion of the DR-069 invariant.
+// These two functions restore parity with the corporate / real estate
+// lanes; with them in place, gating the LLM promotion on interactive
+// channels costs nothing.
+
+export function rerouteFromEmploymentGeneral(state: EngineState, problemType: string): EngineState {
+  if (state.matter_type !== 'employment_general') return state;
+  if (!routingAnswerIsUserGrounded(state, 'employment_problem_type')) return state;
+
+  const routingMap: Partial<Record<string, MatterType>> = {
+    'I was fired or let go': 'wrongful_dismissal',
+    // Constructive dismissal phrasing (DR-070): the lead resigned under
+    // changed conditions. Routes to the wrongful_dismissal pack, which
+    // carries the Bardal / limitation framing this claim needs.
+    'My job changed so much I had to leave, or I felt forced out': 'wrongful_dismissal',
+    'I work as a contractor and the company ended or changed my contract': 'wrongful_dismissal',
+    'I have a severance offer to review': 'severance_review',
+    'I am being harassed or discriminated against': 'harassment_complaint',
+    'I am owed wages that have not been paid': 'wage_recovery',
+    'I need an employment contract reviewed': 'employment_contract_review',
+    // 'I am an employer and need help with an employee matter' has NO map
+    // entry: every employment pack is employee-voiced today. The option
+    // exists so the brief records the lead's side honestly instead of
+    // reading the owner as a dismissed employee.
+  };
+
+  const target = routingMap[problemType];
+  if (!target) return state; // "Something else" / employer-side stays employment_general
+
+  return {
+    ...state,
+    ...classificationForMatterType(target),
+    matter_type_provenance: 'user_routing_answer',
+  };
+}
+
+// ─── Estates general rerouting (DR-069 parity) ────────────────────────────
+
+export function rerouteFromEstatesGeneral(state: EngineState, problemType: string): EngineState {
+  if (state.matter_type !== 'estates_general') return state;
+  if (!routingAnswerIsUserGrounded(state, 'estates_problem_type')) return state;
+
+  const routingMap: Partial<Record<string, MatterType>> = {
+    'I need a will drafted or updated': 'will_drafting',
+    'I want to set up a trust': 'will_drafting',
+    'I need a power of attorney': 'power_of_attorney',
+    // Lost capacity with nothing in place (DR-070): legally a guardianship
+    // question, not POA drafting. Routes to the power_of_attorney pack so
+    // the capacity questions get asked; the poa_urgency option "The person
+    // may no longer be able to sign documents" carries the dispositive
+    // fact to the lawyer.
+    'A family member can no longer manage their affairs and nothing is in place': 'power_of_attorney',
+    'Someone has passed and I need help with probate': 'probate',
+    'There is a dispute over a will or an estate': 'estate_dispute',
+    'Someone is misusing a power of attorney': 'estate_dispute',
+  };
+
+  const target = routingMap[problemType];
+  if (!target) return state; // "Something else" stays estates_general
+
+  return {
+    ...state,
+    ...classificationForMatterType(target),
+    matter_type_provenance: 'user_routing_answer',
   };
 }

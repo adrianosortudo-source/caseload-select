@@ -668,6 +668,19 @@
   margin: 0;
 }
 
+/* DR-069: honesty note under the cover headline when the matter
+   classification is AI-inferred (single-pass channels). Gold provisional
+   tone, never the confident white of the headline. */
+.brief-frame .cover-classification-note {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bf-gold);
+  margin: 0;
+}
+
 /* Dark surfaces: panels are separated by background layering, not strokes
    (brand 7.2). */
 .brief-frame .brief-decision-band {

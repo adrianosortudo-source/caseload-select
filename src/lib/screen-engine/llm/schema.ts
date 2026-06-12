@@ -95,19 +95,25 @@ function isLlmAllowed(slot: SlotDefinition): boolean {
 // ── Routing catch-all promotion (Phase C parity with chip UI) ───────────
 //
 // When the regex classifier landed at a *_general routing catch-all
-// (corporate_general / real_estate_general), inject a SCOPED classifier
-// slot so the LLM can promote to a specific sub-type from the lead's
-// turn-1 free text. Mirrors what the web widget achieves via the chip-
-// based routing question: the chip-click feeds `applyAnswer(state,
-// routingSlotId, value)` which invokes rerouteFromCorporateGeneral /
-// rerouteFromRealEstateGeneral. With this schema change, Gemini gets
-// the same promotion path from turn 1 without waiting for a follow-up
-// question.
+// (corporate_general / real_estate_general / employment_general /
+// estates_general), inject a SCOPED classifier slot so the LLM can offer
+// a sub-type pick from the lead's turn-1 free text.
+//
+// DR-069 (2026-06-11): the merge gates the promotion. On INTERACTIVE
+// channels (web widget, Meta, realtime voice), mergeLlmResults keeps the
+// matter at the catch-all so the routing question gets asked and the
+// lead's answer routes via rerouteFrom*General. On SINGLE-PASS callers
+// (voice webhook, promote replay, admin reclassify) the promotion fires
+// and stamps matter_type_provenance='llm_inferred'; the brief surfaces
+// the AI-inferred classification honestly. The schema injection itself
+// is channel-independent: it gives the LLM the option list either way,
+// and the merge decides what to do with the pick.
 //
 // Peer sets mirror the chip routing slots in extractor.ts
-// rerouteFromCorporateGeneral / rerouteFromRealEstateGeneral. The
-// current matter type is included so the LLM can confidently STAY at
-// the catch-all when the lead's description is genuinely ambiguous.
+// rerouteFromCorporateGeneral / rerouteFromRealEstateGeneral /
+// rerouteFromEmploymentGeneral / rerouteFromEstatesGeneral. The current
+// matter type is included so the LLM can confidently STAY at the
+// catch-all when the lead's description is genuinely ambiguous.
 const ROUTING_PEER_SETS: Partial<Record<MatterType, MatterType[]>> = {
   corporate_general: [
     'corporate_general',
@@ -165,11 +171,11 @@ export function getExtractableSlots(matterType: MatterType): ExtractionSlot[] {
     return result;
   }
 
-  // Routing catch-all: inject a SCOPED classifier so the LLM can promote
-  // to a specific sub-type from turn-1 text. Mergelogic in
-  // llm/extractor.ts gates on routing catch-alls and applies
-  // classificationForMatterType when the LLM picks a different
-  // (specific) sub-type from the peer set.
+  // Routing catch-all: inject a SCOPED classifier so the LLM can offer a
+  // sub-type pick from turn-1 text. Merge logic in llm/extractor.ts
+  // gates the actual promotion on the channel (DR-069): interactive
+  // channels keep the catch-all and ask the routing question; single-
+  // pass callers apply classificationForMatterType and stamp llm_inferred.
   const peers = ROUTING_PEER_SETS[matterType];
   if (peers) {
     return [
@@ -199,7 +205,7 @@ function routingClassifierSlot(currentMatterType: MatterType, peers: MatterType[
   return {
     id: MATTER_TYPE_CLASSIFIER_FIELD,
     question:
-      `CLASSIFICATION TASK — not extraction. The lead's matter was initially classified as '${currentMatterType}', a ROUTING CATCH-ALL. Your job is to PROMOTE to a specific sub-type when the description gives you ANY signal. Be decisive. The strict null rule does NOT apply here — classification IS the goal. Examples of strong signals: "shareholder", "co-founder", "business partner", "buyout offer", "40% ownership" → shareholder_dispute. "invoice", "client owes us money", "they haven't paid" → unpaid_invoice. "vendor billed us wrong", "supplier overcharged" → vendor_supplier_dispute. "embezzlement", "financial irregularities", "missing funds" → corporate_money_control. "contract broken", "agreement violated", "breach of contract" → contract_dispute. "tenant", "landlord", "lease dispute", "rent issue" → landlord_tenant. "closing on a house", "buying a condo", "selling our home" → residential_purchase_sale. "commercial property", "commercial lease" → commercial_real_estate. "construction lien", "unpaid contractor" → construction_lien. "mortgage default", "power of sale" → mortgage_dispute. "deposit dispute", "deal fell through" → real_estate_litigation. "pre-construction condo", "builder delay" → preconstruction_condo. Return '${currentMatterType}' ONLY when the description has NO signal at all (e.g. "I have a corporate issue, can you help?" with no detail).`,
+      `CLASSIFICATION TASK, not extraction. The lead's matter was initially classified as '${currentMatterType}', a ROUTING CATCH-ALL. Your job is to PROMOTE to a specific sub-type when the description gives you a real signal. Be decisive when the lead's words name the problem. Examples of strong signals: "shareholder", "co-founder", "business partner", "buyout offer", "40% ownership" → shareholder_dispute. "invoice", "client owes us money", "they haven't paid" → unpaid_invoice. "vendor billed us wrong", "supplier overcharged" → vendor_supplier_dispute. "embezzlement", "financial irregularities", "missing funds" → corporate_money_control. "contract broken", "agreement violated", "breach of contract" → contract_dispute. "tenant", "landlord", "lease dispute", "rent issue" → landlord_tenant. "closing on a house", "buying a condo", "selling our home" → residential_purchase_sale. "commercial property", "commercial lease", "leasing space for a business" → commercial_real_estate. "construction lien", "unpaid contractor" → construction_lien. "mortgage default", "power of sale" → mortgage_dispute. "deposit dispute", "deal fell through" → real_estate_litigation. "pre-construction condo", "builder delay" → preconstruction_condo. Decisive does not mean forced (rule 2a): never promote to a sub-type that adds or changes a material fact the lead did not state. Return '${currentMatterType}' itself when the description has no signal, or when none of the listed sub-types accurately matches what the lead described.`,
     input_type: 'single_select',
     options: peers,
     description: 'Tier: classifier. Group: routing.',
@@ -235,7 +241,7 @@ function matterTypeClassifierSlot(): ExtractionSlot {
   return {
     id: MATTER_TYPE_CLASSIFIER_FIELD,
     question:
-      "Top-level classification task. Pick the matter-type bucket that best fits the lead's description, even if the lead used a synonym, typo, or layperson phrasing. Return null only if the description is genuinely too vague to map to any bucket. Examples: 'I want to start a corporation' / 'opening a business' / 'incorporating with a partner' → business_setup_advisory. 'closing on a house' / 'buying a condo' / 'selling our home' → residential_purchase_sale. 'I was fired' / 'wrongful dismissal' / 'severance package' / 'workplace harassment' / 'unpaid wages' / 'employment contract' → employment_general. 'need a will' / 'estate planning' / 'power of attorney' / 'applying for probate' / 'contest a will' / 'when my mother passed' → estates_general. 'family matter' / 'divorce' / 'custody' / 'criminal charges' / 'car accident injury' → out_of_scope.",
+      "Top-level classification task. Pick the matter-type bucket that best fits the lead's description, even if the lead used a synonym, typo, or layperson phrasing. Return null only if the description is genuinely too vague to map to any bucket. Examples: 'I want to start a corporation' / 'opening a business' / 'incorporating with a partner' → business_setup_advisory. 'closing on a house' / 'buying a condo' / 'selling our home' → residential_purchase_sale. 'I was fired' / 'wrongful dismissal' / 'severance package' / 'workplace harassment' / 'unpaid wages' / 'employment contract' → employment_general. 'need a will' / 'estate planning' / 'power of attorney' / 'applying for probate' / 'contest a will' / 'when my mother passed' → estates_general. 'family matter' / 'divorce' / 'custody' / 'criminal charges' / 'car accident injury' → out_of_scope. Rule 2a applies: when the practice area is clear but no specific sub-type accurately matches what the lead described, return the area's general bucket (corporate_general, real_estate_general, employment_general, estates_general) rather than a specific sub-type that adds facts the lead did not state.",
     input_type: 'single_select',
     options: [...ALL_CANONICAL_MATTER_TYPES],
     description: 'Tier: classifier. Group: routing.',

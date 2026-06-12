@@ -14,6 +14,31 @@ function slotVal(state: EngineState, id: string): string | null {
   return state.slots[id] ?? null;
 }
 
+/**
+ * DR-069: true when the current matter classification rests on AI
+ * inference the lead never confirmed. Two shapes count:
+ *  - matter_type_provenance === 'llm_inferred' (the __matter_type
+ *    promotion on a single-pass channel), or
+ *  - the practice area's routing slot holds an llm_inferred value
+ *    (the routing fact on the brief came from extraction, not the lead).
+ * Both must surface on the brief as unconfirmed classification.
+ */
+const ROUTING_SLOT_IDS = [
+  'corporate_problem_type',
+  'real_estate_problem_type',
+  'employment_problem_type',
+  'estates_problem_type',
+] as const;
+
+function matterClassificationInferred(state: EngineState): boolean {
+  if (state.matter_type_provenance === 'llm_inferred') return true;
+  for (const slotId of ROUTING_SLOT_IDS) {
+    const meta = state.slot_meta[slotId];
+    if (state.slots[slotId] && meta?.source === 'llm_inferred') return true;
+  }
+  return false;
+}
+
 // ─── Matter snapshot ──────────────────────────────────────────────────────
 
 function buildMatterSnapshot(state: EngineState): string {
@@ -902,6 +927,10 @@ function buildResolvedFactsV2(state: EngineState): ResolvedFact[] {
       // the lead typed the name). screen-brief-html.ts maps this to
       // channel-aware "From {channel} profile" phrasing.
       case 'profile_metadata': source = 'profile_metadata'; break;
+      // DR-069 (2026-06-11): llm_inferred previously collapsed into the
+      // default 'unknown', so the brief could say a fact was shaky but
+      // not WHY. The renderer carries a dedicated chip for this value.
+      case 'llm_inferred': source = 'llm_inferred'; break;
       default: source = 'unknown';
     }
     out.push({ label, value: val, source });
@@ -925,6 +954,9 @@ function buildResolvedFactsV2(state: EngineState): ResolvedFact[] {
     profile_metadata: 3,
     explicit_from_caller: 4,
     inferred_from_transcript: 5,
+    // llm_inferred (DR-069): AI extraction, same display rank as
+    // transcript inference, above only 'unknown'.
+    llm_inferred: 5,
     unknown: 6,
     // Legacy values - present in older DB rows
     confirmed: 0,
@@ -939,8 +971,17 @@ function buildBandReasoningBullets(state: EngineState): string[] {
   const bullets: string[] = [];
   const matter = state.matter_type;
 
-  // Matter and routing facts (always relevant)
-  bullets.push(`Matter routed to ${matterTypeLabel(matter)} based on lead's own description.`);
+  // Matter and routing facts (always relevant). DR-069: the copy must not
+  // overclaim. "Based on lead's own description" was asserted even when an
+  // AI promotion picked the lane; the bullet now tracks provenance.
+  const provenance = state.matter_type_provenance ?? 'unknown';
+  if (provenance === 'user_routing_answer') {
+    bullets.push(`Matter routed to ${matterTypeLabel(matter)} from the lead's own routing answer.`);
+  } else if (provenance === 'llm_inferred') {
+    bullets.push(`Matter routed to ${matterTypeLabel(matter)} by AI inference from the description. The lead has not confirmed this classification.`);
+  } else {
+    bullets.push(`Matter routed to ${matterTypeLabel(matter)} based on lead's own description.`);
+  }
 
   // Matter-specific drivers
   if (matter === 'business_setup_advisory') {
@@ -1213,6 +1254,14 @@ function buildInferredSignals(state: EngineState): string[] {
 }
 
 function buildOpenQuestions(state: EngineState): string[] {
+  // DR-069: when the matter classification rests on AI inference, the
+  // confirm-it question leads every channel's list, including the early-
+  // return channels below (they bypass the gap logic entirely, so an
+  // append-at-the-end would never reach them).
+  const routingConfirm = matterClassificationInferred(state)
+    ? ['Confirm the matter classification: the engine inferred it from the description and the lead has not confirmed it.']
+    : [];
+
   // SMS (and any other budgeted channel) intentionally stops asking after
   // a small number of questions: completing a thin brief beats abandoning
   // a deep one. Surface the channel context honestly so the lawyer reads
@@ -1220,24 +1269,27 @@ function buildOpenQuestions(state: EngineState): string[] {
   // didn't bother to answer."
   if (state.channel === 'sms') {
     return [
+      ...routingConfirm,
       'Short-form intake (SMS): full discovery should happen on the call.',
       'Confirm details below the headline before quoting.',
     ];
   }
   if (state.channel === 'gbp') {
     return [
+      ...routingConfirm,
       'Short-form intake (Google Business Profile): plain-text channel inside Maps / Search.',
       'Lead came from a local search; full discovery on the call.',
     ];
   }
   if (state.channel === 'voice') {
     return [
+      ...routingConfirm,
       'Voice intake: transcribed from a phone call, single-pass extraction.',
       'Confirm what the lead said on the call back. Audio recording may be linked in the GHL conversation thread.',
     ];
   }
 
-  const questions: string[] = [];
+  const questions: string[] = [...routingConfirm];
   const next = selectNextSlot(state);
   if (next) questions.push(next.question);
 
@@ -1251,6 +1303,7 @@ function buildOpenQuestions(state: EngineState): string[] {
     agreement_proof: 'Written terms or agreement not confirmed.',
     risk: 'Counterparty position not confirmed.',
     dispute_subtype: 'Problem type not yet determined: routing question pending.',
+    real_estate_subtype: 'Problem type not yet determined: routing question pending.',
     financial_irregularity: 'Nature of financial concern not yet described.',
     irregularity_evidence: 'Documentary evidence of irregularity not confirmed.',
     vendor_billing: 'Nature of billing dispute not yet described.',
@@ -1370,6 +1423,15 @@ function buildRiskFlags(state: EngineState): string[] {
     }
   }
 
+  // DR-069, matter-type-agnostic: the *_general routing-pending flags above
+  // only fire while the matter is still in a catch-all lane. When an AI
+  // promotion routed the matter (single-pass channels), the specific-matter
+  // blocks assert confidence the lead never gave; this flag restores the
+  // honest framing on the rerouted matter type.
+  if (matterClassificationInferred(state)) {
+    flags.push('Matter classification is AI-inferred, not confirmed by the lead. Verify the matter type early in the call.');
+  }
+
   if (state.raw.mentions_urgency) flags.push('Urgency signals detected in client input.');
 
   return flags;
@@ -1397,6 +1459,13 @@ export function validateReportFacts(state: EngineState): string[] {
   }
   if (!isConfirmed(state, 'irregularity_amount') && slotVal(state, 'irregularity_amount')) {
     warnings.push('Amount of the financial irregularity is shown but the lead has not confirmed it. Treat as preliminary.');
+  }
+
+  // DR-069: inference-only classification gets the same honesty treatment
+  // as the per-slot disclaimers above. This renders in the high-prominence
+  // "what this brief deliberately does not assert" panel.
+  if (matterClassificationInferred(state)) {
+    warnings.push('The matter classification at the top of this brief was inferred by the engine from the description, not confirmed by the lead.');
   }
 
   const timing = slotVal(state, 'advisory_timing');
@@ -1447,6 +1516,10 @@ export function buildReport(state: EngineState): LawyerReport {
     // admin reclassify, and band-recompute paths can see it without
     // re-running the classifier (added 2026-06-07).
     advisory_subtrack: state.advisory_subtrack,
+    // Persist matter-type provenance (DR-069, 2026-06-11): how the matter
+    // classification was determined. 'unknown' covers states serialized
+    // before the field existed. Same DR-054 rationale as advisory_subtrack.
+    matter_type_provenance: state.matter_type_provenance ?? 'unknown',
   };
 }
 

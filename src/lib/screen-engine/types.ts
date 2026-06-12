@@ -257,6 +257,37 @@ export type SlotMetaSource =
 
 export type AdvisorySubtrack = 'solo_setup' | 'partner_setup' | 'buy_in_or_joining' | 'unknown';
 
+/**
+ * How the CURRENT matter_type was determined (added 2026-06-11, DR-069).
+ *
+ * matter_type is the engine's most load-bearing classification: it selects
+ * the question pack, the banding lane, the fee framing, and the entire
+ * brief pack. Until DR-069 it carried no provenance at all, so downstream
+ * surfaces could not tell a deterministic keyword classification from an
+ * LLM guess from a lead-confirmed routing answer, and the brief asserted
+ * all three with equal confidence.
+ *
+ *  - `'deterministic'`: the regex classifier in extractor.classify() set
+ *    it from keyword signals in the lead's own words. High precision.
+ *  - `'user_routing_answer'`: the lead answered a routing question
+ *    (corporate_problem_type / real_estate_problem_type /
+ *    employment_problem_type / estates_problem_type) and a
+ *    rerouteFrom*General function applied their choice. The strongest
+ *    provenance: the lead picked the bucket themselves.
+ *  - `'llm_inferred'`: the LLM's __matter_type classifier promoted a
+ *    routing catch-all to a specific sub-type. Permitted only on
+ *    single-pass flows (voice transcript, operator replay) where no
+ *    follow-up question is possible, and on the 'unknown' lane where the
+ *    LLM is the only classifier (DR-039, multilingual). Briefs must
+ *    surface this honestly: the lead never confirmed the classification.
+ *  - `'unknown'`: states serialized before this field existed.
+ */
+export type MatterTypeProvenance =
+  | 'deterministic'
+  | 'user_routing_answer'
+  | 'llm_inferred'
+  | 'unknown';
+
 export interface LeadSummary {
   intro: string;        // 1-2 sentences in plain language about what they're dealing with
   points: string[];     // bullets of key confirmed facts in their language
@@ -330,6 +361,14 @@ export interface EngineState {
   input: string;
   practice_area: PracticeArea;
   matter_type: MatterType;
+  /**
+   * Provenance of the current matter_type (DR-069). Set by initialiseState
+   * ('deterministic'), upgraded by the rerouteFrom*General functions
+   * ('user_routing_answer') and by the mergeLlmResults __matter_type
+   * promotion ('llm_inferred'). Optional because states serialized before
+   * 2026-06-11 lack it; readers treat absence as 'unknown'.
+   */
+  matter_type_provenance?: MatterTypeProvenance;
   intent_family: IntentFamily;
   dispute_family: DisputeFamily;
   advisory_subtrack: AdvisorySubtrack;
@@ -502,6 +541,11 @@ export type FactSource =
   | 'system_metadata'
   | 'profile_metadata'
   | 'inferred_from_transcript'
+  // AI extraction from the lead's free text (DR-069, 2026-06-11). Before
+  // this member existed, buildResolvedFactsV2 collapsed llm_inferred slot
+  // fills to 'unknown', so the brief could say a fact was shaky but not
+  // WHY. The renderer already carries a dedicated chip for this value.
+  | 'llm_inferred'
   | 'unknown'
   // Legacy values, kept for backward compatibility with existing DB rows.
   // New code should NOT emit these. The brief renderer maps them to lawyer
@@ -532,6 +576,9 @@ export const FACT_SOURCE_PRECEDENCE: Record<FactSource, number> = {
   // after the engine asked, overrides a weak profile_metadata seed.
   profile_metadata: 2,
   inferred_from_transcript: 1,
+  // llm_inferred (DR-069): an AI guess from free text. Same trust floor as
+  // inferred_from_transcript; any user-grounded or metadata source beats it.
+  llm_inferred: 1,
   unknown: 0,
   // Legacy mappings (read-only, never emitted by new code):
   confirmed: 6,      // old 'confirmed' implied readback acknowledgement
@@ -623,4 +670,17 @@ export interface LawyerReport {
    * For non-advisory matter types this is 'unknown' (the engine default).
    */
   advisory_subtrack: AdvisorySubtrack;
+  /**
+   * How the matter_type was determined (added 2026-06-11, DR-069).
+   *
+   * Mirrors `EngineState.matter_type_provenance` into the persisted brief,
+   * following the DR-054 rule: every state field a downstream decision
+   * needs must be on LawyerReport, or serialization drops it. Downstream
+   * consumers: the brief renderer (cover-headline honesty chip when the
+   * classification is 'llm_inferred'), triage queries, and any future
+   * GHL workflow branching on classification confidence.
+   *
+   * 'unknown' for states serialized before this field existed.
+   */
+  matter_type_provenance: MatterTypeProvenance;
 }

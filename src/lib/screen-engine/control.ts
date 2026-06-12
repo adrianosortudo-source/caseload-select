@@ -4,7 +4,13 @@ import type { I18nBundle } from './i18n/loader';
 import { selectNextSlot, computeCoreCompleteness, getDecisionGap, isWeakName } from './selector';
 import { computeBand } from './band';
 import { SLOT_REGISTRY } from './slotRegistry';
-import { updateAdvisorySubtrack, rerouteFromCorporateGeneral, rerouteFromRealEstateGeneral } from './extractor';
+import {
+  updateAdvisorySubtrack,
+  rerouteFromCorporateGeneral,
+  rerouteFromRealEstateGeneral,
+  rerouteFromEmploymentGeneral,
+  rerouteFromEstatesGeneral,
+} from './extractor';
 import { deriveAdvisorySpecificTask } from './slotEvidence';
 import { buildClosingMessage } from './closing';
 
@@ -23,11 +29,11 @@ const BAND_A_COMPLETENESS = 65;
 // to a soft cap: plain text like SMS but lower latency (lead is in Maps
 // right now) so 5 questions before bailing instead of 3.
 //
-// Voice (DR-033) is single-pass. The transcript arrives via a post-call
-// webhook; there is no follow-up dialogue from the engine. Budget = 3
-// matches SMS numerically; the reasoning is different (no second turn
-// possible vs SMS where each turn is expensive). buildOpenQuestions
-// for voice surfaces the remaining gaps for the lawyer's call-back.
+// Voice: DR-033 (single-pass, post-call webhook) used budget=3 because
+// there was no second turn. DR-048 (Voice v2, engine-owns-turns) raises
+// this to 8 to allow multi-turn discovery in realtime. The DR-033
+// /api/voice-intake route never calls getNextStep so the increase is
+// safe: it only affects the Voice v2 realtime turn loop.
 //
 // "questionHistory.length" counts every slot the lead has answered after
 // the initial regex / LLM pass on the kickoff message. Slots filled
@@ -35,7 +41,7 @@ const BAND_A_COMPLETENESS = 65;
 const QUESTION_BUDGET_BY_CHANNEL: Partial<Record<NonNullable<EngineState['channel']>, number>> = {
   sms: 3,
   gbp: 5,
-  voice: 3,
+  voice: 8,
 };
 
 function questionsAnswered(state: EngineState): number {
@@ -1023,6 +1029,18 @@ export function applyAnswer(state: EngineState, slotId: string, value: string): 
   // Reroute real_estate_general when problem type is answered
   if (slotId === 'real_estate_problem_type') {
     updated = rerouteFromRealEstateGeneral(updated, value);
+  }
+
+  // Reroute employment_general when problem type is answered (DR-069
+  // parity, 2026-06-11: these two lanes previously had NO deterministic
+  // reroute, so a chip answer to the routing question never routed)
+  if (slotId === 'employment_problem_type') {
+    updated = rerouteFromEmploymentGeneral(updated, value);
+  }
+
+  // Reroute estates_general when problem type is answered
+  if (slotId === 'estates_problem_type') {
+    updated = rerouteFromEstatesGeneral(updated, value);
   }
 
   // Recompute completeness, band, gap

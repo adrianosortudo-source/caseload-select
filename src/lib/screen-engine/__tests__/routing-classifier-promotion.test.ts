@@ -107,24 +107,33 @@ function corporateGeneralState(): EngineState {
   return s;
 }
 
-describe('mergeLlmResults — routing catch-all promotion', () => {
-  it('promotes corporate_general → shareholder_dispute when LLM picks sub-type', () => {
+describe('mergeLlmResults: routing catch-all promotion', () => {
+  // DR-069 (2026-06-11): *_general promotion now requires
+  // allowGeneralPromotion (single-pass flows: voice webhook, operator
+  // replay, admin reclassify). On interactive channels the default is
+  // gated: the selector asks the routing question and the lead's own
+  // answer routes via rerouteFrom*General. The promotion cases below
+  // pass the option, documenting the single-pass contract; the gated
+  // default has its own block further down.
+  it('promotes corporate_general → shareholder_dispute when LLM picks sub-type (single-pass)', () => {
     const before = corporateGeneralState();
     const merged = mergeLlmResults(before, {
       [MATTER_TYPE_CLASSIFIER_FIELD]: 'shareholder_dispute',
-    });
+    }, { allowGeneralPromotion: true });
     expect(merged.matter_type).toBe('shareholder_dispute');
     // intent_family + dispute_family should also update via
-    // classificationForMatterType — that's how the brief loads the
+    // classificationForMatterType: that's how the brief loads the
     // right matter pack.
     expect(merged.intent_family).toBe('business_dispute');
+    // DR-069: the promotion is an AI decision the lead never confirmed.
+    expect(merged.matter_type_provenance).toBe('llm_inferred');
   });
 
-  it('promotes corporate_general → unpaid_invoice when LLM picks that', () => {
+  it('promotes corporate_general → unpaid_invoice when LLM picks that (single-pass)', () => {
     const before = corporateGeneralState();
     const merged = mergeLlmResults(before, {
       [MATTER_TYPE_CLASSIFIER_FIELD]: 'unpaid_invoice',
-    });
+    }, { allowGeneralPromotion: true });
     expect(merged.matter_type).toBe('unpaid_invoice');
     expect(merged.intent_family).toBe('business_dispute');
   });
@@ -133,7 +142,7 @@ describe('mergeLlmResults — routing catch-all promotion', () => {
     const before = corporateGeneralState();
     const merged = mergeLlmResults(before, {
       [MATTER_TYPE_CLASSIFIER_FIELD]: 'corporate_general',
-    });
+    }, { allowGeneralPromotion: true });
     // No-op: ambiguous description, engine stays at routing catch-all.
     expect(merged.matter_type).toBe('corporate_general');
   });
@@ -142,7 +151,7 @@ describe('mergeLlmResults — routing catch-all promotion', () => {
     const before = corporateGeneralState();
     const merged = mergeLlmResults(before, {
       [MATTER_TYPE_CLASSIFIER_FIELD]: null,
-    });
+    }, { allowGeneralPromotion: true });
     expect(merged.matter_type).toBe('corporate_general');
   });
 
@@ -150,7 +159,7 @@ describe('mergeLlmResults — routing catch-all promotion', () => {
     const before = corporateGeneralState();
     const merged = mergeLlmResults(before, {
       [MATTER_TYPE_CLASSIFIER_FIELD]: 'unknown',
-    });
+    }, { allowGeneralPromotion: true });
     expect(merged.matter_type).toBe('corporate_general');
   });
 
@@ -161,13 +170,42 @@ describe('mergeLlmResults — routing catch-all promotion', () => {
     const before = corporateGeneralState();
     const promoted = mergeLlmResults(before, {
       [MATTER_TYPE_CLASSIFIER_FIELD]: 'shareholder_dispute',
-    });
+    }, { allowGeneralPromotion: true });
     expect(promoted.matter_type).toBe('shareholder_dispute');
-    // Now try to re-promote — should be a no-op (gate condition is
+    // Now try to re-promote: should be a no-op (gate condition is
     // state.matter_type must be a routing catch-all).
     const second = mergeLlmResults(promoted, {
       [MATTER_TYPE_CLASSIFIER_FIELD]: 'unpaid_invoice',
-    });
+    }, { allowGeneralPromotion: true });
     expect(second.matter_type).toBe('shareholder_dispute');
+  });
+});
+
+// ── DR-069: gated default on interactive channels ───────────────────────
+
+describe('mergeLlmResults: DR-069 promotion gate (interactive default)', () => {
+  it('does NOT promote a *_general catch-all without allowGeneralPromotion', () => {
+    const before = corporateGeneralState();
+    const merged = mergeLlmResults(before, {
+      [MATTER_TYPE_CLASSIFIER_FIELD]: 'shareholder_dispute',
+    });
+    // Interactive default: the routing question stays askable; the
+    // lead's own answer routes via rerouteFromCorporateGeneral.
+    expect(merged.matter_type).toBe('corporate_general');
+    expect(merged.matter_type_provenance).toBe('deterministic');
+  });
+
+  it("still promotes the 'unknown' lane without the option (DR-039 multilingual dependency)", () => {
+    const before = initialiseState('preciso de ajuda com um problema na minha empresa');
+    if (before.matter_type !== 'unknown') {
+      throw new Error(
+        `Test premise violation: expected non-English text to land at unknown but got ${before.matter_type}`,
+      );
+    }
+    const merged = mergeLlmResults(before, {
+      [MATTER_TYPE_CLASSIFIER_FIELD]: 'corporate_general',
+    });
+    expect(merged.matter_type).toBe('corporate_general');
+    expect(merged.matter_type_provenance).toBe('llm_inferred');
   });
 });

@@ -35,8 +35,30 @@ symbols, dashes, and punctuation). If none of the listed options matches the \
 lead's situation, return null. Do not return free-form text for single-select \
 fields, do not paraphrase, do not return the lead's exact words. If the lead \
 said "30 percent" and the options are "Majority / 50/50 / Significant minority \
-/ Small minority", return "Small minority" (closest matching option) or null \
-(if uncertain).
+/ Small minority", return "Small minority" (the stated value is contained in \
+that option's meaning) or null (if uncertain).
+
+2a. THE NO-FORCE-FIT RULE. Rule 2 never licenses a wrong answer. Two cases \
+look similar and must be kept apart. Case one: the lead did not address the \
+topic at all. Rule 0 applies and the answer is null. Case two: the lead DID \
+address the topic, but none of the listed options accurately describes what \
+they said. In case two, do not pick the nearest-sounding option. Instead: \
+(a) if the option list contains an escape option such as "Something else", \
+"Other", or "Not sure", select that escape option; (b) if there is no escape \
+option, return null. Never select an option that asserts something the lead \
+did not say, or that contradicts the lead's words. The lead's own words \
+always outrank plausibility. Example: the lead says "I need to lease a space \
+for my business" and the options cover buying or selling property but not \
+leasing. "Buying or selling commercial property" is wrong, because the lead \
+is not buying or selling. The correct answer is the leasing option when one \
+is listed, otherwise "Something else", otherwise null. A mapping is \
+legitimate only when the lead's statement is contained in the option's \
+meaning, as with the dollar ranges in rule 5. It is a force-fit, and \
+forbidden, when the chosen option adds or changes a material fact. This rule \
+also governs classification fields: being decisive means picking the \
+sub-type the lead's words actually support. When no listed sub-type matches \
+what the lead described, return the current catch-all value rather than \
+promoting to a specific type the lead did not describe.
 
 3. For free-text fields, return a concise version of what the lead said. If \
 the lead did not say it, return null.
@@ -119,7 +141,7 @@ export function buildUserPrompt(
   const matterContext = matterType === 'unknown'
     ? 'Matter type has not yet been classified. Help identify it through the routing fields.'
     : ROUTING_CATCH_ALL_MATTER_TYPES.has(matterType)
-    ? `Matter type initially classified as: ${matterType} (a ROUTING CATCH-ALL). The schema includes a \`__matter_type\` classifier with a scoped list of sub-types. Be DECISIVE: if the description contains ANY signal pointing to a specific sub-type (e.g. "shareholder", "buyout", "partner dispute" → shareholder_dispute; "unpaid invoice", "client owes us" → unpaid_invoice; "tenant", "landlord", "rent dispute" → landlord_tenant), pick that sub-type. Only return '${matterType}' itself when the description is GENUINELY too vague to point at any sub-type. The strict null rule does NOT apply to this classifier — classification is the whole point of this field.`
+    ? `Matter type initially classified as: ${matterType} (a ROUTING CATCH-ALL). The schema includes a \`__matter_type\` classifier with a scoped list of sub-types. Be DECISIVE: if the description contains ANY signal pointing to a specific sub-type (e.g. "shareholder", "buyout", "partner dispute" → shareholder_dispute; "unpaid invoice", "client owes us" → unpaid_invoice; "tenant", "landlord", "rent dispute" → landlord_tenant), pick that sub-type. The strict null rule does NOT apply to this classifier, but rule 2a still does: decisive does not mean forced. When none of the listed sub-types matches what the lead actually described, or the description is genuinely too vague, return '${matterType}' itself rather than the nearest-sounding sub-type.`
     : `Matter type already classified as: ${matterType}.`;
 
   const slotCatalogue = slots.map(slotToCatalogueEntry).join('\n\n');

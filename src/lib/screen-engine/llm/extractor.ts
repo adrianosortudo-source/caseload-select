@@ -181,9 +181,36 @@ function slotOptionsIncludeValue(slotId: string, value: string): boolean {
   return false;
 }
 
+export interface MergeLlmOptions {
+  /**
+   * DR-069: allow the __matter_type classifier to promote a *_general
+   * routing catch-all to a specific sub-type.
+   *
+   * Default FALSE (interactive channels: web widget, Meta channels,
+   * realtime voice). On those channels the selector asks the routing
+   * question and the lead's own answer routes via rerouteFrom*General,
+   * so an unconfirmed AI promotion would only pre-empt the lead and
+   * make the routing question unaskable (the slot applies_to the
+   * *_general lane the promotion just left).
+   *
+   * Pass TRUE only on single-pass flows where no follow-up question is
+   * possible: the voice post-call webhook, the operator promote replay,
+   * and admin reclassify. There the promotion is the best available
+   * routing and the brief flags it as AI-inferred.
+   *
+   * The 'unknown' lane is NOT gated by this option: the LLM is the only
+   * classifier for non-English input (DR-039) and for English text the
+   * regex could not place, and its promotion from 'unknown' targets the
+   * area-level *_general lanes by prompt design, which keeps the routing
+   * question askable.
+   */
+  allowGeneralPromotion?: boolean;
+}
+
 export function mergeLlmResults(
   state: EngineState,
   extracted: Record<string, string | null>,
+  options?: MergeLlmOptions,
 ): EngineState {
   let working: EngineState = state;
 
@@ -219,7 +246,14 @@ export function mergeLlmResults(
   // matter into wrongful_dismissal. The isValidMatterType guard here is
   // a belt-and-suspenders check; the practice-area filter in the
   // schema's option list is the primary defence.
-  if (ROUTING_CATCH_ALL_MATTER_TYPES.has(state.matter_type)) {
+  // DR-069 gate: promotion from a *_general catch-all is allowed only on
+  // single-pass flows (options.allowGeneralPromotion). On interactive
+  // channels the routing question gets asked and the lead routes. The
+  // 'unknown' lane always promotes (DR-039: the LLM is the only
+  // classifier for non-English input).
+  const promotionAllowed =
+    state.matter_type === 'unknown' || options?.allowGeneralPromotion === true;
+  if (ROUTING_CATCH_ALL_MATTER_TYPES.has(state.matter_type) && promotionAllowed) {
     const llmMatter = extracted[MATTER_TYPE_CLASSIFIER_FIELD];
     if (
       llmMatter &&
@@ -230,7 +264,17 @@ export function mergeLlmResults(
       !isNonAnswer(llmMatter)
     ) {
       const classification = classificationForMatterType(llmMatter);
-      working = { ...working, ...classification };
+      // The promotion is an AI decision the lead never confirmed; stamp
+      // the provenance so briefs and triage can render it honestly
+      // (DR-069). Note the common benign case: promoting 'unknown' to an
+      // area-level *_general lane is area detection, the routing question
+      // still gets asked there, and the lead's answer upgrades the
+      // provenance to 'user_routing_answer' via rerouteFrom*General.
+      working = {
+        ...working,
+        ...classification,
+        matter_type_provenance: 'llm_inferred',
+      };
     }
   }
 
@@ -267,10 +311,23 @@ export function mergeLlmResults(
       if (!slotOptionsIncludeValue(slotId, value)) continue;
     }
 
-    // Don't override regex-found values
+    // Don't override user-grounded or metadata-sourced values (DR-069
+    // widening, 2026-06-11). The guard previously protected only
+    // 'explicit' (regex) fills, so a resume-turn LLM merge could clobber
+    // a user's button answer and silently downgrade its provenance to
+    // llm_inferred, which then failed isUserAnswered, the discovery
+    // floor, and the routing reroute gate. The LLM may only overwrite
+    // its own earlier guesses ('llm_inferred') and defensive 'unknown'
+    // placeholders, matching isUserGroundedFill (DR-061).
     const existing = slots[slotId];
     const existingMeta = slotMeta[slotId];
-    if (existing && existing !== '' && existingMeta && existingMeta.source === 'explicit') {
+    if (
+      existing &&
+      existing !== '' &&
+      existingMeta &&
+      existingMeta.source !== 'llm_inferred' &&
+      existingMeta.source !== 'unknown'
+    ) {
       continue;
     }
 

@@ -78,10 +78,6 @@ import {
 } from '@/lib/numeric-option-mapping';
 import { applyFreeTextFuzzyMatch } from '@/lib/free-text-fuzzy-match';
 import { applyFreeTextAnswerMapping } from '@/lib/free-text-answer-mapping';
-import {
-  rerouteFromCorporateGeneral,
-  rerouteFromRealEstateGeneral,
-} from '@/lib/screen-engine/extractor';
 import { getI18n, type I18nBundle } from '@/lib/screen-engine/i18n/loader';
 import { getQuestionDisplayText, getOptionDisplayLabel } from '@/lib/screen-engine/i18n/display';
 import type { SupportedLanguage } from '@/lib/screen-engine/types';
@@ -594,30 +590,15 @@ export async function processChannelInbound(
     }
   }
 
-  // Matter-type reroute after LLM merge — covers the case where Gemini
-  // (not the numeric-option mapper) fills the routing slot. The engine
-  // already side-effects on chip answers via applyAnswer (control.ts:
-  // applyAnswer calls rerouteFromCorporateGeneral / rerouteFromRealEstate
-  // General when the routing slot is filled). The numeric-option mapper
-  // routes through applyAnswer too. But mergeLlmResults does NOT yet
-  // invoke those side effects, so an LLM-only fill of corporate_problem
-  // _type leaves matter_type at the routing catch-all. This explicit
-  // call closes that gap until the engine fix lands (task #99 — teach
-  // mergeLlmResults to side-effect like applyAnswer; needs sandbox sync).
-  if (
-    state.matter_type === 'corporate_general' &&
-    typeof state.slots['corporate_problem_type'] === 'string' &&
-    state.slots['corporate_problem_type']
-  ) {
-    state = rerouteFromCorporateGeneral(state, state.slots['corporate_problem_type']);
-  }
-  if (
-    state.matter_type === 'real_estate_general' &&
-    typeof state.slots['real_estate_problem_type'] === 'string' &&
-    state.slots['real_estate_problem_type']
-  ) {
-    state = rerouteFromRealEstateGeneral(state, state.slots['real_estate_problem_type']);
-  }
+  // Post-merge matter-type reroute REMOVED (DR-069, 2026-06-11). This
+  // block existed to make Gemini-only routing-slot fills reroute (task
+  // #99), which is exactly the defect class DR-069 forbids: an
+  // llm_inferred value silently changed the matter type, the routing
+  // slot stopped applying to the new matter, and the routing question
+  // became unaskable. Reroutes now fire ONLY inside applyAnswer (chip
+  // clicks and every reply adapter route through it), where the answer
+  // is user-grounded by construction. The engine-side reroute functions
+  // also carry their own provenance gate as defense in depth.
 
   // ── Build the brief ─────────────────────────────────────────────────────
   // Resolve firm timezone so submitted_at renders firm-local, matching the

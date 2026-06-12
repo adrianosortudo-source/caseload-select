@@ -97,13 +97,18 @@ export function seedVoiceState(
   callerName: string | null,
 ): EngineState {
   let s = state;
+  // Provenance matches the live route's seeding (drift fixed 2026-06-11,
+  // DR-069 pass): caller-ID phone is carrier reachability
+  // ('system_metadata'), caller name is GHL contact-record identity
+  // ('profile_metadata'). The previous 'answered' stamps overclaimed and
+  // made replayed rows defeat the weak-name and provenance logic.
   if (callerPhone && !s.slots['client_phone']) {
     s = {
       ...s,
       slots: { ...s.slots, client_phone: callerPhone },
       slot_meta: {
         ...s.slot_meta,
-        client_phone: { source: 'answered', confidence: 1.0 },
+        client_phone: { source: 'system_metadata', confidence: 1.0 },
       },
     };
   }
@@ -113,7 +118,7 @@ export function seedVoiceState(
       slots: { ...s.slots, client_name: callerName },
       slot_meta: {
         ...s.slot_meta,
-        client_name: { source: 'answered', confidence: 1.0 },
+        client_name: { source: 'profile_metadata', confidence: 1.0 },
       },
     };
   }
@@ -160,7 +165,9 @@ export async function runVoicePipeline(
         (k) => llm.extracted[k] !== null && llm.extracted[k] !== '',
       );
       if (llm.mode === 'live' && filledIds.length > 0) {
-        state = mergeLlmResults(state, llm.extracted);
+        // allowGeneralPromotion (DR-069): replay of a single-pass voice
+        // transcript, same rationale as the live route.
+        state = mergeLlmResults(state, llm.extracted, { allowGeneralPromotion: true });
       }
     } catch (err) {
       console.warn('[voice-pipeline] llmExtractServer failed:', err);

@@ -161,7 +161,9 @@ export async function POST(
         (k) => llm.extracted[k] !== null && llm.extracted[k] !== '',
       );
       if (llm.mode === 'live' && filledIds.length > 0) {
-        state = mergeLlmResults(state, llm.extracted);
+        // allowGeneralPromotion (DR-069): operator-triggered single-pass
+        // replay; no follow-up question is possible.
+        state = mergeLlmResults(state, llm.extracted, { allowGeneralPromotion: true });
       }
     } catch (err) {
       console.warn('[reclassify] llmExtractServer failed:', err);

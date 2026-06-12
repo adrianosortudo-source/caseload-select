@@ -77,6 +77,7 @@ function buildFakeReport(overrides: Partial<LawyerReport> = {}): LawyerReport {
     band_reasoning_bullets: ['Wrongful dismissal lane; standard arc'],
     contact_complete: true,
     advisory_subtrack: 'unknown',
+    matter_type_provenance: 'deterministic',
   } as LawyerReport;
   return { ...base, ...overrides };
 }

@@ -132,6 +132,9 @@ const FACT_SOURCE_CLASS: Record<string, string> = {
   // understands the captured name is provisional.
   profile_metadata: 'src-stated',
   inferred_from_transcript: 'src-inferred',
+  // llm_inferred (DR-069): live for resolved facts now that the engine's
+  // buildResolvedFactsV2 emits it instead of collapsing to 'unknown'.
+  llm_inferred: 'src-inferred',
   unknown: 'src-unknown',
   // Legacy DB-row backward-compat
   stated: 'src-stated',
@@ -1007,11 +1010,23 @@ export function renderBriefHtmlServer(
           </div>
         </aside>`;
 
+  // DR-069: when the matter classification rests on AI inference the lead
+  // never confirmed (single-pass channels: voice transcript, replay), the
+  // cover headline carries an honesty note instead of asserting the
+  // classification flat. Reads matter_type_provenance off the persisted
+  // report; rows serialized before the field existed read 'unknown' and
+  // render unchanged.
+  const classificationInferred = report.matter_type_provenance === 'llm_inferred';
+  const classificationNote = classificationInferred
+    ? `<p class="cover-classification-note">Classification AI-inferred from the description, not confirmed by the lead</p>`
+    : '';
+
   const cover = `
     <section class="brief-cover">
       <div class="brief-cover-left">
         <p class="cover-eyebrow">CaseLoad Select · Lawyer triage</p>
         <h1 class="cover-headline">${headlineWithSquare}</h1>
+        ${classificationNote}
         ${report.confidence_calibration ? `<p class="cover-summary">${esc(report.confidence_calibration)}</p>` : ''}
       </div>
       ${decisionBand}
