@@ -363,7 +363,7 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </div>
-          <h2 className="text-[28px] font-extrabold text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
+          <h2 className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
             {ws("done_heading", "Your matter review was submitted.")}
           </h2>
           <p
@@ -391,7 +391,7 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
         backLabel={backLabel}
       >
         <div className="flex flex-col gap-5">
-          <h2 className="text-[28px] font-extrabold text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
+          <h2 className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
             {ws("insight_heading", "Here is what we understood.")}
           </h2>
           <p
@@ -433,7 +433,7 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
       >
         <form action={submitContact} className="flex flex-col gap-5">
           <div>
-            <h2 className="text-[28px] font-extrabold text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
+            <h2 className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
               {ws("contact_heading", "How should the firm reach you?")}
             </h2>
             <p
