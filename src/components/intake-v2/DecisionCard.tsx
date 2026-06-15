@@ -98,7 +98,7 @@ export function DecisionCard({ item, value, onChange }: Props) {
     <div className="flex flex-col gap-7">
       <div className="flex flex-col gap-2.5">
         <h2
-          className="text-[26px] sm:text-[30px] leading-tight font-extrabold text-balance text-[var(--cls-text,#1E2F58)]"
+          className="text-[24px] sm:text-[26px] leading-tight font-extrabold text-balance text-[var(--cls-text,#1E2F58)]"
           style={{ fontFamily: fontDisplay }}
         >
           {item.question}
