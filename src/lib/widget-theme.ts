@@ -93,8 +93,13 @@ export const DRG_WIDGET_THEME: WidgetTheme = {
     borderHover: "#B8956A",
   },
   fonts: {
-    display: "var(--font-source-serif-4), Source Serif 4, serif",
-    body: "var(--font-source-serif-4), Source Serif 4, serif",
+    // "Source Serif 4" MUST stay quoted: the bare trailing digit makes it an
+    // invalid font-family identifier, which renders the whole resolved
+    // declaration invalid-at-computed-value-time, so the widget silently
+    // falls back to the inherited sans (colors themed, fonts did not). The
+    // next/font var resolves to its own quoted family; this is the fallback.
+    display: 'var(--font-source-serif-4), "Source Serif 4", serif',
+    body: 'var(--font-source-serif-4), "Source Serif 4", serif',
   },
   loadSourceSerif: true,
 };
