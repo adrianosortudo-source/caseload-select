@@ -38,6 +38,7 @@ const ALL_MATTER_TYPES_RECORD: Record<MatterType, true> = {
   corporate_money_control: true,
   corporate_general: true,
   general_counsel_advisory: true,
+  notary_services: true,
   // Real estate
   commercial_real_estate: true,
   residential_purchase_sale: true,
@@ -331,6 +332,33 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     abstraction_level: 'concrete',
     required: false,
     priority: 13,
+  },
+
+  // ─── NOTARY SERVICES (DR-073) ─────────────────────────────────────────────
+  // One light document-type question, then contact capture. Notary is an
+  // administrative service, not a legal matter, so the intake is minimal
+  // and it bands at C (computeBand). getDecisionGap short-circuits this
+  // matter type so the universal readiness slots are not asked.
+
+  {
+    id: 'notary_document_type',
+    question: 'What kind of document do you need notarized?',
+    input_type: 'single_select',
+    options: [
+      { value: 'Real estate or mortgage document', label: 'Real estate or mortgage document' },
+      { value: 'Affidavit or statutory declaration', label: 'Affidavit or statutory declaration' },
+      { value: 'Travel or consent letter', label: 'Travel or consent letter' },
+      { value: 'Certified copy of a document', label: 'Certified copy of a document' },
+      { value: 'Other', label: 'Other' },
+    ],
+    applies_to: ['notary_services'],
+    tier: 'core',
+    question_group: 'standing',
+    resolves: 'none',
+    decision_value: 6,
+    abstraction_level: 'concrete',
+    required: true,
+    priority: 10,
   },
 
   // ─── BUSINESS SETUP ADVISORY ──────────────────────────────────────────────

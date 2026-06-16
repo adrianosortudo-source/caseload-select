@@ -10,6 +10,9 @@ export function getDecisionGap(state: EngineState): DecisionGap {
   // After matter-specific gaps are resolved, ask universal readiness questions
   // (skip for out_of_scope where we forward without qualifying further).
   if (state.matter_type === 'out_of_scope' || state.matter_type === 'unknown') return 'none';
+  // Notary (DR-073) is a thin administrative lane: ask only its own
+  // document-type slot, never the universal readiness triple.
+  if (state.matter_type === 'notary_services') return 'none';
   if (!isResolved(state, 'hiring_timeline')) return 'hiring_timeline';
   if (!isResolved(state, 'other_counsel')) return 'other_counsel';
   if (!isResolved(state, 'decision_authority')) return 'decision_authority';
@@ -547,6 +550,10 @@ function scoreSlot(slot: SlotDefinition, currentGap: DecisionGap): number {
 // we audit each in the same way.
 
 const MATTER_SPECIFIC_SLOT_ORDER: Record<string, readonly string[]> = {
+  // NOTARY SERVICES (DR-073): one document-type question, then contact.
+  notary_services: [
+    'notary_document_type',
+  ],
   // GENERAL COUNSEL ADVISORY (DR-072). Tight order: what kind of help,
   // confirm there is a business, size it, then the conditional contract
   // detail. The universal readiness triple fires after this list.

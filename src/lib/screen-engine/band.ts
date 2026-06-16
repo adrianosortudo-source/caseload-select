@@ -773,6 +773,21 @@ export function computeBand(state: EngineState): BandResult {
   if (state.matter_type === 'out_of_scope') {
     return bandOutOfScope(state);
   }
+  if (state.matter_type === 'notary_services') {
+    // DR-073: notary is a low-priority administrative service, not a legal
+    // matter. Fixed Band C (operator decision for Damaris): it lands in the
+    // triage queue as a real but low-priority inquiry, not Band D (which
+    // would frame it as refer-elsewhere) and not auto-scored by the
+    // four-axis engine (it has no value/urgency/complexity signal to score).
+    // Per-firm band override (e.g. a firm that bounces notary) is a future
+    // per-firm-calibration concern; C is the universal default.
+    return {
+      band: 'C',
+      confidence: 60,
+      reasoning: 'Notary services request (administrative, not a legal matter). Low-priority; routed to the queue at Band C for a quick callback.',
+      coreCompleteness: state.coreCompleteness,
+    };
+  }
   if (state.matter_type === 'corporate_general') {
     const problem = slotValue(state, 'corporate_problem_type');
     // DR-069/DR-070: the escape demotion and the "subtype identified"

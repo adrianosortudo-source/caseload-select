@@ -96,6 +96,13 @@
       "Over 50": "Mais de 50",
       "Not sure": "Não tenho certeza"
     },
+    "notary_document_type": {
+      "Real estate or mortgage document": "Documento imobiliário ou de hipoteca",
+      "Affidavit or statutory declaration": "Declaração juramentada ou declaração legal",
+      "Travel or consent letter": "Carta de viagem ou de consentimento",
+      "Certified copy of a document": "Cópia autenticada de um documento",
+      "Other": "Outro"
+    },
     "company_involvement": {
       "I own or co-own the company": "Sou dono ou cosócio da empresa",
       "I am a director or officer": "Sou diretor ou administrador",

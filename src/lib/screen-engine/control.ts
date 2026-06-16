@@ -874,8 +874,45 @@ export function getNextStep(state: EngineState): NextStep {
   const gap = getDecisionGap(state);
   const channel = state.channel ?? 'web';
 
-  // Out-of-scope: stop immediately with a polite message; lead still goes to the firm
+  // Out-of-scope: capture contact, THEN stop (DR-073, 2026-06-16). This
+  // branch previously stopped immediately ("lead still goes to the firm"),
+  // but that predates the contact-capture doctrine (DR-038) and the Band D
+  // doctrine (2026-05-15). On web/SMS/GBP, where no contact is pre-seeded,
+  // the immediate stop persisted a lead with no contact, which DR-038 then
+  // rejected to `unconfirmed_inquiries` (no_contact_provided) while the
+  // done screen falsely promised a callback. Now OOS drives the same
+  // contact-capture path as in-scope: present the routing-note insight,
+  // capture name + reachability, then stop. The lead lands as Band D
+  // triaging (refer-eligible) and the "a lawyer will reach out" promise is
+  // honored. Channels that pre-seed contact (voice caller-ID, Meta profile)
+  // satisfy the gate on the first pass and stop immediately as before.
   if (state.matter_type === 'out_of_scope') {
+    const oosName = state.slots['client_name'];
+    const oosNameMeta = state.slot_meta['client_name'];
+    const oosWeakProfileName =
+      oosNameMeta?.source === 'profile_metadata' &&
+      isWeakName(typeof oosName === 'string' ? oosName : null);
+    const oosHasName = !!oosName && !oosWeakProfileName;
+    const oosHasReachable = !!state.slots['client_phone'] || !!state.slots['client_email'];
+
+    if (oosHasName && oosHasReachable) {
+      return {
+        type: 'stop',
+        message: 'Lead captured. Forwarded to the firm.',
+        bridgeText: getBridgeText(state),
+        closingMessage: buildClosingMessage(state),
+      };
+    }
+    // Show the routing-note insight once, then drive contact capture.
+    if (!state.contactCaptureStarted && !state.insightShown) {
+      return { type: 'present_insight', bridgeText: getBridgeText(state) };
+    }
+    if (!oosHasName) {
+      const nameSlot = SLOT_REGISTRY.find((s) => s.id === 'client_name');
+      if (nameSlot) return { type: 'capture_contact', slot: nameSlot };
+    }
+    const emailSlot = SLOT_REGISTRY.find((s) => s.id === 'client_email');
+    if (emailSlot) return { type: 'capture_contact', slot: emailSlot };
     return {
       type: 'stop',
       message: 'Lead captured. Forwarded to the firm.',

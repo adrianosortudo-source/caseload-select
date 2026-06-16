@@ -30,6 +30,13 @@
       "Over 50": "Over 50",
       "Not sure": "Not sure"
     },
+    "notary_document_type": {
+      "Real estate or mortgage document": "Real estate or mortgage document",
+      "Affidavit or statutory declaration": "Affidavit or statutory declaration",
+      "Travel or consent letter": "Travel or consent letter",
+      "Certified copy of a document": "Certified copy of a document",
+      "Other": "Other"
+    },
     "company_involvement": {
       "I own or co-own the company": "I own or co-own the company",
       "I am a director or officer": "I am a director or officer",

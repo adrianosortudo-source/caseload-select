@@ -62,6 +62,11 @@ function buildMatterSnapshot(state: EngineState): string {
       return 'Corporate financial irregularity: concern about unauthorized transactions, missing funds, or financial misconduct within a company.';
     case 'corporate_general':
       return 'Corporate/business matter: problem type not yet fully determined. Routing questions pending.';
+    case 'notary_services': {
+      const doc = slotVal(state, 'notary_document_type');
+      const docPhrase = doc && doc !== 'Other' ? ` (${doc.toLowerCase()})` : '';
+      return `Notary services request${docPhrase}: the lead wants a document notarized, witnessed, or certified. Administrative service, not a legal matter. Low-priority callback to confirm the document and book a time.`;
+    }
     case 'general_counsel_advisory': {
       const shape = slotVal(state, 'gca_engagement_shape');
       if (shape === 'Ongoing on-call legal support') return 'General counsel advisory: ongoing outsourced legal support for a business. Scope to be defined on the call.';
@@ -151,6 +156,8 @@ function buildLikelyServices(state: EngineState): string[] {
       services.push('Negotiated buyout or exit strategy');
       return services;
     }
+    case 'notary_services':
+      return ['Notarization or commissioning of the document', 'Certified true copies if needed', 'Quick in-office or remote appointment'];
     case 'general_counsel_advisory': {
       const shape = slotVal(state, 'gca_engagement_shape');
       if (shape === 'A specific contract reviewed or drafted') {
@@ -478,6 +485,10 @@ function buildFeeEstimate(state: EngineState): string {
       // the call. Surface the schedule's nearest reference points so the
       // lawyer anchors the conversation rather than improvising.
       return `${prefix} Not on the flat-fee schedule; scope and quote on the call. Reference points from the schedule: $450/yr annual compliance, $549+ for a builders' agreement review, $1,600+ for a shareholders' agreement. Ongoing counsel is typically a monthly or per-matter retainer.`;
+    case 'notary_services':
+      // DR-073: notary is a flat per-document administrative fee, set on the
+      // call. Not a legal-fee matter.
+      return `${prefix} Flat per-document notary or commissioning fee, confirmed on the call. Not a legal-services engagement.`;
     case 'unpaid_invoice': {
       const amount = slotVal(state, 'amount_at_stake');
       if (!isConfirmed(state, 'amount_at_stake')) return `${prefix} Amount not confirmed: estimate not available.`;
@@ -662,6 +673,8 @@ function buildBestNextQuestion(state: EngineState): string {
       if (shape === 'Corporate records or filings kept up to date') return 'When was the corporation last brought up to date, and are any filings overdue?';
       return 'What kind of ongoing or one-off legal help does the business need, and is there a deadline?';
     }
+    case 'notary_services':
+      return 'What document needs notarizing, and is there a deadline? Confirm whether it must be done in person.';
     case 'shareholder_dispute': {
       if (!isConfirmed(state, 'proof_of_ownership') && !isConfirmed(state, 'shareholder_agreement')) {
         return 'Do you have any documentation of your ownership stake: a shareholder agreement, share certificates, or emails confirming it?';
@@ -818,6 +831,8 @@ export const SLOT_LABELS: Record<string, string> = {
   gca_business_stage: 'Business stage',
   gca_business_size: 'Business size',
   gca_specific_document: 'Document type',
+  // Notary services (DR-073)
+  notary_document_type: 'Document type',
   client_name: 'Name',
   client_phone: 'Phone',
   client_email: 'Email',
@@ -1255,6 +1270,7 @@ function matterTypeLabel(mt: string): string {
     corporate_money_control: 'Corporate Financial Concern',
     corporate_general: 'Corporate (routing)',
     general_counsel_advisory: 'General Counsel Advisory',
+    notary_services: 'Notary Services',
     commercial_real_estate: 'Commercial Real Estate',
     residential_purchase_sale: 'Residential Purchase or Sale',
     real_estate_litigation: 'Real Estate Litigation',
@@ -1566,6 +1582,11 @@ export function buildReport(state: EngineState): LawyerReport {
 function buildStrategicConsiderations(state: EngineState): string[] {
   const out: string[] = [];
   switch (state.matter_type) {
+    case 'notary_services': {
+      out.push('Administrative service, not a legal matter. Quick to clear; a fast callback to book a time is the whole job.');
+      out.push('Watch for the upsell: a lead who needs a document notarized often has the underlying matter (a real estate closing, an affidavit for a dispute, a travel consent letter) that the firm could also handle.');
+      break;
+    }
     case 'general_counsel_advisory': {
       const shape = slotVal(state, 'gca_engagement_shape');
       const size = slotVal(state, 'gca_business_size');
@@ -1955,6 +1976,11 @@ function buildStrategicConsiderations(state: EngineState): string[] {
 function buildWhatToConfirm(state: EngineState): string[] {
   const out: string[] = [];
   switch (state.matter_type) {
+    case 'notary_services': {
+      out.push('What exactly needs notarizing or commissioning, and whether the signer must attend in person.');
+      out.push('Whether there is an underlying legal matter the document belongs to that the firm could also take on.');
+      break;
+    }
     case 'general_counsel_advisory': {
       const shape = slotVal(state, 'gca_engagement_shape');
       out.push('Engagement shape: retainer, monthly, or ad-hoc, and roughly how much legal work the business expects.');
@@ -2273,6 +2299,12 @@ function buildCrossSell(state: EngineState): string[] {
 
 function buildCallOpeners(state: EngineState): string[] {
   switch (state.matter_type) {
+    case 'notary_services':
+      return [
+        'Confirm the document and whether it needs notarizing, commissioning, or a certified copy.',
+        'Confirm the deadline and whether the signer can attend in person.',
+        'Ask what the document is for. It often points to a matter the firm can also help with.',
+      ];
     case 'general_counsel_advisory': {
       const shape = slotVal(state, 'gca_engagement_shape');
       const out = [

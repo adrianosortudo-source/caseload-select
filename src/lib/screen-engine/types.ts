@@ -25,6 +25,13 @@ export type MatterType =
   // Buying / Selling) and carries the DR-055/DR-056 revenue-tier band
   // gate, which would mis-score an advisory-relationship engagement.
   | 'general_counsel_advisory'
+  // Notary services (DR-073, 2026-06-16). A real DRG service (on the
+  // website), but administrative, not legal advice: notarization,
+  // commissioner of oaths, certified copies. In-scope LOW-priority lane
+  // (Band C, operator decision for Damaris), NOT out_of_scope (Band D
+  // refer-eligible would mis-frame it as "send elsewhere"). Tight intake:
+  // one document-type question, then contact capture.
+  | 'notary_services'
   // Real estate
   | 'commercial_real_estate'
   | 'residential_purchase_sale'

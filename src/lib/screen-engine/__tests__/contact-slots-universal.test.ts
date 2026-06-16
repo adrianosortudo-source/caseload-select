@@ -28,6 +28,7 @@ const ALL_MATTER_TYPES: readonly MatterType[] = [
   "corporate_money_control",
   "corporate_general",
   "general_counsel_advisory",
+  "notary_services",
   "commercial_real_estate",
   "residential_purchase_sale",
   "real_estate_litigation",

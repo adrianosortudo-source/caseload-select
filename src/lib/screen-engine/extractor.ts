@@ -190,6 +190,14 @@ const STANDALONE_CONTRACT_REVIEW_SIGNALS = [
   'review terms before i sign', 'review the terms before signing',
 ];
 
+const NOTARY_SIGNALS = [
+  'notarize', 'notarized', 'notarise', 'notarised', 'notary', 'notary public',
+  'commissioner of oaths', 'commissioner for oaths', 'commission an oath',
+  'certify a copy', 'certified copy', 'certified true copy', 'true copy',
+  'witness my signature', 'witness a signature', 'attest a document',
+  'attest my signature', 'statutory declaration witnessed', 'document notarized',
+];
+
 const RECORDS_UPKEEP_SIGNALS = [
   'records upkeep', 'minute book', 'minute books', 'corporate records',
   'annual records', 'annual return', 'annual returns', 'annual resolutions',
@@ -889,6 +897,15 @@ export function classificationForMatterType(mt: MatterType): {
       advisory_subtrack: 'unknown',
     };
   }
+  if (mt === 'notary_services') {
+    return {
+      intent_family: 'general_counsel',
+      practice_area: 'corporate',
+      matter_type: mt,
+      dispute_family: 'unknown',
+      advisory_subtrack: 'unknown',
+    };
+  }
   if (CORPORATE_DISPUTE_MATTERS.has(mt)) {
     return {
       intent_family: 'business_dispute',
@@ -967,6 +984,7 @@ const ALL_CANONICAL_MATTER_TYPES: ReadonlyArray<MatterType> = [
   'corporate_money_control',
   'corporate_general',
   'general_counsel_advisory',
+  'notary_services',
   'commercial_real_estate',
   'residential_purchase_sale',
   'real_estate_litigation',
@@ -1254,6 +1272,17 @@ export function classify(input: string): {
       dispute_family: matterTypeToDisputeFamily(matterType),
       advisory_subtrack: 'unknown',
     };
+  }
+
+  // Notary services (DR-073). Checked LATE: after every legal-matter intent
+  // and the composite dispute pass, so a genuine legal matter that merely
+  // mentions notarization still routes to the legal matter. A pure
+  // "document notarized" / "commissioner of oaths" request lands here.
+  // Placed before the CORPORATE_CONTEXT fallback so "notarize my company's
+  // resolution" routes to notary (the stamp they asked for), not the
+  // corporate routing lane.
+  if (matchesAny(input, NOTARY_SIGNALS)) {
+    return classificationForMatterType('notary_services');
   }
 
   // Any corporate/business context → intermediate lane, not unknown.
