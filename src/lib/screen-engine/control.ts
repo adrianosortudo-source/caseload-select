@@ -542,6 +542,42 @@ function buildLeadSummaryEn(state: EngineState): LeadSummary {
     };
   }
 
+  // ─── General counsel advisory + notary (DR-072 / DR-073) ──────────
+  // Both are new matter types that were falling through to the generic
+  // "Thank you. Here is what we understood." fallback, so the review
+  // screen showed no actual recap (field-detected on a notary widget
+  // test, 2026-06-16).
+
+  if (t === 'general_counsel_advisory') {
+    const shape = slot(state, 'gca_engagement_shape');
+    let intro = 'You are looking for ongoing or one-off legal support for your business.';
+    if (shape === 'Ongoing on-call legal support') intro = 'You want a lawyer available to your business on an ongoing basis.';
+    else if (shape === 'A specific contract reviewed or drafted') intro = 'You want a lawyer to review or draft a specific contract.';
+    else if (shape === 'Corporate records or filings kept up to date') intro = 'You want help keeping your corporate records and filings up to date.';
+    const stage = slot(state, 'gca_business_stage');
+    if (stage && stage !== 'Not a business, this is personal') points.push(`Business stage: ${stage.toLowerCase()}.`);
+    const size = slot(state, 'gca_business_size');
+    if (size && size !== 'Not sure') points.push(`Business size: ${size.toLowerCase()}.`);
+    const docDetail = slot(state, 'gca_specific_document');
+    if (docDetail) points.push(`Document: ${docDetail}.`);
+    return {
+      intro,
+      points,
+      closing: 'A lawyer can scope the work on a short call and set up the right arrangement for your business.',
+    };
+  }
+
+  if (t === 'notary_services') {
+    const doc = slot(state, 'notary_document_type');
+    let intro = 'You need a document notarized, witnessed, or certified.';
+    if (doc && doc !== 'Other') intro = `You need a document notarized: ${doc.toLowerCase()}.`;
+    return {
+      intro,
+      points,
+      closing: 'The firm can notarize or commission your document and confirm a time once they have your details.',
+    };
+  }
+
   // ─── Combined catch-all for employment_general + estates_general ───
 
   if (t === 'employment_general' || t === 'estates_general') {

@@ -16,11 +16,14 @@
 
 import { describe, it, expect } from 'vitest';
 import { initialiseState } from '../extractor';
-import { getNextStep, applyAnswer, markInsightShown, startContactCapture } from '../control';
+import { getNextStep, applyAnswer, markInsightShown, startContactCapture, buildLeadSummary } from '../control';
 import { computeBand } from '../band';
 import { selectNextSlot } from '../selector';
 import { buildReport } from '../report';
+import { getI18n } from '../i18n/loader';
 import type { EngineState } from '../types';
+
+const GENERIC_SUMMARY_INTRO = 'Thank you. Here is what we understood from your description.';
 
 // ── 1. notary classification + Band C ────────────────────────────────────
 
@@ -101,6 +104,16 @@ describe('notary_services: brief matter pack', () => {
     expect(r.likely_legal_services.length).toBeGreaterThan(0);
     expect(r.call_openers.length).toBeGreaterThan(0);
     expect(r.what_to_confirm.length).toBeGreaterThan(0);
+  });
+
+  it('the review-screen summary is notary-specific, not the empty generic fallback', () => {
+    // Field defect 2026-06-16: the insight/review screen showed no recap
+    // because buildLeadSummary had no notary case and fell through.
+    let s = initialiseState('i need a document notarized');
+    s = applyAnswer(s, 'notary_document_type', 'Travel or consent letter');
+    const summary = buildLeadSummary(s, getI18n('en'));
+    expect(summary.intro).not.toBe(GENERIC_SUMMARY_INTRO);
+    expect(summary.intro.toLowerCase()).toContain('notar');
   });
 });
 

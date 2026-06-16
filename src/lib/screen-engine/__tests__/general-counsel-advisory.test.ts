@@ -18,10 +18,11 @@
 
 import { describe, it, expect } from 'vitest';
 import { initialiseState, rerouteFromCorporateGeneral } from '../extractor';
-import { applyAnswer, getNextStep } from '../control';
+import { applyAnswer, getNextStep, buildLeadSummary } from '../control';
 import { computeBand } from '../band';
 import { selectNextSlot } from '../selector';
 import { buildReport } from '../report';
+import { getI18n } from '../i18n/loader';
 import type { EngineState, SlotMetaSource } from '../types';
 
 function stateWithRoutingFill(
@@ -301,5 +302,13 @@ describe('general_counsel_advisory: brief matter pack', () => {
     expect(r.likely_legal_services.length).toBeGreaterThan(0);
     expect(r.call_openers.length).toBeGreaterThan(0);
     expect(r.what_to_confirm.length).toBeGreaterThan(0);
+  });
+
+  it('the review-screen summary is GC-specific, not the empty generic fallback (DR-073)', () => {
+    let s = initialiseState('I want an on-call lawyer for my business');
+    s = applyAnswer(s, 'gca_engagement_shape', 'Ongoing on-call legal support');
+    const summary = buildLeadSummary(s, getI18n('en'));
+    expect(summary.intro).not.toBe('Thank you. Here is what we understood from your description.');
+    expect(summary.intro.toLowerCase()).toContain('business');
   });
 });

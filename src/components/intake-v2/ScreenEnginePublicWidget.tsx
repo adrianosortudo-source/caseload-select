@@ -456,6 +456,19 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
               {summary.points.map((point) => <li key={point}>{point}</li>)}
             </ul>
           )}
+          {/* Contact-requirement note (2026-06-16): the prior CTA "Yes, share
+              my contact details" read as an optional opt-in. A lead has no
+              way to get a reply without leaving contact details, so the
+              screen now says so plainly above the button. */}
+          <p
+            className="text-[14px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
+            style={{ fontFamily: fontBody }}
+          >
+            {ws(
+              "insight_contact_note",
+              "A lawyer reviews what you share and reaches out directly. Add your contact details below so the firm can get back to you.",
+            )}
+          </p>
           <button
             type="button"
             onClick={() => {
@@ -466,7 +479,7 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
             className="min-h-[52px] rounded-full bg-[var(--cls-accent,#1E2F58)] px-8 text-[15px] font-semibold text-[var(--cls-accent-text,#FFFFFF)]"
             style={{ fontFamily: fontBody }}
           >
-            {ws("insight_cta", "Yes, share my contact details")}
+            {ws("insight_cta", "Share my contact details so the firm can reply")}
           </button>
         </div>
       </Shell>
