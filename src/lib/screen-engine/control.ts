@@ -971,7 +971,7 @@ export function getNextStep(state: EngineState): NextStep {
   if (state.matter_type === 'unknown') {
     return {
       type: 'clarify',
-      message: "To route this correctly, could you tell me a bit more about what's happening? A few examples of the buckets we handle: starting a business, partner dispute, contract issue, money owed, real estate matter.",
+      message: "Could you share a little more about what's going on? A short sentence is enough. Common areas: business setup, contracts, real estate, wills and estates, and employment matters.",
     };
   }
 

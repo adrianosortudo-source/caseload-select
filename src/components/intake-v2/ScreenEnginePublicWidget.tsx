@@ -125,6 +125,17 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
   const [isReading, setIsReading] = useState(false);
   const [persistStatus, setPersistStatus] = useState<string | null>(null);
   const persistedRef = useRef(false);
+  // Clarify state (DR-071, 2026-06-11). When the engine cannot classify
+  // the lead's input (matter_type stays 'unknown' after the LLM merge,
+  // per the DR-070 no-force-fit rule), `getNextStep` returns
+  // `{ type: 'clarify', message }`. The widget renders a free-text card
+  // asking for more context, increments the counter, and re-runs `start`
+  // with the augmented text. After two unsuccessful clarify rounds the
+  // widget routes to contact capture with a calm "we can still get this
+  // to the team" message rather than looping. `clarifyFallback` flips
+  // the contact-capture heading to the softer copy.
+  const [clarifyAttempts, setClarifyAttempts] = useState(0);
+  const [clarifyFallback, setClarifyFallback] = useState(false);
 
   const next = state ? getNextStep(state) : null;
 
@@ -157,7 +168,15 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
   }, [next, language, i18n]);
 
   async function start() {
-    const text = description.trim();
+    await runStart(description);
+  }
+
+  // Runs the engine pipeline against an arbitrary text. `start()` uses
+  // the kickoff description; the clarify handler concatenates the
+  // original description with the lead's clarification context and
+  // re-runs the pipeline. Same shape either way.
+  async function runStart(rawText: string) {
+    const text = rawText.trim();
     if (text.length < 10) return;
 
     let nextState = initialiseState(text);
@@ -178,6 +197,34 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
     }
   }
 
+  // Clarify handler (DR-071). Appends the lead's clarification context
+  // to the prior description and re-runs the engine. After two
+  // unsuccessful clarify rounds, routes to contact capture with the
+  // calm fallback copy: "We can still get this to the team."
+  async function submitClarify(extra: string) {
+    const trimmed = extra.trim();
+    if (trimmed.length === 0) return;
+    const augmented = description ? `${description}\n\n${trimmed}` : trimmed;
+    setDescription(augmented);
+    const nextAttempts = clarifyAttempts + 1;
+    setClarifyAttempts(nextAttempts);
+
+    if (nextAttempts >= 2) {
+      // Two clarify rounds have been spent. Don't loop a third time;
+      // gracefully transition to contact capture so the lead lands in
+      // the triage queue and a lawyer scopes the matter on the call.
+      setClarifyFallback(true);
+      if (state) {
+        const cc = startContactCapture(state);
+        mutate(cc);
+        setStage("contact");
+      }
+      return;
+    }
+
+    await runStart(augmented);
+  }
+
   function mutate(nextState: EngineState) {
     setState(scoreState(nextState));
   }
@@ -192,7 +239,11 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
   function back() {
     const prev = history.at(-1);
     if (!prev) {
+      // Returning all the way to kickoff resets the clarify counter so a
+      // re-submitted description gets a fresh two-round budget (DR-071).
       setStage("kickoff");
+      setClarifyAttempts(0);
+      setClarifyFallback(false);
       return;
     }
     setHistory((items) => items.slice(0, -1));
@@ -423,6 +474,15 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
   }
 
   if (stage === "contact" || next?.type === "capture_contact") {
+    const contactHeading = clarifyFallback
+      ? ws("fallback_contact_heading", "We can still get this to the team.")
+      : ws("contact_heading", "How should the firm reach you?");
+    const contactSub = clarifyFallback
+      ? ws(
+          "fallback_contact_sub",
+          "Share your contact details below and a lawyer will reach out to scope what you need.",
+        )
+      : ws("contact_sub", "Share your contact details so the team can follow up after review.");
     return (
       <Shell
         totalScreens={1}
@@ -434,13 +494,13 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
         <form action={submitContact} className="flex flex-col gap-5">
           <div>
             <h2 className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
-              {ws("contact_heading", "How should the firm reach you?")}
+              {contactHeading}
             </h2>
             <p
               className="mt-2 text-[15px] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_65%,transparent)]"
               style={{ fontFamily: fontBody }}
             >
-              {ws("contact_sub", "Share your contact details so the team can follow up after review.")}
+              {contactSub}
             </p>
           </div>
           {[
@@ -490,10 +550,10 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
   // Hold the question render until the LLM extraction settles. Without this
   // guard, the engine renders Question 1 from the evidence-pass state, then a
   // few seconds later the LLM merge advances `getNextStep` to a different slot
-  // and the screen swaps without any user input — the symptom that reads as
-  // "two different versions of the widget flashing past." One loading screen,
+  // and the screen swaps without any user input (the symptom that reads as
+  // "two different versions of the widget flashing past"). One loading screen,
   // then exactly one question.
-  if (isReading || !currentItem) {
+  if (isReading) {
     return (
       <Shell
         totalScreens={5}
@@ -511,9 +571,82 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
             className="text-[13px] uppercase tracking-[0.18em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_60%,transparent)]"
             style={{ fontFamily: fontBody }}
           >
-            {isReading
-              ? ws("loading_reading", "Reading your description...")
-              : ws("loading_preparing", "Preparing the next question...")}
+            {ws("loading_reading", "Reading your description...")}
+          </p>
+        </div>
+      </Shell>
+    );
+  }
+
+  // Clarify branch (DR-071, 2026-06-11). When the engine cannot classify
+  // the lead's input ("Fractional Counsel", "Notary Services", anything
+  // outside the 27 canonical matter types after DR-070's no-force-fit
+  // rule), `getNextStep` returns `{ type: 'clarify', message }` with no
+  // `slot`. Without this branch the widget hits the no-currentItem
+  // spinner forever. With it, render a free-text card asking for more
+  // context. `submitClarify` increments the counter and re-runs the
+  // engine; after two unsuccessful rounds it falls back to contact
+  // capture (handled in submitClarify itself, not in render).
+  if (next?.type === "clarify") {
+    const clarifyDescription =
+      clarifyAttempts === 0
+        ? next.message ??
+          ws(
+            "clarify_body_1",
+            "Could you share a little more about what's going on? A short sentence is enough. Common areas: business setup, contracts, real estate, wills and estates, and employment matters.",
+          )
+        : ws(
+            "clarify_body_2",
+            "One more line if you can. Even a topic or a few keywords would help.",
+          );
+    return (
+      <Shell
+        totalScreens={5}
+        currentScreen={Math.min(history.length, 4)}
+        roundLabel={roundLabel}
+        onBack={back}
+        backLabel={backLabel}
+      >
+        <FreeTextAnswerCard
+          key={`clarify-${clarifyAttempts}`}
+          item={{
+            id: "clarify",
+            question: ws("clarify_heading", "A few more details?"),
+            description: clarifyDescription,
+            presentation: "text",
+            placeholder: ws(
+              "clarify_placeholder",
+              "For example: I need an on-call lawyer for my business to review contracts as they come in.",
+            ),
+          }}
+          onSubmit={submitClarify}
+          submitLabel={ws("clarify_submit", "Continue")}
+        />
+      </Shell>
+    );
+  }
+
+  // Defensive fallback for transient mid-merge states where `next` has
+  // no slot and no clarify message. Should not normally fire post-DR-071.
+  if (!currentItem) {
+    return (
+      <Shell
+        totalScreens={5}
+        currentScreen={Math.min(history.length, 4)}
+        roundLabel={roundLabel}
+        onBack={back}
+        backLabel={backLabel}
+      >
+        <div className="flex flex-col items-center justify-center text-center gap-4 py-16">
+          <div
+            aria-hidden="true"
+            className="w-10 h-10 rounded-full border-2 border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] border-t-[var(--cls-accent,#1E2F58)] animate-spin"
+          />
+          <p
+            className="text-[13px] uppercase tracking-[0.18em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_60%,transparent)]"
+            style={{ fontFamily: fontBody }}
+          >
+            {ws("loading_preparing", "Preparing the next question...")}
           </p>
         </div>
       </Shell>

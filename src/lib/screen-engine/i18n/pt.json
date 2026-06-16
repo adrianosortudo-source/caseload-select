@@ -456,6 +456,13 @@
     "free_text_other_label": "Outra coisa (vou explicar)",
     "status_submitted": "enviado",
     "didnt_catch": "Desculpe, não consegui entender sua última resposta. Pode confirmar respondendo com o número da opção que se encaixa melhor?",
-    "voice_hint": "fale a sua resposta em vez de digitar"
+    "voice_hint": "fale a sua resposta em vez de digitar",
+    "clarify_heading": "Mais alguns detalhes?",
+    "clarify_body_1": "Pode compartilhar um pouco mais sobre o que está acontecendo? Uma frase curta já basta. Áreas comuns: abertura de empresa, contratos, imóveis, testamentos e heranças, e questões trabalhistas.",
+    "clarify_body_2": "Mais uma linha, se possível. Mesmo um tópico ou algumas palavras-chave ajudam.",
+    "clarify_placeholder": "Por exemplo: preciso de um advogado de plantão para ajudar minha empresa em contratos pontuais",
+    "clarify_submit": "Continuar",
+    "fallback_contact_heading": "Ainda podemos encaminhar isso para a equipe.",
+    "fallback_contact_sub": "Compartilhe seus dados de contato e um advogado entrará em contato para entender o que você precisa."
   }
 }
