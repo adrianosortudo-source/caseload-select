@@ -8,7 +8,27 @@
       "A contract or agreement was not honoured": "A contract or agreement was not honoured",
       "Starting, buying, or restructuring a business": "Starting, buying, or restructuring a business",
       "A contract I need drafted or reviewed before signing": "A contract I need drafted or reviewed before signing",
+      "Ongoing legal support for an existing business": "Ongoing legal support for an existing business",
       "Something else": "Something else"
+    },
+    "gca_engagement_shape": {
+      "Ongoing on-call legal support": "Ongoing on-call legal support",
+      "A specific contract reviewed or drafted": "A specific contract reviewed or drafted",
+      "Corporate records or filings kept up to date": "Corporate records or filings kept up to date",
+      "Other": "Other"
+    },
+    "gca_business_stage": {
+      "Already operating": "Already operating",
+      "About to start": "About to start",
+      "Just exploring": "Just exploring",
+      "Not a business, this is personal": "Not a business, this is personal"
+    },
+    "gca_business_size": {
+      "Solo": "Solo",
+      "2 to 10": "2 to 10",
+      "11 to 50": "11 to 50",
+      "Over 50": "Over 50",
+      "Not sure": "Not sure"
     },
     "company_involvement": {
       "I own or co-own the company": "I own or co-own the company",

@@ -153,6 +153,53 @@ const CONTRACT_BREACH_SIGNALS = [
   'broke their word', 'broke their promise',
 ];
 
+// ─── General counsel advisory signals (DR-072) ─────────────────────────────
+//
+// Three named sets, unioned in detectIntent. Kept separate for the brief's
+// "exact trigger phrases" documentation and for per-set regression tests.
+//
+// Anti-scope discipline (the no-junk-drawer guard): these are checked in
+// detectIntent AFTER setup_advisory and business_dispute, so a real
+// incorporation, dispute, purchase, or lease always wins. They are checked
+// BEFORE the weak real-estate-base fallback and the corporate_general
+// catch-all, so an explicit "on-call lawyer" / "records upkeep" ask routes
+// here instead of dying in a generic lane. The contract-review set is kept
+// tight to the word "contract" + named agreement types; pre-incorporation
+// document review ("review the shareholders agreement before signing")
+// stays with setup_advisory because setup is matched first.
+
+const FRACTIONAL_COUNSEL_SIGNALS = [
+  'fractional counsel', 'fractional general counsel', 'outsourced general counsel',
+  'outsourced counsel', 'outside general counsel', 'general counsel services',
+  'on-call lawyer', 'on call lawyer', 'lawyer on retainer', 'lawyer on call',
+  'ongoing legal support', 'ongoing legal advice', 'ongoing counsel',
+  'legal support on retainer', 'advisor on retainer', 'monthly legal support',
+  'retainer arrangement', 'part-time general counsel', 'part time general counsel',
+  'in-house counsel on demand', 'gc services', 'legal partner for my business',
+];
+
+const STANDALONE_CONTRACT_REVIEW_SIGNALS = [
+  'review a contract', 'review this contract', 'review my contract',
+  'review the contract', 'have a contract reviewed', 'need a contract reviewed',
+  'get a contract reviewed', 'contract reviewed before', 'look over a contract',
+  'look over this contract', 'check a contract', 'check this contract',
+  'draft a contract', 'draft this contract', 'write up a contract',
+  'review an nda', 'review a vendor agreement', 'review a service agreement',
+  'review a consulting agreement', 'review a supplier agreement',
+  'review a partnership contract before', 'contract review service',
+  'review terms before i sign', 'review the terms before signing',
+];
+
+const RECORDS_UPKEEP_SIGNALS = [
+  'records upkeep', 'minute book', 'minute books', 'corporate records',
+  'annual records', 'annual return', 'annual returns', 'annual resolutions',
+  'corporate maintenance', 'corporate compliance', 'keep my corporation compliant',
+  'keep the corporation compliant', 'keep my company compliant',
+  'maintain my corporation', 'maintain corporate records', 'update corporate records',
+  'corporate housekeeping', 'corporate filings', 'keep up with filings',
+  'annual filings', 'compliance filings',
+];
+
 // ─── New matter type signals ───────────────────────────────────────────────
 
 const VENDOR_SUPPLIER_SIGNALS = [
@@ -484,6 +531,13 @@ const ESTATES_SIGNALS = [
   'fight over the estate', 'inheritance dispute', 'capacity assessment',
   'power of attorney for property', 'power of attorney for personal care',
   'poa for property', 'poa for personal care',
+  // Bare "power of attorney" + "continuing power of attorney" (2026-06-11):
+  // the area gate previously only matched the "for property / for personal
+  // care" long forms, so "I need a power of attorney for my mother" missed
+  // estates entirely and fell to unknown, even though the sub-type
+  // classifier (ESTATES_POA_SIGNALS) was ready. DRG sells POAs; this closes
+  // the gate gap.
+  'power of attorney', 'continuing power of attorney',
   'guardianship of person', 'guardianship of property',
   'estate of my', 'when my mother passed', 'when my father passed',
   'when my parent passed', 'after my father died', 'after my mother died',
@@ -727,6 +781,18 @@ function detectIntent(input: string): IntentFamily {
   // Corporate dispute
   if (matchesAny(input, BUSINESS_DISPUTE_SIGNALS)) return 'business_dispute';
 
+  // General counsel advisory (DR-072). Checked AFTER setup + dispute so a
+  // real incorporation or dispute wins; checked BEFORE the weak
+  // real-estate-base fallback and the catch-alls so an explicit "on-call
+  // lawyer" / "review this contract" / "records upkeep" ask routes here.
+  if (
+    matchesAny(input, FRACTIONAL_COUNSEL_SIGNALS) ||
+    matchesAny(input, STANDALONE_CONTRACT_REVIEW_SIGNALS) ||
+    matchesAny(input, RECORDS_UPKEEP_SIGNALS)
+  ) {
+    return 'general_counsel';
+  }
+
   // Plain real estate context (mentions property/lease/construction without specific transaction or dispute language)
   if (matchesAny(input, REAL_ESTATE_BASE_SIGNALS)) {
     // If construction/lien language present, route as dispute lane
@@ -814,6 +880,15 @@ export function classificationForMatterType(mt: MatterType): {
       advisory_subtrack: 'unknown',
     };
   }
+  if (mt === 'general_counsel_advisory') {
+    return {
+      intent_family: 'general_counsel',
+      practice_area: 'corporate',
+      matter_type: mt,
+      dispute_family: 'unknown',
+      advisory_subtrack: 'unknown',
+    };
+  }
   if (CORPORATE_DISPUTE_MATTERS.has(mt)) {
     return {
       intent_family: 'business_dispute',
@@ -891,6 +966,7 @@ const ALL_CANONICAL_MATTER_TYPES: ReadonlyArray<MatterType> = [
   'vendor_supplier_dispute',
   'corporate_money_control',
   'corporate_general',
+  'general_counsel_advisory',
   'commercial_real_estate',
   'residential_purchase_sale',
   'real_estate_litigation',
@@ -1143,6 +1219,16 @@ export function classify(input: string): {
       practice_area: 'corporate',
       matter_type: matterType,
       dispute_family: matterTypeToDisputeFamily(matterType),
+      advisory_subtrack: 'unknown',
+    };
+  }
+
+  if (intent === 'general_counsel') {
+    return {
+      intent_family: 'general_counsel',
+      practice_area: 'corporate',
+      matter_type: 'general_counsel_advisory',
+      dispute_family: 'unknown',
       advisory_subtrack: 'unknown',
     };
   }
@@ -1617,6 +1703,9 @@ export function rerouteFromCorporateGeneral(state: EngineState, problemType: str
     // were force-fit into disputes the brief then asserted as fact.
     'Starting, buying, or restructuring a business': { matter: 'business_setup_advisory', intent: 'setup_advisory' },
     'A contract I need drafted or reviewed before signing': { matter: 'business_setup_advisory', intent: 'setup_advisory' },
+    // General counsel advisory destination (2026-06-11, DR-072). Absorbs
+    // the corporate_general leads who mentioned an ongoing-support shape.
+    'Ongoing legal support for an existing business': { matter: 'general_counsel_advisory', intent: 'general_counsel' },
   };
 
   const target = routingMap[problemType];

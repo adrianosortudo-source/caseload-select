@@ -61,7 +61,9 @@ describe('Slot priority audit — free_text inventory', () => {
     // Lock the audit conclusion: out of all free_text slots, the
     // only one asking for a sensitive specific number is
     // ownership_percentage. Contact slots are required for
-    // reachability; business_location asks for a city/region.
+    // reachability; business_location asks for a city/region;
+    // gca_specific_document (DR-072) asks "what kind of contract"
+    // (descriptive, optional, lawyer-facing, not invasive).
     const freeText = SLOT_REGISTRY.filter((s) => s.input_type === 'free_text');
     const ids = freeText.map((s) => s.id).sort();
     expect(ids).toEqual([
@@ -70,6 +72,7 @@ describe('Slot priority audit — free_text inventory', () => {
       'client_name',
       'client_phone',
       'client_postal_code',
+      'gca_specific_document',
       'ownership_percentage',
     ]);
   });

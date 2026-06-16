@@ -74,7 +74,27 @@
       "A contract or agreement was not honoured": "Um contrato ou acordo não foi cumprido",
       "Starting, buying, or restructuring a business": "Abrir, comprar ou reestruturar um negócio",
       "A contract I need drafted or reviewed before signing": "Um contrato que preciso redigir ou revisar antes de assinar",
+      "Ongoing legal support for an existing business": "Apoio jurídico contínuo para uma empresa em funcionamento",
       "Something else": "Outra coisa"
+    },
+    "gca_engagement_shape": {
+      "Ongoing on-call legal support": "Apoio jurídico contínuo, à disposição",
+      "A specific contract reviewed or drafted": "Um contrato específico para revisar ou redigir",
+      "Corporate records or filings kept up to date": "Manter os registros e declarações da empresa em dia",
+      "Other": "Outra coisa"
+    },
+    "gca_business_stage": {
+      "Already operating": "Já em funcionamento",
+      "About to start": "Prestes a começar",
+      "Just exploring": "Apenas pesquisando",
+      "Not a business, this is personal": "Não é uma empresa, é pessoal"
+    },
+    "gca_business_size": {
+      "Solo": "Só eu",
+      "2 to 10": "2 a 10",
+      "11 to 50": "11 a 50",
+      "Over 50": "Mais de 50",
+      "Not sure": "Não tenho certeza"
     },
     "company_involvement": {
       "I own or co-own the company": "Sou dono ou cosócio da empresa",

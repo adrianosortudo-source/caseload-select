@@ -547,6 +547,15 @@ function scoreSlot(slot: SlotDefinition, currentGap: DecisionGap): number {
 // we audit each in the same way.
 
 const MATTER_SPECIFIC_SLOT_ORDER: Record<string, readonly string[]> = {
+  // GENERAL COUNSEL ADVISORY (DR-072). Tight order: what kind of help,
+  // confirm there is a business, size it, then the conditional contract
+  // detail. The universal readiness triple fires after this list.
+  general_counsel_advisory: [
+    'gca_engagement_shape',          // what kind of help (routing within the lane)
+    'gca_business_stage',            // confirm business context (rejects consumer inquiries)
+    'gca_business_size',             // value-axis input
+    'gca_specific_document',         // conditional: only when engagement = contract review
+  ],
   // ESTATES
   will_drafting: [
     'existing_will_status',          // "Is this your first will, or updating?"
@@ -620,6 +629,11 @@ function pickByExplicitOrder(state: EngineState): SlotDefinition | null {
     if (slot.tier === 'contact') continue;
     if (!slot.applies_to.includes(state.matter_type as never)) continue;
     if (!slotApplicableToSubtrack(state, slot)) continue;
+    // DR-072: the GC contract-detail free-text applies only when the lead
+    // chose the contract-review engagement shape. Keeps the GC intake tight
+    // (no "what kind of contract?" when they asked for ongoing counsel).
+    if (slotId === 'gca_specific_document' &&
+        state.slots['gca_engagement_shape'] !== 'A specific contract reviewed or drafted') continue;
     // groupAlreadyAnswered is intentionally NOT consulted here: the
     // explicit order is authoritative. resolves:'none' slots are already
     // exempted from group-dedup, and matter-specific resolvers won't
@@ -653,6 +667,10 @@ export function selectNextSlot(state: EngineState): SlotDefinition | null {
     if (groupAlreadyAnswered(state, slot)) return false;
 
     if (state.advisory_subtrack === 'solo_setup' && slot.id === 'ownership_split_discussed') return false;
+
+    // DR-072: GC contract-detail free-text only when engagement = contract review.
+    if (slot.id === 'gca_specific_document' &&
+        state.slots['gca_engagement_shape'] !== 'A specific contract reviewed or drafted') return false;
 
     return true;
   });

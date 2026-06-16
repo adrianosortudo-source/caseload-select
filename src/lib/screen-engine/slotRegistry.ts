@@ -37,6 +37,7 @@ const ALL_MATTER_TYPES_RECORD: Record<MatterType, true> = {
   vendor_supplier_dispute: true,
   corporate_money_control: true,
   corporate_general: true,
+  general_counsel_advisory: true,
   // Real estate
   commercial_real_estate: true,
   residential_purchase_sale: true,
@@ -201,6 +202,9 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       // force-fit into disputes. Both route to business_setup_advisory.
       { value: 'Starting, buying, or restructuring a business', label: 'Starting, buying, or restructuring a business' },
       { value: 'A contract I need drafted or reviewed before signing', label: 'A contract I need drafted or reviewed before signing' },
+      // General counsel advisory bucket (2026-06-11, DR-072): ongoing
+      // outsourced legal support for an operating business.
+      { value: 'Ongoing legal support for an existing business', label: 'Ongoing legal support for an existing business' },
       { value: 'Something else', label: 'Something else' },
     ],
     applies_to: ['corporate_general'],
@@ -246,6 +250,87 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
         'vendor', 'supplier', 'service provider',
       ],
     },
+  },
+
+  // ─── GENERAL COUNSEL ADVISORY (DR-072) ────────────────────────────────────
+  // Tight 4-slot intake: engagement shape, business stage (rejects
+  // consumer inquiries), business size (value-axis input), and a
+  // conditional free-text contract detail. Timing / other counsel /
+  // decision authority are NOT duplicated here; the universal readiness
+  // slots (hiring_timeline, other_counsel, decision_authority) already
+  // cover them and feed the readiness axis. Slot order lives in
+  // MATTER_SPECIFIC_SLOT_ORDER (selector.ts).
+
+  {
+    id: 'gca_engagement_shape',
+    question: 'What kind of legal help do you need?',
+    input_type: 'single_select',
+    options: [
+      { value: 'Ongoing on-call legal support', label: 'Ongoing on-call legal support' },
+      { value: 'A specific contract reviewed or drafted', label: 'A specific contract reviewed or drafted' },
+      { value: 'Corporate records or filings kept up to date', label: 'Corporate records or filings kept up to date' },
+      { value: 'Other', label: 'Other' },
+    ],
+    applies_to: ['general_counsel_advisory'],
+    tier: 'core',
+    question_group: 'standing',
+    resolves: 'none',
+    decision_value: 12,
+    abstraction_level: 'concrete',
+    required: true,
+    priority: 10,
+  },
+  {
+    id: 'gca_business_stage',
+    question: 'Where is the business right now?',
+    input_type: 'single_select',
+    options: [
+      { value: 'Already operating', label: 'Already operating' },
+      { value: 'About to start', label: 'About to start' },
+      { value: 'Just exploring', label: 'Just exploring' },
+      { value: 'Not a business, this is personal', label: 'Not a business, this is personal' },
+    ],
+    applies_to: ['general_counsel_advisory'],
+    tier: 'core',
+    question_group: 'standing',
+    resolves: 'none',
+    decision_value: 8,
+    abstraction_level: 'concrete',
+    required: true,
+    priority: 11,
+  },
+  {
+    id: 'gca_business_size',
+    question: 'Roughly how big is the business?',
+    input_type: 'single_select',
+    options: [
+      { value: 'Solo', label: 'Solo' },
+      { value: '2 to 10', label: '2 to 10' },
+      { value: '11 to 50', label: '11 to 50' },
+      { value: 'Over 50', label: 'Over 50' },
+      { value: 'Not sure', label: 'Not sure' },
+    ],
+    applies_to: ['general_counsel_advisory'],
+    tier: 'core',
+    question_group: 'value',
+    resolves: 'none',
+    decision_value: 7,
+    abstraction_level: 'concrete',
+    required: true,
+    priority: 12,
+  },
+  {
+    id: 'gca_specific_document',
+    question: 'What kind of contract or document is it?',
+    input_type: 'free_text',
+    applies_to: ['general_counsel_advisory'],
+    tier: 'strategic',
+    question_group: 'standing',
+    resolves: 'none',
+    decision_value: 4,
+    abstraction_level: 'concrete',
+    required: false,
+    priority: 13,
   },
 
   // ─── BUSINESS SETUP ADVISORY ──────────────────────────────────────────────
@@ -2510,6 +2595,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       'vendor_supplier_dispute',
       'corporate_money_control',
       'corporate_general',
+      'general_counsel_advisory',
       'commercial_real_estate',
       'residential_purchase_sale',
       'real_estate_litigation',
@@ -2556,6 +2642,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       'vendor_supplier_dispute',
       'corporate_money_control',
       'corporate_general',
+      'general_counsel_advisory',
       'commercial_real_estate',
       'residential_purchase_sale',
       'real_estate_litigation',
@@ -2603,6 +2690,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       'vendor_supplier_dispute',
       'corporate_money_control',
       'corporate_general',
+      'general_counsel_advisory',
       'commercial_real_estate',
       'residential_purchase_sale',
       'real_estate_litigation',

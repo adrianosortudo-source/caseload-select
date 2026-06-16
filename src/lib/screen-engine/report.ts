@@ -62,6 +62,13 @@ function buildMatterSnapshot(state: EngineState): string {
       return 'Corporate financial irregularity: concern about unauthorized transactions, missing funds, or financial misconduct within a company.';
     case 'corporate_general':
       return 'Corporate/business matter: problem type not yet fully determined. Routing questions pending.';
+    case 'general_counsel_advisory': {
+      const shape = slotVal(state, 'gca_engagement_shape');
+      if (shape === 'Ongoing on-call legal support') return 'General counsel advisory: ongoing outsourced legal support for a business. Scope to be defined on the call.';
+      if (shape === 'A specific contract reviewed or drafted') return 'General counsel advisory: standalone contract review or drafting, pre-signing.';
+      if (shape === 'Corporate records or filings kept up to date') return 'General counsel advisory: corporate records and compliance maintenance for an operating business.';
+      return 'General counsel advisory: ongoing or open-ended business legal support. Scope to be defined on the call.';
+    }
     case 'commercial_real_estate':
       return 'Commercial real estate transaction: purchase, sale, or lease of office, retail, industrial, or investment property.';
     case 'residential_purchase_sale':
@@ -143,6 +150,19 @@ function buildLikelyServices(state: EngineState): string[] {
       if (slotVal(state, 'dividend_or_money_issue') === 'Yes') services.push('Derivative action or oppression remedy');
       services.push('Negotiated buyout or exit strategy');
       return services;
+    }
+    case 'general_counsel_advisory': {
+      const shape = slotVal(state, 'gca_engagement_shape');
+      if (shape === 'A specific contract reviewed or drafted') {
+        return ['Contract review and plain-language risk summary', 'Redlines and negotiation points', 'Drafting or amendment as needed'];
+      }
+      if (shape === 'Corporate records or filings kept up to date') {
+        return ['Minute book review and update', 'Annual return and annual resolutions', 'Ongoing corporate compliance calendar'];
+      }
+      if (shape === 'Ongoing on-call legal support') {
+        return ['Outsourced general counsel on a retainer or as-needed basis', 'Contract review and templates', 'Ongoing corporate and commercial advice'];
+      }
+      return ['Scoping call to define the engagement', 'Business legal advice on an ongoing or as-needed basis'];
     }
     case 'unpaid_invoice':
       return ['Demand letter', 'Civil claim or Small Claims Court', 'Negotiated payment settlement'];
@@ -453,6 +473,11 @@ function buildFeeEstimate(state: EngineState): string {
       if (hasOwnership && (hasAccess || hasMoney)) return `${prefix} $3,000–$10,000+ depending on urgency and dispute complexity.`;
       return `${prefix} Fee opportunity not confirmed. Likely consult-first matter until ownership, value, and records are confirmed.`;
     }
+    case 'general_counsel_advisory':
+      // DR-072: DRG's flat-fee schedule does not cover this lane; quote on
+      // the call. Surface the schedule's nearest reference points so the
+      // lawyer anchors the conversation rather than improvising.
+      return `${prefix} Not on the flat-fee schedule; scope and quote on the call. Reference points from the schedule: $450/yr annual compliance, $549+ for a builders' agreement review, $1,600+ for a shareholders' agreement. Ongoing counsel is typically a monthly or per-matter retainer.`;
     case 'unpaid_invoice': {
       const amount = slotVal(state, 'amount_at_stake');
       if (!isConfirmed(state, 'amount_at_stake')) return `${prefix} Amount not confirmed: estimate not available.`;
@@ -630,6 +655,13 @@ function buildBestNextQuestion(state: EngineState): string {
       }
       return 'What outcome are you hoping to achieve, and have you taken any steps so far?';
     }
+    case 'general_counsel_advisory': {
+      const shape = slotVal(state, 'gca_engagement_shape');
+      if (shape === 'A specific contract reviewed or drafted') return 'What kind of contract is it, and is there a deadline to sign or respond?';
+      if (shape === 'Ongoing on-call legal support') return 'What prompted the search for ongoing support now, and what kinds of legal questions come up most for the business?';
+      if (shape === 'Corporate records or filings kept up to date') return 'When was the corporation last brought up to date, and are any filings overdue?';
+      return 'What kind of ongoing or one-off legal help does the business need, and is there a deadline?';
+    }
     case 'shareholder_dispute': {
       if (!isConfirmed(state, 'proof_of_ownership') && !isConfirmed(state, 'shareholder_agreement')) {
         return 'Do you have any documentation of your ownership stake: a shareholder agreement, share certificates, or emails confirming it?';
@@ -781,6 +813,11 @@ export const SLOT_LABELS: Record<string, string> = {
   desired_outcome_money_control: 'Desired outcome',
   corporate_problem_type: 'Problem type',
   company_involvement: 'Company involvement',
+  // General counsel advisory (DR-072)
+  gca_engagement_shape: 'Help needed',
+  gca_business_stage: 'Business stage',
+  gca_business_size: 'Business size',
+  gca_specific_document: 'Document type',
   client_name: 'Name',
   client_phone: 'Phone',
   client_email: 'Email',
@@ -1217,6 +1254,7 @@ function matterTypeLabel(mt: string): string {
     vendor_supplier_dispute: 'Vendor or Supplier Dispute',
     corporate_money_control: 'Corporate Financial Concern',
     corporate_general: 'Corporate (routing)',
+    general_counsel_advisory: 'General Counsel Advisory',
     commercial_real_estate: 'Commercial Real Estate',
     residential_purchase_sale: 'Residential Purchase or Sale',
     real_estate_litigation: 'Real Estate Litigation',
@@ -1528,6 +1566,28 @@ export function buildReport(state: EngineState): LawyerReport {
 function buildStrategicConsiderations(state: EngineState): string[] {
   const out: string[] = [];
   switch (state.matter_type) {
+    case 'general_counsel_advisory': {
+      const shape = slotVal(state, 'gca_engagement_shape');
+      const size = slotVal(state, 'gca_business_size');
+      const counsel = slotVal(state, 'other_counsel');
+      out.push('Scope is open by design. The first call defines the engagement; do not quote before it.');
+      if (shape === 'Ongoing on-call legal support') {
+        out.push('Ongoing relationship, not a one-off. Frame as a retainer or monthly arrangement; the lifetime value is the recurring relationship plus the corporate, real estate, and estates work it pulls through.');
+      }
+      if (shape === 'A specific contract reviewed or drafted') {
+        out.push('Pre-signing review. Confirm the deadline first; the value is in catching risk before the client commits, not after.');
+      }
+      if (shape === 'Corporate records or filings kept up to date') {
+        out.push('Records maintenance is the $450/yr annual-compliance hook. Low fee, high retention; it anchors the firm as the business grows.');
+      }
+      if (counsel === 'Yes, switching from a previous lawyer') {
+        out.push('Switching from prior counsel: an established business moving its book. Higher intent, ask why they are leaving.');
+      }
+      if (size === '11 to 50' || size === 'Over 50') {
+        out.push('Larger business: the engagement and the recurring need both scale. Worth partner attention on the first call.');
+      }
+      break;
+    }
     case 'business_setup_advisory': {
       const sub = state.advisory_subtrack;
       const revenue = slotVal(state, 'revenue_expectation');
@@ -1895,6 +1955,18 @@ function buildStrategicConsiderations(state: EngineState): string[] {
 function buildWhatToConfirm(state: EngineState): string[] {
   const out: string[] = [];
   switch (state.matter_type) {
+    case 'general_counsel_advisory': {
+      const shape = slotVal(state, 'gca_engagement_shape');
+      out.push('Engagement shape: retainer, monthly, or ad-hoc, and roughly how much legal work the business expects.');
+      out.push('Whether there is existing counsel and, if so, why they are moving or seeking a second view.');
+      if (shape === 'A specific contract reviewed or drafted') {
+        out.push('The actual document and any signing deadline; whether it is already signed (then it is review, not negotiation).');
+      }
+      if (shape === 'Corporate records or filings kept up to date') {
+        out.push('When the corporation was last updated and whether any annual returns or filings are overdue.');
+      }
+      break;
+    }
     case 'business_setup_advisory': {
       const sub = state.advisory_subtrack;
       const regulated = slotVal(state, 'regulated_industry');
@@ -2201,6 +2273,18 @@ function buildCrossSell(state: EngineState): string[] {
 
 function buildCallOpeners(state: EngineState): string[] {
   switch (state.matter_type) {
+    case 'general_counsel_advisory': {
+      const shape = slotVal(state, 'gca_engagement_shape');
+      const out = [
+        'Open by confirming what the business does and what kinds of legal questions come up. It defines the whole engagement.',
+        'Confirm whether they want this ongoing (retainer) or as a one-off, and any deadline driving the call.',
+      ];
+      if (shape === 'A specific contract reviewed or drafted') {
+        out.push('Ask for the contract and the signing deadline up front, and whether anyone has signed yet.');
+      }
+      out.push('Confirm whether they work with an accountant or prior lawyer, so the engagement coordinates rather than duplicates.');
+      return out;
+    }
     case 'business_setup_advisory': {
       const sub = state.advisory_subtrack;
       const out = [

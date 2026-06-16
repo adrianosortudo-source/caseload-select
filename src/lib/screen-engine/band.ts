@@ -315,6 +315,23 @@ function scoreValueSpecific(state: EngineState): number | null {
   }
   if (t === 'corporate_general' || t === 'real_estate_general') return 3;
 
+  if (t === 'general_counsel_advisory') {
+    // Advisory work, flat-fee-ish, not a big-ticket dispute. Conservative
+    // baseline (DR-072). Value scales with business size (more surface
+    // area, bigger engagement) and a small lift for the ongoing-relationship
+    // shape over a one-off. The "switching from a previous lawyer" signal
+    // is NOT read here: it already lifts the readiness axis via the
+    // universal other_counsel slot, and reading it here would double-count.
+    let s = 3;
+    const size = slotValue(state, 'gca_business_size');
+    if (size === 'Over 50') s += 3;
+    else if (size === '11 to 50') s += 2;
+    else if (size === '2 to 10') s += 1;
+    const shape = slotValue(state, 'gca_engagement_shape');
+    if (shape === 'Ongoing on-call legal support') s += 1; // recurring relationship
+    return clamp(s);
+  }
+
   // ─── ESTATES — will_drafting (Phase B sub-type) ───────────────────
   // Field-detected 2026-06-01: this branch was missing. Phase B added the
   // matter type for extraction + reporting but left scoring at 0. The
@@ -345,6 +362,15 @@ function scoreValue(state: EngineState): number {
 function scoreComplexitySpecific(state: EngineState): number | null {
   const t = state.matter_type;
   let s = 0;
+
+  if (t === 'general_counsel_advisory') {
+    // Advisory work, generally low complexity (no litigation, no
+    // multi-party dispute). Low drag. Ongoing counsel touches more
+    // surface area than a one-off review but still light (DR-072).
+    const shape = slotValue(state, 'gca_engagement_shape');
+    if (shape === 'Ongoing on-call legal support') return 3;
+    return 2;
+  }
 
   if (t === 'business_setup_advisory') {
     const sub = state.advisory_subtrack;

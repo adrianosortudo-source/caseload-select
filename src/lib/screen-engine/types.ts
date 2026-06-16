@@ -17,6 +17,14 @@ export type MatterType =
   | 'vendor_supplier_dispute'
   | 'corporate_money_control'
   | 'corporate_general'
+  // General counsel advisory (DR-072, 2026-06-11). Ongoing/outsourced
+  // counsel, standalone pre-signing contract review, and corporate
+  // records maintenance. Absorbs DRG's Fractional Counsel + Contract
+  // Review + Records Upkeep services. A peer matter type, NOT a subtrack
+  // of business_setup_advisory: setup is forward-looking (Starting /
+  // Buying / Selling) and carries the DR-055/DR-056 revenue-tier band
+  // gate, which would mis-score an advisory-relationship engagement.
+  | 'general_counsel_advisory'
   // Real estate
   | 'commercial_real_estate'
   | 'residential_purchase_sale'
@@ -297,6 +305,10 @@ export interface LeadSummary {
 export type IntentFamily =
   | 'setup_advisory'
   | 'business_dispute'
+  // Ongoing/outsourced counsel, standalone contract review, records
+  // maintenance (DR-072). Distinct from setup_advisory (forward-looking)
+  // and business_dispute (adversarial).
+  | 'general_counsel'
   | 'real_estate_transaction'
   | 'real_estate_dispute'
   | 'employment'

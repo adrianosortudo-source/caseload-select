@@ -32,17 +32,30 @@ import { MATTER_TYPE_CLASSIFIER_FIELD } from '../llm/schema';
 
 describe('clarify step doctrine (DR-071)', () => {
   it('leaves matter_type=unknown for inputs the regex classifier cannot place', () => {
-    // The exact Damaris field repro. "Fractional Counsel" is not in any
-    // matter-type regex keyword set.
+    // A genuinely unclassifiable opener (no business / RE / employment /
+    // estates / general-counsel signal). NOTE: the original Damaris repro
+    // ("Fractional Counsel services") now classifies to
+    // general_counsel_advisory under DR-072, so it no longer dead-ends in
+    // clarify. See the DR-072 graduation test below.
     const state = initialiseState(
-      'I want to learn more about the Fractional Counsel services',
+      'I would like to learn more about how you can help me',
     );
     expect(state.matter_type).toBe('unknown');
   });
 
-  it('getNextStep returns the clarify NextStep for matter_type=unknown', () => {
+  it('DR-072 graduation: "Fractional Counsel" now classifies, no longer hits clarify', () => {
+    // The original field defect. DR-071 caught the spinner; DR-072 gave
+    // the input a real home so it never reaches clarify at all.
     const state = initialiseState(
       'I want to learn more about the Fractional Counsel services',
+    );
+    expect(state.matter_type).toBe('general_counsel_advisory');
+    expect(getNextStep(state).type).not.toBe('clarify');
+  });
+
+  it('getNextStep returns the clarify NextStep for matter_type=unknown', () => {
+    const state = initialiseState(
+      'I would like to learn more about how you can help me',
     );
     const step = getNextStep(state);
     expect(step.type).toBe('clarify');
@@ -50,7 +63,7 @@ describe('clarify step doctrine (DR-071)', () => {
 
   it('the clarify NextStep carries a message and NO slot', () => {
     const state = initialiseState(
-      'I want to learn more about the Fractional Counsel services',
+      'I would like to learn more about how you can help me',
     );
     const step = getNextStep(state);
     expect(step.type).toBe('clarify');
@@ -60,7 +73,7 @@ describe('clarify step doctrine (DR-071)', () => {
 
   it("clarify message is warm, not internal ('route this correctly' phrasing removed)", () => {
     const state = initialiseState(
-      'I want to learn more about the Fractional Counsel services',
+      'I would like to learn more about how you can help me',
     );
     const step = getNextStep(state);
     expect(step.message).toBeTruthy();
@@ -70,7 +83,7 @@ describe('clarify step doctrine (DR-071)', () => {
 
   it('clarify message names all DRG practice areas (corporate, RE, wills, estates, employment)', () => {
     const state = initialiseState(
-      'I want to learn more about the Fractional Counsel services',
+      'I would like to learn more about how you can help me',
     );
     const step = getNextStep(state);
     const msg = (step.message ?? '').toLowerCase();
@@ -88,7 +101,7 @@ describe('clarify step doctrine (DR-071)', () => {
     // (Gemini honestly declines). Merge should NOT promote, matter_type
     // stays unknown, clarify still fires.
     const before = initialiseState(
-      'I want to learn more about the Fractional Counsel services',
+      'I would like to learn more about how you can help me',
     );
     const after = mergeLlmResults(before, {
       [MATTER_TYPE_CLASSIFIER_FIELD]: null,
@@ -118,7 +131,7 @@ describe('clarify step doctrine (DR-071)', () => {
     // missing, widget had no fallback. This guards against re-introducing
     // that shape.
     const inputs = [
-      'I want to learn more about the Fractional Counsel services',
+      'I would like to learn more about how you can help me',
       'I need notary services',
       'I need help with records upkeep',
       'I am looking for a lawyer',
