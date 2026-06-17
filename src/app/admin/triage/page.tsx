@@ -73,7 +73,7 @@ export default async function AdminTriagePage({
   let query = supabase
     .from("screened_leads")
     .select(`
-      lead_id, firm_id, band, status, matter_type, practice_area,
+      id, lead_id, firm_id, band, status, matter_type, practice_area,
       value_score, complexity_score, urgency_score, readiness_score,
       readiness_answered, whale_nurture, band_c_subtrack,
       decision_deadline, contact_name, submitted_at,
