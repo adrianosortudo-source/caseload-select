@@ -23,8 +23,11 @@ import { channelLabel, channelBadgeClasses } from "@/lib/channel-labels";
 import DecisionTimer from "@/components/portal/DecisionTimer";
 import TriageRefresh from "@/components/portal/TriageRefresh";
 import FirmFilter from "@/components/admin/FirmFilter";
+import LeadRowActions from "@/components/admin/LeadRowActions";
+import BulkArchiveControl from "@/components/admin/BulkArchiveControl";
 
 interface QueueRow {
+  id: string;
   lead_id: string;
   firm_id: string;
   band: "A" | "B" | "C" | "D" | null;
@@ -52,7 +55,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type BandFilter = "all" | "A" | "B" | "C" | "D";
-type LifecycleView = "active" | "history";
+type LifecycleView = "active" | "history" | "archived";
 
 const HISTORY_STATUSES = ["passed", "referred", "declined"] as const;
 
@@ -64,7 +67,8 @@ export default async function AdminTriagePage({
   const { band: bandRaw, firm_id: firmIdRaw, view: viewRaw } = await searchParams;
   const bandFilter: BandFilter =
     bandRaw === "A" || bandRaw === "B" || bandRaw === "C" || bandRaw === "D" ? bandRaw : "all";
-  const view: LifecycleView = viewRaw === "history" ? "history" : "active";
+  const view: LifecycleView =
+    viewRaw === "history" ? "history" : viewRaw === "archived" ? "archived" : "active";
 
   let query = supabase
     .from("screened_leads")
@@ -76,9 +80,13 @@ export default async function AdminTriagePage({
       notification_sent_at, notification_error, brief_json,
       slot_answers, intake_firms!inner(id, name, branding)
     `);
-  query = view === "history"
-    ? query.in("status", HISTORY_STATUSES as unknown as string[])
-    : query.eq("status", "triaging");
+  if (view === "archived") {
+    query = query.eq("archived", true);
+  } else if (view === "history") {
+    query = query.in("status", HISTORY_STATUSES as unknown as string[]).eq("archived", false);
+  } else {
+    query = query.eq("status", "triaging").eq("archived", false);
+  }
 
   if (firmIdRaw) query = query.eq("firm_id", firmIdRaw);
 
@@ -86,14 +94,21 @@ export default async function AdminTriagePage({
 
   if (error) return <ErrorState message={`Could not load the queue: ${error.message}`} />;
 
-  // Off-tab count (cross-firm, no firm filter) for the tab strip totals.
-  let offTabQuery = supabase
-    .from("screened_leads")
-    .select("id", { count: "exact", head: true });
-  offTabQuery = view === "history"
-    ? offTabQuery.eq("status", "triaging")
-    : offTabQuery.in("status", HISTORY_STATUSES as unknown as string[]);
-  const { count: offTabCount } = await offTabQuery;
+  // Tab-strip counts for all three views, respecting the firm filter.
+  async function countView(v: LifecycleView): Promise<number> {
+    let q = supabase.from("screened_leads").select("id", { count: "exact", head: true });
+    if (v === "archived") q = q.eq("archived", true);
+    else if (v === "history") q = q.in("status", HISTORY_STATUSES as unknown as string[]).eq("archived", false);
+    else q = q.eq("status", "triaging").eq("archived", false);
+    if (firmIdRaw) q = q.eq("firm_id", firmIdRaw);
+    const { count } = await q;
+    return count ?? 0;
+  }
+  const [activeCount, historyCount, archivedCount] = await Promise.all([
+    countView("active"),
+    countView("history"),
+    countView("archived"),
+  ]);
 
   // Load all firms for the filter dropdown — small set, single query.
   const { data: firms } = await supabase
@@ -104,7 +119,7 @@ export default async function AdminTriagePage({
   const allRows = sortTriageRows((data ?? []) as QueueRow[]);
   const totalCount = allRows.length;
   // Band filter is only meaningful on the Active tab.
-  const rows = view === "history" || bandFilter === "all"
+  const rows = view !== "active" || bandFilter === "all"
     ? allRows
     : allRows.filter((r) => r.band === bandFilter);
 
@@ -116,8 +131,6 @@ export default async function AdminTriagePage({
     D: allRows.filter((r) => r.band === "D").length,
   };
 
-  const activeCount = view === "history" ? (offTabCount ?? 0) : totalCount;
-  const historyCount = view === "history" ? totalCount : (offTabCount ?? 0);
   const streamCheckUrl = view === "history"
     ? "/api/admin/triage/stream-check?view=history"
     : "/api/admin/triage/stream-check";
@@ -126,7 +139,7 @@ export default async function AdminTriagePage({
     <div className="space-y-5">
       <TriageRefresh streamCheckUrl={streamCheckUrl} />
       <Header count={totalCount} view={view} />
-      <LifecycleTabRow view={view} activeCount={activeCount} historyCount={historyCount} firmIdActive={firmIdRaw ?? null} />
+      <LifecycleTabRow view={view} activeCount={activeCount} historyCount={historyCount} archivedCount={archivedCount} firmIdActive={firmIdRaw ?? null} />
       <FilterRow
         active={bandFilter}
         counts={counts}
@@ -137,6 +150,7 @@ export default async function AdminTriagePage({
         firmIdActive={firmIdRaw ?? null}
         view={view}
       />
+      {view === "history" && <BulkArchiveControl firmId={firmIdRaw ?? null} />}
       {rows.length === 0 ? (
         <EmptyState view={view} filtered={bandFilter !== "all" || !!firmIdRaw} />
       ) : (
@@ -144,6 +158,7 @@ export default async function AdminTriagePage({
           {rows.map((row) => (
             <li key={`${row.firm_id}:${row.lead_id}`}>
               <QueueCard row={row} view={view} />
+              <LeadRowActions id={row.id} status={row.status} view={view} />
             </li>
           ))}
         </ul>
@@ -156,16 +171,18 @@ function LifecycleTabRow({
   view,
   activeCount,
   historyCount,
+  archivedCount,
   firmIdActive,
 }: {
   view: LifecycleView;
   activeCount: number;
   historyCount: number;
+  archivedCount: number;
   firmIdActive: string | null;
 }) {
   function tabHref(v: LifecycleView): string {
     const params = new URLSearchParams();
-    if (v === "history") params.set("view", "history");
+    if (v !== "active") params.set("view", v);
     if (firmIdActive) params.set("firm_id", firmIdActive);
     const qs = params.toString();
     return qs ? `/admin/triage?${qs}` : "/admin/triage";
@@ -173,6 +190,7 @@ function LifecycleTabRow({
   const tabs: Array<{ key: LifecycleView; label: string; count: number }> = [
     { key: "active", label: "Active", count: activeCount },
     { key: "history", label: "History", count: historyCount },
+    { key: "archived", label: "Archived", count: archivedCount },
   ];
   return (
     <div className="flex items-center gap-1.5 flex-wrap border-b border-black/10 pb-3">
@@ -217,13 +235,13 @@ function FilterRow({
   // Band sub-filter is only meaningful on the Active (triaging) tab.
   // History rows span multiple statuses; the band filter would be too
   // ambiguous to apply uniformly. Hide the band row entirely on history.
-  if (view === "history") {
+  if (view !== "active") {
     return (
       <FirmFilter
         action="/admin/triage"
         firms={firms}
         active={firmIdActive}
-        extraParams={[{ name: "view", value: "history" }]}
+        extraParams={[{ name: "view", value: view }]}
       />
     );
   }
@@ -327,8 +345,8 @@ function QueueCard({ row, view }: { row: QueueRow; view: LifecycleView }) {
   const simplicity = row.complexity_score === null ? null : 10 - row.complexity_score;
   const channel = row.slot_answers?.channel ?? null;
   const firmName = row.intake_firms?.branding?.firm_name ?? row.intake_firms?.name ?? "Unknown firm";
-  const isHistory = view === "history";
-  const statusChip = !isHistory
+  const isFinalised = view !== "active";
+  const statusChip = !isFinalised
     ? null
     : row.status === "passed"
     ? { label: "Passed", classes: "bg-stone-100 text-stone-700 border-stone-300" }
@@ -338,13 +356,15 @@ function QueueCard({ row, view }: { row: QueueRow; view: LifecycleView }) {
     ? { label: "Declined", classes: "bg-stone-100 text-stone-700 border-stone-300" }
     : row.status === "taken"
     ? { label: "Taken", classes: "bg-emerald-100 text-emerald-900 border-emerald-300" }
+    : row.status === "triaging"
+    ? { label: "Triaging", classes: "bg-amber-50 text-amber-800 border-amber-200" }
     : null;
 
   return (
     <Link
       href={`/portal/${row.firm_id}/triage/${row.lead_id}`}
       className={`block bg-white border transition-colors ${
-        isHistory
+        isFinalised
           ? "border-black/10 hover:border-stone-400 opacity-80 hover:opacity-100"
           : "border-black/10 hover:border-navy"
       }`}
@@ -360,6 +380,11 @@ function QueueCard({ row, view }: { row: QueueRow; view: LifecycleView }) {
             {statusChip && (
               <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 border ${statusChip.classes}`}>
                 {statusChip.label}
+              </span>
+            )}
+            {view === "archived" && (
+              <span className="text-[10px] uppercase tracking-wider font-bold bg-stone-200 text-stone-700 px-2 py-0.5 border border-stone-300">
+                Archived
               </span>
             )}
             <span className="text-xs uppercase tracking-wider font-semibold text-black/60">
@@ -404,7 +429,7 @@ function QueueCard({ row, view }: { row: QueueRow; view: LifecycleView }) {
         </div>
 
         <div className="flex flex-col items-start md:items-end gap-2 min-w-[140px]">
-          {isHistory ? (
+          {isFinalised ? (
             <span className="text-[10px] uppercase tracking-wider font-bold text-stone-500">
               No decision needed
             </span>
