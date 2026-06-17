@@ -18,7 +18,6 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 import { buildFileEmail } from "@/lib/file-notify-pure";
 import type { FirmFileRow, ActorContext } from "@/lib/firm-files";
-import type { FileCategory } from "@/lib/firm-files-pure";
 
 interface FirmRow {
   id: string;
@@ -135,7 +134,8 @@ export async function notifyOnFirmFileUpload(args: NotifyArgs): Promise<NotifyRe
   const email = buildFileEmail({
     firmName,
     fileDisplayName: args.file.display_name,
-    fileCategory: args.file.category as FileCategory,
+    section: args.file.section,
+    kind: args.file.kind,
     fileSizeBytes: args.file.size_bytes,
     description: args.file.description,
     filesUrl,

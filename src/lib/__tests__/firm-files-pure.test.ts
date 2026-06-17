@@ -3,13 +3,22 @@ import {
   ALLOWED_MIME_TYPES,
   CATEGORY_LABELS,
   FILE_CATEGORIES,
+  FILE_SECTIONS,
+  SECTION_LABELS,
   MAX_FILE_SIZE_BYTES,
+  MAX_EXTERNAL_URL_LEN,
   buildStoragePath,
   categoryLabel,
+  cleanLinkTitle,
+  fileTypeLabel,
   formatBytes,
   isValidCategory,
+  isValidKind,
+  isValidSection,
   mimeFromFilename,
   sanitizeFilename,
+  sectionLabel,
+  validateExternalUrl,
   validateUpload,
 } from "../firm-files-pure";
 
@@ -42,6 +51,40 @@ describe("isValidCategory", () => {
   });
 });
 
+describe("sections", () => {
+  it("labels every documented section", () => {
+    for (const s of FILE_SECTIONS) {
+      expect(sectionLabel(s)).toBe(SECTION_LABELS[s]);
+    }
+  });
+
+  it("falls back to Admin for null / undefined / blank", () => {
+    expect(sectionLabel(null)).toBe("Admin");
+    expect(sectionLabel(undefined)).toBe("Admin");
+    expect(sectionLabel("")).toBe("Admin");
+  });
+
+  it("passes unknown section strings through unchanged", () => {
+    expect(sectionLabel("mystery")).toBe("mystery");
+  });
+
+  it("isValidSection recognises documented sections and rejects others", () => {
+    for (const s of FILE_SECTIONS) expect(isValidSection(s)).toBe(true);
+    expect(isValidSection("brand")).toBe(true);
+    expect(isValidSection("contract")).toBe(false);
+    expect(isValidSection("")).toBe(false);
+  });
+});
+
+describe("isValidKind", () => {
+  it("accepts file and link only", () => {
+    expect(isValidKind("file")).toBe(true);
+    expect(isValidKind("link")).toBe(true);
+    expect(isValidKind("folder")).toBe(false);
+    expect(isValidKind("")).toBe(false);
+  });
+});
+
 describe("formatBytes", () => {
   it("formats bytes under 1 KB as integer B", () => {
     expect(formatBytes(0)).toBe("0 B");
@@ -61,6 +104,12 @@ describe("formatBytes", () => {
   it("guards bad inputs", () => {
     expect(formatBytes(-1)).toBe("0 B");
     expect(formatBytes(NaN)).toBe("0 B");
+  });
+});
+
+describe("MAX_FILE_SIZE_BYTES", () => {
+  it("is 100 MB", () => {
+    expect(MAX_FILE_SIZE_BYTES).toBe(100 * 1024 * 1024);
   });
 });
 
@@ -131,7 +180,7 @@ describe("mimeFromFilename", () => {
 describe("validateUpload", () => {
   const baseInput = {
     filename: "Q2 Report.pdf",
-    category: "report",
+    section: "reports",
     size: 1024,
     mimeType: "application/pdf",
   };
@@ -141,7 +190,7 @@ describe("validateUpload", () => {
     expect(v.ok).toBe(true);
     if (v.ok) {
       expect(v.filename).toBe("Q2 Report.pdf");
-      expect(v.category).toBe("report");
+      expect(v.section).toBe("reports");
       expect(v.resolvedMime).toBe("application/pdf");
       expect(ALLOWED_MIME_TYPES.has(v.resolvedMime)).toBe(true);
     }
@@ -153,11 +202,11 @@ describe("validateUpload", () => {
     if (!v.ok) expect(v.reason).toBe("missing_filename");
   });
 
-  it("rejects missing or invalid category", () => {
-    expect(validateUpload({ ...baseInput, category: "" }).ok).toBe(false);
-    const v = validateUpload({ ...baseInput, category: "invoice" });
+  it("rejects missing or invalid section", () => {
+    expect(validateUpload({ ...baseInput, section: "" }).ok).toBe(false);
+    const v = validateUpload({ ...baseInput, section: "invoice" });
     expect(v.ok).toBe(false);
-    if (!v.ok) expect(v.reason).toBe("invalid_category");
+    if (!v.ok) expect(v.reason).toBe("invalid_section");
   });
 
   it("rejects empty file", () => {
@@ -186,5 +235,98 @@ describe("validateUpload", () => {
     });
     expect(v.ok).toBe(false);
     if (!v.ok) expect(v.reason).toBe("unsupported_mime");
+  });
+});
+
+describe("validateExternalUrl", () => {
+  it("accepts an https URL and normalises it", () => {
+    const v = validateExternalUrl("https://example.com/deck");
+    expect(v.ok).toBe(true);
+    if (v.ok) expect(v.url).toBe("https://example.com/deck");
+  });
+
+  it("rejects a blank URL", () => {
+    const v = validateExternalUrl("   ");
+    expect(v.ok).toBe(false);
+    if (!v.ok) expect(v.reason).toBe("missing_url");
+  });
+
+  it("rejects non-https schemes", () => {
+    const http = validateExternalUrl("http://example.com");
+    expect(http.ok).toBe(false);
+    if (!http.ok) expect(http.reason).toBe("invalid_url");
+
+    const ftp = validateExternalUrl("ftp://example.com/x");
+    expect(ftp.ok).toBe(false);
+  });
+
+  it("rejects garbage", () => {
+    const v = validateExternalUrl("not a url");
+    expect(v.ok).toBe(false);
+    if (!v.ok) expect(v.reason).toBe("invalid_url");
+  });
+
+  it("rejects overlong URLs", () => {
+    const long = "https://example.com/" + "a".repeat(MAX_EXTERNAL_URL_LEN);
+    const v = validateExternalUrl(long);
+    expect(v.ok).toBe(false);
+    if (!v.ok) expect(v.reason).toBe("url_too_long");
+  });
+});
+
+describe("cleanLinkTitle", () => {
+  it("trims and collapses a provided title", () => {
+    expect(cleanLinkTitle("  Brand   Book  ", "https://x.com")).toBe("Brand Book");
+  });
+
+  it("falls back to the URL host when the title is blank", () => {
+    expect(cleanLinkTitle("", "https://deck.example.com/strategy")).toBe("deck.example.com");
+    expect(cleanLinkTitle(null, "https://deck.example.com/strategy")).toBe("deck.example.com");
+  });
+
+  it("falls back to a sentinel when both title and URL are unusable", () => {
+    expect(cleanLinkTitle("", "not a url")).toBe("untitled link");
+  });
+
+  it("caps long titles at 200 chars", () => {
+    expect(cleanLinkTitle("a".repeat(300), "https://x.com").length).toBeLessThanOrEqual(200);
+  });
+});
+
+describe("fileTypeLabel", () => {
+  it("labels a link", () => {
+    expect(fileTypeLabel({ kind: "link", mimeType: null, displayName: "Brand book" })).toBe("LINK");
+  });
+
+  it("labels common file mimes", () => {
+    expect(fileTypeLabel({ kind: "file", mimeType: "application/pdf", displayName: "a.pdf" })).toBe("PDF");
+    expect(
+      fileTypeLabel({
+        kind: "file",
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        displayName: "a.xlsx",
+      }),
+    ).toBe("XLSX");
+    expect(fileTypeLabel({ kind: "file", mimeType: "text/csv", displayName: "a.csv" })).toBe("CSV");
+    expect(
+      fileTypeLabel({
+        kind: "file",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        displayName: "a.docx",
+      }),
+    ).toBe("DOCX");
+    expect(
+      fileTypeLabel({
+        kind: "file",
+        mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        displayName: "a.pptx",
+      }),
+    ).toBe("PPTX");
+    expect(fileTypeLabel({ kind: "file", mimeType: "image/jpeg", displayName: "a.jpg" })).toBe("IMG");
+  });
+
+  it("falls back to the filename extension, then FILE", () => {
+    expect(fileTypeLabel({ kind: "file", mimeType: null, displayName: "weird.heic" })).toBe("HEIC");
+    expect(fileTypeLabel({ kind: "file", mimeType: null, displayName: "noext" })).toBe("FILE");
   });
 });

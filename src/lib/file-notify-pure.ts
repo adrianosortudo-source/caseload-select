@@ -3,20 +3,22 @@
  *
  * Two flavours:
  *
- *   operator → lawyers   "Adriano shared a new {category} with you"
- *   lawyer   → operator  "{firm} sent a new {category}"
+ *   operator to lawyers   "Adriano shared a file with you"
+ *   lawyer   to operator  "{firm} sent a new file"
  *
  * Both render with the same branded shell as the magic-link and new-lead
- * emails so the inbox stays coherent.
+ * emails so the inbox stays coherent. A link item reads "link" in place of
+ * "file" and shows "Link" where a file would show its size.
  */
 
-import { categoryLabel, formatBytes, type FileCategory } from "@/lib/firm-files-pure";
+import { formatBytes, sectionLabel, type FileSection } from "@/lib/firm-files-pure";
 
 export interface FileEmailInput {
   firmName: string;
   fileDisplayName: string;
-  fileCategory: FileCategory;
-  fileSizeBytes: number;
+  section: FileSection;
+  kind: "file" | "link";
+  fileSizeBytes: number | null;
   description: string | null;
   filesUrl: string;          // absolute URL to /portal/[firmId]/files
   uploaderRole: "operator" | "lawyer";
@@ -30,20 +32,26 @@ export interface FileEmail {
 
 export function buildFileEmail(input: FileEmailInput): FileEmail {
   const isOperatorUploader = input.uploaderRole === "operator";
+  const noun = input.kind === "link" ? "link" : "file";
   const subject = isOperatorUploader
-    ? `${input.uploaderLabel} shared a ${categoryLabel(input.fileCategory).toLowerCase()} with you · ${input.firmName}`
-    : `${input.firmName} sent a new ${categoryLabel(input.fileCategory).toLowerCase()}`;
+    ? `${input.uploaderLabel} shared a ${noun} with you · ${input.firmName}`
+    : `${input.firmName} sent a new ${noun}`;
   return { subject, html: renderHtml(input) };
 }
 
 function renderHtml(input: FileEmailInput): string {
   const isOperator = input.uploaderRole === "operator";
+  const noun = input.kind === "link" ? "link" : "file";
   const heading = isOperator
-    ? `New ${categoryLabel(input.fileCategory)} shared`
-    : `New file from ${escapeHtml(input.firmName)}`;
+    ? `New ${noun} shared`
+    : `New ${noun} from ${escapeHtml(input.firmName)}`;
   const body = isOperator
-    ? `${escapeHtml(input.uploaderLabel)} just dropped a ${escapeHtml(categoryLabel(input.fileCategory).toLowerCase())} into the portal for ${escapeHtml(input.firmName)}.`
-    : `${escapeHtml(input.uploaderLabel)} at ${escapeHtml(input.firmName)} just uploaded a ${escapeHtml(categoryLabel(input.fileCategory).toLowerCase())}.`;
+    ? `${escapeHtml(input.uploaderLabel)} just added a ${noun} to the portal for ${escapeHtml(input.firmName)}.`
+    : `${escapeHtml(input.uploaderLabel)} at ${escapeHtml(input.firmName)} just added a ${noun}.`;
+
+  const metaRight = input.kind === "link"
+    ? "Link"
+    : escapeHtml(formatBytes(input.fileSizeBytes ?? 0));
 
   const descriptionBlock = input.description
     ? `<p style="margin:12px 0 0;font-size:13px;line-height:1.55;color:#3F3C36;background:#F4F3EF;padding:12px 14px;border:1px solid #E4E2DB;">${escapeHtml(input.description)}</p>`
@@ -74,8 +82,8 @@ function renderHtml(input: FileEmailInput): string {
                   <td style="padding:14px 16px;">
                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                       <tr>
-                        <td style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#5C5850;">${escapeHtml(categoryLabel(input.fileCategory))}</td>
-                        <td align="right" style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#5C5850;">${escapeHtml(formatBytes(input.fileSizeBytes))}</td>
+                        <td style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#5C5850;">${escapeHtml(sectionLabel(input.section))}</td>
+                        <td align="right" style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#5C5850;">${metaRight}</td>
                       </tr>
                     </table>
                     <div style="margin-top:10px;font-family:'DM Sans',Arial,sans-serif;font-size:14px;line-height:1.5;color:#0D1520;font-weight:600;">
@@ -93,7 +101,7 @@ function renderHtml(input: FileEmailInput): string {
                 ${body}
               </p>
               <p style="margin:0;">
-                <a href="${escapeAttr(input.filesUrl)}" style="display:inline-block;background:#1E2F58;color:#FFFFFF;text-decoration:none;font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;padding:13px 24px;">Open the file</a>
+                <a href="${escapeAttr(input.filesUrl)}" style="display:inline-block;background:#1E2F58;color:#FFFFFF;text-decoration:none;font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;padding:13px 24px;">Open in the portal</a>
               </p>
             </td>
           </tr>

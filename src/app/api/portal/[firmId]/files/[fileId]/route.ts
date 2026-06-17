@@ -16,6 +16,7 @@ import { getPortalSession } from "@/lib/portal-auth";
 import {
   getFirmFile,
   getFirmFileSignedUrl,
+  getFirmFileLinkUrl,
   archiveFirmFile,
   type ActorContext,
 } from "@/lib/firm-files";
@@ -36,13 +37,26 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   if (file.archived) {
-    return NextResponse.json({ error: "File is archived" }, { status: 410 });
+    return NextResponse.json({ error: "Item is archived" }, { status: 410 });
   }
 
   const actor: ActorContext = {
     role: session.role as "operator" | "lawyer",
     lawyer_id: session.lawyer_id ?? null,
   };
+
+  if (file.kind === "link") {
+    const opened = await getFirmFileLinkUrl({ file, actor });
+    if (!opened.ok) {
+      return NextResponse.json({ error: opened.message }, { status: 500 });
+    }
+    return NextResponse.json({
+      url: opened.url,
+      kind: "link",
+      display_name: file.display_name,
+    });
+  }
+
   const signed = await getFirmFileSignedUrl({ file, actor });
   if (!signed.ok) {
     return NextResponse.json({ error: signed.message }, { status: 500 });
@@ -50,6 +64,7 @@ export async function GET(
 
   return NextResponse.json({
     url: signed.url,
+    kind: "file",
     expires_in_seconds: signed.expires_in_seconds,
     display_name: file.display_name,
     mime_type: file.mime_type,

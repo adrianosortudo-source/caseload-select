@@ -53,6 +53,7 @@ export default async function AdminLayout({
           <AdminTab href="/admin/webhook-outbox" label="Webhook outbox" />
           <AdminTab href="/admin/onboarding-submissions" label="Onboarding" />
           <AdminTab href="/admin/routing" label="Routing" />
+          <AdminTab href="/admin/access" label="Portal access" />
           <AdminTab href="/admin/explainers" label="Explainers" />
           <AdminTab href="/admin/health" label="System health" />
         </div>

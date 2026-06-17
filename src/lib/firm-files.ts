@@ -15,7 +15,11 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import {
   buildStoragePath,
   validateUpload,
-  type FileCategory,
+  validateExternalUrl,
+  cleanLinkTitle,
+  isValidSection,
+  type FileSection,
+  type FileKind,
 } from "@/lib/firm-files-pure";
 
 const BUCKET_ID = "firm-files";
@@ -24,13 +28,16 @@ const SIGNED_URL_TTL_SECONDS = 60;
 export interface FirmFileRow {
   id: string;
   firm_id: string;
+  kind: FileKind;
   uploaded_by_role: "operator" | "lawyer";
   uploaded_by_id: string | null;
-  category: FileCategory;
+  section: FileSection;
+  category: string | null;       // legacy functional category; retained for back-compat
   display_name: string;
-  storage_path: string;
-  size_bytes: number;
-  mime_type: string;
+  storage_path: string | null;   // null for link rows
+  size_bytes: number | null;     // null for link rows
+  mime_type: string | null;      // null for link rows
+  external_url: string | null;   // set for link rows
   description: string | null;
   archived: boolean;
   archived_at: string | null;
@@ -50,7 +57,7 @@ export interface ActorContext {
  */
 export async function listFirmFiles(
   firmId: string,
-  options: { includeArchived?: boolean; category?: FileCategory } = {},
+  options: { includeArchived?: boolean; section?: FileSection } = {},
 ): Promise<FirmFileRow[]> {
   let query = supabase
     .from("firm_files")
@@ -61,8 +68,8 @@ export async function listFirmFiles(
   if (!options.includeArchived) {
     query = query.eq("archived", false);
   }
-  if (options.category) {
-    query = query.eq("category", options.category);
+  if (options.section) {
+    query = query.eq("section", options.section);
   }
 
   const { data, error } = await query.returns<FirmFileRow[]>();
@@ -96,29 +103,53 @@ export interface UploadFailure {
   message: string;
 }
 
-export interface UploadInput {
+export interface UploadFileInput {
   firmId: string;
-  filename: string;
-  category: string;
+  kind: "file";
+  section: string;
   description: string | null;
+  filename: string;
   blob: Blob;
   mimeType: string;
   actor: ActorContext;
 }
 
+export interface UploadLinkInput {
+  firmId: string;
+  kind: "link";
+  section: string;
+  description: string | null;
+  externalUrl: string;
+  displayName: string;
+  actor: ActorContext;
+}
+
+export type UploadInput = UploadFileInput | UploadLinkInput;
+
 /**
- * Upload a file: validate → storage upload → DB insert → audit log.
+ * Add a deliverable to the exchange. A `file` uploads bytes to storage; a
+ * `link` records an external URL (no storage object). Both insert one
+ * firm_files row and log an 'uploaded' audit event.
+ */
+export async function uploadFirmFile(input: UploadInput): Promise<UploadResult | UploadFailure> {
+  return input.kind === "link"
+    ? uploadFirmLink(input)
+    : uploadFirmFileObject(input);
+}
+
+/**
+ * File path: validate → storage upload → DB insert → audit log.
  *
  * On any failure between the storage upload and the DB insert, the storage
  * object is best-effort deleted to keep things consistent. A leaked object
  * is non-fatal (no DB row references it; periodic sweep can clean up) but
  * we try not to leave them around.
  */
-export async function uploadFirmFile(input: UploadInput): Promise<UploadResult | UploadFailure> {
+async function uploadFirmFileObject(input: UploadFileInput): Promise<UploadResult | UploadFailure> {
   // Validate metadata first; cheaper than uploading bytes that we'll reject.
   const validation = validateUpload({
     filename: input.filename,
-    category: input.category,
+    section: input.section,
     size: input.blob.size,
     mimeType: input.mimeType,
   });
@@ -157,9 +188,10 @@ export async function uploadFirmFile(input: UploadInput): Promise<UploadResult |
     .insert({
       id: fileId,
       firm_id: input.firmId,
+      kind: "file",
       uploaded_by_role: input.actor.role,
       uploaded_by_id: input.actor.lawyer_id ?? null,
-      category: validation.category,
+      section: validation.section,
       display_name: validation.filename,
       storage_path: storagePath,
       size_bytes: input.blob.size,
@@ -186,7 +218,57 @@ export async function uploadFirmFile(input: UploadInput): Promise<UploadResult |
     firmId: input.firmId,
     actor: input.actor,
     eventType: "uploaded",
-    metadata: { display_name: validation.filename, size_bytes: input.blob.size },
+    metadata: { display_name: validation.filename, size_bytes: input.blob.size, kind: "file" },
+  });
+
+  return { ok: true, file: inserted as FirmFileRow };
+}
+
+/**
+ * Link path: validate section + URL → DB insert → audit log. No storage write.
+ */
+async function uploadFirmLink(input: UploadLinkInput): Promise<UploadResult | UploadFailure> {
+  if (!input.section || !isValidSection(input.section)) {
+    return { ok: false, status: 400, reason: "invalid_section", message: "a valid section is required" };
+  }
+  const urlValidation = validateExternalUrl(input.externalUrl);
+  if (!urlValidation.ok) {
+    return { ok: false, status: 400, reason: urlValidation.reason, message: urlValidation.message };
+  }
+  const title = cleanLinkTitle(input.displayName, urlValidation.url);
+
+  const fileId = randomUUID();
+  const { data: inserted, error: insertErr } = await supabase
+    .from("firm_files")
+    .insert({
+      id: fileId,
+      firm_id: input.firmId,
+      kind: "link",
+      uploaded_by_role: input.actor.role,
+      uploaded_by_id: input.actor.lawyer_id ?? null,
+      section: input.section,
+      display_name: title,
+      external_url: urlValidation.url,
+      description: input.description?.trim() || null,
+    })
+    .select("*")
+    .single();
+
+  if (insertErr) {
+    return {
+      ok: false,
+      status: 500,
+      reason: "db_insert_failed",
+      message: insertErr.message,
+    };
+  }
+
+  await logFileEvent({
+    fileId,
+    firmId: input.firmId,
+    actor: input.actor,
+    eventType: "uploaded",
+    metadata: { display_name: title, kind: "link" },
   });
 
   return { ok: true, file: inserted as FirmFileRow };
@@ -201,6 +283,10 @@ export async function getFirmFileSignedUrl(args: {
   file: FirmFileRow;
   actor: ActorContext;
 }): Promise<{ ok: true; url: string; expires_in_seconds: number } | { ok: false; message: string }> {
+  if (!args.file.storage_path) {
+    return { ok: false, message: "this item has no stored file" };
+  }
+
   const { data, error } = await supabase.storage
     .from(BUCKET_ID)
     .createSignedUrl(args.file.storage_path, SIGNED_URL_TTL_SECONDS, {
@@ -222,8 +308,30 @@ export async function getFirmFileSignedUrl(args: {
 }
 
 /**
+ * Resolve a link item's external URL and log an 'opened' event. Caller must
+ * have already authorised the actor against the file's firm_id.
+ */
+export async function getFirmFileLinkUrl(args: {
+  file: FirmFileRow;
+  actor: ActorContext;
+}): Promise<{ ok: true; url: string } | { ok: false; message: string }> {
+  if (!args.file.external_url) {
+    return { ok: false, message: "this item is not a link" };
+  }
+
+  await logFileEvent({
+    fileId: args.file.id,
+    firmId: args.file.firm_id,
+    actor: args.actor,
+    eventType: "opened",
+  });
+
+  return { ok: true, url: args.file.external_url };
+}
+
+/**
  * Soft-delete: flips archived=true, captures who/when, logs event. The
- * storage object is intentionally NOT deleted — kept for audit and the
+ * storage object is intentionally NOT deleted; it is kept for audit and the
  * (rare) operator un-archive request. Hard delete is a PIPEDA path.
  */
 export async function archiveFirmFile(args: {
@@ -261,7 +369,7 @@ interface LogEventInput {
   fileId: string;
   firmId: string;
   actor: ActorContext;
-  eventType: "uploaded" | "downloaded" | "archived" | "restored";
+  eventType: "uploaded" | "downloaded" | "archived" | "restored" | "opened";
   metadata?: Record<string, unknown>;
 }
 

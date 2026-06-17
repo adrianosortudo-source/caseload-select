@@ -97,6 +97,7 @@ export async function POST(req: NextRequest) {
       "id, firm_id, email, role, intake_firms!firm_lawyers_firm_id_fkey!inner(id, name, branding)",
     )
     .ilike("email", email)
+    .eq("disabled", false)
     .order("last_signed_in_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .returns<FirmLawyerRow[]>();
