@@ -11,6 +11,7 @@
 
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import Link from "next/link";
+import OnboardingFormLink from "@/components/admin/OnboardingFormLink";
 
 interface SubmissionRow {
   id: string;
@@ -55,6 +56,8 @@ export default async function OnboardingSubmissionsListPage() {
   return (
     <div className="space-y-5">
       <Header total={items.length} />
+
+      <OnboardingFormLink />
 
       {items.length === 0 ? (
         <EmptyState />
@@ -224,7 +227,7 @@ function EmptyState() {
   return (
     <div className="bg-white border border-black/8 px-6 py-10 text-center">
       <p className="text-sm text-black/60">
-        No firm onboarding submissions yet. Send a token URL to a firm rep at <code>/firm-onboarding/[token]</code>.
+        No firm onboarding submissions yet. Use the Onboarding form panel above to preview the form or copy a link to send a firm rep.
       </p>
     </div>
   );
