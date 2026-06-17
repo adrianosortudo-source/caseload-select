@@ -61,8 +61,17 @@ export default async function AccessPage({
         </p>
       </div>
 
-      <div className="bg-white border border-black/10 p-4">
+      <div className="bg-white border border-black/10 p-4 flex items-center justify-between gap-3 flex-wrap">
         <FirmFilter action="/admin/access" firms={firms} active={firm_id ?? null} />
+        {selectedFirm && (
+          <a
+            href={`/portal/${selectedFirm.id}/files`}
+            title={`Open ${selectedFirm.name} portal`}
+            className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider font-semibold px-3 py-1.5 border border-navy/30 text-navy hover:bg-navy hover:text-white transition-colors"
+          >
+            Open portal <span aria-hidden>↗</span>
+          </a>
+        )}
       </div>
 
       {!selectedFirm ? (
