@@ -123,6 +123,10 @@ interface Submission {
   icp_decline: string | null;
   review_comfort: string | null;
   profile_notes: string | null;
+  customer_base_storage_path: string | null;
+  customer_base_original_name: string | null;
+  customer_base_size_bytes: number | null;
+  customer_base_mime_type: string | null;
 }
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
@@ -169,6 +173,17 @@ export default async function SubmissionDetailPage({
     } else {
       docSignedUrl = signed?.signedUrl ?? null;
     }
+  }
+
+  // Fresh signed URL for the Firm Profile client-list upload, if present.
+  let customerBaseSignedUrl: string | null = null;
+  if (row.customer_base_storage_path) {
+    const { data: signed } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(row.customer_base_storage_path, SIGNED_URL_TTL_SECONDS, {
+        download: row.customer_base_original_name ?? true,
+      });
+    customerBaseSignedUrl = signed?.signedUrl ?? null;
   }
 
   return (
@@ -392,7 +407,7 @@ export default async function SubmissionDetailPage({
         </>
       )}
 
-      {row.form_type === "profile" ? <ProfileSections row={row} /> : null}
+      {row.form_type === "profile" ? <ProfileSections row={row} customerBaseUrl={customerBaseSignedUrl} /> : null}
 
       <Section title="Authorisation">
         <Fields>
@@ -643,7 +658,7 @@ function prettifyPayments(v: string[] | null): string | null {
   return v.map((k) => m[k] ?? k).join(", ");
 }
 
-function ProfileSections({ row }: { row: Submission }) {
+function ProfileSections({ row, customerBaseUrl }: { row: Submission; customerBaseUrl: string | null }) {
   return (
     <>
       <Section title="A. Firm shape">
@@ -663,6 +678,34 @@ function ProfileSections({ row }: { row: Submission }) {
           <Field label="Closed or past" value={numOrNull(row.past_clients_closed)} />
           <Field label="Baseline inquiries / month" value={numOrNull(row.baseline_inquiry_volume)} />
         </Fields>
+        <div className="mt-4 bg-parchment border border-gold/40 px-5 py-4">
+          <p className="text-[11px] uppercase tracking-wider font-semibold text-gold mb-2">Client list</p>
+          {row.customer_base_storage_path ? (
+            <div className="space-y-2">
+              <p className="text-sm text-black/80">
+                <span className="font-semibold">{row.customer_base_original_name ?? "(file)"}</span>
+                {row.customer_base_size_bytes ? (
+                  <span className="text-black/50 ml-2 text-xs">{formatBytes(row.customer_base_size_bytes)}</span>
+                ) : null}
+              </p>
+              {customerBaseUrl ? (
+                <a
+                  href={customerBaseUrl}
+                  className="inline-flex items-center gap-2 bg-navy text-white text-xs font-semibold uppercase tracking-wider px-4 py-2 hover:bg-navy/90 transition-colors"
+                >
+                  Download <span aria-hidden>↓</span>
+                </a>
+              ) : (
+                <p className="text-xs text-red-700">Signed URL unavailable. Refresh the page to retry.</p>
+              )}
+              <p className="text-[10px] text-black/40">
+                Signed URL expires in 1 hour. Refresh this page to generate a new one.
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-black/50">No client list uploaded.</p>
+          )}
+        </div>
       </Section>
 
       <Section title="C. Fees and engagement">

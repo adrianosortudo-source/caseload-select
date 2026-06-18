@@ -42,6 +42,10 @@ interface ProfileBody {
   profile_notes?: string;
   signed_name?: string;
   signed_email?: string;
+  customer_base_storage_path?: string | null;
+  customer_base_original_name?: string | null;
+  customer_base_size_bytes?: number | null;
+  customer_base_mime_type?: string | null;
 }
 
 export async function POST(
@@ -123,6 +127,10 @@ export async function POST(
       profile_notes: body.profile_notes?.trim() || null,
       signed_name: body.signed_name.trim(),
       signed_email: body.signed_email?.trim() || body.authorized_rep_email?.trim() || null,
+      customer_base_storage_path: body.customer_base_storage_path ?? null,
+      customer_base_original_name: body.customer_base_original_name ?? null,
+      customer_base_size_bytes: body.customer_base_size_bytes ?? null,
+      customer_base_mime_type: body.customer_base_mime_type ?? null,
       consent_acknowledged: true,
       ip_address: ipAddress,
       user_agent: userAgent,

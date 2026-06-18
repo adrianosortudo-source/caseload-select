@@ -46,6 +46,10 @@ interface ProfileState {
   profile_notes: string;
   signed_name: string;
   signed_email: string;
+  customer_base_storage_path: string | null;
+  customer_base_original_name: string | null;
+  customer_base_size_bytes: number | null;
+  customer_base_mime_type: string | null;
 }
 
 const INITIAL: ProfileState = {
@@ -77,7 +81,17 @@ const INITIAL: ProfileState = {
   profile_notes: "",
   signed_name: "",
   signed_email: "",
+  customer_base_storage_path: null,
+  customer_base_original_name: null,
+  customer_base_size_bytes: null,
+  customer_base_mime_type: null,
 };
+
+type UploadState =
+  | { status: "idle" }
+  | { status: "uploading"; name: string }
+  | { status: "done"; name: string; sizeBytes: number }
+  | { status: "error"; message: string };
 
 const PAYMENT_OPTIONS: Array<{ key: string; label: string }> = [
   { key: "stripe", label: "Stripe or card" },
@@ -91,6 +105,7 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [upload, setUpload] = useState<UploadState>({ status: "idle" });
 
   function update<K extends keyof ProfileState>(key: K, value: ProfileState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -103,6 +118,41 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
         ? prev.payment_methods.filter((k) => k !== key)
         : [...prev.payment_methods, key],
     }));
+  }
+
+  async function handleFileUpload(file: File) {
+    setUpload({ status: "uploading", name: file.name });
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const res = await fetch(`/api/firm-profile/${encodeURIComponent(token)}/upload`, {
+        method: "POST",
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json?.error ?? "upload failed");
+      setForm((prev) => ({
+        ...prev,
+        customer_base_storage_path: json.storage_path,
+        customer_base_original_name: json.original_name,
+        customer_base_size_bytes: json.size_bytes,
+        customer_base_mime_type: json.mime_type,
+      }));
+      setUpload({ status: "done", name: json.original_name, sizeBytes: json.size_bytes });
+    } catch (err) {
+      setUpload({ status: "error", message: err instanceof Error ? err.message : "upload failed" });
+    }
+  }
+
+  function clearUpload() {
+    setForm((prev) => ({
+      ...prev,
+      customer_base_storage_path: null,
+      customer_base_original_name: null,
+      customer_base_size_bytes: null,
+      customer_base_mime_type: null,
+    }));
+    setUpload({ status: "idle" });
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -185,7 +235,7 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
         </div>
         <Field label="Approximate annual revenue band (optional)" hint="Helps confirm the right CaseLoad tier. A round band is fine.">
           <select value={form.annual_revenue_band} onChange={(e) => update("annual_revenue_band", e.target.value)} style={inputStyle}>
-            <option value="">Prefer not to say</option>
+            <option value="">Select</option>
             <option value="under_250k">Under 250k</option>
             <option value="250k_500k">250k to 500k</option>
             <option value="500k_1m">500k to 1M</option>
@@ -200,7 +250,7 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
         </Field>
       </Section>
 
-      <Section title="B. Existing client base" subtitle="Rough numbers are fine. We send a template for the full list after you submit.">
+      <Section title="B. Existing client base" subtitle="Rough numbers are fine. Upload your client list below so we can build relevant messages.">
         <Field label="Approximate past-client count, segmented">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <SubInput label="Active matters" value={form.past_clients_active} onChange={(v) => update("past_clients_active", v)} placeholder="e.g. 12" />
@@ -210,6 +260,12 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
         </Field>
         <Field label="Baseline inquiry volume, last 90 days" hint="Roughly how many new inquiries or leads you got per month before CaseLoad Select. This is the number we measure lift against.">
           <input type="number" inputMode="numeric" value={form.baseline_inquiry_volume} onChange={(e) => update("baseline_inquiry_volume", e.target.value)} style={{ ...inputStyle, maxWidth: "280px" }} placeholder="Approx new inquiries per month" />
+        </Field>
+        <Field
+          label="Upload your client list (optional)"
+          hint="A spreadsheet of your past and current clients with, for each one, their name, contact details (email or phone), and the practice area or type of matter. We do not need any case details, just enough to send relevant messages. CSV, Excel, or PDF."
+        >
+          <FileUploadBlock upload={upload} onPick={handleFileUpload} onClear={clearUpload} />
         </Field>
       </Section>
 
@@ -334,7 +390,7 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
 
         <button
           type="submit"
-          disabled={submitting || !form.signed_name.trim() || !form.legal_name.trim()}
+          disabled={submitting || !form.signed_name.trim() || !form.legal_name.trim() || upload.status === "uploading"}
           style={{
             background: submitting || !form.signed_name.trim() || !form.legal_name.trim() ? "#8090A8" : "#1E2F58",
             color: "#FFFFFF",
@@ -393,6 +449,57 @@ function SubInput({ label, value, onChange, placeholder }: { label: string; valu
         {label}
       </label>
       <input type="number" inputMode="numeric" value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle} placeholder={placeholder} />
+    </div>
+  );
+}
+
+function FileUploadBlock({
+  upload,
+  onPick,
+  onClear,
+}: {
+  upload: UploadState;
+  onPick: (file: File) => void;
+  onClear: () => void;
+}) {
+  const inputId = "customer-base-upload";
+  if (upload.status === "done") {
+    return (
+      <div style={{ background: "#FBFAF6", border: "1px dashed #C4B49A", borderRadius: "4px", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+        <span style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.9rem", color: "#1E2F58", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+          <span style={{ color: "#27834A", marginRight: "8px" }}>✓</span>
+          {upload.name}
+        </span>
+        <button type="button" onClick={onClear} style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.85rem", color: "#1E2F58", background: "transparent", border: "1px solid #C4B49A", padding: "8px 14px", borderRadius: "4px", cursor: "pointer" }}>
+          Replace
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div style={{ background: "#FBFAF6", border: "1px dashed #C4B49A", borderRadius: "4px", padding: "14px 16px" }}>
+      <label htmlFor={inputId} style={{ display: "inline-block", fontFamily: "var(--font-manrope), sans-serif", fontWeight: 600, fontSize: "0.88rem", color: "#FFFFFF", background: "#1E2F58", padding: "10px 18px", borderRadius: "4px", cursor: "pointer" }}>
+        {upload.status === "uploading" ? "Uploading..." : "Choose a file"}
+      </label>
+      <input
+        id={inputId}
+        type="file"
+        accept=".csv,.xlsx,.xls,.pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onPick(f);
+          e.target.value = "";
+        }}
+        style={{ display: "none" }}
+      />
+      <span style={{ marginLeft: "12px", fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.85rem", color: "#6B665E" }}>
+        CSV, Excel, or PDF, up to 10 MB
+      </span>
+      {upload.status === "error" ? (
+        <p style={{ marginTop: "10px", fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.85rem", color: "#B00020" }}>
+          Upload failed: {upload.message}
+        </p>
+      ) : null}
     </div>
   );
 }

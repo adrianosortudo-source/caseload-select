@@ -504,7 +504,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
 
         <Field
           label="Calendar booking link (optional)"
-          hint="Where clients book consultations with you — Calendly, Cal.com, GHL native calendar, etc. If you don't have one yet, leave blank and we'll set one up together."
+          hint="Where clients book consultations with you (Calendly, Cal.com, or similar). If you don't have one yet, leave blank and we'll set one up together."
         >
           <input
             type="url"
@@ -654,7 +654,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
 
         <Field
           label="Existing phone line(s) for legal inquiries (optional)"
-          hint="Main number(s) clients use today to reach you. If you want to forward an existing number to the new GHL line, list it here. Format: any."
+          hint="Main number(s) clients use today to reach you. If you want to forward an existing number to your new line, list it here. Format: any."
         >
           <textarea
             value={form.existing_phone_lines}
@@ -790,13 +790,13 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
       <Section title="4. SMS — A2P 10DLC brand registration" subtitle="Carrier-required for outbound SMS to your leads">
         <Field
           label="Sender phone number preference"
-          hint="The number your SMS will originate from. Default: we provision a new GHL number for you with a Toronto area code. If you prefer to port an existing line, describe it here and we will coordinate the port separately (2-4 week timeline)."
+          hint="The number your SMS will originate from. Default: we provision a new number for you with a Toronto area code. If you prefer to port an existing line, describe it here and we will coordinate the port separately (2-4 week timeline)."
         >
           <textarea
             value={form.sms_sender_phone_preference}
             onChange={(e) => update("sms_sender_phone_preference", e.target.value)}
             style={{ ...inputStyle, minHeight: "60px", resize: "vertical" }}
-            placeholder="Default: provision new GHL number. Or describe a preference."
+            placeholder="Default: provision a new number. Or describe a preference."
           />
         </Field>
       </Section>
@@ -815,12 +815,12 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
 
         <Field
           label="Phone number for WhatsApp"
-          hint="The same GHL number above will double as your WhatsApp Business number — one line handles Voice AI, SMS, and WhatsApp. The number can never be used on consumer WhatsApp once registered. Confirm below."
+          hint="The same number above will double as your WhatsApp Business number, so one line handles Voice AI, SMS, and WhatsApp. The number can never be used on consumer WhatsApp once registered. Confirm below."
         >
           <RadioGroup
             name="whatsapp_number_decision"
             options={[
-              { value: "provision_new_ghl_number", label: "Yes, provision a new GHL number that doubles as our WhatsApp number." },
+              { value: "provision_new_ghl_number", label: "Yes, provision a new number that doubles as our WhatsApp number." },
               { value: "different_carrier_line", label: "I want WhatsApp on a different number (we will coordinate separately)." },
             ]}
             value={form.whatsapp_number_decision}
@@ -1838,13 +1838,12 @@ function PracticeAreasMultiSelect({
 // ── Channel selector ────────────────────────────────────────────────────
 
 const CHANNELS: Array<{ key: string; label: string; hint?: string; preset?: boolean }> = [
-  { key: "whatsapp", label: "WhatsApp Business", hint: "Default — we're setting this up", preset: true },
-  { key: "sms", label: "SMS", hint: "Default — we're setting this up", preset: true },
-  { key: "voice", label: "Voice / phone calls", hint: "Default — Voice AI on the firm GHL line", preset: true },
-  { key: "instagram_dm", label: "Instagram DM", hint: "Requires an Instagram Business account + Meta App Review (1-3 weeks first-time only)" },
-  { key: "facebook_messenger", label: "Facebook Messenger", hint: "Requires a Facebook Page + Meta App Review (shares the review with Instagram DM)" },
-  { key: "gbp_chat", label: "Google Business Profile chat", hint: "Requires a verified Google Business Profile" },
-  { key: "discuss", label: "Not sure yet — let's talk", hint: "Pick this if you want to discuss the channel mix together before deciding" },
+  { key: "whatsapp", label: "WhatsApp Business", hint: "Default, we are setting this up", preset: true },
+  { key: "sms", label: "SMS", hint: "Default, we are setting this up", preset: true },
+  { key: "voice", label: "Voice / phone calls", hint: "Default, Voice AI on the firm's main line", preset: true },
+  { key: "instagram_dm", label: "Instagram DM", hint: "Requires an Instagram Business account plus Meta App Review (1-3 weeks first-time only)" },
+  { key: "facebook_messenger", label: "Facebook Messenger", hint: "Requires a Facebook Page plus Meta App Review (shares the review with Instagram DM)" },
+  { key: "discuss", label: "Not sure yet, let's talk", hint: "Pick this if you want to discuss the channel mix together before deciding" },
 ];
 
 function ChannelMultiSelect({
