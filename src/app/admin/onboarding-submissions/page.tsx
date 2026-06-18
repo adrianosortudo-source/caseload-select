@@ -16,6 +16,7 @@ import OnboardingFormLink from "@/components/admin/OnboardingFormLink";
 interface SubmissionRow {
   id: string;
   submission_token: string;
+  form_type: string;
   legal_name: string | null;
   authorized_rep_name: string | null;
   authorized_rep_email: string | null;
@@ -38,7 +39,7 @@ export default async function OnboardingSubmissionsListPage() {
   const { data: rows, error } = await supabase
     .from("firm_onboarding_intake")
     .select(`
-      id, submission_token, legal_name, authorized_rep_name, authorized_rep_email,
+      id, submission_token, form_type, legal_name, authorized_rep_name, authorized_rep_email,
       whatsapp_number_decision, has_meta_business_manager,
       will_add_operator_as_admin, consent_acknowledged,
       verification_doc_storage_path, verification_doc_original_name,
@@ -90,6 +91,13 @@ export default async function OnboardingSubmissionsListPage() {
                     >
                       {row.legal_name ?? "(no name)"}
                     </Link>
+                    {row.form_type === "profile" ? (
+                      <div className="mt-0.5">
+                        <span className="text-[9px] uppercase tracking-wider font-bold text-navy bg-gold/15 border border-gold/40 px-1.5 py-0.5">
+                          Firm Profile
+                        </span>
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-3 py-2 align-top text-black/70">
                     <div>{row.authorized_rep_name ?? "—"}</div>

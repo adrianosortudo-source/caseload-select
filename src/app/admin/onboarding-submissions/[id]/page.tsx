@@ -97,6 +97,32 @@ interface Submission {
   notification_error: string | null;
   notification_attempts: number | null;
   notification_last_attempt_at: string | null;
+  // v2 form_type + Firm Profile (Form 2) fields
+  form_type: string;
+  office_model: string | null;
+  firm_size: string | null;
+  annual_revenue_band: string | null;
+  second_contact: string | null;
+  ooo_pattern: string | null;
+  past_clients_active: number | null;
+  past_clients_mid: number | null;
+  past_clients_closed: number | null;
+  baseline_inquiry_volume: number | null;
+  fee_structure: string | null;
+  payment_methods: string[] | null;
+  esignature_tool: string | null;
+  marketing_crm: string | null;
+  brand_assets_status: string | null;
+  brand_assets_notes: string | null;
+  photos_status: string | null;
+  social_linkedin_personal: string | null;
+  social_instagram: string | null;
+  social_x: string | null;
+  social_facebook: string | null;
+  icp_want_more: string | null;
+  icp_decline: string | null;
+  review_comfort: string | null;
+  profile_notes: string | null;
 }
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
@@ -152,6 +178,15 @@ export default async function SubmissionDetailPage({
           <p className="text-xs uppercase tracking-wider font-semibold text-gold">Operator console</p>
           <h1 className="text-2xl font-bold text-navy mt-1">{row.legal_name ?? "(no name)"}</h1>
           <p className="text-xs text-black/50 mt-1">
+            <span
+              className={`inline-block mr-2 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 border ${
+                row.form_type === "profile"
+                  ? "bg-gold/15 text-navy border-gold/40"
+                  : "bg-navy/5 text-navy border-navy/15"
+              }`}
+            >
+              {row.form_type === "profile" ? "Firm Profile" : "Registration"}
+            </span>
             Token: <code>{row.submission_token}</code> · Submitted {formatTime(row.submitted_at)}
           </p>
         </div>
@@ -173,6 +208,8 @@ export default async function SubmissionDetailPage({
         />
       </Section>
 
+      {row.form_type !== "profile" && (
+        <>
       <Section title="1. Business identity">
         <Fields>
           <Field label="Legal name" value={row.legal_name} />
@@ -352,6 +389,10 @@ export default async function SubmissionDetailPage({
           <p className="text-sm text-black/80 whitespace-pre-wrap leading-relaxed">{row.notes}</p>
         </Section>
       ) : null}
+        </>
+      )}
+
+      {row.form_type === "profile" ? <ProfileSections row={row} /> : null}
 
       <Section title="Authorisation">
         <Fields>
@@ -578,6 +619,88 @@ function prettifyEmailPlatform(v: string | null): string | null {
     none: "None yet",
   };
   return m[v] ?? v;
+}
+
+// ── v2 Firm Profile (Form 2) rendering ──────────────────────────────────────
+
+function pmap(v: string | null, map: Record<string, string>): string | null {
+  if (!v) return null;
+  return map[v] ?? v;
+}
+
+function numOrNull(v: number | null): string | null {
+  return v === null || v === undefined ? null : String(v);
+}
+
+function prettifyPayments(v: string[] | null): string | null {
+  if (!v || v.length === 0) return null;
+  const m: Record<string, string> = {
+    stripe: "Stripe or card",
+    interac: "Interac e-transfer",
+    cheque: "Cheque",
+    other: "Other",
+  };
+  return v.map((k) => m[k] ?? k).join(", ");
+}
+
+function ProfileSections({ row }: { row: Submission }) {
+  return (
+    <>
+      <Section title="A. Firm shape">
+        <Fields>
+          <Field label="Office model" value={pmap(row.office_model, { remote: "Remote only", hybrid: "Hybrid", in_office: "In-office" })} />
+          <Field label="Firm size" value={pmap(row.firm_size, { solo: "Solo", two: "Two lawyers", three_plus: "Three or more" })} />
+          <Field label="Annual revenue band" value={pmap(row.annual_revenue_band, { under_250k: "Under 250k", "250k_500k": "250k to 500k", "500k_1m": "500k to 1M", over_1m: "Over 1M" })} />
+          <Field label="Second contact" value={row.second_contact} />
+          <Field label="Out-of-office pattern" value={row.ooo_pattern} multiline />
+        </Fields>
+      </Section>
+
+      <Section title="B. Existing client base">
+        <Fields>
+          <Field label="Active matters" value={numOrNull(row.past_clients_active)} />
+          <Field label="Mid-engagement" value={numOrNull(row.past_clients_mid)} />
+          <Field label="Closed or past" value={numOrNull(row.past_clients_closed)} />
+          <Field label="Baseline inquiries / month" value={numOrNull(row.baseline_inquiry_volume)} />
+        </Fields>
+      </Section>
+
+      <Section title="C. Fees and engagement">
+        <Fields>
+          <Field label="Fee structure" value={row.fee_structure} multiline />
+          <Field label="Payment methods" value={prettifyPayments(row.payment_methods)} />
+          <Field label="E-signature tool" value={pmap(row.esignature_tool, { docusign: "DocuSign or similar", pms_native: "Native in PMS", none: "None yet" })} />
+          <Field label="Marketing CRM" value={pmap(row.marketing_crm, { none: "None", mailchimp: "Mailchimp", klaviyo: "Klaviyo", ghl: "GoHighLevel already", other: "Other" })} />
+        </Fields>
+      </Section>
+
+      <Section title="D. Brand and presence">
+        <Fields>
+          <Field label="Brand assets" value={pmap(row.brand_assets_status, { all: "Have all of it", some: "Have some of it", none: "None, build from scratch" })} />
+          <Field label="Photos" value={pmap(row.photos_status, { have: "Have current photos", need_shoot: "Need a shoot", ai_ok: "Open to AI-generated" })} />
+          <Field label="Brand notes" value={row.brand_assets_notes} multiline />
+          <Field label="Personal LinkedIn" value={row.social_linkedin_personal} link />
+          <Field label="Instagram" value={row.social_instagram} />
+          <Field label="X / Twitter" value={row.social_x} />
+          <Field label="Facebook" value={row.social_facebook} link />
+        </Fields>
+      </Section>
+
+      <Section title="E. Growth and screening">
+        <Fields>
+          <Field label="Who they want more of" value={row.icp_want_more} multiline />
+          <Field label="What they decline" value={row.icp_decline} multiline />
+          <Field label="Review-collection comfort" value={row.review_comfort} multiline />
+        </Fields>
+      </Section>
+
+      {row.profile_notes ? (
+        <Section title="F. Notes from the rep">
+          <p className="text-sm text-black/80 whitespace-pre-wrap leading-relaxed">{row.profile_notes}</p>
+        </Section>
+      ) : null}
+    </>
+  );
 }
 
 function prettifyDocType(v: string | null): string | null {
