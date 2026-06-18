@@ -30,6 +30,18 @@ interface Submission {
   authorized_rep_year_of_call: number | null;
   authorized_rep_province_of_call: string | null;
   previous_business_names: string | null;
+  lso_member_number: string | null;
+  registered_legal_name: string | null;
+  additional_bar_admissions: Array<{ jurisdiction?: string; year?: number | string | null; status?: string }> | null;
+  real_estate_insured: string | null;
+  offers_limited_scope: string | null;
+  professional_liability_insurance: string | null;
+  languages: string[] | null;
+  languages_other: string | null;
+  domain_registrar: string | null;
+  dns_control: string | null;
+  dns_access_preference: string | null;
+  email_platform: string | null;
   sms_vertical: string | null;
   sms_sender_phone_preference: string | null;
   whatsapp_number_decision: string | null;
@@ -180,10 +192,16 @@ export default async function SubmissionDetailPage({
             )}
           />
           <Field
-            label="Previous business names"
+            label="Firms practiced under"
             value={row.previous_business_names}
             multiline
           />
+          <Field label="LSO Member Number" value={row.lso_member_number} mono />
+          <Field label="Registered legal name" value={row.registered_legal_name} />
+          <Field label="Additional bar admissions" value={prettifyBars(row.additional_bar_admissions)} multiline />
+          <Field label="Real estate insured" value={prettifyYesNoNa(row.real_estate_insured)} />
+          <Field label="Limited scope retainers" value={prettifyYesNo(row.offers_limited_scope)} />
+          <Field label="Professional liability insurance" value={row.professional_liability_insurance} multiline />
           <Field label="Calendar booking URL" value={row.booking_url} link />
           <Field label="Office hours" value={row.office_hours} />
           <Field
@@ -200,10 +218,11 @@ export default async function SubmissionDetailPage({
           <Field label="Other areas" value={row.practice_areas_other} multiline />
           <Field label="Service area" value={prettifyServiceArea(row.service_area, row.service_area_other)} />
           <Field label="Out-of-scope matters" value={row.out_of_scope_notes} multiline />
+          <Field label="Languages of practice" value={prettifyLanguages(row.languages, row.languages_other)} />
         </Fields>
       </Section>
 
-      <Section title="3. Existing systems + migration">
+      <Section title="3. Existing systems, domain, and migration">
         <Fields>
           <Field label="Current website contact form" value={row.existing_website_form_url} link />
           <Field label="Existing phone line(s)" value={row.existing_phone_lines} multiline />
@@ -212,6 +231,10 @@ export default async function SubmissionDetailPage({
             value={prettifyPMS(row.practice_management_system, row.practice_management_system_other)}
           />
           <Field label="Integration preference" value={prettifyPMSIntegration(row.pms_integration_preference)} />
+          <Field label="Domain registrar" value={prettifyRegistrar(row.domain_registrar)} />
+          <Field label="DNS control" value={prettifyDnsControl(row.dns_control)} />
+          <Field label="DNS access preference" value={prettifyDnsAccess(row.dns_access_preference)} />
+          <Field label="Email platform" value={prettifyEmailPlatform(row.email_platform)} />
         </Fields>
       </Section>
 
@@ -457,6 +480,104 @@ function Field({
 function yesNo(v: boolean | null): string | null {
   if (v === null) return null;
   return v ? "Yes" : "No";
+}
+
+// ── v2 Form 1 prettifiers ──────────────────────────────────────────────────
+
+function prettifyYesNo(v: string | null): string | null {
+  if (!v) return null;
+  if (v === "yes") return "Yes";
+  if (v === "no") return "No";
+  return v;
+}
+
+function prettifyYesNoNa(v: string | null): string | null {
+  if (!v) return null;
+  if (v === "yes") return "Yes";
+  if (v === "no") return "No";
+  if (v === "na") return "Not applicable";
+  return v;
+}
+
+function prettifyLanguages(v: string[] | null, other: string | null): string | null {
+  const labels: Record<string, string> = {
+    english: "English",
+    french: "French",
+    portuguese: "Portuguese",
+    spanish: "Spanish",
+    mandarin: "Mandarin",
+    cantonese: "Cantonese",
+    punjabi: "Punjabi",
+    arabic: "Arabic",
+    hindi: "Hindi",
+    tagalog: "Tagalog",
+  };
+  const parts = (v ?? []).map((k) => labels[k] ?? k);
+  if (other && other.trim()) parts.push(other.trim());
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
+function prettifyBars(
+  v: Array<{ jurisdiction?: string; year?: number | string | null; status?: string }> | null,
+): string | null {
+  if (!v || v.length === 0) return null;
+  const statusLabels: Record<string, string> = {
+    active: "active",
+    non_practising: "non-practising",
+  };
+  const lines = v
+    .filter((b) => (b.jurisdiction && b.jurisdiction.trim()) || (b.year != null && String(b.year).trim() !== ""))
+    .map((b) => {
+      const parts = [b.jurisdiction?.trim() || "(bar)"];
+      if (b.year != null && String(b.year).trim() !== "") parts.push(String(b.year));
+      if (b.status && b.status.trim()) parts.push(statusLabels[b.status] ?? b.status);
+      return parts.join(", ");
+    });
+  return lines.length > 0 ? lines.join("\n") : null;
+}
+
+function prettifyRegistrar(v: string | null): string | null {
+  if (!v) return null;
+  const m: Record<string, string> = {
+    godaddy: "GoDaddy",
+    namecheap: "Namecheap",
+    google_squarespace: "Google Domains or Squarespace",
+    cloudflare: "Cloudflare",
+    other: "Other",
+    not_sure: "Not sure",
+  };
+  return m[v] ?? v;
+}
+
+function prettifyDnsControl(v: string | null): string | null {
+  if (!v) return null;
+  const m: Record<string, string> = {
+    self: "Firm can log in",
+    third_party: "Web developer or third party",
+    not_sure: "Not sure",
+  };
+  return m[v] ?? v;
+}
+
+function prettifyDnsAccess(v: string | null): string | null {
+  if (!v) return null;
+  const m: Record<string, string> = {
+    grant_access: "Will grant access",
+    send_records: "Send records to apply",
+    screenshare: "Screenshare together",
+  };
+  return m[v] ?? v;
+}
+
+function prettifyEmailPlatform(v: string | null): string | null {
+  if (!v) return null;
+  const m: Record<string, string> = {
+    microsoft_365: "Microsoft 365",
+    google_workspace: "Google Workspace",
+    other: "Other",
+    none: "None yet",
+  };
+  return m[v] ?? v;
 }
 
 function prettifyDocType(v: string | null): string | null {

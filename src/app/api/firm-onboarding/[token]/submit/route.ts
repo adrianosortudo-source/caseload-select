@@ -32,6 +32,23 @@ interface SubmitBody {
   authorized_rep_province_of_call?: string;
   // Prior business names / d/b/a, free text. Used by directory cleanup work.
   previous_business_names?: string;
+  // v2 Form 1 additions: LSO + bar record, languages, domain/DNS/email.
+  lso_member_number?: string;
+  registered_legal_name?: string;
+  additional_bar_admissions?: Array<{
+    jurisdiction?: string;
+    year?: string | number | null;
+    status?: string;
+  }>;
+  real_estate_insured?: string;
+  offers_limited_scope?: string;
+  professional_liability_insurance?: string;
+  languages?: string[];
+  languages_other?: string;
+  domain_registrar?: string;
+  dns_control?: string;
+  dns_access_preference?: string;
+  email_platform?: string;
   sms_vertical?: string;
   sms_sender_phone_preference?: string;
   whatsapp_number_decision?: string;
@@ -198,6 +215,22 @@ export async function POST(
     return cleaned.length > 0 ? cleaned : null;
   };
 
+  // v2: normalise the additional bar admissions JSONB. Drops empty rows,
+  // coerces the year through the same plausible-range guard as year-of-call.
+  const normaliseBars = (
+    rows: SubmitBody["additional_bar_admissions"],
+  ): Array<{ jurisdiction: string; year: number | null; status: string }> | null => {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const cleaned = rows
+      .map((b) => ({
+        jurisdiction: (b.jurisdiction ?? "").trim(),
+        year: toYearOfCall(b.year ?? null),
+        status: (b.status ?? "").trim(),
+      }))
+      .filter((b) => b.jurisdiction || b.year !== null || b.status);
+    return cleaned.length > 0 ? cleaned : null;
+  };
+
   const { data: inserted, error: insertErr } = await supabase
     .from("firm_onboarding_intake")
     .insert({
@@ -215,6 +248,20 @@ export async function POST(
       authorized_rep_province_of_call:
         body.authorized_rep_province_of_call?.trim() || null,
       previous_business_names: body.previous_business_names?.trim() || null,
+      form_type: "registration",
+      lso_member_number: body.lso_member_number?.trim() || null,
+      registered_legal_name: body.registered_legal_name?.trim() || null,
+      additional_bar_admissions: normaliseBars(body.additional_bar_admissions),
+      real_estate_insured: body.real_estate_insured?.trim() || null,
+      offers_limited_scope: body.offers_limited_scope?.trim() || null,
+      professional_liability_insurance: body.professional_liability_insurance?.trim() || null,
+      languages:
+        Array.isArray(body.languages) && body.languages.length > 0 ? body.languages : null,
+      languages_other: body.languages_other?.trim() || null,
+      domain_registrar: body.domain_registrar?.trim() || null,
+      dns_control: body.dns_control?.trim() || null,
+      dns_access_preference: body.dns_access_preference?.trim() || null,
+      email_platform: body.email_platform?.trim() || null,
       sms_vertical: body.sms_vertical ?? null,
       sms_sender_phone_preference: body.sms_sender_phone_preference ?? null,
       whatsapp_number_decision: body.whatsapp_number_decision ?? null,

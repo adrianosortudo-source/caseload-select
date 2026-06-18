@@ -27,6 +27,21 @@ interface FormState {
   // (Yellow Pages dedup, GBP name history audit) and "previously known as"
   // profile fields. Blank by default.
   previous_business_names: string;
+  // v2 Form 1 additions: LSO and bar record
+  lso_member_number: string;
+  registered_legal_name: string;
+  additional_bar_admissions: Array<{ jurisdiction: string; year: string; status: string }>;
+  real_estate_insured: string;
+  offers_limited_scope: string;
+  professional_liability_insurance: string;
+  // v2: languages of practice
+  languages: string[];
+  languages_other: string;
+  // v2: domain, DNS, and email platform
+  domain_registrar: string;
+  dns_control: string;
+  dns_access_preference: string;
+  email_platform: string;
   booking_url: string;
   sms_vertical: string;
   sms_sender_phone_preference: string;
@@ -100,6 +115,18 @@ const INITIAL: FormState = {
   authorized_rep_year_of_call: "",
   authorized_rep_province_of_call: "",
   previous_business_names: "",
+  lso_member_number: "",
+  registered_legal_name: "",
+  additional_bar_admissions: [],
+  real_estate_insured: "",
+  offers_limited_scope: "",
+  professional_liability_insurance: "",
+  languages: [],
+  languages_other: "",
+  domain_registrar: "",
+  dns_control: "",
+  dns_access_preference: "",
+  email_platform: "",
   booking_url: "",
   sms_vertical: "LEGAL_SERVICES",
   sms_sender_phone_preference: "",
@@ -379,8 +406,8 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         </div>
 
         <Field
-          label="Previous business names (optional)"
-          hint="Any prior firm names, d/b/a names, or predecessor firm names you have traded under. Used to dedupe stale directory listings (Yellow Pages, Martindale, etc.) and to populate 'previously known as' fields. One per line, or comma-separated."
+          label="Firms and names you have practiced under (optional)"
+          hint="Every firm, partnership, or trade name you or the firm has practiced under, including predecessor firm names and any firm you worked at before this one. We use this to dedupe stale directory listings and to find profiles that still name you at a prior firm. One per line, or comma-separated."
         >
           <textarea
             value={form.previous_business_names}
@@ -388,7 +415,90 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
               update("previous_business_names", e.target.value)
             }
             style={{ ...inputStyle, minHeight: "70px", resize: "vertical" }}
-            placeholder="e.g. Smith & Associates · Smith Law Office · Smith Legal Services"
+            placeholder="e.g. Smith & Associates, Jones Barristers (2016 to 2020), Smith Law Office"
+          />
+        </Field>
+
+        {/* v2: LSO and bar record */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <Field
+            label="LSO Member Number (optional)"
+            hint="Your Law Society of Ontario number (the P-number). Appears on the website footer and on most legal directory profiles."
+          >
+            <input
+              type="text"
+              value={form.lso_member_number}
+              onChange={(e) => update("lso_member_number", e.target.value)}
+              style={inputStyle}
+              placeholder="e.g. P12345"
+            />
+          </Field>
+          <Field
+            label="Registered legal name, if different (optional)"
+            hint="The name on your LSO record when it differs from the name you practise under publicly. Leave blank if they match."
+          >
+            <input
+              type="text"
+              value={form.registered_legal_name}
+              onChange={(e) => update("registered_legal_name", e.target.value)}
+              style={inputStyle}
+              placeholder="Full legal name as registered"
+            />
+          </Field>
+        </div>
+
+        <Field
+          label="Additional bar admissions (optional)"
+          hint="Any other bar you are admitted to, in Canada or abroad. This matters for dual-qualified lawyers and cross-border work. Add a row per admission."
+        >
+          <AdditionalBarsBlock
+            bars={form.additional_bar_admissions}
+            onChange={(next) => update("additional_bar_admissions", next)}
+          />
+        </Field>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <Field
+            label="Insured for real estate practice? (optional)"
+            hint="Whether you carry real estate transaction coverage (LawPro real estate, TitlePLUS). Shows on real estate directory and website surfaces."
+          >
+            <select
+              value={form.real_estate_insured}
+              onChange={(e) => update("real_estate_insured", e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">Select</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+              <option value="na">Not applicable</option>
+            </select>
+          </Field>
+          <Field
+            label="Offer limited scope retainers? (optional)"
+            hint="Whether you take unbundled or limited scope work. Surfaces on the website and affects intake routing copy."
+          >
+            <select
+              value={form.offers_limited_scope}
+              onChange={(e) => update("offers_limited_scope", e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">Select</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </Field>
+        </div>
+
+        <Field
+          label="Professional liability insurance (optional)"
+          hint="LawPro coverage status and any additional errors and omissions coverage you carry. Used for footer compliance on some surfaces."
+        >
+          <input
+            type="text"
+            value={form.professional_liability_insurance}
+            onChange={(e) => update("professional_liability_insurance", e.target.value)}
+            style={inputStyle}
+            placeholder="e.g. LawPro standard coverage; additional E&O through [carrier]"
           />
         </Field>
 
@@ -498,12 +608,36 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
             placeholder="e.g. We handle family law but not LGBTQ+ family cases, or we handle real estate but only residential not commercial"
           />
         </Field>
+
+        {/* v2: languages of practice */}
+        <Field
+          label="Languages of practice (optional)"
+          hint="Select every language you can serve clients in. The intake tool accepts any language at the door and gives you the brief in English; this tells us which languages to surface on your directory and website profiles."
+        >
+          <LanguagesMultiSelect
+            value={form.languages}
+            onChange={(next) => update("languages", next)}
+          />
+        </Field>
+
+        <Field
+          label="Other languages (optional)"
+          hint="Anything not in the list above. Comma-separated."
+        >
+          <input
+            type="text"
+            value={form.languages_other}
+            onChange={(e) => update("languages_other", e.target.value)}
+            style={inputStyle}
+            placeholder="e.g. Tagalog, Urdu"
+          />
+        </Field>
       </Section>
 
       {/* Section 3: Existing systems + migration */}
       <Section
-        title="3. Existing systems + migration"
-        subtitle="What the firm uses today, so we can integrate or migrate cleanly"
+        title="3. Existing systems, domain, and migration"
+        subtitle="What the firm uses today, including the domain and DNS, so we can integrate or migrate cleanly"
       >
         <Field
           label="Current website contact form URL (optional)"
@@ -581,6 +715,75 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
             />
           </Field>
         ) : null}
+        {/* v2: domain, DNS, and email platform */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <Field
+            label="Where is your domain registered? (optional)"
+            hint="The registrar that holds your domain name, where you renew it each year. Needed to point the site and verify the domain with Meta."
+          >
+            <select
+              value={form.domain_registrar}
+              onChange={(e) => update("domain_registrar", e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">Select</option>
+              <option value="godaddy">GoDaddy</option>
+              <option value="namecheap">Namecheap</option>
+              <option value="google_squarespace">Google Domains or Squarespace</option>
+              <option value="cloudflare">Cloudflare</option>
+              <option value="other">Other</option>
+              <option value="not_sure">Not sure</option>
+            </select>
+          </Field>
+          <Field
+            label="Who controls DNS today? (optional)"
+            hint="Whoever can log in to the registrar or the DNS host and change records."
+          >
+            <select
+              value={form.dns_control}
+              onChange={(e) => update("dns_control", e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">Select</option>
+              <option value="self">I do, and I can log in</option>
+              <option value="third_party">My web developer or a third party</option>
+              <option value="not_sure">Not sure</option>
+            </select>
+          </Field>
+        </div>
+
+        <Field
+          label="For DNS changes, how do you want to handle access? (optional)"
+          hint="We can apply the records ourselves if you share access, or you apply the exact records we send you. Either works."
+        >
+          <select
+            value={form.dns_access_preference}
+            onChange={(e) => update("dns_access_preference", e.target.value)}
+            style={inputStyle}
+          >
+            <option value="">Select</option>
+            <option value="grant_access">I will grant access to the registrar or DNS host</option>
+            <option value="send_records">Send me the records and I will apply them</option>
+            <option value="screenshare">Let us do a short screenshare and do it together</option>
+          </select>
+        </Field>
+
+        <Field
+          label="Email platform (optional)"
+          hint="Which platform runs your firm email. We do not need mailbox access; we add DNS records so transactional email delivers reliably from your domain."
+        >
+          <select
+            value={form.email_platform}
+            onChange={(e) => update("email_platform", e.target.value)}
+            style={inputStyle}
+          >
+            <option value="">Select</option>
+            <option value="microsoft_365">Microsoft 365</option>
+            <option value="google_workspace">Google Workspace</option>
+            <option value="other">Other</option>
+            <option value="none">None yet</option>
+          </select>
+        </Field>
       </Section>
 
       {/* Section 4: SMS A2P 10DLC */}
@@ -1361,6 +1564,195 @@ const subFieldLabelStyle: React.CSSProperties = {
   display: "block",
   marginBottom: "4px",
 };
+
+// ── Additional bar admissions (v2 LSO + bar record) ─────────────────────
+
+type BarAdmission = { jurisdiction: string; year: string; status: string };
+
+function AdditionalBarsBlock({
+  bars,
+  onChange,
+}: {
+  bars: BarAdmission[];
+  onChange: (next: BarAdmission[]) => void;
+}) {
+  function addRow() {
+    onChange([...bars, { jurisdiction: "", year: "", status: "" }]);
+  }
+  function removeRow(idx: number) {
+    onChange(bars.filter((_, i) => i !== idx));
+  }
+  function updateRow(idx: number, key: keyof BarAdmission, value: string) {
+    onChange(bars.map((b, i) => (i === idx ? { ...b, [key]: value } : b)));
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      {bars.map((bar, idx) => (
+        <div
+          key={idx}
+          style={{
+            background: "#FBFAF6",
+            border: "1px solid #E4E2DB",
+            borderRadius: "4px",
+            padding: "14px 16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+          }}
+        >
+          <div>
+            <label style={subFieldLabelStyle}>Jurisdiction or bar body</label>
+            <input
+              type="text"
+              value={bar.jurisdiction}
+              onChange={(e) => updateRow(idx, "jurisdiction", e.target.value)}
+              style={inputStyle}
+              placeholder="e.g. OAB Brazil, New York State Bar"
+            />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <div>
+              <label style={subFieldLabelStyle}>Year of admission</label>
+              <input
+                type="number"
+                min="1950"
+                max="2100"
+                step="1"
+                inputMode="numeric"
+                value={bar.year}
+                onChange={(e) => updateRow(idx, "year", e.target.value)}
+                style={inputStyle}
+                placeholder="e.g. 2016"
+              />
+            </div>
+            <div>
+              <label style={subFieldLabelStyle}>Status</label>
+              <select
+                value={bar.status}
+                onChange={(e) => updateRow(idx, "status", e.target.value)}
+                style={inputStyle}
+              >
+                <option value="">Select</option>
+                <option value="active">Active</option>
+                <option value="non_practising">Non-practising</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={() => removeRow(idx)}
+              style={{
+                background: "transparent",
+                border: "1px solid #C4B49A",
+                color: "#1E2F58",
+                padding: "8px 14px",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontFamily: "var(--font-dm-sans), sans-serif",
+                fontSize: "0.82rem",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={addRow}
+        style={{
+          alignSelf: "flex-start",
+          background: "#FFFFFF",
+          border: "1px dashed #C4B49A",
+          color: "#1E2F58",
+          padding: "10px 18px",
+          borderRadius: "4px",
+          cursor: "pointer",
+          fontFamily: "var(--font-manrope), sans-serif",
+          fontSize: "0.88rem",
+          fontWeight: 600,
+        }}
+      >
+        + Add {bars.length === 0 ? "a bar admission" : "one more"}
+      </button>
+    </div>
+  );
+}
+
+// ── Languages multi-select (v2) ─────────────────────────────────────────
+
+const LANGUAGES: Array<{ key: string; label: string }> = [
+  { key: "english", label: "English" },
+  { key: "french", label: "French" },
+  { key: "portuguese", label: "Portuguese" },
+  { key: "spanish", label: "Spanish" },
+  { key: "mandarin", label: "Mandarin" },
+  { key: "cantonese", label: "Cantonese" },
+  { key: "punjabi", label: "Punjabi" },
+  { key: "arabic", label: "Arabic" },
+  { key: "hindi", label: "Hindi" },
+  { key: "tagalog", label: "Tagalog" },
+];
+
+function LanguagesMultiSelect({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  function toggle(key: string) {
+    if (value.includes(key)) onChange(value.filter((k) => k !== key));
+    else onChange([...value, key]);
+  }
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+        gap: "8px",
+      }}
+    >
+      {LANGUAGES.map((lang) => {
+        const checked = value.includes(lang.key);
+        return (
+          <label
+            key={lang.key}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              padding: "10px 12px",
+              background: checked ? "#F4F3EF" : "#FBFAF6",
+              border: checked ? "1px solid #1E2F58" : "1px solid #E4E2DB",
+              borderRadius: "4px",
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={() => toggle(lang.key)}
+              style={{ flexShrink: 0 }}
+            />
+            <span
+              style={{
+                fontFamily: "var(--font-dm-sans), sans-serif",
+                fontSize: "0.92rem",
+                color: "#1E2F58",
+              }}
+            >
+              {lang.label}
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
 
 // ── Practice areas multi-select (Section 2) ─────────────────────────────
 
