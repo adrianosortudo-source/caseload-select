@@ -13,6 +13,7 @@ import { getOperatorSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { listFirmMembers } from "@/lib/firm-members";
 import FirmFilter from "@/components/admin/FirmFilter";
+import NewFirmForm from "@/components/admin/NewFirmForm";
 import MemberManager, { type MemberView } from "@/components/admin/MemberManager";
 
 export const dynamic = "force-dynamic";
@@ -73,6 +74,8 @@ export default async function AccessPage({
           </a>
         )}
       </div>
+
+      <NewFirmForm />
 
       {!selectedFirm ? (
         <div className="bg-white border border-black/8 px-6 py-10 text-center">
