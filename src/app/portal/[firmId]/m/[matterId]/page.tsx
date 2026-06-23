@@ -120,9 +120,8 @@ export default async function ClientMatterHomePage({ params }: PageProps) {
                 </p>
                 <div
                   style={messageBodyStyle}
-                  dangerouslySetInnerHTML={{
-                    __html: m.body.includes('<') ? m.body : escapeHtml(m.body).replace(/\n/g, '<br>'),
-                  }}
+                  /* body is HTML-sanitized server-side in insertMessage */
+                  dangerouslySetInnerHTML={{ __html: m.body.replace(/\n/g, '<br>') }}
                 />
                 {m.attachments?.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
@@ -265,13 +264,3 @@ const messageBodyStyle = {
   color: '#222',
   lineHeight: 1.5,
 };
-
-
-function escapeHtml(s: string): string {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}

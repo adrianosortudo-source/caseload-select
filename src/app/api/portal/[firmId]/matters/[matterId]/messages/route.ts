@@ -26,7 +26,7 @@ import {
   type PortalSession,
 } from '@/lib/portal-auth';
 import { listMessagesForMatter, insertMessage } from '@/lib/matter-messages';
-import { canWriteChannel } from '@/lib/matter-messages-pure';
+import { canWriteChannel, isOwnedAttachmentPath } from '@/lib/matter-messages-pure';
 import { getMatterById } from '@/lib/matter-stage';
 import type { ChannelType, ActorRole, MatterAttachment } from '@/lib/types';
 
@@ -127,19 +127,20 @@ export async function POST(
     );
   }
 
-  // Accept attachments with storage_path (new shape) or url (legacy).
-  // Anything else is silently dropped.
+  // Accept an attachment ONLY when its storage_path sits under this matter's
+  // own prefix. A caller with a valid session for their own matter could
+  // otherwise pass another firm's object key and have the server sign a
+  // download URL for it (cross-firm read of the shared firm-files bucket).
+  // Anything with a foreign or missing storage_path is silently dropped.
   const attachments: MatterAttachment[] = Array.isArray(body.attachments)
-    ? (body.attachments as unknown[]).filter(
-        (a): a is MatterAttachment =>
-          typeof a === 'object' &&
-          a !== null &&
-          typeof (a as Record<string, unknown>).name === 'string' &&
-          (
-            typeof (a as Record<string, unknown>).storage_path === 'string' ||
-            typeof (a as Record<string, unknown>).url === 'string'
-          ),
-      )
+    ? (body.attachments as unknown[]).filter((a): a is MatterAttachment => {
+        if (typeof a !== 'object' || a === null) return false;
+        const rec = a as Record<string, unknown>;
+        return (
+          typeof rec.name === 'string' &&
+          isOwnedAttachmentPath(rec.storage_path, firmId, matterId)
+        );
+      })
     : [];
 
   const senderRole: 'admin' | 'staff' | 'client' =

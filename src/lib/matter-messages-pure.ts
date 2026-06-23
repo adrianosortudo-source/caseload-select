@@ -73,6 +73,23 @@ export function notificationEventType(channel: ChannelType): 'message_new' | 'me
 }
 
 /**
+ * True if an attachment storage_path is owned by this firm + matter.
+ *
+ * Attachment metadata is supplied in the message POST body. The path MUST sit
+ * under this matter's prefix; otherwise a caller with a valid session for their
+ * own matter could reference another firm's object in the shared firm-files
+ * bucket and have the server sign a download URL for it. Enforced at the route
+ * before the path is stored.
+ */
+export function isOwnedAttachmentPath(
+  path: unknown,
+  firmId: string,
+  matterId: string,
+): boolean {
+  return typeof path === 'string' && path.startsWith(`message-attachments/${firmId}/${matterId}/`);
+}
+
+/**
  * Sanitises a message body for storage. Trims, collapses excessive
  * whitespace, and enforces a hard length cap. Returns null if the
  * resulting body is empty.

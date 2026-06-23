@@ -416,11 +416,9 @@ function MessageRow({
       </p>
       <div
         style={{ margin: '2px 0 0 0', color: '#222', lineHeight: 1.4 }}
-        dangerouslySetInnerHTML={{
-          __html: m.body.includes('<')
-            ? m.body
-            : escapeHtml(m.body).replace(/\n/g, '<br>'),
-        }}
+        /* body is HTML-sanitized server-side in insertMessage; render it and
+           turn newlines into line breaks. */
+        dangerouslySetInnerHTML={{ __html: m.body.replace(/\n/g, '<br>') }}
       />
       {m.attachments?.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
@@ -467,13 +465,4 @@ function MessageRow({
       )}
     </div>
   );
-}
-
-function escapeHtml(s: string): string {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

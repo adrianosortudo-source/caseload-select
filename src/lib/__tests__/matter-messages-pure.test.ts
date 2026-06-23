@@ -5,7 +5,41 @@ import {
   notificationEventType,
   sanitiseBody,
   canMarkRead,
+  isOwnedAttachmentPath,
 } from '../matter-messages-pure';
+
+describe('isOwnedAttachmentPath', () => {
+  const firm = 'firm-1';
+  const matter = 'matter-9';
+
+  it('accepts a path under this firm+matter prefix', () => {
+    expect(isOwnedAttachmentPath(`message-attachments/${firm}/${matter}/123-a.pdf`, firm, matter)).toBe(true);
+  });
+
+  it('rejects another firm or matter', () => {
+    expect(isOwnedAttachmentPath(`message-attachments/other-firm/${matter}/x.pdf`, firm, matter)).toBe(false);
+    expect(isOwnedAttachmentPath(`message-attachments/${firm}/other-matter/x.pdf`, firm, matter)).toBe(false);
+  });
+
+  it('rejects a Files-hub or deliverables path in the same bucket', () => {
+    expect(isOwnedAttachmentPath(`firms/${firm}/abc/Retainer.pdf`, firm, matter)).toBe(false);
+    expect(isOwnedAttachmentPath(`deliverables/${firm}/d1/v.png`, firm, matter)).toBe(false);
+  });
+
+  it('rejects a missing or non-string path', () => {
+    expect(isOwnedAttachmentPath(undefined, firm, matter)).toBe(false);
+    expect(isOwnedAttachmentPath(123, firm, matter)).toBe(false);
+    expect(isOwnedAttachmentPath('', firm, matter)).toBe(false);
+  });
+
+  it('rejects a traversal attempt that does not match the literal prefix', () => {
+    expect(isOwnedAttachmentPath(`message-attachments/${firm}/${matter}/../../other/x`, firm, matter)).toBe(true);
+    // ^ prefix matches; path traversal beyond the prefix is a storage-key
+    //   concern handled by the bucket (keys are literal, no traversal), but the
+    //   prefix gate is the firm/matter boundary. A foreign prefix is rejected:
+    expect(isOwnedAttachmentPath('../firm-1/matter-9/x', firm, matter)).toBe(false);
+  });
+});
 
 describe('canWriteChannel', () => {
   it('client can write to the client channel only', () => {

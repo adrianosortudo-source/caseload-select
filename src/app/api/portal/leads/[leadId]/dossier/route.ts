@@ -11,11 +11,12 @@
  * source_idx points into the full conversation array (0-based, all turns).
  * This enables Phase 3 click-to-highlight in the transcript.
  *
- * Auth: request body must include firmId. We verify lead.law_firm_id === firmId
- * as the ownership check (the portal session cookie is scoped to /portal path
- * and not sent to /api routes — firmId + leadId together form a sufficient
- * shared secret since both are UUIDs with 128-bit entropy and are only shown
- * to authenticated portal users).
+ * Auth: a portal session is required. The cookie is path "/", so it rides on
+ * this request. An operator (cross-firm) or a lawyer whose session firm_id
+ * matches the body firmId may call; client sessions are rejected. firmId is
+ * NOT a secret (it is the path segment of every /portal/[firmId]/* URL and the
+ * public widget), so lead.law_firm_id === firmId is an ownership check, not the
+ * authentication. After auth, the lead is still verified to belong to firmId.
  *
  * Result is persisted to intake_sessions.scoring._dossier so subsequent
  * page loads can display it without regenerating.
@@ -23,6 +24,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getPortalSession } from "@/lib/portal-auth";
 import { googleai, MODELS } from "@/lib/openrouter";
 
 export const dynamic = "force-dynamic";
@@ -100,7 +102,15 @@ export async function POST(
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  // Fetch lead — verify ownership
+  // Auth: require a portal session. Operators are cross-firm; a lawyer must
+  // match the firmId. Client sessions are rejected. firmId is public, so this
+  // is the real authentication; the lead ownership check below is secondary.
+  const portalSession = await getPortalSession();
+  if (!portalSession || portalSession.role === "client" || (portalSession.role !== "operator" && portalSession.firm_id !== firmId)) {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+
+  // Fetch lead, verify ownership
   const { data: lead } = await supabase
     .from("leads")
     .select("id, name, case_type, band, priority_band, priority_index, cpi_score, urgency, intake_session_id, law_firm_id")

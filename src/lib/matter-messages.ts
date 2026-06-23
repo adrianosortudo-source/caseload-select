@@ -15,6 +15,7 @@ import type {
   RecipientScope,
 } from './types';
 import { visibleChannelsForRole, sanitiseBody, notificationEventType } from './matter-messages-pure';
+import { sanitizeMessageHtml } from './message-html-sanitize';
 
 const ATTACHMENT_BUCKET = 'firm-files';
 const SIGNED_URL_TTL = 3600; // 1 hour
@@ -118,6 +119,14 @@ export async function insertMessage(input: {
   if (!cleanBody) {
     return { ok: false, error: 'body is empty after sanitisation' };
   }
+  // HTML-sanitize before storage: bodies render via dangerouslySetInnerHTML in
+  // both threads, so an unsanitized body is a stored XSS vector from the client
+  // into the lawyer/operator origin. Plain text survives (a stray "<" is
+  // encoded, not dropped); a small rich subset is allowed for welcome sends.
+  const safeBody = sanitizeMessageHtml(cleanBody);
+  if (!safeBody) {
+    return { ok: false, error: 'body is empty after sanitisation' };
+  }
 
   const { data: inserted, error: insertErr } = await supabase
     .from('matter_messages')
@@ -129,7 +138,7 @@ export async function insertMessage(input: {
       sender_role: input.sender_role,
       sender_lawyer_id: input.sender_lawyer_id ?? null,
       sender_client_email: input.sender_client_email ?? null,
-      body: cleanBody,
+      body: safeBody,
       attachments: input.attachments ?? [],
       broadcast_id: input.broadcast_id ?? null,
       parent_message_id: input.parent_message_id ?? null,
