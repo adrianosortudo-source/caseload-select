@@ -73,9 +73,15 @@ const SCAN_PHASES = [
   "Calculating scores",
 ];
 
-export default function SeoCheckTool() {
+export default function SeoCheckTool({
+  variant = "public",
+}: {
+  variant?: "public" | "operator";
+}) {
+  const isOperator = variant === "operator";
   const [step, setStep] = useState<Step>("input");
   const [domain, setDomain] = useState("");
+  const [maxPages, setMaxPages] = useState(5);
   const [error, setError] = useState("");
   const [result, setResult] = useState<SeoCheckResult | null>(null);
   const [scanPhase, setScanPhase] = useState(0);
@@ -108,7 +114,7 @@ export default function SeoCheckTool() {
       const res = await fetch("/api/tools/seo-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: trimmed }),
+        body: JSON.stringify({ domain: trimmed, maxPages }),
       });
 
       if (phaseInterval.current) clearInterval(phaseInterval.current);
@@ -124,7 +130,9 @@ export default function SeoCheckTool() {
 
       setResult(data);
       await new Promise((r) => setTimeout(r, 600));
-      setStep("email");
+      // The email step is a prospect lead-capture gate; operators skip straight
+      // to the report.
+      setStep(isOperator ? "report" : "email");
     } catch {
       if (phaseInterval.current) clearInterval(phaseInterval.current);
       setError("Network error. Check your connection and try again.");
@@ -181,9 +189,25 @@ export default function SeoCheckTool() {
             </button>
           </div>
           {error && <p className="seo-error">{error}</p>}
+          {isOperator && (
+            <div className="seo-operator-row">
+              <label className="seo-operator-label" htmlFor="seo-maxpages">Pages to scan</label>
+              <select
+                id="seo-maxpages"
+                className="seo-operator-select"
+                value={maxPages}
+                onChange={(e) => setMaxPages(Number(e.target.value))}
+              >
+                {[1, 3, 5, 8, 10].map((n) => (
+                  <option key={n} value={n}>{n} {n === 1 ? "page" : "pages"}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <p className="seo-input-hint">
-            Enter any law firm website. We run a mini-crawl of up to 5 pages and check
-            49 signals per page across SEO, AI visibility, schema, local search, performance, and security.
+            {isOperator
+              ? "Internal tool. Runs a multi-page crawl and checks 49 signals per page across SEO, AI visibility, schema, local search, performance, and security. No email gate; the report opens as soon as the scan finishes."
+              : "Enter any law firm website. We run a mini-crawl of up to 5 pages and check 49 signals per page across SEO, AI visibility, schema, local search, performance, and security."}
           </p>
         </div>
       )}
@@ -264,7 +288,9 @@ export default function SeoCheckTool() {
         </div>
       )}
 
-      {step === "report" && result && <SeoReport result={result} onReset={handleReset} />}
+      {step === "report" && result && (
+        <SeoReport result={result} onReset={handleReset} hideCta={isOperator} />
+      )}
 
       <style>{`
         .seo-tool { width: 100%; }
@@ -341,6 +367,32 @@ export default function SeoCheckTool() {
           margin: var(--sp-3) 0 0;
           line-height: 1.55;
         }
+        .seo-operator-row {
+          display: flex;
+          align-items: center;
+          gap: var(--sp-3);
+          margin-top: var(--sp-3);
+        }
+        .seo-operator-label {
+          font-family: var(--font-display);
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: var(--ls-eyebrow);
+          text-transform: uppercase;
+          color: var(--text-muted);
+        }
+        .seo-operator-select {
+          font-family: var(--font-body);
+          font-size: 13px;
+          color: var(--text);
+          padding: 7px 12px;
+          border: 1.5px solid var(--border);
+          border-radius: var(--r-tight);
+          background: var(--white);
+          cursor: pointer;
+          outline: none;
+        }
+        .seo-operator-select:focus { border-color: var(--navy); }
 
         /* ── Scanning ────────────────────────────────── */
         .seo-scanning {

@@ -300,9 +300,11 @@ function CategoryCard({ cat }: { cat: CategoryResult }) {
 export default function SeoReport({
   result,
   onReset,
+  hideCta = false,
 }: {
   result: SeoCheckResult;
   onReset: () => void;
+  hideCta?: boolean;
 }) {
   const [tab, setTab] = useState<"overview" | "issues">("overview");
 
@@ -452,19 +454,21 @@ export default function SeoReport({
         </div>
       )}
 
-      {/* ── CTA ─────────────────────────────────────── */}
-      <div className="seo-report-cta">
-        <div className="seo-cta-card">
-          <h3 className="seo-cta-title">Want these issues fixed?</h3>
-          <p className="seo-cta-sub">
-            CaseLoad Select builds the SEO and AI visibility infrastructure that puts your firm
-            in front of the right clients. We fix these issues as part of the system.
-          </p>
-          <a href="/home#final-cta" className="seo-cta-btn">
-            Learn how it works
-          </a>
+      {/* ── CTA (prospect-facing; hidden for operator use) ── */}
+      {!hideCta && (
+        <div className="seo-report-cta">
+          <div className="seo-cta-card">
+            <h3 className="seo-cta-title">Want these issues fixed?</h3>
+            <p className="seo-cta-sub">
+              CaseLoad Select builds the SEO and AI visibility infrastructure that puts your firm
+              in front of the right clients. We fix these issues as part of the system.
+            </p>
+            <a href="/home#final-cta" className="seo-cta-btn">
+              Learn how it works
+            </a>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="seo-report-footer">
         <button onClick={onReset} className="seo-reset-btn">Check another site</button>
