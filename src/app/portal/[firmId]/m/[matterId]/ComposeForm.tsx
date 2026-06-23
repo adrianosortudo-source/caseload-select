@@ -1,20 +1,18 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, useRef, type FormEvent, type ChangeEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import type { MatterAttachment } from '@/lib/types';
 
 /**
  * Client-side compose form for the client matter home page.
  *
- * Wraps a textarea + send button. On submit, posts JSON to the
- * matter messages endpoint (which expects JSON, not form-urlencoded).
- * On success, clears the textarea and refreshes the page so the new
- * message appears in the thread.
+ * On send: POST JSON to the messages endpoint, then call
+ * router.refresh() so the server component re-fetches the thread
+ * without a full page reload.
  *
- * The "in-flight" state disables the button and changes its label
- * to prevent double-submission. Errors surface inline with a clear
- * action ("Reply to this email and your lawyer will see it" — gives
- * the client a recovery path that doesn't depend on this surface
- * working).
+ * Supports file attachments: files are uploaded to the upload endpoint
+ * first, then the returned attachment metadata is included in the POST.
  */
 export default function ComposeForm({
   firmId,
@@ -23,13 +21,44 @@ export default function ComposeForm({
   firmId: string;
   matterId: string;
 }) {
+  const router = useRouter();
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<MatterAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function onFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    e.target.value = '';
+    setUploadError(null);
+    setUploading(true);
+    try {
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch(
+          `/api/portal/${firmId}/matters/${matterId}/messages/upload`,
+          { method: 'POST', body: fd },
+        );
+        const json = await res.json();
+        if (!res.ok || !json.ok) {
+          setUploadError(json.error ?? 'Upload failed. Please try again.');
+        } else {
+          setPendingAttachments((prev) => [...prev, json.attachment as MatterAttachment]);
+        }
+      }
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!body.trim()) return;
+    if (!body.trim() && pendingAttachments.length === 0) return;
     setSending(true);
     setError(null);
     try {
@@ -38,7 +67,11 @@ export default function ComposeForm({
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ channel_type: 'client', body: body.trim() }),
+          body: JSON.stringify({
+            channel_type: 'client',
+            body: body.trim() || '(attachment)',
+            attachments: pendingAttachments,
+          }),
         },
       );
       const json = await res.json();
@@ -47,13 +80,9 @@ export default function ComposeForm({
         setSending(false);
         return;
       }
-      // Success — clear the textarea and refresh the page so the new
-      // message appears in the thread. window.location.reload is fine
-      // here; the page is small and the alternative (next/router refresh
-      // + revalidation plumbing) is more complex than it needs to be
-      // for this single-matter view.
       setBody('');
-      window.location.reload();
+      setPendingAttachments([]);
+      router.refresh();
     } catch (err) {
       setError(
         err instanceof Error
@@ -64,14 +93,53 @@ export default function ComposeForm({
     }
   }
 
+  const canSend = (body.trim().length > 0 || pendingAttachments.length > 0) && !sending;
+
   return (
     <form onSubmit={onSubmit} style={{ marginTop: 18 }}>
+      {pendingAttachments.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+          {pendingAttachments.map((a, i) => (
+            <span
+              key={i}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '3px 9px',
+                background: '#fff',
+                border: '1px solid #C4B49A',
+                borderRadius: 4,
+                fontSize: '0.82rem',
+                color: '#444',
+              }}
+            >
+              {a.name}
+              <button
+                type="button"
+                onClick={() => setPendingAttachments((prev) => prev.filter((_, j) => j !== i))}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#888',
+                  padding: 0,
+                  lineHeight: 1,
+                  fontSize: '1rem',
+                }}
+              >
+                x
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       <textarea
         name="body"
         value={body}
         onChange={(e) => setBody(e.target.value)}
-        placeholder="Write a message to your lawyer…"
-        required
+        placeholder="Write a message to your lawyer..."
         rows={4}
         disabled={sending}
         style={{
@@ -86,34 +154,60 @@ export default function ComposeForm({
           boxSizing: 'border-box',
         }}
       />
-      <button
-        type="submit"
-        disabled={sending || !body.trim()}
-        style={{
-          marginTop: 10,
-          background: sending ? '#888' : '#1E2F58',
-          color: '#fff',
-          border: 'none',
-          padding: '10px 18px',
-          borderRadius: 4,
-          cursor: sending || !body.trim() ? 'not-allowed' : 'pointer',
-          fontFamily: 'inherit',
-          fontSize: '0.92rem',
-          fontWeight: 700,
-          opacity: !body.trim() ? 0.6 : 1,
-        }}
-      >
-        {sending ? 'Sending…' : 'Send to your lawyer'}
-      </button>
-      {error ? (
-        <p
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+        <button
+          type="submit"
+          disabled={!canSend}
           style={{
-            fontSize: '0.84rem',
-            color: '#C97A4A',
-            marginTop: 8,
-            fontStyle: 'italic',
+            background: !canSend ? '#888' : '#1E2F58',
+            color: '#fff',
+            border: 'none',
+            padding: '10px 18px',
+            borderRadius: 4,
+            cursor: !canSend ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
+            fontSize: '0.92rem',
+            fontWeight: 700,
+            opacity: !canSend ? 0.6 : 1,
           }}
         >
+          {sending ? 'Sending...' : 'Send to your lawyer'}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading || sending}
+          style={{
+            background: 'none',
+            border: '1px solid #C4B49A',
+            borderRadius: 4,
+            padding: '9px 14px',
+            cursor: (uploading || sending) ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
+            fontSize: '0.86rem',
+            color: '#666',
+          }}
+        >
+          {uploading ? 'Uploading...' : 'Attach file'}
+        </button>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+          onChange={onFileChange}
+          style={{ display: 'none' }}
+        />
+      </div>
+
+      {uploadError && (
+        <p style={{ fontSize: '0.84rem', color: '#C97A4A', marginTop: 6 }}>{uploadError}</p>
+      )}
+      {error ? (
+        <p style={{ fontSize: '0.84rem', color: '#C97A4A', marginTop: 8, fontStyle: 'italic' }}>
           {error} You can also reply to your last email and your lawyer will see it.
         </p>
       ) : (

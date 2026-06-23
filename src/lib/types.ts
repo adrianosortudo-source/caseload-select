@@ -155,6 +155,15 @@ export interface MatterStageEvent {
   created_at: string;
 }
 
+export interface MatterAttachment {
+  storage_path?: string; // primary: object key in firm-files bucket
+  url?: string;          // legacy shape (unused in practice)
+  signed_url?: string;   // runtime only: pre-signed read URL
+  name: string;
+  size?: number;
+  mime?: string;
+}
+
 export interface MatterMessage {
   id: string;
   matter_id: string;
@@ -165,8 +174,9 @@ export interface MatterMessage {
   sender_lawyer_id: string | null;
   sender_client_email: string | null;
   body: string;
-  attachments: Array<{ url: string; name: string; size?: number; mime?: string }>;
+  attachments: MatterAttachment[];
   broadcast_id: string | null;
+  parent_message_id: string | null;
   created_at: string;
 }
 

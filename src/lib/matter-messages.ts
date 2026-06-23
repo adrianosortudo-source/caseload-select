@@ -10,16 +10,49 @@ import { supabaseAdmin as supabase } from './supabase-admin';
 import type {
   ChannelType,
   MatterMessage,
+  MatterAttachment,
   ActorRole,
   RecipientScope,
 } from './types';
 import { visibleChannelsForRole, sanitiseBody, notificationEventType } from './matter-messages-pure';
 
+const ATTACHMENT_BUCKET = 'firm-files';
+const SIGNED_URL_TTL = 3600; // 1 hour
+
+/**
+ * Sign all storage_path entries in an attachment array.
+ * Best-effort: a signing failure leaves signed_url absent but does not
+ * throw or drop the attachment from the list.
+ */
+async function signAttachments(
+  attachments: MatterAttachment[],
+): Promise<MatterAttachment[]> {
+  const paths = attachments
+    .map((a, i) => ({ i, path: a.storage_path }))
+    .filter((x): x is { i: number; path: string } => typeof x.path === 'string');
+
+  if (paths.length === 0) return attachments;
+
+  const signed = await Promise.all(
+    paths.map(async ({ i, path }) => {
+      const { data } = await supabase.storage
+        .from(ATTACHMENT_BUCKET)
+        .createSignedUrl(path, SIGNED_URL_TTL);
+      return { i, signed_url: data?.signedUrl ?? undefined };
+    }),
+  );
+
+  const result = attachments.map((a) => ({ ...a }));
+  for (const { i, signed_url } of signed) {
+    if (signed_url) result[i] = { ...result[i], signed_url };
+  }
+  return result;
+}
+
 /**
  * List messages on a matter, filtered by the role's visible channels.
- * Returns up to `limit` messages in chronological order (oldest first
- * is more useful in a thread view; the caller can reverse for newest-
- * first listing).
+ * Attachment storage_path entries are pre-signed (1h TTL) before return.
+ * Returns up to `limit` messages in chronological order.
  */
 export async function listMessagesForMatter(
   matterId: string,
@@ -44,15 +77,25 @@ export async function listMessagesForMatter(
     .order('created_at', { ascending: true })
     .limit(limit);
 
-  return (data ?? []) as MatterMessage[];
+  const messages = (data ?? []) as MatterMessage[];
+
+  // Sign attachments in parallel across all messages.
+  const withSignedUrls = await Promise.all(
+    messages.map(async (m) => {
+      if (!m.attachments?.length) return m;
+      return { ...m, attachments: await signAttachments(m.attachments) };
+    }),
+  );
+
+  return withSignedUrls;
 }
 
 /**
  * Insert a new message. Caller MUST have validated channel-write
  * permission via `canWriteChannel(role, channel_type)`.
  *
- * Also queues a notification_outbox row for digest delivery (S09).
- * The notification queue write is best-effort — if it fails, the
+ * Also queues a notification_outbox row for digest delivery.
+ * The notification queue write is best-effort; if it fails, the
  * message still lands.
  */
 export async function insertMessage(input: {
@@ -64,8 +107,9 @@ export async function insertMessage(input: {
   sender_lawyer_id?: string | null;
   sender_client_email?: string | null;
   body: string;
-  attachments?: Array<{ url: string; name: string; size?: number; mime?: string }>;
+  attachments?: MatterAttachment[];
   broadcast_id?: string | null;
+  parent_message_id?: string | null;
 }): Promise<
   | { ok: true; message: MatterMessage }
   | { ok: false; error: string }
@@ -88,6 +132,7 @@ export async function insertMessage(input: {
       body: cleanBody,
       attachments: input.attachments ?? [],
       broadcast_id: input.broadcast_id ?? null,
+      parent_message_id: input.parent_message_id ?? null,
     })
     .select()
     .single();
@@ -105,21 +150,17 @@ export async function insertMessage(input: {
 }
 
 /**
- * Queue a notification_outbox row for a new message. Resolves the
- * recipients from the matter's role assignments (client vs internal
- * staff) and inserts one outbox row per recipient.
+ * Queue notification_outbox rows for a new message. Resolves recipients
+ * from the matter's role assignments (client vs internal staff) and
+ * inserts one outbox row per recipient.
  *
- * Phase 1 keeps the recipient resolution simple:
- *   - channel_type='client'    : matter.primary_email + lead_lawyer +
- *                                assignees
- *   - channel_type='internal'  : lead_lawyer + assignees (NEVER client)
- *
- * Phase 2 will add the group/company recipient_scope branches.
+ *   channel_type='client'   : primary_email + lead_lawyer + assignees
+ *   channel_type='internal' : lead_lawyer + assignees (NEVER client)
  */
 async function enqueueMessageNotification(msg: MatterMessage): Promise<void> {
   const { data: matter } = await supabase
     .from('client_matters')
-    .select('lead_id, assignee_ids, primary_email, firm_id')
+    .select('lead_id, assignee_ids, primary_email, primary_name, firm_id')
     .eq('id', msg.matter_id)
     .maybeSingle();
   if (!matter) return;
@@ -131,7 +172,6 @@ async function enqueueMessageNotification(msg: MatterMessage): Promise<void> {
     for (const id of matter.assignee_ids) if (typeof id === 'string') lawyerIds.push(id);
   }
 
-  // Resolve lawyer ids to email addresses.
   if (lawyerIds.length > 0) {
     const { data: lawyers } = await supabase
       .from('firm_lawyers')
@@ -142,7 +182,7 @@ async function enqueueMessageNotification(msg: MatterMessage): Promise<void> {
     }
   }
 
-  // Client recipient on client-channel messages.
+  // Client recipient on client-channel messages (skip when client is the sender).
   if (msg.channel_type === 'client' && matter.primary_email && msg.sender_role !== 'client') {
     recipients.add(matter.primary_email);
   }
@@ -160,6 +200,8 @@ async function enqueueMessageNotification(msg: MatterMessage): Promise<void> {
       channel_type: msg.channel_type,
       sender_role: msg.sender_role,
       body_preview: msg.body.slice(0, 240),
+      body: msg.body,
+      primary_name: matter.primary_name ?? null,
     },
   }));
 
@@ -167,17 +209,11 @@ async function enqueueMessageNotification(msg: MatterMessage): Promise<void> {
 }
 
 /**
- * Mark all messages on a matter as read for a given matter_message
- * scope. Phase 1 only tracks message-level reads on broadcast
- * recipients (matter_message_recipients.read_at); individual messages
- * don't have a read column. Stubbed for future use.
+ * Stub for Phase 2 per-individual-message read tracking.
  */
 export async function markMatterMessagesRead(
   matterId: string,
   _role: ActorRole,
 ): Promise<void> {
-  // Phase 1: no per-individual-message read tracking. The matter view
-  // can show "X new since you last opened" by comparing to a session
-  // timestamp held client-side. This hook exists for Phase 2.
   void matterId;
 }

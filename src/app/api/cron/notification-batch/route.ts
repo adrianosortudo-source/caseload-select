@@ -17,9 +17,9 @@
  * always delivered.
  *
  * Phase 1 grouping: simple email-grouped digest. Each digest body
- * lists the events grouped by matter, with a short body_preview per
- * event. Matter-specific deep links route the recipient to the
- * matter detail page.
+ * lists the events grouped by matter, with the full message body and
+ * a deep link to the matter. Lawyers link to the matter-detail page;
+ * clients link to the matter-home page.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -29,6 +29,7 @@ import { sendEmail } from '@/lib/email';
 
 const BATCH_WINDOW_MIN = 5;
 const MAX_ROWS_PER_DRAIN = 500;
+const APP_BASE = 'https://app.caseloadselect.ca';
 
 interface OutboxRow {
   id: string;
@@ -41,6 +42,8 @@ interface OutboxRow {
     channel_type?: string;
     sender_role?: string;
     body_preview?: string;
+    body?: string;
+    primary_name?: string | null;
     [key: string]: unknown;
   };
   created_at: string;
@@ -51,9 +54,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Find queued rows older than BATCH_WINDOW_MIN minutes so the
-  // batch absorbs multiple events for the same recipient instead of
-  // firing per-event spam.
   const cutoff = new Date(Date.now() - BATCH_WINDOW_MIN * 60 * 1000).toISOString();
 
   const { data: rows, error: fetchErr } = await supabase
@@ -73,7 +73,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, drained: 0, message: 'no rows due' });
   }
 
-  // Group by recipient_email.
   const byRecipient = new Map<string, OutboxRow[]>();
   for (const row of queued) {
     const list = byRecipient.get(row.recipient_email) ?? [];
@@ -81,8 +80,6 @@ export async function GET(req: NextRequest) {
     byRecipient.set(row.recipient_email, list);
   }
 
-  // Resolve per-recipient firm_lawyer toggle. Lawyers with
-  // email_notifications_enabled=false drop their rows.
   const lawyerEmailMap = await resolveLawyerEmailEnabledMap(
     Array.from(byRecipient.keys()),
   );
@@ -96,14 +93,15 @@ export async function GET(req: NextRequest) {
 
   for (const [email, recipientRows] of byRecipient.entries()) {
     stats.recipients++;
-    const enabled = lawyerEmailMap.get(email) ?? true; // default to enabled (covers client recipients)
+    const enabled = lawyerEmailMap.get(email) ?? true;
     if (!enabled) {
       stats.dropped += recipientRows.length;
       for (const r of recipientRows) droppedIds.push(r.id);
       continue;
     }
 
-    const digest = buildDigest(email, recipientRows);
+    const isLawyer = lawyerEmailMap.has(email);
+    const digest = buildDigest(email, recipientRows, isLawyer);
     try {
       await sendEmail(email, digest.subject, digest.html);
       stats.sent += recipientRows.length;
@@ -115,7 +113,6 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Stamp the rows.
   await Promise.all([
     sentIds.length > 0 && supabase
       .from('notification_outbox')
@@ -130,7 +127,7 @@ export async function GET(req: NextRequest) {
       .update({
         status: 'failed',
         failed_at: now,
-        attempts: 1, // simple Phase 1; per-row retry counts come later
+        attempts: 1,
       })
       .in('id', failedIds),
   ].filter(Boolean));
@@ -158,8 +155,11 @@ async function resolveLawyerEmailEnabledMap(
   return m;
 }
 
-function buildDigest(_email: string, rows: OutboxRow[]): { subject: string; html: string } {
-  // Group by matter for the digest sections.
+function buildDigest(
+  _email: string,
+  rows: OutboxRow[],
+  isLawyer: boolean,
+): { subject: string; html: string } {
   const byMatter = new Map<string, OutboxRow[]>();
   for (const r of rows) {
     const key = r.matter_id ?? '_no_matter';
@@ -170,18 +170,33 @@ function buildDigest(_email: string, rows: OutboxRow[]): { subject: string; html
 
   const totalEvents = rows.length;
   const matterCount = byMatter.size;
-  const subject = totalEvents === 1
-    ? `1 update on your matter`
-    : `${totalEvents} updates across ${matterCount} matter${matterCount === 1 ? '' : 's'}`;
+
+  // Use primary_name from first row if available for a better subject.
+  const firstRow = rows[0];
+  const firstPrimaryName = firstRow?.event_payload?.primary_name;
+  const subject =
+    totalEvents === 1 && firstPrimaryName
+      ? `New message${firstRow.event_type === 'message_internal_new' ? ' (internal)' : ''}: ${firstPrimaryName}`
+      : totalEvents === 1
+        ? 'New message on your matter'
+        : `${totalEvents} updates across ${matterCount} matter${matterCount === 1 ? '' : 's'}`;
 
   const sections: string[] = [];
   for (const [matterId, matterRows] of byMatter.entries()) {
-    const eventBlocks = matterRows
-      .map((r) => eventBlockHtml(r))
-      .join('');
+    const matterName = matterRows[0]?.event_payload?.primary_name ?? null;
+    const matterLabel = matterName ? `Matter: ${escapeHtml(matterName)}` : `Matter ${escapeHtml(matterId.slice(0, 8))}...`;
+
+    const portalUrl =
+      matterId !== '_no_matter' && matterRows[0]?.firm_id
+        ? isLawyer
+          ? `${APP_BASE}/portal/${matterRows[0].firm_id}/matters/${matterId}`
+          : `${APP_BASE}/portal/${matterRows[0].firm_id}/m/${matterId}`
+        : null;
+
+    const eventBlocks = matterRows.map((r) => eventBlockHtml(r, portalUrl)).join('');
     sections.push(`
       <section style="margin-bottom: 20px;">
-        <p style="margin: 0 0 8px 0; color: #888; font-size: 13px;">Matter ${escapeHtml(matterId)}</p>
+        <p style="margin: 0 0 8px 0; color: #888; font-size: 13px;">${matterLabel}</p>
         ${eventBlocks}
       </section>
     `);
@@ -192,7 +207,7 @@ function buildDigest(_email: string, rows: OutboxRow[]): { subject: string; html
       <h2 style="color: #1E2F58; margin-bottom: 16px;">${escapeHtml(subject)}</h2>
       ${sections.join('')}
       <p style="margin-top: 28px; color: #888; font-size: 12px;">
-        Sent by CaseLoad Select on behalf of the firm. Reply to this email to respond to your lawyer directly.
+        Sent by CaseLoad Select on behalf of the firm. Reply to this email to respond directly.
       </p>
     </div>
   `.trim();
@@ -200,15 +215,23 @@ function buildDigest(_email: string, rows: OutboxRow[]): { subject: string; html
   return { subject, html };
 }
 
-function eventBlockHtml(row: OutboxRow): string {
+function eventBlockHtml(row: OutboxRow, portalUrl: string | null): string {
   const label = describeEvent(row.event_type);
-  const preview = row.event_payload?.body_preview
-    ? `<p style="margin: 4px 0 0 0; color: #444; font-size: 14px;">${escapeHtml(row.event_payload.body_preview)}</p>`
+  const fullBody = row.event_payload?.body ?? row.event_payload?.body_preview;
+  const bodyText = fullBody
+    ? fullBody.slice(0, 800)
+    : null;
+  const bodyHtml = bodyText
+    ? `<p style="margin: 6px 0 0 0; color: #333; font-size: 14px; white-space: pre-wrap; line-height: 1.5;">${escapeHtml(bodyText)}${fullBody && fullBody.length > 800 ? '...' : ''}</p>`
+    : '';
+  const linkHtml = portalUrl
+    ? `<p style="margin: 8px 0 0 0;"><a href="${portalUrl}" style="color: #1E2F58; font-size: 13px; font-weight: 700;">View message</a></p>`
     : '';
   return `
-    <div style="padding: 10px 12px; background: #F4F3EF; border-radius: 4px; margin-bottom: 8px;">
+    <div style="padding: 12px 14px; background: #F4F3EF; border-radius: 4px; margin-bottom: 8px;">
       <p style="margin: 0; font-weight: 700; color: #0D1520; font-size: 14px;">${escapeHtml(label)}</p>
-      ${preview}
+      ${bodyHtml}
+      ${linkHtml}
     </div>
   `;
 }

@@ -6,15 +6,17 @@
  * internal). Role-gated:
  *
  *   - Lawyer / operator session: can read both channels, write both
- *     channels. Maps to actor_role 'admin' for matter-message
- *     purposes (legacy lawyer token).
- *   - Client session (Phase 1: future — magic-link invite story 01):
- *     can read and write 'client' channel only.
+ *     channels. Maps to actor_role 'admin' for matter-message purposes.
+ *   - Client session: can read and write 'client' channel only.
  *
- * POST body: { channel_type, body, attachments?, recipient_scope? }
+ * POST body:
+ *   { channel_type, body, attachments?, recipient_scope?, parent_message_id? }
+ *
+ * attachments: array of { storage_path, name, size, mime } objects
+ *   returned by the /messages/upload endpoint.
  *
  * On send, the data-access helper queues a notification_outbox row
- * for digest delivery (Story 9).
+ * for digest delivery.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -26,7 +28,7 @@ import {
 import { listMessagesForMatter, insertMessage } from '@/lib/matter-messages';
 import { canWriteChannel } from '@/lib/matter-messages-pure';
 import { getMatterById } from '@/lib/matter-stage';
-import type { ChannelType, ActorRole } from '@/lib/types';
+import type { ChannelType, ActorRole, MatterAttachment } from '@/lib/types';
 
 const VALID_CHANNELS: ChannelType[] = ['client', 'internal'];
 
@@ -36,13 +38,6 @@ function actorRoleFromSession(role: 'lawyer' | 'operator' | 'client'): ActorRole
   return 'admin';
 }
 
-/**
- * Resolve the session for this matter route, accepting either a firm
- * session (lawyer / operator) or a client session scoped to this
- * exact matter. Client sessions can only see / write the 'client'
- * channel; the channel-gating happens at canWriteChannel + visible
- * channels in the data layer, this resolver only proves identity.
- */
 async function resolveSession(
   firmId: string,
   matterId: string,
@@ -100,6 +95,7 @@ export async function POST(
     body?: string;
     attachments?: unknown;
     recipient_scope?: string;
+    parent_message_id?: string | null;
   };
   try {
     body = await req.json();
@@ -131,26 +127,28 @@ export async function POST(
     );
   }
 
-  // Best-effort attachment validation: expect an array of objects with
-  // at least { url, name } shape. Anything else is dropped silently
-  // (the column has a CHECK that the JSONB is an array).
-  const attachments = Array.isArray(body.attachments)
-    ? (body.attachments.filter(
-        (a) =>
-          a && typeof a === 'object' && typeof (a as { url?: unknown }).url === 'string',
-      ) as Array<{ url: string; name: string; size?: number; mime?: string }>)
-    : undefined;
+  // Accept attachments with storage_path (new shape) or url (legacy).
+  // Anything else is silently dropped.
+  const attachments: MatterAttachment[] = Array.isArray(body.attachments)
+    ? (body.attachments as unknown[]).filter(
+        (a): a is MatterAttachment =>
+          typeof a === 'object' &&
+          a !== null &&
+          typeof (a as Record<string, unknown>).name === 'string' &&
+          (
+            typeof (a as Record<string, unknown>).storage_path === 'string' ||
+            typeof (a as Record<string, unknown>).url === 'string'
+          ),
+      )
+    : [];
 
-  // Map the actor role to the matter_messages.sender_role column.
-  // operator + admin both write as 'admin' (the role-of-record for
-  // permission gating); staff writes as 'staff'; client writes as
-  // 'client'. The system role is reserved for automated inserts
-  // (welcome draft send, stage-change announcements) and is set by
-  // the caller, not derived from a session.
   const senderRole: 'admin' | 'staff' | 'client' =
     actor === 'client' ? 'client'
       : actor === 'staff' ? 'staff'
       : 'admin';
+
+  // Validate parent_message_id belongs to the same matter if provided.
+  const parentId = typeof body.parent_message_id === 'string' ? body.parent_message_id : null;
 
   const result = await insertMessage({
     matter_id: matterId,
@@ -165,6 +163,7 @@ export async function POST(
     sender_client_email: actor === 'client' ? session.client_email ?? null : null,
     body: body.body,
     attachments,
+    parent_message_id: parentId,
   });
 
   if (!result.ok) {

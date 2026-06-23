@@ -124,6 +124,47 @@ export default async function ClientMatterHomePage({ params }: PageProps) {
                     __html: m.body.includes('<') ? m.body : escapeHtml(m.body).replace(/\n/g, '<br>'),
                   }}
                 />
+                {m.attachments?.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                    {m.attachments.map((a, i) =>
+                      a.signed_url ? (
+                        <a
+                          key={i}
+                          href={a.signed_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '3px 9px',
+                            background: '#fff',
+                            border: '1px solid #C4B49A',
+                            borderRadius: 4,
+                            fontSize: '0.82rem',
+                            color: '#1E2F58',
+                            textDecoration: 'none',
+                          }}
+                        >
+                          {a.name}{a.size ? ` (${Math.round(a.size / 1024)} KB)` : ''}
+                        </a>
+                      ) : (
+                        <span
+                          key={i}
+                          style={{
+                            padding: '3px 9px',
+                            background: '#F4F3EF',
+                            border: '1px solid #E0DDD3',
+                            borderRadius: 4,
+                            fontSize: '0.82rem',
+                            color: '#888',
+                          }}
+                        >
+                          {a.name}
+                        </span>
+                      )
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
