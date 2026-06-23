@@ -745,6 +745,69 @@ Implementation notes:
 - Use banned AI vocabulary (delve, tapestry, landscape, pivotal, testament, vibrant, intricate, meticulous, garner, interplay, underscore, bolstered, fostering, showcasing, highlighting, emphasizing, enhance, crucial, enduring, boasts, align with, valuable)
 - Allow orphan words (single word alone on last line of any text block)
 
+## Portal Upgrades (2026-06-23)
+
+Two portal features landed in one session, both lawyer-and-operator facing,
+both gated by the existing magic-link auth (operator OR matching firm-lawyer;
+client sessions excluded).
+
+### Messaging upgrade (Phase 1)
+
+Threaded replies, file attachments, and richer notifications on the existing
+`matter_messages` surfaces.
+
+- `matter_messages.parent_message_id` (migration `20260623_matter_messages_threading.sql`, applied). One level of threading; a reply cannot be replied to. `ON DELETE SET NULL` orphans replies rather than cascading.
+- `MatterAttachment` type (`{ storage_path, signed_url?, name, size?, mime? }`). Attachments live in the `firm-files` bucket under a `message-attachments/` prefix (NO `firm_files` rows, so they stay out of the Files hub), signed at list time with a 1h TTL by `signAttachments()` in `lib/matter-messages.ts`.
+- `POST /api/portal/[firmId]/matters/[matterId]/messages/upload` stores one file (25 MB cap, image/pdf/word/excel/text) and returns the attachment metadata for inclusion in the next message POST.
+- Lawyer surface (`MessageThreads.tsx`): root + indented replies, Reply button, file picker, attachment chips. Client surface (`ComposeForm.tsx`): `router.refresh()` instead of full reload, file picker. Client matter page renders attachment links.
+- `notification-batch` digest now carries the full message body, the matter `primary_name` as the section heading, and a per-matter deep link.
+
+### Content approval (Phase 2)
+
+The operator posts marketing deliverables; the firm's lawyer reviews,
+annotates, and formally signs off. The sign-off is an LSO Rule 4.2-1
+compliance record: append-only, timestamped, versioned, capturing signer
+identity, IP, user agent, and the exact attestation copy.
+
+Tables (migration `20260623_content_approval.sql`, applied; service-role only):
+
+```
+content_deliverables (id, firm_id, title, description, content_kind[text|image|pdf],
+  status[draft|in_review|changes_requested|approved|archived], current_version_id,
+  approved_version_id, approved_at, created_by_role, created_by_id, created_at, updated_at)
+deliverable_versions (id, deliverable_id, firm_id, version_number, body_html,
+  storage_path, asset_mime, asset_size_bytes, asset_name, note, created_by_*, created_at)
+deliverable_comments (id, deliverable_id, version_id, firm_id, author_role, author_id,
+  author_name, annotation jsonb, body, resolved, resolved_at, resolved_by_role,
+  parent_comment_id, created_at)
+approval_records (id, deliverable_id, version_id, firm_id, decision[approved|changes_requested],
+  signer_role, signer_id, signer_name, signer_email, attestation, version_number,
+  deliverable_title, ip_address, user_agent, note, created_at)   -- append-only
+```
+
+- Annotation model (`annotation` jsonb on a comment): `{type:'text',start,end,quote}` for a passage; `{type:'pin',x,y}` and `{type:'region',x,y,w,h}` (normalised 0..1) on images; `{type:'page',page}` on PDFs. A null annotation is a general comment.
+- Version-drift guard: comments anchor to a `version_id`. Posting a new version returns the deliverable to `in_review` and clears `approved_version_id` (the prior `approval_records` row is retained as history). The approve route requires the signed version to be the current one (409 otherwise).
+- Compliance posture: sign-off is LAWYER ONLY. The approve route enforces `role==='lawyer'` and a signer email on file; an operator viewing the firm portal cannot attest on the licensee's behalf. The attestation copy is frozen into `approval_records.attestation` (`APPROVAL_ATTESTATION` / `CHANGES_ATTESTATION` in `lib/deliverables-pure.ts`).
+- Assets live in `firm-files` under a `deliverables/` prefix (no Files-hub rows), signed at read with a 1h TTL. Text bodies are sanitised on save via `sanitizeExplainerHtml`.
+- Notifications reuse `notification_outbox` with four new event types (`deliverable_review_requested`, `deliverable_comment_added`, `deliverable_approved`, `deliverable_changes_requested`); the digest groups deliverable events by title with a deep link. Operator-bound events go to `OPERATOR_NOTIFICATION_EMAIL` (default `adriano@caseloadselect.ca`); firm-bound events fan out to enabled, non-disabled `firm_lawyers`.
+
+Surfaces:
+
+| Route | Purpose |
+|---|---|
+| `/portal/[firmId]/deliverables` | List + create (operator or lawyer). `?archived=1` includes archived. New "Deliverables" tab in `PortalTabNav`. |
+| `/portal/[firmId]/deliverables/[id]` | Review surface: annotation layer (text select / image pin+region / PDF page-tag), comment thread with resolve, version history, post-new-version, sign-off panel (lawyer), approval record, archive. |
+| `GET/POST /api/portal/[firmId]/deliverables` | List + create |
+| `GET/PATCH /api/portal/[firmId]/deliverables/[id]` | Detail; PATCH `{action:'archive'}` |
+| `POST .../[id]/versions` | New version: JSON `{body_html,note}` for text, multipart `file+note` for image/pdf (50 MB cap) |
+| `POST .../[id]/comments` | Add comment `{version_id, body, annotation?, parent_comment_id?}` |
+| `PATCH .../[id]/comments/[commentId]` | Resolve / reopen `{resolved}` |
+| `POST .../[id]/approve` | Lawyer sign-off `{version_id, decision, agreed, note?}` |
+
+Key files: `lib/deliverables.ts` (I/O), `lib/deliverables-pure.ts` (validators, status machine, attestation copy), `lib/deliverables-auth.ts` (actor resolution), `components/portal/DeliverableReview.tsx` (the review client), `components/portal/DeliverableList.tsx`.
+
+Operator dependency: a lawyer cannot sign off until an email is on file (`firm_lawyers.email` for the signed-in member, or `intake_firms.branding.lawyer_email`). For DRG, add Damaris via `/admin/access`.
+
 ## Build Roadmap
 
 | Session | Scope | Status |
