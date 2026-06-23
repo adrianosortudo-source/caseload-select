@@ -210,36 +210,51 @@ export async function addVersion(input: {
   note: string | null;
   actor: DeliverableActor;
 }): Promise<{ ok: true; version: DeliverableVersion } | { ok: false; error: string }> {
-  // Next version number.
-  const { data: last } = await supabase
-    .from("deliverable_versions")
-    .select("version_number")
-    .eq("deliverable_id", input.deliverableId)
-    .order("version_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const nextNumber = (last?.version_number ?? 0) + 1;
+  // Compute the next version number and insert. Two concurrent posts can read
+  // the same MAX and collide on UNIQUE(deliverable_id, version_number); the DB
+  // protects integrity (the second insert is rejected with 23505), and we
+  // re-read and retry once so the loser is re-sequenced instead of surfacing an
+  // opaque 500.
+  let inserted: DeliverableVersion | null = null;
+  let lastErr = "";
+  for (let attempt = 0; attempt < 2 && !inserted; attempt++) {
+    const { data: last } = await supabase
+      .from("deliverable_versions")
+      .select("version_number")
+      .eq("deliverable_id", input.deliverableId)
+      .order("version_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextNumber = (last?.version_number ?? 0) + 1;
 
-  const { data: inserted, error: insertErr } = await supabase
-    .from("deliverable_versions")
-    .insert({
-      deliverable_id: input.deliverableId,
-      firm_id: input.firmId,
-      version_number: nextNumber,
-      body_html: input.bodyHtml,
-      storage_path: input.storagePath,
-      asset_mime: input.assetMime,
-      asset_size_bytes: input.assetSizeBytes,
-      asset_name: input.assetName,
-      note: input.note,
-      created_by_role: input.actor.role,
-      created_by_id: input.actor.id ?? null,
-    })
-    .select("*")
-    .single();
-  if (insertErr) return { ok: false, error: `version insert failed: ${insertErr.message}` };
+    const { data, error: insertErr } = await supabase
+      .from("deliverable_versions")
+      .insert({
+        deliverable_id: input.deliverableId,
+        firm_id: input.firmId,
+        version_number: nextNumber,
+        body_html: input.bodyHtml,
+        storage_path: input.storagePath,
+        asset_mime: input.assetMime,
+        asset_size_bytes: input.assetSizeBytes,
+        asset_name: input.assetName,
+        note: input.note,
+        created_by_role: input.actor.role,
+        created_by_id: input.actor.id ?? null,
+      })
+      .select("*")
+      .single();
+    if (!insertErr) {
+      inserted = data as DeliverableVersion;
+      break;
+    }
+    lastErr = insertErr.message;
+    // 23505 = unique_violation: another post took this number; retry once.
+    if (insertErr.code !== "23505") break;
+  }
+  if (!inserted) return { ok: false, error: `version insert failed: ${lastErr}` };
 
-  const version = inserted as DeliverableVersion;
+  const version = inserted;
 
   // Point the deliverable at the new version, return it to review, clear any
   // stale approval pointer (the prior approval stays in approval_records).
@@ -260,7 +275,7 @@ export async function addVersion(input: {
     eventType: "deliverable_review_requested",
     audience: "firm",
     actor: input.actor,
-    bodyPreview: `Version ${nextNumber} is ready for your review.`,
+    bodyPreview: `Version ${version.version_number} is ready for your review.`,
   }).catch((e) => console.warn("[deliverables] notify failed:", e));
 
   return { ok: true, version };

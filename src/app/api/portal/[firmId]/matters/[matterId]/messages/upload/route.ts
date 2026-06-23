@@ -26,7 +26,8 @@ const ALLOWED_MIME = new Set([
   'image/png',
   'image/gif',
   'image/webp',
-  'image/svg+xml',
+  // image/svg+xml intentionally excluded: SVG can carry script and these
+  // attachments are served inline via signed URL (stored-XSS vector).
   'application/pdf',
   'text/plain',
   'text/csv',

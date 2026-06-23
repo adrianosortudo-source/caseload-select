@@ -29,6 +29,7 @@ import { sendEmail } from '@/lib/email';
 
 const BATCH_WINDOW_MIN = 5;
 const MAX_ROWS_PER_DRAIN = 500;
+const MAX_NOTIFY_ATTEMPTS = 5;
 const APP_BASE = 'https://app.caseloadselect.ca';
 
 interface OutboxRow {
@@ -50,6 +51,7 @@ interface OutboxRow {
     [key: string]: unknown;
   };
   created_at: string;
+  attempts?: number;
 }
 
 export async function GET(req: NextRequest) {
@@ -61,7 +63,7 @@ export async function GET(req: NextRequest) {
 
   const { data: rows, error: fetchErr } = await supabase
     .from('notification_outbox')
-    .select('id, recipient_email, firm_id, matter_id, event_type, event_payload, created_at')
+    .select('id, recipient_email, firm_id, matter_id, event_type, event_payload, created_at, attempts')
     .eq('status', 'queued')
     .lte('created_at', cutoff)
     .order('created_at', { ascending: true })
@@ -89,10 +91,9 @@ export async function GET(req: NextRequest) {
 
   const batchId = crypto.randomUUID();
   const now = new Date().toISOString();
-  const stats = { sent: 0, dropped: 0, failed: 0, recipients: 0 };
-  const sentIds: string[] = [];
+  const stats = { sent: 0, dropped: 0, failed: 0, requeued: 0, recipients: 0 };
   const droppedIds: string[] = [];
-  const failedIds: string[] = [];
+  const failedRows: OutboxRow[] = [];
 
   for (const [email, recipientRows] of byRecipient.entries()) {
     stats.recipients++;
@@ -105,35 +106,69 @@ export async function GET(req: NextRequest) {
 
     const isLawyer = lawyerEmailMap.has(email);
     const digest = buildDigest(email, recipientRows, isLawyer);
+    const ids = recipientRows.map((r) => r.id);
     try {
       await sendEmail(email, digest.subject, digest.html);
+      // Stamp sent immediately, per recipient, so a mid-drain crash cannot
+      // re-send an already-delivered digest on the next run (the previous
+      // post-loop batch stamp left that window open).
+      await supabase
+        .from('notification_outbox')
+        .update({ status: 'sent', sent_at: now, batch_id: batchId })
+        .in('id', ids);
       stats.sent += recipientRows.length;
-      for (const r of recipientRows) sentIds.push(r.id);
     } catch (err) {
       stats.failed += recipientRows.length;
-      for (const r of recipientRows) failedIds.push(r.id);
-      console.warn(`[notification-batch] send failed for ${email}:`, err);
+      for (const r of recipientRows) failedRows.push(r);
+      console.error(`[notification-batch] send failed for ${email}:`, err);
     }
   }
 
-  await Promise.all([
-    sentIds.length > 0 && supabase
-      .from('notification_outbox')
-      .update({ status: 'sent', sent_at: now, batch_id: batchId })
-      .in('id', sentIds),
-    droppedIds.length > 0 && supabase
+  if (droppedIds.length > 0) {
+    await supabase
       .from('notification_outbox')
       .update({ status: 'dropped', batch_id: batchId })
-      .in('id', droppedIds),
-    failedIds.length > 0 && supabase
-      .from('notification_outbox')
-      .update({
-        status: 'failed',
-        failed_at: now,
-        attempts: 1,
-      })
-      .in('id', failedIds),
-  ].filter(Boolean));
+      .in('id', droppedIds);
+  }
+
+  // Failed rows are retried on the next drain (status stays 'queued') with a
+  // bumped attempt count, until MAX_NOTIFY_ATTEMPTS, then terminal 'failed'.
+  // Previously a single failure was stamped terminal with no retry. Group by
+  // the next attempt value so each group is one update (PostgREST cannot do
+  // attempts = attempts + 1 in a plain update).
+  if (failedRows.length > 0) {
+    const requeueByAttempts = new Map<number, string[]>();
+    const terminalIds: string[] = [];
+    for (const r of failedRows) {
+      const next = (r.attempts ?? 0) + 1;
+      if (next >= MAX_NOTIFY_ATTEMPTS) {
+        terminalIds.push(r.id);
+      } else {
+        const list = requeueByAttempts.get(next) ?? [];
+        list.push(r.id);
+        requeueByAttempts.set(next, list);
+      }
+    }
+    const writes: Array<PromiseLike<unknown>> = [];
+    for (const [attempts, ids] of requeueByAttempts.entries()) {
+      stats.requeued += ids.length;
+      writes.push(
+        supabase
+          .from('notification_outbox')
+          .update({ status: 'queued', attempts, failed_at: now, last_error: 'send failed; will retry' })
+          .in('id', ids),
+      );
+    }
+    if (terminalIds.length > 0) {
+      writes.push(
+        supabase
+          .from('notification_outbox')
+          .update({ status: 'failed', attempts: MAX_NOTIFY_ATTEMPTS, failed_at: now, last_error: 'send failed; max attempts reached' })
+          .in('id', terminalIds),
+      );
+    }
+    await Promise.all(writes);
+  }
 
   return NextResponse.json({
     ok: true,

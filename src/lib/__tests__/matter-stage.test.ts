@@ -79,9 +79,24 @@ vi.mock('@/lib/supabase-admin', () => ({
         };
         return chain;
       },
-      update: (_patch: unknown) => ({
-        eq: () => Promise.resolve({ error: state.updateError }),
-      }),
+      update: (_patch: unknown) => {
+        // Supports the guarded shape update().eq('id').eq('matter_stage').select('id')
+        // as well as a bare awaited update().eq().
+        const result = {
+          data: state.updateError ? null : [{ id: MATTER_ID }],
+          error: state.updateError,
+        };
+        const chain: {
+          eq: () => typeof chain;
+          select: () => Promise<typeof result>;
+          then: (onF: (v: typeof result) => unknown, onR?: (e: unknown) => unknown) => Promise<unknown>;
+        } = {
+          eq: () => chain,
+          select: () => Promise.resolve(result),
+          then: (onF, onR) => Promise.resolve(result).then(onF, onR),
+        };
+        return chain;
+      },
       insert: (values: unknown) => {
         state.inserts.push({ table, values });
         return {

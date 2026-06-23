@@ -197,17 +197,28 @@ export async function transitionMatterStage(input: {
   const now = new Date().toISOString();
   const closedAt = input.to === 'closed' ? now : null;
 
-  const { error: updateErr } = await supabase
+  const { data: updatedRows, error: updateErr } = await supabase
     .from('client_matters')
     .update({
       matter_stage: input.to,
       matter_stage_changed_at: now,
       ...(closedAt ? { closed_at: closedAt } : {}),
     })
-    .eq('id', input.matter_id);
+    .eq('id', input.matter_id)
+    .eq('matter_stage', from) // guard: only advance from the stage we validated
+    .select('id');
 
   if (updateErr) {
     return { ok: false, error: `matter update failed: ${updateErr.message}`, code: 'db_error' };
+  }
+  if (!updatedRows || updatedRows.length === 0) {
+    // The stage moved under us between the read and this write (concurrent
+    // advance). Reject rather than double-advance and double-fire the cadence.
+    return {
+      ok: false,
+      error: `matter stage changed concurrently; expected ${from}`,
+      code: 'invalid_transition',
+    };
   }
 
   const { data: event, error: eventErr } = await supabase
@@ -225,10 +236,10 @@ export async function transitionMatterStage(input: {
     .single();
 
   if (eventErr) {
-    // Stage update succeeded but event log failed. Surface but don't
-    // roll back — operational visibility is more important than
-    // perfect audit trail.
-    console.warn('[matter-stage] event log insert failed:', eventErr.message);
+    // Stage update succeeded but the audit row failed. We do not roll back the
+    // stage (operational continuity), but elevate to console.error so the gap
+    // is greppable/alertable rather than a quiet warn.
+    console.error('[matter-stage] AUDIT GAP: event log insert failed:', eventErr.message);
   }
 
   // DR-049 cadence map, GHL-owned execution (operator decision 2026-06-09,

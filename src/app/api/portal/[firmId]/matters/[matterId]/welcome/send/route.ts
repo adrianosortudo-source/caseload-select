@@ -65,37 +65,47 @@ export async function POST(
     );
   }
 
-  // Insert as a client-channel message (visible to client + lawyer).
-  // System sender_role is appropriate even though a human pressed
-  // Send, because the body is templated; matter_messages.sender_role
-  // is the role-of-record for permission gating, not authorship.
-  const msgResult = await insertMessage({
-    matter_id: matterId,
-    firm_id: firmId,
-    channel_type: 'client',
-    sender_role: session.role === 'operator' ? 'admin' : 'admin',
-    sender_lawyer_id: session.lawyer_id ?? null,
-    body: bodyToSend,
-  });
-
-  if (!msgResult.ok) {
-    return NextResponse.json({ error: msgResult.error }, { status: 500 });
-  }
-
+  // Claim the send atomically BEFORE inserting the message. The stamp is the
+  // gate: a concurrent double-click finds welcome_draft_sent_at already set and
+  // matches zero rows here, so only one request sends the client message (the
+  // prior read-then-write let both POSTs send).
   const now = new Date().toISOString();
-  const { error: updateErr } = await supabase
+  const { data: claimed, error: claimErr } = await supabase
     .from('client_matters')
     .update({
       welcome_draft_sent_at: now,
       welcome_draft_sent_body: bodyToSend,
     })
-    .eq('id', matterId);
+    .eq('id', matterId)
+    .is('welcome_draft_sent_at', null)
+    .select('id');
 
-  if (updateErr) {
-    // Message was inserted; the matter stamp failed. Surface but
-    // don't fail — the matter_message exists which is the source of
-    // truth for the client thread.
-    console.warn('[welcome/send] stamp failed:', updateErr.message);
+  if (claimErr) {
+    return NextResponse.json({ error: claimErr.message }, { status: 500 });
+  }
+  if (!claimed || claimed.length === 0) {
+    return NextResponse.json({ error: 'welcome draft already sent' }, { status: 409 });
+  }
+
+  // Insert as a client-channel message (visible to client + lawyer).
+  // sender_role 'admin' is the role-of-record for permission gating, not
+  // authorship (the body is templated even though a human pressed Send).
+  const msgResult = await insertMessage({
+    matter_id: matterId,
+    firm_id: firmId,
+    channel_type: 'client',
+    sender_role: 'admin',
+    sender_lawyer_id: session.lawyer_id ?? null,
+    body: bodyToSend,
+  });
+
+  if (!msgResult.ok) {
+    // Release the claim so a later retry can send.
+    await supabase
+      .from('client_matters')
+      .update({ welcome_draft_sent_at: null, welcome_draft_sent_body: null })
+      .eq('id', matterId);
+    return NextResponse.json({ error: msgResult.error }, { status: 500 });
   }
 
   return NextResponse.json({

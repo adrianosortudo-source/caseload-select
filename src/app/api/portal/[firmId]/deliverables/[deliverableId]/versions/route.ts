@@ -27,7 +27,8 @@ const IMAGE_MIME = new Set([
   "image/png",
   "image/gif",
   "image/webp",
-  "image/svg+xml",
+  // image/svg+xml intentionally excluded: SVG can carry script and deliverable
+  // assets are rendered/served inline via signed URL (stored-XSS vector).
 ]);
 const PDF_MIME = new Set(["application/pdf"]);
 
