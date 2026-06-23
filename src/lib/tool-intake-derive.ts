@@ -52,6 +52,7 @@ const TOOL_TO_MATTER_TYPE: Record<string, string> = {
   'notary-scope-confirmation': 'notary_services',
   'severance-range-estimator': 'severance_review',
   'business-legal-readiness-score': 'business_setup_advisory',
+  'closing-cash-to-close': 'residential_purchase',
 };
 
 const PRACTICE_SLUG_TO_AREA: Record<string, string> = {
@@ -116,12 +117,12 @@ export function deriveToolBand(axes: ToolAxes): 'B' | 'C' {
 // ─── Lead ID ────────────────────────────────────────────────────────────────
 
 /**
- * Generate a tool-lead ID. Format: T-YYYY-MM-DD-XXX (distinguishable from
+ * Generate a tool-lead ID. Format: T-YYYY-MM-DD-XXXX (distinguishable from
  * standard L-YYYY-MM-DD-XXX lead IDs at a glance).
  */
 export function generateToolLeadId(): string {
   const now = new Date();
   const date = now.toISOString().slice(0, 10);
-  const rand = Math.random().toString(16).slice(2, 6).toUpperCase();
+  const rand = Math.floor(Math.random() * 65536).toString(16).toUpperCase().padStart(4, '0');
   return `T-${date}-${rand}`;
 }
