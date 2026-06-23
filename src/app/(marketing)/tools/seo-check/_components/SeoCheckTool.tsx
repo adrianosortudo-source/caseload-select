@@ -1,76 +1,23 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import SeoReport from "./SeoReport";
-
-interface CheckItem {
-  label: string;
-  status: "pass" | "warn" | "fail";
-  detail: string;
-  fix?: string;
-}
-
-interface CategoryResult {
-  name: string;
-  score: number;
-  maxScore: number;
-  items: CheckItem[];
-}
-
-interface AiBotStatus {
-  name: string;
-  blocked: boolean;
-  category: "search" | "training";
-}
-
-interface PageResult {
-  url: string;
-  title: string | null;
-  pageScore: number;
-  pageGrade: string;
-  aiVisibilityScore: number;
-  categories: CategoryResult[];
-  failCount: number;
-  warnCount: number;
-}
-
-interface TopFix {
-  label: string;
-  category: string;
-  status: "warn" | "fail";
-  fix?: string;
-  pagesAffected: number;
-  totalPages: number;
-}
-
-interface SeoCheckResult {
-  domain: string;
-  pagesScanned: number;
-  pages: PageResult[];
-  categories: CategoryResult[];
-  overallScore: number;
-  grade: string;
-  aiSearchScore: number;
-  aiSearchGrade: string;
-  aiPolicyScore: number;
-  aiPolicyGrade: string;
-  aiBots: AiBotStatus[];
-  topFixes: TopFix[];
-  checkedAt: string;
-}
+import SeoReport, { type SeoCheckResult } from "./SeoReport";
 
 type Step = "input" | "scanning" | "email" | "report";
+type ScanMode = "quick" | "standard" | "deep";
+
+const SCAN_MODE_PAGES: Record<ScanMode, number> = { quick: 10, standard: 25, deep: 50 };
 
 const SCAN_PHASES = [
   "Connecting to site",
   "Fetching robots.txt and llms.txt",
   "Scanning homepage",
   "Discovering internal links and sitemaps",
-  "Selecting pages to scan",
-  "Scanning additional pages",
+  "Crawling commercial pages",
+  "Running indexability and schema engines",
   "Analyzing AI visibility signals",
-  "Checking schema and local SEO",
-  "Calculating scores",
+  "Scoring and ranking issues",
+  "Building the diagnostic",
 ];
 
 export default function SeoCheckTool({
@@ -81,7 +28,8 @@ export default function SeoCheckTool({
   const isOperator = variant === "operator";
   const [step, setStep] = useState<Step>("input");
   const [domain, setDomain] = useState("");
-  const [maxPages, setMaxPages] = useState(5);
+  const [maxPages] = useState(5);
+  const [scanMode, setScanMode] = useState<ScanMode>("quick");
   const [error, setError] = useState("");
   const [result, setResult] = useState<SeoCheckResult | null>(null);
   const [scanPhase, setScanPhase] = useState(0);
@@ -106,15 +54,17 @@ export default function SeoCheckTool({
     setStep("scanning");
     setScanPhase(0);
 
+    // Deeper scans take longer, so let the phase indicator advance more slowly.
+    const phaseMs = isOperator ? (scanMode === "deep" ? 2600 : scanMode === "standard" ? 1700 : 1100) : 1000;
     phaseInterval.current = setInterval(() => {
       setScanPhase((prev) => (prev < SCAN_PHASES.length - 1 ? prev + 1 : prev));
-    }, 1000);
+    }, phaseMs);
 
     try {
       const res = await fetch("/api/tools/seo-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: trimmed, maxPages }),
+        body: JSON.stringify(isOperator ? { domain: trimmed, scanMode } : { domain: trimmed, maxPages }),
       });
 
       if (phaseInterval.current) clearInterval(phaseInterval.current);
@@ -191,23 +141,24 @@ export default function SeoCheckTool({
           {error && <p className="seo-error">{error}</p>}
           {isOperator && (
             <div className="seo-operator-row">
-              <label className="seo-operator-label" htmlFor="seo-maxpages">Pages to scan</label>
+              <label className="seo-operator-label" htmlFor="seo-scanmode">Scan depth</label>
               <select
-                id="seo-maxpages"
+                id="seo-scanmode"
                 className="seo-operator-select"
-                value={maxPages}
-                onChange={(e) => setMaxPages(Number(e.target.value))}
+                value={scanMode}
+                onChange={(e) => setScanMode(e.target.value as ScanMode)}
               >
-                {[1, 3, 5, 8, 10].map((n) => (
-                  <option key={n} value={n}>{n} {n === 1 ? "page" : "pages"}</option>
-                ))}
+                <option value="quick">Quick ({SCAN_MODE_PAGES.quick} pages)</option>
+                <option value="standard">Standard ({SCAN_MODE_PAGES.standard} pages)</option>
+                <option value="deep">Deep ({SCAN_MODE_PAGES.deep} pages)</option>
               </select>
+              <span className="seo-operator-note">Deeper scans take longer. Cap is 75 pages.</span>
             </div>
           )}
           <p className="seo-input-hint">
             {isOperator
-              ? "Internal tool. Runs a multi-page crawl and checks 49 signals per page across SEO, AI visibility, schema, local search, performance, and security. No email gate; the report opens as soon as the scan finishes."
-              : "Enter any law firm website. We run a mini-crawl of up to 5 pages and check 49 signals per page across SEO, AI visibility, schema, local search, performance, and security."}
+              ? "Internal diagnostic. Runs a bounded crawl and checks nine categories per page (on-page, indexability, schema, AI visibility, legal marketing, local SEO, technical, performance, links). The report includes a prospecting summary and outreach angles for internal use."
+              : "Enter any law firm website. We run a mini-crawl and check SEO, AI visibility, schema, local search, performance, and security signals on each page."}
           </p>
         </div>
       )}
@@ -289,7 +240,7 @@ export default function SeoCheckTool({
       )}
 
       {step === "report" && result && (
-        <SeoReport result={result} onReset={handleReset} hideCta={isOperator} />
+        <SeoReport result={result} onReset={handleReset} hideCta={isOperator} showInternal={isOperator} />
       )}
 
       <style>{`
@@ -393,6 +344,7 @@ export default function SeoCheckTool({
           outline: none;
         }
         .seo-operator-select:focus { border-color: var(--navy); }
+        .seo-operator-note { font-size: 11.5px; color: var(--text-muted); }
 
         /* ── Scanning ────────────────────────────────── */
         .seo-scanning {

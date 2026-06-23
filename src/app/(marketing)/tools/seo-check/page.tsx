@@ -29,17 +29,18 @@ export default function SeoCheckPage() {
           <p className="seo-hero-sub">
             Most law firm websites are invisible to AI search. Google&apos;s AI Overviews,
             ChatGPT, and Perplexity now answer legal questions directly, citing the firms
-            with the strongest signals. This tool checks 49 of those signals across SEO health
-            and AI search readiness, then scores your site on what actually drives visibility today.
+            with the strongest signals. This diagnostic crawls your site and checks dozens of
+            signals across SEO health and AI search readiness, then scores what actually drives
+            visibility today.
           </p>
 
           <div className="seo-hero-stats">
             <div className="seo-hero-stat">
-              <div className="seo-hero-stat-num">49</div>
+              <div className="seo-hero-stat-num">70+</div>
               <div className="seo-hero-stat-label">Signals checked</div>
             </div>
             <div className="seo-hero-stat">
-              <div className="seo-hero-stat-num">7</div>
+              <div className="seo-hero-stat-num">9</div>
               <div className="seo-hero-stat-label">Categories scored</div>
             </div>
             <div className="seo-hero-stat">
@@ -57,7 +58,7 @@ export default function SeoCheckPage() {
           <div className="seo-categories-header">
             <span className="seo-cat-eyebrow">What we check</span>
             <h2 className="seo-categories-title">
-              Seven categories that determine your visibility<span className="ts" />
+              The categories that shape your visibility<span className="ts" />
             </h2>
           </div>
           <div className="seo-categories-grid">

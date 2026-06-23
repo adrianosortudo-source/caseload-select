@@ -1,0 +1,162 @@
+import { describe, it, expect } from "vitest";
+import {
+  ipInBlockedRange,
+  isSsrfBlocked,
+  resolveScan,
+  parseRobotsTxt,
+  checkBotBlockedParsed,
+  robotsPathMatchLength,
+  normalizePageUrl,
+  shouldSkipUrl,
+  classifyPageType,
+  scoreUrlPriority,
+  aiScoresFromItems,
+  computeWeightedScore,
+  MAX_PAGES_HARD_CAP,
+  SCAN_MODE_DEFAULTS,
+  type CheckItem,
+} from "../engine-core";
+
+describe("ipInBlockedRange / SSRF ranges", () => {
+  const blocked = [
+    "127.0.0.1", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1",
+    "169.254.169.254", "100.64.0.1", "0.0.0.0", "224.0.0.1", "240.0.0.1",
+    "::1", "fe80::1", "fe90::1", "fea0::1", "febf::1", "fec0::1", "feff::1",
+    "fc00::1", "fdff::1", "ff02::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1",
+    "notanip",
+  ];
+  const allowed = [
+    "8.8.8.8", "1.1.1.1", "172.32.0.1", "100.128.0.1", "93.184.216.34",
+    "2606:4700::1111", "2001:4860:4860::8888", "::ffff:8.8.8.8",
+  ];
+  it("blocks private/reserved/loopback/link-local/site-local/multicast", () => {
+    for (const ip of blocked) expect(ipInBlockedRange(ip), ip).toBe(true);
+  });
+  it("allows global unicast", () => {
+    for (const ip of allowed) expect(ipInBlockedRange(ip), ip).toBe(false);
+  });
+  it("blocks deprecated IPv6 site-local fec0::/10 fully", () => {
+    expect(ipInBlockedRange("fec0::1")).toBe(true);
+    expect(ipInBlockedRange("feff::1")).toBe(true);
+    expect(ipInBlockedRange("fe7f::1")).toBe(false); // just below link-local
+  });
+  it("isSsrfBlocked covers literals + hostname blocklist, allows real hostnames", () => {
+    expect(isSsrfBlocked("localhost")).toBe(true);
+    expect(isSsrfBlocked("169.254.169.254")).toBe(true);
+    expect(isSsrfBlocked("metadata.google.internal")).toBe(true);
+    expect(isSsrfBlocked("127.0.0.1")).toBe(true);
+    expect(isSsrfBlocked("example.com")).toBe(false);
+  });
+});
+
+describe("resolveScan", () => {
+  it("uses scan-mode defaults when maxPages absent", () => {
+    expect(resolveScan({ scanMode: "quick" })).toEqual({ scanMode: "quick", maxPages: SCAN_MODE_DEFAULTS.quick });
+    expect(resolveScan({ scanMode: "standard" }).maxPages).toBe(25);
+    expect(resolveScan({ scanMode: "deep" }).maxPages).toBe(50);
+  });
+  it("defaults to quick mode when neither provided", () => {
+    expect(resolveScan({})).toEqual({ scanMode: "quick", maxPages: 10 });
+  });
+  it("clamps explicit maxPages to [1,75] and floors it", () => {
+    expect(resolveScan({ maxPages: 1000 }).maxPages).toBe(MAX_PAGES_HARD_CAP);
+    expect(resolveScan({ maxPages: 0 }).maxPages).toBe(1);
+    expect(resolveScan({ maxPages: -5 }).maxPages).toBe(1);
+    expect(resolveScan({ maxPages: 7.9 }).maxPages).toBe(7);
+  });
+  it("rejects NaN / non-finite maxPages and falls back to mode default", () => {
+    expect(resolveScan({ maxPages: NaN, scanMode: "standard" }).maxPages).toBe(25);
+    expect(resolveScan({ maxPages: "12" as unknown as number }).maxPages).toBe(10);
+  });
+});
+
+describe("robots.txt precedence + longest match", () => {
+  it("specific agent group overrides wildcard", () => {
+    const r = parseRobotsTxt("User-agent: *\nDisallow: /\n\nUser-agent: GPTBot\nAllow: /\n");
+    expect(checkBotBlockedParsed(r, "GPTBot", "/anything")).toBe(false);
+    expect(checkBotBlockedParsed(r, "OtherBot", "/anything")).toBe(true);
+  });
+  it("merges multiple groups for the same agent before longest-match", () => {
+    const r = parseRobotsTxt("User-agent: GPTBot\nDisallow: /private\n\nUser-agent: GPTBot\nAllow: /private/public\n");
+    expect(checkBotBlockedParsed(r, "GPTBot", "/private")).toBe(true);
+    expect(checkBotBlockedParsed(r, "GPTBot", "/private/public")).toBe(false); // longer Allow wins
+  });
+  it("empty Disallow means allow all", () => {
+    const r = parseRobotsTxt("User-agent: *\nDisallow:\n");
+    expect(checkBotBlockedParsed(r, "GPTBot", "/anything")).toBe(false);
+  });
+  it("honours $ end-anchor and * wildcard", () => {
+    expect(robotsPathMatchLength("/a.pdf", "/*.pdf$")).not.toBeNull();
+    expect(robotsPathMatchLength("/a.pdf?x=1", "/*.pdf$")).toBeNull();
+    const r = parseRobotsTxt("User-agent: *\nDisallow: /*.pdf$\n");
+    expect(checkBotBlockedParsed(r, "Googlebot", "/files/report.pdf")).toBe(true);
+    expect(checkBotBlockedParsed(r, "Googlebot", "/files/report.html")).toBe(false);
+  });
+  it("parses Sitemap lines", () => {
+    const r = parseRobotsTxt("Sitemap: https://x.com/sitemap.xml\nUser-agent: *\nDisallow:\n");
+    expect(r.sitemaps).toContain("https://x.com/sitemap.xml");
+  });
+});
+
+describe("URL normalization / skip / page-type", () => {
+  it("normalizes and strips fragments, rejects non-http", () => {
+    expect(normalizePageUrl("/about#team", "https://x.com")).toBe("https://x.com/about");
+    expect(normalizePageUrl("mailto:a@b.com", "https://x.com")).toBeNull();
+    expect(normalizePageUrl("javascript:void(0)", "https://x.com")).toBeNull();
+  });
+  it("skips assets, feeds, admin, and >2 query params", () => {
+    expect(shouldSkipUrl("https://x.com/a.pdf")).toBe(true);
+    expect(shouldSkipUrl("https://x.com/style.css")).toBe(true);
+    expect(shouldSkipUrl("https://x.com/feed/")).toBe(true);
+    expect(shouldSkipUrl("https://x.com/wp-login.php")).toBe(true);
+    expect(shouldSkipUrl("https://x.com/p?a=1&b=2&c=3")).toBe(true);
+    expect(shouldSkipUrl("https://x.com/practice/real-estate")).toBe(false);
+  });
+  it("classifies law-firm page types", () => {
+    expect(classifyPageType("https://x.com/")).toBe("homepage");
+    expect(classifyPageType("https://x.com/contact-us")).toBe("contact");
+    expect(classifyPageType("https://x.com/practice-areas/family")).toBe("practice");
+    expect(classifyPageType("https://x.com/our-team/jane-doe")).toBe("attorney");
+    expect(classifyPageType("https://x.com/locations/toronto")).toBe("location");
+    expect(classifyPageType("https://x.com/faq")).toBe("faq");
+    expect(classifyPageType("https://x.com/blog/post-1")).toBe("blog");
+    expect(classifyPageType("https://x.com/privacy")).toBe("policy");
+    expect(classifyPageType("https://x.com/something-else")).toBe("other");
+  });
+  it("priority ranks homepage and contact above blog", () => {
+    expect(scoreUrlPriority("https://x.com/")).toBeGreaterThan(scoreUrlPriority("https://x.com/blog/x"));
+    expect(scoreUrlPriority("https://x.com/contact")).toBeGreaterThan(scoreUrlPriority("https://x.com/blog/x"));
+  });
+});
+
+describe("AI search vs policy split", () => {
+  const mk = (status: CheckItem["status"], label: string): CheckItem => ({ label, status, detail: "" });
+  it("excludes training-bot control from search; uses it alone for policy", () => {
+    const items: CheckItem[] = [
+      mk("pass", "AI search bot access"),
+      mk("pass", "Entity description"),
+      mk("fail", "AI training bot control"),
+    ];
+    const { search, policy } = aiScoresFromItems(items);
+    expect(search).toBe(100); // both search items pass
+    expect(policy).toBe(10); // training control fails
+  });
+  it("returns safe defaults on empty items", () => {
+    const { search, policy } = aiScoresFromItems([]);
+    expect(search).toBe(0);
+    expect(policy).toBe(50);
+    expect(Number.isNaN(search)).toBe(false);
+  });
+});
+
+describe("computeWeightedScore guards", () => {
+  it("returns 0 (not NaN) for empty categories", () => {
+    const s = computeWeightedScore([]);
+    expect(s).toBe(0);
+    expect(Number.isNaN(s)).toBe(false);
+  });
+  it("handles zero-max categories without NaN", () => {
+    const s = computeWeightedScore([{ name: "On-Page SEO", score: 0, maxScore: 0, items: [] }]);
+    expect(Number.isNaN(s)).toBe(false);
+  });
+});

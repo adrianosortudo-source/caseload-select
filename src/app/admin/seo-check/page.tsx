@@ -25,9 +25,10 @@ export default function AdminSeoCheckPage() {
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-navy">SEO &amp; AI visibility check</h1>
         <p className="text-sm text-black/55 mt-1 max-w-2xl">
-          Run a multi-page diagnostic on any law firm website. 49 signals per page across SEO,
-          AI search visibility, schema, local search, performance, and security. Use it on prospects
-          before a pitch or on a client site to find what to fix.
+          Run a bounded professional diagnostic on any law firm website (quick 10, standard 25, or deep 50 pages).
+          Nine categories per page including indexability, schema, AI visibility, and legal-marketing readiness,
+          plus a prospecting summary and outreach angles for internal use. Run it on a prospect before a pitch
+          or on a client site to find what to fix.
         </p>
       </div>
 

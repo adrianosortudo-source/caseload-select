@@ -1,0 +1,193 @@
+import { describe, it, expect } from "vitest";
+import {
+  buildIssues,
+  buildInternalSummary,
+  buildSiteStructureIssues,
+  severityBreakdown,
+  type PageResult,
+} from "../analysis";
+import type { CategoryResult, CheckItem, PageType } from "../engine-core";
+
+function cat(name: string, items: CheckItem[]): CategoryResult {
+  const score = items.reduce((s, i) => s + (i.status === "pass" ? 10 : i.status === "warn" ? 5 : 0), 0);
+  return { name, score, maxScore: items.length * 10, items };
+}
+
+function mkPage(opts: {
+  url: string;
+  pageType: PageType;
+  categories: CategoryResult[];
+  contactForm?: boolean;
+  phone?: boolean;
+  cta?: boolean;
+  testimonials?: boolean;
+  credentials?: boolean;
+  schemaBlocks?: number;
+}): PageResult {
+  const allItems = opts.categories.flatMap((c) => c.items);
+  return {
+    url: opts.url,
+    title: "Test page",
+    pageType: opts.pageType,
+    pageScore: 50,
+    pageGrade: "C+",
+    aiVisibilityScore: 50,
+    categories: opts.categories,
+    failCount: allItems.filter((i) => i.status === "fail").length,
+    warnCount: allItems.filter((i) => i.status === "warn").length,
+    httpStatus: 200,
+    indexable: true,
+    indexability: {
+      httpStatus: 200, redirected: false, redirectHops: 0, canonical: null,
+      canonicalSelf: null, canonicalSameOrigin: null, metaNoindex: false, metaNofollow: false,
+      headerNoindex: false, headerNofollow: false, indexable: true, inSitemap: null, mixedSignals: false,
+    },
+    schema: {
+      blocks: opts.schemaBlocks ?? 1, invalidBlocks: 0, types: [], hasOrganization: false,
+      hasLocalBusiness: false, hasLegalService: false, hasAttorney: false, hasPerson: false,
+      hasBreadcrumb: false, hasFaq: false, hasWebsite: false, hasReview: false,
+      fields: { name: false, url: false, telephone: false, address: false, areaServed: false, sameAs: false, priceRange: false, openingHours: false },
+      conflictingEntity: false,
+    },
+    lawFirm: {
+      phoneVisible: opts.phone ?? true, contactFormPresent: opts.contactForm ?? true,
+      addressVisible: true, consultationCta: opts.cta ?? true, policyPagePresent: true, practiceAreaIntent: true,
+      trust: { testimonials: opts.testimonials ?? true, reviews: false, caseResults: false, awards: false, credentials: opts.credentials ?? true },
+    },
+    wordCount: 500,
+    keyWarnings: [],
+  };
+}
+
+describe("buildIssues", () => {
+  it("maps an Indexability failure to critical severity", () => {
+    const pages = [mkPage({
+      url: "https://x.com/", pageType: "homepage",
+      categories: [cat("Indexability", [{ label: "Indexable", status: "fail", detail: "noindex", fix: "remove" }])],
+    })];
+    const issues = buildIssues(pages);
+    const indexIssue = issues.find((i) => i.title === "Indexable");
+    expect(indexIssue?.severity).toBe("critical");
+    expect(indexIssue?.priority).toBeGreaterThan(0);
+    expect(Number.isNaN(indexIssue?.priority)).toBe(false);
+  });
+
+  it("aggregates one issue across pages and counts affected pages", () => {
+    const c = (s: CheckItem["status"]) => cat("On-Page SEO", [{ label: "Page title", status: s, detail: "d" }]);
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [c("fail")] }),
+      mkPage({ url: "https://x.com/about", pageType: "about", categories: [c("warn")] }),
+      mkPage({ url: "https://x.com/contact", pageType: "contact", categories: [c("pass")] }),
+    ];
+    const issues = buildIssues(pages);
+    const titleIssue = issues.find((i) => i.title === "Page title");
+    expect(titleIssue).toBeTruthy();
+    expect(titleIssue?.affectedCount).toBe(2); // fail + warn pages, not the pass
+    expect(titleIssue?.status).toBe("fail"); // worst wins
+    expect(titleIssue?.totalPages).toBe(3);
+  });
+
+  it("sorts issues by priority descending", () => {
+    const pages = [mkPage({
+      url: "https://x.com/", pageType: "homepage",
+      categories: [
+        cat("Indexability", [{ label: "Indexable", status: "fail", detail: "" }]),
+        cat("Performance", [{ label: "Time to first byte", status: "warn", detail: "" }]),
+      ],
+    })];
+    const issues = buildIssues(pages);
+    for (let i = 1; i < issues.length; i++) {
+      expect(issues[i - 1].priority).toBeGreaterThanOrEqual(issues[i].priority);
+    }
+  });
+
+  it("returns no issues when everything passes", () => {
+    const pages = [mkPage({
+      url: "https://x.com/", pageType: "homepage",
+      categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "" }])],
+    })];
+    expect(buildIssues(pages)).toHaveLength(0);
+  });
+});
+
+describe("severityBreakdown", () => {
+  it("counts by severity", () => {
+    const pages = [mkPage({
+      url: "https://x.com/", pageType: "homepage",
+      categories: [
+        cat("Indexability", [{ label: "Indexable", status: "fail", detail: "" }]),
+        cat("Performance", [{ label: "Time to first byte", status: "warn", detail: "" }]),
+      ],
+    })];
+    const b = severityBreakdown(buildIssues(pages));
+    expect(b.critical + b.high + b.medium + b.low + b.info).toBe(buildIssues(pages).length);
+  });
+});
+
+describe("buildInternalSummary", () => {
+  const goodPages = [mkPage({
+    url: "https://x.com/", pageType: "homepage",
+    categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "" }])],
+  })];
+
+  it("is deterministic for the same input", () => {
+    const a = buildInternalSummary(goodPages, buildIssues(goodPages), 80, 80);
+    const b = buildInternalSummary(goodPages, buildIssues(goodPages), 80, 80);
+    expect(a).toEqual(b);
+  });
+
+  it("keeps prospectFitScore within [0,100] and never NaN", () => {
+    for (const score of [0, 20, 50, 80, 100]) {
+      const s = buildInternalSummary(goodPages, [], score, score);
+      expect(s.prospectFitScore).toBeGreaterThanOrEqual(0);
+      expect(s.prospectFitScore).toBeLessThanOrEqual(100);
+      expect(Number.isNaN(s.prospectFitScore)).toBe(false);
+    }
+  });
+
+  it("rates a thin, broken single-page site as poor maturity", () => {
+    const weak = [mkPage({
+      url: "https://x.com/", pageType: "homepage", schemaBlocks: 0,
+      categories: [cat("Indexability", [{ label: "Indexable", status: "fail", detail: "" }])],
+      phone: false, contactForm: false, cta: false, testimonials: false, credentials: false,
+    })];
+    const s = buildInternalSummary(weak, buildIssues(weak), 20, 20);
+    expect(s.websiteMaturity).toBe("poor");
+    expect(["high", "urgent"]).toContain(s.urgencyLevel);
+    expect(s.trustAndConversionGaps.length).toBeGreaterThan(0);
+  });
+
+  it("flags missing trust and conversion cues", () => {
+    const noTrust = [mkPage({
+      url: "https://x.com/", pageType: "homepage",
+      categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "" }])],
+      phone: false, contactForm: false, cta: false, testimonials: false, credentials: false,
+    })];
+    const s = buildInternalSummary(noTrust, [], 60, 60);
+    expect(s.trustAndConversionGaps).toContain("No clear consultation call to action");
+    expect(s.trustAndConversionGaps).toContain("No visible phone number");
+  });
+});
+
+describe("buildSiteStructureIssues", () => {
+  it("flags missing practice pages and missing sitemap", () => {
+    const pages = [mkPage({
+      url: "https://x.com/", pageType: "homepage",
+      categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "" }])],
+    })];
+    const issues = buildSiteStructureIssues(pages, false);
+    const titles = issues.map((i) => i.title);
+    expect(titles).toContain("No practice-area pages found");
+    expect(titles).toContain("No XML sitemap found");
+    expect(titles).toContain("No attorney / team page found");
+  });
+
+  it("does not flag a contact gap when a phone is present on the homepage", () => {
+    const pages = [mkPage({
+      url: "https://x.com/", pageType: "homepage", phone: true,
+      categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "" }])],
+    })];
+    const issues = buildSiteStructureIssues(pages, true);
+    expect(issues.map((i) => i.title)).not.toContain("No clear contact path");
+  });
+});
