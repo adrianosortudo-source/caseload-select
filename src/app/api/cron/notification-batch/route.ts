@@ -44,6 +44,9 @@ interface OutboxRow {
     body_preview?: string;
     body?: string;
     primary_name?: string | null;
+    deliverable_id?: string;
+    deliverable_title?: string;
+    deliverable_url?: string;
     [key: string]: unknown;
   };
   created_at: string;
@@ -160,43 +163,60 @@ function buildDigest(
   rows: OutboxRow[],
   isLawyer: boolean,
 ): { subject: string; html: string } {
+  // Group by matter, or by deliverable when the event has no matter (content
+  // approval events), or a single catch-all bucket otherwise.
   const byMatter = new Map<string, OutboxRow[]>();
   for (const r of rows) {
-    const key = r.matter_id ?? '_no_matter';
+    const key = r.matter_id ?? r.event_payload?.deliverable_id ?? '_no_matter';
     const list = byMatter.get(key) ?? [];
     list.push(r);
     byMatter.set(key, list);
   }
 
   const totalEvents = rows.length;
-  const matterCount = byMatter.size;
+  const groupCount = byMatter.size;
 
-  // Use primary_name from first row if available for a better subject.
+  // Subject prefers a named matter; falls back to a deliverable title; then a
+  // generic count.
   const firstRow = rows[0];
   const firstPrimaryName = firstRow?.event_payload?.primary_name;
+  const firstDeliverableTitle = firstRow?.event_payload?.deliverable_title;
   const subject =
     totalEvents === 1 && firstPrimaryName
       ? `New message${firstRow.event_type === 'message_internal_new' ? ' (internal)' : ''}: ${firstPrimaryName}`
-      : totalEvents === 1
-        ? 'New message on your matter'
-        : `${totalEvents} updates across ${matterCount} matter${matterCount === 1 ? '' : 's'}`;
+      : totalEvents === 1 && firstDeliverableTitle
+        ? `${describeEvent(firstRow.event_type)}: ${firstDeliverableTitle}`
+        : totalEvents === 1
+          ? 'New activity on your portal'
+          : `${totalEvents} updates across ${groupCount} item${groupCount === 1 ? '' : 's'}`;
 
   const sections: string[] = [];
-  for (const [matterId, matterRows] of byMatter.entries()) {
-    const matterName = matterRows[0]?.event_payload?.primary_name ?? null;
-    const matterLabel = matterName ? `Matter: ${escapeHtml(matterName)}` : `Matter ${escapeHtml(matterId.slice(0, 8))}...`;
+  for (const [groupKey, groupRows] of byMatter.entries()) {
+    const first = groupRows[0];
+    const matterName = first?.event_payload?.primary_name ?? null;
+    const deliverableTitle = first?.event_payload?.deliverable_title ?? null;
+    const deliverableUrl = first?.event_payload?.deliverable_url ?? null;
 
-    const portalUrl =
-      matterId !== '_no_matter' && matterRows[0]?.firm_id
+    const groupLabel = matterName
+      ? `Matter: ${escapeHtml(matterName)}`
+      : deliverableTitle
+        ? `Deliverable: ${escapeHtml(deliverableTitle)}`
+        : groupKey !== '_no_matter'
+          ? `Item ${escapeHtml(groupKey.slice(0, 8))}...`
+          : 'Updates';
+
+    const portalUrl = deliverableUrl
+      ? deliverableUrl
+      : first?.matter_id && first?.firm_id
         ? isLawyer
-          ? `${APP_BASE}/portal/${matterRows[0].firm_id}/matters/${matterId}`
-          : `${APP_BASE}/portal/${matterRows[0].firm_id}/m/${matterId}`
+          ? `${APP_BASE}/portal/${first.firm_id}/matters/${first.matter_id}`
+          : `${APP_BASE}/portal/${first.firm_id}/m/${first.matter_id}`
         : null;
 
-    const eventBlocks = matterRows.map((r) => eventBlockHtml(r, portalUrl)).join('');
+    const eventBlocks = groupRows.map((r) => eventBlockHtml(r, portalUrl)).join('');
     sections.push(`
       <section style="margin-bottom: 20px;">
-        <p style="margin: 0 0 8px 0; color: #888; font-size: 13px;">${matterLabel}</p>
+        <p style="margin: 0 0 8px 0; color: #888; font-size: 13px;">${groupLabel}</p>
         ${eventBlocks}
       </section>
     `);
@@ -225,7 +245,7 @@ function eventBlockHtml(row: OutboxRow, portalUrl: string | null): string {
     ? `<p style="margin: 6px 0 0 0; color: #333; font-size: 14px; white-space: pre-wrap; line-height: 1.5;">${escapeHtml(bodyText)}${fullBody && fullBody.length > 800 ? '...' : ''}</p>`
     : '';
   const linkHtml = portalUrl
-    ? `<p style="margin: 8px 0 0 0;"><a href="${portalUrl}" style="color: #1E2F58; font-size: 13px; font-weight: 700;">View message</a></p>`
+    ? `<p style="margin: 8px 0 0 0;"><a href="${portalUrl}" style="color: #1E2F58; font-size: 13px; font-weight: 700;">Open in portal</a></p>`
     : '';
   return `
     <div style="padding: 12px 14px; background: #F4F3EF; border-radius: 4px; margin-bottom: 8px;">
@@ -245,6 +265,10 @@ function describeEvent(eventType: string): string {
     explainer_assigned: 'Explainer assigned',
     welcome_draft_ready: 'Welcome draft ready',
     broadcast_received: 'Broadcast message',
+    deliverable_review_requested: 'New version to review',
+    deliverable_comment_added: 'New comment',
+    deliverable_approved: 'Deliverable approved',
+    deliverable_changes_requested: 'Changes requested',
   };
   return m[eventType] ?? eventType;
 }

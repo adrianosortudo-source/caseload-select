@@ -200,3 +200,102 @@ export interface MatterExplainerAssignment {
   assigned_by_lawyer_id: string | null;
   assigned_at: string;
 }
+
+// ─── Phase 2: content approval ────────────────────────────────────────────
+// Operator posts marketing deliverables for the firm's lawyer to review and
+// formally sign off (LSO Rule 4.2-1 compliance record). See migration
+// 20260623_content_approval.sql.
+
+export type ContentKind = "text" | "image" | "pdf";
+export type DeliverableStatus =
+  | "draft"
+  | "in_review"
+  | "changes_requested"
+  | "approved"
+  | "archived";
+export type DeliverableActorRole = "operator" | "lawyer";
+export type ApprovalDecision = "approved" | "changes_requested";
+
+/**
+ * Annotation anchoring a comment to a location in a version.
+ *   text   - a selected passage in a text deliverable (offsets into the
+ *            plain-text projection + the quoted text for display/verify)
+ *   pin    - a point on an image (x,y normalised 0..1 of the rendered box)
+ *   region - a rectangle on an image (x,y,w,h normalised 0..1)
+ *   page   - a 1-based page tag on a PDF
+ * A null annotation is a general comment on the whole version.
+ */
+export type DeliverableAnnotation =
+  | { type: "text"; start: number; end: number; quote: string }
+  | { type: "pin"; x: number; y: number }
+  | { type: "region"; x: number; y: number; w: number; h: number }
+  | { type: "page"; page: number };
+
+export interface ContentDeliverable {
+  id: string;
+  firm_id: string;
+  title: string;
+  description: string | null;
+  content_kind: ContentKind;
+  status: DeliverableStatus;
+  current_version_id: string | null;
+  approved_version_id: string | null;
+  approved_at: string | null;
+  created_by_role: DeliverableActorRole;
+  created_by_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeliverableVersion {
+  id: string;
+  deliverable_id: string;
+  firm_id: string;
+  version_number: number;
+  body_html: string | null;
+  storage_path: string | null;
+  signed_url?: string; // runtime only: pre-signed read URL for assets
+  asset_mime: string | null;
+  asset_size_bytes: number | null;
+  asset_name: string | null;
+  note: string | null;
+  created_by_role: DeliverableActorRole;
+  created_by_id: string | null;
+  created_at: string;
+}
+
+export interface DeliverableComment {
+  id: string;
+  deliverable_id: string;
+  version_id: string;
+  firm_id: string;
+  author_role: DeliverableActorRole;
+  author_id: string | null;
+  author_name: string | null;
+  annotation: DeliverableAnnotation | null;
+  body: string;
+  resolved: boolean;
+  resolved_at: string | null;
+  resolved_by_role: DeliverableActorRole | null;
+  parent_comment_id: string | null;
+  created_at: string;
+}
+
+export interface ApprovalRecord {
+  id: string;
+  deliverable_id: string;
+  version_id: string;
+  firm_id: string;
+  decision: ApprovalDecision;
+  signer_role: "lawyer" | "operator";
+  signer_id: string | null;
+  signer_name: string;
+  signer_email: string;
+  attestation: string;
+  version_number: number;
+  deliverable_title: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  note: string | null;
+  created_at: string;
+}

@@ -16,10 +16,11 @@ export default function PortalTabNav({ firmId }: PortalTabNavProps) {
   const pathname = usePathname();
 
   const tabs: Tab[] = [
-    { href: `/portal/${firmId}/triage`,    label: "Triage"    },
-    { href: `/portal/${firmId}/dashboard`, label: "Dashboard" },
-    { href: `/portal/${firmId}/pipeline`,  label: "Pipeline"  },
-    { href: `/portal/${firmId}/files`,     label: "Files"     },
+    { href: `/portal/${firmId}/triage`,       label: "Triage"       },
+    { href: `/portal/${firmId}/dashboard`,    label: "Dashboard"    },
+    { href: `/portal/${firmId}/pipeline`,     label: "Pipeline"     },
+    { href: `/portal/${firmId}/files`,        label: "Files"        },
+    { href: `/portal/${firmId}/deliverables`, label: "Deliverables" },
   ];
 
   return (

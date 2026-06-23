@@ -1,0 +1,1106 @@
+"use client";
+
+import {
+  useState,
+  useRef,
+  useCallback,
+  type PointerEvent as ReactPointerEvent,
+  type FormEvent,
+} from "react";
+import Link from "next/link";
+import type {
+  ContentDeliverable,
+  DeliverableVersion,
+  DeliverableComment,
+  ApprovalRecord,
+  DeliverableAnnotation,
+} from "@/lib/types";
+import {
+  STATUS_LABELS,
+  CONTENT_KIND_LABELS,
+  annotationLabel,
+} from "@/lib/deliverables-pure";
+import { formatTimestamp } from "@/lib/firm-timezone";
+
+interface Detail {
+  deliverable: ContentDeliverable;
+  versions: DeliverableVersion[];
+  comments: DeliverableComment[];
+  approvals: ApprovalRecord[];
+}
+
+export default function DeliverableReview({
+  firmId,
+  viewerRole,
+  signerName,
+  signerEmail,
+  approvalAttestation,
+  changesAttestation,
+  initialDetail,
+}: {
+  firmId: string;
+  viewerRole: "operator" | "lawyer";
+  signerName: string | null;
+  signerEmail: string | null;
+  approvalAttestation: string;
+  changesAttestation: string;
+  initialDetail: Detail;
+}) {
+  const [detail, setDetail] = useState<Detail>(initialDetail);
+  const { deliverable, versions, comments, approvals } = detail;
+  const deliverableId = deliverable.id;
+
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
+    deliverable.current_version_id ?? versions[0]?.id ?? null,
+  );
+  const [pendingAnnotation, setPendingAnnotation] = useState<DeliverableAnnotation | null>(null);
+  const [showVersionComposer, setShowVersionComposer] = useState(versions.length === 0);
+
+  const selectedVersion = versions.find((v) => v.id === selectedVersionId) ?? null;
+  const isCurrent = selectedVersionId === deliverable.current_version_id;
+  const versionComments = comments.filter((c) => c.version_id === selectedVersionId);
+
+  const refetch = useCallback(async () => {
+    const res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return;
+    const json = await res.json();
+    if (json.ok) {
+      setDetail({
+        deliverable: json.deliverable,
+        versions: json.versions,
+        comments: json.comments,
+        approvals: json.approvals,
+      });
+    }
+  }, [firmId, deliverableId]);
+
+  // Number positional comments so markers and the sidebar align.
+  const numberByCommentId = new Map<string, number>();
+  let n = 0;
+  for (const c of versionComments) {
+    if (c.annotation) numberByCommentId.set(c.id, ++n);
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <Link
+          href={`/portal/${firmId}/deliverables`}
+          className="text-xs text-black/50 hover:text-navy"
+        >
+          ← All deliverables
+        </Link>
+        <div className="flex items-start justify-between gap-3 mt-2 flex-wrap">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-black/40">
+              {CONTENT_KIND_LABELS[deliverable.content_kind]}
+            </p>
+            <h1 className="text-2xl font-bold text-navy leading-tight">{deliverable.title}</h1>
+            {deliverable.description && (
+              <p className="text-sm text-black/55 mt-1">{deliverable.description}</p>
+            )}
+          </div>
+          <StatusPill status={deliverable.status} />
+        </div>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[1.7fr_1fr] items-start">
+        {/* Content viewer */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <VersionSelector
+              versions={versions}
+              selectedVersionId={selectedVersionId}
+              currentVersionId={deliverable.current_version_id}
+              onSelect={(id) => {
+                setSelectedVersionId(id);
+                setPendingAnnotation(null);
+              }}
+            />
+            <button
+              onClick={() => setShowVersionComposer((s) => !s)}
+              className="text-xs font-semibold uppercase tracking-wider px-3 py-1.5 border border-navy text-navy hover:bg-navy hover:text-white transition-colors"
+            >
+              {showVersionComposer ? "Close" : "Post new version"}
+            </button>
+          </div>
+
+          {showVersionComposer && (
+            <VersionComposer
+              firmId={firmId}
+              deliverableId={deliverableId}
+              contentKind={deliverable.content_kind}
+              onPosted={async () => {
+                setShowVersionComposer(false);
+                await refetch();
+              }}
+              onSelectNew={(id) => setSelectedVersionId(id)}
+            />
+          )}
+
+          {selectedVersion ? (
+            <ContentViewer
+              version={selectedVersion}
+              contentKind={deliverable.content_kind}
+              comments={versionComments}
+              numberByCommentId={numberByCommentId}
+              onAnnotate={setPendingAnnotation}
+            />
+          ) : (
+            <div className="bg-white border border-black/8 px-6 py-10 text-center text-sm text-black/55">
+              No version posted yet.
+            </div>
+          )}
+
+          {selectedVersion && (
+            <CommentComposer
+              firmId={firmId}
+              deliverableId={deliverableId}
+              versionId={selectedVersion.id}
+              pendingAnnotation={pendingAnnotation}
+              onClearAnnotation={() => setPendingAnnotation(null)}
+              viewerRole={viewerRole}
+              onPosted={refetch}
+            />
+          )}
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-5">
+          <CommentThread
+            firmId={firmId}
+            deliverableId={deliverableId}
+            comments={versionComments}
+            numberByCommentId={numberByCommentId}
+            viewerRole={viewerRole}
+            onChanged={refetch}
+          />
+
+          <SignOffPanel
+            firmId={firmId}
+            deliverableId={deliverableId}
+            viewerRole={viewerRole}
+            signerName={signerName}
+            signerEmail={signerEmail}
+            approvalAttestation={approvalAttestation}
+            changesAttestation={changesAttestation}
+            selectedVersion={selectedVersion}
+            isCurrentVersion={isCurrent}
+            status={deliverable.status}
+            onSigned={refetch}
+          />
+
+          <ApprovalHistory approvals={approvals} />
+
+          <ArchiveControl
+            firmId={firmId}
+            deliverableId={deliverableId}
+            status={deliverable.status}
+            onArchived={refetch}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Status + version chrome ─────────────────────────────────────────────────
+
+function StatusPill({ status }: { status: ContentDeliverable["status"] }) {
+  const styles: Record<string, string> = {
+    draft: "bg-stone-100 text-stone-700 border-stone-200",
+    in_review: "bg-sky-50 text-sky-800 border-sky-200",
+    changes_requested: "bg-amber-50 text-amber-800 border-amber-200",
+    approved: "bg-emerald-50 text-emerald-800 border-emerald-200",
+    archived: "bg-stone-50 text-stone-400 border-stone-200",
+  };
+  return (
+    <span
+      className={`text-[11px] uppercase tracking-wider font-semibold px-2.5 py-1 border whitespace-nowrap ${styles[status]}`}
+    >
+      {STATUS_LABELS[status]}
+    </span>
+  );
+}
+
+function VersionSelector({
+  versions,
+  selectedVersionId,
+  currentVersionId,
+  onSelect,
+}: {
+  versions: DeliverableVersion[];
+  selectedVersionId: string | null;
+  currentVersionId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  if (versions.length === 0) return <span className="text-xs text-black/40">No versions</span>;
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs text-black/50">Version</span>
+      <select
+        value={selectedVersionId ?? ""}
+        onChange={(e) => onSelect(e.target.value)}
+        className="text-xs border border-black/15 px-2 py-1 bg-white"
+      >
+        {versions.map((v) => (
+          <option key={v.id} value={v.id}>
+            v{v.version_number}
+            {v.id === currentVersionId ? " (current)" : ""}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// ─── Content viewer (text / image / pdf) ─────────────────────────────────────
+
+function ContentViewer({
+  version,
+  contentKind,
+  comments,
+  numberByCommentId,
+  onAnnotate,
+}: {
+  version: DeliverableVersion;
+  contentKind: ContentDeliverable["content_kind"];
+  comments: DeliverableComment[];
+  numberByCommentId: Map<string, number>;
+  onAnnotate: (a: DeliverableAnnotation) => void;
+}) {
+  if (contentKind === "text") {
+    return <TextViewer version={version} onAnnotate={onAnnotate} />;
+  }
+  if (contentKind === "image") {
+    return (
+      <ImageViewer
+        version={version}
+        comments={comments}
+        numberByCommentId={numberByCommentId}
+        onAnnotate={onAnnotate}
+      />
+    );
+  }
+  return <PdfViewer version={version} onAnnotate={onAnnotate} />;
+}
+
+function TextViewer({
+  version,
+  onAnnotate,
+}: {
+  version: DeliverableVersion;
+  onAnnotate: (a: DeliverableAnnotation) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  function onMouseUp() {
+    const container = ref.current;
+    if (!container) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    if (!container.contains(range.commonAncestorContainer)) return;
+    const pre = range.cloneRange();
+    pre.selectNodeContents(container);
+    pre.setEnd(range.startContainer, range.startOffset);
+    const start = pre.toString().length;
+    const quote = range.toString().trim();
+    if (!quote) return;
+    onAnnotate({ type: "text", start, end: start + quote.length, quote });
+  }
+
+  return (
+    <div className="bg-white border border-black/8 p-5">
+      <p className="text-[11px] text-black/40 mb-3">
+        Select any passage to comment on it.
+      </p>
+      <div
+        ref={ref}
+        onMouseUp={onMouseUp}
+        className="prose-deliverable text-[15px] leading-relaxed text-black/85 [&_h2]:text-navy [&_h2]:font-bold [&_h2]:text-lg [&_h2]:mt-4 [&_h3]:font-bold [&_h3]:text-navy [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-navy [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-gold [&_blockquote]:pl-3 [&_blockquote]:text-black/60"
+        dangerouslySetInnerHTML={{ __html: version.body_html ?? "" }}
+      />
+    </div>
+  );
+}
+
+function ImageViewer({
+  version,
+  comments,
+  numberByCommentId,
+  onAnnotate,
+}: {
+  version: DeliverableVersion;
+  comments: DeliverableComment[];
+  numberByCommentId: Map<string, number>;
+  onAnnotate: (a: DeliverableAnnotation) => void;
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const [dragRect, setDragRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+
+  function norm(e: ReactPointerEvent) {
+    const el = wrapRef.current;
+    if (!el) return { x: 0, y: 0 };
+    const r = el.getBoundingClientRect();
+    return {
+      x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+      y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)),
+    };
+  }
+
+  function onDown(e: ReactPointerEvent) {
+    const p = norm(e);
+    dragStart.current = p;
+    setDragRect({ x: p.x, y: p.y, w: 0, h: 0 });
+  }
+  function onMove(e: ReactPointerEvent) {
+    if (!dragStart.current) return;
+    const p = norm(e);
+    const s = dragStart.current;
+    setDragRect({
+      x: Math.min(s.x, p.x),
+      y: Math.min(s.y, p.y),
+      w: Math.abs(p.x - s.x),
+      h: Math.abs(p.y - s.y),
+    });
+  }
+  function onUp() {
+    const rect = dragRect;
+    const s = dragStart.current;
+    dragStart.current = null;
+    setDragRect(null);
+    if (!rect || !s) return;
+    if (rect.w < 0.02 && rect.h < 0.02) {
+      onAnnotate({ type: "pin", x: s.x, y: s.y });
+    } else {
+      onAnnotate({ type: "region", x: rect.x, y: rect.y, w: rect.w, h: rect.h });
+    }
+  }
+
+  return (
+    <div className="bg-white border border-black/8 p-3">
+      <p className="text-[11px] text-black/40 mb-2">
+        Click to drop a pin, or drag to mark a region.
+      </p>
+      <div
+        ref={wrapRef}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        className="relative select-none touch-none cursor-crosshair inline-block max-w-full"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={version.signed_url ?? ""}
+          alt={version.asset_name ?? "deliverable"}
+          className="max-w-full block"
+          draggable={false}
+        />
+        {comments.map((c) => {
+          const num = numberByCommentId.get(c.id);
+          if (!c.annotation || !num) return null;
+          if (c.annotation.type === "pin") {
+            return (
+              <Marker key={c.id} num={num} left={c.annotation.x} top={c.annotation.y} />
+            );
+          }
+          if (c.annotation.type === "region") {
+            const a = c.annotation;
+            return (
+              <div
+                key={c.id}
+                className="absolute border-2 border-navy/80 bg-navy/10"
+                style={{
+                  left: `${a.x * 100}%`,
+                  top: `${a.y * 100}%`,
+                  width: `${a.w * 100}%`,
+                  height: `${a.h * 100}%`,
+                }}
+              >
+                <span className="absolute -top-2 -left-2 bg-navy text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                  {num}
+                </span>
+              </div>
+            );
+          }
+          return null;
+        })}
+        {dragRect && (
+          <div
+            className="absolute border-2 border-gold bg-gold/20 pointer-events-none"
+            style={{
+              left: `${dragRect.x * 100}%`,
+              top: `${dragRect.y * 100}%`,
+              width: `${dragRect.w * 100}%`,
+              height: `${dragRect.h * 100}%`,
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Marker({ num, left, top }: { num: number; left: number; top: number }) {
+  return (
+    <span
+      className="absolute -translate-x-1/2 -translate-y-1/2 bg-navy text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center ring-2 ring-white"
+      style={{ left: `${left * 100}%`, top: `${top * 100}%` }}
+    >
+      {num}
+    </span>
+  );
+}
+
+function PdfViewer({
+  version,
+  onAnnotate,
+}: {
+  version: DeliverableVersion;
+  onAnnotate: (a: DeliverableAnnotation) => void;
+}) {
+  const [page, setPage] = useState("");
+  return (
+    <div className="bg-white border border-black/8 p-3 space-y-2">
+      {version.signed_url ? (
+        <iframe
+          src={version.signed_url}
+          title={version.asset_name ?? "PDF"}
+          className="w-full h-[600px] border border-black/10"
+        />
+      ) : (
+        <p className="text-sm text-black/55 py-8 text-center">PDF could not be loaded.</p>
+      )}
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-black/50">Tag a comment to a page:</span>
+        <input
+          value={page}
+          onChange={(e) => setPage(e.target.value.replace(/[^0-9]/g, ""))}
+          placeholder="page #"
+          className="w-20 border border-black/15 px-2 py-1"
+        />
+        <button
+          type="button"
+          onClick={() => {
+            const num = parseInt(page, 10);
+            if (Number.isFinite(num) && num > 0) onAnnotate({ type: "page", page: num });
+          }}
+          disabled={!page}
+          className="px-2 py-1 border border-navy text-navy disabled:opacity-40"
+        >
+          Tag page
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Comment composer ────────────────────────────────────────────────────────
+
+function annotationChip(a: DeliverableAnnotation): string {
+  switch (a.type) {
+    case "text":
+      return `On passage: "${a.quote.slice(0, 60)}${a.quote.length > 60 ? "..." : ""}"`;
+    case "pin":
+      return "Pinned on the image";
+    case "region":
+      return "On a marked region";
+    case "page":
+      return `On page ${a.page}`;
+  }
+}
+
+function CommentComposer({
+  firmId,
+  deliverableId,
+  versionId,
+  pendingAnnotation,
+  onClearAnnotation,
+  viewerRole,
+  onPosted,
+}: {
+  firmId: string;
+  deliverableId: string;
+  versionId: string;
+  pendingAnnotation: DeliverableAnnotation | null;
+  onClearAnnotation: () => void;
+  viewerRole: "operator" | "lawyer";
+  onPosted: () => Promise<void> | void;
+}) {
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!body.trim()) return;
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          version_id: versionId,
+          body: body.trim(),
+          annotation: pendingAnnotation,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setError(json.error ?? "Could not post.");
+      } else {
+        setBody("");
+        onClearAnnotation();
+        await onPosted();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="bg-white border border-black/8 p-3 space-y-2">
+      {pendingAnnotation && (
+        <div className="flex items-center gap-2 text-xs bg-gold/15 border border-gold/30 px-2 py-1">
+          <span className="text-navy">{annotationChip(pendingAnnotation)}</span>
+          <button
+            type="button"
+            onClick={onClearAnnotation}
+            className="ml-auto text-black/50 hover:text-black"
+          >
+            clear
+          </button>
+        </div>
+      )}
+      <textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        rows={2}
+        placeholder={
+          viewerRole === "lawyer"
+            ? "Add a comment for the operator..."
+            : "Add a note for the firm..."
+        }
+        className="w-full border border-black/15 px-2 py-1.5 text-sm resize-y"
+      />
+      {error && <p className="text-xs text-red-700">{error}</p>}
+      <button
+        type="submit"
+        disabled={sending || !body.trim()}
+        className="px-3 py-1.5 text-sm font-semibold bg-navy text-white disabled:opacity-50"
+      >
+        {sending ? "Posting..." : pendingAnnotation ? "Comment on selection" : "Add comment"}
+      </button>
+    </form>
+  );
+}
+
+// ─── Comment thread (sidebar) ────────────────────────────────────────────────
+
+function CommentThread({
+  firmId,
+  deliverableId,
+  comments,
+  numberByCommentId,
+  viewerRole,
+  onChanged,
+}: {
+  firmId: string;
+  deliverableId: string;
+  comments: DeliverableComment[];
+  numberByCommentId: Map<string, number>;
+  viewerRole: "operator" | "lawyer";
+  onChanged: () => Promise<void> | void;
+}) {
+  const roots = comments.filter((c) => !c.parent_comment_id);
+  const repliesByParent = new Map<string, DeliverableComment[]>();
+  for (const c of comments) {
+    if (c.parent_comment_id) {
+      const list = repliesByParent.get(c.parent_comment_id) ?? [];
+      list.push(c);
+      repliesByParent.set(c.parent_comment_id, list);
+    }
+  }
+
+  return (
+    <div className="bg-white border border-black/8 p-4">
+      <h3 className="text-sm font-bold text-navy mb-3">
+        Comments <span className="text-black/40 font-normal">({comments.length})</span>
+      </h3>
+      {comments.length === 0 ? (
+        <p className="text-xs text-black/45">No comments on this version yet.</p>
+      ) : (
+        <ul className="space-y-3">
+          {roots.map((c) => (
+            <li key={c.id}>
+              <CommentCard
+                firmId={firmId}
+                deliverableId={deliverableId}
+                comment={c}
+                num={numberByCommentId.get(c.id)}
+                viewerRole={viewerRole}
+                onChanged={onChanged}
+              />
+              {(repliesByParent.get(c.id) ?? []).map((r) => (
+                <div key={r.id} className="ml-4 mt-2 pl-2 border-l-2 border-black/10">
+                  <CommentCard
+                    firmId={firmId}
+                    deliverableId={deliverableId}
+                    comment={r}
+                    num={numberByCommentId.get(r.id)}
+                    viewerRole={viewerRole}
+                    onChanged={onChanged}
+                  />
+                </div>
+              ))}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function CommentCard({
+  firmId,
+  deliverableId,
+  comment,
+  num,
+  viewerRole,
+  onChanged,
+}: {
+  firmId: string;
+  deliverableId: string;
+  comment: DeliverableComment;
+  num: number | undefined;
+  viewerRole: "operator" | "lawyer";
+  onChanged: () => Promise<void> | void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  async function toggleResolved() {
+    setBusy(true);
+    try {
+      await fetch(
+        `/api/portal/${firmId}/deliverables/${deliverableId}/comments/${comment.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resolved: !comment.resolved }),
+        },
+      );
+      await onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={comment.resolved ? "opacity-55" : ""}>
+      <div className="flex items-center gap-2 text-[11px] text-black/50">
+        {num && (
+          <span className="bg-navy text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+            {num}
+          </span>
+        )}
+        <span className="font-semibold text-navy/80">
+          {comment.author_role === "lawyer" ? comment.author_name ?? "Lawyer" : "Operator"}
+        </span>
+        <span>·</span>
+        <span>{formatTimestamp(comment.created_at, undefined, { dateStyle: "short", timeStyle: "short" })}</span>
+        {comment.resolved && (
+          <span className="ml-auto text-emerald-700 font-semibold uppercase tracking-wider text-[9px]">
+            Resolved
+          </span>
+        )}
+      </div>
+      <p className="text-[10px] uppercase tracking-wider text-black/35 mt-0.5">
+        {annotationLabel(comment.annotation)}
+      </p>
+      {comment.annotation?.type === "text" && (
+        <p className="text-xs text-black/55 mt-1 border-l-2 border-gold pl-2">
+          “{comment.annotation.quote.slice(0, 120)}”
+        </p>
+      )}
+      <p className="text-sm text-black/85 mt-1 whitespace-pre-wrap">{comment.body}</p>
+      <button
+        onClick={toggleResolved}
+        disabled={busy}
+        className="text-[11px] font-semibold text-navy/70 hover:text-navy mt-1 disabled:opacity-50"
+      >
+        {comment.resolved ? "Reopen" : "Resolve"}
+      </button>
+    </div>
+  );
+}
+
+// ─── Sign-off panel ──────────────────────────────────────────────────────────
+
+function SignOffPanel({
+  firmId,
+  deliverableId,
+  viewerRole,
+  signerName,
+  signerEmail,
+  approvalAttestation,
+  changesAttestation,
+  selectedVersion,
+  isCurrentVersion,
+  status,
+  onSigned,
+}: {
+  firmId: string;
+  deliverableId: string;
+  viewerRole: "operator" | "lawyer";
+  signerName: string | null;
+  signerEmail: string | null;
+  approvalAttestation: string;
+  changesAttestation: string;
+  selectedVersion: DeliverableVersion | null;
+  isCurrentVersion: boolean;
+  status: ContentDeliverable["status"];
+  onSigned: () => Promise<void> | void;
+}) {
+  const [decision, setDecision] = useState<"approved" | "changes_requested">("approved");
+  const [agreed, setAgreed] = useState(false);
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (viewerRole !== "lawyer") {
+    return (
+      <div className="bg-white border border-black/8 p-4">
+        <h3 className="text-sm font-bold text-navy mb-1">Sign-off</h3>
+        <p className="text-xs text-black/55">
+          The firm's responsible lawyer completes the sign-off. The operator
+          cannot sign on the licensee's behalf.
+        </p>
+      </div>
+    );
+  }
+
+  const attestation = decision === "approved" ? approvalAttestation : changesAttestation;
+
+  async function submit() {
+    if (!selectedVersion) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          version_id: selectedVersion.id,
+          decision,
+          agreed,
+          note: note.trim() || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setError(json.error ?? "Could not sign.");
+      } else {
+        setAgreed(false);
+        setNote("");
+        await onSigned();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="bg-white border-2 border-navy/15 p-4">
+      <h3 className="text-sm font-bold text-navy mb-1">Sign-off</h3>
+      {status === "approved" && (
+        <p className="text-xs text-emerald-700 font-semibold mb-2">
+          The current version is approved. Posting a new version reopens review.
+        </p>
+      )}
+      {!selectedVersion ? (
+        <p className="text-xs text-black/55">No version to sign yet.</p>
+      ) : !isCurrentVersion ? (
+        <p className="text-xs text-black/55">
+          You are viewing an earlier version. Switch to the current version to sign.
+        </p>
+      ) : !signerEmail ? (
+        <p className="text-xs text-amber-800">
+          An email for you must be on file before you can sign. Ask the operator
+          to add it on the access page.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDecision("approved");
+                setAgreed(false);
+              }}
+              className={`flex-1 px-2 py-1.5 text-xs font-semibold border ${
+                decision === "approved"
+                  ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                  : "border-black/15 text-black/60"
+              }`}
+            >
+              Approve
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDecision("changes_requested");
+                setAgreed(false);
+              }}
+              className={`flex-1 px-2 py-1.5 text-xs font-semibold border ${
+                decision === "changes_requested"
+                  ? "border-amber-600 bg-amber-50 text-amber-800"
+                  : "border-black/15 text-black/60"
+              }`}
+            >
+              Request changes
+            </button>
+          </div>
+
+          {decision === "changes_requested" && (
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+              placeholder="What needs to change (optional)"
+              className="w-full border border-black/15 px-2 py-1.5 text-sm"
+            />
+          )}
+
+          <p className="text-[11px] text-black/60 leading-relaxed bg-parchment p-2 border border-black/8">
+            {attestation}
+          </p>
+
+          <label className="flex items-start gap-2 text-xs text-black/75">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              I confirm the statement above. Signing as {signerName ?? "the firm"} ({signerEmail}) on
+              version v{selectedVersion.version_number}.
+            </span>
+          </label>
+
+          {error && <p className="text-xs text-red-700">{error}</p>}
+
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!agreed || submitting}
+            className={`w-full px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 ${
+              decision === "approved" ? "bg-emerald-700" : "bg-amber-700"
+            }`}
+          >
+            {submitting
+              ? "Recording..."
+              : decision === "approved"
+                ? "Sign and approve this version"
+                : "Record requested changes"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Approval history ────────────────────────────────────────────────────────
+
+function ApprovalHistory({ approvals }: { approvals: ApprovalRecord[] }) {
+  if (approvals.length === 0) return null;
+  return (
+    <div className="bg-white border border-black/8 p-4">
+      <h3 className="text-sm font-bold text-navy mb-3">Approval record</h3>
+      <ul className="space-y-3">
+        {approvals.map((a) => (
+          <li key={a.id} className="text-xs border-l-2 pl-2 border-black/10">
+            <div className="flex items-center gap-2">
+              <span
+                className={`uppercase tracking-wider font-bold text-[10px] ${
+                  a.decision === "approved" ? "text-emerald-700" : "text-amber-700"
+                }`}
+              >
+                {a.decision === "approved" ? "Approved" : "Changes requested"}
+              </span>
+              <span className="text-black/40">v{a.version_number}</span>
+            </div>
+            <p className="text-black/70 mt-0.5">
+              {a.signer_name} ({a.signer_email})
+            </p>
+            <p className="text-black/40">
+              {formatTimestamp(a.created_at, undefined, { dateStyle: "medium", timeStyle: "short" })}
+            </p>
+            {a.note && <p className="text-black/60 mt-1">{a.note}</p>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ─── Version composer ────────────────────────────────────────────────────────
+
+function VersionComposer({
+  firmId,
+  deliverableId,
+  contentKind,
+  onPosted,
+  onSelectNew,
+}: {
+  firmId: string;
+  deliverableId: string;
+  contentKind: ContentDeliverable["content_kind"];
+  onPosted: () => Promise<void> | void;
+  onSelectNew: (id: string) => void;
+}) {
+  const [bodyHtml, setBodyHtml] = useState("");
+  const [note, setNote] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [posting, setPosting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function post() {
+    setPosting(true);
+    setError(null);
+    try {
+      let res: Response;
+      if (contentKind === "text") {
+        res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/versions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body_html: bodyHtml, note: note.trim() || null }),
+        });
+      } else {
+        if (!file) {
+          setError("Choose a file.");
+          setPosting(false);
+          return;
+        }
+        const fd = new FormData();
+        fd.append("file", file);
+        if (note.trim()) fd.append("note", note.trim());
+        res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/versions`, {
+          method: "POST",
+          body: fd,
+        });
+      }
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setError(json.error ?? "Could not post version.");
+      } else {
+        setBodyHtml("");
+        setNote("");
+        setFile(null);
+        if (json.version?.id) onSelectNew(json.version.id);
+        await onPosted();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setPosting(false);
+    }
+  }
+
+  return (
+    <div className="bg-parchment border border-black/10 p-3 space-y-2">
+      <p className="text-xs font-semibold text-navy">Post a new version</p>
+      {contentKind === "text" ? (
+        <>
+          <textarea
+            value={bodyHtml}
+            onChange={(e) => setBodyHtml(e.target.value)}
+            rows={8}
+            placeholder="Paste or write the content. Basic HTML is supported (headings, lists, links, bold)."
+            className="w-full border border-black/15 px-2 py-1.5 text-sm font-mono resize-y"
+          />
+          {bodyHtml.trim() && (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-black/55">Preview</summary>
+              <div
+                className="prose-deliverable mt-2 bg-white p-3 border border-black/8 text-sm [&_h2]:font-bold [&_h2]:text-navy [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5"
+                dangerouslySetInnerHTML={{ __html: bodyHtml }}
+              />
+            </details>
+          )}
+        </>
+      ) : (
+        <input
+          type="file"
+          accept={contentKind === "image" ? "image/*" : "application/pdf"}
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="text-xs"
+        />
+      )}
+      <input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="What changed in this version (optional)"
+        className="w-full border border-black/15 px-2 py-1.5 text-sm"
+      />
+      {error && <p className="text-xs text-red-700">{error}</p>}
+      <button
+        type="button"
+        onClick={post}
+        disabled={posting}
+        className="px-3 py-1.5 text-sm font-semibold bg-navy text-white disabled:opacity-50"
+      >
+        {posting ? "Posting..." : "Post version for review"}
+      </button>
+    </div>
+  );
+}
+
+// ─── Archive ─────────────────────────────────────────────────────────────────
+
+function ArchiveControl({
+  firmId,
+  deliverableId,
+  status,
+  onArchived,
+}: {
+  firmId: string;
+  deliverableId: string;
+  status: ContentDeliverable["status"];
+  onArchived: () => Promise<void> | void;
+}) {
+  const [busy, setBusy] = useState(false);
+  if (status === "archived") return null;
+  async function archive() {
+    if (!confirm("Archive this deliverable? It will be hidden from the active list.")) return;
+    setBusy(true);
+    try {
+      await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "archive" }),
+      });
+      await onArchived();
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button
+      onClick={archive}
+      disabled={busy}
+      className="text-xs text-black/45 hover:text-red-700 disabled:opacity-50"
+    >
+      {busy ? "Archiving..." : "Archive deliverable"}
+    </button>
+  );
+}
