@@ -15,6 +15,7 @@ export const CHANNEL_LABELS: Record<string, string> = {
   whatsapp: 'WhatsApp',
   sms: 'SMS',
   gbp: 'Google Business Profile',
+  tool: 'Website tool',
 };
 
 export function channelLabel(channel: string | null | undefined): string {
@@ -49,6 +50,7 @@ export function channelBadgeClasses(channel: string | null | undefined): string 
     case 'voice':     return 'bg-violet-50 text-violet-800 border-violet-200';
     case 'sms':       return 'bg-sky-50 text-sky-800 border-sky-200';
     case 'gbp':       return 'bg-amber-50 text-amber-800 border-amber-200';
+    case 'tool':      return 'bg-orange-50 text-orange-800 border-orange-200';
     case 'web':
     default:          return 'bg-stone-50 text-stone-700 border-stone-200';
   }
