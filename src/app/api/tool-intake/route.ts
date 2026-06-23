@@ -133,6 +133,12 @@ export async function POST(req: NextRequest) {
     );
   }
   const practiceArea = practiceSlugToArea(body.practiceSlug);
+  if (practiceArea === 'unknown') {
+    return NextResponse.json(
+      { error: `unrecognised practice slug: ${body.practiceSlug}` },
+      { status: 400 },
+    );
+  }
   const axes = deriveToolAxes();
   const band = deriveToolBand(axes);
   const decisionDeadline = computeDecisionDeadline(axes.urgency, now, matterType);

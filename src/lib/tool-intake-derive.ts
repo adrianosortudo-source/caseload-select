@@ -60,6 +60,7 @@ const PRACTICE_SLUG_TO_AREA: Record<string, string> = {
   'real-estate': 'real_estate',
   'employment': 'employment',
   'estates': 'estates',
+  'succession': 'estates',
   'fractional-counsel': 'corporate',
   'contract-review': 'corporate',
   'records-upkeep': 'corporate',
@@ -72,7 +73,7 @@ export function toolSlugToMatterType(toolSlug: string): string {
 
 export function practiceSlugToArea(practiceSlug: string): string {
   const cleaned = practiceSlug.replace(/^\//, '');
-  return PRACTICE_SLUG_TO_AREA[cleaned] ?? 'corporate';
+  return PRACTICE_SLUG_TO_AREA[cleaned] ?? 'unknown';
 }
 
 // ─── Axis derivation ────────────────────────────────────────────────────────
