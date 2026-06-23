@@ -122,6 +122,6 @@ export function deriveToolBand(axes: ToolAxes): 'B' | 'C' {
 export function generateToolLeadId(): string {
   const now = new Date();
   const date = now.toISOString().slice(0, 10);
-  const rand = Math.random().toString(16).slice(2, 5).toUpperCase();
+  const rand = Math.random().toString(16).slice(2, 6).toUpperCase();
   return `T-${date}-${rand}`;
 }

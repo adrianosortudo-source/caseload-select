@@ -42,7 +42,7 @@ import {
  */
 
 const BAND_VALUES: Array<"A" | "B" | "C" | "D"> = ["A", "B", "C", "D"];
-const CHANNEL_VALUES = ["web", "voice", "facebook", "instagram", "whatsapp", "sms", "gbp"];
+const CHANNEL_VALUES = ["web", "voice", "facebook", "instagram", "whatsapp", "sms", "gbp", "tool"];
 const HISTORY_PERSIST_DELAY_MS = 1_800;
 
 interface Props {

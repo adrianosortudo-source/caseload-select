@@ -126,6 +126,12 @@ export async function POST(req: NextRequest) {
   const leadId = generateToolLeadId();
   const now = new Date();
   const matterType = toolSlugToMatterType(body.toolSlug);
+  if (matterType === 'unknown') {
+    return NextResponse.json(
+      { error: `unrecognised tool slug: ${body.toolSlug}` },
+      { status: 400 },
+    );
+  }
   const practiceArea = practiceSlugToArea(body.practiceSlug);
   const axes = deriveToolAxes();
   const band = deriveToolBand(axes);

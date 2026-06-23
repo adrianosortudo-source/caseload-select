@@ -429,7 +429,9 @@ function stripDangerousUrlAttrs(html: string): string {
 }
 
 function stripHtmlComments(html: string): string {
-  return html.replace(/<!--[\s\S]*?-->/g, '');
+  return html.replace(/<!--[\s\S]*?-->/g, (match) =>
+    match === '<!-- ACTION_RAIL_SLOT -->' ? match : '',
+  );
 }
 
 function hardenAnchorTargets(html: string): string {
