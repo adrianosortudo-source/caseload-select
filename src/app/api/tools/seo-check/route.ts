@@ -159,6 +159,7 @@ function ipInBlockedRange(ip: string): boolean {
     const firstHex = v.startsWith("::") ? 0 : parseInt(v.split(":")[0] || "0", 16);
     if (Number.isNaN(firstHex)) return true;                  // malformed: refuse
     if (firstHex >= 0xfe80 && firstHex <= 0xfebf) return true; // link-local fe80::/10
+    if (firstHex >= 0xfec0 && firstHex <= 0xfeff) return true; // deprecated site-local fec0::/10
     if (firstHex >= 0xfc00 && firstHex <= 0xfdff) return true; // unique-local fc00::/7
     if (firstHex >= 0xff00) return true;                      // multicast ff00::/8
     return false;
