@@ -152,11 +152,15 @@ function ipInBlockedRange(ip: string): boolean {
     const zone = v.indexOf("%");
     if (zone >= 0) v = v.slice(0, zone);
     if (v === "::1" || v === "::") return true;               // loopback / unspecified
-    if (v.startsWith("fe80")) return true;                    // link-local
-    if (v.startsWith("fc") || v.startsWith("fd")) return true; // unique-local fc00::/7
-    if (v.startsWith("ff")) return true;                      // multicast
     const mapped = v.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);  // IPv4-mapped
     if (mapped) return ipInBlockedRange(mapped[1]);
+    // First hextet drives the reserved-range checks. Leading "::" means the
+    // high bits are zero, so the first group is 0.
+    const firstHex = v.startsWith("::") ? 0 : parseInt(v.split(":")[0] || "0", 16);
+    if (Number.isNaN(firstHex)) return true;                  // malformed: refuse
+    if (firstHex >= 0xfe80 && firstHex <= 0xfebf) return true; // link-local fe80::/10
+    if (firstHex >= 0xfc00 && firstHex <= 0xfdff) return true; // unique-local fc00::/7
+    if (firstHex >= 0xff00) return true;                      // multicast ff00::/8
     return false;
   }
   return true; // not a valid IP: refuse
@@ -174,23 +178,37 @@ function isSsrfBlocked(hostname: string): boolean {
 // socket). Resolving here means validation and the actual connection share
 // one DNS result: a hostname that resolves to any blocked IP is refused, and
 // the connection is pinned to the validated address, closing the rebinding gap.
-type LookupCb = (err: NodeJS.ErrnoException | null, address: string, family: number) => void;
+//
+// The hook must honour the caller's expected callback shape: undici/Node call
+// it either in scalar mode, callback(err, address, family), or in all mode,
+// callback(err, [{ address, family }]). Returning the wrong shape breaks the
+// connection. We always resolve every address (to validate the full set) and
+// then answer in whichever shape was requested.
+interface DnsAddr { address: string; family: number }
+type LookupOptions = { all?: boolean };
+type LookupCb = (
+  err: NodeJS.ErrnoException | null,
+  address: string | DnsAddr[],
+  family?: number
+) => void;
 function validatingLookup(
   hostname: string,
-  _options: unknown,
+  options: LookupOptions,
   callback: LookupCb
 ): void {
+  const wantsAll = !!(options && options.all);
   dnsLookup(hostname, { all: true, verbatim: true }, (err, addresses) => {
-    if (err) { callback(err, "", 0); return; }
-    const list = Array.isArray(addresses) ? addresses : [];
-    if (list.length === 0) { callback(new Error("ssrf_no_address"), "", 0); return; }
+    if (err) { callback(err, wantsAll ? [] : "", 0); return; }
+    const list: DnsAddr[] = Array.isArray(addresses) ? addresses : [];
+    if (list.length === 0) { callback(new Error("ssrf_no_address"), wantsAll ? [] : "", 0); return; }
     for (const a of list) {
       if (ipInBlockedRange(a.address)) {
-        callback(Object.assign(new Error("ssrf_blocked_ip"), { code: "ESSRFBLOCKED" }), "", 0);
+        callback(Object.assign(new Error("ssrf_blocked_ip"), { code: "ESSRFBLOCKED" }), wantsAll ? [] : "", 0);
         return;
       }
     }
-    callback(null, list[0].address, list[0].family);
+    if (wantsAll) callback(null, list);
+    else callback(null, list[0].address, list[0].family);
   });
 }
 
@@ -253,11 +271,21 @@ async function safeFetch(startUrl: string, timeoutMs: number): Promise<SafeFetch
 }
 
 // Reads a response body with a hard byte cap, aborting the stream once the cap
-// is exceeded. The deadline timer from safeFetch stays armed across this read.
-async function readCappedText(res: Response, maxBytes: number): Promise<string | null> {
+// is exceeded. The deadline timer from safeFetch stays armed across this read,
+// so a stalled body read surfaces as "read_failed" (an abort), kept distinct
+// from "too_large" so callers can report the right reason.
+type CappedRead =
+  | { ok: true; text: string }
+  | { ok: false; reason: "too_large" | "read_failed" };
+
+async function readCappedText(res: Response, maxBytes: number): Promise<CappedRead> {
   if (!res.body) {
-    const buf = Buffer.from(await res.arrayBuffer());
-    return buf.byteLength <= maxBytes ? buf.toString("utf8") : null;
+    try {
+      const buf = Buffer.from(await res.arrayBuffer());
+      return buf.byteLength <= maxBytes
+        ? { ok: true, text: buf.toString("utf8") }
+        : { ok: false, reason: "too_large" };
+    } catch { return { ok: false, reason: "read_failed" }; }
   }
   const reader = res.body.getReader();
   const chunks: Buffer[] = [];
@@ -268,12 +296,12 @@ async function readCappedText(res: Response, maxBytes: number): Promise<string |
       if (done) break;
       if (value) {
         total += value.byteLength;
-        if (total > maxBytes) { await reader.cancel(); return null; }
+        if (total > maxBytes) { await reader.cancel(); return { ok: false, reason: "too_large" }; }
         chunks.push(Buffer.from(value));
       }
     }
-  } catch { return null; }
-  return Buffer.concat(chunks).toString("utf8");
+  } catch { return { ok: false, reason: "read_failed" }; }
+  return { ok: true, text: Buffer.concat(chunks).toString("utf8") };
 }
 
 async function safeResource(url: string, timeoutMs: number): Promise<string | null> {
@@ -283,7 +311,8 @@ async function safeResource(url: string, timeoutMs: number): Promise<string | nu
     if (isSsrfBlocked(parsed.hostname)) return null;
     handle = await safeFetch(url, timeoutMs);
     if (!handle.res.ok) return null;
-    return await readCappedText(handle.res, MAX_RESOURCE_BYTES);
+    const read = await readCappedText(handle.res, MAX_RESOURCE_BYTES);
+    return read.ok ? read.text : null;
   } catch {
     return null;
   } finally {
@@ -1196,9 +1225,9 @@ async function scanPage(
     if (!res.ok) return null;
     const ct = res.headers.get("content-type") || "";
     if (!ct.includes("html") && !ct.includes("xhtml")) return null;
-    const html = await readCappedText(res, MAX_HTML_BYTES);
-    if (html === null) return null;
-    return buildPageResult(html, finalUrl, res.headers, ttfbMs, parsedRobots, llmsTxt);
+    const read = await readCappedText(res, MAX_HTML_BYTES);
+    if (!read.ok) return null;
+    return buildPageResult(read.text, finalUrl, res.headers, ttfbMs, parsedRobots, llmsTxt);
   } catch { return null; }
   finally { handle?.cleanup(); }
 }
@@ -1407,16 +1436,16 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const raw = await readCappedText(res, MAX_HTML_BYTES);
-      if (raw === null) {
-        return NextResponse.json(
-          { error: `${domain} returned a page that is too large to scan.` },
-          { status: 422 }
-        );
+      const read = await readCappedText(res, MAX_HTML_BYTES);
+      if (!read.ok) {
+        const error = read.reason === "too_large"
+          ? `${domain} returned a page that is too large to scan.`
+          : `${domain} took too long to respond or closed the connection. Try again in a moment.`;
+        return NextResponse.json({ error }, { status: 422 });
       }
 
-      homeHtml = raw;
-      homePage = buildPageResult(raw, finalUrl, res.headers, ttfbMs, parsedRobots, llmsTxt);
+      homeHtml = read.text;
+      homePage = buildPageResult(read.text, finalUrl, res.headers, ttfbMs, parsedRobots, llmsTxt);
     } catch (fetchErr: unknown) {
       const msg = fetchErr instanceof Error ? fetchErr.message : "unknown";
       if (msg === "ssrf_blocked") return NextResponse.json({ error: "That domain cannot be checked." }, { status: 400 });
