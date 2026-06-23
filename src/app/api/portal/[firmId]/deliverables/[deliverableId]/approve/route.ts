@@ -97,7 +97,11 @@ export async function POST(
     userAgent,
     note: cleanNote(body.note),
   });
-  if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
+  if (!result.ok) {
+    // stale = a newer version was posted during the sign-off (race with the
+    // pre-check); surface it as 409 so the lawyer re-reviews the current version.
+    return NextResponse.json({ error: result.error }, { status: result.stale ? 409 : 500 });
+  }
 
   return NextResponse.json({ ok: true, record: result.record });
 }

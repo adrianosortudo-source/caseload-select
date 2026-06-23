@@ -30,7 +30,7 @@ type Actor = { role: string; id: string | null; name: string | null; email: stri
 interface State {
   actor: Actor;
   detail: unknown;
-  recordResult: { ok: true; record: unknown } | { ok: false; error: string };
+  recordResult: { ok: true; record: unknown } | { ok: false; error: string; stale?: boolean };
   recordArgs: Record<string, unknown> | null;
 }
 
@@ -177,5 +177,13 @@ describe("POST approve", () => {
     state.recordResult = { ok: false, error: "insert failed" };
     const res = await POST(makeReq({ version_id: V_CUR, decision: "approved", agreed: true }), params());
     expect(res.status).toBe(500);
+  });
+
+  it("409 when the version goes stale during sign-off (F-04 race)", async () => {
+    // Pre-check passes (version_id === current), but recordApproval's conditional
+    // update finds the version superseded and reports stale.
+    state.recordResult = { ok: false, stale: true, error: "a newer version exists" };
+    const res = await POST(makeReq({ version_id: V_CUR, decision: "approved", agreed: true }), params());
+    expect(res.status).toBe(409);
   });
 });

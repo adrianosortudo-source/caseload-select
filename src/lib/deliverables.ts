@@ -342,7 +342,39 @@ export async function recordApproval(input: {
   ipAddress: string | null;
   userAgent: string | null;
   note: string | null;
-}): Promise<{ ok: true; record: ApprovalRecord } | { ok: false; error: string }> {
+}): Promise<{ ok: true; record: ApprovalRecord } | { ok: false; error: string; stale?: boolean }> {
+  const approved = input.decision === "approved";
+  const now = new Date().toISOString();
+
+  // Close the version-drift TOCTOU: apply the status change ONLY while the
+  // signed version is still the current one. The route pre-checks this, but a
+  // new version posted between that check and here would otherwise let a
+  // sign-off land on a stale version. The conditional update is the real gate;
+  // if zero rows match, a newer version exists and we reject as stale without
+  // recording an approval against the superseded version.
+  const { data: updatedRows, error: updErr } = await supabase
+    .from("content_deliverables")
+    .update({
+      status: statusAfterDecision(input.decision),
+      approved_version_id: approved ? input.versionId : null,
+      approved_at: approved ? now : null,
+      updated_at: now,
+    })
+    .eq("id", input.deliverableId)
+    .eq("current_version_id", input.versionId)
+    .select("id");
+  if (updErr) return { ok: false, error: `approval update failed: ${updErr.message}` };
+  if (!updatedRows || updatedRows.length === 0) {
+    return {
+      ok: false,
+      stale: true,
+      error: "a newer version exists; refresh and sign the current version",
+    };
+  }
+
+  // Append the immutable approval record. If this fails after the status moved,
+  // best-effort revert the deliverable to in_review so status and the
+  // append-only log stay consistent.
   const { data, error } = await supabase
     .from("approval_records")
     .insert({
@@ -363,18 +395,13 @@ export async function recordApproval(input: {
     })
     .select("*")
     .single();
-  if (error) return { ok: false, error: `approval insert failed: ${error.message}` };
-
-  const approved = input.decision === "approved";
-  await supabase
-    .from("content_deliverables")
-    .update({
-      status: statusAfterDecision(input.decision),
-      approved_version_id: approved ? input.versionId : null,
-      approved_at: approved ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", input.deliverableId);
+  if (error) {
+    await supabase
+      .from("content_deliverables")
+      .update({ status: "in_review", approved_version_id: null, approved_at: null, updated_at: new Date().toISOString() })
+      .eq("id", input.deliverableId);
+    return { ok: false, error: `approval insert failed: ${error.message}` };
+  }
 
   await enqueueDeliverableNotification({
     firmId: input.firmId,

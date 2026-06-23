@@ -36,6 +36,7 @@ export default async function PortalLayout({
   // sessions. Lawyer-facing surfaces (triage, dashboard, pipeline, leads,
   // files, clients, matters) exclude role='client' at page level instead.
   const isOperator = session?.role === "operator";
+  const isClient = session?.role === "client";
   if (!session || (!isOperator && session.firm_id !== firmId)) {
     redirect("/portal/login");
   }
@@ -77,7 +78,10 @@ export default async function PortalLayout({
 
       {isOperator && <OperatorViewingBanner firmName={firmName} />}
 
-      <PortalTabNav firmId={firmId} />
+      {/* Lawyer/operator tab nav. Hidden for client sessions: a client only
+          reaches /m/[matterId] under this layout, and the tabs point at
+          lawyer surfaces that reject client sessions anyway. */}
+      {!isClient && <PortalTabNav firmId={firmId} />}
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">{children}</main>
       <footer className="text-center text-xs text-black/30 py-6 shrink-0 flex items-center justify-center gap-4">
