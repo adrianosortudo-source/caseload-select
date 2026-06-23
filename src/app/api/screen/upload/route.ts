@@ -106,12 +106,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Upload failed" }, { status: 500 });
     }
 
-    const { data: urlData } = supabase.storage
-      .from(BUCKET)
-      .getPublicUrl(storagePath);
+    // The bucket is private (F9). Return an authorized self-signing route URL
+    // instead of a public URL: the value is persisted as the answer and rendered
+    // in the brief, and clicking it later mints a short-lived signed URL only
+    // for an authorized firm/operator session. The lead never needs to reopen it
+    // (the widget shows the filename, not the URL).
+    const authorizedUrl = `/api/portal/${firmId}/intake-file?path=${encodeURIComponent(storagePath)}`;
 
     return NextResponse.json({
-      url: urlData.publicUrl,
+      url: authorizedUrl,
       path: storagePath,
       filename: file.name,
     });
