@@ -94,7 +94,7 @@ const widgetSecurityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    value: "camera=(), microphone=(self), geolocation=(), payment=(), usb=()",
   },
   // No X-Frame-Options on /widget/* — would override CSP frame-ancestors and
   // block embedding. The CSP frame-ancestors omission above is the gate.
