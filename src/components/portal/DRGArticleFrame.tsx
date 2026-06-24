@@ -1,7 +1,13 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useEffect, useLayoutEffect, useCallback, type RefObject } from "react";
 import type { DeliverableAnnotation } from "@/lib/types";
+import {
+  applyHighlights,
+  measureAnchors,
+  setActiveHighlight,
+  type HighlightItem,
+} from "@/lib/highlight-dom";
 import "./drg-article-frame.css";
 
 /**
@@ -37,6 +43,11 @@ export function DRGArticleFrame({
   heroImageUrl,
   bodyHtml,
   onAnnotate,
+  highlights,
+  measureRef,
+  onAnchors,
+  activeHighlightId = null,
+  onHighlightClick,
 }: {
   title: string;
   excerpt: string | null;
@@ -47,9 +58,70 @@ export function DRGArticleFrame({
   heroImageUrl: string | null;
   bodyHtml: string;
   onAnnotate: (annotation: DeliverableAnnotation, position: AnnotationPosition) => void;
+  /** Stored text-comment ranges to keep highlighted in the body. */
+  highlights?: HighlightItem[];
+  /** The shared row element; mark tops are reported relative to its top. */
+  measureRef?: RefObject<HTMLElement | null>;
+  /** Reports each highlight's row-relative top so the margin can align cards. */
+  onAnchors?: (anchors: Map<string, number>) => void;
+  /** The currently focused comment; its highlight gets stronger emphasis. */
+  activeHighlightId?: string | null;
+  /** Fires when a highlighted passage is clicked. */
+  onHighlightClick?: (commentId: string) => void;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const heroImgRef = useRef<HTMLImageElement>(null);
+
+  const highlightsKey = (highlights ?? [])
+    .map((h) => `${h.id}:${h.start}:${h.end}:${h.num}`)
+    .join("|");
+
+  const measureAndReport = useCallback(() => {
+    const body = bodyRef.current;
+    const ref = measureRef?.current;
+    if (!body || !ref || !onAnchors) return;
+    const refTop = ref.getBoundingClientRect().top;
+    const ids = (highlights ?? []).map((h) => h.id);
+    onAnchors(measureAnchors(body, refTop, ids));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measureRef, onAnchors, highlightsKey]);
+
+  // Apply (or refresh) the marks whenever the body or the comment set changes,
+  // then report anchor positions to the parent.
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    if (!body || highlights === undefined) return;
+    applyHighlights(body, bodyHtml, highlights);
+    setActiveHighlight(body, activeHighlightId);
+    measureAndReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bodyHtml, highlightsKey]);
+
+  // Re-measure on reflow (resize, image/font load) without re-wrapping.
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body || highlights === undefined) return;
+    let raf = 0;
+    const schedule = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(measureAndReport);
+    };
+    const ro = new ResizeObserver(schedule);
+    ro.observe(body);
+    window.addEventListener("resize", schedule);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      window.removeEventListener("resize", schedule);
+    };
+  }, [measureAndReport, highlights]);
+
+  // Reflect the active comment onto its highlight without re-wrapping.
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body || highlights === undefined) return;
+    setActiveHighlight(body, activeHighlightId);
+  }, [activeHighlightId, highlights]);
 
   function onTextMouseUp() {
     const container = bodyRef.current;
@@ -80,6 +152,15 @@ export function DRGArticleFrame({
   // delegation is the cleanest approach.
   function onBodyClick(e: React.MouseEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement;
+    // A click on a highlighted passage focuses its comment card.
+    const mark = target.closest?.("mark.drg-hl") as HTMLElement | null;
+    if (mark && onHighlightClick) {
+      const id = mark.dataset.hlId;
+      if (id) {
+        onHighlightClick(id);
+        return;
+      }
+    }
     if (target.tagName !== "IMG") return;
     const img = target as HTMLImageElement;
     const rect = img.getBoundingClientRect();

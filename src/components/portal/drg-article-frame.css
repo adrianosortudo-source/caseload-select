@@ -185,6 +185,25 @@
   margin: 0 auto;
 }
 
+/* Commented-passage highlight (Google-Docs style). Stays marked so the reviewer
+   can see exactly what each comment anchors to; the active one is stronger. */
+.cls-drg-article .drg-body mark.drg-hl {
+  background: rgba(184, 149, 106, 0.28);
+  color: inherit;
+  border-bottom: 2px solid var(--brass);
+  border-radius: 2px;
+  padding: 0 1px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.cls-drg-article .drg-body mark.drg-hl:hover {
+  background: rgba(184, 149, 106, 0.42);
+}
+.cls-drg-article .drg-body mark.drg-hl.is-active {
+  background: rgba(184, 149, 106, 0.58);
+  box-shadow: 0 0 0 1px var(--brass);
+}
+
 .cls-drg-article .drg-body p {
   font-family: var(--font-serif);
   font-weight: 400;

@@ -5,8 +5,10 @@ import {
   useRef,
   useCallback,
   useEffect,
+  useLayoutEffect,
   type PointerEvent as ReactPointerEvent,
   type FormEvent,
+  type RefObject,
 } from "react";
 import Link from "next/link";
 import type {
@@ -22,6 +24,8 @@ import {
   CONTENT_KIND_LABELS,
   annotationLabel,
 } from "@/lib/deliverables-pure";
+import { stackCards, stackBottom } from "@/lib/margin-stack";
+import type { HighlightItem } from "@/lib/highlight-dom";
 import { formatTimestamp } from "@/lib/firm-timezone";
 
 interface Detail {
@@ -29,6 +33,28 @@ interface Detail {
   versions: DeliverableVersion[];
   comments: DeliverableComment[];
   approvals: ApprovalRecord[];
+}
+
+function cssEscapeId(id: string): string {
+  if (typeof window !== "undefined" && window.CSS && typeof CSS.escape === "function") {
+    return CSS.escape(id);
+  }
+  return id.replace(/["\\]/g, "\\$&");
+}
+
+function sameMap(a: Map<string, number>, b: Map<string, number>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [k, v] of a) {
+    if (b.get(k) !== v) return false;
+  }
+  return true;
+}
+
+function scrollMarkIntoView(rowEl: HTMLElement | null, id: string) {
+  const mark = rowEl?.querySelector(
+    `mark.drg-hl[data-hl-id="${cssEscapeId(id)}"]`,
+  ) as HTMLElement | null;
+  mark?.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
 export default function DeliverableReview({
@@ -79,12 +105,50 @@ export default function DeliverableReview({
     }
   }, [firmId, deliverableId]);
 
+  // Google-Docs margin: the content+comment row is the shared coordinate
+  // origin. The article frame reports each highlight's top relative to it so
+  // the comment cards can sit beside their passage.
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [anchors, setAnchors] = useState<Map<string, number>>(new Map());
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const handleAnchors = useCallback((m: Map<string, number>) => {
+    setAnchors((prev) => (sameMap(prev, m) ? prev : m));
+  }, []);
+
+  // Card click: focus and scroll its highlight into view.
+  const focusFromCard = useCallback((id: string) => {
+    setActiveId(id);
+    scrollMarkIntoView(rowRef.current, id);
+  }, []);
+
+  // Highlight click: focus; the margin scrolls the card into view itself.
+  const focusFromHighlight = useCallback((id: string) => {
+    setActiveId(id);
+  }, []);
+
   // Number positional comments so markers and the sidebar align.
   const numberByCommentId = new Map<string, number>();
   let n = 0;
   for (const c of versionComments) {
     if (c.annotation) numberByCommentId.set(c.id, ++n);
   }
+
+  // Stored text ranges to keep highlighted in the body and to align cards to.
+  const textHighlights: HighlightItem[] = [];
+  for (const c of versionComments) {
+    if (c.annotation && c.annotation.type === "text") {
+      textHighlights.push({
+        id: c.id,
+        start: c.annotation.start,
+        end: c.annotation.end,
+        quote: c.annotation.quote,
+        num: numberByCommentId.get(c.id) ?? 0,
+      });
+    }
+  }
+  const isDrgText =
+    deliverable.content_kind === "text" && deliverable.firm_id === DRG_FIRM_ID;
 
   return (
     <div className="space-y-5">
@@ -111,94 +175,43 @@ export default function DeliverableReview({
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1.7fr_1fr] items-start">
-        {/* Content viewer */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <VersionSelector
-              versions={versions}
-              selectedVersionId={selectedVersionId}
-              currentVersionId={deliverable.current_version_id}
-              onSelect={(id) => {
-                setSelectedVersionId(id);
-                setPendingAnnotation(null);
-              }}
-            />
-            <button
-              onClick={() => setShowVersionComposer((s) => !s)}
-              className="text-xs font-semibold uppercase tracking-wider px-3 py-1.5 border border-navy text-navy hover:bg-navy hover:text-white transition-colors"
-            >
-              {showVersionComposer ? "Close" : "Post new version"}
-            </button>
-          </div>
-
-          {showVersionComposer && (
-            <VersionComposer
-              firmId={firmId}
-              deliverableId={deliverableId}
-              contentKind={deliverable.content_kind}
-              onPosted={async () => {
-                setShowVersionComposer(false);
-                await refetch();
-              }}
-              onSelectNew={(id) => setSelectedVersionId(id)}
-            />
-          )}
-
-          {selectedVersion ? (
-            <ContentViewer
-              version={selectedVersion}
-              deliverable={deliverable}
-              comments={versionComments}
-              numberByCommentId={numberByCommentId}
-              onAnnotate={(a, pos) => {
-                setPendingAnnotation(a);
-                setPendingPosition(pos ?? null);
-              }}
-            />
-          ) : (
-            <div className="bg-white border border-black/8 px-6 py-10 text-center text-sm text-black/55">
-              No version posted yet.
-            </div>
-          )}
-
-          {selectedVersion && (
-            <CommentComposer
-              firmId={firmId}
-              deliverableId={deliverableId}
-              versionId={selectedVersion.id}
-              pendingAnnotation={pendingPosition ? null : pendingAnnotation}
-              onClearAnnotation={() => { setPendingAnnotation(null); setPendingPosition(null); }}
-              viewerRole={viewerRole}
-              onPosted={refetch}
-            />
-          )}
-
-          {pendingAnnotation && pendingPosition && selectedVersion && (
-            <FloatingAnnotationPopover
-              annotation={pendingAnnotation}
-              position={pendingPosition}
-              firmId={firmId}
-              deliverableId={deliverableId}
-              versionId={selectedVersion.id}
-              viewerRole={viewerRole}
-              onDismiss={() => { setPendingAnnotation(null); setPendingPosition(null); }}
-              onPosted={async () => { setPendingAnnotation(null); setPendingPosition(null); await refetch(); }}
-            />
-          )}
+      {/* Review action bar: version controls + sign-off live above the article
+          so the right margin is dedicated to passage-aligned comments. */}
+      <div className="bg-white border border-border-brand p-3 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <VersionSelector
+            versions={versions}
+            selectedVersionId={selectedVersionId}
+            currentVersionId={deliverable.current_version_id}
+            onSelect={(id) => {
+              setSelectedVersionId(id);
+              setPendingAnnotation(null);
+              setPendingPosition(null);
+              setActiveId(null);
+            }}
+          />
+          <button
+            onClick={() => setShowVersionComposer((s) => !s)}
+            className="text-xs font-semibold uppercase tracking-wider px-3 py-1.5 border border-navy text-navy hover:bg-navy hover:text-white transition-colors"
+          >
+            {showVersionComposer ? "Close" : "Post new version"}
+          </button>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-5">
-          <CommentThread
+        {showVersionComposer && (
+          <VersionComposer
             firmId={firmId}
             deliverableId={deliverableId}
-            comments={versionComments}
-            numberByCommentId={numberByCommentId}
-            viewerRole={viewerRole}
-            onChanged={refetch}
+            contentKind={deliverable.content_kind}
+            onPosted={async () => {
+              setShowVersionComposer(false);
+              await refetch();
+            }}
+            onSelectNew={(id) => setSelectedVersionId(id)}
           />
+        )}
 
+        <div className="grid gap-3 lg:grid-cols-[1.6fr_1fr] items-start">
           <SignOffPanel
             firmId={firmId}
             deliverableId={deliverableId}
@@ -212,16 +225,96 @@ export default function DeliverableReview({
             status={deliverable.status}
             onSigned={refetch}
           />
+          <div className="space-y-3">
+            <ApprovalHistory approvals={approvals} />
+            <ArchiveControl
+              firmId={firmId}
+              deliverableId={deliverableId}
+              status={deliverable.status}
+              onArchived={refetch}
+            />
+          </div>
+        </div>
+      </div>
 
-          <ApprovalHistory approvals={approvals} />
+      {/* Article (left) + passage-aligned comment margin (right). The row is
+          the shared coordinate origin for highlight + card alignment. */}
+      <div
+        ref={rowRef}
+        className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px] items-start"
+      >
+        <div className="space-y-4">
+          {selectedVersion ? (
+            <ContentViewer
+              version={selectedVersion}
+              deliverable={deliverable}
+              comments={versionComments}
+              numberByCommentId={numberByCommentId}
+              onAnnotate={(a, pos) => {
+                setPendingAnnotation(a);
+                setPendingPosition(pos ?? null);
+              }}
+              highlights={isDrgText ? textHighlights : undefined}
+              measureRef={rowRef}
+              onAnchors={handleAnchors}
+              activeHighlightId={activeId}
+              onHighlightClick={focusFromHighlight}
+            />
+          ) : (
+            <div className="bg-white border border-border-brand px-6 py-10 text-center text-sm text-black/55">
+              No version posted yet.
+            </div>
+          )}
 
-          <ArchiveControl
+          {selectedVersion && (
+            <CommentComposer
+              firmId={firmId}
+              deliverableId={deliverableId}
+              versionId={selectedVersion.id}
+              pendingAnnotation={pendingPosition ? null : pendingAnnotation}
+              onClearAnnotation={() => {
+                setPendingAnnotation(null);
+                setPendingPosition(null);
+              }}
+              viewerRole={viewerRole}
+              onPosted={refetch}
+            />
+          )}
+
+          {pendingAnnotation && pendingPosition && selectedVersion && (
+            <FloatingAnnotationPopover
+              annotation={pendingAnnotation}
+              position={pendingPosition}
+              firmId={firmId}
+              deliverableId={deliverableId}
+              versionId={selectedVersion.id}
+              viewerRole={viewerRole}
+              onDismiss={() => {
+                setPendingAnnotation(null);
+                setPendingPosition(null);
+              }}
+              onPosted={async () => {
+                setPendingAnnotation(null);
+                setPendingPosition(null);
+                await refetch();
+              }}
+            />
+          )}
+        </div>
+
+        {selectedVersion && (
+          <MarginComments
             firmId={firmId}
             deliverableId={deliverableId}
-            status={deliverable.status}
-            onArchived={refetch}
+            viewerRole={viewerRole}
+            comments={versionComments}
+            numberByCommentId={numberByCommentId}
+            anchors={anchors}
+            activeId={activeId}
+            onActivate={focusFromCard}
+            onChanged={refetch}
           />
-        </div>
+        )}
       </div>
     </div>
   );
@@ -231,11 +324,11 @@ export default function DeliverableReview({
 
 function StatusPill({ status }: { status: ContentDeliverable["status"] }) {
   const styles: Record<string, string> = {
-    draft: "bg-stone-100 text-stone-700 border-stone-200",
-    in_review: "bg-sky-50 text-sky-800 border-sky-200",
+    draft: "bg-parchment-2 text-muted border-border-brand",
+    in_review: "bg-navy/10 text-navy border-navy/20",
     changes_requested: "bg-amber-50 text-amber-800 border-amber-200",
-    approved: "bg-emerald-50 text-emerald-800 border-emerald-200",
-    archived: "bg-stone-50 text-stone-400 border-stone-200",
+    approved: "bg-green-pass/10 text-green-pass border-green-pass/30",
+    archived: "bg-parchment-2 text-muted border-border-brand",
   };
   return (
     <span
@@ -264,7 +357,7 @@ function VersionSelector({
       <select
         value={selectedVersionId ?? ""}
         onChange={(e) => onSelect(e.target.value)}
-        className="text-xs border border-black/15 px-2 py-1 bg-white"
+        className="text-xs border border-border-brand px-2 py-1 bg-white"
       >
         {versions.map((v) => (
           <option key={v.id} value={v.id}>
@@ -290,19 +383,29 @@ function ContentViewer({
   comments,
   numberByCommentId,
   onAnnotate,
+  highlights,
+  measureRef,
+  onAnchors,
+  activeHighlightId,
+  onHighlightClick,
 }: {
   version: DeliverableVersion;
   deliverable: ContentDeliverable;
   comments: DeliverableComment[];
   numberByCommentId: Map<string, number>;
   onAnnotate: (a: DeliverableAnnotation, pos?: AnnotationPosition) => void;
+  highlights?: HighlightItem[];
+  measureRef?: RefObject<HTMLElement | null>;
+  onAnchors?: (anchors: Map<string, number>) => void;
+  activeHighlightId?: string | null;
+  onHighlightClick?: (commentId: string) => void;
 }) {
   const contentKind = deliverable.content_kind;
   if (contentKind === "text") {
     if (deliverable.firm_id === DRG_FIRM_ID) {
       return (
         <div className="space-y-2">
-          <p className="flex items-center gap-2 text-xs text-navy bg-gold/15 border border-gold/30 px-3 py-2">
+          <p className="flex items-center gap-2 text-xs text-navy bg-parchment-2 border border-border-brand px-3 py-2">
             <span aria-hidden="true" className="font-bold">“ ”</span>
             Select any passage to comment on it, the same way you would in Google
             Docs. Click the hero or any inline image to comment on that image.
@@ -317,6 +420,11 @@ function ContentViewer({
             heroImageUrl={deliverable.hero_image_url}
             bodyHtml={version.body_html ?? ""}
             onAnnotate={onAnnotate}
+            highlights={highlights}
+            measureRef={measureRef}
+            onAnchors={onAnchors}
+            activeHighlightId={activeHighlightId}
+            onHighlightClick={onHighlightClick}
           />
         </div>
       );
@@ -362,14 +470,14 @@ function TextViewer({
   }
 
   return (
-    <div className="bg-white border border-black/8 p-5">
+    <div className="bg-white border border-border-brand p-5">
       <p className="text-[11px] text-black/40 mb-3">
         Select any passage to comment on it.
       </p>
       <div
         ref={ref}
         onMouseUp={onMouseUp}
-        className="prose-deliverable text-[15px] leading-relaxed text-black/85 [&_h2]:text-navy [&_h2]:font-bold [&_h2]:text-lg [&_h2]:mt-4 [&_h3]:font-bold [&_h3]:text-navy [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-navy [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-gold [&_blockquote]:pl-3 [&_blockquote]:text-black/60"
+        className="prose-deliverable text-[15px] leading-relaxed text-black/85 [&_h2]:text-navy [&_h2]:font-bold [&_h2]:text-lg [&_h2]:mt-4 [&_h3]:font-bold [&_h3]:text-navy [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-navy [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-[color:var(--portal-accent)] [&_blockquote]:pl-3 [&_blockquote]:text-black/60"
         dangerouslySetInnerHTML={{ __html: version.body_html ?? "" }}
       />
     </div>
@@ -431,7 +539,7 @@ function ImageViewer({
   }
 
   return (
-    <div className="bg-white border border-black/8 p-3">
+    <div className="bg-white border border-border-brand p-3">
       <p className="text-[11px] text-black/40 mb-2">
         Click to drop a pin, or drag to mark a region.
       </p>
@@ -470,7 +578,7 @@ function ImageViewer({
                   height: `${a.h * 100}%`,
                 }}
               >
-                <span className="absolute -top-2 -left-2 bg-navy text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                <span className="absolute -top-2 -left-2 bg-navy text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center">
                   {num}
                 </span>
               </div>
@@ -480,7 +588,7 @@ function ImageViewer({
         })}
         {dragRect && (
           <div
-            className="absolute border-2 border-gold bg-gold/20 pointer-events-none"
+            className="absolute border-2 border-border-brand bg-parchment-2 pointer-events-none"
             style={{
               left: `${dragRect.x * 100}%`,
               top: `${dragRect.y * 100}%`,
@@ -497,7 +605,7 @@ function ImageViewer({
 function Marker({ num, left, top }: { num: number; left: number; top: number }) {
   return (
     <span
-      className="absolute -translate-x-1/2 -translate-y-1/2 bg-navy text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center ring-2 ring-white"
+      className="absolute -translate-x-1/2 -translate-y-1/2 bg-navy text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center ring-2 ring-white"
       style={{ left: `${left * 100}%`, top: `${top * 100}%` }}
     >
       {num}
@@ -514,12 +622,12 @@ function PdfViewer({
 }) {
   const [page, setPage] = useState("");
   return (
-    <div className="bg-white border border-black/8 p-3 space-y-2">
+    <div className="bg-white border border-border-brand p-3 space-y-2">
       {version.signed_url ? (
         <iframe
           src={version.signed_url}
           title={version.asset_name ?? "PDF"}
-          className="w-full h-[600px] border border-black/10"
+          className="w-full h-[600px] border border-border-brand"
         />
       ) : (
         <p className="text-sm text-black/55 py-8 text-center">PDF could not be loaded.</p>
@@ -530,7 +638,7 @@ function PdfViewer({
           value={page}
           onChange={(e) => setPage(e.target.value.replace(/[^0-9]/g, ""))}
           placeholder="page #"
-          className="w-20 border border-black/15 px-2 py-1"
+          className="w-20 border border-border-brand px-2 py-1"
         />
         <button
           type="button"
@@ -663,9 +771,9 @@ function FloatingAnnotationPopover({
         width: POPOVER_W,
         zIndex: 1200,
       }}
-      className="bg-white border border-black/20 shadow-xl"
+      className="bg-white border border-border-brand"
     >
-      <div className="px-3 py-2 border-b border-black/8 bg-parchment">
+      <div className="px-3 py-2 border-b border-border-brand bg-parchment">
         <p className="text-[10px] text-black/50 truncate leading-tight">
           {annotationChip(annotation)}
         </p>
@@ -681,7 +789,7 @@ function FloatingAnnotationPopover({
               ? "Add a comment for the operator..."
               : "Add a note for the firm..."
           }
-          className="w-full border border-black/15 px-2 py-1.5 text-sm resize-none"
+          className="w-full border border-border-brand px-2 py-1.5 text-sm resize-none"
           onKeyDown={(e) => {
             // Cmd/Ctrl + Enter submits
             if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -690,7 +798,7 @@ function FloatingAnnotationPopover({
             }
           }}
         />
-        {error && <p className="text-[11px] text-red-700">{error}</p>}
+        {error && <p className="text-[11px] text-red-fail">{error}</p>}
         <div className="flex items-center gap-2">
           <button
             type="submit"
@@ -784,9 +892,9 @@ function CommentComposer({
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-white border border-black/8 p-3 space-y-2">
+    <form onSubmit={onSubmit} className="bg-white border border-border-brand p-3 space-y-2">
       {pendingAnnotation && (
-        <div className="flex items-center gap-2 text-xs bg-gold/15 border border-gold/30 px-2 py-1">
+        <div className="flex items-center gap-2 text-xs bg-parchment-2 border border-border-brand px-2 py-1">
           <span className="text-navy">{annotationChip(pendingAnnotation)}</span>
           <button
             type="button"
@@ -806,9 +914,9 @@ function CommentComposer({
             ? "Add a comment for the operator..."
             : "Add a note for the firm..."
         }
-        className="w-full border border-black/15 px-2 py-1.5 text-sm resize-y"
+        className="w-full border border-border-brand px-2 py-1.5 text-sm resize-y"
       />
-      {error && <p className="text-xs text-red-700">{error}</p>}
+      {error && <p className="text-xs text-red-fail">{error}</p>}
       <button
         type="submit"
         disabled={sending || !body.trim()}
@@ -820,14 +928,23 @@ function CommentComposer({
   );
 }
 
-// ─── Comment thread (sidebar) ────────────────────────────────────────────────
+// ─── Comment margin (Google-Docs style) ──────────────────────────────────────
 
-function CommentThread({
+/**
+ * Comment cards aligned to their passage. On wide screens each anchored card
+ * floats at its highlight's height (collision-pushed down when crowded);
+ * general / image comments stack below. Below `lg` it degrades to a plain
+ * stacked list.
+ */
+function MarginComments({
   firmId,
   deliverableId,
   comments,
   numberByCommentId,
   viewerRole,
+  anchors,
+  activeId,
+  onActivate,
   onChanged,
 }: {
   firmId: string;
@@ -835,8 +952,23 @@ function CommentThread({
   comments: DeliverableComment[];
   numberByCommentId: Map<string, number>;
   viewerRole: "operator" | "lawyer";
+  anchors: Map<string, number>;
+  activeId: string | null;
+  onActivate: (id: string) => void;
   onChanged: () => Promise<void> | void;
 }) {
+  const [isWide, setIsWide] = useState(false);
+  const [tops, setTops] = useState<Map<string, number>>(new Map());
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const on = () => setIsWide(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+
   const roots = comments.filter((c) => !c.parent_comment_id);
   const repliesByParent = new Map<string, DeliverableComment[]>();
   for (const c of comments) {
@@ -846,42 +978,118 @@ function CommentThread({
       repliesByParent.set(c.parent_comment_id, list);
     }
   }
+  const anchoredRoots = roots.filter((c) => anchors.has(c.id));
+  const unanchoredRoots = roots.filter((c) => !anchors.has(c.id));
 
+  // Resolve card tops from anchors + measured heights (wide only).
+  useLayoutEffect(() => {
+    if (!isWide) return;
+    const heights = new Map<string, number>();
+    for (const c of roots) {
+      heights.set(c.id, cardRefs.current.get(c.id)?.offsetHeight ?? 96);
+    }
+    const stacked = stackCards(
+      anchoredRoots.map((c) => ({
+        id: c.id,
+        anchor: anchors.get(c.id) ?? 0,
+        height: heights.get(c.id) ?? 96,
+      })),
+      12,
+    );
+    let cursor = stackBottom(stacked, heights, 12);
+    for (const c of unanchoredRoots) {
+      stacked.set(c.id, cursor);
+      cursor += (heights.get(c.id) ?? 96) + 12;
+    }
+    setTops((prev) => (sameMap(prev, stacked) ? prev : stacked));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWide, anchors, comments]);
+
+  // Bring the focused card into view.
+  useEffect(() => {
+    if (!activeId) return;
+    cardRefs.current.get(activeId)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeId]);
+
+  if (comments.length === 0) {
+    return (
+      <div className="bg-white border border-border-brand p-4">
+        <h3 className="text-sm font-bold text-navy mb-1">Comments</h3>
+        <p className="text-xs text-black/45">
+          No comments yet. Select any passage in the article to start one.
+        </p>
+      </div>
+    );
+  }
+
+  const group = (c: DeliverableComment, positioned: boolean) => {
+    const replies = repliesByParent.get(c.id) ?? [];
+    const active = activeId === c.id;
+    return (
+      <div
+        key={c.id}
+        ref={(el) => {
+          if (el) cardRefs.current.set(c.id, el);
+          else cardRefs.current.delete(c.id);
+        }}
+        onClick={() => onActivate(c.id)}
+        style={
+          positioned
+            ? {
+                position: "absolute",
+                top: tops.get(c.id) ?? anchors.get(c.id) ?? 0,
+                left: 0,
+                right: 0,
+              }
+            : undefined
+        }
+        className={`bg-white border p-3 cursor-pointer transition-shadow ${
+          active ? "border-navy ring-1 ring-navy/30 shadow-sm" : "border-border-brand"
+        }`}
+      >
+        <CommentCard
+          firmId={firmId}
+          deliverableId={deliverableId}
+          comment={c}
+          num={numberByCommentId.get(c.id)}
+          viewerRole={viewerRole}
+          onChanged={onChanged}
+        />
+        {replies.map((r) => (
+          <div key={r.id} className="ml-3 mt-2 pl-2 border-l-2 border-border-brand">
+            <CommentCard
+              firmId={firmId}
+              deliverableId={deliverableId}
+              comment={r}
+              num={numberByCommentId.get(r.id)}
+              viewerRole={viewerRole}
+              onChanged={onChanged}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  if (!isWide) {
+    return (
+      <div className="space-y-3">
+        <h3 className="text-sm font-bold text-navy">
+          Comments <span className="text-black/40 font-normal">({comments.length})</span>
+        </h3>
+        {roots.map((c) => group(c, false))}
+      </div>
+    );
+  }
+
+  let laneHeight = 0;
+  for (const c of roots) {
+    const top = tops.get(c.id) ?? anchors.get(c.id) ?? 0;
+    laneHeight = Math.max(laneHeight, top + (cardRefs.current.get(c.id)?.offsetHeight ?? 96) + 12);
+  }
   return (
-    <div className="bg-white border border-black/8 p-4">
-      <h3 className="text-sm font-bold text-navy mb-3">
-        Comments <span className="text-black/40 font-normal">({comments.length})</span>
-      </h3>
-      {comments.length === 0 ? (
-        <p className="text-xs text-black/45">No comments on this version yet.</p>
-      ) : (
-        <ul className="space-y-3">
-          {roots.map((c) => (
-            <li key={c.id}>
-              <CommentCard
-                firmId={firmId}
-                deliverableId={deliverableId}
-                comment={c}
-                num={numberByCommentId.get(c.id)}
-                viewerRole={viewerRole}
-                onChanged={onChanged}
-              />
-              {(repliesByParent.get(c.id) ?? []).map((r) => (
-                <div key={r.id} className="ml-4 mt-2 pl-2 border-l-2 border-black/10">
-                  <CommentCard
-                    firmId={firmId}
-                    deliverableId={deliverableId}
-                    comment={r}
-                    num={numberByCommentId.get(r.id)}
-                    viewerRole={viewerRole}
-                    onChanged={onChanged}
-                  />
-                </div>
-              ))}
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="relative" style={{ minHeight: laneHeight }}>
+      {roots.map((c) => group(c, true))}
     </div>
   );
 }
@@ -924,7 +1132,7 @@ function CommentCard({
     <div className={comment.resolved ? "opacity-55" : ""}>
       <div className="flex items-center gap-2 text-[11px] text-black/50">
         {num && (
-          <span className="bg-navy text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+          <span className="bg-navy text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center">
             {num}
           </span>
         )}
@@ -934,7 +1142,7 @@ function CommentCard({
         <span>·</span>
         <span>{formatTimestamp(comment.created_at, undefined, { dateStyle: "short", timeStyle: "short" })}</span>
         {comment.resolved && (
-          <span className="ml-auto text-emerald-700 font-semibold uppercase tracking-wider text-[9px]">
+          <span className="ml-auto text-green-pass font-semibold uppercase tracking-wider text-[9px]">
             Resolved
           </span>
         )}
@@ -943,7 +1151,7 @@ function CommentCard({
         {annotationLabel(comment.annotation)}
       </p>
       {comment.annotation?.type === "text" && (
-        <p className="text-xs text-black/55 mt-1 border-l-2 border-gold pl-2">
+        <p className="text-xs text-black/55 mt-1 border-l-2 border-[color:var(--portal-accent)] pl-2">
           “{comment.annotation.quote.slice(0, 120)}”
         </p>
       )}
@@ -994,7 +1202,7 @@ function SignOffPanel({
 
   if (viewerRole !== "lawyer") {
     return (
-      <div className="bg-white border border-black/8 p-4">
+      <div className="bg-white border border-border-brand p-4">
         <h3 className="text-sm font-bold text-navy mb-1">Sign-off</h3>
         <p className="text-xs text-black/55">
           The firm's responsible lawyer completes the sign-off. The operator
@@ -1040,7 +1248,7 @@ function SignOffPanel({
     <div className="bg-white border-2 border-navy/15 p-4">
       <h3 className="text-sm font-bold text-navy mb-1">Sign-off</h3>
       {status === "approved" && (
-        <p className="text-xs text-emerald-700 font-semibold mb-2">
+        <p className="text-xs text-green-pass font-semibold mb-2">
           The current version is approved. Posting a new version reopens review.
         </p>
       )}
@@ -1066,8 +1274,8 @@ function SignOffPanel({
               }}
               className={`flex-1 px-2 py-1.5 text-xs font-semibold border ${
                 decision === "approved"
-                  ? "border-emerald-600 bg-emerald-50 text-emerald-800"
-                  : "border-black/15 text-black/60"
+                  ? "border-green-pass/30 bg-green-pass/10 text-green-pass"
+                  : "border-border-brand text-black/60"
               }`}
             >
               Approve
@@ -1081,7 +1289,7 @@ function SignOffPanel({
               className={`flex-1 px-2 py-1.5 text-xs font-semibold border ${
                 decision === "changes_requested"
                   ? "border-amber-600 bg-amber-50 text-amber-800"
-                  : "border-black/15 text-black/60"
+                  : "border-border-brand text-black/60"
               }`}
             >
               Request changes
@@ -1094,11 +1302,11 @@ function SignOffPanel({
               onChange={(e) => setNote(e.target.value)}
               rows={2}
               placeholder="What needs to change (optional)"
-              className="w-full border border-black/15 px-2 py-1.5 text-sm"
+              className="w-full border border-border-brand px-2 py-1.5 text-sm"
             />
           )}
 
-          <p className="text-[11px] text-black/60 leading-relaxed bg-parchment p-2 border border-black/8">
+          <p className="text-[11px] text-black/60 leading-relaxed bg-parchment p-2 border border-border-brand">
             {attestation}
           </p>
 
@@ -1115,14 +1323,14 @@ function SignOffPanel({
             </span>
           </label>
 
-          {error && <p className="text-xs text-red-700">{error}</p>}
+          {error && <p className="text-xs text-red-fail">{error}</p>}
 
           <button
             type="button"
             onClick={submit}
             disabled={!agreed || submitting}
             className={`w-full px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 ${
-              decision === "approved" ? "bg-emerald-700" : "bg-amber-700"
+              decision === "approved" ? "bg-green-pass" : "bg-amber-700"
             }`}
           >
             {submitting
@@ -1142,15 +1350,15 @@ function SignOffPanel({
 function ApprovalHistory({ approvals }: { approvals: ApprovalRecord[] }) {
   if (approvals.length === 0) return null;
   return (
-    <div className="bg-white border border-black/8 p-4">
+    <div className="bg-white border border-border-brand p-4">
       <h3 className="text-sm font-bold text-navy mb-3">Approval record</h3>
       <ul className="space-y-3">
         {approvals.map((a) => (
-          <li key={a.id} className="text-xs border-l-2 pl-2 border-black/10">
+          <li key={a.id} className="text-xs border-l-2 pl-2 border-border-brand">
             <div className="flex items-center gap-2">
               <span
                 className={`uppercase tracking-wider font-bold text-[10px] ${
-                  a.decision === "approved" ? "text-emerald-700" : "text-amber-700"
+                  a.decision === "approved" ? "text-green-pass" : "text-amber-700"
                 }`}
               >
                 {a.decision === "approved" ? "Approved" : "Changes requested"}
@@ -1235,7 +1443,7 @@ function VersionComposer({
   }
 
   return (
-    <div className="bg-parchment border border-black/10 p-3 space-y-2">
+    <div className="bg-parchment border border-border-brand p-3 space-y-2">
       <p className="text-xs font-semibold text-navy">Post a new version</p>
       {contentKind === "text" ? (
         <>
@@ -1244,13 +1452,13 @@ function VersionComposer({
             onChange={(e) => setBodyHtml(e.target.value)}
             rows={8}
             placeholder="Paste or write the content. Basic HTML is supported (headings, lists, links, bold)."
-            className="w-full border border-black/15 px-2 py-1.5 text-sm font-mono resize-y"
+            className="w-full border border-border-brand px-2 py-1.5 text-sm font-mono resize-y"
           />
           {bodyHtml.trim() && (
             <details className="text-xs">
               <summary className="cursor-pointer text-black/55">Preview</summary>
               <div
-                className="prose-deliverable mt-2 bg-white p-3 border border-black/8 text-sm [&_h2]:font-bold [&_h2]:text-navy [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5"
+                className="prose-deliverable mt-2 bg-white p-3 border border-border-brand text-sm [&_h2]:font-bold [&_h2]:text-navy [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5"
                 dangerouslySetInnerHTML={{ __html: bodyHtml }}
               />
             </details>
@@ -1268,9 +1476,9 @@ function VersionComposer({
         value={note}
         onChange={(e) => setNote(e.target.value)}
         placeholder="What changed in this version (optional)"
-        className="w-full border border-black/15 px-2 py-1.5 text-sm"
+        className="w-full border border-border-brand px-2 py-1.5 text-sm"
       />
-      {error && <p className="text-xs text-red-700">{error}</p>}
+      {error && <p className="text-xs text-red-fail">{error}</p>}
       <button
         type="button"
         onClick={post}
@@ -1316,7 +1524,7 @@ function ArchiveControl({
     <button
       onClick={archive}
       disabled={busy}
-      className="text-xs text-black/45 hover:text-red-700 disabled:opacity-50"
+      className="text-xs text-black/45 hover:text-red-fail disabled:opacity-50"
     >
       {busy ? "Archiving..." : "Archive deliverable"}
     </button>
