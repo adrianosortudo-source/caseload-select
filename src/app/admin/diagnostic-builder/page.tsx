@@ -87,23 +87,33 @@ export default function DiagnosticBuilderPage() {
         {status === "not-running" && (
           <div className="space-y-3">
             <p className="text-sm text-black/70">
-              Start the local server from the builder folder, then re-probe.
-              The server uses Gemini for the draft step, so set the key in the
-              same shell.
+              The builder normally auto-starts at Windows login (a shortcut to{" "}
+              <code className="font-mono bg-black/5 px-1.5 py-0.5">start-builder.vbs</code>{" "}
+              lives in your Startup folder). If the dot is red, it crashed or
+              has not started yet. Two ways to restart:
             </p>
-            <pre className="bg-[#0D1520] text-[#cdd6e3] text-xs leading-relaxed p-4 overflow-x-auto whitespace-pre">
-{`# PowerShell
-cd D:\\00_Work\\01_CaseLoad_Select\\00_System\\02_Skills\\caseload-select-diagnostic\\builder
-$env:GEMINI_API_KEY = "your-key"
-python serve.py`}
-            </pre>
+            <ul className="text-sm text-black/70 list-disc pl-5 space-y-1.5">
+              <li>
+                Double-click{" "}
+                <code className="font-mono bg-black/5 px-1.5 py-0.5">start-builder.vbs</code>{" "}
+                in the builder folder. Silent restart. Re-probe after ~3 seconds.
+              </li>
+              <li>
+                For visible logs, double-click{" "}
+                <code className="font-mono bg-black/5 px-1.5 py-0.5">start-builder.bat</code>{" "}
+                instead. A terminal opens and stays open; close it to stop the server.
+              </li>
+            </ul>
             <p className="text-xs text-black/50">
-              Persist the key once with{" "}
+              Folder:{" "}
               <code className="font-mono bg-black/5 px-1.5 py-0.5">
-                setx GEMINI_API_KEY &quot;your-key&quot;
-              </code>{" "}
-              so new shells pick it up automatically (the current shell still
-              needs the <code className="font-mono bg-black/5 px-1.5 py-0.5">$env:</code> line).
+                D:\00_Work\01_CaseLoad_Select\00_System\02_Skills\caseload-select-diagnostic\builder
+              </code>
+            </p>
+            <p className="text-xs text-black/50">
+              Recovery: if a stuck process is holding port 8765, double-click{" "}
+              <code className="font-mono bg-black/5 px-1.5 py-0.5">stop-builder.bat</code>,
+              then start it again.
             </p>
           </div>
         )}
