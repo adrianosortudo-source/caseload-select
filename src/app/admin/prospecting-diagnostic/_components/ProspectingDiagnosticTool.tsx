@@ -15,17 +15,19 @@
 import { useRef, useState } from "react";
 import {
   buildProspectingDiagnostic,
+  buildScanPlan,
+  runScans,
   formatCallAgenda,
   formatReportText,
   PILLAR_LABEL,
   type ActsPillar,
+  type ScanMode,
   type DomainScan,
   type DiagnosticFinding,
   type ProspectingDiagnostic,
 } from "../_lib/prospecting";
 import type { SeoCheckResult } from "../_lib/seo-types";
 
-type ScanMode = "quick" | "standard" | "deep";
 type ProgressStatus = "pending" | "scanning" | "done" | "error";
 
 interface ProgressRow {
@@ -156,15 +158,13 @@ export default function ProspectingDiagnosticTool() {
       return;
     }
 
-    const allAlternates = parseList(alternateDomains, cleanDomain).filter((d) => d !== primary);
-    const alternates = allAlternates.slice(0, MAX_ALTERNATES);
-    const droppedAlternates = allAlternates.length - alternates.length;
+    const plan = buildScanPlan(primary, parseList(alternateDomains, cleanDomain), scanMode, MAX_ALTERNATES);
     const competitorList = parseList(competitors, (s) => s.trim());
 
     const prospect = {
       firmName: name,
       primaryDomain: primary,
-      alternateDomains: alternates,
+      alternateDomains: plan.capped,
       market: market.trim(),
       practiceFocus: practiceFocus.trim(),
       competitors: competitorList,
@@ -173,54 +173,38 @@ export default function ProspectingDiagnosticTool() {
 
     setError("");
     setNotice(
-      droppedAlternates > 0
-        ? `Scanned the first ${MAX_ALTERNATES} alternate domains. ${droppedAlternates} more were not scanned.`
+      plan.dropped > 0
+        ? `Scanned the first ${MAX_ALTERNATES} alternate domains. ${plan.dropped} more were not scanned.`
         : ""
     );
     setDiag(null);
     setScans([]);
     setRunning(true);
+    setProgress(plan.queue.map((q) => ({ domain: q.domain, role: q.role, status: "pending" as ProgressStatus })));
 
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const queue: Array<{ domain: string; role: "primary" | "alternate"; mode: ScanMode }> = [
-      { domain: primary, role: "primary", mode: scanMode },
-      ...alternates.map((d) => ({ domain: d, role: "alternate" as const, mode: "quick" as ScanMode })),
-    ];
+    const outcome = await runScans(plan.queue, {
+      scan: scanDomain,
+      signal: controller.signal,
+      onProgress: (i, status, error) =>
+        setProgress((prev) => prev.map((p, idx) => (idx === i ? { ...p, status, error } : p))),
+    });
 
-    setProgress(queue.map((q) => ({ domain: q.domain, role: q.role, status: "pending" as ProgressStatus })));
-
-    const collected: DomainScan[] = [];
-    for (let i = 0; i < queue.length; i++) {
-      const q = queue[i];
-      setProgress((prev) => prev.map((p, idx) => (idx === i ? { ...p, status: "scanning" } : p)));
-
-      const { result, error: scanErr } = await scanDomain(q.domain, q.mode, controller.signal);
-
-      if (controller.signal.aborted) {
-        setProgress((prev) => prev.map((p, idx) => (idx === i ? { ...p, status: "error", error: "cancelled" } : p)));
-        setNotice("Scan cancelled.");
-        setRunning(false);
-        return;
-      }
-
-      if (q.role === "primary" && !result) {
-        setProgress((prev) => prev.map((p, idx) => (idx === i ? { ...p, status: "error", error: scanErr } : p)));
-        setError(`Could not scan the primary domain (${q.domain}): ${scanErr || "unknown error"}. Fix the domain and run again.`);
-        setRunning(false);
-        return;
-      }
-
-      collected.push({ domain: q.domain, role: q.role, result, error: scanErr });
-      setProgress((prev) =>
-        prev.map((p, idx) => (idx === i ? { ...p, status: result ? "done" : "error", error: scanErr } : p))
-      );
+    if (outcome.kind === "cancelled") {
+      setNotice("Scan cancelled.");
+      setRunning(false);
+      return;
+    }
+    if (outcome.kind === "primary_failed") {
+      setError(`Could not scan the primary domain (${outcome.domain}): ${outcome.error || "unknown error"}. Fix the domain and run again.`);
+      setRunning(false);
+      return;
     }
 
-    const built = buildProspectingDiagnostic(prospect, collected);
-    setScans(collected);
-    setDiag(built);
+    setScans(outcome.scans);
+    setDiag(buildProspectingDiagnostic(prospect, outcome.scans));
     setRunning(false);
   }
 

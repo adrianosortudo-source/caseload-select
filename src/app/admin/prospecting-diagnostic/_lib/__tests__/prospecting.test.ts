@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   buildProspectingDiagnostic,
+  buildScanPlan,
+  runScans,
   classifyActs,
   formatColdEmail,
   formatCallAgenda,
@@ -293,5 +295,85 @@ describe("cold email LSO + brand compliance", () => {
     const none = formatColdEmail({ ...PROSPECT, market: "" }, "capture");
     expect(none).toContain("law firms");
     expect(none.toLowerCase()).not.toContain("ontario");
+  });
+});
+
+describe("buildScanPlan", () => {
+  it("caps alternates, dedupes, drops the primary, and reports the overflow", () => {
+    const plan = buildScanPlan(
+      "a.ca",
+      ["a.ca", "b.ca", "b.ca", "c.ca", "d.ca", "e.ca", "f.ca"],
+      "deep",
+      4
+    );
+    // a.ca removed (primary), b.ca deduped → unique [b,c,d,e,f] = 5, capped to 4.
+    expect(plan.capped).toEqual(["b.ca", "c.ca", "d.ca", "e.ca"]);
+    expect(plan.dropped).toBe(1);
+    expect(plan.queue[0]).toEqual({ domain: "a.ca", role: "primary", mode: "deep" });
+    expect(plan.queue).toHaveLength(5);
+    expect(plan.queue.slice(1).every((q) => q.role === "alternate" && q.mode === "quick")).toBe(true);
+  });
+
+  it("reports zero dropped when alternates fit", () => {
+    const plan = buildScanPlan("a.ca", ["b.ca"], "standard", 4);
+    expect(plan.dropped).toBe(0);
+    expect(plan.capped).toEqual(["b.ca"]);
+    expect(plan.queue[0].mode).toBe("standard");
+  });
+});
+
+describe("runScans", () => {
+  const liveSignal = () => new AbortController().signal;
+
+  it("cancellation wins over a primary failure (ordering)", async () => {
+    const controller = new AbortController();
+    // The user cancels mid-request: the scan aborts the controller, then resolves
+    // with no result. A null primary result must NOT read as a primary failure.
+    const scan = async () => {
+      controller.abort();
+      return { result: null as null, error: "cancelled" };
+    };
+    const plan = buildScanPlan("a.ca", [], "quick", 4);
+    const outcome = await runScans(plan.queue, { scan, signal: controller.signal });
+    expect(outcome.kind).toBe("cancelled");
+  });
+
+  it("stops on a genuine primary failure", async () => {
+    const scan = async () => ({ result: null as null, error: "boom" });
+    const plan = buildScanPlan("a.ca", ["b.ca"], "quick", 4);
+    const outcome = await runScans(plan.queue, { scan, signal: liveSignal() });
+    expect(outcome).toEqual({ kind: "primary_failed", domain: "a.ca", error: "boom" });
+  });
+
+  it("continues past a failed alternate and collects it as unreachable", async () => {
+    const map: Record<string, { result: ReturnType<typeof mkResult> | null; error?: string }> = {
+      "a.ca": { result: mkResult("a.ca", 60, []) },
+      "b.ca": { result: null, error: "down" },
+      "c.ca": { result: mkResult("c.ca", 50, []) },
+    };
+    const scan = async (domain: string) => map[domain];
+    const plan = buildScanPlan("a.ca", ["b.ca", "c.ca"], "quick", 4);
+    const outcome = await runScans(plan.queue, { scan, signal: liveSignal() });
+    expect(outcome.kind).toBe("ok");
+    if (outcome.kind === "ok") {
+      expect(outcome.scans.map((s) => s.domain)).toEqual(["a.ca", "b.ca", "c.ca"]);
+      expect(outcome.scans.find((s) => s.domain === "b.ca")!.result).toBeNull();
+      expect(outcome.scans.find((s) => s.domain === "c.ca")!.result).not.toBeNull();
+    }
+  });
+
+  it("emits a scanning then done progress event per index", async () => {
+    const scan = async (domain: string) => ({ result: mkResult(domain, 50, []) });
+    const plan = buildScanPlan("a.ca", ["b.ca"], "quick", 4);
+    const events: Array<[number, string]> = [];
+    await runScans(plan.queue, {
+      scan,
+      signal: liveSignal(),
+      onProgress: (i, status) => events.push([i, status]),
+    });
+    expect(events).toContainEqual([0, "scanning"]);
+    expect(events).toContainEqual([0, "done"]);
+    expect(events).toContainEqual([1, "scanning"]);
+    expect(events).toContainEqual([1, "done"]);
   });
 });

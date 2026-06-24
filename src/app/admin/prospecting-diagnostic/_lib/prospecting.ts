@@ -52,6 +52,9 @@ export interface ProspectInput {
   notes: string;
 }
 
+export type ScanMode = "quick" | "standard" | "deep";
+export type ScanProgressStatus = "pending" | "scanning" | "done" | "error";
+
 /** One scan attempt, keyed by role. result is null when the scan failed. */
 export interface DomainScan {
   domain: string;
@@ -666,6 +669,86 @@ export function buildProspectingDiagnostic(
     reportReadySummary,
     coldEmailDraft,
   };
+}
+
+/* ────────────────────────────────────────────────────────
+   Scan orchestration (pure, UI-agnostic, injectable)
+
+   The client component is a thin shell over these. Keeping plan-building and
+   the run loop here (with the scan function and AbortSignal injected) lets the
+   cap, the dropped-count, the cancel-before-primary-fail ordering, and the
+   alternate-failure handling be unit-tested without a DOM.
+   ──────────────────────────────────────────────────────── */
+
+export interface ScanQueueItem {
+  domain: string;
+  role: "primary" | "alternate";
+  mode: ScanMode;
+}
+
+/**
+ * Build the ordered scan queue from operator input: primary first at the chosen
+ * depth, then deduped alternates (minus the primary) in quick mode, capped at
+ * maxAlternates. Reports how many alternates were dropped so the cap is never
+ * silent.
+ */
+export function buildScanPlan(
+  primary: string,
+  rawAlternates: string[],
+  primaryMode: ScanMode,
+  maxAlternates: number
+): { queue: ScanQueueItem[]; capped: string[]; dropped: number } {
+  const deduped = [...new Set(rawAlternates.filter((d) => d && d !== primary))];
+  const capped = deduped.slice(0, Math.max(0, maxAlternates));
+  const dropped = deduped.length - capped.length;
+  const queue: ScanQueueItem[] = [
+    { domain: primary, role: "primary", mode: primaryMode },
+    ...capped.map((d) => ({ domain: d, role: "alternate" as const, mode: "quick" as ScanMode })),
+  ];
+  return { queue, capped, dropped };
+}
+
+export type RunScansOutcome =
+  | { kind: "ok"; scans: DomainScan[] }
+  | { kind: "cancelled"; index: number }
+  | { kind: "primary_failed"; domain: string; error?: string };
+
+export interface RunScansDeps {
+  scan: (
+    domain: string,
+    mode: ScanMode,
+    signal: AbortSignal
+  ) => Promise<{ result: SeoCheckResult | null; error?: string }>;
+  signal: AbortSignal;
+  onProgress?: (index: number, status: ScanProgressStatus, error?: string) => void;
+}
+
+/**
+ * Run the queue sequentially. Cancellation is checked BEFORE the primary-failure
+ * branch, so a cancel never reads as a primary scan error. A failed PRIMARY
+ * stops the run; a failed alternate is collected as an unreachable DomainScan
+ * and the run continues.
+ */
+export async function runScans(queue: ScanQueueItem[], deps: RunScansDeps): Promise<RunScansOutcome> {
+  const collected: DomainScan[] = [];
+  for (let i = 0; i < queue.length; i++) {
+    const q = queue[i];
+    deps.onProgress?.(i, "scanning");
+    const { result, error } = await deps.scan(q.domain, q.mode, deps.signal);
+
+    if (deps.signal.aborted) {
+      deps.onProgress?.(i, "error", "cancelled");
+      return { kind: "cancelled", index: i };
+    }
+    if (q.role === "primary" && !result) {
+      deps.onProgress?.(i, "error", error);
+      return { kind: "primary_failed", domain: q.domain, error };
+    }
+
+    collected.push({ domain: q.domain, role: q.role, result, error });
+    deps.onProgress?.(i, result ? "done" : "error", error);
+  }
+  return { kind: "ok", scans: collected };
 }
 
 /* Re-export for the client component's internal scores panel. */
