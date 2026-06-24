@@ -89,10 +89,12 @@ const REQUIRED_ENV_VARS: readonly EnvVarSpec[] = [
   { primary: "GOOGLE_AI_API_KEY", alias: "GEMINI_API_KEY" },
   // Resend (transactional email)
   "RESEND_API_KEY",
-  // Meta (webhooks — added 2026-05-13 in Block 1)
+  // Meta webhooks (Block 1, 2026-05-13)
   "META_APP_SECRET",
   "META_MESSENGER_VERIFY_TOKEN",
   "META_INSTAGRAM_VERIFY_TOKEN",
+  // GA4 (website metrics dashboard)
+  "GOOGLE_SERVICE_ACCOUNT_KEY",
 ] as const;
 
 export default async function AdminHealthPage() {
