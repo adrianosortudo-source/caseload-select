@@ -91,6 +91,7 @@ export async function POST(
     if (!uploaded.ok) return NextResponse.json({ error: uploaded.error }, { status: 500 });
 
     const note = cleanNote(form.get("note"));
+    const silent = form.get("silent") === "true";
     const result = await addVersion({
       deliverableId,
       firmId,
@@ -101,6 +102,7 @@ export async function POST(
       assetName: file.name,
       note,
       actor: resolved.actor,
+      silent,
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
     return NextResponse.json({ ok: true, version: result.version });
@@ -113,7 +115,7 @@ export async function POST(
       { status: 400 },
     );
   }
-  let body: { body_html?: unknown; note?: unknown };
+  let body: { body_html?: unknown; note?: unknown; silent?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -125,6 +127,7 @@ export async function POST(
   if (!sanitised) {
     return NextResponse.json({ error: "body_html is required" }, { status: 400 });
   }
+  const silent = body.silent === true;
   const result = await addVersion({
     deliverableId,
     firmId,
@@ -135,6 +138,7 @@ export async function POST(
     assetName: null,
     note: cleanNote(body.note),
     actor: resolved.actor,
+    silent,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
   return NextResponse.json({ ok: true, version: result.version });

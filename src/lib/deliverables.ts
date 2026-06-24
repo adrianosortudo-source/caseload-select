@@ -209,6 +209,13 @@ export async function addVersion(input: {
   assetName: string | null;
   note: string | null;
   actor: DeliverableActor;
+  /**
+   * When true, do NOT enqueue the firm-side review notification and do NOT
+   * stamp review_notified_at. Used for bulk seed flows where the operator
+   * wants to verify placement in the portal before announcing.
+   * `notifyPendingReviews` then fires one consolidated digest later.
+   */
+  silent?: boolean;
 }): Promise<{ ok: true; version: DeliverableVersion } | { ok: false; error: string }> {
   // Compute the next version number and insert. Two concurrent posts can read
   // the same MAX and collide on UNIQUE(deliverable_id, version_number); the DB
@@ -269,16 +276,68 @@ export async function addVersion(input: {
     })
     .eq("id", input.deliverableId);
 
-  await enqueueDeliverableNotification({
-    firmId: input.firmId,
-    deliverableId: input.deliverableId,
-    eventType: "deliverable_review_requested",
-    audience: "firm",
-    actor: input.actor,
-    bodyPreview: `Version ${version.version_number} is ready for your review.`,
-  }).catch((e) => console.warn("[deliverables] notify failed:", e));
+  if (input.silent !== true) {
+    // Default flow: announce immediately and stamp the deliverable as
+    // notified so notifyPendingReviews skips it later.
+    await supabase
+      .from("content_deliverables")
+      .update({ review_notified_at: new Date().toISOString() })
+      .eq("id", input.deliverableId);
+
+    await enqueueDeliverableNotification({
+      firmId: input.firmId,
+      deliverableId: input.deliverableId,
+      eventType: "deliverable_review_requested",
+      audience: "firm",
+      actor: input.actor,
+      bodyPreview: `Version ${version.version_number} is ready for your review.`,
+    }).catch((e) => console.warn("[deliverables] notify failed:", e));
+  }
 
   return { ok: true, version };
+}
+
+/**
+ * Operator action: announce every in_review deliverable for this firm that
+ * has not yet been announced (review_notified_at IS NULL), in one batch.
+ * Each deliverable enqueues a notification_outbox row; the existing 5-minute
+ * digest cron groups them into ONE digest email per recipient. Idempotent:
+ * re-running picks up only the still-unannounced rows.
+ */
+export async function notifyPendingReviews(input: {
+  firmId: string;
+  actor: DeliverableActor;
+}): Promise<{ ok: true; notified: number } | { ok: false; error: string }> {
+  const { data: pending, error } = await supabase
+    .from("content_deliverables")
+    .select("id, title, current_version_id")
+    .eq("firm_id", input.firmId)
+    .eq("status", "in_review")
+    .is("review_notified_at", null)
+    .order("created_at", { ascending: true });
+  if (error) return { ok: false, error: `query failed: ${error.message}` };
+
+  const rows = (pending ?? []) as Array<{ id: string; title: string; current_version_id: string | null }>;
+  if (rows.length === 0) return { ok: true, notified: 0 };
+
+  const now = new Date().toISOString();
+  for (const r of rows) {
+    await enqueueDeliverableNotification({
+      firmId: input.firmId,
+      deliverableId: r.id,
+      eventType: "deliverable_review_requested",
+      audience: "firm",
+      actor: input.actor,
+      bodyPreview: "Ready for your review.",
+    }).catch((e) => console.warn("[deliverables] notify failed:", e));
+
+    await supabase
+      .from("content_deliverables")
+      .update({ review_notified_at: now })
+      .eq("id", r.id);
+  }
+
+  return { ok: true, notified: rows.length };
 }
 
 export async function addComment(input: {
