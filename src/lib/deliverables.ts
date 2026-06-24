@@ -265,7 +265,7 @@ export async function addVersion(input: {
 
   // Point the deliverable at the new version, return it to review, clear any
   // stale approval pointer (the prior approval stays in approval_records).
-  await supabase
+  const { error: updateErr } = await supabase
     .from("content_deliverables")
     .update({
       current_version_id: version.id,
@@ -275,23 +275,30 @@ export async function addVersion(input: {
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.deliverableId);
+  if (updateErr) {
+    return { ok: false, error: `deliverable update failed: ${updateErr.message}` };
+  }
 
   if (input.silent !== true) {
-    // Default flow: announce immediately and stamp the deliverable as
-    // notified so notifyPendingReviews skips it later.
-    await supabase
-      .from("content_deliverables")
-      .update({ review_notified_at: new Date().toISOString() })
-      .eq("id", input.deliverableId);
-
-    await enqueueDeliverableNotification({
-      firmId: input.firmId,
-      deliverableId: input.deliverableId,
-      eventType: "deliverable_review_requested",
-      audience: "firm",
-      actor: input.actor,
-      bodyPreview: `Version ${version.version_number} is ready for your review.`,
-    }).catch((e) => console.warn("[deliverables] notify failed:", e));
+    // Enqueue FIRST; stamp review_notified_at only after the outbox insert
+    // succeeds. If the enqueue throws (e.g. CHECK constraint violation),
+    // the stamp is skipped and notifyPendingReviews can pick up the row later.
+    try {
+      await enqueueDeliverableNotification({
+        firmId: input.firmId,
+        deliverableId: input.deliverableId,
+        eventType: "deliverable_review_requested",
+        audience: "firm",
+        actor: input.actor,
+        bodyPreview: `Version ${version.version_number} is ready for your review.`,
+      });
+      await supabase
+        .from("content_deliverables")
+        .update({ review_notified_at: new Date().toISOString() })
+        .eq("id", input.deliverableId);
+    } catch (e) {
+      console.warn("[deliverables] notify failed (review_notified_at NOT stamped):", e);
+    }
   }
 
   return { ok: true, version };
@@ -321,23 +328,28 @@ export async function notifyPendingReviews(input: {
   if (rows.length === 0) return { ok: true, notified: 0 };
 
   const now = new Date().toISOString();
+  let notified = 0;
   for (const r of rows) {
-    await enqueueDeliverableNotification({
-      firmId: input.firmId,
-      deliverableId: r.id,
-      eventType: "deliverable_review_requested",
-      audience: "firm",
-      actor: input.actor,
-      bodyPreview: "Ready for your review.",
-    }).catch((e) => console.warn("[deliverables] notify failed:", e));
-
-    await supabase
-      .from("content_deliverables")
-      .update({ review_notified_at: now })
-      .eq("id", r.id);
+    try {
+      await enqueueDeliverableNotification({
+        firmId: input.firmId,
+        deliverableId: r.id,
+        eventType: "deliverable_review_requested",
+        audience: "firm",
+        actor: input.actor,
+        bodyPreview: "Ready for your review.",
+      });
+      await supabase
+        .from("content_deliverables")
+        .update({ review_notified_at: now })
+        .eq("id", r.id);
+      notified++;
+    } catch (e) {
+      console.warn("[deliverables] notifyPendingReviews: enqueue failed for", r.id, e);
+    }
   }
 
-  return { ok: true, notified: rows.length };
+  return { ok: true, notified };
 }
 
 export async function addComment(input: {
@@ -542,5 +554,6 @@ async function enqueueDeliverableNotification(input: {
     },
   }));
 
-  await supabase.from("notification_outbox").insert(rows);
+  const { error: insertErr } = await supabase.from("notification_outbox").insert(rows);
+  if (insertErr) throw new Error(`notification_outbox insert failed: ${insertErr.message}`);
 }

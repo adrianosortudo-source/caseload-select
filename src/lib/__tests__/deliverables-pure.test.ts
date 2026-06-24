@@ -29,9 +29,9 @@ describe("validateAnnotation", () => {
     expect(validateAnnotation({ type: "text", start: 0, end: 3, quote: "" })).toBeNull();
   });
 
-  it("coerces end below start up to start", () => {
-    const a = validateAnnotation({ type: "text", start: 10, end: 4, quote: "x" });
-    expect(a).toEqual({ type: "text", start: 10, end: 10, quote: "x" });
+  it("rejects end <= start (zero-length range)", () => {
+    expect(validateAnnotation({ type: "text", start: 10, end: 4, quote: "x" })).toBeNull();
+    expect(validateAnnotation({ type: "text", start: 10, end: 10, quote: "x" })).toBeNull();
   });
 
   it("clamps pin coordinates to 0..1", () => {

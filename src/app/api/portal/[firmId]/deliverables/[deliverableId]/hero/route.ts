@@ -38,6 +38,16 @@ function safeName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
 }
 
+function sniffMime(buf: Buffer): string | null {
+  if (buf.length < 4) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
+  if (buf.length >= 12 &&
+    buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+    buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return "image/webp";
+  return null;
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ firmId: string; deliverableId: string }> },
@@ -75,12 +85,17 @@ export async function POST(
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
+  const sniffed = sniffMime(buffer);
+  if (!sniffed || !ALLOWED_MIME.has(sniffed)) {
+    return NextResponse.json({ error: "file content is not a valid image" }, { status: 415 });
+  }
+
   const ts = Date.now();
   const storagePath = `deliverables/hero/${firmId}/${deliverableId}/${ts}-${safeName(file.name)}`;
 
   const { error: uploadErr } = await supabase.storage
     .from(BUCKET)
-    .upload(storagePath, buffer, { contentType: mime, upsert: false });
+    .upload(storagePath, buffer, { contentType: sniffed, upsert: false });
   if (uploadErr) {
     console.error("[deliverables/hero] upload failed:", uploadErr.message);
     return NextResponse.json({ error: "upload failed" }, { status: 500 });

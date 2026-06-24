@@ -21,6 +21,9 @@ export async function POST(
   const { firmId } = await params;
   const resolved = await resolveDeliverableActor(firmId);
   if (!resolved) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  if (resolved.actor.role !== "operator") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const result = await notifyPendingReviews({ firmId, actor: resolved.actor });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });

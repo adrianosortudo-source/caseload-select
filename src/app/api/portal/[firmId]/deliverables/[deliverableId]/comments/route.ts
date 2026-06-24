@@ -51,6 +51,12 @@ export async function POST(
   const annotation = validateAnnotation(body.annotation);
   const parentId =
     typeof body.parent_comment_id === "string" ? body.parent_comment_id : null;
+  if (parentId && !detail.comments.some((c) => c.id === parentId)) {
+    return NextResponse.json(
+      { error: "parent_comment_id not found in this deliverable" },
+      { status: 400 },
+    );
+  }
 
   const result = await addComment({
     deliverableId,

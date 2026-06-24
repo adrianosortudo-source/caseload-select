@@ -142,7 +142,8 @@ export function validateAnnotation(raw: unknown): DeliverableAnnotation | null {
     case "text": {
       if (!isFiniteNumber(a.start) || !isFiniteNumber(a.end)) return null;
       const start = Math.max(0, Math.floor(a.start));
-      const end = Math.max(start, Math.floor(a.end));
+      const end = Math.floor(a.end);
+      if (end <= start) return null;
       const quote = typeof a.quote === "string" ? a.quote.slice(0, 1000) : "";
       if (!quote) return null;
       return { type: "text", start, end, quote };
@@ -167,6 +168,15 @@ export function validateAnnotation(raw: unknown): DeliverableAnnotation | null {
       if (!isFiniteNumber(a.page)) return null;
       const page = Math.max(1, Math.floor(a.page));
       return { type: "page", page };
+    }
+    case "image": {
+      if (typeof a.src !== "string") return null;
+      // Only allow https: (Supabase signed URLs) or root-relative paths.
+      // A javascript: URI stored and later rendered would be stored XSS.
+      if (!a.src.startsWith("https://") && !a.src.startsWith("/")) return null;
+      const src = a.src.slice(0, 2000);
+      const alt = typeof a.alt === "string" ? a.alt.slice(0, 200) : undefined;
+      return { type: "image", src, alt };
     }
     default:
       return null;
