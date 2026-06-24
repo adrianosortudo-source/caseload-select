@@ -183,6 +183,22 @@ export function ipInBlockedRange(ip: string): boolean {
     if (v === "::1" || v === "::") return true;               // loopback / unspecified
     const mapped = v.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);  // IPv4-mapped
     if (mapped) return ipInBlockedRange(mapped[1]);
+    // NAT64 well-known prefix 64:ff9b::/96 embeds an IPv4 in the low 32 bits.
+    // 64:ff9b::a9fe:a9fe and 64:ff9b::169.254.169.254 both mean 169.254.169.254,
+    // so a private/metadata IPv4 can be smuggled past the v6 range checks.
+    if (v.startsWith("64:ff9b::") || v.startsWith("64:ff9b:0:0:0:0:")) {
+      const dotted = v.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+      if (dotted) return ipInBlockedRange(dotted[1]);
+      const parts = v.split(":");
+      const last = parts[parts.length - 1];
+      const prev = parts[parts.length - 2];
+      const h2 = parseInt(last, 16);
+      const h1 = parseInt(prev, 16);
+      if (last && prev && Number.isFinite(h1) && Number.isFinite(h2)) {
+        return ipInBlockedRange(`${(h1 >> 8) & 255}.${h1 & 255}.${(h2 >> 8) & 255}.${h2 & 255}`);
+      }
+      return true; // unparseable NAT64 embedding: refuse
+    }
     const firstHex = v.startsWith("::") ? 0 : parseInt(v.split(":")[0] || "0", 16);
     if (Number.isNaN(firstHex)) return true;                  // malformed: refuse
     if (firstHex >= 0xfe80 && firstHex <= 0xfebf) return true; // link-local fe80::/10

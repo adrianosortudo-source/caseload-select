@@ -22,6 +22,7 @@
 
 import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 const BUCKET = "intake-attachments";
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -47,6 +48,23 @@ export async function POST(req: Request) {
     const contentType = req.headers.get("content-type") ?? "";
     if (!contentType.includes("multipart/form-data")) {
       return NextResponse.json({ error: "multipart/form-data required" }, { status: 400 });
+    }
+
+    // Reject oversized bodies before buffering the multipart payload (the 10 MB
+    // limit plus a small margin for the form envelope).
+    const contentLength = Number(req.headers.get("content-length") ?? "0");
+    if (Number.isFinite(contentLength) && contentLength > MAX_BYTES + 64 * 1024) {
+      return NextResponse.json({ error: "File exceeds 10 MB limit" }, { status: 413 });
+    }
+
+    // Per-IP rate gate before parsing: any OTP-verified session_id could
+    // otherwise spam 10 MB uploads into the private bucket.
+    const rl = await checkRateLimit("intake", ipFromRequest(req));
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: "Too many uploads from this network. Try again shortly." },
+        { status: 429, headers: rateLimitHeaders(rl) }
+      );
     }
 
     const formData = await req.formData();

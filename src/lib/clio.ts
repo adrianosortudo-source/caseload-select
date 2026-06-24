@@ -43,6 +43,9 @@ export function signClioState(firmId: string): string {
 
 export function verifyClioState(state: string | null): string | null {
   if (!state) return null;
+  // A missing/blank secret would HMAC with "", making state forgeable by anyone
+  // who knows the deploy is misconfigured. Reject all states in that case.
+  if (clioStateSecret().length < 16) return null;
   const parts = state.split(".");
   if (parts.length !== 2) return null;
   let payload: string;

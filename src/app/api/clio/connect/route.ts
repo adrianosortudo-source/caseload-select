@@ -19,7 +19,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!process.env.CLIO_CLIENT_ID || !process.env.CLIO_REDIRECT_URI) {
+  if (!process.env.CLIO_CLIENT_ID || !process.env.CLIO_REDIRECT_URI || (process.env.CLIO_CLIENT_SECRET ?? "").length < 16) {
+    // CLIO_CLIENT_SECRET is also the OAuth-state signing key; without it the
+    // state is forgeable, so refuse to start the flow.
     return NextResponse.json({ error: "Clio integration not configured" }, { status: 503 });
   }
 

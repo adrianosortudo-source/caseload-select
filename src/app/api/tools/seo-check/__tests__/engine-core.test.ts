@@ -24,10 +24,15 @@ describe("ipInBlockedRange / SSRF ranges", () => {
     "::1", "fe80::1", "fe90::1", "fea0::1", "febf::1", "fec0::1", "feff::1",
     "fc00::1", "fdff::1", "ff02::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1",
     "notanip",
+    // NAT64 64:ff9b::/96 embedding a private/metadata IPv4
+    "64:ff9b::a9fe:a9fe", "64:ff9b::169.254.169.254", "64:ff9b::0a00:0001",
+    "64:ff9b::7f00:0001", "64:ff9b:0:0:0:0:a9fe:a9fe",
   ];
   const allowed = [
     "8.8.8.8", "1.1.1.1", "172.32.0.1", "100.128.0.1", "93.184.216.34",
     "2606:4700::1111", "2001:4860:4860::8888", "::ffff:8.8.8.8",
+    // NAT64 embedding a public IPv4 stays allowed
+    "64:ff9b::0808:0808", "64:ff9b::8.8.8.8",
   ];
   it("blocks private/reserved/loopback/link-local/site-local/multicast", () => {
     for (const ip of blocked) expect(ipInBlockedRange(ip), ip).toBe(true);
