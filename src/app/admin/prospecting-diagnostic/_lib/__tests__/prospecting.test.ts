@@ -376,4 +376,46 @@ describe("runScans", () => {
     expect(events).toContainEqual([1, "scanning"]);
     expect(events).toContainEqual([1, "done"]);
   });
+
+  it("cancels on a LATER alternate, after prior scans succeeded", async () => {
+    const controller = new AbortController();
+    const scan = async (domain: string) => {
+      if (domain === "c.ca") {
+        controller.abort(); // user clicks Cancel during the second alternate
+        return { result: null as null, error: "cancelled" };
+      }
+      return { result: mkResult(domain, 50, []) };
+    };
+    const plan = buildScanPlan("a.ca", ["b.ca", "c.ca"], "quick", 4);
+    const events: Array<[number, string, string | undefined]> = [];
+    const outcome = await runScans(plan.queue, {
+      scan,
+      signal: controller.signal,
+      onProgress: (i, status, error) => events.push([i, status, error]),
+    });
+    // Cancellation is reported at the alternate where it happened (index 2).
+    expect(outcome).toEqual({ kind: "cancelled", index: 2 });
+    // The earlier rows completed; the cancelled row carries the cancelled marker.
+    expect(events).toContainEqual([0, "done", undefined]);
+    expect(events).toContainEqual([1, "done", undefined]);
+    expect(events).toContainEqual([2, "error", "cancelled"]);
+  });
+
+  it("emits an error progress event carrying the failed-alternate reason", async () => {
+    const map: Record<string, { result: ReturnType<typeof mkResult> | null; error?: string }> = {
+      "a.ca": { result: mkResult("a.ca", 60, []) },
+      "b.ca": { result: null, error: "down" },
+    };
+    const scan = async (domain: string) => map[domain];
+    const plan = buildScanPlan("a.ca", ["b.ca"], "quick", 4);
+    const events: Array<[number, string, string | undefined]> = [];
+    const outcome = await runScans(plan.queue, {
+      scan,
+      signal: new AbortController().signal,
+      onProgress: (i, status, error) => events.push([i, status, error]),
+    });
+    expect(outcome.kind).toBe("ok");
+    expect(events).toContainEqual([0, "done", undefined]);
+    expect(events).toContainEqual([1, "error", "down"]);
+  });
 });
