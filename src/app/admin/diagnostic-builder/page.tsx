@@ -108,18 +108,27 @@ python serve.py`}
           </div>
         )}
 
-        <div className="pt-2 border-t border-black/8">
-          <a
-            href={LOCAL_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs uppercase tracking-wider text-black/55 hover:text-navy underline underline-offset-4"
-          >
-            Open {LOCAL_URL} directly
-          </a>
-          <span className="text-xs text-black/40 ml-2">
-            (fallback if the probe stays red but you just started the server)
-          </span>
+        <div className="pt-2 border-t border-black/8 space-y-2">
+          <div>
+            <a
+              href={LOCAL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs uppercase tracking-wider text-black/55 hover:text-navy underline underline-offset-4"
+            >
+              Open {LOCAL_URL} directly
+            </a>
+            <span className="text-xs text-black/40 ml-2">
+              (fallback if the probe stays red but you just started the server)
+            </span>
+          </div>
+          <p className="text-[11px] text-black/40 leading-relaxed">
+            The probe is a best-effort indicator. It tells your browser whether a
+            local service answers on port 8765 from the operator console origin.
+            It can show red on a working server when a browser blocks the
+            cross-port preflight, and green on any other service that happens to
+            listen on that port. Trust the new-tab open more than the dot.
+          </p>
         </div>
       </section>
 
