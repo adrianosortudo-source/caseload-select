@@ -229,7 +229,15 @@ export type DeliverableAnnotation =
   | { type: "text"; start: number; end: number; quote: string }
   | { type: "pin"; x: number; y: number }
   | { type: "region"; x: number; y: number; w: number; h: number }
-  | { type: "page"; page: number };
+  | { type: "page"; page: number }
+  /**
+   * Anchor on an inline image inside a text deliverable's body. The
+   * Google-Docs-style popover triggers this on click; the reviewer adds a
+   * general comment about that image. src + alt give the operator enough to
+   * identify which image without a coord, which is the desired UX (no need
+   * for pin/region precision on inline embedded images).
+   */
+  | { type: "image"; src: string; alt?: string };
 
 export interface ContentDeliverable {
   id: string;

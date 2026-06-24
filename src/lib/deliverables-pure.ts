@@ -185,6 +185,8 @@ export function annotationLabel(annotation: DeliverableAnnotation | null): strin
       return "On a region";
     case "page":
       return `On page ${annotation.page}`;
+    case "image":
+      return annotation.alt ? `On image: ${annotation.alt.slice(0, 40)}` : "On an inline image";
   }
 }
 

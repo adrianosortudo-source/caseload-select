@@ -4,6 +4,7 @@ import {
   useState,
   useRef,
   useCallback,
+  useEffect,
   type PointerEvent as ReactPointerEvent,
   type FormEvent,
 } from "react";
@@ -15,7 +16,7 @@ import type {
   ApprovalRecord,
   DeliverableAnnotation,
 } from "@/lib/types";
-import { DRGArticleFrame } from "./DRGArticleFrame";
+import { DRGArticleFrame, type AnnotationPosition } from "./DRGArticleFrame";
 import {
   STATUS_LABELS,
   CONTENT_KIND_LABELS,
@@ -55,6 +56,7 @@ export default function DeliverableReview({
     deliverable.current_version_id ?? versions[0]?.id ?? null,
   );
   const [pendingAnnotation, setPendingAnnotation] = useState<DeliverableAnnotation | null>(null);
+  const [pendingPosition, setPendingPosition] = useState<AnnotationPosition | null>(null);
   const [showVersionComposer, setShowVersionComposer] = useState(versions.length === 0);
 
   const selectedVersion = versions.find((v) => v.id === selectedVersionId) ?? null;
@@ -149,7 +151,10 @@ export default function DeliverableReview({
               deliverable={deliverable}
               comments={versionComments}
               numberByCommentId={numberByCommentId}
-              onAnnotate={setPendingAnnotation}
+              onAnnotate={(a, pos) => {
+                setPendingAnnotation(a);
+                setPendingPosition(pos ?? null);
+              }}
             />
           ) : (
             <div className="bg-white border border-black/8 px-6 py-10 text-center text-sm text-black/55">
@@ -162,10 +167,23 @@ export default function DeliverableReview({
               firmId={firmId}
               deliverableId={deliverableId}
               versionId={selectedVersion.id}
-              pendingAnnotation={pendingAnnotation}
-              onClearAnnotation={() => setPendingAnnotation(null)}
+              pendingAnnotation={pendingPosition ? null : pendingAnnotation}
+              onClearAnnotation={() => { setPendingAnnotation(null); setPendingPosition(null); }}
               viewerRole={viewerRole}
               onPosted={refetch}
+            />
+          )}
+
+          {pendingAnnotation && pendingPosition && selectedVersion && (
+            <FloatingAnnotationPopover
+              annotation={pendingAnnotation}
+              position={pendingPosition}
+              firmId={firmId}
+              deliverableId={deliverableId}
+              versionId={selectedVersion.id}
+              viewerRole={viewerRole}
+              onDismiss={() => { setPendingAnnotation(null); setPendingPosition(null); }}
+              onPosted={async () => { setPendingAnnotation(null); setPendingPosition(null); await refetch(); }}
             />
           )}
         </div>
@@ -277,7 +295,7 @@ function ContentViewer({
   deliverable: ContentDeliverable;
   comments: DeliverableComment[];
   numberByCommentId: Map<string, number>;
-  onAnnotate: (a: DeliverableAnnotation) => void;
+  onAnnotate: (a: DeliverableAnnotation, pos?: AnnotationPosition) => void;
 }) {
   const contentKind = deliverable.content_kind;
   if (contentKind === "text") {
@@ -296,7 +314,7 @@ function ContentViewer({
         />
       );
     }
-    return <TextViewer version={version} onAnnotate={onAnnotate} />;
+    return <TextViewer version={version} onAnnotate={(a) => onAnnotate(a)} />;
   }
   if (contentKind === "image") {
     return (
@@ -523,6 +541,173 @@ function PdfViewer({
   );
 }
 
+// ─── Floating annotation popover (Google-Docs style) ─────────────────────────
+
+const POPOVER_W = 288;
+const POPOVER_H = 152; // approximate height to decide above/below
+const POPOVER_MARGIN = 8; // minimum distance from viewport edge
+
+function FloatingAnnotationPopover({
+  annotation,
+  position,
+  firmId,
+  deliverableId,
+  versionId,
+  viewerRole,
+  onDismiss,
+  onPosted,
+}: {
+  annotation: DeliverableAnnotation;
+  position: AnnotationPosition;
+  firmId: string;
+  deliverableId: string;
+  versionId: string;
+  viewerRole: "operator" | "lawyer";
+  onDismiss: () => void;
+  onPosted: () => Promise<void>;
+}) {
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-focus textarea when popover opens
+  useEffect(() => {
+    taRef.current?.focus();
+  }, []);
+
+  // Esc to dismiss
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onDismiss();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onDismiss]);
+
+  // Click outside to dismiss. Delayed 120ms so the same mouseup that opened
+  // the popover does not immediately close it.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    function attach() {
+      document.addEventListener("mousedown", handleOutside);
+    }
+    function handleOutside(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        onDismiss();
+      }
+    }
+    timer = setTimeout(attach, 120);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", handleOutside);
+    };
+  }, [onDismiss]);
+
+  // Clamp to viewport. Use position: fixed so viewport coords are direct.
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const OFFSET = 10;
+  const clampedLeft = Math.min(
+    Math.max(POPOVER_MARGIN, position.left - POPOVER_W / 2),
+    vw - POPOVER_W - POPOVER_MARGIN,
+  );
+  // Prefer above the anchor; fall back to below when there is not enough room.
+  const showAbove = position.top - POPOVER_H - OFFSET > 20;
+  const top = showAbove
+    ? Math.max(POPOVER_MARGIN, position.top - POPOVER_H - OFFSET)
+    : Math.min(vh - POPOVER_H - POPOVER_MARGIN, position.top + OFFSET + 20);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!body.trim()) return;
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/portal/${firmId}/deliverables/${deliverableId}/comments`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version_id: versionId, body: body.trim(), annotation }),
+        },
+      );
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setError(json.error ?? "Could not post.");
+      } else {
+        await onPosted();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div
+      ref={wrapRef}
+      style={{
+        position: "fixed",
+        top,
+        left: clampedLeft,
+        width: POPOVER_W,
+        zIndex: 1200,
+      }}
+      className="bg-white border border-black/20 shadow-xl"
+    >
+      <div className="px-3 py-2 border-b border-black/8 bg-parchment">
+        <p className="text-[10px] text-black/50 truncate leading-tight">
+          {annotationChip(annotation)}
+        </p>
+      </div>
+      <form onSubmit={onSubmit} className="p-3 space-y-2">
+        <textarea
+          ref={taRef}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={3}
+          placeholder={
+            viewerRole === "lawyer"
+              ? "Add a comment for the operator..."
+              : "Add a note for the firm..."
+          }
+          className="w-full border border-black/15 px-2 py-1.5 text-sm resize-none"
+          onKeyDown={(e) => {
+            // Cmd/Ctrl + Enter submits
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
+        />
+        {error && <p className="text-[11px] text-red-700">{error}</p>}
+        <div className="flex items-center gap-2">
+          <button
+            type="submit"
+            disabled={sending || !body.trim()}
+            className="px-3 py-1.5 text-xs font-semibold bg-navy text-white disabled:opacity-50 whitespace-nowrap"
+          >
+            {sending ? "Posting..." : "Comment"}
+          </button>
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="text-xs text-black/45 hover:text-black"
+          >
+            Cancel
+          </button>
+          <span className="ml-auto text-[10px] text-black/30">
+            {typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘" : "Ctrl"}+↵
+          </span>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ─── Comment composer ────────────────────────────────────────────────────────
 
 function annotationChip(a: DeliverableAnnotation): string {
@@ -535,6 +720,8 @@ function annotationChip(a: DeliverableAnnotation): string {
       return "On a marked region";
     case "page":
       return `On page ${a.page}`;
+    case "image":
+      return a.alt ? `On image: ${a.alt.slice(0, 50)}` : "On an inline image";
   }
 }
 

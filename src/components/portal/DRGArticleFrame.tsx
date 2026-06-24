@@ -13,13 +13,20 @@ import "./drg-article-frame.css";
  * we render it inside a Source Serif 4 / oxblood / cream wrapper that
  * matches the live site.
  *
- * Selection-to-comment works the same as the generic TextViewer: mouseup
- * with a non-collapsed selection inside the body fires onAnnotate with a
- * text annotation, and the parent component shows the comment composer.
+ * Annotation triggers (Google-Docs-style floating popover):
+ *  - Text mouseup with a non-collapsed selection fires onAnnotate with a
+ *    text annotation + the bounding-rect viewport position so the parent
+ *    can anchor a floating comment composer near the selection.
+ *  - Click on any <img> inside the body fires onAnnotate with an image
+ *    annotation + position centered above that image.
+ *  - Click on the hero image fires onAnnotate with an image annotation.
  *
  * CSS namespace `.cls-drg-article` keeps the DRG variables and rules from
  * leaking into the portal Tailwind chrome.
  */
+
+export type AnnotationPosition = { top: number; left: number };
+
 export function DRGArticleFrame({
   title,
   excerpt,
@@ -31,19 +38,20 @@ export function DRGArticleFrame({
   bodyHtml,
   onAnnotate,
 }: {
-  title: string;          // Bare display title (no operator kicker prefix)
+  title: string;
   excerpt: string | null;
   topic: string | null;
   byline: string | null;
-  publishDate: string | null; // ISO date or null
+  publishDate: string | null;
   readTime: string | null;
   heroImageUrl: string | null;
   bodyHtml: string;
-  onAnnotate: (annotation: DeliverableAnnotation) => void;
+  onAnnotate: (annotation: DeliverableAnnotation, position: AnnotationPosition) => void;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
+  const heroImgRef = useRef<HTMLImageElement>(null);
 
-  function onMouseUp() {
+  function onTextMouseUp() {
     const container = bodyRef.current;
     if (!container) return;
     const sel = window.getSelection();
@@ -56,7 +64,44 @@ export function DRGArticleFrame({
     const start = pre.toString().length;
     const quote = range.toString().trim();
     if (!quote) return;
-    onAnnotate({ type: "text", start, end: start + quote.length, quote });
+
+    // Viewport-relative rect of the selection; the floating popover uses
+    // `position: fixed` so viewport coords are exactly what it needs.
+    const rect = range.getBoundingClientRect();
+    const position: AnnotationPosition = {
+      top: rect.top,
+      left: rect.left + rect.width / 2,
+    };
+    onAnnotate({ type: "text", start, end: start + quote.length, quote }, position);
+  }
+
+  // Event delegation: any <img> clicked inside the article body triggers an
+  // image annotation. Inline images in body_html don't have React refs, so
+  // delegation is the cleanest approach.
+  function onBodyClick(e: React.MouseEvent<HTMLDivElement>) {
+    const target = e.target as HTMLElement;
+    if (target.tagName !== "IMG") return;
+    const img = target as HTMLImageElement;
+    const rect = img.getBoundingClientRect();
+    const position: AnnotationPosition = {
+      top: rect.top,
+      left: rect.left + rect.width / 2,
+    };
+    onAnnotate(
+      { type: "image", src: img.src, alt: img.alt || undefined },
+      position,
+    );
+  }
+
+  function onHeroClick() {
+    const img = heroImgRef.current;
+    if (!img || !heroImageUrl) return;
+    const rect = img.getBoundingClientRect();
+    const position: AnnotationPosition = {
+      top: rect.top,
+      left: rect.left + rect.width / 2,
+    };
+    onAnnotate({ type: "image", src: heroImageUrl, alt: title }, position);
   }
 
   return (
@@ -99,7 +144,14 @@ export function DRGArticleFrame({
       <div className={heroImageUrl ? "drg-hero-frame" : "drg-hero-frame is-empty"}>
         {heroImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={heroImageUrl} alt={title} />
+          <img
+            ref={heroImgRef}
+            src={heroImageUrl}
+            alt={title}
+            onClick={onHeroClick}
+            style={{ cursor: "pointer" }}
+            title="Click to comment on this image"
+          />
         ) : (
           <span>Hero image not yet generated</span>
         )}
@@ -109,7 +161,8 @@ export function DRGArticleFrame({
         <div
           ref={bodyRef}
           className="drg-body"
-          onMouseUp={onMouseUp}
+          onMouseUp={onTextMouseUp}
+          onClick={onBodyClick}
           dangerouslySetInnerHTML={{ __html: bodyHtml }}
         />
       </div>
@@ -142,7 +195,6 @@ export function DRGArticleFrame({
 }
 
 function formatDate(isoDate: string): string {
-  // Accept full ISO timestamps or bare YYYY-MM-DD
   const d = new Date(isoDate.length === 10 ? `${isoDate}T00:00:00` : isoDate);
   if (Number.isNaN(d.getTime())) return isoDate;
   const month = d.toLocaleString("en-CA", { month: "long" });
