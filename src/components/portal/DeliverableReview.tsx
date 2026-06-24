@@ -11,6 +11,7 @@ import {
   type RefObject,
 } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type {
   ContentDeliverable,
   DeliverableVersion,
@@ -126,6 +127,25 @@ export default function DeliverableReview({
   const focusFromHighlight = useCallback((id: string) => {
     setActiveId(id);
   }, []);
+
+  // Deep link from CaseLoad Connect: ?comment=<id> opens this deliverable
+  // focused on that comment. Select the comment's version, mark it active
+  // (the margin scrolls its card into view), and scroll its passage highlight
+  // into view once the version's content has rendered. One-shot.
+  const searchParams = useSearchParams();
+  const didAutoFocusRef = useRef(false);
+  useEffect(() => {
+    if (didAutoFocusRef.current) return;
+    const target = searchParams.get("comment");
+    if (!target) return;
+    const c = comments.find((x) => x.id === target);
+    if (!c) return;
+    didAutoFocusRef.current = true;
+    setSelectedVersionId(c.version_id);
+    setActiveId(c.id);
+    const t = setTimeout(() => scrollMarkIntoView(rowRef.current, c.id), 400);
+    return () => clearTimeout(t);
+  }, [searchParams, comments]);
 
   // Number positional comments so markers and the sidebar align.
   const numberByCommentId = new Map<string, number>();
