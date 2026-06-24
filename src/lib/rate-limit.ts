@@ -82,7 +82,8 @@ export type RateLimitBucket =
   | "extract"
   | "transcribe"
   | "otpSend"
-  | "otpVerify";
+  | "otpVerify"
+  | "seoCheck";
 
 interface BucketConfig {
   limit: number;
@@ -98,6 +99,7 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   transcribe:     { limit: 10, windowSeconds: 60 },    // 10 per minute
   otpSend:        { limit: 5,  windowSeconds: 600 },   // 5 per 10 minutes
   otpVerify:      { limit: 10, windowSeconds: 600 },   // 10 per 10 minutes
+  seoCheck:       { limit: 8,  windowSeconds: 600 },   // 8 per 10 minutes (public, unauth only)
 };
 
 /**

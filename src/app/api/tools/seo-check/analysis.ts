@@ -180,6 +180,8 @@ export interface SeoCheckResult {
   issues: Issue[];
   internalSummary: InternalSummary;
   severityBreakdown: SeverityBreakdown;
+  /** True when the wall-clock budget was hit before the page target was met. */
+  partial?: boolean;
   checkedAt: string;
 }
 

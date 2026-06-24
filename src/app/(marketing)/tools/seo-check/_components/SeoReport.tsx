@@ -113,6 +113,7 @@ export interface SeoCheckResult {
   issues?: Issue[];
   internalSummary?: InternalSummary;
   severityBreakdown?: SeverityBreakdown;
+  partial?: boolean;
   checkedAt: string;
 }
 
@@ -288,6 +289,7 @@ export default function SeoReport({
           <div className="seo-report-hero-text">
             <div className="seo-report-eyebrow">
               Multi-page diagnostic &middot; {pagesScanned} page{pagesScanned > 1 ? "s" : ""}{result.scanMode ? ` · ${result.scanMode}` : ""}
+              {result.partial ? " · partial (time limit reached)" : ""}
             </div>
             <h2 className="seo-report-domain">{result.domain}</h2>
             <p className="seo-report-summary">

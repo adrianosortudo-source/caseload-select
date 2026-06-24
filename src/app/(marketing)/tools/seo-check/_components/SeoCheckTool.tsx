@@ -28,7 +28,6 @@ export default function SeoCheckTool({
   const isOperator = variant === "operator";
   const [step, setStep] = useState<Step>("input");
   const [domain, setDomain] = useState("");
-  const [maxPages] = useState(5);
   const [scanMode, setScanMode] = useState<ScanMode>("quick");
   const [error, setError] = useState("");
   const [result, setResult] = useState<SeoCheckResult | null>(null);
@@ -64,7 +63,7 @@ export default function SeoCheckTool({
       const res = await fetch("/api/tools/seo-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(isOperator ? { domain: trimmed, scanMode } : { domain: trimmed, maxPages }),
+        body: JSON.stringify(isOperator ? { domain: trimmed, scanMode } : { domain: trimmed }),
       });
 
       if (phaseInterval.current) clearInterval(phaseInterval.current);

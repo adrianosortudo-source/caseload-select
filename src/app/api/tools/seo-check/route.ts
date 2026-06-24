@@ -53,6 +53,9 @@ import {
   buildInternalSummary,
   severityBreakdown,
 } from "./analysis";
+import { SCAN_MODE_DEFAULTS } from "./engine-core";
+import { getOperatorSession } from "@/lib/portal-auth";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 // Deep scans walk up to 50 pages sequentially; allow headroom on Vercel Pro.
@@ -280,26 +283,50 @@ function extractCanonical(html: string): string | null {
    Structured-data extraction (JSON-LD)
    ──────────────────────────────────────────────────────── */
 
-function collectTypes(node: unknown, out: Set<string>): void {
-  if (!node || typeof node !== "object") return;
-  if (Array.isArray(node)) { for (const n of node) collectTypes(n, out); return; }
-  const obj = node as Record<string, unknown>;
-  const t = obj["@type"];
-  if (typeof t === "string") out.add(t.toLowerCase());
-  else if (Array.isArray(t)) for (const x of t) if (typeof x === "string") out.add(x.toLowerCase());
-  for (const key of Object.keys(obj)) collectTypes(obj[key], out);
+// Iterative, bounded walkers. A hostile but valid JSON-LD block with deep
+// nesting must not overflow the stack or run away, so we cap depth and the
+// total node count instead of recursing.
+const MAX_SCHEMA_DEPTH = 64;
+const MAX_SCHEMA_NODES = 5000;
+
+function collectTypes(root: unknown, out: Set<string>): void {
+  const stack: Array<{ node: unknown; depth: number }> = [{ node: root, depth: 0 }];
+  let visited = 0;
+  while (stack.length > 0) {
+    const { node, depth } = stack.pop()!;
+    if (!node || typeof node !== "object" || depth > MAX_SCHEMA_DEPTH) continue;
+    if (++visited > MAX_SCHEMA_NODES) break;
+    if (Array.isArray(node)) {
+      for (const n of node) stack.push({ node: n, depth: depth + 1 });
+      continue;
+    }
+    const obj = node as Record<string, unknown>;
+    const t = obj["@type"];
+    if (typeof t === "string") out.add(t.toLowerCase());
+    else if (Array.isArray(t)) for (const x of t) if (typeof x === "string") out.add(x.toLowerCase());
+    for (const key of Object.keys(obj)) stack.push({ node: obj[key], depth: depth + 1 });
+  }
 }
 
-function hasKeyDeep(node: unknown, keys: string[]): boolean {
-  if (!node || typeof node !== "object") return false;
-  if (Array.isArray(node)) return node.some((n) => hasKeyDeep(n, keys));
-  const obj = node as Record<string, unknown>;
-  for (const k of Object.keys(obj)) {
-    if (keys.includes(k.toLowerCase())) {
-      const v = obj[k];
-      if (v !== null && v !== undefined && v !== "") return true;
+function hasKeyDeep(root: unknown, keys: string[]): boolean {
+  const stack: Array<{ node: unknown; depth: number }> = [{ node: root, depth: 0 }];
+  let visited = 0;
+  while (stack.length > 0) {
+    const { node, depth } = stack.pop()!;
+    if (!node || typeof node !== "object" || depth > MAX_SCHEMA_DEPTH) continue;
+    if (++visited > MAX_SCHEMA_NODES) break;
+    if (Array.isArray(node)) {
+      for (const n of node) stack.push({ node: n, depth: depth + 1 });
+      continue;
     }
-    if (hasKeyDeep(obj[k], keys)) return true;
+    const obj = node as Record<string, unknown>;
+    for (const k of Object.keys(obj)) {
+      if (keys.includes(k.toLowerCase())) {
+        const v = obj[k];
+        if (v !== null && v !== undefined && v !== "") return true;
+      }
+      stack.push({ node: obj[k], depth: depth + 1 });
+    }
   }
   return false;
 }
@@ -1142,8 +1169,11 @@ const DEPTH_BY_BUDGET = (maxPages: number): number => (maxPages <= 10 ? 2 : maxP
 const FANOUT_PER_PAGE = 30;
 const FRONTIER_CAP = 600;
 
+// Dedupe / membership key. URL already lowercases scheme + host; we strip the
+// fragment and a trailing slash but PRESERVE path and query case, because URL
+// paths can be case-sensitive and this key is also reused as a fetch URL.
 function normKey(url: string): string {
-  try { const u = new URL(url); u.hash = ""; return u.href.replace(/\/$/, "").toLowerCase(); } catch { return url.toLowerCase(); }
+  try { const u = new URL(url); u.hash = ""; return u.href.replace(/\/$/, ""); } catch { return url; }
 }
 
 /* ────────────────────────────────────────────────────────
@@ -1154,7 +1184,26 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const rawDomain = body?.domain;
-    const { scanMode, maxPages } = resolveScan({ maxPages: body?.maxPages, scanMode: body?.scanMode });
+
+    // Only operators may request standard/deep scans or large page budgets.
+    // Unauthenticated (public lead-magnet) callers are capped to quick mode and
+    // rate-limited, since each scan is an expensive arbitrary-domain crawl.
+    const isOperator = !!(await getOperatorSession());
+    if (!isOperator) {
+      const decision = await checkRateLimit("seoCheck", ipFromRequest(req));
+      if (!decision.ok) {
+        return NextResponse.json(
+          { error: "Too many scans from this network. Try again in a few minutes." },
+          { status: 429, headers: rateLimitHeaders(decision) }
+        );
+      }
+    }
+
+    let { scanMode, maxPages } = resolveScan({ maxPages: body?.maxPages, scanMode: body?.scanMode });
+    if (!isOperator) {
+      scanMode = "quick";
+      maxPages = Math.min(maxPages, SCAN_MODE_DEFAULTS.quick);
+    }
 
     if (!rawDomain || typeof rawDomain !== "string") {
       return NextResponse.json({ error: "Domain is required." }, { status: 400 });
@@ -1166,6 +1215,11 @@ export async function POST(req: NextRequest) {
     if (isSsrfBlocked(domain)) {
       return NextResponse.json({ error: "That domain cannot be checked." }, { status: 400 });
     }
+
+    // Overall wall-clock budget so deep crawls return partial results instead of
+    // hitting the function ceiling with nothing.
+    const startedAt = Date.now();
+    const CRAWL_BUDGET_MS = 230_000;
 
     const homeUrl = `https://${domain}`;
 
@@ -1224,6 +1278,7 @@ export async function POST(req: NextRequest) {
     }
 
     const pages: PageResult[] = [homePage];
+    let partial = false;
 
     if (maxPages > 1) {
       const maxDepth = DEPTH_BY_BUDGET(maxPages);
@@ -1247,6 +1302,8 @@ export async function POST(req: NextRequest) {
       if (sitemapSet) for (const u of sitemapSet) enqueue(u, 1);
 
       while (pages.length < maxPages && frontier.length > 0) {
+        // Stop early (with partial results) if the wall-clock budget is spent.
+        if (Date.now() - startedAt > CRAWL_BUDGET_MS) { partial = true; break; }
         // Pick the highest-priority candidate.
         let bestIdx = 0;
         for (let i = 1; i < frontier.length; i++) if (frontier[i].score > frontier[bestIdx].score) bestIdx = i;
@@ -1310,6 +1367,7 @@ export async function POST(req: NextRequest) {
       issues,
       internalSummary,
       severityBreakdown: breakdown,
+      partial,
       checkedAt: new Date().toISOString(),
     };
 

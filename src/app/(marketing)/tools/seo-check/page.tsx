@@ -5,7 +5,7 @@ import SeoCheckTool from "./_components/SeoCheckTool";
 export const metadata: Metadata = {
   title: "Free SEO & AI Visibility Check · CaseLoad Select",
   description:
-    "Run a multi-page diagnostic of your law firm's SEO health and AI search visibility. 49 signals per page across 7 categories including AI bot access, schema markup, performance, and security. Free, no account required.",
+    "Run a multi-page diagnostic of your law firm's SEO health and AI search visibility. Dozens of signals across nine categories including indexability, AI bot access, schema readiness, local search, and security. Free, no account required.",
   openGraph: {
     title: "Free SEO & AI Visibility Check · CaseLoad Select",
     description:
@@ -126,7 +126,7 @@ export default function SeoCheckPage() {
           <p>
             <strong>Free diagnostic tool.</strong> This report checks publicly visible signals
             on your website. It does not access analytics, Search Console, or any private data.
-            Results are based on a multi-page diagnostic scan (up to 5 pages) and may not capture every signal on larger sites.
+            Results are based on a multi-page diagnostic crawl (up to 10 pages) and may not capture every signal on larger sites.
             Built by CaseLoad Select.
           </p>
         </section>
