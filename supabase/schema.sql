@@ -389,3 +389,90 @@
 -- created_at / updated_at    timestamptz
 -- Env vars required: DOCUGENERATE_API_KEY, DOCUGENERATE_TEMPLATE_ID,
 --                    DOCUSEAL_API_KEY, DOCUSEAL_TEMPLATE_ID, DOCUSEAL_WEBHOOK_SECRET
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Content Studio tables                    (migration: 20260624_content_studio_foundation.sql)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- RLS: service-role only (ENABLE + FORCE + REVOKE anon/authenticated/PUBLIC).
+
+-- firm_content_strategies
+-- id                  uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- firm_id             uuid NOT NULL REFERENCES intake_firms(id) ON DELETE CASCADE
+-- name                text NOT NULL
+-- version             integer NOT NULL DEFAULT 1
+-- status              text NOT NULL DEFAULT 'active' CHECK (draft|active|archived)
+-- default_locale      text NOT NULL DEFAULT 'en'
+-- bilingual_enabled   boolean NOT NULL DEFAULT false
+-- jurisdiction        text NOT NULL DEFAULT 'Ontario'
+-- strategy_json       jsonb NOT NULL DEFAULT '{}'
+-- format_specs        jsonb NOT NULL DEFAULT '{}'
+-- voice_rules         jsonb NOT NULL DEFAULT '{}'
+-- created_at / updated_at  timestamptz
+-- UNIQUE (firm_id, version)
+
+-- content_calendar_slots
+-- id                  uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- firm_id             uuid NOT NULL REFERENCES intake_firms(id) ON DELETE CASCADE
+-- strategy_id         uuid REFERENCES firm_content_strategies(id) ON DELETE SET NULL
+-- week_of             date NOT NULL
+-- publish_date        date NOT NULL
+-- cadence_kind        text NOT NULL CHECK (tuesday_primary|thursday_day2|monthly_letter|quarterly_tool)
+-- territory           text
+-- planned_format      text NOT NULL CHECK (counsel_note|clause_in_the_margin|decision_tool|counsel_letter)
+-- theme               text NOT NULL
+-- status              text NOT NULL DEFAULT 'planned' CHECK (planned|briefed|drafting|legal_review|production|shipped|skipped)
+-- notes               text
+-- created_at / updated_at  timestamptz
+
+-- content_pieces
+-- id                  uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- firm_id             uuid NOT NULL REFERENCES intake_firms(id) ON DELETE CASCADE
+-- calendar_slot_id    uuid REFERENCES content_calendar_slots(id) ON DELETE SET NULL
+-- strategy_id         uuid REFERENCES firm_content_strategies(id) ON DELETE SET NULL
+-- strategy_version    integer
+-- deliverable_id      uuid  (nullable, FK to content_deliverables.id when legal gate is used)
+-- title_working       text NOT NULL
+-- format              text NOT NULL CHECK (counsel_note|clause_in_the_margin|decision_tool|counsel_letter)
+-- language_mode       text NOT NULL DEFAULT 'en' CHECK (en|pt|bilingual)
+-- workflow_gate       text NOT NULL DEFAULT 'discovery' CHECK (discovery|position|draft|legal_gate|authoring|production)
+-- status              text NOT NULL DEFAULT 'draft' CHECK (draft|in_review|changes_requested|approved|production|published|archived)
+-- source_brief        jsonb NOT NULL DEFAULT '{}'
+-- ship_checks         jsonb NOT NULL DEFAULT '{}'
+-- owner_name          text
+-- review_date         date
+-- created_at / updated_at  timestamptz
+
+-- content_piece_versions
+-- id                  uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- piece_id            uuid NOT NULL REFERENCES content_pieces(id) ON DELETE CASCADE
+-- version_number      integer NOT NULL
+-- language            text NOT NULL DEFAULT 'en' CHECK (en|pt)
+-- body_structured     jsonb NOT NULL DEFAULT '[]'
+-- body_markdown       text
+-- seo_metadata        jsonb NOT NULL DEFAULT '{}'
+-- source_notes        jsonb NOT NULL DEFAULT '{}'
+-- text_hash           text
+-- created_by          text
+-- created_with_ai_run_id uuid
+-- is_current          boolean NOT NULL DEFAULT false
+-- created_at          timestamptz
+-- UNIQUE (piece_id, version_number, language)
+
+-- content_ai_runs
+-- id                    uuid PRIMARY KEY DEFAULT gen_random_uuid()
+-- firm_id               uuid NOT NULL REFERENCES intake_firms(id) ON DELETE CASCADE
+-- piece_id              uuid REFERENCES content_pieces(id) ON DELETE SET NULL
+-- piece_version_id      uuid REFERENCES content_piece_versions(id) ON DELETE SET NULL
+-- run_type              text NOT NULL CHECK (draft|revise|validate_deterministic|validate_voice|validate_lso|generate_derivatives)
+-- status                text NOT NULL DEFAULT 'queued' CHECK (queued|running|succeeded|failed)
+-- model                 text
+-- input_hash            text
+-- output_hash           text
+-- prompt_context_version integer
+-- prompt_context        jsonb NOT NULL DEFAULT '{}'
+-- request_metadata      jsonb NOT NULL DEFAULT '{}'
+-- result                jsonb NOT NULL DEFAULT '{}'
+-- usage                 jsonb NOT NULL DEFAULT '{}'
+-- error_message         text
+-- started_at / completed_at  timestamptz
+-- created_at            timestamptz
