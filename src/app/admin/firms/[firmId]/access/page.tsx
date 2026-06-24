@@ -9,7 +9,6 @@ import { redirect } from "next/navigation";
 import { getOperatorSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { listFirmMembers } from "@/lib/firm-members";
-import NewFirmForm from "@/components/admin/NewFirmForm";
 import MemberManager, { type MemberView } from "@/components/admin/MemberManager";
 
 export const dynamic = "force-dynamic";
@@ -64,8 +63,6 @@ export default async function FirmAccessPage({
           Open portal <span aria-hidden>&#8599;</span>
         </a>
       </div>
-
-      <NewFirmForm />
 
       <MemberManager
         firmId={firmId}

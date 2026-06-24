@@ -59,6 +59,12 @@ export default function FirmSwitcher({ firms }: { firms: Firm[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
+  // New-firm inline creator state.
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
   const match = FIRM_SCOPED_RE.exec(pathname);
   const currentFirmId = match ? match[1] : (firms[0]?.id ?? "");
   const currentSegment = match ? match[2] : null;
@@ -68,6 +74,42 @@ export default function FirmSwitcher({ firms }: { firms: Firm[] }) {
     setOpen(false);
     if (currentSegment) {
       router.push(`/admin/firms/${firmId}/${currentSegment}`);
+    } else {
+      router.push(`/admin/firms/${firmId}/access`);
+    }
+  }
+
+  async function handleCreateFirm(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      setCreateError("Enter a firm name.");
+      return;
+    }
+    setBusy(true);
+    setCreateError(null);
+    try {
+      const res = await fetch("/api/admin/intake-firms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setCreateError((body as { error?: string }).error ?? `Failed (HTTP ${res.status}).`);
+        return;
+      }
+      const id = (body as { firm?: { id?: string } }).firm?.id;
+      setNewName("");
+      setCreating(false);
+      if (id) {
+        router.push(`/admin/firms/${id}/access`);
+      }
+      router.refresh();
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -75,7 +117,20 @@ export default function FirmSwitcher({ firms }: { firms: Firm[] }) {
     <>
       {/* Firm switcher header */}
       <div className="px-3 pt-3 pb-2">
-        <div className="label px-2 mb-1.5 text-white/30">Firm</div>
+        <div className="flex items-center justify-between px-2 mb-1.5">
+          <span className="label text-white/30">Firm</span>
+          <button
+            type="button"
+            onClick={() => {
+              setCreating((v) => !v);
+              setCreateError(null);
+            }}
+            title="Create a new firm"
+            className="text-[10px] uppercase tracking-wider font-semibold text-white/40 hover:text-gold transition"
+          >
+            {creating ? "Cancel" : "+ New"}
+          </button>
+        </div>
         {firms.length === 0 ? (
           <div className="px-2 py-1.5 text-xs text-white/40">No firms</div>
         ) : firms.length === 1 ? (
@@ -107,6 +162,28 @@ export default function FirmSwitcher({ firms }: { firms: Firm[] }) {
               </div>
             )}
           </div>
+        )}
+
+        {creating && (
+          <form onSubmit={handleCreateFirm} className="mt-2 px-2 space-y-1.5">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              disabled={busy}
+              autoFocus
+              placeholder="New firm name"
+              className="w-full text-xs px-2 py-1.5 bg-white/5 border border-white/15 text-white placeholder:text-white/30 focus:outline-none focus:border-gold"
+            />
+            <button
+              type="submit"
+              disabled={busy || newName.trim().length === 0}
+              className="w-full text-[10px] uppercase tracking-wider font-semibold px-2 py-1.5 bg-gold text-deep-black hover:bg-gold/90 disabled:opacity-40 transition"
+            >
+              {busy ? "Creating…" : "Create firm"}
+            </button>
+            {createError && <p className="text-[10px] text-red-fail">{createError}</p>}
+          </form>
         )}
       </div>
 
