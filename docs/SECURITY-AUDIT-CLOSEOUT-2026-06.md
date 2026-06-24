@@ -47,7 +47,12 @@ Critical/High to fix-completeness gaps and false positives.
    `session_id` as the sole capability (the standard capability-URL model; the firm is derived from the
    session). Hardening to a signed capability token is a product decision, not a clear bug.
 
-## Confirmed clean
+## Confirmed clean (verified against live prod DB, 2026-06-24)
 Operator gate; lawyer/firm isolation in the portal layout; client/matter isolation; signed-URL
-firm-prefix binding; PII tables RLS on and forced with `anon`/`authenticated` revoked. Service-role
-bypasses RLS, so route code is the tenant guard; that is why the IDOR checks above matter.
+firm-prefix binding. RLS posture was checked directly against the prod database (`pg_class` +
+`role_table_grants`), not inferred from migrations: all 23 PII tables have RLS enabled and
+`anon`/`authenticated` grants are `(none)`. Three tables (`channel_intake_sessions`,
+`firm_onboarding_intake`, `unconfirmed_inquiries`) were found RLS-enabled-but-NOT-forced and were
+forced in migration `20260624_force_rls_three_pii_tables.sql` (applied to prod + re-verified). All 23
+PII tables are now RLS-on-and-forced. Service-role bypasses RLS, so route code is the tenant guard;
+that is why the IDOR checks above matter.
