@@ -63,6 +63,7 @@ interface DeploymentsResponse {
 }
 
 interface ProjectResponse {
+  id?: string;
   name?: string;
 }
 
@@ -85,19 +86,23 @@ export async function fetchVercelProjectStatus(
   const tp = teamParam();
   const sep = tp ? "&" : "";
 
-  const [projectRes, deploysRes] = await Promise.all([
-    fetch(`${API_BASE}/v9/projects/${projectId}?${tp}`, { headers: headers() }),
-    fetch(
-      `${API_BASE}/v6/deployments?projectId=${projectId}&target=production&limit=1${sep}${tp}`,
-      { headers: headers() },
-    ),
-  ]);
+  const projectRes = await fetch(
+    `${API_BASE}/v9/projects/${projectId}?${tp}`,
+    { headers: headers() },
+  );
 
   let projectName: string | null = null;
+  let internalId: string = projectId;
   if (projectRes.ok) {
     const p = (await projectRes.json()) as ProjectResponse;
     projectName = p.name ?? null;
+    if (p.id) internalId = p.id;
   }
+
+  const deploysRes = await fetch(
+    `${API_BASE}/v6/deployments?projectId=${internalId}&target=production&limit=1${sep}${tp}`,
+    { headers: headers() },
+  );
 
   let latestDeploy: VercelDeployment | null = null;
   if (deploysRes.ok) {

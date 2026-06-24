@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { fetchGA4Metrics, isGA4Available, type GA4Report, type GA4TopEntry } from "@/lib/google-analytics";
 import { fetchVercelProjectStatus, isVercelAvailable, type VercelProjectStatus } from "@/lib/vercel-analytics-api";
+import { fetchIntakeFunnel, type IntakeFunnelReport, type TopEntry } from "@/lib/intake-funnel";
 import FirmFilter from "@/components/admin/FirmFilter";
 
 export const dynamic = "force-dynamic";
@@ -28,13 +29,14 @@ export default async function MetricsPage({
   const firmList = (firms ?? []) as FirmRow[];
   const selected = firmId ? firmList.find((f) => f.id === firmId) : firmList[0];
 
-  const [ga4, vercel] = await Promise.all([
+  const [ga4, vercel, funnel] = await Promise.all([
     selected?.ga4_property_id
       ? fetchGA4Metrics(selected.ga4_property_id)
       : Promise.resolve(null),
     selected?.vercel_project_id
       ? fetchVercelProjectStatus(selected.vercel_project_id)
       : Promise.resolve(null),
+    selected ? fetchIntakeFunnel(selected.id) : Promise.resolve(null),
   ]);
 
   const ga4Link = selected?.ga4_property_id
@@ -62,12 +64,13 @@ export default async function MetricsPage({
       {selected && (
         <>
           <GA4Panel report={ga4} deepLink={ga4Link} propertyId={selected.ga4_property_id} />
+          <FunnelPanel report={funnel} />
           <VercelPanel status={vercel} projectId={selected.vercel_project_id} />
         </>
       )}
 
       <p className="text-xs text-black/40 mt-4">
-        Server-rendered on each load. GA4 data covers the last 7 days with week-over-week delta. Vercel shows the latest production deployment.
+        Server-rendered on each load. GA4 and intake funnel cover the last 7 days with week-over-week delta. Vercel shows the latest production deployment.
       </p>
     </div>
   );
@@ -146,6 +149,117 @@ function GA4Panel({
         <TopList title="Top sources" items={report.topSources} labelKey="label" valueLabel="Sessions" />
       </div>
     </Panel>
+  );
+}
+
+// ─── Intake funnel ─────────────────────────────────────────────────────────
+
+const BAND_COLORS: Record<string, string> = {
+  A: "bg-emerald-600",
+  B: "bg-emerald-400",
+  C: "bg-amber-400",
+  D: "bg-orange-400",
+  E: "bg-red-400",
+  unscored: "bg-black/20",
+};
+
+function FunnelPanel({ report }: { report: IntakeFunnelReport | null }) {
+  if (!report) {
+    return (
+      <Panel title="Intake funnel" subtitle="Last 7 days">
+        <EmptyState>No intake data available.</EmptyState>
+      </Panel>
+    );
+  }
+
+  const total = report.bands.reduce((s, b) => s + b.count, 0);
+
+  return (
+    <Panel title="Intake funnel" subtitle="Last 7 days">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <MetricCard label="Screened leads" value={fmt(report.totalLeads.value)} delta={report.totalLeads.delta} />
+        <MetricCard label="Taken" value={fmt(report.taken.value)} delta={report.taken.delta} />
+        <MetricCard label="Passed" value={fmt(report.passed.value)} delta={report.passed.delta} />
+        <MetricCard
+          label="Take rate"
+          value={`${(report.takeRate.value * 100).toFixed(0)}%`}
+          delta={report.takeRate.delta}
+        />
+      </div>
+
+      {total > 0 && (
+        <div className="mt-4">
+          <h3 className="text-[10px] uppercase tracking-wider font-semibold text-black/50 mb-2">Band distribution</h3>
+          <div className="flex h-6 w-full overflow-hidden rounded">
+            {report.bands.map((b) => (
+              <div
+                key={b.band}
+                className={`${BAND_COLORS[b.band] ?? "bg-black/20"} relative group`}
+                style={{ width: `${(b.count / total) * 100}%` }}
+                title={`Band ${b.band}: ${b.count}`}
+              >
+                {b.count / total > 0.08 && (
+                  <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">
+                    {b.band}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-3 mt-1.5 flex-wrap">
+            {report.bands.map((b) => (
+              <span key={b.band} className="text-[10px] text-black/50">
+                <span className={`inline-block w-2 h-2 rounded-sm mr-0.5 align-middle ${BAND_COLORS[b.band] ?? "bg-black/20"}`} />
+                {b.band}: {b.count} ({((b.count / total) * 100).toFixed(0)}%)
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+        <CountList title="Top practice areas" items={report.topPracticeAreas} />
+        <CountList title="Top matter types" items={report.topMatterTypes} />
+      </div>
+
+      {(report.mattersCreated.value > 0 || report.mattersByStage.length > 0) && (
+        <div className="mt-4 border-t border-black/8 pt-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <MetricCard label="Matters created" value={fmt(report.mattersCreated.value)} delta={report.mattersCreated.delta} />
+          </div>
+          {report.mattersByStage.length > 0 && (
+            <div className="mt-3">
+              <h3 className="text-[10px] uppercase tracking-wider font-semibold text-black/50 mb-2">Open matters by stage</h3>
+              <div className="flex gap-3 flex-wrap">
+                {report.mattersByStage.map((s) => (
+                  <span key={s.stage} className="inline-flex items-center gap-1 rounded bg-parchment border border-black/8 px-2.5 py-1 text-xs">
+                    <span className="font-semibold text-navy">{s.count}</span>
+                    <span className="text-black/50">{s.stage.replace(/_/g, " ")}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function CountList({ title, items }: { title: string; items: TopEntry[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <h3 className="text-[10px] uppercase tracking-wider font-semibold text-black/50 mb-2">{title}</h3>
+      <div className="space-y-1">
+        {items.map((item, i) => (
+          <div key={i} className="flex items-center justify-between gap-2 text-xs">
+            <span className="truncate text-black/70 min-w-0">{item.label.replace(/_/g, " ")}</span>
+            <span className="font-mono text-black/60 tabular-nums shrink-0">{item.count}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
