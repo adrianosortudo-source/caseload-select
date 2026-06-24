@@ -265,7 +265,21 @@ export async function sendFirmMessage(input: {
   parent_message_id?: string | null;
 }): Promise<{ ok: true; message: OperatorFirmMessage } | { ok: false; error: string }> {
   const safeBody = sanitizeMessageHtml(input.body);
-  const hasAttachments = (input.attachments?.length ?? 0) > 0;
+
+  // Bind every attachment to THIS firm's upload prefix. The storage_path is
+  // client-supplied and signed (service-role, RLS-bypassing) at list time, so
+  // an unbound path would let a caller sign any object in the firm-files
+  // bucket (another firm's uploads, deliverables, etc.). Only paths produced
+  // by this firm's handleUpload (firm-messages/{firmId}/...) are accepted.
+  const attachments = (input.attachments ?? []).filter(
+    (a): a is MatterAttachment & { storage_path: string } =>
+      a != null && typeof a.storage_path === 'string',
+  );
+  const prefix = `firm-messages/${input.firmId}/`;
+  if (attachments.some((a) => !a.storage_path.startsWith(prefix))) {
+    return { ok: false, error: 'invalid attachment path' };
+  }
+  const hasAttachments = attachments.length > 0;
   if (!safeBody && !hasAttachments) {
     return { ok: false, error: 'message is empty' };
   }
@@ -282,7 +296,7 @@ export async function sendFirmMessage(input: {
       sender_id: input.actor.id,
       sender_name: input.actor.name,
       body: safeBody,
-      attachments: input.attachments ?? [],
+      attachments,
     })
     .select()
     .single();

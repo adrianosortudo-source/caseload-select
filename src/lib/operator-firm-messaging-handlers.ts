@@ -44,18 +44,30 @@ export function operatorActor(): MessagingActor {
   return { role: 'operator', id: 'operator', name: 'CaseLoad' };
 }
 
-/** Resolve the lawyer actor (id + display name) from a firm session. */
+/**
+ * Resolve the lawyer actor (id + display name) from a firm session. Returns
+ * null when no stable lawyer identity can be established, in which case the
+ * route must refuse. A real firm_lawyers.id is required:
+ *   - without it, every legacy-token lawyer would collapse to a shared
+ *     sentinel id and could edit/delete each other's messages (ownership is
+ *     keyed on sender_id), and reaction/read state would bleed between them.
+ *   - the lookup is bound to firm_id so a stale token whose lawyer row has
+ *     moved firms cannot resolve an identity for this firm.
+ */
 export async function resolveLawyerActor(
+  firmId: string,
   lawyerId: string | null | undefined,
-): Promise<MessagingActor> {
-  if (!lawyerId) return { role: 'lawyer', id: 'lawyer', name: 'The firm' };
+): Promise<MessagingActor | null> {
+  if (!lawyerId) return null;
   const { data } = await supabase
     .from('firm_lawyers')
     .select('display_name, title, email')
     .eq('id', lawyerId)
+    .eq('firm_id', firmId)
     .maybeSingle();
+  if (!data) return null;
   const name =
-    (data?.display_name as string | null) ?? (data?.email as string | null) ?? 'The firm';
+    (data.display_name as string | null) ?? (data.email as string | null) ?? 'The firm';
   return { role: 'lawyer', id: lawyerId, name };
 }
 

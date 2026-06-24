@@ -17,7 +17,8 @@ export async function GET(
   const { firmId } = await params;
   const session = await getFirmSession(firmId);
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
-  const actor = await resolveLawyerActor(session.lawyer_id);
+  const actor = await resolveLawyerActor(firmId, session.lawyer_id);
+  if (!actor) return NextResponse.json({ error: 'lawyer identity required; sign in again' }, { status: 403 });
   return handleList(firmId, actor);
 }
 
@@ -28,6 +29,7 @@ export async function POST(
   const { firmId } = await params;
   const session = await getFirmSession(firmId);
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
-  const actor = await resolveLawyerActor(session.lawyer_id);
+  const actor = await resolveLawyerActor(firmId, session.lawyer_id);
+  if (!actor) return NextResponse.json({ error: 'lawyer identity required; sign in again' }, { status: 403 });
   return handleSend(firmId, actor, req);
 }

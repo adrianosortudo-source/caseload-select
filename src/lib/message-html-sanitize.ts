@@ -27,7 +27,14 @@ import sanitizeHtml from 'sanitize-html';
 const MESSAGE_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li', 'a', 'blockquote'],
   allowedAttributes: {
-    a: ['href'],
+    a: ['href', 'rel', 'target'],
+  },
+  // Links are rendered into the other party's thread (operator, lawyer, or
+  // client) via dangerouslySetInnerHTML. Force rel + target on every anchor so
+  // a stored link cannot reach window.opener (reverse tabnabbing) and is not
+  // treated as endorsed.
+  transformTags: {
+    a: sanitizeHtml.simpleTransform('a', { rel: 'noopener noreferrer nofollow', target: '_blank' }, true),
   },
   allowedSchemes: ['http', 'https', 'mailto', 'tel'],
   allowedSchemesByTag: { a: ['http', 'https', 'mailto', 'tel'] },

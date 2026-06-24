@@ -46,7 +46,8 @@ vi.mock("@/lib/portal-auth", () => ({
   getFirmSession: () => Promise.resolve(sessionState.firm),
 }));
 
-import { participantKey, getOperatorUnreadByFirm } from "@/lib/operator-firm-messaging";
+import { participantKey, getOperatorUnreadByFirm, sendFirmMessage } from "@/lib/operator-firm-messaging";
+import { resolveLawyerActor } from "@/lib/operator-firm-messaging-handlers";
 
 const FIRM_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const FIRM_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -83,6 +84,34 @@ describe("getOperatorUnreadByFirm", () => {
   it("is empty when there are no lawyer messages", async () => {
     const counts = await getOperatorUnreadByFirm();
     expect(counts.size).toBe(0);
+  });
+});
+
+describe("security guards (audit fixes)", () => {
+  it("H-1: resolveLawyerActor returns null without a lawyer id (no shared sentinel identity)", async () => {
+    expect(await resolveLawyerActor(FIRM_A, null)).toBe(null);
+    expect(await resolveLawyerActor(FIRM_A, undefined)).toBe(null);
+  });
+
+  it("M-1: sendFirmMessage rejects an attachment path outside the firm prefix", async () => {
+    const res = await sendFirmMessage({
+      firmId: FIRM_A,
+      actor: { role: "operator", id: "operator", name: "CaseLoad" },
+      body: "",
+      attachments: [{ storage_path: `firm-messages/${FIRM_B}/steal.pdf`, name: "x" }],
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toBe("invalid attachment path");
+  });
+
+  it("M-1: sendFirmMessage rejects an arbitrary bucket path", async () => {
+    const res = await sendFirmMessage({
+      firmId: FIRM_A,
+      actor: { role: "operator", id: "operator", name: "CaseLoad" },
+      body: "hi",
+      attachments: [{ storage_path: `deliverables/${FIRM_B}/secret.pdf`, name: "x" }],
+    });
+    expect(res.ok).toBe(false);
   });
 });
 

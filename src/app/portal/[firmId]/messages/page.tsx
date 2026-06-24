@@ -32,17 +32,20 @@ export default async function FirmPortalMessagesPage({
   const session = await getFirmSession(firmId);
   if (!session) redirect(`/portal/${firmId}/login`);
 
-  const lawyerId = session.lawyer_id ?? "lawyer";
-  let lawyerName = "The firm";
-  if (session.lawyer_id) {
-    const { data } = await supabase
-      .from("firm_lawyers")
-      .select("display_name, email")
-      .eq("id", session.lawyer_id)
-      .maybeSingle();
-    lawyerName =
-      (data?.display_name as string | null) ?? (data?.email as string | null) ?? "The firm";
-  }
+  // Messaging needs a stable lawyer identity (ownership + read/reaction state
+  // key on it). A legacy token without lawyer_id is sent to re-login rather
+  // than collapsing to a shared sentinel id.
+  if (!session.lawyer_id) redirect(`/portal/${firmId}/login?error=identity`);
+  const lawyerId = session.lawyer_id;
+
+  const { data: lawyerRow } = await supabase
+    .from("firm_lawyers")
+    .select("display_name, email")
+    .eq("id", lawyerId)
+    .eq("firm_id", firmId)
+    .maybeSingle();
+  const lawyerName =
+    (lawyerRow?.display_name as string | null) ?? (lawyerRow?.email as string | null) ?? "The firm";
 
   const messages = (await listFirmMessages(firmId, {
     viewerParticipant: lawyerId,
