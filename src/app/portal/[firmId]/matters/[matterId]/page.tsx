@@ -178,7 +178,7 @@ function StageTimeline({
                 borderRadius: 4,
                 fontSize: '0.84rem',
                 fontWeight: isCurrent ? 800 : 500,
-                background: isCurrent ? '#1E2F58' : isPast ? '#C4B49A' : '#E0DDD3',
+                background: isCurrent ? '#1E2F58' : isPast ? 'var(--portal-accent)' : '#E0DDD3',
                 color: isCurrent || isPast ? '#fff' : '#888',
               }}
             >
@@ -418,7 +418,7 @@ const eyebrowStyle = {
   fontSize: '0.72rem',
   letterSpacing: '0.14em',
   textTransform: 'uppercase' as const,
-  color: '#C4B49A',
+  color: 'var(--portal-accent)',
   margin: 0,
 };
 
@@ -476,7 +476,7 @@ const primaryButtonStyle = {
 };
 
 const secondaryButtonStyle = {
-  background: '#C4B49A',
+  background: 'var(--portal-accent)',
   color: '#fff',
   border: 'none',
   padding: '6px 12px',

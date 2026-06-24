@@ -30,11 +30,11 @@ interface Column {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const BAND_STYLE: Record<string, string> = {
-  A: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  B: "bg-blue-100   text-blue-800   border-blue-200",
+  A: "bg-green-pass/10 text-green-pass border-green-pass/30",
+  B: "bg-navy/10   text-navy   border-navy/20",
   C: "bg-amber-100  text-amber-800  border-amber-200",
   D: "bg-orange-100 text-orange-800 border-orange-200",
-  E: "bg-red-100    text-red-800    border-red-200",
+  E: "bg-red-fail/10    text-red-fail    border-red-fail/30",
   X: "bg-amber-100  text-amber-900  border-amber-300",
 };
 
@@ -43,10 +43,10 @@ const STAGE_ACCENT: Record<string, string> = {
   new_lead:               "bg-navy/40",
   contacted:              "bg-navy/30",
   qualified:              "bg-navy/20",
-  consultation_scheduled: "bg-blue-400",
-  consultation_held:      "bg-blue-300",
-  proposal_sent:          "bg-blue-200",
-  client_won:             "bg-emerald-400",
+  consultation_scheduled: "bg-navy",
+  consultation_held:      "bg-navy",
+  proposal_sent:          "bg-navy",
+  client_won:             "bg-green-pass",
   no_show:                "bg-black/20",
   client_lost:            "bg-black/15",
 };
@@ -56,21 +56,21 @@ const STAGE_ACCENT: Record<string, string> = {
 function LeadCard({ card }: { card: Card }) {
   const band = card.band?.toUpperCase() ?? null;
   const inner = (
-    <div className={`w-44 flex-shrink-0 bg-white rounded-lg border border-black/6 p-3 shadow-sm space-y-1.5 ${
-      card.href ? "hover:border-navy/25 hover:shadow-md transition-all cursor-pointer" : ""
+    <div className={`w-44 flex-shrink-0 bg-white border border-border-brand p-3 space-y-1.5 ${
+      card.href ? "hover:border-navy/25 transition-all cursor-pointer" : ""
     }`}>
       <div className="flex items-start justify-between gap-1.5">
         <span className="text-sm font-medium text-black/80 leading-snug">{card.name}</span>
         {band && (
-          <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-            BAND_STYLE[band] ?? "bg-black/5 text-black/40 border-black/10"
+          <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 border ${
+            BAND_STYLE[band] ?? "bg-black/5 text-black/40 border-border-brand"
           }`}>
             {band}
           </span>
         )}
       </div>
       {card.practice_area && (
-        <span className="inline-block text-[10px] bg-navy/8 text-navy rounded px-1.5 py-0.5 font-medium capitalize">
+        <span className="inline-block text-[10px] bg-navy/8 text-navy px-1.5 py-0.5 font-medium capitalize">
           {card.practice_area}
         </span>
       )}
@@ -100,7 +100,7 @@ export default function PipelineBoard({ columns }: { columns: Column[] }) {
 
             {/* Stage label — stacks above cards on mobile, fixed-width column at sm+ */}
             <div className="w-full sm:w-36 sm:flex-shrink-0 flex items-center gap-2 pt-0.5">
-              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${accent}`} />
+              <span className={`w-1.5 h-1.5 flex-shrink-0 ${accent}`} />
               <div className="min-w-0">
                 <span className="block text-[11px] font-semibold text-black/55 uppercase tracking-wide leading-tight">
                   {col.label}

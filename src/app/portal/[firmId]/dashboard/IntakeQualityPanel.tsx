@@ -20,10 +20,10 @@ interface Props {
 }
 
 const TIER_COLOR: Record<IntakeQualityReport["qualityTier"], string> = {
-  complete: "bg-emerald-500",
-  adequate: "bg-blue-400",
+  complete: "bg-green-pass",
+  adequate: "bg-navy",
   partial:  "bg-amber-400",
-  sparse:   "bg-red-400",
+  sparse:   "bg-red-fail",
 };
 
 const TIER_LABEL: Record<IntakeQualityReport["qualityTier"], string> = {
@@ -40,7 +40,7 @@ export default function IntakeQualityPanel({ avgScore, tierCounts, topGaps, sess
   const total = tiers.reduce((s, t) => s + (tierCounts[t] ?? 0), 0);
 
   return (
-    <div className="rounded-xl border border-gray-100 bg-white p-5 space-y-4">
+    <div className="border border-gray-100 bg-white p-5 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-gray-900">Intake Quality</h2>
@@ -58,7 +58,7 @@ export default function IntakeQualityPanel({ avgScore, tierCounts, topGaps, sess
       {/* Tier distribution bar */}
       {total > 0 && (
         <div className="space-y-2">
-          <div className="flex rounded-full overflow-hidden h-2 gap-px">
+          <div className="flex overflow-hidden h-2 gap-px">
             {tiers.map(t => {
               const count = tierCounts[t] ?? 0;
               if (count === 0) return null;
@@ -79,7 +79,7 @@ export default function IntakeQualityPanel({ avgScore, tierCounts, topGaps, sess
               if (count === 0) return null;
               return (
                 <div key={t} className="flex items-center gap-1.5">
-                  <div className={`w-2 h-2 rounded-full ${TIER_COLOR[t]}`} />
+                  <div className={`w-2 h-2 ${TIER_COLOR[t]}`} />
                   <span className="text-xs text-gray-600">{TIER_LABEL[t]} <span className="text-gray-400">{count}</span></span>
                 </div>
               );
@@ -96,7 +96,7 @@ export default function IntakeQualityPanel({ avgScore, tierCounts, topGaps, sess
             {topGaps.map(g => (
               <span
                 key={g}
-                className="inline-block px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-xs text-amber-800 font-mono"
+                className="inline-block px-2 py-0.5 bg-amber-50 border border-amber-200 text-xs text-amber-800 font-mono"
               >
                 {g}
               </span>

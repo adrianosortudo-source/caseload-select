@@ -40,7 +40,7 @@ export default function DeliverableCard(props: Props) {
     displayName: props.displayName,
   });
   const chipClass = `flex-none inline-flex items-center justify-center font-mono font-bold text-[10px] tracking-wider px-2 h-9 min-w-[44px] border ${
-    isLink ? "bg-gold/15 text-navy border-gold/50" : "bg-parchment text-navy border-black/15"
+    isLink ? "bg-parchment-2 text-navy border-border-brand" : "bg-parchment text-navy border-border-brand"
   }`;
 
   async function onOpen() {
@@ -95,7 +95,7 @@ export default function DeliverableCard(props: Props) {
 
   if (props.archived) {
     return (
-      <div className="bg-white border border-black/10 opacity-60 flex gap-3 p-4">
+      <div className="bg-white border border-border-brand opacity-60 flex gap-3 p-4">
         <span className={chipClass}>{typeLabel}</span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -113,7 +113,7 @@ export default function DeliverableCard(props: Props) {
   const metaLeft = isLink ? "Link" : `${typeLabel} · ${formatBytes(props.sizeBytes ?? 0)}`;
 
   return (
-    <div className="group bg-white border border-black/10 hover:border-navy/40 transition-colors">
+    <div className="group bg-white border border-border-brand hover:border-navy/40 transition-colors">
       <button
         type="button"
         onClick={onOpen}
@@ -144,7 +144,7 @@ export default function DeliverableCard(props: Props) {
       </button>
       <div className="flex items-center justify-end gap-2 px-4 pb-2 -mt-1">
         {state === "error" && errMsg && (
-          <span className="text-[11px] text-red-700 truncate max-w-[200px]" title={errMsg}>
+          <span className="text-[11px] text-red-fail truncate max-w-[200px]" title={errMsg}>
             {errMsg}
           </span>
         )}
@@ -152,7 +152,7 @@ export default function DeliverableCard(props: Props) {
           type="button"
           onClick={onArchive}
           disabled={state !== "idle"}
-          className="text-[10px] uppercase tracking-wider font-semibold text-black/40 hover:text-red-700 disabled:opacity-40"
+          className="text-[10px] uppercase tracking-wider font-semibold text-black/40 hover:text-red-fail disabled:opacity-40"
         >
           {state === "archiving" ? "…" : "Archive"}
         </button>
@@ -166,7 +166,7 @@ function UploaderTag({ role }: { role: "operator" | "lawyer" }) {
   const colour =
     role === "operator"
       ? "bg-navy/5 text-navy border-navy/15"
-      : "bg-gold/15 text-navy border-gold/40";
+      : "bg-parchment-2 text-navy border-border-brand";
   return (
     <span className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 border ${colour}`}>
       {label}

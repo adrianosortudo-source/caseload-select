@@ -207,7 +207,7 @@ function secondaryButtonStyle(disabled: boolean): React.CSSProperties {
 
 function sendButtonStyle(disabled: boolean): React.CSSProperties {
   return {
-    background: disabled ? '#888' : '#C4B49A',
+    background: disabled ? '#888' : 'var(--portal-accent)',
     color: '#0D1520',
     border: 'none',
     padding: '8px 16px',

@@ -13,11 +13,11 @@ import { STATUS_LABELS, CONTENT_KIND_LABELS } from "@/lib/deliverables-pure";
 type Row = ContentDeliverable & { open_comments: number; version_count: number };
 
 const STATUS_STYLES: Record<DeliverableStatus, string> = {
-  draft: "bg-stone-100 text-stone-700 border-stone-200",
-  in_review: "bg-sky-50 text-sky-800 border-sky-200",
+  draft: "bg-parchment-2 text-muted border-border-brand",
+  in_review: "bg-navy/10 text-navy border-navy/20",
   changes_requested: "bg-amber-50 text-amber-800 border-amber-200",
-  approved: "bg-emerald-50 text-emerald-800 border-emerald-200",
-  archived: "bg-stone-50 text-stone-400 border-stone-200",
+  approved: "bg-green-pass/10 text-green-pass border-green-pass/30",
+  archived: "bg-parchment-2 text-muted border-border-brand",
 };
 
 export default function DeliverableList({
@@ -38,7 +38,7 @@ export default function DeliverableList({
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-xs uppercase tracking-wider font-semibold text-gold">
+          <p className="text-xs uppercase tracking-wider font-semibold text-[color:var(--portal-accent)]">
             Content approval
           </p>
           <h1 className="text-2xl font-bold text-navy mt-1">Deliverables</h1>
@@ -53,7 +53,7 @@ export default function DeliverableList({
             className={`inline-flex items-center px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border transition-colors ${
               includeArchived
                 ? "border-navy bg-navy text-white"
-                : "border-black/15 bg-white text-black/70 hover:border-navy hover:text-navy"
+                : "border-border-brand bg-white text-black/70 hover:border-navy hover:text-navy"
             }`}
           >
             Show archived
@@ -75,7 +75,7 @@ export default function DeliverableList({
       )}
 
       {initialDeliverables.length === 0 ? (
-        <div className="bg-white border border-black/8 px-6 py-10 text-center">
+        <div className="bg-white border border-border-brand px-6 py-10 text-center">
           <p className="text-sm text-black/60">
             {includeArchived
               ? "No deliverables match these filters."
@@ -90,7 +90,7 @@ export default function DeliverableList({
             <Link
               key={d.id}
               href={`/portal/${firmId}/deliverables/${d.id}`}
-              className="block bg-white border border-black/8 p-4 hover:border-navy/40 transition-colors"
+              className="block bg-white border border-border-brand p-4 hover:border-navy/40 transition-colors"
             >
               <div className="flex items-start justify-between gap-2">
                 <span className="text-[10px] uppercase tracking-wider text-black/40">
@@ -170,14 +170,14 @@ function NewDeliverableForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-white border border-black/8 p-4 space-y-3">
+    <form onSubmit={onSubmit} className="bg-white border border-border-brand p-4 space-y-3">
       <div>
         <label className="block text-xs font-semibold text-navy mb-1">Title</label>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g. October blog post: Ontario severance basics"
-          className="w-full border border-black/15 px-3 py-2 text-sm"
+          className="w-full border border-border-brand px-3 py-2 text-sm"
         />
       </div>
       <div>
@@ -188,7 +188,7 @@ function NewDeliverableForm({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="What this is and where it will run"
-          className="w-full border border-black/15 px-3 py-2 text-sm"
+          className="w-full border border-border-brand px-3 py-2 text-sm"
         />
       </div>
       <div>
@@ -202,7 +202,7 @@ function NewDeliverableForm({
               className={`px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border transition-colors ${
                 kind === k
                   ? "border-navy bg-navy text-white"
-                  : "border-black/15 bg-white text-black/60 hover:border-navy"
+                  : "border-border-brand bg-white text-black/60 hover:border-navy"
               }`}
             >
               {CONTENT_KIND_LABELS[k]}
@@ -210,7 +210,7 @@ function NewDeliverableForm({
           ))}
         </div>
       </div>
-      {error && <p className="text-xs text-red-700">{error}</p>}
+      {error && <p className="text-xs text-red-fail">{error}</p>}
       <button
         type="submit"
         disabled={saving || !title.trim()}

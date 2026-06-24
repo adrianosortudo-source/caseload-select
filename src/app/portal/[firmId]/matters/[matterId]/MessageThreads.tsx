@@ -280,7 +280,7 @@ function ThreadColumn({
                   gap: 4,
                   padding: '2px 7px',
                   background: '#F4F3EF',
-                  border: '1px solid #C4B49A',
+                  border: '1px solid var(--portal-accent)',
                   borderRadius: 3,
                   fontSize: '0.76rem',
                   color: '#444',
@@ -312,7 +312,7 @@ function ThreadColumn({
             padding: 6,
             fontFamily: 'inherit',
             fontSize: '0.86rem',
-            border: '1px solid #C4B49A',
+            border: '1px solid var(--portal-accent)',
             borderRadius: 3,
             resize: 'vertical',
             boxSizing: 'border-box',
@@ -324,7 +324,7 @@ function ThreadColumn({
             type="submit"
             disabled={sending || (!body.trim() && pendingAttachments.length === 0)}
             style={{
-              background: sending ? '#888' : '#C4B49A',
+              background: sending ? '#888' : 'var(--portal-accent)',
               color: '#fff',
               border: 'none',
               padding: '6px 12px',
@@ -345,7 +345,7 @@ function ThreadColumn({
             title="Attach file"
             style={{
               background: 'none',
-              border: '1px solid #C4B49A',
+              border: '1px solid var(--portal-accent)',
               borderRadius: 3,
               padding: '5px 8px',
               cursor: (uploading || sending) ? 'not-allowed' : 'pointer',
@@ -404,7 +404,7 @@ function MessageRow({
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              color: '#C4B49A',
+              color: 'var(--portal-accent)',
               fontSize: '0.72rem',
               fontWeight: 700,
               padding: 0,

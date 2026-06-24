@@ -119,7 +119,7 @@ function Header({
   return (
     <div className="flex items-end justify-between gap-3 flex-wrap">
       <div>
-        <p className="text-xs uppercase tracking-wider font-semibold text-gold">File exchange</p>
+        <p className="text-xs uppercase tracking-wider font-semibold text-[color:var(--portal-accent)]">File exchange</p>
         <h1 className="text-2xl font-bold text-navy mt-1">Files</h1>
       </div>
       <div className="flex items-center gap-3">
@@ -135,7 +135,7 @@ function Header({
           className={`inline-flex items-center px-3 py-1.5 text-xs font-semibold uppercase tracking-wider border transition-colors ${
             includeArchived
               ? "border-navy bg-navy text-white"
-              : "border-black/15 bg-white text-black/70 hover:border-navy hover:text-navy"
+              : "border-border-brand bg-white text-black/70 hover:border-navy hover:text-navy"
           }`}
         >
           Show archived
@@ -147,7 +147,7 @@ function Header({
 
 function EmptyState({ includeArchived }: { includeArchived: boolean }) {
   return (
-    <div className="bg-white border border-black/8 px-6 py-10 text-center">
+    <div className="bg-white border border-border-brand px-6 py-10 text-center">
       <p className="text-sm text-black/60">
         {includeArchived
           ? "No items match these filters."

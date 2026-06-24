@@ -107,7 +107,7 @@ const eyebrowStyle = {
   fontSize: '0.72rem',
   letterSpacing: '0.14em',
   textTransform: 'uppercase' as const,
-  color: '#C4B49A',
+  color: 'var(--portal-accent)',
   margin: 0,
 };
 
@@ -134,14 +134,14 @@ const stageTitleStyle = {
   color: '#1E2F58',
   textTransform: 'uppercase' as const,
   letterSpacing: '0.06em',
-  borderBottom: '2px solid #C4B49A',
+  borderBottom: '2px solid var(--portal-accent)',
   paddingBottom: 6,
   marginBottom: 12,
 };
 
 const countBadgeStyle = {
   display: 'inline-block',
-  background: '#C4B49A',
+  background: 'var(--portal-accent)',
   color: '#fff',
   fontSize: '0.78rem',
   padding: '2px 8px',

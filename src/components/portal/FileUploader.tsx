@@ -110,7 +110,7 @@ export default function FileUploader({ firmId }: { firmId: string }) {
   const dirty = !!file || linkUrl.length > 0 || linkTitle.length > 0 || description.length > 0;
 
   return (
-    <form onSubmit={onSubmit} className="bg-white border border-black/10 p-4 sm:p-5 space-y-3">
+    <form onSubmit={onSubmit} className="bg-white border border-border-brand p-4 sm:p-5 space-y-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="text-sm font-bold uppercase tracking-wider text-navy">Add a file or link</h2>
         {kind === "file" && (
@@ -120,7 +120,7 @@ export default function FileUploader({ firmId }: { firmId: string }) {
         )}
       </div>
 
-      <div className="inline-flex border border-black/15">
+      <div className="inline-flex border border-border-brand">
         {(["file", "link"] as FileKind[]).map((k) => (
           <button
             key={k}
@@ -155,7 +155,7 @@ export default function FileUploader({ firmId }: { firmId: string }) {
                 if (f) setMode("idle");
               }}
               disabled={mode === "uploading"}
-              className="block w-full text-sm text-black/80 file:mr-3 file:py-2 file:px-3 file:border file:border-black/15 file:bg-parchment file:text-xs file:uppercase file:tracking-wider file:font-semibold file:text-navy hover:file:bg-navy hover:file:text-white transition-colors"
+              className="block w-full text-sm text-black/80 file:mr-3 file:py-2 file:px-3 file:border file:border-border-brand file:bg-parchment file:text-xs file:uppercase file:tracking-wider file:font-semibold file:text-navy hover:file:bg-navy hover:file:text-white transition-colors"
             />
             {file && (
               <span className="mt-1 block text-xs text-black/50">
@@ -177,7 +177,7 @@ export default function FileUploader({ firmId }: { firmId: string }) {
               }}
               disabled={mode === "uploading"}
               placeholder="https://..."
-              className="w-full text-sm px-3 py-2 border border-black/15 bg-white focus:outline-none focus:border-navy"
+              className="w-full text-sm px-3 py-2 border border-border-brand bg-white focus:outline-none focus:border-navy"
             />
           </label>
         )}
@@ -190,7 +190,7 @@ export default function FileUploader({ firmId }: { firmId: string }) {
             value={section}
             onChange={(e) => setSection(e.target.value as FileSection)}
             disabled={mode === "uploading"}
-            className="w-full text-sm px-3 py-2 border border-black/15 bg-white text-black/80 focus:outline-none focus:border-navy"
+            className="w-full text-sm px-3 py-2 border border-border-brand bg-white text-black/80 focus:outline-none focus:border-navy"
           >
             {FILE_SECTIONS.map((s) => (
               <option key={s} value={s}>
@@ -213,7 +213,7 @@ export default function FileUploader({ firmId }: { firmId: string }) {
             disabled={mode === "uploading"}
             maxLength={200}
             placeholder="What the firm sees on the card."
-            className="w-full text-sm px-3 py-2 border border-black/15 bg-white focus:outline-none focus:border-navy"
+            className="w-full text-sm px-3 py-2 border border-border-brand bg-white focus:outline-none focus:border-navy"
           />
         </label>
       )}
@@ -229,12 +229,12 @@ export default function FileUploader({ firmId }: { firmId: string }) {
           disabled={mode === "uploading"}
           placeholder="One line of context. Visible to the recipient."
           maxLength={500}
-          className="w-full text-sm px-3 py-2 border border-black/15 bg-white focus:outline-none focus:border-navy"
+          className="w-full text-sm px-3 py-2 border border-border-brand bg-white focus:outline-none focus:border-navy"
         />
       </label>
 
       {error && (
-        <div className="text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-2">
+        <div className="text-xs text-red-fail bg-red-fail/10 border border-red-fail/30 px-3 py-2">
           {error}
         </div>
       )}

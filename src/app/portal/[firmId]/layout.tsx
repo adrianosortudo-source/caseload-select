@@ -52,7 +52,14 @@ export default async function PortalLayout({
   const primaryColor = branding.primary_color ?? "#1E2F58";
 
   return (
-    <div className="bg-parchment min-h-screen flex flex-col">
+    <div
+      className="bg-parchment min-h-screen flex flex-col"
+      // Firm accent for the lawyer portal (white-label): every lawyer-surface
+      // accent reads `var(--portal-accent)` so it follows the firm's branding,
+      // matching the header. Structure tokens (parchment, border-brand, status
+      // colours) stay brand-agnostic.
+      style={{ ["--portal-accent" as string]: primaryColor }}
+    >
       <header
         className="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 border-b border-black/5 shrink-0"
         style={{ backgroundColor: primaryColor }}

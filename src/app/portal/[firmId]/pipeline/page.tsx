@@ -137,7 +137,7 @@ export default async function PipelinePage({
           <select
             name="practice_area"
             defaultValue={paFilter ?? ""}
-            className="border border-black/10 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/20"
+            className="border border-border-brand px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/20"
           >
             <option value="">All areas</option>
             {practiceAreas.map((pa) => (
@@ -151,19 +151,19 @@ export default async function PipelinePage({
             type="date"
             name="date_from"
             defaultValue={dateFrom.slice(0, 10)}
-            className="border border-black/10 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/20"
+            className="border border-border-brand px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-navy/20"
           />
         </div>
         <button
           type="submit"
-          className="px-4 py-2 rounded-lg text-sm font-medium bg-navy text-white hover:bg-navy/90 transition"
+          className="px-4 py-2 text-sm font-medium bg-navy text-white hover:bg-navy/90 transition"
         >
           Apply
         </button>
         {(paFilter || date_from) && (
           <a
             href={`/portal/${firmId}/pipeline`}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-black/5 text-black/60 hover:bg-black/8 transition"
+            className="px-4 py-2 text-sm font-medium bg-black/5 text-black/60 hover:bg-black/8 transition"
           >
             Clear
           </a>

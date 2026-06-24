@@ -31,18 +31,18 @@ interface Props {
 }
 
 function pctColor(drop: number | null) {
-  if (drop === null) return "text-[#C4B49A]";
+  if (drop === null) return "text-[color:var(--portal-accent)]";
   if (drop > 40) return "text-red-400";
   if (drop > 20) return "text-amber-300";
-  return "text-[#C4B49A]";
+  return "text-[color:var(--portal-accent)]";
 }
 
 function pulseDot(drop: number | null) {
   if (drop !== null && drop > 40) {
     return (
       <span className="relative flex h-1.5 w-1.5 ml-1">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500" />
+        <span className="animate-ping absolute inline-flex h-full w-full bg-red-400 opacity-75" />
+        <span className="relative inline-flex h-1.5 w-1.5 bg-red-500" />
       </span>
     );
   }
@@ -64,7 +64,7 @@ export default function FunnelBar({ counts }: Props) {
   if (!hasAnyData) return null;
 
   return (
-    <div className="bg-[#1E2F58] rounded-xl px-4 py-3 overflow-x-auto">
+    <div className="bg-[#1E2F58] px-4 py-3 overflow-x-auto">
       <div className="flex items-stretch gap-0 min-w-max">
         {stages.map((s, i) => (
           <div key={s.key} className="flex items-center">

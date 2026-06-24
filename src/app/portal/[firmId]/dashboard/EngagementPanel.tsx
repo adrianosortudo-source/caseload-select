@@ -60,9 +60,9 @@ function CpscBar({ points, monthlyFee }: { points: MonthPoint[]; monthlyFee: num
       {cpscPoints.map((p) => (
         <div key={p.label} className="flex items-center gap-2">
           <div className="w-16 text-right text-[10px] text-black/40 shrink-0">{p.label}</div>
-          <div className="flex-1 bg-black/5 rounded-full h-2 overflow-hidden">
+          <div className="flex-1 bg-parchment-2 h-2 overflow-hidden">
             <div
-              className="h-2 rounded-full bg-navy/40"
+              className="h-2 bg-navy/40"
               style={{ width: `${Math.min(100, (p.cpsc / maxCpsc) * 100)}%` }}
             />
           </div>
@@ -94,7 +94,7 @@ export default function EngagementPanel({
     : null;
 
   return (
-    <div className="bg-white rounded-xl border border-black/5 shadow-sm overflow-hidden">
+    <div className="bg-white border border-border-brand overflow-hidden">
       {/* Toggle header */}
       <button
         onClick={() => setOpen(o => !o)}
@@ -113,7 +113,7 @@ export default function EngagementPanel({
       </button>
 
       {open && (
-        <div className="px-5 pb-5 space-y-5 border-t border-black/5">
+        <div className="px-5 pb-5 space-y-5 border-t border-border-brand">
           {/* Summary stats */}
           <div className="grid grid-cols-3 gap-3 pt-4">
             <div className="text-center">

@@ -38,7 +38,7 @@ export default function PortalTabNav({ firmId }: PortalTabNavProps) {
                 className={`
                   px-4 py-3 text-sm font-medium border-b-2 transition-colors
                   ${active
-                    ? "border-gold text-navy"
+                    ? "text-navy border-[color:var(--portal-accent)]"
                     : "border-transparent text-black/50 hover:text-black/80 hover:border-black/20"
                   }
                 `}
