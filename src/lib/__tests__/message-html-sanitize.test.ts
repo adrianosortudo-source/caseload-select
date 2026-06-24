@@ -30,8 +30,14 @@ describe('sanitizeMessageHtml', () => {
   it('preserves the small rich subset used by welcome sends', () => {
     const out = sanitizeMessageHtml('<p>Hi <strong>there</strong>, see <a href="https://x.ca">link</a></p>');
     expect(out).toContain('<strong>there</strong>');
-    expect(out).toContain('<a href="https://x.ca">');
+    expect(out).toContain('href="https://x.ca"');
     expect(out).toContain('<p>');
+  });
+
+  it('hardens anchors with rel + target (reverse-tabnabbing guard)', () => {
+    const out = sanitizeMessageHtml('<a href="https://x.ca">link</a>');
+    expect(out).toContain('rel="noopener noreferrer nofollow"');
+    expect(out).toContain('target="_blank"');
   });
 
   it('strips a javascript: href', () => {
