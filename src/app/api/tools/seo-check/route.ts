@@ -674,7 +674,7 @@ function checkAiVisibility(html: string, parsedRobots: ParsedRobots | null, llms
   if (questionHeadings.length >= 3) {
     items.push({ label: "Question-format headings", status: "pass", detail: `${questionHeadings.length} question headings found. These match how people ask AI assistants.` });
   } else if (questionHeadings.length > 0) {
-    items.push({ label: "Question-format headings", status: "warn", detail: `Only ${questionHeadings.length} question heading${questionHeadings.length > 1 ? "s" : ""}. More improves AI citation likelihood.`, fix: "Reframe section headings as questions people actually ask, like \"What happens if...\" or \"How long does...\"" });
+    items.push({ label: "Question-format headings", status: "warn", detail: `Only ${questionHeadings.length} question heading${questionHeadings.length > 1 ? "s" : ""}. More can help AI systems pull answers from the page.`, fix: "Reframe section headings as questions people actually ask, like \"What happens if...\" or \"How long does...\"" });
   } else {
     items.push({ label: "Question-format headings", status: "fail", detail: "No question-format headings. AI models look for Q&A patterns to extract answers.", fix: "Add H2 or H3 headings phrased as questions that match queries people type into AI search." });
   }
@@ -684,7 +684,7 @@ function checkAiVisibility(html: string, parsedRobots: ParsedRobots | null, llms
   if (directAnswers.length >= 5) {
     items.push({ label: "Direct-answer sentences", status: "pass", detail: "Content includes clear definitional sentences that AI models can extract as answers." });
   } else if (directAnswers.length > 0) {
-    items.push({ label: "Direct-answer sentences", status: "warn", detail: "Some direct-answer content found. Adding more clear definitions improves AI citability.", fix: "Write more sentences that directly answer questions: \"X is...\", \"X means...\", \"X requires...\"" });
+    items.push({ label: "Direct-answer sentences", status: "warn", detail: "Some direct-answer content found. Adding more clear definitions can help AI systems extract answers.", fix: "Write more sentences that directly answer questions: \"X is...\", \"X means...\", \"X requires...\"" });
   } else {
     items.push({ label: "Direct-answer sentences", status: "fail", detail: "No direct-answer patterns detected. AI models prefer content that directly answers questions.", fix: "Include explicit definitional sentences. Example: \"A power of attorney is a legal document that...\"" });
   }
@@ -694,14 +694,14 @@ function checkAiVisibility(html: string, parsedRobots: ParsedRobots | null, llms
   if (authoritative.length >= 1) {
     items.push({ label: "Authoritative citations", status: "pass", detail: `${authoritative.length} link${authoritative.length > 1 ? "s" : ""} to authoritative sources. Supports credibility for AI sourcing.` });
   } else {
-    items.push({ label: "Authoritative citations", status: "warn", detail: "No outbound links to authoritative legal sources.", fix: "Link to government, court, or law-society resources where relevant. AI systems weight corroborated content." });
+    items.push({ label: "Authoritative citations", status: "warn", detail: "No outbound links to authoritative legal sources.", fix: "Link to government, court, or law-society resources where relevant. Corroborating links are a useful credibility signal." });
   }
 
   const hasAuthorMeta = extractMetaContent(html, "author") !== null;
   if (hasAuthorMeta || schema.hasPerson || schema.hasAttorney) {
     items.push({ label: "Author / reviewer signals", status: "pass", detail: "Author or reviewer attribution found. Supports source credibility for AI." });
   } else {
-    items.push({ label: "Author / reviewer signals", status: "warn", detail: "No author or reviewer attribution. AI models weight content from identified authors.", fix: "Add author metadata or Person schema, and a reviewed-by line where a lawyer has checked the content." });
+    items.push({ label: "Author / reviewer signals", status: "warn", detail: "No author or reviewer attribution. Identified authorship is a useful credibility signal for search and AI.", fix: "Add author metadata or Person schema, and a reviewed-by line where a lawyer has checked the content." });
   }
 
   if (llmsTxt && llmsTxt.length > 50) {

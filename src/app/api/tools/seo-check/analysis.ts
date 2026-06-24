@@ -216,11 +216,13 @@ const LABEL_SEVERITY: Record<string, Severity> = {
   // Optional content-use policy, not a visibility deficiency. It is captured
   // separately in aiPolicyScore, so it stays low and never tops the fix list.
   "AI training bot control": "low",
+  // Emerging, optional AI-readiness file. Low priority by design.
+  "llms.txt file": "low",
 };
 
 // Optional-policy labels: never raised by the commercial+sitewide coverage
-// bump, because choosing not to block training bots is a valid default.
-const POLICY_LABELS = new Set<string>(["AI training bot control"]);
+// bump, because choosing not to act on them is a valid default.
+const POLICY_LABELS = new Set<string>(["AI training bot control", "llms.txt file"]);
 
 const EFFORT_BY_CATEGORY: Record<string, Effort> = {
   "Indexability": "low",
@@ -303,7 +305,7 @@ function internalAngle(category: string, severity: Severity): { note: string; an
   if (c === "Performance") {
     return {
       note: "Performance gap. Lower priority for cold outreach unless severe; keep as supporting evidence.",
-      angle: "The site is slower than it needs to be in places, which quietly costs both ranking and the visitor's patience.",
+      angle: "The site is slower than it needs to be in places, which can frustrate visitors; page speed is also a known search signal.",
     };
   }
   return {

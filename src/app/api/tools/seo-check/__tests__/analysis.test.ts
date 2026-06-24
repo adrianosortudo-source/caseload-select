@@ -138,6 +138,18 @@ describe("buildIssues", () => {
     expect(issue?.severity).not.toBe("high");
   });
 
+  it("keeps optional llms.txt low, never bumped to high across commercial pages", () => {
+    const c = cat("AI Visibility", [{ label: "llms.txt file", status: "warn", detail: "" }]);
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [c] }),
+      mkPage({ url: "https://x.com/contact", pageType: "contact", categories: [c] }),
+      mkPage({ url: "https://x.com/practice", pageType: "practice", categories: [c] }),
+    ];
+    const issue = buildIssues(pages).find((i) => i.title === "llms.txt file");
+    expect(["low", "info"]).toContain(issue?.severity);
+    expect(issue?.severity).not.toBe("high");
+  });
+
   it("returns no issues when everything passes", () => {
     const pages = [mkPage({
       url: "https://x.com/", pageType: "homepage",
