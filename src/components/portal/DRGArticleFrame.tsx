@@ -31,7 +31,7 @@ export function DRGArticleFrame({
   bodyHtml,
   onAnnotate,
 }: {
-  title: string;
+  title: string;          // Bare display title (no operator kicker prefix)
   excerpt: string | null;
   topic: string | null;
   byline: string | null;
@@ -61,30 +61,39 @@ export function DRGArticleFrame({
 
   return (
     <div className="cls-drg-article">
-      <div className="drg-preview-band">Preview · how readers will see this on drglaw.ca</div>
+      <div className="drg-preview-band">
+        Preview, how readers will see this on drglaw.ca
+      </div>
 
-      <div className="drg-article-header">
-        <div className="drg-chip-row">
-          {topic && <span className="drg-chip">{topic}</span>}
-          <span className="drg-dot" aria-hidden="true">·</span>
-          <span className={publishDate ? "" : "drg-chip is-draft"}>
-            {publishDate ? formatDate(publishDate) : "Draft · not yet published"}
-          </span>
-          {byline && (
-            <>
-              <span className="drg-dot" aria-hidden="true">·</span>
-              <span>{byline}</span>
-            </>
-          )}
-          {readTime && (
-            <>
-              <span className="drg-dot" aria-hidden="true">·</span>
-              <span>{readTime}</span>
-            </>
-          )}
+      <div className="drg-topband">
+        DRG Law
+        <span className="drg-topband-sub">Decisions in legal clarity</span>
+      </div>
+
+      <div className="drg-main">
+        <div className="drg-article-header">
+          <div className="drg-chip-row">
+            {topic && <span className="drg-chip">{topic}</span>}
+            <span className="drg-dot" aria-hidden="true">·</span>
+            <span className={publishDate ? "" : "drg-chip is-draft"}>
+              {publishDate ? formatDate(publishDate) : "Draft, not yet published"}
+            </span>
+            {readTime && (
+              <>
+                <span className="drg-dot" aria-hidden="true">·</span>
+                <span>{readTime}</span>
+              </>
+            )}
+            {byline && (
+              <>
+                <span className="drg-dot" aria-hidden="true">·</span>
+                <span>{byline}</span>
+              </>
+            )}
+          </div>
+          <h1 className="drg-display">{title}</h1>
+          {excerpt && <p className="drg-lead">{excerpt}</p>}
         </div>
-        <h1 className="drg-display">{title}</h1>
-        {excerpt && <p className="drg-lead">{excerpt}</p>}
       </div>
 
       <div className={heroImageUrl ? "drg-hero-frame" : "drg-hero-frame is-empty"}>
@@ -96,16 +105,37 @@ export function DRGArticleFrame({
         )}
       </div>
 
-      <div
-        ref={bodyRef}
-        className="drg-body"
-        onMouseUp={onMouseUp}
-        dangerouslySetInnerHTML={{ __html: bodyHtml }}
-      />
+      <div className="drg-body-wrap">
+        <div
+          ref={bodyRef}
+          className="drg-body"
+          onMouseUp={onMouseUp}
+          dangerouslySetInnerHTML={{ __html: bodyHtml }}
+        />
+      </div>
 
-      <div className="drg-footer">
-        <strong>DRG Law Professional Corporation</strong> · Toronto, Ontario · Reviewed
-        and approved by the responsible licensee before publication.
+      <div className="drg-final-cta">
+        <div className="drg-final-cta-inner">
+          <p className="drg-final-cta-eyebrow">Next step</p>
+          <h2 className="drg-final-cta-title">
+            Send the question before the decision hardens
+          </h2>
+          <p className="drg-final-cta-body">
+            I read every message myself. If I can help, I write back with the
+            plan. If your file fits another lawyer better, I tell you so and
+            name one.
+          </p>
+          <div className="drg-final-cta-actions">
+            <span className="drg-cta-btn">Send the question</span>
+            <span className="drg-cta-btn is-ghost">Call 647 584 0998</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="drg-op-footer">
+        <strong>Preview chrome.</strong> The top band, hero placeholder, and
+        bottom CTA are rendered locally to match drglaw.ca. The actual
+        publish-time page is built from the firm site, not this preview.
       </div>
     </div>
   );

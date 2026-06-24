@@ -35,8 +35,9 @@
   font-feature-settings: "liga", "kern";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  padding: 32px 24px 48px;
+  padding: 0 0 0;
   border: 1px solid rgba(0, 0, 0, 0.08);
+  overflow: hidden;
 }
 
 @media (max-width: 768px) {
@@ -46,16 +47,52 @@
 .cls-drg-article * { box-sizing: border-box; }
 .cls-drg-article a { color: inherit; text-decoration: none; }
 
-/* Hero block */
+/* Top faux-nav band, just enough to give the operator's render a brand frame
+   without trying to ship the real nav (which has interactive subnav, EN/PT
+   switcher, and the BOOK YOUR QUESTION CTA). The frame stays clearly
+   "preview", not a fake live page. */
+.cls-drg-article .drg-topband {
+  background: #0D0907;
+  color: var(--paper);
+  padding: 18px 32px;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-size: 18px;
+  border-bottom: 2px solid var(--brass);
+}
+
+.cls-drg-article .drg-topband .drg-topband-sub {
+  display: block;
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--brass);
+  margin-top: 2px;
+}
+
+.cls-drg-article .drg-main {
+  padding: 56px 24px 0;
+}
+
+@media (max-width: 768px) {
+  .cls-drg-article .drg-main { padding: 32px 16px 0; }
+}
+
+/* Article header: centered to match live drglaw.ca */
 .cls-drg-article .drg-article-header {
   max-width: var(--reading-max);
   margin: 0 auto;
+  text-align: center;
 }
 
 .cls-drg-article .drg-chip-row {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
+  justify-content: center;
   gap: 6px;
   font-family: var(--font-serif);
   font-weight: 600;
@@ -86,15 +123,16 @@
 .cls-drg-article .drg-display {
   font-family: var(--font-serif);
   font-weight: 700;
-  font-size: 56px;
-  line-height: 1.06;
+  font-size: 46px;
+  line-height: 1.08;
   letter-spacing: -0.022em;
   color: var(--ink);
   margin: 0 0 22px;
+  font-variation-settings: "opsz" 48;
 }
 
 @media (max-width: 768px) {
-  .cls-drg-article .drg-display { font-size: 36px; }
+  .cls-drg-article .drg-display { font-size: 32px; }
 }
 
 .cls-drg-article .drg-lead {
@@ -110,17 +148,17 @@
   .cls-drg-article .drg-lead { font-size: 18px; }
 }
 
-/* Hero image */
+/* Hero image: full-width cinematic 16:9, matching the live editorial hero */
 .cls-drg-article .drg-hero-frame {
-  max-width: var(--content-max);
-  margin: 24px auto 40px;
+  width: 100%;
+  margin: 40px 0 56px;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border: 1px solid var(--brass-soft);
   background: var(--cream);
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
 
 .cls-drg-article .drg-hero-frame img {
@@ -281,37 +319,110 @@
   margin-bottom: 0;
 }
 
-/* Footer band */
-.cls-drg-article .drg-footer {
-  max-width: var(--reading-max);
-  margin: 56px auto 0;
-  padding-top: 24px;
-  border-top: 1px solid var(--brass-soft);
-  font-family: var(--font-serif);
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--mid);
-  letter-spacing: 0.02em;
+/* Body wrap so left/right padding matches the chrome */
+.cls-drg-article .drg-body-wrap {
+  padding: 0 24px;
 }
 
-.cls-drg-article .drg-footer strong {
+/* Bottom CTA band: faithful to the live drglaw.ca black CTA strip */
+.cls-drg-article .drg-final-cta {
+  background: #0D0907;
+  color: var(--paper);
+  padding: 64px 32px;
+  margin-top: 64px;
+  text-align: left;
+}
+
+.cls-drg-article .drg-final-cta-inner {
+  max-width: var(--reading-max);
+  margin: 0 auto;
+}
+
+.cls-drg-article .drg-final-cta-eyebrow {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--brass);
+  margin: 0 0 16px;
+}
+
+.cls-drg-article .drg-final-cta-title {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 36px;
+  line-height: 1.12;
+  letter-spacing: -0.018em;
+  margin: 0 0 16px;
+  color: var(--paper);
+}
+
+@media (max-width: 768px) {
+  .cls-drg-article .drg-final-cta-title { font-size: 26px; }
+}
+
+.cls-drg-article .drg-final-cta-body {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--cream);
+  margin: 0 0 24px;
+}
+
+.cls-drg-article .drg-final-cta-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cls-drg-article .drg-cta-btn {
+  display: inline-block;
+  padding: 12px 22px;
+  border: 1px solid var(--brass);
+  background: var(--ox);
+  color: var(--paper);
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.cls-drg-article .drg-cta-btn.is-ghost {
+  background: transparent;
+  color: var(--brass);
+}
+
+/* Operator-facing footer: reminds the operator this is preview chrome,
+   not part of what readers see. */
+.cls-drg-article .drg-op-footer {
+  padding: 16px 24px;
+  background: var(--cream);
+  font-family: var(--font-serif);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--mid);
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.cls-drg-article .drg-op-footer strong {
   color: var(--ox);
   font-weight: 600;
 }
 
-/* Preview badge */
+/* Preview badge: thin sticky band above the article so the operator is never
+   confused that this is the actual live page. */
 .cls-drg-article .drg-preview-band {
-  position: sticky;
-  top: 0;
-  z-index: 5;
   background: var(--ox);
   color: var(--paper);
   font-family: var(--font-serif);
   font-weight: 700;
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  padding: 8px 16px;
-  margin: -32px -24px 24px;
+  padding: 6px 16px;
   text-align: center;
 }

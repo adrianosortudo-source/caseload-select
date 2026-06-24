@@ -252,6 +252,12 @@ export interface ContentDeliverable {
   publish_date: string | null;  // YYYY-MM-DD; null means "draft, not scheduled"
   read_time: string | null;     // "8 min read"
   hero_image_url: string | null;
+  /**
+   * Operator queue label (e.g. "Backfill", "Wk 1"). Shown in the deliverables
+   * list as a prefix on the title. Intentionally NOT rendered in the article
+   * header: the rendered display title must match drglaw.ca.
+   */
+  kicker: string | null;
 }
 
 export interface DeliverableVersion {

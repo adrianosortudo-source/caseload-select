@@ -98,7 +98,9 @@ export default function DeliverableReview({
             <p className="text-[10px] uppercase tracking-wider text-black/40">
               {CONTENT_KIND_LABELS[deliverable.content_kind]}
             </p>
-            <h1 className="text-2xl font-bold text-navy leading-tight">{deliverable.title}</h1>
+            <h1 className="text-2xl font-bold text-navy leading-tight">
+              {deliverable.kicker ? `${deliverable.kicker} · ` : ""}{deliverable.title}
+            </h1>
             {deliverable.description && (
               <p className="text-sm text-black/55 mt-1">{deliverable.description}</p>
             )}

@@ -102,7 +102,9 @@ export default function DeliverableList({
                   {STATUS_LABELS[d.status]}
                 </span>
               </div>
-              <h2 className="text-base font-bold text-navy mt-1.5 leading-snug">{d.title}</h2>
+              <h2 className="text-base font-bold text-navy mt-1.5 leading-snug">
+                {d.kicker ? `${d.kicker} · ` : ""}{d.title}
+              </h2>
               {d.description && (
                 <p className="text-xs text-black/55 mt-1 line-clamp-2">{d.description}</p>
               )}
