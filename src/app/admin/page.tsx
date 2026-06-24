@@ -22,6 +22,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getOperatorSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getOperatorUnreadByFirm } from "@/lib/operator-firm-messaging";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -137,6 +138,11 @@ export default async function AdminHomePage() {
   const webhookFailed = webhookFailedRes.count ?? 0;
   const voiceUnconfirmed = voiceUnconfirmedRes.count ?? 0;
 
+  // Unread CaseLoad Connect messages (lawyer-sent, per firm), best-effort.
+  const unreadByFirm = await getOperatorUnreadByFirm().catch(() => new Map<string, number>());
+  const unreadMessagesTotal = Array.from(unreadByFirm.values()).reduce((s, n) => s + n, 0);
+  const firstUnreadFirmId = firms.find((f) => (unreadByFirm.get(f.id) ?? 0) > 0)?.id ?? null;
+
   // Attention bar counts.
   const plus4hMs = nowMs + FOUR_HOURS_MS;
   const expiringSoon = leads.filter(
@@ -155,12 +161,18 @@ export default async function AdminHomePage() {
     ].some((t) => t != null && new Date(t).getTime() <= plus14dMs),
   ).length;
 
-  const attention = [
-    { label: "Leads expiring under 4h", count: expiringSoon, href: "/admin/triage" },
-    { label: "Notifications failed", count: notifFailed, href: "/admin/triage" },
-    { label: "Webhooks failed", count: webhookFailed, href: "/admin/webhook-outbox" },
-    { label: "Tokens expiring under 14d", count: tokensExpiring, href: "/admin/health" },
-    { label: "Unconfirmed voice (7d)", count: voiceUnconfirmed, href: "/admin/health" },
+  const attention: { label: string; count: number; href: string; tone: "alert" | "warn" | "info" }[] = [
+    { label: "Leads expiring under 4h", count: expiringSoon, href: "/admin/triage", tone: "alert" },
+    { label: "Notifications failed", count: notifFailed, href: "/admin/triage", tone: "alert" },
+    { label: "Webhooks failed", count: webhookFailed, href: "/admin/webhook-outbox", tone: "alert" },
+    { label: "Tokens expiring under 14d", count: tokensExpiring, href: "/admin/health", tone: "warn" },
+    { label: "Unconfirmed voice (7d)", count: voiceUnconfirmed, href: "/admin/health", tone: "alert" },
+    {
+      label: "Unread firm messages",
+      count: unreadMessagesTotal,
+      href: firstUnreadFirmId ? `/admin/firms/${firstUnreadFirmId}/messages` : "/admin",
+      tone: "info",
+    },
   ];
   const totalAttention = attention.reduce((s, a) => s + a.count, 0);
 
@@ -196,6 +208,7 @@ export default async function AdminHomePage() {
       tokenWarn,
       onboarded,
       lastIntakeMs,
+      unread: unreadByFirm.get(f.id) ?? 0,
     };
   });
 
@@ -221,9 +234,9 @@ export default async function AdminHomePage() {
             <span className="text-xs text-green-pass font-semibold">All clear</span>
           )}
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {attention.map((a) => (
-            <AttentionChip key={a.label} label={a.label} count={a.count} href={a.href} />
+            <AttentionChip key={a.label} label={a.label} count={a.count} href={a.href} tone={a.tone} />
           ))}
         </div>
       </section>
@@ -325,12 +338,24 @@ export default async function AdminHomePage() {
   );
 }
 
-function AttentionChip({ label, count, href }: { label: string; count: number; href: string }) {
+function AttentionChip({
+  label,
+  count,
+  href,
+  tone,
+}: {
+  label: string;
+  count: number;
+  href: string;
+  tone: "alert" | "warn" | "info";
+}) {
   const active = count > 0;
-  const isWarn = label.includes("Tokens") || label.includes("expiring");
-  const activeClasses = isWarn
-    ? "bg-amber-50 border-amber-300 text-amber-900"
-    : "bg-red-fail/10 border-red-fail/40 text-red-fail";
+  const activeClasses =
+    tone === "warn"
+      ? "bg-amber-50 border-amber-300 text-amber-900"
+      : tone === "info"
+      ? "bg-navy/10 border-navy/30 text-navy"
+      : "bg-red-fail/10 border-red-fail/40 text-red-fail";
   return (
     <Link
       href={href}
@@ -357,6 +382,7 @@ interface FirmCardData {
   tokenWarn: boolean;
   onboarded: boolean;
   lastIntakeMs: number;
+  unread: number;
 }
 
 function FirmCard({ card, nowMs }: { card: FirmCardData; nowMs: number }) {
@@ -370,12 +396,19 @@ function FirmCard({ card, nowMs }: { card: FirmCardData; nowMs: number }) {
         >
           {card.name}
         </Link>
-        <span
-          aria-label={healthy ? "Healthy" : "Needs attention"}
-          className={`mt-1 shrink-0 inline-block w-2.5 h-2.5 ${
-            healthy ? "bg-green-pass" : "bg-red-fail"
-          }`}
-        />
+        <div className="flex items-center gap-2 shrink-0">
+          {card.unread > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-navy text-white tabular-nums">
+              {card.unread}
+            </span>
+          )}
+          <span
+            aria-label={healthy ? "Healthy" : "Needs attention"}
+            className={`mt-0.5 inline-block w-2.5 h-2.5 ${
+              healthy ? "bg-green-pass" : "bg-red-fail"
+            }`}
+          />
+        </div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <Metric label="Open leads" value={card.openTriaging} />
@@ -405,8 +438,12 @@ function FirmCard({ card, nowMs }: { card: FirmCardData; nowMs: number }) {
       <div className="mt-3 text-[11px] text-black/45">
         Last intake: {card.lastIntakeMs > 0 ? relativeTime(new Date(card.lastIntakeMs).toISOString(), nowMs) : "none yet"}
       </div>
-      <div className="mt-3 pt-3 border-t border-border-brand grid grid-cols-2 gap-1.5">
+      <div className="mt-3 pt-3 border-t border-border-brand grid grid-cols-3 gap-1.5">
         <CardLink href={`/admin/firms/${card.id}/triage`} label="Triage" />
+        <CardLink
+          href={`/admin/firms/${card.id}/messages`}
+          label={card.unread > 0 ? `Messages (${card.unread})` : "Messages"}
+        />
         <CardLink href={`/portal/${card.id}/files`} label="Files" />
       </div>
     </div>

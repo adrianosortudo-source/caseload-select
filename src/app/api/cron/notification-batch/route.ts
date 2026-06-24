@@ -208,7 +208,10 @@ function buildDigest(
   // approval events), or a single catch-all bucket otherwise.
   const byMatter = new Map<string, OutboxRow[]>();
   for (const r of rows) {
-    const key = r.matter_id ?? r.event_payload?.deliverable_id ?? '_no_matter';
+    const key =
+      r.matter_id ??
+      r.event_payload?.deliverable_id ??
+      (r.event_type === 'firm_message_new' ? `firm:${r.firm_id ?? 'unknown'}` : '_no_matter');
     const list = byMatter.get(key) ?? [];
     list.push(r);
     byMatter.set(key, list);
@@ -238,7 +241,11 @@ function buildDigest(
     const deliverableTitle = first?.event_payload?.deliverable_title ?? null;
     const deliverableUrl = first?.event_payload?.deliverable_url ?? null;
 
-    const groupLabel = matterName
+    const isFirmMessage = first?.event_type === 'firm_message_new';
+
+    const groupLabel = isFirmMessage
+      ? 'CaseLoad messages'
+      : matterName
       ? `Matter: ${escapeHtml(matterName)}`
       : deliverableTitle
         ? `Deliverable: ${escapeHtml(deliverableTitle)}`
@@ -246,7 +253,11 @@ function buildDigest(
           ? `Item ${escapeHtml(groupKey.slice(0, 8))}...`
           : 'Updates';
 
-    const portalUrl = deliverableUrl
+    const portalUrl = isFirmMessage && first?.firm_id
+      ? isLawyer
+        ? `${APP_BASE}/portal/${first.firm_id}/messages`
+        : `${APP_BASE}/admin/firms/${first.firm_id}/messages`
+      : deliverableUrl
       ? deliverableUrl
       : first?.matter_id && first?.firm_id
         ? isLawyer
@@ -310,6 +321,7 @@ function describeEvent(eventType: string): string {
     deliverable_comment_added: 'New comment',
     deliverable_approved: 'Deliverable approved',
     deliverable_changes_requested: 'Changes requested',
+    firm_message_new: 'New CaseLoad message',
   };
   return m[eventType] ?? eventType;
 }

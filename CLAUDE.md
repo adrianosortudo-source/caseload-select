@@ -866,6 +866,17 @@ All migrations idempotent. Run in order:
 23. `20260609_otp_attempt_cap.sql`: OTP brute-force attempt cap. APPLIED 2026-06-09 via Supabase MCP before the same-day deploy.
 24. `20260609_webhook_outbox_action_check_expand.sql`: widens the `webhook_outbox` action CHECK to six actions (DR-067; also fixes the latent `referred` rejection). APPLIED 2026-06-09 via Supabase MCP before the same-day deploy.
 25. `20260611_voice_turn_sessions.sql`: `voice_turn_sessions` table for the Voice v2 realtime loop (DR-048). Per-call session store keyed on `call_id`, holds `engine_state` jsonb between turns. Unique partial index on `(call_id) WHERE NOT finalized`. Service-role RLS only. **NOT YET APPLIED: run when deploying Voice v2.**
+26. `20260624_operator_firm_messaging.sql`: CaseLoad Connect (operator-to-firm messaging). Three tables (`operator_firm_channels`, `operator_firm_messages`, `operator_firm_channel_reads`), RLS forced + anon/authenticated/PUBLIC revoked, plus the `firm_message_new` event type added to the `notification_outbox` event_type CHECK. APPLIED 2026-06-24 via Supabase MCP.
+
+## CaseLoad Connect (operator-to-firm messaging, 2026-06-24)
+
+A dedicated channel between the CaseLoad operator and each firm's lawyers. Structurally Slack Connect: one shared channel per firm, two participant classes (operator sees every firm, a lawyer sees only its own). This is NOT the lawyer-to-client matter thread (`matter_messages`, channel_type `client`); those stay privileged and firm-private and the operator never reads them.
+
+- **Data layer:** `lib/operator-firm-messaging.ts` (service-role; channel get-or-create, list with signed attachments, send + notify, edit/delete own, mark-read, unread counts). `lib/operator-firm-messaging-handlers.ts` holds the shared route handlers so the operator and lawyer trees never drift.
+- **Routes:** operator at `/api/admin/firms/[firmId]/messages/*` (operator session), lawyer at `/api/portal/[firmId]/messages/*` (firm session, rejects operators + clients). Both: GET list (marks read), POST send, PATCH/DELETE own message, POST read, POST upload.
+- **Surfaces:** operator `/admin/firms/[firmId]/messages` (FIRM nav "Messages" row) + unread total in the console attention bar + per-firm unread badge and a Messages link on each firm card. Lawyer `/portal/[firmId]/messages` (portal "CaseLoad" tab). Both poll every 30s (matter-thread parity).
+- **Notifications:** `notification_outbox` event_type `firm_message_new`. Operator sends notify the firm's enabled lawyers; lawyer sends notify `adriano@caseloadselect.ca`. The 5-minute digest renders them under a "CaseLoad messages" group with a deep link (lawyer to the portal tab, operator to the console surface).
+- **Scope:** MVP is human messages only (list, threads one level deep, attachments, edit/delete own, read state, unread badges). Phase 2/3 (reactions, search, pins, mark-unread, realtime, system auto-posts, multiple topic channels) deferred. Full feature inventory + roadmap: `docs/operator-firm-messaging-spec-v1.md`.
 
 ## Voice intake — observability + defense in depth (2026-06-02)
 

@@ -30,6 +30,11 @@ const NAV_LINKS = [
     active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/content-studio`),
   },
   {
+    label: "Messages",
+    href: (id: string) => `/admin/firms/${id}/messages`,
+    active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/messages`),
+  },
+  {
     label: "Onboarding",
     href: (id: string) => `/admin/firms/${id}/onboarding`,
     active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/onboarding`),
@@ -55,6 +60,7 @@ const SYSTEM_LINKS = [
   { label: "Onboarding desk", href: "/admin/onboarding-submissions" },
   { label: "Explainer library", href: "/admin/explainers" },
   { label: "SEO check", href: "/admin/seo-check" },
+  { label: "Prospecting diagnostic", href: "/admin/prospecting-diagnostic" },
   { label: "Diagnostics", href: "/admin/diagnostic-builder" },
   { label: "Health", href: "/admin/health" },
 ];
