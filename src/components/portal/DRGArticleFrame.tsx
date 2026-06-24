@@ -188,12 +188,7 @@ export function DRGArticleFrame({
   return (
     <div className="cls-drg-article">
       <div className="drg-preview-band">
-        Preview, how readers will see this on drglaw.ca
-      </div>
-
-      <div className="drg-topband">
-        DRG Law
-        <span className="drg-topband-sub">Decisions in legal clarity</span>
+        Draft preview
       </div>
 
       <div className="drg-main">
@@ -248,29 +243,6 @@ export function DRGArticleFrame({
         />
       </div>
 
-      <div className="drg-final-cta">
-        <div className="drg-final-cta-inner">
-          <p className="drg-final-cta-eyebrow">Next step</p>
-          <h2 className="drg-final-cta-title">
-            Send the question before the decision hardens
-          </h2>
-          <p className="drg-final-cta-body">
-            I read every message myself. If I can help, I write back with the
-            plan. If your file fits another lawyer better, I tell you so and
-            name one.
-          </p>
-          <div className="drg-final-cta-actions">
-            <span className="drg-cta-btn">Send the question</span>
-            <span className="drg-cta-btn is-ghost">Call 647 584 0998</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="drg-op-footer">
-        <strong>Preview chrome.</strong> The top band, hero placeholder, and
-        bottom CTA are rendered locally to match drglaw.ca. The actual
-        publish-time page is built from the firm site, not this preview.
-      </div>
     </div>
   );
 }
