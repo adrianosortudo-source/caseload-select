@@ -301,17 +301,24 @@ function ContentViewer({
   if (contentKind === "text") {
     if (deliverable.firm_id === DRG_FIRM_ID) {
       return (
-        <DRGArticleFrame
-          title={deliverable.title}
-          excerpt={deliverable.excerpt}
-          topic={deliverable.topic}
-          byline={deliverable.byline}
-          publishDate={deliverable.publish_date}
-          readTime={deliverable.read_time}
-          heroImageUrl={deliverable.hero_image_url}
-          bodyHtml={version.body_html ?? ""}
-          onAnnotate={onAnnotate}
-        />
+        <div className="space-y-2">
+          <p className="flex items-center gap-2 text-xs text-navy bg-gold/15 border border-gold/30 px-3 py-2">
+            <span aria-hidden="true" className="font-bold">“ ”</span>
+            Select any passage to comment on it, the same way you would in Google
+            Docs. Click the hero or any inline image to comment on that image.
+          </p>
+          <DRGArticleFrame
+            title={deliverable.title}
+            excerpt={deliverable.excerpt}
+            topic={deliverable.topic}
+            byline={deliverable.byline}
+            publishDate={deliverable.publish_date}
+            readTime={deliverable.read_time}
+            heroImageUrl={deliverable.hero_image_url}
+            bodyHtml={version.body_html ?? ""}
+            onAnnotate={onAnnotate}
+          />
+        </div>
       );
     }
     return <TextViewer version={version} onAnnotate={(a) => onAnnotate(a)} />;
