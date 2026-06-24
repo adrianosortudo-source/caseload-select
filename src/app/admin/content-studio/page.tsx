@@ -1,6 +1,8 @@
 import PageHeader from "@/components/PageHeader";
+import FirmFilter from "@/components/admin/FirmFilter";
 import Link from "next/link";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { CreatePieceButton } from "./components";
 
 export const dynamic = "force-dynamic";
 
@@ -43,14 +45,6 @@ type ContentPiece = {
   review_date: string | null;
 };
 
-type StudioData = {
-  firms: Firm[];
-  strategies: Strategy[];
-  slots: CalendarSlot[];
-  pieces: ContentPiece[];
-  error: string | null;
-};
-
 const gateLabels: Record<string, string> = {
   discovery: "Discovery",
   position: "Position",
@@ -77,11 +71,6 @@ const statusTone: Record<string, string> = {
   active: "bg-emerald-50 text-emerald-700",
 };
 
-function firmName(firms: Firm[], firmId: string) {
-  const firm = firms.find((f) => f.id === firmId);
-  return firm?.name ?? "Unknown firm";
-}
-
 function humanize(value: string) {
   return value
     .split("_")
@@ -98,49 +87,6 @@ function formatDate(value: string | null) {
   }).format(new Date(`${value}T12:00:00`));
 }
 
-async function getStudioData(): Promise<StudioData> {
-  const [firmsRes, strategiesRes, slotsRes, piecesRes] = await Promise.all([
-    supabase
-      .from("intake_firms")
-      .select("id,name")
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("firm_content_strategies")
-      .select("id,firm_id,name,version,status,bilingual_enabled,jurisdiction")
-      .eq("status", "active")
-      .order("version", { ascending: false }),
-    supabase
-      .from("content_calendar_slots")
-      .select(
-        "id,firm_id,publish_date,week_of,cadence_kind,planned_format,territory,theme,status"
-      )
-      .order("publish_date", { ascending: true })
-      .limit(16),
-    supabase
-      .from("content_pieces")
-      .select(
-        "id,firm_id,calendar_slot_id,title_working,format,language_mode,workflow_gate,status,review_date"
-      )
-      .order("created_at", { ascending: false })
-      .limit(16),
-  ]);
-
-  const error =
-    firmsRes.error?.message ??
-    strategiesRes.error?.message ??
-    slotsRes.error?.message ??
-    piecesRes.error?.message ??
-    null;
-
-  return {
-    firms: (firmsRes.data ?? []) as Firm[],
-    strategies: (strategiesRes.data ?? []) as Strategy[],
-    slots: (slotsRes.data ?? []) as CalendarSlot[],
-    pieces: (piecesRes.data ?? []) as ContentPiece[],
-    error,
-  };
-}
-
 function StatusBadge({ value }: { value: string }) {
   return (
     <span
@@ -151,8 +97,94 @@ function StatusBadge({ value }: { value: string }) {
   );
 }
 
-export default async function ContentStudioPage() {
-  const { firms, strategies, slots, pieces, error } = await getStudioData();
+export default async function ContentStudioPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const firmId = typeof sp.firm_id === "string" ? sp.firm_id : null;
+
+  const { data: firmsData } = await supabase
+    .from("intake_firms")
+    .select("id,name")
+    .order("name");
+  const firms = (firmsData ?? []) as Firm[];
+
+  const selected = firmId
+    ? firms.find((f) => f.id === firmId) ?? null
+    : firms.length === 1
+      ? firms[0]
+      : null;
+
+  if (!selected) {
+    return (
+      <div>
+        <PageHeader
+          title="Content Studio"
+          subtitle="Select a firm to view its editorial calendar and content pipeline."
+        />
+        <div className="mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {firms.map((firm) => (
+              <Link
+                key={firm.id}
+                href={`/admin/content-studio?firm_id=${firm.id}`}
+                className="rounded border border-black/8 bg-white p-6 hover:border-sky-300 hover:bg-sky-50/30 transition-colors"
+              >
+                <div className="font-medium text-sm text-black/80">
+                  {firm.name ?? "Unnamed firm"}
+                </div>
+                <div className="text-xs text-black/40 mt-1">
+                  Click to open content workspace
+                </div>
+              </Link>
+            ))}
+            {firms.length === 0 && (
+              <div className="col-span-full p-8 text-center text-sm text-black/40">
+                No firms configured. Add a firm via Portal Access first.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const [strategiesRes, slotsRes, piecesRes] = await Promise.all([
+    supabase
+      .from("firm_content_strategies")
+      .select("id,firm_id,name,version,status,bilingual_enabled,jurisdiction")
+      .eq("firm_id", selected.id)
+      .eq("status", "active")
+      .order("version", { ascending: false }),
+    supabase
+      .from("content_calendar_slots")
+      .select(
+        "id,firm_id,publish_date,week_of,cadence_kind,planned_format,territory,theme,status"
+      )
+      .eq("firm_id", selected.id)
+      .order("publish_date", { ascending: true })
+      .limit(16),
+    supabase
+      .from("content_pieces")
+      .select(
+        "id,firm_id,calendar_slot_id,title_working,format,language_mode,workflow_gate,status,review_date"
+      )
+      .eq("firm_id", selected.id)
+      .order("created_at", { ascending: false })
+      .limit(30),
+  ]);
+
+  const strategies = (strategiesRes.data ?? []) as Strategy[];
+  const slots = (slotsRes.data ?? []) as CalendarSlot[];
+  const pieces = (piecesRes.data ?? []) as ContentPiece[];
+  const error =
+    strategiesRes.error?.message ??
+    slotsRes.error?.message ??
+    piecesRes.error?.message ??
+    null;
+
   const piecesBySlot = new Map(
     pieces.map((piece) => [piece.calendar_slot_id, piece])
   );
@@ -166,19 +198,22 @@ export default async function ContentStudioPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Content Studio"
-        subtitle="Editorial calendar, source briefs, legal gate, and channel production."
-      />
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <PageHeader
+          title="Content Studio"
+          subtitle={selected.name ?? "Unknown firm"}
+        />
+        <FirmFilter
+          action="/admin/content-studio"
+          firms={firms.map((f) => ({ id: f.id, name: f.name ?? "Unnamed" }))}
+          active={selected.id}
+        />
+      </div>
 
       <div className="mt-6 space-y-6">
         {error && (
           <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            {error}. Run{" "}
-            <code className="text-xs">
-              supabase/migrations/20260624_content_studio_foundation.sql
-            </code>{" "}
-            in Supabase SQL Editor.
+            {error}
           </div>
         )}
 
@@ -226,7 +261,6 @@ export default async function ContentStudioPage() {
             <thead className="text-xs text-black/50 border-b border-black/10 bg-black/[0.02]">
               <tr>
                 <th className="text-left px-4 py-3">Publish date</th>
-                <th className="text-left">Firm</th>
                 <th className="text-left">Cadence</th>
                 <th className="text-left">Territory</th>
                 <th className="text-left">Theme</th>
@@ -238,25 +272,20 @@ export default async function ContentStudioPage() {
               {slots.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={6}
                     className="py-8 text-center text-black/40"
                   >
-                    No calendar slots yet. Run the migration, then seed DRG
-                    weekly themes.
+                    No calendar slots yet for {selected.name}.
                   </td>
                 </tr>
               )}
               {slots.map((slot) => {
                 const piece = piecesBySlot.get(slot.id);
                 return (
-                  <tr
-                    key={slot.id}
-                    className="border-b border-black/5"
-                  >
+                  <tr key={slot.id} className="border-b border-black/5">
                     <td className="px-4 py-3 whitespace-nowrap">
                       {formatDate(slot.publish_date)}
                     </td>
-                    <td>{firmName(firms, slot.firm_id)}</td>
                     <td className="text-black/60">
                       {humanize(slot.cadence_kind)}
                     </td>
@@ -273,18 +302,21 @@ export default async function ContentStudioPage() {
                       {piece ? (
                         <Link
                           href={`/admin/content-studio/${piece.id}`}
-                          className="text-navy hover:underline"
+                          className="text-sky-600 hover:underline"
                         >
                           {piece.title_working}
                         </Link>
                       ) : (
-                        <span className="text-black/40">Not created</span>
+                        <CreatePieceButton
+                          firmId={selected.id}
+                          slotId={slot.id}
+                          theme={slot.theme}
+                          format={slot.planned_format}
+                        />
                       )}
                     </td>
                     <td className="px-4 text-right">
-                      <StatusBadge
-                        value={piece?.status ?? slot.status}
-                      />
+                      <StatusBadge value={piece?.status ?? slot.status} />
                     </td>
                   </tr>
                 );
@@ -318,7 +350,6 @@ export default async function ContentStudioPage() {
                       {piece.title_working}
                     </div>
                     <div className="text-xs text-black/50 mt-1">
-                      {firmName(firms, piece.firm_id)} /{" "}
                       {humanize(piece.format)} /{" "}
                       {piece.language_mode.toUpperCase()}
                     </div>
@@ -348,7 +379,7 @@ export default async function ContentStudioPage() {
             <div className="divide-y divide-black/5">
               {strategies.length === 0 && (
                 <div className="p-6 text-sm text-black/40">
-                  No active strategies yet.
+                  No active strategies for {selected.name}.
                 </div>
               )}
               {strategies.map((strategy) => (
@@ -361,8 +392,7 @@ export default async function ContentStudioPage() {
                       {strategy.name}
                     </div>
                     <div className="text-xs text-black/50 mt-1">
-                      {firmName(firms, strategy.firm_id)} / v
-                      {strategy.version} / {strategy.jurisdiction}
+                      v{strategy.version} / {strategy.jurisdiction}
                     </div>
                   </div>
                   <div className="text-right">

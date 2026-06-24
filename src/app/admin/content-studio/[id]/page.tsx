@@ -1,6 +1,7 @@
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import PageHeader from "@/components/PageHeader";
 import Link from "next/link";
+import { SourceBriefForm, PieceActions } from "../components";
 
 export const dynamic = "force-dynamic";
 
@@ -103,16 +104,6 @@ function wordCount(text: string | null): number {
 
 /* ── Types ─────────────────────────────────────────────────── */
 
-type SourceBrief = {
-  decision_question?: string;
-  legal_distinction?: string;
-  consequence?: string;
-  authorities?: string;
-  five_line_brief_seeds?: string;
-  territory?: string;
-  seo_target_query?: string;
-};
-
 type ContentPiece = {
   id: string;
   firm_id: string;
@@ -124,7 +115,7 @@ type ContentPiece = {
   status: string;
   review_date: string | null;
   owner_name: string | null;
-  source_brief: SourceBrief | null;
+  source_brief: Record<string, string> | null;
   created_at: string;
 };
 
@@ -225,52 +216,6 @@ async function getPieceDetail(id: string) {
 }
 
 /* ── Sub-components ────────────────────────────────────────── */
-
-function SourceBriefPanel({ brief }: { brief: SourceBrief | null }) {
-  if (!brief || Object.keys(brief).length === 0) {
-    return (
-      <div className="rounded border border-black/8 bg-white p-6">
-        <div className="text-xs uppercase tracking-wider text-black/50 mb-3">
-          Source Brief
-        </div>
-        <p className="text-sm text-black/40">
-          No source brief yet. Start by filling out the decision question,
-          legal distinction, and territory fields.
-        </p>
-      </div>
-    );
-  }
-
-  const fields: { key: keyof SourceBrief; label: string }[] = [
-    { key: "decision_question", label: "Decision question" },
-    { key: "legal_distinction", label: "Legal distinction" },
-    { key: "consequence", label: "Consequence" },
-    { key: "authorities", label: "Authorities" },
-    { key: "five_line_brief_seeds", label: "Brief seeds" },
-    { key: "territory", label: "Territory" },
-    { key: "seo_target_query", label: "SEO target query" },
-  ];
-
-  return (
-    <div className="rounded border border-black/8 bg-white p-6">
-      <div className="text-xs uppercase tracking-wider text-black/50 mb-4">
-        Source Brief
-      </div>
-      <dl className="space-y-3">
-        {fields.map(({ key, label }) => {
-          const value = brief[key];
-          if (!value) return null;
-          return (
-            <div key={key}>
-              <dt className="text-xs font-medium text-black/60">{label}</dt>
-              <dd className="mt-0.5 text-sm text-black/80">{value}</dd>
-            </div>
-          );
-        })}
-      </dl>
-    </div>
-  );
-}
 
 function CurrentDraftPanel({
   enVersion,
@@ -546,62 +491,6 @@ function PieceMetadataCard({
   );
 }
 
-function ActionButtons({ piece }: { piece: ContentPiece }) {
-  const currentIndex = gateOrder.indexOf(
-    piece.workflow_gate as (typeof gateOrder)[number]
-  );
-  const nextGate =
-    currentIndex >= 0 && currentIndex < gateOrder.length - 1
-      ? gateLabels[gateOrder[currentIndex + 1]]
-      : null;
-
-  return (
-    <div className="rounded border border-black/8 bg-white p-5">
-      <div className="text-xs uppercase tracking-wider text-black/50 mb-4">
-        Actions
-      </div>
-      <div className="space-y-2">
-        <div className="rounded border border-black/10 px-3 py-2.5">
-          <div className="text-sm font-medium text-black/70">
-            Run validators
-          </div>
-          <div className="text-xs text-black/40 mt-0.5">
-            POST /api/admin/content-studio/{piece.id}/validate
-          </div>
-        </div>
-        <div className="rounded border border-black/10 px-3 py-2.5">
-          <div className="text-sm font-medium text-black/70">
-            Generate draft
-          </div>
-          <div className="text-xs text-black/40 mt-0.5">
-            POST /api/admin/content-studio/{piece.id}/draft
-          </div>
-        </div>
-        {nextGate && (
-          <div className="rounded border border-sky-200 bg-sky-50 px-3 py-2.5">
-            <div className="text-sm font-medium text-sky-700">
-              Advance to {nextGate}
-            </div>
-            <div className="text-xs text-sky-600/60 mt-0.5">
-              Move this piece to the next workflow gate.
-            </div>
-          </div>
-        )}
-        {!nextGate && piece.workflow_gate === "production" && (
-          <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-            <div className="text-sm font-medium text-emerald-700">
-              At final gate
-            </div>
-            <div className="text-xs text-emerald-600/60 mt-0.5">
-              This piece is in the production gate.
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function countValidatorOutcome(
   result: Record<string, unknown> | null,
   outcome: string
@@ -762,7 +651,15 @@ export default async function ContentPieceDetailPage({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left column: 2/3 */}
           <div className="lg:col-span-2 space-y-6">
-            <SourceBriefPanel brief={piece.source_brief} />
+            <SourceBriefForm
+              pieceId={piece.id}
+              initial={
+                piece.source_brief &&
+                typeof piece.source_brief === "object"
+                  ? (piece.source_brief as Record<string, string>)
+                  : null
+              }
+            />
             <CurrentDraftPanel
               enVersion={enVersion}
               ptVersion={ptVersion}
@@ -775,7 +672,16 @@ export default async function ContentPieceDetailPage({
           <div className="space-y-6">
             <PieceMetadataCard piece={piece} strategy={strategy} />
             <WorkflowGateTracker currentGate={piece.workflow_gate} />
-            <ActionButtons piece={piece} />
+            <PieceActions
+              pieceId={piece.id}
+              currentGate={piece.workflow_gate}
+              hasVersion={!!enVersion}
+              hasBrief={
+                !!piece.source_brief &&
+                typeof piece.source_brief === "object" &&
+                Object.keys(piece.source_brief).length > 0
+              }
+            />
           </div>
         </div>
       </div>
