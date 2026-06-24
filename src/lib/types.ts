@@ -266,6 +266,29 @@ export interface ContentDeliverable {
    * header: the rendered display title must match drglaw.ca.
    */
   kicker: string | null;
+  // Content-plan placement (migration 20260624_content_periods.sql).
+  period_id: string | null;   // FK to content_periods; null = unscheduled
+  format: string | null;      // editorial format label, e.g. "Counsel Note"
+}
+
+/**
+ * A weekly content period: the editorial frame the firm sees above a batch of
+ * deliverables (theme + what's covered + the strategic rationale). Operator
+ * authored; the firm reads it. See migration 20260624_content_periods.sql.
+ */
+export interface ContentPeriod {
+  id: string;
+  firm_id: string;
+  starts_on: string;   // YYYY-MM-DD
+  ends_on: string;     // YYYY-MM-DD
+  theme: string | null;
+  details: string | null;
+  rationale: string | null;   // the "why": brand relevance + search intent
+  sort_index: number;
+  created_by_role: string | null;
+  created_by_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DeliverableVersion {

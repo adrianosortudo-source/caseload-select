@@ -8,7 +8,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
-import { getDeliverableDetail, archiveDeliverable } from "@/lib/deliverables";
+import {
+  getDeliverableDetail,
+  archiveDeliverable,
+  setDeliverablePlacement,
+} from "@/lib/deliverables";
 
 export async function GET(
   _req: NextRequest,
@@ -48,6 +52,20 @@ export async function PATCH(
   if (body.action === "archive") {
     const result = await archiveDeliverable({ deliverableId, firmId });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === "place") {
+    // Operator-only: place a deliverable in a week and/or set its format.
+    if (resolved.actor.role !== "operator") {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    const b = body as { period_id?: unknown; format?: unknown };
+    const periodId = typeof b.period_id === "string" && b.period_id ? b.period_id : null;
+    const rawFormat = typeof b.format === "string" ? b.format.trim().slice(0, 80) : "";
+    const format = rawFormat.length > 0 ? rawFormat : null;
+    const result = await setDeliverablePlacement({ deliverableId, firmId, periodId, format });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
     return NextResponse.json({ ok: true });
   }
 

@@ -16,6 +16,7 @@ import { randomUUID } from "crypto";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import type {
   ContentDeliverable,
+  ContentPeriod,
   DeliverableVersion,
   DeliverableComment,
   ApprovalRecord,
@@ -24,7 +25,11 @@ import type {
   DeliverableAnnotation,
   ApprovalDecision,
 } from "@/lib/types";
-import { statusAfterNewVersion, statusAfterDecision } from "@/lib/deliverables-pure";
+import {
+  statusAfterNewVersion,
+  statusAfterDecision,
+  type PlanDeliverable,
+} from "@/lib/deliverables-pure";
 
 const ASSET_BUCKET = "firm-files";
 const SIGNED_URL_TTL = 3600; // 1 hour; review pages stay open a while
@@ -87,6 +92,130 @@ export async function listDeliverables(
     open_comments: openByDeliverable.get(r.id) ?? 0,
     version_count: versionsByDeliverable.get(r.id) ?? 0,
   }));
+}
+
+// ─── Content plan (weekly periods + format grouping) ─────────────────────────
+
+export interface ContentPlanData {
+  periods: ContentPeriod[];        // newest week first
+  deliverables: PlanDeliverable[]; // light rows for grouping client-side
+}
+
+export async function getContentPlan(
+  firmId: string,
+  options: { includeArchived?: boolean } = {},
+): Promise<ContentPlanData> {
+  let dq = supabase
+    .from("content_deliverables")
+    .select("id, title, kicker, status, content_kind, format, period_id, publish_date")
+    .eq("firm_id", firmId);
+  if (!options.includeArchived) dq = dq.neq("status", "archived");
+
+  const [periodsRes, delivRes] = await Promise.all([
+    supabase
+      .from("content_periods")
+      .select("*")
+      .eq("firm_id", firmId)
+      .order("starts_on", { ascending: false })
+      .order("sort_index", { ascending: false }),
+    dq,
+  ]);
+  if (periodsRes.error) throw new Error(`periods load failed: ${periodsRes.error.message}`);
+  if (delivRes.error) throw new Error(`plan deliverables load failed: ${delivRes.error.message}`);
+
+  return {
+    periods: (periodsRes.data ?? []) as ContentPeriod[],
+    deliverables: (delivRes.data ?? []) as PlanDeliverable[],
+  };
+}
+
+export async function createPeriod(input: {
+  firmId: string;
+  startsOn: string;
+  endsOn: string;
+  theme: string | null;
+  details: string | null;
+  rationale: string | null;
+  actor: DeliverableActor;
+}): Promise<{ ok: true; period: ContentPeriod } | { ok: false; error: string }> {
+  const { data, error } = await supabase
+    .from("content_periods")
+    .insert({
+      firm_id: input.firmId,
+      starts_on: input.startsOn,
+      ends_on: input.endsOn,
+      theme: input.theme,
+      details: input.details,
+      rationale: input.rationale,
+      created_by_role: input.actor.role,
+      created_by_id: input.actor.id ?? null,
+    })
+    .select("*")
+    .single();
+  if (error) return { ok: false, error: `create period failed: ${error.message}` };
+  return { ok: true, period: data as ContentPeriod };
+}
+
+export async function updatePeriod(input: {
+  periodId: string;
+  firmId: string;
+  patch: Partial<
+    Pick<ContentPeriod, "starts_on" | "ends_on" | "theme" | "details" | "rationale" | "sort_index">
+  >;
+}): Promise<{ ok: true; period: ContentPeriod } | { ok: false; error: string }> {
+  const { data, error } = await supabase
+    .from("content_periods")
+    .update({ ...input.patch, updated_at: new Date().toISOString() })
+    .eq("id", input.periodId)
+    .eq("firm_id", input.firmId)
+    .select("*")
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "period not found for this firm" };
+  return { ok: true, period: data as ContentPeriod };
+}
+
+export async function deletePeriod(input: {
+  periodId: string;
+  firmId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  // Deliverables in this week unassign automatically (FK ON DELETE SET NULL).
+  const { error } = await supabase
+    .from("content_periods")
+    .delete()
+    .eq("id", input.periodId)
+    .eq("firm_id", input.firmId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Operator: assign a deliverable to a week and/or set its format label. */
+export async function setDeliverablePlacement(input: {
+  deliverableId: string;
+  firmId: string;
+  periodId: string | null;
+  format: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (input.periodId) {
+    const { data: p } = await supabase
+      .from("content_periods")
+      .select("id")
+      .eq("id", input.periodId)
+      .eq("firm_id", input.firmId)
+      .maybeSingle();
+    if (!p) return { ok: false, error: "period not found for this firm" };
+  }
+  const { error } = await supabase
+    .from("content_deliverables")
+    .update({
+      period_id: input.periodId,
+      format: input.format,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.deliverableId)
+    .eq("firm_id", input.firmId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 export interface DeliverableDetail {

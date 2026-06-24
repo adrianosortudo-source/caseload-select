@@ -206,3 +206,59 @@ export function openCommentCount(
 ): number {
   return comments.filter((c) => !c.resolved).length;
 }
+
+// ─── Content plan grouping ───────────────────────────────────────────────────
+
+export interface PlanDeliverable {
+  id: string;
+  title: string;
+  kicker: string | null;
+  status: DeliverableStatus;
+  content_kind: ContentKind;
+  format: string | null;
+  period_id: string | null;
+  publish_date: string | null;
+}
+
+export interface FormatGroup {
+  format: string | null; // null = no format set ("Unfiled")
+  items: PlanDeliverable[];
+}
+
+function comparePublishDate(a: PlanDeliverable, b: PlanDeliverable): number {
+  // Dated items first (ascending); undated items sink to the end.
+  if (!a.publish_date && !b.publish_date) return 0;
+  if (!a.publish_date) return 1;
+  if (!b.publish_date) return -1;
+  return a.publish_date < b.publish_date ? -1 : a.publish_date > b.publish_date ? 1 : 0;
+}
+
+/**
+ * Group deliverables by format, preserving the order each format first appears
+ * once items are sorted by publish date (stable, editorial order). Items with
+ * no format collect last under a null-format group.
+ */
+export function groupByFormat(items: PlanDeliverable[]): FormatGroup[] {
+  const sorted = [...items].sort(comparePublishDate);
+  const order: (string | null)[] = [];
+  const byFormat = new Map<string | null, PlanDeliverable[]>();
+  for (const it of sorted) {
+    const key = it.format && it.format.trim() ? it.format : null;
+    if (!byFormat.has(key)) {
+      byFormat.set(key, []);
+      order.push(key);
+    }
+    byFormat.get(key)!.push(it);
+  }
+  order.sort((a, b) => (a === null ? 1 : 0) - (b === null ? 1 : 0));
+  return order.map((f) => ({ format: f, items: byFormat.get(f)! }));
+}
+
+/** Approval progress for a set of deliverables. */
+export function planProgress(
+  items: { status: DeliverableStatus }[],
+): { approved: number; total: number } {
+  let approved = 0;
+  for (const it of items) if (it.status === "approved") approved++;
+  return { approved, total: items.length };
+}

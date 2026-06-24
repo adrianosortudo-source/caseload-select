@@ -12,8 +12,8 @@
 
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
-import { listDeliverables } from "@/lib/deliverables";
-import DeliverableList from "@/components/portal/DeliverableList";
+import { getContentPlan } from "@/lib/deliverables";
+import ContentPlan from "@/components/portal/ContentPlan";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -35,14 +35,15 @@ export default async function DeliverablesPage({
   const viewerRole = session.role === "operator" ? "operator" : "lawyer";
   const includeArchived = archived === "1";
 
-  const deliverables = await listDeliverables(firmId, { includeArchived });
+  const plan = await getContentPlan(firmId, { includeArchived });
 
   return (
-    <DeliverableList
+    <ContentPlan
       firmId={firmId}
       viewerRole={viewerRole}
       includeArchived={includeArchived}
-      initialDeliverables={deliverables}
+      periods={plan.periods}
+      deliverables={plan.deliverables}
     />
   );
 }
