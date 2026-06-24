@@ -705,6 +705,8 @@ const reportStyles = `
   }
   @media print {
     .seo-tabs, .seo-report-actions, .seo-report-cta, .seo-report-footer, .seo-mini-btn { display: none !important; }
+    /* Hide any surrounding app shell (sidebar nav) so the PDF is report-only. */
+    aside { display: none !important; }
     .seo-report { max-width: none; }
     /* Reveal every section so the exported PDF is the complete report. */
     .seo-pane { display: block !important; margin-bottom: 12px; }

@@ -209,8 +209,8 @@ export default function SeoCheckTool({
             <div className="seo-email-form">
               <h3 className="seo-email-title">Enter your email to view the report</h3>
               <p className="seo-email-sub">
-                Get the detailed breakdown with all 49 check results, AI bot access status,
-                and recommended fixes for every issue.
+                Get the detailed breakdown across all nine categories, AI bot access status,
+                and recommended fixes ranked by priority.
               </p>
               <div className="seo-email-row">
                 <input
