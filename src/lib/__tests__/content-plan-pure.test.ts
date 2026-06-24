@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   groupByFormat,
   planProgress,
+  computeOverview,
   type PlanDeliverable,
 } from "../deliverables-pure";
 
@@ -63,5 +64,37 @@ describe("planProgress", () => {
 
   it("is zero over zero for an empty set", () => {
     expect(planProgress([])).toEqual({ approved: 0, total: 0 });
+  });
+});
+
+describe("computeOverview", () => {
+  it("tallies statuses, weeks, formats, and the soonest unapproved publish", () => {
+    const o = computeOverview([
+      item({ id: "a", status: "approved", format: "Counsel Note", period_id: "p1", publish_date: "2026-06-24" }),
+      item({ id: "b", status: "in_review", format: "Counsel Note", period_id: "p1", publish_date: "2026-06-26" }),
+      item({ id: "c", status: "changes_requested", format: "Lead Magnet", period_id: "p2", publish_date: "2026-06-30" }),
+      item({ id: "d", status: "draft", format: null, period_id: null, publish_date: null }),
+    ]);
+    expect(o.total).toBe(4);
+    expect(o.approved).toBe(1);
+    expect(o.pending).toBe(1);
+    expect(o.changes).toBe(1);
+    expect(o.draft).toBe(1);
+    expect(o.weeks).toBe(2);
+    expect(o.byFormat).toEqual([
+      { format: "Counsel Note", count: 2 },
+      { format: "Lead Magnet", count: 1 },
+      { format: null, count: 1 },
+    ]);
+    // approved item (06-24) is excluded; soonest unapproved is b (06-26)
+    expect(o.nextPublish).toEqual({ date: "2026-06-26", title: "t" });
+  });
+
+  it("has no nextPublish when every piece is approved or undated", () => {
+    const o = computeOverview([
+      item({ id: "a", status: "approved", publish_date: "2026-06-24" }),
+      item({ id: "b", status: "in_review", publish_date: null }),
+    ]);
+    expect(o.nextPublish).toBeNull();
   });
 });

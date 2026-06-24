@@ -262,3 +262,54 @@ export function planProgress(
   for (const it of items) if (it.status === "approved") approved++;
   return { approved, total: items.length };
 }
+
+export interface PlanOverview {
+  total: number;
+  approved: number;
+  pending: number; // in_review, waiting on the firm
+  changes: number; // changes_requested, back with the operator
+  draft: number;
+  weeks: number; // distinct weeks that hold content
+  byFormat: { format: string | null; count: number }[];
+  nextPublish: { date: string; title: string } | null; // soonest publish among not-yet-approved
+}
+
+/**
+ * Whole-plan summary for the review-overview panel. Live counts, a format
+ * tally, and the soonest publish date among pieces not yet approved (the
+ * working deadline: review before it goes out).
+ */
+export function computeOverview(items: PlanDeliverable[]): PlanOverview {
+  let approved = 0;
+  let pending = 0;
+  let changes = 0;
+  let draft = 0;
+  const weeks = new Set<string>();
+  let next: { date: string; title: string } | null = null;
+  for (const it of items) {
+    if (it.status === "approved") approved++;
+    else if (it.status === "in_review") pending++;
+    else if (it.status === "changes_requested") changes++;
+    else if (it.status === "draft") draft++;
+    if (it.period_id) weeks.add(it.period_id);
+    if (it.status !== "approved" && it.publish_date) {
+      if (!next || it.publish_date < next.date) {
+        next = { date: it.publish_date, title: it.title };
+      }
+    }
+  }
+  const byFormat = groupByFormat(items).map((g) => ({
+    format: g.format,
+    count: g.items.length,
+  }));
+  return {
+    total: items.length,
+    approved,
+    pending,
+    changes,
+    draft,
+    weeks: weeks.size,
+    byFormat,
+    nextPublish: next,
+  };
+}

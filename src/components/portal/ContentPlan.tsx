@@ -7,7 +7,9 @@ import type { ContentPeriod, ContentKind, DeliverableStatus } from "@/lib/types"
 import {
   groupByFormat,
   planProgress,
+  computeOverview,
   type PlanDeliverable,
+  type PlanOverview,
 } from "@/lib/deliverables-pure";
 
 const PLAN_STATUS: Record<DeliverableStatus, { label: string; cls: string }> = {
@@ -62,6 +64,7 @@ export default function ContentPlan({
   const live = deliverables.filter((d) => d.status !== "archived");
   const unscheduled = live.filter((d) => !d.period_id);
   const archived = includeArchived ? deliverables.filter((d) => d.status === "archived") : [];
+  const overview = computeOverview(live);
 
   const refresh = () => router.refresh();
 
@@ -112,6 +115,8 @@ export default function ContentPlan({
           )}
         </div>
       </div>
+
+      <ReviewOverview overview={overview} isOperator={isOperator} />
 
       {isOperator && showNewWeek && (
         <PeriodForm
@@ -205,6 +210,118 @@ export default function ContentPlan({
         the signer&rsquo;s name, as a Law Society of Ontario Rule 4.2-1 compliance
         record. Posting a new version returns a piece to review.
       </p>
+    </div>
+  );
+}
+
+// ─── Review overview (whole-plan summary) ────────────────────────────────────
+
+function daysUntil(iso: string): number {
+  const d = new Date(`${iso}T00:00:00`);
+  const t = new Date();
+  t.setHours(0, 0, 0, 0);
+  return Math.round((d.getTime() - t.getTime()) / 86400000);
+}
+
+function daysLabel(days: number): string {
+  if (days === 0) return "publishes today";
+  if (days < 0) return `${-days} day${-days === 1 ? "" : "s"} overdue`;
+  return `in ${days} day${days === 1 ? "" : "s"}`;
+}
+
+function ReviewOverview({
+  overview,
+  isOperator,
+}: {
+  overview: PlanOverview;
+  isOperator: boolean;
+}) {
+  const { total, approved, pending, changes, draft, weeks, byFormat, nextPublish } = overview;
+  if (total === 0) return null;
+  const pct = Math.round((approved / total) * 100);
+  const waiting = pending + changes;
+  const days = nextPublish ? daysUntil(nextPublish.date) : null;
+  const urgency =
+    days === null ? "text-navy" : days <= 0 ? "text-red-fail" : days <= 2 ? "text-amber-800" : "text-navy";
+
+  return (
+    <div className="bg-white border border-border-brand p-5 space-y-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-xs uppercase tracking-wider font-semibold text-[color:var(--portal-accent)]">
+            Review overview
+          </p>
+          <h2 className="text-lg font-bold text-navy mt-0.5">
+            {waiting > 0
+              ? `${waiting} piece${waiting === 1 ? "" : "s"} need your review`
+              : "Everything is reviewed"}
+          </h2>
+          <p className="text-sm text-black/55 mt-0.5 max-w-xl">
+            {isOperator
+              ? "The firm reads each piece and approves it or asks for changes. You see the live queue state here."
+              : "Read each piece and approve it, or ask for changes. Click any row to open the draft."}
+          </p>
+        </div>
+        {nextPublish && (
+          <div className="text-right">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-black/40">
+              Next to publish
+            </p>
+            <p className={`text-sm font-semibold ${urgency}`}>{fmtDate(nextPublish.date)}</p>
+            {days !== null && <p className={`text-xs ${urgency}`}>{daysLabel(days)}</p>}
+            <p className="text-[11px] text-muted mt-0.5 max-w-[230px] truncate">
+              {nextPublish.title}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between text-xs mb-1.5">
+          <span className="text-black/55">
+            <span className="font-semibold text-navy">{approved}</span> of {total} approved
+          </span>
+          <span className="text-black/45">{pct}%</span>
+        </div>
+        <div className="h-2 rounded-full bg-parchment-2 overflow-hidden">
+          <div className="h-full bg-green-pass rounded-full" style={{ width: `${pct}%` }} />
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12px]">
+          <OverviewCount n={approved} label="approved" cls="text-green-pass" />
+          <OverviewCount n={pending} label="pending" cls="text-amber-800" />
+          {changes > 0 && (
+            <OverviewCount n={changes} label="changes requested" cls="text-amber-800" />
+          )}
+          {isOperator && draft > 0 && <OverviewCount n={draft} label="draft" cls="text-muted" />}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 pt-1">
+        <OverviewStat n={total} label={`piece${total === 1 ? "" : "s"}`} />
+        {weeks > 0 && <OverviewStat n={weeks} label={`week${weeks === 1 ? "" : "s"}`} />}
+        {byFormat
+          .filter((f) => f.format)
+          .map((f) => (
+            <OverviewStat key={f.format ?? "_"} n={f.count} label={f.format ?? ""} />
+          ))}
+      </div>
+    </div>
+  );
+}
+
+function OverviewCount({ n, label, cls }: { n: number; label: string; cls: string }) {
+  return (
+    <span className={cls}>
+      <span className="font-semibold">{n}</span> <span className="text-black/50">{label}</span>
+    </span>
+  );
+}
+
+function OverviewStat({ n, label }: { n: number; label: string }) {
+  return (
+    <div className="bg-parchment-2 rounded px-3 py-1.5 whitespace-nowrap">
+      <span className="font-bold text-navy">{n}</span>{" "}
+      <span className="text-[12px] text-muted">{label}</span>
     </div>
   );
 }
