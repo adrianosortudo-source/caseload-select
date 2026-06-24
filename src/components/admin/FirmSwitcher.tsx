@@ -125,8 +125,18 @@ export default function FirmSwitcher({ firms }: { firms: Firm[] }) {
 
   return (
     <>
+      {/* Console home */}
+      <nav className="px-3 pt-3 pb-1">
+        <Link
+          href="/admin"
+          className={`${NAV_LINK_CLASS} ${pathname === "/admin" ? NAV_ACTIVE : NAV_IDLE}`}
+        >
+          Console
+        </Link>
+      </nav>
+
       {/* Firm switcher header */}
-      <div className="px-3 pt-3 pb-2">
+      <div className="px-3 pt-2 pb-2">
         <div className="flex items-center justify-between px-2 mb-1.5">
           <span className="label text-white/30">Firm</span>
           <button

@@ -5,7 +5,7 @@
  * firm_lawyers row (when present), sets a 30-day session cookie, and
  * redirects to the appropriate landing surface based on role:
  *
- *   role='operator'  → /admin/triage  (cross-firm queue)
+ *   role='operator'  → /admin  (console home)
  *   role='lawyer'    → /portal/[firmId]/triage  (firm-scoped queue)
  *
  * Backward compat: legacy tokens without a role default to 'lawyer'.
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   }
 
   const landingUrl = payload.role === "operator"
-    ? new URL("/admin/triage", req.url)
+    ? new URL("/admin", req.url)
     : new URL(`/portal/${payload.firm_id}/triage`, req.url);
 
   const { name, value, options } = createSessionCookie(payload.firm_id, {
