@@ -23,7 +23,7 @@
  *      → look up firm in intake_firms.custom_domain, rewrite to /portal/{firmId}
  *
  * Rewrite map (for both class-2 and class-3 hosts):
- *   /                  → /widget/{firmId}        (intake widget at the apex of the firm's host)
+ *   /                  → /widget-public/{firmId} (Screen 2.0 intake widget at the apex of the firm's host)
  *   /portal            → /portal/{firmId}        (client portal)
  *   /portal/*          → /portal/{firmId}/*      (portal sub-routes)
  *
@@ -112,9 +112,13 @@ function rewriteForFirm(req: NextRequest, firmId: string): NextResponse {
     return response;
   }
 
-  // Everything else lands on the intake widget for that firm
+  // Everything else lands on the intake widget for that firm. /widget-public
+  // is the canonical Screen 2.0 surface (/api/intake-v2), the same engine the
+  // DRG embed uses; the legacy /widget (v2.1 / /api/screen) is retired for new
+  // surfaces. A firm cutting over a custom intake domain must land on the
+  // current engine, not the old one.
   const rewriteUrl = req.nextUrl.clone();
-  rewriteUrl.pathname = `/widget/${firmId}`;
+  rewriteUrl.pathname = `/widget-public/${firmId}`;
   const response = NextResponse.rewrite(rewriteUrl);
   response.headers.set("x-firm-id", firmId);
   return response;
