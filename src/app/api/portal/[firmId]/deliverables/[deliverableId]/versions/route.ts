@@ -19,6 +19,22 @@ import {
 } from "@/lib/deliverables";
 import { cleanNote } from "@/lib/deliverables-pure";
 import { sanitizeExplainerHtml } from "@/lib/explainer-html-sanitize";
+import { postDeliverableLifecycleToChannel } from "@/lib/deliverable-channel-post";
+
+async function announceNewVersion(
+  firmId: string,
+  deliverableId: string,
+  title: string,
+  actor: Parameters<typeof postDeliverableLifecycleToChannel>[0]["actor"],
+): Promise<void> {
+  await postDeliverableLifecycleToChannel({
+    firmId,
+    deliverableId,
+    deliverableTitle: title,
+    event: "new_version",
+    actor,
+  }).catch((e) => console.warn("[deliverables/versions] channel post failed:", e));
+}
 
 const MAX_ASSET_BYTES = 50 * 1024 * 1024; // 50 MB
 
@@ -129,6 +145,7 @@ export async function POST(
       silent,
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
+    if (!silent) await announceNewVersion(firmId, deliverableId, detail.deliverable.title, resolved.actor);
     return NextResponse.json({ ok: true, version: result.version });
   }
 
@@ -165,5 +182,6 @@ export async function POST(
     silent,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
+  if (!silent) await announceNewVersion(firmId, deliverableId, detail.deliverable.title, resolved.actor);
   return NextResponse.json({ ok: true, version: result.version });
 }

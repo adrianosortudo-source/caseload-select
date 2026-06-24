@@ -21,6 +21,7 @@ import {
   APPROVAL_ATTESTATION,
   CHANGES_ATTESTATION,
 } from "@/lib/deliverables-pure";
+import { postDeliverableLifecycleToChannel } from "@/lib/deliverable-channel-post";
 
 export async function POST(
   req: NextRequest,
@@ -102,6 +103,15 @@ export async function POST(
     // pre-check); surface it as 409 so the lawyer re-reviews the current version.
     return NextResponse.json({ error: result.error }, { status: result.stale ? 409 : 500 });
   }
+
+  // Post the sign-off into the CaseLoad Connect channel (best-effort).
+  await postDeliverableLifecycleToChannel({
+    firmId,
+    deliverableId,
+    deliverableTitle: detail.deliverable.title,
+    event: decision,
+    actor: resolved.actor,
+  }).catch((e) => console.warn("[deliverables/approve] channel post failed:", e));
 
   return NextResponse.json({ ok: true, record: result.record });
 }

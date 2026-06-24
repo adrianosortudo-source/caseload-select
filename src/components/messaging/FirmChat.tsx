@@ -28,11 +28,23 @@ export interface ChatMessage {
   pinned_at: string | null;
   pinned_by: string | null;
   reactions: { emoji: string; count: number; mine: boolean }[];
+  context:
+    | {
+        kind: "deliverable_comment";
+        deliverable_id: string;
+        deliverable_title: string;
+        comment_id: string;
+        version_id: string;
+        annotation_label: string;
+      }
+    | { kind: "deliverable_lifecycle"; deliverable_id: string; deliverable_title: string; event: string }
+    | null;
   created_at: string;
 }
 
 interface FirmChatProps {
   apiBase: string;
+  firmId: string;
   currentRole: "operator" | "lawyer";
   currentId: string;
   /** What the OTHER party is called, shown in the header. */
@@ -44,6 +56,7 @@ const POLL_MS = 30000;
 
 export default function FirmChat({
   apiBase,
+  firmId,
   currentRole,
   currentId,
   counterpartLabel,
@@ -165,7 +178,7 @@ export default function FirmChat({
             </p>
           ) : (
             filtered.map((m) => (
-              <MessageRow key={m.id} m={m} mine={isMine(m)} apiBase={apiBase} act={act} onChanged={refresh} compact />
+              <MessageRow key={m.id} m={m} mine={isMine(m)} apiBase={apiBase} firmId={firmId} act={act} onChanged={refresh} compact />
             ))
           )
         ) : roots.length === 0 ? (
@@ -179,6 +192,7 @@ export default function FirmChat({
                 m={m}
                 mine={isMine(m)}
                 apiBase={apiBase}
+                firmId={firmId}
                 act={act}
                 onChanged={refresh}
                 onReply={() => setReplyTo(replyTo === m.id ? null : m.id)}
@@ -187,7 +201,7 @@ export default function FirmChat({
               {(repliesByParent.get(m.id) ?? []).length > 0 && (
                 <div className="ml-6 mt-2 space-y-2 border-l-2 border-border-brand pl-3">
                   {(repliesByParent.get(m.id) ?? []).map((r) => (
-                    <MessageRow key={r.id} m={r} mine={isMine(r)} apiBase={apiBase} act={act} onChanged={refresh} compact />
+                    <MessageRow key={r.id} m={r} mine={isMine(r)} apiBase={apiBase} firmId={firmId} act={act} onChanged={refresh} compact />
                   ))}
                 </div>
               )}
@@ -217,10 +231,23 @@ export default function FirmChat({
   );
 }
 
+function contextHref(ctx: NonNullable<ChatMessage["context"]>, firmId: string): string {
+  if (ctx.kind === "deliverable_comment") {
+    return `/portal/${firmId}/deliverables/${ctx.deliverable_id}?comment=${ctx.comment_id}`;
+  }
+  return `/portal/${firmId}/deliverables/${ctx.deliverable_id}`;
+}
+
+function contextLabel(ctx: NonNullable<ChatMessage["context"]>): string {
+  if (ctx.kind === "deliverable_comment") return `Open comment on ${ctx.deliverable_title}`;
+  return `Open ${ctx.deliverable_title}`;
+}
+
 function MessageRow({
   m,
   mine,
   apiBase,
+  firmId,
   act,
   onChanged,
   onReply,
@@ -230,6 +257,7 @@ function MessageRow({
   m: ChatMessage;
   mine: boolean;
   apiBase: string;
+  firmId: string;
   act: (messageId: string, action: string, emoji?: string) => void;
   onChanged: () => void;
   onReply?: () => void;
@@ -339,6 +367,15 @@ function MessageRow({
             </a>
           ))}
         </div>
+      )}
+
+      {!m.deleted_at && m.context && (
+        <a
+          href={contextHref(m.context, firmId)}
+          className="mt-1.5 inline-flex items-center gap-1 text-[11px] uppercase tracking-wider font-semibold text-navy hover:underline"
+        >
+          {contextLabel(m.context)} <span aria-hidden>&#8599;</span>
+        </a>
       )}
 
       {!m.deleted_at && m.reactions?.length > 0 && (

@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
 import { getDeliverableDetail, addComment } from "@/lib/deliverables";
 import { cleanCommentBody, validateAnnotation } from "@/lib/deliverables-pure";
+import { postDeliverableCommentToChannel } from "@/lib/deliverable-channel-post";
 
 export async function POST(
   req: NextRequest,
@@ -68,5 +69,16 @@ export async function POST(
     actor: resolved.actor,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
+
+  // Fan the comment into the CaseLoad Connect channel (best-effort, never
+  // blocks the comment). Carries a deep-link context back to this comment.
+  await postDeliverableCommentToChannel({
+    firmId,
+    deliverableId,
+    deliverableTitle: detail.deliverable.title ?? "a deliverable",
+    comment: result.comment,
+    actor: resolved.actor,
+  }).catch((e) => console.warn("[deliverables/comments] channel post failed:", e));
+
   return NextResponse.json({ ok: true, comment: result.comment });
 }

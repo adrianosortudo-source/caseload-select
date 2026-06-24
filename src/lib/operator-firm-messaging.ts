@@ -29,6 +29,23 @@ export interface MessageReaction {
   mine: boolean;
 }
 
+/** Typed reference a message can carry, driving a deep-link affordance. */
+export type MessageContext =
+  | {
+      kind: 'deliverable_comment';
+      deliverable_id: string;
+      deliverable_title: string;
+      comment_id: string;
+      version_id: string;
+      annotation_label: string;
+    }
+  | {
+      kind: 'deliverable_lifecycle';
+      deliverable_id: string;
+      deliverable_title: string;
+      event: string;
+    };
+
 export interface OperatorFirmMessage {
   id: string;
   channel_id: string;
@@ -43,6 +60,7 @@ export interface OperatorFirmMessage {
   deleted_at: string | null;
   pinned_at: string | null;
   pinned_by: string | null;
+  context: MessageContext | null;
   reactions: MessageReaction[];
   created_at: string;
 }
@@ -112,6 +130,26 @@ export async function getOrCreateChannel(firmId: string): Promise<string> {
     throw new Error(`channel create failed: ${error.message}`);
   }
   return created.id as string;
+}
+
+/**
+ * Find the channel message that was posted for a given deliverable comment id
+ * (via its context). Used to thread a reply-comment under the channel message
+ * of its parent comment. Returns null when there is no such message.
+ */
+export async function findChannelMessageIdByCommentId(
+  firmId: string,
+  commentId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('operator_firm_messages')
+    .select('id')
+    .eq('firm_id', firmId)
+    .eq('context->>comment_id', commentId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data?.id as string | null) ?? null;
 }
 
 /**
@@ -263,6 +301,13 @@ export async function sendFirmMessage(input: {
   body: string;
   attachments?: MatterAttachment[];
   parent_message_id?: string | null;
+  context?: MessageContext | null;
+  /**
+   * Skip the firm_message_new notification. Used by auto-posts (deliverable
+   * comments / lifecycle) whose source event already notifies, so the channel
+   * shows the message without producing a second digest entry.
+   */
+  suppressNotification?: boolean;
 }): Promise<{ ok: true; message: OperatorFirmMessage } | { ok: false; error: string }> {
   const safeBody = sanitizeMessageHtml(input.body);
 
@@ -297,6 +342,7 @@ export async function sendFirmMessage(input: {
       sender_name: input.actor.name,
       body: safeBody,
       attachments,
+      context: input.context ?? null,
     })
     .select()
     .single();
@@ -305,9 +351,11 @@ export async function sendFirmMessage(input: {
     return { ok: false, error: `message insert failed: ${error.message}` };
   }
 
-  await enqueueFirmMessageNotification(inserted as OperatorFirmMessage).catch((err) => {
-    console.warn('[operator-firm-messaging] notification enqueue failed:', err);
-  });
+  if (!input.suppressNotification) {
+    await enqueueFirmMessageNotification(inserted as OperatorFirmMessage).catch((err) => {
+      console.warn('[operator-firm-messaging] notification enqueue failed:', err);
+    });
+  }
 
   return { ok: true, message: inserted as OperatorFirmMessage };
 }

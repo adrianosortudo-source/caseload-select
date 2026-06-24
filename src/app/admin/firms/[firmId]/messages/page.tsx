@@ -49,6 +49,7 @@ export default async function OperatorFirmMessagesPage({
 
       <FirmChat
         apiBase={`/api/admin/firms/${firmId}/messages`}
+        firmId={firmId}
         currentRole="operator"
         currentId="operator"
         counterpartLabel={firmName}

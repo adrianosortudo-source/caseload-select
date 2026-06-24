@@ -68,6 +68,7 @@ export default async function FirmPortalMessagesPage({
 
       <FirmChat
         apiBase={`/api/portal/${firmId}/messages`}
+        firmId={firmId}
         currentRole="lawyer"
         currentId={lawyerId}
         counterpartLabel="CaseLoad"
