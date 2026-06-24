@@ -18,22 +18,27 @@ type Status = "detecting" | "running" | "not-running";
 
 export default function DiagnosticBuilderPage() {
   const [status, setStatus] = useState<Status>("detecting");
+  const [probeError, setProbeError] = useState<string>("");
 
   async function probe() {
     setStatus("detecting");
+    setProbeError("");
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), 2500);
     try {
-      // Real CORS fetch: the local server returns Access-Control-Allow-Origin
-      // for this host plus Access-Control-Allow-Private-Network so Chrome's
-      // PNA preflight passes. r.ok confirms it actually responded.
       const r = await fetch(`${LOCAL_URL}/schema.json`, {
         signal: controller.signal,
         cache: "no-store",
       });
       setStatus(r.ok ? "running" : "not-running");
-    } catch {
+      if (!r.ok) setProbeError(`HTTP ${r.status}`);
+    } catch (e) {
       setStatus("not-running");
+      setProbeError(
+        e instanceof Error
+          ? `${e.name}: ${e.message}`
+          : "fetch failed"
+      );
     } finally {
       clearTimeout(t);
     }
@@ -54,15 +59,33 @@ export default function DiagnosticBuilderPage() {
       </header>
 
       <section className="bg-white border border-black/8 p-6 space-y-4">
-        <div className="flex items-center gap-3">
+        {/* Primary affordance: always visible. Click goes to localhost:8765
+            in a new tab regardless of probe state. The probe is informational
+            because cross-origin HTTPS-to-localhost detection is unreliable
+            even when the server is up and answering correctly. */}
+        <a
+          href={LOCAL_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block bg-gold text-[#0D1520] font-mono text-xs uppercase tracking-wider px-6 py-3 hover:opacity-90 transition"
+        >
+          Open builder in a new tab
+        </a>
+
+        <div className="flex items-center gap-3 pt-2 border-t border-black/8">
           <StatusDot status={status} />
           <div className="text-sm">
             <div className="font-semibold text-navy">
               {status === "detecting" && "Probing local builder..."}
-              {status === "running" && "Local builder is running."}
-              {status === "not-running" && "Local builder is not running."}
+              {status === "running" && "Local builder responded to probe."}
+              {status === "not-running" && "Probe did not reach the local builder."}
             </div>
             <div className="text-xs text-black/55 font-mono">{LOCAL_URL}</div>
+            {status === "not-running" && probeError && (
+              <div className="text-xs text-red-700 font-mono mt-1">
+                {probeError}
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -73,24 +96,23 @@ export default function DiagnosticBuilderPage() {
           </button>
         </div>
 
-        {status === "running" && (
-          <a
-            href={LOCAL_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block bg-gold text-[#0D1520] font-mono text-xs uppercase tracking-wider px-6 py-3 hover:opacity-90 transition"
-          >
-            Open builder in a new tab
-          </a>
-        )}
+        <p className="text-xs text-black/45 leading-relaxed">
+          The probe can fail (red dot) even when the server is up: Chrome blocks
+          cross-port localhost requests in some configurations regardless of CORS
+          headers. <strong>Try the gold button first.</strong> If a new tab opens
+          to a working CaseLoad Select Diagnostic Builder page, the server is
+          fine. Only if that new tab fails do you need to restart the server
+          (see below).
+        </p>
 
         {status === "not-running" && (
-          <div className="space-y-3">
+          <div className="space-y-3 pt-3 border-t border-black/8">
             <p className="text-sm text-black/70">
-              The builder normally auto-starts at Windows login (a shortcut to{" "}
+              If the Open button above did NOT load a working page, the server
+              is actually down. It normally auto-starts at Windows login
+              (shortcut to{" "}
               <code className="font-mono bg-black/5 px-1.5 py-0.5">start-builder.vbs</code>{" "}
-              lives in your Startup folder). If the dot is red, it crashed or
-              has not started yet. Two ways to restart:
+              in your Startup folder). To restart:
             </p>
             <ul className="text-sm text-black/70 list-disc pl-5 space-y-1.5">
               <li>
