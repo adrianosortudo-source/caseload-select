@@ -28,6 +28,7 @@ import {
 import { listMessagesForMatter, insertMessage } from '@/lib/matter-messages';
 import { canWriteChannel, isOwnedAttachmentPath } from '@/lib/matter-messages-pure';
 import { getMatterById } from '@/lib/matter-stage';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { ChannelType, ActorRole, MatterAttachment } from '@/lib/types';
 
 const VALID_CHANNELS: ChannelType[] = ['client', 'internal'];
@@ -148,8 +149,26 @@ export async function POST(
       : actor === 'staff' ? 'staff'
       : 'admin';
 
-  // Validate parent_message_id belongs to the same matter if provided.
-  const parentId = typeof body.parent_message_id === 'string' ? body.parent_message_id : null;
+  // Codex re-audit CP-05: parent_message_id must belong to THIS matter.
+  // Previously the comment said so but only a typecheck ran, so a caller
+  // could thread a reply against any known message id (including across
+  // matters/firms), polluting thread metadata.
+  let parentId: string | null = null;
+  if (typeof body.parent_message_id === 'string' && body.parent_message_id.length > 0) {
+    const { data: parentRow } = await supabaseAdmin
+      .from('matter_messages')
+      .select('id')
+      .eq('id', body.parent_message_id)
+      .eq('matter_id', matterId)
+      .maybeSingle();
+    if (!parentRow) {
+      return NextResponse.json(
+        { error: 'parent_message_id does not belong to this matter' },
+        { status: 400 },
+      );
+    }
+    parentId = body.parent_message_id;
+  }
 
   const result = await insertMessage({
     matter_id: matterId,

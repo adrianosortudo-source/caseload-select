@@ -37,7 +37,16 @@ vi.mock("@/lib/supabase-admin", () => {
         single: () =>
           Promise.resolve(
             table === "intake_sessions"
-              ? { data: { id: "sess-1", status: "in_progress" }, error: null }
+              ? {
+                  // CP-02: include contact.email so the session-captured email
+                  // matches the request body in the happy-path tests.
+                  data: {
+                    id: "sess-1",
+                    status: "in_progress",
+                    contact: { email: "lead@example.com" },
+                  },
+                  error: null,
+                }
               : { data: null, error: null },
           ),
       }),

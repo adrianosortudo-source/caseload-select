@@ -202,6 +202,23 @@ export interface RateLimitDecision {
  * caller can choose to log the would-be-throttle without blocking the
  * request.
  */
+// Buckets that protect public abuse/enumeration surfaces. When
+// RATE_LIMIT_FAIL_CLOSED=true and the limiter is unconfigured, these reject
+// instead of letting traffic through. seoCheck and intake stay fail-open
+// because they are tolerant of unauthenticated traffic and the user-visible
+// failure mode of a false 429 is worse than the abuse risk. (Codex re-audit
+// CP-04. Default remains fail-open until the operator enables Upstash and
+// flips RATE_LIMIT_FAIL_CLOSED, so DRG production is not affected.)
+const FAIL_CLOSED_BUCKETS: ReadonlySet<RateLimitBucket> = new Set<RateLimitBucket>([
+  "requestLink",
+  "otpSend",
+  "otpVerify",
+]);
+
+function failClosedMode(): boolean {
+  return process.env.RATE_LIMIT_FAIL_CLOSED === "true";
+}
+
 export async function checkRateLimit(
   bucket: RateLimitBucket,
   identity: string,
@@ -209,6 +226,11 @@ export async function checkRateLimit(
   const limiter = getLimiter(bucket);
   const config = BUCKET_CONFIG[bucket];
   if (!limiter) {
+    if (failClosedMode() && FAIL_CLOSED_BUCKETS.has(bucket)) {
+      // Defensive deny: limiter unconfigured but operator has opted into
+      // fail-closed mode on a sensitive bucket.
+      return { ok: false, active: false, remaining: 0, reset: 0, limit: config.limit };
+    }
     return { ok: true, active: false, remaining: config.limit, reset: 0, limit: config.limit };
   }
   try {

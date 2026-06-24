@@ -123,6 +123,25 @@ async function main() {
     violations.push(`RLS OFF on table ${row.relname}`);
   }
 
+  // (3) Codex re-audit CP-01: also check pg_default_acl directly. Codex
+  // correctly pointed out that information_schema.role_table_grants only sees
+  // CURRENT tables — a default-ACL drift hides until the NEXT migration
+  // creates a table. This catches the trap at the source.
+  const defaults = await pgQuery(`
+    SELECT pg_get_userbyid(defaclrole) AS owner, defaclacl::text AS acl
+    FROM pg_default_acl
+    WHERE defaclnamespace = 'public'::regnamespace
+      AND defaclobjtype = 'r';
+  `);
+  for (const row of defaults) {
+    if (/\banon=/.test(row.acl) || /\bauthenticated=/.test(row.acl)) {
+      violations.push(
+        `pg_default_acl(owner=${row.owner}) grants future public tables to ` +
+          `anon/authenticated: ${row.acl}`,
+      );
+    }
+  }
+
   if (violations.length === 0) {
     console.log('OK: no anon/authenticated table grants and no RLS-off tables in public.');
     process.exit(0);

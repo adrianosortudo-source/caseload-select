@@ -38,25 +38,48 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json() as { session_id?: string; email?: string; firm_name?: string };
-    const { session_id, email, firm_name = "the firm" } = body;
+    const { session_id, email: requestedEmail, firm_name = "the firm" } = body;
 
     if (!session_id) {
       return NextResponse.json({ error: "session_id required" }, { status: 400 });
     }
-    if (!email || !email.includes("@")) {
+    if (!requestedEmail || !requestedEmail.includes("@")) {
       return NextResponse.json({ error: "valid email required" }, { status: 400 });
     }
 
-    // Verify session exists
+    // Verify session exists and load the contact captured during intake.
     const { data: session, error: sessionErr } = await supabase
       .from("intake_sessions")
-      .select("id, status")
+      .select("id, status, contact")
       .eq("id", session_id)
       .single();
 
     if (sessionErr || !session) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
+
+    // Codex re-audit CP-02: bind the OTP recipient to the email captured
+    // during intake, not the email supplied in the request body. The previous
+    // shape let an attacker who learned a valid session_id receive the OTP at
+    // an address of their choice and verify the session. Either the request
+    // matches the captured email (legit reissue) or we refuse.
+    const sessionContact = (session.contact ?? {}) as { email?: string };
+    const capturedEmail = (sessionContact.email ?? "").trim().toLowerCase();
+    if (!capturedEmail) {
+      return NextResponse.json(
+        { error: "Session has no captured contact email; complete intake first." },
+        { status: 422 },
+      );
+    }
+    if (capturedEmail !== requestedEmail.trim().toLowerCase()) {
+      return NextResponse.json(
+        { error: "email does not match the contact captured for this session" },
+        { status: 403 },
+      );
+    }
+    // From this point on, send to the captured email (server-trusted value),
+    // never to anything caller-controlled.
+    const email = capturedEmail;
 
     // Generate OTP and expiry
     const otp = generateOtp();
@@ -95,12 +118,23 @@ export async function POST(req: Request) {
     try {
       const result = await sendEmail(email, `Your ${firm_name} verification code: ${otp}`, html);
       if (result.skipped) {
-        // Resend not configured  -  dev mode
-        console.info(`[otp/send] DEV: OTP for ${email}: ${otp}`);
+        // Resend not configured. Log the code ONLY in non-production (local dev
+        // without an API key). Codex re-audit CP-03: OTP values must never
+        // reach production application logs.
+        if (process.env.NODE_ENV !== 'production') {
+          console.info(`[otp/send] DEV: OTP for ${email}: ${otp}`);
+        } else {
+          console.warn(`[otp/send] RESEND_API_KEY missing in production; OTP stored but not delivered, session=${session_id}`);
+        }
       }
     } catch (emailErr) {
-      // Email delivery failed (e.g. Resend sandbox restriction)  -  OTP is still valid in DB
-      console.warn(`[otp/send] Email delivery failed, OTP still stored. Code for ${email}: ${otp}`, emailErr);
+      // Email delivery failed. NEVER log the OTP value; surface only the
+      // session id + delivery error so an operator can investigate without the
+      // code itself appearing in logs (CP-03).
+      console.warn(
+        `[otp/send] Email delivery failed for session=${session_id}; OTP stored in DB and unchanged.`,
+        emailErr,
+      );
     }
 
     return NextResponse.json({ sent: true });
