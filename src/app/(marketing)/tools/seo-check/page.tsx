@@ -286,6 +286,12 @@ export default function SeoCheckPage() {
           font-weight: 700;
         }
 
+        @media print {
+          /* Print only the diagnostic report, not the marketing page chrome. */
+          .seo-nav, .seo-hero, .seo-categories-preview, .seo-disclaimer { display: none !important; }
+          .seo-main { padding: 0 !important; background: #fff !important; min-height: 0 !important; }
+          .seo-tool-section { margin: 0 !important; max-width: none !important; }
+        }
         @media (max-width: 768px) {
           .seo-categories-grid {
             grid-template-columns: 1fr;

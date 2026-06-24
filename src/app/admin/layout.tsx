@@ -28,7 +28,7 @@ export default async function AdminLayout({
 
   return (
     <div className="bg-parchment min-h-screen flex flex-col">
-      <header className="bg-[#0D1520] border-b-2 border-gold px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0">
+      <header className="bg-[#0D1520] border-b-2 border-gold px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0 print:hidden">
         <div className="flex items-center gap-4 min-w-0">
           <div className="min-w-0">
             <div className="font-mono text-[11px] uppercase tracking-[0.18em] font-semibold text-gold">
@@ -47,7 +47,7 @@ export default async function AdminLayout({
         </form>
       </header>
 
-      <nav className="bg-white border-b border-black/8 px-4 sm:px-6 shrink-0 overflow-x-auto">
+      <nav className="bg-white border-b border-black/8 px-4 sm:px-6 shrink-0 overflow-x-auto print:hidden">
         <div className="max-w-6xl mx-auto flex items-center gap-1 min-w-max">
           <AdminTab href="/admin/triage" label="Triage queue" />
           <AdminTab href="/admin/webhook-outbox" label="Webhook outbox" />
@@ -62,7 +62,7 @@ export default async function AdminLayout({
 
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">{children}</main>
 
-      <footer className="text-center text-xs text-black/30 py-6 shrink-0 flex items-center justify-center gap-4">
+      <footer className="text-center text-xs text-black/30 py-6 shrink-0 flex items-center justify-center gap-4 print:hidden">
         <span>CaseLoad Select operator console</span>
         <span aria-hidden>·</span>
         <a href="/privacy" className="hover:text-navy transition-colors">Privacy</a>

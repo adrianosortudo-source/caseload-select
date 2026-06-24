@@ -274,6 +274,10 @@ export default function SeoReport({
     copyText(text, () => { setCopied(key); setTimeout(() => setCopied((c) => (c === key ? null : c)), 1600); });
   }
 
+  // Panes are always rendered; the active one shows on screen, and print
+  // reveals all of them so the exported PDF is the complete report.
+  const paneClass = (name: typeof tab) => `seo-pane ${tab === name ? "seo-pane-active" : ""}`;
+
   return (
     <div className="seo-report">
       {/* Header */}
@@ -329,9 +333,8 @@ export default function SeoReport({
         <button className={`seo-tab ${tab === "categories" ? "seo-tab-active" : ""}`} onClick={() => setTab("categories")} type="button">Categories</button>
       </div>
 
-      {/* Summary tab */}
-      {tab === "summary" && (
-        <div className="seo-pane">
+      {/* Summary section */}
+      <div className={paneClass("summary")}>
           <section className="seo-block">
             <h3 className="seo-block-title">Top priority fixes</h3>
             <ul className="seo-fix-list">
@@ -408,12 +411,10 @@ export default function SeoReport({
               )}
             </section>
           )}
-        </div>
-      )}
+      </div>
 
-      {/* Issues tab */}
-      {tab === "issues" && (
-        <div className="seo-pane">
+      {/* Issues section */}
+      <div className={paneClass("issues")}>
           {allIssues.length === 0 && <p className="seo-empty">No issues found. All checks passed.</p>}
           <ul className="seo-issue-list">
             {allIssues.map((it) => (
@@ -435,12 +436,11 @@ export default function SeoReport({
               </li>
             ))}
           </ul>
-        </div>
-      )}
+      </div>
 
-      {/* Pages tab */}
-      {tab === "pages" && pages.length > 0 && (
-        <div className="seo-pane">
+      {/* Pages section */}
+      {pages.length > 0 && (
+        <div className={paneClass("pages")}>
           <div className="seo-table-wrap">
             <table className="seo-table">
               <thead>
@@ -470,14 +470,12 @@ export default function SeoReport({
         </div>
       )}
 
-      {/* Categories tab */}
-      {tab === "categories" && (
-        <div className="seo-pane">
+      {/* Categories section */}
+      <div className={paneClass("categories")}>
           <div className="seo-categories">
             {result.categories.map((c, i) => <CategoryCard key={i} cat={c} />)}
           </div>
-        </div>
-      )}
+      </div>
 
       {!hideCta && (
         <div className="seo-report-cta">
@@ -587,7 +585,8 @@ const reportStyles = `
   .seo-tab:hover { color: var(--navy); }
   .seo-tab-active { color: var(--navy); border-bottom-color: var(--navy); }
 
-  .seo-pane { margin-bottom: var(--sp-6); }
+  .seo-pane { margin-bottom: var(--sp-6); display: none; }
+  .seo-pane-active { display: block; }
   .seo-block { background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card); padding: var(--sp-5); margin-bottom: var(--sp-4); }
   .seo-block-title { font-family: var(--font-display); font-size: 14px; font-weight: 700; color: var(--navy); margin: 0 0 var(--sp-4); }
   .seo-empty { color: var(--text-muted); font-size: 14px; text-align: center; padding: var(--sp-5) 0; }
@@ -707,6 +706,10 @@ const reportStyles = `
   @media print {
     .seo-tabs, .seo-report-actions, .seo-report-cta, .seo-report-footer, .seo-mini-btn { display: none !important; }
     .seo-report { max-width: none; }
-    .seo-block, .seo-issue-card, .seo-cat-card, .seo-report-header, .seo-table-wrap { break-inside: avoid; box-shadow: none; }
+    /* Reveal every section so the exported PDF is the complete report. */
+    .seo-pane { display: block !important; margin-bottom: 12px; }
+    .seo-block, .seo-issue-card, .seo-cat-card, .seo-report-header, .seo-table-wrap, .seo-fix-row, .seo-bot-row, .seo-internal-stat { break-inside: avoid; box-shadow: none; }
+    /* Expand collapsed category items so the print is not truncated. */
+    .seo-cat-items { display: block !important; }
   }
 `;
