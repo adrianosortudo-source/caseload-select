@@ -8,14 +8,20 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { exchangeClioCode, saveClioTokens } from "@/lib/clio";
+import { exchangeClioCode, saveClioTokens, verifyClioState } from "@/lib/clio";
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
-  const firmId = req.nextUrl.searchParams.get("state");
+  // The firm is taken from the SIGNED state, not the raw query value. An
+  // unverifiable state cannot bind tokens to a firm we did not initiate the
+  // flow for. We do not echo an untrusted firmId into the redirect URL.
+  const firmId = verifyClioState(req.nextUrl.searchParams.get("state"));
 
-  if (!code || !firmId) {
-    return NextResponse.redirect(new URL(`/portal/${firmId ?? ""}?clio=error`, req.url));
+  if (!firmId) {
+    return NextResponse.redirect(new URL(`/portal/login?clio=error`, req.url));
+  }
+  if (!code) {
+    return NextResponse.redirect(new URL(`/portal/${firmId}?clio=error`, req.url));
   }
 
   try {

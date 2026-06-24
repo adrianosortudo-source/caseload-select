@@ -12,12 +12,54 @@
  * Scopes requested: contacts:read contacts:write matters:read matters:write calendar_entries:read
  */
 
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { supabaseAdmin as supabase } from "./supabase-admin";
 
 const CLIO_BASE = "https://app.clio.com/api/v4";
 const CLIO_AUTH_URL = "https://app.clio.com/oauth/authorize";
 const CLIO_TOKEN_URL = "https://app.clio.com/oauth/token";
 const SCOPES = "contacts:read contacts:write matters:read matters:write calendar_entries:read";
+
+// ─── OAuth state signing ─────────────────────────────────────────────────────
+// The OAuth `state` carries the firm the flow is binding tokens to. It MUST be
+// tamper-proof: an unsigned firmId lets an attacker craft their own Clio auth
+// URL with state=<other firm> and bind their Clio account to that firm on the
+// callback. We sign firmId+expiry with the Clio client secret (server-only) so
+// the callback can trust the firmId without forgery.
+const CLIO_STATE_TTL_MS = 10 * 60 * 1000;
+
+function clioStateSecret(): string {
+  return process.env.CLIO_CLIENT_SECRET ?? "";
+}
+function b64url(buf: Buffer): string {
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+export function signClioState(firmId: string): string {
+  const payload = `${firmId}.${Date.now() + CLIO_STATE_TTL_MS}`;
+  const sig = b64url(createHmac("sha256", clioStateSecret()).update(payload).digest());
+  return `${b64url(Buffer.from(payload, "utf8"))}.${sig}`;
+}
+
+export function verifyClioState(state: string | null): string | null {
+  if (!state) return null;
+  const parts = state.split(".");
+  if (parts.length !== 2) return null;
+  let payload: string;
+  try {
+    payload = Buffer.from(parts[0].replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+  } catch { return null; }
+  const expected = b64url(createHmac("sha256", clioStateSecret()).update(payload).digest());
+  const a = Buffer.from(parts[1]);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  const dot = payload.lastIndexOf(".");
+  if (dot < 0) return null;
+  const firmId = payload.slice(0, dot);
+  const exp = Number(payload.slice(dot + 1));
+  if (!firmId || !Number.isFinite(exp) || Date.now() > exp) return null;
+  return firmId;
+}
 
 export interface ClioTokens {
   access_token: string;
@@ -33,7 +75,7 @@ export function getClioAuthUrl(firmId: string): string {
     client_id: process.env.CLIO_CLIENT_ID ?? "",
     redirect_uri: process.env.CLIO_REDIRECT_URI ?? "",
     scope: SCOPES,
-    state: firmId,
+    state: signClioState(firmId),
   });
   return `${CLIO_AUTH_URL}?${params}`;
 }

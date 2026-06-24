@@ -351,8 +351,12 @@ export async function POST(req: Request) {
     }
 
     // ── Load firm config + session in parallel ────────────────────────
+    // A resumed session MUST belong to the firm in this request. Binding the
+    // lookup to firm_id prevents pairing firm A's request with firm B's
+    // session (a mismatch returns "Session not found"); the legitimate widget
+    // always resends the firm_id the session was created under.
     const sessionPromise = session_id
-      ? supabase.from("intake_sessions").select("*").eq("id", session_id).single()
+      ? supabase.from("intake_sessions").select("*").eq("id", session_id).eq("firm_id", firm_id).single()
       : supabase.from("intake_sessions").insert({ firm_id, channel, status: "in_progress" }).select().single();
 
     const [firmResult, sessionResult] = await Promise.all([
