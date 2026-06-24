@@ -76,10 +76,32 @@ export interface SeverityBreakdown {
   info: number;
 }
 
+/**
+ * Per-page view, narrowed to the fields the prospect-enrichment research packet
+ * reads. The live API returns a richer PageResult; structural typing lets this
+ * narrower shape read it safely.
+ */
+export interface SeoPageResult {
+  url: string;
+  title: string | null;
+  pageType: string;
+  schema: {
+    types: string[];
+    fields: { address: boolean; areaServed: boolean };
+  };
+  lawFirm: {
+    practiceAreaIntent: boolean;
+    addressVisible: boolean;
+  };
+  wordCount?: number;
+}
+
 export interface SeoCheckResult {
   domain: string;
   scanMode: "quick" | "standard" | "deep";
   pagesScanned: number;
+  /** Present on the live API response; read by the enrichment research packet. */
+  pages?: SeoPageResult[];
   categories: SeoCategoryResult[];
   overallScore: number;
   grade: string;

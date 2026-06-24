@@ -27,6 +27,7 @@ import {
   type ProspectingDiagnostic,
 } from "../_lib/prospecting";
 import type { SeoCheckResult } from "../_lib/seo-types";
+import { buildResearchPacket, type ProspectEnrichment } from "../_lib/enrich";
 
 type ProgressStatus = "pending" | "scanning" | "done" | "error";
 
@@ -90,6 +91,7 @@ export default function ProspectingDiagnosticTool() {
   // Form state
   const [firmName, setFirmName] = useState("");
   const [primaryDomain, setPrimaryDomain] = useState("");
+  const [linkedinUrl, setLinkedinUrl] = useState("");
   const [alternateDomains, setAlternateDomains] = useState("");
   const [market, setMarket] = useState("");
   const [practiceFocus, setPracticeFocus] = useState("");
@@ -106,6 +108,14 @@ export default function ProspectingDiagnosticTool() {
   const [copied, setCopied] = useState<string>("");
   const [notice, setNotice] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+
+  // Enrichment state (Phase 1: market + practice focus + alternate-domain hints).
+  const [enriching, setEnriching] = useState(false);
+  const [enrichError, setEnrichError] = useState("");
+  const [enrichment, setEnrichment] = useState<ProspectEnrichment | null>(null);
+  // The quick scan captured during enrichment, reused as the primary scan when
+  // the operator then runs the diagnostic at quick depth (no double crawl).
+  const enrichScanRef = useRef<{ domain: string; result: SeoCheckResult } | null>(null);
 
   function cancelRun() {
     abortRef.current?.abort();
@@ -143,6 +153,67 @@ export default function ProspectingDiagnosticTool() {
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") return { result: null, error: "cancelled" };
       return { result: null, error: e instanceof Error ? e.message : "Network error" };
+    }
+  }
+
+  async function handleEnrich() {
+    const name = firmName.trim();
+    const primary = cleanDomain(primaryDomain);
+    if (!name) {
+      setEnrichError("Enter the firm name first.");
+      return;
+    }
+    if (!primary) {
+      setEnrichError("Enter the primary domain first.");
+      return;
+    }
+
+    setEnrichError("");
+    setEnrichment(null);
+    setEnriching(true);
+    const controller = new AbortController();
+
+    try {
+      const { result, error: scanErr } = await scanDomain(primary, "quick", controller.signal);
+      if (!result) {
+        setEnrichError(`Could not scan ${primary}: ${scanErr || "unknown error"}.`);
+        return;
+      }
+      enrichScanRef.current = { domain: primary, result };
+
+      const packet = buildResearchPacket(
+        { firmName: name, primaryDomain: primary, linkedinUrl: linkedinUrl.trim() || undefined },
+        result
+      );
+
+      const res = await fetch("/api/admin/prospecting-diagnostic/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packet }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        setEnrichError((data as { error?: string }).error || `Enrichment failed (HTTP ${res.status}).`);
+        return;
+      }
+      setEnrichment(data.enrichment as ProspectEnrichment);
+    } catch (e) {
+      setEnrichError(e instanceof Error ? e.message : "Network error.");
+    } finally {
+      setEnriching(false);
+    }
+  }
+
+  function applyEnrichment() {
+    if (!enrichment) return;
+    if (enrichment.market.value) setMarket(enrichment.market.value);
+    const pa = enrichment.practiceAreaFocus;
+    if (pa.summary) setPracticeFocus(pa.summary);
+    else if (pa.practiceAreas.length) setPracticeFocus(pa.practiceAreas.join(", "));
+    if (enrichment.alternateDomains.length) {
+      const existing = parseList(alternateDomains, cleanDomain);
+      const merged = [...new Set([...existing, ...enrichment.alternateDomains.map((a) => a.domain)])];
+      setAlternateDomains(merged.join("\n"));
     }
   }
 
@@ -185,8 +256,16 @@ export default function ProspectingDiagnosticTool() {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    // Reuse the quick scan captured during enrichment for the primary domain,
+    // so enrich-then-run at quick depth does not crawl the same site twice.
+    const cachedPrimary = enrichScanRef.current;
+    const scan: typeof scanDomain = (domain, mode, signal) =>
+      cachedPrimary && domain === cachedPrimary.domain && mode === "quick"
+        ? Promise.resolve({ result: cachedPrimary.result })
+        : scanDomain(domain, mode, signal);
+
     const outcome = await runScans(plan.queue, {
-      scan: scanDomain,
+      scan,
       signal: controller.signal,
       onProgress: (i, status, error) =>
         setProgress((prev) => prev.map((p, idx) => (idx === i ? { ...p, status, error } : p))),
@@ -222,7 +301,18 @@ export default function ProspectingDiagnosticTool() {
     <div className="space-y-6">
       {/* ── Input section ─────────────────────────────── */}
       <section className="bg-white border border-black/8 p-5 sm:p-6">
-        <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-navy mb-4">Prospect inputs</h2>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-navy">Prospect inputs</h2>
+          <button
+            type="button"
+            onClick={handleEnrich}
+            disabled={enriching || running}
+            title="Scan the site and let AI suggest market, practice focus, and alternate domains"
+            className="text-[11px] font-display font-bold uppercase tracking-wider px-4 py-2 border border-gold text-navy hover:bg-gold/10 disabled:opacity-50 transition"
+          >
+            {enriching ? "Researching prospect…" : "Enrich prospect"}
+          </button>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Prospect firm name" required>
             <input
@@ -239,6 +329,14 @@ export default function ProspectingDiagnosticTool() {
               onChange={(e) => setPrimaryDomain(e.target.value)}
               placeholder="firmname.ca"
               onKeyDown={(e) => e.key === "Enter" && !running && runDiagnostic()}
+            />
+          </Field>
+          <Field label="LinkedIn URL" hint="Stored as a reference. Not scraped.">
+            <input
+              className={inputClass}
+              value={linkedinUrl}
+              onChange={(e) => setLinkedinUrl(e.target.value)}
+              placeholder="linkedin.com/company/firmname"
             />
           </Field>
           <Field label="Market / location">
@@ -282,6 +380,56 @@ export default function ProspectingDiagnosticTool() {
             />
           </Field>
         </div>
+
+        {enrichError && <p className="text-sm text-red-700 mt-4">{enrichError}</p>}
+
+        {enrichment && (
+          <div className="mt-5 pt-4 border-t border-black/8">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-navy">AI suggestions</h3>
+              <button
+                type="button"
+                onClick={applyEnrichment}
+                className="text-[11px] font-display font-bold uppercase tracking-wider px-4 py-2 bg-navy text-white hover:bg-navy/90 transition"
+              >
+                Apply suggestions
+              </button>
+            </div>
+            <div className="space-y-3">
+              <SuggestionRow
+                label="Market / location"
+                value={enrichment.market.value || "No suggestion from the scan"}
+                confidence={enrichment.market.confidence}
+                evidence={enrichment.market.evidence}
+              />
+              <SuggestionRow
+                label="Practice area focus"
+                value={
+                  enrichment.practiceAreaFocus.summary ||
+                  enrichment.practiceAreaFocus.practiceAreas.join(", ") ||
+                  "No suggestion from the scan"
+                }
+                confidence={enrichment.practiceAreaFocus.confidence}
+                evidence={enrichment.practiceAreaFocus.evidence}
+                chips={enrichment.practiceAreaFocus.practiceAreas}
+              />
+              {enrichment.alternateDomains.length > 0 && (
+                <SuggestionRow
+                  label="Alternate domains"
+                  value={enrichment.alternateDomains.map((a) => a.domain).join(", ")}
+                  confidence={enrichment.alternateDomains[0].confidence}
+                  evidence={enrichment.alternateDomains.map((a) => a.reason).filter(Boolean)}
+                />
+              )}
+              <div className="text-xs text-black/45 border border-dashed border-black/15 px-3 py-2">
+                Competitors: source not configured. Planned for Phase 2 (owned Toronto firm database).
+              </div>
+            </div>
+            <p className="text-[11px] text-black/45 mt-2">
+              Suggestions are AI-generated from the site scan. Review and edit before running the diagnostic.
+            </p>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-4 mt-5 pt-4 border-t border-black/8">
           <label className="flex items-center gap-2 text-xs">
@@ -597,6 +745,40 @@ function ConfidenceChip({ confidence }: { confidence: "low" | "medium" | "high" 
     <span className={`text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 ${cls}`}>
       {confidence}
     </span>
+  );
+}
+
+function SuggestionRow({
+  label,
+  value,
+  confidence,
+  evidence,
+  chips,
+}: {
+  label: string;
+  value: string;
+  confidence: "low" | "medium" | "high";
+  evidence?: string[];
+  chips?: string[];
+}) {
+  return (
+    <div className="text-sm">
+      <div className="flex items-center gap-2 mb-0.5">
+        <span className="text-[10px] uppercase tracking-wider font-semibold text-black/45">{label}</span>
+        <ConfidenceChip confidence={confidence} />
+      </div>
+      <div className="text-black/80">{value}</div>
+      {chips && chips.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1">
+          {chips.map((c) => (
+            <span key={c} className="text-[10px] bg-black/5 text-black/60 px-1.5 py-0.5">{c}</span>
+          ))}
+        </div>
+      )}
+      {evidence && evidence.length > 0 && (
+        <div className="text-[11px] text-black/40 mt-1">Evidence: {evidence.join("; ")}</div>
+      )}
+    </div>
   );
 }
 
