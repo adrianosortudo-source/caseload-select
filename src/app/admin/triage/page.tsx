@@ -349,13 +349,13 @@ function QueueCard({ row, view }: { row: QueueRow; view: LifecycleView }) {
   const statusChip = !isFinalised
     ? null
     : row.status === "passed"
-    ? { label: "Passed", classes: "bg-stone-100 text-stone-700 border-stone-300" }
+    ? { label: "Passed", classes: "bg-parchment-2 text-muted border-border-brand" }
     : row.status === "referred"
-    ? { label: "Referred", classes: "bg-slate-100 text-slate-700 border-slate-300" }
+    ? { label: "Referred", classes: "bg-navy text-white border-navy" }
     : row.status === "declined"
-    ? { label: "Declined", classes: "bg-stone-100 text-stone-700 border-stone-300" }
+    ? { label: "Declined", classes: "text-red-fail border-red-fail bg-transparent" }
     : row.status === "taken"
-    ? { label: "Taken", classes: "bg-emerald-100 text-emerald-900 border-emerald-300" }
+    ? { label: "Taken", classes: "bg-green-pass text-white border-green-pass" }
     : row.status === "triaging"
     ? { label: "Triaging", classes: "bg-amber-50 text-amber-800 border-amber-200" }
     : null;
@@ -383,7 +383,7 @@ function QueueCard({ row, view }: { row: QueueRow; view: LifecycleView }) {
               </span>
             )}
             {view === "archived" && (
-              <span className="text-[10px] uppercase tracking-wider font-bold bg-stone-200 text-stone-700 px-2 py-0.5 border border-stone-300">
+              <span className="text-[10px] uppercase tracking-wider font-bold bg-parchment-2 text-muted px-2 py-0.5 border border-border-brand">
                 Archived
               </span>
             )}
@@ -430,7 +430,7 @@ function QueueCard({ row, view }: { row: QueueRow; view: LifecycleView }) {
 
         <div className="flex flex-col items-start md:items-end gap-2 min-w-[140px]">
           {isFinalised ? (
-            <span className="text-[10px] uppercase tracking-wider font-bold text-stone-500">
+            <span className="text-[10px] uppercase tracking-wider font-bold text-muted">
               No decision needed
             </span>
           ) : (
@@ -461,10 +461,10 @@ function QueueCard({ row, view }: { row: QueueRow; view: LifecycleView }) {
  */
 function NotificationChip({ sentAt, error }: { sentAt: string | null; error: string | null }) {
   const state = sentAt
-    ? { label: "Notify sent", classes: "bg-emerald-50 text-emerald-700 border-emerald-200" }
+    ? { label: "Notify sent", classes: "bg-green-pass/10 text-green-pass border-green-pass/30" }
     : error
-    ? { label: "Notify failed", classes: "bg-red-50 text-red-700 border-red-300" }
-    : { label: "Notify pending", classes: "bg-stone-50 text-stone-500 border-stone-200" };
+    ? { label: "Notify failed", classes: "bg-red-fail/10 text-red-fail border-red-fail/30" }
+    : { label: "Notify pending", classes: "bg-parchment-2 text-muted border-border-brand" };
   return (
     <span
       className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 border ${state.classes}`}
@@ -477,14 +477,14 @@ function NotificationChip({ sentAt, error }: { sentAt: string | null; error: str
 
 function BandBadge({ band }: { band: "A" | "B" | "C" | "D" | null }) {
   const colour =
-    band === "A" ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-    : band === "B" ? "bg-amber-100 text-amber-900 border-amber-300"
-    : band === "C" ? "bg-stone-100 text-stone-700 border-stone-300"
-    : band === "D" ? "bg-slate-100 text-slate-700 border-slate-300"
-                   : "bg-stone-50 text-stone-500 border-stone-200";
+    band === "A" ? "bg-gold text-deep-black border-gold"
+    : band === "B" ? "bg-navy text-white border-navy"
+    : band === "C" ? "bg-muted text-white border-muted"
+    : band === "D" ? "bg-transparent text-field-label border-muted"
+                   : "bg-parchment-2 text-muted border-border-brand";
   return (
     <span
-      className={`inline-flex items-center justify-center font-mono font-bold text-base w-10 h-10 border ${colour}`}
+      className={`inline-flex items-center justify-center font-display font-bold text-base w-10 h-10 border ${colour}`}
       aria-label={`Band ${band ?? "unrated"}`}
     >
       {band ?? "—"}

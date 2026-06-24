@@ -63,13 +63,13 @@ export default async function PortalLayout({
           )}
           <div className="min-w-0">
             <div className="text-white font-semibold text-sm truncate">{firmName}</div>
-            <div className="text-white/50 text-xs">Client Dashboard</div>
+            <div className="text-white/50 text-xs">Lawyer portal</div>
           </div>
         </div>
         <form action={`/api/portal/logout?firm_id=${firmId}`} method="POST" className="shrink-0">
           <button
             type="submit"
-            className="text-xs text-white/60 hover:text-white transition px-3 py-1.5 rounded border border-white/20 hover:border-white/40"
+            className="text-xs text-white/60 hover:text-white transition px-3 py-1.5 border border-white/20 hover:border-white/40"
           >
             Sign out
           </button>

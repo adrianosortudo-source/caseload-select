@@ -74,16 +74,16 @@ function formatResponseTime(secs: number | null): string {
 
 function responseTimeColor(secs: number | null): string {
   if (secs === null) return "text-black/40";
-  if (secs < 60) return "text-emerald-600";
+  if (secs < 60) return "text-green-pass";
   if (secs <= 300) return "text-amber-600";
-  return "text-red-600";
+  return "text-red-fail";
 }
 
 function funnelColor(pct: number | null): string {
   if (pct === null) return "text-black/40";
-  if (pct >= 15) return "text-emerald-600";
+  if (pct >= 15) return "text-green-pass";
   if (pct >= 8) return "text-amber-600";
-  return "text-red-600";
+  return "text-red-fail";
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ function Delta({ pct }: { pct: number | null }) {
   if (pct === 0) return <span className="text-xs text-black/40">→ flat</span>;
   const up = pct > 0;
   return (
-    <span className={`text-xs font-medium flex items-center gap-0.5 ${up ? "text-emerald-600" : "text-red-500"}`}>
+    <span className={`text-xs font-medium flex items-center gap-0.5 ${up ? "text-green-pass" : "text-red-fail"}`}>
       <span>{up ? "↑" : "↓"}</span>
       <span>{Math.abs(pct)}%</span>
     </span>
@@ -101,9 +101,9 @@ function Delta({ pct }: { pct: number | null }) {
 }
 
 const BENCHMARK_DOT: Record<NonNullable<BenchmarkStatus>, string> = {
-  green: "bg-emerald-500",
+  green: "bg-green-pass",
   amber: "bg-amber-400",
-  red:   "bg-red-500",
+  red:   "bg-red-fail",
 };
 
 const BENCHMARK_TITLE: Record<NonNullable<BenchmarkStatus>, string> = {
@@ -146,7 +146,7 @@ function KpiTile({
   hero?: boolean;
 }) {
   return (
-    <div className={`bg-white rounded-xl border border-black/5 shadow-sm p-5 flex flex-col gap-3 ${hero ? "border-navy/10 shadow-md" : ""}`}>
+    <div className={`bg-white border border-border-brand p-5 flex flex-col gap-3 ${hero ? "border-gold/30" : ""}`}>
       <div className="flex items-center justify-between gap-1">
         <div className={`uppercase tracking-wide font-medium ${hero ? "text-xs text-navy/60" : "text-xs text-black/50"}`}>
           {label}

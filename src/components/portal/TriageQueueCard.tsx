@@ -104,13 +104,13 @@ const TriageQueueCard = forwardRef<HTMLAnchorElement, TriageQueueCardProps>(func
     !isHistory
       ? null
       : row.status === "passed"
-      ? { label: "Passed", classes: "bg-stone-100 text-stone-700 border-stone-300" }
+      ? { label: "Passed", classes: "bg-parchment-2 text-muted border-border-brand" }
       : row.status === "referred"
-      ? { label: "Referred", classes: "bg-slate-100 text-slate-700 border-slate-300" }
+      ? { label: "Referred", classes: "bg-navy text-white border-navy" }
       : row.status === "declined"
-      ? { label: "Declined", classes: "bg-stone-100 text-stone-700 border-stone-300" }
+      ? { label: "Declined", classes: "text-red-fail border-red-fail bg-transparent" }
       : row.status === "taken"
-      ? { label: "Taken", classes: "bg-emerald-100 text-emerald-900 border-emerald-300" }
+      ? { label: "Taken", classes: "bg-green-pass text-white border-green-pass" }
       : null;
 
   // tel: and mailto: builders: tolerate missing fields.
@@ -153,7 +153,7 @@ const TriageQueueCard = forwardRef<HTMLAnchorElement, TriageQueueCardProps>(func
         {/* Countdown — spans the two top rows */}
         <div className="row-span-2 text-right min-w-[110px]">
           {isHistory ? (
-            <span className="text-[10px] uppercase tracking-wider font-bold text-stone-500">
+            <span className="text-[10px] uppercase tracking-wider font-bold text-muted">
               No decision needed
             </span>
           ) : (
@@ -238,7 +238,7 @@ const TriageQueueCard = forwardRef<HTMLAnchorElement, TriageQueueCardProps>(func
           </span>
         )}
         {langLabel && (
-          <span className="text-[10px] uppercase tracking-wider font-semibold bg-blue-50 text-blue-800 px-2 py-0.5 border border-blue-200">
+          <span className="text-[10px] uppercase tracking-wider font-semibold bg-navy/10 text-navy px-2 py-0.5 border border-navy/20">
             {langLabel}
           </span>
         )}
@@ -275,14 +275,14 @@ export default TriageQueueCard;
 
 function BandBadge({ band }: { band: "A" | "B" | "C" | "D" | null }) {
   const colour =
-    band === "A" ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-    : band === "B" ? "bg-amber-100 text-amber-900 border-amber-300"
-    : band === "C" ? "bg-stone-100 text-stone-700 border-stone-300"
-    : band === "D" ? "bg-slate-100 text-slate-700 border-slate-300"
-                   : "bg-stone-50 text-stone-500 border-stone-200";
+    band === "A" ? "bg-gold text-deep-black border-gold"
+    : band === "B" ? "bg-navy text-white border-navy"
+    : band === "C" ? "bg-muted text-white border-muted"
+    : band === "D" ? "bg-transparent text-field-label border-muted"
+                   : "bg-parchment-2 text-muted border-border-brand";
   return (
     <span
-      className={`inline-flex items-center justify-center font-mono font-bold text-2xl w-14 h-14 border ${colour}`}
+      className={`inline-flex items-center justify-center font-display font-bold text-2xl w-14 h-14 border ${colour}`}
       aria-label={`Band ${band ?? "unrated"}`}
     >
       {band ?? "—"}

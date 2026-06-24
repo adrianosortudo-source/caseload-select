@@ -19,6 +19,7 @@ export default function PortalTabNav({ firmId }: PortalTabNavProps) {
     { href: `/portal/${firmId}/triage`,       label: "Triage"       },
     { href: `/portal/${firmId}/dashboard`,    label: "Dashboard"    },
     { href: `/portal/${firmId}/pipeline`,     label: "Pipeline"     },
+    { href: `/portal/${firmId}/clients`,      label: "Clients"      },
     { href: `/portal/${firmId}/files`,        label: "Files"        },
     { href: `/portal/${firmId}/deliverables`, label: "Deliverables" },
   ];
@@ -36,7 +37,7 @@ export default function PortalTabNav({ firmId }: PortalTabNavProps) {
                 className={`
                   px-4 py-3 text-sm font-medium border-b-2 transition-colors
                   ${active
-                    ? "border-navy text-navy"
+                    ? "border-gold text-navy"
                     : "border-transparent text-black/50 hover:text-black/80 hover:border-black/20"
                   }
                 `}

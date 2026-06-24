@@ -253,14 +253,14 @@ function Header({
 
 function BandBadge({ band }: { band: "A" | "B" | "C" | "D" | null }) {
   const colour =
-    band === "A" ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-    : band === "B" ? "bg-amber-100 text-amber-900 border-amber-300"
-    : band === "C" ? "bg-stone-100 text-stone-700 border-stone-300"
-    : band === "D" ? "bg-slate-100 text-slate-700 border-slate-300"
-                   : "bg-stone-50 text-stone-500 border-stone-200";
+    band === "A" ? "bg-gold text-deep-black border-gold"
+    : band === "B" ? "bg-navy text-white border-navy"
+    : band === "C" ? "bg-muted text-white border-muted"
+    : band === "D" ? "bg-transparent text-field-label border-muted"
+                   : "bg-parchment-2 text-muted border-border-brand";
   return (
     <span
-      className={`inline-flex items-center justify-center font-mono font-bold text-sm h-7 px-2.5 border ${colour}`}
+      className={`inline-flex items-center justify-center font-display font-bold text-sm h-7 px-2.5 border ${colour}`}
     >
       Band {band ?? "—"}
     </span>
@@ -269,12 +269,12 @@ function BandBadge({ band }: { band: "A" | "B" | "C" | "D" | null }) {
 
 function LanguageCallout({ label }: { label: string }) {
   return (
-    <div className="bg-blue-50 border border-blue-200 px-4 py-3 flex items-center gap-3">
-      <span className="text-xs uppercase tracking-wider font-semibold text-blue-700">
+    <div className="bg-navy/10 border border-navy/20 px-4 py-3 flex items-center gap-3">
+      <span className="text-xs uppercase tracking-wider font-semibold text-navy">
         Intake language
       </span>
-      <span className="text-sm font-semibold text-blue-900">{label}</span>
-      <span className="text-xs text-blue-600">
+      <span className="text-sm font-semibold text-navy">{label}</span>
+      <span className="text-xs text-navy/60">
         The brief is translated to English. Original-language text preserved in the raw transcript.
       </span>
     </div>

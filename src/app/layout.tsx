@@ -1,6 +1,21 @@
 import type { Metadata, Viewport } from "next";
+import { Oxanium, Manrope } from "next/font/google";
 import "./globals.css";
 import AdminShell from "@/components/AdminShell";
+
+const oxanium = Oxanium({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  variable: "--font-oxanium",
+  display: "swap",
+});
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  weight: ["400", "500", "700", "800"],
+  variable: "--font-manrope",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "CaseLoad Select",
@@ -18,7 +33,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${oxanium.variable} ${manrope.variable}`}>
       <body>
         <AdminShell>{children}</AdminShell>
       </body>

@@ -27,7 +27,7 @@ export default async function PortalLoginPage({
   return (
     <div className="min-h-screen bg-parchment flex items-center justify-center p-6">
       <div className="max-w-sm w-full space-y-4">
-        <div className="text-center text-navy font-semibold text-lg">CaseLoad Select</div>
+        <div className="text-center font-display font-semibold text-lg text-navy tracking-wide">CaseLoad Select</div>
 
         <div className="bg-white border border-black/8 p-8 space-y-5">
           <div>
