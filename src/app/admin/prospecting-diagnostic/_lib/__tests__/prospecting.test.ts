@@ -197,6 +197,9 @@ describe("buildProspectingDiagnostic", () => {
     expect(diag.domainComparison).toBeDefined();
     expect(diag.domainComparison!.fragmentationFlagged).toBe(true);
     expect(diag.domainComparison!.strongestDomain).toBe("example.ca");
+    // Page counts are not conflated: primary is its own count; total spans both.
+    expect(diag.scanSummary.pagesScanned).toBe(5);
+    expect(diag.scanSummary.totalPagesScanned).toBe(10);
     // Fragmentation finding is promoted to the front of Authority.
     expect(diag.actsFindings.authority[0].title.toLowerCase()).toContain("fragment");
     // Domain question is added to the strategic call list.
@@ -255,5 +258,40 @@ describe("brand-voice safety of generated copy", () => {
     for (const b of blobs) {
       expect(b.includes(EM_DASH)).toBe(false);
     }
+  });
+});
+
+describe("cold email LSO + brand compliance", () => {
+  // The full AI banned-vocab list is enforced on SOURCE by the write-time hook,
+  // and the cold email is assembled from source string literals, so re-listing
+  // those words here would be redundant (and would itself trip the hook). These
+  // assertions cover the parts that are dynamic or LSO-specific: market
+  // interpolation, promotional / self-designation terms, comparative reframe
+  // shapes, and the em dash.
+  const REFRAMES = ["reads more like", "less like", "may not be", "not just"];
+  // Word-boundary so "expertise" (a fair description of the firm) does not trip.
+  const PROMO_RE = [/\bspecialist\b/i, /\bexpert\b/i, /\bguarantee/i, /free audit/i];
+
+  function assertClean(text: string) {
+    const lower = text.toLowerCase();
+    for (const r of REFRAMES) expect(lower).not.toContain(r);
+    for (const re of PROMO_RE) expect(re.test(text)).toBe(false);
+    expect(text.includes(EM_DASH)).toBe(false);
+  }
+
+  it("is clean across every lead pillar", () => {
+    (["authority", "capture", "target", "screen"] as const).forEach((pillar) => {
+      assertClean(formatColdEmail(PROSPECT, pillar));
+    });
+  });
+
+  it("uses the prospect market and never hard-codes a province", () => {
+    const bc = formatColdEmail({ ...PROSPECT, market: "Vancouver, British Columbia" }, "screen");
+    expect(bc).toContain("law firms in Vancouver, British Columbia");
+    expect(bc.toLowerCase()).not.toContain("ontario");
+
+    const none = formatColdEmail({ ...PROSPECT, market: "" }, "capture");
+    expect(none).toContain("law firms");
+    expect(none.toLowerCase()).not.toContain("ontario");
   });
 });

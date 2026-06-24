@@ -90,7 +90,10 @@ export interface ProspectingDiagnostic {
   };
   scanSummary: {
     checkedAt: string;
+    /** Page count for the PRIMARY domain only (the findings basis). */
     pagesScanned: number;
+    /** Sum of pages scanned across the primary and every reachable alternate. */
+    totalPagesScanned: number;
     scanMode: string;
     domainsChecked: string[];
   };
@@ -484,7 +487,11 @@ function buildReportSummary(
   const focus = prospect.practiceFocus.trim() ? `, with a focus on ${prospect.practiceFocus.trim()}` : "";
   const pageWord = scanSummary.pagesScanned === 1 ? "page" : "pages";
 
-  const para1 = `${prospect.firmName} serves ${where}${focus}. A bounded scan of ${scanSummary.domainsChecked.join(", ")} (${scanSummary.pagesScanned} ${pageWord}) read the firm's public web presence through the ACTS lens: Authority, Capture, Target, and Screen.`;
+  const comparison =
+    prospect.alternateDomains.length > 0
+      ? `, compared against ${prospect.alternateDomains.join(", ")},`
+      : "";
+  const para1 = `${prospect.firmName} serves ${where}${focus}. A bounded scan of ${prospect.primaryDomain} (${scanSummary.pagesScanned} ${pageWord})${comparison} read the firm's public web presence through the ACTS lens: Authority, Capture, Target, and Screen.`;
 
   const para2 = `The clearest commercial opportunity sits in ${PILLAR_LABEL[leadPillar]}. ${leadFinding.businessConsequence}`;
 
@@ -503,12 +510,14 @@ export function formatColdEmail(
   const subject = `Subject: Quick observation about ${prospect.firmName}'s matter acquisition path`;
   const observation = OBSERVATION_BY_PILLAR[leadPillar];
   const consequence = CONSEQUENCE_CLAUSE_BY_PILLAR[leadPillar];
+  const audience = prospect.market.trim() ? `law firms in ${prospect.market.trim()}` : "law firms";
 
   const body = [
     "Hi [First name],",
     `I was reviewing ${prospect.firmName}'s public web presence this week and noticed ${observation}.`,
-    `The issue may not be traffic. It reads more like ${consequence}, which means good matters can slip past before they reach you.`,
-    "We work with Ontario law firms to turn search visibility, AI visibility, and the intake path into a cleaner flow of qualified matters, so the cases worth your time surface first.",
+    `It points to ${consequence}.`,
+    "That is the kind of gap that costs a firm good matters without ever showing up as a traffic number.",
+    `We work with ${audience} to connect search visibility, AI visibility, and the intake path, so inquiries are easier to qualify and route.`,
     "Would a short strategic call next week be worth it, to walk through what I found?",
     "Best,",
     `${OPERATOR_NAME}`,
@@ -543,7 +552,9 @@ export function formatReportText(diag: ProspectingDiagnostic): string {
   const lines: string[] = [];
   lines.push(`CaseLoad Select prospecting diagnostic: ${diag.prospect.firmName}`);
   lines.push(`Domains checked: ${diag.scanSummary.domainsChecked.join(", ")}`);
-  lines.push(`Scan depth: ${diag.scanSummary.scanMode} (${diag.scanSummary.pagesScanned} pages) on ${diag.scanSummary.checkedAt}`);
+  lines.push(
+    `Primary scan: ${diag.scanSummary.scanMode}, ${diag.scanSummary.pagesScanned} pages on ${diag.prospect.primaryDomain} (${diag.scanSummary.totalPagesScanned} pages across all domains), ${diag.scanSummary.checkedAt}`
+  );
   lines.push("");
   lines.push(diag.reportReadySummary);
   lines.push("");
@@ -620,9 +631,11 @@ export function buildProspectingDiagnostic(
     "Open on the firm's strongest practice area and where its site is quietly underselling it.";
 
   const domainsChecked = scans.map((s) => s.domain);
+  const totalPagesScanned = scans.reduce((sum, s) => sum + (s.result?.pagesScanned ?? 0), 0);
   const scanSummary = {
     checkedAt: primary?.checkedAt ?? new Date().toISOString(),
     pagesScanned: primary?.pagesScanned ?? 0,
+    totalPagesScanned,
     scanMode: primary?.scanMode ?? "quick",
     domainsChecked,
   };

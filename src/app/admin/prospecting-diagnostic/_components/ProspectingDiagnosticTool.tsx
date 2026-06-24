@@ -12,7 +12,7 @@
  * download JSON). Raw SEO scores stay in a collapsible internal panel.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   buildProspectingDiagnostic,
   formatCallAgenda,
@@ -36,6 +36,11 @@ interface ProgressRow {
 }
 
 const SCAN_MODE_PAGES: Record<ScanMode, number> = { quick: 10, standard: 25, deep: 50 };
+
+// Each alternate is a full crawl against the rate-limited SEO route, run
+// sequentially. Cap the fan-out so a pasted list cannot tie up the operator UI
+// (and the route) indefinitely. Anything past the cap is reported, not silent.
+const MAX_ALTERNATES = 4;
 
 const PILLAR_BLURB: Record<ActsPillar, string> = {
   authority: "Trust, entity clarity, reviews, schema, AI confidence.",
@@ -97,6 +102,12 @@ export default function ProspectingDiagnosticTool() {
   const [diag, setDiag] = useState<ProspectingDiagnostic | null>(null);
   const [scans, setScans] = useState<DomainScan[]>([]);
   const [copied, setCopied] = useState<string>("");
+  const [notice, setNotice] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
+
+  function cancelRun() {
+    abortRef.current?.abort();
+  }
 
   function flashCopied(key: string) {
     setCopied(key);
@@ -112,17 +123,23 @@ export default function ProspectingDiagnosticTool() {
     }
   }
 
-  async function scanDomain(domain: string, mode: ScanMode): Promise<{ result: SeoCheckResult | null; error?: string }> {
+  async function scanDomain(
+    domain: string,
+    mode: ScanMode,
+    signal: AbortSignal
+  ): Promise<{ result: SeoCheckResult | null; error?: string }> {
     try {
       const res = await fetch("/api/tools/seo-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ domain, scanMode: mode }),
+        signal,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return { result: null, error: (data as { error?: string }).error || `HTTP ${res.status}` };
       return { result: data as SeoCheckResult };
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return { result: null, error: "cancelled" };
       return { result: null, error: e instanceof Error ? e.message : "Network error" };
     }
   }
@@ -139,7 +156,9 @@ export default function ProspectingDiagnosticTool() {
       return;
     }
 
-    const alternates = parseList(alternateDomains, cleanDomain).filter((d) => d !== primary);
+    const allAlternates = parseList(alternateDomains, cleanDomain).filter((d) => d !== primary);
+    const alternates = allAlternates.slice(0, MAX_ALTERNATES);
+    const droppedAlternates = allAlternates.length - alternates.length;
     const competitorList = parseList(competitors, (s) => s.trim());
 
     const prospect = {
@@ -153,9 +172,17 @@ export default function ProspectingDiagnosticTool() {
     };
 
     setError("");
+    setNotice(
+      droppedAlternates > 0
+        ? `Scanned the first ${MAX_ALTERNATES} alternate domains. ${droppedAlternates} more were not scanned.`
+        : ""
+    );
     setDiag(null);
     setScans([]);
     setRunning(true);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     const queue: Array<{ domain: string; role: "primary" | "alternate"; mode: ScanMode }> = [
       { domain: primary, role: "primary", mode: scanMode },
@@ -169,7 +196,14 @@ export default function ProspectingDiagnosticTool() {
       const q = queue[i];
       setProgress((prev) => prev.map((p, idx) => (idx === i ? { ...p, status: "scanning" } : p)));
 
-      const { result, error: scanErr } = await scanDomain(q.domain, q.mode);
+      const { result, error: scanErr } = await scanDomain(q.domain, q.mode, controller.signal);
+
+      if (controller.signal.aborted) {
+        setProgress((prev) => prev.map((p, idx) => (idx === i ? { ...p, status: "error", error: "cancelled" } : p)));
+        setNotice("Scan cancelled.");
+        setRunning(false);
+        return;
+      }
 
       if (q.role === "primary" && !result) {
         setProgress((prev) => prev.map((p, idx) => (idx === i ? { ...p, status: "error", error: scanErr } : p)));
@@ -239,7 +273,7 @@ export default function ProspectingDiagnosticTool() {
               placeholder="Immigration and litigation"
             />
           </Field>
-          <Field label="Alternate / legacy domains" hint="One per line. Scanned in quick mode for comparison.">
+          <Field label="Alternate / legacy domains" hint={`One per line. Up to ${MAX_ALTERNATES} scanned in quick mode for comparison.`}>
             <textarea
               className={`${inputClass} h-20 resize-y`}
               value={alternateDomains}
@@ -290,12 +324,24 @@ export default function ProspectingDiagnosticTool() {
         </div>
 
         {error && <p className="text-sm text-red-700 mt-3">{error}</p>}
+        {notice && <p className="text-sm text-amber-800 mt-2">{notice}</p>}
       </section>
 
       {/* ── Scan progress ─────────────────────────────── */}
       {progress.length > 0 && (running || !diag) && (
         <section className="bg-white border border-black/8 p-5 sm:p-6">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-navy mb-3">Scanning</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-navy">Scanning</h2>
+            {running && (
+              <button
+                type="button"
+                onClick={cancelRun}
+                className="text-[11px] font-display font-bold uppercase tracking-wider px-3 py-1.5 border border-black/15 text-navy hover:border-navy transition"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
           <ul className="space-y-2">
             {progress.map((p) => (
               <li key={`${p.role}-${p.domain}`} className="flex items-center gap-3 text-sm">
