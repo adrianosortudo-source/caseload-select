@@ -232,10 +232,12 @@ export default function FirmChat({
 }
 
 function contextHref(ctx: NonNullable<ChatMessage["context"]>, firmId: string): string {
+  const fid = encodeURIComponent(firmId);
+  const did = encodeURIComponent(ctx.deliverable_id);
   if (ctx.kind === "deliverable_comment") {
-    return `/portal/${firmId}/deliverables/${ctx.deliverable_id}?comment=${ctx.comment_id}`;
+    return `/portal/${fid}/deliverables/${did}?comment=${encodeURIComponent(ctx.comment_id)}`;
   }
-  return `/portal/${firmId}/deliverables/${ctx.deliverable_id}`;
+  return `/portal/${fid}/deliverables/${did}`;
 }
 
 function contextLabel(ctx: NonNullable<ChatMessage["context"]>): string {

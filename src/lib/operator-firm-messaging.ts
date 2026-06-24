@@ -145,6 +145,7 @@ export async function findChannelMessageIdByCommentId(
     .from('operator_firm_messages')
     .select('id')
     .eq('firm_id', firmId)
+    .eq('context->>kind', 'deliverable_comment')
     .eq('context->>comment_id', commentId)
     .order('created_at', { ascending: false })
     .limit(1)
