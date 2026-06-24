@@ -22,14 +22,16 @@ export default function DiagnosticBuilderPage() {
   async function probe() {
     setStatus("detecting");
     const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 1500);
+    const t = setTimeout(() => controller.abort(), 2500);
     try {
-      await fetch(`${LOCAL_URL}/schema.json`, {
-        mode: "no-cors",
+      // Real CORS fetch: the local server returns Access-Control-Allow-Origin
+      // for this host plus Access-Control-Allow-Private-Network so Chrome's
+      // PNA preflight passes. r.ok confirms it actually responded.
+      const r = await fetch(`${LOCAL_URL}/schema.json`, {
         signal: controller.signal,
         cache: "no-store",
       });
-      setStatus("running");
+      setStatus(r.ok ? "running" : "not-running");
     } catch {
       setStatus("not-running");
     } finally {
@@ -105,6 +107,20 @@ python serve.py`}
             </p>
           </div>
         )}
+
+        <div className="pt-2 border-t border-black/8">
+          <a
+            href={LOCAL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs uppercase tracking-wider text-black/55 hover:text-navy underline underline-offset-4"
+          >
+            Open {LOCAL_URL} directly
+          </a>
+          <span className="text-xs text-black/40 ml-2">
+            (fallback if the probe stays red but you just started the server)
+          </span>
+        </div>
       </section>
 
       <section className="bg-white border border-black/8 p-6 space-y-4">
