@@ -86,12 +86,15 @@ export function DRGArticleFrame({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [measureRef, onAnchors, highlightsKey]);
 
-  // Apply (or refresh) the marks whenever the body or the comment set changes,
-  // then report anchor positions to the parent.
+  // The body content is rendered IMPERATIVELY here, not via React's
+  // dangerouslySetInnerHTML. React must not own the body's inner DOM: when the
+  // margin reports anchors and the parent re-renders, React would reconcile a
+  // dangerouslySetInnerHTML node and wipe the <mark> highlights we inject. By
+  // owning innerHTML ourselves, the highlights survive every re-render.
   useLayoutEffect(() => {
     const body = bodyRef.current;
-    if (!body || highlights === undefined) return;
-    applyHighlights(body, bodyHtml, highlights);
+    if (!body) return;
+    applyHighlights(body, bodyHtml, highlights ?? []);
     setActiveHighlight(body, activeHighlightId);
     measureAndReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -234,12 +237,13 @@ export function DRGArticleFrame({
       </div>
 
       <div className="drg-body-wrap">
+        {/* Content is set imperatively in the layout effect above so React
+            never reconciles (and wipes) the injected highlight marks. */}
         <div
           ref={bodyRef}
           className="drg-body"
           onMouseUp={onTextMouseUp}
           onClick={onBodyClick}
-          dangerouslySetInnerHTML={{ __html: bodyHtml }}
         />
       </div>
 
