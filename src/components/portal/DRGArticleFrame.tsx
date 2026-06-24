@@ -44,6 +44,7 @@ export function DRGArticleFrame({
   bodyHtml,
   onAnnotate,
   highlights,
+  elementAnchors,
   measureRef,
   onAnchors,
   activeHighlightId = null,
@@ -60,6 +61,12 @@ export function DRGArticleFrame({
   onAnnotate: (annotation: DeliverableAnnotation, position: AnnotationPosition) => void;
   /** Stored text-comment ranges to keep highlighted in the body. */
   highlights?: HighlightItem[];
+  /**
+   * Whole-element comments anchored to the header title, the lead, or the hero
+   * image. These cannot be inline-marked (React owns those nodes), so the
+   * margin card is anchored to the element's measured top instead.
+   */
+  elementAnchors?: { id: string; kind: "title" | "excerpt" | "hero" }[];
   /** The shared row element; mark tops are reported relative to its top. */
   measureRef?: RefObject<HTMLElement | null>;
   /** Reports each highlight's row-relative top so the margin can align cards. */
@@ -71,10 +78,16 @@ export function DRGArticleFrame({
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const heroImgRef = useRef<HTMLImageElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const leadRef = useRef<HTMLParagraphElement>(null);
 
   const highlightsKey = (highlights ?? [])
     .map((h) => `${h.id}:${h.start}:${h.end}:${h.num}`)
     .join("|");
+  const elementAnchorsKey = (elementAnchors ?? [])
+    .map((e) => `${e.id}:${e.kind}`)
+    .join("|");
+  const commentedKinds = new Set((elementAnchors ?? []).map((e) => e.kind));
 
   const measureAndReport = useCallback(() => {
     const body = bodyRef.current;
@@ -82,9 +95,47 @@ export function DRGArticleFrame({
     if (!body || !ref || !onAnchors) return;
     const refTop = ref.getBoundingClientRect().top;
     const ids = (highlights ?? []).map((h) => h.id);
-    onAnchors(measureAnchors(body, refTop, ids));
+    const map = measureAnchors(body, refTop, ids);
+    // Add the header-element comments, anchored to the element's top.
+    for (const ea of elementAnchors ?? []) {
+      const el =
+        ea.kind === "title"
+          ? titleRef.current
+          : ea.kind === "excerpt"
+            ? leadRef.current
+            : heroImgRef.current;
+      if (el) map.set(ea.id, el.getBoundingClientRect().top - refTop);
+    }
+    onAnchors(map);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [measureRef, onAnchors, highlightsKey]);
+  }, [measureRef, onAnchors, highlightsKey, elementAnchorsKey]);
+
+  // Select text in (or click) the title or lead to comment on it. The header is
+  // React-owned, so this produces a whole-element "field" annotation rather than
+  // an inline-highlighted passage.
+  function onFieldMouseUp(field: "title" | "excerpt", e: React.MouseEvent<HTMLElement>) {
+    const el = e.currentTarget;
+    const sel = window.getSelection();
+    let quote = "";
+    let rect: DOMRect;
+    if (
+      sel &&
+      sel.rangeCount > 0 &&
+      !sel.isCollapsed &&
+      el.contains(sel.getRangeAt(0).commonAncestorContainer)
+    ) {
+      quote = sel.toString().trim();
+      rect = sel.getRangeAt(0).getBoundingClientRect();
+    } else {
+      quote = (el.textContent ?? "").trim();
+      rect = el.getBoundingClientRect();
+    }
+    if (!quote) return;
+    onAnnotate(
+      { type: "field", field, quote },
+      { top: rect.top, left: rect.left + rect.width / 2 },
+    );
+  }
 
   // The body content is rendered IMPERATIVELY here, not via React's
   // dangerouslySetInnerHTML. React must not own the body's inner DOM: when the
@@ -98,7 +149,7 @@ export function DRGArticleFrame({
     setActiveHighlight(body, activeHighlightId);
     measureAndReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bodyHtml, highlightsKey]);
+  }, [bodyHtml, highlightsKey, elementAnchorsKey]);
 
   // Re-measure on reflow (resize, image/font load) without re-wrapping.
   useEffect(() => {
@@ -215,12 +266,32 @@ export function DRGArticleFrame({
               </>
             )}
           </div>
-          <h1 className="drg-display">{title}</h1>
-          {excerpt && <p className="drg-lead">{excerpt}</p>}
+          <h1
+            ref={titleRef}
+            className={`drg-display${commentedKinds.has("title") ? " is-commented" : ""}`}
+            onMouseUp={(e) => onFieldMouseUp("title", e)}
+            title="Select or click to comment on the title"
+          >
+            {title}
+          </h1>
+          {excerpt && (
+            <p
+              ref={leadRef}
+              className={`drg-lead${commentedKinds.has("excerpt") ? " is-commented" : ""}`}
+              onMouseUp={(e) => onFieldMouseUp("excerpt", e)}
+              title="Select or click to comment on the lead"
+            >
+              {excerpt}
+            </p>
+          )}
         </div>
       </div>
 
-      <div className={heroImageUrl ? "drg-hero-frame" : "drg-hero-frame is-empty"}>
+      <div
+        className={`drg-hero-frame${heroImageUrl ? "" : " is-empty"}${
+          commentedKinds.has("hero") ? " is-commented" : ""
+        }`}
+      >
         {heroImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img

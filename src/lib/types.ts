@@ -237,7 +237,13 @@ export type DeliverableAnnotation =
    * identify which image without a coord, which is the desired UX (no need
    * for pin/region precision on inline embedded images).
    */
-  | { type: "image"; src: string; alt?: string };
+  | { type: "image"; src: string; alt?: string }
+  /**
+   * Whole-element comment on a header field (the display title or the lead).
+   * The header is React-owned so these are not inline-highlighted; the comment
+   * card anchors beside the element and the element shows a "commented" cue.
+   */
+  | { type: "field"; field: "title" | "excerpt"; quote: string };
 
 export interface ContentDeliverable {
   id: string;

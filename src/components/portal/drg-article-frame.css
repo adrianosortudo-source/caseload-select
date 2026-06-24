@@ -148,6 +148,27 @@
   .cls-drg-article .drg-lead { font-size: 18px; }
 }
 
+/* Commentable header fields (title + lead): hover affordance + a commented
+   cue. These are React-owned, so they get an element-level tint rather than an
+   inline mark. */
+.cls-drg-article .drg-display,
+.cls-drg-article .drg-lead {
+  border-radius: 3px;
+  transition: background 0.12s ease;
+}
+.cls-drg-article .drg-display:hover,
+.cls-drg-article .drg-lead:hover {
+  background: rgba(184, 149, 106, 0.12);
+}
+.cls-drg-article .drg-display.is-commented,
+.cls-drg-article .drg-lead.is-commented {
+  background: rgba(184, 149, 106, 0.22);
+}
+.cls-drg-article .drg-hero-frame.is-commented {
+  outline: 3px solid var(--brass);
+  outline-offset: -3px;
+}
+
 /* Hero image: full-width cinematic 16:9, matching the live editorial hero */
 .cls-drg-article .drg-hero-frame {
   width: 100%;

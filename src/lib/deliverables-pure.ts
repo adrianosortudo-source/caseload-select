@@ -178,6 +178,12 @@ export function validateAnnotation(raw: unknown): DeliverableAnnotation | null {
       const alt = typeof a.alt === "string" ? a.alt.slice(0, 200) : undefined;
       return { type: "image", src, alt };
     }
+    case "field": {
+      if (a.field !== "title" && a.field !== "excerpt") return null;
+      const quote = typeof a.quote === "string" ? a.quote.slice(0, 1000) : "";
+      if (!quote) return null;
+      return { type: "field", field: a.field, quote };
+    }
     default:
       return null;
   }
@@ -197,6 +203,8 @@ export function annotationLabel(annotation: DeliverableAnnotation | null): strin
       return `On page ${annotation.page}`;
     case "image":
       return annotation.alt ? `On image: ${annotation.alt.slice(0, 40)}` : "On an inline image";
+    case "field":
+      return annotation.field === "title" ? "On the title" : "On the lead";
   }
 }
 

@@ -167,6 +167,23 @@ export default function DeliverableReview({
       });
     }
   }
+  // Whole-element comments on the header title / lead / hero image, anchored to
+  // the element (not inline-marked).
+  const elementAnchors: { id: string; kind: "title" | "excerpt" | "hero" }[] = [];
+  for (const c of versionComments) {
+    if (c.annotation?.type === "field") {
+      elementAnchors.push({
+        id: c.id,
+        kind: c.annotation.field === "title" ? "title" : "excerpt",
+      });
+    } else if (
+      c.annotation?.type === "image" &&
+      deliverable.hero_image_url &&
+      c.annotation.src === deliverable.hero_image_url
+    ) {
+      elementAnchors.push({ id: c.id, kind: "hero" });
+    }
+  }
   const isDrgText =
     deliverable.content_kind === "text" && deliverable.firm_id === DRG_FIRM_ID;
 
@@ -275,6 +292,7 @@ export default function DeliverableReview({
                 setPendingPosition(pos ?? null);
               }}
               highlights={isDrgText ? textHighlights : undefined}
+              elementAnchors={isDrgText ? elementAnchors : undefined}
               measureRef={rowRef}
               onAnchors={handleAnchors}
               activeHighlightId={activeId}
@@ -404,6 +422,7 @@ function ContentViewer({
   numberByCommentId,
   onAnnotate,
   highlights,
+  elementAnchors,
   measureRef,
   onAnchors,
   activeHighlightId,
@@ -415,6 +434,7 @@ function ContentViewer({
   numberByCommentId: Map<string, number>;
   onAnnotate: (a: DeliverableAnnotation, pos?: AnnotationPosition) => void;
   highlights?: HighlightItem[];
+  elementAnchors?: { id: string; kind: "title" | "excerpt" | "hero" }[];
   measureRef?: RefObject<HTMLElement | null>;
   onAnchors?: (anchors: Map<string, number>) => void;
   activeHighlightId?: string | null;
@@ -427,8 +447,9 @@ function ContentViewer({
         <div className="space-y-2">
           <p className="flex items-center gap-2 text-xs text-navy bg-parchment-2 border border-border-brand px-3 py-2">
             <span aria-hidden="true" className="font-bold">“ ”</span>
-            Select any passage to comment on it, the same way you would in Google
-            Docs. Click the hero or any inline image to comment on that image.
+            Select any passage, the title, or the lead to comment on it, the same
+            way you would in Google Docs. Click the hero or any inline image to
+            comment on that image.
           </p>
           <DRGArticleFrame
             title={deliverable.title}
@@ -441,6 +462,7 @@ function ContentViewer({
             bodyHtml={version.body_html ?? ""}
             onAnnotate={onAnnotate}
             highlights={highlights}
+            elementAnchors={elementAnchors}
             measureRef={measureRef}
             onAnchors={onAnchors}
             activeHighlightId={activeHighlightId}
@@ -857,6 +879,10 @@ function annotationChip(a: DeliverableAnnotation): string {
       return `On page ${a.page}`;
     case "image":
       return a.alt ? `On image: ${a.alt.slice(0, 50)}` : "On an inline image";
+    case "field": {
+      const where = a.field === "title" ? "title" : "lead";
+      return `On the ${where}: "${a.quote.slice(0, 50)}${a.quote.length > 50 ? "..." : ""}"`;
+    }
   }
 }
 
