@@ -147,7 +147,10 @@ describe("POST versions", () => {
   it("200 on a valid image asset version", async () => {
     state.detail = makeDetail("image");
     const form = new FormData();
-    form.append("file", new File([new Uint8Array([1, 2, 3])], "ad.png", { type: "image/png" }));
+    // Real PNG magic bytes: the route sniffs content (commit 28d229c) and
+    // rejects a declared image/png whose body is not actually a PNG.
+    const pngHeader = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
+    form.append("file", new File([pngHeader], "ad.png", { type: "image/png" }));
     form.append("note", "new creative");
     const res = await POST(multipartReq(form), params());
     expect(res.status).toBe(200);
