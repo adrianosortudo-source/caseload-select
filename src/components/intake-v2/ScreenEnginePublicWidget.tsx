@@ -298,7 +298,18 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
         body: JSON.stringify(payload),
       });
       const body = await res.json().catch(() => ({}));
-      setPersistStatus(body.persisted ? "submitted" : body.reason ?? "submitted");
+      const persisted = Boolean(body.persisted);
+      setPersistStatus(persisted ? "submitted" : body.reason ?? "submitted");
+      // Tell the embedding host a lead actually landed, so the firm's site can
+      // fire its own conversion analytics. Mirrors the resize handshake; the
+      // host filters on the message type. Fires once, only on a real persist.
+      if (persisted && typeof window !== "undefined" && window.parent !== window) {
+        try {
+          window.parent.postMessage({ type: "caseload-widget-complete", persisted: true }, "*");
+        } catch {
+          // best-effort; the host may not be listening
+        }
+      }
     } catch (err) {
       setPersistStatus(err instanceof Error ? err.message : "submission issue");
     }
