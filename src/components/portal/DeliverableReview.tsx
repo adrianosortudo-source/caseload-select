@@ -15,6 +15,7 @@ import type {
   ApprovalRecord,
   DeliverableAnnotation,
 } from "@/lib/types";
+import { DRGArticleFrame } from "./DRGArticleFrame";
 import {
   STATUS_LABELS,
   CONTENT_KIND_LABELS,
@@ -143,7 +144,7 @@ export default function DeliverableReview({
           {selectedVersion ? (
             <ContentViewer
               version={selectedVersion}
-              contentKind={deliverable.content_kind}
+              deliverable={deliverable}
               comments={versionComments}
               numberByCommentId={numberByCommentId}
               onAnnotate={setPendingAnnotation}
@@ -258,20 +259,41 @@ function VersionSelector({
 
 // ─── Content viewer (text / image / pdf) ─────────────────────────────────────
 
+// DRG firm id. When the deliverable belongs to DRG, text articles render in
+// the brand-faithful DRGArticleFrame instead of the generic TextViewer so
+// Damaris sees the draft close to how readers will see it on drglaw.ca.
+const DRG_FIRM_ID = "eec1d25e-a047-4827-8e4a-6eb96becca2b";
+
 function ContentViewer({
   version,
-  contentKind,
+  deliverable,
   comments,
   numberByCommentId,
   onAnnotate,
 }: {
   version: DeliverableVersion;
-  contentKind: ContentDeliverable["content_kind"];
+  deliverable: ContentDeliverable;
   comments: DeliverableComment[];
   numberByCommentId: Map<string, number>;
   onAnnotate: (a: DeliverableAnnotation) => void;
 }) {
+  const contentKind = deliverable.content_kind;
   if (contentKind === "text") {
+    if (deliverable.firm_id === DRG_FIRM_ID) {
+      return (
+        <DRGArticleFrame
+          title={deliverable.title}
+          excerpt={deliverable.excerpt}
+          topic={deliverable.topic}
+          byline={deliverable.byline}
+          publishDate={deliverable.publish_date}
+          readTime={deliverable.read_time}
+          heroImageUrl={deliverable.hero_image_url}
+          bodyHtml={version.body_html ?? ""}
+          onAnnotate={onAnnotate}
+        />
+      );
+    }
     return <TextViewer version={version} onAnnotate={onAnnotate} />;
   }
   if (contentKind === "image") {

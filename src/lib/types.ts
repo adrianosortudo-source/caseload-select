@@ -245,6 +245,13 @@ export interface ContentDeliverable {
   created_by_id: string | null;
   created_at: string;
   updated_at: string;
+  // Brand-render metadata for the article preview shell. Added 2026-06-23.
+  excerpt: string | null;
+  topic: string | null;
+  byline: string | null;
+  publish_date: string | null;  // YYYY-MM-DD; null means "draft, not scheduled"
+  read_time: string | null;     // "8 min read"
+  hero_image_url: string | null;
 }
 
 export interface DeliverableVersion {

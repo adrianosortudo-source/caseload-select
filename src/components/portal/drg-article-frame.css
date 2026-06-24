@@ -1,0 +1,317 @@
+@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Manrope:wght@400;600;700&display=swap");
+
+/*
+ * DRG article frame: scoped CSS for the deliverable review render.
+ *
+ * Faithful port of the DRG website article shell so Damaris sees her draft
+ * close to how readers will see it on drglaw.ca. Every rule is namespaced
+ * under .cls-drg-article so it cannot bleed into the portal chrome (which is
+ * Tailwind-driven). Source: drg-law-website/src/app/globals.css article block.
+ *
+ * Tokens carry the v12 brand palette + token-freeze typography.
+ */
+
+.cls-drg-article {
+  --ox: #6E2C2C;
+  --brass: #B8956A;
+  --cream: #EFE9DD;
+  --paper: #FFFCF6;
+  --ink: #1A1410;
+  --mid: #8C7D6E;
+  --brass-soft: rgba(184, 149, 106, 0.45);
+  --ox-soft: rgba(110, 44, 44, 0.18);
+
+  --font-serif: "Source Serif 4", "Source Serif Pro", Georgia, serif;
+  --font-sans: "Manrope", system-ui, sans-serif;
+  --reading-max: 720px;
+  --content-max: 1100px;
+
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 17px;
+  line-height: 1.62;
+  font-feature-settings: "liga", "kern";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  padding: 32px 24px 48px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+@media (max-width: 768px) {
+  .cls-drg-article { font-size: 15px; }
+}
+
+.cls-drg-article * { box-sizing: border-box; }
+.cls-drg-article a { color: inherit; text-decoration: none; }
+
+/* Hero block */
+.cls-drg-article .drg-article-header {
+  max-width: var(--reading-max);
+  margin: 0 auto;
+}
+
+.cls-drg-article .drg-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ox);
+  margin-bottom: 28px;
+}
+
+.cls-drg-article .drg-chip {
+  border: 1px solid var(--brass);
+  padding: 4px 10px;
+  margin-right: 6px;
+  color: var(--ox);
+}
+
+.cls-drg-article .drg-chip-row .drg-dot {
+  color: var(--brass);
+  font-weight: 400;
+  padding: 0 4px;
+}
+
+.cls-drg-article .drg-chip.is-draft {
+  background: rgba(110, 44, 44, 0.04);
+}
+
+.cls-drg-article .drg-display {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 56px;
+  line-height: 1.06;
+  letter-spacing: -0.022em;
+  color: var(--ink);
+  margin: 0 0 22px;
+}
+
+@media (max-width: 768px) {
+  .cls-drg-article .drg-display { font-size: 36px; }
+}
+
+.cls-drg-article .drg-lead {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 21px;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 0 0 32px;
+}
+
+@media (max-width: 768px) {
+  .cls-drg-article .drg-lead { font-size: 18px; }
+}
+
+/* Hero image */
+.cls-drg-article .drg-hero-frame {
+  max-width: var(--content-max);
+  margin: 24px auto 40px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--brass-soft);
+  background: var(--cream);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cls-drg-article .drg-hero-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cls-drg-article .drg-hero-frame.is-empty {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--mid);
+  padding: 0 24px;
+  text-align: center;
+}
+
+/* Article body */
+.cls-drg-article .drg-body {
+  max-width: var(--reading-max);
+  margin: 0 auto;
+}
+
+.cls-drg-article .drg-body p {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 17px;
+  line-height: 1.62;
+  color: var(--ink);
+  margin: 0 0 18px;
+}
+
+.cls-drg-article .drg-body h2 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 26px;
+  line-height: 1.22;
+  color: var(--ink);
+  margin: 36px 0 14px;
+  letter-spacing: -0.008em;
+}
+
+.cls-drg-article .drg-body h2::before {
+  content: "§";
+  display: inline-block;
+  margin-right: 14px;
+  color: var(--brass);
+  font-weight: 600;
+  font-size: 0.88em;
+  vertical-align: baseline;
+}
+
+.cls-drg-article .drg-body h3 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 20px;
+  line-height: 1.3;
+  color: var(--ink);
+  margin: 28px 0 12px;
+  letter-spacing: -0.006em;
+}
+
+.cls-drg-article .drg-body h4 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 1.3;
+  color: var(--ink);
+  margin: 24px 0 10px;
+}
+
+.cls-drg-article .drg-body strong,
+.cls-drg-article .drg-body b {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.cls-drg-article .drg-body em,
+.cls-drg-article .drg-body i {
+  font-style: italic;
+}
+
+.cls-drg-article .drg-body a {
+  color: var(--ox);
+  border-bottom: 1px solid var(--brass-soft);
+}
+
+.cls-drg-article .drg-body a:hover {
+  border-bottom-color: var(--ox);
+}
+
+.cls-drg-article .drg-body ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 24px;
+}
+
+.cls-drg-article .drg-body ul > li {
+  position: relative;
+  padding: 14px 0 14px 28px;
+  border-top: 1px solid var(--brass-soft);
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.cls-drg-article .drg-body ul > li::before {
+  content: "·";
+  position: absolute;
+  left: 4px;
+  top: 14px;
+  color: var(--ox);
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.cls-drg-article .drg-body ul > li:first-child {
+  border-top: 0;
+}
+
+.cls-drg-article .drg-body ol {
+  padding-left: 24px;
+  margin: 8px 0 24px;
+}
+
+.cls-drg-article .drg-body ol > li {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.6;
+  padding: 4px 0;
+  color: var(--ink);
+}
+
+/* The brief panel renders blockquotes in the cream and oxblood-bordered
+   Five-Line Brief shape that opens every DRG article. */
+.cls-drg-article .drg-body blockquote {
+  border-left: 3px solid var(--ox);
+  background: var(--cream);
+  padding: 18px 22px;
+  margin: 28px 0;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.58;
+  color: var(--ink);
+}
+
+.cls-drg-article .drg-body blockquote p {
+  margin: 0 0 10px;
+}
+
+.cls-drg-article .drg-body blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* Footer band */
+.cls-drg-article .drg-footer {
+  max-width: var(--reading-max);
+  margin: 56px auto 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--brass-soft);
+  font-family: var(--font-serif);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--mid);
+  letter-spacing: 0.02em;
+}
+
+.cls-drg-article .drg-footer strong {
+  color: var(--ox);
+  font-weight: 600;
+}
+
+/* Preview badge */
+.cls-drg-article .drg-preview-band {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--ox);
+  color: var(--paper);
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  margin: -32px -24px 24px;
+  text-align: center;
+}
