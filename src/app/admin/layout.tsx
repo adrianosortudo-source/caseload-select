@@ -56,6 +56,7 @@ export default async function AdminLayout({
           <AdminTab href="/admin/access" label="Portal access" />
           <AdminTab href="/admin/explainers" label="Explainers" />
           <AdminTab href="/admin/seo-check" label="SEO check" />
+          <AdminTab href="/admin/diagnostic-builder" label="Diagnostic builder" />
           <AdminTab href="/admin/health" label="System health" />
         </div>
       </nav>
