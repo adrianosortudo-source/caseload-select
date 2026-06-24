@@ -12,11 +12,15 @@ import { supabaseAdmin as supabase } from './supabase-admin';
 import type { MatterAttachment } from './types';
 import {
   type MessagingActor,
+  participantKey,
   listFirmMessages,
   sendFirmMessage,
   editFirmMessage,
   deleteFirmMessage,
   markFirmChannelRead,
+  addReaction,
+  removeReaction,
+  setPinned,
 } from './operator-firm-messaging';
 
 const BUCKET = 'firm-files';
@@ -56,10 +60,49 @@ export async function resolveLawyerActor(
 }
 
 export async function handleList(firmId: string, actor: MessagingActor): Promise<NextResponse> {
-  const messages = await listFirmMessages(firmId);
+  const messages = await listFirmMessages(firmId, { viewerParticipant: participantKey(actor) });
   // Reading the list marks it read for this actor (best-effort).
   await markFirmChannelRead(firmId, actor).catch(() => {});
   return NextResponse.json({ ok: true, messages });
+}
+
+/**
+ * Message action: react / unreact / pin / unpin. Body:
+ *   { action: 'react' | 'unreact', emoji }
+ *   { action: 'pin' | 'unpin' }
+ */
+export async function handleMessageAction(
+  firmId: string,
+  actor: MessagingActor,
+  messageId: string,
+  req: NextRequest,
+): Promise<NextResponse> {
+  let body: { action?: string; emoji?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 });
+  }
+  switch (body.action) {
+    case 'react': {
+      const r = await addReaction({ firmId, messageId, actor, emoji: body.emoji ?? '' });
+      return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: r.error }, { status: 400 });
+    }
+    case 'unreact': {
+      const r = await removeReaction({ firmId, messageId, actor, emoji: body.emoji ?? '' });
+      return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: r.error }, { status: 400 });
+    }
+    case 'pin': {
+      const r = await setPinned({ firmId, messageId, actor, pinned: true });
+      return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: r.error }, { status: 400 });
+    }
+    case 'unpin': {
+      const r = await setPinned({ firmId, messageId, actor, pinned: false });
+      return r.ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: r.error }, { status: 400 });
+    }
+    default:
+      return NextResponse.json({ error: 'unknown action' }, { status: 400 });
+  }
 }
 
 export async function handleSend(

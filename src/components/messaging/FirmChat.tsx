@@ -11,7 +11,9 @@
  * marks the channel read server-side, so opening the page clears unread.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+const REACTION_PALETTE = ["👍", "✅", "🙏", "👀", "🎉", "❓"];
 
 export interface ChatMessage {
   id: string;
@@ -23,6 +25,9 @@ export interface ChatMessage {
   attachments: { storage_path: string; name: string; size?: number; mime?: string; signed_url?: string }[];
   edited_at: string | null;
   deleted_at: string | null;
+  pinned_at: string | null;
+  pinned_by: string | null;
+  reactions: { emoji: string; count: number; mine: boolean }[];
   created_at: string;
 }
 
@@ -46,6 +51,8 @@ export default function FirmChat({
 }: FirmChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [pinnedOnly, setPinnedOnly] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const refresh = useCallback(async () => {
@@ -58,6 +65,22 @@ export default function FirmChat({
       // transient; next poll retries
     }
   }, [apiBase]);
+
+  const act = useCallback(
+    async (messageId: string, action: string, emoji?: string) => {
+      try {
+        await fetch(`${apiBase}/${messageId}/action`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, emoji }),
+        });
+        refresh();
+      } catch {
+        // transient
+      }
+    },
+    [apiBase, refresh],
+  );
 
   useEffect(() => {
     const t = setInterval(refresh, POLL_MS);
@@ -82,19 +105,70 @@ export default function FirmChat({
     return m.sender_role === currentRole && m.sender_id === currentId;
   }
 
+  const q = query.trim().toLowerCase();
+  const searching = q !== "" || pinnedOnly;
+  const pinnedCount = useMemo(
+    () => messages.filter((m) => m.pinned_at && !m.deleted_at).length,
+    [messages],
+  );
+  const filtered = useMemo(
+    () =>
+      messages.filter((m) => {
+        if (m.deleted_at) return false;
+        if (pinnedOnly && !m.pinned_at) return false;
+        if (q) {
+          const hay = `${m.body} ${m.sender_name ?? ""}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      }),
+    [messages, q, pinnedOnly],
+  );
+
   return (
     <div className="flex flex-col h-[calc(100vh-13rem)] bg-white border border-border-brand">
-      <div className="px-4 py-3 border-b border-border-brand flex items-center justify-between shrink-0">
-        <div>
+      <div className="px-4 py-3 border-b border-border-brand flex items-center justify-between gap-3 shrink-0 flex-wrap">
+        <div className="min-w-0">
           <div className="text-sm font-display font-bold text-navy">CaseLoad Connect</div>
           <div className="text-[11px] text-muted">
             Direct line with {counterpartLabel}. Not visible to clients.
           </div>
         </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {pinnedCount > 0 && (
+            <button
+              onClick={() => setPinnedOnly((v) => !v)}
+              className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-1.5 border transition-colors ${
+                pinnedOnly
+                  ? "bg-navy text-white border-navy"
+                  : "border-border-brand text-muted hover:text-navy"
+              }`}
+            >
+              Pinned {pinnedCount}
+            </button>
+          )}
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search"
+            className="text-xs px-2 py-1.5 border border-border-brand bg-white focus:outline-none focus:border-navy w-32"
+          />
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {roots.length === 0 ? (
+        {searching ? (
+          filtered.length === 0 ? (
+            <p className="text-sm text-black/45 text-center py-10">
+              {pinnedOnly && q === "" ? "No pinned messages." : "No messages match."}
+            </p>
+          ) : (
+            filtered.map((m) => (
+              <MessageRow key={m.id} m={m} mine={isMine(m)} apiBase={apiBase} act={act} onChanged={refresh} compact />
+            ))
+          )
+        ) : roots.length === 0 ? (
           <p className="text-sm text-black/45 text-center py-10">
             No messages yet. Start the conversation below.
           </p>
@@ -105,6 +179,7 @@ export default function FirmChat({
                 m={m}
                 mine={isMine(m)}
                 apiBase={apiBase}
+                act={act}
                 onChanged={refresh}
                 onReply={() => setReplyTo(replyTo === m.id ? null : m.id)}
                 replyOpen={replyTo === m.id}
@@ -112,14 +187,7 @@ export default function FirmChat({
               {(repliesByParent.get(m.id) ?? []).length > 0 && (
                 <div className="ml-6 mt-2 space-y-2 border-l-2 border-border-brand pl-3">
                   {(repliesByParent.get(m.id) ?? []).map((r) => (
-                    <MessageRow
-                      key={r.id}
-                      m={r}
-                      mine={isMine(r)}
-                      apiBase={apiBase}
-                      onChanged={refresh}
-                      compact
-                    />
+                    <MessageRow key={r.id} m={r} mine={isMine(r)} apiBase={apiBase} act={act} onChanged={refresh} compact />
                   ))}
                 </div>
               )}
@@ -153,6 +221,7 @@ function MessageRow({
   m,
   mine,
   apiBase,
+  act,
   onChanged,
   onReply,
   replyOpen,
@@ -161,6 +230,7 @@ function MessageRow({
   m: ChatMessage;
   mine: boolean;
   apiBase: string;
+  act: (messageId: string, action: string, emoji?: string) => void;
   onChanged: () => void;
   onReply?: () => void;
   replyOpen?: boolean;
@@ -169,9 +239,16 @@ function MessageRow({
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showReact, setShowReact] = useState(false);
 
   const when = formatWhen(m.created_at);
   const isSystem = m.sender_role === "system";
+
+  function toggleReaction(emoji: string) {
+    const existing = m.reactions?.find((r) => r.emoji === emoji);
+    act(m.id, existing?.mine ? "unreact" : "react", emoji);
+    setShowReact(false);
+  }
 
   async function saveEdit() {
     setBusy(true);
@@ -207,6 +284,11 @@ function MessageRow({
         </span>
         <span className="text-[10px] text-black/40 tabular-nums">{when}</span>
         {m.edited_at && <span className="text-[10px] text-black/35">(edited)</span>}
+        {m.pinned_at && (
+          <span className="text-[10px] uppercase tracking-wider font-semibold text-navy" title={m.pinned_by ? `Pinned by ${m.pinned_by}` : "Pinned"}>
+            Pinned
+          </span>
+        )}
       </div>
 
       {m.deleted_at ? (
@@ -259,8 +341,25 @@ function MessageRow({
         </div>
       )}
 
+      {!m.deleted_at && m.reactions?.length > 0 && (
+        <div className="mt-1.5 flex items-center gap-1 flex-wrap">
+          {m.reactions.map((r) => (
+            <button
+              key={r.emoji}
+              onClick={() => act(m.id, r.mine ? "unreact" : "react", r.emoji)}
+              className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 border ${
+                r.mine ? "bg-navy/10 border-navy/30 text-navy" : "bg-parchment-2 border-border-brand text-black/60"
+              }`}
+            >
+              <span>{r.emoji}</span>
+              <span className="tabular-nums text-[10px]">{r.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {!m.deleted_at && (
-        <div className="mt-1.5 flex items-center gap-3">
+        <div className="mt-1.5 flex items-center gap-3 relative">
           {onReply && (
             <button
               onClick={onReply}
@@ -269,6 +368,18 @@ function MessageRow({
               {replyOpen ? "Close" : "Reply"}
             </button>
           )}
+          <button
+            onClick={() => setShowReact((v) => !v)}
+            className="text-[10px] uppercase tracking-wider font-semibold text-muted hover:text-navy"
+          >
+            React
+          </button>
+          <button
+            onClick={() => act(m.id, m.pinned_at ? "unpin" : "pin")}
+            className="text-[10px] uppercase tracking-wider font-semibold text-muted hover:text-navy"
+          >
+            {m.pinned_at ? "Unpin" : "Pin"}
+          </button>
           {mine && !editing && (
             <>
               <button
@@ -288,6 +399,19 @@ function MessageRow({
                 Delete
               </button>
             </>
+          )}
+          {showReact && (
+            <div className="absolute bottom-full left-0 mb-1 z-10 flex items-center gap-1 bg-white border border-border-brand p-1 shadow-none">
+              {REACTION_PALETTE.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => toggleReaction(emoji)}
+                  className="text-sm px-1 hover:bg-parchment-2"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
           )}
         </div>
       )}

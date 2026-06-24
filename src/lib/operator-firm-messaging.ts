@@ -23,6 +23,12 @@ const OPERATOR_EMAIL = process.env.OPERATOR_NOTIFICATION_EMAIL ?? 'adriano@casel
 
 export type OperatorFirmSenderRole = 'operator' | 'lawyer' | 'system';
 
+export interface MessageReaction {
+  emoji: string;
+  count: number;
+  mine: boolean;
+}
+
 export interface OperatorFirmMessage {
   id: string;
   channel_id: string;
@@ -35,8 +41,14 @@ export interface OperatorFirmMessage {
   attachments: MatterAttachment[];
   edited_at: string | null;
   deleted_at: string | null;
+  pinned_at: string | null;
+  pinned_by: string | null;
+  reactions: MessageReaction[];
   created_at: string;
 }
+
+/** Fixed reaction palette offered in the composer UI. */
+export const REACTION_EMOJIS = ['👍', '✅', '🙏', '👀', '🎉', '❓'] as const;
 
 /** The actor performing a write, resolved by the route from the session. */
 export interface MessagingActor {
@@ -109,9 +121,10 @@ export async function getOrCreateChannel(firmId: string): Promise<string> {
  */
 export async function listFirmMessages(
   firmId: string,
-  options: { limit?: number } = {},
+  options: { limit?: number; viewerParticipant?: string } = {},
 ): Promise<OperatorFirmMessage[]> {
   const limit = options.limit ?? 300;
+  const viewer = options.viewerParticipant ?? null;
   const channelId = await getOrCreateChannel(firmId);
 
   const { data } = await supabase
@@ -122,14 +135,121 @@ export async function listFirmMessages(
     .limit(limit);
 
   const rows = (data ?? []) as OperatorFirmMessage[];
+  const messageIds = rows.map((m) => m.id);
+
+  // Reactions for all messages in one read, grouped per message + emoji.
+  const reactionsByMessage = new Map<string, MessageReaction[]>();
+  if (messageIds.length > 0) {
+    const { data: reactionRows } = await supabase
+      .from('operator_firm_message_reactions')
+      .select('message_id, emoji, participant')
+      .in('message_id', messageIds);
+    const acc = new Map<string, Map<string, { count: number; mine: boolean }>>();
+    for (const r of reactionRows ?? []) {
+      const mid = r.message_id as string;
+      const emoji = r.emoji as string;
+      const byEmoji = acc.get(mid) ?? new Map();
+      const cur = byEmoji.get(emoji) ?? { count: 0, mine: false };
+      cur.count += 1;
+      if (viewer && r.participant === viewer) cur.mine = true;
+      byEmoji.set(emoji, cur);
+      acc.set(mid, byEmoji);
+    }
+    for (const [mid, byEmoji] of acc.entries()) {
+      reactionsByMessage.set(
+        mid,
+        Array.from(byEmoji.entries()).map(([emoji, v]) => ({ emoji, count: v.count, mine: v.mine })),
+      );
+    }
+  }
+
   const withSigned = await Promise.all(
     rows.map(async (m) => {
-      const base = m.deleted_at ? { ...m, body: '', attachments: [] } : m;
+      const reactions = reactionsByMessage.get(m.id) ?? [];
+      const base = m.deleted_at
+        ? { ...m, body: '', attachments: [], reactions }
+        : { ...m, reactions };
       if (!base.attachments?.length) return base;
       return { ...base, attachments: await signAttachments(base.attachments) };
     }),
   );
   return withSigned;
+}
+
+/** Toggle a reaction on. Idempotent via the unique constraint. */
+export async function addReaction(input: {
+  firmId: string;
+  messageId: string;
+  actor: MessagingActor;
+  emoji: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!(REACTION_EMOJIS as readonly string[]).includes(input.emoji)) {
+    return { ok: false, error: 'unsupported emoji' };
+  }
+  const { data: msg } = await supabase
+    .from('operator_firm_messages')
+    .select('id, firm_id')
+    .eq('id', input.messageId)
+    .maybeSingle();
+  if (!msg || msg.firm_id !== input.firmId) return { ok: false, error: 'message not found' };
+
+  const { error } = await supabase.from('operator_firm_message_reactions').upsert(
+    {
+      message_id: input.messageId,
+      firm_id: input.firmId,
+      participant: participantKey(input.actor),
+      participant_label: input.actor.name,
+      emoji: input.emoji,
+    },
+    { onConflict: 'message_id,participant,emoji' },
+  );
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Toggle a reaction off. */
+export async function removeReaction(input: {
+  firmId: string;
+  messageId: string;
+  actor: MessagingActor;
+  emoji: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error } = await supabase
+    .from('operator_firm_message_reactions')
+    .delete()
+    .eq('message_id', input.messageId)
+    .eq('firm_id', input.firmId)
+    .eq('participant', participantKey(input.actor))
+    .eq('emoji', input.emoji);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Pin or unpin a message. Any participant may pin. */
+export async function setPinned(input: {
+  firmId: string;
+  messageId: string;
+  actor: MessagingActor;
+  pinned: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: msg } = await supabase
+    .from('operator_firm_messages')
+    .select('id, firm_id, deleted_at')
+    .eq('id', input.messageId)
+    .maybeSingle();
+  if (!msg || msg.firm_id !== input.firmId) return { ok: false, error: 'message not found' };
+  if (msg.deleted_at) return { ok: false, error: 'message deleted' };
+
+  const { error } = await supabase
+    .from('operator_firm_messages')
+    .update(
+      input.pinned
+        ? { pinned_at: new Date().toISOString(), pinned_by: input.actor.name }
+        : { pinned_at: null, pinned_by: null },
+    )
+    .eq('id', input.messageId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 /**

@@ -10,19 +10,20 @@ interface Tab {
 
 interface PortalTabNavProps {
   firmId: string;
+  caseloadUnread?: number;
 }
 
-export default function PortalTabNav({ firmId }: PortalTabNavProps) {
+export default function PortalTabNav({ firmId, caseloadUnread = 0 }: PortalTabNavProps) {
   const pathname = usePathname();
 
-  const tabs: Tab[] = [
+  const tabs: (Tab & { badge?: number })[] = [
     { href: `/portal/${firmId}/triage`,       label: "Triage"       },
     { href: `/portal/${firmId}/dashboard`,    label: "Dashboard"    },
     { href: `/portal/${firmId}/pipeline`,     label: "Pipeline"     },
     { href: `/portal/${firmId}/clients`,      label: "Clients"      },
     { href: `/portal/${firmId}/files`,        label: "Files"        },
     { href: `/portal/${firmId}/deliverables`, label: "Deliverables" },
-    { href: `/portal/${firmId}/messages`,     label: "CaseLoad"     },
+    { href: `/portal/${firmId}/messages`,     label: "CaseLoad", badge: caseloadUnread },
   ];
 
   return (
@@ -44,6 +45,11 @@ export default function PortalTabNav({ firmId }: PortalTabNavProps) {
                 `}
               >
                 {tab.label}
+                {tab.badge ? (
+                  <span className="ml-1.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-[10px] font-bold bg-navy text-white align-middle tabular-nums">
+                    {tab.badge}
+                  </span>
+                ) : null}
               </Link>
             );
           })}

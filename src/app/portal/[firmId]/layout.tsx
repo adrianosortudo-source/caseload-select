@@ -9,6 +9,7 @@
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getFirmUnreadCount } from "@/lib/operator-firm-messaging";
 import PortalTabNav from "@/components/portal/PortalTabNav";
 
 interface Branding {
@@ -51,6 +52,17 @@ export default async function PortalLayout({
   const firmName = branding.firm_name ?? firm?.name ?? "Client Portal";
   const primaryColor = branding.primary_color ?? "#1E2F58";
 
+  // Lawyer-side unread badge for the CaseLoad Connect tab (operators have the
+  // console badges; clients never see this tab).
+  let caseloadUnread = 0;
+  if (session && !isOperator && !isClient) {
+    caseloadUnread = await getFirmUnreadCount(firmId, {
+      role: "lawyer",
+      id: session.lawyer_id ?? "lawyer",
+      name: "",
+    }).catch(() => 0);
+  }
+
   return (
     <div
       className="bg-parchment min-h-screen flex flex-col"
@@ -88,7 +100,7 @@ export default async function PortalLayout({
       {/* Lawyer/operator tab nav. Hidden for client sessions: a client only
           reaches /m/[matterId] under this layout, and the tabs point at
           lawyer surfaces that reject client sessions anyway. */}
-      {!isClient && <PortalTabNav firmId={firmId} />}
+      {!isClient && <PortalTabNav firmId={firmId} caseloadUnread={caseloadUnread} />}
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">{children}</main>
       <footer className="text-center text-xs text-black/30 py-6 shrink-0 flex items-center justify-center gap-4">

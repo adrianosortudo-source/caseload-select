@@ -106,4 +106,20 @@ describe("route auth gates", () => {
     });
     expect(res.status).toBe(401);
   });
+
+  it("operator message action (react/pin) 401s without an operator session", async () => {
+    const { POST } = await import("@/app/api/admin/firms/[firmId]/messages/[messageId]/action/route");
+    const res = await POST({} as never, {
+      params: Promise.resolve({ firmId: FIRM_A, messageId: "m-1" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("lawyer message action (react/pin) 401s without a firm session", async () => {
+    const { POST } = await import("@/app/api/portal/[firmId]/messages/[messageId]/action/route");
+    const res = await POST({} as never, {
+      params: Promise.resolve({ firmId: FIRM_A, messageId: "m-1" }),
+    });
+    expect(res.status).toBe(401);
+  });
 });

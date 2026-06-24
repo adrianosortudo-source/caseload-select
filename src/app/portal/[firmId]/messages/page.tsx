@@ -44,7 +44,9 @@ export default async function FirmPortalMessagesPage({
       (data?.display_name as string | null) ?? (data?.email as string | null) ?? "The firm";
   }
 
-  const messages = (await listFirmMessages(firmId)) as ChatMessage[];
+  const messages = (await listFirmMessages(firmId, {
+    viewerParticipant: lawyerId,
+  })) as ChatMessage[];
   await markFirmChannelRead(firmId, {
     role: "lawyer",
     id: lawyerId,

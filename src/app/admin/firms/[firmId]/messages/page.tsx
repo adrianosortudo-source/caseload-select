@@ -34,7 +34,7 @@ export default async function OperatorFirmMessagesPage({
     .maybeSingle();
   const firmName = (firm?.name as string | null) ?? "this firm";
 
-  const messages = (await listFirmMessages(firmId)) as ChatMessage[];
+  const messages = (await listFirmMessages(firmId, { viewerParticipant: "operator" })) as ChatMessage[];
   await markFirmChannelRead(firmId, OPERATOR_ACTOR).catch(() => {});
 
   return (
