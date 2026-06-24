@@ -126,7 +126,17 @@ async function safeFetch(startUrl: string, timeoutMs: number): Promise<SafeFetch
     try {
       res = await fetch(currentUrl, {
         signal: controller.signal,
-        headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml,text/plain,*/*" },
+        headers: {
+          "User-Agent": UA,
+          Accept: "text/html,application/xhtml+xml,text/plain,*/*",
+          // Crawling untrusted prospect sites: ask for uncompressed responses so
+          // a compliant server cannot hand us a decompression bomb. A hostile
+          // server can still compress, but the streaming byte cap in
+          // readCappedText bounds memory either way. Defence-in-depth for the
+          // known undici decompression advisory until the undici@8 migration
+          // (gated on a Node >= 22.19 runtime) lands.
+          "Accept-Encoding": "identity",
+        },
         redirect: "manual",
         dispatcher: ssrfAgent,
       } as RequestInit & { dispatcher: Agent });
