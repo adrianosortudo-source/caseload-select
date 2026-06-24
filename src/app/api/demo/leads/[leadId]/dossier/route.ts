@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { getDemoFirmId } from "@/lib/demo-firm";
 import { googleai, MODELS } from "@/lib/openrouter";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,21 @@ export async function POST(
   { params }: { params: Promise<{ leadId: string }> }
 ) {
   const { leadId } = await params;
+
+  // Codex re-audit F-05: this endpoint is intentionally unauthenticated for
+  // the demo widget, but every POST triggers a Gemini LLM call (cost). Per-IP
+  // rate limit so a known demo leadId cannot be replayed in a loop. Uses the
+  // "extract" bucket (30 per minute) which is already configured for AI-cost
+  // public surfaces.
+  const ip = ipFromRequest(request);
+  const rl = await checkRateLimit("extract", ip);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "rate limited", retry_after_seconds: Math.ceil((rl.reset - Date.now()) / 1000) },
+      { status: 429, headers: rateLimitHeaders(rl) },
+    );
+  }
+
   const firmId = await getDemoFirmId();
   if (!firmId) return NextResponse.json({ error: "Demo firm not configured" }, { status: 500 });
 

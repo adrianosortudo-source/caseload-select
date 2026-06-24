@@ -271,6 +271,38 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // ── HMAC verification (Codex re-audit F-02: BEFORE any firm load or GHL
+  // API call) ──────────────────────────────────────────────────────────────
+  // Previously this gate ran AFTER fetchVoiceAITranscript, so an unsigned
+  // request could trigger an outbound GHL Voice AI API call using the firm's
+  // stored token (cost amplification + transcript probing). Verifying first
+  // means a forged caller cannot make the server spend GHL API or expose any
+  // firm data before the signature is checked.
+  const signature = req.headers.get(VOICE_SIGNATURE_HEADER);
+  const verifyResult = await verifyVoiceWebhookSignature({
+    firmId: firmIdParam,
+    rawBody,
+    signatureHeader: signature,
+  });
+  const required = isHmacRequired();
+  const gate = shouldRejectVoiceRequest(verifyResult, required);
+  if (gate.reject) {
+    console.warn(
+      `[voice-intake] signature gate rejected firm=${firmIdParam} required=${required} reason=${gate.reason}`,
+    );
+    return NextResponse.json(
+      { error: 'voice webhook signature rejected', reason: gate.reason },
+      { status: 401, headers: CORS_HEADERS },
+    );
+  }
+  if (verifyResult.mode === 'verified') {
+    console.log(`[voice-intake] signature verified firm=${firmIdParam}`);
+  } else if (verifyResult.mode === 'mismatch' || verifyResult.mode === 'malformed_signature') {
+    console.warn(
+      `[voice-intake] signature soft-fail firm=${firmIdParam} mode=${verifyResult.mode} reason=${verifyResult.reason}`,
+    );
+  }
+
   const { data: firm, error: firmErr } = await supabase
     .from('intake_firms')
     .select('id, name, voice_api_token, ghl_location_id, location, gemini_disabled_alert_sent_at')
@@ -375,44 +407,6 @@ export async function POST(req: NextRequest) {
   }
 
   console.log(`[voice-intake] transcript source=${transcriptSource} length=${transcript.length} api=${apiFetchTelemetry}`);
-
-  // ── HMAC verification (Codex audit HIGH #7) ───────────────────────────
-  // GHL Voice AI is expected to send X-CLS-Voice-Signature: sha256=<hex>
-  // over the raw body, computed with the firm-specific shared secret
-  // stored in intake_firms.voice_webhook_secret. Until that column
-  // exists, until per-firm secrets are populated, and until
-  // VOICE_HMAC_REQUIRED=true is set globally, this verification is in
-  // "soft enforce" mode — it logs signature mismatches but does not
-  // reject. See src/lib/voice-webhook-auth.ts for the full rollout
-  // posture.
-  const signature = req.headers.get(VOICE_SIGNATURE_HEADER);
-  const verifyResult = await verifyVoiceWebhookSignature({
-    firmId: firmIdParam,
-    rawBody,
-    signatureHeader: signature,
-  });
-  const required = isHmacRequired();
-  const gate = shouldRejectVoiceRequest(verifyResult, required);
-  if (gate.reject) {
-    console.warn(
-      `[voice-intake] signature gate rejected firm=${firmIdParam} required=${required} reason=${gate.reason}`,
-    );
-    return NextResponse.json(
-      { error: 'voice webhook signature rejected', reason: gate.reason },
-      { status: 401, headers: CORS_HEADERS },
-    );
-  }
-  if (verifyResult.mode === 'verified') {
-    // Log success at info-level only on the first verified call per cold
-    // start (cheap signal that the wiring works for this firm).
-    console.log(`[voice-intake] signature verified firm=${firmIdParam}`);
-  } else if (verifyResult.mode === 'mismatch' || verifyResult.mode === 'malformed_signature') {
-    // Soft-fail: log the mismatch even though we proceed, so the operator
-    // can spot rollout problems while VOICE_HMAC_REQUIRED is still off.
-    console.warn(
-      `[voice-intake] signature soft-fail firm=${firmIdParam} mode=${verifyResult.mode} reason=${verifyResult.reason}`,
-    );
-  }
 
   // ── call_id window dedup (launch audit H1, per DR-042) ────────────────
   // A GHL workflow re-fire (manual re-run, retry on a slow response) posts

@@ -187,9 +187,12 @@ export function shouldRejectVoiceRequest(
         ? { reject: true, reason: 'firm has no voice_webhook_secret configured' }
         : { reject: false };
     case 'no_signature_header':
-      return required
-        ? { reject: true, reason: 'missing X-CLS-Voice-Signature header' }
-        : { reject: false };
+      // Codex re-audit F-01: when the firm HAS a secret configured, a missing
+      // signature is ALWAYS a rejection regardless of VOICE_HMAC_REQUIRED. The
+      // operator opted that firm into HMAC by populating the column; accepting
+      // unsigned posts on it would be the worst kind of footgun (looks
+      // enforced from the column, isn't enforced in the route).
+      return { reject: true, reason: 'missing X-CLS-Voice-Signature header (firm has a secret configured)' };
     case 'mismatch':
     case 'malformed_signature':
       return { reject: true, reason: `signature ${verify.mode}: ${verify.reason}` };

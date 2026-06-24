@@ -182,8 +182,12 @@ describe('shouldRejectVoiceRequest — decision matrix', () => {
     expect(shouldRejectVoiceRequest(vr('no_secret_configured'), true).reject).toBe(true);
   });
 
-  it('no_signature_header → reject only when required=true', () => {
-    expect(shouldRejectVoiceRequest(vr('no_signature_header'), false).reject).toBe(false);
+  // Codex re-audit F-01: when the firm HAS a secret configured, a missing
+  // signature is ALWAYS a rejection regardless of VOICE_HMAC_REQUIRED. The
+  // operator opted that firm into HMAC by populating the column; accepting
+  // unsigned posts on it would be a footgun.
+  it('no_signature_header → ALWAYS reject (secret is configured)', () => {
+    expect(shouldRejectVoiceRequest(vr('no_signature_header'), false).reject).toBe(true);
     expect(shouldRejectVoiceRequest(vr('no_signature_header'), true).reject).toBe(true);
   });
 
