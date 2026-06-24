@@ -362,12 +362,14 @@ interface FirmCardData {
 function FirmCard({ card, nowMs }: { card: FirmCardData; nowMs: number }) {
   const healthy = !card.notifUnhealthy && !card.tokenWarn;
   return (
-    <Link
-      href={`/admin/firms/${card.id}/triage`}
-      className="block bg-white border border-border-brand p-4 hover:border-navy transition-colors"
-    >
+    <div className="bg-white border border-border-brand p-4 hover:border-navy/40 transition-colors flex flex-col">
       <div className="flex items-start justify-between gap-2">
-        <span className="text-sm font-display font-bold text-navy truncate">{card.name}</span>
+        <Link
+          href={`/admin/firms/${card.id}/triage`}
+          className="text-sm font-display font-bold text-navy truncate hover:underline"
+        >
+          {card.name}
+        </Link>
         <span
           aria-label={healthy ? "Healthy" : "Needs attention"}
           className={`mt-1 shrink-0 inline-block w-2.5 h-2.5 ${
@@ -403,6 +405,21 @@ function FirmCard({ card, nowMs }: { card: FirmCardData; nowMs: number }) {
       <div className="mt-3 text-[11px] text-black/45">
         Last intake: {card.lastIntakeMs > 0 ? relativeTime(new Date(card.lastIntakeMs).toISOString(), nowMs) : "none yet"}
       </div>
+      <div className="mt-3 pt-3 border-t border-border-brand grid grid-cols-2 gap-1.5">
+        <CardLink href={`/admin/firms/${card.id}/triage`} label="Triage" />
+        <CardLink href={`/portal/${card.id}/files`} label="Files" />
+      </div>
+    </div>
+  );
+}
+
+function CardLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="text-center text-[10px] uppercase tracking-wider font-semibold px-2 py-1.5 border border-navy/20 text-navy hover:bg-navy hover:text-white transition-colors"
+    >
+      {label}
     </Link>
   );
 }
