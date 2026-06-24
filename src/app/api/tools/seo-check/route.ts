@@ -1350,6 +1350,14 @@ export async function POST(req: NextRequest) {
     const internalSummary = buildInternalSummary(pages, issues, overallScore, aiSearchScore);
     const breakdown = severityBreakdown(issues);
 
+    // The internal prospecting layer (summary + per-issue internal notes and
+    // outreach angles) is operator-only. Strip it from public responses so it
+    // does not leak through the raw API to a prospect inspecting the network
+    // tab, matching the UI's showInternal gate.
+    const responseIssues = isOperator
+      ? issues
+      : issues.map(({ internalNote, prospectingAngle, ...rest }) => rest);
+
     const result: SeoCheckResult = {
       domain,
       scanMode,
@@ -1364,8 +1372,8 @@ export async function POST(req: NextRequest) {
       aiPolicyGrade: computeGrade(aiPolicyScore),
       aiBots,
       topFixes,
-      issues,
-      internalSummary,
+      issues: responseIssues,
+      ...(isOperator ? { internalSummary } : {}),
       severityBreakdown: breakdown,
       partial,
       checkedAt: new Date().toISOString(),

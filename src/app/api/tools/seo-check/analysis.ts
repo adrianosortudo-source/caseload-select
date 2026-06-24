@@ -178,7 +178,8 @@ export interface SeoCheckResult {
   aiBots: AiBotStatus[];
   topFixes: TopFix[];
   issues: Issue[];
-  internalSummary: InternalSummary;
+  /** Operator-only. Omitted from public (unauthenticated) responses. */
+  internalSummary?: InternalSummary;
   severityBreakdown: SeverityBreakdown;
   /** True when the wall-clock budget was hit before the page target was met. */
   partial?: boolean;
@@ -374,9 +375,13 @@ export function buildIssues(pages: PageResult[]): Issue[] {
 
     let severity = severityFor(acc.category, acc.label, acc.status);
     // Bump one level when the issue lands on commercial pages and is sitewide.
+    // The coverage bump does NOT manufacture "critical": that tier is reserved
+    // for explicitly critical checks (noindex, HTTPS, missing contact path),
+    // so a sitewide minor finding caps at "high".
     if (hitsCommercial && affectedCount >= Math.max(2, Math.ceil(totalPages / 2)) && severity !== "critical") {
       const order: Severity[] = ["critical", "high", "medium", "low", "info"];
-      severity = order[Math.max(0, order.indexOf(severity) - 1)];
+      const bumped = order[Math.max(0, order.indexOf(severity) - 1)];
+      severity = bumped === "critical" ? "high" : bumped;
     }
 
     const confidence: Confidence = acc.category === "Performance" ? "medium" : "high";

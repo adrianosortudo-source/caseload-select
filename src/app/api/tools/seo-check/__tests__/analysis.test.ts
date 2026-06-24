@@ -101,6 +101,28 @@ describe("buildIssues", () => {
     }
   });
 
+  it("does not manufacture critical from the commercial+sitewide coverage bump", () => {
+    // A mid-tier On-Page failure across commercial pages should cap at high,
+    // not become critical. Critical is reserved for explicit blockers.
+    const c = cat("On-Page SEO", [{ label: "Image alt text", status: "fail", detail: "" }]);
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [c] }),
+      mkPage({ url: "https://x.com/contact", pageType: "contact", categories: [c] }),
+      mkPage({ url: "https://x.com/practice", pageType: "practice", categories: [c] }),
+    ];
+    const issue = buildIssues(pages).find((i) => i.title === "Image alt text");
+    expect(issue?.severity).toBe("high");
+    expect(issue?.severity).not.toBe("critical");
+  });
+
+  it("still rates an explicit blocker (noindex) as critical even off commercial pages", () => {
+    const pages = [mkPage({
+      url: "https://x.com/blog/p", pageType: "blog",
+      categories: [cat("Indexability", [{ label: "Indexable", status: "fail", detail: "" }])],
+    })];
+    expect(buildIssues(pages).find((i) => i.title === "Indexable")?.severity).toBe("critical");
+  });
+
   it("returns no issues when everything passes", () => {
     const pages = [mkPage({
       url: "https://x.com/", pageType: "homepage",
