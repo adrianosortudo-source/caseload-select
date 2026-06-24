@@ -359,63 +359,47 @@ export async function recordApproval(input: {
   note: string | null;
 }): Promise<{ ok: true; record: ApprovalRecord } | { ok: false; error: string; stale?: boolean }> {
   const approved = input.decision === "approved";
-  const now = new Date().toISOString();
+  void approved; // unused after the RPC took over; kept for future telemetry
 
-  // Close the version-drift TOCTOU: apply the status change ONLY while the
-  // signed version is still the current one. The route pre-checks this, but a
-  // new version posted between that check and here would otherwise let a
-  // sign-off land on a stale version. The conditional update is the real gate;
-  // if zero rows match, a newer version exists and we reject as stale without
-  // recording an approval against the superseded version.
-  const { data: updatedRows, error: updErr } = await supabase
-    .from("content_deliverables")
-    .update({
-      status: statusAfterDecision(input.decision),
-      approved_version_id: approved ? input.versionId : null,
-      approved_at: approved ? now : null,
-      updated_at: now,
-    })
-    .eq("id", input.deliverableId)
-    .eq("current_version_id", input.versionId)
-    .select("id");
-  if (updErr) return { ok: false, error: `approval update failed: ${updErr.message}` };
-  if (!updatedRows || updatedRows.length === 0) {
-    return {
-      ok: false,
-      stale: true,
-      error: "a newer version exists; refresh and sign the current version",
-    };
+  // Codex re-audit follow-up: the previous app-layer reorder created a crash
+  // window where status='approved' could land WITHOUT the append-only record.
+  // Delegate to a SECURITY DEFINER Postgres function that does the version
+  // drift check + the immutable insert + the status update inside ONE
+  // transaction. Either both land or neither does. SELECT FOR UPDATE
+  // serializes concurrent sign-offs on the same deliverable.
+  const { data: rpcData, error: rpcErr } = await supabase.rpc("record_approval_atomic", {
+    p_deliverable_id:    input.deliverableId,
+    p_version_id:        input.versionId,
+    p_firm_id:           input.firmId,
+    p_decision:          input.decision,
+    p_signer_role:       "lawyer",
+    p_signer_id:         input.signer.id ?? null,
+    p_signer_name:       input.signer.name,
+    p_signer_email:      input.signer.email,
+    p_attestation:       input.attestation,
+    p_version_number:    input.versionNumber,
+    p_deliverable_title: input.deliverableTitle,
+    p_ip_address:        input.ipAddress,
+    p_user_agent:        input.userAgent,
+    p_note:              input.note,
+  });
+  if (rpcErr) {
+    return { ok: false, error: `approval rpc failed: ${rpcErr.message}` };
+  }
+  const result = (rpcData ?? {}) as { ok?: boolean; stale?: boolean; error?: string; record_id?: string };
+  if (!result.ok) {
+    return { ok: false, error: result.error ?? "approval failed", stale: result.stale };
   }
 
-  // Append the immutable approval record. If this fails after the status moved,
-  // best-effort revert the deliverable to in_review so status and the
-  // append-only log stay consistent.
+  // Fetch the full record to return to the caller (the RPC only returns the id
+  // so we can serve a consistent ApprovalRecord shape upstream).
   const { data, error } = await supabase
     .from("approval_records")
-    .insert({
-      deliverable_id: input.deliverableId,
-      version_id: input.versionId,
-      firm_id: input.firmId,
-      decision: input.decision,
-      signer_role: "lawyer",
-      signer_id: input.signer.id ?? null,
-      signer_name: input.signer.name,
-      signer_email: input.signer.email,
-      attestation: input.attestation,
-      version_number: input.versionNumber,
-      deliverable_title: input.deliverableTitle,
-      ip_address: input.ipAddress,
-      user_agent: input.userAgent,
-      note: input.note,
-    })
     .select("*")
+    .eq("id", result.record_id!)
     .single();
-  if (error) {
-    await supabase
-      .from("content_deliverables")
-      .update({ status: "in_review", approved_version_id: null, approved_at: null, updated_at: new Date().toISOString() })
-      .eq("id", input.deliverableId);
-    return { ok: false, error: `approval insert failed: ${error.message}` };
+  if (error || !data) {
+    return { ok: false, error: `approval record fetch failed: ${error?.message ?? "missing"}` };
   }
 
   await enqueueDeliverableNotification({

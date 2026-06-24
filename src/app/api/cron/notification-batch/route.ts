@@ -23,6 +23,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 import { isCronAuthorized } from '@/lib/cron-auth';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { sendEmail } from '@/lib/email';
@@ -107,11 +108,16 @@ export async function GET(req: NextRequest) {
     const isLawyer = lawyerEmailMap.has(email);
     const digest = buildDigest(email, recipientRows, isLawyer);
     const ids = recipientRows.map((r) => r.id);
+    // Content-stable idempotency key: same recipient + same row set produces
+    // the same key, so a crash-after-send followed by a replay is deduped by
+    // Resend (24h window) and no second copy goes out. Outbox stamp can lag.
+    const idempotencyKey = createHash('sha256')
+      .update(`${email}|${[...ids].sort().join(',')}`)
+      .digest('hex');
     try {
-      await sendEmail(email, digest.subject, digest.html);
-      // Stamp sent immediately, per recipient, so a mid-drain crash cannot
-      // re-send an already-delivered digest on the next run (the previous
-      // post-loop batch stamp left that window open).
+      await sendEmail(email, digest.subject, digest.html, { idempotencyKey });
+      // Stamp sent immediately, per recipient, so a mid-drain crash on the
+      // NEXT recipient cannot leave this one queued.
       await supabase
         .from('notification_outbox')
         .update({ status: 'sent', sent_at: now, batch_id: batchId })

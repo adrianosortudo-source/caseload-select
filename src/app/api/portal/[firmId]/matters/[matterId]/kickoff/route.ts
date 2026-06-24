@@ -74,6 +74,10 @@ export async function POST(
   const steps: StepResult[] = [];
 
   // ── Step 1: send welcome draft ────────────────────────────────────────
+  // Codex re-audit follow-up (F7 kickoff): claim the send atomically BEFORE
+  // inserting the client message. The previous read -> insert -> stamp pattern
+  // let two concurrent kickoffs both observe unsent and both send the welcome.
+  // The conditional UPDATE is the gate; release on insert failure.
   if (matter.welcome_draft_sent_at) {
     steps.push({
       step: 'welcome_send',
@@ -86,27 +90,47 @@ export async function POST(
     if (!bodyToSend || !bodyToSend.trim()) {
       steps.push({ step: 'welcome_send', ok: false, detail: 'no draft body' });
     } else {
-      const msgResult = await insertMessage({
-        matter_id: matterId,
-        firm_id: firmId,
-        channel_type: 'client',
-        sender_role: 'admin',
-        sender_lawyer_id: session.lawyer_id ?? null,
-        body: bodyToSend,
-      });
-      if (msgResult.ok) {
-        const sentAt = new Date().toISOString();
-        await supabase
-          .from('client_matters')
-          .update({ welcome_draft_sent_at: sentAt, welcome_draft_sent_body: bodyToSend })
-          .eq('id', matterId);
+      const sentAt = new Date().toISOString();
+      const { data: claimed, error: claimErr } = await supabase
+        .from('client_matters')
+        .update({ welcome_draft_sent_at: sentAt, welcome_draft_sent_body: bodyToSend })
+        .eq('id', matterId)
+        .is('welcome_draft_sent_at', null)
+        .select('id');
+
+      if (claimErr) {
+        steps.push({ step: 'welcome_send', ok: false, detail: claimErr.message });
+      } else if (!claimed || claimed.length === 0) {
+        // Lost the race to a concurrent kickoff (or to welcome/send). Treat as
+        // already sent; do NOT re-insert.
         steps.push({
           step: 'welcome_send',
           ok: true,
-          data: { sent_at: sentAt, message_id: msgResult.message.id },
+          detail: 'already sent (concurrent claim)',
         });
       } else {
-        steps.push({ step: 'welcome_send', ok: false, detail: msgResult.error });
+        const msgResult = await insertMessage({
+          matter_id: matterId,
+          firm_id: firmId,
+          channel_type: 'client',
+          sender_role: 'admin',
+          sender_lawyer_id: session.lawyer_id ?? null,
+          body: bodyToSend,
+        });
+        if (msgResult.ok) {
+          steps.push({
+            step: 'welcome_send',
+            ok: true,
+            data: { sent_at: sentAt, message_id: msgResult.message.id },
+          });
+        } else {
+          // Message insert failed; release the claim so a later send can retry.
+          await supabase
+            .from('client_matters')
+            .update({ welcome_draft_sent_at: null, welcome_draft_sent_body: null })
+            .eq('id', matterId);
+          steps.push({ step: 'welcome_send', ok: false, detail: msgResult.error });
+        }
       }
     }
   }
