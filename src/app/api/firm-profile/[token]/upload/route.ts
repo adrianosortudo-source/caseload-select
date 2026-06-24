@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 const BUCKET = "firm-onboarding-docs";
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -38,8 +39,18 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> },
 ) {
   const { token } = await params;
-  if (!token || token.length > 200) {
+  if (!token || token.length < 8 || token.length > 200) {
     return NextResponse.json({ ok: false, error: "invalid token" }, { status: 400 });
+  }
+
+  // Token is a shared-secret slug; rate-limit per IP to cap junk/cost writes
+  // to the private bucket from anyone fuzzing token prefixes.
+  const rl = await checkRateLimit("firmOnboarding", ipFromRequest(req));
+  if (!rl.ok) {
+    return NextResponse.json(
+      { ok: false, error: "Too many uploads from this network. Try again later." },
+      { status: 429, headers: rateLimitHeaders(rl) }
+    );
   }
 
   let formData: FormData;

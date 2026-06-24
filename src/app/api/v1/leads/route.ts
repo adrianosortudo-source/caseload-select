@@ -37,13 +37,10 @@ import { computeSabsUrgency, computeDismissalBardal } from "@/lib/interaction-sc
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function resolveFirm(req: Request): Promise<{ firmId: string; firmName: string } | null> {
-  const url = new URL(req.url);
-  let token = url.searchParams.get("token");
-
-  if (!token) {
-    const auth = req.headers.get("authorization") ?? "";
-    if (auth.startsWith("Bearer ")) token = auth.slice(7).trim();
-  }
+  // Authorization header only. A ?token= query param leaks the firm's API
+  // token into logs, referrers, and proxy history, so it is no longer accepted.
+  const auth = req.headers.get("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
 
   if (!token) return null;
 
