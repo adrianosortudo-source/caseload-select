@@ -82,6 +82,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // A calendar slot may only be briefed by its own firm. Validate ownership
+  // before linking/mutating it, so a piece for firm A cannot consume firm B's
+  // slot (service-role bypasses RLS, so this check is the only guard).
+  if (calendar_slot_id) {
+    const { data: slot } = await supabaseAdmin
+      .from("content_calendar_slots")
+      .select("id")
+      .eq("id", calendar_slot_id)
+      .eq("firm_id", firm_id)
+      .maybeSingle();
+    if (!slot) {
+      return NextResponse.json(
+        { ok: false, error: "calendar slot not found for this firm" },
+        { status: 400 }
+      );
+    }
+  }
+
   // Snapshot the active strategy for this firm
   const strategy = await getActiveStrategy(firm_id);
   const strategyId = strategy?.id ?? undefined;
@@ -110,7 +128,8 @@ export async function POST(req: NextRequest) {
     await supabaseAdmin
       .from("content_calendar_slots")
       .update({ status: "briefed" })
-      .eq("id", calendar_slot_id);
+      .eq("id", calendar_slot_id)
+      .eq("firm_id", firm_id);
   }
 
   return NextResponse.json({ ok: true, piece }, { status: 201 });
