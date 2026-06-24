@@ -44,6 +44,7 @@ export default async function DeliverablesPage({
       includeArchived={includeArchived}
       periods={plan.periods}
       deliverables={plan.deliverables}
+      settings={plan.settings}
     />
   );
 }

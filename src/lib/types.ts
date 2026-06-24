@@ -291,6 +291,17 @@ export interface ContentPeriod {
   updated_at: string;
 }
 
+/**
+ * Per-firm content-plan settings, shown in the review-overview panel. Operator
+ * authored. See migration 20260624_content_plan_settings.sql.
+ */
+export interface ContentPlanSettings {
+  firm_id: string;
+  ask: string | null;        // batch ask note the firm reads
+  review_by: string | null;  // YYYY-MM-DD custom deadline; null = use next publish
+  updated_at: string;
+}
+
 export interface DeliverableVersion {
   id: string;
   deliverable_id: string;

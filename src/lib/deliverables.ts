@@ -17,6 +17,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import type {
   ContentDeliverable,
   ContentPeriod,
+  ContentPlanSettings,
   DeliverableVersion,
   DeliverableComment,
   ApprovalRecord,
@@ -99,6 +100,7 @@ export async function listDeliverables(
 export interface ContentPlanData {
   periods: ContentPeriod[];        // newest week first
   deliverables: PlanDeliverable[]; // light rows for grouping client-side
+  settings: ContentPlanSettings | null; // operator batch note + custom deadline
 }
 
 export async function getContentPlan(
@@ -111,7 +113,7 @@ export async function getContentPlan(
     .eq("firm_id", firmId);
   if (!options.includeArchived) dq = dq.neq("status", "archived");
 
-  const [periodsRes, delivRes] = await Promise.all([
+  const [periodsRes, delivRes, settingsRes] = await Promise.all([
     supabase
       .from("content_periods")
       .select("*")
@@ -119,6 +121,7 @@ export async function getContentPlan(
       .order("starts_on", { ascending: false })
       .order("sort_index", { ascending: false }),
     dq,
+    supabase.from("content_plan_settings").select("*").eq("firm_id", firmId).maybeSingle(),
   ]);
   if (periodsRes.error) throw new Error(`periods load failed: ${periodsRes.error.message}`);
   if (delivRes.error) throw new Error(`plan deliverables load failed: ${delivRes.error.message}`);
@@ -126,7 +129,30 @@ export async function getContentPlan(
   return {
     periods: (periodsRes.data ?? []) as ContentPeriod[],
     deliverables: (delivRes.data ?? []) as PlanDeliverable[],
+    settings: (settingsRes.data ?? null) as ContentPlanSettings | null,
   };
+}
+
+export async function upsertContentPlanSettings(input: {
+  firmId: string;
+  ask: string | null;
+  reviewBy: string | null;
+}): Promise<{ ok: true; settings: ContentPlanSettings } | { ok: false; error: string }> {
+  const { data, error } = await supabase
+    .from("content_plan_settings")
+    .upsert(
+      {
+        firm_id: input.firmId,
+        ask: input.ask,
+        review_by: input.reviewBy,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "firm_id" },
+    )
+    .select("*")
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, settings: data as ContentPlanSettings };
 }
 
 export async function createPeriod(input: {

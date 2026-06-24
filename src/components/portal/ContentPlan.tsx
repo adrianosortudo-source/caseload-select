@@ -3,7 +3,12 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ContentPeriod, ContentKind, DeliverableStatus } from "@/lib/types";
+import type {
+  ContentPeriod,
+  ContentPlanSettings,
+  ContentKind,
+  DeliverableStatus,
+} from "@/lib/types";
 import {
   groupByFormat,
   planProgress,
@@ -49,12 +54,14 @@ export default function ContentPlan({
   includeArchived,
   periods,
   deliverables,
+  settings,
 }: {
   firmId: string;
   viewerRole: "operator" | "lawyer";
   includeArchived: boolean;
   periods: ContentPeriod[];
   deliverables: PlanDeliverable[];
+  settings: ContentPlanSettings | null;
 }) {
   const router = useRouter();
   const [showNewWeek, setShowNewWeek] = useState(false);
@@ -116,7 +123,13 @@ export default function ContentPlan({
         </div>
       </div>
 
-      <ReviewOverview overview={overview} isOperator={isOperator} />
+      <ReviewOverview
+        overview={overview}
+        isOperator={isOperator}
+        firmId={firmId}
+        settings={settings}
+        onChanged={refresh}
+      />
 
       {isOperator && showNewWeek && (
         <PeriodForm
@@ -232,17 +245,34 @@ function daysLabel(days: number): string {
 function ReviewOverview({
   overview,
   isOperator,
+  firmId,
+  settings,
+  onChanged,
 }: {
   overview: PlanOverview;
   isOperator: boolean;
+  firmId: string;
+  settings: ContentPlanSettings | null;
+  onChanged: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const { total, approved, pending, changes, draft, weeks, byFormat, nextPublish } = overview;
   if (total === 0) return null;
   const pct = Math.round((approved / total) * 100);
   const waiting = pending + changes;
-  const days = nextPublish ? daysUntil(nextPublish.date) : null;
+
+  // Deadline: an operator-set "review by" wins; otherwise the soonest publish.
+  const deadlineDate = settings?.review_by ?? nextPublish?.date ?? null;
+  const deadlineLabel = settings?.review_by ? "Review by" : "Next to publish";
+  const days = deadlineDate ? daysUntil(deadlineDate) : null;
   const urgency =
     days === null ? "text-navy" : days <= 0 ? "text-red-fail" : days <= 2 ? "text-amber-800" : "text-navy";
+
+  const askLine =
+    settings?.ask ??
+    (isOperator
+      ? "The firm reads each piece and approves it or asks for changes. You see the live queue state here."
+      : "Read each piece and approve it, or ask for changes. Click any row to open the draft.");
 
   return (
     <div className="bg-white border border-border-brand p-5 space-y-4">
@@ -256,22 +286,20 @@ function ReviewOverview({
               ? `${waiting} piece${waiting === 1 ? "" : "s"} need your review`
               : "Everything is reviewed"}
           </h2>
-          <p className="text-sm text-black/55 mt-0.5 max-w-xl">
-            {isOperator
-              ? "The firm reads each piece and approves it or asks for changes. You see the live queue state here."
-              : "Read each piece and approve it, or ask for changes. Click any row to open the draft."}
-          </p>
+          <p className="text-sm text-black/55 mt-0.5 max-w-xl whitespace-pre-line">{askLine}</p>
         </div>
-        {nextPublish && (
+        {deadlineDate && (
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-wider font-semibold text-black/40">
-              Next to publish
+              {deadlineLabel}
             </p>
-            <p className={`text-sm font-semibold ${urgency}`}>{fmtDate(nextPublish.date)}</p>
+            <p className={`text-sm font-semibold ${urgency}`}>{fmtDate(deadlineDate)}</p>
             {days !== null && <p className={`text-xs ${urgency}`}>{daysLabel(days)}</p>}
-            <p className="text-[11px] text-muted mt-0.5 max-w-[230px] truncate">
-              {nextPublish.title}
-            </p>
+            {!settings?.review_by && nextPublish && (
+              <p className="text-[11px] text-muted mt-0.5 max-w-[230px] truncate">
+                {nextPublish.title}
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -305,6 +333,104 @@ function ReviewOverview({
             <OverviewStat key={f.format ?? "_"} n={f.count} label={f.format ?? ""} />
           ))}
       </div>
+
+      {isOperator && (
+        <div className="pt-1">
+          <button
+            onClick={() => setEditing((s) => !s)}
+            className="text-[11px] font-semibold text-navy/70 hover:text-navy"
+          >
+            {editing
+              ? "Close"
+              : settings?.ask || settings?.review_by
+                ? "Edit note and deadline"
+                : "Add a note and deadline"}
+          </button>
+          {editing && (
+            <SettingsForm
+              firmId={firmId}
+              settings={settings}
+              onDone={() => {
+                setEditing(false);
+                onChanged();
+              }}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SettingsForm({
+  firmId,
+  settings,
+  onDone,
+}: {
+  firmId: string;
+  settings: ContentPlanSettings | null;
+  onDone: () => void;
+}) {
+  const [ask, setAsk] = useState(settings?.ask ?? "");
+  const [reviewBy, setReviewBy] = useState(settings?.review_by ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/portal/${firmId}/content-plan-settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ask: ask.trim() || null, review_by: reviewBy || null }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setError(json.error ?? "Could not save.");
+        setSaving(false);
+        return;
+      }
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 p-3 bg-parchment-2/50 border border-border-brand space-y-2">
+      <div>
+        <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
+          Note to the firm
+        </label>
+        <textarea
+          value={ask}
+          onChange={(e) => setAsk(e.target.value)}
+          rows={2}
+          placeholder="e.g. Please clear this batch by Monday. Flag any source-policy concerns on quoted clauses."
+          className="w-full text-sm border border-border-brand px-2 py-1.5 bg-white resize-y"
+        />
+      </div>
+      <div>
+        <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
+          Review by <span className="text-black/40 normal-case font-normal">(optional)</span>
+        </label>
+        <input
+          type="date"
+          value={reviewBy}
+          onChange={(e) => setReviewBy(e.target.value)}
+          className="text-sm border border-border-brand px-2 py-1.5 bg-white"
+        />
+      </div>
+      {error && <p className="text-[11px] text-red-fail">{error}</p>}
+      <button
+        onClick={save}
+        disabled={saving}
+        className="px-3 py-1.5 text-xs font-semibold bg-navy text-white disabled:opacity-50"
+      >
+        {saving ? "Saving..." : "Save"}
+      </button>
     </div>
   );
 }
