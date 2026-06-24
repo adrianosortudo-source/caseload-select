@@ -56,7 +56,8 @@ vi.mock("@/lib/supabase-admin", () => {
       return {
         select: () => ({
           eq: () => ({
-            maybeSingle: () => Promise.resolve({ data: { name: "Test Firm" }, error: null }),
+            // CP-03: route now reads is_demo (boolean), not name (regex).
+            maybeSingle: () => Promise.resolve({ data: { is_demo: false }, error: null }),
           }),
         }),
       };

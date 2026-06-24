@@ -61,23 +61,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ verified: true, band: session.band });
     }
 
-    // Demo-firm bypass: when the firm's name contains "[DEMO]", any 6-digit
-    // code is accepted. Lets sales demos run end-to-end against production
-    // without requiring email-based code verification. Real firms keep their
-    // OTP enforcement intact because the bypass keys off firm name, not env.
+    // Demo-firm bypass: when intake_firms.is_demo = true, any 6-digit code is
+    // accepted so sales demos can run end-to-end against production without
+    // email-based verification. Codex re-audit CP-03: the prior gate was a
+    // regex against intake_firms.name (mutable text). A rename could silently
+    // turn OTP off or on. The dedicated boolean column is auditable, must be
+    // set explicitly by the operator, and is documented to never be true on a
+    // firm that holds real client PII.
     let isDemoFirm = false;
     if (session.firm_id) {
       const { data: firm } = await supabase
         .from("intake_firms")
-        .select("name")
+        .select("is_demo")
         .eq("id", session.firm_id)
         .maybeSingle();
-      const firmName = (firm?.name as string | undefined) ?? "";
-      isDemoFirm = /\[DEMO\]/i.test(firmName);
+      isDemoFirm = firm?.is_demo === true;
     }
 
     if (isDemoFirm && /^\d{6}$/.test(code.trim())) {
-      // Skip code/expiry check  -  demo firm accepts any 6-digit code.
+      // Skip code/expiry check. Log so an operator can audit if this ever
+      // fires unexpectedly (a real firm with is_demo=true is a misconfig).
+      console.info(`[otp/verify] demo bypass on firm=${session.firm_id} session=${session_id}`);
     } else {
       const attempts = (session.otp_attempts as number | null) ?? 0;
 
