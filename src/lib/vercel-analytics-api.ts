@@ -51,10 +51,13 @@ export interface VercelProjectStatus {
 // ─── API ────────────────────────────────────────────────────────────────────
 
 interface DeploymentApiItem {
-  uid: string;
+  uid?: string;
+  id?: string;
   url: string;
-  state: string;
-  created: number;
+  state?: string;
+  readyState?: string;
+  created?: number;
+  createdAt?: number;
   ready?: number;
 }
 
@@ -65,6 +68,7 @@ interface DeploymentsResponse {
 interface ProjectResponse {
   id?: string;
   name?: string;
+  accountId?: string;
 }
 
 export async function fetchVercelProjectStatus(
@@ -93,14 +97,22 @@ export async function fetchVercelProjectStatus(
 
   let projectName: string | null = null;
   let internalId: string = projectId;
+  let projectAccountId: string | null = null;
   if (projectRes.ok) {
     const p = (await projectRes.json()) as ProjectResponse;
     projectName = p.name ?? null;
     if (p.id) internalId = p.id;
+    if (p.accountId) projectAccountId = p.accountId;
+  } else {
+    console.error(`[vercel-api] project fetch failed: ${projectRes.status} ${projectRes.statusText}`);
   }
 
+  const deployTeamParam = projectAccountId
+    ? `&teamId=${projectAccountId}`
+    : sep ? `${sep}${tp}` : "";
+
   const deploysRes = await fetch(
-    `${API_BASE}/v6/deployments?projectId=${internalId}&target=production&limit=1${sep}${tp}`,
+    `${API_BASE}/v6/deployments?projectId=${internalId}&target=production&limit=1${deployTeamParam}`,
     { headers: headers() },
   );
 
@@ -110,19 +122,23 @@ export async function fetchVercelProjectStatus(
     const first = d.deployments?.[0];
     if (first) {
       latestDeploy = {
-        id: first.uid,
+        id: first.uid ?? first.id ?? "",
         url: first.url,
-        state: first.state,
-        created: new Date(first.created).toISOString(),
+        state: first.state ?? first.readyState ?? "",
+        created: new Date(first.created ?? first.createdAt ?? 0).toISOString(),
         readyAt: first.ready ? new Date(first.ready).toISOString() : null,
       };
     }
+  } else {
+    console.error(`[vercel-api] deployments fetch failed: ${deploysRes.status} ${deploysRes.statusText}`);
   }
 
   const teamSlug = process.env.VERCEL_TEAM_SLUG ?? "";
   const dashBase = teamSlug
     ? `https://vercel.com/${teamSlug}/${projectName ?? projectId}`
-    : `https://vercel.com/~/projects/${projectId}`;
+    : projectName
+      ? `https://vercel.com/~/projects/${projectName}`
+      : `https://vercel.com/~/projects/${projectId}`;
 
   return {
     configured: true,
