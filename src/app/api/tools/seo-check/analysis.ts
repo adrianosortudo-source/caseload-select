@@ -213,7 +213,14 @@ const LABEL_SEVERITY: Record<string, Severity> = {
   "Phone number visible": "high",
   "Contact path": "high",
   "Mixed indexability signals": "high",
+  // Optional content-use policy, not a visibility deficiency. It is captured
+  // separately in aiPolicyScore, so it stays low and never tops the fix list.
+  "AI training bot control": "low",
 };
+
+// Optional-policy labels: never raised by the commercial+sitewide coverage
+// bump, because choosing not to block training bots is a valid default.
+const POLICY_LABELS = new Set<string>(["AI training bot control"]);
 
 const EFFORT_BY_CATEGORY: Record<string, Effort> = {
   "Indexability": "low",
@@ -378,7 +385,7 @@ export function buildIssues(pages: PageResult[]): Issue[] {
     // The coverage bump does NOT manufacture "critical": that tier is reserved
     // for explicitly critical checks (noindex, HTTPS, missing contact path),
     // so a sitewide minor finding caps at "high".
-    if (hitsCommercial && affectedCount >= Math.max(2, Math.ceil(totalPages / 2)) && severity !== "critical") {
+    if (hitsCommercial && affectedCount >= Math.max(2, Math.ceil(totalPages / 2)) && severity !== "critical" && !POLICY_LABELS.has(acc.label)) {
       const order: Severity[] = ["critical", "high", "medium", "low", "info"];
       const bumped = order[Math.max(0, order.indexOf(severity) - 1)];
       severity = bumped === "critical" ? "high" : bumped;

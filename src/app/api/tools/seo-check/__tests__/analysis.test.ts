@@ -123,6 +123,21 @@ describe("buildIssues", () => {
     expect(buildIssues(pages).find((i) => i.title === "Indexable")?.severity).toBe("critical");
   });
 
+  it("keeps AI training bot control as a low-severity policy item, never bumped", () => {
+    // Optional content-use policy: warn on every page must stay low, not climb
+    // to high via the commercial+sitewide coverage bump.
+    const c = cat("AI Visibility", [{ label: "AI training bot control", status: "warn", detail: "" }]);
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [c] }),
+      mkPage({ url: "https://x.com/contact", pageType: "contact", categories: [c] }),
+      mkPage({ url: "https://x.com/practice", pageType: "practice", categories: [c] }),
+    ];
+    const issue = buildIssues(pages).find((i) => i.title === "AI training bot control");
+    // A warn drops the "low" base to "info"; the point is it is never elevated.
+    expect(["low", "info"]).toContain(issue?.severity);
+    expect(issue?.severity).not.toBe("high");
+  });
+
   it("returns no issues when everything passes", () => {
     const pages = [mkPage({
       url: "https://x.com/", pageType: "homepage",
