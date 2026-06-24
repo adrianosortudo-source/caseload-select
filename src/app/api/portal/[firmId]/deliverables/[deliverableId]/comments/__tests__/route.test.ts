@@ -12,6 +12,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+// The route fans the comment into the CaseLoad Connect channel; mock that
+// module so the test does not pull in the real supabase-admin chain.
+vi.mock("@/lib/deliverable-channel-post", () => ({
+  postDeliverableCommentToChannel: vi.fn(() => Promise.resolve()),
+  postDeliverableLifecycleToChannel: vi.fn(() => Promise.resolve()),
+}));
+
 const FIRM = "11111111-1111-1111-1111-111111111111";
 const DELIV = "22222222-2222-2222-2222-222222222222";
 const V_CUR = "33333333-3333-3333-3333-333333333333";

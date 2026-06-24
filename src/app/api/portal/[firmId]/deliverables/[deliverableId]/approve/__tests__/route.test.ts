@@ -18,6 +18,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { APPROVAL_ATTESTATION, CHANGES_ATTESTATION } from "@/lib/deliverables-pure";
 
+// The route posts the sign-off into the CaseLoad Connect channel; mock that
+// module so the test does not pull in the real supabase-admin chain.
+vi.mock("@/lib/deliverable-channel-post", () => ({
+  postDeliverableCommentToChannel: vi.fn(() => Promise.resolve()),
+  postDeliverableLifecycleToChannel: vi.fn(() => Promise.resolve()),
+}));
+
 vi.mock("server-only", () => ({}));
 
 const FIRM = "11111111-1111-1111-1111-111111111111";
