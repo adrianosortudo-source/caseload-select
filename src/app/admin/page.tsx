@@ -87,9 +87,14 @@ export default async function AdminHomePage() {
   ] = await Promise.all([
     supabase
       .from("intake_firms")
+      // Demo / test-fixture firms (is_demo=true) are kept off the operator
+      // console home so the firm board shows only live client firms. The demo
+      // firms still exist and back /demo + /test-screen; they are simply not
+      // surfaced here. Other operator firm pickers are unaffected.
       .select(
         "id, name, facebook_page_token_expires_at, whatsapp_cloud_token_expires_at, voice_api_token_expires_at",
       )
+      .eq("is_demo", false)
       .order("name", { ascending: true })
       .returns<FirmRow[]>(),
     supabase
