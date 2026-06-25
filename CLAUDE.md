@@ -14,6 +14,16 @@ This repo contains two products:
 1. **CaseLoad Select App** — CRM, pipeline, sequences, dashboard, operator tools
 2. **CaseLoad Screen Engine** — GPT-powered intake screening, scoring, embeddable widget
 
+## CRM Build Research (read before CRM-build work)
+
+The in-house CRM (GHL replacement) has a research corpus. Read in this order before planning or building CRM features:
+
+1. `D:\00_Work\01_CaseLoad_Select\05_Product\CRM_Research\SYNTHESIS-CRM-Build-Guidance-v1.md`. The 15-book synthesis: canonical data model, the four engines (state-machine, scoring/CPI, cadence/TCA, dashboard), failure modes, KPI set, LSO fence.
+2. `D:\00_Work\01_CaseLoad_Select\05_Product\CaseLoad_CRM_Migration_Plan_v1.md`. Phases (0 to 4), two CRM layers (A client-firm, B agency), GHL exit, open decisions.
+3. `docs/research/CRM_Build_Brief_v1.md`. The competitive/empirical delta. Key item: the scoring engine must add confidence + explainability + a missing-data re-score loop (what Lawmatics QualifyAI ships and the synthesis spec lacks).
+4. Evidence: `05_Product/CRM_Research/CRM_Competitor_Teardown_v2.html` (15 CRMs scored, scoring landscape, build backlog) and `05_Product/CRM_Research/GHL_Audit_Baseline_v1.html` (live DRG GHL config, 91 fields as the migration data dictionary, J-cadence suite as cadence-engine seed).
+5. Enrichment + compliance: `05_Product/CRM_Research/CRM_Enrichment_Research_v1.md` (Smokeball/MyCase, the structured-intake repeating-record primitive, the 8-point explainable-scoring design, the AI-intake bar, and build-ready `consent_log` + `conflict_checks` schemas from LSO Rule 4.2-1 / Rule 3.4 / By-Law 9 / PIPEDA / CASL, plus the hard exclusions).
+
 ## Operator Model
 
 Adriano operates the system for client firms. This is done-for-you, not self-serve SaaS. Firms never access admin panels. "Firm onboarding" means Adriano's setup checklist (Clio OAuth, practice areas, pipeline stages, Google review link, branding, intake form config). Build for operator efficiency, not firm self-service.
@@ -867,6 +877,7 @@ All migrations idempotent. Run in order:
 24. `20260609_webhook_outbox_action_check_expand.sql`: widens the `webhook_outbox` action CHECK to six actions (DR-067; also fixes the latent `referred` rejection). APPLIED 2026-06-09 via Supabase MCP before the same-day deploy.
 25. `20260611_voice_turn_sessions.sql`: `voice_turn_sessions` table for the Voice v2 realtime loop (DR-048). Per-call session store keyed on `call_id`, holds `engine_state` jsonb between turns. Unique partial index on `(call_id) WHERE NOT finalized`. Service-role RLS only. **NOT YET APPLIED: run when deploying Voice v2.**
 26. `20260624_operator_firm_messaging.sql`: CaseLoad Connect (operator-to-firm messaging). Three tables (`operator_firm_channels`, `operator_firm_messages`, `operator_firm_channel_reads`), RLS forced + anon/authenticated/PUBLIC revoked, plus the `firm_message_new` event type added to the `notification_outbox` event_type CHECK. APPLIED 2026-06-24 via Supabase MCP.
+27. `20260625_firm_about_explainer.sql`: `firm_about` table (per-firm standing "About this content" explainer rendered as a collapsible panel above the deliverables list at `/portal/[firmId]/deliverables`). Single row per firm (`firm_id` PK to `intake_firms`, `body_html`, `updated_at`, `updated_by`), RLS enabled + forced, anon/authenticated/PUBLIC grants revoked, service-role only. APPLIED 2026-06-25 via Supabase MCP; DRG content row seeded the same day. Read via guarded `getFirmAbout` (returns null if absent, so the page is safe to deploy ahead of the migration); written via operator-only `POST /api/portal/[firmId]/about` (sanitised with `sanitizeExplainerHtml`). See `lib/firm-about.ts` + `components/portal/AboutPanel.tsx`.
 
 ## CaseLoad Connect (operator-to-firm messaging, 2026-06-24)
 
