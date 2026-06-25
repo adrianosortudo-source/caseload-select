@@ -51,6 +51,7 @@ export default function MemberManager({
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
+  const [shortLink, setShortLink] = useState<{ id: string; url: string; copied: boolean } | null>(null);
 
   async function onAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -95,6 +96,36 @@ export default function MemberManager({
       }
       const sent = (body as { sent?: boolean }).sent;
       setNotice(sent === false ? `Link generated for ${m.email} (email send not configured).` : `Link sent to ${m.email}.`);
+    } catch (err) {
+      setRowError({ id: m.id, message: err instanceof Error ? err.message : "Network error." });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onCopyLink(m: MemberView) {
+    setBusyId(m.id);
+    setRowError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/admin/firms/${firmId}/members/${m.id}/signin-code`, {
+        method: "POST",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRowError({ id: m.id, message: (body as { error?: string }).error ?? `HTTP ${res.status}` });
+        return;
+      }
+      const url = (body as { url?: string }).url ?? "";
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(url);
+        copied = true;
+      } catch {
+        // Clipboard blocked (insecure context or permission). The link is still
+        // shown below for manual copy.
+      }
+      setShortLink({ id: m.id, url, copied });
     } catch (err) {
       setRowError({ id: m.id, message: err instanceof Error ? err.message : "Network error." });
     } finally {
@@ -260,17 +291,43 @@ export default function MemberManager({
                       {rowError && rowError.id === m.id && (
                         <p className="mt-1 text-[11px] text-red-700">{rowError.message}</p>
                       )}
+                      {shortLink && shortLink.id === m.id && (
+                        <div className="mt-2 bg-navy/5 border border-navy/15 px-3 py-2 space-y-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-navy">
+                            {shortLink.copied ? "Short link copied" : "Short link"}
+                          </p>
+                          <input
+                            readOnly
+                            value={shortLink.url}
+                            onFocus={(e) => e.currentTarget.select()}
+                            className="w-full text-xs px-2 py-1.5 border border-navy/20 bg-white text-navy font-mono break-all"
+                          />
+                          <p className="text-[10px] text-black/45">
+                            Hand this out of band (text, WhatsApp) if email is blocked. Valid 48 hours, reusable until then.
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 justify-end">
                       {!m.disabled && (
-                        <button
-                          type="button"
-                          onClick={() => onResend(m)}
-                          disabled={isBusy}
-                          className="text-[11px] uppercase tracking-wider font-semibold px-2.5 py-1.5 border border-navy/30 text-navy hover:bg-navy hover:text-white transition-colors disabled:opacity-40"
-                        >
-                          {isBusy ? "…" : "Resend link"}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => onCopyLink(m)}
+                            disabled={isBusy}
+                            className="text-[11px] uppercase tracking-wider font-semibold px-2.5 py-1.5 border border-navy/30 text-navy hover:bg-navy hover:text-white transition-colors disabled:opacity-40"
+                          >
+                            {isBusy ? "…" : "Copy link"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onResend(m)}
+                            disabled={isBusy}
+                            className="text-[11px] uppercase tracking-wider font-semibold px-2.5 py-1.5 border border-navy/30 text-navy hover:bg-navy hover:text-white transition-colors disabled:opacity-40"
+                          >
+                            {isBusy ? "…" : "Resend link"}
+                          </button>
+                        </>
                       )}
                       <button
                         type="button"
