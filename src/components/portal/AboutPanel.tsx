@@ -8,7 +8,13 @@ import { useState } from "react";
  * (sanitizeExplainerHtml allowlist). Collapsed to a preview when the body runs
  * long; "Read more" expands it. Read once, stays available.
  */
-export default function AboutPanel({ bodyHtml }: { bodyHtml: string }) {
+export default function AboutPanel({
+  bodyHtml,
+  links = [],
+}: {
+  bodyHtml: string;
+  links?: { label: string; url: string }[];
+}) {
   const wordCount = bodyHtml
     .replace(/<[^>]+>/g, " ")
     .trim()
@@ -51,6 +57,27 @@ export default function AboutPanel({ bodyHtml }: { bodyHtml: string }) {
         >
           {expanded ? "Show less" : "Read more"}
         </button>
+      ) : null}
+      {links.length > 0 ? (
+        <div className="mt-4 pt-3 border-t border-border-brand">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-black/40 mb-1.5">
+            Reference
+          </p>
+          <ul className="flex flex-wrap gap-x-5 gap-y-1">
+            {links.map((l) => (
+              <li key={l.url}>
+                <a
+                  href={l.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-semibold text-navy hover:underline"
+                >
+                  {l.label} <span aria-hidden>↗</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       <style>{`
         .cls-about-body p { margin: 0 0 0.75rem; line-height: 1.6; }

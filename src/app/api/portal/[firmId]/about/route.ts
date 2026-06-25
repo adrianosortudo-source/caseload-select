@@ -22,7 +22,7 @@ export async function POST(
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  let body: { body_html?: unknown };
+  let body: { body_html?: unknown; links?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -35,6 +35,7 @@ export async function POST(
   const result = await setFirmAbout({
     firmId,
     bodyHtml: body.body_html,
+    links: body.links,
     updatedBy: "operator",
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });

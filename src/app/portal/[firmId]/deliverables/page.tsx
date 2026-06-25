@@ -44,7 +44,7 @@ export default async function DeliverablesPage({
 
   return (
     <div className="space-y-6">
-      {about ? <AboutPanel bodyHtml={about.body_html} /> : null}
+      {about ? <AboutPanel bodyHtml={about.body_html} links={about.links} /> : null}
       <ContentPlan
         firmId={firmId}
         viewerRole={viewerRole}
