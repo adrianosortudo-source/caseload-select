@@ -71,6 +71,18 @@ interface SubmitBody {
   gbp_admin_blocker_note?: string;
   linkedin_admin_status?: string;
   linkedin_admin_blocker_note?: string;
+  // v2 Phase 1: Bing Places + Apple Business Connect access tracking
+  bing_places_status?: string;
+  bing_places_notes?: string;
+  apple_business_status?: string;
+  apple_business_notes?: string;
+  // v2 Phase 1: Services + Fees capture
+  fees_upload_storage_path?: string | null;
+  fees_upload_original_name?: string | null;
+  fees_upload_size_bytes?: number | null;
+  fees_upload_mime_type?: string | null;
+  fees_freetext?: string;
+  fees_structured?: Array<{ service?: string; fee?: string; fee_type?: string }>;
   // M365 admin fields were dropped from the form 2026-05-14 (Resend
   // handles outbound email via DNS, no Exchange Admin role needed
   // from the firm). The DB columns stay populated only for historical
@@ -231,6 +243,24 @@ export async function POST(
     return cleaned.length > 0 ? cleaned : null;
   };
 
+  // v2: normalise the fees cheatsheet JSONB. Keeps only rows that carry a
+  // service AND at least a fee or a fee type; drops the untouched default
+  // rows so the stored array is the firm's actual answers. fee is kept as a
+  // string (the number input serialises that way).
+  const normaliseFees = (
+    rows: SubmitBody["fees_structured"],
+  ): Array<{ service: string; fee: string; fee_type: string }> | null => {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const cleaned = rows
+      .map((r) => ({
+        service: (r.service ?? "").trim(),
+        fee: String(r.fee ?? "").trim(),
+        fee_type: (r.fee_type ?? "").trim(),
+      }))
+      .filter((r) => r.service && (r.fee || r.fee_type));
+    return cleaned.length > 0 ? cleaned : null;
+  };
+
   const { data: inserted, error: insertErr } = await supabase
     .from("firm_onboarding_intake")
     .insert({
@@ -288,6 +318,16 @@ export async function POST(
       gbp_admin_blocker_note: body.gbp_admin_blocker_note || null,
       linkedin_admin_status: body.linkedin_admin_status || null,
       linkedin_admin_blocker_note: body.linkedin_admin_blocker_note || null,
+      bing_places_status: body.bing_places_status || null,
+      bing_places_notes: body.bing_places_notes?.trim() || null,
+      apple_business_status: body.apple_business_status || null,
+      apple_business_notes: body.apple_business_notes?.trim() || null,
+      fees_upload_storage_path: body.fees_upload_storage_path ?? null,
+      fees_upload_original_name: body.fees_upload_original_name ?? null,
+      fees_upload_size_bytes: body.fees_upload_size_bytes ?? null,
+      fees_upload_mime_type: body.fees_upload_mime_type ?? null,
+      fees_freetext: body.fees_freetext?.trim() || null,
+      fees_structured: normaliseFees(body.fees_structured),
       // M365 columns intentionally left out of new inserts (2026-05-14).
       // The DB column nullability handles this; historical rows stay
       // populated.

@@ -62,6 +62,18 @@ interface FormState {
   gbp_admin_blocker_note: string;
   linkedin_admin_status: string;
   linkedin_admin_blocker_note: string;
+  // v2 Phase 1: Bing Places + Apple Business Connect access tracking.
+  bing_places_status: string;
+  bing_places_notes: string;
+  apple_business_status: string;
+  apple_business_notes: string;
+  // v2 Phase 1: Services + Fees capture (upload + free-text + structured).
+  fees_upload_storage_path: string | null;
+  fees_upload_original_name: string | null;
+  fees_upload_size_bytes: number | null;
+  fees_upload_mime_type: string | null;
+  fees_freetext: string;
+  fees_structured: Array<{ service: string; fee: string; fee_type: string }>;
   // Section 1 extensions (operating hours + additional lawyers beyond the
   // authorized rep).
   office_hours: string;
@@ -101,6 +113,29 @@ type UploadState =
   | { status: "uploading"; name: string }
   | { status: "done"; name: string; sizeBytes: number }
   | { status: "error"; message: string };
+
+// Default services for the fees cheatsheet (Field 02c). Locked labels; the
+// firm fills fee + fee type per row and can append custom rows below.
+const DEFAULT_FEE_SERVICES: string[] = [
+  "Incorporation (standard)",
+  "Shareholders' Agreement",
+  "Residential Purchase",
+  "Residential Sale",
+  "Residential Refinance",
+  "Simple Will",
+  "Will + Power of Attorney",
+  "Probate Application",
+  "Annual Compliance",
+  "Notarization / Commissioning",
+];
+
+const FEE_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "flat", label: "Flat" },
+  { value: "hourly", label: "Hourly" },
+  { value: "starting_at", label: "Starting at" },
+  { value: "by_quote", label: "By quote" },
+  { value: "not_offered", label: "Not offered" },
+];
 
 const INITIAL: FormState = {
   legal_name: "",
@@ -147,6 +182,16 @@ const INITIAL: FormState = {
   gbp_admin_blocker_note: "",
   linkedin_admin_status: "",
   linkedin_admin_blocker_note: "",
+  bing_places_status: "",
+  bing_places_notes: "",
+  apple_business_status: "",
+  apple_business_notes: "",
+  fees_upload_storage_path: null,
+  fees_upload_original_name: null,
+  fees_upload_size_bytes: null,
+  fees_upload_mime_type: null,
+  fees_freetext: "",
+  fees_structured: DEFAULT_FEE_SERVICES.map((service) => ({ service, fee: "", fee_type: "" })),
   office_hours: "",
   additional_lawyers: [],
   practice_areas: [],
@@ -174,6 +219,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [upload, setUpload] = useState<UploadState>({ status: "idle" });
+  const [feesUpload, setFeesUpload] = useState<UploadState>({ status: "idle" });
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -225,6 +271,50 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
     setUpload({ status: "idle" });
   }
 
+  // Fees schedule upload (Field 02a). Same endpoint as the verification doc,
+  // with kind=fees so the route applies the 50 MB / broad-format profile and
+  // stores under a fees/ prefix.
+  async function handleFeesUpload(file: File) {
+    setFeesUpload({ status: "uploading", name: file.name });
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("kind", "fees");
+    try {
+      const res = await fetch(
+        `/api/firm-onboarding/${encodeURIComponent(token)}/upload`,
+        { method: "POST", body: fd }
+      );
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json?.error ?? "upload failed");
+      }
+      setForm((prev) => ({
+        ...prev,
+        fees_upload_storage_path: json.storage_path,
+        fees_upload_original_name: json.original_name,
+        fees_upload_size_bytes: json.size_bytes,
+        fees_upload_mime_type: json.mime_type,
+      }));
+      setFeesUpload({ status: "done", name: json.original_name, sizeBytes: json.size_bytes });
+    } catch (err) {
+      setFeesUpload({
+        status: "error",
+        message: err instanceof Error ? err.message : "upload failed",
+      });
+    }
+  }
+
+  function clearFeesUpload() {
+    setForm((prev) => ({
+      ...prev,
+      fees_upload_storage_path: null,
+      fees_upload_original_name: null,
+      fees_upload_size_bytes: null,
+      fees_upload_mime_type: null,
+    }));
+    setFeesUpload({ status: "idle" });
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -260,6 +350,8 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
       setSubmitting(false);
     }
   }
+
+  const uploadBusy = upload.status === "uploading" || feesUpload.status === "uploading";
 
   return (
     <form onSubmit={onSubmit} className="space-y-10">
@@ -966,7 +1058,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
 
         <AccessStatusBlock
           label="Google Business Profile Manager status"
-          hint="Set this once you have run through the guide. If you already added CaseLoad Select as a Manager previously, pick 'Done — access granted'."
+          hint="Set this once you have run through the guide. If you already added CaseLoad Select as a Manager previously, pick 'Done: access granted'."
           status={form.gbp_admin_status}
           onStatusChange={(v) => update("gbp_admin_status", v)}
           blockerNote={form.gbp_admin_blocker_note}
@@ -998,6 +1090,100 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         />
       </Section>
 
+      {/* Section 9: Bing Places for Business */}
+      <Section
+        title="9. Bing Places for Business"
+        subtitle="So we can manage your firm's listing on Bing, Microsoft Copilot, DuckDuckGo, and ChatGPT-search"
+      >
+        <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.95rem", color: "#4a5a72", lineHeight: 1.6, marginBottom: "16px" }}>
+          Bing powers Microsoft Copilot, DuckDuckGo, and a growing share of ChatGPT-search results. A Bing Places listing makes your firm discoverable to clients searching from those surfaces, not only Bing itself. Same pattern as Google Business Profile: you stay as Owner, and CaseLoad Select takes Manager access to keep the listing current and respond to inquiries. The five-step walkthrough opens in a new tab.
+        </p>
+
+        <GuideLinkButton
+          href={`/firm-onboarding-guides/bing.html?token=${encodeURIComponent(token)}`}
+          label="View the Bing Places guide"
+        />
+
+        <AccessStatusBlock
+          label="Bing Places Manager status"
+          hint="Set this once you have run through the guide. If you hit a blocker, describe it below."
+          status={form.bing_places_status}
+          onStatusChange={(v) => update("bing_places_status", v)}
+          blockerNote={form.bing_places_notes}
+          onBlockerNoteChange={(v) => update("bing_places_notes", v)}
+        />
+      </Section>
+
+      {/* Section 10: Apple Business Connect */}
+      <Section
+        title="10. Apple Business Connect"
+        subtitle="So your firm appears correctly in Apple Maps, Siri, and Spotlight on iPhone"
+      >
+        <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.95rem", color: "#4a5a72", lineHeight: 1.6, marginBottom: "16px" }}>
+          Apple Business Connect controls how your firm shows up in Apple Maps, Siri, and Spotlight search. iPhone holds roughly 60% of the Canadian mobile market, and Apple&apos;s results do not route through Google, so a firm with no Apple listing is missing from a large share of &quot;find a lawyer&quot; searches on iPhone. Apple does not let one phone anchor two business listings, so this one has to be created under your own Apple ID. You complete verification on your phone, then add CaseLoad Select as a Team Member with Administrator access. The six-step walkthrough opens in a new tab.
+        </p>
+
+        <GuideLinkButton
+          href={`/firm-onboarding-guides/apple.html?token=${encodeURIComponent(token)}`}
+          label="View the Apple Business Connect guide"
+        />
+
+        <AccessStatusBlock
+          label="Apple Business Connect status"
+          hint="Set this once you have run through the guide. If you hit a blocker, describe it below."
+          status={form.apple_business_status}
+          onStatusChange={(v) => update("apple_business_status", v)}
+          blockerNote={form.apple_business_notes}
+          onBlockerNoteChange={(v) => update("apple_business_notes", v)}
+        />
+      </Section>
+
+      {/* Section 11: Services and fees */}
+      <Section
+        title="11. Services and fees"
+        subtitle="So we can calibrate the intake engine and build the fee section of your website"
+      >
+        <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.95rem", color: "#4a5a72", lineHeight: 1.6, marginBottom: "16px" }}>
+          We need your fee structure to calibrate the screen engine and to populate the fee page on your website. There are three ways to give it to us. Pick whichever is easiest: upload what you already have, paste it as text, or fill the quick cheatsheet.
+        </p>
+
+        <Field
+          label="Upload your existing fee schedule"
+          hint="Drag your fee schedule here. Any format works: Excel, PDF, Word, or a photo of a printed sheet. Up to 50 MB. We extract the details from whatever you send."
+        >
+          <FileUploadBlock
+            upload={feesUpload}
+            onPick={handleFeesUpload}
+            onClear={clearFeesUpload}
+            inputId="fees-schedule-upload"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+            hint="PDF, Word, Excel, CSV, or image · up to 50 MB · optional"
+          />
+        </Field>
+
+        <Field
+          label="Or paste your fees here"
+          hint="One service per line. Skip this if you uploaded a file above."
+        >
+          <textarea
+            value={form.fees_freetext}
+            onChange={(e) => update("fees_freetext", e.target.value)}
+            style={{ ...inputStyle, minHeight: "120px", resize: "vertical" }}
+            placeholder={"e.g.\nIncorporation: $1,500 flat\nResidential purchase: $1,200 starting at\nSimple will: $400 flat"}
+          />
+        </Field>
+
+        <Field
+          label="Or fill the quick cheatsheet"
+          hint="The services we see most often for Ontario solos. Enter a fee and a fee type per row, or mark a row Not offered. Add anything we missed at the bottom."
+        >
+          <FeesCheatsheetBlock
+            rows={form.fees_structured}
+            onChange={(next) => update("fees_structured", next)}
+          />
+        </Field>
+      </Section>
+
       {/* Section 7: notes + signature + submit
          (Microsoft 365 admin step removed 2026-05-14 — Resend handles
          outbound transactional email via DNS records on the firm's
@@ -1005,7 +1191,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
          m365_admin_status / m365_admin_blocker_note columns stay in
          firm_onboarding_intake for historical rows but new submissions
          do not populate them.) */}
-      <Section title="9. Notes + authorisation" subtitle="Optional notes, then sign to submit">
+      <Section title="12. Notes + authorisation" subtitle="Optional notes, then sign to submit">
         <Field label="Notes (optional)">
           <textarea
             value={form.notes}
@@ -1048,11 +1234,11 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         <button
           type="submit"
           disabled={
-            submitting || !form.signed_name.trim() || upload.status === "uploading"
+            submitting || !form.signed_name.trim() || uploadBusy
           }
           style={{
             background:
-              submitting || !form.signed_name.trim() || upload.status === "uploading"
+              submitting || !form.signed_name.trim() || uploadBusy
                 ? "#8090A8"
                 : "#1E2F58",
             color: "#FFFFFF",
@@ -1063,7 +1249,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
             fontSize: "0.95rem",
             borderRadius: "4px",
             cursor:
-              submitting || !form.signed_name.trim() || upload.status === "uploading"
+              submitting || !form.signed_name.trim() || uploadBusy
                 ? "not-allowed"
                 : "pointer",
             letterSpacing: "0.01em",
@@ -1074,7 +1260,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         >
           {submitting
             ? "Sending..."
-            : upload.status === "uploading"
+            : uploadBusy
               ? "Waiting for upload..."
               : "Submit to CaseLoad Select"}
         </button>
@@ -1245,12 +1431,17 @@ function FileUploadBlock({
   upload,
   onPick,
   onClear,
+  inputId = "verification-doc-upload",
+  accept = ".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png",
+  hint = "PDF, JPG, or PNG · up to 10 MB · optional",
 }: {
   upload: UploadState;
   onPick: (file: File) => void;
   onClear: () => void;
+  inputId?: string;
+  accept?: string;
+  hint?: string;
 }) {
-  const inputId = "verification-doc-upload";
 
   return (
     <div
@@ -1284,7 +1475,7 @@ function FileUploadBlock({
           <input
             id={inputId}
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+            accept={accept}
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) onPick(f);
@@ -1301,7 +1492,7 @@ function FileUploadBlock({
               color: "#6B665E",
             }}
           >
-            PDF, JPG, or PNG · up to 10 MB · optional
+            {hint}
           </span>
           {upload.status === "error" ? (
             <p
@@ -1681,6 +1872,150 @@ function AdditionalBarsBlock({
   );
 }
 
+// ── Services + fees cheatsheet (v2 Phase 1, Field 02c) ──────────────────
+
+type FeeRow = { service: string; fee: string; fee_type: string };
+
+function FeesCheatsheetBlock({
+  rows,
+  onChange,
+}: {
+  rows: FeeRow[];
+  onChange: (next: FeeRow[]) => void;
+}) {
+  // The first DEFAULT_FEE_SERVICES.length rows carry locked service labels
+  // (the firm fills fee + type, or marks the row Not offered). Rows beyond
+  // that are firm-added "anything we missed" rows with an editable service.
+  const lockedCount = DEFAULT_FEE_SERVICES.length;
+
+  function updateRow(idx: number, key: keyof FeeRow, value: string) {
+    onChange(rows.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
+  }
+  function addRow() {
+    onChange([...rows, { service: "", fee: "", fee_type: "" }]);
+  }
+  function removeRow(idx: number) {
+    onChange(rows.filter((_, i) => i !== idx));
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      {rows.map((row, idx) => {
+        const locked = idx < lockedCount;
+        const notOffered = row.fee_type === "not_offered";
+        return (
+          <div
+            key={idx}
+            style={{
+              background: "#FBFAF6",
+              border: "1px solid #E4E2DB",
+              borderRadius: "4px",
+              padding: "12px 14px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+            }}
+          >
+            <div>
+              <label style={subFieldLabelStyle}>Service</label>
+              {locked ? (
+                <div
+                  style={{
+                    fontFamily: "var(--font-dm-sans), sans-serif",
+                    fontSize: "0.95rem",
+                    color: "#1E2F58",
+                    fontWeight: 600,
+                    paddingTop: "2px",
+                  }}
+                >
+                  {row.service}
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={row.service}
+                  onChange={(e) => updateRow(idx, "service", e.target.value)}
+                  style={inputStyle}
+                  placeholder="Service name"
+                />
+              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div>
+                <label style={subFieldLabelStyle}>Fee ($)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="decimal"
+                  value={row.fee}
+                  onChange={(e) => updateRow(idx, "fee", e.target.value)}
+                  style={{ ...inputStyle, opacity: notOffered ? 0.5 : 1 }}
+                  placeholder={notOffered ? "n/a" : "e.g. 1500"}
+                  disabled={notOffered}
+                />
+              </div>
+              <div>
+                <label style={subFieldLabelStyle}>Fee type</label>
+                <select
+                  value={row.fee_type}
+                  onChange={(e) => updateRow(idx, "fee_type", e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">Select</option>
+                  {FEE_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {!locked ? (
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={() => removeRow(idx)}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid #C4B49A",
+                    color: "#1E2F58",
+                    padding: "6px 12px",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontFamily: "var(--font-dm-sans), sans-serif",
+                    fontSize: "0.8rem",
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        onClick={addRow}
+        style={{
+          alignSelf: "flex-start",
+          background: "#FFFFFF",
+          border: "1px dashed #C4B49A",
+          color: "#1E2F58",
+          padding: "10px 18px",
+          borderRadius: "4px",
+          cursor: "pointer",
+          fontFamily: "var(--font-manrope), sans-serif",
+          fontSize: "0.88rem",
+          fontWeight: 600,
+        }}
+      >
+        + Add a service we missed
+      </button>
+    </div>
+  );
+}
+
 // ── Languages multi-select (v2) ─────────────────────────────────────────
 
 const LANGUAGES: Array<{ key: string; label: string }> = [
@@ -1973,7 +2308,7 @@ function SignatureBlock({
         }}
       >
         By signing below, I confirm I am authorised to provide this information on behalf of{" "}
-        <strong>{firmLabel}</strong>. I authorise CaseLoad Select to use these details to register the firm with the SMS carriers (A2P 10DLC), with Meta (Business Manager, WhatsApp Business, and the social DM channels selected above), with Google (Business Profile management), and with LinkedIn (Company Page admin). I also authorise CaseLoad Select to act on the firm&apos;s behalf in configuring the firm&apos;s practice management system integration where applicable. CaseLoad Select will not share these details with any party other than the registration and integration providers listed.
+        <strong>{firmLabel}</strong>. I authorise CaseLoad Select to use these details to register the firm with the SMS carriers (A2P 10DLC), with Meta (Business Manager, WhatsApp Business, and the social DM channels selected above), with Google (Business Profile management), with LinkedIn (Company Page admin), with Microsoft (Bing Places for Business management), and with Apple (Business Connect management). I also authorise CaseLoad Select to act on the firm&apos;s behalf in configuring the firm&apos;s practice management system integration where applicable. CaseLoad Select will not share these details with any party other than the registration and integration providers listed.
       </p>
 
       <div
@@ -2102,8 +2437,8 @@ function AccessStatusBlock({
           options={[
             { value: "not_started", label: "Not started yet" },
             { value: "in_progress", label: "In progress" },
-            { value: "granted", label: "Done — access granted" },
-            { value: "blocked", label: "Blocked — see notes below" },
+            { value: "granted", label: "Done: access granted" },
+            { value: "blocked", label: "Blocked: see notes below" },
           ]}
           value={status}
           onChange={onStatusChange}

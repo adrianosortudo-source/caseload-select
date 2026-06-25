@@ -61,6 +61,18 @@ interface Submission {
   gbp_admin_blocker_note: string | null;
   linkedin_admin_status: string | null;
   linkedin_admin_blocker_note: string | null;
+  // v2 Phase 1: Bing Places + Apple Business Connect access tracking
+  bing_places_status: string | null;
+  bing_places_notes: string | null;
+  apple_business_status: string | null;
+  apple_business_notes: string | null;
+  // v2 Phase 1: Services + Fees capture
+  fees_upload_storage_path: string | null;
+  fees_upload_original_name: string | null;
+  fees_upload_size_bytes: number | null;
+  fees_upload_mime_type: string | null;
+  fees_freetext: string | null;
+  fees_structured: Array<{ service?: string; fee?: string; fee_type?: string }> | null;
   m365_admin_status: string | null;
   m365_admin_blocker_note: string | null;
   intake_channels: string[] | null;
@@ -184,6 +196,17 @@ export default async function SubmissionDetailPage({
         download: row.customer_base_original_name ?? true,
       });
     customerBaseSignedUrl = signed?.signedUrl ?? null;
+  }
+
+  // Fresh signed URL for the fees schedule upload, if present.
+  let feesSignedUrl: string | null = null;
+  if (row.fees_upload_storage_path) {
+    const { data: signed } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(row.fees_upload_storage_path, SIGNED_URL_TTL_SECONDS, {
+        download: row.fees_upload_original_name ?? true,
+      });
+    feesSignedUrl = signed?.signedUrl ?? null;
   }
 
   return (
@@ -392,6 +415,60 @@ export default async function SubmissionDetailPage({
         />
       </Section>
 
+      <Section title="9. Bing Places for Business">
+        <AccessStatusRow
+          label="Bing Places Manager access"
+          status={row.bing_places_status}
+          blockerNote={row.bing_places_notes}
+        />
+      </Section>
+
+      <Section title="10. Apple Business Connect">
+        <AccessStatusRow
+          label="Apple Business Connect access"
+          status={row.apple_business_status}
+          blockerNote={row.apple_business_notes}
+        />
+      </Section>
+
+      <Section title="11. Services and fees">
+        <Fields>
+          <Field label="Fees pasted (free-text)" value={row.fees_freetext} multiline />
+        </Fields>
+        <FeesCheatsheetTable rows={row.fees_structured} />
+        <div className="mt-4 bg-parchment border border-gold/40 px-5 py-4">
+          <p className="text-[11px] uppercase tracking-wider font-semibold text-gold mb-2">Fee schedule upload</p>
+          {row.fees_upload_storage_path ? (
+            <div className="space-y-2">
+              <p className="text-sm text-black/80">
+                <span className="font-semibold">{row.fees_upload_original_name ?? "(file)"}</span>
+                {row.fees_upload_size_bytes ? (
+                  <span className="text-black/50 ml-2 text-xs">{formatBytes(row.fees_upload_size_bytes)}</span>
+                ) : null}
+                {row.fees_upload_mime_type ? (
+                  <span className="text-black/50 ml-2 text-xs">{row.fees_upload_mime_type}</span>
+                ) : null}
+              </p>
+              {feesSignedUrl ? (
+                <a
+                  href={feesSignedUrl}
+                  className="inline-flex items-center gap-2 bg-navy text-white text-xs font-semibold uppercase tracking-wider px-4 py-2 hover:bg-navy/90 transition-colors"
+                >
+                  Download <span aria-hidden>↓</span>
+                </a>
+              ) : (
+                <p className="text-xs text-red-700">Signed URL unavailable. Refresh the page to retry.</p>
+              )}
+              <p className="text-[10px] text-black/40">
+                Signed URL expires in 1 hour. Refresh this page to generate a new one.
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-black/50">No fee schedule uploaded.</p>
+          )}
+        </div>
+      </Section>
+
       {/* Microsoft 365 Exchange admin section removed 2026-05-14 — Resend
          handles outbound email via DNS records, no Exchange Admin role
          needed from the firm. m365_admin_status and m365_admin_blocker_note
@@ -400,7 +477,7 @@ export default async function SubmissionDetailPage({
          need to inspect an old submission's M365 field. */}
 
       {row.notes ? (
-        <Section title="9. Notes from the rep">
+        <Section title="12. Notes from the rep">
           <p className="text-sm text-black/80 whitespace-pre-wrap leading-relaxed">{row.notes}</p>
         </Section>
       ) : null}
@@ -451,7 +528,7 @@ function AccessStatusRow({
 }) {
   const meta =
     status === "granted"
-      ? { text: "Done — access granted", className: "bg-emerald-100 text-emerald-900 border-emerald-300" }
+      ? { text: "Done: access granted", className: "bg-emerald-100 text-emerald-900 border-emerald-300" }
       : status === "in_progress"
         ? { text: "In progress", className: "bg-amber-50 text-amber-900 border-amber-300" }
         : status === "blocked"
@@ -480,6 +557,45 @@ function AccessStatusRow({
 
 function Fields({ children }: { children: React.ReactNode }) {
   return <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">{children}</dl>;
+}
+
+function FeesCheatsheetTable({
+  rows,
+}: {
+  rows: Array<{ service?: string; fee?: string; fee_type?: string }> | null;
+}) {
+  if (!rows || rows.length === 0) {
+    return (
+      <div className="mt-2">
+        <p className="text-[10px] uppercase tracking-wider text-black/40 font-semibold mb-0.5">Cheatsheet</p>
+        <p className="text-black/30 text-sm">Not filled in</p>
+      </div>
+    );
+  }
+  const feeTypeLabels: Record<string, string> = {
+    flat: "Flat",
+    hourly: "Hourly",
+    starting_at: "Starting at",
+    by_quote: "By quote",
+    not_offered: "Not offered",
+  };
+  return (
+    <div className="mt-2">
+      <p className="text-[10px] uppercase tracking-wider text-black/40 font-semibold mb-1.5">Cheatsheet</p>
+      <div className="border border-black/10">
+        {rows.map((r, i) => (
+          <div
+            key={i}
+            className="grid grid-cols-[1.6fr_0.8fr_1fr] gap-2 px-3 py-2 text-sm border-b border-black/5 last:border-b-0"
+          >
+            <span className="text-black/80 break-words">{r.service || "(unnamed)"}</span>
+            <span className="text-black/60 tabular-nums">{r.fee ? `$${r.fee}` : ""}</span>
+            <span className="text-black/60">{r.fee_type ? (feeTypeLabels[r.fee_type] ?? r.fee_type) : ""}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Field({

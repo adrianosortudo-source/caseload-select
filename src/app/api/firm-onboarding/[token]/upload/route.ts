@@ -16,12 +16,34 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 const BUCKET = "firm-onboarding-docs";
-const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
-const ALLOWED_MIME = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-]);
+
+// Two upload kinds share this route + bucket. `verification` is the WhatsApp
+// business-verification doc (tight: 10 MB, PDF / JPEG / PNG). `fees` is the
+// Services + Fees schedule a firm uploads (looser: 50 MB, common office,
+// document, and image formats). The form passes `kind` in the multipart body;
+// anything other than "fees" falls back to the verification profile.
+const UPLOAD_KINDS = {
+  verification: {
+    maxBytes: 10 * 1024 * 1024, // 10 MB
+    prefix: "",
+    allowedMime: new Set(["application/pdf", "image/jpeg", "image/png"]),
+  },
+  fees: {
+    maxBytes: 50 * 1024 * 1024, // 50 MB
+    prefix: "fees/",
+    allowedMime: new Set([
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/csv",
+      "text/plain",
+    ]),
+  },
+} as const;
 
 // Filename sanitizer — keep alphanumeric, dot, dash, underscore. Replace the
 // rest. Prevents path traversal and weird filesystem behaviour.
@@ -69,25 +91,29 @@ export async function POST(
     );
   }
 
+  const kindRaw = formData.get("kind");
+  const kind: keyof typeof UPLOAD_KINDS = kindRaw === "fees" ? "fees" : "verification";
+  const { maxBytes, prefix, allowedMime } = UPLOAD_KINDS[kind];
+
   if (file.size === 0) {
     return NextResponse.json({ ok: false, error: "empty file" }, { status: 400 });
   }
-  if (file.size > MAX_BYTES) {
+  if (file.size > maxBytes) {
     return NextResponse.json(
-      { ok: false, error: `file too large; max ${MAX_BYTES / 1024 / 1024} MB` },
+      { ok: false, error: `file too large; max ${maxBytes / 1024 / 1024} MB` },
       { status: 400 }
     );
   }
-  if (!ALLOWED_MIME.has(file.type)) {
+  if (!allowedMime.has(file.type)) {
     return NextResponse.json(
-      { ok: false, error: `unsupported file type: ${file.type}. Allowed: PDF, JPEG, PNG.` },
+      { ok: false, error: `unsupported file type: ${file.type || "unknown"}.` },
       { status: 400 }
     );
   }
 
   const safeName = sanitizeFilename(file.name);
   const stamp = Date.now();
-  const storagePath = `${encodeURIComponent(token)}/${stamp}-${safeName}`;
+  const storagePath = `${encodeURIComponent(token)}/${prefix}${stamp}-${safeName}`;
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = new Uint8Array(arrayBuffer);

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CaseLoad Select &middot; Apple Business Connect setup</title>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700&family=Manrope:wght@700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --c-deep-black: #0D1520;
+    --c-navy: #1E2F58;
+    --c-gold: #C4B49A;
+    --c-parchment: #F4F3EF;
+    --c-white: #FFFFFF;
+    --c-body: #4A5A72;
+    --c-muted: #8090A8;
+    --c-muted-readable: #5E6D82;
+    --c-gold-on-light: #8B7A5E;
+    --c-border: #E0DDD6;
+    --c-success: #27834A;
+    --c-flag: #B53A2D;
+    --font-display: 'Oxanium','Rajdhani',sans-serif;
+    --font-heading: 'Manrope','Inter',sans-serif;
+    --font-body: 'DM Sans','Inter',sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { font-family:var(--font-body); background:#F4F3EF; color:var(--c-body); line-height:1.6; }
+  .wrap { max-width:760px; margin:0 auto; padding:32px 24px 80px; }
+
+  .header-bar { background:var(--c-deep-black); padding:16px 24px; display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--c-gold); margin:-32px -24px 28px; border-radius:0; }
+  .hb-logo { height:20px; width:auto; display:block; }
+  .hb-title { font-family:var(--font-display); font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:rgba(255,255,255,0.7); }
+
+  .eyebrow { font-family:var(--font-display); font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); margin-bottom:8px; }
+  h1 { font-family:var(--font-heading); font-size:30px; font-weight:800; line-height:1.15; letter-spacing:-0.02em; color:var(--c-navy); margin-bottom:14px; }
+  .lead { font-family:var(--font-body); font-size:15px; line-height:1.6; color:var(--c-body); margin-bottom:24px; max-width:620px; }
+  .lead strong { color:var(--c-navy); font-weight:600; }
+
+  .meta-band { background:var(--c-white); border:1px solid var(--c-border); padding:14px 18px; display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:30px; }
+  .meta-item { font-family:var(--font-body); font-size:11px; line-height:1.5; color:var(--c-body); }
+  .meta-item .key { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); display:block; margin-bottom:4px; }
+  .meta-item strong { color:var(--c-navy); font-weight:600; }
+
+  .why { background:var(--c-white); border-top:3px solid var(--c-navy); padding:18px 22px; margin-bottom:28px; }
+  .why h2 { font-family:var(--font-heading); font-size:16px; font-weight:700; color:var(--c-navy); margin-bottom:8px; }
+  .why p { font-family:var(--font-body); font-size:12.5px; line-height:1.6; color:var(--c-body); }
+  .why p strong { color:var(--c-navy); font-weight:600; }
+
+  .steps-h { font-family:var(--font-heading); font-size:18px; font-weight:700; color:var(--c-navy); margin:6px 0 16px; }
+
+  .step { background:var(--c-white); border:1px solid var(--c-border); padding:18px 22px 18px 70px; margin-bottom:14px; position:relative; }
+  .step-num { font-family:var(--font-display); font-size:24px; font-weight:700; color:var(--c-gold); position:absolute; left:22px; top:18px; line-height:1; }
+  .step h3 { font-family:var(--font-heading); font-size:14.5px; font-weight:700; color:var(--c-navy); margin-bottom:7px; line-height:1.3; }
+  .step p { font-family:var(--font-body); font-size:12.5px; line-height:1.6; color:var(--c-body); margin-bottom:6px; }
+  .step p strong { color:var(--c-navy); font-weight:600; }
+  .step ul { list-style:none; padding:0; margin:6px 0 0; }
+  .step li { font-family:var(--font-body); font-size:12px; line-height:1.55; color:var(--c-body); padding:3px 0 3px 14px; position:relative; }
+  .step li::before { content:''; position:absolute; left:0; top:11px; width:5px; height:5px; background:var(--c-gold); }
+  .step li strong { color:var(--c-navy); font-weight:600; }
+  .step .mono { font-family:var(--font-display); font-size:11.5px; font-weight:600; color:var(--c-navy); background:var(--c-parchment); padding:1px 6px; border:1px solid var(--c-border); }
+  .step .ss { background:#FAF8F4; border:1px dashed var(--c-border); padding:18px; text-align:center; font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; color:var(--c-muted-readable); text-transform:uppercase; margin-top:10px; }
+
+  .callout { background:#FBF4F2; border-top:3px solid var(--c-flag); padding:16px 20px; margin:18px 0; }
+  .callout .label { font-family:var(--font-display); font-size:9.5px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-flag); margin-bottom:5px; }
+  .callout p { font-family:var(--font-body); font-size:12.5px; line-height:1.55; color:var(--c-body); }
+  .callout p strong { color:var(--c-navy); font-weight:600; }
+
+  .status-band { background:var(--c-deep-black); color:var(--c-white); padding:22px; margin:24px 0 6px; }
+  .status-band .label { font-family:var(--font-display); font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold); margin-bottom:8px; }
+  .status-band h3 { font-family:var(--font-heading); font-size:15px; font-weight:700; color:var(--c-white); margin-bottom:10px; }
+  .status-band p { font-family:var(--font-body); font-size:12.5px; line-height:1.6; color:rgba(255,255,255,0.88); }
+
+  .footer { margin-top:36px; padding-top:18px; border-top:1px solid var(--c-border); font-family:var(--font-display); font-size:10px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-muted); display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header-bar">
+    <img class="hb-logo" src="https://caseload-select.vercel.app/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select &middot; Sign Better Cases">
+    <a id="back-to-onboarding" class="hb-title" href="/" style="text-decoration:none;color:rgba(255,255,255,0.7);">&larr; Back to the onboarding form</a>
+  </div>
+
+  <div class="eyebrow">Setup walkthrough &middot; Apple Business Connect</div>
+  <h1>Add CaseLoad Select as Administrator on your Apple Business Connect listing</h1>
+  <p class="lead">About twenty minutes. Apple Business Connect controls how your firm appears in <strong>Apple Maps, Siri, Spotlight search, and the Apple ecosystem broadly</strong>. iPhone holds roughly 60% market share in Canada, and Apple's search results do not route through Google. Without an Apple listing, your firm is invisible on a meaningful slice of "find a lawyer" searches from iPhone users.</p>
+
+  <div class="meta-band">
+    <div class="meta-item"><span class="key">Time</span><strong>~20 minutes</strong></div>
+    <div class="meta-item"><span class="key">You'll need</span>Apple ID + iPhone for verification</div>
+    <div class="meta-item"><span class="key">Sign-in URL</span><span style="font-family:var(--font-display); font-size:10.5px; font-weight:600; color:var(--c-navy);">businessconnect.apple.com</span></div>
+  </div>
+
+  <div class="why">
+    <h2>Why we ask you to do the setup on your Apple ID</h2>
+    <p>Apple does not allow one phone to anchor two business listings. Our Apple IDs are tied to our personal phones, so we cannot create the listing for you. <strong>You sign up under your own Apple ID</strong>, complete verification on your phone, then invite CaseLoad Select as a Team Member with Administrator access. Ongoing management transfers to us. Same arrangement as the GBP and LinkedIn setups: you stay as the owner of record, we handle the day-to-day.</p>
+  </div>
+
+  <div class="callout">
+    <div class="label">Before you start</div>
+    <p>Make sure you have access to <strong>the iPhone tied to your Apple ID</strong>. Apple verification sends a text or makes a phone call to that number. If you don't have an Apple ID, create one at appleid.apple.com first; takes about five minutes.</p>
+  </div>
+
+  <h2 class="steps-h">Six steps. Have your phone in hand.</h2>
+
+  <div class="step">
+    <div class="step-num">1</div>
+    <h3>Sign in at businessconnect.apple.com</h3>
+    <p>Use your <strong>existing Apple ID</strong>. If you don't have one, click "Create an Apple ID" on the sign-in page. Apple may ask for two-factor authentication; have your phone nearby.</p>
+    <div class="ss">[Screenshot &middot; businessconnect.apple.com sign-in screen]</div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">2</div>
+    <h3>Add your business</h3>
+    <p>After signing in, click <span class="mono">Add Location</span> or <span class="mono">Get Started</span>. Apple may already have an auto-generated listing from public sources; if so, claim it. Otherwise add a new business.</p>
+    <p>Fill in the firm details exactly as you have them on your other listings (GBP, LinkedIn, Bing). We'll feed you the canonical NAP if you want to copy and paste:</p>
+    <ul>
+      <li><strong>Business name</strong> (your full legal entity)</li>
+      <li><strong>Category</strong>: Lawyer / Legal Services / Law Firm</li>
+      <li><strong>Address, phone, website, hours</strong></li>
+    </ul>
+    <div class="ss">[Screenshot &middot; Add Location form with NAP fields highlighted]</div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">3</div>
+    <h3>Verify the listing via your phone</h3>
+    <p>Apple sends a text or makes a call to the business phone number on the listing. You confirm by entering the code Apple sends, or by answering the call.</p>
+    <p>Verification is required before you can add a team member or before the listing appears in Apple Maps + Siri + Spotlight.</p>
+    <div class="ss">[Screenshot &middot; Verification code entry screen]</div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">4</div>
+    <h3>Company name &rarr; Team &rarr; Invite Team Member</h3>
+    <p>Once verified, click your <strong>company name</strong> in the top navigation. From the dropdown, select <span class="mono">Team</span>.</p>
+    <p>On the Team page, click <span class="mono">Invite Team Member</span>.</p>
+    <div class="ss">[Screenshot &middot; Team page with Invite Team Member button]</div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">5</div>
+    <h3>Invite adriano@caseloadselect.ca as Administrator</h3>
+    <p>In the invite form:</p>
+    <ul>
+      <li>Email: <strong>adriano@caseloadselect.ca</strong></li>
+      <li>Role: <strong>Administrator</strong></li>
+    </ul>
+    <p>Administrator role lets us edit the listing, publish posts, respond to inquiries, and manage Apple Maps + Siri + Spotlight presence on your behalf. <strong>It does not transfer ownership.</strong> You stay as the owner of record; you can revoke our access at any time.</p>
+    <div class="ss">[Screenshot &middot; Invite team member form filled with admin role]</div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">6</div>
+    <h3>Send the invitation</h3>
+    <p>Apple emails the invitation to adriano@caseloadselect.ca. We accept the invite from our side within the business day. The listing typically takes <strong>24 to 72 hours</strong> to propagate to Apple Maps, Siri, and Spotlight after we finish populating the details.</p>
+    <p>From here on, you only touch Apple Business Connect if you want to publish something specific. Routine updates go through us.</p>
+  </div>
+
+  <div class="status-band">
+    <div class="label">After you finish</div>
+    <h3>Mark the status as Done in your onboarding form</h3>
+    <p>Go back to your onboarding form and set the <strong>Apple Business Connect status</strong> to <strong>Done: access granted</strong>. If you hit a blocker (Apple ID issue, verification failed, role unavailable, two-factor problem), set it to <strong>Blocked</strong> and write a short note. We'll respond within the business day.</p>
+  </div>
+
+  <div class="footer">
+    <div>CaseLoad Select &middot; Sign Better Cases</div>
+    <div>Apple Business Connect setup guide &middot; v1</div>
+  </div>
+
+</div>
+
+<script>
+  // Token-aware back link. The form links here with ?token=...; wire the
+  // "Back to the onboarding form" anchor to return to /firm-onboarding/[token].
+  // Falls back to root if no token. Mirrors the gbp.html / meta.html hook.
+  (function () {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get('token');
+      var link = document.getElementById('back-to-onboarding');
+      if (link) {
+        link.href = token ? '/firm-onboarding/' + encodeURIComponent(token) : '/';
+      }
+    } catch (e) { /* no-op: link defaults to / */ }
+  })();
+</script>
+</body>
+</html>

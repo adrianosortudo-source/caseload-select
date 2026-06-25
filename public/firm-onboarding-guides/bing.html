@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CaseLoad Select &middot; Bing Places for Business setup</title>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700&family=Manrope:wght@700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --c-deep-black: #0D1520;
+    --c-navy: #1E2F58;
+    --c-gold: #C4B49A;
+    --c-parchment: #F4F3EF;
+    --c-white: #FFFFFF;
+    --c-body: #4A5A72;
+    --c-muted: #8090A8;
+    --c-muted-readable: #5E6D82;
+    --c-gold-on-light: #8B7A5E;
+    --c-border: #E0DDD6;
+    --c-success: #27834A;
+    --c-flag: #B53A2D;
+    --font-display: 'Oxanium','Rajdhani',sans-serif;
+    --font-heading: 'Manrope','Inter',sans-serif;
+    --font-body: 'DM Sans','Inter',sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { font-family:var(--font-body); background:#F4F3EF; color:var(--c-body); line-height:1.6; }
+  .wrap { max-width:760px; margin:0 auto; padding:32px 24px 80px; }
+
+  .header-bar { background:var(--c-deep-black); padding:16px 24px; display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--c-gold); margin:-32px -24px 28px; border-radius:0; }
+  .hb-logo { height:20px; width:auto; display:block; }
+  .hb-title { font-family:var(--font-display); font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:rgba(255,255,255,0.7); }
+
+  .eyebrow { font-family:var(--font-display); font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); margin-bottom:8px; }
+  h1 { font-family:var(--font-heading); font-size:30px; font-weight:800; line-height:1.15; letter-spacing:-0.02em; color:var(--c-navy); margin-bottom:14px; }
+  .lead { font-family:var(--font-body); font-size:15px; line-height:1.6; color:var(--c-body); margin-bottom:24px; max-width:620px; }
+  .lead strong { color:var(--c-navy); font-weight:600; }
+
+  .meta-band { background:var(--c-white); border:1px solid var(--c-border); padding:14px 18px; display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:30px; }
+  .meta-item { font-family:var(--font-body); font-size:11px; line-height:1.5; color:var(--c-body); }
+  .meta-item .key { font-family:var(--font-display); font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); display:block; margin-bottom:4px; }
+  .meta-item strong { color:var(--c-navy); font-weight:600; }
+
+  .why { background:var(--c-white); border-top:3px solid var(--c-navy); padding:18px 22px; margin-bottom:28px; }
+  .why h2 { font-family:var(--font-heading); font-size:16px; font-weight:700; color:var(--c-navy); margin-bottom:8px; }
+  .why p { font-family:var(--font-body); font-size:12.5px; line-height:1.6; color:var(--c-body); }
+  .why p strong { color:var(--c-navy); font-weight:600; }
+
+  .steps-h { font-family:var(--font-heading); font-size:18px; font-weight:700; color:var(--c-navy); margin:6px 0 16px; }
+
+  .step { background:var(--c-white); border:1px solid var(--c-border); padding:18px 22px 18px 70px; margin-bottom:14px; position:relative; }
+  .step-num { font-family:var(--font-display); font-size:24px; font-weight:700; color:var(--c-gold); position:absolute; left:22px; top:18px; line-height:1; }
+  .step h3 { font-family:var(--font-heading); font-size:14.5px; font-weight:700; color:var(--c-navy); margin-bottom:7px; line-height:1.3; }
+  .step p { font-family:var(--font-body); font-size:12.5px; line-height:1.6; color:var(--c-body); margin-bottom:6px; }
+  .step p strong { color:var(--c-navy); font-weight:600; }
+  .step ul { list-style:none; padding:0; margin:6px 0 0; }
+  .step li { font-family:var(--font-body); font-size:12px; line-height:1.55; color:var(--c-body); padding:3px 0 3px 14px; position:relative; }
+  .step li::before { content:''; position:absolute; left:0; top:11px; width:5px; height:5px; background:var(--c-gold); }
+  .step li strong { color:var(--c-navy); font-weight:600; }
+  .step .mono { font-family:var(--font-display); font-size:11.5px; font-weight:600; color:var(--c-navy); background:var(--c-parchment); padding:1px 6px; border:1px solid var(--c-border); }
+  .step .ss { background:#FAF8F4; border:1px dashed var(--c-border); padding:18px; text-align:center; font-family:var(--font-display); font-size:10px; letter-spacing:0.12em; color:var(--c-muted-readable); text-transform:uppercase; margin-top:10px; }
+
+  .status-band { background:var(--c-deep-black); color:var(--c-white); padding:22px; margin:24px 0 6px; }
+  .status-band .label { font-family:var(--font-display); font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold); margin-bottom:8px; }
+  .status-band h3 { font-family:var(--font-heading); font-size:15px; font-weight:700; color:var(--c-white); margin-bottom:10px; }
+  .status-band p { font-family:var(--font-body); font-size:12.5px; line-height:1.6; color:rgba(255,255,255,0.88); }
+  .status-band a { color:var(--c-gold); text-decoration:underline; }
+
+  .footer { margin-top:36px; padding-top:18px; border-top:1px solid var(--c-border); font-family:var(--font-display); font-size:10px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-muted); display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header-bar">
+    <img class="hb-logo" src="https://caseload-select.vercel.app/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select &middot; Sign Better Cases">
+    <a id="back-to-onboarding" class="hb-title" href="/" style="text-decoration:none;color:rgba(255,255,255,0.7);">&larr; Back to the onboarding form</a>
+  </div>
+
+  <div class="eyebrow">Setup walkthrough &middot; Bing Places for Business</div>
+  <h1>Add CaseLoad Select as Manager on your Bing Places listing</h1>
+  <p class="lead">About fifteen minutes. Bing powers Microsoft Copilot, DuckDuckGo, and increasingly ChatGPT-search results. Listing your firm on Bing Places makes it discoverable to clients searching from those surfaces, not just Bing search itself. Same pattern as the GBP setup: <strong>you stay as Owner; CaseLoad Select takes Manager access</strong> so we can keep the listing fresh and respond to inquiries.</p>
+
+  <div class="meta-band">
+    <div class="meta-item"><span class="key">Time</span><strong>~15 minutes</strong></div>
+    <div class="meta-item"><span class="key">You'll need</span>Microsoft account + your firm address + a phone for verification</div>
+    <div class="meta-item"><span class="key">Sign-in URL</span><span style="font-family:var(--font-display); font-size:10.5px; font-weight:600; color:var(--c-navy);">business.bing.com</span></div>
+  </div>
+
+  <div class="why">
+    <h2>Why we ask for Manager access</h2>
+    <p>Manager access lets us update hours, photos, services, and respond to listing inquiries on your behalf. <strong>It does not transfer ownership.</strong> You stay as Owner, you can revoke our access at any time, and only you can delete the listing. Same arrangement as the Google Business Profile setup.</p>
+  </div>
+
+  <h2 class="steps-h">Five steps. Have your phone nearby for verification.</h2>
+
+  <div class="step">
+    <div class="step-num">1</div>
+    <h3>Sign in at business.bing.com</h3>
+    <p>Use a <strong>Microsoft account</strong>. Personal Outlook or Hotmail works, but a firm-domain Microsoft account is preferred for long-term ownership clarity. If your firm uses Microsoft 365 for email, sign in with that.</p>
+    <p>If you don't have a Microsoft account yet, click "Create account" on the sign-in page. Takes two minutes; no payment details required.</p>
+    <div class="ss">[Screenshot &middot; business.bing.com sign-in screen]</div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">2</div>
+    <h3>Claim or add your business</h3>
+    <p>After signing in, you'll land on the Bing Places dashboard. Two paths:</p>
+    <ul>
+      <li><strong>If Bing already has a listing for your firm</strong> (auto-generated from public sources), click <span class="mono">Claim</span> next to it. Bing matches by business name + address.</li>
+      <li><strong>If no listing exists yet</strong>, click <span class="mono">Add a new business</span> and fill in the firm details: legal business name, primary category (Lawyer / Law Firm), address, phone, website, hours.</li>
+    </ul>
+    <div class="ss">[Screenshot &middot; Claim vs Add a new business]</div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">3</div>
+    <h3>Verify the listing</h3>
+    <p>Bing offers three verification methods. Pick the fastest for your situation:</p>
+    <ul>
+      <li><strong>Phone call or text</strong> to the business phone number on the listing. Instant.</li>
+      <li><strong>Postcard</strong> sent to the registered business address. 5-7 business days.</li>
+      <li><strong>Video verification</strong>, where Bing asks you to record a short clip showing the business location and signage. Available for some categories.</li>
+    </ul>
+    <p>Verification is required before the listing goes live or before you can add a Manager.</p>
+    <div class="ss">[Screenshot &middot; Verification method selection]</div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">4</div>
+    <h3>Settings &rarr; Manage Users &rarr; Add user</h3>
+    <p>Once verified, open <span class="mono">Settings</span> from the left sidebar, then <span class="mono">Manage Users</span>. Click <span class="mono">Add user</span>.</p>
+    <ul>
+      <li>Email: <strong>adriano@caseloadselect.ca</strong></li>
+      <li>Role: <strong>Manager</strong> (not Owner)</li>
+    </ul>
+    <p>Manager access lets us edit the listing, respond to inquiries, and post updates. It does not let us delete the listing or transfer ownership.</p>
+    <div class="ss">[Screenshot &middot; Manage Users panel with Add user button]</div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">5</div>
+    <h3>Send the invitation</h3>
+    <p>Bing emails the invitation to adriano@caseloadselect.ca. We accept the invite from our side within the business day. You're done.</p>
+    <p>From here on, you only touch Bing Places if you want to publish something specific. Routine updates (new photos, hours changes, service additions) go through us.</p>
+  </div>
+
+  <div class="status-band">
+    <div class="label">After you finish</div>
+    <h3>Mark the status as Done in your onboarding form</h3>
+    <p>Go back to your onboarding form and set the <strong>Bing Places Manager status</strong> to <strong>Done: access granted</strong>. If you hit a blocker (account issue, verification failed, role unavailable), set it to <strong>Blocked</strong> and write a line in the notes. We'll respond within the business day.</p>
+  </div>
+
+  <div class="footer">
+    <div>CaseLoad Select &middot; Sign Better Cases</div>
+    <div>Bing Places setup guide &middot; v1</div>
+  </div>
+
+</div>
+
+<script>
+  // Token-aware back link. The form links here with ?token=...; wire the
+  // "Back to the onboarding form" anchor to return to /firm-onboarding/[token].
+  // Falls back to root if no token. Mirrors the gbp.html / meta.html hook.
+  (function () {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get('token');
+      var link = document.getElementById('back-to-onboarding');
+      if (link) {
+        link.href = token ? '/firm-onboarding/' + encodeURIComponent(token) : '/';
+      }
+    } catch (e) { /* no-op: link defaults to / */ }
+  })();
+</script>
+</body>
+</html>
