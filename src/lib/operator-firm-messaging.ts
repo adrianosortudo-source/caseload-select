@@ -502,6 +502,54 @@ export async function getOperatorUnreadByFirm(): Promise<Map<string, number>> {
   return counts;
 }
 
+export interface OperatorChannelPreview {
+  firm_id: string;
+  last_message_at: string;
+  preview: string;
+  sender_role: OperatorFirmSenderRole;
+  sender_name: string | null;
+}
+
+/**
+ * Latest message per firm channel (operator view), newest firm first. Powers
+ * the console-home "Firm messages" section: one row per conversation with a
+ * short plain-text preview of the most recent message. Unread counts come
+ * from getOperatorUnreadByFirm separately. Pass firmIds to scope to the live
+ * (non-demo) firms. HTML is stripped to a preview; soft-deleted messages are
+ * excluded.
+ */
+export async function getOperatorChannelPreviews(firmIds?: string[]): Promise<OperatorChannelPreview[]> {
+  let q = supabase
+    .from('operator_firm_messages')
+    .select('firm_id, body, created_at, sender_role, sender_name')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(2000);
+  if (firmIds && firmIds.length > 0) q = q.in('firm_id', firmIds);
+  const { data } = await q;
+
+  const seen = new Set<string>();
+  const out: OperatorChannelPreview[] = [];
+  for (const m of data ?? []) {
+    const firmId = m.firm_id as string;
+    if (seen.has(firmId)) continue; // input is newest-first, so first per firm is its latest
+    seen.add(firmId);
+    const preview = String(m.body ?? '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 140);
+    out.push({
+      firm_id: firmId,
+      last_message_at: m.created_at as string,
+      preview,
+      sender_role: m.sender_role as OperatorFirmSenderRole,
+      sender_name: (m.sender_name as string | null) ?? null,
+    });
+  }
+  return out;
+}
+
 /**
  * Queue notification_outbox rows for a new firm message, addressed to the
  * OTHER party. Operator/system sends notify the firm's lawyers; lawyer sends

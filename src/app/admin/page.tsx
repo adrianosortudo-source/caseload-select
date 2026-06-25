@@ -22,7 +22,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getOperatorSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
-import { getOperatorUnreadByFirm } from "@/lib/operator-firm-messaging";
+import {
+  getOperatorUnreadByFirm,
+  getOperatorChannelPreviews,
+  type OperatorChannelPreview,
+} from "@/lib/operator-firm-messaging";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -143,8 +147,13 @@ export default async function AdminHomePage() {
   const webhookFailed = webhookFailedRes.count ?? 0;
   const voiceUnconfirmed = voiceUnconfirmedRes.count ?? 0;
 
-  // Unread CaseLoad Connect messages (lawyer-sent, per firm), best-effort.
-  const unreadByFirm = await getOperatorUnreadByFirm().catch(() => new Map<string, number>());
+  // CaseLoad Connect: per-firm unread + latest-message previews, best-effort.
+  // Previews are scoped to the live (non-demo) firms shown above.
+  const liveFirmIds = firms.map((f) => f.id);
+  const [unreadByFirm, channelPreviews] = await Promise.all([
+    getOperatorUnreadByFirm().catch(() => new Map<string, number>()),
+    getOperatorChannelPreviews(liveFirmIds).catch(() => [] as OperatorChannelPreview[]),
+  ]);
   const unreadMessagesTotal = Array.from(unreadByFirm.values()).reduce((s, n) => s + n, 0);
   const firstUnreadFirmId = firms.find((f) => (unreadByFirm.get(f.id) ?? 0) > 0)?.id ?? null;
 
@@ -221,6 +230,26 @@ export default async function AdminHomePage() {
   const firmNameById = new Map(firms.map((f) => [f.id, f.name ?? "Unnamed firm"] as const));
   const contentInProgress = contentPieces.length;
 
+  // Console-home "Firm messages": latest conversation per live firm, unread
+  // first then newest. firmNameById is built from the non-demo firm list, so
+  // any demo-firm channel that slipped through is dropped here too.
+  const messageRows = channelPreviews
+    .filter((p) => firmNameById.has(p.firm_id))
+    .map((p) => ({
+      firmId: p.firm_id,
+      firmName: firmNameById.get(p.firm_id)!,
+      preview: p.preview,
+      at: p.last_message_at,
+      senderRole: p.sender_role,
+      senderName: p.sender_name,
+      unread: unreadByFirm.get(p.firm_id) ?? 0,
+    }))
+    .sort(
+      (a, b) =>
+        (b.unread > 0 ? 1 : 0) - (a.unread > 0 ? 1 : 0) ||
+        (a.at < b.at ? 1 : a.at > b.at ? -1 : 0),
+    );
+
   return (
     <div className="space-y-8">
       <div>
@@ -269,6 +298,38 @@ export default async function AdminHomePage() {
         <h2 className="text-xs uppercase tracking-wider font-semibold text-field-label">
           Your backlog
         </h2>
+
+        {/* Firm messages (CaseLoad Connect, cross-firm) */}
+        <BacklogCard
+          title="Firm messages"
+          count={messageRows.length}
+          emptyText="No firm messages yet."
+        >
+          {messageRows.slice(0, 6).map((m) => (
+            <Link
+              key={m.firmId}
+              href={`/admin/firms/${m.firmId}/messages`}
+              className="flex items-center justify-between gap-3 px-3 py-2 border-t border-border-brand hover:bg-parchment/60 transition-colors"
+            >
+              <div className="min-w-0">
+                <div className="text-sm text-navy font-semibold truncate">{m.firmName}</div>
+                <div className="text-[11px] text-black/50 truncate">
+                  {senderLabel(m.senderRole, m.senderName)}: {m.preview || "(no text)"}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {m.unread > 0 && (
+                  <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-navy text-white tabular-nums">
+                    {m.unread}
+                  </span>
+                )}
+                <span className="text-[11px] text-black/45 tabular-nums whitespace-nowrap">
+                  {relativeTime(m.at, nowMs)}
+                </span>
+              </div>
+            </Link>
+          ))}
+        </BacklogCard>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Onboarding submissions */}
@@ -525,6 +586,12 @@ function StatusTag({ status }: { status: string }) {
       {label}
     </span>
   );
+}
+
+function senderLabel(role: string, name: string | null): string {
+  if (role === "operator") return "You";
+  if (role === "system") return "System";
+  return name?.trim() || "Lawyer";
 }
 
 function relativeTime(iso: string | null, nowMs: number): string {
