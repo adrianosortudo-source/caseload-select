@@ -101,6 +101,11 @@ set -e
 
 if [ ${#DRIFT[@]} -eq 0 ]; then
   echo "OK: app/src/lib/screen-engine/ matches sandbox/src/engine/ (content; line endings ignored; persist.ts excluded by design)."
+  # Refresh the CI fingerprint so the GitHub Actions gate (check-engine-manifest.sh,
+  # which can't see the sandbox) stays in lock-step with this verified content.
+  # DR-058. Commit the updated scripts/engine-sync.manifest with your engine change.
+  bash "$SCRIPT_DIR/gen-engine-manifest.sh"
+  echo "Refreshed scripts/engine-sync.manifest"
   exit 0
 fi
 

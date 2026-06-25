@@ -1,0 +1,8 @@
+# Shell scripts must stay LF so they execute on Linux CI. A stored CRLF in a
+# shebang line breaks `bash` / `env` on the GitHub Actions runners. The DR-058
+# engine-sync gate runs scripts/*.sh in CI, so this is load-bearing.
+*.sh text eol=lf
+
+# Engine-sync fingerprint: keep LF so the committed blob is identical across
+# Windows and Linux and the CI manifest diff stays clean.
+/scripts/engine-sync.manifest text eol=lf

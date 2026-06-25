@@ -110,6 +110,16 @@ foreach ($key in $appMap.Keys) {
 
 if ($drifted.Count -eq 0 -and $onlyInSandbox.Count -eq 0 -and $onlyInApp.Count -eq 0) {
     Write-Host "OK: app/src/lib/screen-engine/ matches sandbox/src/engine/ (content; line endings ignored; persist.ts excluded by design)."
+    # Refresh the CI fingerprint so the GitHub Actions gate (check-engine-manifest.sh)
+    # stays in lock-step. The bash generator is the single source of truth for the
+    # manifest format; call it when bash is available (git-bash on Windows). DR-058.
+    $gen = Join-Path $scriptDir "gen-engine-manifest.sh"
+    if (Get-Command bash -ErrorAction SilentlyContinue) {
+        bash $gen
+        Write-Host "Refreshed scripts/engine-sync.manifest"
+    } else {
+        Write-Host "NOTE: bash not found. Run 'npm run gen:engine-manifest' to refresh scripts/engine-sync.manifest before committing engine changes."
+    }
     exit 0
 }
 

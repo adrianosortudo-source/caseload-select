@@ -6,16 +6,19 @@
 #   3. DR-039 brief-equality eval (explicit regression guard for
 #      language-agnostic intake parity across en/fr/es/pt/zh)
 #
-# Engine sandbox-vs-app drift check (scripts/check-engine-sync.sh) is
-# NOT run here because the sandbox repo lives on disk alongside this
-# repo and is not in version control. That check stays operator-local
-# until the sandbox is promoted to its own git repo (separate work
-# item — see DR-033 long-term).
+# Engine sandbox-vs-app drift (DR-033/DR-058) is gated here via a committed
+# fingerprint. The full check (scripts/check-engine-sync.sh) needs the sandbox,
+# which lives on disk and is not in version control, so it stays operator-local.
+# CI instead runs scripts/check-engine-manifest.sh, which diffs the engine port
+# against scripts/engine-sync.manifest, the fingerprint that check-engine-sync.sh
+# refreshes locally once app == sandbox is verified. A failure here means an
+# engine file changed without that ritual.
 #
 # Required status checks (set in GitHub branch protection):
 #   - typecheck
 #   - test
 #   - brief-equality-eval
+#   - engine-sync
 
 name: CI
 
@@ -89,4 +92,27 @@ jobs:
             npx vitest run src/lib/__evals__/brief-equality-eval.test.ts
           else
             echo "brief-equality-eval.test.ts is not present on this branch yet — skipping. The eval ships with DR-039 (PR #7). Once that lands in main, this job will run the assertion on every PR."
+          fi
+
+  engine-sync:
+    name: Engine sync (DR-058)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify engine port matches the committed manifest
+        # CI can't see the sandbox (not in git), so this diffs the engine port
+        # against scripts/engine-sync.manifest, the fingerprint that
+        # check-engine-sync.sh refreshes locally once app == sandbox is verified.
+        # A failure means an engine file changed without the sync ritual: run
+        # `npm run check:engine-sync` locally and commit the refreshed manifest.
+        # Only bash + sha256sum are needed, so this job skips the Node setup.
+        #
+        # if-exists guard for the bootstrap window: older in-flight branches
+        # won't carry the script/manifest yet (mirrors the brief-equality job).
+        run: |
+          if [ -f scripts/check-engine-manifest.sh ] && [ -f scripts/engine-sync.manifest ]; then
+            bash scripts/check-engine-manifest.sh
+          else
+            echo "engine-sync gate not present on this branch yet, skipping (ships with DR-058)."
           fi
