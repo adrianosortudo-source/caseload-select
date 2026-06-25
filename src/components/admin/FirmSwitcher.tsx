@@ -61,6 +61,7 @@ const SYSTEM_LINKS = [
   { label: "Explainer library", href: "/admin/explainers" },
   { label: "SEO check", href: "/admin/seo-check" },
   { label: "Prospecting diagnostic", href: "/admin/prospecting-diagnostic" },
+  { label: "Agency CRM", href: "/admin/agency-crm" },
   { label: "Diagnostics", href: "/admin/diagnostic-builder" },
   { label: "Health", href: "/admin/health" },
 ];
