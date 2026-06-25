@@ -13,7 +13,9 @@
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
 import { getContentPlan } from "@/lib/deliverables";
+import { getFirmAbout } from "@/lib/firm-about";
 import ContentPlan from "@/components/portal/ContentPlan";
+import AboutPanel from "@/components/portal/AboutPanel";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -35,16 +37,22 @@ export default async function DeliverablesPage({
   const viewerRole = session.role === "operator" ? "operator" : "lawyer";
   const includeArchived = archived === "1";
 
-  const plan = await getContentPlan(firmId, { includeArchived });
+  const [plan, about] = await Promise.all([
+    getContentPlan(firmId, { includeArchived }),
+    getFirmAbout(firmId),
+  ]);
 
   return (
-    <ContentPlan
-      firmId={firmId}
-      viewerRole={viewerRole}
-      includeArchived={includeArchived}
-      periods={plan.periods}
-      deliverables={plan.deliverables}
-      settings={plan.settings}
-    />
+    <div className="space-y-6">
+      {about ? <AboutPanel bodyHtml={about.body_html} /> : null}
+      <ContentPlan
+        firmId={firmId}
+        viewerRole={viewerRole}
+        includeArchived={includeArchived}
+        periods={plan.periods}
+        deliverables={plan.deliverables}
+        settings={plan.settings}
+      />
+    </div>
   );
 }
