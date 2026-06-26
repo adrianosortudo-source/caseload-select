@@ -13,6 +13,7 @@ import type {
   MatterStageEvent,
 } from './types';
 import { validateStageTransition, journeyTriggerForTransition } from './matter-stage-pure';
+import { checkStageGate } from './matter-stage-gate';
 import {
   buildMatterStageChangedPayload,
   type MatterStageCadenceTrigger,
@@ -168,7 +169,7 @@ export async function transitionMatterStage(input: {
       event: MatterStageEvent;
       webhook?: StageWebhookOutcome | null;
     }
-  | { ok: false; error: string; code?: 'invalid_transition' | 'not_found' | 'db_error' }
+  | { ok: false; error: string; code?: 'invalid_transition' | 'not_found' | 'db_error' | 'gate_blocked' }
 > {
   const { data: matter, error: fetchErr } = await supabase
     .from('client_matters')
@@ -192,6 +193,20 @@ export async function transitionMatterStage(input: {
       error: `invalid transition: ${from} → ${input.to}`,
       code: 'invalid_transition',
     };
+  }
+
+  const gate = await checkStageGate(
+    {
+      id: matter.id,
+      source_screened_lead_id: matter.source_screened_lead_id ?? null,
+      primary_name: matter.primary_name ?? null,
+      primary_email: matter.primary_email ?? null,
+      primary_phone: matter.primary_phone ?? null,
+    },
+    input.to,
+  );
+  if (!gate.allowed) {
+    return { ok: false, error: gate.reason, code: 'gate_blocked' };
   }
 
   const now = new Date().toISOString();
