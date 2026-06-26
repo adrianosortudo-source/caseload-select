@@ -382,15 +382,27 @@ function Panel({
 }
 
 function CronCard({ job }: { job: CronJobHealth }) {
-  const succeededAll = job.runs_24h > 0 && job.failed_24h === 0;
+  // Health is authoritative on the cron run status plus the 24h success ratio.
+  // The pg_net HTTP status is SUPPLEMENTARY only: pg_net purges _http_response
+  // rows after a few hours, so a low-frequency job (the daily token check runs
+  // once at 06:41) legitimately has no response on record by the time this
+  // board loads in the afternoon. A missing HTTP status is "unknown", never
+  // "unhealthy". Only a RECORDED non-2xx, or a recorded timeout, counts against
+  // health. The previous logic painted every job with a null HTTP status red,
+  // which false-flagged the daily job every afternoon.
   const hasFailures = job.failed_24h > 0;
-  const httpHealthy = job.last_http_status !== null && job.last_http_status >= 200 && job.last_http_status < 300;
+  const lastRunFailed = job.last_run_status === "failed";
+  const lastRunOk = job.last_run_status === "succeeded";
+  const httpKnown = job.last_http_status !== null;
+  const httpBad =
+    httpKnown &&
+    (job.last_http_status! < 200 || job.last_http_status! >= 400 || job.last_http_timed_out === true);
   const overall: "green" | "amber" | "red" =
-    hasFailures || !httpHealthy
+    hasFailures || lastRunFailed || httpBad
       ? "red"
-      : succeededAll
+      : lastRunOk
         ? "green"
-        : "amber";
+        : "amber"; // ran with an unknown status, or never run
 
   return (
     <div className="border border-black/10 bg-parchment p-3 space-y-2">
@@ -402,9 +414,9 @@ function CronCard({ job }: { job: CronJobHealth }) {
         <StatusDot tone={overall} />
       </div>
       <div className="grid grid-cols-3 gap-2 text-[11px]">
-        <Metric label="Last run" value={job.last_run_status ?? "—"} tone={job.last_run_status === "succeeded" ? "neutral" : "red"} />
+        <Metric label="Last run" value={job.last_run_status ?? "never"} tone={lastRunFailed ? "red" : "neutral"} />
         <Metric label="24h ok" value={`${job.succeeded_24h}/${job.runs_24h}`} tone={hasFailures ? "red" : "neutral"} />
-        <Metric label="Last HTTP" value={job.last_http_status?.toString() ?? "—"} tone={httpHealthy ? "neutral" : "red"} />
+        <Metric label="Last HTTP" value={httpKnown ? job.last_http_status!.toString() : "n/a"} tone={httpBad ? "red" : "neutral"} />
       </div>
       <div className="text-[10px] text-black/50 tabular-nums">
         {job.last_run_start ? formatTime(job.last_run_start) : "Never run"}
