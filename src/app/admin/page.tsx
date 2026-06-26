@@ -139,17 +139,21 @@ export default async function AdminHomePage() {
   ]);
 
   const firms = firmsRes.data ?? [];
+  // `firms` is already is_demo=false (live only), so this is the live firm id
+  // list. The deliverables query is not firm-filtered at the DB, so a demo/test
+  // firm's deliverable would otherwise leak into the backlog and render as
+  // "Unknown firm" (its id is absent from the live firm name map).
+  const liveFirmIds = firms.map((f) => f.id);
   const leads = leadsRes.data ?? [];
   const matters = mattersRes.data ?? [];
   const onboarding = onboardingRes.data ?? [];
-  const deliverables = deliverablesRes.data ?? [];
+  const deliverables = (deliverablesRes.data ?? []).filter((d) => liveFirmIds.includes(d.firm_id));
   const contentPieces = contentRes.data ?? [];
   const webhookFailed = webhookFailedRes.count ?? 0;
   const voiceUnconfirmed = voiceUnconfirmedRes.count ?? 0;
 
-  // CaseLoad Connect: per-firm unread + latest-message previews, best-effort.
-  // Previews are scoped to the live (non-demo) firms shown above.
-  const liveFirmIds = firms.map((f) => f.id);
+  // Messages: per-firm unread + latest-message previews, best-effort.
+  // Previews are scoped to the live (non-demo) firms via liveFirmIds above.
   const [unreadByFirm, channelPreviews] = await Promise.all([
     getOperatorUnreadByFirm().catch(() => new Map<string, number>()),
     getOperatorChannelPreviews(liveFirmIds).catch(() => [] as OperatorChannelPreview[]),
