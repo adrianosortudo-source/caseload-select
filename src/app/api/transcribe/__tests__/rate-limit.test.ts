@@ -1,11 +1,13 @@
 /**
  * Route-level tests for /api/transcribe rate limiting + size guards (H6).
  *
- * /api/transcribe is a public proxy in front of Whisper (the kickoff
- * recorder calls it from the browser, so it cannot require auth). Pins:
+ * /api/transcribe is a public proxy in front of Gemini transcription (the
+ * kickoff recorder calls it from the browser, so it cannot require auth).
+ * Pins:
  *   - 429 when the per-IP bucket denies
  *   - 413 from the Content-Length guard BEFORE the body is parsed
- *   - happy path: allowed request reaches the (mocked) OpenAI fetch
+ *   - happy path: allowed request reaches the (mocked) Gemini fetch and the
+ *     candidate text is unwrapped + trimmed
  *
  * The Content-Length test uses a stub request whose formData() throws,
  * proving the oversize rejection happens without buffering the body.
@@ -29,11 +31,19 @@ const ALLOWED = { ok: true, active: false, remaining: 10, reset: 0, limit: 10 };
 const DENIED = { ok: false, active: true, remaining: 0, reset: Date.now() + 30_000, limit: 10 };
 
 const realFetch = global.fetch;
-const realApiKey = process.env.OPENAI_API_KEY;
+const realGoogleKey = process.env.GOOGLE_AI_API_KEY;
+const realGeminiKey = process.env.GEMINI_API_KEY;
+
+function geminiResponse(text: string): Response {
+  return new Response(
+    JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] }),
+    { status: 200 },
+  );
+}
 
 function makeAudioRequest(): Request {
   const form = new FormData();
-  form.append("audio", new Blob([new Uint8Array(2048)], { type: "audio/webm" }), "kickoff.webm");
+  form.append("audio", new Blob([new Uint8Array(2048)], { type: "audio/wav" }), "kickoff.wav");
   return new Request("https://app.caseloadselect.ca/api/transcribe", {
     method: "POST",
     body: form,
@@ -43,16 +53,16 @@ function makeAudioRequest(): Request {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.checkRateLimit.mockResolvedValue(ALLOWED);
-  process.env.OPENAI_API_KEY = "test-key";
+  process.env.GOOGLE_AI_API_KEY = "test-key";
+  delete process.env.GEMINI_API_KEY;
 });
 
 afterEach(() => {
   global.fetch = realFetch;
-  if (realApiKey === undefined) {
-    delete process.env.OPENAI_API_KEY;
-  } else {
-    process.env.OPENAI_API_KEY = realApiKey;
-  }
+  if (realGoogleKey === undefined) delete process.env.GOOGLE_AI_API_KEY;
+  else process.env.GOOGLE_AI_API_KEY = realGoogleKey;
+  if (realGeminiKey === undefined) delete process.env.GEMINI_API_KEY;
+  else process.env.GEMINI_API_KEY = realGeminiKey;
 });
 
 describe("/api/transcribe rate limiting", () => {
@@ -67,7 +77,7 @@ describe("/api/transcribe rate limiting", () => {
   });
 
   it("charges the transcribe bucket", async () => {
-    global.fetch = vi.fn(async () => new Response(JSON.stringify({ text: "hi" }), { status: 200 }));
+    global.fetch = vi.fn(async () => geminiResponse("hi")) as typeof fetch;
     await POST(makeAudioRequest());
     expect(mocks.checkRateLimit).toHaveBeenCalledWith("transcribe", "203.0.113.9");
   });
@@ -87,10 +97,9 @@ describe("/api/transcribe rate limiting", () => {
     expect(json.error).toBe("audio exceeds 25 MB limit");
   });
 
-  it("passes an allowed request through to Whisper and returns the transcript", async () => {
+  it("passes an allowed request through to Gemini and returns the transcript", async () => {
     const fetchMock = vi.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit) =>
-        new Response(JSON.stringify({ text: "  hello world  " }), { status: 200 }),
+      async (_input: RequestInfo | URL, _init?: RequestInit) => geminiResponse("  hello world  "),
     );
     global.fetch = fetchMock as typeof fetch;
 
@@ -99,6 +108,8 @@ describe("/api/transcribe rate limiting", () => {
     const json = await res.json();
     expect(json).toEqual({ ok: true, text: "hello world" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe("https://api.openai.com/v1/audio/transcriptions");
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      "generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+    );
   });
 });

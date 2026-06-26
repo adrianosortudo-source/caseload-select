@@ -1,27 +1,32 @@
 /**
  * POST /api/transcribe
  *
- * Receives an audio blob (WebM/Opus from MediaRecorder), transcribes it via
- * OpenAI Whisper, returns the transcript text. Used by the IntakeControllerV2
- * kickoff screen so prospects can record their situation by voice instead of
- * typing.
+ * Receives an audio blob, transcribes it via Google Gemini, returns the
+ * transcript text. Used by the IntakeControllerV2 kickoff screen so prospects
+ * can record their situation by voice instead of typing.
  *
  * Body: multipart/form-data with field "audio" (Blob)
  * Returns: { ok: true; text: string } | { ok: false; error: string }
  *
  * Notes:
- *  - Uses OPENAI_API_KEY (already provisioned for the screening engine).
- *  - Whisper model: whisper-1. ~$0.006 per minute of audio.
- *  - Max blob size: 25 MB (Whisper API limit). Browser typically produces
- *    ~50-100 KB for a 30-second clip, so this is comfortable.
- *  - English-only is the default. Multi-lingual support is intentionally
- *    out of scope (per CLAUDE.md "Do Not — Add multilingual features").
+ *  - Uses GOOGLE_AI_API_KEY (falls back to GEMINI_API_KEY), the same key the
+ *    screen engine already runs on. OpenAI is no longer in this path.
+ *  - Model: gemini-2.5-flash. Gemini transcribes audio natively.
+ *  - Gemini accepts audio/wav, audio/mp3, audio/aiff, audio/aac, audio/ogg,
+ *    audio/flac. It does NOT accept the audio/webm or audio/mp4 that browsers
+ *    record, so VoiceInput.tsx transcodes the recording to WAV (16 kHz mono)
+ *    client-side before upload. The blob that reaches this route is already
+ *    Gemini-compatible; we still normalise the declared MIME defensively.
+ *  - Max blob size: 25 MB. A 16 kHz mono WAV is ~1 MB per minute, so a
+ *    60-second kickoff clip lands around 1-2 MB.
+ *  - Multi-lingual: no language is forced. Gemini returns the transcript in
+ *    the spoken language; the screen engine handles detection downstream.
  */
 
 import { NextResponse } from "next/server";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
-export const runtime = "nodejs"; // Required because Whisper SDK uses Node FormData
+export const runtime = "nodejs"; // Buffer + formData() on the server
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
@@ -30,9 +35,35 @@ const MAX_BYTES = 25 * 1024 * 1024;
 // through formData() before the blob-size check can run.
 const MAX_REQUEST_BYTES = MAX_BYTES + 64 * 1024;
 
+const GEMINI_MODEL = "gemini-2.5-flash";
+
+// MIME types Gemini accepts for inline audio. The client sends WAV; anything
+// else is mapped to its closest accepted type or defaults to audio/wav.
+const GEMINI_AUDIO_MIME = new Set([
+  "audio/wav",
+  "audio/mp3",
+  "audio/aiff",
+  "audio/aac",
+  "audio/ogg",
+  "audio/flac",
+]);
+
+function normaliseAudioMime(declared: string): string {
+  const base = (declared || "").split(";")[0].trim().toLowerCase();
+  if (GEMINI_AUDIO_MIME.has(base)) return base;
+  if (base === "audio/mpeg") return "audio/mp3";
+  if (base === "audio/x-wav" || base === "audio/wave") return "audio/wav";
+  return "audio/wav";
+}
+
+const TRANSCRIBE_PROMPT =
+  "Transcribe this audio recording verbatim. Return only the spoken words as " +
+  "plain text, with no preamble, labels, quotation marks, or commentary. If " +
+  "the audio contains no discernible speech, return an empty string.";
+
 export async function POST(req: Request) {
   // Public route (the kickoff recorder calls it from the browser); the
-  // per-IP bucket is the only gate in front of the Whisper spend (H6).
+  // per-IP bucket is the only gate in front of the model spend (H6).
   const ip = ipFromRequest(req);
   const rl = await checkRateLimit("transcribe", ip);
   if (!rl.ok) {
@@ -47,7 +78,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "audio exceeds 25 MB limit" }, { status: 413 });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
       { ok: false, error: "Server not configured for transcription." },
@@ -69,17 +100,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "audio exceeds 25 MB limit" }, { status: 413 });
     }
 
-    // Forward to OpenAI Whisper as multipart/form-data
-    const upstream = new FormData();
-    upstream.append("file", audio, "kickoff.webm");
-    upstream.append("model", "whisper-1");
-    upstream.append("language", "en");
-    upstream.append("response_format", "json");
+    const mimeType = normaliseAudioMime(audio.type);
+    const base64 = Buffer.from(await audio.arrayBuffer()).toString("base64");
 
-    const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    const endpoint =
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent` +
+      `?key=${encodeURIComponent(apiKey)}`;
+
+    const res = await fetch(endpoint, {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: upstream,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: TRANSCRIBE_PROMPT },
+              { inline_data: { mime_type: mimeType, data: base64 } },
+            ],
+          },
+        ],
+        generationConfig: { temperature: 0 },
+      }),
     });
 
     if (!res.ok) {
@@ -90,8 +131,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const data = (await res.json()) as { text?: string };
-    const text = (data.text ?? "").trim();
+    const data = (await res.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+    const text = (data.candidates?.[0]?.content?.parts ?? [])
+      .map((p) => p.text ?? "")
+      .join("")
+      .trim();
+
     if (!text) {
       return NextResponse.json({ ok: false, error: "Transcript came back empty." }, { status: 502 });
     }
