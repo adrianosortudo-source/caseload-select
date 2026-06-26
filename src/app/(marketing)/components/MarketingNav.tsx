@@ -51,6 +51,7 @@ export default function MarketingNav() {
         <li><a href="#why">Why us</a></li>
         <li><a href="#faq">FAQ</a></li>
         <li><a href="/what-we-dont-do">Scope</a></li>
+        <li><a href="/case-studies/drg-law">Work</a></li>
       </ul>
       <a href="#cta" className="cls-nav-cta">Book a Call</a>
 

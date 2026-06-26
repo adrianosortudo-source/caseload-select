@@ -5,6 +5,7 @@ import ProblemSection from "../components/ProblemSection";
 import ActsSystemSection from "../components/ActsSystemSection";
 import CpiSection from "../components/CpiSection";
 import ClientResultSection from "../components/ClientResultSection";
+import CaseStudyTeaser from "../components/CaseStudyTeaser";
 import WhySection from "../components/WhySection";
 import FaqSection from "../components/FaqSection";
 
@@ -32,6 +33,7 @@ export default function MarketingHomePage() {
       <ActsSystemSection />
       <CpiSection />
       <ClientResultSection />
+      <CaseStudyTeaser />
       <WhySection />
       <FaqSection />
 
