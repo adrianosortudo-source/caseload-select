@@ -184,7 +184,13 @@ export default async function AdminHomePage() {
     {
       label: "Unread firm messages",
       count: unreadMessagesTotal,
-      href: firstUnreadFirmId ? `/admin/firms/${firstUnreadFirmId}/messages` : "/admin",
+      // Link to the firm with unread mail, else the first firm's messages, so
+      // the chip always opens a messages surface. The prior "/admin" fallback
+      // made the chip a self-link (a dead end) whenever nothing was unread.
+      href: (() => {
+        const targetFirmId = firstUnreadFirmId ?? firms[0]?.id ?? null;
+        return targetFirmId ? `/admin/firms/${targetFirmId}/messages` : "/admin";
+      })(),
       tone: "info",
     },
   ];

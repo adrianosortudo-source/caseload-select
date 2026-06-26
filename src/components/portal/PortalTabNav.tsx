@@ -23,7 +23,7 @@ export default function PortalTabNav({ firmId, caseloadUnread = 0 }: PortalTabNa
     { href: `/portal/${firmId}/clients`,      label: "Clients"      },
     { href: `/portal/${firmId}/files`,        label: "Files"        },
     { href: `/portal/${firmId}/deliverables`, label: "Deliverables" },
-    { href: `/portal/${firmId}/messages`,     label: "CaseLoad", badge: caseloadUnread },
+    { href: `/portal/${firmId}/messages`,     label: "Messages", badge: caseloadUnread },
   ];
 
   return (

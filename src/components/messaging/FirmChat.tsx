@@ -142,7 +142,7 @@ export default function FirmChat({
     <div className="flex flex-col h-[calc(100vh-13rem)] bg-white border border-border-brand">
       <div className="px-4 py-3 border-b border-border-brand flex items-center justify-between gap-3 shrink-0 flex-wrap">
         <div className="min-w-0">
-          <div className="text-sm font-display font-bold text-navy">CaseLoad Connect</div>
+          <div className="text-sm font-display font-bold text-navy">Messages</div>
           <div className="text-[11px] text-muted">
             Direct line with {counterpartLabel}. Not visible to clients.
           </div>
