@@ -7,7 +7,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { getPortalSession } from "@/lib/portal-auth";
+import { requirePortalViewer } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +16,9 @@ export default async function PortalRoot({
 }: {
   params: Promise<{ firmId: string }>;
 }) {
-  const session = await getPortalSession();
   const { firmId } = await params;
-
-  // Client sessions are matter-scoped; lawyer surfaces reject them.
-  if (!session || session.role === "client" || session.firm_id !== firmId) {
-    redirect("/portal/login");
-  }
+  // Operator-view contract (DR-076).
+  await requirePortalViewer(firmId);
 
   redirect(`/portal/${firmId}/dashboard`);
 }

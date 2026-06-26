@@ -8,9 +8,8 @@
  * Auth is handled by the parent [firmId]/layout.tsx.
  */
 
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getPortalSession } from "@/lib/portal-auth";
+import { requirePortalViewer } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { formatTimestamp } from "@/lib/firm-timezone";
 
@@ -77,14 +76,10 @@ export default async function PortalLeadsPage({
   params: Promise<{ firmId: string }>;
   searchParams: Promise<{ band?: string; stage?: string }>;
 }) {
-  const session = await getPortalSession();
   const { firmId } = await params;
   const { band: bandFilter, stage: stageFilter } = await searchParams;
-
-  // Client sessions are matter-scoped; lawyer surfaces reject them.
-  if (!session || session.role === "client" || session.firm_id !== firmId) {
-    redirect("/portal/login");
-  }
+  // Operator-view contract (DR-076).
+  await requirePortalViewer(firmId);
 
   let query = supabase
     .from("leads")

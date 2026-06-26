@@ -13,8 +13,7 @@
  * page is the post-take view: matters in flight.
  */
 
-import { redirect } from 'next/navigation';
-import { getFirmSession } from '@/lib/portal-auth';
+import { requirePortalViewer } from '@/lib/portal-auth';
 import { listActiveMattersForFirm } from '@/lib/matter-stage';
 import { formatTimestamp } from '@/lib/firm-timezone';
 import type { ClientMatter, MatterStage } from '@/lib/types';
@@ -34,10 +33,10 @@ interface PageProps {
 
 export default async function LawyerClientsHomePage({ params }: PageProps) {
   const { firmId } = await params;
-  const session = await getFirmSession(firmId);
-  if (!session) {
-    redirect(`/portal/${firmId}/login`);
-  }
+  // Operator-view contract (DR-076): admits operator read-only and fixes the
+  // prior redirect to the non-existent /portal/[firmId]/login (a hard 404 that
+  // also hit real lawyers arriving without a session).
+  await requirePortalViewer(firmId);
 
   const matters = await listActiveMattersForFirm(firmId, { limit: 200 });
 

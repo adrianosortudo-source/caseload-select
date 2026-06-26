@@ -12,8 +12,7 @@
  * Auth verified by parent layout.
  */
 
-import { redirect } from "next/navigation";
-import { getPortalSession } from "@/lib/portal-auth";
+import { requirePortalViewer } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import KpiTiles from "./KpiTiles";
 import IntakeQualityPanel from "./IntakeQualityPanel";
@@ -43,13 +42,10 @@ export default async function DashboardPage({
 }: {
   params: Promise<{ firmId: string }>;
 }) {
-  const session = await getPortalSession();
   const { firmId } = await params;
-
-  // Client sessions are matter-scoped; lawyer surfaces reject them.
-  if (!session || session.role === "client" || session.firm_id !== firmId) {
-    redirect("/portal/login");
-  }
+  // Operator-view contract (DR-076): admits operator (read-only) + matched
+  // lawyer, rejects client + firm mismatch, redirects to the real /portal/login.
+  await requirePortalViewer(firmId);
 
   // ── Date windows ─────────────────────────────────────────────────────────
   const now = new Date();

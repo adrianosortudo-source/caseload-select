@@ -10,8 +10,7 @@
  * Auth verified by parent layout.
  */
 
-import { redirect } from "next/navigation";
-import { getPortalSession } from "@/lib/portal-auth";
+import { requirePortalViewer } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import PipelineBoard from "./PipelineBoard";
 import FunnelBar from "./FunnelBar";
@@ -57,14 +56,10 @@ export default async function PipelinePage({
   params: Promise<{ firmId: string }>;
   searchParams: Promise<{ practice_area?: string; date_from?: string }>;
 }) {
-  const session = await getPortalSession();
   const { firmId } = await params;
   const { practice_area: paFilter, date_from } = await searchParams;
-
-  // Client sessions are matter-scoped; lawyer surfaces reject them.
-  if (!session || session.role === "client" || session.firm_id !== firmId) {
-    redirect("/portal/login");
-  }
+  // Operator-view contract (DR-076).
+  await requirePortalViewer(firmId);
 
   const now = new Date();
   const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();

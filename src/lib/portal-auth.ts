@@ -24,6 +24,7 @@
 
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 const COOKIE_NAME = "portal_session";
 const LINK_TTL_HOURS = 48;
@@ -209,6 +210,47 @@ export async function getFirmSession(firmId: string): Promise<PortalSession | nu
   if (session.role === "client") return null;   // clients use /portal/[firmId]/m/[matterId]
   if (session.firm_id !== firmId) return null;
   return session;
+}
+
+export interface PortalViewer {
+  session: PortalSession;
+  /** True when an operator (cross-firm) is viewing this firm's portal read-only. */
+  isOperator: boolean;
+  /** True when a firm-scoped lawyer/admin/staff session is the viewer. */
+  isLawyer: boolean;
+}
+
+/**
+ * Single page guard for every lawyer-facing portal surface (triage, dashboard,
+ * pipeline, leads, files, clients, matters, deliverables, messages). It encodes
+ * the operator-view contract (DR-076) in ONE place:
+ *
+ *   - operator session  -> admitted, isOperator=true. Cross-firm; the portal
+ *                          renders read-only with the "Operator view" banner.
+ *                          Write controls are gated on !isOperator; the write
+ *                          API routes reject operator sessions independently.
+ *   - lawyer session     -> admitted only when the token firm_id matches the
+ *                          route firmId. isLawyer=true.
+ *   - client session     -> rejected here (clients live under /m/[matterId]).
+ *   - no / mismatched    -> redirect to the real /portal/login.
+ *
+ * redirect() throws, so on any failure this never returns; callers can treat
+ * the returned session as guaranteed non-null. This replaced the prior per-page
+ * guards that diverged three ways: getFirmSession() nulled operators then
+ * redirected to the non-existent /portal/[firmId]/login (a hard 404 that also
+ * hit real lawyers), a firm_id check with no operator bypass bounced operators
+ * to login, and the messages page rendered console chrome.
+ */
+export async function requirePortalViewer(firmId: string): Promise<PortalViewer> {
+  const session = await getPortalSession();
+  if (!session) redirect("/portal/login");
+  if (session.role === "client") redirect("/portal/login");
+  if (session.role === "operator") {
+    return { session, isOperator: true, isLawyer: false };
+  }
+  // lawyer / admin / staff: must match the firm in the route.
+  if (session.firm_id !== firmId) redirect("/portal/login");
+  return { session, isOperator: false, isLawyer: true };
 }
 
 /**

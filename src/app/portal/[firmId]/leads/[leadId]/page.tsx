@@ -22,9 +22,9 @@
  * Auth: enforced via portal session cookie (getPortalSession).
  */
 
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getPortalSession } from "@/lib/portal-auth";
+import { requirePortalViewer } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { formatTimestamp } from "@/lib/firm-timezone";
 import { getFollowupSteps } from "@/lib/intake-memo";
@@ -181,13 +181,9 @@ export default async function PortalLeadDetailPage({
 }: {
   params: Promise<{ firmId: string; leadId: string }>;
 }) {
-  const session = await getPortalSession();
   const { firmId, leadId } = await params;
-
-  // Client sessions are matter-scoped; lawyer surfaces reject them.
-  if (!session || session.role === "client" || session.firm_id !== firmId) {
-    redirect("/portal/login");
-  }
+  // Operator-view contract (DR-076).
+  await requirePortalViewer(firmId);
 
   // ── Fetch lead (extended field set for Phase 1 panels) ──────────────────
   const { data: lead } = await supabase

@@ -23,9 +23,8 @@
  * /portal/[firmId]/m/[matterId] (the client surface).
  */
 
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getFirmSession } from '@/lib/portal-auth';
+import { requirePortalViewer } from '@/lib/portal-auth';
 import { getMatterById } from '@/lib/matter-stage';
 import { formatTimestamp } from '@/lib/firm-timezone';
 import { listMessagesForMatter } from '@/lib/matter-messages';
@@ -57,10 +56,9 @@ interface PageProps {
 
 export default async function LawyerMatterDetailPage({ params }: PageProps) {
   const { firmId, matterId } = await params;
-  const session = await getFirmSession(firmId);
-  if (!session) {
-    redirect(`/portal/${firmId}/login`);
-  }
+  // Operator-view contract (DR-076): admits operator read-only and fixes the
+  // prior redirect to the non-existent /portal/[firmId]/login (a hard 404).
+  await requirePortalViewer(firmId);
 
   const matter = await getMatterById(matterId);
   if (!matter || matter.firm_id !== firmId) {
