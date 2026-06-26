@@ -85,6 +85,7 @@ import { selectNextSlot } from '@/lib/screen-engine/selector';
 import { meetsDiscoveryFloor } from '@/lib/discovery-floor';
 import { applyPendingSlotReply, isUserGroundedFill } from '@/lib/pending-slot-reply';
 import { SLOT_REGISTRY } from '@/lib/screen-engine/slotRegistry';
+import { buildScoringDeltaForInsert } from '@/lib/scoring-port-read';
 
 // ── Channel type ────────────────────────────────────────────────────────
 
@@ -1086,6 +1087,7 @@ export async function finalizeChannelLead(
     follow_up_count: totalFollowUps,
     ...channelMetaForSlotAnswers,
   };
+  const scoringDelta = buildScoringDeltaForInsert(slotAnswers, state.matter_type, band);
 
   const { data: inserted, error: insertErr } = await supabase
     .from('screened_leads')
@@ -1121,6 +1123,7 @@ export async function finalizeChannelLead(
       submitted_at: state.submitted_at ?? now.toISOString(),
       intake_language: state.language ?? 'en',
       raw_transcript: state.input ?? fallbackTranscript,
+      ...(scoringDelta ?? {}),
     })
     .select('id, lead_id, status, decision_deadline, whale_nurture')
     .single();

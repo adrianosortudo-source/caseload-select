@@ -72,6 +72,7 @@ import { persistUnconfirmedInquiry } from "@/lib/unconfirmed-inquiry";
 import { renderBriefHtmlServer } from "@/lib/screen-brief-html";
 import { resolveFirmTimezone } from "@/lib/firm-timezone";
 import type { LawyerReport, Channel } from "@/lib/screen-engine/types";
+import { buildScoringDeltaForInsert } from "@/lib/scoring-port-read";
 
 interface IntakeAxes {
   value: number;
@@ -372,6 +373,7 @@ export async function POST(req: NextRequest) {
   // are not yet locked. Leave NULL at insert; the portal can compute from the
   // axes columns or a later cron sweep can backfill once thresholds are pinned.
   const bandCSubtrack: string | null = null;
+  const scoringDelta = buildScoringDeltaForInsert(hydratedSlotAnswers, matterType, band);
 
   // ── Insert ────────────────────────────────────────────────────────────────
   const { data: inserted, error: insertErr } = await supabase
@@ -416,6 +418,7 @@ export async function POST(req: NextRequest) {
       utm_term: v.utm_term ?? null,
       utm_content: v.utm_content ?? null,
       referrer: referrer ?? null,
+      ...(scoringDelta ?? {}),
     })
     .select('id, lead_id, status, decision_deadline, whale_nurture')
     .single();
