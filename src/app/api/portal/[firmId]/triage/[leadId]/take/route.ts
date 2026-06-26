@@ -21,6 +21,7 @@ import { getPortalSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { buildTakenPayload, fireGhlWebhook, type LeadFacts } from "@/lib/ghl-webhook";
 import { createMatterFromBandATake } from "@/lib/matter-stage";
+import { logPromotionEvent } from "@/lib/matter-promotion";
 
 interface BriefJson {
   matter_snapshot?: string;
@@ -154,6 +155,26 @@ export async function POST(
     );
   }
 
+  // Fetch screened_leads UUID for H3 promotion event logging and Band A matter
+  // creation. Done unconditionally so take_recorded fires for all bands.
+  const { data: screened } = await supabase
+    .from('screened_leads')
+    .select('id')
+    .eq('lead_id', leadId)
+    .eq('firm_id', firmId)
+    .maybeSingle();
+  const screenedUuid = screened?.id ?? null;
+
+  // H3: log take_recorded (best-effort; never blocks the take response)
+  if (screenedUuid) {
+    await logPromotionEvent({
+      screened_lead_id: screenedUuid,
+      firm_id: firmId,
+      lawyer_id: actorId,
+      event_type: 'take_recorded',
+    });
+  }
+
   // Build and fire the webhook.
   const facts: LeadFacts = {
     lead_id: lead.lead_id,
@@ -176,32 +197,17 @@ export async function POST(
   });
   const delivery = await fireGhlWebhook(firmId, payload);
 
-  // S8 Phase 1 Story 3: on Band A take, create a client_matters row
-  // at matter_stage='intake' so the matter is queryable in the
-  // lawyer's active-clients home + the client surface. Best-effort:
-  // the matter creation is logged on failure but does not roll back
-  // the take. The screened_lead row remains in 'taken' state with the
-  // webhook fired; the operator can re-trigger matter creation via
-  // a backfill endpoint if needed.
-  //
-  // Only Band A takes create a matter. Band B/C are pipeline-managed
-  // via the legacy `leads` table; Band D is OOS / refer-eligible (no
-  // matter expected).
+  // Band A: create a client_matters row at matter_stage='intake' so the matter
+  // is queryable in the lawyer's active-clients home and client surface. Best-effort:
+  // the take row stays 'taken' regardless of matter creation outcome.
+  // H3: log matter_created, matter_failed, or matter_skipped for observability.
+  // Band B/C are pipeline-managed via the legacy leads table; Band D is OOS.
   let matterId: string | null = null;
-  if (lead.band === 'A') {
-    // Read the actual screened_leads row id (UUID) for the FK to
-    // source_screened_lead_id. The lead_id column is the human-
-    // readable string id (e.g. L-2026-05-22-SX4), not the UUID PK.
-    const { data: leadRow } = await supabase
-      .from('screened_leads')
-      .select('id')
-      .eq('lead_id', leadId)
-      .eq('firm_id', firmId)
-      .maybeSingle();
-    if (leadRow?.id && lead.contact_name && (lead.contact_email || lead.contact_phone)) {
+  if (lead.band === 'A' && screenedUuid) {
+    if (lead.contact_name && (lead.contact_email || lead.contact_phone)) {
       const matterResult = await createMatterFromBandATake({
         firm_id: firmId,
-        source_screened_lead_id: leadRow.id,
+        source_screened_lead_id: screenedUuid,
         matter_type: lead.matter_type,
         practice_area: lead.practice_area,
         primary_name: lead.contact_name,
@@ -210,9 +216,30 @@ export async function POST(
       });
       if (matterResult.ok) {
         matterId = matterResult.matter.id;
+        await logPromotionEvent({
+          screened_lead_id: screenedUuid,
+          firm_id: firmId,
+          lawyer_id: actorId,
+          event_type: 'matter_created',
+          matter_id: matterId,
+        });
       } else {
         console.warn('[take] Band A matter creation failed:', matterResult.error);
+        await logPromotionEvent({
+          screened_lead_id: screenedUuid,
+          firm_id: firmId,
+          lawyer_id: actorId,
+          event_type: 'matter_failed',
+          error_text: matterResult.error,
+        });
       }
+    } else {
+      await logPromotionEvent({
+        screened_lead_id: screenedUuid,
+        firm_id: firmId,
+        lawyer_id: actorId,
+        event_type: 'matter_skipped',
+      });
     }
   }
 

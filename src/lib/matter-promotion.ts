@@ -9,11 +9,9 @@
  * never propagates to the caller. The take route must not fail because
  * a metrics write failed.
  *
- * WIRING: These helpers are not yet wired into the take route.
- * Activate after applying:
- *   supabase/migrations-draft/20260626_matter_promotion_events.sql
- * Then call logPromotionEvent from:
- *   src/app/api/portal/[firmId]/triage/[leadId]/take/route.ts
+ * WIRED: logPromotionEvent is called from take/route.ts at 4 points:
+ *   take_recorded (all bands), matter_created, matter_failed, matter_skipped (Band A).
+ * Migration applied 2026-06-26: supabase/migrations/20260626_matter_promotion_events.sql
  *
  * DR reference: H3 (Codex audit v2, take-to-matter atomicity).
  */

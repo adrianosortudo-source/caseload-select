@@ -17,6 +17,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import type { WebhookPayload } from "@/lib/ghl-webhook-pure";
 import { enqueueWebhook, recordAttempt } from "@/lib/webhook-outbox";
 import { safeFetch } from "@/lib/safe-outbound-fetch";
+import { isConsentGated, type LeadConsentState, type ConsentStatus } from "@/lib/comms-gate";
 
 export {
   buildTakenPayload,
@@ -111,6 +112,40 @@ export async function deliverWebhook(
   const url = await getFirmWebhookUrl(payload.firm_id);
   if (!url) {
     return { fired: false, reason: "ghl_webhook_url not configured" };
+  }
+
+  // H5: CASL consent gate (DR-075). Checked per-firm via consent_gate_enabled.
+  // Fail-open: if the consent migration has not been applied yet (column absent),
+  // the try-catch allows the send. Gate is dormant for all firms until the operator
+  // applies the migration and sets consent_gate_enabled = true on a specific firm.
+  try {
+    const { data: gateRow } = await supabase
+      .from('intake_firms')
+      .select('consent_gate_enabled')
+      .eq('id', payload.firm_id)
+      .maybeSingle();
+
+    if (gateRow?.consent_gate_enabled === true) {
+      const { data: leadRow } = await supabase
+        .from('screened_leads')
+        .select('email_consent_status, sms_consent_status, six_month_expiry_date')
+        .eq('lead_id', payload.lead_id)
+        .maybeSingle();
+
+      if (leadRow) {
+        const consentState: LeadConsentState = {
+          email_consent_status: (leadRow.email_consent_status ?? null) as ConsentStatus | null,
+          sms_consent_status: (leadRow.sms_consent_status ?? null) as ConsentStatus | null,
+          six_month_expiry_date: (leadRow.six_month_expiry_date as string | null) ?? null,
+        };
+        if (!isConsentGated(consentState, 'email')) {
+          return { fired: false, reason: 'consent_gate_blocked' };
+        }
+      }
+      // leadRow null: lead not found or consent columns absent; fail-open
+    }
+  } catch {
+    // Consent columns not yet migrated or lookup error; fail-open (allow send)
   }
 
   const enq = await enqueueWebhook(payload, url);
