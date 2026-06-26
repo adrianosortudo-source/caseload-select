@@ -113,8 +113,11 @@ export function listenForHandoffResult(opts: {
     if (isValidResult(e.data, firmId, session)) finish(e.data.transcript);
   };
 
-  // In case the record tab wrote the result before this listener attached
-  // (it should not, since we attach before opening the tab), check once.
+  // Re-read localStorage directly. Covers two cases: the result was written
+  // before this listener attached, and (the important one on iOS) the widget
+  // tab was backgrounded while the user recorded in the new tab. iOS suspends
+  // background tabs, so a `storage` event fired during recording may never be
+  // delivered; re-checking when the tab regains visibility recovers it.
   const checkExisting = () => {
     try {
       const raw = window.localStorage.getItem(resultKey(session));
@@ -126,13 +129,23 @@ export function listenForHandoffResult(opts: {
     }
   };
 
+  const onVisible = () => {
+    if (document.visibilityState === "visible") checkExisting();
+  };
+
   window.addEventListener("storage", onStorage);
   window.addEventListener("message", onMessage);
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", checkExisting);
+  window.addEventListener("pageshow", checkExisting);
   checkExisting();
 
   function cleanup() {
     window.removeEventListener("storage", onStorage);
     window.removeEventListener("message", onMessage);
+    document.removeEventListener("visibilitychange", onVisible);
+    window.removeEventListener("focus", checkExisting);
+    window.removeEventListener("pageshow", checkExisting);
   }
 
   return cleanup;

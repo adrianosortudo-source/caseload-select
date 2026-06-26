@@ -1,5 +1,35 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { checkStageGate, type GateMatterInput } from '@/lib/matter-stage-gate';
+
+// supabase-admin imports server-only; mock the whole module.
+vi.mock('server-only', () => ({}));
+
+// Default: every conflict check query returns a cleared row so these tests
+// focus on Gate 1 (contact info) without needing to set up conflict state.
+// Gate 2 conflict cases live in matter-conflict-gate.test.ts.
+vi.mock('@/lib/supabase-admin', () => ({
+  supabaseAdmin: {
+    from: (table: string) => {
+      if (table === 'screened_conflict_checks') {
+        const chain: Record<string, unknown> = {};
+        const noop = () => chain;
+        chain.select = noop;
+        chain.eq = noop;
+        chain.order = noop;
+        chain.limit = noop;
+        chain.maybeSingle = () =>
+          Promise.resolve({
+            data: { check_status: 'cleared', waiver_consent_id: null },
+            error: null,
+          });
+        return chain;
+      }
+      return {
+        select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }),
+      };
+    },
+  },
+}));
 
 function matter(overrides: Partial<GateMatterInput> = {}): GateMatterInput {
   return {
@@ -54,7 +84,7 @@ describe('checkStageGate: retainer_pending contact gate', () => {
 });
 
 describe('checkStageGate: stages without contact gate', () => {
-  it('retainer_pending -> active: no contact check, allowed even without contact', async () => {
+  it('active: no contact check, allowed when conflict is cleared', async () => {
     const r = await checkStageGate(matter({ primary_email: null, primary_phone: null }), 'active');
     expect(r.allowed).toBe(true);
   });
@@ -75,10 +105,14 @@ describe('checkStageGate: stages without contact gate', () => {
   });
 });
 
-describe('checkStageGate: stub gates return allowed', () => {
-  it('conflict and consent stubs pass through', async () => {
-    // No conflict or consent data available; both stubs return allowed.
-    const r = await checkStageGate(matter({ source_screened_lead_id: null }), 'retainer_pending');
+describe('checkStageGate: conflict gate passes when cleared', () => {
+  it('cleared conflict check on retainer_pending: allowed', async () => {
+    const r = await checkStageGate(matter(), 'retainer_pending');
+    expect(r.allowed).toBe(true);
+  });
+
+  it('cleared conflict check on active: allowed', async () => {
+    const r = await checkStageGate(matter(), 'active');
     expect(r.allowed).toBe(true);
   });
 });

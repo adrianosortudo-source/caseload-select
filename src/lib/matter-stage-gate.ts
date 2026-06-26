@@ -4,18 +4,21 @@
  * Checks domain prerequisites before a stage advance is committed. Wired into
  * transitionMatterStage between the state-graph validation and the DB write.
  *
- * Currently implemented:
- *   - Mandatory contact: intake -> retainer_pending requires primary_name
+ * Implemented:
+ *   Gate 1: Mandatory contact -- intake to retainer_pending requires primary_name
  *     and at least one of primary_email / primary_phone.
+ *   Gate 2: Canonical conflict check -- retainer_pending and active require a
+ *     human-cleared or human-waived row in screened_conflict_checks for this
+ *     matter. No auto-clear. No row = blocked. Waived requires waiver_consent_id.
+ *     The legacy conflict_checks table (rooted on leads/law_firm_clients) is NOT
+ *     consulted here.
  *
  * Stubbed (always returns allowed; wired when backing data exists):
- *   - Conflict disposition (conflict_checks table not yet built)
- *   - Comms consent (DR-075 migration pending operator approval)
- *
- * DR-075: CASL consent gate architecture.
+ *   Gate 3: Comms consent (DR-075 migration pending operator approval)
  */
 
 import type { MatterStage } from '@/lib/types';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 
 export type StageGateCode =
   | 'missing_contact_info'
@@ -34,8 +37,11 @@ export interface GateMatterInput {
   primary_phone: string | null;
 }
 
-// Stages that require contact info before advancing.
 const CONTACT_REQUIRED_TARGETS = new Set<MatterStage>(['retainer_pending']);
+
+// Both stages involve external parties and financial commitment; conflict must
+// be cleared before either is permitted.
+const CONFLICT_GATE_TARGETS = new Set<MatterStage>(['retainer_pending', 'active']);
 
 /**
  * Returns { allowed: true } when all compliance checks pass, or a
@@ -66,9 +72,45 @@ export async function checkStageGate(
     }
   }
 
-  // Gate 2: conflict disposition (stub).
-  // TODO: query conflict_checks by matter.id; block if disposition = 'conflict_found'.
-  // Activate when the conflict_checks table is built and migrations are applied.
+  // Gate 2: canonical conflict check (screened_conflict_checks, NOT legacy conflict_checks).
+  // No auto-clear: absence of a check is a block, not a pass.
+  if (CONFLICT_GATE_TARGETS.has(to)) {
+    const { data: check } = await supabaseAdmin
+      .from('screened_conflict_checks')
+      .select('check_status, waiver_consent_id')
+      .eq('matter_id', matter.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!check) {
+      return {
+        allowed: false,
+        reason: 'No conflict check on file. A conflict check must be completed and cleared before advancing.',
+        code: 'conflict_not_cleared',
+      };
+    }
+
+    if (check.check_status === 'cleared') {
+      // Human reviewer confirmed no conflict; gate passes.
+    } else if (check.check_status === 'waived') {
+      if (!check.waiver_consent_id) {
+        return {
+          allowed: false,
+          reason: 'Conflict waiver must reference a consent or waiver record (waiver_consent_id is required).',
+          code: 'conflict_not_cleared',
+        };
+      }
+      // Waived with a consent/waiver reference on file; gate passes.
+    } else {
+      // pending, potential, or blocked
+      return {
+        allowed: false,
+        reason: `Conflict check status is '${check.check_status}'. A human must clear or waive before advancing.`,
+        code: 'conflict_not_cleared',
+      };
+    }
+  }
 
   // Gate 3: comms consent (stub).
   // TODO (DR-075 activation): query screened_leads by matter.source_screened_lead_id;

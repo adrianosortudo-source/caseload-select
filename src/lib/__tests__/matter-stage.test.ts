@@ -65,14 +65,31 @@ vi.mock('@/lib/supabase-admin', () => ({
   supabaseAdmin: {
     from: (table: string) => ({
       select: (_cols: string) => {
-        const chain = {
+        // chain must include order + limit so the conflict gate query
+        // (.select().eq().order().limit().maybeSingle()) does not throw.
+        const chain: {
+          eq: () => typeof chain;
+          order: () => typeof chain;
+          limit: () => typeof chain;
+          maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+        } = {
           eq: () => chain,
+          order: () => chain,
+          limit: () => chain,
           maybeSingle: () => {
             if (table === 'client_matters') {
               return Promise.resolve({ data: state.matterRow, error: state.matterFetchError });
             }
             if (table === 'screened_leads') {
               return Promise.resolve({ data: state.sourceLeadRow, error: null });
+            }
+            if (table === 'screened_conflict_checks') {
+              // Conflict gate passes for all transitionMatterStage tests; the
+              // gate-specific behavior is covered in matter-conflict-gate.test.ts.
+              return Promise.resolve({
+                data: { check_status: 'cleared', waiver_consent_id: null },
+                error: null,
+              });
             }
             return Promise.resolve({ data: null, error: null });
           },
