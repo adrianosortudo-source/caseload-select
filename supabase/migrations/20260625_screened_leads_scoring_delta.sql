@@ -1,5 +1,7 @@
 -- =============================================================================
--- Phase 1 expand-phase migration (C3 dual-run runbook approved 2026-06-25).
+-- Phase 1 expand-phase migration. Scoring-delta persist path cleared for this
+-- migration specifically. C3 dual-run runbook: docs/crm-migration-runbook.md
+-- (authored 2026-06-26; was not yet authored at apply time 2026-06-25).
 -- APPLIED to prod (ssxryjxifwiivghglqer) 2026-06-25 via MCP apply_migration.
 -- In supabase/migrations/ so `supabase db push` tracks it; fully idempotent, so
 -- a re-run (or a db push that re-applies) is a harmless no-op.
@@ -49,7 +51,7 @@ END $$;
 -- BACKFILL (NOT run by this migration). The scoring-delta values are computed in
 -- TypeScript via computeScorePort (src/lib/scoring-port.ts), so the backfill is
 -- a batched job run AFTER this migration, not pure SQL. Reference implementation:
--- scripts/backfill-scoring-delta.mjs (staged, not yet executed).
+-- scripts/backfill-scoring-delta.ts (not yet executed; see docs/crm-migration-runbook.md).
 --
 -- Per row of screened_leads where matter_type NOT IN ('out_of_scope','unknown')
 -- AND firm_id IS NOT NULL (quarantine null-firm rows, runbook section 7):
