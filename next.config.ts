@@ -94,7 +94,15 @@ const widgetSecurityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(self), geolocation=(), payment=(), usb=()",
+    // microphone=* (not (self)) because the widget is meant to be embedded on
+    // client firm sites and use the mic from inside a cross-origin iframe.
+    // WebKit/iOS Safari mishandles `self` in a subframe's Permissions-Policy
+    // header (it can resolve against the top origin, blocking the widget),
+    // while Chrome honors it. The wildcard avoids that quirk. Access stays
+    // gated by the embedder's iframe allow="microphone" attribute, so this is
+    // not a widening of who can actually reach the mic. Camera, geolocation,
+    // payment, and usb remain disabled; the widget only needs the microphone.
+    value: "camera=(), microphone=*, geolocation=(), payment=(), usb=()",
   },
   // No X-Frame-Options on /widget/* — would override CSP frame-ancestors and
   // block embedding. The CSP frame-ancestors omission above is the gate.
