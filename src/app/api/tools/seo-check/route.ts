@@ -388,8 +388,31 @@ function extractLawFirmSignals(html: string, schema: SchemaSummary): LawFirmSign
   const buttonText = (html.match(/<button[^>]*>([\s\S]*?)<\/button>/gi) || []).map((b) => b.replace(/<[^>]+>/g, " ").toLowerCase()).join(" ");
   const cta = anchorText + " " + buttonText;
 
-  const hasForm = /<form[\s\S]*?(<input|<textarea|<select)/i.test(html) || /mailto:/i.test(html);
-  const consultationCta = /(free consultation|book a consultation|schedule a consultation|request a consultation|book a call|schedule a call|get started|request a quote|contact us|talk to (a|an) (lawyer|attorney)|speak (to|with) (a|an) (lawyer|attorney))/i.test(cta);
+  // Modern law firm sites render CTA text client-side (React/Next.js). Scan
+  // href attributes for intake anchors: present in SSR HTML even when the
+  // button label is injected after hydration.
+  // Use matchAll to capture group 1 (the URL value only, not the full href="..." attribute).
+  const anchorHrefs = [...html.matchAll(/\bhref=["']([^"']+)["']/gi)].map((m) => m[1].toLowerCase());
+  const hasIntakeAnchor = anchorHrefs.some(
+    (h) => /#(matter-review|intake|contact|book|schedule|consultation|get-started|form)/.test(h) ||
+      /\/(book|contact|schedule|consultation)/.test(h)
+  );
+
+  // Intake widgets (CaseLoad Screen, Typeform, Calendly, etc.) embed as iframes
+  // rather than native <form> elements. Treat an intake-looking iframe as a form.
+  const iframeSrcs = [...html.matchAll(/<iframe[^>]*src=["']([^"']+)["']/gi)].map((m) => m[1].toLowerCase());
+  const hasIntakeIframe = iframeSrcs.some(
+    (s) => /(widget-public|widget\/|intake|calendly\.com|typeform\.com|jotform\.com|cognitoforms|formstack)/.test(s)
+  );
+
+  const hasForm = /<form[\s\S]*?(<input|<textarea|<select)/i.test(html) ||
+    /mailto:/i.test(html) ||
+    hasIntakeIframe;
+
+  const consultationCta =
+    hasIntakeAnchor ||
+    hasIntakeIframe ||
+    /(free consultation|book a consultation|schedule a consultation|request a consultation|book a call|schedule a call|get started|request a quote|contact us|talk to (a|an) (lawyer|attorney)|speak (to|with) (a|an) (lawyer|attorney))/i.test(cta);
 
   return {
     phoneVisible: PHONE_RE.test(bodyText),
