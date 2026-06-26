@@ -19,7 +19,7 @@
 --   - For explicit consent rows, six_month_expiry_date stays NULL (explicit does not expire).
 --   - consent_log is append-only: INSERT-only policy, no UPDATE, no DELETE.
 --
--- DR reference: H5 (pending operator approval).
+-- DR reference: DR-075 (CASL consent gate architecture).
 
 BEGIN;
 

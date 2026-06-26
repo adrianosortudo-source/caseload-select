@@ -16,7 +16,7 @@
  * All inputs are typed strings, not DB-native enums, so the gate works
  * identically in tests and production without importing Supabase types.
  *
- * DR reference: H5 consent gate (pending schema migration).
+ * DR reference: DR-075 (CASL consent gate architecture).
  * Schema migration: supabase/migrations-draft/20260626_screened_leads_consent.sql
  */
 
