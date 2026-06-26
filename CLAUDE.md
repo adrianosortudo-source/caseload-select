@@ -890,6 +890,26 @@ A dedicated channel between the CaseLoad operator and each firm's lawyers. Struc
 - **Notifications:** `notification_outbox` event_type `firm_message_new`. Operator sends notify the firm's enabled lawyers; lawyer sends notify `adriano@caseloadselect.ca`. The 5-minute digest renders them under a "CaseLoad messages" group with a deep link (lawyer to the portal tab, operator to the console surface).
 - **Scope:** MVP is human messages only (list, threads one level deep, attachments, edit/delete own, read state, unread badges). Phase 2/3 (reactions, search, pins, mark-unread, realtime, system auto-posts, multiple topic channels) deferred. Full feature inventory + roadmap: `docs/operator-firm-messaging-spec-v1.md`.
 
+## Email Branding & Delivery (2026-06-25)
+
+DRG-style correspondence shell for client-facing transactional emails, shipped in commit `b98795a`.
+
+**Brand ownership (DR-074).** Two axes set an email's look. Who it represents sets the brand: client-facing firm correspondence (intake OTP, portal invite, client welcome, the GHL CRM cadences) carries the FIRM's brand; operator and product notifications (new-lead alerts, the 5-minute digest, magic-link sign-in, firm onboarding, screen-demo) stay CaseLoad. Do not re-skin the product notifications per firm.
+
+**Per-firm shell, opt-in via `intake_firms.branding.theme`.** `lib/email-branding.ts` `resolveEmailBranding(branding)` reads the same theme that drives the widget, solidifies its rgba tokens to hex (email clients drop rgba), and returns null when the firm has no theme. Null tells the caller to keep its existing default rendering, so non-themed firms are byte-for-byte unchanged. Only DRG carries a theme today. `lib/email-shell.ts` `renderEmailShell()` builds the email-safe document (600px table, Outlook MSO conditional, no shadow, rgba, flex, grid, or gradient). `lib/firm-email-branding.ts` is the IO loader (no `server-only`; see Developer Gotchas). Wired into `api/otp/send`, the client `invite` route, and the welcome `send` route. Pure libs are covered by `__tests__/email-branding.test.ts` and `email-shell.test.ts` (the latter doubles as the email-safety scan).
+
+**Welcome is digest-delivered, not a standalone send.** The welcome body is inserted as a `matter_message` (client channel), and the client receives it through the shared 5-minute digest (`matter_message` to `notification_outbox` to `cron/notification-batch`). For a themed firm, the welcome `send` route sends a standalone branded email and suppresses that one client digest copy via `insertMessage({ notifyClient: false })`, falling back to the digest if the standalone send fails. Lawyers are notified either way. Rule: before restyling any notification, trace `insertMessage` to `notification_outbox` to the digest to find where it actually reaches the recipient.
+
+**GHL half (operator-deployed, not code).** The CRM cadence emails L01-L14 and the LTT calculator result email are GHL email-step HTML, not app code. Files plus the operator handoff are in `06_Clients/DRGLaw/02_Strategy/EmailTemplates/` (`GHL_Email_Deployment_Checklist_v1.md`). The in-app sequence engine (`sequence-engine.ts` and `send-sequences.ts`) is dormant; DRG's cadences run in GHL.
+
+## Developer Gotchas + Deploy-Safety (2026-06-25)
+
+**Hooks reach code and client files, not only brand deliverables.** The banned-vocab hook blocks em dashes and banned vocabulary in any Write or Edit content, including TypeScript and JS comments, so use commas, colons, or parens in source comments. The DOC-META hook blocks editing any file under `06_Clients/*/`, `04_Playbooks/`, `00_System/`, and the other doc folders (HTML email templates included) unless it carries a DOC-META header (YAML frontmatter for markdown, an `<!-- DOC-META v1 ... -->` comment for HTML).
+
+**`server-only` breaks vitest route tests.** An IO lib imported (transitively) by a route that has its own test must not `import "server-only"`; it throws when the test loads the route module. The repo pattern is IO libs importing `supabaseAdmin` without `server-only`. `lib/firm-about.ts` still carries `server-only` and is a latent test-breaker if a tested route ever imports it.
+
+**Deploy-safety is a pattern, not a per-case call.** Every read of a new table or column is guarded (return null when absent, so the surface renders unchanged and is safe to deploy ahead of its migration), and additive migrations are applied to prod first, then the reading code is pushed. The about panel and the email shell both shipped this way. The "do not auto-apply migration to prod" rule is an awareness gate: hold by default, but when the operator directly asks to see the live result, apply it and report exactly what hit prod.
+
 ## Voice intake — observability + defense in depth (2026-06-02)
 
 Hardening landed across `/api/voice-intake` so a live voice line does not lose leads or degrade silently. All operator alerts go to `adriano@caseloadselect.ca` only (the resolver in `lib/voice-callback-notify.ts`), best-effort via `waitUntil` (never block the webhook ACK, never affect the persisted row).
