@@ -512,7 +512,7 @@ function QueueHeader(props: QueueHeaderProps) {
               type="button"
               onClick={() => onSelectUserView(uv)}
               className="px-2.5 py-1 text-xs text-black/75 hover:text-navy bg-parchment hover:bg-white"
-              title={`Your view: ${uv.label} — query: "${uv.query}"`}
+              title={`Your view: ${uv.label}, query: "${uv.query}"`}
             >
               {uv.label}
             </button>
@@ -600,7 +600,7 @@ function QueueHeader(props: QueueHeaderProps) {
           onFocus={handleSearchFocus}
           onBlur={handleSearchBlur}
           onKeyDown={handleSearchKeyDown}
-          placeholder="Search — name, phone, email, postal, ref, matter. Try band:A or channel:voice or -channel:web"
+          placeholder="Search by name, phone, email, postal, ref, matter. Try band:A or channel:voice or -channel:web"
           aria-label="Search leads"
           className="w-full pl-9 pr-24 py-2 text-sm bg-parchment border border-black/15 focus:bg-white focus:border-navy outline-none transition-colors"
         />

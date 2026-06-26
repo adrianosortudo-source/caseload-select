@@ -168,7 +168,7 @@ export default function RoutingConfigPanel({
           <LawyerSelect
             value={fallbackLead}
             lawyers={lawyers}
-            unsetLabel="Not configured — no lead assigned when no PA default matches"
+            unsetLabel="Not configured: no lead assigned when no PA default matches"
             onChange={(id) => {
               setStatus({ kind: 'idle' });
               setFallbackLead(id);
@@ -325,7 +325,7 @@ function LawyerSelect({
       {lawyers.map((l) => (
         <option key={l.id} value={l.id}>
           {l.name}
-          {l.title ? ` — ${l.title}` : ''}
+          {l.title ? `, ${l.title}` : ''}
         </option>
       ))}
     </select>

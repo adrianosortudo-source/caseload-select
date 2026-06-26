@@ -357,7 +357,7 @@ function ReferModal({ onCancel, onConfirm }: ReferModalProps) {
               rows={4}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Internal note — why this lead is being referred, what context to pass along."
+              placeholder="Internal note: why this lead is being referred, what context to pass along."
               maxLength={4000}
               className="mt-1 w-full bg-parchment border border-black/15 px-3 py-2 text-sm focus:outline-none focus:border-navy resize-y"
             />
