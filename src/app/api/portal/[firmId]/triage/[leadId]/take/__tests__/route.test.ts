@@ -50,6 +50,8 @@ interface MockState {
   webhookFired: boolean;
   webhookPayload: unknown;
   matterCreated: boolean;
+  // Controllable result for createMatterFromBandATake. Defaults to success.
+  matterResult: { ok: true; matter: { id: string } } | { ok: false; error: string };
 }
 
 const FIRM_ID = "11111111-1111-1111-1111-111111111111";
@@ -67,6 +69,7 @@ const state: MockState = {
   webhookFired: false,
   webhookPayload: null,
   matterCreated: false,
+  matterResult: { ok: true, matter: { id: "matter-uuid-1" } },
 };
 
 vi.mock("@/lib/portal-auth", () => ({
@@ -132,7 +135,7 @@ vi.mock("@/lib/ghl-webhook", () => ({
 vi.mock("@/lib/matter-stage", () => ({
   createMatterFromBandATake: (_args: unknown) => {
     state.matterCreated = true;
-    return Promise.resolve({ ok: true, matter: { id: "matter-uuid-1" } });
+    return Promise.resolve(state.matterResult);
   },
 }));
 
@@ -178,6 +181,7 @@ beforeEach(() => {
   state.webhookFired = false;
   state.webhookPayload = null;
   state.matterCreated = false;
+  state.matterResult = { ok: true, matter: { id: "matter-uuid-1" } };
 });
 
 describe("POST /api/portal/[firmId]/triage/[leadId]/take", () => {
@@ -323,5 +327,39 @@ describe("POST /api/portal/[firmId]/triage/[leadId]/take", () => {
     const res = await POST(makeReq() as never, makeParams());
     expect(res.status).toBe(500);
     expect(state.webhookFired).toBe(false);
+  });
+
+  // Matter-creation path tests (P4 hardening)
+
+  it("Band A take with missing contact info: take succeeds, matter skipped, matter_id null", async () => {
+    // Route pre-check: contact_name && (email || phone). When both email and phone
+    // are null, createMatterFromBandATake is never called; matter_id is null in
+    // the response. The take itself still goes through.
+    state.session = { firm_id: FIRM_ID, role: "lawyer", lawyer_id: "lawyer-id-1" };
+    state.lead = triagingLead({ band: "A", contact_email: null, contact_phone: null });
+    state.uuidRow = { id: "uuid-row-1" };
+    const res = await POST(makeReq() as never, makeParams());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe("taken");
+    expect(body.matter_id).toBeNull();
+    expect(state.matterCreated).toBe(false);
+    expect(state.webhookFired).toBe(true);
+  });
+
+  it("Band A take: matter-creation failure returns 200 with matter_id null (best-effort)", async () => {
+    // createMatterFromBandATake returns ok:false (DB insert fail, duplicate, etc.).
+    // The route logs the error and continues: take 200, webhook fired, matter_id null.
+    state.session = { firm_id: FIRM_ID, role: "lawyer", lawyer_id: "lawyer-id-1" };
+    state.lead = triagingLead({ band: "A" });
+    state.uuidRow = { id: "uuid-row-1" };
+    state.matterResult = { ok: false, error: "insert failed" };
+    const res = await POST(makeReq() as never, makeParams());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe("taken");
+    expect(body.matter_id).toBeNull();
+    expect(state.matterCreated).toBe(true);
+    expect(state.webhookFired).toBe(true);
   });
 });
