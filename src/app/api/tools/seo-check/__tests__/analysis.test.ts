@@ -23,6 +23,7 @@ function mkPage(opts: {
   testimonials?: boolean;
   credentials?: boolean;
   schemaBlocks?: number;
+  hasPerson?: boolean;
 }): PageResult {
   const allItems = opts.categories.flatMap((c) => c.items);
   return {
@@ -44,7 +45,7 @@ function mkPage(opts: {
     },
     schema: {
       blocks: opts.schemaBlocks ?? 1, invalidBlocks: 0, types: [], hasOrganization: false,
-      hasLocalBusiness: false, hasLegalService: false, hasAttorney: false, hasPerson: false,
+      hasLocalBusiness: false, hasLegalService: false, hasAttorney: false, hasPerson: opts.hasPerson ?? false,
       hasBreadcrumb: false, hasFaq: false, hasWebsite: false, hasReview: false,
       fields: { name: false, url: false, telephone: false, address: false, areaServed: false, sameAs: false, priceRange: false, openingHours: false },
       conflictingEntity: false,
@@ -238,5 +239,26 @@ describe("buildSiteStructureIssues", () => {
     })];
     const issues = buildSiteStructureIssues(pages, true);
     expect(issues.map((i) => i.title)).not.toContain("No clear contact path");
+  });
+
+  it("does not flag practice pages when the firm names them by matter (topic URL, type 'other')", () => {
+    const c = [cat("On-Page SEO", [{ label: "Page title", status: "pass" as const, detail: "" }])];
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: c }),
+      // /corporate, /real-estate classify as "other" but carry practice-area intent
+      mkPage({ url: "https://x.com/corporate", pageType: "other", categories: c }),
+      mkPage({ url: "https://x.com/real-estate", pageType: "other", categories: c }),
+    ];
+    expect(buildSiteStructureIssues(pages, true).map((i) => i.title)).not.toContain("No practice-area pages found");
+  });
+
+  it("does not flag a missing team page when a page carries Person schema", () => {
+    const c = [cat("On-Page SEO", [{ label: "Page title", status: "pass" as const, detail: "" }])];
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: c }),
+      // /about carries the lawyer's Person schema even though it is not a /team URL
+      mkPage({ url: "https://x.com/about", pageType: "about", hasPerson: true, categories: c }),
+    ];
+    expect(buildSiteStructureIssues(pages, true).map((i) => i.title)).not.toContain("No attorney / team page found");
   });
 });

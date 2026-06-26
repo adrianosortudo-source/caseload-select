@@ -454,6 +454,16 @@ export function buildSiteStructureIssues(pages: PageResult[], hasSitemap: boolea
   const out: Issue[] = [];
   const hasType = (t: PageType) => pages.some((p) => p.pageType === t);
 
+  // Firms name practice pages by the matter itself (/corporate, /real-estate),
+  // which the URL classifier tags "other", so do not rely on pageType alone:
+  // a non-utility page with practice-area intent counts as a practice page.
+  const hasPractice = hasType("practice") ||
+    pages.some((p) => p.pageType === "other" && p.lawFirm.practiceAreaIntent);
+  // Team info often lives on /about rather than a dedicated /team URL; treat
+  // Person/Attorney schema anywhere as evidence the firm names its lawyers.
+  const hasTeamSignal = hasType("attorney") ||
+    pages.some((p) => p.schema.hasPerson || p.schema.hasAttorney);
+
   const push = (
     id: string, category: string, severity: Severity, title: string, detail: string,
     fix: string, effort: Effort, note: string, angle: string, basePriority: number
@@ -476,7 +486,7 @@ export function buildSiteStructureIssues(pages: PageResult[], hasSitemap: boolea
       "There is no obvious way for a ready-to-act visitor to reach the firm. That is signed cases walking, not a traffic problem.", 88);
   }
 
-  if (!hasType("practice")) {
+  if (!hasPractice) {
     push("structure-practice", "Legal Marketing", "high", "No practice-area pages found",
       "No dedicated practice-area or service pages were found. These are the pages high-intent clients search for.",
       "Build a page per core practice area, each targeting the specific matter language clients use.",
@@ -484,7 +494,7 @@ export function buildSiteStructureIssues(pages: PageResult[], hasSitemap: boolea
       "The firm's highest-value services do not have their own pages, so the searches that matter most have nowhere to land.", 84);
   }
 
-  if (!hasType("attorney")) {
+  if (!hasTeamSignal) {
     push("structure-attorney", "AI Visibility", "medium", "No attorney / team page found",
       "No attorney or team page was found. These pages carry the expertise and authorship signals search and AI weight.",
       "Add an attorney/team page with each lawyer's bio, credentials, and Person schema.",

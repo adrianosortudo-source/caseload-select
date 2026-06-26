@@ -9,7 +9,7 @@ Critical/High to fix-completeness gaps and false positives.
 
 | Area | Fix |
 |---|---|
-| SEO tool SSRF (`api/tools/seo-check`) | DNS-validating, connection-pinning undici dispatcher; per-hop plus per-URL SSRF checks; full IPv6 reserved ranges (`fe80::/10`, `fec0::/10`, `fc00::/7`, `ff00::/8`, IPv4-mapped, NAT64 `64:ff9b::/96`); manual redirects (max 5); byte-capped streaming body reads; `Accept-Encoding: identity` on untrusted fetches |
+| SEO tool SSRF (`api/tools/seo-check`) | DNS-validating, connection-pinning undici dispatcher; per-hop plus per-URL SSRF checks; full IPv6 reserved ranges (`fe80::/10`, `fec0::/10`, `fc00::/7`, `ff00::/8`, IPv4-mapped, NAT64 `64:ff9b::/96`); manual redirects (max 5); byte-capped streaming body reads (bounds decompression) |
 | SEO tool access / cost | Standard/deep scan plus `maxPages > 10` require an operator session; unauthenticated callers forced to quick (10 or fewer) and rate-limited (`seoCheck` bucket); 230s crawl budget with partial results |
 | SEO tool data gate | Public responses strip `internalSummary` plus per-issue `internalNote`/`prospectingAngle`; severity calibration (policy items stay low; the coverage bump cannot synthesize critical) |
 | Tenant isolation | `api/screen` session lookup bound to `firm_id` (cross-firm session-mix IDOR); Clio OAuth `state` HMAC-signed with firmId+expiry (and rejects when `CLIO_CLIENT_SECRET` is missing) |
@@ -36,8 +36,9 @@ Critical/High to fix-completeness gaps and false positives.
    (a) confirm/pin Vercel Node 22.19+ (`engines.node` plus the project setting), (b) `npm install undici@^8`,
    (c) re-verify the SSRF agent (Agent, `connect.lookup`, and `dispatcher` cross-version compat, plus
    the `localtest.me` to 400 block and the engine-core tests), (d) full suite. The decompression
-   vector is mitigated in the interim by the streaming byte cap plus `Accept-Encoding: identity`.
-   (Also: `next` vendors its own `postcss@8.4.31`; that clears only on a future Next release.)
+   vector is bounded in the interim by the streaming byte cap (an earlier `Accept-Encoding: identity`
+   mitigation was reverted: it broke the crawler's compression check for every site and added little
+   over the cap). (Also: `next` vendors its own `postcss@8.4.31`; that clears only on a future Next release.)
 
 4. **`VOICE_HMAC_REQUIRED`.** Operator env flip. Set `VOICE_HMAC_REQUIRED=true` in Vercel prod; DRG's
    `voice_webhook_secret` is already populated. A firm with a secret already requires a valid
