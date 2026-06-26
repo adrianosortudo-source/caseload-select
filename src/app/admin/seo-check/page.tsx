@@ -16,21 +16,17 @@
 
 import "@/app/(marketing)/styles/tokens.css";
 import SeoCheckTool from "@/app/(marketing)/tools/seo-check/_components/SeoCheckTool";
+import PageHeader from "@/components/PageHeader";
 
 export const dynamic = "force-dynamic";
 
 export default function AdminSeoCheckPage() {
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-navy">SEO &amp; AI visibility check</h1>
-        <p className="text-sm text-black/55 mt-1 max-w-2xl">
-          Run a bounded professional diagnostic on any law firm website (quick 10, standard 25, or deep 50 pages).
-          Nine categories per page including indexability, schema, AI visibility, and legal-marketing readiness,
-          plus a prospecting summary and outreach angles for internal use. Run it on a prospect before a pitch
-          or on a client site to find what to fix.
-        </p>
-      </div>
+      <PageHeader
+        title="SEO and AI visibility check"
+        subtitle="Run a bounded professional diagnostic on any law firm website (quick 10, standard 25, or deep 50 pages). Nine categories per page including indexability, schema, AI visibility, and legal-marketing readiness, plus a prospecting summary and outreach angles for internal use. Run it on a prospect before a pitch or on a client site to find what to fix."
+      />
 
       <div className="cls-marketing">
         <SeoCheckTool variant="operator" />

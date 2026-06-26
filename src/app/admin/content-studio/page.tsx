@@ -1,5 +1,4 @@
 import PageHeader from "@/components/PageHeader";
-import FirmFilter from "@/components/admin/FirmFilter";
 import Link from "next/link";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { CreatePieceButton } from "./components";
@@ -198,17 +197,10 @@ export default async function ContentStudioPage({
 
   return (
     <div>
-      <div className="flex items-end justify-between flex-wrap gap-3">
-        <PageHeader
-          title="Content Studio"
-          subtitle={selected.name ?? "Unknown firm"}
-        />
-        <FirmFilter
-          action="/admin/content-studio"
-          firms={firms.map((f) => ({ id: f.id, name: f.name ?? "Unnamed" }))}
-          active={selected.id}
-        />
-      </div>
+      <PageHeader
+        title="Content Studio"
+        subtitle={selected.name ?? "Unknown firm"}
+      />{/* Firm is chosen from the sidebar switcher; no redundant in-page picker. */}
 
       <div className="mt-6 space-y-6">
         {error && (

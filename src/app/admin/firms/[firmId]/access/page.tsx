@@ -47,7 +47,7 @@ export default async function FirmAccessPage({
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs uppercase tracking-wider font-semibold text-gold">Operator</p>
+        <p className="text-xs uppercase tracking-wider font-semibold text-gold">Operator console</p>
         <h1 className="text-2xl font-bold text-navy mt-1">Portal access</h1>
         <p className="mt-1 text-sm text-black/60">
           {firmName}: grant and manage who can sign in to this firm&apos;s portal.

@@ -47,7 +47,7 @@ export default async function FirmMetricsPage({
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs uppercase tracking-wider font-semibold text-gold">Operator</p>
+        <p className="text-xs uppercase tracking-wider font-semibold text-gold">Operator console</p>
         <h1 className="text-2xl font-bold text-navy mt-1">Website metrics</h1>
         {firm && <p className="mt-1 text-sm text-black/60">{firm.name}</p>}
       </div>

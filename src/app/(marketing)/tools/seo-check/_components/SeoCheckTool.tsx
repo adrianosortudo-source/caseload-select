@@ -123,7 +123,7 @@ export default function SeoCheckTool({
               <input
                 type="text"
                 className="seo-input-field"
-                placeholder="yourfirm.ca"
+                placeholder={isOperator ? "firm-or-prospect.ca" : "yourfirm.ca"}
                 value={domain}
                 onChange={(e) => {
                   setDomain(e.target.value);
@@ -134,7 +134,7 @@ export default function SeoCheckTool({
               />
             </div>
             <button className="seo-scan-btn" onClick={handleScan}>
-              Check my site
+              {isOperator ? "Run check" : "Check my site"}
             </button>
           </div>
           {error && <p className="seo-error">{error}</p>}

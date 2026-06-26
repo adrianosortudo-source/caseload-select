@@ -14,22 +14,17 @@
  */
 
 import ProspectingDiagnosticTool from "./_components/ProspectingDiagnosticTool";
+import PageHeader from "@/components/PageHeader";
 
 export const dynamic = "force-dynamic";
 
 export default function AdminProspectingDiagnosticPage() {
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-navy">Prospecting diagnostic</h1>
-        <p className="text-sm text-black/55 mt-1 max-w-2xl">
-          Run a firm through the SEO &amp; AI Visibility engine, then read the result back as a
-          sales narrative. The technical findings translate into the ACTS framework, with outreach
-          hooks, strategic call questions, a 30/60/90 plan, a cold email draft, and a JSON export
-          for the diagnostic PDF builder. The SEO grade stays internal; the output speaks in
-          business terms.
-        </p>
-      </div>
+      <PageHeader
+        title="Prospecting diagnostic"
+        subtitle="Run a firm through the SEO and AI Visibility engine, then read the result back as a sales narrative. The technical findings translate into the ACTS framework, with outreach hooks, strategic call questions, a 30/60/90 plan, a cold email draft, and a JSON export for the diagnostic PDF builder. The SEO grade stays internal; the output speaks in business terms."
+      />
 
       <ProspectingDiagnosticTool />
     </div>

@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
+import PageHeader from "@/components/PageHeader";
 
 const LOCAL_URL = "http://localhost:8765";
 
@@ -50,13 +51,15 @@ export default function DiagnosticBuilderPage() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-bold text-navy">Diagnostic builder</h1>
-        <p className="text-sm text-black/60">
-          Local tool that turns a firm URL into a branded 8-page diagnostic PDF.
-          Autonomous research, AI draft, locked template, brand-and-LSO QA gate.
-        </p>
-      </header>
+      <PageHeader
+        title="Diagnostic builder"
+        subtitle="Local tool that turns a firm URL into a branded 8-page diagnostic PDF. Autonomous research, AI draft, locked template, brand-and-LSO QA gate."
+        right={
+          <span className="text-[10px] uppercase tracking-wider font-semibold text-black/50 border border-black/15 px-2 py-1">
+            Local tool
+          </span>
+        }
+      />
 
       <section className="bg-white border border-black/8 p-6 space-y-4">
         {/* Primary affordance: always visible. Click goes to localhost:8765

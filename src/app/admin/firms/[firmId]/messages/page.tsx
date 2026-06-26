@@ -40,7 +40,7 @@ export default async function OperatorFirmMessagesPage({
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-xs uppercase tracking-wider font-semibold text-gold">Operator</p>
+        <p className="text-xs uppercase tracking-wider font-semibold text-gold">Operator console</p>
         <h1 className="text-2xl font-bold text-navy mt-1">Messages</h1>
         <p className="mt-1 text-sm text-black/60">
           Your direct line with {firmName}. Clients never see this channel.

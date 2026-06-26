@@ -65,9 +65,21 @@ export function matterLabel(matter: string | null | undefined): string {
   return MATTER_LABELS[matter] ?? matter;
 }
 
+/** snake_case or kebab-case to Title Case: "family_law" -> "Family Law". */
+function toTitleCase(raw: string): string {
+  return raw
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function practiceAreaLabel(area: string | null | undefined): string {
   if (!area) return PRACTICE_AREA_LABELS.unknown;
-  return PRACTICE_AREA_LABELS[area] ?? area;
+  // Case-insensitive map lookup, then a Title-Case fallback so unmapped values
+  // (family_law, general, litigation, or any future key) never reach the screen
+  // as raw snake_case. Stored data is inconsistently cased, so normalize first.
+  return PRACTICE_AREA_LABELS[area.toLowerCase()] ?? toTitleCase(area);
 }
 
 export const BAND_C_SUBTRACK_LABELS: Record<string, string> = {

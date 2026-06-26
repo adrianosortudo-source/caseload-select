@@ -74,7 +74,7 @@ export default async function FirmOnboardingPage({
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs uppercase tracking-wider font-semibold text-gold">Operator</p>
+        <p className="text-xs uppercase tracking-wider font-semibold text-gold">Operator console</p>
         <h1 className="text-2xl font-bold text-navy mt-1">Onboarding</h1>
         <p className="mt-1 text-sm text-black/60">
           {firmName}: registration and firm-profile submissions for this firm.
