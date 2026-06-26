@@ -307,7 +307,9 @@ function Header({ count, view }: { count: number; view: LifecycleView }) {
         <h1 className="text-2xl font-bold text-navy mt-1">{title}</h1>
       </div>
       <div className="text-xs text-black/50 uppercase tracking-wider">
-        {count === 0 ? "Nothing here yet" : `${count} lead${count === 1 ? "" : "s"} ${totalNoun}`}
+        {/* Always a count summary. The empty case is covered by EmptyState in
+            the body, so the prior "Nothing here yet" here was a duplicate. */}
+        {`${count} lead${count === 1 ? "" : "s"} ${totalNoun}`}
       </div>
     </div>
   );

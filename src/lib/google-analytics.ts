@@ -150,7 +150,11 @@ function dimVal(row: GA4Row | undefined, index: number): string {
 }
 
 function computeDelta(current: number, previous: number): number | null {
-  if (previous === 0) return current > 0 ? 1 : null;
+  // No prior-week baseline means no meaningful percentage change. Returning a
+  // flat +100% (the old `current > 0 ? 1`) read as real growth when it only
+  // meant "the prior week was zero", so every first-week metric showed +100%.
+  // Suppress the delta instead; the card renders the value with no delta badge.
+  if (previous === 0) return null;
   return (current - previous) / previous;
 }
 

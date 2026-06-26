@@ -45,7 +45,10 @@ function fourteenDaysAgo(): string {
 }
 
 function computeDelta(current: number, previous: number): number | null {
-  if (previous === 0) return current > 0 ? 1 : null;
+  // No prior-week baseline means no meaningful percentage change. A flat +100%
+  // read as real growth when it only meant "the prior week was zero". Suppress
+  // the delta; the card renders the value with no delta badge.
+  if (previous === 0) return null;
   return (current - previous) / previous;
 }
 
