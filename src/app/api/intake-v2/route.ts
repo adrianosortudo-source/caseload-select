@@ -374,6 +374,9 @@ export async function POST(req: NextRequest) {
   // axes columns or a later cron sweep can backfill once thresholds are pinned.
   const bandCSubtrack: string | null = null;
   const scoringDelta = buildScoringDeltaForInsert(hydratedSlotAnswers, matterType, band);
+  // N2: extract axis_reasoning from the report so it is a queryable top-level
+  // column (CANONICAL-DATA-MODEL-v1.md s3.4), not buried inside brief_json.
+  const axisReasoning = (v.brief_json as unknown as LawyerReport)?.axis_reasoning ?? null;
 
   // ── Insert ────────────────────────────────────────────────────────────────
   const { data: inserted, error: insertErr } = await supabase
@@ -418,6 +421,7 @@ export async function POST(req: NextRequest) {
       utm_term: v.utm_term ?? null,
       utm_content: v.utm_content ?? null,
       referrer: referrer ?? null,
+      axis_reasoning: axisReasoning,
       ...(scoringDelta ?? {}),
     })
     .select('id, lead_id, status, decision_deadline, whale_nurture')

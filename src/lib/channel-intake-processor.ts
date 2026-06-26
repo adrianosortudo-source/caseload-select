@@ -1123,6 +1123,7 @@ export async function finalizeChannelLead(
       submitted_at: state.submitted_at ?? now.toISOString(),
       intake_language: state.language ?? 'en',
       raw_transcript: state.input ?? fallbackTranscript,
+      axis_reasoning: report.axis_reasoning ?? null,
       ...(scoringDelta ?? {}),
     })
     .select('id, lead_id, status, decision_deadline, whale_nurture')
