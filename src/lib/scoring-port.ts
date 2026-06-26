@@ -23,6 +23,7 @@
  * pass uses a flat inferred-provenance discount (INFERRED_TRUST).
  */
 import { scoreFourAxes } from '@/lib/screen-engine/band';
+import { extractRawSignals } from '@/lib/screen-engine/extractor';
 import type { EngineState, FourAxisScores, Band } from '@/lib/screen-engine/types';
 import {
   AXIS_INPUT_MANIFEST,
@@ -195,19 +196,50 @@ export interface ScorePort {
 }
 
 /**
+ * Rehydrate the scored EngineState from a stored screened_leads row. The
+ * persisted `slot_answers` is a PARTIAL serialized state: it carries
+ * slots / slot_meta / advisory_subtrack / dispute_family / etc., but NOT
+ * `matter_type` (which lives in its own column). Pass the column value back in,
+ * or the whole port keys off an undefined matter_type, axisSlotWeights returns
+ * an empty map, and completeness collapses to 0 for every row.
+ *
+ * `raw` is intentionally left as-is here; computeScorePort defaults a missing
+ * `raw` to the all-false RawSignals.
+ */
+export function rehydrateScoredState(slotAnswers: unknown, matterType: string): EngineState {
+  return { ...(slotAnswers as Record<string, unknown>), matter_type: matterType } as unknown as EngineState;
+}
+
+/**
  * Compute the full C1-C3 + 8.2 + 7 bundle for a four-axis-scored lead. `band`
  * comes from computeBand (the caller already has it). This is the shape the
  * Section 5 columns will persist once the dual-run schema lands (gated by C3).
+ *
+ * Callers building `state` from a screened_leads row MUST run it through
+ * rehydrateScoredState first so matter_type is present.
  */
 export function computeScorePort(state: EngineState, band: Band): ScorePort {
-  const { confidence, completeness, scoringGaps } = computeScoreConfidence(state);
-  const scores: FourAxisScores = scoreFourAxes(state);
+  // Serialized/historical states may omit `raw` (the extracted mention-flags
+  // container): in the live data 31 of 44 rows had no `raw` because no flags were
+  // serialized. scoreUrgency and friends read `state.raw.mentions_*`, so a missing
+  // `raw` crashes them. A missing `raw` means "no mentions", so default it to {}
+  // (the honest neutral: no flags read, no bump added) rather than throw. In the
+  // live intake path `raw` is always present, so this is a no-op there.
+  //
+  // `slots` / `slot_meta` are deliberately NOT defaulted. A state missing those is
+  // genuinely degenerate (no answers at all) and must surface as malformed
+  // upstream, not be silently scored as an empty intake.
+  // extractRawSignals('') is the canonical all-false RawSignals (empty input
+  // mentions nothing): type-correct and semantically exact for "no mentions".
+  const safeState: EngineState = state.raw ? state : { ...state, raw: extractRawSignals('') };
+  const { confidence, completeness, scoringGaps } = computeScoreConfidence(safeState);
+  const scores: FourAxisScores = scoreFourAxes(safeState);
   return {
     confidence,
     completeness,
-    missing_fields: missingSlotsForMatter(state),
+    missing_fields: missingSlotsForMatter(safeState),
     explanation: buildScoreExplanation(scores, { confidence, scoringGaps }),
-    field_provenance: fieldProvenance(state),
+    field_provenance: fieldProvenance(safeState),
     requires_human_review: requiresHumanReviewBeforeAuto(band, confidence),
   };
 }

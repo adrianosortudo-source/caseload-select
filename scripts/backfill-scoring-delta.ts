@@ -46,9 +46,9 @@ try {
 }
 
 import { createClient } from '@supabase/supabase-js';
-import { computeScorePort } from '../src/lib/scoring-port';
+import { computeScorePort, rehydrateScoredState } from '../src/lib/scoring-port';
 import { scorePortToColumns } from '../src/lib/scoring-port-persistence';
-import type { EngineState, Band } from '../src/lib/screen-engine/types';
+import type { Band } from '../src/lib/screen-engine/types';
 
 const PROD_REF = 'ssxryjxifwiivghglqer';
 // Prefer the operator-set SUPABASE_URL over NEXT_PUBLIC_SUPABASE_URL: .env.local
@@ -107,8 +107,18 @@ const supabase = createClient(url, key, { auth: { persistSession: false } });
         continue;
       }
 
-      const state = row.slot_answers as unknown as EngineState;
-      const cols = scorePortToColumns(computeScorePort(state, row.band as Band));
+      // slot_answers omits matter_type (it is a column); merge it back in.
+      const state = rehydrateScoredState(row.slot_answers, row.matter_type);
+      // A genuinely degenerate state (no slots / slot_meta) throws in the port.
+      // Quarantine and report it, matching the read-shadow, instead of crashing
+      // the whole run. (Missing `raw` is normalized inside computeScorePort.)
+      let cols: ReturnType<typeof scorePortToColumns>;
+      try {
+        cols = scorePortToColumns(computeScorePort(state, row.band as Band));
+      } catch {
+        skipped.push({ id: row.id, reason: 'malformed_slot_answers' });
+        continue;
+      }
 
       if (!commit) {
         console.log(

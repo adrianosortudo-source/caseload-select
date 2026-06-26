@@ -13,7 +13,7 @@
  * (a null persisted field is "not yet populated", not a drift), full null counts
  * in columnPopulation, and the distributions still computed from the fresh port.
  */
-import { computeScorePort } from '@/lib/scoring-port';
+import { computeScorePort, rehydrateScoredState } from '@/lib/scoring-port';
 import { scorePortToColumns, type ScoringDeltaColumns } from '@/lib/scoring-port-persistence';
 import type { EngineState, Band } from '@/lib/screen-engine/types';
 
@@ -89,7 +89,9 @@ function classify(row: ShadowRow): { ok: true; state: EngineState } | { ok: fals
   if (SKIP_MATTER_TYPES.has(row.matter_type)) return { ok: false, reason: 'out_of_scope' };
   if (!row.band) return { ok: false, reason: 'null_band' };
   if (!isUsableState(row.slot_answers)) return { ok: false, reason: 'malformed_slot_answers' };
-  return { ok: true, state: row.slot_answers };
+  // slot_answers omits matter_type (it is a column); merge it back in so the
+  // port keys off the right matter type instead of reading completeness 0.
+  return { ok: true, state: rehydrateScoredState(row.slot_answers, row.matter_type) };
 }
 
 /** Expected scoring-delta columns for a scannable row, or null if the port throws. */

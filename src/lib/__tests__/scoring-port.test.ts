@@ -10,6 +10,7 @@ import {
   buildScoreExplanation,
   requiresHumanReviewBeforeAuto,
   computeScorePort,
+  rehydrateScoredState,
 } from '@/lib/scoring-port';
 import type { EngineState, FourAxisScores, MatterType, SlotMetaSource } from '@/lib/screen-engine/types';
 
@@ -162,5 +163,71 @@ describe('computeScorePort (bundle)', () => {
     // Only one low-weight axis slot answered: low confidence + Band A => human review.
     expect(port.confidence).toBe('low');
     expect(port.requires_human_review).toBe(true);
+  });
+});
+
+describe('computeScorePort tolerates serialized states missing raw (regression)', () => {
+  // 31 of 44 live screened_leads rows had slot_answers with no `raw` (no
+  // mention-flags serialized). scoreUrgency reads state.raw.mentions_*, so a
+  // missing raw crashed the backfill mid-run. It must score, treating mentions
+  // as absent.
+  it('scores a state with no raw field instead of throwing', () => {
+    const base = makeState(CRE, { commercial_re_amount: '$2M–$10M' }, { commercial_re_amount: 'answered' });
+    const noRaw = { ...base } as Record<string, unknown>;
+    delete noRaw.raw;
+    const port = computeScorePort(noRaw as unknown as EngineState, 'B');
+    expect(['high', 'medium', 'low']).toContain(port.confidence);
+    expect(typeof port.completeness).toBe('number');
+    expect(port.explanation.length).toBeGreaterThan(0);
+    expect(port.field_provenance.commercial_re_amount).toBe('confirmed');
+  });
+
+  // The boundary is deliberate: a state with no slots at all is genuinely
+  // degenerate and must surface as malformed upstream (the backfill and
+  // read-shadow quarantine it), not be silently scored as an empty intake.
+  it('still throws on a degenerate state with no slots / slot_meta', () => {
+    const base = makeState(CRE, { commercial_re_amount: '$2M–$10M' });
+    const degenerate = { ...base } as Record<string, unknown>;
+    delete degenerate.slots;
+    delete degenerate.slot_meta;
+    expect(() => computeScorePort(degenerate as unknown as EngineState, 'B')).toThrow();
+  });
+});
+
+describe('rehydrateScoredState: live slot_answers omits matter_type (regression)', () => {
+  // Real screened_leads store matter_type as a column, NOT inside slot_answers
+  // (0 of 44 live rows carried it). Without rehydration the port keys off an
+  // undefined matter_type, axisSlotWeights returns an empty map, and completeness
+  // collapses to 0 for fully-answered rows. This is the shape the dry-run hit.
+  const liveSlotAnswers = {
+    slots: {
+      commercial_re_amount: 'Under $500,000',
+      commercial_property_type: 'Retail / storefront',
+      commercial_re_concerns: 'Reviewing the agreement',
+      commercial_re_stage: 'Talking with the other side',
+      decision_authority: 'Multiple owners or directors',
+      hiring_timeline: 'Within the next 30 days',
+      other_counsel: 'Yes, I am comparing options',
+    },
+    slot_meta: Object.fromEntries(
+      [
+        'commercial_re_amount', 'commercial_property_type', 'commercial_re_concerns',
+        'commercial_re_stage', 'decision_authority', 'hiring_timeline', 'other_counsel',
+      ].map((k) => [k, { source: 'answered' }]),
+    ),
+    advisory_subtrack: 'unknown',
+    // deliberately NO matter_type and NO raw, matching the live row shape
+  };
+
+  it('without rehydration the port collapses to completeness 0 (the bug)', () => {
+    const naive = computeScorePort(liveSlotAnswers as unknown as EngineState, 'B');
+    expect(naive.completeness).toBe(0);
+  });
+
+  it('rehydrated with the column matter_type, the same row reads complete + high', () => {
+    const state = rehydrateScoredState(liveSlotAnswers, CRE);
+    const port = computeScorePort(state, 'B');
+    expect(port.completeness).toBe(1);
+    expect(port.confidence).toBe('high');
   });
 });
