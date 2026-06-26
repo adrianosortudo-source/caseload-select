@@ -108,6 +108,17 @@ const widgetSecurityHeaders = [
   // block embedding. The CSP frame-ancestors omission above is the gate.
 ];
 
+// /voice-handoff is the top-level first-party voice recorder for the iOS
+// handoff. It is NOT embeddable (it must run as its own tab), so it keeps the
+// strict main-app frame lock, but it needs the mic, so microphone=(self)
+// instead of the main-app microphone=(). Derived from mainSecurityHeaders so
+// the rest of the posture stays in sync.
+const voiceHandoffSecurityHeaders = mainSecurityHeaders.map(h =>
+  h.key === "Permissions-Policy"
+    ? { key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=(), payment=(), usb=()" }
+    : h
+);
+
 const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
@@ -127,13 +138,19 @@ const nextConfig: NextConfig = {
         headers: widgetSecurityHeaders,
       },
       {
-        // Catch-all for EVERYTHING that is NOT /widget/*. Negative lookahead
-        // is required here because Next.js headers() MERGES headers from
-        // every matching rule rather than letting the more-specific rule win
-        // outright — without this exclusion, the widget would receive both
-        // its embeddable set AND the strict main-app set, and the latter's
-        // X-Frame-Options: DENY would block iframe embedding by firms.
-        source: "/((?!widget/|widget-public/).*)",
+        // /voice-handoff is top-level and first-party but needs the mic.
+        source: "/voice-handoff",
+        headers: voiceHandoffSecurityHeaders,
+      },
+      {
+        // Catch-all for EVERYTHING that is NOT a widget or the voice-handoff
+        // recorder. Negative lookahead is required here because Next.js
+        // headers() MERGES headers from every matching rule rather than
+        // letting the more-specific rule win outright. Without this exclusion
+        // the widget would receive both its embeddable set AND the strict
+        // main-app set, and the latter's X-Frame-Options: DENY would block
+        // iframe embedding by firms; voice-handoff would get microphone=().
+        source: "/((?!widget/|widget-public/|voice-handoff).*)",
         headers: mainSecurityHeaders,
       },
     ];
