@@ -17,12 +17,14 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { getScoringPortForRead } from "@/lib/scoring-port-read";
 import { matterLabel, subtrackLabel } from "@/lib/screened-leads-labels";
 import { intakeLanguageLabel } from "@/lib/intake-language-label";
 import { channelLabel, channelBadgeClasses } from "@/lib/channel-labels";
 import { buildInboundContext } from "@/lib/inbound-context";
 import DecisionTimer from "@/components/portal/DecisionTimer";
 import BriefLiveTimers from "@/components/portal/BriefLiveTimers";
+import ScoringPortPanel from "@/components/portal/ScoringPortPanel";
 import TriageActionBar from "@/components/portal/TriageActionBar";
 import "./brief.css";
 
@@ -41,7 +43,14 @@ interface LeadRow {
   contact_name: string | null;
   intake_language: string | null;
   slot_answers: { channel?: string; voice_meta?: { recording_url?: string | null } } | null;
-  // Module 1 lead enrichment — passive web-attribution. All null for
+  // Scoring-port columns (C3 phase 2). Null for pre-C3 rows and when not populated.
+  score_confidence: string | null;
+  score_completeness: number | string | null;
+  score_explanation: string | null;
+  score_missing_fields: unknown;
+  field_provenance: unknown;
+  score_version: number | null;
+  // Module 1 lead enrichment: passive web-attribution. All null for
   // non-web channels and legacy rows.
   utm_source: string | null;
   utm_medium: string | null;
@@ -49,7 +58,7 @@ interface LeadRow {
   utm_term: string | null;
   utm_content: string | null;
   referrer: string | null;
-  intake_firms: { location: string | null } | null;
+  intake_firms: { location: string | null; read_scoring_port: boolean } | null;
 }
 
 export const dynamic = "force-dynamic";
@@ -76,8 +85,10 @@ export default async function TriageLeadPage({
       band, matter_type, whale_nurture, band_c_subtrack,
       decision_deadline, submitted_at, contact_name, intake_language,
       slot_answers,
+      score_confidence, score_completeness, score_explanation,
+      score_missing_fields, field_provenance, score_version,
       utm_source, utm_medium, utm_campaign, utm_term, utm_content, referrer,
-      intake_firms!inner(location)
+      intake_firms!inner(location, read_scoring_port)
     `)
     .eq("lead_id", leadId)
     .maybeSingle()
@@ -100,10 +111,28 @@ export default async function TriageLeadPage({
 
   const langLabel = intakeLanguageLabel(row.intake_language);
 
-  // Inbound context (Module 1 lead enrichment): "Day, Time · Source · 'Term'"
-  // for web leads, omitted entirely for Voice / Messenger / Instagram /
-  // WhatsApp (those have their own "Inbound via" treatment).
   const firmLocation = row.intake_firms?.location ?? null;
+
+  // Scoring port: compute from persisted columns when the firm flag is on.
+  // Returns null (and renders nothing) for all default-flag-off firms.
+  const scoringPort = getScoringPortForRead(
+    {
+      id: row.lead_id,
+      matter_type: row.matter_type,
+      band: row.band,
+      slot_answers: row.slot_answers,
+      score_confidence: row.score_confidence,
+      score_completeness: row.score_completeness,
+      score_explanation: row.score_explanation,
+      score_missing_fields: row.score_missing_fields,
+      field_provenance: row.field_provenance,
+      score_version: row.score_version,
+    },
+    { read_scoring_port: row.intake_firms?.read_scoring_port === true },
+  );
+
+  // Inbound context: "Day, Time · Source · 'Term'" for web leads, omitted
+  // for Voice / Messenger / Instagram / WhatsApp.
   const inboundContext = buildInboundContext({
     submittedAtIso: row.submitted_at,
     firmLocation,
@@ -152,6 +181,7 @@ export default async function TriageLeadPage({
       )}
       {row.status !== "triaging" && <StatusBanner status={row.status} />}
       {langLabel && <LanguageCallout label={langLabel} />}
+      <ScoringPortPanel data={scoringPort} />
       <BriefFrame html={briefTopHtml} />
       <TriageActionBar
         firmId={firmId}

@@ -2,14 +2,15 @@
  * Tests for the single-lead brief API endpoint
  * (GET /api/portal/[firmId]/triage/[leadId]).
  *
- * Focus: the auth gate plus the cross-firm 404 shape. The brief carries the
- * lead's full record (contact details + brief HTML), so:
+ * Focus: auth gate, cross-firm 404 shape, and scoring_port flag behavior.
  *   - lawyer with matching firm_id: 200
  *   - operator (any firm_id): 200
  *   - lawyer with mismatched firm_id: 401
  *   - client session (B1): 401 even when its firm_id matches
  *   - no session: 401
  *   - lead exists but belongs to another firm: 404 (no existence leak)
+ *   - scoring_port: null when read_scoring_port is false (default)
+ *   - scoring_port: populated when read_scoring_port is true
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -24,6 +25,7 @@ interface MockState {
     matter_id?: string;
   } | null;
   lead: Record<string, unknown> | null;
+  firmConfig: Record<string, unknown> | null;
   error: { message: string } | null;
 }
 
@@ -34,6 +36,7 @@ const LEAD_ID = "L-2026-06-09-BRF";
 const state: MockState = {
   session: null,
   lead: null,
+  firmConfig: { read_scoring_port: false },
   error: null,
 };
 
@@ -41,14 +44,34 @@ vi.mock("@/lib/portal-auth", () => ({
   getPortalSession: () => Promise.resolve(state.session),
 }));
 
+// Mock scoring-port-read so the route test stays focused on routing logic.
+// The scoring-port logic itself is tested in scoring-port-read.test.ts.
+vi.mock("@/lib/scoring-port-read", () => ({
+  getScoringPortForRead: (row: Record<string, unknown>, config: { read_scoring_port: boolean }) => {
+    if (!config.read_scoring_port) return null;
+    return {
+      score_confidence: row.score_confidence ?? null,
+      score_completeness: row.score_completeness ?? null,
+      score_explanation: row.score_explanation ?? null,
+      score_missing_fields: row.score_missing_fields ?? null,
+      field_provenance: row.field_provenance ?? null,
+      score_version: row.score_version ?? null,
+    };
+  },
+}));
+
 vi.mock("@/lib/supabase-admin", () => ({
   supabaseAdmin: {
-    from: (_table: string) => ({
-      // Brief query chain: select().eq("lead_id").maybeSingle()
+    // Route does Promise.all([leadQuery, firmQuery]); distinguish by table name.
+    from: (table: string) => ({
       select: (_cols: string) => ({
         eq: (_field: string, _value: unknown) => ({
-          maybeSingle: () =>
-            Promise.resolve({ data: state.lead, error: state.error }),
+          maybeSingle: () => {
+            if (table === "intake_firms") {
+              return Promise.resolve({ data: state.firmConfig, error: null });
+            }
+            return Promise.resolve({ data: state.lead, error: state.error });
+          },
         }),
       }),
     }),
@@ -91,6 +114,7 @@ function leadRow(overrides: Record<string, unknown> = {}): Record<string, unknow
 beforeEach(() => {
   state.session = null;
   state.lead = null;
+  state.firmConfig = { read_scoring_port: false };
   state.error = null;
 });
 
@@ -150,5 +174,53 @@ describe("GET /api/portal/[firmId]/triage/[leadId]", () => {
     state.error = { message: "connection refused" };
     const res = await GET(makeReq() as never, makeParams());
     expect(res.status).toBe(500);
+  });
+
+  // Scoring-port flag gate tests (C3 phase 2)
+
+  it("returns scoring_port: null when read_scoring_port is false (default)", async () => {
+    state.session = { firm_id: FIRM_ID, role: "lawyer", lawyer_id: "abc" };
+    state.lead = leadRow();
+    state.firmConfig = { read_scoring_port: false };
+    const res = await GET(makeReq() as never, makeParams());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.scoring_port).toBeNull();
+  });
+
+  it("returns scoring_port fields when read_scoring_port is true and columns are set", async () => {
+    state.session = { firm_id: FIRM_ID, role: "lawyer", lawyer_id: "abc" };
+    state.lead = leadRow({
+      score_confidence: "high",
+      score_completeness: 0.85,
+      score_explanation: "Strong employment matter with clear facts.",
+      score_missing_fields: [],
+      field_provenance: {},
+      score_version: 1,
+    });
+    state.firmConfig = { read_scoring_port: true };
+    const res = await GET(makeReq() as never, makeParams());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.scoring_port).not.toBeNull();
+    expect(body.scoring_port.score_confidence).toBe("high");
+    expect(body.scoring_port.score_completeness).toBe(0.85);
+    expect(body.scoring_port.score_explanation).toBe("Strong employment matter with clear facts.");
+    expect(body.scoring_port.score_version).toBe(1);
+  });
+
+  it("returns scoring_port with null fields when flag is on but columns are pre-backfill", async () => {
+    state.session = { firm_id: FIRM_ID, role: "lawyer", lawyer_id: "abc" };
+    // Pre-backfill row: scoring-delta columns are absent (old intake before C3)
+    state.lead = leadRow();
+    state.firmConfig = { read_scoring_port: true };
+    const res = await GET(makeReq() as never, makeParams());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Flag on, but no persisted data: scoring_port object present with null values
+    expect(body.scoring_port).not.toBeNull();
+    expect(body.scoring_port.score_confidence).toBeNull();
+    expect(body.scoring_port.score_completeness).toBeNull();
+    expect(body.scoring_port.score_version).toBeNull();
   });
 });
