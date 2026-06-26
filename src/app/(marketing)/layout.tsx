@@ -14,6 +14,13 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_CA",
   },
+  // The marketing pages are a metadata root of their own, so they do not pick up
+  // the app/icon.png file convention the console inherits. Point at the same
+  // served assets so the CaseLoad mark is the favicon across the whole domain.
+  icons: {
+    icon: "/icon.png",
+    apple: "/apple-icon.png",
+  },
 };
 
 /**
