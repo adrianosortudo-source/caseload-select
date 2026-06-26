@@ -13,10 +13,11 @@
  *
  * iOS reality (no navigation anywhere; the recorder always runs in place):
  *  - Desktop / Android / iOS Safari: show the record button and attempt
- *    getUserMedia inline. iOS Safari 15+ supports the mic inside a cross-origin
- *    iframe with the embedder's allow="microphone", so the embedded widget can
- *    record without leaving the firm's page. If a runtime denial comes back, we
- *    swap the button for typing-fallback copy.
+ *    getUserMedia inline. Whether WebKit permits the mic in a cross-origin
+ *    iframe is policy-gated and not guaranteed (it is unproven on real iOS
+ *    Safari devices for this embed), so Safari is allowed to ATTEMPT in place;
+ *    a runtime denial swaps the button for typing-fallback copy. No navigation
+ *    either way.
  *  - iOS WebKit shells (Chrome / Firefox / Edge / in-app browsers, all WebKit
  *    under the hood) inside a cross-origin iframe: WebKit forbids getUserMedia
  *    there with no way around it, so we never show a button that will fail and
@@ -232,13 +233,14 @@ function getVoiceCapability(): VoiceCapability {
 
   // iOS WebKit shells (Chrome / Firefox / Edge / in-app on iOS) cannot use
   // getUserMedia inside a cross-origin iframe, with no workaround. Do not show
-  // a button that will fail; show honest copy. iOS Safari is NOT blocked here:
-  // Safari 15+ supports the mic in a cross-origin iframe, so it gets the button
-  // and a runtime failure (below) falls back to typing.
+  // a button that will fail; show honest copy. iOS Safari is NOT pre-blocked:
+  // whether WebKit allows the mic in a cross-origin iframe is policy-gated and
+  // unproven on real devices, so we let Safari ATTEMPT inline and rely on the
+  // runtime denial below to fall back to typing if it refuses.
   if (context.isIOSWebKitShell && context.isCrossOriginFrame) {
     return {
       mode: "unavailable",
-      message: "Voice input is not available in this iPhone or iPad browser. Please type your answer, or open this page in Safari to record.",
+      message: "Voice input is not available in this iPhone or iPad browser. Please type your answer.",
     };
   }
 
