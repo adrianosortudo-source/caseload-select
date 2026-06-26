@@ -131,6 +131,8 @@ export interface ValidatedIntakeBody {
   utm_term?: string | null;
   utm_content?: string | null;
   referrer?: string | null;
+  /** H5 DR-075: true when the lead checked the explicit-consent checkbox. */
+  email_consent_explicit?: boolean;
 }
 
 // Caps to bound DoS-via-large-body. Each cap is far above any realistic
@@ -313,6 +315,9 @@ export function validateIntakeBody(raw: unknown): { ok: true; body: ValidatedInt
   const utm_content = okOptStrCapped(raw.utm_content, 'utm_content', MAX_UTM_FIELD_LEN);
   const referrer = okOptStrCapped(raw.referrer, 'referrer', MAX_REFERRER_LEN);
 
+  // H5 DR-075: explicit consent checkbox (boolean, optional, false when absent)
+  const email_consent_explicit: boolean = raw.email_consent_explicit === true;
+
   if (errors.length > 0 || !axes || !brief_json || !slot_answers) {
     return { ok: false, errors: errors.length > 0 ? errors : ['missing required object fields'] };
   }
@@ -338,6 +343,7 @@ export function validateIntakeBody(raw: unknown): { ok: true; body: ValidatedInt
       utm_term,
       utm_content,
       referrer,
+      email_consent_explicit,
     },
   };
 }

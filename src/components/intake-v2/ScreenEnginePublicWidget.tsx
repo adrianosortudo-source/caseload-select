@@ -36,6 +36,8 @@ interface Props {
    * (DR-036).
    */
   initialLang?: SupportedLanguage;
+  /** When true, renders the CASL explicit-consent checkbox on the contact form (H5, DR-075). */
+  consentCaptureEnabled?: boolean;
 }
 
 type Stage = "kickoff" | "questions" | "contact" | "done";
@@ -117,7 +119,7 @@ function FreeTextAnswerCard({
   );
 }
 
-export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" }: Props) {
+export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en", consentCaptureEnabled = false }: Props) {
   const [stage, setStage] = useState<Stage>("kickoff");
   const [description, setDescription] = useState("");
   const [state, setState] = useState<EngineState | null>(null);
@@ -136,6 +138,7 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
   // the contact-capture heading to the softer copy.
   const [clarifyAttempts, setClarifyAttempts] = useState(0);
   const [clarifyFallback, setClarifyFallback] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
 
   const next = state ? getNextStep(state) : null;
 
@@ -289,6 +292,7 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
         phone: finalState.slots.client_phone ?? undefined,
       },
       referrer: typeof document !== "undefined" ? document.referrer : null,
+      email_consent_explicit: consentCaptureEnabled && consentChecked,
     };
 
     try {
@@ -559,6 +563,22 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en" 
               />
             </label>
           ))}
+          {consentCaptureEnabled && (
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={consentChecked}
+                onChange={(e) => setConsentChecked(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--cls-accent,#1E2F58)]"
+              />
+              <span
+                className="text-[13px] leading-snug text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
+                style={{ fontFamily: fontBody }}
+              >
+                {firmName} can email me about my inquiry and related legal services.
+              </span>
+            </label>
+          )}
           <button
             type="submit"
             className="min-h-[52px] rounded-full bg-[var(--cls-accent,#1E2F58)] px-8 text-[15px] font-semibold text-[var(--cls-accent-text,#FFFFFF)]"

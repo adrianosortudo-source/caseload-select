@@ -109,6 +109,8 @@ interface IntakeBody {
   utm_term?: string | null;
   utm_content?: string | null;
   referrer?: string | null;
+  /** H5 DR-075: true when the lead checked the explicit-consent checkbox on the widget. */
+  email_consent_explicit?: boolean;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -378,6 +380,31 @@ export async function POST(req: NextRequest) {
   // column (CANONICAL-DATA-MODEL-v1.md s3.4), not buried inside brief_json.
   const axisReasoning = (v.brief_json as unknown as LawyerReport)?.axis_reasoning ?? null;
 
+  // H5 DR-075: CASL consent fields. Every web intake is at minimum an implied
+  // consent under CASL s.6(6)(d): the submission IS the inquiry. When the widget
+  // sends email_consent_explicit=true the lead checked the opt-in checkbox and
+  // the status is upgraded to explicit (no 6-month expiry).
+  const consentCapTs = v.submitted_at ?? now.toISOString();
+  const sixMonthExpiry = (() => {
+    const d = new Date(consentCapTs);
+    d.setMonth(d.getMonth() + 6);
+    return d.toISOString();
+  })();
+  const consentIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
+  const consentUa = req.headers.get('user-agent') ?? null;
+  const emailConsentFields = v.email_consent_explicit
+    ? {
+        email_consent_status: 'explicit' as const,
+        email_consent_source: 'widget_optin',
+        email_consent_captured_at: now.toISOString(),
+      }
+    : {
+        email_consent_status: 'implied' as const,
+        email_consent_source: 'screen_inquiry',
+        email_consent_captured_at: consentCapTs,
+        six_month_expiry_date: sixMonthExpiry,
+      };
+
   // ── Insert ────────────────────────────────────────────────────────────────
   const { data: inserted, error: insertErr } = await supabase
     .from('screened_leads')
@@ -423,6 +450,9 @@ export async function POST(req: NextRequest) {
       referrer: referrer ?? null,
       axis_reasoning: axisReasoning,
       ...(scoringDelta ?? {}),
+      ...emailConsentFields,
+      consent_ip: consentIp,
+      consent_user_agent: consentUa,
     })
     .select('id, lead_id, status, decision_deadline, whale_nurture')
     .single();

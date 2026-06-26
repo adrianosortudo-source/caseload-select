@@ -41,6 +41,7 @@ interface PageProps {
 interface FirmRow {
   name: string | null;
   branding: FirmBranding | null;
+  consent_gate_enabled: boolean | null;
 }
 
 // Languages the kickoff screen can render before the engine detects the
@@ -61,7 +62,7 @@ export default async function PublicWidgetPage({ params, searchParams }: PagePro
 
   const { data: firm } = await supabase
     .from("intake_firms")
-    .select("name, branding")
+    .select("name, branding, consent_gate_enabled")
     .eq("id", firmId)
     .single<FirmRow>();
 
@@ -90,6 +91,7 @@ export default async function PublicWidgetPage({ params, searchParams }: PagePro
         firmId={firmId}
         firmName={displayName}
         initialLang={initialLang}
+        consentCaptureEnabled={!!firm.consent_gate_enabled}
       />
     </div>
   );
