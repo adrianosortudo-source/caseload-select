@@ -51,7 +51,10 @@ import { scorePortToColumns } from '../src/lib/scoring-port-persistence';
 import type { EngineState, Band } from '../src/lib/screen-engine/types';
 
 const PROD_REF = 'ssxryjxifwiivghglqer';
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+// Prefer the operator-set SUPABASE_URL over NEXT_PUBLIC_SUPABASE_URL: .env.local
+// carries a stale NEXT_PUBLIC_SUPABASE_URL pointing at the OLD project, and the
+// inline dotenv above would otherwise let it win over the prod URL you export.
+const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const commit = process.argv.includes('--commit');
 
