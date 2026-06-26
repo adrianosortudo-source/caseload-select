@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * VoiceInput — microphone button for the kickoff TextCard.
+ * VoiceInput - microphone button for the kickoff TextCard.
  *
  * Behaviour:
  *  - Tap once to start recording. Mic indicator pulses.
@@ -13,41 +13,51 @@
  *  - The WAV blob is POSTed to /api/transcribe.
  *  - The transcript is appended to the parent textarea (via onTranscript).
  *
- * Browser support: MediaRecorder is available in all modern browsers.
- * Falls back gracefully — if getUserMedia is unavailable or denied, the
- * button is hidden and the user can still type.
+ * Browser support is checked in the current browsing context. iOS
+ * Chrome/Firefox/Edge and in-app browsers are WKWebView shells, and WebKit
+ * blocks media capture in some iframe contexts before the user ever sees a
+ * permission prompt. In those cases we show honest fallback copy and keep
+ * typing as the guaranteed path.
  */
 
 import { useEffect, useRef, useState } from "react";
 
 interface Props {
-  /** Called with the transcribed text once Whisper returns. */
+  /** Called with the transcribed text once Gemini returns. */
   onTranscript: (text: string) => void;
   /** Called when an error occurs (mic blocked, transcription failed). */
   onError?: (message: string) => void;
+  /** Reports whether the voice UI is actually available in this context. */
+  onAvailabilityChange?: (available: boolean) => void;
 }
 
 const MAX_RECORDING_MS = 60_000; // hard cap to prevent runaway recordings
 
 type RecState = "idle" | "requesting" | "recording" | "uploading";
+type VoiceCapability =
+  | { canAttempt: true }
+  | { canAttempt: false; message: string };
 
-export function VoiceInput({ onTranscript, onError }: Props) {
+export function VoiceInput({ onTranscript, onError, onAvailabilityChange }: Props) {
   const [state, setState] = useState<RecState>("idle");
-  const [supported, setSupported] = useState<boolean>(true);
+  const [capability, setCapability] = useState<VoiceCapability | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef   = useRef<Blob[]>([]);
-  const streamRef   = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
   const startedAtRef = useRef<number>(0);
-  const tickerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Capability detection on mount
+  // Capability detection on mount. This cannot call getUserMedia because that
+  // would prompt for mic permission outside the user's tap; it checks the known
+  // platform, frame, and policy gates that make the call impossible.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!("MediaRecorder" in window)) { setSupported(false); return; }
-    if (!navigator.mediaDevices?.getUserMedia) { setSupported(false); return; }
-  }, []);
+    const next = getVoiceCapability();
+    setCapability(next);
+    onAvailabilityChange?.(next.canAttempt);
+  }, [onAvailabilityChange]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -60,8 +70,14 @@ export function VoiceInput({ onTranscript, onError }: Props) {
   }, []);
 
   function stopTicker() {
-    if (tickerRef.current) { clearInterval(tickerRef.current); tickerRef.current = null; }
-    if (autoStopRef.current) { clearTimeout(autoStopRef.current); autoStopRef.current = null; }
+    if (tickerRef.current) {
+      clearInterval(tickerRef.current);
+      tickerRef.current = null;
+    }
+    if (autoStopRef.current) {
+      clearTimeout(autoStopRef.current);
+      autoStopRef.current = null;
+    }
   }
 
   function stopRecorder() {
@@ -69,16 +85,25 @@ export function VoiceInput({ onTranscript, onError }: Props) {
       if (recorderRef.current && recorderRef.current.state !== "inactive") {
         recorderRef.current.stop();
       }
-    } catch { /* ignore */ }
+    } catch {
+      // ignore
+    }
   }
 
   function releaseStream() {
-    streamRef.current?.getTracks().forEach(t => { try { t.stop(); } catch { /* ignore */ } });
+    streamRef.current?.getTracks().forEach(t => {
+      try {
+        t.stop();
+      } catch {
+        // ignore
+      }
+    });
     streamRef.current = null;
   }
 
   async function start() {
     if (state !== "idle") return;
+    if (!capability?.canAttempt) return;
     setState("requesting");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -90,7 +115,9 @@ export function VoiceInput({ onTranscript, onError }: Props) {
       recorder.ondataavailable = e => {
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
-      recorder.onstop = () => { void handleStop(); };
+      recorder.onstop = () => {
+        void handleStop();
+      };
 
       recorder.start();
       startedAtRef.current = Date.now();
@@ -105,6 +132,11 @@ export function VoiceInput({ onTranscript, onError }: Props) {
       setState("idle");
       releaseStream();
       const msg = err instanceof Error ? err.message : String(err);
+      if (isPermissionOrPolicyError(err)) {
+        const next = getVoiceCapabilityAfterRuntimeDenial();
+        setCapability(next);
+        onAvailabilityChange?.(next.canAttempt);
+      }
       if (onError) onError(`Mic access denied: ${msg}`);
     }
   }
@@ -162,15 +194,26 @@ export function VoiceInput({ onTranscript, onError }: Props) {
     }
   }
 
-  if (!supported) return null;
+  if (!capability) return null;
+
+  if (!capability.canAttempt) {
+    return (
+      <p
+        className="text-[12px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_55%,transparent)]"
+        style={{ fontFamily: "var(--cls-font-body, DM Sans, sans-serif)" }}
+      >
+        {capability.message}
+      </p>
+    );
+  }
 
   const isRecording = state === "recording";
   const isBusy = state === "requesting" || state === "uploading";
   const label =
     state === "requesting" ? "Allow mic..." :
-    state === "uploading"  ? "Transcribing..." :
-    state === "recording"  ? `Recording... ${elapsed}s` :
-                              "Tap to record";
+    state === "uploading" ? "Transcribing..." :
+    state === "recording" ? `Recording... ${elapsed}s` :
+    "Tap to record";
 
   return (
     <button
@@ -192,12 +235,123 @@ export function VoiceInput({ onTranscript, onError }: Props) {
         <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
         <path d="M19 10a7 7 0 0 1-14 0" />
         <line x1="12" y1="19" x2="12" y2="23" />
-        <line x1="8"  y1="23" x2="16" y2="23" />
+        <line x1="8" y1="23" x2="16" y2="23" />
       </svg>
       <span>{label}</span>
       {isRecording && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse ml-1" />}
     </button>
   );
+}
+
+function getVoiceCapability(): VoiceCapability {
+  if (typeof window === "undefined") return { canAttempt: false, message: "Voice input is unavailable here. Please type your answer." };
+  if (!window.isSecureContext) return { canAttempt: false, message: "Voice input requires a secure connection. Please type your answer." };
+  if (!("MediaRecorder" in window)) return { canAttempt: false, message: "Voice input is not supported in this browser. Please type your answer." };
+  if (!navigator.mediaDevices?.getUserMedia) return { canAttempt: false, message: "Voice input is not supported in this browser. Please type your answer." };
+  if (!permissionsPolicyAllows("microphone")) {
+    return { canAttempt: false, message: "Voice input is unavailable on this site. Please type your answer." };
+  }
+
+  const context = getBrowserContext();
+
+  // Production block: any iOS browser inside a cross-origin iframe. WebKit
+  // (which every iOS browser runs on) refuses getUserMedia in a third-party
+  // frame, so the widget embedded on a firm site cannot record on iPhone or
+  // iPad. Top-level iOS, including the WebKit shells on iOS 14.3+, is allowed
+  // to try; the runtime-denial handler below swaps in fallback copy if it
+  // actually fails.
+  if (context.isIOS && context.isCrossOriginFrame) {
+    return {
+      canAttempt: false,
+      message: "Voice input is not available inside this embedded intake on iPhone/iPad. Please type your answer.",
+    };
+  }
+
+  return { canAttempt: true };
+}
+
+// Called after getUserMedia throws NotAllowedError / SecurityError. A runtime
+// refusal is definitive for this context, so we always drop to fallback copy
+// rather than re-offering a button that will fail again.
+function getVoiceCapabilityAfterRuntimeDenial(): VoiceCapability {
+  const context = getBrowserContext();
+  if (context.isIOS) {
+    return {
+      canAttempt: false,
+      message: context.isCrossOriginFrame
+        ? "Voice input is not available inside this embedded intake on iPhone/iPad. Please type your answer."
+        : "Voice input is not available in this browser. Please type your answer.",
+    };
+  }
+  return {
+    canAttempt: false,
+    message: "Microphone access is blocked for this site. Please type your answer.",
+  };
+}
+
+function isPermissionOrPolicyError(err: unknown): boolean {
+  if (!(err instanceof DOMException)) return false;
+  return err.name === "NotAllowedError" || err.name === "SecurityError";
+}
+
+function getBrowserContext() {
+  const ua = navigator.userAgent;
+  const platform = navigator.platform;
+  const isIPadOSDesktopMode = platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || isIPadOSDesktopMode;
+  const isCriOS = /\bCriOS\//.test(ua);
+  const isFxiOS = /\bFxiOS\//.test(ua);
+  const isEdgiOS = /\bEdgiOS\//.test(ua);
+  const isDuckDuckGoIOS = /\bDuckDuckGo\//.test(ua) && isIOS;
+  const isSafari =
+    isIOS &&
+    /Safari\//.test(ua) &&
+    !isCriOS &&
+    !isFxiOS &&
+    !isEdgiOS &&
+    !isDuckDuckGoIOS &&
+    navigator.vendor === "Apple Computer, Inc.";
+
+  return {
+    isIOS,
+    isSafari,
+    isIOSWebKitShell: isIOS && !isSafari,
+    isEmbedded: isEmbeddedFrame(),
+    isCrossOriginFrame: isCrossOriginEmbeddedFrame(),
+  };
+}
+
+function isEmbeddedFrame(): boolean {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
+
+function isCrossOriginEmbeddedFrame(): boolean {
+  if (!isEmbeddedFrame()) return false;
+  try {
+    return window.top?.location.origin !== window.location.origin;
+  } catch {
+    return true;
+  }
+}
+
+function permissionsPolicyAllows(feature: string): boolean {
+  const doc = document as Document & {
+    permissionsPolicy?: { allowsFeature?: (feature: string) => boolean };
+    featurePolicy?: { allowsFeature?: (feature: string) => boolean };
+  };
+
+  try {
+    if (doc.permissionsPolicy?.allowsFeature) return doc.permissionsPolicy.allowsFeature(feature);
+    if (doc.featurePolicy?.allowsFeature) return doc.featurePolicy.allowsFeature(feature);
+  } catch {
+    return false;
+  }
+
+  return true;
 }
 
 function pickMimeType(): string {
@@ -232,7 +386,11 @@ async function transcodeToWav(blob: Blob): Promise<Blob> {
   try {
     decoded = await decodeCtx.decodeAudioData(arrayBuffer.slice(0));
   } finally {
-    try { await decodeCtx.close(); } catch { /* ignore */ }
+    try {
+      await decodeCtx.close();
+    } catch {
+      // ignore
+    }
   }
 
   const frameCount = Math.ceil(decoded.duration * TARGET_SAMPLE_RATE);
@@ -270,13 +428,13 @@ function encodeWav(samples: Float32Array, sampleRate: number): Blob {
   view.setUint32(4, 36 + dataSize, true);
   writeString(8, "WAVE");
   writeString(12, "fmt ");
-  view.setUint32(16, 16, true);          // PCM chunk size
-  view.setUint16(20, 1, true);           // audio format: PCM
-  view.setUint16(22, 1, true);           // channels: mono
+  view.setUint32(16, 16, true); // PCM chunk size
+  view.setUint16(20, 1, true); // audio format: PCM
+  view.setUint16(22, 1, true); // channels: mono
   view.setUint32(24, sampleRate, true);
   view.setUint32(28, sampleRate * bytesPerSample, true); // byte rate
-  view.setUint16(32, bytesPerSample, true);              // block align
-  view.setUint16(34, 16, true);          // bits per sample
+  view.setUint16(32, bytesPerSample, true); // block align
+  view.setUint16(34, 16, true); // bits per sample
   writeString(36, "data");
   view.setUint32(40, dataSize, true);
 

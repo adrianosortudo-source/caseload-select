@@ -49,6 +49,7 @@ export function TextCard({
 }: Props) {
   const [focused, setFocused] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceAvailable, setVoiceAvailable] = useState(false);
   const text = typeof value === "string" ? value : "";
   const canSubmit = text.trim().length >= minChars;
 
@@ -113,13 +114,16 @@ export function TextCard({
             <VoiceInput
               onTranscript={handleTranscript}
               onError={setVoiceError}
+              onAvailabilityChange={setVoiceAvailable}
             />
-            <span
-              className="text-[12px] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_55%,transparent)]"
-              style={{ fontFamily: fontBody }}
-            >
-              {voiceHint}
-            </span>
+            {voiceAvailable && (
+              <span
+                className="text-[12px] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_55%,transparent)]"
+                style={{ fontFamily: fontBody }}
+              >
+                {voiceHint}
+              </span>
+            )}
           </div>
           {voiceError && (
             <p className="text-[12px] text-red-600" style={{ fontFamily: fontBody }}>
