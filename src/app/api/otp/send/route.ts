@@ -14,6 +14,8 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
+import { loadFirmEmailBranding } from "@/lib/firm-email-branding";
+import { renderEmailShell } from "@/lib/email-shell";
 
 const OTP_TTL_MINUTES = 15;
 
@@ -22,6 +24,15 @@ function generateOtp(): string {
   // Set it in .env.local: OTP_TEST_CODE=123456
   if (process.env.OTP_TEST_CODE) return process.env.OTP_TEST_CODE;
   return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function escapeHtml(s: string): string {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 export async function POST(req: Request) {
@@ -50,7 +61,7 @@ export async function POST(req: Request) {
     // Verify session exists and load the contact captured during intake.
     const { data: session, error: sessionErr } = await supabase
       .from("intake_sessions")
-      .select("id, status, contact")
+      .select("id, status, contact, firm_id")
       .eq("id", session_id)
       .single();
 
@@ -98,8 +109,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Failed to generate OTP" }, { status: 500 });
     }
 
-    // Send email
-    const html = `
+    // Send email. Firms with a configured theme (e.g. DRG Law) get the branded
+    // correspondence shell; every other firm keeps the default verification
+    // layout below, unchanged.
+    const branding = await loadFirmEmailBranding(session.firm_id as string | null);
+    const html = branding
+      ? renderEmailShell({
+          branding,
+          preheader: `Your ${firm_name} verification code`,
+          eyebrow: "Verification",
+          bodyHtml:
+            `<p>Enter this code to confirm your identity and view your case review from ${escapeHtml(firm_name)}.</p>` +
+            `<p style="margin:18px 0; font-family:${branding.fontStack}; font-size:34px; line-height:38px; letter-spacing:8px; font-weight:700; color:${branding.ink};">${otp}</p>` +
+            `<p style="margin:0; font-size:14px; line-height:21px; color:${branding.inkMuted};">This code expires in ${OTP_TTL_MINUTES} minutes. If you did not request this, you can ignore this email.</p>`,
+          footerHtml: escapeHtml(branding.firmName),
+        })
+      : `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
         <p style="color: #6b7280; font-size: 14px; margin-bottom: 8px;">Your verification code</p>
         <div style="font-size: 40px; font-weight: 700; letter-spacing: 8px; color: #111827; margin: 16px 0 24px;">

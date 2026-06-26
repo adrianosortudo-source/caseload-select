@@ -111,6 +111,13 @@ export async function insertMessage(input: {
   attachments?: MatterAttachment[];
   broadcast_id?: string | null;
   parent_message_id?: string | null;
+  /**
+   * When false, the matter client is not added as a notification recipient
+   * (lawyers and assignees still are). The welcome send uses this for themed
+   * firms, where a standalone branded email replaces the client's digest copy.
+   * Defaults to true, so every other caller keeps notifying the client.
+   */
+  notifyClient?: boolean;
 }): Promise<
   | { ok: true; message: MatterMessage }
   | { ok: false; error: string }
@@ -151,7 +158,10 @@ export async function insertMessage(input: {
   }
 
   // Queue notification (best-effort).
-  await enqueueMessageNotification(inserted as MatterMessage).catch((err) => {
+  await enqueueMessageNotification(
+    inserted as MatterMessage,
+    input.notifyClient ?? true,
+  ).catch((err) => {
     console.warn('[matter-messages] notification enqueue failed:', err);
   });
 
@@ -166,7 +176,10 @@ export async function insertMessage(input: {
  *   channel_type='client'   : primary_email + lead_lawyer + assignees
  *   channel_type='internal' : lead_lawyer + assignees (NEVER client)
  */
-async function enqueueMessageNotification(msg: MatterMessage): Promise<void> {
+async function enqueueMessageNotification(
+  msg: MatterMessage,
+  notifyClient = true,
+): Promise<void> {
   const { data: matter } = await supabase
     .from('client_matters')
     .select('lead_id, assignee_ids, primary_email, primary_name, firm_id')
@@ -191,8 +204,14 @@ async function enqueueMessageNotification(msg: MatterMessage): Promise<void> {
     }
   }
 
-  // Client recipient on client-channel messages (skip when client is the sender).
-  if (msg.channel_type === 'client' && matter.primary_email && msg.sender_role !== 'client') {
+  // Client recipient on client-channel messages (skip when client is the sender,
+  // or when the caller opted out via notifyClient=false).
+  if (
+    notifyClient &&
+    msg.channel_type === 'client' &&
+    matter.primary_email &&
+    msg.sender_role !== 'client'
+  ) {
     recipients.add(matter.primary_email);
   }
 

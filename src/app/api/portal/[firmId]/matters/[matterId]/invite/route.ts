@@ -22,6 +22,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getFirmSession, generatePortalToken } from '@/lib/portal-auth';
 import { getMatterById } from '@/lib/matter-stage';
 import { sendEmail } from '@/lib/email';
+import { loadFirmEmailBranding } from '@/lib/firm-email-branding';
+import { renderEmailShell } from '@/lib/email-shell';
+import type { EmailBranding } from '@/lib/email-branding';
 
 const INVITE_TTL_HOURS = 48;
 
@@ -61,6 +64,10 @@ export async function POST(
 
   // Best-effort email send. The lawyer also gets the URL in the
   // response so they can copy-paste if the inbox bounces.
+  // Themed firms (e.g. DRG Law) get the branded correspondence shell; every
+  // other firm keeps the default invite layout, unchanged.
+  const branding = await loadFirmEmailBranding(firmId);
+
   let emailDelivery: { sent: boolean; error?: string } = { sent: false };
   try {
     const result = await sendEmail(
@@ -69,6 +76,7 @@ export async function POST(
       buildInviteEmailHtml({
         primary_name: matter.primary_name,
         accept_url: acceptUrl,
+        branding,
       }),
     );
     emailDelivery = 'skipped' in result && result.skipped
@@ -93,8 +101,28 @@ export async function POST(
   });
 }
 
-function buildInviteEmailHtml(input: { primary_name: string; accept_url: string }): string {
+function buildInviteEmailHtml(input: {
+  primary_name: string;
+  accept_url: string;
+  branding?: EmailBranding | null;
+}): string {
   const firstName = (input.primary_name ?? '').split(/\s+/)[0] || 'there';
+
+  if (input.branding) {
+    const b = input.branding;
+    return renderEmailShell({
+      branding: b,
+      preheader: 'Your secure link to your matter',
+      eyebrow: 'Secure access',
+      bodyHtml:
+        `<p>Hi ${escapeHtml(firstName)},</p>` +
+        `<p>Here's the secure link to your matter. It takes you to a private page where you can read updates, send messages, and view what's coming next.</p>`,
+      cta: { label: 'Open your secure page', url: input.accept_url },
+      footerHtml:
+        `This link expires in 48 hours. If it expires before you open it, reply to this email and we'll send a fresh one.<br><br>${escapeHtml(b.firmName)}`,
+    });
+  }
+
   return `
     <div style="font-family: 'Manrope', Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px;">
       <p>Hi ${escapeHtml(firstName)},</p>

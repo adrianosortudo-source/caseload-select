@@ -25,6 +25,9 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getMatterById } from '@/lib/matter-stage';
 import { insertMessage } from '@/lib/matter-messages';
 import { sanitizeWelcomeHtml } from '@/lib/welcome-html-sanitize';
+import { sendEmail } from '@/lib/email';
+import { loadFirmEmailBranding } from '@/lib/firm-email-branding';
+import { renderEmailShell } from '@/lib/email-shell';
 
 export async function POST(
   _req: NextRequest,
@@ -87,6 +90,33 @@ export async function POST(
     return NextResponse.json({ error: 'welcome draft already sent' }, { status: 409 });
   }
 
+  // Themed firms (e.g. DRG Law) receive a standalone branded welcome email (the
+  // L08 correspondence). When it sends, suppress the client's digest copy of
+  // this same message so the client is not emailed twice; lawyers are still
+  // notified. Non-themed firms send nothing here and the client is notified
+  // through the digest exactly as before. Best-effort: a delivery failure falls
+  // back to the digest path (notifyClient stays true).
+  const branding = await loadFirmEmailBranding(firmId);
+  let standaloneSent = false;
+  if (branding && matter.primary_email) {
+    try {
+      const result = await sendEmail(
+        matter.primary_email,
+        `Welcome to ${branding.firmName}`,
+        renderEmailShell({
+          branding,
+          preheader: `Welcome to ${branding.firmName}`,
+          eyebrow: 'Welcome',
+          bodyHtml: bodyToSend,
+          footerHtml: escapeHtml(branding.firmName),
+        }),
+      );
+      standaloneSent = !('skipped' in result && result.skipped) && Boolean(result.id);
+    } catch {
+      standaloneSent = false;
+    }
+  }
+
   // Insert as a client-channel message (visible to client + lawyer).
   // sender_role 'admin' is the role-of-record for permission gating, not
   // authorship (the body is templated even though a human pressed Send).
@@ -97,6 +127,7 @@ export async function POST(
     sender_role: 'admin',
     sender_lawyer_id: session.lawyer_id ?? null,
     body: bodyToSend,
+    notifyClient: !standaloneSent,
   });
 
   if (!msgResult.ok) {
@@ -114,4 +145,13 @@ export async function POST(
     sent_at: now,
     message_id: msgResult.message.id,
   });
+}
+
+function escapeHtml(s: string): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
