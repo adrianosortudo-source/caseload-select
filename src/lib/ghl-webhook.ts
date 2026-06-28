@@ -145,7 +145,11 @@ export async function deliverWebhook(
       // leadRow null: lead not found or consent columns absent; fail-open
     }
   } catch {
-    // Consent columns not yet migrated or lookup error; fail-open (allow send)
+    // Consent check error: fail-closed. Cannot verify consent; block the send.
+    // The operator can retry manually from /admin/webhook-outbox after the
+    // underlying issue clears (transient DB error, missing key, etc.).
+    console.error('[deliverWebhook] consent gate check threw; blocking send for firm', payload.firm_id);
+    return { fired: false, reason: 'consent_gate_error' };
   }
 
   const enq = await enqueueWebhook(payload, url);
