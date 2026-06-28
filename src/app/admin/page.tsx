@@ -467,7 +467,7 @@ function FirmCard({ card, nowMs }: { card: FirmCardData; nowMs: number }) {
     <div className="bg-white border border-border-brand p-4 hover:border-navy/40 transition-colors flex flex-col">
       <div className="flex items-start justify-between gap-2">
         <Link
-          href={`/admin/firms/${card.id}/triage`}
+          href={`/admin/triage?firm_id=${card.id}`}
           className="text-sm font-display font-bold text-navy truncate hover:underline"
         >
           {card.name}
@@ -515,7 +515,7 @@ function FirmCard({ card, nowMs }: { card: FirmCardData; nowMs: number }) {
         Last intake: {card.lastIntakeMs > 0 ? relativeTime(new Date(card.lastIntakeMs).toISOString(), nowMs) : "none yet"}
       </div>
       <div className="mt-3 pt-3 border-t border-border-brand grid grid-cols-3 gap-1.5">
-        <CardLink href={`/admin/firms/${card.id}/triage`} label="Triage" />
+        <CardLink href={`/admin/triage?firm_id=${card.id}`} label="Triage" />
         <CardLink
           href={`/admin/firms/${card.id}/messages`}
           label={card.unread > 0 ? `Messages (${card.unread})` : "Messages"}

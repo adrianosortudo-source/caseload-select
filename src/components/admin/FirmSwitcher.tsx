@@ -10,11 +10,6 @@ const FIRM_SCOPED_RE = /^\/admin\/firms\/([^/]+)\/(.*)/;
 
 const NAV_LINKS = [
   {
-    label: "Triage",
-    href: (_: string) => "/admin/triage",
-    active: (p: string, _: string) => p === "/admin/triage" || p.startsWith("/admin/triage/"),
-  },
-  {
     label: "Routing",
     href: (id: string) => `/admin/firms/${id}/routing`,
     active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/routing`),
@@ -49,20 +44,25 @@ const NAV_LINKS = [
     href: (id: string) => `/admin/firms/${id}/metrics`,
     active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/metrics`),
   },
-  {
-    label: "Webhook outbox",
-    href: (_: string) => "/admin/webhook-outbox",
-    active: (p: string, _: string) => p.startsWith("/admin/webhook-outbox"),
-  },
 ];
 
-const SYSTEM_LINKS = [
-  { label: "Onboarding desk", href: "/admin/onboarding-submissions" },
-  { label: "Explainer library", href: "/admin/explainers" },
+// Client-acquisition tools (selling CaseLoad Select, prospecting law firms).
+// Not firm-scoped, so they sit in their own group rather than under a firm.
+const SELL_LINKS = [
+  { label: "Agency CRM", href: "/admin/agency-crm" },
   { label: "SEO check", href: "/admin/seo-check" },
   { label: "Prospecting diagnostic", href: "/admin/prospecting-diagnostic" },
-  { label: "Agency CRM", href: "/admin/agency-crm" },
   { label: "Diagnostics", href: "/admin/diagnostic-builder" },
+];
+
+// Cross-firm operations and infrastructure. Triage and Webhook outbox moved
+// here from the per-firm group: both link to global routes (the cross-firm
+// triage queue narrows by ?firm_id), so they were never firm-scoped (finding 06).
+const SYSTEM_LINKS = [
+  { label: "Triage", href: "/admin/triage" },
+  { label: "Webhook outbox", href: "/admin/webhook-outbox" },
+  { label: "Onboarding desk", href: "/admin/onboarding-submissions" },
+  { label: "Explainer library", href: "/admin/explainers" },
   { label: "Health", href: "/admin/health" },
 ];
 
@@ -226,6 +226,21 @@ export default function FirmSwitcher({ firms }: { firms: Firm[] }) {
           );
         })}
       </nav>
+
+      {/* Sell and prospect nav */}
+      <div className="mt-2 px-3 border-t border-white/5 pt-4">
+        <div className="label px-2 mb-1.5 text-white/30">Sell and prospect</div>
+        <nav className="space-y-0.5">
+          {SELL_LINKS.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+            return (
+              <Link key={item.href} href={item.href} className={`${NAV_LINK_CLASS} ${isActive ? NAV_ACTIVE : NAV_IDLE}`}>
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
 
       {/* System nav */}
       <div className="mt-2 px-3 border-t border-white/5 pt-4">
