@@ -176,16 +176,11 @@ export function VoiceInput({ onTranscript, onError, onAvailabilityChange }: Prop
 
   if (!capability) return null;
 
-  if (capability.mode === "unavailable") {
-    return (
-      <p
-        className="text-[12px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_55%,transparent)]"
-        style={{ fontFamily: "var(--cls-font-body, DM Sans, sans-serif)" }}
-      >
-        {capability.message}
-      </p>
-    );
-  }
+  // Voice unavailable in this context (e.g. iOS WebKit shells inside a
+  // cross-origin iframe). Render nothing: the textarea already invites typing,
+  // so a fallback sentence is just noise. Runtime denials still surface their
+  // own message via onError.
+  if (capability.mode === "unavailable") return null;
 
   const isRecording = state === "recording";
   const isBusy = state === "requesting" || state === "uploading";
