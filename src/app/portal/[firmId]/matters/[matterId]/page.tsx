@@ -39,6 +39,7 @@ import type {
 import { nextStage } from '@/lib/matter-stage-pure';
 import WelcomeEditor from './WelcomeEditor';
 import MessageThreads from './MessageThreads';
+import { ConflictCheckPanel } from './ConflictCheckPanel';
 
 const STAGE_LABEL: Record<MatterStage, string> = {
   intake: 'Intake',
@@ -72,17 +73,28 @@ export default async function LawyerMatterDetailPage({ params }: PageProps) {
   }
 
   // Fetch supporting data in parallel
-  const [clientMessages, internalMessages, stageEvents, assignedExplainers] = await Promise.all([
-    listMessagesForMatter(matterId, 'admin', { channel: 'client', limit: 50 }),
-    listMessagesForMatter(matterId, 'admin', { channel: 'internal', limit: 50 }),
-    supabase
-      .from('matter_stage_events')
-      .select('*')
-      .eq('matter_id', matterId)
-      .order('created_at', { ascending: true })
-      .then((r) => (r.data ?? []) as MatterStageEvent[]),
-    fetchAssignedExplainers(matterId),
-  ]);
+  const [clientMessages, internalMessages, stageEvents, assignedExplainers, conflictCheck] =
+    await Promise.all([
+      listMessagesForMatter(matterId, 'admin', { channel: 'client', limit: 50 }),
+      listMessagesForMatter(matterId, 'admin', { channel: 'internal', limit: 50 }),
+      supabase
+        .from('matter_stage_events')
+        .select('*')
+        .eq('matter_id', matterId)
+        .order('created_at', { ascending: true })
+        .then((r) => (r.data ?? []) as MatterStageEvent[]),
+      fetchAssignedExplainers(matterId),
+      // Most-recent conflict check for this matter (gate reads the same way)
+      supabase
+        .from('screened_conflict_checks')
+        .select('id,check_status,check_type,disposition,dispositioned_by,dispositioned_at,notes,created_at')
+        .eq('matter_id', matterId)
+        .eq('firm_id', firmId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then((r) => r.data ?? null),
+    ]);
 
   const next = nextStage(matter.matter_stage);
 
@@ -107,6 +119,13 @@ export default async function LawyerMatterDetailPage({ params }: PageProps) {
       </header>
 
       <StageTimeline matter={matter} events={stageEvents} firmId={firmId} matterId={matterId} next={next} />
+
+      <ConflictCheckPanel
+        firmId={firmId}
+        matterId={matterId}
+        screened_lead_id={matter.source_screened_lead_id ?? ''}
+        existingCheck={conflictCheck}
+      />
 
       <WelcomePanel matter={matter} firmId={firmId} matterId={matterId} />
 
