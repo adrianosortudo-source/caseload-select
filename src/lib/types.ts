@@ -141,6 +141,8 @@ export interface ClientMatter {
   closed_at: string | null;
   created_at: string;
   updated_at: string;
+  matter_milestone: string | null;
+  matter_milestone_note: string | null;
 }
 
 export interface MatterStageEvent {

@@ -20,7 +20,8 @@ export type TriggerEvent =
   | "retainer_awaiting"        // J6: proposal sent, retainer not yet signed
   | "consultation_scheduled"   // J2: consultation booked, send reminders
   | "review_request"           // J9: client won, request Google review (3-touch)
-  | "matter_active"            // J8: client won, active matter check-ins (3-touch, 8 weeks)
+  | "matter_active"            // J8 timed: client won, active matter check-ins (3-touch, 8 weeks)
+  | "milestone_assistant"      // J8 tap: lawyer taps milestone → AI drafts client update → lawyer approves before send. NOT a timed cadence. Distinct from matter_active. Requires matter_milestone + matter_milestone_note on client_matters (migration pending). No sequence template exists yet.
   | "re_engagement"            // J10: client lost or stalled, re-engage at 90d + 180d
   | "relationship_milestone"   // J11: client won, relationship touchpoint at 6mo + 12mo
   | "long_term_nurture";       // J12: client won, annual nurture for referral compounding

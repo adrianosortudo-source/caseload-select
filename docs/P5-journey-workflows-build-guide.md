@@ -353,24 +353,54 @@ If the lawyer does not call within 30 minutes (detected by `lawyer_call_complete
 
 ---
 
-## 11. J8 · Active Matter Update
+## 11. J8 · Active Matter Update: Milestone Assistant
 
-**Trigger:** Custom field `matter_milestone` changes (set externally by Clio integration or by lawyer manually).
+**Design model:** Draft-and-approve. The lawyer is the author; the system is the typist and the reminder. AI drafts the client update; the lawyer approves before anything sends. Nothing auto-sends except a defined carve-out for purely factual, time-critical confirmations (see below).
 
-**Audience:** Retained clients with active matters.
+**Two triggers:**
 
-**Steps (1-2 touches per milestone):**
+1. **Milestone tap:** Lawyer selects a milestone from `matter_milestone` (one tap on mobile). System reads `matter_milestone` + optional `matter_milestone_note` (the lawyer's own words), generates a plain-language, on-brand draft, and returns it to the lawyer for approval or light editing.
+2. **Quiet-file nudge:** Cron-based. Fires to the lawyer (not the client) when a matter has had no client update in approximately 10 days. The nudge arrives with a pre-prepared draft already in it, so the lawyer can approve in one tap.
 
-| Milestone | Channel | Template |
+**Schema inputs:**
+
+| Field | Source | Purpose |
 |---|---|---|
-| `filing_complete` | Email | `J8 · Filing Complete` |
-| `discovery_complete` | Email | `J8 · Discovery Complete` |
-| `settlement_offered` | Email + SMS | `J8 · Settlement Offered` (lawyer-prep) |
-| `closing_scheduled` | Email + SMS | `J8 · Closing Scheduled` |
+| `matter_milestone` | `client_matters` | Which stage the file just hit (e.g. `conditions_waived`, `title_search_complete`, `closing_scheduled`) |
+| `matter_milestone_note` | `client_matters` | Lawyer's optional personal note, woven into the draft by the AI |
 
-**Exit conditions:** Contact moves to stage `8. Closed-Lost` or `9. Closed-Won`.
+> Neither field exists on `client_matters` yet. A migration will be required when this feature is built.
 
-**Defer to post-launch.** Not required for first-client-live.
+**Draft composition:** AI (Gemini) weaves together: client first name, matter description, milestone reached, what happens next, and `matter_milestone_note` if provided. Output is a single short message in the firm's voice. Example for DRG residential purchase, `conditions_waived` (the AI-generated draft):
+
+> Hi [name], good news: the conditions on [address] are now waived and we are clear to move toward closing. Next I will be running title; I will update you once that is back. Damaris.
+
+Lawyer adds "Congrats, this is the exciting part" and sends. Total time: approximately 30 seconds.
+
+**Two-bucket framework:**
+
+| Bucket | What goes here | Who sends |
+|---|---|---|
+| She sends, system assists | Active matter updates, in-person review asks, replies to reviews, personal prospect notes, cross-sell suggestions after close | Lawyer approves each draft |
+| System runs on its own | Booking link + reminders, review-link follow-up after happy close, polite "not right fit" referral note, calendar inquiry responses | Auto-send (no approval required) |
+
+**The one true auto-send carve-out:** Purely factual, time-critical confirmations where the information is machine-generated and the client needs it immediately. Example: "Closing on [address] is scheduled for [time] today." The criterion is: no judgment call is involved and delay harms the client.
+
+**DRG residential real estate example milestones:**
+
+1. APS reviewed
+2. Conditions waived
+3. Title search complete
+4. Closing scheduled
+5. Closing complete
+
+At each step: lawyer taps the milestone, optionally adds a note, system drafts, lawyer approves, message sends.
+
+**Sequence engine type:** `milestone_assistant` (distinct from `matter_active`, the timed check-in cadence). See `src/lib/sequence-engine.ts`.
+
+**Build status:** NOT YET BUILT. Fields not on schema. No UI, no API route, no GHL workflow. Defer to post-DRG-pilot.
+
+**Exit conditions:** Matter stage reaches `closed_won` or `closed_lost`.
 
 ---
 

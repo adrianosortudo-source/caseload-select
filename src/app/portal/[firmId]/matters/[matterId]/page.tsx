@@ -40,6 +40,7 @@ import { nextStage } from '@/lib/matter-stage-pure';
 import WelcomeEditor from './WelcomeEditor';
 import MessageThreads from './MessageThreads';
 import { ConflictCheckPanel } from './ConflictCheckPanel';
+import MilestoneDraftPanel from '@/components/portal/MilestoneDraftPanel';
 
 const STAGE_LABEL: Record<MatterStage, string> = {
   intake: 'Intake',
@@ -128,6 +129,15 @@ export default async function LawyerMatterDetailPage({ params }: PageProps) {
       />
 
       <WelcomePanel matter={matter} firmId={firmId} matterId={matterId} />
+
+      {matter.matter_stage === 'active' && (
+        <MilestoneDraftPanel
+          firmId={firmId}
+          matterId={matterId}
+          practiceArea={matter.practice_area}
+          currentMilestone={matter.matter_milestone}
+        />
+      )}
 
       <section style={cardStyle}>
         <p style={sectionEyebrowStyle}>Messages</p>
