@@ -4,11 +4,11 @@ import "./styles/marketing.css";
 import RevealOnScroll from "./components/RevealOnScroll";
 
 export const metadata: Metadata = {
-  title: "CaseLoad Select — Sign Better Cases",
+  title: "CaseLoad Select · Sign Better Cases",
   description:
     "Most Ontario firms don't have a lead generation problem. They have a lead selection problem. CaseLoad Select is the operator-led system that ranks every inquiry before it reaches you.",
   openGraph: {
-    title: "CaseLoad Select — Sign Better Cases",
+    title: "CaseLoad Select · Sign Better Cases",
     description:
       "Every case that reaches you arrives ranked. You know which ones to activate before you make a single call.",
     type: "website",

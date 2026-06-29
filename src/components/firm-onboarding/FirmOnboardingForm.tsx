@@ -412,7 +412,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         </Field>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <Field label="Authorized representative — name">
+          <Field label="Authorized representative name">
             <input
               type="text"
               required
@@ -422,7 +422,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
               placeholder="Full name"
             />
           </Field>
-          <Field label="Authorized representative — title">
+          <Field label="Authorized representative title">
             <input
               type="text"
               required
@@ -435,7 +435,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <Field label="Authorized representative — email">
+          <Field label="Authorized representative email">
             <input
               type="email"
               required
@@ -445,7 +445,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
               placeholder="you@yourfirm.ca"
             />
           </Field>
-          <Field label="Authorized representative — direct phone">
+          <Field label="Authorized representative direct phone">
             <input
               type="tel"
               required
@@ -459,7 +459,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <Field
-            label="Authorized representative — year of call"
+            label="Authorized representative year of call"
             hint="Year you were called to the bar (4 digits). Used on Canadian Law List, Yellow Pages Canada, and other directory profiles. Find on your LSO certificate or LSO directory listing."
           >
             <input
@@ -477,7 +477,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
             />
           </Field>
           <Field
-            label="Authorized representative — province of call"
+            label="Authorized representative province of call"
             hint="The provincial / territorial bar where you were called. Ontario is the default for most Toronto firms; pick the one that matches your LSO/bar registration."
           >
             <select
@@ -801,7 +801,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
               onChange={(v) => update("pms_integration_preference", v)}
               options={[
                 { value: "yes", label: "Yes, integrate at go-live" },
-                { value: "not_now", label: "Not now — we will run side-by-side and revisit" },
+                { value: "not_now", label: "Not now: we will run side-by-side and revisit" },
                 { value: "discuss", label: "Let's discuss the scope together" },
               ]}
             />
@@ -879,7 +879,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
       </Section>
 
       {/* Section 4: SMS A2P 10DLC */}
-      <Section title="4. SMS — A2P 10DLC brand registration" subtitle="Carrier-required for outbound SMS to your leads">
+      <Section title="4. SMS: A2P 10DLC brand registration" subtitle="Carrier-required for outbound SMS to your leads">
         <Field
           label="Sender phone number preference"
           hint="The number your SMS will originate from. Default: we provision a new number for you with a Toronto area code. If you prefer to port an existing line, describe it here and we will coordinate the port separately (2-4 week timeline)."
@@ -970,7 +970,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
             name="has_facebook_account"
             options={[
               { value: "yes", label: "Yes" },
-              { value: "no", label: "No — I will create one before we start" },
+              { value: "no", label: "No: I will create one before we start" },
             ]}
             value={form.has_facebook_account}
             onChange={(v) => update("has_facebook_account", v)}
@@ -985,7 +985,7 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
             name="has_meta_business_manager"
             options={[
               { value: "yes", label: "Yes" },
-              { value: "no", label: "No — we will create one together" },
+              { value: "no", label: "No: we will create one together" },
               { value: "not_sure", label: "Not sure" },
             ]}
             value={form.has_meta_business_manager}

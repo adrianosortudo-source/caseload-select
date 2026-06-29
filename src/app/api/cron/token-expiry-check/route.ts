@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
     if (alerted.length === 0) continue;
 
     const body = buildTokenAlertBody(status);
-    const subject = `[token-health] ${row.name ?? `Firm ${row.id}`} — ${alerted.length} token${alerted.length === 1 ? "" : "s"} need attention`;
+    const subject = `[token-health] ${row.name ?? `Firm ${row.id}`}: ${alerted.length} token${alerted.length === 1 ? "" : "s"} need attention`;
 
     let emailSent = false;
     let emailError: string | undefined;

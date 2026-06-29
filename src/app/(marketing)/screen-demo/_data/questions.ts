@@ -225,7 +225,7 @@ export const Q4_STAKES: Question = {
     },
     {
       id: "unclear",
-      label: "Not sure yet — the prospect couldn't articulate it",
+      label: "Not sure yet: the prospect couldn't articulate it",
       delta: { complexity: 5, strategic: 2, legitimacy: 4 },
     },
   ],

@@ -5,7 +5,7 @@ import CasePicker from "./_components/CasePicker";
 export const metadata: Metadata = {
   title: "See the Screen at work · CaseLoad Select",
   description:
-    "Walk through a sample inquiry. See the Screen score it, band it, and recommend the next action — the same report your firm would receive on a real intake.",
+    "Walk through a sample inquiry. See the Screen score it, band it, and recommend the next action, the same report your firm would receive on a real intake.",
 };
 
 /**
@@ -58,7 +58,7 @@ export default function ScreenDemoEntry() {
             </h2>
             <p className="cls-demo-picker-sub">
               The three sample cases produce a Band A, Band B, and Band C
-              outcome respectively — calibrated to show the Screen&apos;s range.
+              outcome respectively, calibrated to show the Screen&apos;s range.
               Or pick the gold card to walk through with a real inquiry your
               firm received recently.
             </p>

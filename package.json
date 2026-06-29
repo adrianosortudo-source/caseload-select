@@ -5,9 +5,10 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev:turbo": "next dev --turbopack",
-    "build": "next build",
+    "build": "node scripts/check-no-em-dash-marketing.mjs && next build",
     "start": "next start",
     "lint": "next lint",
+    "check:em-dash-marketing": "node scripts/check-no-em-dash-marketing.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "check:engine-sync": "bash scripts/check-engine-sync.sh",

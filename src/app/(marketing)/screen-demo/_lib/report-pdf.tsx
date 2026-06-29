@@ -457,7 +457,7 @@ export function ReportPdf({ caseFixture, score, firmName, answers }: ReportPdfPr
 
   return (
     <Document
-      title={`CaseLoad Select Screen Report (Sample) — ${caseFixture.title}`}
+      title={`CaseLoad Select Screen Report (Sample): ${caseFixture.title}`}
       author="CaseLoad Select"
       subject="Sample Screen Report"
     >
