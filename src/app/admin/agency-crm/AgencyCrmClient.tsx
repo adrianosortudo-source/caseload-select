@@ -36,6 +36,10 @@ const DEAL_LABELS: Record<DealStage, string> = {
 const INPUT = 'border border-black/15 px-3 py-2 text-sm';
 const PANEL = 'bg-white border border-black/10';
 
+// Initial card cap per pipeline column. "Show more" raises it in STAGE_PAGE_SIZE
+// steps so the ~1000-firm New lane does not mount every card up front.
+const STAGE_PAGE_SIZE = 25;
+
 export default function AgencyCrmClient({
   initialProspects,
   initialReminders,
@@ -48,6 +52,10 @@ export default function AgencyCrmClient({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Per-stage render cap. The New lane holds the full toronto_law_firms import
+  // (~1000 firms); mounting every card (each with its own select) at once is
+  // slow. "Show more" raises the cap for that one column.
+  const [shownByStage, setShownByStage] = useState<Record<string, number>>({});
 
   // Add-prospect form
   const [firmName, setFirmName] = useState('');
@@ -289,27 +297,46 @@ export default function AgencyCrmClient({
               <ul className="divide-y divide-black/5">
                 {inStage.length === 0 ? (
                   <li className="px-3 py-3 text-xs text-black/40">Empty</li>
-                ) : inStage.map((p) => (
-                  <li key={p.id} className="px-3 py-3">
-                    <div className="text-sm font-semibold text-navy">{p.firm_name}</div>
-                    <div className="text-xs text-black/60 mt-0.5">
-                      {[p.contact_name, p.city, p.practice_area].filter(Boolean).join(' · ') || 'No details yet'}
-                    </div>
-                    {p.source && <div className="text-[10px] uppercase tracking-wider text-black/40 mt-1">{p.source}</div>}
-                    <div className="mt-2">
-                      <label className="sr-only" htmlFor={`stage-${p.id}`}>Stage</label>
-                      <select
-                        id={`stage-${p.id}`}
-                        value={p.stage}
-                        disabled={busy}
-                        onChange={(e) => send(`/api/admin/agency-crm/prospects/${p.id}`, 'PATCH', { stage: e.target.value })}
-                        className="border border-black/15 text-xs px-2 py-1"
-                      >
-                        {PROSPECT_STAGES.map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
-                      </select>
-                    </div>
-                  </li>
-                ))}
+                ) : (() => {
+                  const cap = shownByStage[stage] ?? STAGE_PAGE_SIZE;
+                  const hidden = inStage.length - cap;
+                  return (
+                    <>
+                      {inStage.slice(0, cap).map((p) => (
+                        <li key={p.id} className="px-3 py-3">
+                          <div className="text-sm font-semibold text-navy">{p.firm_name}</div>
+                          <div className="text-xs text-black/60 mt-0.5">
+                            {[p.contact_name, p.city, p.practice_area].filter(Boolean).join(' · ') || 'No details yet'}
+                          </div>
+                          {p.source && <div className="text-[10px] uppercase tracking-wider text-black/40 mt-1">{p.source}</div>}
+                          <div className="mt-2">
+                            <label className="sr-only" htmlFor={`stage-${p.id}`}>Stage</label>
+                            <select
+                              id={`stage-${p.id}`}
+                              value={p.stage}
+                              disabled={busy}
+                              onChange={(e) => send(`/api/admin/agency-crm/prospects/${p.id}`, 'PATCH', { stage: e.target.value })}
+                              className="border border-black/15 text-xs px-2 py-1"
+                            >
+                              {PROSPECT_STAGES.map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+                            </select>
+                          </div>
+                        </li>
+                      ))}
+                      {hidden > 0 && (
+                        <li className="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => setShownByStage((prev) => ({ ...prev, [stage]: cap + STAGE_PAGE_SIZE }))}
+                            className="w-full text-xs uppercase tracking-wider font-semibold text-navy hover:bg-black/5 py-1.5 transition"
+                          >
+                            Show {Math.min(STAGE_PAGE_SIZE, hidden)} more ({hidden} hidden)
+                          </button>
+                        </li>
+                      )}
+                    </>
+                  );
+                })()}
               </ul>
             </div>
           );
