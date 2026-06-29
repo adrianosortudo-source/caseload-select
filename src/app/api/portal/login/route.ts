@@ -26,10 +26,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/portal/login?error=invalid", req.url));
   }
 
-  // Record the sign-in moment on the firm_lawyers row if we have one. Best
-  // effort — if the row doesn't exist (legacy branding-only flow), skip.
+  // Record the sign-in moment on the firm_lawyers row if we have one. This must
+  // be awaited: a Supabase query builder is lazy, so the prior `void` form never
+  // executed (the request only fires on await or .then), which is why the access
+  // page status never flipped from Invited to Active. Awaiting also guarantees
+  // the write lands before the serverless function returns the redirect. The
+  // builder resolves with { error } rather than throwing, so no try/catch is
+  // needed; a row that does not exist (legacy branding-only flow) is a no-op.
   if (payload.lawyer_id) {
-    void supabase
+    await supabase
       .from("firm_lawyers")
       .update({ last_signed_in_at: new Date().toISOString() })
       .eq("id", payload.lawyer_id);
