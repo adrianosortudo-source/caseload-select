@@ -21,7 +21,7 @@ The lifecycle states on `screened_leads.status` map to five webhook actions. Eve
 | `triaging` → `passed` | `passed` | `POST /api/portal/[firmId]/triage/[leadId]/pass` | Decline-with-grace, lawyer-initiated; uses resolved decline copy with optional per-lead override |
 | `triaging` → `referred` | `referred` | `POST /api/portal/[firmId]/triage/[leadId]/refer` | Firm's choice; common patterns are a "we have referred you to X" note or nothing (relationship-only) |
 | (insert) → `declined` | `declined_oos` | `POST /api/intake-v2` when `matter_type === 'out_of_scope'` | Decline-with-grace, OOS-flavoured; references the practice area |
-| `triaging` → `declined` | `declined_backstop` | `GET /api/cron/triage-backstop` (vercel cron) when `decision_deadline < now()` | Decline-with-grace, backstop-flavoured; lawyer never acted |
+| `triaging` → `declined` | `declined_backstop` | `GET /api/cron/triage-backstop` (pg_cron, runs every hour at :07) when `decision_deadline < now()` | Decline-with-grace, backstop-flavoured; lawyer never acted |
 
 A sixth action, `matter_stage_changed`, is not a `screened_leads` lifecycle event: it fires on forward `client_matters` stage transitions (see its section below) and carries a reduced envelope.
 

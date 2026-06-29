@@ -9,8 +9,8 @@
  * manually via direct DB UPDATE if a matter needs to move backwards
  * (rare edge case).
  *
- * Each forward transition fires a journey cadence per the existing
- * sequence-engine triggers:
+ * Each forward transition enqueues a matter_stage_changed webhook event
+ * (per DR-067) which triggers the corresponding GHL journey cadence:
  *
  *   intake               → retainer_pending : J6 (retainer awaiting)
  *   retainer_pending     → active           : J7 (welcome / onboarding)

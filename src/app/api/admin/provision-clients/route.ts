@@ -93,7 +93,13 @@ export async function POST(req: Request) {
   }
 
   const authHeader = req.headers.get("x-admin-secret");
-  if (authHeader !== adminSecret) {
+  const { timingSafeEqual } = await import("crypto");
+  const headerBuf = Buffer.from(authHeader ?? "");
+  const secretBuf = Buffer.from(adminSecret);
+  const match =
+    headerBuf.length === secretBuf.length &&
+    timingSafeEqual(headerBuf, secretBuf);
+  if (!match) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
