@@ -159,10 +159,12 @@ export async function resendMemberLink(args: {
     lawyerId: member.id,
   });
 
-  await supabase
-    .from("firm_lawyers")
-    .update({ invitation_sent_at: new Date().toISOString() })
-    .eq("id", args.memberId);
+  if (result.sent) {
+    await supabase
+      .from("firm_lawyers")
+      .update({ invitation_sent_at: new Date().toISOString() })
+      .eq("id", args.memberId);
+  }
 
   return { ok: true, sent: result.sent };
 }
