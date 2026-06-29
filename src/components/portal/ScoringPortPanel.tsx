@@ -44,8 +44,9 @@ export default function ScoringPortPanel({ data }: ScoringPortPanelProps) {
       ? Math.round(Number(score_completeness) * 100)
       : null;
 
+  interface MissingField { slot_id: string; label: string; }
   const missingFields = Array.isArray(score_missing_fields)
-    ? (score_missing_fields as string[])
+    ? (score_missing_fields as MissingField[])
     : [];
 
   return (
@@ -88,10 +89,10 @@ export default function ScoringPortPanel({ data }: ScoringPortPanelProps) {
           <div className="flex flex-wrap gap-1.5">
             {missingFields.map((field) => (
               <span
-                key={field}
+                key={field.slot_id}
                 className="text-xs text-black/60 bg-black/5 border border-black/10 px-2 py-0.5"
               >
-                {field}
+                {field.label}
               </span>
             ))}
           </div>
