@@ -89,6 +89,9 @@ export function TextCard({
       </div>
 
       <textarea
+        id="cls-text-input"
+        name="cls-text-input"
+        aria-label={item.question}
         rows={6}
         value={text}
         placeholder={item.placeholder ?? "Type your answer..."}

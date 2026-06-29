@@ -146,6 +146,9 @@ export function RapidFire({ items, values, onChange }: Props) {
               {otherOpenFor === item.id && (
                 <div className="mt-1 flex flex-col gap-2 rounded-lg border border-[#1E2F58]/15 bg-white p-3">
                   <textarea
+                    id={`cls-other-${item.id}`}
+                    name={`cls-other-${item.id}`}
+                    aria-label={`Other response for ${item.question}`}
                     rows={3}
                     autoFocus
                     value={otherTexts[item.id] ?? ""}
