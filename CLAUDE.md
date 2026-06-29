@@ -346,6 +346,25 @@ Product name: **CaseLoad Screen**. "Case Review" and "Intake OS" are deprecated 
 
 Embeddable at `/widget/[firmId]` as iframe on firm websites.
 
+## Embedded Widget: Voice, Embed Contract, Capability UX (2026-06-28)
+
+Locked after the DRG voice-mic debugging cycle. Plan around these for every client; do not rediscover them on a live site.
+
+**iOS voice reality.** Every iOS browser runs on WebKit (Chrome is `CriOS`, Firefox `FxiOS`, Edge `EdgiOS`, all shells over the same engine). `getUserMedia` inside a cross-origin iframe works in **iOS Safari only** (proven on a real device); the WebKit shells refuse it with no workaround, because it is an Apple platform limit. The intake widget is always embedded cross-origin on a firm site, so embedded voice records on iOS Safari and not on Chrome iOS. Desktop and Android record inline as normal. Full proven matrix: `memory/reference_widget_voice_ios_matrix.md`.
+
+**The cross-origin mic embed contract.** Three conditions must all hold for the embedded widget to reach the mic:
+1. The firm-site `<iframe>` carries `allow="microphone"`.
+2. The widget route sends `Permissions-Policy: microphone=*`, NOT `microphone=(self)`. WebKit mishandles `self` in this context and blocks the mic even when it should allow it. Set in `next.config.ts` for `/widget*` and `/widget-public*`; the main app keeps `microphone=()`.
+3. The route is excluded from the admin shell. Any NEW public or embedded route must be added to the AdminShell bypass AND given the correct Permissions-Policy, or it renders inside the operator console with the wrong headers (exactly how the since-deleted `/voice-handoff` route broke).
+
+**Capability-gated UX rules.** Any feature that depends on a browser/OS capability follows four rules:
+1. Detect capability on mount, before rendering a control. Never show a button already proven dead in this context (`VoiceInput.tsx` `getVoiceCapability`).
+2. Keep the fallback (typing) available in every state.
+3. When the capability is unavailable, render NOTHING. No apology sentence; the textarea already invites typing. A runtime denial after a deliberate tap still surfaces its own message.
+4. An embedded surface never navigates the user off the firm's page. The new-tab voice handoff was built and rejected for this reason; voice must run in place.
+
+**Reused-credential verification.** The original mic failure was a stale assumption: the transcribe route reused "the screening engine's OpenAI key" via a comment written before the engine moved to Gemini, and that key's project had no Whisper access (HTTP 403). When a feature borrows a shared credential, verify the credential's actual model and scope access at wire-up; do not trust a provenance comment. Prefer consolidating on the current vendor over leaving a one-feature legacy dependency. Transcription now runs on Gemini via `/api/transcribe`.
+
 ## Lawyer Triage Portal (CaseLoad Screen 2.0 / CRM Bible v5 era)
 
 A NEW surface inside the existing portal, alongside the legacy Dashboard / Pipeline / Phases tabs, consuming output from CaseLoad Screen 2.0 (the Vite SPA at `https://caseload-screen-v2.vercel.app`). The lawyer's daily decision surface for inbound leads.
