@@ -151,6 +151,26 @@ describe("buildIssues", () => {
     expect(issue?.severity).not.toBe("high");
   });
 
+  it("keeps Sitemap membership low, never enters the Indexability blocker bucket", () => {
+    // A missing sitemap (inSitemap=null) fires a warn in the Indexability category.
+    // It must NOT reach medium+ severity: a missing sitemap is a discoverability
+    // gap, not an indexability suppression. Medium+ would trigger the
+    // "held back from search engines" pain-point, which is misleading.
+    const c = cat("Indexability", [{ label: "Sitemap membership", status: "warn", detail: "No sitemap found." }]);
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [c] }),
+      mkPage({ url: "https://x.com/about", pageType: "about", categories: [c] }),
+      mkPage({ url: "https://x.com/practice", pageType: "practice", categories: [c] }),
+    ];
+    const issue = buildIssues(pages).find((i) => i.title === "Sitemap membership");
+    expect(issue).toBeTruthy();
+    // warn drops the "low" base to "info"; the key check is never medium+.
+    expect(["low", "info"]).toContain(issue?.severity);
+    expect(issue?.severity).not.toBe("medium");
+    expect(issue?.severity).not.toBe("high");
+    expect(issue?.severity).not.toBe("critical");
+  });
+
   it("returns no issues when everything passes", () => {
     const pages = [mkPage({
       url: "https://x.com/", pageType: "homepage",

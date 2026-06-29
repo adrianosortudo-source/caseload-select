@@ -200,21 +200,33 @@ async function safeResource(url: string, timeoutMs: number): Promise<string | nu
    Sitemap fetch + link extraction
    ──────────────────────────────────────────────────────── */
 
-async function fetchSitemapUrls(sitemapUrl: string, domain: string): Promise<string[]> {
+async function fetchSitemapUrls(sitemapUrl: string, domain: string, depth = 0): Promise<string[]> {
   try {
     const parsed = new URL(sitemapUrl);
     if (isSsrfBlocked(parsed.hostname)) return [];
     const raw = await safeResource(sitemapUrl, 6000);
     if (!raw) return [];
     const urls: string[] = [];
+    const childSitemaps: string[] = [];
     const locPattern = /<loc>\s*(https?:\/\/[^\s<]+)\s*<\/loc>/gi;
     for (const [, url] of raw.matchAll(locPattern)) {
       const trimmed = url.trim();
-      if (/\.(xml|gz)(\?.*)?$/.test(trimmed)) continue;
+      if (/\.(xml|gz)(\?.*)?$/.test(trimmed)) {
+        // Sitemap index entry: collect for recursive fetch (one level only).
+        if (depth === 0 && isSameOrigin(trimmed, domain)) childSitemaps.push(trimmed);
+        continue;
+      }
       if (isSameOrigin(trimmed, domain)) {
         try { const u = new URL(trimmed); u.hash = ""; urls.push(u.href); } catch { /* skip */ }
       }
       if (urls.length >= 200) break;
+    }
+    if (depth === 0) {
+      for (const child of childSitemaps.slice(0, 5)) {
+        const childUrls = await fetchSitemapUrls(child, domain, 1);
+        for (const u of childUrls) urls.push(u);
+        if (urls.length >= 500) break;
+      }
     }
     return urls;
   } catch { return []; }
@@ -810,7 +822,7 @@ function checkLocalSeo(html: string, schema: SchemaSummary): CategoryResult {
     ? { label: "NAP in structured data", status: "pass", detail: "Contact info found in JSON-LD." }
     : { label: "NAP in structured data", status: "fail", detail: "No NAP in structured data.", fix: "Add telephone, address, and name to a LocalBusiness or LegalService schema block." });
 
-  items.push((/google\.com\/(maps\/place|search\?.*business|business)/i.test(html) || /g\.page\//i.test(html))
+  items.push((/google\.com\/(maps\/place|search\?.*business|business)/i.test(html) || /g\.page\//i.test(html) || /maps\.app\.goo\.gl|goo\.gl\/maps/i.test(html))
     ? { label: "Google Business Profile link", status: "pass", detail: "GBP link found. Cross-linking strengthens local authority." }
     : { label: "Google Business Profile link", status: "warn", detail: "No link to Google Business Profile.", fix: "Link to the firm's Google Business Profile in the footer or contact section." });
 

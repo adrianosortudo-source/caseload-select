@@ -218,11 +218,15 @@ const LABEL_SEVERITY: Record<string, Severity> = {
   "AI training bot control": "low",
   // Emerging, optional AI-readiness file. Low priority by design.
   "llms.txt file": "low",
+  // Discoverability gap, not an indexability blocker. Pages not in a sitemap
+  // are still crawlable; missing a sitemap is a setup gap, not a suppression.
+  // Kept low so a missing sitemap never triggers the "held back" Indexability angle.
+  "Sitemap membership": "low",
 };
 
 // Optional-policy labels: never raised by the commercial+sitewide coverage
 // bump, because choosing not to act on them is a valid default.
-const POLICY_LABELS = new Set<string>(["AI training bot control", "llms.txt file"]);
+const POLICY_LABELS = new Set<string>(["AI training bot control", "llms.txt file", "Sitemap membership"]);
 
 const EFFORT_BY_CATEGORY: Record<string, Effort> = {
   "Indexability": "low",

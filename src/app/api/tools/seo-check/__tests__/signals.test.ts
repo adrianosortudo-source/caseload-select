@@ -106,3 +106,39 @@ describe("hasIntakeIframe", () => {
     expect(hasIntakeIframe("<p>Contact us at 416-555-1234</p>")).toBe(false);
   });
 });
+
+// ---- GBP link detection (replicated from checkLocalSeo) ----
+
+function hasGbpLink(html: string): boolean {
+  return (
+    /google\.com\/(maps\/place|search\?.*business|business)/i.test(html) ||
+    /g\.page\//i.test(html) ||
+    /maps\.app\.goo\.gl|goo\.gl\/maps/i.test(html)
+  );
+}
+
+describe("hasGbpLink", () => {
+  it("detects google.com/maps/place link", () => {
+    expect(hasGbpLink(`<a href="https://www.google.com/maps/place/myfirm">Google</a>`)).toBe(true);
+  });
+
+  it("detects maps.app.goo.gl short URL (common Share button output)", () => {
+    expect(hasGbpLink(`<a href="https://maps.app.goo.gl/YwmKbP64L9w8DyEc6">Find us on Google</a>`)).toBe(true);
+  });
+
+  it("detects goo.gl/maps short URL (legacy format)", () => {
+    expect(hasGbpLink(`<a href="https://goo.gl/maps/abc123">Directions</a>`)).toBe(true);
+  });
+
+  it("detects g.page short URL", () => {
+    expect(hasGbpLink(`<a href="https://g.page/myfirm">GBP</a>`)).toBe(true);
+  });
+
+  it("does not fire on unrelated google links", () => {
+    expect(hasGbpLink(`<a href="https://www.google.com/search?q=lawyers">Search</a>`)).toBe(false);
+  });
+
+  it("does not fire when no Google link present", () => {
+    expect(hasGbpLink("<p>Contact us by phone.</p>")).toBe(false);
+  });
+});
