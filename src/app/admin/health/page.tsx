@@ -124,6 +124,19 @@ export default async function AdminHealthPage() {
     };
   });
 
+  // External services the console depends on. The audit flagged two silent ones:
+  // the local diagnostic builder and the external onboarding microsite. Config
+  // status is derived from env presence; live health-pinging is a later add.
+  const dependencies: { name: string; purpose: string; state: string; tone: "ok" | "info" | "bad" }[] = [
+    { name: "Supabase", purpose: "Database, sessions, cron scheduler", state: process.env.NEXT_PUBLIC_SUPABASE_URL ? "Configured" : "Missing key", tone: process.env.NEXT_PUBLIC_SUPABASE_URL ? "ok" : "bad" },
+    { name: "Resend", purpose: "Transactional + notification email", state: process.env.RESEND_API_KEY ? "Configured" : "Missing key", tone: process.env.RESEND_API_KEY ? "ok" : "bad" },
+    { name: "Google Gemini", purpose: "Screen engine + voice extraction", state: (process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY) ? "Configured" : "Missing key", tone: (process.env.GOOGLE_AI_API_KEY || process.env.GEMINI_API_KEY) ? "ok" : "bad" },
+    { name: "GoHighLevel", purpose: "SMS, Voice AI, webhooks", state: "Per firm (tokens on intake_firms)", tone: "info" },
+    { name: "Vercel", purpose: "Hosting and deploy", state: "This deployment", tone: "info" },
+    { name: "Diagnostic builder", purpose: "Branded diagnostic PDF", state: "Local tool (localhost:8765)", tone: "info" },
+    { name: "Onboarding microsite", purpose: "Firm content-strategy reference", state: "External (drg-onboarding.vercel.app)", tone: "info" },
+  ];
+
   return (
     <div className="space-y-6">
       <Header />
@@ -277,6 +290,34 @@ export default async function AdminHealthPage() {
             </dl>
           </div>
         </div>
+      </Panel>
+
+      {/* External dependencies */}
+      <Panel title="External dependencies" subtitle={`${dependencies.length} services`}>
+        <ul className="divide-y divide-black/8">
+          {dependencies.map((d) => (
+            <li key={d.name} className="py-2 flex items-baseline justify-between gap-3 flex-wrap">
+              <div className="min-w-0">
+                <span className="text-sm font-semibold text-navy">{d.name}</span>
+                <span className="text-xs text-black/55 ml-2">{d.purpose}</span>
+              </div>
+              <span
+                className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 shrink-0 ${
+                  d.tone === "ok"
+                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    : d.tone === "bad"
+                      ? "bg-red-50 text-red-700 border border-red-200"
+                      : "bg-black/5 text-black/55 border border-black/10"
+                }`}
+              >
+                {d.state}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-[10px] text-black/40">
+          Configured means the credential is present in this deployment, not that the service answered. Live health pinging is a later add.
+        </p>
       </Panel>
 
       <p className="text-xs text-black/40">
