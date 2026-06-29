@@ -35,11 +35,6 @@ const NAV_LINKS = [
     active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/onboarding`),
   },
   {
-    label: "Explainers",
-    href: (id: string) => `/admin/firms/${id}/explainers`,
-    active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/explainers`),
-  },
-  {
     label: "Metrics",
     href: (id: string) => `/admin/firms/${id}/metrics`,
     active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/metrics`),
@@ -62,7 +57,6 @@ const SYSTEM_LINKS = [
   { label: "Triage", href: "/admin/triage" },
   { label: "Webhook outbox", href: "/admin/webhook-outbox" },
   { label: "Onboarding desk", href: "/admin/onboarding-submissions" },
-  { label: "Explainer library", href: "/admin/explainers" },
   { label: "Health", href: "/admin/health" },
 ];
 
