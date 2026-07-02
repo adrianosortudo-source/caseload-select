@@ -140,11 +140,23 @@ export async function POST(
     : 'The lawyer';
 
   // Persist the current milestone + note before calling Gemini so the record
-  // is up-to-date even if the network call fails.
-  await supabase
+  // is up-to-date even if the network call fails. Not fatal to the draft
+  // (the lawyer still gets a usable draft to copy), but logged rather than
+  // swallowed: until the matter_milestone / matter_milestone_note columns
+  // land (see migrations-draft/20260629_client_matters_milestone_fields.sql),
+  // this update fails on every call and the "current milestone" state never
+  // persists.
+  const { error: persistErr } = await supabase
     .from('client_matters')
     .update({ matter_milestone: milestone, matter_milestone_note: note })
     .eq('id', matterId);
+  if (persistErr) {
+    console.error('[milestone-draft] failed to persist matter_milestone', {
+      matterId,
+      milestone,
+      error: persistErr.message,
+    });
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DRAFT_TIMEOUT_MS);

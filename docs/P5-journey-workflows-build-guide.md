@@ -398,7 +398,7 @@ At each step: lawyer taps the milestone, optionally adds a note, system drafts, 
 
 **Sequence engine type:** `milestone_assistant` (distinct from `matter_active`, the timed check-in cadence). See `src/lib/sequence-engine.ts`.
 
-**Build status:** NOT YET BUILT. Fields not on schema. No UI, no API route, no GHL workflow. Defer to post-DRG-pilot.
+**Build status:** BUILT 2026-06-29 (app commit c30b7c1), hardened 2026-07-02. Migration `matter_milestone` + `matter_milestone_note` + `quiet_nudge_sent_at` on `client_matters` is DRAFT ONLY at `supabase/migrations-draft/20260629_client_matters_milestone_fields.sql`, not yet applied to prod; the milestone-draft route and the quiet-file-nudge cron are both deployed but their DB persistence is inert until the operator approves the migration. `POST /api/portal/[firmId]/matters/[matterId]/milestone-draft` (draft composer, Gemini), `MilestoneDraftPanel.tsx` (matter detail, active stage only), `GET /api/cron/quiet-file-nudge` (daily cron, not yet scheduled in pg_cron pending the same migration approval).
 
 **Exit conditions:** Matter stage reaches `closed_won` or `closed_lost`.
 

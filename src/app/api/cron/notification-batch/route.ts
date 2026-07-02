@@ -322,6 +322,7 @@ function describeEvent(eventType: string): string {
     deliverable_approved: 'Deliverable approved',
     deliverable_changes_requested: 'Changes requested',
     firm_message_new: 'New CaseLoad message',
+    milestone_draft_ready: 'Quiet file: update due',
   };
   return m[eventType] ?? eventType;
 }
