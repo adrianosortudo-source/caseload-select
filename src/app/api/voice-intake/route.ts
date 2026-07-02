@@ -874,6 +874,16 @@ export async function POST(req: NextRequest) {
     slot_meta: state.slot_meta,
     slot_evidence: state.slot_evidence,
     channel: 'voice' as const,
+    // Questions-asked measurement gap (qualification audit F6, 2026-07-02).
+    // Added for shape consistency with the web/Meta paths, but this route
+    // (DR-033) is a single-pass post-call transcript analysis: initialiseState
+    // -> runEvidencePass -> one llmExtractServer call, never a live
+    // getNextStep/applyAnswer loop. state.questionHistory therefore stays
+    // empty here structurally, not as a bug; the actual conversation ran
+    // through the GHL Voice AI agent's own prompt, a separate system with
+    // no shared instrumentation. This will start reading real depth once
+    // DR-048 Voice v2 (the engine-owned realtime turn loop) deploys.
+    questionHistory: state.questionHistory,
     voice_meta: {
       call_id: storedCallId,
       call_duration_sec: body.call_duration_sec ?? null,

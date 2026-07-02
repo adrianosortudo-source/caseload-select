@@ -286,6 +286,11 @@ describe('processChannelInbound — discovery follow-up phase', () => {
     expect(slotAnswers.multi_turn).toBe(true);
     expect(slotAnswers.follow_up_count).toBeGreaterThanOrEqual(2);
 
+    // Questions-asked measurement gap fix (qualification audit F6,
+    // 2026-07-02): the live questionHistory must now survive into the
+    // persisted row, not just drive in-session budget enforcement.
+    expect(slotAnswers.questionHistory).toEqual(['amount_at_stake', 'billing_dispute_reason']);
+
     // Closing acknowledgment was sent on the same channel.
     expect(mocks.sendChannelMessage).toHaveBeenCalledTimes(1);
     const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;

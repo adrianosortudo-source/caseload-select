@@ -208,6 +208,12 @@ describe('/api/voice-intake contact-capture gate', () => {
     // The recovered name is on the persisted record.
     const slots = (screened?.payload.slot_answers as { slots?: Record<string, unknown> })?.slots ?? {};
     expect(slots.client_name).toBe('Adriana Dominguez');
+    // Questions-asked measurement gap (qualification audit F6, 2026-07-02):
+    // present for shape consistency with web/Meta, but empty by design.
+    // Voice (DR-033) is a single-pass transcript analysis, no live
+    // getNextStep loop runs here, so there is nothing to have tracked.
+    const slotAnswersRoot = screened?.payload.slot_answers as { questionHistory?: unknown[] };
+    expect(slotAnswersRoot.questionHistory).toEqual([]);
   });
 
   it('LOCKED REGRESSION (2026-06-04): bare name answered to "Can I get your name?" (no readback) enters the queue with the recovered name', async () => {

@@ -1085,6 +1085,14 @@ export async function finalizeChannelLead(
     channel,
     multi_turn: wasMultiTurn,
     follow_up_count: totalFollowUps,
+    // Questions-asked measurement gap (qualification audit F6, 2026-07-02).
+    // state.questionHistory is tracked live during the multi-turn session
+    // (it already drives QUESTION_BUDGET_BY_CHANNEL enforcement) but was
+    // never copied into the persisted row, so the metrics page read
+    // q_asked=0 on every Meta lead regardless of real depth. Real fix,
+    // unlike the voice route's questionHistory field: Meta channels DO run
+    // the engine's own turn-by-turn selector loop.
+    questionHistory: state.questionHistory,
     ...channelMetaForSlotAnswers,
   };
   const scoringDelta = buildScoringDeltaForInsert(slotAnswers, state.matter_type, band);

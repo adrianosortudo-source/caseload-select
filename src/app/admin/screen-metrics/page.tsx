@@ -262,8 +262,9 @@ function ChannelSection({ metrics }: { metrics: import("@/lib/screen-metrics-pur
     <section className="bg-white border border-black/10 px-5 py-5">
       <h2 className="text-sm font-bold text-navy uppercase tracking-wider mb-1">Channel quality</h2>
       <p className="text-xs text-black/50 mb-4">
-        Avg questions asked is only meaningful on the web channel today; voice and Meta channels
-        do not persist questionHistory into slot_answers yet.
+        Avg questions asked is meaningful on web and Meta channels (Messenger, Instagram, WhatsApp).
+        Voice stays at 0 structurally: the current voice path is a single-pass post-call transcript
+        analysis, not a live turn-by-turn conversation through this engine.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
