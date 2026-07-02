@@ -192,6 +192,38 @@ describe("buildNewLeadHtml", () => {
     expect(html).not.toContain("whale nurture flag");
   });
 
+  it("surfaces the confidence tier when provided (standard triaging branch)", () => {
+    const html = buildNewLeadHtml({
+      ...baseInput,
+      scoreConfidence: "low",
+      decisionDeadlineIso: deadline,
+      now,
+    });
+    expect(html).toContain("low confidence");
+    expect(html).toContain("thin facts");
+  });
+
+  it("surfaces the confidence tier on the Band D branch", () => {
+    const html = buildNewLeadHtml({
+      ...baseInput,
+      band: "D",
+      scoreConfidence: "medium",
+      decisionDeadlineIso: deadline,
+      now,
+    });
+    expect(html).toContain("medium confidence");
+  });
+
+  it("omits the confidence line when not provided", () => {
+    const html = buildNewLeadHtml({
+      ...baseInput,
+      scoreConfidence: null,
+      decisionDeadlineIso: deadline,
+      now,
+    });
+    expect(html).not.toContain("confidence · brief built from");
+  });
+
   it("escapes HTML in the firm name", () => {
     const html = buildNewLeadHtml({
       ...baseInput,

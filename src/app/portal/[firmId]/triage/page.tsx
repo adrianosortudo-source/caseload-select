@@ -69,7 +69,7 @@ export default async function TriageQueuePage({
       readiness_answered, whale_nurture, band_c_subtrack,
       decision_deadline, contact_name, contact_phone, contact_email,
       contact_postal_code, submitted_at, brief_json, slot_answers,
-      intake_language
+      intake_language, score_confidence
     `)
     .eq("firm_id", firmId);
   query = view === "history"

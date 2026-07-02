@@ -215,6 +215,22 @@ export async function notifyLawyersOfNewLead(args: NotifyArgs): Promise<NotifyRe
   const firmName = firm.branding?.firm_name ?? firm.name ?? "your firm";
   const briefUrl = `${resolveAppOrigin()}/portal/${args.firmId}/triage/${encodeURIComponent(args.leadId)}`;
 
+  // Best-effort confidence-tier lookup (C3 scoring port, promoted 2026-07-02).
+  // A single narrow column read by lead_id, not a re-fetch of the row the
+  // caller already has on hand for the rest of emailInput. Never blocks or
+  // throws into the notification path; a failed read just omits the line.
+  let scoreConfidence: string | null = null;
+  try {
+    const { data: scoreRow } = await supabase
+      .from("screened_leads")
+      .select("score_confidence")
+      .eq("lead_id", args.leadId)
+      .maybeSingle();
+    scoreConfidence = (scoreRow as { score_confidence?: string | null } | null)?.score_confidence ?? null;
+  } catch {
+    scoreConfidence = null;
+  }
+
   const emailInput: NewLeadEmailInput = {
     firmName,
     firstName: deriveFirstName(args.contactName),
@@ -227,6 +243,7 @@ export async function notifyLawyersOfNewLead(args: NotifyArgs): Promise<NotifyRe
     intakeLanguage: args.intakeLanguage ?? null,
     channel: args.channel ?? null,
     lifecycleStatus: args.lifecycleStatus ?? "triaging",
+    scoreConfidence,
   };
 
   const email = buildNewLeadEmail(emailInput);

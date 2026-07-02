@@ -51,6 +51,7 @@ export interface QueueCardRow {
   brief_json: { matter_snapshot?: string; fee_estimate?: string } | null;
   slot_answers: { channel?: string } | null;
   intake_language: string | null;
+  score_confidence?: string | null;
 }
 
 /**
@@ -232,6 +233,7 @@ const TriageQueueCard = forwardRef<HTMLAnchorElement, TriageQueueCardProps>(func
             Whale nurture
           </span>
         )}
+        <ConfidenceChip confidence={row.score_confidence ?? null} />
         {subtrack && (
           <span className="text-[10px] uppercase tracking-wider font-semibold bg-parchment-2 text-black/70 px-2 py-0.5 border border-black/10">
             {subtrack}
@@ -272,6 +274,27 @@ const TriageQueueCard = forwardRef<HTMLAnchorElement, TriageQueueCardProps>(func
 });
 
 export default TriageQueueCard;
+
+/**
+ * Confidence-tier chip (C3 scoring port, promoted 2026-07-02). Distinct from
+ * the band badge on purpose: band says how urgent/valuable the matter looks,
+ * confidence says how much of that is backed by user-answered slots versus
+ * thin evidence. A low-confidence Band A is real and should read as both.
+ */
+function ConfidenceChip({ confidence }: { confidence: string | null }) {
+  if (!confidence) return null;
+  const classes =
+    confidence === "high"
+      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+      : confidence === "medium"
+        ? "bg-amber-50 text-amber-800 border-amber-200"
+        : "bg-red-50 text-red-800 border-red-200";
+  return (
+    <span className={`text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 border ${classes}`}>
+      {confidence} confidence
+    </span>
+  );
+}
 
 function BandBadge({ band }: { band: "A" | "B" | "C" | "D" | null }) {
   const colour =

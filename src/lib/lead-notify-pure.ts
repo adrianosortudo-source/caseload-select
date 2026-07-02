@@ -47,6 +47,12 @@ export interface NewLeadEmailInput {
   channel?: string | null;
   /** Defaults to 'triaging' for backward compat with older callers. */
   lifecycleStatus?: LifecycleStatus;
+  /**
+   * C3 scoring-port confidence tier (high/medium/low), promoted 2026-07-02.
+   * Omit or null when the row predates the scoring engine or the firm's
+   * scoring-port columns are unpopulated; no line renders in that case.
+   */
+  scoreConfidence?: string | null;
   now?: Date;
 }
 
@@ -115,6 +121,7 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
     intakeLanguage,
     channel,
     lifecycleStatus = "triaging",
+    scoreConfidence,
     now = new Date(),
   } = input;
 
@@ -126,6 +133,14 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
     : "";
   const channelNote = (channel && channel !== 'web')
     ? `<div style="margin-top:6px;font-size:12px;color:#1E3A5F;font-family:'Oxanium',Arial,sans-serif;letter-spacing:0.08em;text-transform:uppercase;">Inbound via: ${escapeHtml(channelLabel(channel))}</div>`
+    : "";
+  // Confidence is separate from band on purpose (a thin, low-confidence
+  // Band A is real and should not read as a fully-evidenced Band A). Colour
+  // mirrors the ScoringPortPanel/queue-card treatment for the same tier.
+  const confidenceColor =
+    scoreConfidence === "high" ? "#1E6F42" : scoreConfidence === "medium" ? "#8A6D1E" : "#8A3B2E";
+  const confidenceNote = scoreConfidence
+    ? `<div style="margin-top:6px;font-size:12px;color:${confidenceColor};font-family:'Oxanium',Arial,sans-serif;letter-spacing:0.08em;text-transform:uppercase;">${escapeHtml(scoreConfidence)} confidence · brief built from ${scoreConfidence === "high" ? "mostly confirmed" : scoreConfidence === "medium" ? "partly confirmed" : "thin"} facts</div>`
     : "";
 
   // Three distinct visual treatments share the navy header band and brand
@@ -170,7 +185,8 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
       The screen engine classified this matter as outside your practice areas. Decision window: <strong style="font-weight:700;color:#1E2F58;">${escapeHtml(remaining)}</strong> to Refer to a colleague, Take (if the engine misclassified), or Pass.
     </div>
     ${channelNote}
-    ${langNote}`;
+    ${langNote}
+    ${confidenceNote}`;
   } else {
     const remainingMs = new Date(decisionDeadlineIso).getTime() - now.getTime();
     const remaining = formatRemaining(remainingMs);
@@ -189,6 +205,7 @@ export function buildNewLeadHtml(input: NewLeadEmailInput): string {
     </div>
     ${channelNote}
     ${langNote}
+    ${confidenceNote}
     ${whaleNote}`;
   }
 
