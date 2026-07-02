@@ -18,7 +18,7 @@ import { buildReport } from "@/lib/screen-engine/report";
 import { renderBriefHtmlServer } from "@/lib/screen-brief-html";
 import type { EngineState, SlotDefinition } from "@/lib/screen-engine/types";
 
-interface Props {
+export interface ScreenEnginePublicWidgetProps {
   firmId: string;
   firmName: string;
   /**
@@ -38,9 +38,38 @@ interface Props {
   initialLang?: SupportedLanguage;
   /** When true, renders the CASL explicit-consent checkbox on the contact form (H5, DR-075). */
   consentCaptureEnabled?: boolean;
+  /**
+   * Where the completed intake payload should be submitted.
+   *
+   * Defaults to CaseLoad's same-origin persistence route so the existing
+   * iframe/public-widget pages keep working. First-party host sites such as
+   * DRG Law can pass a same-origin proxy route (for example `/api/intake`) so
+   * the intake UI renders natively in the host app while submissions still land
+   * in CaseLoad.
+   */
+  submitEndpoint?: string | ((firmId: string) => string);
+  /**
+   * Optional host hook fired after a submit attempt completes. First-party
+   * hosts can use this for analytics or UI state without relying on
+   * cross-window postMessage.
+   */
+  onSubmitResult?: (result: {
+    persisted: boolean;
+    status: string;
+    response: unknown;
+  }) => void;
 }
 
 type Stage = "kickoff" | "questions" | "contact" | "done";
+
+function resolveSubmitEndpoint(
+  firmId: string,
+  submitEndpoint?: ScreenEnginePublicWidgetProps["submitEndpoint"],
+): string {
+  if (typeof submitEndpoint === "function") return submitEndpoint(firmId);
+  if (submitEndpoint) return submitEndpoint;
+  return `/api/intake-v2?firmId=${encodeURIComponent(firmId)}`;
+}
 
 function scoreState(state: EngineState): EngineState {
   const band = computeBand(state);
@@ -119,7 +148,14 @@ function FreeTextAnswerCard({
   );
 }
 
-export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en", consentCaptureEnabled = false }: Props) {
+export function ScreenEnginePublicWidget({
+  firmId,
+  firmName,
+  initialLang = "en",
+  consentCaptureEnabled = false,
+  submitEndpoint,
+  onSubmitResult,
+}: ScreenEnginePublicWidgetProps) {
   const [stage, setStage] = useState<Stage>("kickoff");
   const [description, setDescription] = useState("");
   const [state, setState] = useState<EngineState | null>(null);
@@ -296,14 +332,16 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en",
     };
 
     try {
-      const res = await fetch(`/api/intake-v2?firmId=${encodeURIComponent(firmId)}`, {
+      const res = await fetch(resolveSubmitEndpoint(firmId, submitEndpoint), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const body = await res.json().catch(() => ({}));
       const persisted = Boolean(body.persisted);
-      setPersistStatus(persisted ? "submitted" : body.reason ?? "submitted");
+      const status = persisted ? "submitted" : body.reason ?? "submitted";
+      setPersistStatus(status);
+      onSubmitResult?.({ persisted, status, response: body });
       // Tell the embedding host a lead actually landed, so the firm's site can
       // fire its own conversion analytics. Mirrors the resize handshake; the
       // host filters on the message type. Fires once, only on a real persist.
@@ -315,7 +353,9 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en",
         }
       }
     } catch (err) {
-      setPersistStatus(err instanceof Error ? err.message : "submission issue");
+      const status = err instanceof Error ? err.message : "submission issue";
+      setPersistStatus(status);
+      onSubmitResult?.({ persisted: false, status, response: null });
     }
   }
 
@@ -575,7 +615,10 @@ export function ScreenEnginePublicWidget({ firmId, firmName, initialLang = "en",
                 className="text-[13px] leading-snug text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
                 style={{ fontFamily: fontBody }}
               >
-                {firmName} can email me about my inquiry and related legal services.
+                {ws(
+                  "consent_checkbox_label",
+                  "{firmName} can email me about my inquiry and related legal services.",
+                ).replace(/\{firmName\}/g, firmName)}
               </span>
             </label>
           )}

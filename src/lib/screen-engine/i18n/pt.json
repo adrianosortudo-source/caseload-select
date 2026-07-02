@@ -491,6 +491,7 @@
     "clarify_placeholder": "Por exemplo: preciso de um advogado de plantão para ajudar minha empresa em contratos pontuais",
     "clarify_submit": "Continuar",
     "fallback_contact_heading": "Ainda podemos encaminhar isso para a equipe.",
-    "fallback_contact_sub": "Compartilhe seus dados de contato e um advogado entrará em contato para entender o que você precisa."
+    "fallback_contact_sub": "Compartilhe seus dados de contato e um advogado entrará em contato para entender o que você precisa.",
+    "consent_checkbox_label": "{firmName} pode entrar em contato comigo por e-mail sobre minha consulta e outros serviços jurídicos relacionados."
   }
 }
