@@ -279,6 +279,20 @@ function getMatterGap(state: EngineState): DecisionGap {
       if (!isResolved(state, 'business_activity_type')) return 'business_activity_type';
       if (!isResolved(state, 'business_stage')) return 'business_stage';
       if (!isResolved(state, 'setup_needs')) return 'setup_needs';
+      // Readiness-starvation fix (qualification audit F2, 2026-07-02;
+      // FOLLOWUPS 2026-06-09 "WhatsApp discovery never reaches the
+      // readiness slot"). solo_setup runs 10 matter-specific slots before
+      // this chain would naturally reach readiness; async channels see
+      // real mid-conversation abandonment, and readiness drives the
+      // readiness axis and therefore banding, so it was disproportionately
+      // the fact missing when a lead went quiet mid-chain. Ask it after
+      // the first 4 matter facts instead of only at the very end. Scoped
+      // to solo_setup/partner_setup only (the two long chains); the short
+      // buy_in_or_joining chain and every other matter type keep their
+      // original order (regression-tested in the sandbox selector suite).
+      if (!isResolved(state, 'hiring_timeline')) return 'hiring_timeline';
+      if (!isResolved(state, 'other_counsel')) return 'other_counsel';
+      if (!isResolved(state, 'decision_authority')) return 'decision_authority';
       if (!isResolved(state, 'regulated_industry')) return 'regulated_industry';
       if (!isResolved(state, 'revenue_expectation')) return 'revenue_expectation';
       if (!isResolved(state, 'cross_border_work')) return 'cross_border_work';
@@ -293,6 +307,11 @@ function getMatterGap(state: EngineState): DecisionGap {
       if (!isResolved(state, 'ownership')) return 'ownership';
       if (!isResolved(state, 'advisory_concern')) return 'advisory_concern';
       if (!isResolved(state, 'business_activity_type')) return 'business_activity_type';
+      // Readiness-starvation fix (qualification audit F2, 2026-07-02): same
+      // rationale as solo_setup above. partner_setup also runs 10 slots.
+      if (!isResolved(state, 'hiring_timeline')) return 'hiring_timeline';
+      if (!isResolved(state, 'other_counsel')) return 'other_counsel';
+      if (!isResolved(state, 'decision_authority')) return 'decision_authority';
       if (!isResolved(state, 'business_stage')) return 'business_stage';
       if (!isResolved(state, 'regulated_industry')) return 'regulated_industry';
       if (!isResolved(state, 'revenue_expectation')) return 'revenue_expectation';
