@@ -153,9 +153,10 @@ function resolveAppOrigin(): string {
 /**
  * Load firm row + lawyer recipients in two cheap queries. Returns null when
  * the firm cannot be resolved (orphan firmId, deleted firm, etc.); caller
- * skips notification in that case.
+ * skips notification in that case. Exported for the deadline-reminder cron,
+ * which fans out to the same recipient set.
  */
-async function loadFirmAndRecipients(
+export async function loadFirmAndRecipients(
   firmId: string,
 ): Promise<{ firm: FirmRow; recipients: FirmLawyerRecipient[] } | null> {
   const { data: firm } = await supabase
