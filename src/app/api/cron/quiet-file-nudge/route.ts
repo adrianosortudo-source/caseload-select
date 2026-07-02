@@ -26,10 +26,12 @@
  * crons under /api/cron/*).
  *
  * Scheduling: pg_cron job 'quiet-file-nudge-daily', defined in the DRAFT
- * migration supabase/migrations-draft/20260629_client_matters_milestone_fields.sql.
- * NOT YET APPLIED to prod; this route is inert (matter_milestone /
- * quiet_nudge_sent_at columns absent) until the operator approves the
- * migration.
+ * migration supabase/migrations-draft/20260702_quiet_file_nudge_cron_schedule.sql.
+ * NOT YET APPLIED to prod (deliberately held back until the operator runs
+ * this route manually at least once and confirms the output). The backing
+ * schema (matter_milestone / matter_milestone_note / quiet_nudge_sent_at)
+ * IS applied, so the route is callable and functionally correct today;
+ * it just is not on a schedule yet.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

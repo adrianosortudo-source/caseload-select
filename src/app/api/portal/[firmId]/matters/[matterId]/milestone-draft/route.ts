@@ -142,10 +142,9 @@ export async function POST(
   // Persist the current milestone + note before calling Gemini so the record
   // is up-to-date even if the network call fails. Not fatal to the draft
   // (the lawyer still gets a usable draft to copy), but logged rather than
-  // swallowed: until the matter_milestone / matter_milestone_note columns
-  // land (see migrations-draft/20260629_client_matters_milestone_fields.sql),
-  // this update fails on every call and the "current milestone" state never
-  // persists.
+  // swallowed. matter_milestone / matter_milestone_note landed in prod
+  // 2026-07-02 (migrations/20260702180000_j8_client_matters_milestone_fields_schema.sql),
+  // so this now persists correctly; the error path stays as a defensive guard.
   const { error: persistErr } = await supabase
     .from('client_matters')
     .update({ matter_milestone: milestone, matter_milestone_note: note })

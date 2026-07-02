@@ -1,4 +1,9 @@
--- J8 Milestone Assistant: schema additions
+-- J8 Milestone Assistant: schema additions (cron scheduling deferred, applied separately)
+--
+-- APPLIED TO PROD 2026-07-02 via Supabase MCP (operator approved schema-only;
+-- deferred the pg_cron schedule until the quiet-file-nudge cron has been run
+-- manually at least once). See supabase/migrations-draft/20260702_quiet_file_nudge_cron_schedule.sql
+-- for the deferred pg_cron piece.
 --
 -- Adds matter_milestone and matter_milestone_note to client_matters.
 -- These feed the POST /api/portal/[firmId]/matters/[matterId]/milestone-draft
@@ -12,17 +17,13 @@
 -- QUIET_NUDGE_SUPPRESSION_DAYS in the route (7 days) gates re-nudging.
 --
 -- Also extends the notification_outbox event_type constraint to include
--- 'milestone_draft_ready' (used by the quiet-file nudge cron), and
--- schedules the daily pg_cron job that calls the route.
+-- 'milestone_draft_ready' (used by the quiet-file nudge cron).
 --
 -- Safe to apply: all three ALTER TABLE ADD COLUMN calls are additive
 -- (nullable). The event_type constraint extension is idempotent (DROP +
--- ADD pattern). The cron schedule block unschedules-then-reschedules by
--- name, idempotent on re-run. RLS: no new policies needed; client_matters
--- already has FORCE RLS + service-role-only write path in place from
--- 20260522014558_s8p1_client_matters.sql.
---
--- DO NOT apply to prod without operator approval.
+-- ADD pattern). RLS: no new policies needed; client_matters and
+-- notification_outbox already have FORCE RLS + service-role-only write
+-- paths in place (verified unaffected post-apply).
 
 -- ── client_matters additions ──────────────────────────────────────────────
 
@@ -70,21 +71,3 @@ ALTER TABLE notification_outbox
     'firm_message_new',
     'milestone_draft_ready'
   ));
-
--- ── pg_cron schedule ────────────────────────────────────────────────────
--- Pattern mirrors 20260522014741_s8p1_notification_batch_cron.sql. Daily
--- at 13:00 UTC (09:00 America/Toronto EDT / 08:00 EST; no DST adjustment,
--- matching the existing token-expiry-check job's fixed-UTC convention).
-
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'quiet-file-nudge-daily') THEN
-    PERFORM cron.unschedule('quiet-file-nudge-daily');
-  END IF;
-
-  PERFORM cron.schedule(
-    'quiet-file-nudge-daily',
-    '0 13 * * *',
-    $cmd$ SELECT cron_internal.call_cron_route('/api/cron/quiet-file-nudge'); $cmd$
-  );
-END $$;
