@@ -6,10 +6,16 @@
  * the decline copy via the three-layer model, then fires the decline-with-
  * grace webhook to GHL.
  *
- * Body: { note?: string }
+ * Body: { note?: string, reason_code?: DecisionReasonCode }
  *   - note empty / absent → resolver falls through to per-PA / firm default / system
  *   - note non-empty → resolver returns the note as the decline body, marked
  *     as source: per_lead_override
+ *   - reason_code (qualification audit item 6, 2026-07-02): structured,
+ *     internal-only taxonomy (too_small / out_of_area / conflict / capacity /
+ *     bad_fit_client / fee_mismatch / other), persisted onto
+ *     decision_reason_code. Orthogonal to note: note is the prose the firm
+ *     may see reflected in decline copy; reason_code never leaves this row.
+ *     An invalid value returns 400 before any state changes.
  *
  * Auth: portal session must match firmId.
  *
@@ -25,6 +31,7 @@ import {
   resolveDecline,
 } from "@/lib/decline-resolver";
 import { buildPassedPayload, fireGhlWebhook, type LeadFacts } from "@/lib/ghl-webhook";
+import { isDecisionReasonCode } from "@/lib/screened-leads-labels";
 
 interface LeadRow {
   lead_id: string;
@@ -56,14 +63,20 @@ export async function POST(
   }
   const actor = session.role === "operator" ? "operator" : "lawyer";
 
-  let body: { note?: string };
+  let body: { note?: string; reason_code?: string };
   try {
-    body = (await req.json()) as { note?: string };
+    body = (await req.json()) as { note?: string; reason_code?: string };
   } catch {
     body = {};
   }
   const rawNote = (body.note ?? "").slice(0, MAX_NOTE_LEN).trim();
   const note = rawNote.length > 0 ? rawNote : null;
+
+  const rawReasonCode = (body.reason_code ?? "").trim();
+  if (rawReasonCode.length > 0 && !isDecisionReasonCode(rawReasonCode)) {
+    return NextResponse.json({ error: `Invalid reason_code: ${rawReasonCode}` }, { status: 400 });
+  }
+  const reasonCode = rawReasonCode.length > 0 ? rawReasonCode : null;
 
   // Load the lead.
   const { data: existing, error: fetchErr } = await supabase
@@ -119,6 +132,7 @@ export async function POST(
         status_changed_by: actorId,
         status_changed_by_role: actor,
         status_note: note, // null when not provided; lookup honours empty as no override
+        decision_reason_code: reasonCode,
       },
       { count: "exact" },
     )

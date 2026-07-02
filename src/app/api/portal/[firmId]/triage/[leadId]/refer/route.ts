@@ -5,12 +5,18 @@
  * lead's status from 'triaging' to 'referred', stores the optional
  * referredTo + note on the row, then fires the `referred` GHL webhook.
  *
- * Body: { referredTo?: string, note?: string }
- *   - Both optional. The lawyer may want to mark a lead as referred
- *     without naming the recipient (e.g. when they have not decided yet
- *     who they'll pass it to). Note is an optional internal annotation.
+ * Body: { referredTo?: string, note?: string, reason_code?: DecisionReasonCode }
+ *   - referredTo/note optional. The lawyer may want to mark a lead as
+ *     referred without naming the recipient (e.g. when they have not
+ *     decided yet who they'll pass it to). Note is an optional internal
+ *     annotation.
+ *   - reason_code (qualification audit item 6, 2026-07-02): same internal
+ *     taxonomy as Pass (too_small / out_of_area / conflict / capacity /
+ *     bad_fit_client / fee_mismatch / other), persisted onto
+ *     decision_reason_code, never forwarded to the GHL webhook payload.
+ *     An invalid value returns 400 before any state changes.
  *
- * Auth: same model as the take / pass routes — portal session must match
+ * Auth: same model as the take / pass routes, portal session must match
  * the firmId path param, or operator session.
  *
  * Idempotency: already-referred returns 200 with the existing state;
@@ -26,6 +32,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { buildReferredPayload, fireGhlWebhook, type LeadFacts } from "@/lib/ghl-webhook";
+import { isDecisionReasonCode } from "@/lib/screened-leads-labels";
 
 interface LeadRow {
   lead_id: string;
@@ -57,9 +64,9 @@ export async function POST(
   }
   const actor = session.role === "operator" ? "operator" : "lawyer";
 
-  let body: { referredTo?: string; note?: string };
+  let body: { referredTo?: string; note?: string; reason_code?: string };
   try {
-    body = (await req.json()) as { referredTo?: string; note?: string };
+    body = (await req.json()) as { referredTo?: string; note?: string; reason_code?: string };
   } catch {
     body = {};
   }
@@ -67,6 +74,12 @@ export async function POST(
   const rawNote = (body.note ?? "").slice(0, MAX_FIELD_LEN).trim();
   const referredTo = rawReferredTo.length > 0 ? rawReferredTo : null;
   const note = rawNote.length > 0 ? rawNote : null;
+
+  const rawReasonCode = (body.reason_code ?? "").trim();
+  if (rawReasonCode.length > 0 && !isDecisionReasonCode(rawReasonCode)) {
+    return NextResponse.json({ error: `Invalid reason_code: ${rawReasonCode}` }, { status: 400 });
+  }
+  const reasonCode = rawReasonCode.length > 0 ? rawReasonCode : null;
 
   // Load the lead.
   const { data: existing, error: fetchErr } = await supabase
@@ -124,6 +137,7 @@ export async function POST(
         // Persist the lawyer's note (not the referredTo). The note is the
         // free-text rationale; referredTo lives in the webhook payload only.
         status_note: note,
+        decision_reason_code: reasonCode,
       },
       { count: "exact" },
     )

@@ -332,4 +332,22 @@ describe("POST /api/portal/[firmId]/triage/[leadId]/refer", () => {
     expect(body.current_status).toBe("taken");
     expect(state.webhookFired).toBe(false);
   });
+
+  // Decision reason-code taxonomy (qualification audit item 6, 2026-07-02).
+  it("accepts a valid reason_code and still refers the lead", async () => {
+    state.session = { firm_id: FIRM_ID, role: "lawyer", lawyer_id: "abc" };
+    state.lead = bandDTriagingLead();
+    const res = await POST(makeReq({ reason_code: "conflict" }) as never, makeParams());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe("referred");
+  });
+
+  it("rejects an invalid reason_code with 400 before any state change", async () => {
+    state.session = { firm_id: FIRM_ID, role: "lawyer", lawyer_id: "abc" };
+    state.lead = bandDTriagingLead();
+    const res = await POST(makeReq({ reason_code: "nonsense" }) as never, makeParams());
+    expect(res.status).toBe(400);
+    expect(state.webhookFired).toBe(false);
+  });
 });

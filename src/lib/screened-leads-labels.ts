@@ -92,3 +92,40 @@ export function subtrackLabel(s: string | null | undefined): string | null {
   if (!s) return null;
   return BAND_C_SUBTRACK_LABELS[s] ?? s;
 }
+
+/**
+ * Decision reason-code taxonomy for Pass/Refer (qualification audit item 6,
+ * 2026-07-02). Internal only: never rendered on client-facing copy. The
+ * canonical value list also lives in the screened_leads_decision_reason_code_check
+ * CHECK constraint; keep both in sync if the taxonomy ever changes.
+ */
+export const DECISION_REASON_CODES = [
+  "too_small",
+  "out_of_area",
+  "conflict",
+  "capacity",
+  "bad_fit_client",
+  "fee_mismatch",
+  "other",
+] as const;
+
+export type DecisionReasonCode = (typeof DECISION_REASON_CODES)[number];
+
+export const DECISION_REASON_CODE_LABELS: Record<DecisionReasonCode, string> = {
+  too_small: "Too small",
+  out_of_area: "Out of practice area",
+  conflict: "Conflict of interest",
+  capacity: "No capacity right now",
+  bad_fit_client: "Not a good client fit",
+  fee_mismatch: "Fee expectations mismatch",
+  other: "Other",
+};
+
+export function isDecisionReasonCode(value: unknown): value is DecisionReasonCode {
+  return typeof value === "string" && (DECISION_REASON_CODES as readonly string[]).includes(value);
+}
+
+export function decisionReasonCodeLabel(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return isDecisionReasonCode(code) ? DECISION_REASON_CODE_LABELS[code] : code;
+}

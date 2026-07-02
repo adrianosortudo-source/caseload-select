@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { DECISION_REASON_CODES, DECISION_REASON_CODE_LABELS } from "@/lib/screened-leads-labels";
 
 interface Props {
   firmId: string;
@@ -68,14 +69,17 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
     }
   }
 
-  async function onPassConfirm(note: string) {
+  async function onPassConfirm(note: string, reasonCode: string) {
     setMode("submitting");
     setError(null);
     try {
       const res = await fetch(`/api/portal/${firmId}/triage/${leadId}/pass`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note: note.trim().length > 0 ? note.trim() : undefined }),
+        body: JSON.stringify({
+          note: note.trim().length > 0 ? note.trim() : undefined,
+          reason_code: reasonCode.length > 0 ? reasonCode : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -92,7 +96,7 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
     }
   }
 
-  async function onReferConfirm(referredTo: string, note: string) {
+  async function onReferConfirm(referredTo: string, note: string, reasonCode: string) {
     setMode("submitting");
     setError(null);
     try {
@@ -102,6 +106,7 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
         body: JSON.stringify({
           referredTo: referredTo.trim().length > 0 ? referredTo.trim() : undefined,
           note: note.trim().length > 0 ? note.trim() : undefined,
+          reason_code: reasonCode.length > 0 ? reasonCode : undefined,
         }),
       });
       const data = await res.json();
@@ -249,16 +254,17 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
 
 interface PassModalProps {
   onCancel: () => void;
-  onConfirm: (note: string) => void | Promise<void>;
+  onConfirm: (note: string, reasonCode: string) => void | Promise<void>;
 }
 
 function PassModal({ onCancel, onConfirm }: PassModalProps) {
   const [note, setNote] = useState("");
+  const [reasonCode, setReasonCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function handleConfirm() {
     setSubmitting(true);
-    await onConfirm(note);
+    await onConfirm(note, reasonCode);
   }
 
   return (
@@ -271,6 +277,24 @@ function PassModal({ onCancel, onConfirm }: PassModalProps) {
           </p>
         </div>
         <div className="px-6 py-4 space-y-3">
+          <label className="block">
+            <span className="text-xs uppercase tracking-wider font-semibold text-black/60">
+              Why (internal only, optional)
+            </span>
+            <select
+              value={reasonCode}
+              onChange={(e) => setReasonCode(e.target.value)}
+              className="mt-1 w-full bg-parchment border border-black/15 px-3 py-2 text-sm focus:outline-none focus:border-navy"
+            >
+              <option value="">Not specified</option>
+              {DECISION_REASON_CODES.map((code) => (
+                <option key={code} value={code}>{DECISION_REASON_CODE_LABELS[code]}</option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs text-black/40">
+              Never shown to the lead or the firm; feeds the operator metrics dashboard only.
+            </span>
+          </label>
           <label className="block">
             <span className="text-xs uppercase tracking-wider font-semibold text-black/60">
               Custom decline note (optional)
@@ -313,17 +337,18 @@ function PassModal({ onCancel, onConfirm }: PassModalProps) {
 
 interface ReferModalProps {
   onCancel: () => void;
-  onConfirm: (referredTo: string, note: string) => void | Promise<void>;
+  onConfirm: (referredTo: string, note: string, reasonCode: string) => void | Promise<void>;
 }
 
 function ReferModal({ onCancel, onConfirm }: ReferModalProps) {
   const [referredTo, setReferredTo] = useState("");
   const [note, setNote] = useState("");
+  const [reasonCode, setReasonCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function handleConfirm() {
     setSubmitting(true);
-    await onConfirm(referredTo, note);
+    await onConfirm(referredTo, note, reasonCode);
   }
 
   return (
@@ -348,6 +373,24 @@ function ReferModal({ onCancel, onConfirm }: ReferModalProps) {
               maxLength={4000}
               className="mt-1 w-full bg-parchment border border-black/15 px-3 py-2 text-sm focus:outline-none focus:border-navy"
             />
+          </label>
+          <label className="block">
+            <span className="text-xs uppercase tracking-wider font-semibold text-black/60">
+              Why (internal only, optional)
+            </span>
+            <select
+              value={reasonCode}
+              onChange={(e) => setReasonCode(e.target.value)}
+              className="mt-1 w-full bg-parchment border border-black/15 px-3 py-2 text-sm focus:outline-none focus:border-navy"
+            >
+              <option value="">Not specified</option>
+              {DECISION_REASON_CODES.map((code) => (
+                <option key={code} value={code}>{DECISION_REASON_CODE_LABELS[code]}</option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs text-black/40">
+              Never shown to the lead or the firm; feeds the operator metrics dashboard only.
+            </span>
           </label>
           <label className="block">
             <span className="text-xs uppercase tracking-wider font-semibold text-black/60">
