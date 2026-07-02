@@ -55,6 +55,7 @@ const SELL_LINKS = [
 // triage queue narrows by ?firm_id), so they were never firm-scoped (finding 06).
 const SYSTEM_LINKS = [
   { label: "Triage", href: "/admin/triage" },
+  { label: "Screen metrics", href: "/admin/screen-metrics" },
   { label: "Webhook outbox", href: "/admin/webhook-outbox" },
   { label: "Onboarding desk", href: "/admin/onboarding-submissions" },
   { label: "Health", href: "/admin/health" },
