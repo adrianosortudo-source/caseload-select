@@ -9,9 +9,13 @@
  *     and at least one of primary_email / primary_phone.
  *   Gate 2: Canonical conflict check -- retainer_pending and active require a
  *     human-cleared or human-waived row in screened_conflict_checks for this
- *     matter. No auto-clear. No row = blocked. Waived requires waiver_consent_id.
- *     The legacy conflict_checks table (rooted on leads/law_firm_clients) is NOT
- *     consulted here.
+ *     matter. No auto-clear. No row = blocked. A waived check must reference a
+ *     waiver_consent_id that resolves to a real, same-firm consent_log row
+ *     with consent_type='conflict_waiver' and consent_status='granted' -- a
+ *     bare non-null UUID is not sufficient (closes the dead end where a
+ *     lawyer could pick "Waived" with nothing ever validating what it points
+ *     to). The legacy conflict_checks table (rooted on leads/law_firm_clients)
+ *     is NOT consulted here.
  *
  * Stubbed (always returns allowed; wired when backing data exists):
  *   Gate 3: Comms consent (DR-075 migration pending operator approval)
@@ -31,6 +35,7 @@ export type StageGateResult =
 
 export interface GateMatterInput {
   id: string;
+  firm_id: string;
   source_screened_lead_id: string | null;
   primary_name: string | null;
   primary_email: string | null;
@@ -101,7 +106,45 @@ export async function checkStageGate(
           code: 'conflict_not_cleared',
         };
       }
-      // Waived with a consent/waiver reference on file; gate passes.
+
+      // A non-null id is not proof of a valid waiver. Resolve it against
+      // consent_log and verify it is a real, same-firm, granted
+      // conflict_waiver row before letting the transition through.
+      const { data: consent } = await supabaseAdmin
+        .from('consent_log')
+        .select('firm_id, consent_type, consent_status')
+        .eq('id', check.waiver_consent_id)
+        .maybeSingle();
+
+      if (!consent) {
+        return {
+          allowed: false,
+          reason: 'Conflict waiver references a consent record that does not exist.',
+          code: 'conflict_not_cleared',
+        };
+      }
+      if (consent.firm_id !== matter.firm_id) {
+        return {
+          allowed: false,
+          reason: 'Conflict waiver references a consent record belonging to a different firm.',
+          code: 'conflict_not_cleared',
+        };
+      }
+      if (consent.consent_type !== 'conflict_waiver') {
+        return {
+          allowed: false,
+          reason: `Conflict waiver references a consent record of type '${consent.consent_type}', not 'conflict_waiver'.`,
+          code: 'conflict_not_cleared',
+        };
+      }
+      if (consent.consent_status !== 'granted') {
+        return {
+          allowed: false,
+          reason: `Conflict waiver's consent record status is '${consent.consent_status}', not 'granted'.`,
+          code: 'conflict_not_cleared',
+        };
+      }
+      // Waived with a verified, same-firm, granted conflict_waiver record; gate passes.
     } else {
       // pending, potential, or blocked
       return {

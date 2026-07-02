@@ -34,6 +34,7 @@ vi.mock('@/lib/supabase-admin', () => ({
 function matter(overrides: Partial<GateMatterInput> = {}): GateMatterInput {
   return {
     id: 'm-1',
+    firm_id: 'firm-1',
     source_screened_lead_id: 'sl-1',
     primary_name: 'Jane Doe',
     primary_email: 'jane@example.com',

@@ -198,6 +198,7 @@ export async function transitionMatterStage(input: {
   const gate = await checkStageGate(
     {
       id: matter.id,
+      firm_id: matter.firm_id,
       source_screened_lead_id: matter.source_screened_lead_id ?? null,
       primary_name: matter.primary_name ?? null,
       primary_email: matter.primary_email ?? null,

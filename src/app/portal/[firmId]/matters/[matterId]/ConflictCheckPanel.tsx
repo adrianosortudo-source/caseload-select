@@ -161,23 +161,33 @@ export function ConflictCheckPanel({ firmId, matterId, screened_lead_id, existin
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Notes (optional)…"
+                placeholder={
+                  disposition === 'waived'
+                    ? 'Basis for the waiver (required)…'
+                    : 'Notes (optional)…'
+                }
                 rows={2}
                 style={{
                   width: '100%', borderRadius: 4, border: '1px solid rgba(0,0,0,0.15)',
                   padding: '6px 10px', fontSize: '0.84rem', resize: 'vertical',
-                  marginBottom: 10, boxSizing: 'border-box',
+                  marginBottom: 4, boxSizing: 'border-box',
                 }}
               />
+              {disposition === 'waived' && (
+                <p style={{ fontSize: '0.76rem', color: '#666', marginBottom: 10 }}>
+                  A waiver records a consent entry (LSO conflict waiver). State the basis above before saving.
+                </p>
+              )}
               <button
                 onClick={disposeCheck}
-                disabled={dispositioning}
+                disabled={dispositioning || (disposition === 'waived' && notes.trim().length === 0)}
                 style={{
+                  marginTop: disposition === 'waived' ? 0 : 10,
                   background: disposition === 'blocked' ? '#B91C1C' : '#1E2F58',
                   color: '#fff', border: 'none', borderRadius: 4,
                   padding: '8px 16px', fontSize: '0.84rem', fontWeight: 600,
                   cursor: dispositioning ? 'not-allowed' : 'pointer',
-                  opacity: dispositioning ? 0.6 : 1,
+                  opacity: dispositioning || (disposition === 'waived' && notes.trim().length === 0) ? 0.6 : 1,
                 }}
               >
                 {dispositioning ? 'Saving…' : `Mark as ${disposition}`}
