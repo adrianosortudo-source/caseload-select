@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Shell } from "@/components/intake-v2/Shell";
 import { TextCard } from "@/components/intake-v2/TextCard";
 import { DecisionCard } from "@/components/intake-v2/DecisionCard";
@@ -16,6 +16,7 @@ import type { SupportedLanguage } from "@/lib/screen-engine/types";
 import { llmExtract, mergeLlmResults } from "@/lib/screen-engine/llm/extractor";
 import { buildReport } from "@/lib/screen-engine/report";
 import { renderBriefHtmlServer } from "@/lib/screen-brief-html";
+import { getWebAttribution } from "@/lib/screen-engine/persist";
 import type { EngineState, SlotDefinition } from "@/lib/screen-engine/types";
 
 export interface ScreenEnginePublicWidgetProps {
@@ -69,6 +70,21 @@ function resolveSubmitEndpoint(
   if (typeof submitEndpoint === "function") return submitEndpoint(firmId);
   if (submitEndpoint) return submitEndpoint;
   return `/api/intake-v2?firmId=${encodeURIComponent(firmId)}`;
+}
+
+/**
+ * Drop-off checkpoint endpoint (qualification audit F2/F6/item 5,
+ * 2026-07-02). Only meaningful for the default submit path: a custom
+ * `submitEndpoint` override points at some other deployment, so there is
+ * no sibling `/checkpoint` route to call. Returns null in that case, the
+ * caller skips the checkpoint entirely.
+ */
+function resolveCheckpointEndpoint(
+  firmId: string,
+  submitEndpoint?: ScreenEnginePublicWidgetProps["submitEndpoint"],
+): string | null {
+  if (submitEndpoint) return null;
+  return `/api/intake-v2/checkpoint`;
 }
 
 function scoreState(state: EngineState): EngineState {
@@ -177,6 +193,34 @@ export function ScreenEnginePublicWidget({
   const [consentChecked, setConsentChecked] = useState(false);
 
   const next = state ? getNextStep(state) : null;
+
+  // Drop-off checkpoint (qualification audit F2/F6/item 5, 2026-07-02).
+  // Fires a best-effort, fire-and-forget POST after every turn advance
+  // (state only changes on a discrete answer, never on a keystroke, so
+  // this is human-paced, at most a couple dozen calls across a full
+  // conversation). Gated on real progress (at least one answered slot)
+  // so a visitor who loads the widget and leaves without typing anything
+  // does not create a session row. Never surfaces a failure to the UI:
+  // this is telemetry for the abandonment sweep, not the intake path.
+  useEffect(() => {
+    if (!state || persistedRef.current) return;
+    const hasProgress = Object.keys(state.slot_meta ?? {}).length > 0;
+    if (!hasProgress) return;
+    const endpoint = resolveCheckpointEndpoint(firmId, submitEndpoint);
+    if (!endpoint) return;
+    const attribution = getWebAttribution();
+    fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firmId,
+        lead_id: state.lead_id,
+        engine_state: state,
+        ...attribution,
+      }),
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
   // Language-aware UI chrome. After the LLM extraction sets state.language
   // (turn 1 finishes), every visible chrome string (round labels, button

@@ -381,7 +381,8 @@ The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), 
 | `firm_decline_templates` | Per-firm and per-practice-area decline copy. Three-layer resolver: `screened_leads.status_note` (per-lead override) → per-PA → firm default → system fallback in `lib/decline-resolver-pure`. Migration: `20260505_firm_decline_templates.sql`. |
 | `webhook_outbox` | At-least-once delivery store for outbound GHL webhooks. Idempotency-keyed on `(lead_id, action)`. Migration: `20260505_webhook_outbox.sql`. |
 | `unconfirmed_inquiries` | Contact-capture doctrine reject store. Rows that fail the gate (missing name AND/OR reachability) land here, NEVER in `screened_leads`, NEVER in the triage portal. Ops visibility only. Reasons: `no_contact_provided` / `abandoned` / `engine_refused`. Migration: `20260516_unconfirmed_inquiries.sql`. |
-| `channel_intake_sessions` | Multi-turn intake sessions for Meta channels (Messenger / Instagram / WhatsApp). Distinct from `public.intake_sessions` which powers the web widget. Holds `engine_state` (serialized `EngineState`) for resume on next inbound from the same `(firm_id, channel, sender_id)`. Finalised once contact is captured (screened lead created) or `max_follow_ups=3` exhausted (moved to `unconfirmed_inquiries`). Migration: `20260516_channel_intake_sessions.sql`. |
+| `channel_intake_sessions` | Multi-turn intake sessions for Meta channels (Messenger / Instagram / WhatsApp). Holds `engine_state` (serialized `EngineState`) for resume on next inbound from the same `(firm_id, channel, sender_id)`. Finalised once contact is captured (screened lead created) or `max_follow_ups=3` exhausted (moved to `unconfirmed_inquiries`). Migration: `20260516_channel_intake_sessions.sql`. **Correction (2026-07-02):** the prior note here claiming `public.intake_sessions` "powers the web widget" was stale; that table is the legacy v1 `/api/screen` product (OTP, round3, memo) and has nothing to do with Screen 2.0. The Screen 2.0 web widget's own drop-off tracking is `web_intake_sessions` (row below). |
+| `web_intake_sessions` | Drop-off tracking for the Screen 2.0 web widget (qualification audit F2/F6/item 5, 2026-07-02). Widget POSTs a checkpoint after every answered turn (`POST /api/intake-v2/checkpoint`), keyed on `(firm_id, lead_id)`; a successful `/api/intake-v2` submit finalizes the row with `screened_lead_id` set. Purpose-built rather than a widened `channel_intake_sessions`, whose finalize path is coupled to Meta Send-API closing messages that do not exist for web. Hourly cron `/api/cron/expire-web-intake-sessions` sweeps expired rows: contact-complete sessions get a thin brief in `screened_leads` (same DR-038 doctrine as the Meta sweep), everything else moves to `unconfirmed_inquiries` with `reason='abandoned'`. Migration: `20260702170000_web_intake_sessions.sql`. |
 | `intake_firms.facebook_page_access_token` | Meta Page access token used by Messenger Send + Instagram Send (IG inherits the linked Page's token). SECRET. service-role read only. Migration: `20260516_intake_firms_meta_access_tokens.sql`. |
 | `intake_firms.whatsapp_cloud_api_access_token` | WhatsApp Cloud API access token. SECRET. service-role read only. Migration: `20260516_intake_firms_meta_access_tokens.sql`. |
 
@@ -391,7 +392,8 @@ The legacy `leads` table, CPI v2.1 scoring engine, 5-band system (A through E), 
 |---|---|
 | `/portal/[firmId]/triage` | Triage queue page. Sorted Band A → B → C with deadline tiebreaker. `?band=A\|B\|C` filter. |
 | `/portal/[firmId]/triage/[leadId]` | Single brief view. Splits `brief_html` on the `<!-- ACTION_RAIL_SLOT -->` marker (DR-057), renders top half as `<BriefFrame>`, `<TriageActionBar>` between, bottom half as a second `<BriefFrame>`. Action rail is inline (not fixed-bottom) so it does not slice mid-scroll. |
-| `POST /api/intake-v2` | Persistence endpoint — Screen 2.0 POSTs here. Demo skip on missing/invalid firmId. Fires `declined_oos` webhook for OOS leads. |
+| `POST /api/intake-v2` | Persistence endpoint, Screen 2.0 POSTs here. Demo skip on missing/invalid firmId. Fires `declined_oos` webhook for OOS leads. Also best-effort finalizes any matching `web_intake_sessions` checkpoint row on success. |
+| `POST /api/intake-v2/checkpoint` | Drop-off checkpoint (qualification audit item 5, 2026-07-02). Widget fires this after every answered turn; upserts `web_intake_sessions` keyed on `(firm_id, lead_id)`. Always 200, even on validation failure, this is telemetry, never the intake path. |
 | `POST /api/voice-intake` | Voice channel persistence endpoint (DR-033). Receives the GHL Voice AI post-call webhook payload, runs the screen engine server-side on the transcript, inserts a `screened_leads` row with `channel='voice'`, fires the new-lead notification. Sibling to `/api/intake-v2`, not a modification of it. Requires `@google/generative-ai` and `GEMINI_API_KEY` for LLM extraction (best-effort; regex-only if the key is missing). **Live for DRG since 2026-05-21.** GHL workflow webhook body shape: `{ firmId, caller_phone, caller_name, transcript, call_id }`. Transcript field uses `{{contact.call_summary}}` (NOT `{{contact.notes}}` which silently fails GHL save validation per DR-042). Voice agent doctrine: CRM Bible DR-040 through DR-045. |
 | `GET/POST /api/messenger-intake` | Meta Messenger webhook. GET is the hub.verify_token handshake; POST verifies HMAC, resolves firm by Page ID via `intake_firms.facebook_page_id`, runs the engine via `channel-intake-processor` in `waitUntil` so Meta gets a fast 200 ACK while engine + LLM work (5-15s) happen in the background. `screened_leads.slot_answers.channel='facebook'`. Wired to engine end-to-end as of Block 2 of Meta App Review prep. |
 | `GET/POST /api/instagram-intake` | Meta Instagram DM webhook. Same shape as Messenger. Resolves firm by IG Business Account ID via `intake_firms.instagram_business_account_id`. `channel='instagram'`. |
@@ -500,7 +502,9 @@ src/
 │   │   ├── cron/
 │   │   │   ├── triage-backstop/route.ts                # Deadline-expiry sweeper
 │   │   │   ├── webhook-retry/route.ts                  # Outbox retry sweeper
-│   │   │   └── expire-channel-intake-sessions/route.ts # Abandoned multi-turn session sweeper (contact-doctrine, hourly)
+│   │   │   ├── expire-channel-intake-sessions/route.ts # Abandoned multi-turn session sweeper (contact-doctrine, hourly)
+│   │   │   ├── expire-web-intake-sessions/route.ts     # Abandoned web-widget session sweeper (qualification audit item 5, hourly)
+│   │   │   └── deadline-reminder/route.ts              # T-12h decision-window reminder (qualification audit F1, hourly)
 │   │   └── admin/webhook-outbox/
 │   │       ├── route.ts                                # Operator listing
 │   │       └── [outboxId]/retry/route.ts               # Manual retry
@@ -527,6 +531,7 @@ src/
     ├── firm-resolver.ts                                # Meta asset ID → firm lookup (3 channels)
     ├── channel-intake-processor.ts                     # Shared server-side engine pipeline + multi-turn contact-capture loop
     ├── channel-intake-session-store.ts                 # Load/save/finalise channel_intake_sessions
+    ├── web-intake-session-store.ts                     # Checkpoint/finalise web_intake_sessions (qualification audit item 5)
     ├── channel-send.ts                                 # Channel-agnostic Send dispatcher + follow-up phrasing
     ├── messenger-send.ts                               # Messenger Send API client
     ├── instagram-send.ts                               # Instagram Send API client (inherits Page token)
@@ -544,6 +549,7 @@ Crons are scheduled via Supabase pg_cron (no Vercel Pro dependency):
 - `webhook-retry-5m` — `*/5 * * * *`, calls `/api/cron/webhook-retry`
 - `token-expiry-check-daily` (`41 6 * * *`) calls `/api/cron/token-expiry-check`. Scheduled 2026-06-09 as pg_cron job 5; the four prior jobs verified green on the same pass.
 - `deadline-reminder-hourly` (`37 * * * *`) calls `/api/cron/deadline-reminder`. Scheduled 2026-07-02 as pg_cron job 6. T-12h decision-window reminder to firm lawyers (qualification audit F1): triaging rows at least 12h old whose deadline falls within the next 12h get one reminder email before the backstop fires; stamped on `screened_leads.deadline_reminder_sent_at`.
+- `expire-web-intake-sessions-hourly` (`17 * * * *`) calls `/api/cron/expire-web-intake-sessions`. Scheduled 2026-07-02 as pg_cron job 7. Web-widget drop-off sweep (qualification audit item 5): expired `web_intake_sessions` rows finalize into a thin `screened_leads` brief (contact-complete) or `unconfirmed_inquiries` (`reason='abandoned'`).
 
 Migration `20260506_pg_cron_pg_net_setup.sql` enables `pg_cron` and `pg_net`, stores the bearer token in Supabase Vault as `pg_cron_token`, defines `cron_internal.call_cron_route(path)` (reads token from Vault, posts to `https://app.caseloadselect.ca` via pg_net), and schedules the two jobs.
 

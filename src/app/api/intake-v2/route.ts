@@ -73,6 +73,7 @@ import { renderBriefHtmlServer } from "@/lib/screen-brief-html";
 import { resolveFirmTimezone } from "@/lib/firm-timezone";
 import type { LawyerReport, Channel } from "@/lib/screen-engine/types";
 import { buildScoringDeltaForInsert } from "@/lib/scoring-port-read";
+import { finalizeWebSessionOnSubmit } from "@/lib/web-intake-session-store";
 
 interface IntakeAxes {
   value: number;
@@ -471,6 +472,16 @@ export async function POST(req: NextRequest) {
       { status: 500, headers: corsHeaders }
     );
   }
+
+  // Close the loop on the web drop-off checkpoint (qualification audit
+  // item 5, 2026-07-02): a successful submit means this session is no
+  // longer "abandoned," so the sweep must never touch it. Best-effort,
+  // never blocks the response; a no-op when no checkpoint ever fired
+  // (fast one-turn submit, demo mode, or a non-web channel through this
+  // same endpoint).
+  finalizeWebSessionOnSubmit(firmIdParam, inserted.lead_id, inserted.id as string).catch((err) => {
+    console.error("[intake-v2] finalizeWebSessionOnSubmit failed:", err);
+  });
 
   // Lead notification email. Doctrine (2026-05-15): "The engine sorts
   // attention, the lawyer decides outcome." OOS leads now carry band='D'
