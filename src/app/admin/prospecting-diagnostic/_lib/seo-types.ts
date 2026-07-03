@@ -68,6 +68,59 @@ export interface SeoInternalSummary {
   trustAndConversionGaps: string[];
 }
 
+export interface SeoIntentSignal {
+  signal: string;
+  status: "pass" | "warn" | "fail";
+  weight: number;
+  detail: string;
+  evidence?: string;
+}
+
+export interface SeoPageAuditSnapshot {
+  metaDescription: string | null;
+  h1s: string[];
+  h2s: string[];
+  imageCount: number;
+  imagesMissingAlt: number;
+  internalLinksOut: number;
+  ctaEvidence: string[];
+  phoneEvidence: string[];
+}
+
+export interface SeoRenderingSnapshot {
+  risk: "low" | "medium" | "high";
+  wordCount: number;
+  scriptCount: number;
+  externalScriptCount: number;
+  appShellLikely: boolean;
+  emptyAppRoot: boolean;
+  hasNoscriptFallback: boolean;
+  evidence: string[];
+  recommendation?: string;
+}
+
+export interface SeoRenderingSummary {
+  risk: "low" | "medium" | "high";
+  highRiskPages: number;
+  mediumRiskPages: number;
+  totalPages: number;
+  evidence: string[];
+}
+
+export interface SeoIntentAlignment {
+  score: number;
+  grade: string;
+  confidence: Confidence;
+  targetKeyword?: string;
+  targetMatter?: string;
+  targetLocation?: string;
+  bestMatchingPage?: string;
+  matchedSignals?: number;
+  totalSignals?: number;
+  evidence: SeoIntentSignal[];
+  missingSignals?: string[];
+}
+
 export interface SeverityBreakdown {
   critical: number;
   high: number;
@@ -94,6 +147,10 @@ export interface SeoPageResult {
     addressVisible: boolean;
   };
   wordCount?: number;
+  rendering?: SeoRenderingSnapshot;
+  metaDescription?: string | null;
+  pageAudit?: SeoPageAuditSnapshot;
+  intentAlignment?: SeoIntentAlignment;
 }
 
 export interface SeoCheckResult {
@@ -109,6 +166,8 @@ export interface SeoCheckResult {
   aiSearchGrade: string;
   aiPolicyScore: number;
   aiPolicyGrade: string;
+  intentAlignment?: SeoIntentAlignment;
+  renderingSummary?: SeoRenderingSummary;
   issues: SeoCheckIssue[];
   internalSummary?: SeoInternalSummary;
   severityBreakdown: SeverityBreakdown;

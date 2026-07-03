@@ -55,6 +55,13 @@ function mkResult(domain: string, overallScore: number, issues: SeoCheckIssue[])
     aiSearchGrade: "D",
     aiPolicyScore: 50,
     aiPolicyGrade: "C",
+    renderingSummary: {
+      risk: "medium",
+      highRiskPages: 0,
+      mediumRiskPages: 1,
+      totalPages: 5,
+      evidence: ["contact: 180 words in server HTML; 8 external scripts"],
+    },
     issues,
     severityBreakdown,
     partial: false,
@@ -181,6 +188,16 @@ describe("buildProspectingDiagnostic", () => {
     expect(diag.thirtySixtyNinetyPlan.day90.length).toBeGreaterThan(0);
     expect(diag.reportReadySummary).toContain("Example Law Professional Corporation");
     expect(diag.coldEmailDraft).toContain("Subject: Quick observation");
+    expect(diag.integrationSummary).toBeDefined();
+    const integration = diag.integrationSummary!;
+    expect(integration.schemaVersion).toBe("seo-prospecting-diagnostic.v1");
+    expect(integration.scores.seoHealth).toBe(55);
+    expect(integration.flags.renderingRisk).toBe("medium");
+    expect(integration.priorityIssues[0]).toMatchObject({
+      title: "Indexable",
+      category: "Indexability",
+      severity: "high",
+    });
 
     // The lead pillar (highest-priority issue is Indexability) drives the email.
     expect(diag.coldEmailDraft.toLowerCase()).toContain("held back from search");

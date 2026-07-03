@@ -58,7 +58,7 @@ export type ScanProgressStatus = "pending" | "scanning" | "done" | "error";
 /** One scan attempt, keyed by role. result is null when the scan failed. */
 export interface DomainScan {
   domain: string;
-  role: "primary" | "alternate";
+  role: "primary" | "alternate" | "competitor";
   result: SeoCheckResult | null;
   error?: string;
 }
@@ -79,6 +79,23 @@ export interface DomainComparison {
   fragmentationFlagged: boolean;
   strongestDomain: string | null;
   canonicalRecommendation: string;
+}
+
+export interface CompetitorComparisonRow {
+  domain: string;
+  reachable: boolean;
+  pagesScanned: number;
+  overallScore: number | null;
+  aiSearchScore: number | null;
+  intentScore: number | null;
+  note: string;
+}
+
+export interface CompetitorComparison {
+  rows: CompetitorComparisonRow[];
+  strongestCompetitor: string | null;
+  gaps: string[];
+  advantages: string[];
 }
 
 export interface ProspectingDiagnostic {
@@ -108,9 +125,38 @@ export interface ProspectingDiagnostic {
   };
   /** Present only when alternate domains were supplied. */
   domainComparison?: DomainComparison;
+  /** Present only when competitor domains were supplied and scanned. */
+  competitorComparison?: CompetitorComparison;
   topOutreachHooks: string[];
   strategicCallQuestions: string[];
   recommendedOpeningAngle: string;
+  integrationSummary?: {
+    schemaVersion: "seo-prospecting-diagnostic.v1";
+    generatedAt: string;
+    firmName: string;
+    primaryDomain: string;
+    market: string;
+    practiceFocus: string;
+    scores: {
+      seoHealth: number | null;
+      aiSearch: number | null;
+      intentAlignment: number | null;
+      prospectFit: number | null;
+    };
+    flags: {
+      partialScan: boolean;
+      renderingRisk: "low" | "medium" | "high" | "unknown";
+      highRiskRenderingPages: number;
+      competitorGaps: number;
+    };
+    priorityIssues: Array<{
+      title: string;
+      category: string;
+      severity: string;
+      affectedCount: number;
+    }>;
+    recommendedOpeningAngle: string;
+  };
   thirtySixtyNinetyPlan: {
     day30: string[];
     day60: string[];
@@ -156,12 +202,14 @@ export function classifyActs(category: string, title: string): ActsPillar {
     case "Local SEO":
     case "Performance":
     case "Technical & Security":
+    case "Rendering & Crawlability":
       return "capture";
 
     case "Schema & Structured Data":
       return "authority";
 
     case "Links & Content":
+    case "Intent Alignment":
       return "target";
 
     case "AI Visibility":
@@ -203,11 +251,13 @@ const GENERIC_FIX: Record<string, string> = {
   "On-Page SEO": "Add the missing on-page signals (title, description, headings) to the affected pages.",
   "Local SEO": "Surface consistent name, address, and phone signals and link the Google Business Profile.",
   Performance: "Reduce render-blocking resources and oversized assets on the affected pages.",
+  "Rendering & Crawlability": "Server-render or statically render critical legal-service copy, phone numbers, and CTAs so crawlers can read them without browser execution.",
   "Technical & Security": "Add the missing security headers and confirm HTTPS is enforced sitewide.",
   "Schema & Structured Data": "Add valid LegalService and Person structured data with the core business fields.",
   "AI Visibility": "Package the firm's entity, authorship, and answers so AI search systems can read and cite them.",
   "Legal Marketing": "Make the contact path and trust cues obvious on every page.",
   "Links & Content": "Deepen thin pages and add descriptive internal links between related matters.",
+  "Intent Alignment": "Build or sharpen the best matching page around the priority matter, location, and client-language terms.",
 };
 
 const OBSERVATION_BY_PILLAR: Record<ActsPillar, string> = {
@@ -308,7 +358,9 @@ function maturityFor(result: SeoCheckResult): string {
 }
 
 function buildDomainComparison(scans: DomainScan[]): DomainComparison {
-  const rows: DomainComparisonRow[] = scans.map((scan) => {
+  const rows: DomainComparisonRow[] = scans
+    .filter((scan): scan is DomainScan & { role: "primary" | "alternate" } => scan.role !== "competitor")
+    .map((scan) => {
     if (!scan.result) {
       return {
         domain: scan.domain,
@@ -352,6 +404,69 @@ function buildDomainComparison(scans: DomainScan[]): DomainComparison {
   }
 
   return { rows, fragmentationFlagged, strongestDomain: strongest, canonicalRecommendation };
+}
+
+function buildCompetitorComparison(primary: SeoCheckResult | null, scans: DomainScan[]): CompetitorComparison | undefined {
+  const competitorScans = scans.filter((s) => s.role === "competitor");
+  if (competitorScans.length === 0) return undefined;
+  const rows: CompetitorComparisonRow[] = competitorScans.map((scan) => {
+    if (!scan.result) {
+      return {
+        domain: scan.domain,
+        reachable: false,
+        pagesScanned: 0,
+        overallScore: null,
+        aiSearchScore: null,
+        intentScore: null,
+        note: scan.error ? `Did not scan cleanly: ${scan.error}` : "Did not return a result.",
+      };
+    }
+    const intentScore = scan.result.intentAlignment?.score ?? null;
+    return {
+      domain: scan.domain,
+      reachable: true,
+      pagesScanned: scan.result.pagesScanned,
+      overallScore: scan.result.overallScore,
+      aiSearchScore: scan.result.aiSearchScore,
+      intentScore,
+      note: `${scan.result.pagesScanned} page${scan.result.pagesScanned === 1 ? "" : "s"} scanned${intentScore !== null ? `, intent ${intentScore}/100` : ""}.`,
+    };
+  });
+
+  const reachable = rows.filter((r) => r.reachable);
+  const strongestCompetitor =
+    reachable.length > 0
+      ? reachable.reduce((best, r) => ((r.intentScore ?? r.overallScore ?? 0) > (best.intentScore ?? best.overallScore ?? 0) ? r : best)).domain
+      : null;
+
+  const primaryIntent = primary?.intentAlignment?.score ?? null;
+  const primaryOverall = primary?.overallScore ?? null;
+  const primaryAi = primary?.aiSearchScore ?? null;
+  const gaps: string[] = [];
+  const advantages: string[] = [];
+
+  const bestIntent = Math.max(...reachable.map((r) => r.intentScore ?? -1), -1);
+  const bestOverall = Math.max(...reachable.map((r) => r.overallScore ?? -1), -1);
+  const bestAi = Math.max(...reachable.map((r) => r.aiSearchScore ?? -1), -1);
+
+  if (primaryIntent !== null && bestIntent >= 0) {
+    if (primaryIntent + 10 < bestIntent) gaps.push(`Competitors show stronger target-intent alignment (${bestIntent}/100 vs ${primaryIntent}/100).`);
+    else if (primaryIntent >= bestIntent + 10) advantages.push(`The target site has stronger target-intent alignment than scanned competitors (${primaryIntent}/100 vs ${bestIntent}/100).`);
+  }
+  if (primaryOverall !== null && bestOverall >= 0) {
+    if (primaryOverall + 10 < bestOverall) gaps.push(`A competitor has a stronger overall SEO foundation (${bestOverall}/100 vs ${primaryOverall}/100).`);
+    else if (primaryOverall >= bestOverall + 10) advantages.push(`The target site has a stronger overall SEO foundation than scanned competitors (${primaryOverall}/100 vs ${bestOverall}/100).`);
+  }
+  if (primaryAi !== null && bestAi >= 0) {
+    if (primaryAi + 10 < bestAi) gaps.push(`A competitor is cleaner for AI search access/readiness (${bestAi}/100 vs ${primaryAi}/100).`);
+    else if (primaryAi >= bestAi + 10) advantages.push(`The target site is cleaner for AI search than scanned competitors (${primaryAi}/100 vs ${bestAi}/100).`);
+  }
+
+  if (gaps.length === 0 && advantages.length === 0 && reachable.length > 0) {
+    advantages.push("The scanned competitors are close enough that page-level positioning and intake quality should decide the outreach angle.");
+  }
+
+  return { rows, strongestCompetitor, gaps, advantages };
 }
 
 function fragmentationFinding(comparison: DomainComparison): DiagnosticFinding {
@@ -625,6 +740,7 @@ export function buildProspectingDiagnostic(
       actsFindings.authority = [fragmentationFinding(domainComparison), ...actsFindings.authority].slice(0, 4);
     }
   }
+  const competitorComparison = buildCompetitorComparison(primary, scans);
 
   const { pillar: leadPillar, finding: leadFinding } = leadPillarAndFinding(issues, actsFindings);
 
@@ -648,6 +764,33 @@ export function buildProspectingDiagnostic(
   const thirtySixtyNinetyPlan = buildPlan(actsFindings);
   const reportReadySummary = buildReportSummary(prospect, scanSummary, leadPillar, leadFinding, recommendedOpeningAngle);
   const coldEmailDraft = formatColdEmail(prospect, leadPillar);
+  const integrationSummary: ProspectingDiagnostic["integrationSummary"] = {
+    schemaVersion: "seo-prospecting-diagnostic.v1",
+    generatedAt: scanSummary.checkedAt,
+    firmName: prospect.firmName,
+    primaryDomain: prospect.primaryDomain,
+    market: prospect.market,
+    practiceFocus: prospect.practiceFocus,
+    scores: {
+      seoHealth: primary?.overallScore ?? null,
+      aiSearch: primary?.aiSearchScore ?? null,
+      intentAlignment: primary?.intentAlignment?.score ?? null,
+      prospectFit: primary?.internalSummary?.prospectFitScore ?? null,
+    },
+    flags: {
+      partialScan: !!primary?.partial,
+      renderingRisk: primary?.renderingSummary?.risk ?? "unknown",
+      highRiskRenderingPages: primary?.renderingSummary?.highRiskPages ?? 0,
+      competitorGaps: competitorComparison?.gaps.length ?? 0,
+    },
+    priorityIssues: issues.slice(0, 8).map((issue) => ({
+      title: issue.title,
+      category: issue.category,
+      severity: issue.severity,
+      affectedCount: issue.affectedCount,
+    })),
+    recommendedOpeningAngle,
+  };
 
   return {
     prospect: {
@@ -662,9 +805,11 @@ export function buildProspectingDiagnostic(
     scanSummary,
     actsFindings,
     domainComparison,
+    competitorComparison,
     topOutreachHooks,
     strategicCallQuestions,
     recommendedOpeningAngle,
+    integrationSummary,
     thirtySixtyNinetyPlan,
     reportReadySummary,
     coldEmailDraft,
@@ -682,7 +827,7 @@ export function buildProspectingDiagnostic(
 
 export interface ScanQueueItem {
   domain: string;
-  role: "primary" | "alternate";
+  role: "primary" | "alternate" | "competitor";
   mode: ScanMode;
 }
 

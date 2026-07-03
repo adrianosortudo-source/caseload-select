@@ -12,7 +12,7 @@
  * download JSON). Raw SEO scores stay in a collapsible internal panel.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   buildProspectingDiagnostic,
   buildScanPlan,
@@ -33,9 +33,35 @@ type ProgressStatus = "pending" | "scanning" | "done" | "error";
 
 interface ProgressRow {
   domain: string;
-  role: "primary" | "alternate";
+  role: "primary" | "alternate" | "competitor";
   status: ProgressStatus;
   error?: string;
+}
+
+interface ScanIntentPayload {
+  targetKeyword?: string;
+  targetMatter?: string;
+  targetLocation?: string;
+  targetAudience?: string;
+}
+
+interface SavedDiagnosticRun {
+  id: string;
+  prospect_firm_name: string;
+  primary_domain: string;
+  market: string | null;
+  practice_focus: string | null;
+  target_keyword: string | null;
+  scan_mode: string;
+  pages_scanned: number;
+  total_pages_scanned: number;
+  overall_score: number | null;
+  ai_search_score: number | null;
+  intent_score: number | null;
+  prospect_fit_score: number | null;
+  website_maturity: string | null;
+  urgency_level: string | null;
+  created_at: string;
 }
 
 const SCAN_MODE_PAGES: Record<ScanMode, number> = { quick: 10, standard: 25, deep: 50 };
@@ -44,6 +70,7 @@ const SCAN_MODE_PAGES: Record<ScanMode, number> = { quick: 10, standard: 25, dee
 // sequentially. Cap the fan-out so a pasted list cannot tie up the operator UI
 // (and the route) indefinitely. Anything past the cap is reported, not silent.
 const MAX_ALTERNATES = 4;
+const MAX_COMPETITORS = 3;
 
 const PILLAR_BLURB: Record<ActsPillar, string> = {
   authority: "Trust, entity clarity, reviews, schema, AI confidence.",
@@ -95,6 +122,7 @@ export default function ProspectingDiagnosticTool() {
   const [alternateDomains, setAlternateDomains] = useState("");
   const [market, setMarket] = useState("");
   const [practiceFocus, setPracticeFocus] = useState("");
+  const [targetKeyword, setTargetKeyword] = useState("");
   const [competitors, setCompetitors] = useState("");
   const [notes, setNotes] = useState("");
   const [scanMode, setScanMode] = useState<ScanMode>("quick");
@@ -107,6 +135,10 @@ export default function ProspectingDiagnosticTool() {
   const [scans, setScans] = useState<DomainScan[]>([]);
   const [copied, setCopied] = useState<string>("");
   const [notice, setNotice] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedRunId, setSavedRunId] = useState("");
+  const [savedRuns, setSavedRuns] = useState<SavedDiagnosticRun[]>([]);
+  const [loadingSavedRuns, setLoadingSavedRuns] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   // Enrichment state (Phase 1: market + practice focus + alternate-domain hints).
@@ -116,6 +148,10 @@ export default function ProspectingDiagnosticTool() {
   // The quick scan captured during enrichment, reused as the primary scan when
   // the operator then runs the diagnostic at quick depth (no double crawl).
   const enrichScanRef = useRef<{ domain: string; result: SeoCheckResult } | null>(null);
+
+  useEffect(() => {
+    loadSavedRuns();
+  }, []);
 
   function cancelRun() {
     abortRef.current?.abort();
@@ -135,16 +171,66 @@ export default function ProspectingDiagnosticTool() {
     }
   }
 
+  async function loadSavedRuns() {
+    setLoadingSavedRuns(true);
+    try {
+      const res = await fetch("/api/admin/prospecting-diagnostic/runs?limit=8");
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray((data as { items?: unknown }).items)) {
+        setSavedRuns((data as { items: SavedDiagnosticRun[] }).items);
+      }
+    } finally {
+      setLoadingSavedRuns(false);
+    }
+  }
+
+  async function loadSavedRun(id: string) {
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/prospecting-diagnostic/runs?id=${encodeURIComponent(id)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.run) {
+        setError((data as { error?: string }).error || `Could not load diagnostic (HTTP ${res.status}).`);
+        return;
+      }
+      const run = (data as { run: { diagnostic?: ProspectingDiagnostic; scans?: DomainScan[] } }).run;
+      if (!run.diagnostic) {
+        setError("Saved diagnostic is missing its diagnostic payload.");
+        return;
+      }
+      setDiag(run.diagnostic);
+      setScans(Array.isArray(run.scans) ? run.scans : []);
+      setProgress([]);
+      setSavedRunId(id);
+      setNotice("Loaded saved diagnostic.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load saved diagnostic.");
+    }
+  }
+
+  function previousRunFor(run: SavedDiagnosticRun): SavedDiagnosticRun | undefined {
+    return savedRuns.find((candidate) => candidate.primary_domain === run.primary_domain && candidate.id !== run.id);
+  }
+
   async function scanDomain(
     domain: string,
     mode: ScanMode,
-    signal: AbortSignal
+    signal: AbortSignal,
+    intentPayload?: ScanIntentPayload
   ): Promise<{ result: SeoCheckResult | null; error?: string }> {
     try {
+      const body = {
+        domain,
+        scanMode: mode,
+        ...(intentPayload?.targetKeyword ? { targetKeyword: intentPayload.targetKeyword } : {}),
+        ...(intentPayload?.targetMatter ? { targetMatter: intentPayload.targetMatter } : {}),
+        ...(intentPayload?.targetLocation ? { targetLocation: intentPayload.targetLocation } : {}),
+        ...(intentPayload?.targetAudience ? { targetAudience: intentPayload.targetAudience } : {}),
+      };
       const res = await fetch("/api/tools/seo-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain, scanMode: mode }),
+        body: JSON.stringify(body),
         signal,
       });
       const data = await res.json().catch(() => ({}));
@@ -154,6 +240,20 @@ export default function ProspectingDiagnosticTool() {
       if (e instanceof Error && e.name === "AbortError") return { result: null, error: "cancelled" };
       return { result: null, error: e instanceof Error ? e.message : "Network error" };
     }
+  }
+
+  function buildIntentPayload(): ScanIntentPayload | undefined {
+    const matter = practiceFocus.trim();
+    const location = market.trim();
+    const explicitKeyword = targetKeyword.trim();
+    const derivedKeyword = matter && location ? `${matter} lawyer ${location}` : matter;
+    const payload: ScanIntentPayload = {
+      targetKeyword: explicitKeyword || derivedKeyword || undefined,
+      targetMatter: matter || undefined,
+      targetLocation: location || undefined,
+      targetAudience: "Legal clients searching for help with this matter",
+    };
+    return payload.targetKeyword || payload.targetMatter || payload.targetLocation ? payload : undefined;
   }
 
   async function handleEnrich() {
@@ -174,7 +274,7 @@ export default function ProspectingDiagnosticTool() {
     const controller = new AbortController();
 
     try {
-      const { result, error: scanErr } = await scanDomain(primary, "quick", controller.signal);
+      const { result, error: scanErr } = await scanDomain(primary, "quick", controller.signal, buildIntentPayload());
       if (!result) {
         setEnrichError(`Could not scan ${primary}: ${scanErr || "unknown error"}.`);
         return;
@@ -230,7 +330,13 @@ export default function ProspectingDiagnosticTool() {
     }
 
     const plan = buildScanPlan(primary, parseList(alternateDomains, cleanDomain), scanMode, MAX_ALTERNATES);
-    const competitorList = parseList(competitors, (s) => s.trim());
+    const competitorList = parseList(competitors, cleanDomain).filter((d) => d && d !== primary).slice(0, MAX_COMPETITORS);
+    const droppedCompetitors = Math.max(0, parseList(competitors, cleanDomain).filter((d) => d && d !== primary).length - competitorList.length);
+    const intentPayload = buildIntentPayload();
+    const queue = [
+      ...plan.queue,
+      ...competitorList.map((domain) => ({ domain, role: "competitor" as const, mode: "quick" as ScanMode })),
+    ];
 
     const prospect = {
       firmName: name,
@@ -243,15 +349,19 @@ export default function ProspectingDiagnosticTool() {
     };
 
     setError("");
-    setNotice(
+    setNotice([
       plan.dropped > 0
         ? `Scanned the first ${MAX_ALTERNATES} alternate domains. ${plan.dropped} more were not scanned.`
-        : ""
-    );
+        : "",
+      droppedCompetitors > 0
+        ? `Scanned the first ${MAX_COMPETITORS} competitor domains. ${droppedCompetitors} more were not scanned.`
+        : "",
+    ].filter(Boolean).join(" "));
     setDiag(null);
     setScans([]);
+    setSavedRunId("");
     setRunning(true);
-    setProgress(plan.queue.map((q) => ({ domain: q.domain, role: q.role, status: "pending" as ProgressStatus })));
+    setProgress(queue.map((q) => ({ domain: q.domain, role: q.role, status: "pending" as ProgressStatus })));
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -260,11 +370,11 @@ export default function ProspectingDiagnosticTool() {
     // so enrich-then-run at quick depth does not crawl the same site twice.
     const cachedPrimary = enrichScanRef.current;
     const scan: typeof scanDomain = (domain, mode, signal) =>
-      cachedPrimary && domain === cachedPrimary.domain && mode === "quick"
+      cachedPrimary && !intentPayload && domain === cachedPrimary.domain && mode === "quick"
         ? Promise.resolve({ result: cachedPrimary.result })
-        : scanDomain(domain, mode, signal);
+        : scanDomain(domain, mode, signal, intentPayload);
 
-    const outcome = await runScans(plan.queue, {
+    const outcome = await runScans(queue, {
       scan,
       signal: controller.signal,
       onProgress: (i, status, error) =>
@@ -297,8 +407,108 @@ export default function ProspectingDiagnosticTool() {
     );
   }
 
+  async function saveDiagnostic() {
+    if (!diag || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/prospecting-diagnostic/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          diagnostic: diag,
+          scans,
+          targetKeyword: targetKeyword.trim() || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) {
+        setError((data as { error?: string }).error || `Could not save diagnostic (HTTP ${res.status}).`);
+        return;
+      }
+      setSavedRunId((data as { run?: { id?: string } }).run?.id || "saved");
+      setNotice("Diagnostic saved to internal history.");
+      void loadSavedRuns();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save diagnostic.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {savedRuns.length > 0 && (
+        <section className="bg-white border border-black/8 p-5 sm:p-6">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-navy">Recent saved diagnostics</h2>
+            <button
+              type="button"
+              onClick={loadSavedRuns}
+              disabled={loadingSavedRuns}
+              className="text-[11px] font-display font-bold uppercase tracking-wider px-3 py-1.5 border border-black/15 text-navy hover:border-navy disabled:opacity-50 transition"
+            >
+              {loadingSavedRuns ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wider text-black/45 border-b border-black/10">
+                  <th className="py-2 pr-3 font-semibold">Firm</th>
+                  <th className="py-2 pr-3 font-semibold">Domain</th>
+                  <th className="py-2 pr-3 font-semibold">Intent</th>
+                  <th className="py-2 pr-3 font-semibold">Scores</th>
+                  <th className="py-2 pr-3 font-semibold">Saved</th>
+                  <th className="py-2 font-semibold"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {savedRuns.map((run) => {
+                  const previous = previousRunFor(run);
+                  return (
+                    <tr key={run.id} className="border-b border-black/5">
+                      <td className="py-2 pr-3 text-navy font-semibold">{run.prospect_firm_name}</td>
+                      <td className="py-2 pr-3 font-mono text-black/70">{run.primary_domain}</td>
+                      <td className="py-2 pr-3 text-black/60">{run.target_keyword || run.practice_focus || run.market || "n/a"}</td>
+                      <td className="py-2 pr-3 text-black/60">
+                        SEO {run.overall_score ?? "n/a"} · AI {run.ai_search_score ?? "n/a"} · Intent {run.intent_score ?? "n/a"}
+                      </td>
+                      <td className="py-2 pr-3 text-black/50">
+                        {new Date(run.created_at).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}
+                      </td>
+                      <td className="py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => loadSavedRun(run.id)}
+                          className="text-[11px] font-display font-bold uppercase tracking-wider px-3 py-1.5 border border-black/15 text-navy hover:border-navy transition mr-2"
+                        >
+                          Load
+                        </button>
+                        <a
+                          href={`/admin/prospecting-diagnostic/runs/${run.id}`}
+                          className="inline-block text-[11px] font-display font-bold uppercase tracking-wider px-3 py-1.5 border border-black/15 text-navy hover:border-navy transition"
+                        >
+                          Open
+                        </a>
+                        {previous && (
+                          <a
+                            href={`/admin/prospecting-diagnostic/compare?before=${previous.id}&after=${run.id}`}
+                            className="inline-block text-[11px] font-display font-bold uppercase tracking-wider px-3 py-1.5 border border-black/15 text-navy hover:border-navy transition ml-2"
+                          >
+                            Compare
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {/* ── Input section ─────────────────────────────── */}
       <section className="bg-white border border-black/8 p-5 sm:p-6">
         <div className="flex items-center justify-between gap-3 mb-4">
@@ -355,6 +565,14 @@ export default function ProspectingDiagnosticTool() {
               placeholder="Immigration and litigation"
             />
           </Field>
+          <Field label="Target search intent" hint="Optional. If blank, derived from practice focus + market.">
+            <input
+              className={inputClass}
+              value={targetKeyword}
+              onChange={(e) => setTargetKeyword(e.target.value)}
+              placeholder="estate litigation lawyer Toronto"
+            />
+          </Field>
           <Field label="Alternate / legacy domains" hint={`One per line. Up to ${MAX_ALTERNATES} scanned in quick mode for comparison.`}>
             <textarea
               className={`${inputClass} h-20 resize-y`}
@@ -363,7 +581,7 @@ export default function ProspectingDiagnosticTool() {
               placeholder={"oldfirmname.com\nfirmname.lawyer"}
             />
           </Field>
-          <Field label="Competitors" hint="Optional. One per line. Captured on the record, not scanned.">
+          <Field label="Competitors" hint={`Optional. One per line. Up to ${MAX_COMPETITORS} scanned in quick mode for comparison.`}>
             <textarea
               className={`${inputClass} h-20 resize-y`}
               value={competitors}
@@ -545,6 +763,55 @@ export default function ProspectingDiagnosticTool() {
               </section>
             )}
 
+            {diag.competitorComparison && (
+              <section className="bg-white border border-black/8 p-5 sm:p-6">
+                <h2 className="text-base font-bold text-navy">Competitor comparison</h2>
+                <div className="overflow-x-auto mt-3">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-[11px] uppercase tracking-wider text-black/45 border-b border-black/10">
+                        <th className="py-2 pr-3 font-semibold">Competitor</th>
+                        <th className="py-2 pr-3 font-semibold">Pages</th>
+                        <th className="py-2 pr-3 font-semibold">SEO</th>
+                        <th className="py-2 pr-3 font-semibold">AI</th>
+                        <th className="py-2 pr-3 font-semibold">Intent</th>
+                        <th className="py-2 font-semibold">Signal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diag.competitorComparison.rows.map((r) => (
+                        <tr key={r.domain} className="border-b border-black/5">
+                          <td className="py-2 pr-3 font-mono text-navy">
+                            {r.domain}
+                            {diag.competitorComparison!.strongestCompetitor === r.domain && (
+                              <span className="ml-2 text-[10px] uppercase tracking-wider text-gold">strongest</span>
+                            )}
+                          </td>
+                          <td className="py-2 pr-3 text-black/70">{r.reachable ? r.pagesScanned : "n/a"}</td>
+                          <td className="py-2 pr-3 text-black/70">{r.overallScore ?? "n/a"}</td>
+                          <td className="py-2 pr-3 text-black/70">{r.aiSearchScore ?? "n/a"}</td>
+                          <td className="py-2 pr-3 text-black/70">{r.intentScore ?? "n/a"}</td>
+                          <td className="py-2 text-black/60">{r.note}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {diag.competitorComparison.gaps.length > 0 && (
+                  <div className="mt-3 text-sm text-black/75">
+                    <span className="font-semibold text-navy">Gaps: </span>
+                    {diag.competitorComparison.gaps.join(" ")}
+                  </div>
+                )}
+                {diag.competitorComparison.advantages.length > 0 && (
+                  <div className="mt-2 text-sm text-black/75">
+                    <span className="font-semibold text-navy">Advantages: </span>
+                    {diag.competitorComparison.advantages.join(" ")}
+                  </div>
+                )}
+              </section>
+            )}
+
             {/* 30/60/90 plan */}
             <section className="bg-white border border-black/8 p-5 sm:p-6">
               <h2 className="text-base font-bold text-navy mb-3">30 / 60 / 90 day plan</h2>
@@ -622,9 +889,17 @@ export default function ProspectingDiagnosticTool() {
                 >
                   Download JSON export
                 </button>
+                <button
+                  type="button"
+                  onClick={saveDiagnostic}
+                  disabled={saving || !!savedRunId}
+                  className="w-full text-center bg-navy text-white font-display text-[11px] font-bold uppercase tracking-wider px-4 py-2.5 hover:bg-navy/90 disabled:opacity-55 transition"
+                >
+                  {saving ? "Saving..." : savedRunId ? "Saved to history" : "Save diagnostic"}
+                </button>
               </div>
               <p className="text-[11px] text-black/45 mt-2 leading-relaxed">
-                The JSON carries the full diagnostic object for the PDF diagnostic builder.
+                The JSON carries the full diagnostic object for the PDF diagnostic builder. Saved diagnostics are stored internally for later follow-up.
               </p>
             </section>
 
@@ -843,6 +1118,21 @@ function InternalScoresPanel({ scans }: { scans: DomainScan[] }) {
                 <span className="text-right font-semibold text-navy">{r.aiSearchScore}/100</span>
                 <span>AI policy</span>
                 <span className="text-right font-semibold text-navy">{r.aiPolicyScore}/100</span>
+                {r.intentAlignment && (
+                  <>
+                    <span>Intent alignment</span>
+                    <span className="text-right font-semibold text-navy">
+                      {r.intentAlignment.score}/100 ({r.intentAlignment.grade})
+                    </span>
+                    <span>Best intent page</span>
+                    <span className="text-right truncate">
+                      {(() => {
+                        if (!r.intentAlignment?.bestMatchingPage) return "n/a";
+                        try { return new URL(r.intentAlignment.bestMatchingPage).pathname || "/"; } catch { return r.intentAlignment.bestMatchingPage; }
+                      })()}
+                    </span>
+                  </>
+                )}
                 <span>Pages scanned</span>
                 <span className="text-right">{r.pagesScanned}{r.partial ? " (partial)" : ""}</span>
                 {r.internalSummary && (
