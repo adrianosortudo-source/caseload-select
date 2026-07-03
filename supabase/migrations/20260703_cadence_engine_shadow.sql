@@ -29,9 +29,10 @@
 -- Idempotency mirrors the webhook_outbox / processed_channel_messages scaffolding:
 --   one run per (cadence_key, matter_id); one outbound row per (cadence_run_id, step_number).
 --
--- DO NOT apply to prod without operator approval. The runner
--- (/api/cron/cadence-runner) guards on table existence and no-ops until this
--- lands, so the code is safe to deploy ahead of the migration.
+-- APPLIED to prod 2026-07-03 (verified: 4 tables, RLS enabled+forced, anon/
+-- authenticated/PUBLIC grants revoked, service_role only, J6/J7/J9/J11 seeded).
+-- pg_cron scheduling for the runner is NOT yet wired; a manual tick is the
+-- only way this engine runs today.
 
 BEGIN;
 
