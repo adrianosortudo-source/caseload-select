@@ -657,7 +657,7 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
   },
   {
     id: 'business_stage',
-    question: 'How far along are you?',
+    question: 'How far along is the business?',
     input_type: 'single_select',
     options: [
       { value: 'Just researching', label: 'Just researching' },

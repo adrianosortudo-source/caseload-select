@@ -116,7 +116,7 @@ export const AXIS_INPUT_MANIFEST: AxisInputManifest = {
       },
       {
         "slotId": "business_stage",
-        "label": "How far along are you?"
+        "label": "How far along is the business?"
       },
       {
         "slotId": "employees_planned",

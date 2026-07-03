@@ -55,7 +55,7 @@
     "other_counsel": "Você já falou com outro advogado sobre este caso?",
     "decision_authority": "Quem decide se contrata um advogado para isto?",
     "business_activity_type": "Que tipo de negócio você está planejando abrir?",
-    "business_stage": "Em que estágio você está?",
+    "business_stage": "Em que estágio está o negócio?",
     "setup_needs": "No que você mais precisa de ajuda?",
     "ownership_split_discussed": "Vocês já conversaram sobre como dividir a sociedade, as responsabilidades ou os lucros?",
     "business_location": "Em que cidade ou região o negócio vai operar?",
@@ -437,7 +437,7 @@
   },
   "summary_labels": {
     "what_you_do": "O que você faz",
-    "where_you_are": "Em que estágio você está",
+    "where_you_are": "Estágio atual",
     "business_location": "Onde o negócio vai operar",
     "revenue_expectation": "Receita esperada no primeiro ano",
     "hiring_plans": "Planos de contratação",
