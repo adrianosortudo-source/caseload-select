@@ -13,7 +13,7 @@ export default async function AdminSidebar() {
   }));
 
   return (
-    <aside className="w-60 shrink-0 bg-deep-black flex flex-col sticky top-0 h-screen overflow-y-auto border-r border-white/5">
+    <aside className="w-60 shrink-0 bg-deep-black flex flex-col sticky top-0 h-screen overflow-y-auto border-r border-white/5 print:hidden">
       {/* Brand mark links to the console home */}
       <Link href="/admin" className="block px-5 pt-5 pb-4 border-b border-white/8 shrink-0 hover:bg-white/4 transition-colors">
         <div className="font-display text-[11px] uppercase tracking-[0.2em] font-semibold text-gold">
