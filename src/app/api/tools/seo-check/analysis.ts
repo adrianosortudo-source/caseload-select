@@ -22,6 +22,15 @@ import {
   COMMERCIAL_PAGE_TYPES,
   pageTypeLabel,
 } from "./engine-core";
+import {
+  type PageAuditSnapshot,
+  type PageIntentResult,
+  type SiteIntentResult,
+} from "./intent-analysis";
+import {
+  type PageRenderingSnapshot,
+  type SiteRenderingSummary,
+} from "./rendering-analysis";
 
 /* ────────────────────────────────────────────────────────
    Per-page enriched signals
@@ -88,6 +97,7 @@ export interface LawFirmSignals {
 export interface PageResult {
   url: string;
   title: string | null;
+  metaDescription?: string | null;
   pageType: PageType;
   pageScore: number;
   pageGrade: string;
@@ -101,6 +111,9 @@ export interface PageResult {
   schema: SchemaSummary;
   lawFirm: LawFirmSignals;
   wordCount: number;
+  rendering?: PageRenderingSnapshot;
+  pageAudit?: PageAuditSnapshot;
+  intentAlignment?: PageIntentResult;
   keyWarnings: string[];
 }
 
@@ -176,6 +189,8 @@ export interface SeoCheckResult {
   aiPolicyScore: number;
   aiPolicyGrade: string;
   aiBots: AiBotStatus[];
+  intentAlignment?: SiteIntentResult;
+  renderingSummary?: SiteRenderingSummary;
   topFixes: TopFix[];
   issues: Issue[];
   /** Operator-only. Omitted from public (unauthenticated) responses. */
@@ -195,10 +210,12 @@ const CATEGORY_FAIL_SEVERITY: Record<string, Severity> = {
   "Indexability": "critical",
   "On-Page SEO": "high",
   "Legal Marketing": "high",
+  "Intent Alignment": "high",
   "AI Visibility": "high",
   "Schema & Structured Data": "medium",
   "Local SEO": "medium",
   "Technical & Security": "high",
+  "Rendering & Crawlability": "medium",
   "Performance": "low",
   "Links & Content": "medium",
 };
@@ -207,9 +224,18 @@ const CATEGORY_FAIL_SEVERITY: Record<string, Severity> = {
 const LABEL_SEVERITY: Record<string, Severity> = {
   "Indexable": "critical",
   "Robots meta (noindex)": "critical",
+  "Redirect chain": "low",
   "AI search bot access": "high",
   "HTTPS": "critical",
   "Page title": "high",
+  "Meta description": "low",
+  "H1 heading": "medium",
+  "H2 subheadings": "low",
+  "Open Graph tags": "low",
+  "Image alt text": "low",
+  "Heading hierarchy": "low",
+  "Anchor text quality": "low",
+  "Content-to-HTML ratio": "low",
   "Phone number visible": "high",
   "Contact path": "high",
   "Mixed indexability signals": "high",
@@ -227,6 +253,22 @@ const LABEL_SEVERITY: Record<string, Severity> = {
 // Optional-policy labels: never raised by the commercial+sitewide coverage
 // bump, because choosing not to act on them is a valid default.
 const POLICY_LABELS = new Set<string>(["AI training bot control", "llms.txt file", "Sitemap membership"]);
+const NO_COVERAGE_BUMP_LABELS = new Set<string>([
+  ...POLICY_LABELS,
+  "Meta description",
+  "H1 heading",
+  "H2 subheadings",
+  "Open Graph tags",
+  "Image alt text",
+  "Heading hierarchy",
+  "Anchor text quality",
+  "Content-to-HTML ratio",
+  "Time to first byte",
+  "Render-blocking resources",
+  "Redirect chain",
+]);
+
+const POLICY_RELEVANT_CATEGORIES = new Set<string>(["Indexability", "Technical & Security", "Performance"]);
 
 const EFFORT_BY_CATEGORY: Record<string, Effort> = {
   "Indexability": "low",
@@ -234,8 +276,10 @@ const EFFORT_BY_CATEGORY: Record<string, Effort> = {
   "Schema & Structured Data": "medium",
   "AI Visibility": "medium",
   "Legal Marketing": "medium",
+  "Intent Alignment": "medium",
   "Local SEO": "low",
   "Technical & Security": "medium",
+  "Rendering & Crawlability": "medium",
   "Performance": "high",
   "Links & Content": "medium",
 };
@@ -256,8 +300,9 @@ function dropSeverity(s: Severity): Severity {
   return order[Math.min(order.length - 1, i + 1)];
 }
 
-function severityFor(category: string, label: string, status: "warn" | "fail"): Severity {
-  const base = LABEL_SEVERITY[label] ?? CATEGORY_FAIL_SEVERITY[category] ?? "medium";
+function severityFor(category: string, label: string, status: "warn" | "fail", detail = ""): Severity {
+  let base = LABEL_SEVERITY[label] ?? CATEGORY_FAIL_SEVERITY[category] ?? "medium";
+  if (label === "Page title" && /(too long|too short|may be truncated)/i.test(detail)) base = "medium";
   return status === "fail" ? base : dropSeverity(base);
 }
 
@@ -282,6 +327,12 @@ function internalAngle(category: string, severity: Severity): { note: string; an
       angle: "Visitors who are ready to act do not have an obvious next step or enough trust cues to take it. That is signed cases leaking out, not a traffic problem.",
     };
   }
+  if (c === "Intent Alignment") {
+    return {
+      note: "Matter-intent gap. Strong prospecting evidence because it ties the audit to the exact work the firm says it wants.",
+      angle: "The site does not yet have a page that clearly owns the priority matter and location in client language. That makes the firm's best-fit work harder to find and easier for competitors to frame first.",
+    };
+  }
   if (c === "Local SEO") {
     return {
       note: "Local visibility gap. Relevant for firms that depend on a city/region catchment.",
@@ -304,6 +355,12 @@ function internalAngle(category: string, severity: Severity): { note: string; an
     return {
       note: "Technical / security gap. Useful as a credibility opener; signals the site has not been maintained.",
       angle: "A few technical and security basics are not in place. On their own they are small, together they signal a site that has not had recent attention.",
+    };
+  }
+  if (c === "Rendering & Crawlability") {
+    return {
+      note: "Rendering risk. Use this to avoid overclaiming when raw HTML may not show what a browser shows.",
+      angle: "The site appears to rely on JavaScript for some visible content, which can make search and AI extraction less reliable unless critical copy is server-rendered.",
     };
   }
   if (c === "Performance") {
@@ -352,8 +409,12 @@ export function buildIssues(pages: PageResult[]): Issue[] {
 
   for (const page of pages) {
     for (const cat of page.categories) {
+      if (page.pageType === "policy" && !POLICY_RELEVANT_CATEGORIES.has(cat.name)) continue;
       for (const item of cat.items) {
         if (item.status === "pass") continue;
+        // Avoid double-counting schema absence: when no JSON-LD exists, the
+        // "structured data" issue already carries the actionable finding.
+        if (cat.name === "Schema & Structured Data" && item.label === "JSON-LD validity" && /no blocks to validate/i.test(item.detail)) continue;
         const key = `${cat.name}::${item.label}`;
         const existing = map.get(key);
         if (!existing) {
@@ -386,12 +447,12 @@ export function buildIssues(pages: PageResult[]): Issue[] {
     const pageTypeImpact = [...acc.types];
     const hitsCommercial = pageTypeImpact.some((t) => COMMERCIAL_PAGE_TYPES.includes(t));
 
-    let severity = severityFor(acc.category, acc.label, acc.status);
+    let severity = severityFor(acc.category, acc.label, acc.status, acc.detail);
     // Bump one level when the issue lands on commercial pages and is sitewide.
     // The coverage bump does NOT manufacture "critical": that tier is reserved
     // for explicitly critical checks (noindex, HTTPS, missing contact path),
     // so a sitewide minor finding caps at "high".
-    if (hitsCommercial && affectedCount >= Math.max(2, Math.ceil(totalPages / 2)) && severity !== "critical" && !POLICY_LABELS.has(acc.label)) {
+    if (hitsCommercial && affectedCount >= Math.max(2, Math.ceil(totalPages / 2)) && severity !== "critical" && !NO_COVERAGE_BUMP_LABELS.has(acc.label)) {
       const order: Severity[] = ["critical", "high", "medium", "low", "info"];
       const bumped = order[Math.max(0, order.indexOf(severity) - 1)];
       severity = bumped === "critical" ? "high" : bumped;
@@ -411,7 +472,7 @@ export function buildIssues(pages: PageResult[]): Issue[] {
     const { note, angle } = internalAngle(acc.category, severity);
     const evidence = affectedCount === 1
       ? `1 page: ${[...acc.urls][0]}`
-      : `${affectedCount} of ${totalPages} pages, including ${[...acc.urls].slice(0, 3).map((u) => safePath(u)).join(", ")}`;
+      : `${affectedCount} of ${totalPages} pages, including ${distinctEvidencePaths([...acc.urls]).slice(0, 3).join(", ")}`;
 
     issues.push({
       id: slug(acc.category, acc.label),
@@ -438,7 +499,29 @@ export function buildIssues(pages: PageResult[]): Issue[] {
 }
 
 function safePath(url: string): string {
-  try { return new URL(url).pathname || "/"; } catch { return url; }
+  try {
+    const u = new URL(url);
+    const path = u.pathname || "/";
+    if (u.search) {
+      const params = u.searchParams;
+      if (params.has("attachment_id")) return `${path}?attachment_id=${params.get("attachment_id")}`;
+      if (params.has("p")) return `${path}?p=${params.get("p")}`;
+      return `${path}${u.search}`;
+    }
+    return path;
+  } catch { return url; }
+}
+
+function distinctEvidencePaths(urls: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const url of urls) {
+    const path = safePath(url);
+    if (seen.has(path)) continue;
+    seen.add(path);
+    out.push(path);
+  }
+  return out.length > 0 ? out : urls.map(safePath);
 }
 
 export function severityBreakdown(issues: Issue[]): SeverityBreakdown {

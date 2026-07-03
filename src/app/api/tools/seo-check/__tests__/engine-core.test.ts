@@ -8,6 +8,7 @@ import {
   robotsPathMatchLength,
   normalizePageUrl,
   shouldSkipUrl,
+  crawlUrlKey,
   classifyPageType,
   scoreUrlPriority,
   aiScoresFromItems,
@@ -114,6 +115,10 @@ describe("URL normalization / skip / page-type", () => {
     expect(shouldSkipUrl("https://x.com/style.css")).toBe(true);
     expect(shouldSkipUrl("https://x.com/feed/")).toBe(true);
     expect(shouldSkipUrl("https://x.com/wp-login.php")).toBe(true);
+    expect(shouldSkipUrl("https://x.com/?attachment_id=910")).toBe(true);
+    expect(shouldSkipUrl("https://x.com/?p=123")).toBe(true);
+    expect(shouldSkipUrl("https://x.com/category/real-estate/")).toBe(true);
+    expect(shouldSkipUrl("https://x.com/tag/tax/")).toBe(true);
     expect(shouldSkipUrl("https://x.com/p?a=1&b=2&c=3")).toBe(true);
     expect(shouldSkipUrl("https://x.com/practice/real-estate")).toBe(false);
   });
@@ -121,12 +126,21 @@ describe("URL normalization / skip / page-type", () => {
     expect(classifyPageType("https://x.com/")).toBe("homepage");
     expect(classifyPageType("https://x.com/contact-us")).toBe("contact");
     expect(classifyPageType("https://x.com/practice-areas/family")).toBe("practice");
+    expect(classifyPageType("https://x.com/practices/professional-regulation-and-liability")).toBe("practice");
+    expect(classifyPageType("https://x.com/tax-law/")).toBe("practice");
+    expect(classifyPageType("https://x.com/real-estate-law/")).toBe("practice");
+    expect(classifyPageType("https://x.com/wills-and-estates/")).toBe("practice");
+    expect(classifyPageType("https://x.com/notary-services/")).toBe("practice");
     expect(classifyPageType("https://x.com/our-team/jane-doe")).toBe("attorney");
     expect(classifyPageType("https://x.com/locations/toronto")).toBe("location");
     expect(classifyPageType("https://x.com/faq")).toBe("faq");
     expect(classifyPageType("https://x.com/blog/post-1")).toBe("blog");
     expect(classifyPageType("https://x.com/privacy")).toBe("policy");
     expect(classifyPageType("https://x.com/something-else")).toBe("other");
+  });
+  it("dedupes crawl URL variants across protocol, www, slash, and query order", () => {
+    expect(crawlUrlKey("http://www.x.com/contact-us")).toBe(crawlUrlKey("https://x.com/contact-us/"));
+    expect(crawlUrlKey("https://x.com/a?b=2&a=1#frag")).toBe(crawlUrlKey("https://www.x.com/a/?a=1&b=2"));
   });
   it("priority ranks homepage and contact above blog", () => {
     expect(scoreUrlPriority("https://x.com/")).toBeGreaterThan(scoreUrlPriority("https://x.com/blog/x"));

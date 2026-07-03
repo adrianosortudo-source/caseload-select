@@ -25,7 +25,12 @@ export default function AdminSeoCheckPage() {
     <div>
       <PageHeader
         title="SEO and AI visibility check"
-        subtitle="Run a bounded professional diagnostic on any law firm website (quick 10, standard 25, or deep 50 pages). Nine categories per page including indexability, schema, AI visibility, and legal-marketing readiness, plus a prospecting summary and outreach angles for internal use. Run it on a prospect before a pitch or on a client site to find what to fix."
+        subtitle="Canonical SEO audit for prospects and clients. Run a quick scan to triage a new site fast, or standard/deep for a full technical, content, and AI-visibility diagnostic. Save results here and revisit them for follow-up."
+        right={
+          <p className="text-xs text-black/40 max-w-[260px] text-right leading-snug">
+            Canonical SEO audit. Prospecting Diagnostic consumes SEO results separately.
+          </p>
+        }
       />
 
       <div className="cls-marketing">

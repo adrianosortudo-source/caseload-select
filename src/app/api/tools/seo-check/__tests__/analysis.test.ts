@@ -88,6 +88,46 @@ describe("buildIssues", () => {
     expect(titleIssue?.totalPages).toBe(3);
   });
 
+  it("keeps long page titles below high while preserving missing-title blockers", () => {
+    const longTitle = cat("On-Page SEO", [{ label: "Page title", status: "warn", detail: "Too long (75 chars)." }]);
+    const missingTitle = cat("On-Page SEO", [{ label: "Page title", status: "fail", detail: "Missing. Add a title." }]);
+    const longIssue = buildIssues([mkPage({ url: "https://x.com/", pageType: "homepage", categories: [longTitle] })])
+      .find((i) => i.title === "Page title");
+    const missingIssue = buildIssues([mkPage({ url: "https://x.com/", pageType: "homepage", categories: [missingTitle] })])
+      .find((i) => i.title === "Page title");
+    expect(longIssue?.severity).toBe("low");
+    expect(missingIssue?.severity).toBe("high");
+  });
+
+  it("suppresses JSON-LD validity as a duplicate when there are no blocks", () => {
+    const schema = cat("Schema & Structured Data", [
+      { label: "JSON-LD structured data", status: "fail", detail: "No JSON-LD blocks found." },
+      { label: "JSON-LD validity", status: "fail", detail: "No blocks to validate." },
+    ]);
+    const titles = buildIssues([mkPage({ url: "https://x.com/", pageType: "homepage", categories: [schema] })]).map((i) => i.title);
+    expect(titles).toContain("JSON-LD structured data");
+    expect(titles).not.toContain("JSON-LD validity");
+  });
+
+  it("does not let policy pages inflate business-content findings", () => {
+    const local = cat("Local SEO", [{ label: "NAP in structured data", status: "fail", detail: "No NAP." }]);
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [local] }),
+      mkPage({ url: "https://x.com/privacy-policy", pageType: "policy", categories: [local] }),
+    ];
+    const issue = buildIssues(pages).find((i) => i.title === "NAP in structured data");
+    expect(issue?.affectedCount).toBe(1);
+    expect(issue?.evidence).toBe("1 page: https://x.com/");
+  });
+
+  it("keeps a simple redirect chain low priority", () => {
+    const redirect = cat("Indexability", [{ label: "Redirect chain", status: "warn", detail: "1 redirect hop before the final page." }]);
+    const issue = buildIssues([mkPage({ url: "https://x.com/", pageType: "homepage", categories: [redirect] })])
+      .find((i) => i.title === "Redirect chain");
+    expect(["low", "info"]).toContain(issue?.severity);
+    expect(issue?.priority).toBeLessThan(30);
+  });
+
   it("sorts issues by priority descending", () => {
     const pages = [mkPage({
       url: "https://x.com/", pageType: "homepage",
@@ -102,7 +142,7 @@ describe("buildIssues", () => {
     }
   });
 
-  it("does not manufacture critical from the commercial+sitewide coverage bump", () => {
+  it("keeps generic hygiene issues below high-severity prospecting blockers", () => {
     // A mid-tier On-Page failure across commercial pages should cap at high,
     // not become critical. Critical is reserved for explicit blockers.
     const c = cat("On-Page SEO", [{ label: "Image alt text", status: "fail", detail: "" }]);
@@ -112,8 +152,24 @@ describe("buildIssues", () => {
       mkPage({ url: "https://x.com/practice", pageType: "practice", categories: [c] }),
     ];
     const issue = buildIssues(pages).find((i) => i.title === "Image alt text");
-    expect(issue?.severity).toBe("high");
+    expect(issue?.severity).toBe("low");
+    expect(issue?.priority).toBeLessThan(40);
+    expect(issue?.severity).not.toBe("medium");
     expect(issue?.severity).not.toBe("critical");
+  });
+
+  it("dedupes evidence paths and preserves meaningful query labels", () => {
+    const c = cat("Schema & Structured Data", [{ label: "Business schema fields", status: "fail", detail: "" }]);
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [c] }),
+      mkPage({ url: "https://x.com/?attachment_id=910", pageType: "homepage", categories: [c] }),
+      mkPage({ url: "https://x.com/contact", pageType: "contact", categories: [c] }),
+    ];
+    const issue = buildIssues(pages).find((i) => i.title === "Business schema fields");
+    expect(issue?.evidence).toContain("/");
+    expect(issue?.evidence).toContain("/?attachment_id=910");
+    expect(issue?.evidence).toContain("/contact");
+    expect(issue?.evidence).not.toContain("/, /, /");
   });
 
   it("still rates an explicit blocker (noindex) as critical even off commercial pages", () => {

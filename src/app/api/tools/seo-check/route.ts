@@ -32,6 +32,7 @@ import {
   normalizePageUrl,
   isSameOrigin,
   shouldSkipUrl,
+  crawlUrlKey,
   scoreUrlPriority,
   classifyPageType,
   resolveScan,
@@ -53,6 +54,19 @@ import {
   buildInternalSummary,
   severityBreakdown,
 } from "./analysis";
+import {
+  type NormalizedIntent,
+  aggregateIntentAlignment,
+  analyzePageIntent,
+  buildIntentCategory,
+  buildPageAuditSnapshot,
+  normalizeIntentInput,
+} from "./intent-analysis";
+import {
+  aggregateRenderingSummary,
+  analyzeRenderingSnapshot,
+  buildRenderingCategory,
+} from "./rendering-analysis";
 import { SCAN_MODE_DEFAULTS } from "./engine-core";
 import { getOperatorSession } from "@/lib/portal-auth";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
@@ -1025,9 +1039,8 @@ function buildIndexability(
 
   let inSitemap: boolean | null = null;
   if (sitemapSet && sitemapSet.size > 0) {
-    // sitemapSet is keyed with normKey (lowercased, fragment + trailing slash
-    // stripped); match the final URL the same way.
-    inSitemap = sitemapSet.has(normKey(finalUrl));
+    // sitemapSet is keyed with the same canonical crawl key used for dedupe.
+    inSitemap = sitemapSet.has(crawlUrlKey(finalUrl));
   }
 
   return {
@@ -1066,7 +1079,8 @@ function buildPageResult(
   domain: string,
   parsedRobots: ParsedRobots | null,
   llmsTxt: string | null,
-  sitemapSet: Set<string> | null
+  sitemapSet: Set<string> | null,
+  intent: NormalizedIntent | null
 ): PageResult {
   const pageHostname = new URL(finalUrl).hostname.replace(/^www\./, "");
   const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? null;
@@ -1075,6 +1089,13 @@ function buildPageResult(
   const schema = extractSchemaSummary(html);
   const lawFirm = extractLawFirmSignals(html, schema);
   const idx = buildIndexability(html, headers, finalUrl, requestedUrl, redirectHops, domain, sitemapSet);
+  const bodyText = extractBodyText(html);
+  const wordCount = countWords(bodyText);
+  const rendering = analyzeRenderingSnapshot(html, wordCount);
+  const pageAudit = buildPageAuditSnapshot(html);
+  const intentAlignment = intent
+    ? analyzePageIntent({ html, url: finalUrl, title, wordCount, schemaTypes: schema.types, intent })
+    : undefined;
   const path = (() => { try { return new URL(finalUrl).pathname || "/"; } catch { return "/"; } })();
   const robotsAllowed = robotsAllowedFor(parsedRobots, path);
 
@@ -1086,9 +1107,12 @@ function buildPageResult(
     checkLegalMarketing(lawFirm),
     checkLocalSeo(html, schema),
     checkTechnicalSecurity(html, finalUrl, headers),
+    buildRenderingCategory(rendering),
     checkPerformance(html, ttfbMs, pageHostname),
     checkLinksContent(html, pageHostname),
   ];
+  const intentCategory = buildIntentCategory(intentAlignment ?? null);
+  if (intentCategory) categories.push(intentCategory);
 
   const pageScore = computeWeightedScore(categories);
   const pageGrade = computeGrade(pageScore);
@@ -1104,6 +1128,7 @@ function buildPageResult(
   return {
     url: finalUrl,
     title,
+    metaDescription: pageAudit.metaDescription,
     pageType,
     pageScore,
     pageGrade,
@@ -1116,7 +1141,10 @@ function buildPageResult(
     indexability: idx,
     schema,
     lawFirm,
-    wordCount: countWords(extractBodyText(html)),
+    wordCount,
+    rendering,
+    pageAudit,
+    intentAlignment,
     keyWarnings,
   };
 }
@@ -1126,7 +1154,8 @@ async function scanPage(
   domain: string,
   parsedRobots: ParsedRobots | null,
   llmsTxt: string | null,
-  sitemapSet: Set<string> | null
+  sitemapSet: Set<string> | null,
+  intent: NormalizedIntent | null
 ): Promise<{ page: PageResult; html: string } | null> {
   let handle: SafeFetchResult | null = null;
   try {
@@ -1139,7 +1168,7 @@ async function scanPage(
     if (!ct.includes("html") && !ct.includes("xhtml")) return null;
     const read = await readCappedText(res, MAX_HTML_BYTES);
     if (!read.ok) return null;
-    const page = buildPageResult(read.text, finalUrl, url, res.headers, ttfbMs, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet);
+    const page = buildPageResult(read.text, finalUrl, url, res.headers, ttfbMs, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent);
     return { page, html: read.text };
   } catch { return null; }
   finally { handle?.cleanup(); }
@@ -1207,10 +1236,6 @@ const FRONTIER_CAP = 600;
 // Dedupe / membership key. URL already lowercases scheme + host; we strip the
 // fragment and a trailing slash but PRESERVE path and query case, because URL
 // paths can be case-sensitive and this key is also reused as a fetch URL.
-function normKey(url: string): string {
-  try { const u = new URL(url); u.hash = ""; return u.href.replace(/\/$/, ""); } catch { return url; }
-}
-
 /* ────────────────────────────────────────────────────────
    POST handler
    ──────────────────────────────────────────────────────── */
@@ -1243,6 +1268,12 @@ export async function POST(req: NextRequest) {
     if (!rawDomain || typeof rawDomain !== "string") {
       return NextResponse.json({ error: "Domain is required." }, { status: 400 });
     }
+    const intent = isOperator ? normalizeIntentInput({
+      targetKeyword: body?.targetKeyword,
+      targetMatter: body?.targetMatter,
+      targetLocation: body?.targetLocation,
+      targetAudience: body?.targetAudience,
+    }) : null;
     const domain = normalizeDomain(rawDomain);
     if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(domain)) {
       return NextResponse.json({ error: "Invalid domain format." }, { status: 400 });
@@ -1266,11 +1297,11 @@ export async function POST(req: NextRequest) {
 
     // Collect sitemap URLs (default location + same-origin robots-declared).
     const sitemapUrls = new Set<string>();
-    for (const u of await fetchSitemapUrls(`https://${domain}/sitemap.xml`, domain)) sitemapUrls.add(normKey(u));
+    for (const u of await fetchSitemapUrls(`https://${domain}/sitemap.xml`, domain)) sitemapUrls.add(crawlUrlKey(u));
     if (parsedRobots) {
       const sameOriginSitemaps = parsedRobots.sitemaps.filter((s) => isSameOrigin(s, domain)).slice(0, 3);
       for (const sm of sameOriginSitemaps) {
-        for (const u of await fetchSitemapUrls(sm, domain)) sitemapUrls.add(normKey(u));
+        for (const u of await fetchSitemapUrls(sm, domain)) sitemapUrls.add(crawlUrlKey(u));
       }
     }
     const sitemapSet = sitemapUrls.size > 0 ? sitemapUrls : null;
@@ -1299,7 +1330,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error }, { status: 422 });
       }
       homeHtml = read.text;
-      homePage = buildPageResult(read.text, finalUrl, homeUrl, res.headers, ttfbMs, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet);
+      homePage = buildPageResult(read.text, finalUrl, homeUrl, res.headers, ttfbMs, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent);
     } catch (fetchErr: unknown) {
       const msg = fetchErr instanceof Error ? fetchErr.message : "unknown";
       if (msg === "ssrf_blocked") return NextResponse.json({ error: "That domain cannot be checked." }, { status: 400 });
@@ -1317,19 +1348,19 @@ export async function POST(req: NextRequest) {
 
     if (maxPages > 1) {
       const maxDepth = DEPTH_BY_BUDGET(maxPages);
-      const visited = new Set<string>([normKey(homePage.url), normKey(homeUrl)]);
+      const visited = new Set<string>([crawlUrlKey(homePage.url), crawlUrlKey(homeUrl)]);
       // Frontier of candidate URLs with crawl depth.
       const frontier: Array<{ url: string; depth: number; score: number }> = [];
       const enqueue = (url: string, depth: number) => {
         if (frontier.length >= FRONTIER_CAP) return;
-        const key = normKey(url);
+        const key = crawlUrlKey(url);
         if (visited.has(key)) return;
         if (!isSameOrigin(url, domain) || shouldSkipUrl(url)) return;
         // Respect robots for our own scanner on discovered pages.
         if (parsedRobots) {
           try { if (checkBotBlockedParsed(parsedRobots, SCANNER_TOKEN, new URL(url).pathname)) return; } catch { return; }
         }
-        if (frontier.some((f) => normKey(f.url) === key)) return;
+        if (frontier.some((f) => crawlUrlKey(f.url) === key)) return;
         frontier.push({ url, depth, score: scoreUrlPriority(url) });
       };
 
@@ -1343,13 +1374,13 @@ export async function POST(req: NextRequest) {
         let bestIdx = 0;
         for (let i = 1; i < frontier.length; i++) if (frontier[i].score > frontier[bestIdx].score) bestIdx = i;
         const next = frontier.splice(bestIdx, 1)[0];
-        const key = normKey(next.url);
+        const key = crawlUrlKey(next.url);
         if (visited.has(key)) continue;
         visited.add(key);
 
-        const scanned = await scanPage(next.url, domain, parsedRobots, llmsTxt, sitemapSet);
+        const scanned = await scanPage(next.url, domain, parsedRobots, llmsTxt, sitemapSet, intent);
         if (!scanned) continue;
-        visited.add(normKey(scanned.page.url));
+        visited.add(crawlUrlKey(scanned.page.url));
         pages.push(scanned.page);
 
         // Expand discovery from this page if depth allows.
@@ -1375,6 +1406,8 @@ export async function POST(req: NextRequest) {
       ...AI_SEARCH_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : false, category: "search" as const })),
       ...AI_TRAINING_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : false, category: "training" as const })),
     ];
+    const intentAlignment = aggregateIntentAlignment(pages);
+    const renderingSummary = aggregateRenderingSummary(pages);
 
     const topFixes = computeTopFixes(pages, 5);
 
@@ -1406,6 +1439,8 @@ export async function POST(req: NextRequest) {
       aiPolicyScore,
       aiPolicyGrade: computeGrade(aiPolicyScore),
       aiBots,
+      ...(intentAlignment ? { intentAlignment } : {}),
+      ...(renderingSummary ? { renderingSummary } : {}),
       topFixes,
       issues: responseIssues,
       ...(isOperator ? { internalSummary } : {}),

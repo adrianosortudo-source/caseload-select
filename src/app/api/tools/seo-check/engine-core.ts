@@ -140,8 +140,10 @@ export const CATEGORY_WEIGHTS: Record<string, number> = {
   "Legal Marketing": 12,
   "Local SEO": 8,
   "Technical & Security": 8,
+  "Rendering & Crawlability": 6,
   "Performance": 4,
   "Links & Content": 4,
+  "Intent Alignment": 8,
 };
 
 /* ────────────────────────────────────────────────────────
@@ -375,15 +377,36 @@ export function shouldSkipUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     const path = parsed.pathname.toLowerCase();
+    const params = parsed.searchParams;
     // Documents, assets, archives, feeds.
     if (/\.(pdf|jpe?g|png|gif|svg|webp|avif|ico|mp4|mp3|wav|zip|gz|rar|7z|doc|docx|xls|xlsx|ppt|pptx|css|js|mjs|json|xml|rss|atom|txt|woff2?|ttf|eot|map)(\?|$)/.test(path)) return true;
     if (/\/(feed|rss|atom)\/?$/.test(path)) return true;
-    if ([...parsed.searchParams].length > 2) return true;
+    // WordPress/media attachment pages often look like real HTML but are not
+    // useful prospecting pages; they polluted calibration scans as homepage
+    // duplicates with thin metadata findings.
+    if (params.has("attachment_id") || params.has("attachment") || params.has("p")) return true;
+    if (/^\/?(attachment|media|image|photo|wp-content|uploads|category|tag|author)(\/|$)/.test(path)) return true;
+    if ([...params].length > 2) return true;
     // Admin / auth / transactional / search.
-    if (/\/(login|logout|admin|wp-admin|wp-login|wp-json|dashboard|account|cart|checkout|register|sign-?in|sign-?up|search|\?s=)/.test(path)) return true;
+    if (/\/(login|logout|admin|wp-admin|wp-login|wp-json|dashboard|account|cart|checkout|register|sign-?in|sign-?up|search|archive|\?s=)/.test(path)) return true;
     return false;
   } catch { return true; }
 }
+
+export function crawlUrlKey(url: string): string {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "").toLowerCase();
+    const path = (u.pathname || "/").replace(/\/$/, "") || "/";
+    u.searchParams.sort();
+    return `${host}${path}${u.search}`;
+  } catch {
+    return url;
+  }
+}
+
+const PRACTICE_INTENT_PATH_RE =
+  /(^|\/)(practices?|practice-areas?|services?|legal-services|areas-of-law|what-we-do|expertise|specialties)(\/|$|-)|(^|\/)(tax-law|real-estate-law|real-estate|wills-and-estates|wills|estates?|estate-litigation|family-law|divorce|immigration|litigation|civil-litigation|commercial-litigation|corporate|business-law|employment-law|labou?r-law|personal-injury|medical-malpractice|insurance|criminal-law|notary-services?|probate|construction-law|professional-regulation|professional-liability)(\/|$|-)/;
 
 /**
  * Classify a URL into a law-firm page type for prioritisation and reporting.
@@ -395,8 +418,8 @@ export function classifyPageType(url: string): PageType {
   if (p === "/" || p === "") return "homepage";
   if (/(^|\/)(contact|contact-us|get-in-touch|book|consultation|schedule)(\/|$|-)/.test(p)) return "contact";
   if (/(^|\/)(privacy|terms|disclaimer|accessibility|cookie|legal-notice|sitemap)(\/|$|-)/.test(p)) return "policy";
+  if (PRACTICE_INTENT_PATH_RE.test(p)) return "practice";
   if (/(^|\/)(attorneys?|lawyers?|team|our-team|our-people|people|staff|professionals?|bio|profile|meet)(\/|$|-)/.test(p)) return "attorney";
-  if (/(^|\/)(practice|practice-areas?|services?|legal-services|areas-of-law|what-we-do|expertise|specialties)(\/|$|-)/.test(p)) return "practice";
   if (/(^|\/)(location|locations|office|offices|find-us|directions)(\/|$|-)/.test(p)) return "location";
   if (/(^|\/)(faq|faqs|frequently-asked|questions)(\/|$|-)/.test(p)) return "faq";
   if (/(^|\/)(about|about-us|who-we-are|our-firm|the-firm|firm|history)(\/|$|-)/.test(p)) return "about";

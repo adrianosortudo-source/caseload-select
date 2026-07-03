@@ -29,9 +29,63 @@ interface AiBotStatus {
   category: "search" | "training";
 }
 
+interface IntentSignal {
+  signal: string;
+  status: "pass" | "warn" | "fail";
+  weight: number;
+  detail: string;
+  evidence?: string;
+}
+
+interface IntentAlignment {
+  score: number;
+  grade: string;
+  confidence: "high" | "medium" | "low";
+  targetKeyword?: string;
+  targetMatter?: string;
+  targetLocation?: string;
+  bestMatchingPage?: string;
+  matchedSignals?: number;
+  totalSignals?: number;
+  evidence: IntentSignal[];
+  missingSignals?: string[];
+}
+
+interface PageAuditSnapshot {
+  metaDescription: string | null;
+  h1s: string[];
+  h2s: string[];
+  imageCount: number;
+  imagesMissingAlt: number;
+  internalLinksOut: number;
+  ctaEvidence: string[];
+  phoneEvidence: string[];
+}
+
+interface RenderingSnapshot {
+  risk: "low" | "medium" | "high";
+  wordCount: number;
+  scriptCount: number;
+  externalScriptCount: number;
+  appShellLikely: boolean;
+  emptyAppRoot: boolean;
+  hasNoscriptFallback: boolean;
+  evidence: string[];
+  recommendation?: string;
+}
+
+interface RenderingSummary {
+  risk: "low" | "medium" | "high";
+  highRiskPages: number;
+  mediumRiskPages: number;
+  totalPages: number;
+  evidence: string[];
+}
+
 interface PageResult {
   url: string;
   title?: string | null;
+  metaDescription?: string | null;
   pageType?: string;
   pageScore: number;
   pageGrade: string;
@@ -42,6 +96,9 @@ interface PageResult {
   httpStatus?: number;
   indexable?: boolean;
   wordCount?: number;
+  rendering?: RenderingSnapshot;
+  pageAudit?: PageAuditSnapshot;
+  intentAlignment?: IntentAlignment;
   keyWarnings?: string[];
 }
 
@@ -109,6 +166,8 @@ export interface SeoCheckResult {
   aiPolicyScore?: number;
   aiPolicyGrade?: string;
   aiBots: AiBotStatus[];
+  intentAlignment?: IntentAlignment;
+  renderingSummary?: RenderingSummary;
   topFixes?: TopFix[];
   issues?: Issue[];
   internalSummary?: InternalSummary;
@@ -130,6 +189,66 @@ const EMPTY = "n/a";
 
 function sevClass(s: Severity): string {
   return `sev-${s}`;
+}
+
+/* ────────────────────────────────────────────────────────
+   Audit notes (operator only): a deterministic read on how safe an issue
+   is to cite in outreach, derived from category/severity/confidence/evidence.
+   Not a new signal, just a classification of signals the engine already
+   produced, so it applies to saved historical runs without a re-scan.
+   ──────────────────────────────────────────────────────── */
+
+type AuditNoteKind = "safe" | "verify" | "hygiene" | "crawler_limitation";
+
+const AUDIT_NOTE_LABEL: Record<AuditNoteKind, string> = {
+  safe: "Safe to mention",
+  verify: "Verify manually",
+  hygiene: "Low-priority hygiene",
+  crawler_limitation: "Crawler limitation",
+};
+
+// Content-extraction findings depend on parsing raw server HTML for meaning
+// (definitions, Q&A patterns, authorship). A JS-rendered page can read as a
+// false negative here even when the content exists after hydration.
+const CONTENT_EXTRACTION_LABELS = new Set([
+  "Semantic HTML structure", "Direct-answer sentences", "Question-format headings",
+  "Author / reviewer signals", "Entity description",
+]);
+
+// Rendering and structure findings are prone to the same class of false
+// negative the SEO tool itself has been calibrated against: CTA text, contact
+// widgets, and team bios that render client-side are invisible to a raw-HTML
+// crawl even though a visitor sees them. "No practice-area pages found" is
+// deliberately NOT here: it is a URL/page-type inventory fact (hardened
+// against the same client-render class of false positive already), so it
+// falls through to the safe-to-mention default below.
+const VERIFY_MANUALLY_LABELS = new Set([
+  "Server-rendered content", "JavaScript app-shell dependency", "Noscript fallback",
+  "Consultation call to action", "Contact form / direct contact",
+  "No clear contact path", "No attorney / team page found",
+]);
+
+const HYGIENE_LABELS = new Set([
+  "Image alt text", "Meta description", "H1 heading", "H2 subheadings",
+  "Content-to-HTML ratio", "HTML document size", "Anchor text quality",
+  "Open Graph tags", "Word count", "Heading hierarchy", "Internal links",
+  "External links",
+]);
+
+function classifyAuditNote(issue: Issue): AuditNoteKind {
+  const policyOnly = issue.pageTypeImpact && issue.pageTypeImpact.length > 0
+    && issue.pageTypeImpact.every((t) => t === "policy");
+
+  if (issue.confidence === "low" || policyOnly || CONTENT_EXTRACTION_LABELS.has(issue.title)) {
+    return "crawler_limitation";
+  }
+  if (VERIFY_MANUALLY_LABELS.has(issue.title)) {
+    return "verify";
+  }
+  if (HYGIENE_LABELS.has(issue.title) || issue.severity === "low" || issue.severity === "info") {
+    return "hygiene";
+  }
+  return "safe";
 }
 
 /* ────────────────────────────────────────────────────────
@@ -234,6 +353,8 @@ export default function SeoReport({
   const issues = result.issues ?? [];
   const summary = result.internalSummary;
   const breakdown = result.severityBreakdown;
+  const intent = result.intentAlignment;
+  const rendering = result.renderingSummary;
 
   const allIssues: Issue[] = issues.length > 0
     ? issues
@@ -366,6 +487,10 @@ export default function SeoReport({
             </section>
           )}
 
+          {intent && <IntentPanel intent={intent} />}
+
+          {rendering && <RenderingPanel summary={rendering} />}
+
           <AiBotPanel bots={result.aiBots} />
 
           {showInternal && summary && (
@@ -416,25 +541,37 @@ export default function SeoReport({
       {/* Issues section */}
       <div className={paneClass("issues")}>
           {allIssues.length === 0 && <p className="seo-empty">No issues found. All checks passed.</p>}
+          {showInternal && allIssues.length > 0 && (
+            <p className="seo-audit-legend">
+              <strong>Audit note</strong> reads how safe each finding is to cite before a re-check: schema, NAP,
+              and security-header findings are hard facts; contact/team/rendering findings can be client-side false
+              negatives worth a manual look; hygiene items are low-stakes polish; crawler-limitation items depend on
+              raw HTML the engine could not fully evaluate.
+            </p>
+          )}
           <ul className="seo-issue-list">
-            {allIssues.map((it) => (
-              <li key={it.id} className="seo-issue-card">
-                <div className="seo-issue-head">
-                  <span className={`seo-sev-tag ${sevClass(it.severity)}`}>{SEVERITY_LABEL[it.severity]}</span>
-                  <span className="seo-issue-title">{it.title}</span>
-                  <span className="seo-fix-cat">{it.category}</span>
-                  {it.affectedCount > 0 && (
-                    <span className="seo-fix-pages">{it.affectedCount}{it.totalPages ? `/${it.totalPages}` : ""} page{it.affectedCount > 1 ? "s" : ""}</span>
-                  )}
-                  <span className="seo-fix-effort">{it.effort} effort, {it.confidence} confidence</span>
-                </div>
-                <p className="seo-issue-detail">{it.detail}</p>
-                {it.fix && <p className="seo-item-fix"><strong>How to fix:</strong> {it.fix}</p>}
-                {it.evidence && <p className="seo-issue-evidence">Evidence: {it.evidence}</p>}
-                {showInternal && it.internalNote && (<p className="seo-issue-internal"><strong>Internal:</strong> {it.internalNote}</p>)}
-                {showInternal && it.prospectingAngle && (<p className="seo-issue-angle"><strong>Angle:</strong> {it.prospectingAngle}</p>)}
-              </li>
-            ))}
+            {allIssues.map((it) => {
+              const note = showInternal ? classifyAuditNote(it) : null;
+              return (
+                <li key={it.id} className="seo-issue-card">
+                  <div className="seo-issue-head">
+                    <span className={`seo-sev-tag ${sevClass(it.severity)}`}>{SEVERITY_LABEL[it.severity]}</span>
+                    <span className="seo-issue-title">{it.title}</span>
+                    <span className="seo-fix-cat">{it.category}</span>
+                    {it.affectedCount > 0 && (
+                      <span className="seo-fix-pages">{it.affectedCount}{it.totalPages ? `/${it.totalPages}` : ""} page{it.affectedCount > 1 ? "s" : ""}</span>
+                    )}
+                    <span className="seo-fix-effort">{it.effort} effort, {it.confidence} confidence</span>
+                    {note && <span className={`seo-audit-tag seo-audit-${note}`}>{AUDIT_NOTE_LABEL[note]}</span>}
+                  </div>
+                  <p className="seo-issue-detail">{it.detail}</p>
+                  {it.fix && <p className="seo-item-fix"><strong>How to fix:</strong> {it.fix}</p>}
+                  {it.evidence && <p className="seo-issue-evidence">Evidence: {it.evidence}</p>}
+                  {showInternal && it.internalNote && (<p className="seo-issue-internal"><strong>Internal:</strong> {it.internalNote}</p>)}
+                  {showInternal && it.prospectingAngle && (<p className="seo-issue-angle"><strong>Angle:</strong> {it.prospectingAngle}</p>)}
+                </li>
+              );
+            })}
           </ul>
       </div>
 
@@ -444,7 +581,7 @@ export default function SeoReport({
           <div className="seo-table-wrap">
             <table className="seo-table">
               <thead>
-                <tr><th>Page</th><th>Type</th><th>Score</th><th>Index</th><th>Issues</th><th>Key warnings</th></tr>
+                <tr><th>Page</th><th>Type</th><th>Score</th><th>Index</th><th>Intent</th><th>Rendering</th><th>Page evidence</th><th>Key warnings</th></tr>
               </thead>
               <tbody>
                 {pages.map((p, i) => {
@@ -459,7 +596,19 @@ export default function SeoReport({
                       <td>{p.pageType ? (PAGE_TYPE_LABEL[p.pageType] ?? p.pageType) : EMPTY}</td>
                       <td><span className="seo-td-grade" style={{ color: p.pageScore >= 70 ? "var(--navy)" : p.pageScore >= 40 ? "var(--stone-on-light)" : "var(--danger)" }}>{p.pageGrade}</span> {p.pageScore}</td>
                       <td>{p.indexable === false ? <span className="seo-noindex">noindex</span> : "ok"}</td>
-                      <td>{p.failCount > 0 ? <span className="seo-td-fail">{p.failCount} fail</span> : null} {p.warnCount > 0 ? <span className="seo-td-warn">{p.warnCount} warn</span> : null}{p.failCount === 0 && p.warnCount === 0 ? "clean" : ""}</td>
+                      <td>{p.intentAlignment ? <span className="seo-td-grade">{p.intentAlignment.grade} {p.intentAlignment.score}</span> : EMPTY}</td>
+                      <td>
+                        {p.rendering
+                          ? <span className={`seo-render-risk seo-render-${p.rendering.risk}`}>{p.rendering.risk}</span>
+                          : EMPTY}
+                      </td>
+                      <td className="seo-td-warnings">
+                        {[
+                          p.pageAudit?.h1s?.[0] ? `H1: ${p.pageAudit.h1s[0]}` : "",
+                          p.wordCount ? `${p.wordCount} words` : "",
+                          p.pageAudit ? `${p.pageAudit.internalLinksOut} internal links` : "",
+                        ].filter(Boolean).join(" · ") || EMPTY}
+                      </td>
                       <td className="seo-td-warnings">{p.keyWarnings && p.keyWarnings.length > 0 ? p.keyWarnings.join(", ") : EMPTY}</td>
                     </tr>
                   );
@@ -509,6 +658,79 @@ function InternalList({ title, items }: { title: string; items: string[] }) {
       <span className="seo-internal-sub">{title}</span>
       <ul>{items.map((it, i) => <li key={i}>{it}</li>)}</ul>
     </div>
+  );
+}
+
+function IntentPanel({ intent }: { intent: IntentAlignment }) {
+  const target = intent.targetKeyword || intent.targetMatter || "Target intent";
+  const bestPath = (() => {
+    if (!intent.bestMatchingPage) return EMPTY;
+    try { return new URL(intent.bestMatchingPage).pathname || "/"; } catch { return intent.bestMatchingPage; }
+  })();
+  const topSignals = (intent.evidence ?? []).slice(0, 8);
+  return (
+    <section className="seo-block seo-intent-panel">
+      <div className="seo-intent-head">
+        <div>
+          <h3 className="seo-block-title">Intent alignment</h3>
+          <p className="seo-intent-target">
+            {target}{intent.targetLocation ? ` · ${intent.targetLocation}` : ""}
+          </p>
+        </div>
+        <div className="seo-intent-score">
+          <span className="seo-intent-grade">{intent.grade}</span>
+          <span>{intent.score}/100</span>
+          <small>{intent.confidence} confidence</small>
+        </div>
+      </div>
+
+      <div className="seo-intent-meta">
+        <span>Best page: {bestPath}</span>
+        {intent.missingSignals && intent.missingSignals.length > 0 && (
+          <span>Missing: {intent.missingSignals.slice(0, 4).join(", ")}</span>
+        )}
+      </div>
+
+      <ul className="seo-intent-signals">
+        {topSignals.map((s) => (
+          <li key={s.signal} className={`seo-intent-signal seo-icon-${s.status}`}>
+            <span className={`seo-item-icon seo-icon-${s.status}`}>{STATUS_ICON[s.status]}</span>
+            <div>
+              <strong>{s.signal}</strong>
+              <span>{s.detail}</span>
+              {s.evidence && <em>{s.evidence}</em>}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function RenderingPanel({ summary }: { summary: RenderingSummary }) {
+  const label = summary.risk === "high"
+    ? "High rendering risk"
+    : summary.risk === "medium"
+      ? "Some rendering risk"
+      : "Server HTML looks crawlable";
+  return (
+    <section className={`seo-block seo-render-panel seo-render-panel-${summary.risk}`}>
+      <div className="seo-render-head">
+        <h3 className="seo-block-title">Rendering & crawlability</h3>
+        <span className={`seo-render-badge seo-render-${summary.risk}`}>{label}</span>
+      </div>
+      <p className="seo-render-copy">
+        This scan reads the server HTML first. Pages with thin server HTML or app-shell patterns should be verified in a rendered browser before using missing-content findings in outreach.
+      </p>
+      <div className="seo-render-stats">
+        <span>{summary.highRiskPages} high-risk</span>
+        <span>{summary.mediumRiskPages} medium-risk</span>
+        <span>{summary.totalPages} scanned</span>
+      </div>
+      <ul className="seo-render-evidence">
+        {summary.evidence.slice(0, 4).map((e, i) => <li key={i}>{e}</li>)}
+      </ul>
+    </section>
   );
 }
 
@@ -608,6 +830,33 @@ const reportStyles = `
   .seo-chip-wrap { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
   .seo-chip { font-size: 12px; padding: 5px 11px; border-radius: 20px; background: var(--parchment); color: var(--text); border: 1px solid var(--border); }
 
+  .seo-intent-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-4); margin-bottom: var(--sp-3); }
+  .seo-intent-target { margin: -8px 0 0; font-size: 13px; color: var(--text-muted); }
+  .seo-intent-score { min-width: 96px; text-align: right; font-family: var(--font-display); color: var(--navy); }
+  .seo-intent-grade { display: block; font-size: 28px; line-height: 1; font-weight: 700; }
+  .seo-intent-score small { display: block; margin-top: 2px; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--text-muted); }
+  .seo-intent-meta { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+  .seo-intent-meta span { font-size: 11.5px; color: var(--text-muted); background: var(--parchment); border: 1px solid var(--border); border-radius: 3px; padding: 4px 8px; }
+  .seo-intent-signals { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+  .seo-intent-signal { display: flex; gap: var(--sp-2); padding: var(--sp-2); border: 1px solid var(--border-soft); background: var(--white); }
+  .seo-intent-signal strong { display: block; font-family: var(--font-display); font-size: 11px; color: var(--navy); }
+  .seo-intent-signal span { display: block; font-size: 12px; color: var(--text); line-height: 1.45; }
+  .seo-intent-signal em { display: block; margin-top: 3px; font-size: 11px; font-style: normal; color: var(--text-muted); overflow-wrap: anywhere; }
+
+  .seo-render-panel { border-color: var(--border); }
+  .seo-render-panel-high { border-color: rgba(192,57,43,0.35); }
+  .seo-render-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-2); }
+  .seo-render-head .seo-block-title { margin: 0; }
+  .seo-render-badge, .seo-render-risk { font-family: var(--font-display); font-size: 9.5px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; padding: 3px 9px; border-radius: 3px; background: var(--parchment); white-space: nowrap; }
+  .seo-render-low { color: var(--navy); }
+  .seo-render-medium { color: var(--stone-on-light); }
+  .seo-render-high { color: var(--danger); }
+  .seo-render-copy { margin: 0 0 var(--sp-3); font-size: 12.5px; color: var(--text-muted); line-height: 1.6; }
+  .seo-render-stats { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+  .seo-render-stats span { font-size: 11.5px; color: var(--text-muted); background: var(--parchment); border: 1px solid var(--border); border-radius: 3px; padding: 4px 8px; }
+  .seo-render-evidence { margin: 0; padding-left: 18px; }
+  .seo-render-evidence li { font-size: 12px; color: var(--text); line-height: 1.5; margin-bottom: 3px; }
+
   .seo-issue-card { border: 1px solid var(--border); border-radius: var(--r-card); padding: var(--sp-4); background: var(--white); }
   .seo-issue-head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-2); }
   .seo-issue-title { font-size: 14px; font-weight: 700; color: var(--navy); }
@@ -616,6 +865,14 @@ const reportStyles = `
   .seo-issue-internal { font-size: 12px; color: var(--text); margin: var(--sp-2) 0 0; padding: 7px 10px; background: rgba(196,180,154,0.14); border-radius: 4px; }
   .seo-issue-angle { font-size: 12px; color: var(--navy); margin: var(--sp-2) 0 0; padding: 7px 10px; background: rgba(30,47,88,0.05); border-radius: 4px; }
   .seo-issue-internal strong, .seo-issue-angle strong { text-transform: uppercase; font-size: 9.5px; letter-spacing: 0.6px; }
+
+  .seo-audit-legend { font-size: 11.5px; color: var(--text-muted); line-height: 1.55; margin: 0 0 var(--sp-3); padding: var(--sp-3); background: var(--parchment); border-radius: var(--r-tight); }
+  .seo-audit-legend strong { color: var(--text); text-transform: uppercase; font-family: var(--font-display); font-size: 9.5px; letter-spacing: 0.6px; }
+  .seo-audit-tag { font-family: var(--font-display); font-size: 8.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; white-space: nowrap; margin-left: auto; }
+  .seo-audit-safe { background: rgba(30,47,88,0.08); color: var(--navy); }
+  .seo-audit-verify { background: rgba(196,180,154,0.22); color: var(--stone-on-light); }
+  .seo-audit-hygiene { background: var(--parchment); color: var(--text-muted); }
+  .seo-audit-crawler_limitation { background: rgba(192,57,43,0.08); color: var(--danger); }
 
   .seo-internal { border-color: var(--stone); }
   .seo-internal-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-4); }
@@ -702,6 +959,9 @@ const reportStyles = `
     .seo-gauges { justify-content: center; }
     .seo-internal-cols { grid-template-columns: 1fr; }
     .seo-bots-grid { grid-template-columns: 1fr; }
+    .seo-intent-head { flex-direction: column; }
+    .seo-intent-score { text-align: left; }
+    .seo-intent-signals { grid-template-columns: 1fr; }
   }
   @media print {
     .seo-tabs, .seo-report-actions, .seo-report-cta, .seo-report-footer, .seo-mini-btn { display: none !important; }
