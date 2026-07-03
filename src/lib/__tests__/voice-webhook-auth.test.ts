@@ -100,7 +100,7 @@ describe('verifyVoiceWebhookSignature — rollout posture', () => {
     expect(r.mode).toBe('no_signature_header');
   });
 
-  it("returns 'malformed_signature' when the header is not hex", async () => {
+  it("returns 'malformed_signature' when the header is not hex and not the static token", async () => {
     setMockSecret('super-secret-value');
     const r = await verifyVoiceWebhookSignature({
       firmId: FIRM_ID,
@@ -108,6 +108,61 @@ describe('verifyVoiceWebhookSignature — rollout posture', () => {
       signatureHeader: 'sha256=not-hex!',
     });
     expect(r.mode).toBe('malformed_signature');
+  });
+
+  it("returns 'verified_static_token' when the header IS the secret verbatim (GHL static-header form)", async () => {
+    const secret = 'aGVsbG8rc3RhdGljK3Rva2VuL2Zvci9naGw9PQ==';
+    setMockSecret(secret);
+    const r = await verifyVoiceWebhookSignature({
+      firmId: FIRM_ID,
+      rawBody: '{"transcript":"anything, body integrity not claimed"}',
+      signatureHeader: secret,
+    });
+    expect(r.mode).toBe('verified_static_token');
+  });
+
+  it('static token match is independent of the request body', async () => {
+    const secret = 'static-token-123';
+    setMockSecret(secret);
+    for (const body of ['{}', '{"a":1}', 'completely different']) {
+      const r = await verifyVoiceWebhookSignature({
+        firmId: FIRM_ID,
+        rawBody: body,
+        signatureHeader: secret,
+      });
+      expect(r.mode).toBe('verified_static_token');
+    }
+  });
+
+  it('a wrong non-hex token rejects as malformed_signature, not as verified', async () => {
+    setMockSecret('the-real-secret');
+    const r = await verifyVoiceWebhookSignature({
+      firmId: FIRM_ID,
+      rawBody: '{}',
+      signatureHeader: 'the-wrong-secret!',
+    });
+    expect(r.mode).toBe('malformed_signature');
+  });
+
+  it('a wrong hex-shaped token still runs the HMAC path and rejects as mismatch', async () => {
+    setMockSecret('the-real-secret');
+    const r = await verifyVoiceWebhookSignature({
+      firmId: FIRM_ID,
+      rawBody: '{}',
+      signatureHeader: 'deadbeef'.repeat(8),
+    });
+    expect(r.mode).toBe('mismatch');
+  });
+
+  it('a hex-shaped SECRET still verifies via the static path before HMAC parsing', async () => {
+    const secret = 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
+    setMockSecret(secret);
+    const r = await verifyVoiceWebhookSignature({
+      firmId: FIRM_ID,
+      rawBody: '{}',
+      signatureHeader: secret,
+    });
+    expect(r.mode).toBe('verified_static_token');
   });
 
   it("returns 'mismatch' when the HMAC does not match", async () => {
@@ -154,6 +209,8 @@ describe('shouldRejectVoiceRequest — decision matrix', () => {
     switch (mode) {
       case 'verified':
         return { mode, firmId: FIRM_ID };
+      case 'verified_static_token':
+        return { mode, firmId: FIRM_ID };
       case 'no_secret_configured':
         return { mode, firmId: FIRM_ID };
       case 'no_column':
@@ -170,6 +227,11 @@ describe('shouldRejectVoiceRequest — decision matrix', () => {
   it('verified → never reject', () => {
     expect(shouldRejectVoiceRequest(vr('verified'), true).reject).toBe(false);
     expect(shouldRejectVoiceRequest(vr('verified'), false).reject).toBe(false);
+  });
+
+  it('verified_static_token → never reject', () => {
+    expect(shouldRejectVoiceRequest(vr('verified_static_token'), true).reject).toBe(false);
+    expect(shouldRejectVoiceRequest(vr('verified_static_token'), false).reject).toBe(false);
   });
 
   it('no_column → never reject (pre-migration safety)', () => {

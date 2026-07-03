@@ -295,8 +295,8 @@ export async function POST(req: NextRequest) {
       { status: 401, headers: CORS_HEADERS },
     );
   }
-  if (verifyResult.mode === 'verified') {
-    console.log(`[voice-intake] signature verified firm=${firmIdParam}`);
+  if (verifyResult.mode === 'verified' || verifyResult.mode === 'verified_static_token') {
+    console.log(`[voice-intake] signature verified firm=${firmIdParam} mode=${verifyResult.mode}`);
   } else if (verifyResult.mode === 'mismatch' || verifyResult.mode === 'malformed_signature') {
     console.warn(
       `[voice-intake] signature soft-fail firm=${firmIdParam} mode=${verifyResult.mode} reason=${verifyResult.reason}`,

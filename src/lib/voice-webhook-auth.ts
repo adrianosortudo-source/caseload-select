@@ -22,14 +22,30 @@
  *      to accept unauthenticated POSTs.
  *
  *   3. Operator configures the same secret in the firm's GHL sub-account
- *      voice webhook header (X-CLS-Voice-Signature, sha256=<hex>).
+ *      voice webhook header (X-CLS-Voice-Signature). TWO accepted forms:
+ *
+ *      a. STATIC SHARED TOKEN: the header value IS the secret, verbatim.
+ *         This is the form GHL can actually send: its webhook action
+ *         supports static custom headers only and cannot compute a
+ *         digest over the request body. Compared constant-time.
+ *         Authenticates the sender; does not provide body integrity.
+ *
+ *      b. HMAC-SHA256: sha256=<hex> (or bare hex) of HMAC(secret, rawBody).
+ *         For senders that can sign (the Vapi realtime loop, tests,
+ *         future integrations). Provides sender auth + body integrity.
+ *
+ *      Field history (2026-07-03): the original contract was HMAC-only.
+ *      The Codex F-01 hardening (2026-06-23, correct in intent) made a
+ *      missing header an unconditional 401 for any firm with a secret
+ *      configured, and since GHL cannot sign, every DRG voice call from
+ *      2026-06-23 to 2026-07-03 was silently rejected and lost. The
+ *      static-token form exists so the transport that carries real
+ *      calls can satisfy the gate.
  *
  *   4. Operator sets VOICE_HMAC_REQUIRED=true in Vercel Production env
- *      vars. From that point, unauthenticated voice POSTs are rejected
- *      401 platform-wide. Until then, the helper verifies signatures
- *      when present but never rejects on missing/invalid — a "soft
- *      enforce" mode so ops can dry-run the wiring per firm without
- *      breaking the existing voice path.
+ *      vars. From that point, voice POSTs for firms WITHOUT a configured
+ *      secret are also rejected 401 platform-wide. (Firms WITH a secret
+ *      are enforced regardless of the env toggle, per F-01 below.)
  *
  * The graceful-degradation behaviour lets this file ship before the
  * migration without putting voice intake at risk.
@@ -41,6 +57,7 @@ import { supabaseAdmin as supabase } from './supabase-admin';
 
 export type VerifyResult =
   | { mode: 'verified'; firmId: string }
+  | { mode: 'verified_static_token'; firmId: string }
   | { mode: 'no_secret_configured'; firmId: string }
   | { mode: 'no_column'; firmId: string }
   | { mode: 'no_signature_header'; firmId: string }
@@ -65,10 +82,31 @@ export function isHmacRequired(): boolean {
 }
 
 /**
- * Constant-time HMAC compare against the configured per-firm secret.
- * Does not throw; returns a typed result so the caller can decide
- * whether to reject 401 or pass through based on the platform-wide
- * VOICE_HMAC_REQUIRED toggle.
+ * Constant-time string equality. Runs a timingSafeEqual over
+ * zero-padded buffers of equal length so a length mismatch costs the
+ * same as a content mismatch (mirrors lib/cron-auth.ts).
+ */
+function constantTimeStringEquals(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length === bufB.length) {
+    return timingSafeEqual(bufA, bufB);
+  }
+  const longest = Math.max(bufA.length, bufB.length);
+  const padA = Buffer.alloc(longest);
+  const padB = Buffer.alloc(longest);
+  bufA.copy(padA);
+  bufB.copy(padB);
+  timingSafeEqual(padA, padB);
+  return false;
+}
+
+/**
+ * Constant-time verification against the configured per-firm secret.
+ * Accepts the static-token form (header === secret) or the HMAC form
+ * (sha256=<hex> over the raw body). Does not throw; returns a typed
+ * result so the caller can decide whether to reject 401 or pass
+ * through based on the platform-wide VOICE_HMAC_REQUIRED toggle.
  *
  * `rawBody` MUST be the byte-exact request body. Parsing the JSON first
  * and re-serializing would change whitespace and break the HMAC.
@@ -115,6 +153,16 @@ export async function verifyVoiceWebhookSignature(args: {
     return { mode: 'no_signature_header', firmId };
   }
 
+  // 2a. Static-token form: the header value IS the secret, verbatim.
+  //     Checked BEFORE the hex parse because the secret is typically
+  //     base64 (openssl rand -base64 32) and would fail the hex gate.
+  //     This is the only form GHL's static-header webhook action can
+  //     send. Constant-time compare; a wrong value falls through to the
+  //     HMAC path and rejects there.
+  if (constantTimeStringEquals(signatureHeader, secret)) {
+    return { mode: 'verified_static_token', firmId };
+  }
+
   // Accept "sha256=<hex>" (Meta convention) or bare hex.
   const cleaned = signatureHeader.startsWith('sha256=')
     ? signatureHeader.slice('sha256='.length)
@@ -123,7 +171,7 @@ export async function verifyVoiceWebhookSignature(args: {
     return {
       mode: 'malformed_signature',
       firmId,
-      reason: 'signature is not a hex digest',
+      reason: 'signature is not a hex digest and does not match the static token',
     };
   }
 
@@ -158,6 +206,7 @@ export async function verifyVoiceWebhookSignature(args: {
  *   verify result            | required? | proceed?
  *   -------------------------+-----------+----------
  *   verified                 | any       | YES
+ *   verified_static_token    | any       | YES (GHL static-header form)
  *   no_column                | any       | YES (pre-migration; the
  *                                                column literally doesn't
  *                                                exist yet, treat as not
@@ -165,10 +214,11 @@ export async function verifyVoiceWebhookSignature(args: {
  *   no_secret_configured     | false     | YES (this firm not rolled out)
  *   no_secret_configured     | true      | NO  (enforcement is on; missing
  *                                                secret IS a misconfig)
- *   no_signature_header      | false     | YES (caller didn't send; this
- *                                                firm has a secret but
- *                                                hasn't enforced yet)
- *   no_signature_header      | true      | NO
+ *   no_signature_header      | any       | NO  (F-01: a populated secret
+ *                                                opts the firm into
+ *                                                enforcement; the env
+ *                                                toggle does not soften
+ *                                                a missing header)
  *   mismatch / malformed     | any       | NO  (signature was sent and
  *                                                doesn't match; that's
  *                                                always a real failure)
@@ -179,6 +229,7 @@ export function shouldRejectVoiceRequest(
 ): { reject: true; reason: string } | { reject: false } {
   switch (verify.mode) {
     case 'verified':
+    case 'verified_static_token':
       return { reject: false };
     case 'no_column':
       return { reject: false };
