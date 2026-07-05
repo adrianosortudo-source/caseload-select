@@ -199,6 +199,10 @@ export function PieceActions({
   const [validateState, setValidateState] = useState<ActionState>("idle");
   const [draftState, setDraftState] = useState<ActionState>("idle");
   const [advanceState, setAdvanceState] = useState<ActionState>("idle");
+  const [exportState, setExportState] = useState<ActionState>("idle");
+  const [publishState, setPublishState] = useState<ActionState>("idle");
+  const [publishedUrl, setPublishedUrl] = useState("");
+  const [exportUrls, setExportUrls] = useState<Record<string, string> | null>(null);
   const [resultMsg, setResultMsg] = useState<string | null>(null);
 
   const currentIndex = GATE_ORDER.indexOf(currentGate);
@@ -271,6 +275,35 @@ export function PieceActions({
       { workflow_gate: nextGate },
       setAdvanceState
     );
+  };
+
+  const handleExport = () =>
+    runAction(
+      `/api/admin/content-studio/pieces/${pieceId}/export`,
+      "POST",
+      {},
+      setExportState
+    ).then((d) => {
+      if (d?.signed_urls) {
+        setExportUrls(d.signed_urls);
+        setResultMsg(`Exported v${d.version_number}. Links are valid for 1 hour.`);
+      }
+    });
+
+  const handlePublishRecord = () => {
+    if (!publishedUrl.trim()) {
+      setPublishState("error");
+      setResultMsg("Enter the URL where this piece was placed first.");
+      return;
+    }
+    runAction(
+      `/api/admin/content-studio/pieces/${pieceId}/publish-record`,
+      "POST",
+      { published_url: publishedUrl.trim() },
+      setPublishState
+    ).then((d) => {
+      if (d?.ok) setResultMsg("Publish recorded.");
+    });
   };
 
   function btnClass(state: ActionState, base: string) {
@@ -351,12 +384,76 @@ export function PieceActions({
           </div>
         )}
 
+        <div className="pt-2 mt-2 border-t border-black/8">
+          <button
+            onClick={handleExport}
+            disabled={exportState === "loading" || !hasVersion}
+            className={btnClass(
+              exportState,
+              "w-full text-left rounded border border-black/10 px-3 py-2.5 hover:bg-black/[0.02] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            )}
+          >
+            <div className="text-sm font-medium text-black/70">
+              {exportState === "loading" ? "Exporting..." : "Export bundle"}
+            </div>
+            <div className="text-xs text-black/40 mt-0.5">
+              Requires a lawyer-approved deliverable (or an active publish
+              delegation). Writes page.html + schema.json + meta.json.
+            </div>
+          </button>
+
+          {exportUrls && (
+            <div className="mt-2 rounded border border-sky-200 bg-sky-50 px-3 py-2 space-y-1">
+              {Object.entries(exportUrls).map(([name, url]) => (
+                <div key={name}>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-sky-700 hover:underline"
+                  >
+                    {name} →
+                  </a>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-3 rounded border border-black/10 px-3 py-2.5">
+            <div className="text-sm font-medium text-black/70 mb-1">
+              Record publish
+            </div>
+            <div className="text-xs text-black/40 mb-2">
+              After you place the exported bundle on the firm&apos;s site,
+              record the URL here. This does not publish anything itself.
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={publishedUrl}
+                onChange={(e) => setPublishedUrl(e.target.value)}
+                placeholder="https://drglaw.ca/..."
+                className="flex-1 text-xs border border-black/15 rounded px-2 py-1.5 focus:outline-none focus:border-sky-400 placeholder:text-black/30"
+              />
+              <button
+                onClick={handlePublishRecord}
+                disabled={publishState === "loading"}
+                className="text-xs font-medium px-3 py-1.5 rounded bg-black/80 text-white hover:bg-black disabled:opacity-50 shrink-0"
+              >
+                {publishState === "loading" ? "Recording..." : "Record"}
+              </button>
+            </div>
+          </div>
+        </div>
+
         {resultMsg && (
           <div
             className={`text-xs rounded px-3 py-2 ${
               validateState === "error" ||
               draftState === "error" ||
-              advanceState === "error"
+              advanceState === "error" ||
+              exportState === "error" ||
+              publishState === "error"
                 ? "bg-rose-50 text-rose-700 border border-rose-200"
                 : "bg-emerald-50 text-emerald-700 border border-emerald-200"
             }`}

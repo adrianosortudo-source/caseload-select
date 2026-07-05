@@ -10,6 +10,8 @@ import {
   buildCanonicalServicePageUserPrompt,
   renderServicePagePreview,
   renderMarkdownToSafeHtml,
+  renderServicePageExport,
+  renderMarkdownExport,
   CANONICAL_SERVICE_PAGE_TOOL_NAME,
   SERVICE_PAGE_SECTION_KEYS,
   type CanonicalServicePageModelOutput,
@@ -434,5 +436,74 @@ describe("renderMarkdownToSafeHtml", () => {
     expect(renderMarkdownToSafeHtml("")).toBe("");
     expect(renderMarkdownToSafeHtml(null)).toBe("");
     expect(renderMarkdownToSafeHtml(undefined)).toBe("");
+  });
+});
+
+describe("renderServicePageExport", () => {
+  const blocks = toBodyStructuredBlocks(makeValidOutput(), makeStrategy());
+  const seoMetadata = {
+    title: "Commercial Lease Review in Ontario",
+    meta_description: "A lawyer reviews the lease before signature.",
+    schema: {
+      legal_service: { "@type": "LegalService", name: "DRG Law Professional Corporation" },
+      person: { "@type": "Person", name: "Damaris Regina Guimaraes" },
+      faq_page: { "@type": "FAQPage", mainEntity: [] },
+      breadcrumb_list: { "@type": "BreadcrumbList", itemListElement: [] },
+    },
+  };
+
+  it("produces a standalone document with doctype, title, and meta description", () => {
+    const { pageHtml } = renderServicePageExport(blocks, seoMetadata);
+    expect(pageHtml).toMatch(/^<!doctype html>/);
+    expect(pageHtml).toContain("<title>Commercial Lease Review in Ontario</title>");
+    expect(pageHtml).toContain('content="A lawyer reviews the lease before signature."');
+  });
+
+  it("renders the LSO disclaimer banner before the article content", () => {
+    const { pageHtml } = renderServicePageExport(blocks, seoMetadata);
+    const bannerIndex = pageHtml.indexOf("Legal information, not legal advice.");
+    const articleIndex = pageHtml.indexOf("<article>");
+    expect(bannerIndex).toBeGreaterThan(-1);
+    expect(articleIndex).toBeGreaterThan(-1);
+    expect(bannerIndex).toBeLessThan(articleIndex);
+  });
+
+  it("embeds every schema block as a JSON-LD script tag", () => {
+    const { pageHtml, schemaJsonLd } = renderServicePageExport(blocks, seoMetadata);
+    expect(schemaJsonLd).toHaveLength(4);
+    expect(pageHtml).toContain('<script type="application/ld+json">');
+    expect(pageHtml).toContain("DRG Law Professional Corporation");
+  });
+
+  it("escapes a </script> substring inside JSON-LD so it cannot close the tag early", () => {
+    const hostile = {
+      ...seoMetadata,
+      schema: {
+        ...seoMetadata.schema,
+        legal_service: { "@type": "LegalService", name: "</script><script>alert(1)</script>" },
+      },
+    };
+    const { pageHtml } = renderServicePageExport(blocks, hostile);
+    // Exactly one legitimate </script> per opened script tag (4 schema
+    // blocks): if the hostile payload's "</script" had survived unescaped,
+    // this count would be higher than the open-tag count.
+    const openTags = (pageHtml.match(/<script type="application\/ld\+json">/g) ?? []).length;
+    const closeTags = (pageHtml.match(/<\/script>/g) ?? []).length;
+    expect(openTags).toBe(4);
+    expect(closeTags).toBe(4);
+    expect(pageHtml).toContain("\\u003c/script>");
+  });
+});
+
+describe("renderMarkdownExport", () => {
+  it("wraps rendered markdown as a standalone document with the supplied title and description", () => {
+    const { pageHtml, schemaJsonLd } = renderMarkdownExport(
+      "# Shareholder agreements\n\nThe three clauses most founders skip.",
+      { title: "Shareholder Agreements: Three Clauses", metaDescription: "What founders miss." }
+    );
+    expect(pageHtml).toContain("<title>Shareholder Agreements: Three Clauses</title>");
+    expect(pageHtml).toContain('content="What founders miss."');
+    expect(pageHtml).toContain("<h1>Shareholder agreements</h1>");
+    expect(schemaJsonLd).toEqual([]);
   });
 });

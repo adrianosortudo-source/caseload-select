@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "./supabase-admin";
 import type { ValidatorConfig } from "./content-validators";
+import type { DelegationGrant } from "./deliverables-pure";
 
 export interface StrategyRow {
   id: string;
@@ -229,6 +230,55 @@ export async function recordAiRun(run: {
     })
     .select()
     .single();
+}
+
+export interface PublishGateStatus {
+  deliverableStatus: string | null;
+  delegation: DelegationGrant | null;
+}
+
+/**
+ * Resolves the two facts checkLegalGateExitCondition (content-studio-gates.ts)
+ * needs to decide whether a piece may leave legal_gate: its linked
+ * deliverable's status, and any active publish delegation covering its
+ * format. Shared by the workflow-gate PATCH route and the export route so
+ * the two never drift on what "cleared for production" means.
+ *
+ * The delegation read is guarded: content_publish_delegations is a staged,
+ * not-yet-applied migration (Amendment No. 1 to CLS-2026-DRG-001). Any
+ * error, including "table does not exist," is treated as "no active
+ * delegation." This function never creates or assumes that table exists.
+ */
+export async function resolvePublishGateStatus(piece: {
+  firm_id: string;
+  deliverable_id: string | null;
+}): Promise<PublishGateStatus> {
+  let deliverableStatus: string | null = null;
+  if (piece.deliverable_id) {
+    const { data } = await supabaseAdmin
+      .from("content_deliverables")
+      .select("status")
+      .eq("id", piece.deliverable_id)
+      .maybeSingle();
+    deliverableStatus = (data?.status as string | undefined) ?? null;
+  }
+
+  let delegation: DelegationGrant | null = null;
+  try {
+    const { data: grant, error: grantErr } = await supabaseAdmin
+      .from("content_publish_delegations")
+      .select("status, expires_at, scope_formats")
+      .eq("firm_id", piece.firm_id)
+      .eq("status", "active")
+      .order("granted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!grantErr && grant) delegation = grant as unknown as DelegationGrant;
+  } catch {
+    delegation = null;
+  }
+
+  return { deliverableStatus, delegation };
 }
 
 export async function recordValidationRun(run: {

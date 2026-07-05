@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOperator } from "@/lib/admin-auth";
-import { getPiece, updatePiece, getCurrentVersion } from "@/lib/content-studio";
+import {
+  getPiece,
+  updatePiece,
+  getCurrentVersion,
+  resolvePublishGateStatus,
+} from "@/lib/content-studio";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createDeliverable, addVersion } from "@/lib/deliverables";
-import type { DelegationGrant } from "@/lib/deliverables-pure";
 import {
   checkLegalGateEntryCondition,
   checkLegalGateExitCondition,
@@ -240,36 +244,7 @@ export async function PATCH(
     }
 
     if (newGate === "authoring" || newGate === "production") {
-      let deliverableStatus: string | null = null;
-      if (currentPiece.deliverable_id) {
-        const { data: deliverable } = await supabaseAdmin
-          .from("content_deliverables")
-          .select("status")
-          .eq("id", currentPiece.deliverable_id)
-          .maybeSingle();
-        deliverableStatus = (deliverable?.status as string | undefined) ?? null;
-      }
-
-      // Guarded read: content_publish_delegations is a staged, not-yet-
-      // applied migration (Amendment No. 1 to CLS-2026-DRG-001). Any error
-      // (missing table included) is treated as "no active delegation" per
-      // the build plan; this route never creates or depends on that table
-      // existing.
-      let delegation: DelegationGrant | null = null;
-      try {
-        const { data: grant, error: grantErr } = await supabaseAdmin
-          .from("content_publish_delegations")
-          .select("status, expires_at, scope_formats")
-          .eq("firm_id", currentPiece.firm_id)
-          .eq("status", "active")
-          .order("granted_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (!grantErr && grant) delegation = grant as unknown as DelegationGrant;
-      } catch {
-        delegation = null;
-      }
-
+      const { deliverableStatus, delegation } = await resolvePublishGateStatus(currentPiece);
       const exitCheck = checkLegalGateExitCondition({
         deliverableStatus,
         delegation,

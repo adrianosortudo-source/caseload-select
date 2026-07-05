@@ -925,3 +925,139 @@ export function renderMarkdownToSafeHtml(markdown: string | null | undefined): s
     })
     .join("\n");
 }
+
+// =============================================================================
+// Export pipeline (added 2026-07-05, WP-3 of the next-20% build plan:
+// docs/CONTENT_STUDIO_NEXT20_BUILD_PLAN.md). This is the mechanism, not the
+// publication: it produces a standalone HTML bundle an operator can hand-
+// place into a firm's website repo. It writes to no public surface itself.
+//
+// The DR-082 LSO Rule 4.2-1 disclaimer banner is rendered before content on
+// every export, verbatim from the live drg-law-website copy (firm.ts /
+// i18n.ts lsoDisclaimerHeadline + lsoDisclaimer body). This is DRG-specific
+// wording; a multi-firm version of this pipeline would need the disclaimer
+// sourced per-firm (out of scope here, DRG is the only firm this pipeline
+// runs against today).
+//
+// Brand tokens (colors, serif typeface) are DRG's real, verified tokens from
+// drg-law-website/src/app/globals.css, not invented values, but this is a
+// structurally-correct, readable static document, not a pixel-match of the
+// live Next.js site's actual component tree; matching that exactly would
+// require importing the site's build, which is out of scope (WP-3 is "the
+// mechanism, not the publication").
+// =============================================================================
+
+const LSO_DISCLAIMER_HEADLINE = "Legal information, not legal advice.";
+const LSO_DISCLAIMER_BODY =
+  "What you read on this website is general information about the law. It is not legal advice for your situation. Sending an intake does not make DRG Law your lawyer. That only happens after DRG Law checks for conflicts and both sides sign a written agreement.";
+
+export interface ServicePageExportBundle {
+  pageHtml: string;
+  schemaJsonLd: Array<Record<string, unknown>>;
+  meta: { title: string; metaDescription: string };
+}
+
+// Embedding JSON inside a <script> tag: replacing every "<" with its unicode
+// escape prevents a "</script>" substring inside the JSON payload from
+// closing the tag early. < is valid JSON string syntax and decodes back
+// to "<" for any JSON-LD consumer (crawlers, rich-result validators) that
+// parses the script's text content as JSON, so this is safe on both sides.
+function jsonLdScriptTag(block: Record<string, unknown>): string {
+  return `<script type="application/ld+json">${JSON.stringify(block).replace(/</g, "\\u003c")}</script>`;
+}
+
+function wrapExportDocument(input: {
+  title: string;
+  metaDescription: string;
+  bodyHtml: string;
+  schemaJsonLd: Array<Record<string, unknown>>;
+}): string {
+  const jsonLdScripts = input.schemaJsonLd.map(jsonLdScriptTag).join("\n");
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(input.title)}</title>
+<meta name="description" content="${escapeHtml(input.metaDescription)}">
+<style>
+  :root {
+    --ox: #6E2C2C;
+    --brass: #B8956A;
+    --cream: #EFE9DD;
+    --paper: #FFFCF6;
+    --ink: #1A1410;
+    --mid: #6B5F52;
+  }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Source Serif Pro", Georgia, serif;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+    line-height: 1.6;
+  }
+  h1, h2, h3 { color: var(--ox); font-weight: 600; }
+  h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+  h2 { font-size: 1.35rem; margin-top: 2rem; }
+  h3 { font-size: 1.1rem; margin-top: 1.5rem; }
+  a { color: var(--ox); }
+  .cls-lso-banner {
+    background: var(--cream);
+    border-left: 4px solid var(--brass);
+    padding: 0.9rem 1.1rem;
+    margin: 0 0 2rem;
+    font-size: 0.9rem;
+    color: var(--mid);
+  }
+  .cls-lso-banner strong { color: var(--ink); }
+  .cls-preview-last-updated { color: var(--mid); font-size: 0.85rem; }
+  .cls-faq-item { margin: 1.25rem 0; }
+</style>
+</head>
+<body>
+<aside class="cls-lso-banner"><strong>${escapeHtml(LSO_DISCLAIMER_HEADLINE)}</strong> ${escapeHtml(LSO_DISCLAIMER_BODY)}</aside>
+<article>
+${input.bodyHtml}
+</article>
+${jsonLdScripts}
+</body>
+</html>`;
+}
+
+/** Export bundle for canonical_service_page: reuses renderServicePagePreview
+ * for the body HTML + JSON-LD, then wraps it as a standalone document. */
+export function renderServicePageExport(
+  blocks: ServicePageBlock[] | null | undefined,
+  seoMetadata: Record<string, unknown> | undefined
+): ServicePageExportBundle {
+  const { html, schemaJson } = renderServicePagePreview(blocks, seoMetadata);
+  const title = (seoMetadata?.title as string | undefined) ?? "";
+  const metaDescription = (seoMetadata?.meta_description as string | undefined) ?? "";
+  const pageHtml = wrapExportDocument({
+    title,
+    metaDescription,
+    bodyHtml: html,
+    schemaJsonLd: schemaJson,
+  });
+  return { pageHtml, schemaJsonLd: schemaJson, meta: { title, metaDescription } };
+}
+
+/** Export bundle for every Markdown format (counsel_note, checklist,
+ * landing_page, etc). No JSON-LD source exists for these formats yet (only
+ * canonical_service_page populates seo_metadata.schema); the bundle carries
+ * an empty schemaJsonLd array rather than inventing one. */
+export function renderMarkdownExport(
+  markdown: string | null | undefined,
+  meta: { title: string; metaDescription: string }
+): ServicePageExportBundle {
+  const bodyHtml = renderMarkdownToSafeHtml(markdown);
+  const pageHtml = wrapExportDocument({
+    title: meta.title,
+    metaDescription: meta.metaDescription,
+    bodyHtml,
+    schemaJsonLd: [],
+  });
+  return { pageHtml, schemaJsonLd: [], meta };
+}
