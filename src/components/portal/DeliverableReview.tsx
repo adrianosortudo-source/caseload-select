@@ -212,6 +212,38 @@ export default function DeliverableReview({
         </div>
       </div>
 
+      {/* Version-mismatch banner: prevents the client landing on an old version
+          and getting silently blocked from signing off. Only rendered when the
+          selected version is not the current version and a current version exists
+          to switch to. Uses the CaseLoad top-strip pattern (no left border). */}
+      {!isCurrent && deliverable.current_version_id && (
+        <div className="bg-amber-50 border-t-4 border-amber-500 p-4 flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-900">
+              You are viewing an earlier version
+            </p>
+            <p className="text-xs text-amber-800 mt-1">
+              {selectedVersion
+                ? `You are on v${selectedVersion.version_number}. `
+                : ""}
+              Switch to the current version to sign off or request changes.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedVersionId(deliverable.current_version_id);
+              setPendingAnnotation(null);
+              setPendingPosition(null);
+              setActiveId(null);
+            }}
+            className="text-xs font-semibold uppercase tracking-wider px-3 py-1.5 border border-amber-700 bg-white text-amber-900 hover:bg-amber-700 hover:text-white transition-colors whitespace-nowrap flex-shrink-0"
+          >
+            Switch to current
+          </button>
+        </div>
+      )}
+
       {/* Review action bar: version controls + sign-off live above the article
           so the right margin is dedicated to passage-aligned comments. */}
       <div className="bg-white border border-border-brand p-3 space-y-3">
