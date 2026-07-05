@@ -18,6 +18,7 @@ export default function PortalTabNav({ firmId, caseloadUnread = 0 }: PortalTabNa
 
   const tabs: (Tab & { badge?: number })[] = [
     { href: `/portal/${firmId}/triage`,       label: "Triage"       },
+    { href: `/portal/${firmId}/inbox`,        label: "Inbox"        },
     { href: `/portal/${firmId}/dashboard`,    label: "Dashboard"    },
     { href: `/portal/${firmId}/pipeline`,     label: "Pipeline"     },
     { href: `/portal/${firmId}/clients`,      label: "Clients"      },
