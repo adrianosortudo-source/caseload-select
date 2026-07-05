@@ -1,17 +1,15 @@
 /**
- * Tests for the operator "Audit note" classifier used in SeoReport.tsx
- * (classifyAuditNote). The function is defined in a "use client" component
- * with no JSX-transform precedent for direct import in this vitest config
- * (see signals.test.ts for the same replication pattern), so the rules are
- * replicated here verbatim to pin the classification without restructuring
- * the component.
+ * Tests for the operator "Audit note" classifier (classifyAuditNote), the
+ * canonical implementation in ../audit-notes. That module is shared by the
+ * on-screen report (SeoReport.tsx) and the server-rendered PDF (report-pdf.tsx),
+ * so this test pins the real function rather than a replica.
  */
 
 import { describe, it, expect } from "vitest";
+import { classifyAuditNote } from "../audit-notes";
 
 type Severity = "critical" | "high" | "medium" | "low" | "info";
 type Confidence = "high" | "medium" | "low";
-type AuditNoteKind = "safe" | "verify" | "hygiene" | "crawler_limitation";
 
 interface Issue {
   title: string;
@@ -19,40 +17,6 @@ interface Issue {
   severity: Severity;
   confidence: Confidence;
   pageTypeImpact?: string[];
-}
-
-const CONTENT_EXTRACTION_LABELS = new Set([
-  "Semantic HTML structure", "Direct-answer sentences", "Question-format headings",
-  "Author / reviewer signals", "Entity description",
-]);
-
-const VERIFY_MANUALLY_LABELS = new Set([
-  "Server-rendered content", "JavaScript app-shell dependency", "Noscript fallback",
-  "Consultation call to action", "Contact form / direct contact",
-  "No clear contact path", "No attorney / team page found",
-]);
-
-const HYGIENE_LABELS = new Set([
-  "Image alt text", "Meta description", "H1 heading", "H2 subheadings",
-  "Content-to-HTML ratio", "HTML document size", "Anchor text quality",
-  "Open Graph tags", "Word count", "Heading hierarchy", "Internal links",
-  "External links",
-]);
-
-function classifyAuditNote(issue: Issue): AuditNoteKind {
-  const policyOnly = issue.pageTypeImpact && issue.pageTypeImpact.length > 0
-    && issue.pageTypeImpact.every((t) => t === "policy");
-
-  if (issue.confidence === "low" || policyOnly || CONTENT_EXTRACTION_LABELS.has(issue.title)) {
-    return "crawler_limitation";
-  }
-  if (VERIFY_MANUALLY_LABELS.has(issue.title)) {
-    return "verify";
-  }
-  if (HYGIENE_LABELS.has(issue.title) || issue.severity === "low" || issue.severity === "info") {
-    return "hygiene";
-  }
-  return "safe";
 }
 
 function issue(overrides: Partial<Issue> & Pick<Issue, "title" | "category">): Issue {
