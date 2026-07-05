@@ -887,3 +887,41 @@ export function renderServicePagePreview(
 
   return { html: htmlParts.join("\n"), schemaJson };
 }
+
+// =============================================================================
+// Markdown-format renderer (added 2026-07-05, WP-2 of the next-20% build plan:
+// docs/CONTENT_STUDIO_NEXT20_BUILD_PLAN.md). Every format other than
+// canonical_service_page stores body_markdown as plain Markdown text with no
+// HTML renderer; the admin preview page shows it raw inside a <pre> block.
+// The legal-gate deliverable needs real HTML for the lawyer review surface
+// (DeliverableVersion.body_html), so this reuses the exact same
+// escape-then-substitute safety discipline as renderServicePagePreview
+// above: escapeHtml() runs first, applyInlineMarkdown() only ever operates
+// on the already-escaped string, so a raw "<script>" in the model's Markdown
+// output can never survive as a live tag.
+//
+// Deliberately minimal: paragraphs, #/##/### headings, bold, links. No
+// lists, no tables, no nested blockquotes. Every format this repo generates
+// today (counsel_note, checklist, landing_page, decision_tool,
+// clause_in_the_margin, counsel_letter) is prose-and-headings shaped, so
+// this covers the actual output; it is not a general Markdown engine.
+// =============================================================================
+
+export function renderMarkdownToSafeHtml(markdown: string | null | undefined): string {
+  const blocks = String(markdown ?? "")
+    .split(/\n\s*\n/)
+    .map((b) => b.trim())
+    .filter((b) => b.length > 0);
+
+  return blocks
+    .map((block) => {
+      const headingMatch = block.match(/^(#{1,3})\s+(.+)$/);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const heading = applyInlineMarkdown(escapeHtml(headingMatch[2].trim()));
+        return `<h${level}>${heading}</h${level}>`;
+      }
+      return `<p>${applyInlineMarkdown(escapeHtml(block)).replace(/\n/g, "<br>")}</p>`;
+    })
+    .join("\n");
+}

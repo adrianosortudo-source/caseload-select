@@ -6,6 +6,10 @@ import {
   renderServicePagePreview,
   type ServicePageBlock,
 } from "@/lib/content-studio-structured";
+import {
+  checkLegalGateEntryCondition,
+  checkLegalGateExitCondition,
+} from "@/lib/content-studio-gates";
 
 export const dynamic = "force-dynamic";
 
@@ -121,6 +125,12 @@ type ContentPiece = {
   owner_name: string | null;
   source_brief: Record<string, string> | null;
   created_at: string;
+  deliverable_id: string | null;
+};
+
+type LinkedDeliverable = {
+  id: string;
+  status: string;
 };
 
 type PieceVersion = {
@@ -160,7 +170,7 @@ async function getPieceDetail(id: string) {
     supabase
       .from("content_pieces")
       .select(
-        "id,firm_id,calendar_slot_id,title_working,format,language_mode,workflow_gate,status,review_date,owner_name,source_brief,created_at"
+        "id,firm_id,calendar_slot_id,title_working,format,language_mode,workflow_gate,status,review_date,owner_name,source_brief,created_at,deliverable_id"
       )
       .eq("id", id)
       .single(),
@@ -191,6 +201,7 @@ async function getPieceDetail(id: string) {
   ]);
 
   const piece = pieceRes.data as ContentPiece | null;
+  const enVersion = enVersionRes.data as PieceVersion | null;
 
   // Fetch strategy separately since we need the firm_id from the piece
   let strategy: Strategy | null = null;
@@ -206,12 +217,59 @@ async function getPieceDetail(id: string) {
     strategy = strategyRes.data as Strategy | null;
   }
 
+  // WP-2 (Ses.16 next-20% build plan): the linked deliverable + a live
+  // "why is the next advance blocked" hint, computed with the same pure
+  // gate functions the PATCH route enforces (content-studio-gates.ts), so
+  // the admin surface never drifts from what the route actually checks.
+  let deliverable: LinkedDeliverable | null = null;
+  if (piece?.deliverable_id) {
+    const { data } = await supabase
+      .from("content_deliverables")
+      .select("id,status")
+      .eq("id", piece.deliverable_id)
+      .maybeSingle();
+    deliverable = (data as LinkedDeliverable | null) ?? null;
+  }
+
+  let gateHint: string | null = null;
+  if (piece) {
+    if (piece.workflow_gate === "draft") {
+      let latestValidationResults: { status: string }[] | null = null;
+      if (enVersion) {
+        const { data: run } = await supabase
+          .from("content_ai_runs")
+          .select("result")
+          .eq("piece_version_id", enVersion.id)
+          .eq("run_type", "validate_deterministic")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const result = run?.result as { validators?: { status: string }[] } | undefined;
+        latestValidationResults = result?.validators ?? null;
+      }
+      const entryCheck = checkLegalGateEntryCondition({
+        hasCurrentVersion: !!enVersion,
+        latestValidationResults,
+      });
+      if (!entryCheck.ok) gateHint = entryCheck.reason;
+    } else if (piece.workflow_gate === "legal_gate") {
+      const exitCheck = checkLegalGateExitCondition({
+        deliverableStatus: deliverable?.status ?? null,
+        delegation: null, // admin hint only; the route re-checks delegation live
+        format: piece.format,
+      });
+      if (!exitCheck.ok) gateHint = exitCheck.reason;
+    }
+  }
+
   return {
     piece,
-    enVersion: enVersionRes.data as PieceVersion | null,
+    enVersion,
     ptVersion: ptVersionRes.data as PieceVersion | null,
     aiRuns: (aiRunsRes.data ?? []) as AiRun[],
     strategy,
+    deliverable,
+    gateHint,
     error:
       pieceRes.error?.message ??
       enVersionRes.error?.message ??
@@ -427,7 +485,13 @@ function ValidatorResultsPanel({ aiRuns }: { aiRuns: AiRun[] }) {
   );
 }
 
-function WorkflowGateTracker({ currentGate }: { currentGate: string }) {
+function WorkflowGateTracker({
+  currentGate,
+  gateHint,
+}: {
+  currentGate: string;
+  gateHint: string | null;
+}) {
   const currentIndex = gateOrder.indexOf(
     currentGate as (typeof gateOrder)[number]
   );
@@ -437,6 +501,12 @@ function WorkflowGateTracker({ currentGate }: { currentGate: string }) {
       <div className="text-xs uppercase tracking-wider text-black/50 mb-4">
         Workflow Gates
       </div>
+      {gateHint && (
+        <div className="mb-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <span className="font-medium">Next advance blocked: </span>
+          {gateHint}
+        </div>
+      )}
       <div className="space-y-0">
         {gateOrder.map((gate, index) => {
           const isCompleted = currentIndex > index;
@@ -486,6 +556,59 @@ function WorkflowGateTracker({ currentGate }: { currentGate: string }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+const DELIVERABLE_STATUS_TONE: Record<string, string> = {
+  draft: "bg-black/5 text-black/70",
+  in_review: "bg-sky-50 text-sky-700",
+  changes_requested: "bg-rose-50 text-rose-700",
+  approved: "bg-emerald-50 text-emerald-700",
+  archived: "bg-black/5 text-black/50",
+};
+
+function DeliverableStatusCard({
+  firmId,
+  deliverable,
+}: {
+  firmId: string;
+  deliverable: LinkedDeliverable | null;
+}) {
+  if (!deliverable) {
+    return (
+      <div className="rounded border border-black/8 bg-white p-5">
+        <div className="text-xs uppercase tracking-wider text-black/50 mb-3">
+          Legal Review
+        </div>
+        <p className="text-sm text-black/40">
+          No deliverable linked yet. One is created automatically the first
+          time this piece advances to the legal_gate workflow gate.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded border border-black/8 bg-white p-5">
+      <div className="text-xs uppercase tracking-wider text-black/50 mb-3">
+        Legal Review
+      </div>
+      <div className="mb-3">
+        <span
+          className={`inline-block px-2.5 py-0.5 rounded text-xs font-medium ${
+            DELIVERABLE_STATUS_TONE[deliverable.status] ?? "bg-black/5 text-black/60"
+          }`}
+        >
+          {humanize(deliverable.status)}
+        </span>
+      </div>
+      <Link
+        href={`/portal/${firmId}/deliverables/${deliverable.id}`}
+        className="text-sm text-sky-600 hover:underline"
+      >
+        Open in the review portal →
+      </Link>
     </div>
   );
 }
@@ -663,7 +786,7 @@ export default async function ContentPieceDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { piece, enVersion, ptVersion, aiRuns, strategy, error } =
+  const { piece, enVersion, ptVersion, aiRuns, strategy, deliverable, gateHint, error } =
     await getPieceDetail(id);
 
   if (!piece) {
@@ -735,7 +858,8 @@ export default async function ContentPieceDetailPage({
           {/* Right column: 1/3 */}
           <div className="space-y-6">
             <PieceMetadataCard piece={piece} strategy={strategy} />
-            <WorkflowGateTracker currentGate={piece.workflow_gate} />
+            <DeliverableStatusCard firmId={piece.firm_id} deliverable={deliverable} />
+            <WorkflowGateTracker currentGate={piece.workflow_gate} gateHint={gateHint} />
             <PieceActions
               pieceId={piece.id}
               currentGate={piece.workflow_gate}

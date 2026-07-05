@@ -9,6 +9,7 @@ import {
   buildCanonicalServicePageSystemPrompt,
   buildCanonicalServicePageUserPrompt,
   renderServicePagePreview,
+  renderMarkdownToSafeHtml,
   CANONICAL_SERVICE_PAGE_TOOL_NAME,
   SERVICE_PAGE_SECTION_KEYS,
   type CanonicalServicePageModelOutput,
@@ -400,5 +401,38 @@ describe("renderServicePagePreview", () => {
     expect(html1).not.toContain("Last updated:");
     const { html: html2 } = renderServicePagePreview(blocks, { generated_at: "not-a-date" });
     expect(html2).not.toContain("Last updated:");
+  });
+});
+
+describe("renderMarkdownToSafeHtml", () => {
+  it("renders heading levels 1 through 3", () => {
+    const html = renderMarkdownToSafeHtml("# Title\n\n## Section\n\n### Sub");
+    expect(html).toContain("<h1>Title</h1>");
+    expect(html).toContain("<h2>Section</h2>");
+    expect(html).toContain("<h3>Sub</h3>");
+  });
+
+  it("renders paragraphs split on blank lines", () => {
+    const html = renderMarkdownToSafeHtml("First paragraph.\n\nSecond paragraph.");
+    expect(html).toContain("<p>First paragraph.</p>");
+    expect(html).toContain("<p>Second paragraph.</p>");
+  });
+
+  it("applies bold and link inline markdown", () => {
+    const html = renderMarkdownToSafeHtml("Read the **five-line brief** at [the journal](https://drglaw.ca/journal).");
+    expect(html).toContain("<strong>five-line brief</strong>");
+    expect(html).toContain('<a href="https://drglaw.ca/journal"');
+  });
+
+  it("escapes a raw script tag so it can never render as a live element", () => {
+    const html = renderMarkdownToSafeHtml('Some text <script>alert(1)</script> more text.');
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+  });
+
+  it("handles empty and missing input", () => {
+    expect(renderMarkdownToSafeHtml("")).toBe("");
+    expect(renderMarkdownToSafeHtml(null)).toBe("");
+    expect(renderMarkdownToSafeHtml(undefined)).toBe("");
   });
 });

@@ -2,8 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireOperator } from "@/lib/admin-auth";
 import { getPiece, updatePiece, getCurrentVersion } from "@/lib/content-studio";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { createDeliverable, addVersion } from "@/lib/deliverables";
+import type { DelegationGrant } from "@/lib/deliverables-pure";
+import {
+  checkLegalGateEntryCondition,
+  checkLegalGateExitCondition,
+} from "@/lib/content-studio-gates";
+import {
+  renderServicePagePreview,
+  renderMarkdownToSafeHtml,
+  type ServicePageBlock,
+} from "@/lib/content-studio-structured";
 
 export const dynamic = "force-dynamic";
+
+// System actor for deliverables created automatically by a gate advance.
+// The route itself is already operator-gated (requireOperator below), so
+// "operator" is the correct role for this write; there is no separate
+// human actor to attribute it to.
+const GATE_ACTOR = { role: "operator" as const, id: null, name: "Content Studio (automated)", email: null };
 
 const WORKFLOW_GATES = [
   "discovery",
@@ -135,6 +152,135 @@ export async function PATCH(
         },
         { status: 422 }
       );
+    }
+
+    // WP-2 (Ses.16 next-20% build plan): legal_gate is a real gate, not a
+    // label. Any transition LANDING at legal_gate must pass the entry
+    // condition (a current version exists and its latest validation run has
+    // zero fails); any transition LANDING at authoring or production must
+    // pass the exit condition (linked deliverable approved, or an active
+    // publish delegation covers this format). Checked by destination gate,
+    // not by the specific (from, to) pair, so a gate-skipping PATCH cannot
+    // route around either check.
+    if (newGate === "legal_gate") {
+      const version = await getCurrentVersion(id, "en");
+      let latestValidationResults: { status: string }[] | null = null;
+      if (version) {
+        const { data: run } = await supabaseAdmin
+          .from("content_ai_runs")
+          .select("result")
+          .eq("piece_version_id", version.id)
+          .eq("run_type", "validate_deterministic")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const result = run?.result as { validators?: { status: string }[] } | undefined;
+        latestValidationResults = result?.validators ?? null;
+      }
+
+      const entryCheck = checkLegalGateEntryCondition({
+        hasCurrentVersion: !!version,
+        latestValidationResults,
+      });
+      if (!entryCheck.ok) {
+        return NextResponse.json(
+          { ok: false, error: entryCheck.reason, code: "legal_gate_entry_blocked" },
+          { status: 422 }
+        );
+      }
+
+      // Entry condition met: render the piece and create its linked
+      // deliverable in the existing lawyer-review system. notify: false
+      // (via addVersion's `silent` option) is mandatory here: this is an
+      // internal workflow transition, not an operator announcing a
+      // deliverable is ready, and the stop-line in the build plan forbids
+      // any notification reaching the firm from this run.
+      const html =
+        currentPiece.format === "canonical_service_page"
+          ? renderServicePagePreview(
+              (version!.body_structured as ServicePageBlock[] | null) ?? [],
+              (version!.seo_metadata as Record<string, unknown> | null) ?? undefined
+            ).html
+          : renderMarkdownToSafeHtml(version!.body_markdown as string | null);
+
+      const created = await createDeliverable({
+        firmId: currentPiece.firm_id,
+        title: currentPiece.title_working,
+        description: `Content Studio piece (${currentPiece.format}), auto-created on advance to legal_gate.`,
+        contentKind: "text",
+        actor: GATE_ACTOR,
+      });
+      if (!created.ok) {
+        return NextResponse.json(
+          { ok: false, error: `Failed to create linked deliverable: ${created.error}` },
+          { status: 500 }
+        );
+      }
+
+      const versioned = await addVersion({
+        deliverableId: created.deliverable.id,
+        firmId: currentPiece.firm_id,
+        bodyHtml: html,
+        storagePath: null,
+        assetMime: null,
+        assetSizeBytes: null,
+        assetName: null,
+        note: "Auto-created from Content Studio legal gate advance.",
+        actor: GATE_ACTOR,
+        silent: true,
+      });
+      if (!versioned.ok) {
+        return NextResponse.json(
+          { ok: false, error: `Failed to create deliverable version: ${versioned.error}` },
+          { status: 500 }
+        );
+      }
+
+      updates.deliverable_id = created.deliverable.id;
+    }
+
+    if (newGate === "authoring" || newGate === "production") {
+      let deliverableStatus: string | null = null;
+      if (currentPiece.deliverable_id) {
+        const { data: deliverable } = await supabaseAdmin
+          .from("content_deliverables")
+          .select("status")
+          .eq("id", currentPiece.deliverable_id)
+          .maybeSingle();
+        deliverableStatus = (deliverable?.status as string | undefined) ?? null;
+      }
+
+      // Guarded read: content_publish_delegations is a staged, not-yet-
+      // applied migration (Amendment No. 1 to CLS-2026-DRG-001). Any error
+      // (missing table included) is treated as "no active delegation" per
+      // the build plan; this route never creates or depends on that table
+      // existing.
+      let delegation: DelegationGrant | null = null;
+      try {
+        const { data: grant, error: grantErr } = await supabaseAdmin
+          .from("content_publish_delegations")
+          .select("status, expires_at, scope_formats")
+          .eq("firm_id", currentPiece.firm_id)
+          .eq("status", "active")
+          .order("granted_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!grantErr && grant) delegation = grant as unknown as DelegationGrant;
+      } catch {
+        delegation = null;
+      }
+
+      const exitCheck = checkLegalGateExitCondition({
+        deliverableStatus,
+        delegation,
+        format: currentPiece.format as string,
+      });
+      if (!exitCheck.ok) {
+        return NextResponse.json(
+          { ok: false, error: exitCheck.reason, code: "legal_gate_exit_blocked" },
+          { status: 422 }
+        );
+      }
     }
   }
 
