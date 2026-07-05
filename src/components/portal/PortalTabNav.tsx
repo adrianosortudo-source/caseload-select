@@ -21,6 +21,7 @@ export default function PortalTabNav({ firmId, caseloadUnread = 0 }: PortalTabNa
     { href: `/portal/${firmId}/inbox`,        label: "Inbox"        },
     { href: `/portal/${firmId}/dashboard`,    label: "Dashboard"    },
     { href: `/portal/${firmId}/pipeline`,     label: "Pipeline"     },
+    { href: `/portal/${firmId}/boards`,       label: "Boards"       },
     { href: `/portal/${firmId}/clients`,      label: "Clients"      },
     { href: `/portal/${firmId}/files`,        label: "Files"        },
     { href: `/portal/${firmId}/deliverables`, label: "Deliverables" },
