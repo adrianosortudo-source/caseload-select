@@ -210,3 +210,97 @@ describe('runCadenceEngine (via the route)', () => {
     expect(state.outboundUpserts.flat()).toHaveLength(0);
   });
 });
+
+describe('WP-1 extensions: fan-out, lead-status enrollment, exit conditions', () => {
+  beforeEach(() => {
+    cronAuthed = true;
+    resetState();
+  });
+
+  it('fans out a single stage event to every cadence sharing its trigger (J7 + J8 both fire on client_won)', async () => {
+    const J7_RULE = { id: 'rule-j7', firm_id: null, cadence_key: 'J7', name: 'Welcome', trigger_type: 'field_change', trigger_config: { cadence_trigger: 'client_won' }, channel: 'email', enabled: true };
+    const J8_RULE = { id: 'rule-j8', firm_id: null, cadence_key: 'J8', name: 'Active Matter Update', trigger_type: 'field_change', trigger_config: { cadence_trigger: 'client_won' }, channel: 'email', enabled: true };
+    state.tables['cadence_rules'] = { select: { data: [J7_RULE, J8_RULE], error: null } };
+    state.tables['cadence_steps'] = { select: { data: [
+      { id: 's-j7-1', cadence_rule_id: 'rule-j7', step_number: 1, delay_hours: 0, channel: 'email', subject_template: 'a', body_template: 'a', active: true },
+      { id: 's-j8-1', cadence_rule_id: 'rule-j8', step_number: 1, delay_hours: 0, channel: 'email', subject_template: 'b', body_template: 'b', active: true },
+    ], error: null } };
+    state.tables['matter_stage_events'] = { select: { data: [
+      { matter_id: 'matter-1', firm_id: 'firm-1', from_stage: 'retainer_pending', to_stage: 'active', created_at: '2026-07-01T00:00:00.000Z' },
+    ], error: null } };
+    state.tables['client_matters'] = { select: { data: [
+      { id: 'matter-1', firm_id: 'firm-1', matter_stage: 'active', primary_name: 'Ana', primary_email: 'ana@example.com', matter_type: 'will_drafting', source_screened_lead_id: 'lead-1' },
+    ], error: null } };
+    // Both enroll rows land in one upsert call: report 2 inserted, no active runs to advance.
+    state.tables['cadence_runs'] = { upsertResult: { data: [{ id: 'run-j7' }, { id: 'run-j8' }], error: null }, select: { data: [], error: null } };
+
+    const { runCadenceEngine } = await import('@/lib/cadence-runner');
+    const summary = await runCadenceEngine({ now: NOW });
+    expect(summary.enrolled).toBe(2);
+  });
+
+  it('enrolls a lead-only run off a screened_leads status flip (J10 re-engagement, no matter exists)', async () => {
+    const J10_RULE = { id: 'rule-j10', firm_id: null, cadence_key: 'J10', name: 'Re-Engagement', trigger_type: 'field_change', trigger_config: { cadence_trigger: 're_engagement', source: 'screened_leads_status', status: 'passed' }, channel: 'email', enabled: true };
+    state.tables['cadence_rules'] = { select: { data: [J10_RULE], error: null } };
+    state.tables['cadence_steps'] = { select: { data: [
+      { id: 's-j10-1', cadence_rule_id: 'rule-j10', step_number: 1, delay_hours: 2160, channel: 'email', subject_template: 'a', body_template: 'a', active: true },
+    ], error: null } };
+    state.tables['matter_stage_events'] = { select: { data: [], error: null } };
+    state.tables['screened_leads'] = {
+      select: { data: [{ id: 'lead-9', firm_id: 'firm-1', status: 'passed', contact_email: 'p@example.com', contact_name: 'Passed Lead', matter_type: 'probate', email_consent_status: 'implied', sms_consent_status: 'unknown', six_month_expiry_date: null, updated_at: '2026-06-01T00:00:00.000Z' }], error: null },
+    };
+    state.tables['cadence_runs'] = { upsertResult: { data: [{ id: 'run-j10' }], error: null }, select: { data: [], error: null } };
+
+    const { runCadenceEngine } = await import('@/lib/cadence-runner');
+    const summary = await runCadenceEngine({ now: NOW });
+    expect(summary.enrolled).toBe(1);
+  });
+
+  it('exits a run once the matter stage has advanced past the rule exit whitelist (J6 exits after the retainer is signed)', async () => {
+    const J6_RULE = { id: 'rule-j6', firm_id: null, cadence_key: 'J6', name: 'Retainer Awaiting', trigger_type: 'field_change', trigger_config: { cadence_trigger: 'retainer_awaiting' }, exit_config: { matter_stage_not_in: ['retainer_pending'] }, channel: 'email', enabled: true };
+    state.tables['cadence_rules'] = { select: { data: [J6_RULE], error: null } };
+    state.tables['cadence_steps'] = { select: { data: [
+      { id: 's-j6-1', cadence_rule_id: 'rule-j6', step_number: 1, delay_hours: 0, channel: 'email', subject_template: 'a', body_template: 'a', active: true },
+      { id: 's-j6-2', cadence_rule_id: 'rule-j6', step_number: 2, delay_hours: 48, channel: 'email', subject_template: 'b', body_template: 'b', active: true },
+    ], error: null } };
+    state.tables['matter_stage_events'] = { select: { data: [], error: null } };
+    state.tables['cadence_runs'] = { select: { data: [
+      { id: 'run-exit', firm_id: 'firm-1', cadence_rule_id: 'rule-j6', cadence_key: 'J6', matter_id: 'matter-exit', screened_lead_id: 'lead-exit', anchor_at: '2026-07-01T00:00:00.000Z', status: 'active', next_step_number: 1 },
+    ], error: null } };
+    // The retainer got signed: the matter has already moved past retainer_pending.
+    state.tables['client_matters'] = { maybeSingle: { data: { id: 'matter-exit', firm_id: 'firm-1', matter_stage: 'active', primary_name: 'Signed Client', primary_email: 's@example.com', matter_type: 'probate', source_screened_lead_id: 'lead-exit' }, error: null } };
+    state.tables['screened_leads'] = { select: { data: [{ id: 'lead-exit', contact_email: 's@example.com', email_consent_status: 'explicit', sms_consent_status: 'unknown', six_month_expiry_date: null }], error: null } };
+
+    const { runCadenceEngine } = await import('@/lib/cadence-runner');
+    const summary = await runCadenceEngine({ now: NOW });
+
+    expect(summary.exited).toBe(1);
+    expect(summary.runs_advanced).toBe(0);
+    expect(state.outboundUpserts.flat()).toHaveLength(0);
+
+    const update = state.runUpdates.find((u) => u.id === 'run-exit');
+    expect(update?.patch.status).toBe('exited');
+    expect(update?.patch.exit_reason).toMatch(/retainer_pending/);
+  });
+
+  it('does not exit a run still within its exit whitelist stage', async () => {
+    const J6_RULE = { id: 'rule-j6', firm_id: null, cadence_key: 'J6', name: 'Retainer Awaiting', trigger_type: 'field_change', trigger_config: { cadence_trigger: 'retainer_awaiting' }, exit_config: { matter_stage_not_in: ['retainer_pending'] }, channel: 'email', enabled: true };
+    state.tables['cadence_rules'] = { select: { data: [J6_RULE], error: null } };
+    state.tables['cadence_steps'] = { select: { data: [
+      { id: 's-j6-1', cadence_rule_id: 'rule-j6', step_number: 1, delay_hours: 0, channel: 'email', subject_template: 'a', body_template: 'a', active: true },
+    ], error: null } };
+    state.tables['matter_stage_events'] = { select: { data: [], error: null } };
+    state.tables['cadence_runs'] = { select: { data: [
+      { id: 'run-live', firm_id: 'firm-1', cadence_rule_id: 'rule-j6', cadence_key: 'J6', matter_id: 'matter-live', screened_lead_id: 'lead-live', anchor_at: '2026-07-09T00:00:00.000Z', status: 'active', next_step_number: 1 },
+    ], error: null }, upsertResult: { data: [], error: null } };
+    state.tables['client_matters'] = { maybeSingle: { data: { id: 'matter-live', firm_id: 'firm-1', matter_stage: 'retainer_pending', primary_name: 'Waiting Client', primary_email: 'w@example.com', matter_type: 'probate', source_screened_lead_id: 'lead-live' }, error: null } };
+    state.tables['screened_leads'] = { select: { data: [{ id: 'lead-live', contact_email: 'w@example.com', email_consent_status: 'explicit', sms_consent_status: 'unknown', six_month_expiry_date: null }], error: null } };
+
+    const { runCadenceEngine } = await import('@/lib/cadence-runner');
+    const summary = await runCadenceEngine({ now: NOW });
+
+    expect(summary.exited).toBe(0);
+    expect(summary.runs_advanced).toBe(1);
+    expect(summary.shadow_logged).toBe(1);
+  });
+});

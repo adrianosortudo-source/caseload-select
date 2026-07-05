@@ -34,6 +34,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { journeyTriggerForTransition } from '@/lib/matter-stage-pure';
 import type { MatterStage } from '@/lib/types';
 import { isConsentGated, consentBlockReason, type LeadConsentState } from '@/lib/comms-gate';
+import { isRealSendEnabledForFirm } from '@/lib/cadence-dispatch';
 import {
   resolveRuleForFirm,
   matchesFieldChangeTrigger,
@@ -41,6 +42,7 @@ import {
   dueSteps,
   lastStepNumber,
   interpolateTemplate,
+  shouldExitRun,
   type CadenceRule,
   type CadenceStep,
   type CadenceRun,
@@ -55,6 +57,7 @@ export interface CadenceRunSummary {
   shadow_logged: number;
   suppressed: number;
   completed: number;
+  exited: number;
 }
 
 interface StageEventRow {
@@ -77,15 +80,20 @@ interface MatterRow {
 
 interface LeadRow {
   id: string;
+  firm_id: string;
+  status: string;
   contact_email: string | null;
+  contact_name: string | null;
+  matter_type: string | null;
   email_consent_status: string | null;
   sms_consent_status: string | null;
   six_month_expiry_date: string | null;
+  updated_at: string;
 }
 
 const NO_SUMMARY: CadenceRunSummary = {
   ok: true, applied: false, enrolled: 0, runs_advanced: 0,
-  shadow_logged: 0, suppressed: 0, completed: 0,
+  shadow_logged: 0, suppressed: 0, completed: 0, exited: 0,
 };
 
 function isUndefinedTable(err: { code?: string; message?: string } | null): boolean {
@@ -140,7 +148,7 @@ export async function runCadenceEngine(
 
   const summary: CadenceRunSummary = {
     ok: true, applied: true, enrolled: 0, runs_advanced: 0,
-    shadow_logged: 0, suppressed: 0, completed: 0,
+    shadow_logged: 0, suppressed: 0, completed: 0, exited: 0,
   };
 
   // ── Pass 1: ENROLL from stage events ─────────────────────────────────────
@@ -175,22 +183,28 @@ export async function runCadenceEngine(
       ev.to_stage as MatterStage,
     );
     if (!trigger) continue;
-    const matchingRule = rules.find(
-      (r) => matchesFieldChangeTrigger(r, trigger)
-        && (r.firm_id === ev.firm_id || r.firm_id === null),
+    // Fan out to every DISTINCT cadence_key whose trigger matches this event
+    // (e.g. J7 and J8 both fire on the retainer_pending -> active transition).
+    // resolveRuleForFirm still applies firm-override-over-global per key.
+    const matchingCadenceKeys = new Set(
+      rules
+        .filter((r) => matchesFieldChangeTrigger(r, trigger) && (r.firm_id === ev.firm_id || r.firm_id === null))
+        .map((r) => r.cadence_key),
     );
-    if (!matchingRule) continue;
-    const resolved = resolveRuleForFirm(rules, ev.firm_id, matchingRule.cadence_key);
-    if (!resolved) continue;
+    if (matchingCadenceKeys.size === 0) continue;
     const matter = matterById.get(ev.matter_id);
-    enrollRows.push({
-      firm_id: ev.firm_id,
-      cadence_rule_id: resolved.id,
-      cadence_key: resolved.cadence_key,
-      matter_id: ev.matter_id,
-      screened_lead_id: matter?.source_screened_lead_id ?? null,
-      anchor_at: ev.created_at,
-    });
+    for (const cadenceKey of matchingCadenceKeys) {
+      const resolved = resolveRuleForFirm(rules, ev.firm_id, cadenceKey);
+      if (!resolved) continue;
+      enrollRows.push({
+        firm_id: ev.firm_id,
+        cadence_rule_id: resolved.id,
+        cadence_key: resolved.cadence_key,
+        matter_id: ev.matter_id,
+        screened_lead_id: matter?.source_screened_lead_id ?? null,
+        anchor_at: ev.created_at,
+      });
+    }
   }
 
   if (enrollRows.length > 0) {
@@ -199,7 +213,64 @@ export async function runCadenceEngine(
       .from('cadence_runs')
       .upsert(enrollRows, { onConflict: 'cadence_key,matter_id', ignoreDuplicates: true })
       .select('id');
-    if (!enrollErr && inserted) summary.enrolled = inserted.length;
+    if (!enrollErr && inserted) summary.enrolled += inserted.length;
+  }
+
+  // ── Pass 1b: ENROLL from screened_leads status flips (lead-only cadences) ─
+  // A rule can be sourced from screened_leads instead of matter_stage_events
+  // when trigger_config.source === 'screened_leads_status' (e.g. J10
+  // re-engagement: a passed lead never becomes a client_matters row, so there
+  // is no stage event to enroll off).
+  const leadSourcedRules = rules.filter(
+    (r) => r.enabled
+      && r.trigger_type === 'field_change'
+      && r.trigger_config['source'] === 'screened_leads_status'
+      && typeof r.trigger_config['status'] === 'string',
+  );
+  if (leadSourcedRules.length > 0) {
+    const statuses = Array.from(new Set(leadSourcedRules.map((r) => r.trigger_config['status'] as string)));
+    let leadQuery = supabase
+      .from('screened_leads')
+      .select('id, firm_id, status, updated_at')
+      .in('status', statuses)
+      .limit(2000);
+    if (firmScope) leadQuery = leadQuery.eq('firm_id', firmScope);
+    const { data: statusLeadRows } = await leadQuery;
+    const statusLeads = (statusLeadRows ?? []) as Array<{ id: string; firm_id: string; status: string; updated_at: string }>;
+
+    const leadEnrollRows: Array<{
+      firm_id: string; cadence_rule_id: string; cadence_key: string;
+      matter_id: null; screened_lead_id: string; anchor_at: string;
+    }> = [];
+
+    for (const lead of statusLeads) {
+      const matchingCadenceKeys = new Set(
+        leadSourcedRules
+          .filter((r) => r.trigger_config['status'] === lead.status && (r.firm_id === lead.firm_id || r.firm_id === null))
+          .map((r) => r.cadence_key),
+      );
+      for (const cadenceKey of matchingCadenceKeys) {
+        const resolved = resolveRuleForFirm(rules, lead.firm_id, cadenceKey);
+        if (!resolved) continue;
+        leadEnrollRows.push({
+          firm_id: lead.firm_id,
+          cadence_rule_id: resolved.id,
+          cadence_key: resolved.cadence_key,
+          matter_id: null,
+          screened_lead_id: lead.id,
+          anchor_at: lead.updated_at,
+        });
+      }
+    }
+
+    if (leadEnrollRows.length > 0) {
+      // ignoreDuplicates: uq_cadence_runs_key_lead makes re-enrollment a no-op.
+      const { data: inserted, error: leadEnrollErr } = await supabase
+        .from('cadence_runs')
+        .upsert(leadEnrollRows, { onConflict: 'cadence_key,screened_lead_id', ignoreDuplicates: true })
+        .select('id');
+      if (!leadEnrollErr && inserted) summary.enrolled += inserted.length;
+    }
   }
 
   // ── Pass 2: ADVANCE active runs ──────────────────────────────────────────
@@ -231,28 +302,47 @@ export async function runCadenceEngine(
   if (leadIds.length > 0) {
     const { data: leadRows } = await supabase
       .from('screened_leads')
-      .select('id, contact_email, email_consent_status, sms_consent_status, six_month_expiry_date')
+      .select('id, firm_id, status, contact_email, contact_name, matter_type, email_consent_status, sms_consent_status, six_month_expiry_date, updated_at')
       .in('id', leadIds);
     for (const l of (leadRows ?? []) as LeadRow[]) leadById.set(l.id, l);
   }
 
   const firmIds = Array.from(new Set(runs.map((r) => r.firm_id)));
   const firmNameById = new Map<string, string>();
+  const firmRealSendById = new Map<string, boolean>();
   if (firmIds.length > 0) {
-    const { data: firmRows } = await supabase.from('intake_firms').select('id, name').in('id', firmIds);
-    for (const f of (firmRows ?? []) as Array<{ id: string; name: string | null }>) {
+    const { data: firmRows } = await supabase.from('intake_firms').select('id, name, cadence_real_send').in('id', firmIds);
+    for (const f of (firmRows ?? []) as Array<{ id: string; name: string | null; cadence_real_send: boolean | null }>) {
       firmNameById.set(f.id, cleanFirmName(f.name));
+      firmRealSendById.set(f.id, f.cadence_real_send === true);
     }
   }
 
+  const ruleById = new Map<string, CadenceRule>(rules.map((r) => [r.id, r]));
+
   for (const run of runs) {
+    const matter = run.matter_id ? matterById.get(run.matter_id) : undefined;
+    const lead = run.screened_lead_id ? leadById.get(run.screened_lead_id) : undefined;
+
+    // Evaluate exit condition before touching this run's steps. Only
+    // matter-anchored runs can exit on stage; lead-only runs (no matter_id)
+    // never exit via this mechanism.
+    const rule = ruleById.get(run.cadence_rule_id);
+    const exitVerdict = shouldExitRun(rule?.exit_config, matter?.matter_stage ?? null);
+    if (exitVerdict.exit) {
+      summary.exited += 1;
+      await supabase
+        .from('cadence_runs')
+        .update({ status: 'exited', exit_reason: exitVerdict.reason, updated_at: now.toISOString() })
+        .eq('id', run.id);
+      continue;
+    }
+
     const runSteps = steps.filter((s) => s.cadence_rule_id === run.cadence_rule_id);
     const due = dueSteps(run, runSteps, now);
     if (due.length === 0) continue;
     summary.runs_advanced += 1;
 
-    const matter = run.matter_id ? matterById.get(run.matter_id) : undefined;
-    const lead = run.screened_lead_id ? leadById.get(run.screened_lead_id) : undefined;
     const firmName = firmNameById.get(run.firm_id) ?? 'the firm';
     const recipient = matter?.primary_email ?? lead?.contact_email ?? null;
 
@@ -263,10 +353,16 @@ export async function runCadenceEngine(
     };
 
     const vars = {
-      first_name: firstName(matter?.primary_name ?? null),
+      first_name: firstName(matter?.primary_name ?? lead?.contact_name ?? null),
       firm_name: firmName,
-      matter_type: humanizeMatterType(matter?.matter_type ?? null),
+      matter_type: humanizeMatterType(matter?.matter_type ?? lead?.matter_type ?? null),
     };
+
+    // Real-send eligibility: both the firm flag AND the global env kill
+    // switch must be open. Neither is ever true in this sprint, so this is
+    // always false today; every row below is written shadow=true exactly as
+    // before. See cadence-dispatch.ts for the (also inert) send-side gate.
+    const realSendEligible = isRealSendEnabledForFirm(firmRealSendById.get(run.firm_id) ?? false);
 
     const ledgerRows: Array<Record<string, unknown>> = [];
     let maxStep = run.next_step_number - 1;
@@ -284,11 +380,11 @@ export async function runCadenceEngine(
         recipient_email: recipient,
         subject: interpolateTemplate(step.subject_template, vars),
         body: interpolateTemplate(step.body_template, vars),
-        shadow: true,
+        shadow: !realSendEligible,
         consent_verdict: allowed ? 'allowed' : 'blocked',
         consent_block_reason: blockReason,
         scheduled_for: computeStepScheduledAt(run.anchor_at, step.delay_hours).toISOString(),
-        status: allowed ? 'shadow_logged' : 'suppressed',
+        status: allowed ? (realSendEligible ? 'scheduled' : 'shadow_logged') : 'suppressed',
       });
       if (allowed) summary.shadow_logged += 1;
       else summary.suppressed += 1;

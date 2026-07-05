@@ -18,6 +18,7 @@ import {
   dueSteps,
   lastStepNumber,
   interpolateTemplate,
+  shouldExitRun,
   type CadenceRule,
   type CadenceStep,
   type CadenceRun,
@@ -240,12 +241,44 @@ describe('interpolateTemplate', () => {
   });
 });
 
-describe('seed library integrity', () => {
-  it('has the four launch cadences', () => {
-    expect(CADENCE_SEED_LIBRARY.map((r) => r.cadence_key).sort()).toEqual(['J11', 'J6', 'J7', 'J9']);
+describe('shouldExitRun', () => {
+  it('exits when the current matter stage is not in the whitelist', () => {
+    const v = shouldExitRun({ matter_stage_not_in: ['retainer_pending'] }, 'active');
+    expect(v.exit).toBe(true);
+    expect(v.reason).toMatch(/retainer_pending/);
   });
 
-  it('every seed trigger is a real journeyTriggerForTransition output (enrollment invariant)', () => {
+  it('does not exit when the current stage is still in the whitelist', () => {
+    const v = shouldExitRun({ matter_stage_not_in: ['retainer_pending'] }, 'retainer_pending');
+    expect(v.exit).toBe(false);
+    expect(v.reason).toBeNull();
+  });
+
+  it('never exits on an empty or missing config', () => {
+    expect(shouldExitRun({}, 'active').exit).toBe(false);
+    expect(shouldExitRun(undefined, 'active').exit).toBe(false);
+    expect(shouldExitRun(null, 'active').exit).toBe(false);
+  });
+
+  it('never exits on an empty whitelist array', () => {
+    expect(shouldExitRun({ matter_stage_not_in: [] }, 'active').exit).toBe(false);
+  });
+
+  it('never exits a lead-only run (no matter stage to evaluate)', () => {
+    expect(shouldExitRun({ matter_stage_not_in: ['retainer_pending'] }, null).exit).toBe(false);
+  });
+
+  it('ignores a malformed config (non-array value)', () => {
+    expect(shouldExitRun({ matter_stage_not_in: 'retainer_pending' } as unknown as Record<string, unknown>, 'active').exit).toBe(false);
+  });
+});
+
+describe('seed library integrity', () => {
+  it('has the seven launch cadences', () => {
+    expect(CADENCE_SEED_LIBRARY.map((r) => r.cadence_key).sort()).toEqual(['J10', 'J11', 'J12', 'J6', 'J7', 'J8', 'J9']);
+  });
+
+  it('every stage-sourced seed trigger is a real journeyTriggerForTransition output (enrollment invariant)', () => {
     // The set of cadence_triggers the stage machine can emit.
     const emitted = new Set(
       [
@@ -256,8 +289,17 @@ describe('seed library integrity', () => {
       ].filter((x): x is string => !!x),
     );
     for (const r of CADENCE_SEED_LIBRARY) {
+      // J10 is lead-status-sourced (screened_leads.status flips to 'passed'),
+      // not stage-sourced: no matter_stage_events row exists for a passed lead.
+      if (r.source === 'screened_leads_status') continue;
       expect(emitted.has(r.cadence_trigger)).toBe(true);
     }
+  });
+
+  it('lead-status-sourced rules (J10) carry a source and status on their config', () => {
+    const j10 = CADENCE_SEED_LIBRARY.find((r) => r.cadence_key === 'J10')!;
+    expect(j10.source).toBe('screened_leads_status');
+    expect(j10.status).toBe('passed');
   });
 
   it('J9 keeps the documented 0/72/168 hour cadence', () => {

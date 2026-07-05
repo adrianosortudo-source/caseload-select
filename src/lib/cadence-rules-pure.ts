@@ -26,6 +26,7 @@ export interface CadenceRule {
   name: string;
   trigger_type: TriggerType;
   trigger_config: Record<string, unknown>;
+  exit_config?: Record<string, unknown>;
   channel: 'email' | 'sms';
   enabled: boolean;
 }
@@ -176,6 +177,41 @@ export function lastStepNumber(steps: CadenceStep[], cadenceRuleId: string): num
     .filter((s) => s.cadence_rule_id === cadenceRuleId && s.active)
     .map((s) => s.step_number);
   return nums.length === 0 ? 0 : Math.max(...nums);
+}
+
+// ── Exit conditions ────────────────────────────────────────────────────────
+
+export interface ExitVerdict {
+  exit: boolean;
+  reason: string | null;
+}
+
+/**
+ * Evaluates a rule's exit_config against the run's current matter stage.
+ * Config shape: { matter_stage_not_in: string[] }. When the matter's current
+ * stage is NOT in that whitelist, the run has outlived its reason to exist
+ * (e.g. J6 "retainer awaiting" no longer applies once the matter is no longer
+ * in retainer_pending) and should exit rather than keep logging touches.
+ *
+ * A null/undefined config, an empty whitelist, or a null currentMatterStage
+ * (lead-only run, no matter) never triggers an exit: fail-open on exit means
+ * the run keeps going, which is the safe default in shadow mode (an extra
+ * logged touch dispatches nothing; a wrongly-exited run silently drops a
+ * touch that should have fired).
+ */
+export function shouldExitRun(
+  exitConfig: Record<string, unknown> | null | undefined,
+  currentMatterStage: string | null,
+): ExitVerdict {
+  const whitelist = exitConfig && Array.isArray(exitConfig['matter_stage_not_in'])
+    ? (exitConfig['matter_stage_not_in'] as unknown[]).filter((v): v is string => typeof v === 'string')
+    : null;
+  if (!whitelist || whitelist.length === 0) return { exit: false, reason: null };
+  if (currentMatterStage === null) return { exit: false, reason: null };
+  if (!whitelist.includes(currentMatterStage)) {
+    return { exit: true, reason: `matter_stage_advanced_past:${whitelist.join(',')}` };
+  }
+  return { exit: false, reason: null };
 }
 
 // ── Template interpolation ─────────────────────────────────────────────────
