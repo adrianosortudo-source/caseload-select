@@ -82,6 +82,60 @@ export function canPostVersion(role: string): boolean {
   return role === "operator" || role === "lawyer";
 }
 
+// ─── Delegated publishing (Amendment No. 1 to CLS-2026-DRG-001) ───────────────
+
+/**
+ * The statement recorded when the operator publishes under a delegation grant.
+ * It is deliberately NOT the licensee's first-person attestation: it says, in
+ * the operator's voice, that the item was published under authority the lawyer
+ * delegated, and that the lawyer retains final LSO Rule 4.2-1 responsibility.
+ * Frozen into approval_records.attestation so the basis the operator acted on
+ * is preserved even if this copy later changes.
+ */
+export const DELEGATED_PUBLISH_ATTESTATION =
+  "Published by the operator under publishing authority delegated by the " +
+  "firm's lawyer (Amendment No. 1 to CLS-2026-DRG-001). The content was " +
+  "produced under the firm's approved content strategy and passed the Law " +
+  "Society of Ontario Rule 4.2-1 compliance checks. The firm's lawyer retains " +
+  "final compliance responsibility and may revoke this authority at any time.";
+
+/**
+ * Only the firm's lawyer can ENABLE or revoke a delegation. The operator can
+ * never grant itself the authority; that would defeat the purpose of the
+ * lawyer-controlled gate. Mirrors Section A5 of the amendment.
+ */
+export function canEnableDelegation(
+  role: DeliverableActorRole | "operator" | "lawyer" | "client",
+): boolean {
+  return role === "lawyer";
+}
+
+export interface DelegationGrant {
+  status: "active" | "revoked" | "expired";
+  expires_at: string | null; // ISO timestamp
+  scope_formats: string[];
+}
+
+/**
+ * Whether the operator may publish a given format under a delegation grant.
+ * True only when: the actor is the operator, a grant exists and is active, the
+ * grant has not lapsed past expires_at, and the piece's format is in scope.
+ * The lawyer's own sign-off path (canSignOff) is unchanged and is unaffected
+ * by delegation.
+ */
+export function canPublishUnderDelegation(
+  role: string,
+  grant: DelegationGrant | null,
+  format: string | null,
+  now: Date = new Date(),
+): boolean {
+  if (role !== "operator") return false;
+  if (!grant || grant.status !== "active") return false;
+  if (grant.expires_at && new Date(grant.expires_at).getTime() <= now.getTime()) return false;
+  if (!format) return false;
+  return grant.scope_formats.includes(format);
+}
+
 // ─── Validators ──────────────────────────────────────────────────────────────
 
 export function isValidContentKind(value: unknown): value is ContentKind {
