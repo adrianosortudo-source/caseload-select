@@ -38,25 +38,47 @@ export function buildValidatorConfig(
   const specs = strategy.format_specs as Record<string, Record<string, unknown>>;
   const formatSpec = specs[format] ?? {};
 
+  const fmt = voice.formatting_rules as Record<string, boolean> | undefined;
   return {
     banned_vocabulary: (voice.banned_vocabulary as string[]) ?? [],
     approved_vocabulary: (voice.approved_vocabulary as string[]) ?? [],
     lso_constraints:
       ((voice.lso_rules as Record<string, unknown>)?.constraints as string[]) ?? [],
     formatting_rules: {
-      no_em_dashes:
-        (voice.formatting_rules as Record<string, boolean>)?.no_em_dashes ?? true,
-      no_italics:
-        (voice.formatting_rules as Record<string, boolean>)?.no_italics ?? true,
-      no_orphan_words:
-        (voice.formatting_rules as Record<string, boolean>)?.no_orphan_words ?? true,
-      no_rule_of_three:
-        (voice.formatting_rules as Record<string, boolean>)?.no_rule_of_three ?? true,
+      no_em_dashes: fmt?.no_em_dashes ?? true,
+      no_italics: fmt?.no_italics ?? true,
+      no_orphan_words: fmt?.no_orphan_words ?? true,
+      no_rule_of_three: fmt?.no_rule_of_three ?? true,
+      no_timing_promises: fmt?.no_timing_promises ?? true,
+      no_specialist_language: fmt?.no_specialist_language ?? true,
+      no_factual_hallucination: fmt?.no_factual_hallucination ?? true,
+      enforce_hook_retain_reward: fmt?.enforce_hook_retain_reward ?? false,
+      no_fake_scarcity: fmt?.no_fake_scarcity ?? true,
+      no_weasel_words: fmt?.no_weasel_words ?? true,
+      enforce_email_respect: fmt?.enforce_email_respect ?? true,
+      no_rejected_ctas: fmt?.no_rejected_ctas ?? true,
+      enforce_review_request_compliance: fmt?.enforce_review_request_compliance ?? true,
+      enforce_negative_review_response: fmt?.enforce_negative_review_response ?? true,
+      enforce_testimonial_content: fmt?.enforce_testimonial_content ?? true,
+      no_lso_superlatives: fmt?.no_lso_superlatives ?? true,
+      no_referral_violations: fmt?.no_referral_violations ?? true,
+      no_incentivized_review: fmt?.no_incentivized_review ?? true,
+      no_review_removal_copy: fmt?.no_review_removal_copy ?? true,
+      no_free_consult_lure: fmt?.no_free_consult_lure ?? true,
+      no_distress_hero: fmt?.no_distress_hero ?? true,
+      no_us_trust_badges: fmt?.no_us_trust_badges ?? true,
+      no_lsa_quality_claim: fmt?.no_lsa_quality_claim ?? true,
     },
     format_spec: {
       word_range: formatSpec.word_range as [number, number] | undefined,
       structure: formatSpec.structure as string[] | undefined,
+      page_structure: formatSpec.page_structure as string[] | undefined,
     },
+    format,
+    rejected_ctas: (voice.rejected_ctas as string[] | undefined) ?? [],
+    certified_specialists:
+      ((strategy.strategy_json as Record<string, unknown>)
+        ?.certified_specialists as Array<{ lawyer: string; areas: string[] }>) ?? [],
   };
 }
 
@@ -210,6 +232,7 @@ export async function recordAiRun(run: {
 }
 
 export async function recordValidationRun(run: {
+  piece_id: string;
   piece_version_id: string;
   firm_id: string;
   results: Array<{ key: string; status: string; severity: string; findings: unknown[] }>;
@@ -218,6 +241,11 @@ export async function recordValidationRun(run: {
     .from("content_ai_runs")
     .insert({
       firm_id: run.firm_id,
+      // piece_id must be set alongside piece_version_id: the admin piece
+      // page loads run history with .eq("piece_id", id), so a version-only
+      // row is invisible there (caught by the 2026-07-05 prod smoke test:
+      // the Validator Results panel could never populate).
+      piece_id: run.piece_id,
       piece_version_id: run.piece_version_id,
       run_type: "validate_deterministic",
       status: "succeeded",

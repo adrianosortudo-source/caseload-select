@@ -125,6 +125,7 @@ export async function POST(
 
   // Record the validation run
   const { error: recordErr } = await recordValidationRun({
+    piece_id: id,
     piece_version_id: version.id,
     firm_id: piece.firm_id,
     results: results.map((r) => ({
