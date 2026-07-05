@@ -2,6 +2,10 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import PageHeader from "@/components/PageHeader";
 import Link from "next/link";
 import { SourceBriefForm, PieceActions } from "../components";
+import {
+  renderServicePagePreview,
+  type ServicePageBlock,
+} from "@/lib/content-studio-structured";
 
 export const dynamic = "force-dynamic";
 
@@ -125,6 +129,8 @@ type PieceVersion = {
   language: string;
   version_number: number;
   body_markdown: string | null;
+  body_structured: unknown[] | null;
+  seo_metadata: Record<string, unknown> | null;
   is_current: boolean;
   created_at: string;
 };
@@ -161,7 +167,7 @@ async function getPieceDetail(id: string) {
     supabase
       .from("content_piece_versions")
       .select(
-        "id,piece_id,language,version_number,body_markdown,is_current,created_at"
+        "id,piece_id,language,version_number,body_markdown,body_structured,seo_metadata,is_current,created_at"
       )
       .eq("piece_id", id)
       .eq("language", "en")
@@ -170,7 +176,7 @@ async function getPieceDetail(id: string) {
     supabase
       .from("content_piece_versions")
       .select(
-        "id,piece_id,language,version_number,body_markdown,is_current,created_at"
+        "id,piece_id,language,version_number,body_markdown,body_structured,seo_metadata,is_current,created_at"
       )
       .eq("piece_id", id)
       .eq("language", "pt")
@@ -217,10 +223,71 @@ async function getPieceDetail(id: string) {
 
 /* ── Sub-components ────────────────────────────────────────── */
 
+// canonical_service_page versions carry body_structured + seo_metadata and
+// an intentionally empty body_markdown (see content-studio-structured.ts /
+// draft/route.ts's structured-output branch). Every other format is
+// Markdown-only and keeps the original raw <pre> rendering unchanged.
+function VersionBody({
+  version,
+  format,
+}: {
+  version: PieceVersion;
+  format: string;
+}) {
+  if (format !== "canonical_service_page") {
+    return (
+      <pre className="whitespace-pre-wrap text-sm text-black/80 bg-black/[0.02] rounded p-4 max-h-96 overflow-y-auto font-sans leading-relaxed">
+        {version.body_markdown ?? "(empty)"}
+      </pre>
+    );
+  }
+
+  if (!Array.isArray(version.body_structured) || version.body_structured.length === 0) {
+    return (
+      <p className="text-sm text-black/40 bg-black/[0.02] rounded p-4">
+        No structured content yet for this canonical_service_page version.
+        This format generates as structured output, not Markdown; run the
+        draft generator (or regenerate it) to populate body_structured.
+      </p>
+    );
+  }
+
+  const { html, schemaJson } = renderServicePagePreview(
+    version.body_structured as ServicePageBlock[],
+    version.seo_metadata ?? undefined
+  );
+
+  return (
+    <div className="space-y-4">
+      <div
+        className="cls-structured-preview text-sm text-black/80 bg-black/[0.02] rounded p-4 max-h-96 overflow-y-auto leading-relaxed [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:mb-2 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-1 [&_h3]:text-sm [&_h3]:font-medium [&_h3]:mt-3 [&_p]:mb-2 [&_a]:text-sky-600 [&_a]:underline"
+        // Safe: renderServicePagePreview HTML-escapes all text before
+        // reintroducing any markup (see the function's own header comment
+        // in content-studio-structured.ts). No raw user/model text can
+        // reach this as a live tag.
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+      <details className="rounded border border-black/8">
+        <summary className="px-4 py-2 cursor-pointer text-xs font-medium text-black/60 hover:text-black/80">
+          Schema (JSON-LD) — {schemaJson.length} block
+          {schemaJson.length !== 1 ? "s" : ""}
+        </summary>
+        <pre className="whitespace-pre-wrap text-xs text-black/70 bg-black/[0.02] p-4 max-h-96 overflow-y-auto">
+          {schemaJson.length > 0
+            ? JSON.stringify(schemaJson, null, 2)
+            : "No schema blocks found in seo_metadata."}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
 function CurrentDraftPanel({
+  format,
   enVersion,
   ptVersion,
 }: {
+  format: string;
   enVersion: PieceVersion | null;
   ptVersion: PieceVersion | null;
 }) {
@@ -266,9 +333,7 @@ function CurrentDraftPanel({
               </span>
             </div>
           </div>
-          <pre className="whitespace-pre-wrap text-sm text-black/80 bg-black/[0.02] rounded p-4 max-h-96 overflow-y-auto font-sans leading-relaxed">
-            {enVersion.body_markdown ?? "(empty)"}
-          </pre>
+          <VersionBody version={enVersion} format={format} />
         </div>
       )}
 
@@ -284,9 +349,7 @@ function CurrentDraftPanel({
             </span>
           </summary>
           <div className="p-6">
-            <pre className="whitespace-pre-wrap text-sm text-black/80 bg-black/[0.02] rounded p-4 max-h-96 overflow-y-auto font-sans leading-relaxed">
-              {ptVersion.body_markdown ?? "(empty)"}
-            </pre>
+            <VersionBody version={ptVersion} format={format} />
             <div className="mt-2 text-xs text-black/40">
               {formatTimestamp(ptVersion.created_at)}
             </div>
@@ -661,6 +724,7 @@ export default async function ContentPieceDetailPage({
               }
             />
             <CurrentDraftPanel
+              format={piece.format}
               enVersion={enVersion}
               ptVersion={ptVersion}
             />

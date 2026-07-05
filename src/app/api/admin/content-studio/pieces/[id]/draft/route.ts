@@ -7,166 +7,190 @@ import {
   getNextVersionNumber,
   createPieceVersion,
   recordAiRun,
+  type StrategyRow,
 } from "@/lib/content-studio";
-import type { StrategyRow } from "@/lib/content-studio";
+import {
+  CANONICAL_SERVICE_PAGE_TOOL_NAME,
+  CANONICAL_SERVICE_PAGE_TOOL_SCHEMA,
+  buildCanonicalServicePageSystemPrompt,
+  buildCanonicalServicePageUserPrompt,
+  extractToolUseInput,
+  validateCanonicalServicePageOutput,
+  toBodyStructuredBlocks,
+  assembleSchemaBlocks,
+  buildSeoMetadata,
+  flattenServicePageToPlainText,
+} from "@/lib/content-studio-structured";
+import { buildSystemPrompt, buildUserPrompt } from "@/lib/content-studio-prompt";
 
 export const dynamic = "force-dynamic";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const MODEL = "claude-sonnet-4-20250514";
 
-function buildSystemPrompt(strategy: StrategyRow, format: string): string {
-  const voice = strategy.voice_rules as Record<string, unknown>;
-  const specs = strategy.format_specs as Record<string, Record<string, unknown>>;
-  const formatSpec = specs[format] ?? {};
-  const strategyJson = strategy.strategy_json as Record<string, unknown>;
-
-  const bannedVocab = (voice.banned_vocabulary as string[]) ?? [];
-  const approvedVocab = (voice.approved_vocabulary as string[]) ?? [];
-  const formattingRules = (voice.formatting_rules as Record<string, boolean>) ?? {};
-  const lsoRules = (voice.lso_rules as Record<string, unknown>) ?? {};
-  const territory = strategyJson.territory_context as string | undefined;
-  const voiceTone = (voice.tone as string) ?? "authoritative, direct, evidence-led";
-
-  const parts: string[] = [];
-
-  parts.push(
-    "You are a legal content writer producing a draft for an Ontario law firm."
-  );
-  parts.push(
-    `Format: ${format.replace(/_/g, " ")}. Write in Markdown.`
-  );
-
-  if (formatSpec.word_range) {
-    const [min, max] = formatSpec.word_range as [number, number];
-    parts.push(`Target word count: ${min} to ${max} words.`);
-  }
-
-  if (formatSpec.structure) {
-    const sections = formatSpec.structure as string[];
-    parts.push(
-      `Required structure sections: ${sections.join(", ")}.`
-    );
-  }
-
-  parts.push(`Voice and tone: ${voiceTone}.`);
-
-  if (bannedVocab.length > 0) {
-    parts.push(
-      `BANNED vocabulary (do not use any of these words or phrases): ${bannedVocab.join(", ")}.`
-    );
-  }
-
-  if (approvedVocab.length > 0) {
-    parts.push(
-      `Approved vocabulary (prefer using these terms where natural): ${approvedVocab.join(", ")}.`
-    );
-  }
-
-  // Formatting constraints
-  const formatRules: string[] = [];
-  if (formattingRules.no_em_dashes) {
-    formatRules.push(
-      "Never use em dashes. Use commas, colons, semicolons, or restructure."
-    );
-  }
-  if (formattingRules.no_italics) {
-    formatRules.push("Never use italics for any purpose.");
-  }
-  if (formattingRules.no_orphan_words) {
-    formatRules.push("Avoid orphan words (single word alone on the last line of a paragraph).");
-  }
-  if (formattingRules.no_rule_of_three) {
-    formatRules.push(
-      "Avoid rule-of-three constructions unless the items are genuinely distinct and necessary."
-    );
-  }
-  if (formatRules.length > 0) {
-    parts.push(`Formatting rules: ${formatRules.join(" ")}`);
-  }
-
-  // LSO compliance
-  const lsoConstraints = (lsoRules.constraints as string[]) ?? [];
-  parts.push(
-    "LSO Rule 4.2-1 compliance is mandatory. No outcome promises, no 'specialist' or 'expert' language, no unverifiable superlatives."
-  );
-  if (lsoConstraints.length > 0) {
-    parts.push(`Additional LSO constraints: ${lsoConstraints.join("; ")}.`);
-  }
-
-  // Opening discipline
-  parts.push(
-    "Opening discipline: lead with consequence to the reader, not firm performance. Do not open with 'At our firm' or 'We specialize in'."
-  );
-
-  // Territory context
-  if (territory) {
-    parts.push(`Territory context: ${territory}.`);
-  }
-
-  parts.push(
-    "Each paragraph must advance one idea. Back every claim with facts and reasons. Lead with strong action verbs. Close with a specific conclusion or call to action."
-  );
-
-  return parts.join("\n\n");
-}
-
-function buildUserPrompt(
-  sourceBrief: Record<string, unknown>,
-  format: string
-): string {
-  const parts: string[] = [];
-
-  parts.push(
-    `Write a ${format.replace(/_/g, " ")} draft based on the following source brief.\n`
-  );
-
-  const fieldLabels: Record<string, string> = {
-    decision_question: "Decision question",
-    legal_distinction: "Legal distinction",
-    consequence: "Consequence if ignored",
-    practice_area: "Practice area",
-    matter_type: "Matter type",
-    jurisdiction: "Jurisdiction",
-    audience: "Target audience",
-    angle: "Content angle",
-    key_statute: "Key statute or regulation",
-    case_law: "Relevant case law",
-    data_point: "Supporting data point",
-    cta: "Call to action",
-  };
-
-  for (const [key, label] of Object.entries(fieldLabels)) {
-    const val = sourceBrief[key];
-    if (val && typeof val === "string" && val.trim().length > 0) {
-      parts.push(`${label}: ${val.trim()}`);
-    }
-  }
-
-  // Include any extra fields not in the label map
-  for (const [key, val] of Object.entries(sourceBrief)) {
-    if (
-      !(key in fieldLabels) &&
-      val &&
-      typeof val === "string" &&
-      val.trim().length > 0
-    ) {
-      const label = key
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-      parts.push(`${label}: ${val.trim()}`);
-    }
-  }
-
-  parts.push(
-    "\nProduce the complete draft in Markdown. Include all required sections per the format spec."
-  );
-
-  return parts.join("\n");
-}
-
 function hashString(s: string): string {
   return createHash("sha256").update(s).digest("hex").slice(0, 16);
+}
+
+/**
+ * Structured-output generation for canonical_service_page. See
+ * src/lib/content-studio-structured.ts for the schema, prompt builders,
+ * validation, and deterministic assembly. Storage uses the existing
+ * content_piece_versions.body_structured and .seo_metadata JSONB columns;
+ * no schema change is involved.
+ */
+async function generateCanonicalServicePageDraft({
+  apiKey,
+  pieceId,
+  firmId,
+  sourceBrief,
+  strategy,
+}: {
+  apiKey: string;
+  pieceId: string;
+  firmId: string;
+  sourceBrief: Record<string, unknown>;
+  strategy: StrategyRow;
+}): Promise<NextResponse> {
+  const systemPrompt = buildCanonicalServicePageSystemPrompt(strategy, sourceBrief);
+  const userPrompt = buildCanonicalServicePageUserPrompt(sourceBrief);
+  const promptContextHash = hashString(systemPrompt + userPrompt);
+
+  let aiResponse: Response;
+  try {
+    aiResponse = await fetch(ANTHROPIC_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+        tools: [
+          {
+            name: CANONICAL_SERVICE_PAGE_TOOL_NAME,
+            description:
+              "Emit the complete canonical service page draft as structured content.",
+            input_schema: CANONICAL_SERVICE_PAGE_TOOL_SCHEMA,
+          },
+        ],
+        tool_choice: { type: "tool", name: CANONICAL_SERVICE_PAGE_TOOL_NAME },
+      }),
+    });
+  } catch (fetchError) {
+    const msg = fetchError instanceof Error ? fetchError.message : "Network error";
+    return NextResponse.json(
+      { ok: false, error: `Anthropic API call failed: ${msg}` },
+      { status: 502 }
+    );
+  }
+
+  if (!aiResponse.ok) {
+    const errorBody = await aiResponse.text().catch(() => "unknown error");
+    return NextResponse.json(
+      { ok: false, error: `Anthropic API returned ${aiResponse.status}: ${errorBody}` },
+      { status: 502 }
+    );
+  }
+
+  const aiResult = (await aiResponse.json()) as {
+    id: string;
+    content: Array<{ type: string; id?: string; name?: string; input?: unknown; text?: string }>;
+    model: string;
+    usage: { input_tokens: number; output_tokens: number };
+  };
+
+  const toolResult = extractToolUseInput(aiResult);
+  if (!toolResult.ok) {
+    return NextResponse.json(
+      { ok: false, error: `Structured output extraction failed: ${toolResult.error}` },
+      { status: 502 }
+    );
+  }
+
+  const validated = validateCanonicalServicePageOutput(toolResult.input);
+  if (!validated.valid) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Model output failed schema validation.",
+        code: "structured_output_invalid",
+        details: validated.errors,
+      },
+      { status: 422 }
+    );
+  }
+
+  const blocks = toBodyStructuredBlocks(validated.output, strategy);
+  const schemaBlocks = assembleSchemaBlocks(validated.output, strategy, sourceBrief);
+  const seoMetadata = buildSeoMetadata(validated.output, sourceBrief, schemaBlocks);
+  const flatText = flattenServicePageToPlainText(blocks);
+  const textHash = hashString(flatText);
+
+  const versionNumber = await getNextVersionNumber(pieceId, "en");
+
+  const { data: aiRun, error: runErr } = await recordAiRun({
+    firm_id: firmId,
+    piece_id: pieceId,
+    run_type: "draft",
+    model: aiResult.model || MODEL,
+    prompt_context: {
+      system_prompt_hash: hashString(systemPrompt),
+      user_prompt_hash: hashString(userPrompt),
+      strategy_id: strategy.id,
+      strategy_version: strategy.version,
+      format: "canonical_service_page",
+      generator: "structured_v1",
+    },
+    result: {
+      anthropic_message_id: aiResult.id,
+      section_count: blocks.length,
+    },
+    usage: {
+      input_tokens: aiResult.usage?.input_tokens ?? 0,
+      output_tokens: aiResult.usage?.output_tokens ?? 0,
+    },
+    input_hash: promptContextHash,
+    output_hash: textHash,
+    status: "succeeded",
+  });
+
+  if (runErr) {
+    console.error("Failed to record AI run:", runErr);
+  }
+
+  const { data: version, error: versionErr } = await createPieceVersion({
+    piece_id: pieceId,
+    version_number: versionNumber,
+    language: "en",
+    body_structured: blocks,
+    seo_metadata: seoMetadata,
+    text_hash: textHash,
+    created_by: "ai",
+    created_with_ai_run_id: aiRun?.id ?? undefined,
+  });
+
+  if (versionErr) {
+    return NextResponse.json(
+      { ok: false, error: `Failed to save version: ${versionErr.message}` },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    piece_id: pieceId,
+    version,
+    structured: true,
+    schema_warnings: schemaBlocks.breadcrumb_urls_incomplete
+      ? ["breadcrumb_list item URLs are incomplete: no website URL on file for this firm's canonical_nap."]
+      : [],
+    ai_run: aiRun ? { id: aiRun.id, model: aiRun.model, usage: aiRun.usage } : null,
+  });
 }
 
 /**
@@ -211,6 +235,36 @@ export async function POST(
     );
   }
 
+  // Audit catch 2026-06-26 HIGH 2: refuse compliance formats that require
+  // structured-output generation until the JSON-schema generator branch ships.
+  // The current generator always emits Markdown and stores only body_markdown;
+  // these formats need structured JSON output matching their renderer input
+  // contract (paid_traffic_landing section ordering, review_request channel-
+  // specific shape, review_response TEARS subformat discrimination).
+  // Accepting them now would produce Markdown that misses the format's
+  // structural validators downstream.
+  //
+  // canonical_service_page removed from this set 2026-07-02: it has its own
+  // structured-output branch below (generateCanonicalServicePageDraft), the
+  // first format built per the SEO/AEO spec's operator-confirmed build order
+  // (docs/CONTENT_STUDIO_SEO_AEO_SPEC.md, Section 10). The other three formats
+  // are unchanged and stay gated until their own branches ship.
+  const STRUCTURED_OUTPUT_REQUIRED_FORMATS = new Set([
+    "paid_traffic_landing",
+    "review_request",
+    "review_response",
+  ]);
+  if (STRUCTURED_OUTPUT_REQUIRED_FORMATS.has(piece.format)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Format "${piece.format}" requires structured JSON output and the generator branch has not shipped yet. This format is accepted by the format taxonomy migration but cannot be drafted by the Markdown-only path. Track in project_content_studio_p0_delta_compliance_shipped.md.`,
+        code: "structured_output_required",
+      },
+      { status: 422 }
+    );
+  }
+
   // Validate source brief exists
   const sourceBrief = piece.source_brief as Record<string, unknown> | null;
   if (!sourceBrief || Object.keys(sourceBrief).length === 0) {
@@ -235,7 +289,17 @@ export async function POST(
     );
   }
 
-  const systemPrompt = buildSystemPrompt(strategy, piece.format);
+  if (piece.format === "canonical_service_page") {
+    return generateCanonicalServicePageDraft({
+      apiKey,
+      pieceId: id,
+      firmId: piece.firm_id,
+      sourceBrief,
+      strategy,
+    });
+  }
+
+  const systemPrompt = buildSystemPrompt(strategy, piece.format, sourceBrief);
   const userPrompt = buildUserPrompt(sourceBrief, piece.format);
   const promptContextHash = hashString(systemPrompt + userPrompt);
 
