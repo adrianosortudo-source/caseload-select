@@ -86,8 +86,8 @@ export const CADENCE_SEED_LIBRARY: SeedRule[] = [
     cadence_trigger: 'review_request',
     steps: [
       { step_number: 1, delay_hours: 0,   subject_template: 'Thank you from {firm_name}',           body_template: 'Hi {first_name}, thank you for trusting the firm with your {matter_type}. If the experience was a good one, a short review helps others find the firm.' },
-      { step_number: 2, delay_hours: 72,  subject_template: 'A quick favour, if you have a moment',  body_template: 'Hi {first_name}, following up on a review for your {matter_type}. A few honest sentences are plenty, and it makes a real difference.' },
-      { step_number: 3, delay_hours: 168, subject_template: 'Last note on leaving a review',         body_template: 'Hi {first_name}, a final note. If you would share a review of your {matter_type} experience, the firm would be grateful. Either way, thank you.' },
+      { step_number: 2, delay_hours: 72,  subject_template: 'A quick favour, if you have a moment',  body_template: 'Hi {first_name}, following up on a review for your {matter_type}. A few honest sentences are plenty, and it makes a real difference. {gbp_review_url}' },
+      { step_number: 3, delay_hours: 168, subject_template: 'Last note on leaving a review',         body_template: 'Hi {first_name}, a final note. If you would share a review of your {matter_type} experience, the firm would be grateful. Either way, thank you. {gbp_review_url}' },
     ],
   },
   {

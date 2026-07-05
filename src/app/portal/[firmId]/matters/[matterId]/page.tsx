@@ -41,6 +41,7 @@ import WelcomeEditor from './WelcomeEditor';
 import MessageThreads from './MessageThreads';
 import { ConflictCheckPanel } from './ConflictCheckPanel';
 import MilestoneDraftPanel from '@/components/portal/MilestoneDraftPanel';
+import RequestReviewButton from './RequestReviewButton';
 
 const STAGE_LABEL: Record<MatterStage, string> = {
   intake: 'Intake',
@@ -137,6 +138,13 @@ export default async function LawyerMatterDetailPage({ params }: PageProps) {
           practiceArea={matter.practice_area}
           currentMilestone={matter.matter_milestone}
         />
+      )}
+
+      {(matter.matter_stage === 'active' || matter.matter_stage === 'closing' || matter.matter_stage === 'closed') && (
+        <section style={cardStyle}>
+          <p style={sectionEyebrowStyle}>Google review</p>
+          <RequestReviewButton firmId={firmId} matterId={matterId} />
+        </section>
       )}
 
       <section style={cardStyle}>

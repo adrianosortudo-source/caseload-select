@@ -310,11 +310,13 @@ export async function runCadenceEngine(
   const firmIds = Array.from(new Set(runs.map((r) => r.firm_id)));
   const firmNameById = new Map<string, string>();
   const firmRealSendById = new Map<string, boolean>();
+  const firmReviewUrlById = new Map<string, string>();
   if (firmIds.length > 0) {
-    const { data: firmRows } = await supabase.from('intake_firms').select('id, name, cadence_real_send').in('id', firmIds);
-    for (const f of (firmRows ?? []) as Array<{ id: string; name: string | null; cadence_real_send: boolean | null }>) {
+    const { data: firmRows } = await supabase.from('intake_firms').select('id, name, cadence_real_send, gbp_review_url').in('id', firmIds);
+    for (const f of (firmRows ?? []) as Array<{ id: string; name: string | null; cadence_real_send: boolean | null; gbp_review_url: string | null }>) {
       firmNameById.set(f.id, cleanFirmName(f.name));
       firmRealSendById.set(f.id, f.cadence_real_send === true);
+      firmReviewUrlById.set(f.id, f.gbp_review_url ?? '');
     }
   }
 
@@ -356,6 +358,7 @@ export async function runCadenceEngine(
       first_name: firstName(matter?.primary_name ?? lead?.contact_name ?? null),
       firm_name: firmName,
       matter_type: humanizeMatterType(matter?.matter_type ?? lead?.matter_type ?? null),
+      gbp_review_url: firmReviewUrlById.get(run.firm_id) ?? '',
     };
 
     // Real-send eligibility: both the firm flag AND the global env kill
@@ -413,4 +416,54 @@ export async function runCadenceEngine(
   }
 
   return summary;
+}
+
+export type ManualEnrollResult =
+  | { ok: true; alreadyEnrolled: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Manually enrolls a matter into a cadence on demand, outside the automatic
+ * stage-transition ENROLL pass. Used by the "Request review" action (WP-4):
+ * a lawyer can ask for a review at any point, not only on the automatic
+ * active -> closing transition that already fires J9.
+ *
+ * Idempotent via the same uq_cadence_runs_key_matter index the automatic
+ * path uses: a second manual trigger for the same matter/cadence is a no-op,
+ * not a duplicate enrollment.
+ */
+export async function enrollMatterInCadence(opts: {
+  matterId: string;
+  firmId: string;
+  screenedLeadId: string | null;
+  cadenceKey: string;
+  anchorAt?: string;
+}): Promise<ManualEnrollResult> {
+  const { data: ruleRows, error: ruleErr } = await supabase
+    .from('cadence_rules')
+    .select('id, firm_id, cadence_key, name, trigger_type, trigger_config, channel, enabled')
+    .eq('cadence_key', opts.cadenceKey);
+  if (ruleErr) return { ok: false, error: ruleErr.message };
+
+  const rules = (ruleRows ?? []) as CadenceRule[];
+  const resolved = resolveRuleForFirm(rules, opts.firmId, opts.cadenceKey);
+  if (!resolved) return { ok: false, error: `no enabled rule found for cadence_key=${opts.cadenceKey}` };
+
+  const { data: inserted, error: enrollErr } = await supabase
+    .from('cadence_runs')
+    .upsert(
+      [{
+        firm_id: opts.firmId,
+        cadence_rule_id: resolved.id,
+        cadence_key: resolved.cadence_key,
+        matter_id: opts.matterId,
+        screened_lead_id: opts.screenedLeadId,
+        anchor_at: opts.anchorAt ?? new Date().toISOString(),
+      }],
+      { onConflict: 'cadence_key,matter_id', ignoreDuplicates: true },
+    )
+    .select('id');
+  if (enrollErr) return { ok: false, error: enrollErr.message };
+
+  return { ok: true, alreadyEnrolled: (inserted ?? []).length === 0 };
 }
