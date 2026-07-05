@@ -22,6 +22,54 @@ import {
   COMMERCIAL_PAGE_TYPES,
   pageTypeLabel,
 } from "./engine-core";
+
+// Matches robots.txt Disallow paths that name team/attorney content (team
+// pages, individual bio slugs, staff directories). Used to distinguish "the
+// firm has no team page" from "the firm has one but is blocking crawlers
+// from it", which is a materially different (and more actionable) finding.
+const TEAM_PATH_RE = /team|attorney|lawyer|our-team|staff|people|bio|counsel/i;
+
+function disallowedPaths(parsedRobots: ParsedRobots | null): string[] {
+  if (!parsedRobots) return [];
+  const paths: string[] = [];
+  for (const group of parsedRobots.groups) {
+    for (const rule of group.rules) {
+      if (rule.type === "disallow" && rule.path) paths.push(rule.path);
+    }
+  }
+  return paths;
+}
+
+/**
+ * How much to trust an "absence" finding (no practice pages, no team page)
+ * given how the crawl discovered pages. Two independent safety nets exist:
+ * a sitemap the crawler fully consumed within budget, or a healthy number of
+ * same-origin links on the homepage's own server HTML. When NEITHER holds
+ * (no sitemap and a near-empty homepage link count, the SPA-with-no-sitemap
+ * case), the crawler cannot see most of the site, so a claim that a page
+ * type is absent is unreliable, not a finding of fact.
+ */
+export type DiscoveryConfidence = "high" | "medium" | "low";
+
+export function computeDiscoveryConfidence(
+  pagesScanned: number,
+  sitemapUrlCount: number,
+  homeInternalLinkCount: number,
+  maxPages: number
+): DiscoveryConfidence {
+  // The sitemap is authoritative: if the crawl scanned everything the sitemap
+  // listed (up to the scan's own page budget), coverage is complete by
+  // definition, regardless of how thin the on-page navigation looks.
+  if (sitemapUrlCount > 0 && pagesScanned >= Math.min(sitemapUrlCount, maxPages)) return "high";
+  if (sitemapUrlCount === 0) {
+    if (homeInternalLinkCount < 3) return "low";
+    if (homeInternalLinkCount < 8) return "medium";
+    return "high";
+  }
+  // A sitemap exists but the crawl did not reach everything in it within
+  // budget: partial coverage of a larger site, worth a medium caveat.
+  return "medium";
+}
 import {
   type PageAuditSnapshot,
   type PageIntentResult,
@@ -198,6 +246,16 @@ export interface SeoCheckResult {
   severityBreakdown: SeverityBreakdown;
   /** True when the wall-clock budget was hit before the page target was met. */
   partial?: boolean;
+  /** How much to trust "no X found" findings, given crawl coverage. See computeDiscoveryConfidence. */
+  discoveryConfidence?: DiscoveryConfidence;
+  /**
+   * Short (7-char) commit SHA of the deployed build that produced this scan,
+   * from Vercel's VERCEL_GIT_COMMIT_SHA. Null outside Vercel (local dev).
+   * Two field audits (2026-07-05) traced to a prod deploy running stale
+   * engine code; this makes "which code produced this report" a read-off
+   * instead of a git-log investigation.
+   */
+  buildSha?: string | null;
   checkedAt: string;
 }
 
@@ -516,7 +574,35 @@ export function buildIssues(pages: PageResult[]): Issue[] {
     });
   }
 
-  return issues.sort((a, b) => b.priority - a.priority);
+  return issues.sort(compareIssuesByPriority);
+}
+
+const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low", "info"];
+
+/**
+ * Deterministic issue ordering. Priority alone leaves ties (a scan can have a
+ * dozen HIGH findings at the identical computed score), so "top fixes" would
+ * order arbitrarily, by object insertion order, which shifts across runs of
+ * the same site for no operator-visible reason. Tie-break chain: severity,
+ * then coverage (affected fraction of pages), then category weight (reusing
+ * the same severity-derived weighting the scorer already uses), then title,
+ * so the same scan always produces the same ranked list.
+ */
+export function compareIssuesByPriority(a: Issue, b: Issue): number {
+  if (b.priority !== a.priority) return b.priority - a.priority;
+
+  const sevDiff = SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity);
+  if (sevDiff !== 0) return sevDiff;
+
+  const coverageA = a.totalPages > 0 ? a.affectedCount / a.totalPages : 0;
+  const coverageB = b.totalPages > 0 ? b.affectedCount / b.totalPages : 0;
+  if (coverageB !== coverageA) return coverageB - coverageA;
+
+  const catWeightA = SEVERITY_WEIGHT[CATEGORY_FAIL_SEVERITY[a.category] ?? "medium"];
+  const catWeightB = SEVERITY_WEIGHT[CATEGORY_FAIL_SEVERITY[b.category] ?? "medium"];
+  if (catWeightB !== catWeightA) return catWeightB - catWeightA;
+
+  return a.title.localeCompare(b.title);
 }
 
 function safePath(url: string): string {
@@ -556,11 +642,31 @@ export function severityBreakdown(issues: Issue[]): SeverityBreakdown {
  * firm has a contact path, practice-area pages, an attorney/team page, and a
  * sitemap. These complement the per-page issues from buildIssues.
  */
-export function buildSiteStructureIssues(pages: PageResult[], hasSitemap: boolean): Issue[] {
+export function buildSiteStructureIssues(
+  pages: PageResult[],
+  hasSitemap: boolean,
+  parsedRobots: ParsedRobots | null = null,
+  discoveryConfidence: DiscoveryConfidence = "high"
+): Issue[] {
   const totalPages = pages.length || 1;
   const home = pages[0];
   const out: Issue[] = [];
   const hasType = (t: PageType) => pages.some((p) => p.pageType === t);
+  const teamPathsBlocked = disallowedPaths(parsedRobots).filter((p) => TEAM_PATH_RE.test(p));
+
+  // An "absence" claim (no practice pages, no team page) is only as reliable
+  // as the crawl's ability to find pages in the first place. When discovery
+  // confidence is low (no sitemap, near-empty homepage navigation), downgrade
+  // the severity one tier and say so, rather than reporting full-confidence
+  // absence off a crawl that could not see most of the site.
+  const lowConfidenceSuffix = discoveryConfidence === "low"
+    ? " This crawl found very few navigable links and no sitemap, so this may reflect a discovery gap rather than a genuine absence: verify manually before citing it."
+    : "";
+  const capForLowConfidence = (severity: Severity): Severity => {
+    if (discoveryConfidence !== "low") return severity;
+    const order: Severity[] = ["critical", "high", "medium", "low", "info"];
+    return order[Math.min(order.length - 1, order.indexOf(severity) + 1)];
+  };
 
   // Practice-area content is credited wherever it is surfaced, not only on a
   // page the URL classifier tags "practice". Two real cases this covers:
@@ -600,16 +706,26 @@ export function buildSiteStructureIssues(pages: PageResult[], hasSitemap: boolea
   }
 
   if (!hasPractice) {
-    push("structure-practice", "Legal Marketing", "high", "No practice-area pages found",
-      "No dedicated practice-area or service pages were found. These are the pages high-intent clients search for.",
+    push("structure-practice", "Legal Marketing", capForLowConfidence("high"), "No practice-area pages found",
+      "No dedicated practice-area or service pages were found. These are the pages high-intent clients search for." + lowConfidenceSuffix,
       "Build a page per core practice area, each targeting the specific matter language clients use.",
       "high", "Big revenue lever. Practice-area pages are where high-value matter searches land.",
       "The firm's highest-value services do not have their own pages, so the searches that matter most have nowhere to land.", 84);
   }
 
-  if (!hasTeamSignal) {
-    push("structure-attorney", "AI Visibility", "medium", "No attorney / team page found",
-      "No attorney or team page was found. These pages carry the expertise and authorship signals search and AI weight.",
+  if (!hasTeamSignal && teamPathsBlocked.length > 0) {
+    // The crawler already knows robots.txt blocks team/attorney paths, so the
+    // honest finding is "these pages exist and are hidden from crawlers," not
+    // "these pages do not exist." Different root cause, different fix, and a
+    // stronger prospecting angle (the firm already built the content).
+    push("structure-attorney-blocked", "AI Visibility", "medium", "Attorney / team pages blocked from crawlers",
+      `robots.txt blocks crawler access to attorney or team pages (${teamPathsBlocked.slice(0, 3).join(", ")}), so search engines and AI systems cannot read content the firm already built.`,
+      "Remove the robots.txt Disallow rule blocking team or attorney pages so search engines and AI systems can index them.",
+      "low", "The firm already has this content; it is hiding it from search by accident. Very easy, very visible fix.",
+      "The firm's attorney bios exist, but robots.txt is quietly blocking search engines and AI systems from reading them. That is a five-minute fix with real visibility upside.", 60);
+  } else if (!hasTeamSignal) {
+    push("structure-attorney", "AI Visibility", capForLowConfidence("medium"), "No attorney / team page found",
+      "No attorney or team page was found. These pages carry the expertise and authorship signals search and AI weight." + lowConfidenceSuffix,
       "Add an attorney/team page with each lawyer's bio, credentials, and Person schema.",
       "medium", "Authority and AI-authorship gap. Easy to package, helps E-E-A-T and AI sourcing.",
       "There is no page establishing who the lawyers are, which is exactly the expertise signal search and AI systems look for.", 58);

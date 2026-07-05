@@ -20,6 +20,8 @@ const FULL: AuditPdfResult = {
   aiPolicyScore: 50,
   aiPolicyGrade: "C",
   checkedAt: "2026-07-05T12:00:00.000Z",
+  buildSha: "e1f015b",
+  discoveryConfidence: "low",
   categories: [{ items: [{ status: "pass" }, { status: "fail" }, { status: "warn" }] }],
   severityBreakdown: { critical: 0, high: 1, medium: 11, low: 6, info: 5 },
   issues: [

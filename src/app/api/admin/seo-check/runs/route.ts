@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOperatorSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { buildSeoCheckRunRow } from "../../../tools/seo-check/save-run";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,22 +26,6 @@ function asRecord(v: unknown): JsonRecord | null {
 
 function str(v: unknown, max = 240): string | null {
   return typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null;
-}
-
-function int01(v: unknown): number | null {
-  return typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.min(100, Math.round(v))) : null;
-}
-
-function nonnegativeInt(v: unknown): number {
-  return typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.round(v)) : 0;
-}
-
-function scanMode(v: unknown): "quick" | "standard" | "deep" {
-  return v === "standard" || v === "deep" ? v : "quick";
-}
-
-function renderingRisk(v: unknown): "low" | "medium" | "high" | null {
-  return v === "low" || v === "medium" || v === "high" ? v : null;
 }
 
 export async function GET(req: NextRequest) {
@@ -93,25 +78,8 @@ export async function POST(req: NextRequest) {
   const result = asRecord(body.result);
   if (!result) return NextResponse.json({ error: "result is required." }, { status: 400 });
 
-  const domain = str(result.domain, 255)?.toLowerCase();
-  if (!domain) return NextResponse.json({ error: "result.domain is required." }, { status: 400 });
-
-  const renderingSummary = asRecord(result.renderingSummary);
-  const issues = Array.isArray(result.issues) ? result.issues : [];
-
-  const row = {
-    domain,
-    scan_mode: scanMode(result.scanMode),
-    pages_scanned: nonnegativeInt(result.pagesScanned),
-    overall_score: int01(result.overallScore),
-    ai_search_score: int01(result.aiSearchScore),
-    ai_policy_score: int01(result.aiPolicyScore),
-    grade: str(result.grade, 10),
-    rendering_risk: renderingRisk(renderingSummary?.risk),
-    issue_count: issues.length,
-    result,
-    created_by_lawyer_id: session.lawyer_id || null,
-  };
+  const row = buildSeoCheckRunRow(result, session.lawyer_id || null);
+  if (!row) return NextResponse.json({ error: "result.domain is required." }, { status: 400 });
 
   const { data, error } = await supabase
     .from("seo_check_runs")

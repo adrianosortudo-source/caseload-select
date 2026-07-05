@@ -1,12 +1,31 @@
 import { describe, it, expect } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
   buildIssues,
   buildInternalSummary,
   buildSiteStructureIssues,
   severityBreakdown,
+  computeDiscoveryConfidence,
+  compareIssuesByPriority,
   type PageResult,
+  type Issue,
 } from "../analysis";
+import { parseRobotsTxt } from "../engine-core";
 import type { CategoryResult, CheckItem, PageType } from "../engine-core";
+
+function mkIssue(overrides: Partial<Issue> & Pick<Issue, "title" | "category" | "priority">): Issue {
+  return {
+    id: overrides.title, status: "fail", severity: "high", detail: "", affectedUrls: [],
+    affectedCount: 1, totalPages: 10, pageTypeImpact: [], confidence: "high", effort: "medium",
+    ...overrides,
+  };
+}
+
+function loadFixture(name: string): { pages: PageResult[] } {
+  const p = path.join(__dirname, "__fixtures__", `${name}.json`);
+  return JSON.parse(fs.readFileSync(p, "utf-8"));
+}
 
 function cat(name: string, items: CheckItem[]): CategoryResult {
   const score = items.reduce((s, i) => s + (i.status === "pass" ? 10 : i.status === "warn" ? 5 : 0), 0);
@@ -396,5 +415,124 @@ describe("buildSiteStructureIssues", () => {
       mkPage({ url: "https://x.com/about", pageType: "about", hasPerson: true, categories: c }),
     ];
     expect(buildSiteStructureIssues(pages, true).map((i) => i.title)).not.toContain("No attorney / team page found");
+  });
+
+  it("reframes a missing team page as blocked (not absent) when robots.txt disallows team paths", () => {
+    // Field case gosailaw.com: robots.txt Disallows /team-member/ and every
+    // individual bio slug, so the crawler genuinely cannot reach them. The
+    // firm has the content; it is hiding it from crawlers by accident.
+    const c = [cat("On-Page SEO", [{ label: "Page title", status: "pass" as const, detail: "" }])];
+    const pages = [mkPage({ url: "https://x.com/", pageType: "homepage", categories: c })];
+    const parsedRobots = parseRobotsTxt([
+      "User-agent: *",
+      "Disallow: /team-member/",
+      "Disallow: /team-member-jane-doe/",
+    ].join("\n"));
+    const titles = buildSiteStructureIssues(pages, true, parsedRobots).map((i) => i.title);
+    expect(titles).toContain("Attorney / team pages blocked from crawlers");
+    expect(titles).not.toContain("No attorney / team page found");
+  });
+
+  it("keeps the generic missing-team-page finding when no robots block explains it", () => {
+    const c = [cat("On-Page SEO", [{ label: "Page title", status: "pass" as const, detail: "" }])];
+    const pages = [mkPage({ url: "https://x.com/", pageType: "homepage", categories: c })];
+    const parsedRobots = parseRobotsTxt(["User-agent: *", "Disallow: /wp-admin/"].join("\n"));
+    const titles = buildSiteStructureIssues(pages, true, parsedRobots).map((i) => i.title);
+    expect(titles).toContain("No attorney / team page found");
+    expect(titles).not.toContain("Attorney / team pages blocked from crawlers");
+  });
+
+  it("downgrades practice/team absence findings one severity tier when discovery confidence is low", () => {
+    const c = [cat("On-Page SEO", [{ label: "Page title", status: "pass" as const, detail: "" }])];
+    const pages = [mkPage({ url: "https://x.com/", pageType: "homepage", practiceAreaIntent: false, categories: c })];
+    const highConf = buildSiteStructureIssues(pages, false, null, "high");
+    const lowConf = buildSiteStructureIssues(pages, false, null, "low");
+    const practiceHigh = highConf.find((i) => i.title === "No practice-area pages found");
+    const practiceLow = lowConf.find((i) => i.title === "No practice-area pages found");
+    const teamHigh = highConf.find((i) => i.title === "No attorney / team page found");
+    const teamLow = lowConf.find((i) => i.title === "No attorney / team page found");
+    expect(practiceHigh?.severity).toBe("high");
+    expect(practiceLow?.severity).toBe("medium");
+    expect(teamHigh?.severity).toBe("medium");
+    expect(teamLow?.severity).toBe("low");
+    expect(practiceLow?.detail).toMatch(/discovery gap/);
+  });
+
+  it("does not downgrade the sitemap or robots-blocked findings for low discovery confidence", () => {
+    // "No XML sitemap found" is a hard fact (hasSitemap boolean), not an
+    // absence inferred from crawl coverage, so it is untouched by confidence.
+    const c = [cat("On-Page SEO", [{ label: "Page title", status: "pass" as const, detail: "" }])];
+    const pages = [mkPage({ url: "https://x.com/", pageType: "homepage", categories: c })];
+    const issues = buildSiteStructureIssues(pages, false, null, "low");
+    expect(issues.find((i) => i.title === "No XML sitemap found")?.severity).toBe("medium");
+  });
+});
+
+describe("computeDiscoveryConfidence", () => {
+  it("is high when the crawl scanned everything the sitemap listed within budget", () => {
+    // Field case themblawfirm.ca: a 2-page site, sitemap lists 2 URLs, both scanned.
+    expect(computeDiscoveryConfidence(2, 2, 1, 10)).toBe("high");
+  });
+
+  it("is high for a normal multi-page crawl with a real sitemap", () => {
+    expect(computeDiscoveryConfidence(10, 63, 20, 10)).toBe("high");
+  });
+
+  it("is low with no sitemap and near-zero homepage links (SPA nav, no safety net)", () => {
+    expect(computeDiscoveryConfidence(1, 0, 1, 10)).toBe("low");
+  });
+
+  it("is medium with no sitemap but a moderate number of homepage links", () => {
+    expect(computeDiscoveryConfidence(5, 0, 5, 10)).toBe("medium");
+  });
+
+  it("is high with no sitemap but plenty of homepage links", () => {
+    expect(computeDiscoveryConfidence(10, 0, 12, 10)).toBe("high");
+  });
+
+  it("is medium when the crawl stops early, before exhausting either the sitemap or its own budget", () => {
+    // e.g. a wall-clock timeout: sitemap has 200 URLs, budget is 10 pages, but
+    // only 6 were scanned before the crawl stopped.
+    expect(computeDiscoveryConfidence(6, 200, 5, 10)).toBe("medium");
+  });
+
+  it("is high when the crawl exhausts its own page budget against a larger sitemap", () => {
+    // Asking for a quick (10-page) scan of a 200-URL sitemap and using the
+    // full budget is full compliance with what was requested, not a gap.
+    expect(computeDiscoveryConfidence(10, 200, 5, 10)).toBe("high");
+  });
+});
+
+describe("compareIssuesByPriority", () => {
+  it("breaks a priority tie by coverage (higher affected fraction first)", () => {
+    const a = mkIssue({ title: "A", category: "Technical & Security", priority: 67, affectedCount: 3, totalPages: 10 });
+    const b = mkIssue({ title: "B", category: "Technical & Security", priority: 67, affectedCount: 8, totalPages: 10 });
+    expect([a, b].sort(compareIssuesByPriority)).toEqual([b, a]);
+  });
+
+  it("then breaks by category weight (a HIGH-weighted category before a MEDIUM one)", () => {
+    // Field case tmalaw.ca: 14 HIGH issues tied at priority 67 spanning
+    // Technical & Security (category weight "high") and Schema & Structured
+    // Data (category weight "medium"). Same severity, same coverage: category
+    // weight must be the next tie-break, not object insertion order.
+    const schema = mkIssue({ title: "Business schema fields", category: "Schema & Structured Data", priority: 67, affectedCount: 8, totalPages: 10 });
+    const security = mkIssue({ title: "HSTS header", category: "Technical & Security", priority: 67, affectedCount: 8, totalPages: 10 });
+    expect([schema, security].sort(compareIssuesByPriority)).toEqual([security, schema]);
+  });
+
+  it("finally breaks by title so the order is fully deterministic", () => {
+    const a = mkIssue({ title: "Zebra check", category: "Technical & Security", priority: 67, affectedCount: 8, totalPages: 10 });
+    const b = mkIssue({ title: "Apple check", category: "Technical & Security", priority: 67, affectedCount: 8, totalPages: 10 });
+    expect([a, b].sort(compareIssuesByPriority)).toEqual([b, a]);
+  });
+
+  it("produces the same order on repeated sorts of the real tmalaw tie (14 issues at priority 67)", () => {
+    const domain = loadFixture("tmalaw");
+    const issues = buildIssues(domain.pages);
+    const tied = issues.filter((i) => i.priority === 67);
+    expect(tied.length).toBeGreaterThan(1);
+    const sortedOnce = [...tied].sort(compareIssuesByPriority).map((i) => i.title);
+    const sortedTwice = [...tied].sort(compareIssuesByPriority).sort(compareIssuesByPriority).map((i) => i.title);
+    expect(sortedTwice).toEqual(sortedOnce);
   });
 });

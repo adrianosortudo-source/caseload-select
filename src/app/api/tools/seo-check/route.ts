@@ -53,7 +53,10 @@ import {
   buildSiteStructureIssues,
   buildInternalSummary,
   severityBreakdown,
+  computeDiscoveryConfidence,
+  compareIssuesByPriority,
 } from "./analysis";
+import { saveSeoCheckRunBestEffort } from "./save-run";
 import {
   type NormalizedIntent,
   aggregateIntentAlignment,
@@ -1248,7 +1251,8 @@ export async function POST(req: NextRequest) {
     // Only operators may request standard/deep scans or large page budgets.
     // Unauthenticated (public lead-magnet) callers are capped to quick mode and
     // rate-limited, since each scan is an expensive arbitrary-domain crawl.
-    const isOperator = !!(await getOperatorSession());
+    const operatorSession = await getOperatorSession();
+    const isOperator = !!operatorSession;
     if (!isOperator) {
       const decision = await checkRateLimit("seoCheck", ipFromRequest(req));
       if (!decision.ok) {
@@ -1346,6 +1350,13 @@ export async function POST(req: NextRequest) {
     const pages: PageResult[] = [homePage];
     let partial = false;
 
+    // Count of same-origin links the homepage's OWN server HTML links to.
+    // Feeds discoveryConfidence: a site with near-zero on-page links and no
+    // sitemap safety net cannot be reliably crawled, so absence findings
+    // ("no practice pages", "no team page") get downgraded rather than
+    // reported at full confidence.
+    let homeInternalLinkCount = 0;
+
     if (maxPages > 1) {
       const maxDepth = DEPTH_BY_BUDGET(maxPages);
       const visited = new Set<string>([crawlUrlKey(homePage.url), crawlUrlKey(homeUrl)]);
@@ -1364,7 +1375,9 @@ export async function POST(req: NextRequest) {
         frontier.push({ url, depth, score: scoreUrlPriority(url) });
       };
 
-      for (const u of extractInternalLinks(homeHtml, homePage.url, domain)) enqueue(u, 1);
+      const homeLinks = extractInternalLinks(homeHtml, homePage.url, domain);
+      homeInternalLinkCount = homeLinks.length;
+      for (const u of homeLinks) enqueue(u, 1);
       if (sitemapSet) for (const u of sitemapSet) enqueue(u, 1);
 
       while (pages.length < maxPages && frontier.length > 0) {
@@ -1412,9 +1425,10 @@ export async function POST(req: NextRequest) {
     const topFixes = computeTopFixes(pages, 5);
 
     // Professional layer.
+    const discoveryConfidence = computeDiscoveryConfidence(pages.length, sitemapSet?.size ?? 0, homeInternalLinkCount, maxPages);
     const pageIssues = buildIssues(pages);
-    const structureIssues = buildSiteStructureIssues(pages, !!sitemapSet);
-    const issues = [...pageIssues, ...structureIssues].sort((a, b) => b.priority - a.priority);
+    const structureIssues = buildSiteStructureIssues(pages, !!sitemapSet, parsedRobots, discoveryConfidence);
+    const issues = [...pageIssues, ...structureIssues].sort(compareIssuesByPriority);
     const internalSummary = buildInternalSummary(pages, issues, overallScore, aiSearchScore);
     const breakdown = severityBreakdown(issues);
 
@@ -1446,8 +1460,17 @@ export async function POST(req: NextRequest) {
       ...(isOperator ? { internalSummary } : {}),
       severityBreakdown: breakdown,
       partial,
+      discoveryConfidence,
+      buildSha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
       checkedAt: new Date().toISOString(),
     };
+
+    // Auto-save every operator scan, so it is recoverable without the
+    // operator remembering to click "Save this scan" on the report. See
+    // save-run.ts for why the manual button still exists alongside this.
+    if (isOperator) {
+      await saveSeoCheckRunBestEffort(result as unknown as Record<string, unknown>, operatorSession?.lawyer_id || null);
+    }
 
     return NextResponse.json(result);
   } catch {

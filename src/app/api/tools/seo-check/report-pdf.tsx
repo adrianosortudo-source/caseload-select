@@ -81,6 +81,8 @@ export interface AuditPdfResult {
   aiPolicyGrade?: string;
   partial?: boolean;
   checkedAt?: string;
+  discoveryConfidence?: "high" | "medium" | "low";
+  buildSha?: string | null;
   categories?: Array<{ items?: Array<{ status?: string }> }>;
   issues?: IssueLike[];
   pages?: PageLike[];
@@ -249,6 +251,13 @@ export function AuditReportPdf({ result }: { result: AuditPdfResult }) {
                 ))}
               </View>
             )}
+            {(result.discoveryConfidence === "low" || result.discoveryConfidence === "medium") && (
+              <Text style={[s.para, { color: result.discoveryConfidence === "low" ? COLORS.danger : COLORS.stoneOnLight, marginTop: 4 }]}>
+                Discovery confidence: {result.discoveryConfidence}. This crawl found
+                {result.discoveryConfidence === "low" ? " very few navigable links and no sitemap" : " a sitemap the crawl did not fully cover within budget"},
+                so "not found" findings below may reflect a discovery gap rather than a genuine absence. Verify manually before citing them.
+              </Text>
+            )}
           </Section>
 
           {/* Issues */}
@@ -389,9 +398,13 @@ export function AuditReportPdf({ result }: { result: AuditPdfResult }) {
           )}
         </View>
 
-        {/* Footer on every page */}
+        {/* Footer on every page. Build SHA makes "which code produced this
+            report" a read-off after prod ran stale engine code twice. */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>CaseLoad Select · SEO and AI Visibility Audit · {domain}</Text>
+          <Text style={s.footerText}>
+            CaseLoad Select · SEO and AI Visibility Audit · {domain}
+            {result.buildSha ? ` · build ${result.buildSha}` : ""}
+          </Text>
           <Text style={s.footerText} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
         </View>
       </Page>
