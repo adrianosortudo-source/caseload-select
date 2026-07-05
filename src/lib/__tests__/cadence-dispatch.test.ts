@@ -59,6 +59,9 @@ vi.mock('@/lib/supabase-admin', () => ({
 const sendEmailMock = vi.fn();
 vi.mock('@/lib/email', () => ({ sendEmail: (...args: unknown[]) => sendEmailMock(...args) }));
 
+const sendSmsMock = vi.fn();
+vi.mock('@/lib/sms-dispatch', () => ({ sendSms: (...args: unknown[]) => sendSmsMock(...args) }));
+
 import {
   isRealSendGloballyEnabled,
   isRealSendEnabledForFirm,
@@ -74,6 +77,7 @@ function resetState() {
   state.tables = {};
   state.updates = [];
   sendEmailMock.mockReset();
+  sendSmsMock.mockReset();
 }
 
 describe('isRealSendGloballyEnabled', () => {
@@ -128,7 +132,7 @@ describe('dispatchScheduledCadenceMessages', () => {
   it('sends an eligible, consented, under-cap message when the gate is force-opened for the test', async () => {
     process.env[ENV_KEY] = 'true';
     state.tables['outbound_messages'] = {
-      select: { data: [{ id: 'om-1', firm_id: 'firm-1', matter_id: 'matter-1', screened_lead_id: 'lead-1', recipient_email: 'a@example.com', subject: 's', body: 'b' }], error: null, count: 0 },
+      select: { data: [{ id: 'om-1', firm_id: 'firm-1', matter_id: 'matter-1', screened_lead_id: 'lead-1', channel: 'email', recipient_email: 'a@example.com', subject: 's', body: 'b' }], error: null, count: 0 },
     };
     state.tables['screened_leads'] = {
       maybeSingle: { data: { id: 'lead-1', email_consent_status: 'explicit', sms_consent_status: 'unknown', six_month_expiry_date: null }, error: null },
@@ -146,7 +150,7 @@ describe('dispatchScheduledCadenceMessages', () => {
   it('marks a message failed and does not send when the deliverability cap is already hit', async () => {
     process.env[ENV_KEY] = 'true';
     state.tables['outbound_messages'] = {
-      select: { data: [{ id: 'om-2', firm_id: 'firm-1', matter_id: 'matter-2', screened_lead_id: 'lead-2', recipient_email: 'b@example.com', subject: 's', body: 'b' }], error: null, count: MAX_SENDS_PER_SUBJECT_PER_DAY },
+      select: { data: [{ id: 'om-2', firm_id: 'firm-1', matter_id: 'matter-2', screened_lead_id: 'lead-2', channel: 'email', recipient_email: 'b@example.com', subject: 's', body: 'b' }], error: null, count: MAX_SENDS_PER_SUBJECT_PER_DAY },
     };
     const summary = await dispatchScheduledCadenceMessages();
     expect(summary.capped).toBe(1);
@@ -158,7 +162,7 @@ describe('dispatchScheduledCadenceMessages', () => {
   it('blocks and marks failed when consent is not open at dispatch time', async () => {
     process.env[ENV_KEY] = 'true';
     state.tables['outbound_messages'] = {
-      select: { data: [{ id: 'om-3', firm_id: 'firm-1', matter_id: null, screened_lead_id: 'lead-3', recipient_email: 'c@example.com', subject: 's', body: 'b' }], error: null, count: 0 },
+      select: { data: [{ id: 'om-3', firm_id: 'firm-1', matter_id: null, screened_lead_id: 'lead-3', channel: 'email', recipient_email: 'c@example.com', subject: 's', body: 'b' }], error: null, count: 0 },
     };
     state.tables['screened_leads'] = {
       maybeSingle: { data: { id: 'lead-3', email_consent_status: 'declined', sms_consent_status: 'unknown', six_month_expiry_date: null }, error: null },
@@ -172,7 +176,7 @@ describe('dispatchScheduledCadenceMessages', () => {
   it('blocks without sending when the row has no recipient email', async () => {
     process.env[ENV_KEY] = 'true';
     state.tables['outbound_messages'] = {
-      select: { data: [{ id: 'om-4', firm_id: 'firm-1', matter_id: null, screened_lead_id: 'lead-4', recipient_email: null, subject: 's', body: 'b' }], error: null, count: 0 },
+      select: { data: [{ id: 'om-4', firm_id: 'firm-1', matter_id: null, screened_lead_id: 'lead-4', channel: 'email', recipient_email: null, subject: 's', body: 'b' }], error: null, count: 0 },
     };
     state.tables['screened_leads'] = {
       maybeSingle: { data: { id: 'lead-4', email_consent_status: 'explicit', sms_consent_status: 'unknown', six_month_expiry_date: null }, error: null },
@@ -189,5 +193,48 @@ describe('dispatchScheduledCadenceMessages', () => {
     expect(summary.attempted).toBe(true);
     expect(summary.sent).toBe(0);
     expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it('sends via sendSms (not sendEmail) for a channel=sms row, using the lead phone and checking SMS consent', async () => {
+    process.env[ENV_KEY] = 'true';
+    state.tables['outbound_messages'] = {
+      select: { data: [{ id: 'om-5', firm_id: 'firm-1', matter_id: null, screened_lead_id: 'lead-5', channel: 'sms', recipient_email: null, subject: null, body: 'Reminder text' }], error: null, count: 0 },
+    };
+    state.tables['screened_leads'] = {
+      maybeSingle: { data: { id: 'lead-5', contact_phone: '+14165550000', email_consent_status: 'unknown', sms_consent_status: 'explicit', six_month_expiry_date: null }, error: null },
+    };
+    sendSmsMock.mockResolvedValue({ skipped: false, sid: 'SM1' });
+
+    const summary = await dispatchScheduledCadenceMessages();
+    expect(summary.sent).toBe(1);
+    expect(sendSmsMock).toHaveBeenCalledWith('+14165550000', 'Reminder text');
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(state.updates.find((u) => u.id === 'om-5')?.patch.status).toBe('sent');
+  });
+
+  it('blocks an sms row when SMS consent is not explicit (email-only consent does not carry over)', async () => {
+    process.env[ENV_KEY] = 'true';
+    state.tables['outbound_messages'] = {
+      select: { data: [{ id: 'om-6', firm_id: 'firm-1', matter_id: null, screened_lead_id: 'lead-6', channel: 'sms', recipient_email: null, subject: null, body: 'Reminder text' }], error: null, count: 0 },
+    };
+    state.tables['screened_leads'] = {
+      maybeSingle: { data: { id: 'lead-6', contact_phone: '+14165550000', email_consent_status: 'explicit', sms_consent_status: 'unknown', six_month_expiry_date: null }, error: null },
+    };
+    const summary = await dispatchScheduledCadenceMessages();
+    expect(summary.blocked).toBe(1);
+    expect(sendSmsMock).not.toHaveBeenCalled();
+  });
+
+  it('blocks an sms row with no phone on file rather than throwing', async () => {
+    process.env[ENV_KEY] = 'true';
+    state.tables['outbound_messages'] = {
+      select: { data: [{ id: 'om-7', firm_id: 'firm-1', matter_id: null, screened_lead_id: 'lead-7', channel: 'sms', recipient_email: null, subject: null, body: 'Reminder text' }], error: null, count: 0 },
+    };
+    state.tables['screened_leads'] = {
+      maybeSingle: { data: { id: 'lead-7', contact_phone: null, email_consent_status: 'unknown', sms_consent_status: 'explicit', six_month_expiry_date: null }, error: null },
+    };
+    const summary = await dispatchScheduledCadenceMessages();
+    expect(summary.blocked).toBe(1);
+    expect(sendSmsMock).not.toHaveBeenCalled();
   });
 });

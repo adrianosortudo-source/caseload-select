@@ -370,8 +370,11 @@ export async function runCadenceEngine(
     const ledgerRows: Array<Record<string, unknown>> = [];
     let maxStep = run.next_step_number - 1;
     for (const step of due) {
-      const allowed = isConsentGated(consentState, 'email', now);
-      const blockReason = allowed ? null : consentBlockReason(consentState, 'email', now);
+      // step.channel supports 'sms' for a future SMS cadence (WP-7 adapter,
+      // gated on 10DLC); every seeded cadence today is 'email', so this
+      // branch is plumbing-complete but never actually takes the sms path.
+      const allowed = isConsentGated(consentState, step.channel, now);
+      const blockReason = allowed ? null : consentBlockReason(consentState, step.channel, now);
       ledgerRows.push({
         firm_id: run.firm_id,
         cadence_run_id: run.id,
@@ -379,7 +382,7 @@ export async function runCadenceEngine(
         step_number: step.step_number,
         matter_id: run.matter_id,
         screened_lead_id: run.screened_lead_id,
-        channel: 'email',
+        channel: step.channel,
         recipient_email: recipient,
         subject: interpolateTemplate(step.subject_template, vars),
         body: interpolateTemplate(step.body_template, vars),

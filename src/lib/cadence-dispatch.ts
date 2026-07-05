@@ -31,7 +31,8 @@
 
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { sendEmail } from '@/lib/email';
-import { isConsentGated, type LeadConsentState } from '@/lib/comms-gate';
+import { sendSms } from '@/lib/sms-dispatch';
+import { isConsentGated, type LeadConsentState, type CommChannel } from '@/lib/comms-gate';
 
 export const MAX_SENDS_PER_SUBJECT_PER_DAY = 3;
 
@@ -65,6 +66,7 @@ interface ScheduledMessageRow {
   firm_id: string;
   matter_id: string | null;
   screened_lead_id: string | null;
+  channel: 'email' | 'sms';
   recipient_email: string | null;
   subject: string | null;
   body: string | null;
@@ -72,6 +74,7 @@ interface ScheduledMessageRow {
 
 interface LeadConsentRow {
   id: string;
+  contact_phone: string | null;
   email_consent_status: string | null;
   sms_consent_status: string | null;
   six_month_expiry_date: string | null;
@@ -108,7 +111,7 @@ export async function dispatchScheduledCadenceMessages(
 
   const { data: rows, error } = await supabase
     .from('outbound_messages')
-    .select('id, firm_id, matter_id, screened_lead_id, recipient_email, subject, body')
+    .select('id, firm_id, matter_id, screened_lead_id, channel, recipient_email, subject, body')
     .eq('shadow', false)
     .eq('status', 'scheduled')
     .limit(500);
@@ -141,7 +144,7 @@ export async function dispatchScheduledCadenceMessages(
     }
     const { data: lead } = await supabase
       .from('screened_leads')
-      .select('id, email_consent_status, sms_consent_status, six_month_expiry_date')
+      .select('id, contact_phone, email_consent_status, sms_consent_status, six_month_expiry_date')
       .eq('id', msg.screened_lead_id)
       .maybeSingle();
     const consentState: LeadConsentState = {
@@ -149,20 +152,30 @@ export async function dispatchScheduledCadenceMessages(
       sms_consent_status: ((lead as LeadConsentRow | null)?.sms_consent_status ?? null) as LeadConsentState['sms_consent_status'],
       six_month_expiry_date: (lead as LeadConsentRow | null)?.six_month_expiry_date ?? null,
     };
-    if (!isConsentGated(consentState, 'email', now)) {
-      summary.blocked += 1;
-      await supabase.from('outbound_messages').update({ status: 'failed' }).eq('id', msg.id);
-      continue;
-    }
-
-    if (!msg.recipient_email) {
+    const channel: CommChannel = msg.channel;
+    if (!isConsentGated(consentState, channel, now)) {
       summary.blocked += 1;
       await supabase.from('outbound_messages').update({ status: 'failed' }).eq('id', msg.id);
       continue;
     }
 
     try {
-      await sendEmail(msg.recipient_email, msg.subject ?? '', msg.body ?? '');
+      if (channel === 'sms') {
+        const phone = (lead as LeadConsentRow | null)?.contact_phone;
+        if (!phone) {
+          summary.blocked += 1;
+          await supabase.from('outbound_messages').update({ status: 'failed' }).eq('id', msg.id);
+          continue;
+        }
+        await sendSms(phone, msg.body ?? '');
+      } else {
+        if (!msg.recipient_email) {
+          summary.blocked += 1;
+          await supabase.from('outbound_messages').update({ status: 'failed' }).eq('id', msg.id);
+          continue;
+        }
+        await sendEmail(msg.recipient_email, msg.subject ?? '', msg.body ?? '');
+      }
       summary.sent += 1;
       await supabase.from('outbound_messages').update({ status: 'sent', sent_at: now.toISOString() }).eq('id', msg.id);
     } catch {
