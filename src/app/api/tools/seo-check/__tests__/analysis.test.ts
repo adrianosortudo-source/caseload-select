@@ -24,6 +24,7 @@ function mkPage(opts: {
   credentials?: boolean;
   schemaBlocks?: number;
   hasPerson?: boolean;
+  practiceAreaIntent?: boolean;
 }): PageResult {
   const allItems = opts.categories.flatMap((c) => c.items);
   return {
@@ -52,7 +53,7 @@ function mkPage(opts: {
     },
     lawFirm: {
       phoneVisible: opts.phone ?? true, contactFormPresent: opts.contactForm ?? true,
-      addressVisible: true, consultationCta: opts.cta ?? true, policyPagePresent: true, practiceAreaIntent: true,
+      addressVisible: true, consultationCta: opts.cta ?? true, policyPagePresent: true, practiceAreaIntent: opts.practiceAreaIntent ?? true,
       trust: { testimonials: opts.testimonials ?? true, reviews: false, caseResults: false, awards: false, credentials: opts.credentials ?? true },
     },
     wordCount: 500,
@@ -296,9 +297,9 @@ describe("buildInternalSummary", () => {
 });
 
 describe("buildSiteStructureIssues", () => {
-  it("flags missing practice pages and missing sitemap", () => {
+  it("flags missing practice pages and missing sitemap when no page signals practice areas", () => {
     const pages = [mkPage({
-      url: "https://x.com/", pageType: "homepage",
+      url: "https://x.com/", pageType: "homepage", practiceAreaIntent: false,
       categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "" }])],
     })];
     const issues = buildSiteStructureIssues(pages, false);
@@ -306,6 +307,17 @@ describe("buildSiteStructureIssues", () => {
     expect(titles).toContain("No practice-area pages found");
     expect(titles).toContain("No XML sitemap found");
     expect(titles).toContain("No attorney / team page found");
+  });
+
+  it("does not flag missing practice pages on a one-page site whose homepage signals practice areas", () => {
+    // Common on Wix / Squarespace: the whole firm is one page and every practice
+    // area is a homepage section. The homepage carries practiceAreaIntent, so the
+    // tool must not claim the practice content is absent. Field case: themblawfirm.ca.
+    const pages = [mkPage({
+      url: "https://x.com/", pageType: "homepage", practiceAreaIntent: true,
+      categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "" }])],
+    })];
+    expect(buildSiteStructureIssues(pages, true).map((i) => i.title)).not.toContain("No practice-area pages found");
   });
 
   it("does not flag a contact gap when a phone is present on the homepage", () => {
@@ -320,7 +332,8 @@ describe("buildSiteStructureIssues", () => {
   it("does not flag practice pages when the firm names them by matter (topic URL, type 'other')", () => {
     const c = [cat("On-Page SEO", [{ label: "Page title", status: "pass" as const, detail: "" }])];
     const pages = [
-      mkPage({ url: "https://x.com/", pageType: "homepage", categories: c }),
+      // Homepage intent off, so the "other" matter pages are the sole credit source.
+      mkPage({ url: "https://x.com/", pageType: "homepage", practiceAreaIntent: false, categories: c }),
       // /corporate, /real-estate classify as "other" but carry practice-area intent
       mkPage({ url: "https://x.com/corporate", pageType: "other", categories: c }),
       mkPage({ url: "https://x.com/real-estate", pageType: "other", categories: c }),

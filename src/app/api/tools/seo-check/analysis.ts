@@ -541,11 +541,16 @@ export function buildSiteStructureIssues(pages: PageResult[], hasSitemap: boolea
   const out: Issue[] = [];
   const hasType = (t: PageType) => pages.some((p) => p.pageType === t);
 
-  // Firms name practice pages by the matter itself (/corporate, /real-estate),
-  // which the URL classifier tags "other", so do not rely on pageType alone:
-  // a non-utility page with practice-area intent counts as a practice page.
+  // Practice-area content is credited wherever it is surfaced, not only on a
+  // page the URL classifier tags "practice". Two real cases this covers:
+  // (1) firms name practice pages by the matter itself (/corporate,
+  // /real-estate), which classify as "other"; (2) one-page sites (common on
+  // Wix / Squarespace) carry every practice area as a homepage section, so the
+  // signal lands on the homepage. Firing "No practice-area pages found" when a
+  // scanned page clearly signals the firm's practice areas is a false claim of
+  // absence, so any page with practice-area intent satisfies the check.
   const hasPractice = hasType("practice") ||
-    pages.some((p) => p.pageType === "other" && p.lawFirm.practiceAreaIntent);
+    pages.some((p) => p.lawFirm.practiceAreaIntent);
   // Team info often lives on /about rather than a dedicated /team URL; treat
   // Person/Attorney schema anywhere as evidence the firm names its lawyers.
   const hasTeamSignal = hasType("attorney") ||
