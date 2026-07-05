@@ -21,6 +21,7 @@ import {
 import { deliverWebhook } from './ghl-webhook';
 import { buildWelcomeDraft } from './welcome-draft-pure';
 import { resolveMatterLead, resolveMatterAssignees } from './firm-routing-pure';
+import { writePrimaryParty, writeActivity } from './crm-dual-write';
 
 /**
  * Create a new client_matters row from a Band A take. Snapshots
@@ -131,6 +132,25 @@ export async function createMatterFromBandATake(input: {
     to_stage: 'intake',
     actor_role: 'system',
     note: 'Matter created from Band A take',
+  });
+
+  // M1 canonical model dual-write (best-effort, never blocks the take).
+  // The primary party captures the client contact on the same row shape
+  // crm-dual-read.ts already reads first when populated.
+  void writePrimaryParty({
+    matterId: inserted.id,
+    firmId: input.firm_id,
+    fullName: input.primary_name,
+    email: input.primary_email,
+    phone: input.primary_phone,
+  });
+  void writeActivity({
+    matterId: inserted.id,
+    firmId: input.firm_id,
+    activityType: 'promotion',
+    title: 'Matter created',
+    actorRole: 'system',
+    metadata: { event_type: 'matter_created', source_screened_lead_id: input.source_screened_lead_id },
   });
 
   return { ok: true, matter: inserted as ClientMatter };
@@ -257,6 +277,17 @@ export async function transitionMatterStage(input: {
     // is greppable/alertable rather than a quiet warn.
     console.error('[matter-stage] AUDIT GAP: event log insert failed:', eventErr.message);
   }
+
+  // M1 canonical model dual-write (best-effort, never blocks the transition).
+  void writeActivity({
+    matterId: input.matter_id,
+    firmId: matter.firm_id,
+    activityType: 'stage_change',
+    title: `Stage: ${from} to ${input.to}`,
+    body: input.note,
+    actorRole: input.actor_role,
+    metadata: { from_stage: from, to_stage: input.to, actor_id: input.actor_id },
+  });
 
   // DR-049 cadence map, GHL-owned execution (operator decision 2026-06-09,
   // CRM Bible section 12): GoHighLevel runs the journey cadences; Supabase

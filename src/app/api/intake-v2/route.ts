@@ -74,6 +74,7 @@ import { resolveFirmTimezone } from "@/lib/firm-timezone";
 import type { LawyerReport, Channel } from "@/lib/screen-engine/types";
 import { buildScoringDeltaForInsert } from "@/lib/scoring-port-read";
 import { finalizeWebSessionOnSubmit } from "@/lib/web-intake-session-store";
+import { logIntakeConsent } from "@/lib/consent-log";
 
 interface IntakeAxes {
   value: number;
@@ -481,6 +482,21 @@ export async function POST(req: NextRequest) {
   // same endpoint).
   finalizeWebSessionOnSubmit(firmIdParam, inserted.lead_id, inserted.id as string).catch((err) => {
     console.error("[intake-v2] finalizeWebSessionOnSubmit failed:", err);
+  });
+
+  // H5/DR-075: append the append-only CASL evidentiary trail. The consent
+  // columns above are the queryable state; consent_log is the audit record of
+  // how that state was reached. Best-effort, never blocks persistence.
+  logIntakeConsent({
+    firmId: firmIdParam,
+    screenedLeadId: inserted.id as string,
+    explicit: !!v.email_consent_explicit,
+    capturedAtIso: emailConsentFields.email_consent_captured_at,
+    sixMonthExpiryIso: ('six_month_expiry_date' in emailConsentFields ? emailConsentFields.six_month_expiry_date : null) ?? null,
+    ipAddress: consentIp,
+    userAgent: consentUa,
+  }).catch((err) => {
+    console.error("[intake-v2] logIntakeConsent failed:", err);
   });
 
   // Lead notification email. Doctrine (2026-05-15): "The engine sorts

@@ -16,6 +16,7 @@ import type {
 } from './types';
 import { visibleChannelsForRole, sanitiseBody, notificationEventType } from './matter-messages-pure';
 import { sanitizeMessageHtml } from './message-html-sanitize';
+import { writeActivity, type ActivityActorRole } from './crm-dual-write';
 
 const ATTACHMENT_BUCKET = 'firm-files';
 const SIGNED_URL_TTL = 3600; // 1 hour
@@ -163,6 +164,18 @@ export async function insertMessage(input: {
     input.notifyClient ?? true,
   ).catch((err) => {
     console.warn('[matter-messages] notification enqueue failed:', err);
+  });
+
+  // M1 canonical model dual-write (best-effort, never blocks the send).
+  const label = input.channel_type === 'client' ? 'client message' : 'internal note';
+  void writeActivity({
+    matterId: input.matter_id,
+    firmId: input.firm_id,
+    activityType: 'message',
+    title: `${input.sender_role} sent ${label} (${input.channel_type})`,
+    body: safeBody,
+    actorRole: input.sender_role as ActivityActorRole,
+    metadata: { channel_type: input.channel_type, recipient_scope: input.recipient_scope ?? 'individual' },
   });
 
   return { ok: true, message: inserted as MatterMessage };
