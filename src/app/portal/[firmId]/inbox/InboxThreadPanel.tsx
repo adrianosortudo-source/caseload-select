@@ -91,7 +91,13 @@ export default function InboxThreadPanel({ firmId, matterId }: Props) {
           messages.map((m) => (
             <div key={m.id} style={{ marginBottom: 14, padding: '10px 12px', background: 'rgba(0,0,0,0.02)', borderLeft: '3px solid rgba(30,47,88,0.3)' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#1E2F58', textTransform: 'capitalize' }}>{m.sender_role}</div>
-              <div style={{ fontSize: 13, marginTop: 4, whiteSpace: 'pre-wrap' }}>{m.body}</div>
+              {/* Bodies are sanitized server-side at write (sanitizeMessageHtml);
+                  render the allowed rich subset the same way MessageThreads.tsx
+                  does, so a welcome send does not show literal markup here. */}
+              <div
+                style={{ fontSize: 13, marginTop: 4 }}
+                dangerouslySetInnerHTML={{ __html: m.body.replace(/\n/g, '<br>') }}
+              />
               <div style={{ fontSize: 10, color: 'rgba(0,0,0,0.35)', marginTop: 6 }}>{new Date(m.created_at).toLocaleString()}</div>
             </div>
           ))

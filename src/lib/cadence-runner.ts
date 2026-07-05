@@ -131,9 +131,12 @@ export async function runCadenceEngine(
   const firmScope = opts.firmId ?? null;
 
   // ── Load the rule library (guards table existence) ───────────────────────
+  // exit_config MUST be in this select: the audit (2026-07-05) found it
+  // missing, which made shouldExitRun always see undefined and the J6 exit
+  // condition never fire. A test pins this column list now.
   const { data: ruleRows, error: ruleErr } = await supabase
     .from('cadence_rules')
-    .select('id, firm_id, cadence_key, name, trigger_type, trigger_config, channel, enabled');
+    .select('id, firm_id, cadence_key, name, trigger_type, trigger_config, exit_config, channel, enabled');
   if (ruleErr) {
     if (isUndefinedTable(ruleErr)) return { ...NO_SUMMARY, reason: 'cadence tables not applied' };
     return { ...NO_SUMMARY, applied: true, ok: false, reason: ruleErr.message };
@@ -152,10 +155,16 @@ export async function runCadenceEngine(
   };
 
   // ── Pass 1: ENROLL from stage events ─────────────────────────────────────
+  // DESCENDING order (audit fix 2026-07-05): with ascending order and a 2000
+  // row cap, the scan would return the 2000 OLDEST events forever once the
+  // table outgrew the cap, so exactly the new transitions that still need
+  // enrollment would become invisible. Newest-first keeps every fresh
+  // transition in the window; re-scanning already-enrolled events is a no-op
+  // via the enrollment unique constraints.
   let eventQuery = supabase
     .from('matter_stage_events')
     .select('matter_id, firm_id, from_stage, to_stage, created_at')
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(2000);
   if (firmScope) eventQuery = eventQuery.eq('firm_id', firmScope);
   const { data: eventRows } = await eventQuery;
@@ -196,6 +205,12 @@ export async function runCadenceEngine(
     for (const cadenceKey of matchingCadenceKeys) {
       const resolved = resolveRuleForFirm(rules, ev.firm_id, cadenceKey);
       if (!resolved) continue;
+      // Audit fix (2026-07-05): the key set above can be satisfied by the
+      // GLOBAL rule while resolveRuleForFirm swaps in a firm override whose
+      // own trigger differs. Enroll only when the RESOLVED rule's trigger
+      // matches this event; a firm that overrode a cadence onto a different
+      // trigger must not be enrolled on the global's trigger.
+      if (!matchesFieldChangeTrigger(resolved, trigger)) continue;
       enrollRows.push({
         firm_id: ev.firm_id,
         cadence_rule_id: resolved.id,
@@ -213,7 +228,16 @@ export async function runCadenceEngine(
       .from('cadence_runs')
       .upsert(enrollRows, { onConflict: 'cadence_key,matter_id', ignoreDuplicates: true })
       .select('id');
-    if (!enrollErr && inserted) summary.enrolled += inserted.length;
+    if (enrollErr) {
+      // Audit fix (2026-07-05): this error was previously swallowed, which is
+      // exactly how the 42P10 partial-index defect stayed invisible (the tick
+      // reported ok:true while enrolling nothing). Surface it.
+      console.error('[cadence-runner] matter enrollment upsert failed', { error: enrollErr.message });
+      summary.ok = false;
+      summary.reason = `matter enrollment failed: ${enrollErr.message}`;
+    } else if (inserted) {
+      summary.enrolled += inserted.length;
+    }
   }
 
   // ── Pass 1b: ENROLL from screened_leads status flips (lead-only cadences) ─
@@ -252,6 +276,12 @@ export async function runCadenceEngine(
       for (const cadenceKey of matchingCadenceKeys) {
         const resolved = resolveRuleForFirm(rules, lead.firm_id, cadenceKey);
         if (!resolved) continue;
+        // Audit fix (2026-07-05), same shape as the stage pass: the resolved
+        // rule (possibly a firm override) must itself be lead-status-sourced
+        // with a matching status, not merely share a cadence_key with a
+        // global rule that matched.
+        if (resolved.trigger_config['source'] !== 'screened_leads_status'
+          || resolved.trigger_config['status'] !== lead.status) continue;
         leadEnrollRows.push({
           firm_id: lead.firm_id,
           cadence_rule_id: resolved.id,
@@ -269,7 +299,13 @@ export async function runCadenceEngine(
         .from('cadence_runs')
         .upsert(leadEnrollRows, { onConflict: 'cadence_key,screened_lead_id', ignoreDuplicates: true })
         .select('id');
-      if (!leadEnrollErr && inserted) summary.enrolled += inserted.length;
+      if (leadEnrollErr) {
+        console.error('[cadence-runner] lead enrollment upsert failed', { error: leadEnrollErr.message });
+        summary.ok = false;
+        summary.reason = `lead enrollment failed: ${leadEnrollErr.message}`;
+      } else if (inserted) {
+        summary.enrolled += inserted.length;
+      }
     }
   }
 
@@ -392,16 +428,31 @@ export async function runCadenceEngine(
         scheduled_for: computeStepScheduledAt(run.anchor_at, step.delay_hours).toISOString(),
         status: allowed ? (realSendEligible ? 'scheduled' : 'shadow_logged') : 'suppressed',
       });
-      if (allowed) summary.shadow_logged += 1;
-      else summary.suppressed += 1;
       if (step.step_number > maxStep) maxStep = step.step_number;
     }
 
     if (ledgerRows.length > 0) {
       // ignoreDuplicates: uq_outbound_messages_run_step prevents double-logging.
-      await supabase
+      // Audit fix (2026-07-05): the write's error was previously unchecked and
+      // the run advanced regardless, permanently skipping any touch whose
+      // ledger row failed to land. Now: on a failed write, log loudly, leave
+      // next_step_number untouched, and let the next tick retry. Counts only
+      // increment after the write succeeds.
+      const { error: ledgerErr } = await supabase
         .from('outbound_messages')
         .upsert(ledgerRows, { onConflict: 'cadence_run_id,step_number', ignoreDuplicates: true });
+      if (ledgerErr) {
+        console.error('[cadence-runner] shadow ledger write failed; run not advanced', {
+          run_id: run.id, cadence_key: run.cadence_key, error: ledgerErr.message,
+        });
+        summary.ok = false;
+        summary.reason = `ledger write failed: ${ledgerErr.message}`;
+        continue;
+      }
+      for (const row of ledgerRows) {
+        if (row.status === 'suppressed') summary.suppressed += 1;
+        else summary.shadow_logged += 1;
+      }
     }
 
     const last = lastStepNumber(runSteps, run.cadence_rule_id);

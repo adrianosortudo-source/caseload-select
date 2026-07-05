@@ -147,7 +147,7 @@ describe('dispatchScheduledCadenceMessages', () => {
     expect(update?.patch.status).toBe('sent');
   });
 
-  it('marks a message failed and does not send when the deliverability cap is already hit', async () => {
+  it('defers (leaves scheduled) a message when the rolling deliverability cap is hit, so a later tick retries', async () => {
     process.env[ENV_KEY] = 'true';
     state.tables['outbound_messages'] = {
       select: { data: [{ id: 'om-2', firm_id: 'firm-1', matter_id: 'matter-2', screened_lead_id: 'lead-2', channel: 'email', recipient_email: 'b@example.com', subject: 's', body: 'b' }], error: null, count: MAX_SENDS_PER_SUBJECT_PER_DAY },
@@ -156,7 +156,19 @@ describe('dispatchScheduledCadenceMessages', () => {
     expect(summary.capped).toBe(1);
     expect(summary.sent).toBe(0);
     expect(sendEmailMock).not.toHaveBeenCalled();
-    expect(state.updates.find((u) => u.id === 'om-2')?.patch.status).toBe('failed');
+    // Audit fix: capped is a deferral, not a terminal failure. No status update.
+    expect(state.updates.find((u) => u.id === 'om-2')).toBeUndefined();
+  });
+
+  it('terminal-fails a row with no screened_lead_id instead of reprocessing it every tick', async () => {
+    process.env[ENV_KEY] = 'true';
+    state.tables['outbound_messages'] = {
+      select: { data: [{ id: 'om-8', firm_id: 'firm-1', matter_id: 'matter-8', screened_lead_id: null, channel: 'email', recipient_email: 'x@example.com', subject: 's', body: 'b' }], error: null, count: 0 },
+    };
+    const summary = await dispatchScheduledCadenceMessages();
+    expect(summary.blocked).toBe(1);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(state.updates.find((u) => u.id === 'om-8')?.patch.status).toBe('failed');
   });
 
   it('blocks and marks failed when consent is not open at dispatch time', async () => {

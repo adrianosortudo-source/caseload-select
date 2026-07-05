@@ -96,12 +96,10 @@ describe('computePipelineBoard', () => {
 });
 
 describe('computeHealthBoard', () => {
-  it('computes consent coverage as the share of explicit or implied rows', () => {
+  it('computes consent coverage from pre-computed counts (exact at any scale)', () => {
     const board = computeHealthBoard({
-      consentRows: [
-        { email_consent_status: 'explicit' }, { email_consent_status: 'implied' },
-        { email_consent_status: 'unknown' }, { email_consent_status: 'declined' },
-      ],
+      totalLeads: 4,
+      consentedCount: 2,
       channelRows: [],
       shadowMessageCount: 0,
       notificationFailureCount: 0,
@@ -111,13 +109,14 @@ describe('computeHealthBoard', () => {
   });
 
   it('returns null consent coverage for zero leads', () => {
-    const board = computeHealthBoard({ consentRows: [], channelRows: [], shadowMessageCount: 0, notificationFailureCount: 0 });
+    const board = computeHealthBoard({ totalLeads: 0, consentedCount: 0, channelRows: [], shadowMessageCount: 0, notificationFailureCount: 0 });
     expect(board.consentCoverageRate).toBeNull();
   });
 
   it('builds a channel mix sorted by count descending, defaulting a null channel to web', () => {
     const board = computeHealthBoard({
-      consentRows: [],
+      totalLeads: 0,
+      consentedCount: 0,
       channelRows: [{ channel: 'voice' }, { channel: null }, { channel: null }, { channel: 'whatsapp' }],
       shadowMessageCount: 0,
       notificationFailureCount: 0,
@@ -130,7 +129,7 @@ describe('computeHealthBoard', () => {
   });
 
   it('passes through shadow cadence volume and notification failure count', () => {
-    const board = computeHealthBoard({ consentRows: [], channelRows: [], shadowMessageCount: 42, notificationFailureCount: 3 });
+    const board = computeHealthBoard({ totalLeads: 0, consentedCount: 0, channelRows: [], shadowMessageCount: 42, notificationFailureCount: 3 });
     expect(board.shadowCadenceVolume).toBe(42);
     expect(board.notificationFailureCount).toBe(3);
   });

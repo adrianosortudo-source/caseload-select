@@ -25,7 +25,8 @@ const state: {
   tables: Record<string, TableState>;
   outboundUpserts: Record<string, unknown>[][];
   runUpdates: Array<{ patch: Record<string, unknown>; id: string }>;
-} = { tables: {}, outboundUpserts: [], runUpdates: [] };
+  selects: Array<{ table: string; cols: string }>;
+} = { tables: {}, outboundUpserts: [], runUpdates: [], selects: [] };
 
 function builder(table: string) {
   const b: Record<string, unknown> = {};
@@ -34,7 +35,10 @@ function builder(table: string) {
   let pendingUpdatePatch: Record<string, unknown> | null = null;
 
   const chain = () => b;
-  b.select = chain;
+  b.select = (cols?: string) => {
+    if (typeof cols === 'string') state.selects.push({ table, cols });
+    return b;
+  };
   b.eq = (col: string, val: unknown) => {
     if (isRunUpdate && col === 'id' && pendingUpdatePatch) {
       state.runUpdates.push({ patch: pendingUpdatePatch, id: String(val) });
@@ -89,6 +93,7 @@ function resetState() {
   state.tables = {};
   state.outboundUpserts = [];
   state.runUpdates = [];
+  state.selects = [];
 }
 
 describe('GET /api/cron/cadence-runner', () => {
@@ -281,6 +286,65 @@ describe('WP-1 extensions: fan-out, lead-status enrollment, exit conditions', ()
     const update = state.runUpdates.find((u) => u.id === 'run-exit');
     expect(update?.patch.status).toBe('exited');
     expect(update?.patch.exit_reason).toMatch(/retainer_pending/);
+  });
+
+  it('selects exit_config in the rule-library query (audit regression pin: omitting it made J6 exits impossible)', async () => {
+    state.tables['cadence_rules'] = { select: { data: [], error: null } };
+    state.tables['cadence_steps'] = { select: { data: [], error: null } };
+    state.tables['matter_stage_events'] = { select: { data: [], error: null } };
+    state.tables['cadence_runs'] = { select: { data: [], error: null } };
+
+    const { runCadenceEngine } = await import('@/lib/cadence-runner');
+    await runCadenceEngine({ now: NOW });
+
+    const ruleSelect = state.selects.find((s) => s.table === 'cadence_rules');
+    expect(ruleSelect).toBeDefined();
+    expect(ruleSelect!.cols).toContain('exit_config');
+  });
+
+  it('does not enroll a firm override whose own trigger does not match the event (audit fix)', async () => {
+    // Global J6 fires on retainer_awaiting; the firm override moved J6 to
+    // client_won. An intake -> retainer_pending event matches the global,
+    // but the resolved (override) rule must NOT be enrolled.
+    const GLOBAL_J6 = { id: 'rule-j6-global', firm_id: null, cadence_key: 'J6', name: 'Retainer Awaiting', trigger_type: 'field_change', trigger_config: { cadence_trigger: 'retainer_awaiting' }, channel: 'email', enabled: true };
+    const FIRM_J6 = { id: 'rule-j6-firm', firm_id: 'firm-1', cadence_key: 'J6', name: 'Retainer Awaiting (custom)', trigger_type: 'field_change', trigger_config: { cadence_trigger: 'client_won' }, channel: 'email', enabled: true };
+    state.tables['cadence_rules'] = { select: { data: [GLOBAL_J6, FIRM_J6], error: null } };
+    state.tables['cadence_steps'] = { select: { data: [], error: null } };
+    state.tables['matter_stage_events'] = { select: { data: [
+      { matter_id: 'matter-1', firm_id: 'firm-1', from_stage: 'intake', to_stage: 'retainer_pending', created_at: '2026-07-01T00:00:00.000Z' },
+    ], error: null } };
+    state.tables['client_matters'] = { select: { data: [
+      { id: 'matter-1', firm_id: 'firm-1', matter_stage: 'retainer_pending', primary_name: 'Ana', primary_email: 'a@example.com', matter_type: 'probate', source_screened_lead_id: 'lead-1' },
+    ], error: null } };
+    state.tables['cadence_runs'] = { upsertResult: { data: [], error: null }, select: { data: [], error: null } };
+
+    const { runCadenceEngine } = await import('@/lib/cadence-runner');
+    const summary = await runCadenceEngine({ now: NOW });
+    expect(summary.enrolled).toBe(0);
+  });
+
+  it('does not advance a run when the shadow ledger write fails (audit fix)', async () => {
+    const J9_LOCAL = { id: 'rule-j9', firm_id: null, cadence_key: 'J9', name: 'Review', trigger_type: 'field_change', trigger_config: { cadence_trigger: 'review_request' }, channel: 'email', enabled: true };
+    state.tables['cadence_rules'] = { select: { data: [J9_LOCAL], error: null } };
+    state.tables['cadence_steps'] = { select: { data: [
+      { id: 's1', cadence_rule_id: 'rule-j9', step_number: 1, delay_hours: 0, channel: 'email', subject_template: 'a', body_template: 'a', active: true },
+    ], error: null } };
+    state.tables['matter_stage_events'] = { select: { data: [], error: null } };
+    state.tables['cadence_runs'] = { select: { data: [
+      { id: 'run-fail', firm_id: 'firm-1', cadence_rule_id: 'rule-j9', cadence_key: 'J9', matter_id: 'matter-f', screened_lead_id: 'lead-f', anchor_at: '2026-07-01T00:00:00.000Z', status: 'active', next_step_number: 1 },
+    ], error: null } };
+    state.tables['client_matters'] = { maybeSingle: { data: { id: 'matter-f', firm_id: 'firm-1', matter_stage: 'closing', primary_name: 'F', primary_email: 'f@example.com', matter_type: 'probate', source_screened_lead_id: 'lead-f' }, error: null } };
+    state.tables['screened_leads'] = { select: { data: [{ id: 'lead-f', contact_email: 'f@example.com', email_consent_status: 'explicit', sms_consent_status: 'unknown', six_month_expiry_date: null }], error: null } };
+    // The outbound_messages upsert fails.
+    state.tables['outbound_messages'] = { upsertResult: { data: null, error: { message: 'boom' } } };
+
+    const { runCadenceEngine } = await import('@/lib/cadence-runner');
+    const summary = await runCadenceEngine({ now: NOW });
+
+    expect(summary.ok).toBe(false);
+    expect(summary.shadow_logged).toBe(0);
+    // The run was NOT advanced: no cadence_runs update landed for it.
+    expect(state.runUpdates.find((u) => u.id === 'run-fail')).toBeUndefined();
   });
 
   it('does not exit a run still within its exit whitelist stage', async () => {

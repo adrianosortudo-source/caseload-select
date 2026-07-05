@@ -20,11 +20,22 @@ export interface AllBoards {
 }
 
 export async function computeAllBoardsForFirm(firmId: string): Promise<AllBoards> {
-  const [triageRows, matterRows, consentRows, channelRows, shadowCount, notificationFailureCount] = await Promise.all([
-    supabase.from('screened_leads').select('band, decision_deadline, submitted_at').eq('firm_id', firmId).eq('status', 'triaging').then((r) => r.data ?? []),
-    supabase.from('client_matters').select('matter_stage, matter_stage_changed_at, created_at').eq('firm_id', firmId).then((r) => r.data ?? []),
-    supabase.from('screened_leads').select('email_consent_status').eq('firm_id', firmId).then((r) => r.data ?? []),
-    supabase.from('screened_leads').select('channel').eq('firm_id', firmId).then((r) => r.data ?? []),
+  // Audit fix (2026-07-05): the original row-based consent read had no
+  // .limit(), and PostgREST clamps un-limited selects at the project's
+  // max-rows (Supabase default 1000), so the Health board's consent numbers
+  // would silently freeze at 1000 once a firm passed 1000 leads. Consent
+  // coverage is now two head-count queries, exact at any scale. The
+  // remaining row-based reads (triage queue, matters, channel mix) carry an
+  // explicit cap and are accurate for the solo/2-lawyer ICP; at genuine
+  // scale the channel mix becomes sampled, and the durable fix there is a
+  // grouped view or RPC, not a bigger cap.
+  const ROW_CAP = 5000;
+  const [triageRows, matterRows, totalLeads, consentedCount, channelRows, shadowCount, notificationFailureCount] = await Promise.all([
+    supabase.from('screened_leads').select('band, decision_deadline, submitted_at').eq('firm_id', firmId).eq('status', 'triaging').limit(ROW_CAP).then((r) => r.data ?? []),
+    supabase.from('client_matters').select('matter_stage, matter_stage_changed_at, created_at').eq('firm_id', firmId).limit(ROW_CAP).then((r) => r.data ?? []),
+    supabase.from('screened_leads').select('id', { count: 'exact', head: true }).eq('firm_id', firmId).then((r) => r.count ?? 0),
+    supabase.from('screened_leads').select('id', { count: 'exact', head: true }).eq('firm_id', firmId).in('email_consent_status', ['explicit', 'implied']).then((r) => r.count ?? 0),
+    supabase.from('screened_leads').select('channel').eq('firm_id', firmId).limit(ROW_CAP).then((r) => r.data ?? []),
     supabase.from('outbound_messages').select('id', { count: 'exact', head: true }).eq('firm_id', firmId).then((r) => r.count ?? 0),
     supabase.from('notification_outbox').select('id', { count: 'exact', head: true }).eq('firm_id', firmId).eq('status', 'failed').then((r) => r.count ?? 0),
   ]);
@@ -33,7 +44,8 @@ export async function computeAllBoardsForFirm(firmId: string): Promise<AllBoards
     triage: computeTriageBoard(triageRows as never),
     pipeline: computePipelineBoard(matterRows as never),
     health: computeHealthBoard({
-      consentRows: consentRows as never,
+      totalLeads: totalLeads as number,
+      consentedCount: consentedCount as number,
       channelRows: channelRows as never,
       shadowMessageCount: shadowCount as number,
       notificationFailureCount: notificationFailureCount as number,

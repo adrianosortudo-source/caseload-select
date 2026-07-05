@@ -132,14 +132,20 @@ export async function dispatchScheduledCadenceMessages(
         .gte('sent_at', dayAgo)
         .eq(msg.matter_id ? 'matter_id' : 'screened_lead_id', subjectKey);
       if (exceedsDeliverabilityCap(count ?? 0)) {
+        // Audit fix (2026-07-05): the cap is a ROLLING 24h window, so a
+        // capped message is deferred, not destroyed. Leave it 'scheduled';
+        // a later tick retries once the window slides.
         summary.capped += 1;
-        await supabase.from('outbound_messages').update({ status: 'failed' }).eq('id', msg.id);
         continue;
       }
     }
 
     if (!msg.screened_lead_id) {
+      // Audit fix (2026-07-05): a row with no lead has no consent state to
+      // evaluate and would otherwise stay 'scheduled' forever, reprocessed
+      // every tick. Terminal-fail it (fail-closed on consent).
       summary.blocked += 1;
+      await supabase.from('outbound_messages').update({ status: 'failed' }).eq('id', msg.id);
       continue;
     }
     const { data: lead } = await supabase

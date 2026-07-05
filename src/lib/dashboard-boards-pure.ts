@@ -100,9 +100,6 @@ export function computePipelineBoard(rows: PipelineMatterRow[], now: Date = new 
   return { total: rows.length, stageCounts, avgDaysInCurrentStage, promotionRate };
 }
 
-export interface HealthConsentRow {
-  email_consent_status: string;
-}
 export interface HealthChannelRow {
   channel: string | null;
 }
@@ -115,21 +112,18 @@ export interface HealthBoard {
 }
 
 /**
- * Health board: system-level signal, not lead-level. Reads span four tables
- * (screened_leads for consent + channel, outbound_messages for shadow
- * volume, notification_outbox for failures); the route fetches each
- * separately and this just tallies.
+ * Health board: system-level signal, not lead-level. Consent coverage takes
+ * pre-computed counts (the route uses head-count queries, exact at any
+ * scale, immune to the PostgREST max-rows clamp); channel mix tallies rows.
  */
 export function computeHealthBoard(input: {
-  consentRows: HealthConsentRow[];
+  totalLeads: number;
+  consentedCount: number;
   channelRows: HealthChannelRow[];
   shadowMessageCount: number;
   notificationFailureCount: number;
 }): HealthBoard {
-  const consentedCount = input.consentRows.filter(
-    (r) => r.email_consent_status === 'explicit' || r.email_consent_status === 'implied',
-  ).length;
-  const consentCoverageRate = input.consentRows.length > 0 ? consentedCount / input.consentRows.length : null;
+  const consentCoverageRate = input.totalLeads > 0 ? input.consentedCount / input.totalLeads : null;
 
   const channelCounts = new Map<string, number>();
   for (const r of input.channelRows) {
@@ -141,7 +135,7 @@ export function computeHealthBoard(input: {
     .sort((a, b) => b.count - a.count);
 
   return {
-    totalLeads: input.consentRows.length,
+    totalLeads: input.totalLeads,
     consentCoverageRate,
     channelMix,
     shadowCadenceVolume: input.shadowMessageCount,
