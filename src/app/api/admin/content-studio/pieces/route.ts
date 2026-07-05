@@ -69,11 +69,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Mirrors the content_pieces_format_check CHECK constraint
+  // (supabase/migrations/20260626100200_content_studio_compliance_formats.sql).
+  // Draft-time availability is gated separately in the draft route: formats
+  // whose generator branch has not shipped are creatable and briefable here
+  // but return 422 at draft time.
   const validFormats = [
     "counsel_note",
     "clause_in_the_margin",
     "decision_tool",
     "counsel_letter",
+    "checklist",
+    "landing_page",
+    "paid_traffic_landing",
+    "canonical_service_page",
+    "review_request",
+    "review_response",
   ];
   if (!validFormats.includes(format)) {
     return NextResponse.json(
