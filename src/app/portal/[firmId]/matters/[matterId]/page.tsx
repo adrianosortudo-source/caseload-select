@@ -42,6 +42,7 @@ import MessageThreads from './MessageThreads';
 import { ConflictCheckPanel } from './ConflictCheckPanel';
 import MilestoneDraftPanel from '@/components/portal/MilestoneDraftPanel';
 import RequestReviewButton from './RequestReviewButton';
+import ActivityTimeline from './ActivityTimeline';
 
 const STAGE_LABEL: Record<MatterStage, string> = {
   intake: 'Intake',
@@ -164,6 +165,11 @@ export default async function LawyerMatterDetailPage({ params }: PageProps) {
       />
 
       <EmbedPanel matter={matter} firmId={firmId} matterId={matterId} />
+
+      <section style={cardStyle}>
+        <p style={sectionEyebrowStyle}>Activity</p>
+        <ActivityTimeline firmId={firmId} matterId={matterId} />
+      </section>
     </main>
   );
 }
