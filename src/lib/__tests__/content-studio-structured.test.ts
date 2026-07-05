@@ -165,6 +165,15 @@ describe("extractToolUseInput", () => {
     const result = extractToolUseInput({ content: [] });
     expect(result.ok).toBe(false);
   });
+
+  it("reports truncation when the response stopped at max_tokens, even if a partial tool block exists", () => {
+    const result = extractToolUseInput({
+      content: [{ type: "tool_use", name: CANONICAL_SERVICE_PAGE_TOOL_NAME, input: {} }],
+      stop_reason: "max_tokens",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("max_tokens");
+  });
 });
 
 describe("toBodyStructuredBlocks", () => {

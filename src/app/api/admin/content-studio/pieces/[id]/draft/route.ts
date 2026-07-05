@@ -69,7 +69,9 @@ async function generateCanonicalServicePageDraft({
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 4096,
+        // A complete service page (10 sections + FAQ + CTA fields) overran
+        // 4096 on the first prod run, truncating the tool JSON mid-call.
+        max_tokens: 16384,
         system: systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
         tools: [
@@ -103,6 +105,7 @@ async function generateCanonicalServicePageDraft({
     id: string;
     content: Array<{ type: string; id?: string; name?: string; input?: unknown; text?: string }>;
     model: string;
+    stop_reason?: string | null;
     usage: { input_tokens: number; output_tokens: number };
   };
 

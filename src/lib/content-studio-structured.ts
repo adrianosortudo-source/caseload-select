@@ -376,11 +376,23 @@ export function buildCanonicalServicePageUserPrompt(sourceBriefRaw: Record<strin
 
 interface AnthropicMessageResult {
   content: Array<{ type: string; id?: string; name?: string; input?: unknown; text?: string }>;
+  stop_reason?: string | null;
 }
 
 export function extractToolUseInput(
   aiResult: AnthropicMessageResult
 ): { ok: true; input: unknown } | { ok: false; error: string } {
+  // A max_tokens stop truncates the tool call mid-JSON; the partial input
+  // then fails shape validation with misleading "field missing" errors.
+  // Surface the real cause instead. (Caught by the 2026-07-05 prod smoke
+  // test: a full service page overran the original 4096 ceiling.)
+  if (aiResult.stop_reason === "max_tokens") {
+    return {
+      ok: false,
+      error:
+        "Model output was truncated at the max_tokens ceiling before the tool call completed. Raise max_tokens for this format and retry.",
+    };
+  }
   const toolBlock = aiResult.content?.find(
     (block) => block.type === "tool_use" && block.name === CANONICAL_SERVICE_PAGE_TOOL_NAME
   );
