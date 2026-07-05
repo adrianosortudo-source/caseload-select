@@ -81,9 +81,16 @@ export interface CanonicalServicePageModelOutput {
 
 export const CANONICAL_SERVICE_PAGE_TOOL_NAME = "emit_canonical_service_page";
 
+// Every object node carries additionalProperties: false because the tool is
+// sent with strict: true (Anthropic structured outputs). Strict mode
+// constrains decoding to this schema exactly, which is what eliminates the
+// double-encoded-sections failure class the 2026-07-05 prod smoke test hit
+// (the model emitted sections as a malformed JSON *string*). The API rejects
+// a strict tool whose object nodes omit additionalProperties.
 const HEADING_SECTION = {
   type: "object",
   required: ["heading", "body_markdown"],
+  additionalProperties: false,
   properties: {
     heading: { type: "string" },
     body_markdown: { type: "string" },
@@ -93,10 +100,12 @@ const HEADING_SECTION = {
 export const CANONICAL_SERVICE_PAGE_TOOL_SCHEMA = {
   type: "object",
   required: ["h1", "sections", "faq_block", "seo"],
+  additionalProperties: false,
   properties: {
     h1: {
       type: "object",
       required: ["line1", "line2"],
+      additionalProperties: false,
       properties: {
         line1: { type: "string", description: "First beat, ink-weight, states the problem or the benefit." },
         line2: { type: "string", description: "Second beat, carries the emphasis." },
@@ -116,6 +125,7 @@ export const CANONICAL_SERVICE_PAGE_TOOL_SCHEMA = {
         "service_area_coverage",
         "final_cta",
       ],
+      additionalProperties: false,
       properties: {
         first_paragraph_direct_answer: {
           type: "string",
@@ -127,6 +137,7 @@ export const CANONICAL_SERVICE_PAGE_TOOL_SCHEMA = {
         author_bio: {
           type: "object",
           required: ["bio_text"],
+          additionalProperties: false,
           properties: {
             bio_text: {
               type: "string",
@@ -143,6 +154,7 @@ export const CANONICAL_SERVICE_PAGE_TOOL_SCHEMA = {
         final_cta: {
           type: "object",
           required: ["body_markdown", "cta_label"],
+          additionalProperties: false,
           properties: {
             heading: { type: "string" },
             body_markdown: { type: "string" },
@@ -153,10 +165,13 @@ export const CANONICAL_SERVICE_PAGE_TOOL_SCHEMA = {
     },
     faq_block: {
       type: "array",
-      minItems: 2,
+      // Strict mode rejects minItems > 1; the >= 2 floor is enforced by
+      // validateCanonicalServicePageOutput after the call instead.
+      description: "At least 2 FAQ entries drawn from the client question variants.",
       items: {
         type: "object",
         required: ["question", "answer"],
+        additionalProperties: false,
         properties: {
           question: { type: "string" },
           answer: { type: "string" },
@@ -166,6 +181,7 @@ export const CANONICAL_SERVICE_PAGE_TOOL_SCHEMA = {
     seo: {
       type: "object",
       required: ["title", "meta_description"],
+      additionalProperties: false,
       properties: {
         title: { type: "string" },
         meta_description: { type: "string" },
@@ -174,6 +190,7 @@ export const CANONICAL_SERVICE_PAGE_TOOL_SCHEMA = {
           items: {
             type: "object",
             required: ["url", "anchor_text"],
+            additionalProperties: false,
             properties: {
               url: { type: "string" },
               anchor_text: { type: "string" },

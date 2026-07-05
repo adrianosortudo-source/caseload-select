@@ -66,11 +66,15 @@ async function generateCanonicalServicePageDraft({
         "Content-Type": "application/json",
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
+        // Strict structured outputs: constrained decoding guarantees the
+        // tool input matches the schema. Without it the prod smoke test
+        // (2026-07-05) saw sections arrive as a malformed JSON string.
+        "anthropic-beta": "structured-outputs-2025-11-13",
       },
       body: JSON.stringify({
         model: MODEL,
-        // A complete service page (10 sections + FAQ + CTA fields) overran
-        // 4096 on the first prod run, truncating the tool JSON mid-call.
+        // A complete service page (10 sections + FAQ + CTA fields) runs
+        // ~3300 output tokens; 4096 left no headroom.
         max_tokens: 16384,
         system: systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
@@ -80,6 +84,7 @@ async function generateCanonicalServicePageDraft({
             description:
               "Emit the complete canonical service page draft as structured content.",
             input_schema: CANONICAL_SERVICE_PAGE_TOOL_SCHEMA,
+            strict: true,
           },
         ],
         tool_choice: { type: "tool", name: CANONICAL_SERVICE_PAGE_TOOL_NAME },
