@@ -20,6 +20,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const isPrivacy = path === "/privacy";
   const isTerms = path === "/terms";
   const isFirmOnboarding = path.startsWith("/firm-onboarding");
+  // Public per-firm booking page (WP-6): client-facing, must render without
+  // the operator sidebar, same posture as /widget.
+  const isBooking = path.startsWith("/book");
   // Public marketing site at /home (and any future marketing routes) must not
   // get the operator sidebar. Lives in src/app/(marketing)/.
   const isMarketing =
@@ -38,6 +41,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     isPrivacy ||
     isTerms ||
     isFirmOnboarding ||
+    isBooking ||
     isMarketing
   ) {
     return <>{children}</>;
