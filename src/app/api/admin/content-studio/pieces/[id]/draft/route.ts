@@ -26,7 +26,9 @@ import { buildSystemPrompt, buildUserPrompt } from "@/lib/content-studio-prompt"
 export const dynamic = "force-dynamic";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-const MODEL = "claude-sonnet-4-20250514";
+// Env-overridable so a retired model ID is a Vercel env change, not a code
+// deploy. claude-sonnet-4-20250514 died with a 404 on 2026-07-05.
+const MODEL = process.env.CONTENT_STUDIO_MODEL ?? "claude-sonnet-5";
 
 function hashString(s: string): string {
   return createHash("sha256").update(s).digest("hex").slice(0, 16);
