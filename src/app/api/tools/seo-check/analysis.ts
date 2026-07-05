@@ -396,6 +396,11 @@ function slug(category: string, label: string): string {
  */
 export function buildIssues(pages: PageResult[]): Issue[] {
   const totalPages = pages.length || 1;
+  // The crawl reached at least one policy page (disclaimer / privacy / terms),
+  // so the firm demonstrably HAS policy pages. A per-page "no policy link
+  // found" finding then claims an absence the crawler just disproved, so it is
+  // suppressed below. It still fires when no policy page exists anywhere.
+  const hasPolicyPage = pages.some((p) => p.pageType === "policy");
   type Acc = {
     category: string;
     label: string;
@@ -443,9 +448,16 @@ export function buildIssues(pages: PageResult[]): Issue[] {
 
   const issues: Issue[] = [];
   for (const acc of map.values()) {
+    // Do not report "no policy / disclaimer link" when the firm has policy
+    // pages the crawl actually reached. The pages exist; a footer link missing
+    // from some pages is not a site-level deficiency worth a finding, and the
+    // headline reads as a false claim of absence.
+    if (acc.label === "Policy / disclaimer pages" && hasPolicyPage) continue;
+
     const affectedCount = acc.urls.size;
     const pageTypeImpact = [...acc.types];
     const hitsCommercial = pageTypeImpact.some((t) => COMMERCIAL_PAGE_TYPES.includes(t));
+    const policyOnly = pageTypeImpact.length > 0 && pageTypeImpact.every((t) => t === "policy");
 
     let severity = severityFor(acc.category, acc.label, acc.status, acc.detail);
     // Bump one level when the issue lands on commercial pages and is sitewide.
@@ -456,6 +468,15 @@ export function buildIssues(pages: PageResult[]): Issue[] {
       const order: Severity[] = ["critical", "high", "medium", "low", "info"];
       const bumped = order[Math.max(0, order.indexOf(severity) - 1)];
       severity = bumped === "critical" ? "high" : bumped;
+    }
+
+    // A noindex or robots block that lands ONLY on policy / utility pages
+    // (disclaimer, privacy, terms) is standard, intentional practice with no
+    // ranking cost, not a critical emergency. Cap those Indexability findings
+    // at low. A practice or commercial page carrying the same block is NOT
+    // policy-only, so a noindex'd service page keeps its critical severity.
+    if (policyOnly && acc.category === "Indexability" && (severity === "critical" || severity === "high" || severity === "medium")) {
+      severity = "low";
     }
 
     const confidence: Confidence = acc.category === "Performance" ? "medium" : "high";

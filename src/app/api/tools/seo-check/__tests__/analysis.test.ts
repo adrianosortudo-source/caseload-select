@@ -129,6 +129,53 @@ describe("buildIssues", () => {
     expect(issue?.priority).toBeLessThan(30);
   });
 
+  it("caps a noindex / robots block to low when it lands only on policy pages", () => {
+    // Field case gosailaw.com: /disclaimer/ is Disallow'd in robots.txt. Blocking
+    // a policy / utility page is standard, intentional practice, not a critical
+    // ranking emergency, so it must not read as critical.
+    const blocked = cat("Indexability", [{ label: "robots.txt crawl access", status: "fail", detail: "Blocked for Googlebot, Bingbot in robots.txt." }]);
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "" }])] }),
+      mkPage({ url: "https://x.com/disclaimer", pageType: "policy", categories: [blocked] }),
+    ];
+    const issue = buildIssues(pages).find((i) => i.title === "robots.txt crawl access");
+    expect(issue?.severity).toBe("low");
+  });
+
+  it("keeps a noindex on a practice / content page critical", () => {
+    // The same block on a real content page IS a ranking problem and stays critical.
+    const noindex = cat("Indexability", [{ label: "Indexable", status: "fail", detail: "Page is set to noindex (meta robots)." }]);
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "" }])] }),
+      mkPage({ url: "https://x.com/real-estate/refinances", pageType: "practice", categories: [noindex] }),
+    ];
+    const issue = buildIssues(pages).find((i) => i.title === "Indexable");
+    expect(issue?.severity).toBe("critical");
+  });
+
+  it("does not report a missing policy link when the crawl reached a policy page", () => {
+    // Field case gosailaw.com: the crawl visited /disclaimer/ and /privacy-policy/,
+    // so the firm HAS policy pages; a per-page "no policy link found" finding then
+    // claims an absence the crawler disproved.
+    const noPolicyLink = cat("Legal Marketing", [{ label: "Policy / disclaimer pages", status: "warn" as const, detail: "No privacy, terms, or disclaimer link found." }]);
+    const clean = [cat("On-Page SEO", [{ label: "Page title", status: "pass" as const, detail: "" }])];
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [noPolicyLink] }),
+      mkPage({ url: "https://x.com/contact", pageType: "contact", categories: [noPolicyLink] }),
+      mkPage({ url: "https://x.com/disclaimer", pageType: "policy", categories: clean }),
+    ];
+    expect(buildIssues(pages).map((i) => i.title)).not.toContain("Policy / disclaimer pages");
+  });
+
+  it("still reports a missing policy link when the site has no policy page at all", () => {
+    const noPolicyLink = cat("Legal Marketing", [{ label: "Policy / disclaimer pages", status: "warn" as const, detail: "No privacy, terms, or disclaimer link found." }]);
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [noPolicyLink] }),
+      mkPage({ url: "https://x.com/contact", pageType: "contact", categories: [noPolicyLink] }),
+    ];
+    expect(buildIssues(pages).map((i) => i.title)).toContain("Policy / disclaimer pages");
+  });
+
   it("sorts issues by priority descending", () => {
     const pages = [mkPage({
       url: "https://x.com/", pageType: "homepage",
