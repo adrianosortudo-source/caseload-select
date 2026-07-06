@@ -257,9 +257,54 @@ export async function createCadenceRule(payload: RuleWritePayload): Promise<Writ
   return { ok: true, id: ruleId };
 }
 
+interface RuleSnapshot {
+  name: string;
+  trigger_config: Record<string, unknown>;
+  exit_config: Record<string, unknown> | null;
+  enabled: boolean;
+}
+
+interface StepSnapshot {
+  step_number: number;
+  delay_hours: number;
+  subject_template: string;
+  body_template: string;
+  active: boolean;
+  channel: string;
+}
+
+/**
+ * Updates a cadence rule's mutable fields and replaces its steps.
+ *
+ * Atomicity (Codex audit 2026-07-07, finding 3): the naive
+ * update-parent, delete-steps, insert-steps sequence corrupts the rule if the
+ * final insert fails, leaving an enabled rule with zero steps (the runner then
+ * logs nothing for it). A single-transaction Postgres RPC is the strongest
+ * fix, but this app-layer snapshot-and-restore path needs no prod DDL and the
+ * audit endorses it: snapshot the parent + steps before touching anything,
+ * then on ANY failure after the first write, restore the snapshot so the rule
+ * ends exactly as it started (same name/config AND same steps). cadence_key
+ * and firm_id are immutable and untouched, so they are not in the snapshot;
+ * payload's values for those two fields are deliberately ignored.
+ */
 export async function updateCadenceRule(id: string, payload: RuleWritePayload): Promise<WriteResult> {
-  // cadence_key and firm_id are immutable after creation; payload's values for
-  // those two fields are deliberately ignored here.
+  // Snapshot BEFORE any write, so a later failure can restore exactly.
+  const { data: prevRule, error: readErr } = await supabase
+    .from('cadence_rules')
+    .select('name, trigger_config, exit_config, enabled')
+    .eq('id', id)
+    .maybeSingle<RuleSnapshot>();
+  if (readErr) return { ok: false, error: readErr.message };
+  if (!prevRule) return { ok: false, error: 'cadence rule not found' };
+
+  const { data: prevStepRows, error: prevStepsErr } = await supabase
+    .from('cadence_steps')
+    .select('step_number, delay_hours, subject_template, body_template, active, channel')
+    .eq('cadence_rule_id', id);
+  if (prevStepsErr) return { ok: false, error: prevStepsErr.message };
+  const prevSteps = (prevStepRows ?? []) as StepSnapshot[];
+
+  // 1. Update the parent rule.
   const { error: updateErr } = await supabase
     .from('cadence_rules')
     .update({
@@ -270,12 +315,20 @@ export async function updateCadenceRule(id: string, payload: RuleWritePayload): 
       updated_at: new Date().toISOString(),
     })
     .eq('id', id);
-
+  // Nothing else has been touched yet, so a bare return is safe here.
   if (updateErr) return { ok: false, error: updateErr.message };
 
+  // 2. Delete the existing steps.
   const { error: deleteErr } = await supabase.from('cadence_steps').delete().eq('cadence_rule_id', id);
-  if (deleteErr) return { ok: false, error: deleteErr.message };
+  if (deleteErr) {
+    // Parent is updated but steps are intact (delete failed). Revert the
+    // parent so the rule is unchanged end to end.
+    const restoreErr = await restoreRuleParent(id, prevRule);
+    return { ok: false, error: withRestoreNote(deleteErr.message, restoreErr) };
+  }
 
+  // 3. Insert the replacement steps. This is the write the audit found could
+  //    corrupt the rule: parent updated + old steps gone + new steps missing.
   const stepRows = payload.steps.map((s) => ({
     cadence_rule_id: id,
     step_number: s.step_number,
@@ -288,10 +341,59 @@ export async function updateCadenceRule(id: string, payload: RuleWritePayload): 
 
   if (stepRows.length > 0) {
     const { error: insertErr } = await supabase.from('cadence_steps').insert(stepRows);
-    if (insertErr) return { ok: false, error: insertErr.message };
+    if (insertErr) {
+      // Restore both: re-insert the old steps and revert the parent.
+      const restoreErr = await restoreRuleAndSteps(id, prevRule, prevSteps);
+      return { ok: false, error: withRestoreNote(insertErr.message, restoreErr) };
+    }
   }
 
   return { ok: true, id };
+}
+
+/** Reverts a rule's mutable fields to a pre-write snapshot. Returns an error string on failure. */
+async function restoreRuleParent(id: string, snapshot: RuleSnapshot): Promise<string | null> {
+  const { error } = await supabase
+    .from('cadence_rules')
+    .update({
+      name: snapshot.name,
+      trigger_config: snapshot.trigger_config,
+      exit_config: snapshot.exit_config,
+      enabled: snapshot.enabled,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+  return error ? error.message : null;
+}
+
+/** Reverts the parent AND re-inserts the pre-write steps. Returns a combined error string on any failure. */
+async function restoreRuleAndSteps(
+  id: string,
+  ruleSnapshot: RuleSnapshot,
+  stepSnapshot: StepSnapshot[],
+): Promise<string | null> {
+  const parentErr = await restoreRuleParent(id, ruleSnapshot);
+  // Clear whatever partial step state exists, then re-insert the snapshot.
+  await supabase.from('cadence_steps').delete().eq('cadence_rule_id', id);
+  let stepErr: string | null = null;
+  if (stepSnapshot.length > 0) {
+    const { error } = await supabase.from('cadence_steps').insert(
+      stepSnapshot.map((s) => ({ cadence_rule_id: id, ...s })),
+    );
+    stepErr = error ? error.message : null;
+  }
+  const parts = [parentErr, stepErr].filter((x): x is string => !!x);
+  return parts.length > 0 ? parts.join('; ') : null;
+}
+
+/**
+ * Appends an honest restore-status note to a write error. When the restore
+ * itself failed, the operator is told the rule may need manual repair rather
+ * than being left to assume a clean rollback.
+ */
+function withRestoreNote(originalError: string, restoreError: string | null): string {
+  if (!restoreError) return originalError;
+  return `${originalError} (and restore failed: ${restoreError}; this cadence rule may need manual repair)`;
 }
 
 // ── Delete ───────────────────────────────────────────────────────────────

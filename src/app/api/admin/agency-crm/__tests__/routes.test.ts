@@ -17,14 +17,20 @@ import { NextRequest } from "next/server";
 
 const h = vi.hoisted(() => {
   type OperatorSession = { firm_id: string; role: "operator"; exp: number };
-  const state: { session: OperatorSession | null; created: unknown; updated: unknown; list: unknown[] } = {
+  const state: { session: OperatorSession | null; created: unknown; updated: unknown; list: unknown[]; total: number; lastPageOpts: unknown } = {
     session: null,
     created: { id: "seed" },
     updated: { id: "seed" },
     list: [],
+    total: 0,
+    lastPageOpts: null,
   };
   const fns = {
     listProspects: vi.fn(() => Promise.resolve(state.list)),
+    listProspectsPage: vi.fn((opts: unknown) => {
+      state.lastPageOpts = opts;
+      return Promise.resolve({ items: state.list, total: state.total, limit: 100, offset: 0 });
+    }),
     createProspect: vi.fn(() => Promise.resolve(state.created)),
     updateProspect: vi.fn(() => Promise.resolve(state.updated)),
     listDeals: vi.fn(() => Promise.resolve(state.list)),
@@ -76,6 +82,8 @@ beforeEach(() => {
   h.state.created = { id: ID };
   h.state.updated = { id: ID };
   h.state.list = [];
+  h.state.total = 0;
+  h.state.lastPageOpts = null;
   for (const f of Object.values(h.fns)) f.mockClear();
 });
 
@@ -162,7 +170,7 @@ describe("agency CRM routes: happy path", () => {
     expect(h.fns.createProspect).toHaveBeenCalledTimes(1);
 
     expect((await prospectsGET(req("/prospects", "GET"))).status).toBe(200);
-    expect(h.fns.listProspects).toHaveBeenCalledTimes(1);
+    expect(h.fns.listProspectsPage).toHaveBeenCalledTimes(1);
 
     h.state.updated = { id: ID, stage: "won" };
     expect((await prospectPATCH(req(`/prospects/${ID}`, "PATCH", { stage: "won" }), params(ID))).status).toBe(200);
@@ -173,5 +181,42 @@ describe("agency CRM routes: happy path", () => {
 
     expect((await remindersPOST(req("/reminders", "POST", { due_at: "2026-07-01T00:00:00Z", note: "Follow up" }))).status).toBe(201);
     expect(h.fns.createReminder).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("prospects GET pagination + search (finding 4)", () => {
+  beforeEach(asOperator);
+
+  it("returns a bounded, counted page shape (items + total + limit + offset)", async () => {
+    h.state.list = [{ id: ID, firm_name: "Acme" }];
+    h.state.total = 5648;
+    const res = await prospectsGET(req("/prospects", "GET"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // items retained for backward compat; total/limit/offset added.
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(body.total).toBe(5648);
+    expect(typeof body.limit).toBe("number");
+    expect(typeof body.offset).toBe("number");
+  });
+
+  it("passes limit, offset, stage, and search through to listProspectsPage", async () => {
+    await prospectsGET(req("/prospects?limit=25&offset=50&stage=won&q=toronto", "GET"));
+    expect(h.state.lastPageOpts).toMatchObject({ limit: 25, offset: 50, stage: "won", search: "toronto" });
+  });
+
+  it("accepts the ?search= alias for the query term", async () => {
+    await prospectsGET(req("/prospects?search=markham", "GET"));
+    expect(h.state.lastPageOpts).toMatchObject({ search: "markham" });
+  });
+
+  it("falls back to undefined (default) for a non-numeric limit rather than NaN", async () => {
+    await prospectsGET(req("/prospects?limit=abc", "GET"));
+    expect((h.state.lastPageOpts as { limit?: number }).limit).toBeUndefined();
+  });
+
+  it("does not call the unbounded listProspects for the GET route", async () => {
+    await prospectsGET(req("/prospects", "GET"));
+    expect(h.fns.listProspects).not.toHaveBeenCalled();
   });
 });

@@ -20,12 +20,85 @@ export * from '@/lib/agency-crm-types';
 import { DUPLICATE_PROSPECT_MESSAGE } from '@/lib/agency-crm-types';
 
 // ── Prospects ─────────────────────────────────────────────────────────────────
+
+// The kanban surface groups EVERY prospect into stage columns, so it needs the
+// full set, not a page. A bare .select() is silently capped by PostgREST at
+// the project max-rows (~1000), so with 5,648 seeded prospects ~4,600 were
+// invisible in the UI (Codex audit 2026-07-07, finding 4). listProspects now
+// range-pages to completion up to a hard ceiling; listProspectsPage below is
+// the bounded, counted, searchable variant for API consumers.
+const LIST_PAGE_SIZE = 1000;
+const LIST_HARD_CAP = 20000; // safety ceiling, well above the seeded workload
+
 export async function listProspects(stage?: ProspectStage): Promise<AgencyProspect[]> {
-  let q = supabase.from('agency_prospects').select('*').order('updated_at', { ascending: false });
-  if (stage) q = q.eq('stage', stage);
-  const { data, error } = await q;
+  const all: AgencyProspect[] = [];
+  for (let offset = 0; offset < LIST_HARD_CAP; offset += LIST_PAGE_SIZE) {
+    let q = supabase
+      .from('agency_prospects')
+      .select('*')
+      // Secondary sort on id gives a total order so range paging never skips
+      // or duplicates rows that share updated_at at a page boundary.
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(offset, offset + LIST_PAGE_SIZE - 1);
+    if (stage) q = q.eq('stage', stage);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as AgencyProspect[];
+    all.push(...rows);
+    if (rows.length < LIST_PAGE_SIZE) break; // short page => last page
+  }
+  return all;
+}
+
+export interface ProspectPageOptions {
+  stage?: ProspectStage;
+  search?: string | null;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ProspectPage {
+  items: AgencyProspect[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+const DEFAULT_PAGE_LIMIT = 100;
+const MAX_PAGE_LIMIT = 500;
+
+/**
+ * A single bounded, counted page of prospects with optional stage filter and
+ * server-side search over firm_name, city, and practice_area. Returns the
+ * exact total (via head count) so a caller can build real pagination instead
+ * of guessing at PostgREST's silent window.
+ */
+export async function listProspectsPage(opts: ProspectPageOptions = {}): Promise<ProspectPage> {
+  const limit = Math.min(Math.max(Math.trunc(opts.limit ?? DEFAULT_PAGE_LIMIT), 1), MAX_PAGE_LIMIT);
+  const offset = Math.max(Math.trunc(opts.offset ?? 0), 0);
+
+  let q = supabase
+    .from('agency_prospects')
+    .select('*', { count: 'exact' })
+    .order('updated_at', { ascending: false })
+    .order('id', { ascending: true })
+    .range(offset, offset + limit - 1);
+
+  if (opts.stage) q = q.eq('stage', opts.stage);
+
+  const search = (opts.search ?? '').trim();
+  if (search) {
+    // Operator-supplied (route is operator-gated), but still neutralize the
+    // PostgREST or-filter metacharacters so the term can't break out of the
+    // filter grammar. Replacing with spaces keeps a sensible substring match.
+    const safe = search.replace(/[%,()]/g, ' ');
+    q = q.or(`firm_name.ilike.%${safe}%,city.ilike.%${safe}%,practice_area.ilike.%${safe}%`);
+  }
+
+  const { data, error, count } = await q;
   if (error) throw new Error(error.message);
-  return (data ?? []) as AgencyProspect[];
+  return { items: (data ?? []) as AgencyProspect[], total: count ?? 0, limit, offset };
 }
 
 export async function createProspect(input: ProspectInput): Promise<AgencyProspect> {

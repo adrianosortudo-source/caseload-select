@@ -18,10 +18,13 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ firmId: string }> },
 ) {
-  const session = await requireOperator();
-  if (!session) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  // requireOperator() returns null when authorized and a 401 NextResponse
+  // when not (see admin-auth.ts). This route previously inverted that,
+  // returning 401 for real operators (null) and letting unauthenticated
+  // callers (truthy response) fall through to the firm analytics + GA4 +
+  // Vercel reads below. Codex audit 2026-07-07, finding 1 (High).
+  const denied = await requireOperator();
+  if (denied) return denied;
 
   const { firmId } = await params;
 

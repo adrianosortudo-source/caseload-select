@@ -89,46 +89,30 @@ export async function runConsentLogRepairSweep(
     errors: [],
   };
 
+  // DB-side anti-join (find_leads_missing_email_consent_log): returns up to
+  // `limit` eligible leads that have NO email consent_log row, regardless of
+  // age. This replaced the old "load the oldest N eligible leads, then skip
+  // the ones that already have a log" scan, which starved: once the oldest N
+  // all had evidence, any newer gap was never reached and every tick reported
+  // missing:0 (Codex audit 2026-07-07, finding 2). NOT EXISTS is
+  // age-independent, so the sweep now targets current gaps directly.
   const { data: leads, error: leadsError } = await supabase
-    .from('screened_leads')
-    .select(
-      'id, firm_id, email_consent_status, email_consent_captured_at, six_month_expiry_date, consent_ip, consent_user_agent, submitted_at',
-    )
-    .in('email_consent_status', ['explicit', 'implied'])
-    .order('created_at', { ascending: true })
-    .limit(limit);
+    .rpc('find_leads_missing_email_consent_log', { batch_limit: limit });
 
   if (leadsError) {
-    summary.errors.push(`load screened_leads failed: ${leadsError.message}`);
+    // Deploy-safe: if the function is not applied yet (fresh env / rollback),
+    // degrade to an honest empty summary rather than crash.
+    summary.errors.push(`missing-log anti-join failed: ${leadsError.message}`);
     return summary;
   }
 
   const rows = (leads ?? []) as CandidateLeadRow[];
+  // Every returned row is, by the anti-join's definition, a genuine gap.
   summary.scanned = rows.length;
+  summary.missing = rows.length;
 
   for (const lead of rows) {
     try {
-      const { count, error: existsError } = await supabase
-        .from('consent_log')
-        .select('id', { count: 'exact', head: true })
-        .eq('subject_id', lead.id)
-        .eq('channel', 'email');
-
-      if (existsError) {
-        summary.failed += 1;
-        const msg = `check existing consent_log failed for lead ${lead.id}: ${existsError.message}`;
-        console.error('[consent-log-repair]', lead.id, existsError.message);
-        summary.errors.push(msg);
-        continue;
-      }
-
-      if ((count ?? 0) > 0) {
-        // Evidence already exists for this lead; nothing to repair.
-        continue;
-      }
-
-      summary.missing += 1;
-
       const explicit = lead.email_consent_status === 'explicit';
       const obtainedAt = lead.email_consent_captured_at ?? lead.submitted_at;
 

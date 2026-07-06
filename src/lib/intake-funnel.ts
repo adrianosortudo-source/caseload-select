@@ -62,7 +62,41 @@ interface LeadRow {
 
 interface MatterRow {
   matter_stage: string;
-  created_at: string;
+}
+
+const SCAN_PAGE_SIZE = 1000;
+const SCAN_HARD_CAP = 100000; // safety ceiling for the per-firm windowed scans
+
+type PageResult = { data: unknown; error: { message: string } | null };
+
+/**
+ * Range-pages a query to completion. Used only where the metric genuinely
+ * needs the rows (grouped distributions). A bare .select() is silently capped
+ * by PostgREST at ~1000 rows, so at scale the old array-length counting
+ * undercounted every total and distribution (Codex audit 2026-07-07,
+ * finding 5). The (from, to) window is passed to a fresh builder per page.
+ */
+async function fetchAllRows<T>(
+  build: (from: number, to: number) => PromiseLike<PageResult>,
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let offset = 0; offset < SCAN_HARD_CAP; offset += SCAN_PAGE_SIZE) {
+    const { data, error } = await build(offset, offset + SCAN_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as T[];
+    all.push(...rows);
+    if (rows.length < SCAN_PAGE_SIZE) break; // short page => last page
+  }
+  return all;
+}
+
+/** Exact row count via a head query, immune to the PostgREST row cap. */
+async function countRows(
+  build: () => PromiseLike<{ count: number | null; error: { message: string } | null }>,
+): Promise<number> {
+  const { count, error } = await build();
+  if (error) throw new Error(error.message);
+  return count ?? 0;
 }
 
 export async function fetchIntakeFunnel(
@@ -72,55 +106,88 @@ export async function fetchIntakeFunnel(
   const seven = sevenDaysAgo();
   const fourteen = fourteenDaysAgo();
 
-  const [leadsRes, priorLeadsRes, mattersRes, priorMattersRes, allMattersRes] =
-    await Promise.all([
+  // Current-week leads and all open matters are the only sets whose ROWS are
+  // needed (for the band / practice-area / matter-type / stage distributions),
+  // so those are range-paged to completion. Every pure total is an exact head
+  // count, which never fetches rows and never hits the cap.
+  const [
+    leads,
+    allOpenMatters,
+    priorTotal,
+    priorTaken,
+    priorPassed,
+    currentMattersCreated,
+    priorMattersCreated,
+  ] = await Promise.all([
+    fetchAllRows<LeadRow>((from, to) =>
       supabaseAdmin
         .from("screened_leads")
         .select("band, status, practice_area, matter_type, created_at")
         .eq("firm_id", firmId)
         .gte("created_at", seven)
-        .lte("created_at", now),
-      supabaseAdmin
-        .from("screened_leads")
-        .select("band, status, created_at")
-        .eq("firm_id", firmId)
-        .gte("created_at", fourteen)
-        .lt("created_at", seven),
-      supabaseAdmin
-        .from("client_matters")
-        .select("matter_stage, created_at")
-        .eq("firm_id", firmId)
-        .gte("created_at", seven)
-        .lte("created_at", now),
-      supabaseAdmin
-        .from("client_matters")
-        .select("created_at")
-        .eq("firm_id", firmId)
-        .gte("created_at", fourteen)
-        .lt("created_at", seven),
+        .lte("created_at", now)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    fetchAllRows<MatterRow>((from, to) =>
       supabaseAdmin
         .from("client_matters")
         .select("matter_stage")
         .eq("firm_id", firmId)
-        .is("closed_at", null),
-    ]);
+        .is("closed_at", null)
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    countRows(() =>
+      supabaseAdmin
+        .from("screened_leads")
+        .select("*", { count: "exact", head: true })
+        .eq("firm_id", firmId)
+        .gte("created_at", fourteen)
+        .lt("created_at", seven),
+    ),
+    countRows(() =>
+      supabaseAdmin
+        .from("screened_leads")
+        .select("*", { count: "exact", head: true })
+        .eq("firm_id", firmId)
+        .eq("status", "taken")
+        .gte("created_at", fourteen)
+        .lt("created_at", seven),
+    ),
+    countRows(() =>
+      supabaseAdmin
+        .from("screened_leads")
+        .select("*", { count: "exact", head: true })
+        .eq("firm_id", firmId)
+        .eq("status", "passed")
+        .gte("created_at", fourteen)
+        .lt("created_at", seven),
+    ),
+    countRows(() =>
+      supabaseAdmin
+        .from("client_matters")
+        .select("*", { count: "exact", head: true })
+        .eq("firm_id", firmId)
+        .gte("created_at", seven)
+        .lte("created_at", now),
+    ),
+    countRows(() =>
+      supabaseAdmin
+        .from("client_matters")
+        .select("*", { count: "exact", head: true })
+        .eq("firm_id", firmId)
+        .gte("created_at", fourteen)
+        .lt("created_at", seven),
+    ),
+  ]);
 
-  const leads = (leadsRes.data ?? []) as LeadRow[];
-  const priorLeads = (priorLeadsRes.data ?? []) as LeadRow[];
-  const matters = (mattersRes.data ?? []) as MatterRow[];
-  const priorMatters = (priorMattersRes.data ?? []) as { created_at: string }[];
-  const allOpenMatters = (allMattersRes.data ?? []) as MatterRow[];
-
+  // Current-week totals are derived from the fully-paged leads set, so they are
+  // complete regardless of scale.
   const currentTotal = leads.length;
-  const priorTotal = priorLeads.length;
   const currentTaken = leads.filter((l) => l.status === "taken").length;
-  const priorTaken = priorLeads.filter(
-    (l: LeadRow) => l.status === "taken",
-  ).length;
   const currentPassed = leads.filter((l) => l.status === "passed").length;
-  const priorPassed = priorLeads.filter(
-    (l: LeadRow) => l.status === "passed",
-  ).length;
 
   const currentRate = currentTotal > 0 ? currentTaken / currentTotal : 0;
   const priorRate = priorTotal > 0 ? priorTaken / priorTotal : 0;
@@ -182,8 +249,8 @@ export async function fetchIntakeFunnel(
     topPracticeAreas,
     topMatterTypes,
     mattersCreated: {
-      value: matters.length,
-      delta: computeDelta(matters.length, priorMatters.length),
+      value: currentMattersCreated,
+      delta: computeDelta(currentMattersCreated, priorMattersCreated),
     },
     mattersByStage,
   };

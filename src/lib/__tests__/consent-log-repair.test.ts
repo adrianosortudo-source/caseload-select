@@ -1,84 +1,46 @@
 /**
  * Consent-log repair sweep tests.
  *
- * Mocks @/lib/supabase-admin with a small chainable query builder keyed by
- * table name (same convention as agency-prospect-import.test.ts): the
- * screened_leads table resolves to a fixed candidate list, the consent_log
- * table simulates the existence check (count) and the insert, with a
- * per-test toggle to force an insert error.
+ * The sweep now finds gaps via a DB-side anti-join RPC
+ * (find_leads_missing_email_consent_log): the RPC returns ONLY eligible leads
+ * that lack an email consent_log row, regardless of age, so there is no
+ * per-lead existence check in app code anymore (Codex audit 2026-07-07,
+ * finding 2). @/lib/supabase-admin is mocked: supabase.rpc(name, args)
+ * resolves to a configured candidate list, and from('consent_log').insert()
+ * records the row (with a per-subject toggle to force an insert error).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const h = vi.hoisted(() => {
   const state: {
-    leads: Record<string, unknown>[];
-    existingSubjectIds: Set<string>;
+    missingLeads: Record<string, unknown>[];
+    rpcError: { message: string } | null;
     insertedRows: Record<string, unknown>[];
-    failExistsCheck: boolean;
     failInsertForSubjectIds: Set<string>;
+    lastRpc: { name: string; args: unknown } | null;
   } = {
-    leads: [],
-    existingSubjectIds: new Set<string>(),
+    missingLeads: [],
+    rpcError: null,
     insertedRows: [],
-    failExistsCheck: false,
     failInsertForSubjectIds: new Set<string>(),
+    lastRpc: null,
   };
 
-  function makeScreenedLeadsQuery() {
-    const q: Record<string, unknown> = {};
-    Object.assign(q, {
-      select: () => q,
-      in: () => q,
-      order: () => q,
-      limit: () => Promise.resolve({ data: state.leads, error: null }),
-    });
-    return q;
-  }
-
   function makeConsentLogQuery() {
-    let mode: 'count' | 'insert' | null = null;
-    let eqFilters: Record<string, unknown> = {};
     let insertedRow: Record<string, unknown> | null = null;
-
     const q: Record<string, unknown> = {};
     Object.assign(q, {
-      select: () => {
-        mode = 'count';
-        return q;
-      },
-      eq: (key: string, value: unknown) => {
-        eqFilters = { ...eqFilters, [key]: value };
-        return q;
-      },
       insert: (row: Record<string, unknown>) => {
-        mode = 'insert';
         insertedRow = row;
         return q;
       },
       then: (onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) => {
-        if (mode === 'count') {
-          if (state.failExistsCheck) {
-            return Promise.resolve({ count: null, error: { message: 'exists check boom' } }).then(
-              onFulfilled,
-              onRejected,
-            );
-          }
-          const subjectId = eqFilters['subject_id'] as string;
-          const exists = state.existingSubjectIds.has(subjectId);
-          return Promise.resolve({ count: exists ? 1 : 0, error: null }).then(onFulfilled, onRejected);
+        const subjectId = insertedRow?.subject_id as string;
+        if (state.failInsertForSubjectIds.has(subjectId)) {
+          return Promise.resolve({ data: null, error: { message: 'insert boom' } }).then(onFulfilled, onRejected);
         }
-        if (mode === 'insert') {
-          const subjectId = insertedRow?.subject_id as string;
-          if (state.failInsertForSubjectIds.has(subjectId)) {
-            return Promise.resolve({ data: null, error: { message: 'insert boom' } }).then(
-              onFulfilled,
-              onRejected,
-            );
-          }
-          state.insertedRows.push(insertedRow as Record<string, unknown>);
-          return Promise.resolve({ data: [insertedRow], error: null }).then(onFulfilled, onRejected);
-        }
-        return Promise.resolve({ data: null, error: null }).then(onFulfilled, onRejected);
+        state.insertedRows.push(insertedRow as Record<string, unknown>);
+        return Promise.resolve({ data: [insertedRow], error: null }).then(onFulfilled, onRejected);
       },
     });
     return q;
@@ -87,8 +49,11 @@ const h = vi.hoisted(() => {
   return {
     state,
     supabaseAdmin: {
+      rpc: (name: string, args: unknown) => {
+        state.lastRpc = { name, args };
+        return Promise.resolve({ data: state.rpcError ? null : state.missingLeads, error: state.rpcError });
+      },
       from: (table: string) => {
-        if (table === 'screened_leads') return makeScreenedLeadsQuery();
         if (table === 'consent_log') return makeConsentLogQuery();
         throw new Error(`unexpected table in test: ${table}`);
       },
@@ -101,28 +66,31 @@ vi.mock('@/lib/supabase-admin', () => ({ supabaseAdmin: h.supabaseAdmin }));
 
 import { runConsentLogRepairSweep } from '@/lib/consent-log-repair';
 
+function lead(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'lead-1',
+    firm_id: 'firm-1',
+    email_consent_status: 'explicit',
+    email_consent_captured_at: '2026-06-01T00:00:00.000Z',
+    six_month_expiry_date: null,
+    consent_ip: '1.2.3.4',
+    consent_user_agent: 'ua-1',
+    submitted_at: '2026-06-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
-  h.state.leads = [];
-  h.state.existingSubjectIds = new Set<string>();
+  h.state.missingLeads = [];
+  h.state.rpcError = null;
   h.state.insertedRows = [];
-  h.state.failExistsCheck = false;
   h.state.failInsertForSubjectIds = new Set<string>();
+  h.state.lastRpc = null;
 });
 
 describe('runConsentLogRepairSweep', () => {
-  it('repairs an explicit-consent lead with no existing consent_log row', async () => {
-    h.state.leads = [
-      {
-        id: 'lead-1',
-        firm_id: 'firm-1',
-        email_consent_status: 'explicit',
-        email_consent_captured_at: '2026-06-01T00:00:00.000Z',
-        six_month_expiry_date: null,
-        consent_ip: '1.2.3.4',
-        consent_user_agent: 'ua-1',
-        submitted_at: '2026-06-01T00:00:00.000Z',
-      },
-    ];
+  it('repairs an explicit-consent lead the anti-join returns', async () => {
+    h.state.missingLeads = [lead()];
 
     const result = await runConsentLogRepairSweep();
 
@@ -146,30 +114,37 @@ describe('runConsentLogRepairSweep', () => {
     expect((row.note as string).length).toBeGreaterThan(0);
   });
 
-  it('does not insert when a consent_log row already exists for the subject', async () => {
-    h.state.leads = [
-      {
-        id: 'lead-2',
-        firm_id: 'firm-1',
-        email_consent_status: 'explicit',
-        email_consent_captured_at: '2026-06-01T00:00:00.000Z',
-        six_month_expiry_date: null,
-        consent_ip: null,
-        consent_user_agent: null,
-        submitted_at: '2026-06-01T00:00:00.000Z',
-      },
+  it('repairs a NEWER gap the old oldest-500 scan would have starved (finding 2)', async () => {
+    // The old sweep loaded only the oldest 500 eligible leads and skipped the
+    // covered ones, so once the oldest 500 all had logs, a newer missing lead
+    // (lead 501) was never reached. The anti-join RPC returns exactly the
+    // still-missing leads regardless of age, so lead 501 comes back here even
+    // though 500 older leads already have evidence. The sweep must repair it.
+    h.state.missingLeads = [
+      lead({ id: 'lead-501', firm_id: 'firm-1', email_consent_status: 'implied', six_month_expiry_date: '2026-12-01T00:00:00.000Z', email_consent_captured_at: null, submitted_at: '2026-07-05T00:00:00.000Z' }),
     ];
-    h.state.existingSubjectIds = new Set(['lead-2']);
 
     const result = await runConsentLogRepairSweep();
 
-    expect(result).toMatchObject({ scanned: 1, missing: 0, repaired: 0, failed: 0 });
+    expect(result).toMatchObject({ scanned: 1, missing: 1, repaired: 1, failed: 0 });
+    expect(h.state.insertedRows).toHaveLength(1);
+    expect(h.state.insertedRows[0].subject_id).toBe('lead-501');
+    // The anti-join, not an app-side oldest-N scan, is the source of truth.
+    expect(h.state.lastRpc?.name).toBe('find_leads_missing_email_consent_log');
+  });
+
+  it('no-ops when the anti-join returns nothing (all gaps already closed)', async () => {
+    h.state.missingLeads = [];
+
+    const result = await runConsentLogRepairSweep();
+
+    expect(result).toMatchObject({ scanned: 0, missing: 0, repaired: 0, failed: 0 });
     expect(h.state.insertedRows).toHaveLength(0);
   });
 
   it('handles an implied-consent lead with implied_set/implied_inquiry and the lead expiry', async () => {
-    h.state.leads = [
-      {
+    h.state.missingLeads = [
+      lead({
         id: 'lead-3',
         firm_id: 'firm-2',
         email_consent_status: 'implied',
@@ -178,7 +153,7 @@ describe('runConsentLogRepairSweep', () => {
         consent_ip: '5.6.7.8',
         consent_user_agent: 'ua-3',
         submitted_at: '2026-06-01T12:00:00.000Z',
-      },
+      }),
     ];
 
     const result = await runConsentLogRepairSweep();
@@ -194,18 +169,7 @@ describe('runConsentLogRepairSweep', () => {
   });
 
   it('increments failed and records the error message without throwing on insert failure', async () => {
-    h.state.leads = [
-      {
-        id: 'lead-4',
-        firm_id: 'firm-1',
-        email_consent_status: 'explicit',
-        email_consent_captured_at: '2026-06-01T00:00:00.000Z',
-        six_month_expiry_date: null,
-        consent_ip: null,
-        consent_user_agent: null,
-        submitted_at: '2026-06-01T00:00:00.000Z',
-      },
-    ];
+    h.state.missingLeads = [lead({ id: 'lead-4' })];
     h.state.failInsertForSubjectIds = new Set(['lead-4']);
 
     const result = await runConsentLogRepairSweep();
@@ -215,28 +179,23 @@ describe('runConsentLogRepairSweep', () => {
     expect(result.errors[0]).toContain('lead-4');
   });
 
-  it('respects the limit option', async () => {
-    let seenLimit: number | undefined;
-    const originalFrom = h.supabaseAdmin.from;
-    h.supabaseAdmin.from = ((table: string) => {
-      if (table !== 'screened_leads') return originalFrom(table);
-      const q: Record<string, unknown> = {};
-      Object.assign(q, {
-        select: () => q,
-        in: () => q,
-        order: () => q,
-        limit: (n: number) => {
-          seenLimit = n;
-          return Promise.resolve({ data: [], error: null });
-        },
-      });
-      return q;
-    }) as typeof h.supabaseAdmin.from;
+  it('degrades to an honest empty summary when the anti-join RPC errors (deploy-safe)', async () => {
+    h.state.rpcError = { message: 'function find_leads_missing_email_consent_log does not exist' };
+
+    const result = await runConsentLogRepairSweep();
+
+    expect(result).toMatchObject({ scanned: 0, missing: 0, repaired: 0, failed: 0 });
+    expect(result.errors.length).toBe(1);
+    expect(result.errors[0]).toContain('anti-join failed');
+    expect(h.state.insertedRows).toHaveLength(0);
+  });
+
+  it('passes the limit through to the RPC as batch_limit', async () => {
+    h.state.missingLeads = [];
 
     await runConsentLogRepairSweep({ limit: 17 });
 
-    expect(seenLimit).toBe(17);
-
-    h.supabaseAdmin.from = originalFrom;
+    expect(h.state.lastRpc?.name).toBe('find_leads_missing_email_consent_log');
+    expect(h.state.lastRpc?.args).toEqual({ batch_limit: 17 });
   });
 });
