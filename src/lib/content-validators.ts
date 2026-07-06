@@ -13,6 +13,7 @@ import {
   flattenServicePageToPlainText,
   type ServicePageBlock,
 } from "./content-studio-structured";
+import { extractHost, type InternalLinkTarget } from "./content-studio-links";
 
 export type ValidatorKey =
   | "answer_top_30_percent_text"
@@ -57,7 +58,13 @@ export type ValidatorKey =
   | "jurisdiction_service_area_early"
   | "internal_links_present"
   | "faq_question_shape"
-  | "schema_directives_present";
+  | "schema_directives_present"
+  | "internal_link_domain_allowlist"
+  | "heading_query_alignment"
+  | "entity_present"
+  | "secondary_query_coverage"
+  | "service_area_presence"
+  | "no_cannibalization";
 
 export type Severity = "fail" | "warn" | "info";
 
@@ -112,6 +119,12 @@ export interface ValidatorConfig {
     page_structure?: string[];
   };
   format?: string;
+  // Ses.17 WP-3: the firm's real entity facts, threaded through so the new
+  // entity/domain validators need no extra parameters beyond config +
+  // sourceBrief. Populated by buildValidatorConfig from
+  // strategy_json.canonical_nap.
+  entity_names?: string[];
+  firm_website?: string;
 }
 
 function escapeRegex(s: string): string {
@@ -1852,6 +1865,198 @@ export function validateNoLsaQualityClaim(text: string): ValidatorResult {
   };
 }
 
+// =============================================================================
+// SEO/AEO spec Sections 5, 6, 8 completion (Ses.17 WP-3). These five run
+// against BOTH the Markdown battery (via runDeterministicValidators below,
+// reading fields off ValidatorConfig + sourceBrief) and the
+// canonical_service_page battery (via runCanonicalServicePageValidators
+// further down, reading the same facts off
+// CanonicalServicePageValidationContext), so a link or entity check never
+// depends on which generator produced the piece.
+//
+// significantWords/queryOverlapRatio (defined further down, in the
+// canonical-service-page section) are reused here directly: they are
+// module-scope functions in this same file, not exported, so no import is
+// needed. Their definitions are read below this point in the file but that
+// is fine for function declarations (hoisted).
+// =============================================================================
+
+/**
+ * SEO/AEO spec Section 8: every internal_link_targets URL must resolve to
+ * the firm's own website host. Runs against BOTH Markdown text pieces
+ * (targets pulled from sourceBrief.internal_link_targets) and
+ * canonical_service_page (targets pulled from the validation context).
+ * Fail severity: an internal link that leaves the firm's own site is a
+ * genuine defect, not a style preference.
+ */
+export function validateInternalLinkDomains(
+  internalLinkTargets: InternalLinkTarget[] | undefined,
+  firmWebsite: string | undefined
+): ValidatorResult {
+  const findings: Finding[] = [];
+  const firmHost = extractHost(firmWebsite);
+  if (!internalLinkTargets || internalLinkTargets.length === 0 || !firmHost) {
+    return { key: "internal_link_domain_allowlist", status: "pass", severity: "info", findings };
+  }
+  for (const target of internalLinkTargets) {
+    const host = extractHost(target.url);
+    if (!host) {
+      findings.push({
+        rule: "internal_link_domain_allowlist",
+        severity: "fail",
+        message: `Internal link target "${target.url}" is not a valid absolute URL.`,
+      });
+      continue;
+    }
+    if (host !== firmHost) {
+      findings.push({
+        rule: "internal_link_domain_allowlist",
+        severity: "fail",
+        message: `Internal link target "${target.url}" does not resolve to the firm's own domain (expected ${firmHost}).`,
+      });
+    }
+  }
+  return {
+    key: "internal_link_domain_allowlist",
+    status: findings.length > 0 ? "fail" : "pass",
+    severity: findings.length > 0 ? "fail" : "info",
+    findings,
+  };
+}
+
+/**
+ * SEO/AEO spec Section 5: heading-to-query coverage. Warn-only by design:
+ * the spec explicitly notes some structural headings ("How the process
+ * works") are legitimate even with no query match, so a low-coverage
+ * heading set is a signal to review, not an automatic fail.
+ */
+export function validateHeadingQueryAlignment(
+  text: string,
+  clientQuestionVariants: string[] | undefined,
+  secondaryQueries: string[] | undefined
+): ValidatorResult {
+  const findings: Finding[] = [];
+  const questionPool = [...(clientQuestionVariants ?? []), ...(secondaryQueries ?? [])];
+  if (questionPool.length === 0) {
+    return { key: "heading_query_alignment", status: "pass", severity: "info", findings };
+  }
+  const headings = (text.match(/^#{1,4}\s+.+$/gm) ?? []).map((h) =>
+    h.replace(/^#{1,4}\s+/, "").trim()
+  );
+  if (headings.length === 0) {
+    return { key: "heading_query_alignment", status: "pass", severity: "info", findings };
+  }
+  const alignedCount = headings.filter((h) =>
+    questionPool.some((q) => queryOverlapRatio(q, h) > 0.5)
+  ).length;
+  const ratio = alignedCount / headings.length;
+  if (ratio < 0.3) {
+    findings.push({
+      rule: "heading_query_alignment",
+      severity: "warn",
+      message: `Only ${alignedCount}/${headings.length} headings align with a supplied client question variant or secondary query. Some structural headings are legitimate with no match; treat this as a coverage signal, not a required fix.`,
+    });
+  }
+  return {
+    key: "heading_query_alignment",
+    status: findings.length > 0 ? "warn" : "pass",
+    severity: findings.length > 0 ? "warn" : "info",
+    findings,
+  };
+}
+
+/**
+ * SEO/AEO spec Section 5: the firm/lawyer entity appears somewhere in the
+ * piece. Warn, not fail: Markdown formats have no guaranteed author-bio
+ * block the way canonical_service_page does, so this is a hygiene signal.
+ */
+export function validateEntityPresent(
+  text: string,
+  entityNames: string[] | undefined
+): ValidatorResult {
+  const findings: Finding[] = [];
+  const names = (entityNames ?? []).filter((n): n is string => !!n && n.trim().length > 0);
+  if (names.length === 0) {
+    return { key: "entity_present", status: "pass", severity: "info", findings };
+  }
+  const lower = text.toLowerCase();
+  const found = names.some((name) => lower.includes(name.toLowerCase()));
+  if (!found) {
+    findings.push({
+      rule: "entity_present",
+      severity: "warn",
+      message: `Neither the firm name nor the named lawyer appears anywhere in the piece (checked: ${names.join(", ")}).`,
+    });
+  }
+  return {
+    key: "entity_present",
+    status: findings.length > 0 ? "warn" : "pass",
+    severity: findings.length > 0 ? "warn" : "info",
+    findings,
+  };
+}
+
+/**
+ * SEO/AEO spec Section 6: ratio-based secondary-query coverage, mirroring
+ * validateApprovedVocabulary's warn-under-threshold pattern. Warn, not fail:
+ * forcing every secondary query into the body risks keyword stuffing, which
+ * the doctrine already forbids elsewhere.
+ */
+export function validateSecondaryQueryCoverage(
+  text: string,
+  secondaryQueries: string[] | undefined
+): ValidatorResult {
+  const findings: Finding[] = [];
+  if (!secondaryQueries || secondaryQueries.length === 0) {
+    return { key: "secondary_query_coverage", status: "pass", severity: "info", findings };
+  }
+  const covered = secondaryQueries.filter((q) => queryOverlapRatio(q, text) > 0.5).length;
+  const ratio = covered / secondaryQueries.length;
+  if (ratio < 0.3) {
+    findings.push({
+      rule: "secondary_query_coverage",
+      severity: "warn",
+      message: `Only ${covered}/${secondaryQueries.length} secondary queries have meaningful overlap with the body. Confirm they belong on this piece rather than a different one.`,
+    });
+  }
+  return {
+    key: "secondary_query_coverage",
+    status: findings.length > 0 ? "warn" : "pass",
+    severity: findings.length > 0 ? "warn" : "info",
+    findings,
+  };
+}
+
+/**
+ * SEO/AEO spec Section 6: service-area language present, only runs when
+ * source_brief.service_area is set (not every piece ships a service area).
+ */
+export function validateServiceAreaPresence(
+  text: string,
+  serviceArea: string | string[] | undefined
+): ValidatorResult {
+  const findings: Finding[] = [];
+  if (!serviceArea) {
+    return { key: "service_area_presence", status: "pass", severity: "info", findings };
+  }
+  const areas = Array.isArray(serviceArea) ? serviceArea : [serviceArea];
+  const lower = text.toLowerCase();
+  const missing = areas.filter((a) => a.trim() && !lower.includes(a.toLowerCase()));
+  if (missing.length > 0) {
+    findings.push({
+      rule: "service_area_presence",
+      severity: "warn",
+      message: `Service area(s) not found in the piece: ${missing.join(", ")}.`,
+    });
+  }
+  return {
+    key: "service_area_presence",
+    status: findings.length > 0 ? "warn" : "pass",
+    severity: findings.length > 0 ? "warn" : "info",
+    findings,
+  };
+}
+
 export function runDeterministicValidators(
   text: string,
   config: ValidatorConfig,
@@ -1987,6 +2192,30 @@ export function runDeterministicValidators(
         validateJurisdictionServiceAreaEarlyText(text, jurisdiction, serviceArea)
       );
     }
+
+    // Ses.17 WP-3 additions.
+    const secondaryQueries = sourceBrief.secondary_queries as string[] | undefined;
+    const clientQuestionVariants = sourceBrief.client_question_variants as string[] | undefined;
+    const internalLinkTargets = sourceBrief.internal_link_targets as
+      | InternalLinkTarget[]
+      | undefined;
+
+    if (clientQuestionVariants?.length || secondaryQueries?.length) {
+      results.push(validateHeadingQueryAlignment(text, clientQuestionVariants, secondaryQueries));
+    }
+    if (secondaryQueries?.length) {
+      results.push(validateSecondaryQueryCoverage(text, secondaryQueries));
+    }
+    if (serviceArea) {
+      results.push(validateServiceAreaPresence(text, serviceArea));
+    }
+    if (internalLinkTargets?.length) {
+      results.push(validateInternalLinkDomains(internalLinkTargets, config.firm_website));
+    }
+  }
+
+  if (config.entity_names?.length) {
+    results.push(validateEntityPresent(text, config.entity_names));
   }
 
   return results;
@@ -2019,7 +2248,11 @@ const QUERY_STOP_WORDS = new Set([
   "it", "be", "if", "not", "can", "will", "how", "what", "when", "where",
 ]);
 
-function significantWords(s: string): string[] {
+// Exported (Ses.17 WP-3) so the cannibalization check in content-studio.ts's
+// runAndRecordValidation (which needs a corpus query against other pieces,
+// so it cannot be a pure validator here) can reuse the exact same
+// significant-word extraction the query-overlap checks in this file use.
+export function significantWords(s: string): string[] {
   return s
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
@@ -2397,6 +2630,9 @@ export interface CanonicalServicePageValidationContext {
   serviceArea?: string | string[];
   internalLinkTargets?: Array<{ url: string; anchor_text_hint?: string; relation?: string }>;
   title?: string;
+  // Ses.17 WP-3: strategy_json.canonical_nap.website, for the domain
+  // allowlist check. Optional since a firm may not have it on file yet.
+  firmWebsite?: string;
 }
 
 export function runCanonicalServicePageValidators(
@@ -2418,5 +2654,6 @@ export function runCanonicalServicePageValidators(
     validateInternalLinksPresent(context.internalLinkTargets, seoMetadata),
     validateFaqQuestionsAreQuestionShaped(blocks),
     validateSchemaDirectivesPresent(seoMetadata),
+    validateInternalLinkDomains(context.internalLinkTargets, context.firmWebsite),
   ];
 }

@@ -3,8 +3,11 @@ import { supabaseAdmin } from "./supabase-admin";
 import {
   runDeterministicValidators,
   runCanonicalServicePageValidators,
+  validateLastUpdatedDateVisible,
+  significantWords,
   type ValidatorConfig,
   type ValidatorResult,
+  type Finding,
   type CanonicalServicePageValidationContext,
 } from "./content-validators";
 import type { ServicePageBlock } from "./content-studio-structured";
@@ -87,6 +90,22 @@ export function buildValidatorConfig(
     certified_specialists:
       ((strategy.strategy_json as Record<string, unknown>)
         ?.certified_specialists as Array<{ lawyer: string; areas: string[] }>) ?? [],
+    // Ses.17 WP-3: real entity facts for validateEntityPresent and
+    // validateInternalLinkDomains. canonical_nap is the same source of
+    // truth content-studio-structured.ts already treats as ground truth.
+    entity_names: (() => {
+      const nap = (strategy.strategy_json as Record<string, unknown>).canonical_nap as
+        | Record<string, unknown>
+        | undefined;
+      return [nap?.legal_entity as string | undefined, nap?.lawyer_public_facing_name as string | undefined].filter(
+        (n): n is string => !!n
+      );
+    })(),
+    firm_website: (
+      (strategy.strategy_json as Record<string, unknown>).canonical_nap as
+        | Record<string, unknown>
+        | undefined
+    )?.website as string | undefined,
   };
 }
 
@@ -300,6 +319,69 @@ export interface ValidationOutcome {
 }
 
 /**
+ * SEO/AEO spec Section 6 cannibalization check (Ses.17 WP-3). Not a pure
+ * validator: it needs a corpus query against this firm's other non-archived
+ * pieces, so it lives here (content-studio.ts already does this kind of
+ * I/O) rather than in content-validators.ts. Warn-only; the operator judges
+ * whether two pieces targeting overlapping queries is a real conflict.
+ */
+async function checkCannibalization(input: {
+  pieceId: string;
+  firmId: string;
+  primaryQuery: string;
+}): Promise<ValidatorResult> {
+  const findings: Finding[] = [];
+
+  const { data: otherPieces } = await supabaseAdmin
+    .from("content_pieces")
+    .select("id, title_working, source_brief")
+    .eq("firm_id", input.firmId)
+    .neq("id", input.pieceId)
+    .neq("status", "archived");
+
+  if (otherPieces && otherPieces.length > 0) {
+    const otherIds = otherPieces.map((p) => p.id as string);
+    const { data: versions } = await supabaseAdmin
+      .from("content_piece_versions")
+      .select("piece_id, seo_metadata")
+      .in("piece_id", otherIds)
+      .eq("language", "en")
+      .eq("is_current", true);
+    const seoByPiece = new Map(
+      (versions ?? []).map((v) => [v.piece_id as string, v.seo_metadata as Record<string, unknown> | null])
+    );
+
+    const thisWords = new Set(significantWords(input.primaryQuery));
+    for (const piece of otherPieces) {
+      const seo = seoByPiece.get(piece.id as string);
+      const otherQuery =
+        (seo?.primary_query as string | undefined) ??
+        ((piece.source_brief as Record<string, unknown> | null)?.primary_query as
+          | string
+          | undefined);
+      if (!otherQuery || !otherQuery.trim()) continue;
+      const otherWords = significantWords(otherQuery);
+      if (otherWords.length === 0) continue;
+      const overlap = otherWords.filter((w) => thisWords.has(w)).length / otherWords.length;
+      if (overlap > 0.6) {
+        findings.push({
+          rule: "no_cannibalization",
+          severity: "warn",
+          message: `Primary query overlaps ${Math.round(overlap * 100)}% with "${piece.title_working}" (query: "${otherQuery}"). Confirm these target different queries rather than competing for the same one.`,
+        });
+      }
+    }
+  }
+
+  return {
+    key: "no_cannibalization",
+    status: findings.length > 0 ? "warn" : "pass",
+    severity: findings.length > 0 ? "warn" : "info",
+    findings,
+  };
+}
+
+/**
  * Shared validation core (Ses.17 WP-2). Extracted from the validate route so
  * the new PUT .../version route (the operator-edit path) can run the exact
  * same battery and record the exact same way after a manual edit, instead of
@@ -333,6 +415,11 @@ export async function runAndRecordValidation(input: {
       };
     }
     const seoMetadata = input.version.seo_metadata ?? undefined;
+    const firmWebsite = (
+      (input.strategy.strategy_json as Record<string, unknown>).canonical_nap as
+        | Record<string, unknown>
+        | undefined
+    )?.website as string | undefined;
     const context: CanonicalServicePageValidationContext = {
       primaryQuery: (seoMetadata?.primary_query as string | null | undefined) ?? undefined,
       answerSummary: (seoMetadata?.answer_summary as string | null | undefined) ?? undefined,
@@ -342,6 +429,7 @@ export async function runAndRecordValidation(input: {
       internalLinkTargets: input.sourceBrief?.internal_link_targets as
         | Array<{ url: string; anchor_text_hint?: string; relation?: string }>
         | undefined,
+      firmWebsite,
     };
     results = runCanonicalServicePageValidators(blocks, seoMetadata, context);
   } else {
@@ -350,6 +438,27 @@ export async function runAndRecordValidation(input: {
     }
     const config = buildValidatorConfig(input.strategy, input.format);
     results = runDeterministicValidators(input.version.body_markdown, config, input.sourceBrief);
+    // Ses.17 WP-3: Markdown formats never had a last-updated signal wired in
+    // (only canonical_service_page did, via runCanonicalServicePageValidators).
+    // draft/route.ts's Markdown branch now writes seo_metadata.generated_at
+    // alongside body_markdown, so the same structured check applies here.
+    results.push(validateLastUpdatedDateVisible(input.version.seo_metadata ?? undefined));
+  }
+
+  // Cannibalization check (SEO/AEO spec Section 6): not a pure validator, it
+  // needs a corpus query against this firm's other non-archived pieces. Runs
+  // for every format once a primary_query exists, since it is about query
+  // overlap between pieces, not about any one format's structure.
+  const thisPrimaryQuery =
+    (input.version.seo_metadata?.primary_query as string | undefined) ??
+    (input.sourceBrief?.primary_query as string | undefined);
+  if (thisPrimaryQuery && thisPrimaryQuery.trim()) {
+    const cannibalizationResult = await checkCannibalization({
+      pieceId: input.pieceId,
+      firmId: input.firmId,
+      primaryQuery: thisPrimaryQuery,
+    });
+    results.push(cannibalizationResult);
   }
 
   const { error: recordErr } = await recordValidationRun({

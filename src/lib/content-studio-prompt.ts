@@ -319,10 +319,10 @@ export function buildUserPrompt(
   // structured canonical_service_page branch already uses (see
   // content-studio-structured.ts buildCanonicalServicePageUserPrompt). No
   // raw JSON dump; the model gets a labeled, human-readable option list.
-  // Note: same as the structured branch, this does not yet validate that
-  // each URL resolves to the firm's own domain (SEO/AEO spec Section 8's
-  // domain-allowlist check) -- that gap is pre-existing from Step 1, not
-  // introduced here, and is flagged as a remaining gap.
+  // Ses.17 WP-3: the caller (draft/route.ts) filters non-firm-host targets
+  // out of sourceBrief.internal_link_targets before calling this function,
+  // so whatever arrives here is already domain-scoped. The post-hoc
+  // validateInternalLinkDomains check remains a second line of defense.
   const internalLinkTargets = sourceBrief.internal_link_targets as
     | Array<{ url: string; anchor_text_hint?: string; relation?: string }>
     | undefined;
@@ -344,4 +344,68 @@ export function buildUserPrompt(
   );
 
   return parts.join("\n");
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Deterministic SEO metadata + Article JSON-LD for Markdown formats
+// (Ses.17 WP-3). Mirrors the design principle already established in
+// content-studio-structured.ts's assembleSchemaBlocks/buildSeoMetadata for
+// canonical_service_page: entity facts (firm name, lawyer name) come from
+// strategy_json.canonical_nap, never from the model, so the model is never
+// asked to state a fact it could get wrong. Markdown formats never had any
+// seo_metadata at all before this; the flat fields mirror what Phase 1 of
+// the SEO/AEO spec promised (primary_query, secondary_queries) and the
+// schema.article block closes the "Article schema for counsel_note" gap
+// from spec Section 7.
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * headline: the first Markdown H1 in the generated text if present, else
+ * the piece's own title_working. datePublished/dateModified both use
+ * generatedAt since a Markdown piece has no separate original-publish date
+ * tracked yet (that is the same Phase-4, post-Task-#12 column gap the
+ * structured format's last-updated check documents).
+ */
+export function buildArticleSchemaBlock(input: {
+  strategy: StrategyRow;
+  titleWorking: string;
+  generatedText: string;
+  generatedAt: string;
+}): Record<string, unknown> {
+  const nap = (input.strategy.strategy_json as Record<string, unknown>).canonical_nap as
+    | Record<string, unknown>
+    | undefined;
+  const headlineMatch = input.generatedText.match(/^#\s+(.+)$/m);
+  const headline = (headlineMatch ? headlineMatch[1].trim() : input.titleWorking) || input.titleWorking;
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline,
+    author: { "@type": "Person", name: nap?.lawyer_public_facing_name ?? null },
+    publisher: { "@type": "LegalService", name: nap?.legal_entity ?? null },
+    datePublished: input.generatedAt,
+    dateModified: input.generatedAt,
+    inLanguage: "en",
+  };
+}
+
+export function buildMarkdownSeoMetadata(input: {
+  sourceBrief: Record<string, unknown>;
+  articleSchema: Record<string, unknown>;
+  generatedAt: string;
+}): Record<string, unknown> {
+  const sourceBrief = input.sourceBrief;
+  return {
+    generator: "markdown_v1",
+    generated_at: input.generatedAt,
+    primary_query: (sourceBrief.primary_query as string | undefined) ?? null,
+    secondary_queries: (sourceBrief.secondary_queries as string[] | undefined) ?? [],
+    search_intent: (sourceBrief.search_intent as string | undefined) ?? null,
+    answer_summary: (sourceBrief.answer_summary as string | undefined) ?? null,
+    jurisdiction: (sourceBrief.jurisdiction as string | undefined) ?? null,
+    service_area: (sourceBrief.service_area as string | string[] | undefined) ?? null,
+    schema: {
+      article: input.articleSchema,
+    },
+  };
 }

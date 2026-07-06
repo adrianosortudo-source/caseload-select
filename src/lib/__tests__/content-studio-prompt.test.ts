@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildSystemPrompt, buildUserPrompt } from "../content-studio-prompt";
+import {
+  buildSystemPrompt,
+  buildUserPrompt,
+  buildArticleSchemaBlock,
+  buildMarkdownSeoMetadata,
+} from "../content-studio-prompt";
 import type { StrategyRow } from "../content-studio";
 
 function makeStrategy(overrides: Record<string, unknown> = {}): StrategyRow {
@@ -195,5 +200,129 @@ describe("buildUserPrompt", () => {
   it("still surfaces unlabeled extra string fields under a humanized label", () => {
     const prompt = buildUserPrompt({ custom_field_name: "Some extra detail" }, "counsel_note");
     expect(prompt).toContain("Custom Field Name: Some extra detail");
+  });
+});
+
+// Ses.17 WP-3: Article JSON-LD + last-updated seo_metadata for Markdown
+// formats. The structured canonical_service_page branch has its own richer
+// assembly (content-studio-structured.ts); these two functions give every
+// other format the same last-updated-date + entity-schema coverage.
+describe("buildArticleSchemaBlock", () => {
+  function makeStrategyWithNap(nap?: Record<string, unknown>): StrategyRow {
+    return {
+      id: "strategy-1",
+      firm_id: "eec1d25e-a047-4827-8e4a-6eb96becca2b",
+      name: "DRG Law Content Strategy v2",
+      version: 2,
+      status: "active",
+      default_locale: "en",
+      bilingual_enabled: true,
+      jurisdiction: "Ontario",
+      strategy_json: { canonical_nap: nap },
+      format_specs: {},
+      voice_rules: {},
+    } as StrategyRow;
+  }
+
+  it("takes the headline from the first markdown H1 when present", () => {
+    const block = buildArticleSchemaBlock({
+      strategy: makeStrategyWithNap({
+        legal_entity: "DRG Law Professional Corporation",
+        lawyer_public_facing_name: "Damaris Regina Guimaraes",
+      }),
+      titleWorking: "Working title, not the real headline",
+      generatedText: "# Commercial Lease Review, Ontario\n\nBody text follows.",
+      generatedAt: "2026-07-05T12:00:00.000Z",
+    });
+    expect(block.headline).toBe("Commercial Lease Review, Ontario");
+    expect(block["@type"]).toBe("Article");
+    expect(block["@context"]).toBe("https://schema.org");
+  });
+
+  it("falls back to titleWorking when the generated text has no H1", () => {
+    const block = buildArticleSchemaBlock({
+      strategy: makeStrategyWithNap({}),
+      titleWorking: "Fallback Title",
+      generatedText: "No heading here, just a paragraph.",
+      generatedAt: "2026-07-05T12:00:00.000Z",
+    });
+    expect(block.headline).toBe("Fallback Title");
+  });
+
+  it("populates author and publisher from canonical_nap when present", () => {
+    const block = buildArticleSchemaBlock({
+      strategy: makeStrategyWithNap({
+        legal_entity: "DRG Law Professional Corporation",
+        lawyer_public_facing_name: "Damaris Regina Guimaraes",
+      }),
+      titleWorking: "Title",
+      generatedText: "Body text.",
+      generatedAt: "2026-07-05T12:00:00.000Z",
+    });
+    expect(block.author).toEqual({ "@type": "Person", name: "Damaris Regina Guimaraes" });
+    expect(block.publisher).toEqual({ "@type": "LegalService", name: "DRG Law Professional Corporation" });
+  });
+
+  it("nulls out author/publisher name rather than throwing when canonical_nap is missing", () => {
+    const block = buildArticleSchemaBlock({
+      strategy: makeStrategyWithNap(undefined),
+      titleWorking: "Title",
+      generatedText: "Body text.",
+      generatedAt: "2026-07-05T12:00:00.000Z",
+    });
+    expect((block.author as Record<string, unknown>).name).toBeNull();
+    expect((block.publisher as Record<string, unknown>).name).toBeNull();
+  });
+
+  it("stamps datePublished and dateModified to the same generatedAt value", () => {
+    const block = buildArticleSchemaBlock({
+      strategy: makeStrategyWithNap({}),
+      titleWorking: "Title",
+      generatedText: "Body text.",
+      generatedAt: "2026-07-05T12:00:00.000Z",
+    });
+    expect(block.datePublished).toBe("2026-07-05T12:00:00.000Z");
+    expect(block.dateModified).toBe("2026-07-05T12:00:00.000Z");
+  });
+});
+
+describe("buildMarkdownSeoMetadata", () => {
+  it("carries the SEO/AEO source_brief fields plus the article schema through", () => {
+    const articleSchema = { "@type": "Article", headline: "Test Headline" };
+    const metadata = buildMarkdownSeoMetadata({
+      sourceBrief: {
+        primary_query: "commercial lease review Ontario",
+        secondary_queries: ["lease review lawyer Toronto"],
+        search_intent: "commercial_investigation",
+        answer_summary: "A lawyer reviews the lease before you sign.",
+        jurisdiction: "Ontario",
+        service_area: ["Toronto"],
+      },
+      articleSchema,
+      generatedAt: "2026-07-05T12:00:00.000Z",
+    });
+    expect(metadata.generator).toBe("markdown_v1");
+    expect(metadata.generated_at).toBe("2026-07-05T12:00:00.000Z");
+    expect(metadata.primary_query).toBe("commercial lease review Ontario");
+    expect(metadata.secondary_queries).toEqual(["lease review lawyer Toronto"]);
+    expect(metadata.search_intent).toBe("commercial_investigation");
+    expect(metadata.answer_summary).toBe("A lawyer reviews the lease before you sign.");
+    expect(metadata.jurisdiction).toBe("Ontario");
+    expect(metadata.service_area).toEqual(["Toronto"]);
+    expect((metadata.schema as Record<string, unknown>).article).toBe(articleSchema);
+  });
+
+  it("defaults absent fields to null/empty-array rather than throwing", () => {
+    const metadata = buildMarkdownSeoMetadata({
+      sourceBrief: {},
+      articleSchema: { "@type": "Article" },
+      generatedAt: "2026-07-05T12:00:00.000Z",
+    });
+    expect(metadata.primary_query).toBeNull();
+    expect(metadata.secondary_queries).toEqual([]);
+    expect(metadata.search_intent).toBeNull();
+    expect(metadata.answer_summary).toBeNull();
+    expect(metadata.jurisdiction).toBeNull();
+    expect(metadata.service_area).toBeNull();
   });
 });

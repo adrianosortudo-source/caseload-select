@@ -21,7 +21,13 @@ import {
   buildSeoMetadata,
   flattenServicePageToPlainText,
 } from "@/lib/content-studio-structured";
-import { buildSystemPrompt, buildUserPrompt } from "@/lib/content-studio-prompt";
+import {
+  buildSystemPrompt,
+  buildUserPrompt,
+  buildArticleSchemaBlock,
+  buildMarkdownSeoMetadata,
+} from "@/lib/content-studio-prompt";
+import { filterInternalLinkTargetsToFirmHost, type InternalLinkTarget } from "@/lib/content-studio-links";
 
 export const dynamic = "force-dynamic";
 
@@ -54,8 +60,27 @@ async function generateCanonicalServicePageDraft({
   sourceBrief: Record<string, unknown>;
   strategy: StrategyRow;
 }): Promise<NextResponse> {
-  const systemPrompt = buildCanonicalServicePageSystemPrompt(strategy, sourceBrief);
-  const userPrompt = buildCanonicalServicePageUserPrompt(sourceBrief);
+  // WP-3.3: exclude any internal_link_targets URL that does not resolve to
+  // the firm's own website host before the model ever sees it. Filtering at
+  // the prompt is stronger than the post-hoc validateInternalLinkDomains
+  // check alone: a bad link never reaches the draft in the first place.
+  const firmWebsite = (
+    (strategy.strategy_json as Record<string, unknown>).canonical_nap as
+      | Record<string, unknown>
+      | undefined
+  )?.website as string | undefined;
+  const { allowed: allowedLinkTargets, excluded: excludedLinkTargets } =
+    filterInternalLinkTargetsToFirmHost(
+      sourceBrief.internal_link_targets as InternalLinkTarget[] | undefined,
+      firmWebsite
+    );
+  const filteredSourceBrief: Record<string, unknown> = {
+    ...sourceBrief,
+    internal_link_targets: allowedLinkTargets,
+  };
+
+  const systemPrompt = buildCanonicalServicePageSystemPrompt(strategy, filteredSourceBrief);
+  const userPrompt = buildCanonicalServicePageUserPrompt(filteredSourceBrief);
   const promptContextHash = hashString(systemPrompt + userPrompt);
 
   let aiResponse: Response;
@@ -136,8 +161,8 @@ async function generateCanonicalServicePageDraft({
   }
 
   const blocks = toBodyStructuredBlocks(validated.output, strategy);
-  const schemaBlocks = assembleSchemaBlocks(validated.output, strategy, sourceBrief);
-  const seoMetadata = buildSeoMetadata(validated.output, sourceBrief, schemaBlocks);
+  const schemaBlocks = assembleSchemaBlocks(validated.output, strategy, filteredSourceBrief);
+  const seoMetadata = buildSeoMetadata(validated.output, filteredSourceBrief, schemaBlocks);
   const flatText = flattenServicePageToPlainText(blocks);
   const textHash = hashString(flatText);
 
@@ -199,6 +224,7 @@ async function generateCanonicalServicePageDraft({
     schema_warnings: schemaBlocks.breadcrumb_urls_incomplete
       ? ["breadcrumb_list item URLs are incomplete: no website URL on file for this firm's canonical_nap."]
       : [],
+    excluded_internal_link_targets: excludedLinkTargets,
     ai_run: aiRun ? { id: aiRun.id, model: aiRun.model, usage: aiRun.usage } : null,
   });
 }
@@ -315,8 +341,26 @@ export async function POST(
     });
   }
 
-  const systemPrompt = buildSystemPrompt(strategy, piece.format, sourceBrief);
-  const userPrompt = buildUserPrompt(sourceBrief, piece.format);
+  // WP-3.3: same firm-host filtering as the structured branch above (see
+  // its comment). Applied here too since every Markdown format also reads
+  // sourceBrief.internal_link_targets via buildUserPrompt.
+  const firmWebsite = (
+    (strategy.strategy_json as Record<string, unknown>).canonical_nap as
+      | Record<string, unknown>
+      | undefined
+  )?.website as string | undefined;
+  const { allowed: allowedLinkTargets, excluded: excludedLinkTargets } =
+    filterInternalLinkTargetsToFirmHost(
+      sourceBrief.internal_link_targets as InternalLinkTarget[] | undefined,
+      firmWebsite
+    );
+  const filteredSourceBrief: Record<string, unknown> = {
+    ...sourceBrief,
+    internal_link_targets: allowedLinkTargets,
+  };
+
+  const systemPrompt = buildSystemPrompt(strategy, piece.format, filteredSourceBrief);
+  const userPrompt = buildUserPrompt(filteredSourceBrief, piece.format);
   const promptContextHash = hashString(systemPrompt + userPrompt);
 
   // Call the Anthropic Messages API
@@ -380,6 +424,23 @@ export async function POST(
   const versionNumber = await getNextVersionNumber(id, "en");
   const textHash = hashString(generatedText);
 
+  // WP-3.1/3.2: Article JSON-LD + last-updated marker for Markdown formats.
+  // The structured canonical_service_page branch already assembles its own
+  // richer schema (LegalService/FAQPage/BreadcrumbList); Markdown formats had
+  // no seo_metadata at all until now.
+  const generatedAt = new Date().toISOString();
+  const articleSchema = buildArticleSchemaBlock({
+    strategy,
+    titleWorking: piece.title_working,
+    generatedText,
+    generatedAt,
+  });
+  const seoMetadata = buildMarkdownSeoMetadata({
+    sourceBrief: filteredSourceBrief,
+    articleSchema,
+    generatedAt,
+  });
+
   // Record the AI run first to get the run ID
   const { data: aiRun, error: runErr } = await recordAiRun({
     firm_id: piece.firm_id,
@@ -415,6 +476,7 @@ export async function POST(
     version_number: versionNumber,
     language: "en",
     body_markdown: generatedText,
+    seo_metadata: seoMetadata,
     text_hash: textHash,
     created_by: "ai",
     created_with_ai_run_id: aiRun?.id ?? undefined,
@@ -431,6 +493,7 @@ export async function POST(
     ok: true,
     piece_id: id,
     version,
+    excluded_internal_link_targets: excludedLinkTargets,
     ai_run: aiRun
       ? {
           id: aiRun.id,

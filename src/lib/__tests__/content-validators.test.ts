@@ -41,6 +41,12 @@ import {
   runDeterministicValidators,
   validateItalicsMarkup,
   validateLsoCompliance,
+  validateInternalLinkDomains,
+  validateHeadingQueryAlignment,
+  validateEntityPresent,
+  validateSecondaryQueryCoverage,
+  validateServiceAreaPresence,
+  significantWords,
   type ValidatorConfig,
 } from "../content-validators";
 import { SERVICE_PAGE_SECTION_KEYS, type ServicePageBlock } from "../content-studio-structured";
@@ -696,5 +702,280 @@ describe("validateLsoCompliance (Ses.16 WP-4 bugfix regression)", () => {
   it("still catches unverifiable superlatives", () => {
     expect(validateLsoCompliance("We are the best lawyer in Toronto.").status).toBe("fail");
     expect(validateLsoCompliance("Rated the #1 firm in Ontario.").status).toBe("fail");
+  });
+});
+
+// Ses.17 WP-3: five new validators (SEO/AEO spec Section 8 domain allowlist,
+// plus heading/entity/secondary-query/service-area coverage signals) shared
+// across both the Markdown battery (runDeterministicValidators) and the
+// canonical_service_page structured battery (runCanonicalServicePageValidators).
+describe("validateInternalLinkDomains", () => {
+  const FIRM_WEBSITE = "https://drglaw.ca";
+
+  it("passes (info) when no internal link targets are supplied", () => {
+    const result = validateInternalLinkDomains(undefined, FIRM_WEBSITE);
+    expect(result.status).toBe("pass");
+  });
+
+  it("passes (info) when the firm has no website on file, even with targets present", () => {
+    const result = validateInternalLinkDomains(
+      [{ url: "https://anywhere.com/page" }],
+      undefined
+    );
+    expect(result.status).toBe("pass");
+  });
+
+  it("passes when every target resolves to the firm's own domain", () => {
+    const result = validateInternalLinkDomains(
+      [{ url: "https://drglaw.ca/journal/a" }, { url: "https://www.drglaw.ca/journal/b" }],
+      FIRM_WEBSITE
+    );
+    expect(result.status).toBe("pass");
+  });
+
+  it("fails when a target resolves to an external domain", () => {
+    const result = validateInternalLinkDomains(
+      [{ url: "https://competitor-firm.ca/page" }],
+      FIRM_WEBSITE
+    );
+    expect(result.status).toBe("fail");
+    expect(result.findings[0].message).toContain("does not resolve to the firm's own domain");
+  });
+
+  it("fails on a malformed URL rather than silently passing", () => {
+    const result = validateInternalLinkDomains([{ url: "not-a-url" }], FIRM_WEBSITE);
+    expect(result.status).toBe("fail");
+    expect(result.findings[0].message).toContain("not a valid absolute URL");
+  });
+});
+
+describe("validateHeadingQueryAlignment", () => {
+  it("passes (info) when no client question variants or secondary queries are supplied", () => {
+    const result = validateHeadingQueryAlignment("# Some heading\n\nBody.", undefined, undefined);
+    expect(result.status).toBe("pass");
+  });
+
+  it("does not warn on a legitimate structural heading set that reasonably aligns with the query pool", () => {
+    // False-positive guard: real service-page headings ("Fees and what to
+    // expect", "How the process works") are structural, not query-mirrors,
+    // but the overlap ratio (>=30% of headings share significant words with
+    // the pool) should still clear the warn threshold on a well-targeted page.
+    const text = [
+      "# Commercial Lease Review, Ontario",
+      "## Do you have a commercial lease question",
+      "## How the process works",
+      "## Fees and what to expect",
+      "## Commercial lease review checklist",
+    ].join("\n\n");
+    const result = validateHeadingQueryAlignment(
+      text,
+      ["Do I need a lawyer for a commercial lease?"],
+      ["commercial lease review checklist"]
+    );
+    expect(result.status).toBe("pass");
+  });
+
+  it("warns when almost no heading aligns with the supplied query pool", () => {
+    const text = [
+      "# Unrelated Topic",
+      "## About our office",
+      "## Contact information",
+      "## Directions and parking",
+    ].join("\n\n");
+    const result = validateHeadingQueryAlignment(
+      text,
+      ["commercial lease relocation clause"],
+      ["commercial lease assignment clause"]
+    );
+    expect(result.status).toBe("warn");
+  });
+});
+
+describe("validateEntityPresent", () => {
+  it("passes (info) when no entity names are supplied", () => {
+    expect(validateEntityPresent("Some body text.", undefined).status).toBe("pass");
+    expect(validateEntityPresent("Some body text.", []).status).toBe("pass");
+  });
+
+  it("passes when the firm name appears anywhere in the piece", () => {
+    const result = validateEntityPresent(
+      "DRG Law Professional Corporation reviews the lease before you sign.",
+      ["DRG Law Professional Corporation", "Damaris Regina Guimaraes"]
+    );
+    expect(result.status).toBe("pass");
+  });
+
+  it("passes when the named lawyer (not the firm) appears", () => {
+    const result = validateEntityPresent(
+      "Damaris Regina Guimaraes reviews the lease before you sign.",
+      ["DRG Law Professional Corporation", "Damaris Regina Guimaraes"]
+    );
+    expect(result.status).toBe("pass");
+  });
+
+  it("warns when neither entity name appears anywhere", () => {
+    const result = validateEntityPresent(
+      "A lawyer reviews the lease before you sign.",
+      ["DRG Law Professional Corporation", "Damaris Regina Guimaraes"]
+    );
+    expect(result.status).toBe("warn");
+  });
+});
+
+describe("validateSecondaryQueryCoverage", () => {
+  it("passes (info) when no secondary queries are supplied", () => {
+    expect(validateSecondaryQueryCoverage("Some body text.", undefined).status).toBe("pass");
+  });
+
+  it("passes when secondary queries have meaningful overlap with the body", () => {
+    const text =
+      "A commercial lease review lawyer in Toronto checks the relocation and assignment clauses " +
+      "before you sign a commercial lease.";
+    const result = validateSecondaryQueryCoverage(text, [
+      "commercial lease review lawyer Toronto",
+    ]);
+    expect(result.status).toBe("pass");
+  });
+
+  it("warns when secondary queries share almost no words with the body", () => {
+    const result = validateSecondaryQueryCoverage("A short unrelated paragraph about parking.", [
+      "commercial lease relocation clause assignment",
+    ]);
+    expect(result.status).toBe("warn");
+  });
+});
+
+describe("validateServiceAreaPresence", () => {
+  it("passes (info) when no service area is supplied", () => {
+    expect(validateServiceAreaPresence("Some body text.", undefined).status).toBe("pass");
+  });
+
+  it("passes when every supplied service area appears in the piece", () => {
+    const result = validateServiceAreaPresence(
+      "This service covers Toronto and the surrounding Greater Toronto Area.",
+      ["Toronto"]
+    );
+    expect(result.status).toBe("pass");
+  });
+
+  it("passes when service_area is an array and all entries are present", () => {
+    const result = validateServiceAreaPresence(
+      "This service covers Toronto and Mississauga.",
+      ["Toronto", "Mississauga"]
+    );
+    expect(result.status).toBe("pass");
+  });
+
+  it("warns when a supplied service area does not appear anywhere", () => {
+    const result = validateServiceAreaPresence("This service covers Toronto.", ["Ottawa"]);
+    expect(result.status).toBe("warn");
+  });
+});
+
+describe("significantWords", () => {
+  it("strips punctuation, lowercases, and drops short/stop words", () => {
+    expect(significantWords("Commercial Lease Review, Ontario!")).toEqual([
+      "commercial",
+      "lease",
+      "review",
+      "ontario",
+    ]);
+  });
+});
+
+describe("runDeterministicValidators gating (Ses.17 WP-3)", () => {
+  function makeMinimalConfig(overrides: Partial<ValidatorConfig> = {}): ValidatorConfig {
+    return {
+      banned_vocabulary: [],
+      approved_vocabulary: [],
+      lso_constraints: [],
+      formatting_rules: {
+        no_em_dashes: false,
+        no_italics: false,
+        no_orphan_words: false,
+        no_rule_of_three: false,
+      },
+      format_spec: {},
+      format: "counsel_note",
+      ...overrides,
+    };
+  }
+
+  it("does not add any WP-3 validator when none of the corresponding fields are present", () => {
+    const results = runDeterministicValidators("Some draft body text.", makeMinimalConfig(), {
+      decision_question: "Should I sign?",
+    });
+    const keys = results.map((r) => r.key);
+    expect(keys).not.toContain("heading_query_alignment");
+    expect(keys).not.toContain("secondary_query_coverage");
+    expect(keys).not.toContain("service_area_presence");
+    expect(keys).not.toContain("internal_link_domain_allowlist");
+    expect(keys).not.toContain("entity_present");
+  });
+
+  it("adds heading_query_alignment and secondary_query_coverage when secondary_queries is present", () => {
+    const results = runDeterministicValidators(
+      "# Commercial Lease Review\n\nBody.",
+      makeMinimalConfig(),
+      { secondary_queries: ["commercial lease review"] }
+    );
+    const keys = results.map((r) => r.key);
+    expect(keys).toContain("heading_query_alignment");
+    expect(keys).toContain("secondary_query_coverage");
+  });
+
+  it("adds service_area_presence when service_area is present", () => {
+    const results = runDeterministicValidators("Body about Toronto.", makeMinimalConfig(), {
+      service_area: "Toronto",
+    });
+    expect(results.map((r) => r.key)).toContain("service_area_presence");
+  });
+
+  it("adds internal_link_domain_allowlist only when internal_link_targets is non-empty, using config.firm_website", () => {
+    const withTargets = runDeterministicValidators(
+      "Body text.",
+      makeMinimalConfig({ firm_website: "https://drglaw.ca" }),
+      { internal_link_targets: [{ url: "https://drglaw.ca/x" }] }
+    );
+    expect(withTargets.map((r) => r.key)).toContain("internal_link_domain_allowlist");
+
+    const withoutTargets = runDeterministicValidators(
+      "Body text.",
+      makeMinimalConfig({ firm_website: "https://drglaw.ca" }),
+      {}
+    );
+    expect(withoutTargets.map((r) => r.key)).not.toContain("internal_link_domain_allowlist");
+  });
+
+  it("adds entity_present only when config.entity_names is populated, independent of sourceBrief", () => {
+    const withEntities = runDeterministicValidators(
+      "DRG Law reviews the lease.",
+      makeMinimalConfig({ entity_names: ["DRG Law"] })
+    );
+    expect(withEntities.map((r) => r.key)).toContain("entity_present");
+
+    const withoutEntities = runDeterministicValidators("Some text.", makeMinimalConfig());
+    expect(withoutEntities.map((r) => r.key)).not.toContain("entity_present");
+  });
+});
+
+describe("runCanonicalServicePageValidators firmWebsite wiring (Ses.17 WP-3)", () => {
+  it("passes internal_link_domain_allowlist when every link resolves to the firm's own domain", () => {
+    const results = runCanonicalServicePageValidators(goodBlocks(), goodSeoMetadata(), {
+      ...goodContext(),
+      firmWebsite: "https://drglaw.ca",
+    });
+    const domainResult = results.find((r) => r.key === "internal_link_domain_allowlist");
+    expect(domainResult?.status).toBe("pass");
+  });
+
+  it("fails internal_link_domain_allowlist when a link resolves to an external domain", () => {
+    const results = runCanonicalServicePageValidators(goodBlocks(), goodSeoMetadata(), {
+      ...goodContext(),
+      internalLinkTargets: [{ url: "https://a-different-law-firm.ca/page" }],
+      firmWebsite: "https://drglaw.ca",
+    });
+    const domainResult = results.find((r) => r.key === "internal_link_domain_allowlist");
+    expect(domainResult?.status).toBe("fail");
   });
 });
