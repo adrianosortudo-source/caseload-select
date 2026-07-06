@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getOperatorSession } from '@/lib/portal-auth';
-import { updateProspect, isProspectStage, isUuid, type ProspectPatch } from '@/lib/agency-crm';
+import { updateProspect, isProspectStage, isUuid, DUPLICATE_PROSPECT_MESSAGE, type ProspectPatch } from '@/lib/agency-crm';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!(await getOperatorSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -41,7 +41,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!prospect) return NextResponse.json({ error: 'prospect not found' }, { status: 404 });
     return NextResponse.json({ prospect });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    const message = (e as Error).message;
+    // Renaming firm_name/city onto another prospect's dedupe_key (2026-07-06
+    // constraint) is a conflict the operator can act on, not a server fault.
+    if (message === DUPLICATE_PROSPECT_MESSAGE) {
+      return NextResponse.json({ error: message }, { status: 409 });
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 

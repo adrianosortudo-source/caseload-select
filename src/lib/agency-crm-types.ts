@@ -97,3 +97,15 @@ export interface ReminderPatch {
   note?: string;
   done?: boolean;
 }
+
+/**
+ * Friendly message for uq_agency_prospects_dedupe_key violations (the
+ * generated (lower(firm_name), lower(city)) unique constraint added by the
+ * 2026-07-06 Codex-audit remediation). Lives here (the pure types module)
+ * rather than agency-crm.ts so route tests that mock the I/O module still
+ * exercise the real constant via their importActual of this file. The
+ * single-prospect create/update paths throw it on a 23505; their routes map
+ * that exact message to a 409.
+ */
+export const DUPLICATE_PROSPECT_MESSAGE =
+  'A prospect with this firm name and city already exists.';

@@ -133,6 +133,25 @@ describe("agency CRM routes: validation", () => {
     expect((await dealPATCH(req(`/deals/${ID}`, "PATCH", { stage: "won" }), params(ID))).status).toBe(404);
     expect((await reminderPATCH(req(`/reminders/${ID}`, "PATCH", { done: true }), params(ID))).status).toBe(404);
   });
+
+  it("maps a dedupe_key collision to 409, not 500 (create and update)", async () => {
+    // The lib throws DUPLICATE_PROSPECT_MESSAGE on a 23505 from
+    // uq_agency_prospects_dedupe_key (2026-07-06 constraint); the routes
+    // must surface that as a conflict the operator can act on, not a
+    // server fault. The constant lives in agency-crm-types (pure), which
+    // this file's agency-crm mock spreads via importActual, so the routes
+    // and this test both exercise the real value.
+    const { DUPLICATE_PROSPECT_MESSAGE } = await import("@/lib/agency-crm-types");
+    h.fns.createProspect.mockRejectedValueOnce(new Error(DUPLICATE_PROSPECT_MESSAGE));
+    const postRes = await prospectsPOST(req("/prospects", "POST", { firm_name: "Acme", city: "Toronto" }));
+    expect(postRes.status).toBe(409);
+    expect((await postRes.json()).error).toBe(DUPLICATE_PROSPECT_MESSAGE);
+
+    h.fns.updateProspect.mockRejectedValueOnce(new Error(DUPLICATE_PROSPECT_MESSAGE));
+    const patchRes = await prospectPATCH(req(`/prospects/${ID}`, "PATCH", { firm_name: "Acme" }), params(ID));
+    expect(patchRes.status).toBe(409);
+    expect((await patchRes.json()).error).toBe(DUPLICATE_PROSPECT_MESSAGE);
+  });
 });
 
 describe("agency CRM routes: happy path", () => {

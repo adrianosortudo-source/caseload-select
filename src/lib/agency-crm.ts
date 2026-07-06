@@ -14,6 +14,10 @@ import type {
  */
 
 export * from '@/lib/agency-crm-types';
+// DUPLICATE_PROSPECT_MESSAGE (agency-crm-types.ts, re-exported above): thrown
+// by createProspect/updateProspect on a 23505 from the dedupe_key constraint;
+// the prospect routes map that exact message to a 409.
+import { DUPLICATE_PROSPECT_MESSAGE } from '@/lib/agency-crm-types';
 
 // ── Prospects ─────────────────────────────────────────────────────────────────
 export async function listProspects(stage?: ProspectStage): Promise<AgencyProspect[]> {
@@ -38,7 +42,13 @@ export async function createProspect(input: ProspectInput): Promise<AgencyProspe
     notes: input.notes ?? null,
   };
   const { data, error } = await supabase.from('agency_prospects').insert(row).select('*').single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    // 23505 here is the dedupe_key constraint: before 2026-07-06 this path
+    // silently allowed duplicates; now the DB blocks them, so surface a
+    // clean message the route can 409 instead of the raw constraint error.
+    if (error.code === '23505') throw new Error(DUPLICATE_PROSPECT_MESSAGE);
+    throw new Error(error.message);
+  }
   return data as AgencyProspect;
 }
 
@@ -52,7 +62,13 @@ export async function updateProspect(id: string, patch: ProspectPatch): Promise<
   // maybeSingle: an update that matches no row resolves to data:null (not an error),
   // so the route can return 404 instead of a generic 500.
   const { data, error } = await supabase.from('agency_prospects').update(update).eq('id', id).select('*').maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Renaming a prospect's firm_name/city onto an existing prospect's key
+    // now collides with the dedupe_key constraint; same clean 409 surfacing
+    // as createProspect.
+    if (error.code === '23505') throw new Error(DUPLICATE_PROSPECT_MESSAGE);
+    throw new Error(error.message);
+  }
   return (data as AgencyProspect | null) ?? null;
 }
 

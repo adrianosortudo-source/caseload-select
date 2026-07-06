@@ -6,7 +6,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getOperatorSession } from '@/lib/portal-auth';
-import { listProspects, createProspect, isProspectStage, type ProspectInput } from '@/lib/agency-crm';
+import { listProspects, createProspect, isProspectStage, DUPLICATE_PROSPECT_MESSAGE, type ProspectInput } from '@/lib/agency-crm';
 
 export async function GET(req: NextRequest) {
   if (!(await getOperatorSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -48,7 +48,14 @@ export async function POST(req: NextRequest) {
   try {
     return NextResponse.json({ prospect: await createProspect(input) }, { status: 201 });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    const message = (e as Error).message;
+    // The dedupe_key constraint (2026-07-06) blocks a manual add that
+    // duplicates an existing prospect's name+city; that is a conflict the
+    // operator can act on, not a server fault.
+    if (message === DUPLICATE_PROSPECT_MESSAGE) {
+      return NextResponse.json({ error: message }, { status: 409 });
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 

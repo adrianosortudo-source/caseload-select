@@ -49,9 +49,16 @@ interface TableState {
 const state: {
   tables: Record<string, TableState>;
   outboundUpserts: Record<string, unknown>[][];
+  // Enrollment upsert ATTEMPTS on cadence_runs. Captured (not just counted via
+  // the returned data) because the audit-of-the-audit (2026-07-06) found a
+  // test asserting summary.enrolled === 0 that passed even while the buggy
+  // code attempted an enrollment upsert: the mock's upsertResult returned []
+  // regardless, so `enrolled` stayed 0 either way. Asserting on the attempt
+  // itself is the only mock-honest way to prove a pass was skipped.
+  runUpserts: Record<string, unknown>[][];
   runUpdates: Array<{ patch: Record<string, unknown>; id: string }>;
   selects: Array<{ table: string; cols: string }>;
-} = { tables: {}, outboundUpserts: [], runUpdates: [], selects: [] };
+} = { tables: {}, outboundUpserts: [], runUpserts: [], runUpdates: [], selects: [] };
 
 function builder(table: string) {
   const b: Record<string, unknown> = {};
@@ -81,6 +88,7 @@ function builder(table: string) {
   b.upsert = (rows: Record<string, unknown>[]) => {
     didUpsert = true;
     if (table === 'outbound_messages') state.outboundUpserts.push(rows);
+    if (table === 'cadence_runs') state.runUpserts.push(rows);
     return b;
   };
   b.maybeSingle = () => Promise.resolve(state.tables[table]?.maybeSingle ?? { data: null, error: null });
@@ -117,6 +125,7 @@ const J9_STEPS = [
 function resetState() {
   state.tables = {};
   state.outboundUpserts = [];
+  state.runUpserts = [];
   state.runUpdates = [];
   state.selects = [];
 }
@@ -429,8 +438,15 @@ describe('read-side error handling (audit fix 2026-07-06): a failed read must no
 
     expect(summary.ok).toBe(false);
     expect(summary.reason).toMatch(/matter lookup/);
-    // The enrollment pass was skipped entirely: no cadence_runs upsert row landed.
     expect(summary.enrolled).toBe(0);
+    // The honest assertion (audit-of-the-audit, 2026-07-06): the enrollment
+    // upsert was never even ATTEMPTED. The first version of this test only
+    // checked summary.enrolled === 0, which passed while the buggy code
+    // enrolled the matter with screened_lead_id null (the mock's upsertResult
+    // returned [] regardless, so `enrolled` stayed 0 either way). An
+    // enrollment with a null lead is permanent, thanks to the idempotency
+    // key, and permanently suppresses every touch for that run.
+    expect(state.runUpserts).toHaveLength(0);
   });
 
   it('fails closed when the lead-status enrollment read errors (read #3: J10-style lead-sourced rules)', async () => {

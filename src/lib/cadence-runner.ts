@@ -182,6 +182,7 @@ export async function runCadenceEngine(
   // Resolve the source screened_lead per matter for enrollment (best-effort).
   const enrollMatterIds = Array.from(new Set(events.map((e) => e.matter_id)));
   const matterById = new Map<string, MatterRow>();
+  let enrollMatterLookupFailed = false;
   if (enrollMatterIds.length > 0) {
     const { data: matterRows, error: matterErr } = await supabase
       .from('client_matters')
@@ -189,13 +190,22 @@ export async function runCadenceEngine(
       .in('id', enrollMatterIds);
     if (matterErr) {
       // Audit fix (2026-07-06): per-run enrichment read. Fail closed: without
-      // these matters, enrollment cannot resolve primary_email/matter_type/
-      // source_screened_lead_id, so skip the enrollment pass entirely rather
-      // than enrolling off an incomplete matterById map. The lead-status
-      // enrollment sub-pass and the ADVANCE pass are independent and still run.
+      // these matters, enrollment cannot resolve source_screened_lead_id, so
+      // the stage-event enrollment pass is SKIPPED entirely (the flag below
+      // guards it) rather than enrolling off an incomplete matterById map.
+      // Skipping matters here more than anywhere else in this file: the
+      // enrollment upsert is idempotent on (cadence_key, matter_id), so a run
+      // enrolled once with screened_lead_id null is never repaired on a later
+      // tick, its consent state can never resolve, and every touch it would
+      // ever log gets permanently suppressed. The lead-status enrollment
+      // sub-pass and the ADVANCE pass are independent and still run.
+      // (Same-day audit-of-the-audit fix: the first version of this fix set
+      // ok=false but did not actually skip the pass, exactly the
+      // comment/behavior mismatch it was reviewing for elsewhere.)
       console.error('[cadence-runner] enrollment matter batch lookup failed', { error: matterErr.message });
       summary.ok = false;
       summary.reason = `enrollment matter lookup failed: ${matterErr.message}`;
+      enrollMatterLookupFailed = true;
     } else {
       for (const m of (matterRows ?? []) as MatterRow[]) matterById.set(m.id, m);
     }
@@ -206,7 +216,7 @@ export async function runCadenceEngine(
     matter_id: string; screened_lead_id: string | null; anchor_at: string;
   }> = [];
 
-  for (const ev of events) {
+  for (const ev of enrollMatterLookupFailed ? [] : events) {
     const trigger = journeyTriggerForTransition(
       (ev.from_stage ?? 'intake') as MatterStage,
       ev.to_stage as MatterStage,
