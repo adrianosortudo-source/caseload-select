@@ -11,6 +11,7 @@ import { getPortalSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { getFirmUnreadCount } from "@/lib/operator-firm-messaging";
 import PortalTabNav from "@/components/portal/PortalTabNav";
+import AdminSidebar from "@/components/admin/AdminSidebar";
 
 interface Branding {
   firm_name?: string;
@@ -63,9 +64,12 @@ export default async function PortalLayout({
     }).catch(() => 0);
   }
 
-  return (
+  // The firm-branded portal column (header, operator banner, tab nav, content,
+  // footer). Identical for every viewer; the operator gets the console rail
+  // wrapped around it below.
+  const portalColumn = (
     <div
-      className="bg-parchment min-h-screen flex flex-col"
+      className="bg-parchment flex flex-col flex-1 min-w-0 min-h-screen"
       // Firm accent for the lawyer portal (white-label): every lawyer-surface
       // accent reads `var(--portal-accent)` so it follows the firm's branding,
       // matching the header. Structure tokens (parchment, border-brand, status
@@ -112,6 +116,21 @@ export default async function PortalLayout({
       </footer>
     </div>
   );
+
+  // Operator viewing a firm's portal keeps the full operator console rail on
+  // the left at all times, exactly as in /admin. This is strictly operator
+  // chrome: it renders only for role='operator', so firm lawyers and clients
+  // never see it (their session takes the plain single-column branch below).
+  if (isOperator) {
+    return (
+      <div className="flex min-h-screen bg-parchment">
+        <AdminSidebar />
+        {portalColumn}
+      </div>
+    );
+  }
+
+  return portalColumn;
 }
 
 /**

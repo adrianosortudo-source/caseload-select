@@ -7,6 +7,10 @@ import { useState } from "react";
 type Firm = { id: string; name: string };
 
 const FIRM_SCOPED_RE = /^\/admin\/firms\/([^/]+)\/(.*)/;
+// The operator console rail also renders inside a firm's portal (operator
+// view). Recognize /portal/[firmId]/... so the switcher highlights the firm
+// being viewed and its Firm-portal links point at the right firm.
+const PORTAL_SCOPED_RE = /^\/portal\/([^/]+)(?:\/(.*))?$/;
 
 const NAV_LINKS = [
   {
@@ -92,13 +96,22 @@ export default function FirmSwitcher({ firms }: { firms: Firm[] }) {
   const [createError, setCreateError] = useState<string | null>(null);
 
   const match = FIRM_SCOPED_RE.exec(pathname);
-  const currentFirmId = match ? match[1] : (firms[0]?.id ?? "");
+  const portalMatch = PORTAL_SCOPED_RE.exec(pathname);
+  // Only treat a /portal/[seg] capture as a firm when it is a real firm id
+  // (excludes /portal/login and any other non-firm portal route).
+  const portalFirmId = portalMatch && firms.some((f) => f.id === portalMatch[1]) ? portalMatch[1] : null;
+  const inPortal = portalFirmId !== null;
+  const currentFirmId = match ? match[1] : portalFirmId ?? (firms[0]?.id ?? "");
   const currentSegment = match ? match[2] : null;
   const currentFirm = firms.find((f) => f.id === currentFirmId) ?? firms[0];
 
   function handleFirmSelect(firmId: string) {
     setOpen(false);
-    if (currentSegment) {
+    if (inPortal) {
+      // Switching firm from inside a portal keeps you in the portal, landing
+      // on the new firm's triage queue (its equivalent front door).
+      router.push(`/portal/${firmId}/triage`);
+    } else if (currentSegment) {
       router.push(`/admin/firms/${firmId}/${currentSegment}`);
     } else {
       router.push(`/admin/firms/${firmId}/access`);
@@ -243,8 +256,9 @@ export default function FirmSwitcher({ firms }: { firms: Firm[] }) {
           <nav className="space-y-0.5">
             {FIRM_PORTAL_LINKS.map((item) => {
               const href = item.href(currentFirmId);
+              const isActive = pathname === href || pathname.startsWith(href + "/");
               return (
-                <Link key={href} href={href} className={`${NAV_LINK_CLASS} ${NAV_IDLE}`}>
+                <Link key={href} href={href} className={`${NAV_LINK_CLASS} ${isActive ? NAV_ACTIVE : NAV_IDLE}`}>
                   {item.label}
                 </Link>
               );
