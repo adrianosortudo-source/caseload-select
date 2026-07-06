@@ -387,8 +387,13 @@ export function shouldSkipUrl(url: string): boolean {
     if (params.has("attachment_id") || params.has("attachment") || params.has("p")) return true;
     if (/^\/?(attachment|media|image|photo|wp-content|uploads|category|tag|author)(\/|$)/.test(path)) return true;
     if ([...params].length > 2) return true;
-    // Admin / auth / transactional / search.
-    if (/\/(login|logout|admin|wp-admin|wp-login|wp-json|dashboard|account|cart|checkout|register|sign-?in|sign-?up|search|archive|\?s=)/.test(path)) return true;
+    // Admin / auth / transactional / search, matched against path AND query.
+    // Platform CMSs route these through query strings (field case jsmlaw.ca:
+    // /?fuseaction=member.registerShort is a newsletter-signup form, correctly
+    // noindexed, that consumed a crawl slot and fired a Critical finding).
+    const target = path + parsed.search.toLowerCase();
+    if (/[/=.](login|logout|admin|wp-admin|wp-login|wp-json|dashboard|account|cart|checkout|register|sign-?in|sign-?up|signup|subscribe|unsubscribe|newsletter|search|archive)/.test(target)) return true;
+    if (/[?&]s=/.test(parsed.search)) return true;
     return false;
   } catch { return true; }
 }
@@ -414,8 +419,26 @@ const PRACTICE_INTENT_PATH_RE =
  */
 export function classifyPageType(url: string): PageType {
   let p = "/";
-  try { p = new URL(url).pathname.toLowerCase().replace(/\/+$/, "") || "/"; } catch { return "other"; }
-  if (p === "/" || p === "") return "homepage";
+  let q = "";
+  try {
+    const u = new URL(url);
+    p = u.pathname.toLowerCase().replace(/\/+$/, "") || "/";
+    q = u.search.toLowerCase();
+  } catch { return "other"; }
+  if (p === "/" || p === "") {
+    if (!q) return "homepage";
+    // A query string selects a different document, so this is NOT the
+    // homepage. Platform CMSs route whole page trees through the root path
+    // (field case jsmlaw.ca, ColdFusion: /?fuseaction=store.terms is the
+    // store-policy page, /?fuseaction=member.registerShort the newsletter
+    // signup). Classifying these as "homepage" gave utility cruft top crawl
+    // priority (100), produced five "/" homepage rows in one report, and let
+    // a deliberately noindexed signup form fire a Critical indexability
+    // finding. Classify from query hints instead.
+    if (/(terms|privacy|disclaimer|returns|shipping|cookie|legal)/.test(q)) return "policy";
+    if (/contact/.test(q)) return "contact";
+    return "other";
+  }
   if (/(^|\/)(contact|contact-us|get-in-touch|book|consultation|schedule)(\/|$|-)/.test(p)) return "contact";
   if (/(^|\/)(privacy|terms|disclaimer|accessibility|cookie|legal-notice|sitemap)(\/|$|-)/.test(p)) return "policy";
   if (PRACTICE_INTENT_PATH_RE.test(p)) return "practice";

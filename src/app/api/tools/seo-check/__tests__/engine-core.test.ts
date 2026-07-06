@@ -139,6 +139,30 @@ describe("URL normalization / skip / page-type", () => {
     expect(classifyPageType("https://x.com/privacy")).toBe("policy");
     expect(classifyPageType("https://x.com/something-else")).toBe("other");
   });
+  it("never classifies a query-string URL as the homepage (jsmlaw fuseaction case)", () => {
+    // ColdFusion routes whole page trees through the root path. Classifying
+    // /?fuseaction=... as "homepage" gave utility cruft top crawl priority
+    // and produced five "/" homepage rows in one 50-page report.
+    expect(classifyPageType("https://www.jsmlaw.ca/?fuseaction=store.terms")).toBe("policy");
+    expect(classifyPageType("https://www.jsmlaw.ca/?fuseaction=store.shipping")).toBe("policy");
+    expect(classifyPageType("https://www.jsmlaw.ca/?fuseaction=store.returns")).toBe("policy");
+    expect(classifyPageType("https://x.com/?fuseaction=member.contactUs")).toBe("contact");
+    expect(classifyPageType("https://x.com/?fuseaction=content.page&id=4")).toBe("other");
+    // The bare root stays the homepage.
+    expect(classifyPageType("https://x.com/")).toBe("homepage");
+  });
+  it("skips transactional pages routed through query strings (jsmlaw newsletter form)", () => {
+    // /?fuseaction=member.registerShort is a newsletter-signup form, correctly
+    // noindexed. Crawling it burned a page slot and fired a Critical
+    // "remove the noindex" finding on a page that must stay noindexed.
+    expect(shouldSkipUrl("https://www.jsmlaw.ca/?fuseaction=member.registerShort")).toBe(true);
+    expect(shouldSkipUrl("https://x.com/?fuseaction=member.login")).toBe(true);
+    expect(shouldSkipUrl("https://x.com/newsletter-signup")).toBe(true);
+    expect(shouldSkipUrl("https://x.com/unsubscribe")).toBe(true);
+    // Real content pages with a single benign query param still crawl.
+    expect(shouldSkipUrl("https://x.com/?fuseaction=content.page&id=4")).toBe(false);
+    expect(shouldSkipUrl("https://x.com/practice/real-estate")).toBe(false);
+  });
   it("dedupes crawl URL variants across protocol, www, slash, and query order", () => {
     expect(crawlUrlKey("http://www.x.com/contact-us")).toBe(crawlUrlKey("https://x.com/contact-us/"));
     expect(crawlUrlKey("https://x.com/a?b=2&a=1#frag")).toBe(crawlUrlKey("https://www.x.com/a/?a=1&b=2"));

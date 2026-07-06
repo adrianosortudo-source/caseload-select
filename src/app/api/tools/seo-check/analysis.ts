@@ -21,6 +21,7 @@ import {
   type ParsedRobots,
   COMMERCIAL_PAGE_TYPES,
   pageTypeLabel,
+  classifyPageType,
 } from "./engine-core";
 
 // Matches robots.txt Disallow paths that name team/attorney content (team
@@ -652,13 +653,21 @@ export function buildSiteStructureIssues(
   pages: PageResult[],
   hasSitemap: boolean,
   parsedRobots: ParsedRobots | null = null,
-  discoveryConfidence: DiscoveryConfidence = "high"
+  discoveryConfidence: DiscoveryConfidence = "high",
+  uncrawledUrls: string[] = []
 ): Issue[] {
   const totalPages = pages.length || 1;
   const home = pages[0];
   const out: Issue[] = [];
   const hasType = (t: PageType) => pages.some((p) => p.pageType === t);
   const teamPathsBlocked = disallowedPaths(parsedRobots).filter((p) => TEAM_PATH_RE.test(p));
+  // URLs the crawler DISCOVERED (homepage nav, sitemap) but never scanned
+  // because the page budget ran out. An absence claim ("no team page") is
+  // false when a matching page is sitting unscanned in the frontier. Field
+  // case jsmlaw.ca: the homepage links /pages/our-team, but 40+ practice and
+  // city pages outranked it in a 50-page crawl, and the report asserted "No
+  // attorney or team page was found."
+  const discoveredUncrawled = (t: PageType) => uncrawledUrls.some((u) => classifyPageType(u) === t);
 
   // An "absence" claim (no practice pages, no team page) is only as reliable
   // as the crawl's ability to find pages in the first place. When discovery
@@ -683,11 +692,14 @@ export function buildSiteStructureIssues(
   // scanned page clearly signals the firm's practice areas is a false claim of
   // absence, so any page with practice-area intent satisfies the check.
   const hasPractice = hasType("practice") ||
-    pages.some((p) => p.lawFirm.practiceAreaIntent);
+    pages.some((p) => p.lawFirm.practiceAreaIntent) ||
+    discoveredUncrawled("practice");
   // Team info often lives on /about rather than a dedicated /team URL; treat
-  // Person/Attorney schema anywhere as evidence the firm names its lawyers.
+  // Person/Attorney schema anywhere as evidence the firm names its lawyers,
+  // and a discovered-but-unscanned team URL as proof the page exists.
   const hasTeamSignal = hasType("attorney") ||
-    pages.some((p) => p.schema.hasPerson || p.schema.hasAttorney);
+    pages.some((p) => p.schema.hasPerson || p.schema.hasAttorney) ||
+    discoveredUncrawled("attorney");
 
   const push = (
     id: string, category: string, severity: Severity, title: string, detail: string,
@@ -702,7 +714,7 @@ export function buildSiteStructureIssues(
     });
   };
 
-  const hasContactPath = hasType("contact") || home.lawFirm.contactFormPresent || home.lawFirm.phoneVisible;
+  const hasContactPath = hasType("contact") || home.lawFirm.contactFormPresent || home.lawFirm.phoneVisible || discoveredUncrawled("contact");
   if (!hasContactPath) {
     push("structure-contact", "Legal Marketing", "high", "No clear contact path",
       "No contact page, on-page form, or visible phone number was found across the scanned pages.",

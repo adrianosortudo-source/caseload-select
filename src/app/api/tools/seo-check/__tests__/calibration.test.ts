@@ -94,6 +94,17 @@ describe("calibration: themblawfirm.ca (2-page Wix one-pager)", () => {
     const issues = buildSiteStructureIssues(THEMB.pages, true);
     expect(titlesOf(issues)).toContain("No attorney / team page found");
   });
+
+  it("suppresses the team-page absence when a team URL was discovered but not crawled (jsmlaw case)", () => {
+    // jsmlaw.ca links /pages/our-team from the homepage nav, but 40+ practice
+    // and city pages outranked it in a 50-page crawl and the report asserted
+    // "No attorney or team page was found." A page sitting unscanned in the
+    // frontier is not absent.
+    const issues = buildSiteStructureIssues(THEMB.pages, true, null, "high", [
+      "https://www.themblawfirm.ca/pages/our-team",
+    ]);
+    expect(titlesOf(issues)).not.toContain("No attorney / team page found");
+  });
 });
 
 describe("calibration: gosailaw.com (real noindex + policy-only robots block)", () => {

@@ -1460,6 +1460,11 @@ export async function POST(req: NextRequest) {
     // reported at full confidence.
     let homeInternalLinkCount = 0;
 
+    // URLs discovered (homepage nav, sitemap, crawled pages) but left unscanned
+    // when the page budget ran out. Absence claims ("no team page") consult
+    // this: a page sitting unscanned in the frontier is not absent.
+    let uncrawledUrls: string[] = [];
+
     if (maxPages > 1) {
       const maxDepth = DEPTH_BY_BUDGET(maxPages);
       const visited = new Set<string>([crawlUrlKey(homePage.url), crawlUrlKey(homeUrl)]);
@@ -1504,6 +1509,7 @@ export async function POST(req: NextRequest) {
           for (const u of extractInternalLinks(scanned.html, scanned.page.url, domain)) enqueue(u, next.depth + 1);
         }
       }
+      uncrawledUrls = frontier.map((f) => f.url);
     }
 
     // Backward-compatible aggregation.
@@ -1530,7 +1536,7 @@ export async function POST(req: NextRequest) {
     // Professional layer.
     const discoveryConfidence = computeDiscoveryConfidence(pages.length, sitemapSet?.size ?? 0, homeInternalLinkCount, maxPages);
     const pageIssues = buildIssues(pages);
-    const structureIssues = buildSiteStructureIssues(pages, !!sitemapSet, parsedRobots, discoveryConfidence);
+    const structureIssues = buildSiteStructureIssues(pages, !!sitemapSet, parsedRobots, discoveryConfidence, uncrawledUrls);
     const issues = [...pageIssues, ...structureIssues].sort(compareIssuesByPriority);
     const internalSummary = buildInternalSummary(pages, issues, overallScore, aiSearchScore);
     const breakdown = severityBreakdown(issues);
