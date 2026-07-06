@@ -294,6 +294,24 @@ describe("buildIssues", () => {
     expect(issue?.severity).not.toBe("critical");
   });
 
+  it("keeps a present-but-short HSTS max-age low, while a missing HSTS header stays high", () => {
+    // Field case marathonlaw.ca (Squarespace, fixed max-age=15552000 the site
+    // owner cannot change): the max-age warn read as HIGH 6/6 and ranked third
+    // overall. The header exists and browsers enforce it: a tuning nit, not a
+    // missing control. A genuinely missing header keeps its high severity.
+    const shortMaxAge = cat("Technical & Security", [{ label: "HSTS header", status: "warn", detail: "Present but max-age is low (15552000s). Recommended: at least 31536000." }]);
+    const missing = cat("Technical & Security", [{ label: "HSTS header", status: "warn", detail: "Missing. HSTS tells browsers to always use HTTPS." }]);
+    const mk = (c: CategoryResult) => [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [c] }),
+      mkPage({ url: "https://x.com/contact", pageType: "contact", categories: [c] }),
+      mkPage({ url: "https://x.com/practice", pageType: "practice", categories: [c] }),
+    ];
+    const shortIssue = buildIssues(mk(shortMaxAge)).find((i) => i.title === "HSTS header");
+    const missingIssue = buildIssues(mk(missing)).find((i) => i.title === "HSTS header");
+    expect(["low", "info"]).toContain(shortIssue?.severity);
+    expect(missingIssue?.severity).toBe("high");
+  });
+
   it("returns no issues when everything passes", () => {
     const pages = [mkPage({
       url: "https://x.com/", pageType: "homepage",

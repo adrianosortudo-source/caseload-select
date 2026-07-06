@@ -13,6 +13,7 @@ import {
   scoreUrlPriority,
   aiScoresFromItems,
   computeWeightedScore,
+  decodeHtmlEntities,
   MAX_PAGES_HARD_CAP,
   SCAN_MODE_DEFAULTS,
   type CheckItem,
@@ -177,5 +178,29 @@ describe("computeWeightedScore guards", () => {
   it("handles zero-max categories without NaN", () => {
     const s = computeWeightedScore([{ name: "On-Page SEO", score: 0, maxScore: 0, items: [] }]);
     expect(Number.isNaN(s)).toBe(false);
+  });
+});
+
+describe("decodeHtmlEntities", () => {
+  it("decodes the Squarespace title-separator entity to a single character", () => {
+    // Field case marathonlaw.ca: "Contact &mdash; Marathon Law" counted the
+    // entity as 7 characters and printed it verbatim in reports.
+    const decoded = decodeHtmlEntities("Contact &mdash; Marathon Law");
+    expect(decoded).toBe(`Contact ${String.fromCharCode(0x2014)} Marathon Law`);
+    expect(decoded.length).toBe(22);
+  });
+
+  it("decodes named, decimal, and hex entities", () => {
+    expect(decodeHtmlEntities("Smith &amp; Jones")).toBe("Smith & Jones");
+    expect(decodeHtmlEntities("A&#8212;B")).toBe(`A${String.fromCharCode(0x2014)}B`);
+    expect(decodeHtmlEntities("A&#x2014;B")).toBe(`A${String.fromCharCode(0x2014)}B`);
+    expect(decodeHtmlEntities("It&rsquo;s")).toBe("It’s");
+    expect(decodeHtmlEntities("a&nbsp;b")).toBe("a b");
+  });
+
+  it("passes unknown entities and plain text through unchanged", () => {
+    expect(decodeHtmlEntities("a &unknownthing; b")).toBe("a &unknownthing; b");
+    expect(decodeHtmlEntities("no entities here")).toBe("no entities here");
+    expect(decodeHtmlEntities("bad numeric &#xZZ; stays")).toBe("bad numeric &#xZZ; stays");
   });
 });

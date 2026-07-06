@@ -35,6 +35,7 @@ import {
   crawlUrlKey,
   scoreUrlPriority,
   classifyPageType,
+  decodeHtmlEntities,
   resolveScan,
   computeGrade,
   computeWeightedScore,
@@ -272,7 +273,8 @@ function extractMetaContent(html: string, nameOrProperty: string): string | null
   ];
   for (const p of patterns) {
     const m = html.match(p);
-    if (m) return m[1];
+    // Decode entities so length checks and report text see what a person sees.
+    if (m) return decodeHtmlEntities(m[1]);
   }
   return null;
 }
@@ -412,7 +414,7 @@ const ADDRESS_RE = /\d+\s+[\w\s]+(street|st|avenue|ave|road|rd|boulevard|blvd|dr
 
 function extractLawFirmSignals(html: string, schema: SchemaSummary): LawFirmSignals {
   const bodyText = extractBodyText(html);
-  const lower = html.toLowerCase();
+  const bodyLower = bodyText.toLowerCase();
   const anchorText = (html.match(/<a[^>]*>([\s\S]*?)<\/a>/gi) || []).map((a) => a.replace(/<[^>]+>/g, " ").toLowerCase()).join(" ");
   const buttonText = (html.match(/<button[^>]*>([\s\S]*?)<\/button>/gi) || []).map((b) => b.replace(/<[^>]+>/g, " ").toLowerCase()).join(" ");
   const cta = anchorText + " " + buttonText;
@@ -451,11 +453,16 @@ function extractLawFirmSignals(html: string, schema: SchemaSummary): LawFirmSign
     policyPagePresent: /href=["'][^"']*(privacy|terms|disclaimer)/i.test(html),
     practiceAreaIntent: /\b(lawyer|attorney|law firm|legal|solicitor|barrister|counsel|litigation|real estate|immigration|criminal|family law|corporate|employment|estate|wills|probate|personal injury)\b/i.test(bodyText),
     trust: {
-      testimonials: /(testimonial|what our clients say|client stories|in their words)/i.test(lower),
-      reviews: /(google review|client review|\d+(\.\d+)?\s*(star|\/\s*5)|★|rating)/i.test(lower) || schema.hasReview,
-      caseResults: /(case results|verdicts|settlements|results we|recovered|successful outcomes|notable cases)/i.test(lower),
-      awards: /(super lawyers|best lawyers|martindale|avvo|rising star|award|recognized by|top \d+)/i.test(lower),
-      credentials: /(law society|lso\b|bar association|called to the bar|member of the|llb|juris doctor|\bj\.?d\.?\b|barrister|solicitor)/i.test(lower),
+      // Trust signals must be VISIBLE to a person, so they scan the extracted
+      // body text, not the raw HTML. Field bug (marathonlaw.ca): scanning the
+      // full HTML matched "rating" inside Squarespace's script-config JSON and
+      // credited reviews the page does not show. Word-bounded "ratings?" also
+      // stops crediting unrelated words that merely contain the substring.
+      testimonials: /(testimonial|what our clients say|client stories|in their words)/i.test(bodyLower),
+      reviews: /(google reviews?|client reviews?|\d+(\.\d+)?\s*(star|\/\s*5)|★|\bratings?\b)/i.test(bodyLower) || schema.hasReview,
+      caseResults: /(case results|verdicts|settlements|results we|recovered|successful outcomes|notable cases)/i.test(bodyLower),
+      awards: /(super lawyers|best lawyers|martindale|avvo|rising star|award|recognized by|top \d+)/i.test(bodyLower),
+      credentials: /(law society|lso\b|bar association|called to the bar|member of the|llb|juris doctor|\bj\.?d\.?\b|barrister|solicitor)/i.test(bodyLower),
     },
   };
 }
@@ -468,7 +475,8 @@ function extractLawFirmSignals(html: string, schema: SchemaSummary): LawFirmSign
 function checkOnPageSeo(html: string): CategoryResult {
   const items: CheckItem[] = [];
 
-  const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim();
+  const rawTitle = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim();
+  const title = rawTitle ? decodeHtmlEntities(rawTitle) : rawTitle;
   if (!title) {
     items.push({ label: "Page title", status: "fail", detail: "Missing. Every page needs a unique <title> tag.", fix: "Add a <title> tag inside your <head>. Aim for 50-60 characters with your main keyword near the front." });
   } else if (title.length < 30) {
@@ -839,7 +847,11 @@ function checkLocalSeo(html: string, schema: SchemaSummary): CategoryResult {
     ? { label: "NAP in structured data", status: "pass", detail: "Contact info found in JSON-LD." }
     : { label: "NAP in structured data", status: "fail", detail: "No NAP in structured data.", fix: "Add telephone, address, and name to a LocalBusiness or LegalService schema block." });
 
-  items.push((/google\.com\/(maps\/place|search\?.*business|business)/i.test(html) || /g\.page\//i.test(html) || /maps\.app\.goo\.gl|goo\.gl\/maps/i.test(html))
+  // maps/dir directions links embed the firm's Google place ID, so they tie
+  // the site to its GBP entity just like a maps/place link does. Field case
+  // marathonlaw.ca: two /maps/dir/ office links were on the page yet the
+  // finding claimed no GBP link at all.
+  items.push((/google\.com\/(maps\/(place|dir)|search\?.*business|business)/i.test(html) || /g\.page\//i.test(html) || /maps\.app\.goo\.gl|goo\.gl\/maps/i.test(html))
     ? { label: "Google Business Profile link", status: "pass", detail: "GBP link found. Cross-linking strengthens local authority." }
     : { label: "Google Business Profile link", status: "warn", detail: "No link to Google Business Profile.", fix: "Link to the firm's Google Business Profile in the footer or contact section." });
 
@@ -1044,6 +1056,14 @@ function buildIndexability(
   if (sitemapSet && sitemapSet.size > 0) {
     // sitemapSet is keyed with the same canonical crawl key used for dedupe.
     inSitemap = sitemapSet.has(crawlUrlKey(finalUrl));
+    // The homepage never depends on a sitemap listing for discovery, and some
+    // platforms list it under an alias slug rather than the root (Squarespace
+    // lists /home while serving the site at /, field case marathonlaw.ca).
+    // Reporting "homepage not listed in the sitemap" is noise, so the root
+    // path always counts as covered.
+    if (!inSitemap) {
+      try { if ((new URL(finalUrl).pathname || "/") === "/") inSitemap = true; } catch { /* keep computed value */ }
+    }
   }
 
   return {
@@ -1086,7 +1106,8 @@ function buildPageResult(
   intent: NormalizedIntent | null
 ): PageResult {
   const pageHostname = new URL(finalUrl).hostname.replace(/^www\./, "");
-  const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? null;
+  const rawPageTitle = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? null;
+  const title = rawPageTitle ? decodeHtmlEntities(rawPageTitle) : null;
   const pageType = classifyPageType(finalUrl);
 
   const schema = extractSchemaSummary(html);
@@ -1300,12 +1321,26 @@ export async function POST(req: NextRequest) {
     const parsedRobots = robotsRaw ? parseRobotsTxt(robotsRaw) : null;
 
     // Collect sitemap URLs (default location + same-origin robots-declared).
+    // Two structures on purpose: the KEY SET answers "is this page listed in
+    // the sitemap" (membership must be normalization-insensitive), while the
+    // RAW URL LIST feeds the crawl frontier. Field bug (marathonlaw.ca): the
+    // frontier was fed the keys, which are scheme-less (host/path), so
+    // new URL() threw inside enqueue and every sitemap-only URL was silently
+    // dropped: sitemap discovery contributed nothing to any crawl.
     const sitemapUrls = new Set<string>();
-    for (const u of await fetchSitemapUrls(`https://${domain}/sitemap.xml`, domain)) sitemapUrls.add(crawlUrlKey(u));
+    const sitemapRawUrls: string[] = [];
+    const collectSitemapUrl = (u: string) => {
+      const key = crawlUrlKey(u);
+      if (!sitemapUrls.has(key)) {
+        sitemapUrls.add(key);
+        sitemapRawUrls.push(u);
+      }
+    };
+    for (const u of await fetchSitemapUrls(`https://${domain}/sitemap.xml`, domain)) collectSitemapUrl(u);
     if (parsedRobots) {
       const sameOriginSitemaps = parsedRobots.sitemaps.filter((s) => isSameOrigin(s, domain)).slice(0, 3);
       for (const sm of sameOriginSitemaps) {
-        for (const u of await fetchSitemapUrls(sm, domain)) sitemapUrls.add(crawlUrlKey(u));
+        for (const u of await fetchSitemapUrls(sm, domain)) collectSitemapUrl(u);
       }
     }
     const sitemapSet = sitemapUrls.size > 0 ? sitemapUrls : null;
@@ -1378,7 +1413,7 @@ export async function POST(req: NextRequest) {
       const homeLinks = extractInternalLinks(homeHtml, homePage.url, domain);
       homeInternalLinkCount = homeLinks.length;
       for (const u of homeLinks) enqueue(u, 1);
-      if (sitemapSet) for (const u of sitemapSet) enqueue(u, 1);
+      for (const u of sitemapRawUrls) enqueue(u, 1);
 
       while (pages.length < maxPages && frontier.length > 0) {
         // Stop early (with partial results) if the wall-clock budget is spent.

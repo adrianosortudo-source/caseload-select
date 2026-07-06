@@ -111,7 +111,7 @@ describe("hasIntakeIframe", () => {
 
 function hasGbpLink(html: string): boolean {
   return (
-    /google\.com\/(maps\/place|search\?.*business|business)/i.test(html) ||
+    /google\.com\/(maps\/(place|dir)|search\?.*business|business)/i.test(html) ||
     /g\.page\//i.test(html) ||
     /maps\.app\.goo\.gl|goo\.gl\/maps/i.test(html)
   );
@@ -120,6 +120,12 @@ function hasGbpLink(html: string): boolean {
 describe("hasGbpLink", () => {
   it("detects google.com/maps/place link", () => {
     expect(hasGbpLink(`<a href="https://www.google.com/maps/place/myfirm">Google</a>`)).toBe(true);
+  });
+
+  it("detects google.com/maps/dir directions link (embeds the firm's place ID)", () => {
+    // Field case marathonlaw.ca: two /maps/dir/ office links were on the page
+    // yet the finding claimed no GBP link at all.
+    expect(hasGbpLink(`<a href="https://www.google.com/maps/dir//101+Innovation+Dr/@43.8,-79.5/data=!4m5!0x882b25ea3604af3f:0xefef60b1dd87de5f">Directions</a>`)).toBe(true);
   });
 
   it("detects maps.app.goo.gl short URL (common Share button output)", () => {
@@ -140,5 +146,27 @@ describe("hasGbpLink", () => {
 
   it("does not fire when no Google link present", () => {
     expect(hasGbpLink("<p>Contact us by phone.</p>")).toBe(false);
+  });
+});
+
+// ---- trust-signal reviews regex (replicated from extractLawFirmSignals) ----
+
+const REVIEWS_RE = /(google reviews?|client reviews?|\d+(\.\d+)?\s*(star|\/\s*5)|★|\bratings?\b)/i;
+
+describe("trust reviews regex", () => {
+  it("credits genuine review language", () => {
+    expect(REVIEWS_RE.test("read our google reviews")).toBe(true);
+    expect(REVIEWS_RE.test("4.9 star average")).toBe(true);
+    expect(REVIEWS_RE.test("client reviews from 2025")).toBe(true);
+    expect(REVIEWS_RE.test("our rating speaks for itself")).toBe(true);
+  });
+
+  it("does not credit the verb reviewing or embedded substrings", () => {
+    // Field case marathonlaw.ca: services copy "crafting, reviewing, and
+    // enforcing contracts" must not count as social-proof reviews. The
+    // signal scan also moved from raw HTML to visible body text so script
+    // config JSON (Squarespace "rating" keys) cannot match at all.
+    expect(REVIEWS_RE.test("we specialize in crafting, reviewing, and enforcing contracts")).toBe(false);
+    expect(REVIEWS_RE.test("operating agreements")).toBe(false);
   });
 });

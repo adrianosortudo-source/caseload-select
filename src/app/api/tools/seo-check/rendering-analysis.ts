@@ -37,9 +37,16 @@ function countWords(text: string): number {
 }
 
 function hasEmptyRoot(html: string): boolean {
-  const roots = html.matchAll(/<(?:div|main)[^>]+(?:id|class)=["'][^"']*(?:__next|root|app|gatsby-focus-wrapper|svelte|nuxt)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|main)>/gi);
+  // Match app-shell mount points by EXACT attribute token (id="root",
+  // class="app __next"), not substring. The prior substring match meant any
+  // class merely containing "app" or "root" (Squarespace emits several, field
+  // case marathonlaw.ca /contact) flagged a fully server-rendered page as an
+  // empty app shell.
+  const roots = html.matchAll(/<(?:div|main)[^>]+(?:id|class)=["']([^"']*)["'][^>]*>([\s\S]*?)<\/(?:div|main)>/gi);
+  const SHELL_TOKEN = /(?:^|\s)(?:__next|root|app|gatsby-focus-wrapper|svelte|nuxt)(?:\s|$)/;
   for (const root of roots) {
-    if (countWords(stripTags(root[1])) < 20) return true;
+    if (!SHELL_TOKEN.test(root[1])) continue;
+    if (countWords(stripTags(root[2])) < 20) return true;
   }
   return false;
 }
@@ -60,8 +67,12 @@ export function analyzeRenderingSnapshot(html: string, wordCountOverride?: numbe
   if (emptyAppRoot) evidence.push("main app/root container has little visible text");
   if (hasNoscriptFallback) evidence.push("noscript fallback content present");
 
+  // HIGH means "the raw HTML likely hides content a browser would show", so
+  // it requires an app-shell signal, not just brevity: a contact page with 110
+  // words of fully server-rendered NAP is short by design, not JS-dependent
+  // (field case marathonlaw.ca /contact, previously HIGH on word count alone).
   let risk: RenderingRisk = "low";
-  if ((wordCount < 120 && externalScriptCount >= 5) || (emptyAppRoot && wordCount < 150)) risk = "high";
+  if ((wordCount < 120 && externalScriptCount >= 5 && appShellLikely) || (emptyAppRoot && wordCount < 150)) risk = "high";
   else if (wordCount < 180 || (emptyAppRoot && wordCount < 260) || (wordCount < 300 && appShellLikely && externalScriptCount >= 10)) risk = "medium";
   if (hasNoscriptFallback && risk === "high" && wordCount >= 80) risk = "medium";
 

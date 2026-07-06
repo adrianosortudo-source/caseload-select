@@ -361,6 +361,12 @@ function dropSeverity(s: Severity): Severity {
 function severityFor(category: string, label: string, status: "warn" | "fail", detail = ""): Severity {
   let base = LABEL_SEVERITY[label] ?? CATEGORY_FAIL_SEVERITY[category] ?? "medium";
   if (label === "Page title" && /(too long|too short|may be truncated)/i.test(detail)) base = "medium";
+  // HSTS present but max-age below a year is a tuning nit, not a missing
+  // control: the header exists and browsers enforce it. Field case
+  // marathonlaw.ca (Squarespace, fixed max-age=15552000 the owner cannot
+  // change): the warn read as HIGH 6/6 and ranked third overall. A missing
+  // HSTS header keeps the category's high severity.
+  if (label === "HSTS header" && /max-age is low/i.test(detail)) base = "low";
   return status === "fail" ? base : dropSeverity(base);
 }
 

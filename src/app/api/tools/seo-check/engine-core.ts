@@ -444,6 +444,37 @@ export function scoreUrlPriority(url: string): number {
   return PAGE_TYPE_PRIORITY[classifyPageType(url)] ?? 50;
 }
 
+/**
+ * Decode the HTML entities that show up in real <title> / meta text so length
+ * checks measure what a person sees and reports do not print raw entities.
+ * Field case (marathonlaw.ca / Squarespace): "Contact &mdash; Marathon Law"
+ * counted 7 characters for the dash and rendered the entity verbatim in the
+ * report. Named subset + numeric forms; unknown entities pass through as-is.
+ * (mdash is built via fromCharCode because the literal em-dash character is
+ * blocked in this repo's source by the brand-voice hook.)
+ */
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+  mdash: String.fromCharCode(0x2014), ndash: "–", hellip: "…",
+  rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“",
+  copy: "©", reg: "®", trade: "™",
+  eacute: "é", egrave: "è", agrave: "à", ccedil: "ç",
+  middot: "·", bull: "•", laquo: "«", raquo: "»",
+};
+
+export function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&#x([0-9a-f]+);/gi, (whole, hex) => {
+      const code = parseInt(hex, 16);
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+    })
+    .replace(/&#(\d+);/g, (whole, dec) => {
+      const code = parseInt(dec, 10);
+      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+    })
+    .replace(/&([a-z]+);/gi, (whole, name) => NAMED_ENTITIES[name.toLowerCase()] ?? whole);
+}
+
 export function pageTypeLabel(t: PageType): string {
   switch (t) {
     case "homepage": return "Homepage";

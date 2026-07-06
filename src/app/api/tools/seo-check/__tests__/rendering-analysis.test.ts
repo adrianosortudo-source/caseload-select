@@ -33,4 +33,27 @@ describe("rendering-analysis", () => {
     expect(summary?.risk).toBe("high");
     expect(summary?.highRiskPages).toBe(1);
   });
+
+  it("does not rate a short but fully server-rendered page as high risk", () => {
+    // Field case marathonlaw.ca /contact (Squarespace): ~110 words of complete
+    // NAP content (addresses, tel:, mailto:, hours) with 26 external scripts
+    // and zero app-shell markers. Short by design, not JS-dependent. HIGH must
+    // require an app-shell signal, not brevity alone.
+    const napWords = Array.from({ length: 110 }, (_, i) => `nap${i}`).join(" ");
+    const html = `<html><body><main><h1>Contact</h1><p>${napWords}</p><a href="tel:18774593237">call</a><a href="mailto:info@x.ca">email</a></main>${"<script src=\"/vendor.js\"></script>".repeat(26)}</body></html>`;
+    const snapshot = analyzeRenderingSnapshot(html);
+    expect(snapshot.appShellLikely).toBe(false);
+    expect(snapshot.risk).not.toBe("high");
+  });
+
+  it("matches app-shell mount points by exact class token, not substring", () => {
+    // A hyphenated platform class merely CONTAINING "app" (Squarespace emits
+    // several) is not an app-shell mount point. An exact "app" token is.
+    const scripts = "<script src=\"/x.js\"></script>".repeat(6);
+    const substringOnly = analyzeRenderingSnapshot(`<div class="sqs-announcement-bar-app-wrapper"></div>${scripts}`);
+    expect(substringOnly.emptyAppRoot).toBe(false);
+    const exactToken = analyzeRenderingSnapshot(`<div class="app"></div>${scripts}`);
+    expect(exactToken.emptyAppRoot).toBe(true);
+    expect(exactToken.risk).toBe("high");
+  });
 });
