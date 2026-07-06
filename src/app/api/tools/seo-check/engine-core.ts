@@ -398,6 +398,27 @@ export function shouldSkipUrl(url: string): boolean {
   } catch { return true; }
 }
 
+// WordPress ships two default content URLs on every fresh install: the
+// "Hello world!" post (slug hello-world, often under a dated permalink) and
+// the "Sample Page" (slug sample-page). Firms that never delete them leave
+// boilerplate published and in the sitemap. Detection is CONTENT-gated, not
+// slug-only: a firm can legitimately edit the Sample Page in place and keep
+// the /sample-page/ slug, or genuinely write a post slugged hello-world, so a
+// page only counts as default when its body still carries the WordPress
+// starter fingerprint. This keeps the boilerplate out of the firm's quality
+// findings (word count, thin-content, meta-description, alt-text) without
+// mis-scoring a repurposed page, and surfaces its presence as one honest
+// site-maturity finding. Field case: chaabanelaw.com (1 real homepage + the
+// two untouched WordPress defaults, its entire published site).
+const WP_STARTER_SLUG_RE = /(^|\/)(hello-world|sample-page)(\/|$)/;
+const WP_STARTER_BODY_RE = /this is an example page|as a new wordpress user|welcome to wordpress\.?\s*this is your first post|edit or delete it,? then start writing/i;
+
+export function isWpDefaultContent(url: string, html: string): boolean {
+  let slug = false;
+  try { slug = WP_STARTER_SLUG_RE.test(new URL(url).pathname.toLowerCase()); } catch { return false; }
+  return slug && WP_STARTER_BODY_RE.test(html);
+}
+
 export function crawlUrlKey(url: string): string {
   try {
     const u = new URL(url);

@@ -10,6 +10,7 @@ import {
   shouldSkipUrl,
   crawlUrlKey,
   classifyPageType,
+  isWpDefaultContent,
   scoreUrlPriority,
   aiScoresFromItems,
   computeWeightedScore,
@@ -150,6 +151,20 @@ describe("URL normalization / skip / page-type", () => {
     expect(classifyPageType("https://x.com/?fuseaction=content.page&id=4")).toBe("other");
     // The bare root stays the homepage.
     expect(classifyPageType("https://x.com/")).toBe("homepage");
+  });
+  it("detects WordPress starter content by slug AND body fingerprint (chaabanelaw case)", () => {
+    const sampleBody = `<html><body><h1>Sample Page</h1><p>This is an example page. As a new WordPress user, you should go to your dashboard...</p></body></html>`;
+    const helloBody = `<html><body><h1>Hello world!</h1><p>Welcome to WordPress. This is your first post. Edit or delete it, then start writing!</p></body></html>`;
+    // Slug + boilerplate body => default content.
+    expect(isWpDefaultContent("https://x.com/sample-page/", sampleBody)).toBe(true);
+    expect(isWpDefaultContent("https://x.com/2020/09/02/hello-world/", helloBody)).toBe(true);
+    // Right slug but the firm replaced the body with real content => NOT default
+    // (a firm can edit the Sample Page in place and keep the slug).
+    const realContent = `<html><body><h1>Criminal Defence</h1><p>Our firm represents clients across Toronto in serious criminal matters.</p></body></html>`;
+    expect(isWpDefaultContent("https://x.com/sample-page/", realContent)).toBe(false);
+    expect(isWpDefaultContent("https://x.com/2020/09/02/hello-world/", realContent)).toBe(false);
+    // Real page that merely mentions the boilerplate phrase but is not the slug.
+    expect(isWpDefaultContent("https://x.com/practice/family-law", sampleBody)).toBe(false);
   });
   it("skips transactional pages routed through query strings (jsmlaw newsletter form)", () => {
     // /?fuseaction=member.registerShort is a newsletter-signup form, correctly

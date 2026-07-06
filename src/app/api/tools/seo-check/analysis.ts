@@ -164,6 +164,10 @@ export interface PageResult {
   pageAudit?: PageAuditSnapshot;
   intentAlignment?: PageIntentResult;
   keyWarnings: string[];
+  // True when the page is untouched WordPress starter content (Hello world! /
+  // Sample Page). Excluded from quality findings + scores so boilerplate does
+  // not mis-measure the firm; still counts toward pagesScanned + maturity.
+  wpDefault?: boolean;
 }
 
 export interface TopFix {
@@ -654,7 +658,8 @@ export function buildSiteStructureIssues(
   hasSitemap: boolean,
   parsedRobots: ParsedRobots | null = null,
   discoveryConfidence: DiscoveryConfidence = "high",
-  uncrawledUrls: string[] = []
+  uncrawledUrls: string[] = [],
+  wpStarterUrls: string[] = []
 ): Issue[] {
   const totalPages = pages.length || 1;
   const home = pages[0];
@@ -747,6 +752,18 @@ export function buildSiteStructureIssues(
       "Add an attorney/team page with each lawyer's bio, credentials, and Person schema.",
       "medium", "Authority and AI-authorship gap. Easy to package, helps E-E-A-T and AI sourcing.",
       "There is no page establishing who the lawyers are, which is exactly the expertise signal search and AI systems look for.", 58);
+  }
+
+  if (wpStarterUrls.length > 0) {
+    // Content-gated upstream (route.ts): these are pages whose bodies still
+    // carry the WordPress starter fingerprint, so a firm that repurposed the
+    // slug is never flagged. Framed as a maturity signal, not a per-page fail.
+    const shown = wpStarterUrls.slice(0, 3).map((u) => { try { return new URL(u).pathname; } catch { return u; } });
+    push("structure-wp-starter", "On-Page SEO", "low", "WordPress starter content still published",
+      `The site still publishes WordPress's default starter content (${shown.join(", ")}). These placeholder pages ship with every new WordPress install and were never removed.`,
+      "Delete the default \"Hello world!\" post and \"Sample Page\", and drop them from the XML sitemap.",
+      "low", "Strong signal the site is unfinished or unmaintained: the firm never cleared the WordPress defaults. Cheap, visible fix and a credible outreach opener.",
+      "The firm's site still has the default WordPress placeholder pages published, a clear sign it was set up and left unfinished.", 58);
   }
 
   if (!hasSitemap) {

@@ -32,6 +32,7 @@ import {
   normalizePageUrl,
   isSameOrigin,
   shouldSkipUrl,
+  isWpDefaultContent,
   crawlUrlKey,
   scoreUrlPriority,
   classifyPageType,
@@ -886,6 +887,36 @@ function checkLocalSeo(html: string, schema: SchemaSummary): CategoryResult {
   return { name: "Local SEO", score, maxScore, items };
 }
 
+// Mixed content is a genuinely LOADED http:// sub-resource on an https page.
+// The old detector matched any src=/href="http://, which fired on <a href>
+// navigations and, worse, on <link rel="profile" href="http://gmpg.org/xfn/11">
+// (a WordPress XFN declaration the browser never fetches) that ships on every
+// WordPress install: a false positive a prospect can rebut live. This counts
+// only fetched sub-resources: src / srcset / poster / lazy-load data-src,
+// <object data>, CSS url()/@import, and <link> whose rel actually loads a
+// resource. <a href>, form-field values, data-* config, and declaration rels
+// (profile / canonical / dns-prefetch / pingback / alternate) are excluded.
+// rel tokens that actually fetch a resource. Matched as EXACT tokens, not
+// substrings: rel="dns-prefetch" must not match "prefetch", and rel="profile"
+// (the WordPress XFN declaration) must not match anything.
+const RESOURCE_LINK_RELS = new Set([
+  "stylesheet", "preload", "prefetch", "modulepreload", "icon", "shortcut", "apple-touch-icon", "manifest",
+]);
+export function countMixedContentResources(html: string): number {
+  let count = 0;
+  count += (html.match(/\b(?:src|data-src|data-lazy-src|srcset|poster)=["']http:\/\//gi) || []).length;
+  count += (html.match(/<object\b[^>]*\bdata=["']http:\/\//gi) || []).length;
+  count += (html.match(/(?:url\(|@import\s+(?:url\()?)\s*["']?http:\/\//gi) || []).length;
+  // <link> only when it loads a resource. rel can carry multiple tokens and
+  // sit before or after href, so tokenise rel rather than assume order.
+  for (const tag of html.match(/<link\b[^>]*>/gi) || []) {
+    if (!/\bhref=["']http:\/\//i.test(tag)) continue;
+    const rel = (tag.match(/\brel=["']([^"']*)["']/i)?.[1] || "").toLowerCase();
+    if (rel.split(/\s+/).some((t) => RESOURCE_LINK_RELS.has(t))) count++;
+  }
+  return count;
+}
+
 /* 7. Technical & Security */
 function checkTechnicalSecurity(html: string, url: string, headers: Headers): CategoryResult {
   const items: CheckItem[] = [];
@@ -894,10 +925,10 @@ function checkTechnicalSecurity(html: string, url: string, headers: Headers): Ca
     ? { label: "HTTPS", status: "pass", detail: "Site loads over HTTPS." }
     : { label: "HTTPS", status: "fail", detail: "Site loads over HTTP. Google penalises non-HTTPS sites.", fix: "Install an SSL certificate and redirect all HTTP traffic to HTTPS." });
 
-  const httpResources = html.match(/(?:src|href)=["']http:\/\//gi) || [];
-  items.push(httpResources.length === 0
+  const mixedCount = countMixedContentResources(html);
+  items.push(mixedCount === 0
     ? { label: "Mixed content", status: "pass", detail: "No insecure HTTP resources detected." }
-    : { label: "Mixed content", status: "warn", detail: `${httpResources.length} HTTP resource${httpResources.length > 1 ? "s" : ""} on an HTTPS page.`, fix: "Change all http:// resource URLs to https:// or use protocol-relative URLs." });
+    : { label: "Mixed content", status: "warn", detail: `${mixedCount} HTTP resource${mixedCount > 1 ? "s" : ""} on an HTTPS page.`, fix: "Change all http:// resource URLs to https:// or use protocol-relative URLs." });
 
   const hsts = headers.get("strict-transport-security");
   if (hsts) {
@@ -1203,6 +1234,7 @@ function buildPageResult(
     pageAudit,
     intentAlignment,
     keyWarnings,
+    wpDefault: isWpDefaultContent(finalUrl, html),
   };
 }
 
@@ -1512,12 +1544,22 @@ export async function POST(req: NextRequest) {
       uncrawledUrls = frontier.map((f) => f.url);
     }
 
+    // Untouched WordPress starter pages (Hello world! / Sample Page) are not the
+    // firm's content: excluded from quality scores + findings so their thin
+    // boilerplate does not mis-measure the site (field case chaabanelaw.com,
+    // where /sample-page/ dragged word-count, thin-content, and meta-description
+    // findings onto the firm). They stay in `pages` for pagesScanned, maturity,
+    // and discovery confidence, and their presence is surfaced as one finding.
+    const wpStarterUrls = pages.filter((p) => p.wpDefault).map((p) => p.url);
+    const scored = pages.some((p) => p.wpDefault) ? pages.filter((p) => !p.wpDefault) : pages;
+    const forFindings = scored.length > 0 ? scored : pages;
+
     // Backward-compatible aggregation.
-    const aggregatedCategories = aggregateCategories(pages);
+    const aggregatedCategories = aggregateCategories(forFindings);
     const overallScore = computeWeightedScore(aggregatedCategories);
     const grade = computeGrade(overallScore);
 
-    const perPageAi = pages.map((p) => {
+    const perPageAi = forFindings.map((p) => {
       const ai = p.categories.find((c) => c.name === "AI Visibility");
       return aiScoresFromItems(ai ? ai.items : []);
     });
@@ -1528,15 +1570,15 @@ export async function POST(req: NextRequest) {
       ...AI_SEARCH_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : false, category: "search" as const })),
       ...AI_TRAINING_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : false, category: "training" as const })),
     ];
-    const intentAlignment = aggregateIntentAlignment(pages);
-    const renderingSummary = aggregateRenderingSummary(pages);
+    const intentAlignment = aggregateIntentAlignment(forFindings);
+    const renderingSummary = aggregateRenderingSummary(forFindings);
 
-    const topFixes = computeTopFixes(pages, 5);
+    const topFixes = computeTopFixes(forFindings, 5);
 
     // Professional layer.
     const discoveryConfidence = computeDiscoveryConfidence(pages.length, sitemapSet?.size ?? 0, homeInternalLinkCount, maxPages);
-    const pageIssues = buildIssues(pages);
-    const structureIssues = buildSiteStructureIssues(pages, !!sitemapSet, parsedRobots, discoveryConfidence, uncrawledUrls);
+    const pageIssues = buildIssues(forFindings);
+    const structureIssues = buildSiteStructureIssues(pages, !!sitemapSet, parsedRobots, discoveryConfidence, uncrawledUrls, wpStarterUrls);
     const issues = [...pageIssues, ...structureIssues].sort(compareIssuesByPriority);
     const internalSummary = buildInternalSummary(pages, issues, overallScore, aiSearchScore);
     const breakdown = severityBreakdown(issues);

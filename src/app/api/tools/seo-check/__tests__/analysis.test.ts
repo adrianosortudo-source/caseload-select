@@ -404,6 +404,19 @@ describe("buildSiteStructureIssues", () => {
     expect(buildSiteStructureIssues(pages, true).map((i) => i.title)).not.toContain("No practice-area pages found");
   });
 
+  it("emits one WordPress-starter finding when starter URLs are supplied (chaabanelaw case)", () => {
+    const pages = [mkPage({
+      url: "https://x.com/", pageType: "homepage", practiceAreaIntent: true, phone: true,
+      categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "" }])],
+    })];
+    const starter = ["https://x.com/2020/09/02/hello-world/", "https://x.com/sample-page/"];
+    const titles = buildSiteStructureIssues(pages, true, null, "high", [], starter).map((i) => i.title);
+    expect(titles.filter((t) => t === "WordPress starter content still published").length).toBe(1);
+    // And no finding at all when there is no starter content.
+    expect(buildSiteStructureIssues(pages, true, null, "high", [], []).map((i) => i.title))
+      .not.toContain("WordPress starter content still published");
+  });
+
   it("does not flag a contact gap when a phone is present on the homepage", () => {
     const pages = [mkPage({
       url: "https://x.com/", pageType: "homepage", phone: true,
