@@ -1394,13 +1394,18 @@ export async function POST(req: NextRequest) {
     let homeTtfbMs = 0;
     let resolved = false;
     let homeErrorResponse: NextResponse | null = null;
+    // Remember the last HTTP status a host actually returned, so a live-but-
+    // access-restricted site (field case ganganilaw.com: Squarespace serves a
+    // 401 site-wide password page on both apex and www) is reported honestly
+    // instead of as a dead domain.
+    let lastHttpStatus = 0;
     for (const h of [domain, `www.${domain}`]) {
       let handle: SafeFetchResult | null = null;
       try {
         const t0 = Date.now();
         handle = await safeFetch(`https://${h}`, 15000);
         const { res, finalUrl, redirectHops } = handle;
-        if (!res.ok) { continue; }
+        if (!res.ok) { lastHttpStatus = res.status; continue; }
         const ct = res.headers.get("content-type") || "";
         if (!ct.includes("html") && !ct.includes("xhtml")) {
           homeErrorResponse = NextResponse.json({ error: `${domain} returned a non-HTML response. Only websites can be checked.` }, { status: 422 });
@@ -1430,7 +1435,20 @@ export async function POST(req: NextRequest) {
       }
     }
     if (!resolved) {
-      return homeErrorResponse ?? NextResponse.json({ error: `Could not connect to ${domain}. Verify the domain is correct and the site is live.` }, { status: 422 });
+      if (homeErrorResponse) return homeErrorResponse;
+      if (lastHttpStatus === 401 || lastHttpStatus === 403) {
+        return NextResponse.json({ error: `${domain} is live but access-restricted (HTTP ${lastHttpStatus}), usually a site-wide password or a firewall block. Remove the site lock, then re-run the check.` }, { status: 422 });
+      }
+      if (lastHttpStatus === 451) {
+        return NextResponse.json({ error: `${domain} returned HTTP 451 (unavailable for legal reasons) and cannot be scanned.` }, { status: 422 });
+      }
+      if (lastHttpStatus >= 500) {
+        return NextResponse.json({ error: `${domain} is up but returning server errors (HTTP ${lastHttpStatus}). Try again once the site is serving pages.` }, { status: 422 });
+      }
+      if (lastHttpStatus > 0) {
+        return NextResponse.json({ error: `${domain} responded with HTTP ${lastHttpStatus}, so no page could be scanned.` }, { status: 422 });
+      }
+      return NextResponse.json({ error: `Could not connect to ${domain}. Verify the domain is correct and the site is live.` }, { status: 422 });
     }
     const homeUrl = `https://${originHost}`;
 
