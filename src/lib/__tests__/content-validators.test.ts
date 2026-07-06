@@ -50,6 +50,8 @@ import {
   validatePtJurisdictionDisclosure,
   runPtValidators,
   validateSourceIntegrity,
+  validateNegativeReviewResponse,
+  validateReviewRequest,
   type ValidatorConfig,
 } from "../content-validators";
 import { SERVICE_PAGE_SECTION_KEYS, type ServicePageBlock } from "../content-studio-structured";
@@ -1116,6 +1118,89 @@ describe("validateSourceIntegrity (Ses.17 WP-5 format gating)", () => {
         consequence: "A costly move can be forced.",
       },
       "counsel_note"
+    );
+    expect(result.status).toBe("pass");
+  });
+});
+
+// Ses.17 WP-5: first real test coverage for these two pre-existing
+// validators, retrofitted the moment paid_traffic_landing/review_request/
+// review_response could actually draft and reach them. The switch-channels
+// regression below is the exact false-negative the WP-5 prod smoke test hit.
+describe("validateNegativeReviewResponse", () => {
+  it("passes (info) when format is not a review_response format", () => {
+    expect(validateNegativeReviewResponse("Anything at all.", "counsel_note").status).toBe("pass");
+  });
+
+  it("fails when the response confirms a client relationship", () => {
+    const result = validateNegativeReviewResponse(
+      "During your matter, we did everything possible.",
+      "review_response"
+    );
+    expect(result.status).toBe("fail");
+  });
+
+  it("fails when the response discloses case facts", () => {
+    const result = validateNegativeReviewResponse(
+      "The settlement was reached after months of negotiation.",
+      "review_response"
+    );
+    expect(result.status).toBe("fail");
+  });
+
+  it("does not warn on a compliant close that paraphrases the switch-channels offer (regression: found live 2026-07-06)", () => {
+    const result = validateNegativeReviewResponse(
+      "Thank you for sharing this feedback. Professional obligations prevent a substantive public " +
+        "response. If you would like to raise specific concerns, please call the office or send an " +
+        "email directly to the firm.",
+      "review_response"
+    );
+    expect(result.status).toBe("pass");
+  });
+
+  it("still warns when there is no switch-channels offer at all", () => {
+    const result = validateNegativeReviewResponse(
+      "Thank you for sharing this feedback. Professional obligations prevent a substantive public response.",
+      "review_response"
+    );
+    expect(result.status).toBe("warn");
+  });
+
+  it("recognizes the original literal phrasing too (no regression on the prior pattern)", () => {
+    expect(
+      validateNegativeReviewResponse("Please call the firm to discuss further.", "review_response").status
+    ).toBe("pass");
+    expect(
+      validateNegativeReviewResponse("Please email the firm to discuss further.", "review_response").status
+    ).toBe("pass");
+  });
+});
+
+describe("validateReviewRequest", () => {
+  it("passes (info) when format is not a review_request format", () => {
+    expect(validateReviewRequest("Free gift card for a review!", "counsel_note").status).toBe("pass");
+  });
+
+  it("fails on an incentive offer", () => {
+    expect(validateReviewRequest("Leave a review for a gift card.", "review_request").status).toBe("fail");
+  });
+
+  it("fails on sentiment-gating", () => {
+    expect(
+      validateReviewRequest("If you had a great experience, please leave a review.", "review_request").status
+    ).toBe("fail");
+  });
+
+  it("fails on a staff-name request", () => {
+    expect(
+      validateReviewRequest("Please mention our rep by name in your review.", "review_request").status
+    ).toBe("fail");
+  });
+
+  it("passes a plain, unconditional review ask", () => {
+    const result = validateReviewRequest(
+      "Thank you for trusting the firm with your matter. You are welcome to share your experience through a review. This is optional.",
+      "review_request"
     );
     expect(result.status).toBe("pass");
   });

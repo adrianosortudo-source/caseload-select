@@ -1372,7 +1372,15 @@ export function validateNegativeReviewResponse(
         "Response discloses case facts (fee, date, outcome, judgment). Truth is no defence under Rule 3.3; remove case-specific content.",
     });
   }
-  const switchChannels = /\b(?:contact\s+(?:our|the)\s+office|reach\s+out\s+(?:to\s+us\s+)?(?:directly|offline)|call\s+the\s+firm|email\s+the\s+firm)\b/gi;
+  // Ses.17 WP-5: widened after a live smoke-test false negative. The original
+  // pattern only matched "call the firm" / "email the firm" literally; a
+  // genuinely compliant close ("please call the office or send an email
+  // directly to the firm") missed both because it said "office" not "firm"
+  // for the call, and "send an email...to the firm" not "email the firm".
+  // Same class of miss as the italics/guarantee validators found in Ses.16:
+  // a real, compliant response failing for phrasing, not substance.
+  const switchChannels =
+    /\b(?:contact\s+(?:our|the)\s+office|reach\s+out\s+(?:to\s+us\s+)?(?:directly|offline)|call\s+(?:the|our)\s+(?:firm|office)|(?:send\s+(?:an?\s+)?)?email\s+(?:directly\s+)?(?:to\s+)?(?:the|our)\s+(?:firm|office))\b/gi;
   if (!switchChannels.test(text)) {
     findings.push({
       rule: "negative_review_response",
