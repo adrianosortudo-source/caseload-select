@@ -88,6 +88,11 @@ export default function DeliverableReview({
 
   const selectedVersion = versions.find((v) => v.id === selectedVersionId) ?? null;
   const isCurrent = selectedVersionId === deliverable.current_version_id;
+  // Defensive: a deliverable with versions but no current-version pointer is a
+  // broken state a DB trigger now prevents (migration
+  // 20260707_deliverable_current_version_invariant). If one ever recurs, the
+  // sign-off panel says so explicitly instead of hiding the button silently.
+  const currentVersionMissing = !deliverable.current_version_id && versions.length > 0;
   const versionComments = comments.filter((c) => c.version_id === selectedVersionId);
 
   const refetch = useCallback(async () => {
@@ -291,6 +296,7 @@ export default function DeliverableReview({
             changesAttestation={changesAttestation}
             selectedVersion={selectedVersion}
             isCurrentVersion={isCurrent}
+            currentVersionMissing={currentVersionMissing}
             status={deliverable.status}
             onSigned={refetch}
           />
@@ -1257,6 +1263,7 @@ function SignOffPanel({
   changesAttestation,
   selectedVersion,
   isCurrentVersion,
+  currentVersionMissing,
   status,
   onSigned,
 }: {
@@ -1269,6 +1276,7 @@ function SignOffPanel({
   changesAttestation: string;
   selectedVersion: DeliverableVersion | null;
   isCurrentVersion: boolean;
+  currentVersionMissing: boolean;
   status: ContentDeliverable["status"];
   onSigned: () => Promise<void> | void;
 }) {
@@ -1332,6 +1340,12 @@ function SignOffPanel({
       )}
       {!selectedVersion ? (
         <p className="text-xs text-black/55">No version to sign yet.</p>
+      ) : currentVersionMissing ? (
+        <p className="text-xs text-amber-800">
+          This deliverable has no current version on record, so it cannot be
+          signed yet. Ask the operator to repost the latest version. This is a
+          system state, not something you did.
+        </p>
       ) : !isCurrentVersion ? (
         <p className="text-xs text-black/55">
           You are viewing an earlier version. Switch to the current version to sign.
