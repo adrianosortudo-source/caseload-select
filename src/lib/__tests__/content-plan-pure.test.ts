@@ -20,7 +20,7 @@ function item(p: Partial<PlanDeliverable>): PlanDeliverable {
 }
 
 describe("groupByFormat", () => {
-  it("groups by format in first-appearance order (after date sort)", () => {
+  it("groups by format; an unlisted format sinks after the named ones by first appearance", () => {
     const groups = groupByFormat([
       item({ id: "b", format: "Decision Tool", publish_date: "2026-06-25" }),
       item({ id: "a", format: "Counsel Note", publish_date: "2026-06-24" }),
@@ -28,6 +28,25 @@ describe("groupByFormat", () => {
     ]);
     expect(groups.map((g) => g.format)).toEqual(["Counsel Note", "Decision Tool"]);
     expect(groups[0].items.map((i) => i.id)).toEqual(["a", "c"]);
+  });
+
+  it("orders panels by fixed editorial complexity, not publish date (locked 2026-07-06)", () => {
+    const groups = groupByFormat([
+      item({ id: "gbp", format: "Google Business Profile", publish_date: "2026-06-20" }),
+      item({ id: "lm", format: "Lead Magnet", publish_date: "2026-06-21" }),
+      item({ id: "citm", format: "Clause in the Margin", publish_date: "2026-06-22" }),
+      item({ id: "li", format: "LinkedIn", publish_date: "2026-06-23" }),
+      item({ id: "cn", format: "Counsel Note", publish_date: "2026-06-24" }),
+    ]);
+    // All items are dated earliest-to-latest in the opposite order of the
+    // expected panel order, so this only passes under fixed-priority sort.
+    expect(groups.map((g) => g.format)).toEqual([
+      "Counsel Note",
+      "LinkedIn",
+      "Clause in the Margin",
+      "Lead Magnet",
+      "Google Business Profile",
+    ]);
   });
 
   it("sinks unfiled (null/blank format) to the end", () => {

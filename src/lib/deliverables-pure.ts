@@ -296,9 +296,32 @@ function comparePublishDate(a: PlanDeliverable, b: PlanDeliverable): number {
 }
 
 /**
- * Group deliverables by format, preserving the order each format first appears
- * once items are sorted by publish date (stable, editorial order). Items with
- * no format collect last under a null-format group.
+ * Fixed panel order for the weekly content-plan view, editorial complexity
+ * order rather than publish-date order: the reader's own long-form piece
+ * first, then its lighter derivatives, in the order Adriano reviews them
+ * (locked 2026-07-06). Formats not listed here (e.g. Decision Tool, Counsel
+ * Letter) sink after the named ones but before the null/unfiled group.
+ */
+const FORMAT_PRIORITY: Record<string, number> = {
+  "Counsel Note": 0,
+  "LinkedIn": 1,
+  "Clause in the Margin": 2,
+  "Lead Magnet": 3,
+  "Google Business Profile": 4,
+};
+const UNKNOWN_FORMAT_RANK = 999;
+
+function formatRank(format: string | null): number {
+  if (format && format in FORMAT_PRIORITY) return FORMAT_PRIORITY[format];
+  return UNKNOWN_FORMAT_RANK;
+}
+
+/**
+ * Group deliverables by format. Items within a group stay in publish-date
+ * order (dated first, ascending; undated last). Groups themselves follow the
+ * fixed editorial complexity order in FORMAT_PRIORITY; formats not in that
+ * list keep their first-appearance order after the known ones. Items with no
+ * format collect last under a null-format group.
  */
 export function groupByFormat(items: PlanDeliverable[]): FormatGroup[] {
   const sorted = [...items].sort(comparePublishDate);
@@ -312,7 +335,12 @@ export function groupByFormat(items: PlanDeliverable[]): FormatGroup[] {
     }
     byFormat.get(key)!.push(it);
   }
-  order.sort((a, b) => (a === null ? 1 : 0) - (b === null ? 1 : 0));
+  order.sort((a, b) => {
+    if (a === null && b === null) return 0;
+    if (a === null) return 1;
+    if (b === null) return -1;
+    return formatRank(a) - formatRank(b);
+  });
   return order.map((f) => ({ format: f, items: byFormat.get(f)! }));
 }
 
