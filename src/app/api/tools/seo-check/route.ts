@@ -1346,11 +1346,65 @@ export async function POST(req: NextRequest) {
     const startedAt = Date.now();
     const CRAWL_BUDGET_MS = 230_000;
 
-    const homeUrl = `https://${domain}`;
+    // Resolve the serving host and fetch the homepage before anything else.
+    // Sites commonly serve on only one of apex or www; normalizeDomain strips
+    // www for same-origin keying, so the apex we build by default can be dead
+    // even when the site is live (field case jsmlaw.ca: the apex TLS handshake
+    // fails, only www.jsmlaw.ca answers). Probe both forms, keep the first that
+    // returns a usable HTML page, and build every downstream fetch URL from it.
+    // isSameOrigin treats apex and www as equal, so the crawl is unaffected by
+    // which host served.
+    let originHost = domain;
+    let homeHtml = "";
+    let homeHeaders: Headers = new Headers();
+    let homeFinalUrl = "";
+    let homeRedirectHops = 0;
+    let homeTtfbMs = 0;
+    let resolved = false;
+    let homeErrorResponse: NextResponse | null = null;
+    for (const h of [domain, `www.${domain}`]) {
+      let handle: SafeFetchResult | null = null;
+      try {
+        const t0 = Date.now();
+        handle = await safeFetch(`https://${h}`, 15000);
+        const { res, finalUrl, redirectHops } = handle;
+        if (!res.ok) { continue; }
+        const ct = res.headers.get("content-type") || "";
+        if (!ct.includes("html") && !ct.includes("xhtml")) {
+          homeErrorResponse = NextResponse.json({ error: `${domain} returned a non-HTML response. Only websites can be checked.` }, { status: 422 });
+          continue;
+        }
+        const read = await readCappedText(res, MAX_HTML_BYTES);
+        if (!read.ok) {
+          homeErrorResponse = NextResponse.json({ error: read.reason === "too_large"
+            ? `${domain} returned a page that is too large to scan.`
+            : `${domain} took too long to respond or closed the connection. Try again in a moment.` }, { status: 422 });
+          continue;
+        }
+        originHost = h;
+        homeHeaders = res.headers;
+        homeHtml = read.text;
+        homeFinalUrl = finalUrl;
+        homeRedirectHops = redirectHops;
+        homeTtfbMs = Date.now() - t0;
+        resolved = true;
+        break;
+      } catch (fetchErr: unknown) {
+        const msg = fetchErr instanceof Error ? fetchErr.message : "unknown";
+        if (msg === "ssrf_blocked") homeErrorResponse = NextResponse.json({ error: "That domain cannot be checked." }, { status: 400 });
+        // Any other failure (TLS, DNS, timeout) just moves on to the next host.
+      } finally {
+        handle?.cleanup();
+      }
+    }
+    if (!resolved) {
+      return homeErrorResponse ?? NextResponse.json({ error: `Could not connect to ${domain}. Verify the domain is correct and the site is live.` }, { status: 422 });
+    }
+    const homeUrl = `https://${originHost}`;
 
     const [robotsRaw, llmsTxt] = await Promise.all([
-      safeResource(`https://${domain}/robots.txt`, 5000),
-      safeResource(`https://${domain}/llms.txt`, 5000),
+      safeResource(`https://${originHost}/robots.txt`, 5000),
+      safeResource(`https://${originHost}/llms.txt`, 5000),
     ]);
     const parsedRobots = robotsRaw ? parseRobotsTxt(robotsRaw) : null;
 
@@ -1371,7 +1425,7 @@ export async function POST(req: NextRequest) {
       }
     };
     let sitemapTruncated = false;
-    const rootSm = await fetchSitemapUrls(`https://${domain}/sitemap.xml`, domain);
+    const rootSm = await fetchSitemapUrls(`https://${originHost}/sitemap.xml`, domain);
     for (const u of rootSm.urls) collectSitemapUrl(u);
     if (rootSm.truncated) sitemapTruncated = true;
     if (parsedRobots) {
@@ -1389,42 +1443,12 @@ export async function POST(req: NextRequest) {
     // budget note on fetchSitemapUrls).
     const sitemapComplete = !sitemapTruncated;
 
-    // Scan homepage first.
-    let homePage: PageResult;
-    let homeHtml: string;
-    let homeHandle: SafeFetchResult | null = null;
-    try {
-      const t0 = Date.now();
-      homeHandle = await safeFetch(homeUrl, 15000);
-      const { res, finalUrl, redirectHops } = homeHandle;
-      const ttfbMs = Date.now() - t0;
-      if (!res.ok) {
-        return NextResponse.json({ error: `Could not reach ${domain} (HTTP ${res.status}). Check the domain and try again.` }, { status: 422 });
-      }
-      const ct = res.headers.get("content-type") || "";
-      if (!ct.includes("html") && !ct.includes("xhtml")) {
-        return NextResponse.json({ error: `${domain} returned a non-HTML response. Only websites can be checked.` }, { status: 422 });
-      }
-      const read = await readCappedText(res, MAX_HTML_BYTES);
-      if (!read.ok) {
-        const error = read.reason === "too_large"
-          ? `${domain} returned a page that is too large to scan.`
-          : `${domain} took too long to respond or closed the connection. Try again in a moment.`;
-        return NextResponse.json({ error }, { status: 422 });
-      }
-      homeHtml = read.text;
-      homePage = buildPageResult(read.text, finalUrl, homeUrl, res.headers, ttfbMs, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete);
-    } catch (fetchErr: unknown) {
-      const msg = fetchErr instanceof Error ? fetchErr.message : "unknown";
-      if (msg === "ssrf_blocked") return NextResponse.json({ error: "That domain cannot be checked." }, { status: 400 });
-      if (msg === "too_many_redirects") return NextResponse.json({ error: `${domain} redirected too many times.` }, { status: 422 });
-      if (msg.includes("abort") || msg.includes("AbortError")) {
-        return NextResponse.json({ error: `${domain} took too long to respond. Try again in a moment.` }, { status: 422 });
-      }
-      return NextResponse.json({ error: `Could not connect to ${domain}. Verify the domain is correct and the site is live.` }, { status: 422 });
-    } finally {
-      homeHandle?.cleanup();
-    }
+    // The homepage HTML + headers were already captured during host resolution
+    // above; build its result now that robots + sitemap are available.
+    const homePage: PageResult = buildPageResult(
+      homeHtml, homeFinalUrl, homeUrl, homeHeaders, homeTtfbMs, homeRedirectHops,
+      domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete
+    );
 
     const pages: PageResult[] = [homePage];
     let partial = false;
