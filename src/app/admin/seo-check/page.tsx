@@ -17,6 +17,7 @@
 import "@/app/(marketing)/styles/tokens.css";
 import SeoCheckTool from "@/components/seo-check/SeoCheckTool";
 import PageHeader from "@/components/PageHeader";
+import DeleteSeoAuditButton from "@/components/admin/DeleteSeoAuditButton";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
@@ -109,12 +110,15 @@ export default async function AdminSeoCheckPage() {
                       {new Date(a.created_at).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" })}
                     </td>
                     <td className="px-4 py-2.5 text-right">
-                      <a
-                        href={`/api/admin/seo-check/report-pdf?id=${a.id}`}
-                        className="text-xs font-display font-semibold uppercase tracking-wider text-navy hover:underline"
-                      >
-                        Download PDF
-                      </a>
+                      <span className="inline-flex items-center gap-3">
+                        <a
+                          href={`/api/admin/seo-check/report-pdf?id=${a.id}`}
+                          className="text-xs font-display font-semibold uppercase tracking-wider text-navy hover:underline"
+                        >
+                          Download PDF
+                        </a>
+                        <DeleteSeoAuditButton id={a.id} domain={a.domain ?? "unknown"} />
+                      </span>
                     </td>
                   </tr>
                 ))}

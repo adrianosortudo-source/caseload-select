@@ -64,6 +64,21 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ items: data ?? [] });
 }
 
+export async function DELETE(req: NextRequest) {
+  const session = await getOperatorSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const id = str(searchParams.get("id"), 80);
+  if (!id || !UUID_RE.test(id)) {
+    return NextResponse.json({ error: "Invalid run id." }, { status: 400 });
+  }
+
+  const { error } = await supabase.from("seo_check_runs").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
+
 export async function POST(req: NextRequest) {
   const session = await getOperatorSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
