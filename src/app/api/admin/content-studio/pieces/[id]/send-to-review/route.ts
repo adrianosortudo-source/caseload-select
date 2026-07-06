@@ -90,13 +90,31 @@ export async function POST(
     );
   }
 
-  const html =
+  const enHtml =
     piece.format === "canonical_service_page"
       ? renderServicePagePreview(
           (version!.body_structured as ServicePageBlock[] | null) ?? [],
           (version!.seo_metadata as Record<string, unknown> | null) ?? undefined
         ).html
       : renderMarkdownToSafeHtml(version!.body_markdown as string | null);
+
+  // Ses.17 WP-4: when a current PT version exists, append it beneath the EN
+  // content behind a labeled divider. One sign-off then covers both
+  // languages; the drift guard in deliverables.ts already forces
+  // re-approval whenever any new version (EN or PT) posts after an approval.
+  const ptVersion = piece.language_mode === "bilingual" ? await getCurrentVersion(id, "pt") : null;
+  const ptHtml = ptVersion
+    ? piece.format === "canonical_service_page"
+      ? renderServicePagePreview(
+          (ptVersion.body_structured as ServicePageBlock[] | null) ?? [],
+          (ptVersion.seo_metadata as Record<string, unknown> | null) ?? undefined
+        ).html
+      : renderMarkdownToSafeHtml(ptVersion.body_markdown as string | null)
+    : null;
+
+  const html = ptHtml
+    ? `${enHtml}\n<hr>\n<h2>Portuguese version</h2>\n${ptHtml}`
+    : enHtml;
 
   const versioned = await addVersion({
     deliverableId: piece.deliverable_id,

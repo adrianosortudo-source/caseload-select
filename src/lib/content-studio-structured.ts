@@ -951,6 +951,15 @@ const LSO_DISCLAIMER_HEADLINE = "Legal information, not legal advice.";
 const LSO_DISCLAIMER_BODY =
   "What you read on this website is general information about the law. It is not legal advice for your situation. Sending an intake does not make DRG Law your lawyer. That only happens after DRG Law checks for conflicts and both sides sign a written agreement.";
 
+// Ses.17 WP-4: Portuguese LSO banner copy, read verbatim from
+// drg-law-website/src/lib/i18n.ts (`labelsPt.lsoDisclaimerHeadline` line 224
+// and `lsoDisclaimerBodyPt` lines 255-256, read-only reference per this run's
+// stop-line 2). Inlined as constants rather than importing the website repo,
+// same pattern as the EN banner in Ses.16 WP-3.
+const LSO_DISCLAIMER_HEADLINE_PT = "Informação geral. Não constitui aconselhamento jurídico.";
+const LSO_DISCLAIMER_BODY_PT =
+  "As informações neste site são gerais e não constituem aconselhamento jurídico. A DRG Law atua em direito de Ontário. O envio de uma solicitação não cria relação advogado-cliente. Essa relação só começa após verificação de conflito e assinatura de contrato de prestação de serviços.";
+
 export interface ServicePageExportBundle {
   pageHtml: string;
   schemaJsonLd: Array<Record<string, unknown>>;
@@ -971,10 +980,14 @@ function wrapExportDocument(input: {
   metaDescription: string;
   bodyHtml: string;
   schemaJsonLd: Array<Record<string, unknown>>;
+  language?: "en" | "pt";
 }): string {
+  const isPt = input.language === "pt";
   const jsonLdScripts = input.schemaJsonLd.map(jsonLdScriptTag).join("\n");
+  const disclaimerHeadline = isPt ? LSO_DISCLAIMER_HEADLINE_PT : LSO_DISCLAIMER_HEADLINE;
+  const disclaimerBody = isPt ? LSO_DISCLAIMER_BODY_PT : LSO_DISCLAIMER_BODY;
   return `<!doctype html>
-<html lang="en">
+<html lang="${isPt ? "pt" : "en"}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1017,7 +1030,7 @@ function wrapExportDocument(input: {
 </style>
 </head>
 <body>
-<aside class="cls-lso-banner"><strong>${escapeHtml(LSO_DISCLAIMER_HEADLINE)}</strong> ${escapeHtml(LSO_DISCLAIMER_BODY)}</aside>
+<aside class="cls-lso-banner"><strong>${escapeHtml(disclaimerHeadline)}</strong> ${escapeHtml(disclaimerBody)}</aside>
 <article>
 ${input.bodyHtml}
 </article>
@@ -1027,10 +1040,15 @@ ${jsonLdScripts}
 }
 
 /** Export bundle for canonical_service_page: reuses renderServicePagePreview
- * for the body HTML + JSON-LD, then wraps it as a standalone document. */
+ * for the body HTML + JSON-LD, then wraps it as a standalone document.
+ * Ses.17 WP-4: language selects the LSO banner (EN or PT) and the html
+ * lang attribute; the body content itself is whatever language the version
+ * was authored in (the caller is responsible for passing the matching
+ * version's blocks/seoMetadata). */
 export function renderServicePageExport(
   blocks: ServicePageBlock[] | null | undefined,
-  seoMetadata: Record<string, unknown> | undefined
+  seoMetadata: Record<string, unknown> | undefined,
+  language: "en" | "pt" = "en"
 ): ServicePageExportBundle {
   const { html, schemaJson } = renderServicePagePreview(blocks, seoMetadata);
   const title = (seoMetadata?.title as string | undefined) ?? "";
@@ -1040,24 +1058,35 @@ export function renderServicePageExport(
     metaDescription,
     bodyHtml: html,
     schemaJsonLd: schemaJson,
+    language,
   });
   return { pageHtml, schemaJsonLd: schemaJson, meta: { title, metaDescription } };
 }
 
 /** Export bundle for every Markdown format (counsel_note, checklist,
- * landing_page, etc). No JSON-LD source exists for these formats yet (only
- * canonical_service_page populates seo_metadata.schema); the bundle carries
- * an empty schemaJsonLd array rather than inventing one. */
+ * landing_page, etc). Ses.17 WP-3 populates seo_metadata.schema.article on
+ * these formats at draft time (content-studio-prompt.ts's
+ * buildArticleSchemaBlock); this reads whatever schema.* blocks are present
+ * and emits each as its own JSON-LD script tag, same as the
+ * canonical_service_page path. Emits an empty array only when seo_metadata
+ * carries no schema at all (a pre-WP-3 version, or none supplied). */
 export function renderMarkdownExport(
   markdown: string | null | undefined,
-  meta: { title: string; metaDescription: string }
+  meta: { title: string; metaDescription: string },
+  seoMetadata?: Record<string, unknown> | null,
+  language: "en" | "pt" = "en"
 ): ServicePageExportBundle {
   const bodyHtml = renderMarkdownToSafeHtml(markdown);
+  const schema = (seoMetadata?.schema as Record<string, unknown> | undefined) ?? {};
+  const schemaJsonLd = Object.values(schema).filter(
+    (block): block is Record<string, unknown> => !!block && typeof block === "object"
+  );
   const pageHtml = wrapExportDocument({
     title: meta.title,
     metaDescription: meta.metaDescription,
     bodyHtml,
-    schemaJsonLd: [],
+    schemaJsonLd,
+    language,
   });
-  return { pageHtml, schemaJsonLd: [], meta };
+  return { pageHtml, schemaJsonLd, meta };
 }

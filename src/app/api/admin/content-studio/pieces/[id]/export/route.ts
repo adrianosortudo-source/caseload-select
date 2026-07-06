@@ -17,28 +17,41 @@ const SIGNED_URL_TTL = 3600; // 1 hour
 /**
  * POST /api/admin/content-studio/pieces/[id]/export
  *
- * The mechanism, not the publication: renders the piece's current EN version
+ * The mechanism, not the publication: renders the piece's current version
  * into a standalone HTML bundle (page.html, schema.json, meta.json) and
  * writes it to the firm-files bucket under a deterministic, versioned path.
  * No public surface is touched; this route never deploys, posts, or emails
  * anything. Requires the same legal_gate exit condition as advancing to
  * production (linked deliverable approved, or an active publish delegation
  * covers the format), so an export cannot happen ahead of lawyer sign-off.
+ *
+ * Ses.17 WP-4: accepts an optional { language: "pt" } body (default "en").
+ * PT export requires a current PT version and renders the Portuguese LSO
+ * banner via wrapExportDocument's language param.
  */
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const denied = await requireOperator();
   if (denied) return denied;
 
   const { id } = await params;
+  const body = await req.json().catch(() => ({}));
+  const language: "en" | "pt" = body?.language === "pt" ? "pt" : "en";
 
   const { data: piece, error: pieceErr } = await getPiece(id);
   if (pieceErr || !piece) {
     return NextResponse.json(
       { ok: false, error: pieceErr?.message ?? "Piece not found" },
       { status: pieceErr ? 500 : 404 }
+    );
+  }
+
+  if (language === "pt" && piece.language_mode !== "bilingual") {
+    return NextResponse.json(
+      { ok: false, error: "This piece is not bilingual; it has no Portuguese version to export." },
+      { status: 400 }
     );
   }
 
@@ -55,10 +68,10 @@ export async function POST(
     );
   }
 
-  const version = await getCurrentVersion(id, "en");
+  const version = await getCurrentVersion(id, language);
   if (!version) {
     return NextResponse.json(
-      { ok: false, error: "No current EN version to export." },
+      { ok: false, error: `No current ${language.toUpperCase()} version to export.` },
       { status: 422 }
     );
   }
@@ -67,17 +80,27 @@ export async function POST(
     piece.format === "canonical_service_page"
       ? renderServicePageExport(
           (version.body_structured as ServicePageBlock[] | null) ?? [],
-          (version.seo_metadata as Record<string, unknown> | null) ?? undefined
+          (version.seo_metadata as Record<string, unknown> | null) ?? undefined,
+          language
         )
-      : renderMarkdownExport(version.body_markdown as string | null, {
-          title: piece.title_working as string,
-          metaDescription:
-            ((piece.source_brief as Record<string, unknown> | null)?.answer_summary as
-              | string
-              | undefined) ?? "",
-        });
+      : renderMarkdownExport(
+          version.body_markdown as string | null,
+          {
+            title: piece.title_working as string,
+            metaDescription:
+              ((piece.source_brief as Record<string, unknown> | null)?.answer_summary as
+                | string
+                | undefined) ?? "",
+          },
+          version.seo_metadata as Record<string, unknown> | null,
+          language
+        );
 
-  const prefix = `exports/content-studio/${id}/v${version.version_number}`;
+  // Language-scoped prefix: EN and PT versions of the same piece are
+  // numbered independently (getNextVersionNumber is scoped per language), so
+  // without the language segment an EN v1 and a PT v1 would collide at the
+  // same storage path.
+  const prefix = `exports/content-studio/${id}/${language}/v${version.version_number}`;
   const files: Array<{ name: string; path: string; body: string; contentType: string }> = [
     { name: "page.html", path: `${prefix}/page.html`, body: bundle.pageHtml, contentType: "text/html; charset=utf-8" },
     {

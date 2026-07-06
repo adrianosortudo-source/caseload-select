@@ -883,6 +883,7 @@ export default async function ContentPieceDetailPage({
                 Object.keys(piece.source_brief).length > 0
               }
               hasDeliverable={!!piece.deliverable_id}
+              languageMode={piece.language_mode}
             />
           </div>
         </div>

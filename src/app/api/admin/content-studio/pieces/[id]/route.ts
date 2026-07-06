@@ -11,6 +11,7 @@ import { createDeliverable, addVersion } from "@/lib/deliverables";
 import {
   checkLegalGateEntryCondition,
   checkLegalGateExitCondition,
+  checkBilingualAuthoringCondition,
 } from "@/lib/content-studio-gates";
 import {
   renderServicePagePreview,
@@ -253,6 +254,22 @@ export async function PATCH(
       if (!exitCheck.ok) {
         return NextResponse.json(
           { ok: false, error: exitCheck.reason, code: "legal_gate_exit_blocked" },
+          { status: 422 }
+        );
+      }
+
+      // Ses.17 WP-4: a bilingual piece cannot leave legal_gate without a
+      // current PT version. Checked alongside the exit condition above, not
+      // instead of it (forward-only gates allow skipping "authoring" and
+      // landing directly on "production", so both destinations are guarded).
+      const ptVersion = await getCurrentVersion(id, "pt");
+      const bilingualCheck = checkBilingualAuthoringCondition({
+        languageMode: currentPiece.language_mode as string,
+        hasCurrentPtVersion: !!ptVersion,
+      });
+      if (!bilingualCheck.ok) {
+        return NextResponse.json(
+          { ok: false, error: bilingualCheck.reason, code: "bilingual_authoring_blocked" },
           { status: 422 }
         );
       }

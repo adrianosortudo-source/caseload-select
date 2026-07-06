@@ -133,6 +133,56 @@ describe("buildSystemPrompt", () => {
   });
 });
 
+describe("buildSystemPrompt Portuguese authoring (Ses.17 WP-4)", () => {
+  it("adds a Portuguese language directive when language is 'pt'", () => {
+    const prompt = buildSystemPrompt(makeStrategy(), "counsel_note", {}, "pt");
+    expect(prompt).toContain("write this entire piece in Portuguese");
+    expect(prompt).toContain("jurisdiction disclosure");
+  });
+
+  it("does not add the Portuguese directive when language is 'en' (default)", () => {
+    const prompt = buildSystemPrompt(makeStrategy(), "counsel_note", {});
+    expect(prompt).not.toContain("write this entire piece in Portuguese");
+  });
+
+  it("notes the Markdown format line should say 'entirely in Portuguese' for pt", () => {
+    const ptPrompt = buildSystemPrompt(makeStrategy(), "counsel_note", {}, "pt");
+    const enPrompt = buildSystemPrompt(makeStrategy(), "counsel_note", {}, "en");
+    expect(ptPrompt).toContain("Write in Markdown, entirely in Portuguese.");
+    expect(enPrompt).toContain("Write in Markdown.");
+    expect(enPrompt).not.toContain("entirely in Portuguese");
+  });
+
+  it("selects PT-language reference samples over EN ones when language is 'pt'", () => {
+    const strategy = makeStrategy({
+      voice_rules: {
+        banned_vocabulary: [],
+        approved_vocabulary: ["Ontario"],
+        formatting_rules: {
+          no_em_dashes: true,
+          no_italics: true,
+          no_orphan_words: true,
+          no_rule_of_three: true,
+        },
+        lso_rules: { constraints: ["No outcome promises"] },
+        tone: "authoritative, direct, evidence-led",
+        reference: {
+          samples: [
+            { title: "EN sample", language: "en", excerpt: "This is the English excerpt." },
+            { title: "PT sample", language: "pt", excerpt: "Este é o trecho em português." },
+          ],
+        },
+      },
+    });
+    const ptPrompt = buildSystemPrompt(strategy, "counsel_note", {}, "pt");
+    const enPrompt = buildSystemPrompt(strategy, "counsel_note", {}, "en");
+    expect(ptPrompt).toContain("Este é o trecho em português.");
+    expect(ptPrompt).not.toContain("This is the English excerpt.");
+    expect(enPrompt).toContain("This is the English excerpt.");
+    expect(enPrompt).not.toContain("Este é o trecho em português.");
+  });
+});
+
 describe("buildUserPrompt", () => {
   it("renders the new SEO/AEO fields as labeled lines", () => {
     const prompt = buildUserPrompt(
@@ -283,6 +333,27 @@ describe("buildArticleSchemaBlock", () => {
     });
     expect(block.datePublished).toBe("2026-07-05T12:00:00.000Z");
     expect(block.dateModified).toBe("2026-07-05T12:00:00.000Z");
+  });
+
+  it("defaults inLanguage to 'en' when language is omitted", () => {
+    const block = buildArticleSchemaBlock({
+      strategy: makeStrategyWithNap({}),
+      titleWorking: "Title",
+      generatedText: "Body text.",
+      generatedAt: "2026-07-05T12:00:00.000Z",
+    });
+    expect(block.inLanguage).toBe("en");
+  });
+
+  it("sets inLanguage to 'pt' when language is 'pt' (Ses.17 WP-4)", () => {
+    const block = buildArticleSchemaBlock({
+      strategy: makeStrategyWithNap({}),
+      titleWorking: "Title",
+      generatedText: "Body text.",
+      generatedAt: "2026-07-05T12:00:00.000Z",
+      language: "pt",
+    });
+    expect(block.inLanguage).toBe("pt");
   });
 });
 

@@ -16,10 +16,29 @@
 // or draft/route.ts directly would be.
 import type { StrategyRow } from "./content-studio";
 
+// Ses.17 WP-4: shared between buildSystemPrompt's Markdown path and the
+// structured canonical_service_page branch in draft/route.ts (which builds
+// its own system prompt via content-studio-structured.ts's
+// buildCanonicalServicePageSystemPrompt and has no language parameter of its
+// own; the caller appends this directive post-hoc instead of threading a
+// language param through that file's prompt builder). Same instruction
+// either way: PT is authored from the brief with meaning parity, never
+// translated from finished English.
+export function buildPtLanguageDirective(): string {
+  return (
+    "Language: write this entire piece in Portuguese, for a Portuguese-reading Ontario audience. " +
+    "Author directly in Portuguese from the source brief below with full meaning parity to the firm's " +
+    "intent; this is not a translation exercise, do not draft in English first. State explicitly, in " +
+    "Portuguese, that this content concerns Ontario law (jurisdiction disclosure), since a Portuguese-" +
+    "reading audience should not assume the firm practises in Ontario without being told."
+  );
+}
+
 export function buildSystemPrompt(
   strategy: StrategyRow,
   format: string,
-  sourceBrief: Record<string, unknown>
+  sourceBrief: Record<string, unknown>,
+  language: "en" | "pt" = "en"
 ): string {
   const voice = strategy.voice_rules as Record<string, unknown>;
   const specs = strategy.format_specs as Record<string, Record<string, unknown>>;
@@ -60,12 +79,25 @@ export function buildSystemPrompt(
     parts.push(`Territory context: ${territory}`);
   }
 
+  // ─── LANGUAGE LAYER (Ses.17 WP-4) ───
+  // Identity-shaping, so it sits with ORIGIN, ahead of format/lexicon
+  // directives. Doctrine (strategy voice_traits.bilingual_at_depth,
+  // non-negotiable): PT is authored from the same source brief with meaning
+  // parity, never translated from finished English.
+  if (language === "pt") {
+    parts.push(buildPtLanguageDirective());
+  }
+
   // ─── PERSONALITY LAYER ───
   // Voice tone (per-format override beats firm-level default).
   parts.push(`Voice and tone: ${formatTone ?? voiceTone}.`);
 
   // ─── ARTIFACT + FORMAT LAYER ───
-  parts.push(`Format: ${format.replace(/_/g, " ")}. Write in Markdown.`);
+  parts.push(
+    `Format: ${format.replace(/_/g, " ")}. Write in Markdown${
+      language === "pt" ? ", entirely in Portuguese" : ""
+    }.`
+  );
   if (formatSpec.word_range) {
     const [min, max] = formatSpec.word_range as [number, number];
     parts.push(
@@ -230,7 +262,9 @@ export function buildSystemPrompt(
   // length, and register of these samples.
   if (reference?.samples?.length) {
     const matchLanguage = (sample: { language?: string }) =>
-      !sample.language || sample.language === "en";
+      language === "pt"
+        ? sample.language === "pt"
+        : !sample.language || sample.language === "en";
     const samples = reference.samples.filter(matchLanguage).slice(0, 3);
     if (samples.length > 0) {
       const block = samples
@@ -371,6 +405,7 @@ export function buildArticleSchemaBlock(input: {
   titleWorking: string;
   generatedText: string;
   generatedAt: string;
+  language?: "en" | "pt";
 }): Record<string, unknown> {
   const nap = (input.strategy.strategy_json as Record<string, unknown>).canonical_nap as
     | Record<string, unknown>
@@ -385,7 +420,7 @@ export function buildArticleSchemaBlock(input: {
     publisher: { "@type": "LegalService", name: nap?.legal_entity ?? null },
     datePublished: input.generatedAt,
     dateModified: input.generatedAt,
-    inLanguage: "en",
+    inLanguage: input.language === "pt" ? "pt" : "en",
   };
 }
 

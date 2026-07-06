@@ -190,16 +190,19 @@ export function PieceActions({
   hasVersion,
   hasBrief,
   hasDeliverable,
+  languageMode,
 }: {
   pieceId: string;
   currentGate: string;
   hasVersion: boolean;
   hasBrief: boolean;
   hasDeliverable: boolean;
+  languageMode: string;
 }) {
   const router = useRouter();
   const [validateState, setValidateState] = useState<ActionState>("idle");
   const [draftState, setDraftState] = useState<ActionState>("idle");
+  const [draftPtState, setDraftPtState] = useState<ActionState>("idle");
   const [advanceState, setAdvanceState] = useState<ActionState>("idle");
   const [exportState, setExportState] = useState<ActionState>("idle");
   const [publishState, setPublishState] = useState<ActionState>("idle");
@@ -267,6 +270,18 @@ export function PieceActions({
     ).then((d) => {
       if (d?.version) {
         setResultMsg(`Draft v${d.version.version_number} generated`);
+      }
+    });
+
+  const handleDraftPt = () =>
+    runAction(
+      `/api/admin/content-studio/pieces/${pieceId}/draft`,
+      "POST",
+      { language: "pt" },
+      setDraftPtState
+    ).then((d) => {
+      if (d?.version) {
+        setResultMsg(`Portuguese draft v${d.version.version_number} generated`);
       }
     });
 
@@ -365,6 +380,26 @@ export function PieceActions({
             </div>
           )}
         </button>
+
+        {languageMode === "bilingual" && (
+          <button
+            onClick={handleDraftPt}
+            disabled={draftPtState === "loading" || !hasBrief}
+            className={btnClass(
+              draftPtState,
+              "w-full text-left rounded border border-amber-200 bg-amber-50 px-3 py-2.5 hover:bg-amber-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            )}
+          >
+            <div className="text-sm font-medium text-amber-700">
+              {draftPtState === "loading" ? "Generating Portuguese draft..." : "Generate Portuguese draft"}
+            </div>
+            <div className="text-xs text-amber-600/60 mt-0.5">
+              Authored fresh from the same source brief, not translated from
+              the English draft. Required before this piece can advance past
+              legal_gate.
+            </div>
+          </button>
+        )}
 
         {nextGate && (
           <button

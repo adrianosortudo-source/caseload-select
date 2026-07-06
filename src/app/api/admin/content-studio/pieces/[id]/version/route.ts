@@ -151,10 +151,11 @@ export async function PUT(
     created = version;
   }
 
-  // Auto-validate the edit (EN only; there is no Portuguese validator battery
-  // wired here yet outside runPtValidators, added in WP-4).
+  // Auto-validate the edit. Ses.17 WP-4: runAndRecordValidation now branches
+  // internally on language, running the reduced PT battery for Portuguese
+  // edits instead of the English-pattern batteries.
   let validationSummary: unknown = null;
-  if (language === "en") {
+  {
     const strategy = await getActiveStrategy(piece.firm_id);
     if (strategy && created) {
       const sourceBrief =
@@ -165,6 +166,7 @@ export async function PUT(
         pieceId: id,
         firmId: piece.firm_id,
         format: piece.format,
+        language,
         version: created,
         sourceBrief,
         strategy,

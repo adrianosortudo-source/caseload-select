@@ -26,6 +26,7 @@ import {
   buildUserPrompt,
   buildArticleSchemaBlock,
   buildMarkdownSeoMetadata,
+  buildPtLanguageDirective,
 } from "@/lib/content-studio-prompt";
 import { filterInternalLinkTargetsToFirmHost, type InternalLinkTarget } from "@/lib/content-studio-links";
 
@@ -53,12 +54,14 @@ async function generateCanonicalServicePageDraft({
   firmId,
   sourceBrief,
   strategy,
+  language = "en",
 }: {
   apiKey: string;
   pieceId: string;
   firmId: string;
   sourceBrief: Record<string, unknown>;
   strategy: StrategyRow;
+  language?: "en" | "pt";
 }): Promise<NextResponse> {
   // WP-3.3: exclude any internal_link_targets URL that does not resolve to
   // the firm's own website host before the model ever sees it. Filtering at
@@ -79,7 +82,14 @@ async function generateCanonicalServicePageDraft({
     internal_link_targets: allowedLinkTargets,
   };
 
-  const systemPrompt = buildCanonicalServicePageSystemPrompt(strategy, filteredSourceBrief);
+  // Ses.17 WP-4: content-studio-structured.ts's own prompt builders have no
+  // language parameter (canonical_service_page's strict tool schema
+  // constrains shape, not language, per the build plan). A PT generation
+  // appends the same directive buildSystemPrompt's Markdown path uses,
+  // post-hoc, rather than threading a language param through that file.
+  const baseSystemPrompt = buildCanonicalServicePageSystemPrompt(strategy, filteredSourceBrief);
+  const systemPrompt =
+    language === "pt" ? `${baseSystemPrompt}\n\n${buildPtLanguageDirective()}` : baseSystemPrompt;
   const userPrompt = buildCanonicalServicePageUserPrompt(filteredSourceBrief);
   const promptContextHash = hashString(systemPrompt + userPrompt);
 
@@ -166,7 +176,7 @@ async function generateCanonicalServicePageDraft({
   const flatText = flattenServicePageToPlainText(blocks);
   const textHash = hashString(flatText);
 
-  const versionNumber = await getNextVersionNumber(pieceId, "en");
+  const versionNumber = await getNextVersionNumber(pieceId, language);
 
   const { data: aiRun, error: runErr } = await recordAiRun({
     firm_id: firmId,
@@ -180,6 +190,7 @@ async function generateCanonicalServicePageDraft({
       strategy_version: strategy.version,
       format: "canonical_service_page",
       generator: "structured_v1",
+      language,
     },
     result: {
       anthropic_message_id: aiResult.id,
@@ -201,7 +212,7 @@ async function generateCanonicalServicePageDraft({
   const { data: version, error: versionErr } = await createPieceVersion({
     piece_id: pieceId,
     version_number: versionNumber,
-    language: "en",
+    language,
     body_structured: blocks,
     seo_metadata: seoMetadata,
     text_hash: textHash,
@@ -221,6 +232,7 @@ async function generateCanonicalServicePageDraft({
     piece_id: pieceId,
     version,
     structured: true,
+    language,
     schema_warnings: schemaBlocks.breadcrumb_urls_incomplete
       ? ["breadcrumb_list item URLs are incomplete: no website URL on file for this firm's canonical_nap."]
       : [],
@@ -235,7 +247,7 @@ async function generateCanonicalServicePageDraft({
  * The piece must be at the "draft" workflow gate.
  */
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const denied = await requireOperator();
@@ -251,12 +263,27 @@ export async function POST(
     );
   }
 
+  // Ses.17 WP-4: optional { language: "pt" } body, default "en". An empty or
+  // absent body (every pre-WP-4 caller) parses to {} and defaults to "en".
+  const body = await req.json().catch(() => ({}));
+  const language: "en" | "pt" = body?.language === "pt" ? "pt" : "en";
+
   // Load the piece
   const { data: piece, error: pieceErr } = await getPiece(id);
   if (pieceErr || !piece) {
     return NextResponse.json(
       { ok: false, error: pieceErr?.message ?? "Piece not found" },
       { status: pieceErr ? 500 : 404 }
+    );
+  }
+
+  if (language === "pt" && piece.language_mode !== "bilingual") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "This piece is not bilingual; it has no Portuguese authoring path.",
+      },
+      { status: 400 }
     );
   }
 
@@ -338,6 +365,7 @@ export async function POST(
       firmId: piece.firm_id,
       sourceBrief,
       strategy,
+      language,
     });
   }
 
@@ -359,7 +387,7 @@ export async function POST(
     internal_link_targets: allowedLinkTargets,
   };
 
-  const systemPrompt = buildSystemPrompt(strategy, piece.format, filteredSourceBrief);
+  const systemPrompt = buildSystemPrompt(strategy, piece.format, filteredSourceBrief, language);
   const userPrompt = buildUserPrompt(filteredSourceBrief, piece.format);
   const promptContextHash = hashString(systemPrompt + userPrompt);
 
@@ -421,19 +449,22 @@ export async function POST(
   }
 
   // Create a new piece version with the generated content
-  const versionNumber = await getNextVersionNumber(id, "en");
+  const versionNumber = await getNextVersionNumber(id, language);
   const textHash = hashString(generatedText);
 
   // WP-3.1/3.2: Article JSON-LD + last-updated marker for Markdown formats.
   // The structured canonical_service_page branch already assembles its own
   // richer schema (LegalService/FAQPage/BreadcrumbList); Markdown formats had
-  // no seo_metadata at all until now.
+  // no seo_metadata at all until now. language threads into inLanguage
+  // (Ses.17 WP-4); the brief facts themselves (primary_query etc.) stay the
+  // same regardless of language, since they describe what the piece targets.
   const generatedAt = new Date().toISOString();
   const articleSchema = buildArticleSchemaBlock({
     strategy,
     titleWorking: piece.title_working,
     generatedText,
     generatedAt,
+    language,
   });
   const seoMetadata = buildMarkdownSeoMetadata({
     sourceBrief: filteredSourceBrief,
@@ -453,6 +484,7 @@ export async function POST(
       strategy_id: strategy.id,
       strategy_version: strategy.version,
       format: piece.format,
+      language,
     },
     result: {
       anthropic_message_id: aiResult.id,
@@ -474,7 +506,7 @@ export async function POST(
   const { data: version, error: versionErr } = await createPieceVersion({
     piece_id: id,
     version_number: versionNumber,
-    language: "en",
+    language,
     body_markdown: generatedText,
     seo_metadata: seoMetadata,
     text_hash: textHash,
@@ -493,6 +525,7 @@ export async function POST(
     ok: true,
     piece_id: id,
     version,
+    language,
     excluded_internal_link_targets: excludedLinkTargets,
     ai_run: aiRun
       ? {

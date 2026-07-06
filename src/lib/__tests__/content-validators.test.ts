@@ -47,6 +47,8 @@ import {
   validateSecondaryQueryCoverage,
   validateServiceAreaPresence,
   significantWords,
+  validatePtJurisdictionDisclosure,
+  runPtValidators,
   type ValidatorConfig,
 } from "../content-validators";
 import { SERVICE_PAGE_SECTION_KEYS, type ServicePageBlock } from "../content-studio-structured";
@@ -977,5 +979,100 @@ describe("runCanonicalServicePageValidators firmWebsite wiring (Ses.17 WP-3)", (
     });
     const domainResult = results.find((r) => r.key === "internal_link_domain_allowlist");
     expect(domainResult?.status).toBe("fail");
+  });
+});
+
+// Ses.17 WP-4: Portuguese authoring's reduced, language-neutral validator
+// battery. Deliberately does NOT reuse validateLsoCompliance / opening-
+// discipline / banned-vocabulary against Portuguese text, since those match
+// specific English phrasing and would be noise pretending to be assurance.
+describe("validatePtJurisdictionDisclosure", () => {
+  it("passes when the text names Ontário (accented)", () => {
+    const result = validatePtJurisdictionDisclosure(
+      "Este texto trata de um contrato de locacao comercial em Ontário."
+    );
+    expect(result.status).toBe("pass");
+  });
+
+  it("passes when the text names Ontario (unaccented, e.g. inside a proper noun)", () => {
+    const result = validatePtJurisdictionDisclosure(
+      "A DRG Law atua em direito de Ontario, sem excecoes."
+    );
+    expect(result.status).toBe("pass");
+  });
+
+  it("warns when neither Ontario nor Ontário appears anywhere", () => {
+    const result = validatePtJurisdictionDisclosure(
+      "Este texto trata de um contrato de locacao comercial sem mencionar a provincia."
+    );
+    expect(result.status).toBe("warn");
+  });
+});
+
+describe("runPtValidators", () => {
+  function makeConfig(overrides: Partial<ValidatorConfig> = {}): ValidatorConfig {
+    return {
+      banned_vocabulary: [],
+      approved_vocabulary: [],
+      lso_constraints: [],
+      formatting_rules: {
+        no_em_dashes: true,
+        no_italics: true,
+        no_orphan_words: true,
+        no_rule_of_three: true,
+      },
+      format_spec: { word_range: [100, 200] },
+      format: "counsel_note",
+      ...overrides,
+    };
+  }
+
+  it("runs only the language-neutral structural checks plus the PT jurisdiction check", () => {
+    const text = "Este e um texto de exemplo em Ontario, sem problemas de formatacao. ".repeat(3);
+    const results = runPtValidators(text, makeConfig());
+    const keys = results.map((r) => r.key);
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        "em_dash",
+        "italics_markup",
+        "orphan_words",
+        "word_count",
+        "rule_of_three",
+        "pt_jurisdiction_disclosure",
+      ])
+    );
+    // Explicitly NOT the English-pattern checks.
+    expect(keys).not.toContain("banned_vocabulary");
+    expect(keys).not.toContain("lso_compliance");
+    expect(keys).not.toContain("opening_discipline");
+  });
+
+  it("respects formatting_rules gating, same as the EN battery", () => {
+    const results = runPtValidators("Texto em Ontario.", makeConfig({
+      formatting_rules: {
+        no_em_dashes: false,
+        no_italics: false,
+        no_orphan_words: false,
+        no_rule_of_three: false,
+      },
+      format_spec: {},
+    }));
+    const keys = results.map((r) => r.key);
+    expect(keys).not.toContain("em_dash");
+    expect(keys).not.toContain("italics_markup");
+    expect(keys).not.toContain("orphan_words");
+    expect(keys).not.toContain("word_count");
+    expect(keys).not.toContain("rule_of_three");
+    expect(keys).toContain("pt_jurisdiction_disclosure");
+  });
+
+  it("still catches a banned punctuation mark in Portuguese text (language-neutral check)", () => {
+    const bannedChar = String.fromCharCode(8212); // em dash, built at runtime to keep the literal out of source
+    const results = runPtValidators(
+      `Este texto tem um travessao ${bannedChar} que nao deveria estar aqui, em Ontario.`,
+      makeConfig()
+    );
+    const emDash = results.find((r) => r.key === "em_dash");
+    expect(emDash?.status).toBe("fail");
   });
 });

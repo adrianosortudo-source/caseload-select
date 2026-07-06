@@ -3,6 +3,7 @@ import { supabaseAdmin } from "./supabase-admin";
 import {
   runDeterministicValidators,
   runCanonicalServicePageValidators,
+  runPtValidators,
   validateLastUpdatedDateVisible,
   significantWords,
   type ValidatorConfig,
@@ -10,7 +11,7 @@ import {
   type Finding,
   type CanonicalServicePageValidationContext,
 } from "./content-validators";
-import type { ServicePageBlock } from "./content-studio-structured";
+import { flattenServicePageToPlainText, type ServicePageBlock } from "./content-studio-structured";
 import type { DelegationGrant } from "./deliverables-pure";
 
 export interface StrategyRow {
@@ -393,6 +394,7 @@ export async function runAndRecordValidation(input: {
   pieceId: string;
   firmId: string;
   format: string;
+  language?: "en" | "pt";
   version: {
     id: string;
     body_markdown: string | null;
@@ -402,7 +404,56 @@ export async function runAndRecordValidation(input: {
   sourceBrief: Record<string, unknown> | undefined;
   strategy: StrategyRow;
 }): Promise<{ ok: true; outcome: ValidationOutcome } | { ok: false; error: string; code?: string }> {
+  const language = input.language ?? "en";
   let results: ValidatorResult[];
+
+  // Ses.17 WP-4: Portuguese content runs a reduced, language-neutral battery
+  // instead of the English-pattern batteries below (banned vocabulary, LSO
+  // phrase regexes, opening-discipline phrases all match specific English
+  // phrasing and would be noise, not assurance, against Portuguese text).
+  if (language === "pt") {
+    let text: string | null | undefined;
+    if (input.format === "canonical_service_page") {
+      const blocks = input.version.body_structured as ServicePageBlock[] | null | undefined;
+      text = blocks && Array.isArray(blocks) && blocks.length > 0
+        ? flattenServicePageToPlainText(blocks)
+        : null;
+    } else {
+      text = input.version.body_markdown;
+    }
+    if (!text || text.trim().length === 0) {
+      return { ok: false, error: "Version body is empty. Nothing to validate." };
+    }
+    const config = buildValidatorConfig(input.strategy, input.format);
+    results = runPtValidators(text, config);
+
+    const { error: recordErrPt } = await recordValidationRun({
+      piece_id: input.pieceId,
+      piece_version_id: input.version.id,
+      firm_id: input.firmId,
+      language,
+      results: results.map((r) => ({ key: r.key, status: r.status, severity: r.severity, findings: r.findings })),
+    });
+    if (recordErrPt) {
+      console.error("Failed to record validation run:", recordErrPt);
+    }
+
+    const failCountPt = results.filter((r) => r.status === "fail").length;
+    const warnCountPt = results.filter((r) => r.status === "warn").length;
+    return {
+      ok: true,
+      outcome: {
+        results,
+        summary: {
+          total: results.length,
+          pass: results.filter((r) => r.status === "pass").length,
+          fail: failCountPt,
+          warn: warnCountPt,
+          verdict: failCountPt > 0 ? "fail" : warnCountPt > 0 ? "warn" : "pass",
+        },
+      },
+    };
+  }
 
   if (input.format === "canonical_service_page") {
     const blocks = input.version.body_structured as ServicePageBlock[] | null | undefined;
@@ -465,6 +516,7 @@ export async function runAndRecordValidation(input: {
     piece_id: input.pieceId,
     piece_version_id: input.version.id,
     firm_id: input.firmId,
+    language,
     results: results.map((r) => ({ key: r.key, status: r.status, severity: r.severity, findings: r.findings })),
   });
   if (recordErr) {
@@ -492,6 +544,7 @@ export async function recordValidationRun(run: {
   piece_id: string;
   piece_version_id: string;
   firm_id: string;
+  language?: "en" | "pt";
   results: Array<{ key: string; status: string; severity: string; findings: unknown[] }>;
 }) {
   return supabaseAdmin
@@ -506,7 +559,12 @@ export async function recordValidationRun(run: {
       piece_version_id: run.piece_version_id,
       run_type: "validate_deterministic",
       status: "succeeded",
-      result: { validators: run.results },
+      // Ses.17 WP-4: a language marker distinguishes a PT reduced-battery run
+      // from the EN full-battery run in history; the EN entry-condition check
+      // in pieces/[id]/route.ts already scopes by piece_version_id (the EN
+      // and PT versions are separate rows), so this marker is for operator
+      // legibility, not for gate enforcement.
+      result: { validators: run.results, language: run.language ?? "en" },
       started_at: new Date().toISOString(),
       completed_at: new Date().toISOString(),
     })

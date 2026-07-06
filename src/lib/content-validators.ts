@@ -64,7 +64,8 @@ export type ValidatorKey =
   | "entity_present"
   | "secondary_query_coverage"
   | "service_area_presence"
-  | "no_cannibalization";
+  | "no_cannibalization"
+  | "pt_jurisdiction_disclosure";
 
 export type Severity = "fail" | "warn" | "info";
 
@@ -2055,6 +2056,65 @@ export function validateServiceAreaPresence(
     severity: findings.length > 0 ? "warn" : "info",
     findings,
   };
+}
+
+// =============================================================================
+// Portuguese authoring (Ses.17 WP-4): a reduced, language-neutral battery.
+// The English-pattern checks (banned vocabulary, LSO phrase regexes, opening-
+// discipline phrases, the SEO/AEO text checks) all match specific English
+// phrasing; running them against Portuguese text would either never match
+// (a false pass pretending to be assurance) or false-positive on Portuguese
+// words that happen to contain an English substring. Only the language-
+// neutral structural checks (em dash, italics markup, orphan words, word
+// count, rule of three) plus one new PT-specific check run here.
+// =============================================================================
+
+/**
+ * Warn-only: the Portuguese text should name Ontario/Ontário somewhere, per
+ * the strategy's "Jurisdiction disclosure on PT content" LSO constraint. A
+ * Portuguese-reading audience should not have to assume the firm practises
+ * in Ontario; the piece should say so.
+ */
+export function validatePtJurisdictionDisclosure(text: string): ValidatorResult {
+  const findings: Finding[] = [];
+  const lower = text.toLowerCase();
+  const mentionsOntario = lower.includes("ontário") || lower.includes("ontario");
+  if (!mentionsOntario) {
+    findings.push({
+      rule: "pt_jurisdiction_disclosure",
+      severity: "warn",
+      message:
+        "This Portuguese piece never names Ontario/Ontário. The strategy's jurisdiction-disclosure " +
+        "constraint expects Portuguese content to state, in Portuguese, that it concerns Ontario law.",
+    });
+  }
+  return {
+    key: "pt_jurisdiction_disclosure",
+    status: findings.length > 0 ? "warn" : "pass",
+    severity: findings.length > 0 ? "warn" : "info",
+    findings,
+  };
+}
+
+export function runPtValidators(text: string, config: ValidatorConfig): ValidatorResult[] {
+  const results: ValidatorResult[] = [];
+  if (config.formatting_rules.no_em_dashes) {
+    results.push(validateEmDash(text));
+  }
+  if (config.formatting_rules.no_italics) {
+    results.push(validateItalicsMarkup(text));
+  }
+  if (config.formatting_rules.no_orphan_words) {
+    results.push(validateOrphanWords(text));
+  }
+  if (config.format_spec.word_range) {
+    results.push(validateWordCount(text, config.format_spec.word_range));
+  }
+  if (config.formatting_rules.no_rule_of_three) {
+    results.push(validateRuleOfThree(text));
+  }
+  results.push(validatePtJurisdictionDisclosure(text));
+  return results;
 }
 
 export function runDeterministicValidators(

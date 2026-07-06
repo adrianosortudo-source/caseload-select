@@ -493,6 +493,19 @@ describe("renderServicePageExport", () => {
     expect(closeTags).toBe(4);
     expect(pageHtml).toContain("\\u003c/script>");
   });
+
+  it("renders the Portuguese LSO banner and lang attribute when language is 'pt' (Ses.17 WP-4)", () => {
+    const { pageHtml } = renderServicePageExport(blocks, seoMetadata, "pt");
+    expect(pageHtml).toContain('<html lang="pt">');
+    expect(pageHtml).toContain("Informação geral. Não constitui aconselhamento jurídico.");
+    expect(pageHtml).not.toContain("Legal information, not legal advice.");
+  });
+
+  it("defaults to the English banner and lang attribute when language is omitted", () => {
+    const { pageHtml } = renderServicePageExport(blocks, seoMetadata);
+    expect(pageHtml).toContain('<html lang="en">');
+    expect(pageHtml).toContain("Legal information, not legal advice.");
+  });
 });
 
 describe("renderMarkdownExport", () => {
@@ -505,5 +518,43 @@ describe("renderMarkdownExport", () => {
     expect(pageHtml).toContain('content="What founders miss."');
     expect(pageHtml).toContain("<h1>Shareholder agreements</h1>");
     expect(schemaJsonLd).toEqual([]);
+  });
+
+  it("emits an empty schemaJsonLd array when seo_metadata carries no schema (pre-WP-3 version)", () => {
+    const { schemaJsonLd } = renderMarkdownExport(
+      "# Body",
+      { title: "T", metaDescription: "D" },
+      { generator: "markdown_v1", primary_query: "x" }
+    );
+    expect(schemaJsonLd).toEqual([]);
+  });
+
+  it("emits the Article JSON-LD block from seo_metadata.schema as its own script tag (Ses.17 WP-3)", () => {
+    const articleSchema = {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      headline: "Commercial Lease Review",
+    };
+    const { pageHtml, schemaJsonLd } = renderMarkdownExport(
+      "# Commercial Lease Review\n\nBody text.",
+      { title: "Commercial Lease Review", metaDescription: "D" },
+      { generator: "markdown_v1", schema: { article: articleSchema } }
+    );
+    expect(schemaJsonLd).toEqual([articleSchema]);
+    expect(pageHtml).toContain('<script type="application/ld+json">');
+    expect(pageHtml).toContain('"@type":"Article"');
+    expect(pageHtml).toContain("Commercial Lease Review");
+  });
+
+  it("renders the Portuguese LSO banner and lang attribute when language is 'pt' (Ses.17 WP-4)", () => {
+    const { pageHtml } = renderMarkdownExport(
+      "# Titulo\n\nTexto do corpo.",
+      { title: "T", metaDescription: "D" },
+      undefined,
+      "pt"
+    );
+    expect(pageHtml).toContain('<html lang="pt">');
+    expect(pageHtml).toContain("Informação geral. Não constitui aconselhamento jurídico.");
+    expect(pageHtml).not.toContain("Legal information, not legal advice.");
   });
 });

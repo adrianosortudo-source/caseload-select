@@ -68,3 +68,26 @@ export function checkLegalGateExitCondition(input: {
       "This piece's linked deliverable has not been approved by the firm's lawyer, and no active publish delegation covers this format. Advance blocked until sign-off.",
   };
 }
+
+/**
+ * Sibling of checkLegalGateEntryCondition, for advancing a piece INTO
+ * authoring (or production, since forward-only gates allow skipping
+ * authoring entirely): a bilingual piece must have a current Portuguese
+ * version before it can leave legal_gate. English-only pieces are exempt.
+ * Checked alongside checkLegalGateExitCondition, not instead of it: both
+ * must pass (Ses.17 WP-4).
+ */
+export function checkBilingualAuthoringCondition(input: {
+  languageMode: string;
+  hasCurrentPtVersion: boolean;
+}): { ok: true } | { ok: false; reason: string } {
+  if (input.languageMode !== "bilingual") return { ok: true };
+  if (!input.hasCurrentPtVersion) {
+    return {
+      ok: false,
+      reason:
+        "This piece is bilingual but has no current Portuguese version. Generate the Portuguese draft before advancing past legal_gate.",
+    };
+  }
+  return { ok: true };
+}

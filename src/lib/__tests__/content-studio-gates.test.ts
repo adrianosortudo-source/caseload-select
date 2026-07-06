@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   checkLegalGateEntryCondition,
   checkLegalGateExitCondition,
+  checkBilingualAuthoringCondition,
 } from "../content-studio-gates";
 
 describe("checkLegalGateEntryCondition", () => {
@@ -119,5 +120,33 @@ describe("checkLegalGateExitCondition", () => {
       format: "counsel_note",
     });
     expect(result.ok).toBe(false);
+  });
+});
+
+describe("checkBilingualAuthoringCondition (Ses.17 WP-4)", () => {
+  it("passes an English-only piece regardless of PT version state", () => {
+    expect(
+      checkBilingualAuthoringCondition({ languageMode: "en", hasCurrentPtVersion: false }).ok
+    ).toBe(true);
+    expect(
+      checkBilingualAuthoringCondition({ languageMode: "en", hasCurrentPtVersion: true }).ok
+    ).toBe(true);
+  });
+
+  it("blocks a bilingual piece with no current PT version", () => {
+    const result = checkBilingualAuthoringCondition({
+      languageMode: "bilingual",
+      hasCurrentPtVersion: false,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain("no current Portuguese version");
+  });
+
+  it("passes a bilingual piece once a current PT version exists", () => {
+    const result = checkBilingualAuthoringCondition({
+      languageMode: "bilingual",
+      hasCurrentPtVersion: true,
+    });
+    expect(result.ok).toBe(true);
   });
 });
