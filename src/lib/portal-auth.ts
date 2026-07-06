@@ -25,6 +25,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getPreviewIntent, type PreviewIntent } from "./preview-mode";
 
 const COOKIE_NAME = "portal_session";
 const LINK_TTL_HOURS = 48;
@@ -218,6 +219,15 @@ export interface PortalViewer {
   isOperator: boolean;
   /** True when a firm-scoped lawyer/admin/staff session is the viewer. */
   isLawyer: boolean;
+  /**
+   * True when an operator is viewing this firm's portal in a faithful preview
+   * (DR-084): the lawyer interface renders with no operator chrome and controls
+   * present-but-inert. Distinct from the default operator view, which keeps the
+   * "Operator view" banner and disabled controls.
+   */
+  isPreview: boolean;
+  /** The preview intent when isPreview is true; carries the operator identity. */
+  previewIntent?: PreviewIntent;
 }
 
 /**
@@ -246,11 +256,63 @@ export async function requirePortalViewer(firmId: string): Promise<PortalViewer>
   if (!session) redirect("/portal/login");
   if (session.role === "client") redirect("/portal/login");
   if (session.role === "operator") {
-    return { session, isOperator: true, isLawyer: false };
+    // DR-084: an operator with a live preview cookie for THIS firm (target
+    // 'lawyer') gets the faithful mirror. Any other operator visit keeps the
+    // default read-only banner view from DR-076.
+    const preview = await getPreviewIntent();
+    if (preview && preview.target === "lawyer" && preview.firm_id === firmId) {
+      return { session, isOperator: true, isLawyer: false, isPreview: true, previewIntent: preview };
+    }
+    return { session, isOperator: true, isLawyer: false, isPreview: false };
   }
   // lawyer / admin / staff: must match the firm in the route.
   if (session.firm_id !== firmId) redirect("/portal/login");
-  return { session, isOperator: false, isLawyer: true };
+  return { session, isOperator: false, isLawyer: true, isPreview: false };
+}
+
+export interface ClientMatterView {
+  /** The client session, or the operator session when previewing (DR-084). */
+  session: PortalSession;
+  /** True when an operator is previewing this matter as the client. */
+  isPreview: boolean;
+  previewIntent?: PreviewIntent;
+}
+
+/**
+ * Read guard for the client matter surfaces at `/portal/[firmId]/m/[matterId]`.
+ * Admits the real client (matter-scoped client token) OR an operator with a live
+ * preview cookie targeting this exact matter (DR-084). Returns null otherwise.
+ *
+ * This is a READ guard only. The client WRITE routes keep using
+ * getClientMatterSession, which requires a client token, so an operator in
+ * preview can render the client view but cannot post as the client: the operator
+ * holds no client token and getClientMatterSession returns null for them.
+ */
+export async function resolveClientMatterView(
+  firmId: string,
+  matterId: string,
+): Promise<ClientMatterView | null> {
+  const session = await getPortalSession();
+  if (!session) return null;
+  if (
+    session.role === "client" &&
+    session.firm_id === firmId &&
+    session.matter_id === matterId
+  ) {
+    return { session, isPreview: false };
+  }
+  if (session.role === "operator") {
+    const preview = await getPreviewIntent();
+    if (
+      preview &&
+      preview.target === "client" &&
+      preview.firm_id === firmId &&
+      preview.matter_id === matterId
+    ) {
+      return { session, isPreview: true, previewIntent: preview };
+    }
+  }
+  return null;
 }
 
 /**

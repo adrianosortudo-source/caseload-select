@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import {
   getDeliverableDetail,
   archiveDeliverable,
@@ -36,6 +37,8 @@ export async function PATCH(
   const { firmId, deliverableId } = await params;
   const resolved = await resolveDeliverableActor(firmId);
   if (!resolved) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
 
   let body: { action?: unknown };
   try {
