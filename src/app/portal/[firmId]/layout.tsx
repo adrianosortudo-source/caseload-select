@@ -8,9 +8,11 @@
 
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
+import { getPreviewIntent } from "@/lib/preview-mode";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { getFirmUnreadCount } from "@/lib/operator-firm-messaging";
 import PortalTabNav from "@/components/portal/PortalTabNav";
+import PreviewStrip from "@/components/portal/PreviewStrip";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 
 interface Branding {
@@ -42,6 +44,15 @@ export default async function PortalLayout({
   if (!session || (!isOperator && session.firm_id !== firmId)) {
     redirect("/portal/login");
   }
+
+  // DR-084: an operator with a live preview cookie for this firm renders the
+  // target's interface with no operator chrome (no console rail, no banner),
+  // plus the PreviewStrip. Lawyer preview keeps the lawyer tab nav; client
+  // preview hides it, matching what a real client sees under this layout.
+  const preview = isOperator ? await getPreviewIntent() : null;
+  const isLawyerPreview = !!preview && preview.target === "lawyer" && preview.firm_id === firmId;
+  const isClientPreview = !!preview && preview.target === "client" && preview.firm_id === firmId;
+  const inPreview = isLawyerPreview || isClientPreview;
 
   const { data: firm } = await supabase
     .from("intake_firms")
@@ -99,12 +110,19 @@ export default async function PortalLayout({
         </form>
       </header>
 
-      {isOperator && <OperatorViewingBanner firmName={firmName} />}
+      {isOperator && !inPreview && <OperatorViewingBanner firmName={firmName} firmId={firmId} />}
+      {inPreview && (
+        <PreviewStrip
+          firmId={firmId}
+          label={isClientPreview ? "the client" : `${firmName} (lawyer view)`}
+        />
+      )}
 
       {/* Lawyer/operator tab nav. Hidden for client sessions: a client only
           reaches /m/[matterId] under this layout, and the tabs point at
-          lawyer surfaces that reject client sessions anyway. */}
-      {!isClient && <PortalTabNav firmId={firmId} caseloadUnread={caseloadUnread} />}
+          lawyer surfaces that reject client sessions anyway. Client preview
+          hides it too, matching a real client's chrome. */}
+      {!isClient && !isClientPreview && <PortalTabNav firmId={firmId} caseloadUnread={caseloadUnread} />}
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8">{children}</main>
       <footer className="text-center text-xs text-black/30 py-6 shrink-0 flex items-center justify-center gap-4">
@@ -121,7 +139,7 @@ export default async function PortalLayout({
   // the left at all times, exactly as in /admin. This is strictly operator
   // chrome: it renders only for role='operator', so firm lawyers and clients
   // never see it (their session takes the plain single-column branch below).
-  if (isOperator) {
+  if (isOperator && !inPreview) {
     return (
       <div className="flex min-h-screen bg-parchment">
         <AdminSidebar />
@@ -138,19 +156,27 @@ export default async function PortalLayout({
  * operator (cross-firm session). Anchors the operator back to /admin so
  * they don't get lost in firm chrome.
  */
-function OperatorViewingBanner({ firmName }: { firmName: string }) {
+function OperatorViewingBanner({ firmName, firmId }: { firmName: string; firmId: string }) {
   return (
     <div className="bg-gold/15 border-b border-gold/30 px-4 sm:px-6 py-2 text-xs text-navy flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3">
       <span>
         <span className="uppercase tracking-wider font-bold mr-2">Operator view</span>
         Viewing {firmName} as the operator console.
       </span>
-      <a
-        href="/admin/triage"
-        className="uppercase tracking-wider font-semibold text-navy/80 hover:text-navy underline underline-offset-2 whitespace-nowrap"
-      >
-        Back to operator console
-      </a>
+      <span className="flex items-center gap-4 whitespace-nowrap">
+        <a
+          href={`/api/portal/${firmId}/preview/enter?target=lawyer`}
+          className="uppercase tracking-wider font-semibold text-navy/80 hover:text-navy underline underline-offset-2"
+        >
+          View as the firm
+        </a>
+        <a
+          href="/admin/triage"
+          className="uppercase tracking-wider font-semibold text-navy/80 hover:text-navy underline underline-offset-2"
+        >
+          Back to operator console
+        </a>
+      </span>
     </div>
   );
 }

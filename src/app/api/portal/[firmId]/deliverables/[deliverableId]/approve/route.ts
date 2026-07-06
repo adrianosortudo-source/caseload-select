@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { getDeliverableDetail, recordApproval } from "@/lib/deliverables";
 import {
   canSignOff,
@@ -30,6 +31,8 @@ export async function POST(
   const { firmId, deliverableId } = await params;
   const resolved = await resolveDeliverableActor(firmId);
   if (!resolved) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
 
   if (!canSignOff(resolved.actor.role)) {
     return NextResponse.json(
