@@ -75,6 +75,7 @@ const SYSTEM_LINKS = [
   { label: "Screen metrics", href: "/admin/screen-metrics" },
   { label: "Webhook outbox", href: "/admin/webhook-outbox" },
   { label: "Cadence shadow", href: "/admin/cadence-shadow" },
+  { label: "Cadence rules", href: "/admin/cadence-rules" },
   { label: "Onboarding desk", href: "/admin/onboarding-submissions" },
   { label: "Health", href: "/admin/health" },
 ];
