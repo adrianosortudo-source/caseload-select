@@ -41,6 +41,19 @@ const NAV_LINKS = [
   },
 ];
 
+// Layer A engagement surfaces for the selected firm: these open the firm's
+// PORTAL (the GHL sub-account equivalent: its leads, conversations, matters,
+// boards), not an /admin config page. Operator sessions can view any firm's
+// portal, so these are plain cross-surface links. Added 2026-07-05 after the
+// operator had to route through Portal access to reach the firm's triage
+// queue; the day-to-day engagement surface should be one click from here.
+const FIRM_PORTAL_LINKS = [
+  { label: "Triage queue", href: (id: string) => `/portal/${id}/triage` },
+  { label: "Inbox", href: (id: string) => `/portal/${id}/inbox` },
+  { label: "Clients", href: (id: string) => `/portal/${id}/clients` },
+  { label: "Boards", href: (id: string) => `/portal/${id}/boards` },
+];
+
 // Client-acquisition tools (selling CaseLoad Select, prospecting law firms).
 // Not firm-scoped, so they sit in their own group rather than under a firm.
 const SELL_LINKS = [
@@ -222,6 +235,23 @@ export default function FirmSwitcher({ firms }: { firms: Firm[] }) {
           );
         })}
       </nav>
+
+      {/* Firm portal (Layer A engagement surfaces, opens the firm's portal) */}
+      {currentFirmId && (
+        <div className="px-3 pb-4">
+          <div className="label px-2 mb-1.5 text-white/30">Firm portal</div>
+          <nav className="space-y-0.5">
+            {FIRM_PORTAL_LINKS.map((item) => {
+              const href = item.href(currentFirmId);
+              return (
+                <Link key={href} href={href} className={`${NAV_LINK_CLASS} ${NAV_IDLE}`}>
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      )}
 
       {/* Sell and prospect nav */}
       <div className="mt-2 px-3 border-t border-white/5 pt-4">
