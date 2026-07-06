@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
   let lawyerId: string | undefined;
   let role: "lawyer" | "operator" = "lawyer";
 
-  const { data: lawyerRows } = await supabase
+  const { data: lawyerRows, error: lawyerLookupError } = await supabase
     .from("firm_lawyers")
     .select(
       "id, firm_id, email, role, intake_firms!firm_lawyers_firm_id_fkey!inner(id, name, branding)",
@@ -102,6 +102,15 @@ export async function POST(req: NextRequest) {
     .limit(1)
     .returns<FirmLawyerRow[]>();
 
+  if (lawyerLookupError) {
+    // Internal-only visibility. Never log the raw email (anti-enumeration /
+    // privacy); the external response stays { ok: true } regardless.
+    // eslint-disable-next-line no-console
+    console.error(
+      `[request-link] firm_lawyers lookup failed: ${lawyerLookupError.message}`,
+    );
+  }
+
   if (lawyerRows && lawyerRows.length > 0) {
     const row = lawyerRows[0];
     firmId = row.firm_id;
@@ -110,10 +119,17 @@ export async function POST(req: NextRequest) {
     role = row.role;
   } else {
     // Legacy fallback: branding.lawyer_email
-    const { data: firms } = await supabase
+    const { data: firms, error: legacyLookupError } = await supabase
       .from("intake_firms")
       .select("id, name, branding")
       .filter("branding->>lawyer_email", "eq", email);
+    if (legacyLookupError) {
+      // Same no-raw-email rule as above.
+      // eslint-disable-next-line no-console
+      console.error(
+        `[request-link] legacy firm lookup failed: ${legacyLookupError.message}`,
+      );
+    }
     if (firms && firms.length > 0) {
       firmRow = firms[0] as FirmRow;
       firmId = firmRow.id;
@@ -139,9 +155,14 @@ export async function POST(req: NextRequest) {
 
   try {
     await sendEmail(email, subject, html);
-  } catch {
+  } catch (err) {
     // Don't surface email failures to the caller. Operator can re-send via
-    // /api/portal/generate if needed.
+    // /api/portal/generate if needed. Still log internally so a broken
+    // send isn't invisible.
+    // eslint-disable-next-line no-console
+    console.error(
+      `[request-link] email send failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   return NextResponse.json({ ok: true });
