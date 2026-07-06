@@ -127,11 +127,18 @@ export async function PUT(
         { status: 400 }
       );
     }
+    // Ses.17 WP-3 integration fix: carry the prior version's seo_metadata
+    // (Article JSON-LD + last-updated marker, added by the draft route)
+    // forward unchanged, same as the canonical_service_page branch above.
+    // Before this, an operator edit silently dropped that metadata because
+    // this branch predates WP-3's Markdown seo_metadata assembly.
+    const priorSeo = (priorVersion.seo_metadata as Record<string, unknown> | null) ?? undefined;
     const { data: version, error: versionErr } = await createPieceVersion({
       piece_id: id,
       version_number: versionNumber,
       language,
       body_markdown: validated.body,
+      seo_metadata: priorSeo,
       text_hash: hashString(validated.body),
       created_by: "operator",
     });
