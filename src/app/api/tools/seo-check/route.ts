@@ -1436,14 +1436,17 @@ export async function POST(req: NextRequest) {
     }
     if (!resolved) {
       if (homeErrorResponse) return homeErrorResponse;
-      if (lastHttpStatus === 401 || lastHttpStatus === 403) {
-        return NextResponse.json({ error: `${domain} is live but access-restricted (HTTP ${lastHttpStatus}), usually a site-wide password or a firewall block. Remove the site lock, then re-run the check.` }, { status: 422 });
+      if (lastHttpStatus === 401) {
+        return NextResponse.json({ error: `${domain} is live but access-restricted (HTTP 401), usually a site-wide password on an unpublished or trial site. Remove the site lock, then re-run the check.` }, { status: 422 });
+      }
+      if (lastHttpStatus === 403) {
+        return NextResponse.json({ error: `${domain} is live but blocked the scanner (HTTP 403), usually a firewall or bot protection. Confirm the site loads for you; it may need the scanner allow-listed.` }, { status: 422 });
       }
       if (lastHttpStatus === 451) {
         return NextResponse.json({ error: `${domain} returned HTTP 451 (unavailable for legal reasons) and cannot be scanned.` }, { status: 422 });
       }
       if (lastHttpStatus >= 500) {
-        return NextResponse.json({ error: `${domain} is up but returning server errors (HTTP ${lastHttpStatus}). Try again once the site is serving pages.` }, { status: 422 });
+        return NextResponse.json({ error: `${domain} is up but returned HTTP ${lastHttpStatus} to the scanner. The host may be temporarily unavailable or blocking automated access (common on Squarespace, Wix, and Cloudflare). Confirm the site loads for you, then try again later.` }, { status: 422 });
       }
       if (lastHttpStatus > 0) {
         return NextResponse.json({ error: `${domain} responded with HTTP ${lastHttpStatus}, so no page could be scanned.` }, { status: 422 });
