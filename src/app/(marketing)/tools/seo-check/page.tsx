@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import ToolNav from "./_components/ToolNav";
-import SeoCheckTool from "./_components/SeoCheckTool";
+// The SEO tool components moved out of this frozen marketing tree to
+// src/components/seo-check/ so operator-tool work is no longer blocked by the
+// website-rebuild freeze. This page (proxied, not rebuilt, per the rebuild
+// plan) and /admin/seo-check both consume them from that single home.
+import SeoCheckTool from "@/components/seo-check/SeoCheckTool";
 
 export const metadata: Metadata = {
   title: "Free SEO & AI Visibility Check · CaseLoad Select",

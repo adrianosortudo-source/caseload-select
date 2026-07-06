@@ -395,6 +395,36 @@ export default function SeoReport({
     copyText(text, () => { setCopied(key); setTimeout(() => setCopied((c) => (c === key ? null : c)), 1600); });
   }
 
+  // Operator PDF export goes through the server so the file has a real text
+  // layer (selectable / searchable / greppable). A browser window.print() to a
+  // print-to-PDF driver rasterizes on some machines, which is what the operator
+  // kept hitting. Public (lead-magnet) users have no operator session, so they
+  // keep window.print(); the operator endpoint is gated and never called by them.
+  const [pdfState, setPdfState] = useState<"idle" | "working" | "error">("idle");
+  async function handleServerPdf() {
+    setPdfState("working");
+    try {
+      const res = await fetch("/api/admin/seo-check/report-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ result }),
+      });
+      if (!res.ok) { setPdfState("error"); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `seo-audit-${result.domain}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setPdfState("idle");
+    } catch {
+      setPdfState("error");
+    }
+  }
+
   // Panes are always rendered; the active one shows on screen, and print
   // reveals all of them so the exported PDF is the complete report.
   const paneClass = (name: typeof tab) => `seo-pane ${tab === name ? "seo-pane-active" : ""}`;
@@ -429,7 +459,13 @@ export default function SeoReport({
               <button className="seo-mini-btn" onClick={() => doCopy("fixes", fixesText)} type="button">
                 {copied === "fixes" ? "Copied" : "Copy top fixes"}
               </button>
-              <button className="seo-mini-btn" onClick={() => window.print()} type="button">Print / PDF</button>
+              {showInternal ? (
+                <button className="seo-mini-btn" onClick={handleServerPdf} type="button" disabled={pdfState === "working"}>
+                  {pdfState === "working" ? "Building PDF..." : pdfState === "error" ? "Retry PDF" : "Download PDF"}
+                </button>
+              ) : (
+                <button className="seo-mini-btn" onClick={() => window.print()} type="button">Print / PDF</button>
+              )}
             </div>
           </div>
         </div>

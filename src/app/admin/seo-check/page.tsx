@@ -15,7 +15,7 @@
  */
 
 import "@/app/(marketing)/styles/tokens.css";
-import SeoCheckTool from "@/app/(marketing)/tools/seo-check/_components/SeoCheckTool";
+import SeoCheckTool from "@/components/seo-check/SeoCheckTool";
 import PageHeader from "@/components/PageHeader";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 

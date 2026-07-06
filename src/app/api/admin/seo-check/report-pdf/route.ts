@@ -1,15 +1,15 @@
 /**
- * GET /api/admin/seo-check/report-pdf?id=<uuid>
+ * Operator-only, text-based audit PDF rendered server-side with
+ * @react-pdf/renderer. Real text layer (selectable, searchable, greppable),
+ * unlike a browser window.print() to "Microsoft Print to PDF".
  *
- * Operator-only. Loads a saved scan from seo_check_runs and streams it as a
- * text-based PDF rendered server-side with @react-pdf/renderer. This replaces
- * the browser window.print() path for audits: the output has a real text layer
- * (selectable, searchable, greppable) and is byte-deterministic for the same
- * saved result, so an exported audit can be QA'd and diffed.
+ *   GET  ?id=<uuid>  loads a saved scan from seo_check_runs (Saved audits list).
+ *   POST { result }  renders the exact report the operator is viewing right now
+ *                    (the report's own "Download PDF" button), no round-trip
+ *                    through the database.
  *
- * Reads a persisted operator scan, whose result carries the internal
- * prospecting summary, so the PDF includes it. The route is operator-gated, so
- * that internal content never reaches a non-operator.
+ * Both are operator-gated, so the internal prospecting summary a result may
+ * carry never reaches a non-operator.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -26,6 +26,24 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 function safeFilename(domain: string): string {
   const base = domain.replace(/[^a-z0-9.-]/gi, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "audit";
   return `seo-audit-${base}`;
+}
+
+async function renderPdfResponse(result: AuditPdfResult): Promise<NextResponse> {
+  let buffer: Buffer;
+  try {
+    buffer = await renderToBuffer(AuditReportPdf({ result }));
+  } catch {
+    return NextResponse.json({ error: "Could not render the audit PDF." }, { status: 500 });
+  }
+  const filename = `${safeFilename(result.domain || "audit")}.pdf`;
+  return new NextResponse(new Uint8Array(buffer), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": "private, no-store",
+    },
+  });
 }
 
 export async function GET(req: NextRequest) {
@@ -52,20 +70,30 @@ export async function GET(req: NextRequest) {
   if (!result.checkedAt && typeof data.created_at === "string") result.checkedAt = data.created_at;
   if (!result.domain && typeof data.domain === "string") result.domain = data.domain;
 
-  let buffer: Buffer;
+  return renderPdfResponse(result);
+}
+
+export async function POST(req: NextRequest) {
+  const session = await getOperatorSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  let body: unknown;
   try {
-    buffer = await renderToBuffer(AuditReportPdf({ result }));
+    body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Could not render the audit PDF." }, { status: 500 });
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const filename = `${safeFilename(result.domain || String(data.domain || "audit"))}.pdf`;
-  return new NextResponse(new Uint8Array(buffer), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Cache-Control": "private, no-store",
-    },
-  });
+  const result = (body && typeof body === "object" && !Array.isArray(body)
+    ? (body as { result?: unknown }).result
+    : undefined);
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    return NextResponse.json({ error: "result is required." }, { status: 400 });
+  }
+  const typed = result as AuditPdfResult;
+  if (!typed.domain || typeof typed.domain !== "string") {
+    return NextResponse.json({ error: "result.domain is required." }, { status: 400 });
+  }
+
+  return renderPdfResponse(typed);
 }
