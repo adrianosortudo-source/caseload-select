@@ -448,6 +448,10 @@ Same HMAC magic-link pattern as the legacy Client Portal (`portal-auth.ts`). 48h
 
 `firm_lawyers` table holds the canonical mapping of email → firm + role. The role column extends to `admin | staff | operator | lawyer` (legacy alias). New rows should use `admin` or `staff`. Multi-lawyer per firm supported. Legacy `intake_firms.branding.lawyer_email` remains as a fallback. Inserting a row into `firm_lawyers` automatically fires a magic-link invitation email via the `trg_firm_lawyers_invite` pg_net trigger.
 
+### Operator preview (DR-084)
+
+An operator can step into either the firm's lawyer portal or an end-client's matter portal and see it as that user sees it, read-only. A signed `portal_preview` cookie (`preview-mode.ts`, set by `/api/portal/[firmId]/preview/enter?target=lawyer|client[&matterId=]`, cleared by `/preview/exit`) carries the intent. `[firmId]/layout.tsx` drops the operator rail + banner and mounts `PreviewStrip` in preview; lawyer preview keeps the tab nav, client preview hides it. `requirePortalViewer` (lawyer surfaces) and `resolveClientMatterView` (client `/m/[matterId]` surfaces) admit the operator-in-preview for READS; every write stays blocked server-side (`denyWriteIfPreview` on the operator-accepting deliverables mutation routes; all other portal writes already reject operators or require a client token). Each open is audited to `operator_preview_log`. Controls render present-but-inert; the client preview is gated by the operator session alone. Entry links: "View as the firm" on the operator banner, "View as client" on the lawyer matter detail page. Full contract in DR-084.
+
 ### GHL webhook contract
 
 Versioned artifact at `docs/ghl-webhook-contract.md`, now at v3. Six actions (`taken`, `passed`, `referred`, `declined_oos`, `declined_backstop`, `matter_stage_changed`), one common envelope, action-specific extension keyed by action name. Idempotency: `<lead_id>:<action>` (matter-stage events key on `<matter_id>:stage:<to_stage>`). Delivery: at-least-once via the outbox.

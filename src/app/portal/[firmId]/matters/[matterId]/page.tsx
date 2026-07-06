@@ -62,7 +62,7 @@ export default async function LawyerMatterDetailPage({ params }: PageProps) {
   const { firmId, matterId } = await params;
   // Operator-view contract (DR-076): admits operator read-only and fixes the
   // prior redirect to the non-existent /portal/[firmId]/login (a hard 404).
-  await requirePortalViewer(firmId);
+  const viewer = await requirePortalViewer(firmId);
 
   const matter = await getMatterById(matterId);
   if (!matter || matter.firm_id !== firmId) {
@@ -119,6 +119,24 @@ export default async function LawyerMatterDetailPage({ params }: PageProps) {
           {matter.primary_email ? <span>📧 {matter.primary_email}</span> : null}
           {matter.primary_phone ? <span style={{ marginLeft: 16 }}>📞 {matter.primary_phone}</span> : null}
         </p>
+        {viewer.isOperator && (
+          <p style={{ marginTop: 10 }}>
+            {/* DR-084: operator enters the client matter preview for this matter. */}
+            <a
+              href={`/api/portal/${firmId}/preview/enter?target=client&matterId=${matterId}`}
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                color: "#1E2F58",
+                textDecoration: "underline",
+              }}
+            >
+              View as client
+            </a>
+          </p>
+        )}
       </header>
 
       <StageTimeline matter={matter} events={stageEvents} firmId={firmId} matterId={matterId} next={next} />
