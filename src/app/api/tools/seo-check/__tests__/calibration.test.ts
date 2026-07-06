@@ -125,3 +125,64 @@ describe("calibration: gosailaw.com (real noindex + policy-only robots block)", 
     expect(titlesOf(issues)).not.toContain("Policy / disclaimer pages");
   });
 });
+
+describe("calibration: marathonlaw.ca (Squarespace, sitemap-only pages, short server-rendered contact)", () => {
+  const MARATHON = load("marathonlaw");
+
+  it("crawled 9 pages including the two sitemap-only pages nav links do not reach", () => {
+    // The sitemap-discovery fix: /podcast-episodes and the land-transfer-tax
+    // page are listed in sitemap.xml but not linked in the site nav. Before
+    // the fix the frontier was fed scheme-less keys and dropped them all.
+    expect(MARATHON.pagesScanned).toBe(9);
+    const urls = MARATHON.pages.map((p) => p.url);
+    expect(urls).toContain("https://www.marathonlaw.ca/podcast-episodes");
+    expect(urls).toContain("https://www.marathonlaw.ca/https/wwwratehubca/land-transfer-tax");
+  });
+
+  it("keeps the present-but-short HSTS max-age finding low, not high", () => {
+    // Squarespace sends Strict-Transport-Security max-age=15552000 on every
+    // response; the owner cannot change it. Verified live: header present 4/4.
+    const issues = buildIssues(MARATHON.pages);
+    const hsts = issues.find((i) => i.title === "HSTS header");
+    expect(hsts).toBeTruthy();
+    expect(["low", "info"]).toContain(hsts?.severity);
+  });
+
+  it("does not fire the GBP-link finding: footer carries google.com/maps/dir office links", () => {
+    const issues = buildIssues(MARATHON.pages);
+    expect(titlesOf(issues)).not.toContain("Google Business Profile link");
+  });
+
+  it("does not rate the short server-rendered contact page as high rendering risk", () => {
+    // /contact is ~110 words of fully server-rendered NAP (verified live:
+    // addresses, tel:, mailto:, hours all in raw HTML; zero app-shell markers).
+    const contact = MARATHON.pages.find((p) => p.url.endsWith("/contact"));
+    expect(contact?.rendering?.risk).not.toBe("high");
+  });
+
+  it("decodes HTML entities in extracted titles", () => {
+    const contact = MARATHON.pages.find((p) => p.url.endsWith("/contact"));
+    expect(contact?.title ?? "").not.toContain("&mdash;");
+    expect(contact?.title ?? "").toContain(String.fromCharCode(0x2014));
+  });
+
+  it("does not credit trust signals from script config or verb matches", () => {
+    // Verified live: the homepage's visible text carries zero testimonials,
+    // reviews, awards, or credentials. The old raw-HTML scan credited reviews
+    // from a "rating" key inside Squarespace config JSON.
+    const home = MARATHON.pages[0];
+    expect(home.lawFirm.trust).toEqual({
+      testimonials: false, reviews: false, caseResults: false, awards: false, credentials: false,
+    });
+  });
+
+  it("correctly keeps the real findings: no LegalService schema, CSP missing, thin trust", () => {
+    // Adversarially verified live: the only JSON-LD on the site is a bare
+    // WebSite block, no CSP header is sent, and no trust content exists.
+    const issues = buildIssues(MARATHON.pages);
+    const titles = titlesOf(issues);
+    expect(titles).toContain("Business / LegalService schema");
+    expect(titles).toContain("Content-Security-Policy");
+    expect(titles).toContain("Trust signals");
+  });
+});
