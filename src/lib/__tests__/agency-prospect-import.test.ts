@@ -2,35 +2,48 @@
  * Agency CRM bulk prospect import tests.
  *
  * Covers sanitizeRow (firm_name gate, source default, fit_score clamp),
- * prospectKey, and importProspects (dedupe vs existing rows and within the
- * batch, invalid count, chunked insert). supabaseAdmin is mocked: the first
- * from().select() returns the existing keys; insert().select() echoes ids.
+ * prospectKey, and importProspects (in-batch dedupe, invalid count, chunked
+ * upsert, cross-run dedupe via the DB constraint). supabaseAdmin is mocked:
+ * upsert(rows).select('id') simulates onConflict+ignoreDuplicates by
+ * returning only rows whose key is not already in existingKeys, then adding
+ * those keys so a later chunk within the same call also sees them as taken
+ * (mirrors what the real uq_agency_prospects_dedupe_key constraint would do
+ * to a second colliding chunk in the same import). There is no unpaginated
+ * pre-read to mock anymore: dedupe_key is enforced entirely at the DB layer
+ * plus this in-batch JS pass (Codex audit 2026-07-06, finding 4).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-type Existing = { firm_name: string; city: string | null };
+function dedupeKeyOf(row: Record<string, unknown>): string {
+  return `${String(row.firm_name).trim().toLowerCase()}|${String(row.city ?? "").trim().toLowerCase()}`;
+}
 
 const h = vi.hoisted(() => {
-  const state: { existing: Existing[]; inserted: Record<string, unknown>[]; failInsert: boolean } = {
-    existing: [],
-    inserted: [],
+  const state: { existingKeys: Set<string>; upserted: Record<string, unknown>[]; failInsert: boolean } = {
+    existingKeys: new Set<string>(),
+    upserted: [],
     failInsert: false,
   };
   function makeQuery() {
-    let insertedRows: Record<string, unknown>[] | null = null;
+    let upsertedRows: Record<string, unknown>[] | null = null;
     const q: Record<string, unknown> = {};
     Object.assign(q, {
+      upsert: (rows: Record<string, unknown>[]) => { upsertedRows = rows; return q; },
       select: () => q,
-      insert: (rows: Record<string, unknown>[]) => { insertedRows = rows; return q; },
       then: (onF: (v: unknown) => unknown, onR?: (e: unknown) => unknown) => {
-        if (insertedRows) {
-          state.inserted.push(...insertedRows);
-          const res = state.failInsert
-            ? { data: null, error: { message: "insert boom" } }
-            : { data: insertedRows.map((_, i) => ({ id: `id-${i}` })), error: null };
-          return Promise.resolve(res).then(onF, onR);
+        if (!upsertedRows) return Promise.resolve({ data: [], error: null }).then(onF, onR);
+        state.upserted.push(...upsertedRows);
+        if (state.failInsert) {
+          return Promise.resolve({ data: null, error: { message: "insert boom" } }).then(onF, onR);
         }
-        return Promise.resolve({ data: state.existing, error: null }).then(onF, onR);
+        const returned: { id: string }[] = [];
+        for (const row of upsertedRows) {
+          const key = dedupeKeyOf(row as Record<string, unknown>);
+          if (state.existingKeys.has(key)) continue;
+          state.existingKeys.add(key);
+          returned.push({ id: `id-${returned.length}` });
+        }
+        return Promise.resolve({ data: returned, error: null }).then(onF, onR);
       },
     });
     return q;
@@ -44,8 +57,8 @@ vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: h.supabaseAdmin }));
 import { sanitizeRow, prospectKey, importProspects } from "@/lib/agency-prospect-import";
 
 beforeEach(() => {
-  h.state.existing = [];
-  h.state.inserted = [];
+  h.state.existingKeys = new Set<string>();
+  h.state.upserted = [];
   h.state.failInsert = false;
 });
 
@@ -88,20 +101,28 @@ describe("importProspects", () => {
       { firm_name: "Beta Law", city: "Markham" },
     ]);
     expect(res).toMatchObject({ ok: true, received: 2, inserted: 2, skipped: 0, invalid: 0 });
-    expect(h.state.inserted).toHaveLength(2);
-    expect(h.state.inserted[0].source).toBe("import");
-    expect(h.state.inserted[0].stage).toBe("new");
+    expect(h.state.upserted).toHaveLength(2);
+    expect(h.state.upserted[0].source).toBe("import");
+    expect(h.state.upserted[0].stage).toBe("new");
   });
 
-  it("skips rows that duplicate an existing prospect", async () => {
-    h.state.existing = [{ firm_name: "Acme Law", city: "Toronto" }];
+  it("skips a row that collides with an existing prospect via the DB constraint", async () => {
+    // Simulates a row already present in agency_prospects (as its dedupe_key
+    // would compute): the mock's upsert returns nothing for this row, exactly
+    // like ignoreDuplicates would against uq_agency_prospects_dedupe_key.
+    const acmeKey = dedupeKeyOf({ firm_name: "Acme Law", city: "Toronto" });
+    const betaKey = dedupeKeyOf({ firm_name: "Beta Law", city: "Markham" });
+    h.state.existingKeys = new Set([acmeKey]);
     const res = await importProspects([
       { firm_name: "acme law", city: " toronto " }, // dupe (case/space-insensitive)
       { firm_name: "Beta Law", city: "Markham" },
     ]);
     expect(res).toMatchObject({ inserted: 1, skipped: 1, invalid: 0 });
-    expect(h.state.inserted).toHaveLength(1);
-    expect(h.state.inserted[0].firm_name).toBe("Beta Law");
+    expect(h.state.upserted).toHaveLength(2); // both rows are SENT to upsert; the constraint handles the skip
+    // Beta's key is now marked "existing" in the mock (it was the one that
+    // was actually inserted); Acme's was already there and stays there.
+    expect(h.state.existingKeys.has(betaKey)).toBe(true);
+    expect(h.state.existingKeys.has(acmeKey)).toBe(true);
   });
 
   it("dedupes within the batch", async () => {
@@ -121,7 +142,7 @@ describe("importProspects", () => {
     const rows = Array.from({ length: 501 }, (_, i) => ({ firm_name: `Firm ${i}`, city: "Toronto" }));
     const res = await importProspects(rows);
     expect(res.inserted).toBe(501);
-    expect(h.state.inserted).toHaveLength(501);
+    expect(h.state.upserted).toHaveLength(501);
   });
 
   it("surfaces an insert error without throwing", async () => {

@@ -67,23 +67,26 @@ export async function importProspects(rawRows: unknown[]): Promise<ImportResult>
     valid.push(row);
   }
 
-  // Existing keys, so a re-run inserts only what is genuinely new.
-  const { data: existing, error: exErr } = await supabase.from('agency_prospects').select('firm_name, city');
-  if (exErr) throw new Error(exErr.message);
-  const seen = new Set<string>(
-    (existing ?? []).map((e) => prospectKey(e.firm_name as string, e.city as string | null)),
-  );
-
+  // In-batch dedupe only. Cross-run dedupe (a re-import seeing rows already in
+  // the table) is now enforced by the DB's uq_agency_prospects_dedupe_key
+  // constraint via upsert+ignoreDuplicates below (Codex audit 2026-07-06,
+  // finding 4): the prior approach read every existing (firm_name, city) with
+  // one unpaginated select, which only sees PostgREST's first page once the
+  // table passes the default max-rows cap (agency_prospects has 5648 rows in
+  // prod today), so a re-import could already be inserting duplicates for any
+  // key outside that first page.
+  let skippedInBatch = 0;
+  const seenInBatch = new Set<string>();
   const toInsert: ProspectInput[] = [];
   for (const row of valid) {
     const key = prospectKey(row.firm_name, row.city);
-    if (seen.has(key)) continue; // dupes against existing rows and earlier rows in this batch
-    seen.add(key);
+    if (seenInBatch.has(key)) { skippedInBatch++; continue; }
+    seenInBatch.add(key);
     toInsert.push(row);
   }
-  const skipped = valid.length - toInsert.length;
 
   let inserted = 0;
+  let skippedByConstraint = 0;
   for (let i = 0; i < toInsert.length; i += INSERT_CHUNK) {
     const slice = toInsert.slice(i, i + INSERT_CHUNK).map((r) => ({
       firm_name: r.firm_name,
@@ -97,10 +100,22 @@ export async function importProspects(rawRows: unknown[]): Promise<ImportResult>
       fit_score: r.fit_score ?? null,
       notes: r.notes ?? null,
     }));
-    const { data, error } = await supabase.from('agency_prospects').insert(slice).select('id');
+    // dedupe_key is a generated column (lower/trim of firm_name + city); never
+    // sent on the payload. ignoreDuplicates makes a row that collides with an
+    // existing prospect a no-op instead of a 23505 error; .select('id') then
+    // returns only the rows that were actually inserted, so the gap between
+    // slice.length and the returned count is exactly how many the constraint
+    // skipped.
+    const { data, error } = await supabase
+      .from('agency_prospects')
+      .upsert(slice, { onConflict: 'dedupe_key', ignoreDuplicates: true })
+      .select('id');
     if (error) { errors.push(error.message); continue; }
-    inserted += (data ?? []).length;
+    const returnedCount = (data ?? []).length;
+    inserted += returnedCount;
+    skippedByConstraint += slice.length - returnedCount;
   }
 
+  const skipped = skippedInBatch + skippedByConstraint;
   return { ok: errors.length === 0, received, inserted, skipped, invalid, errors };
 }
