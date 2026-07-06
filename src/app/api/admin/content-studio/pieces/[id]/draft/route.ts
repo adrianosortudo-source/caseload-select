@@ -234,12 +234,18 @@ export async function POST(
     );
   }
 
-  // Validate workflow gate
-  if (piece.workflow_gate !== "draft") {
+  // Validate workflow gate. legal_gate is allowed alongside draft (Ses.17
+  // WP-2, the revision loop): when the firm requests changes, the operator
+  // must be able to regenerate without the piece leaving legal_gate. A
+  // regeneration here creates a new piece version exactly like one at
+  // draft; the SEND_TO_REVIEW route (a separate, explicit action) is what
+  // actually posts the update to the linked deliverable.
+  const REGENERATION_ALLOWED_GATES = new Set(["draft", "legal_gate"]);
+  if (!REGENERATION_ALLOWED_GATES.has(piece.workflow_gate)) {
     return NextResponse.json(
       {
         ok: false,
-        error: `Piece must be at the "draft" workflow gate to generate a draft. Current gate: ${piece.workflow_gate}`,
+        error: `Piece must be at the "draft" or "legal_gate" workflow gate to generate a draft. Current gate: ${piece.workflow_gate}`,
       },
       { status: 422 }
     );

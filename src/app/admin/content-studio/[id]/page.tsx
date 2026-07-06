@@ -1,7 +1,7 @@
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import PageHeader from "@/components/PageHeader";
 import Link from "next/link";
-import { SourceBriefForm, PieceActions } from "../components";
+import { SourceBriefForm, PieceActions, VersionEditPanel } from "../components";
 import {
   renderServicePagePreview,
   type ServicePageBlock,
@@ -341,10 +341,12 @@ function VersionBody({
 }
 
 function CurrentDraftPanel({
+  pieceId,
   format,
   enVersion,
   ptVersion,
 }: {
+  pieceId: string;
   format: string;
   enVersion: PieceVersion | null;
   ptVersion: PieceVersion | null;
@@ -393,6 +395,16 @@ function CurrentDraftPanel({
           </div>
           <VersionBody version={enVersion} format={format} />
         </div>
+      )}
+
+      {enVersion && (
+        <VersionEditPanel
+          pieceId={pieceId}
+          format={format}
+          bodyMarkdown={enVersion.body_markdown}
+          bodyStructured={enVersion.body_structured as Array<Record<string, unknown>> | null}
+          seoMetadata={enVersion.seo_metadata}
+        />
       )}
 
       {ptVersion && (
@@ -847,6 +859,7 @@ export default async function ContentPieceDetailPage({
               }
             />
             <CurrentDraftPanel
+              pieceId={piece.id}
               format={piece.format}
               enVersion={enVersion}
               ptVersion={ptVersion}
@@ -869,6 +882,7 @@ export default async function ContentPieceDetailPage({
                 typeof piece.source_brief === "object" &&
                 Object.keys(piece.source_brief).length > 0
               }
+              hasDeliverable={!!piece.deliverable_id}
             />
           </div>
         </div>

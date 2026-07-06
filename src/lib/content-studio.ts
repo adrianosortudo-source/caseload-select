@@ -1,6 +1,13 @@
 import "server-only";
 import { supabaseAdmin } from "./supabase-admin";
-import type { ValidatorConfig } from "./content-validators";
+import {
+  runDeterministicValidators,
+  runCanonicalServicePageValidators,
+  type ValidatorConfig,
+  type ValidatorResult,
+  type CanonicalServicePageValidationContext,
+} from "./content-validators";
+import type { ServicePageBlock } from "./content-studio-structured";
 import type { DelegationGrant } from "./deliverables-pure";
 
 export interface StrategyRow {
@@ -279,6 +286,97 @@ export async function resolvePublishGateStatus(piece: {
   }
 
   return { deliverableStatus, delegation };
+}
+
+export interface ValidationOutcome {
+  results: ValidatorResult[];
+  summary: {
+    total: number;
+    pass: number;
+    fail: number;
+    warn: number;
+    verdict: "pass" | "warn" | "fail";
+  };
+}
+
+/**
+ * Shared validation core (Ses.17 WP-2). Extracted from the validate route so
+ * the new PUT .../version route (the operator-edit path) can run the exact
+ * same battery and record the exact same way after a manual edit, instead of
+ * duplicating the branch-by-format logic or round-tripping through HTTP.
+ * canonical_service_page reads body_structured + seo_metadata; every other
+ * format reads body_markdown through buildValidatorConfig.
+ */
+export async function runAndRecordValidation(input: {
+  pieceId: string;
+  firmId: string;
+  format: string;
+  version: {
+    id: string;
+    body_markdown: string | null;
+    body_structured: unknown[] | null;
+    seo_metadata: Record<string, unknown> | null;
+  };
+  sourceBrief: Record<string, unknown> | undefined;
+  strategy: StrategyRow;
+}): Promise<{ ok: true; outcome: ValidationOutcome } | { ok: false; error: string; code?: string }> {
+  let results: ValidatorResult[];
+
+  if (input.format === "canonical_service_page") {
+    const blocks = input.version.body_structured as ServicePageBlock[] | null | undefined;
+    if (!blocks || !Array.isArray(blocks) || blocks.length === 0) {
+      return {
+        ok: false,
+        error:
+          "This canonical_service_page version has no body_structured content, so it cannot be validated as a structured page. It was likely created before the structured-output generator shipped, or a generation attempt failed partway. Regenerate the draft.",
+        code: "structured_body_missing",
+      };
+    }
+    const seoMetadata = input.version.seo_metadata ?? undefined;
+    const context: CanonicalServicePageValidationContext = {
+      primaryQuery: (seoMetadata?.primary_query as string | null | undefined) ?? undefined,
+      answerSummary: (seoMetadata?.answer_summary as string | null | undefined) ?? undefined,
+      jurisdiction: (seoMetadata?.jurisdiction as string | null | undefined) ?? undefined,
+      serviceArea: (seoMetadata?.service_area as string | string[] | null | undefined) ?? undefined,
+      title: (seoMetadata?.title as string | null | undefined) ?? undefined,
+      internalLinkTargets: input.sourceBrief?.internal_link_targets as
+        | Array<{ url: string; anchor_text_hint?: string; relation?: string }>
+        | undefined,
+    };
+    results = runCanonicalServicePageValidators(blocks, seoMetadata, context);
+  } else {
+    if (!input.version.body_markdown || input.version.body_markdown.trim().length === 0) {
+      return { ok: false, error: "Version body is empty. Nothing to validate." };
+    }
+    const config = buildValidatorConfig(input.strategy, input.format);
+    results = runDeterministicValidators(input.version.body_markdown, config, input.sourceBrief);
+  }
+
+  const { error: recordErr } = await recordValidationRun({
+    piece_id: input.pieceId,
+    piece_version_id: input.version.id,
+    firm_id: input.firmId,
+    results: results.map((r) => ({ key: r.key, status: r.status, severity: r.severity, findings: r.findings })),
+  });
+  if (recordErr) {
+    console.error("Failed to record validation run:", recordErr);
+  }
+
+  const failCount = results.filter((r) => r.status === "fail").length;
+  const warnCount = results.filter((r) => r.status === "warn").length;
+  return {
+    ok: true,
+    outcome: {
+      results,
+      summary: {
+        total: results.length,
+        pass: results.filter((r) => r.status === "pass").length,
+        fail: failCount,
+        warn: warnCount,
+        verdict: failCount > 0 ? "fail" : warnCount > 0 ? "warn" : "pass",
+      },
+    },
+  };
 }
 
 export async function recordValidationRun(run: {

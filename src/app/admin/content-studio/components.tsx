@@ -189,11 +189,13 @@ export function PieceActions({
   currentGate,
   hasVersion,
   hasBrief,
+  hasDeliverable,
 }: {
   pieceId: string;
   currentGate: string;
   hasVersion: boolean;
   hasBrief: boolean;
+  hasDeliverable: boolean;
 }) {
   const router = useRouter();
   const [validateState, setValidateState] = useState<ActionState>("idle");
@@ -201,6 +203,7 @@ export function PieceActions({
   const [advanceState, setAdvanceState] = useState<ActionState>("idle");
   const [exportState, setExportState] = useState<ActionState>("idle");
   const [publishState, setPublishState] = useState<ActionState>("idle");
+  const [sendToReviewState, setSendToReviewState] = useState<ActionState>("idle");
   const [publishedUrl, setPublishedUrl] = useState("");
   const [exportUrls, setExportUrls] = useState<Record<string, string> | null>(null);
   const [resultMsg, setResultMsg] = useState<string | null>(null);
@@ -306,6 +309,16 @@ export function PieceActions({
     });
   };
 
+  const handleSendToReview = () =>
+    runAction(
+      `/api/admin/content-studio/pieces/${pieceId}/send-to-review`,
+      "POST",
+      {},
+      setSendToReviewState
+    ).then((d) => {
+      if (d?.ok) setResultMsg("Sent to review. The deliverable is back in review pending re-approval.");
+    });
+
   function btnClass(state: ActionState, base: string) {
     if (state === "loading") return `${base} opacity-50 cursor-wait`;
     return `${base} cursor-pointer`;
@@ -384,6 +397,26 @@ export function PieceActions({
           </div>
         )}
 
+        {hasDeliverable && (
+          <button
+            onClick={handleSendToReview}
+            disabled={sendToReviewState === "loading"}
+            className={btnClass(
+              sendToReviewState,
+              "w-full text-left rounded border border-violet-200 bg-violet-50 px-3 py-2.5 hover:bg-violet-100 transition-colors"
+            )}
+          >
+            <div className="text-sm font-medium text-violet-700">
+              {sendToReviewState === "loading" ? "Sending..." : "Send current draft to review"}
+            </div>
+            <div className="text-xs text-violet-600/60 mt-0.5">
+              Posts the current version to the linked deliverable. Requires a
+              zero-fail validation run. Returns the deliverable to in_review
+              and clears any prior approval.
+            </div>
+          </button>
+        )}
+
         <div className="pt-2 mt-2 border-t border-black/8">
           <button
             onClick={handleExport}
@@ -453,7 +486,8 @@ export function PieceActions({
               draftState === "error" ||
               advanceState === "error" ||
               exportState === "error" ||
-              publishState === "error"
+              publishState === "error" ||
+              sendToReviewState === "error"
                 ? "bg-rose-50 text-rose-700 border border-rose-200"
                 : "bg-emerald-50 text-emerald-700 border border-emerald-200"
             }`}
@@ -462,6 +496,318 @@ export function PieceActions({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ── Version Edit Panel (Ses.17 WP-2, the revision loop) ───── */
+
+type EditableSection = { key: string; heading?: string; body_markdown: string };
+type EditableFaqItem = { question: string; answer: string };
+
+interface EditableServicePage {
+  h1: { key: string; line1: string; line2: string } | null;
+  sections: EditableSection[];
+  faqBlock: { key: string; items: EditableFaqItem[] } | null;
+  seoTitle: string;
+  seoMetaDescription: string;
+}
+
+// Splits the stored ServicePageBlock[] into an editable shape the form can
+// bind to, then reassembles it back into ServicePageBlock[] on save. Kept
+// local (not imported from content-studio-structured.ts) since this is a
+// UI-shape concern, not the canonical block type; the PUT route validates
+// the reassembled shape server-side regardless.
+function toEditableServicePage(
+  blocks: Array<Record<string, unknown>>,
+  seoMetadata: Record<string, unknown> | null
+): EditableServicePage {
+  let h1: EditableServicePage["h1"] = null;
+  const sections: EditableSection[] = [];
+  let faqBlock: EditableServicePage["faqBlock"] = null;
+
+  for (const b of blocks) {
+    if (b.type === "h1") {
+      h1 = { key: String(b.key), line1: String(b.line1 ?? ""), line2: String(b.line2 ?? "") };
+    } else if (b.type === "section") {
+      sections.push({
+        key: String(b.key),
+        heading: typeof b.heading === "string" ? b.heading : undefined,
+        body_markdown: String(b.body_markdown ?? ""),
+      });
+    } else if (b.type === "faq_block") {
+      faqBlock = {
+        key: String(b.key),
+        items: Array.isArray(b.items)
+          ? (b.items as Array<Record<string, unknown>>).map((it) => ({
+              question: String(it.question ?? ""),
+              answer: String(it.answer ?? ""),
+            }))
+          : [],
+      };
+    }
+  }
+
+  return {
+    h1,
+    sections,
+    faqBlock,
+    seoTitle: String(seoMetadata?.title ?? ""),
+    seoMetaDescription: String(seoMetadata?.meta_description ?? ""),
+  };
+}
+
+function fromEditableServicePage(page: EditableServicePage): Array<Record<string, unknown>> {
+  const blocks: Array<Record<string, unknown>> = [];
+  if (page.h1) blocks.push({ type: "h1", key: page.h1.key, line1: page.h1.line1, line2: page.h1.line2 });
+  for (const s of page.sections) {
+    blocks.push({ type: "section", key: s.key, heading: s.heading, body_markdown: s.body_markdown });
+  }
+  if (page.faqBlock) blocks.push({ type: "faq_block", key: page.faqBlock.key, items: page.faqBlock.items });
+  return blocks;
+}
+
+export function VersionEditPanel({
+  pieceId,
+  format,
+  bodyMarkdown,
+  bodyStructured,
+  seoMetadata,
+}: {
+  pieceId: string;
+  format: string;
+  bodyMarkdown: string | null;
+  bodyStructured: Array<Record<string, unknown>> | null;
+  seoMetadata: Record<string, unknown> | null;
+}) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [validationMsg, setValidationMsg] = useState<string | null>(null);
+  const isStructured = format === "canonical_service_page";
+
+  const [markdown, setMarkdown] = useState(bodyMarkdown ?? "");
+  const [page, setPage] = useState<EditableServicePage>(() =>
+    toEditableServicePage(bodyStructured ?? [], seoMetadata)
+  );
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    setError(null);
+    setValidationMsg(null);
+    try {
+      const payload = isStructured
+        ? {
+            blocks: fromEditableServicePage(page),
+            seo_title: page.seoTitle,
+            seo_meta_description: page.seoMetaDescription,
+          }
+        : { body_markdown: markdown };
+      const res = await fetch(`/api/admin/content-studio/pieces/${pieceId}/version`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setError(data.error ?? "Save failed");
+        return;
+      }
+      if (data.validation_summary) {
+        const s = data.validation_summary;
+        setValidationMsg(`Saved as v${data.version.version_number}. Validation: ${s.pass} pass, ${s.warn} warn, ${s.fail} fail.`);
+      } else {
+        setValidationMsg(`Saved as v${data.version.version_number}.`);
+      }
+      setEditing(false);
+      router.refresh();
+    } catch {
+      setError("Network error");
+    } finally {
+      setSaving(false);
+    }
+  }, [pieceId, isStructured, page, markdown, router]);
+
+  if (!editing) {
+    return (
+      <div className="px-6 py-3 border-t border-black/5 flex items-center justify-between">
+        <button
+          onClick={() => setEditing(true)}
+          className="text-xs font-medium text-sky-600 hover:text-sky-700"
+        >
+          Edit this draft
+        </button>
+        {validationMsg && (
+          <span className="text-xs text-emerald-700">{validationMsg}</span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 border-t border-sky-200 bg-sky-50/30 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-xs uppercase tracking-wider text-sky-600">Editing Draft</div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setEditing(false);
+              setError(null);
+              setMarkdown(bodyMarkdown ?? "");
+              setPage(toEditableServicePage(bodyStructured ?? [], seoMetadata));
+            }}
+            className="text-xs text-black/50 hover:text-black/70"
+            disabled={saving}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="text-xs font-medium px-3 py-1.5 rounded bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Save as new version"}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded px-3 py-2">
+          {error}
+        </div>
+      )}
+
+      {!isStructured && (
+        <textarea
+          value={markdown}
+          onChange={(e) => setMarkdown(e.target.value)}
+          rows={16}
+          className="w-full text-sm font-mono border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400"
+        />
+      )}
+
+      {isStructured && (
+        <div className="space-y-4">
+          {page.h1 && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-black/60 mb-1">H1 line 1</label>
+                <input
+                  type="text"
+                  value={page.h1.line1}
+                  onChange={(e) =>
+                    setPage((p) => ({ ...p, h1: p.h1 ? { ...p.h1, line1: e.target.value } : p.h1 }))
+                  }
+                  className="w-full text-sm border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-black/60 mb-1">H1 line 2</label>
+                <input
+                  type="text"
+                  value={page.h1.line2}
+                  onChange={(e) =>
+                    setPage((p) => ({ ...p, h1: p.h1 ? { ...p.h1, line2: e.target.value } : p.h1 }))
+                  }
+                  className="w-full text-sm border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400"
+                />
+              </div>
+            </div>
+          )}
+
+          {page.sections.map((s, i) => (
+            <div key={s.key} className="rounded border border-black/10 p-3">
+              {s.heading !== undefined && (
+                <input
+                  type="text"
+                  value={s.heading}
+                  onChange={(e) =>
+                    setPage((p) => {
+                      const sections = [...p.sections];
+                      sections[i] = { ...sections[i], heading: e.target.value };
+                      return { ...p, sections };
+                    })
+                  }
+                  placeholder="Heading"
+                  className="w-full text-sm font-medium border-0 border-b border-black/10 px-0 pb-1 mb-2 focus:outline-none focus:border-sky-400"
+                />
+              )}
+              <textarea
+                value={s.body_markdown}
+                onChange={(e) =>
+                  setPage((p) => {
+                    const sections = [...p.sections];
+                    sections[i] = { ...sections[i], body_markdown: e.target.value };
+                    return { ...p, sections };
+                  })
+                }
+                rows={5}
+                className="w-full text-sm border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400"
+              />
+            </div>
+          ))}
+
+          {page.faqBlock && (
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-black/60">FAQ</div>
+              {page.faqBlock.items.map((item, i) => (
+                <div key={i} className="rounded border border-black/10 p-3 space-y-2">
+                  <input
+                    type="text"
+                    value={item.question}
+                    onChange={(e) =>
+                      setPage((p) => {
+                        if (!p.faqBlock) return p;
+                        const items = [...p.faqBlock.items];
+                        items[i] = { ...items[i], question: e.target.value };
+                        return { ...p, faqBlock: { ...p.faqBlock, items } };
+                      })
+                    }
+                    placeholder="Question"
+                    className="w-full text-sm font-medium border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400"
+                  />
+                  <textarea
+                    value={item.answer}
+                    onChange={(e) =>
+                      setPage((p) => {
+                        if (!p.faqBlock) return p;
+                        const items = [...p.faqBlock.items];
+                        items[i] = { ...items[i], answer: e.target.value };
+                        return { ...p, faqBlock: { ...p.faqBlock, items } };
+                      })
+                    }
+                    rows={3}
+                    placeholder="Answer"
+                    className="w-full text-sm border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-black/60 mb-1">SEO title</label>
+              <input
+                type="text"
+                value={page.seoTitle}
+                onChange={(e) => setPage((p) => ({ ...p, seoTitle: e.target.value }))}
+                className="w-full text-sm border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-black/60 mb-1">SEO meta description</label>
+              <textarea
+                value={page.seoMetaDescription}
+                onChange={(e) => setPage((p) => ({ ...p, seoMetaDescription: e.target.value }))}
+                rows={2}
+                className="w-full text-sm border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
