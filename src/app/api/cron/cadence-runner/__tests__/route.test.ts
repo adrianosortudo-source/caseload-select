@@ -7,8 +7,24 @@
  * chainable builder configured per table via module-level state.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { NextRequest } from 'next/server';
+
+// Every test dynamically imports ../route and @/lib/cadence-runner (so each
+// gets a fresh module against the per-test mock state). That first cold
+// import pulls the whole cadence chain (runner -> dispatch -> comms-gate ->
+// supabase-admin) through vitest's transform, which under a saturated box
+// (parallel test files + a running dev server) can exceed the default 5s
+// test budget on whichever test happens to trigger it first, timing out a
+// trivial assertion. Warm both modules once here, outside any per-test
+// budget, so the module cache is hot before the assertions run; keep a
+// generous file timeout as a load-spike safety margin. This targets the
+// cold-import cost, not test logic.
+vi.setConfig({ testTimeout: 20000 });
+beforeAll(async () => {
+  await import('../route');
+  await import('@/lib/cadence-runner');
+});
 
 vi.mock('server-only', () => ({}));
 
