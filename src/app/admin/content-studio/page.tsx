@@ -200,6 +200,14 @@ export default async function ContentStudioPage({
       <PageHeader
         title="Content Studio"
         subtitle={selected.name ?? "Unknown firm"}
+        right={
+          <Link
+            href={`/admin/content-studio/coverage?firm_id=${selected.id}`}
+            className="text-sm text-sky-600 hover:underline"
+          >
+            Coverage report →
+          </Link>
+        }
       />{/* Firm is chosen from the sidebar switcher; no redundant in-page picker. */}
 
       <div className="mt-6 space-y-6">
