@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
 import { listDeliverables, createDeliverable } from "@/lib/deliverables";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { cleanTitle, cleanDescription, isValidContentKind } from "@/lib/deliverables-pure";
 
 export async function GET(
@@ -33,6 +34,8 @@ export async function POST(
   const { firmId } = await params;
   const resolved = await resolveDeliverableActor(firmId);
   if (!resolved) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
 
   let body: { title?: unknown; description?: unknown; content_kind?: unknown };
   try {
