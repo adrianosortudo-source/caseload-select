@@ -426,3 +426,50 @@ describe('validateIntakeBody — UTM + referrer (enrichment fields)', () => {
     expect(r.ok).toBe(false);
   });
 });
+
+describe('validateIntakeBody: gclid (P12 Phase 1)', () => {
+  it('accepts a body with gclid populated', () => {
+    const b = validBody();
+    b.gclid = 'Cj0KCQjw_test123';
+    const r = validateIntakeBody(b);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.body.gclid).toBe('Cj0KCQjw_test123');
+  });
+
+  it('accepts a body with no gclid (back-compat)', () => {
+    const r = validateIntakeBody(validBody());
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.body.gclid).toBeUndefined();
+  });
+
+  it('accepts an explicit null gclid', () => {
+    const b = validBody();
+    b.gclid = null;
+    const r = validateIntakeBody(b);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.body.gclid).toBeNull();
+  });
+
+  it('coerces a whitespace-only gclid to null', () => {
+    const b = validBody();
+    b.gclid = '   ';
+    const r = validateIntakeBody(b);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.body.gclid).toBeNull();
+  });
+
+  it('rejects an oversized gclid (over 512 chars)', () => {
+    const b = validBody();
+    b.gclid = 'x'.repeat(513);
+    const r = validateIntakeBody(b);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.some((e) => e.includes('gclid'))).toBe(true);
+  });
+
+  it('rejects a non-string gclid', () => {
+    const b = validBody();
+    b.gclid = 12345 as unknown as string;
+    const r = validateIntakeBody(b);
+    expect(r.ok).toBe(false);
+  });
+});

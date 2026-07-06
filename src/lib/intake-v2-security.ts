@@ -131,6 +131,8 @@ export interface ValidatedIntakeBody {
   utm_term?: string | null;
   utm_content?: string | null;
   referrer?: string | null;
+  /** P12 Phase 1: Google Ads click ID, captured from the widget URL. */
+  gclid?: string | null;
   /** H5 DR-075: true when the lead checked the explicit-consent checkbox. */
   email_consent_explicit?: boolean;
 }
@@ -151,6 +153,7 @@ const MAX_RAW_TRANSCRIPT_LEN = 16_000;       // 16 KB of original-language text
 const MAX_UTM_FIELD_LEN = 200;
 const MAX_UTM_TERM_LEN = 500;
 const MAX_REFERRER_LEN = 2_048;              // URL spec practical ceiling
+const MAX_GCLID_LEN = 512;                   // Google Ads click IDs run ~100-200 chars
 
 const LANGUAGE_RE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/i;
 const LEAD_ID_RE = /^[A-Za-z0-9._:\\-]+$/;
@@ -314,6 +317,7 @@ export function validateIntakeBody(raw: unknown): { ok: true; body: ValidatedInt
   const utm_term = okOptStrCapped(raw.utm_term, 'utm_term', MAX_UTM_TERM_LEN);
   const utm_content = okOptStrCapped(raw.utm_content, 'utm_content', MAX_UTM_FIELD_LEN);
   const referrer = okOptStrCapped(raw.referrer, 'referrer', MAX_REFERRER_LEN);
+  const gclid = okOptStrCapped(raw.gclid, 'gclid', MAX_GCLID_LEN);
 
   // H5 DR-075: explicit consent checkbox (boolean, optional, false when absent)
   const email_consent_explicit: boolean = raw.email_consent_explicit === true;
@@ -343,6 +347,7 @@ export function validateIntakeBody(raw: unknown): { ok: true; body: ValidatedInt
       utm_term,
       utm_content,
       referrer,
+      gclid,
       email_consent_explicit,
     },
   };

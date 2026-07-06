@@ -51,6 +51,7 @@ interface ExpiredWebSession {
   utm_term: string | null;
   utm_content: string | null;
   referrer: string | null;
+  gclid: string | null;
 }
 
 interface SweepOutcome {
@@ -70,7 +71,7 @@ export async function GET(req: NextRequest) {
 
   const { data: expired, error } = await supabase
     .from("web_intake_sessions")
-    .select("id, firm_id, lead_id, engine_state, utm_source, utm_medium, utm_campaign, utm_term, utm_content, referrer")
+    .select("id, firm_id, lead_id, engine_state, utm_source, utm_medium, utm_campaign, utm_term, utm_content, referrer, gclid")
     .eq("finalized", false)
     .lt("expires_at", nowIso)
     .order("expires_at", { ascending: true })
@@ -170,6 +171,7 @@ export async function GET(req: NextRequest) {
           utm_term: row.utm_term,
           utm_content: row.utm_content,
           referrer: row.referrer,
+          gclid: row.gclid,
           axis_reasoning: report.axis_reasoning ?? null,
         })
         .select("id, lead_id, status, decision_deadline, whale_nurture")
@@ -246,6 +248,7 @@ export async function GET(req: NextRequest) {
         utm_medium: row.utm_medium,
         utm_campaign: row.utm_campaign,
         referrer: row.referrer,
+        gclid: row.gclid,
       },
       rawTranscript: engineState.input ?? null,
       matterType: engineState.matter_type ?? null,

@@ -344,6 +344,11 @@ export function ScreenEnginePublicWidget({
     persistedRef.current = true;
     const report = buildReport(finalState);
     const briefHtml = renderBriefHtmlServer(report, "web", finalState.language ?? "en");
+    // P12 Phase 1: read UTM + gclid from the widget's own URL (the
+    // embedding site forwards them onto the iframe src) plus
+    // document.referrer, so the real submit carries the same
+    // attribution the drop-off checkpoint already sends.
+    const attribution = getWebAttribution();
 
     const payload = {
       lead_id: report.lead_id,
@@ -371,7 +376,13 @@ export function ScreenEnginePublicWidget({
         email: finalState.slots.client_email ?? undefined,
         phone: finalState.slots.client_phone ?? undefined,
       },
-      referrer: typeof document !== "undefined" ? document.referrer : null,
+      utm_source: attribution.utm_source,
+      utm_medium: attribution.utm_medium,
+      utm_campaign: attribution.utm_campaign,
+      utm_term: attribution.utm_term,
+      utm_content: attribution.utm_content,
+      referrer: attribution.referrer,
+      gclid: attribution.gclid,
       email_consent_explicit: consentCaptureEnabled && consentChecked,
     };
 

@@ -55,6 +55,7 @@ export interface WebAttribution {
   utm_term: string | null;
   utm_content: string | null;
   referrer: string | null;
+  gclid: string | null;
 }
 
 /**
@@ -79,6 +80,7 @@ export function getWebAttribution(): WebAttribution {
       utm_term: null,
       utm_content: null,
       referrer: null,
+      gclid: null,
     };
   }
   const params = new URLSearchParams(window.location.search);
@@ -98,6 +100,7 @@ export function getWebAttribution(): WebAttribution {
     utm_term: trim(params.get('utm_term')),
     utm_content: trim(params.get('utm_content')),
     referrer: trim(docReferrer),
+    gclid: trim(params.get('gclid')),
   };
 }
 
@@ -179,13 +182,14 @@ export async function persistScreenedLead(
       email: state.slots['client_email'] ?? undefined,
       phone: state.slots['client_phone'] ?? undefined,
     },
-    // Lead enrichment Module 1 — passive web-attribution signals.
+    // Lead enrichment Module 1: passive web-attribution signals.
     utm_source: attribution.utm_source,
     utm_medium: attribution.utm_medium,
     utm_campaign: attribution.utm_campaign,
     utm_term: attribution.utm_term,
     utm_content: attribution.utm_content,
     referrer: attribution.referrer,
+    gclid: attribution.gclid,
   };
 
   // firmId rides on the query string so the endpoint can short-circuit demo

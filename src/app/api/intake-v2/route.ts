@@ -111,6 +111,8 @@ interface IntakeBody {
   utm_term?: string | null;
   utm_content?: string | null;
   referrer?: string | null;
+  /** P12 Phase 1: Google Ads click ID, captured from the widget URL. */
+  gclid?: string | null;
   /** H5 DR-075: true when the lead checked the explicit-consent checkbox on the widget. */
   email_consent_explicit?: boolean;
 }
@@ -257,6 +259,7 @@ export async function POST(req: NextRequest) {
         utm_medium: v.utm_medium ?? null,
         utm_campaign: v.utm_campaign ?? null,
         referrer: v.referrer ?? null,
+        gclid: v.gclid ?? null,
       },
       rawTranscript: v.raw_transcript ?? null,
       matterType,
@@ -450,6 +453,7 @@ export async function POST(req: NextRequest) {
       utm_term: v.utm_term ?? null,
       utm_content: v.utm_content ?? null,
       referrer: referrer ?? null,
+      gclid: v.gclid ?? null,
       axis_reasoning: axisReasoning,
       ...(scoringDelta ?? {}),
       ...emailConsentFields,

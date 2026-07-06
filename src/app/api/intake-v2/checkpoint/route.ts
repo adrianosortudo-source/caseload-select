@@ -8,7 +8,7 @@
  * multi-turn state.
  *
  * Body: { firmId, lead_id, engine_state, utm_source?, utm_medium?,
- *         utm_campaign?, utm_term?, utm_content?, referrer? }
+ *         utm_campaign?, utm_term?, utm_content?, referrer?, gclid? }
  *
  * Always returns 200 on any recoverable condition (demo mode, unknown
  * firm, oversized payload) so a failure here can never surface as an
@@ -32,6 +32,7 @@ const MAX_LEAD_ID_LEN = 120;
 const MAX_ENGINE_STATE_BYTES = 200_000; // 200 KB; the full brief is ~250 KB, engine_state is a subset
 const MAX_UTM_FIELD_LEN = 200;
 const MAX_REFERRER_LEN = 2_048;
+const MAX_GCLID_LEN = 512;
 
 interface CheckpointBody {
   firmId?: string;
@@ -43,6 +44,7 @@ interface CheckpointBody {
   utm_term?: string | null;
   utm_content?: string | null;
   referrer?: string | null;
+  gclid?: string | null;
 }
 
 function okOptStrCapped(v: unknown, maxLen: number): string | null {
@@ -133,6 +135,7 @@ export async function POST(req: NextRequest) {
     utm_term: okOptStrCapped(body.utm_term, MAX_UTM_FIELD_LEN),
     utm_content: okOptStrCapped(body.utm_content, MAX_UTM_FIELD_LEN),
     referrer: okOptStrCapped(body.referrer, MAX_REFERRER_LEN),
+    gclid: okOptStrCapped(body.gclid, MAX_GCLID_LEN),
   });
 
   return NextResponse.json(

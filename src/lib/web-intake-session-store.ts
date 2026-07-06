@@ -24,6 +24,7 @@ export interface WebAttributionFields {
   utm_term: string | null;
   utm_content: string | null;
   referrer: string | null;
+  gclid: string | null;
 }
 
 export interface WebSessionRow extends WebAttributionFields {
@@ -88,6 +89,7 @@ export async function checkpointWebSession(args: CheckpointArgs): Promise<Checkp
         utm_term: args.utm_term ?? null,
         utm_content: args.utm_content ?? null,
         referrer: args.referrer ?? null,
+        gclid: args.gclid ?? null,
       })
       .eq('id', existing.id);
     if (updateErr) return { ok: false, error: updateErr.message };
@@ -104,6 +106,7 @@ export async function checkpointWebSession(args: CheckpointArgs): Promise<Checkp
     utm_term: args.utm_term ?? null,
     utm_content: args.utm_content ?? null,
     referrer: args.referrer ?? null,
+    gclid: args.gclid ?? null,
   });
   if (insertErr) return { ok: false, error: insertErr.message };
   return { ok: true };
