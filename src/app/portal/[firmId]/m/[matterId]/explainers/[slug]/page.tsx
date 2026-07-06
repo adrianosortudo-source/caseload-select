@@ -20,7 +20,7 @@
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getClientMatterSession } from '@/lib/portal-auth';
+import { resolveClientMatterView } from '@/lib/portal-auth';
 import { getMatterById } from '@/lib/matter-stage';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { sanitizeExplainerHtml } from '@/lib/explainer-html-sanitize';
@@ -32,8 +32,8 @@ interface PageProps {
 export default async function ClientExplainerPage({ params }: PageProps) {
   const { firmId, matterId, slug } = await params;
 
-  const session = await getClientMatterSession(firmId, matterId);
-  if (!session) {
+  const view = await resolveClientMatterView(firmId, matterId);
+  if (!view) {
     redirect(`/portal/${firmId}/m/${matterId}/accept?expired=1`);
   }
 
