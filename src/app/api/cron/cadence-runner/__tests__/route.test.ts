@@ -20,7 +20,16 @@ import { NextRequest } from 'next/server';
 // budget, so the module cache is hot before the assertions run; keep a
 // generous file timeout as a load-spike safety margin. This targets the
 // cold-import cost, not test logic.
-vi.setConfig({ testTimeout: 20000 });
+// hookTimeout also needs raising (2026-07-06): vitest's default hookTimeout
+// is 10s, separate from testTimeout, and the beforeAll warm-up itself is what
+// pays the cold-import cost. Under a heavily saturated box (~100 concurrent
+// node processes from parallel sessions observed live) the warm-up alone can
+// exceed that default, failing the whole file with "Hook timed out in
+// 10000ms" even though every individual test is fast once the module cache
+// is hot (confirmed: 20/20 pass in under 4s when run standalone off a quiet
+// box). Same fix shape as the testTimeout raise above, applied to the actual
+// hook that does the slow work.
+vi.setConfig({ testTimeout: 20000, hookTimeout: 20000 });
 beforeAll(async () => {
   await import('../route');
   await import('@/lib/cadence-runner');
@@ -382,5 +391,132 @@ describe('WP-1 extensions: fan-out, lead-status enrollment, exit conditions', ()
     expect(summary.exited).toBe(0);
     expect(summary.runs_advanced).toBe(1);
     expect(summary.shadow_logged).toBe(1);
+  });
+});
+
+describe('read-side error handling (audit fix 2026-07-06): a failed read must not read as empty', () => {
+  beforeEach(() => {
+    cronAuthed = true;
+    resetState();
+    state.tables['cadence_rules'] = { select: { data: [J9_RULE], error: null } };
+    state.tables['cadence_steps'] = { select: { data: J9_STEPS, error: null } };
+    state.tables['matter_stage_events'] = { select: { data: [], error: null } };
+    state.tables['intake_firms'] = { select: { data: [{ id: 'firm-1', name: 'DRG Law Professional Corporation' }], error: null } };
+  });
+
+  it('fails closed when the stage-events scan errors (read #1: gates the whole tick)', async () => {
+    state.tables['matter_stage_events'] = { select: { data: null, error: { message: 'boom-events' } } };
+
+    const { runCadenceEngine } = await import('@/lib/cadence-runner');
+    const summary = await runCadenceEngine({ now: NOW });
+
+    expect(summary.ok).toBe(false);
+    expect(summary.reason).toMatch(/stage events/);
+    expect(summary.enrolled).toBe(0);
+    expect(state.runUpdates).toHaveLength(0);
+    expect(state.outboundUpserts.flat()).toHaveLength(0);
+  });
+
+  it('fails closed when the enrollment matter batch lookup errors (read #2)', async () => {
+    state.tables['matter_stage_events'] = { select: { data: [
+      { matter_id: 'matter-1', firm_id: 'firm-1', from_stage: 'active', to_stage: 'closing', created_at: '2026-07-01T00:00:00.000Z' },
+    ], error: null } };
+    state.tables['client_matters'] = { select: { data: null, error: { message: 'boom-matter-batch' } } };
+    state.tables['cadence_runs'] = { upsertResult: { data: [], error: null }, select: { data: [], error: null } };
+
+    const { runCadenceEngine } = await import('@/lib/cadence-runner');
+    const summary = await runCadenceEngine({ now: NOW });
+
+    expect(summary.ok).toBe(false);
+    expect(summary.reason).toMatch(/matter lookup/);
+    // The enrollment pass was skipped entirely: no cadence_runs upsert row landed.
+    expect(summary.enrolled).toBe(0);
+  });
+
+  it('fails closed when the lead-status enrollment read errors (read #3: J10-style lead-sourced rules)', async () => {
+    const J10_RULE = { id: 'rule-j10', firm_id: null, cadence_key: 'J10', name: 'Re-Engagement', trigger_type: 'field_change', trigger_config: { cadence_trigger: 're_engagement', source: 'screened_leads_status', status: 'passed' }, channel: 'email', enabled: true };
+    state.tables['cadence_rules'] = { select: { data: [J10_RULE], error: null } };
+    state.tables['cadence_steps'] = { select: { data: [
+      { id: 's-j10-1', cadence_rule_id: 'rule-j10', step_number: 1, delay_hours: 2160, channel: 'email', subject_template: 'a', body_template: 'a', active: true },
+    ], error: null } };
+    state.tables['screened_leads'] = { select: { data: null, error: { message: 'boom-lead-status' } } };
+    state.tables['cadence_runs'] = { upsertResult: { data: [], error: null }, select: { data: [], error: null } };
+
+    const { runCadenceEngine } = await import('@/lib/cadence-runner');
+    const summary = await runCadenceEngine({ now: NOW });
+
+    expect(summary.ok).toBe(false);
+    expect(summary.reason).toMatch(/lead-status enrollment/);
+    expect(summary.enrolled).toBe(0);
+    expect(state.runUpdates).toHaveLength(0);
+  });
+
+  it('fails closed when the active-runs scan errors (read #4: gates the whole ADVANCE pass)', async () => {
+    state.tables['cadence_runs'] = { select: { data: null, error: { message: 'boom-active-runs' } } };
+
+    const { runCadenceEngine } = await import('@/lib/cadence-runner');
+    const summary = await runCadenceEngine({ now: NOW });
+
+    expect(summary.ok).toBe(false);
+    expect(summary.reason).toMatch(/active runs/);
+    expect(summary.runs_advanced).toBe(0);
+    expect(state.runUpdates).toHaveLength(0);
+    expect(state.outboundUpserts.flat()).toHaveLength(0);
+  });
+
+  it('skips (does not advance) a run when its per-matter reload errors (read #5)', async () => {
+    state.tables['cadence_runs'] = { select: { data: [
+      { id: 'run-m5', firm_id: 'firm-1', cadence_rule_id: 'rule-j9', cadence_key: 'J9', matter_id: 'matter-m5', screened_lead_id: 'lead-m5', anchor_at: '2026-07-01T00:00:00.000Z', status: 'active', next_step_number: 1 },
+    ], error: null } };
+    state.tables['client_matters'] = { maybeSingle: { data: null, error: { message: 'boom-matter-reload' } } };
+    state.tables['screened_leads'] = { select: { data: [
+      { id: 'lead-m5', contact_email: 'm5@example.com', email_consent_status: 'explicit', sms_consent_status: 'unknown', six_month_expiry_date: null },
+    ], error: null } };
+
+    const { runCadenceEngine } = await import('@/lib/cadence-runner');
+    const summary = await runCadenceEngine({ now: NOW });
+
+    expect(summary.ok).toBe(false);
+    expect(summary.reason).toMatch(/matter reload/);
+    expect(summary.runs_advanced).toBe(0);
+    expect(state.runUpdates.find((u) => u.id === 'run-m5')).toBeUndefined();
+    expect(state.outboundUpserts.flat()).toHaveLength(0);
+  });
+
+  it('skips (does not advance) every run when the lead batch load errors (read #6: fail-closed on consent)', async () => {
+    state.tables['cadence_runs'] = { select: { data: [
+      { id: 'run-m6', firm_id: 'firm-1', cadence_rule_id: 'rule-j9', cadence_key: 'J9', matter_id: 'matter-m6', screened_lead_id: 'lead-m6', anchor_at: '2026-07-01T00:00:00.000Z', status: 'active', next_step_number: 1 },
+    ], error: null } };
+    state.tables['client_matters'] = { maybeSingle: { data: { id: 'matter-m6', firm_id: 'firm-1', matter_stage: 'closing', primary_name: 'M6', primary_email: 'm6@example.com', matter_type: 'probate', source_screened_lead_id: 'lead-m6' }, error: null } };
+    state.tables['screened_leads'] = { select: { data: null, error: { message: 'boom-lead-batch' } } };
+
+    const { runCadenceEngine } = await import('@/lib/cadence-runner');
+    const summary = await runCadenceEngine({ now: NOW });
+
+    expect(summary.ok).toBe(false);
+    expect(summary.reason).toMatch(/lead batch load/);
+    expect(summary.runs_advanced).toBe(0);
+    expect(state.runUpdates.find((u) => u.id === 'run-m6')).toBeUndefined();
+    expect(state.outboundUpserts.flat()).toHaveLength(0);
+  });
+
+  it('skips (does not advance) every run when the firm config load errors (read #7)', async () => {
+    state.tables['cadence_runs'] = { select: { data: [
+      { id: 'run-m7', firm_id: 'firm-1', cadence_rule_id: 'rule-j9', cadence_key: 'J9', matter_id: 'matter-m7', screened_lead_id: 'lead-m7', anchor_at: '2026-07-01T00:00:00.000Z', status: 'active', next_step_number: 1 },
+    ], error: null } };
+    state.tables['client_matters'] = { maybeSingle: { data: { id: 'matter-m7', firm_id: 'firm-1', matter_stage: 'closing', primary_name: 'M7', primary_email: 'm7@example.com', matter_type: 'probate', source_screened_lead_id: 'lead-m7' }, error: null } };
+    state.tables['screened_leads'] = { select: { data: [
+      { id: 'lead-m7', contact_email: 'm7@example.com', email_consent_status: 'explicit', sms_consent_status: 'unknown', six_month_expiry_date: null },
+    ], error: null } };
+    state.tables['intake_firms'] = { select: { data: null, error: { message: 'boom-firm-config' } } };
+
+    const { runCadenceEngine } = await import('@/lib/cadence-runner');
+    const summary = await runCadenceEngine({ now: NOW });
+
+    expect(summary.ok).toBe(false);
+    expect(summary.reason).toMatch(/firm config load/);
+    expect(summary.runs_advanced).toBe(0);
+    expect(state.runUpdates.find((u) => u.id === 'run-m7')).toBeUndefined();
+    expect(state.outboundUpserts.flat()).toHaveLength(0);
   });
 });

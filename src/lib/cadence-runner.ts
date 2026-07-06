@@ -167,18 +167,38 @@ export async function runCadenceEngine(
     .order('created_at', { ascending: false })
     .limit(2000);
   if (firmScope) eventQuery = eventQuery.eq('firm_id', firmScope);
-  const { data: eventRows } = await eventQuery;
+  const { data: eventRows, error: eventErr } = await eventQuery;
+  if (eventErr) {
+    // Audit fix (2026-07-06): this error was previously unchecked, so a
+    // transient Supabase failure read as "zero stage events" and the tick
+    // reported ok:true while enrolling nothing off real transitions. This is
+    // the very first read of the tick; fail closed by returning early rather
+    // than proceeding on an empty array as if it were ground truth.
+    console.error('[cadence-runner] stage events scan failed', { error: eventErr.message });
+    return { ...summary, ok: false, reason: `stage events read failed: ${eventErr.message}` };
+  }
   const events = (eventRows ?? []) as StageEventRow[];
 
   // Resolve the source screened_lead per matter for enrollment (best-effort).
   const enrollMatterIds = Array.from(new Set(events.map((e) => e.matter_id)));
   const matterById = new Map<string, MatterRow>();
   if (enrollMatterIds.length > 0) {
-    const { data: matterRows } = await supabase
+    const { data: matterRows, error: matterErr } = await supabase
       .from('client_matters')
       .select('id, firm_id, matter_stage, primary_name, primary_email, matter_type, source_screened_lead_id')
       .in('id', enrollMatterIds);
-    for (const m of (matterRows ?? []) as MatterRow[]) matterById.set(m.id, m);
+    if (matterErr) {
+      // Audit fix (2026-07-06): per-run enrichment read. Fail closed: without
+      // these matters, enrollment cannot resolve primary_email/matter_type/
+      // source_screened_lead_id, so skip the enrollment pass entirely rather
+      // than enrolling off an incomplete matterById map. The lead-status
+      // enrollment sub-pass and the ADVANCE pass are independent and still run.
+      console.error('[cadence-runner] enrollment matter batch lookup failed', { error: matterErr.message });
+      summary.ok = false;
+      summary.reason = `enrollment matter lookup failed: ${matterErr.message}`;
+    } else {
+      for (const m of (matterRows ?? []) as MatterRow[]) matterById.set(m.id, m);
+    }
   }
 
   const enrollRows: Array<{
@@ -259,52 +279,63 @@ export async function runCadenceEngine(
       .in('status', statuses)
       .limit(2000);
     if (firmScope) leadQuery = leadQuery.eq('firm_id', firmScope);
-    const { data: statusLeadRows } = await leadQuery;
-    const statusLeads = (statusLeadRows ?? []) as Array<{ id: string; firm_id: string; status: string; updated_at: string }>;
+    const { data: statusLeadRows, error: statusLeadErr } = await leadQuery;
+    if (statusLeadErr) {
+      // Audit fix (2026-07-06): this error was previously unchecked, so a
+      // transient failure read as "no leads flipped status" and J10-style
+      // lead-sourced cadences silently stopped enrolling. Fail closed: skip
+      // just this sub-pass (the stage-event ENROLL pass above and the
+      // ADVANCE pass below are independent and still run).
+      console.error('[cadence-runner] lead-status enrollment read failed', { error: statusLeadErr.message });
+      summary.ok = false;
+      summary.reason = `lead-status enrollment read failed: ${statusLeadErr.message}`;
+    } else {
+      const statusLeads = (statusLeadRows ?? []) as Array<{ id: string; firm_id: string; status: string; updated_at: string }>;
 
-    const leadEnrollRows: Array<{
-      firm_id: string; cadence_rule_id: string; cadence_key: string;
-      matter_id: null; screened_lead_id: string; anchor_at: string;
-    }> = [];
+      const leadEnrollRows: Array<{
+        firm_id: string; cadence_rule_id: string; cadence_key: string;
+        matter_id: null; screened_lead_id: string; anchor_at: string;
+      }> = [];
 
-    for (const lead of statusLeads) {
-      const matchingCadenceKeys = new Set(
-        leadSourcedRules
-          .filter((r) => r.trigger_config['status'] === lead.status && (r.firm_id === lead.firm_id || r.firm_id === null))
-          .map((r) => r.cadence_key),
-      );
-      for (const cadenceKey of matchingCadenceKeys) {
-        const resolved = resolveRuleForFirm(rules, lead.firm_id, cadenceKey);
-        if (!resolved) continue;
-        // Audit fix (2026-07-05), same shape as the stage pass: the resolved
-        // rule (possibly a firm override) must itself be lead-status-sourced
-        // with a matching status, not merely share a cadence_key with a
-        // global rule that matched.
-        if (resolved.trigger_config['source'] !== 'screened_leads_status'
-          || resolved.trigger_config['status'] !== lead.status) continue;
-        leadEnrollRows.push({
-          firm_id: lead.firm_id,
-          cadence_rule_id: resolved.id,
-          cadence_key: resolved.cadence_key,
-          matter_id: null,
-          screened_lead_id: lead.id,
-          anchor_at: lead.updated_at,
-        });
+      for (const lead of statusLeads) {
+        const matchingCadenceKeys = new Set(
+          leadSourcedRules
+            .filter((r) => r.trigger_config['status'] === lead.status && (r.firm_id === lead.firm_id || r.firm_id === null))
+            .map((r) => r.cadence_key),
+        );
+        for (const cadenceKey of matchingCadenceKeys) {
+          const resolved = resolveRuleForFirm(rules, lead.firm_id, cadenceKey);
+          if (!resolved) continue;
+          // Audit fix (2026-07-05), same shape as the stage pass: the resolved
+          // rule (possibly a firm override) must itself be lead-status-sourced
+          // with a matching status, not merely share a cadence_key with a
+          // global rule that matched.
+          if (resolved.trigger_config['source'] !== 'screened_leads_status'
+            || resolved.trigger_config['status'] !== lead.status) continue;
+          leadEnrollRows.push({
+            firm_id: lead.firm_id,
+            cadence_rule_id: resolved.id,
+            cadence_key: resolved.cadence_key,
+            matter_id: null,
+            screened_lead_id: lead.id,
+            anchor_at: lead.updated_at,
+          });
+        }
       }
-    }
 
-    if (leadEnrollRows.length > 0) {
-      // ignoreDuplicates: uq_cadence_runs_key_lead makes re-enrollment a no-op.
-      const { data: inserted, error: leadEnrollErr } = await supabase
-        .from('cadence_runs')
-        .upsert(leadEnrollRows, { onConflict: 'cadence_key,screened_lead_id', ignoreDuplicates: true })
-        .select('id');
-      if (leadEnrollErr) {
-        console.error('[cadence-runner] lead enrollment upsert failed', { error: leadEnrollErr.message });
-        summary.ok = false;
-        summary.reason = `lead enrollment failed: ${leadEnrollErr.message}`;
-      } else if (inserted) {
-        summary.enrolled += inserted.length;
+      if (leadEnrollRows.length > 0) {
+        // ignoreDuplicates: uq_cadence_runs_key_lead makes re-enrollment a no-op.
+        const { data: inserted, error: leadEnrollErr } = await supabase
+          .from('cadence_runs')
+          .upsert(leadEnrollRows, { onConflict: 'cadence_key,screened_lead_id', ignoreDuplicates: true })
+          .select('id');
+        if (leadEnrollErr) {
+          console.error('[cadence-runner] lead enrollment upsert failed', { error: leadEnrollErr.message });
+          summary.ok = false;
+          summary.reason = `lead enrollment failed: ${leadEnrollErr.message}`;
+        } else if (inserted) {
+          summary.enrolled += inserted.length;
+        }
       }
     }
   }
@@ -316,19 +347,45 @@ export async function runCadenceEngine(
     .eq('status', 'active')
     .limit(2000);
   if (firmScope) runQuery = runQuery.eq('firm_id', firmScope);
-  const { data: runRows } = await runQuery;
+  const { data: runRows, error: runErr } = await runQuery;
+  if (runErr) {
+    // Audit fix (2026-07-06): this error was previously unchecked, so a
+    // transient failure read as "no active runs" and the ADVANCE pass
+    // silently skipped every run while still reporting ok:true. This gates
+    // the whole ADVANCE pass; fail closed by skipping the pass rather than
+    // treating an empty array as if no runs were active.
+    console.error('[cadence-runner] active runs scan failed', { error: runErr.message });
+    summary.ok = false;
+    summary.reason = `active runs read failed: ${runErr.message}`;
+    return summary;
+  }
   const runs = (runRows ?? []) as CadenceRun[];
   if (runs.length === 0) return summary;
 
-  // Batch-load the matters + leads + firms these runs reference.
+  // Batch-load the matters + leads + firms these runs reference. A run whose
+  // enrichment data fails to load is fail-closed: it is skipped this tick
+  // (not advanced with incomplete state) and retried automatically on the
+  // next tick once the read succeeds.
+  const skipRunIds = new Set<string>();
+
   const runMatterIds = Array.from(new Set(runs.map((r) => r.matter_id).filter((x): x is string => !!x)));
   for (const id of runMatterIds) {
     if (!matterById.has(id)) {
-      const { data: m } = await supabase
+      const { data: m, error: matterReloadErr } = await supabase
         .from('client_matters')
         .select('id, firm_id, matter_stage, primary_name, primary_email, matter_type, source_screened_lead_id')
         .eq('id', id)
         .maybeSingle();
+      if (matterReloadErr) {
+        // Audit fix (2026-07-06): per-run enrichment read. Skip only the
+        // run(s) anchored to this matter id rather than advancing them
+        // without matter_stage / primary_email / matter_type.
+        console.error('[cadence-runner] per-matter reload failed during advancement', { matter_id: id, error: matterReloadErr.message });
+        summary.ok = false;
+        summary.reason = `matter reload failed: ${matterReloadErr.message}`;
+        for (const r of runs) if (r.matter_id === id) skipRunIds.add(r.id);
+        continue;
+      }
       if (m) matterById.set(id, m as MatterRow);
     }
   }
@@ -336,11 +393,24 @@ export async function runCadenceEngine(
   const leadIds = Array.from(new Set(runs.map((r) => r.screened_lead_id).filter((x): x is string => !!x)));
   const leadById = new Map<string, LeadRow>();
   if (leadIds.length > 0) {
-    const { data: leadRows } = await supabase
+    const { data: leadRows, error: leadBatchErr } = await supabase
       .from('screened_leads')
       .select('id, firm_id, status, contact_email, contact_name, matter_type, email_consent_status, sms_consent_status, six_month_expiry_date, updated_at')
       .in('id', leadIds);
-    for (const l of (leadRows ?? []) as LeadRow[]) leadById.set(l.id, l);
+    if (leadBatchErr) {
+      // Audit fix (2026-07-06): fail-closed on consent, per the module's own
+      // doctrine (see file header). A run whose lead consent state could not
+      // be loaded must NOT be advanced this tick: advancing it would record a
+      // consent_verdict against data that was never actually read. Skip every
+      // run anchored to a screened_lead_id; an unadvanced run simply retries
+      // next tick, which is safe in shadow mode.
+      console.error('[cadence-runner] lead batch load failed during advancement', { error: leadBatchErr.message });
+      summary.ok = false;
+      summary.reason = `lead batch load failed: ${leadBatchErr.message}`;
+      for (const r of runs) if (r.screened_lead_id) skipRunIds.add(r.id);
+    } else {
+      for (const l of (leadRows ?? []) as LeadRow[]) leadById.set(l.id, l);
+    }
   }
 
   const firmIds = Array.from(new Set(runs.map((r) => r.firm_id)));
@@ -348,17 +418,32 @@ export async function runCadenceEngine(
   const firmRealSendById = new Map<string, boolean>();
   const firmReviewUrlById = new Map<string, string>();
   if (firmIds.length > 0) {
-    const { data: firmRows } = await supabase.from('intake_firms').select('id, name, cadence_real_send, gbp_review_url').in('id', firmIds);
-    for (const f of (firmRows ?? []) as Array<{ id: string; name: string | null; cadence_real_send: boolean | null; gbp_review_url: string | null }>) {
-      firmNameById.set(f.id, cleanFirmName(f.name));
-      firmRealSendById.set(f.id, f.cadence_real_send === true);
-      firmReviewUrlById.set(f.id, f.gbp_review_url ?? '');
+    const { data: firmRows, error: firmErr } = await supabase.from('intake_firms').select('id, name, cadence_real_send, gbp_review_url').in('id', firmIds);
+    if (firmErr) {
+      // Audit fix (2026-07-06): per-run enrichment read. Without the firm
+      // name / real-send flag / review URL, the shadow row would be logged
+      // with wrong interpolation and a wrong real-send eligibility guess.
+      // Skip every run this tick rather than advance on defaulted values.
+      console.error('[cadence-runner] firm config load failed during advancement', { error: firmErr.message });
+      summary.ok = false;
+      summary.reason = `firm config load failed: ${firmErr.message}`;
+      for (const r of runs) skipRunIds.add(r.id);
+    } else {
+      for (const f of (firmRows ?? []) as Array<{ id: string; name: string | null; cadence_real_send: boolean | null; gbp_review_url: string | null }>) {
+        firmNameById.set(f.id, cleanFirmName(f.name));
+        firmRealSendById.set(f.id, f.cadence_real_send === true);
+        firmReviewUrlById.set(f.id, f.gbp_review_url ?? '');
+      }
     }
   }
 
   const ruleById = new Map<string, CadenceRule>(rules.map((r) => [r.id, r]));
 
   for (const run of runs) {
+    // Fail-closed: a run whose matter/lead/firm enrichment read failed above
+    // is skipped entirely this tick rather than advanced on incomplete data.
+    if (skipRunIds.has(run.id)) continue;
+
     const matter = run.matter_id ? matterById.get(run.matter_id) : undefined;
     const lead = run.screened_lead_id ? leadById.get(run.screened_lead_id) : undefined;
 
