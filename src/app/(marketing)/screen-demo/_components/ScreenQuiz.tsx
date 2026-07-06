@@ -137,7 +137,7 @@ export default function ScreenQuiz({ caseFixture }: ScreenQuizProps) {
         <p className="quiz-gate-sub">
           Five questions, scored. Add your firm name and email and we&apos;ll
           show you the report. You&apos;ll get a copy in your inbox you can
-          share with a partner or save for later.
+          keep on file or pass along at the firm.
         </p>
 
         <form onSubmit={submitEmail} className="quiz-form" noValidate>

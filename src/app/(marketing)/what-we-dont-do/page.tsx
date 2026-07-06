@@ -259,10 +259,9 @@ export default function WhatWeDontDoPage() {
         /* ── Recommend block ─────────────────────────────────────────── */
         .wwd-recommend {
           margin: 48px 0 48px;
-          padding: 32px 32px 32px 36px;
+          padding: 32px;
           background: rgba(255, 255, 255, 0.7);
-          border: 1px solid rgba(196, 180, 154, 0.4);
-          border-left: 3px solid #C4B49A;
+          border: 1px solid #C4B49A;
           border-radius: 4px;
         }
         .wwd-recommend-label {

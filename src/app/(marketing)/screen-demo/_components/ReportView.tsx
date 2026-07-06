@@ -207,7 +207,7 @@ export default function ReportView({
           clock. A 30-minute call walks through what that looks like for
           your practice and your case mix.
         </p>
-        <a href="/home#cta" className="r-cta-btn">Book a 30-minute call →</a>
+        <a href="/next-steps" className="r-cta-btn">See if this fits your practice →</a>
         <p className="r-cta-fine">
           Or run another sample case: <a href="/screen-demo">choose a different scenario</a>
         </p>
@@ -542,7 +542,7 @@ function Styles() {
         padding: 14px 16px;
         background: var(--off-white);
         border-radius: var(--r-tight);
-        border-left: 3px solid var(--stone);
+        border: 1px solid var(--border);
       }
       .r-next-card:first-child {
         grid-column: span 2;

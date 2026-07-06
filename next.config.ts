@@ -138,15 +138,16 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // Apex / catches visitors at the bare domain (caseloadselect.ca) once the
-  // GHL-hosted marketing site is cut over. The Next.js marketing route group
-  // lives at /home; without this redirect the apex would 404. Permanent (308)
-  // so search engines treat /home as canonical.
+  // Canonical-domain fix (2026-07-02, Website Strategy decision D4): / is
+  // now the canonical homepage (relocated from home/page.tsx to the
+  // (marketing) route-group root page.tsx). /home 301s to / for any
+  // existing bookmarks, backlinks, or cached search results. Permanent
+  // (308) so search engines re-index / as canonical, not /home.
   async redirects() {
     return [
       {
-        source: "/",
-        destination: "/home",
+        source: "/home",
+        destination: "/",
         permanent: true,
       },
     ];

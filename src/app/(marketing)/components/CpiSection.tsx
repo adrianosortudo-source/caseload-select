@@ -1,76 +1,63 @@
 "use client";
 
 /**
- * CpiSection — the "Wham Moment" component
+ * CpiSection: the "Wham Moment" component
  *
  * Brand book identifies CPI as "the single most concrete proof asset the
  * brand owns." This component is the section that converts a curious
  * visitor into someone who wants to see the engine run on their intake.
  *
- * Five priority-band tiles (A through E), score range, action per band.
- * Branded band colours matching the priority-bands pattern in the brand
- * book's design-system reference. Horizontal on desktop, stacked on mobile.
+ * Four priority-band tiles (A through D), matching the live Screen 2.0
+ * engine exactly (screen-engine/band.ts). No score range is shown; the
+ * live engine has no numeric CPI-to-band cutpoints. Horizontal on
+ * desktop, stacked on mobile.
  */
 
 interface BandProps {
-  letter: "A" | "B" | "C" | "D" | "E";
-  range: string;
+  letter: "A" | "B" | "C" | "D";
   label: string;
   action: string;
   color: string;
   delay: 1 | 2 | 3 | 4;
 }
 
-// Production CPI thresholds (v2.1): A >= 90, B >= 75, C >= 60, D >= 45, E < 45
+// Matches the live engine's four bands exactly (screen-engine/band.ts).
 const BANDS: BandProps[] = [
   {
     letter: "A",
-    range: "90 – 100",
-    label: "Priority",
-    action: "Call back inside the hour. Highest-fit, highest-value matter.",
+    label: "High Priority",
+    action: "Call first. Highest-fit, highest-value matter.",
     color: "#2E7D5B",
     delay: 1,
   },
   {
     letter: "B",
-    range: "75 – 89",
-    label: "Qualified",
-    action: "Standard follow-up cadence. Strong matter, normal queue.",
+    label: "Mid Priority",
+    action: "Standard callback. Strong matter, normal queue.",
     color: "#5A8A6E",
     delay: 1,
   },
   {
     letter: "C",
-    range: "60 – 74",
-    label: "Review",
-    action: "Ranked behind A and B. Worth a look when the calendar opens.",
+    label: "Low Priority",
+    action: "Standard follow-up cadence. Ranked behind A and B.",
     color: "#B58D2E",
     delay: 2,
   },
   {
     letter: "D",
-    range: "45 – 59",
-    label: "Refer",
-    action: "Out of practice scope. Refer-eligible with one click.",
-    color: "#C07A2E",
+    label: "Refer-eligible",
+    action: "Out of scope for this firm. Flagged for the lawyer to refer, take if misclassified, or pass. Nothing goes out under your name that you did not approve.",
+    color: "#6B7280",
     delay: 3,
-  },
-  {
-    letter: "E",
-    range: "0 – 44",
-    label: "Decline",
-    action: "Auto-filtered. Polite decline goes out. You never read the brief.",
-    color: "#9C5B5B",
-    delay: 4,
   },
 ];
 
-function Band({ letter, range, label, action, color, delay }: BandProps) {
+function Band({ letter, label, action, color, delay }: BandProps) {
   return (
     <article className={`b-tile reveal reveal-delay-${delay}`} style={{ ["--band-color" as string]: color }}>
       <div className="b-head">
         <span className="b-letter">{letter}</span>
-        <span className="b-range">{range}</span>
       </div>
       <h3 className="b-label">{label}</h3>
       <p className="b-action">{action}</p>
@@ -89,10 +76,11 @@ export default function CpiSection() {
           The Case Priority Index<span className="ts" />
         </h2>
         <p className="section-sub reveal" style={{ marginBottom: "var(--sp-7)" }}>
-          Every inquiry is scored zero to one hundred before a lawyer reads it.
-          The score routes the brief into one of five bands. Each band has a
-          predetermined action. You open the file already knowing which band
-          it sits in, and what the system has done with it.
+          Every inquiry is scored on value, complexity, urgency, and readiness
+          before a lawyer reads it. The score routes the brief into one of
+          four bands. Each band has a predetermined action. You open the file
+          already knowing which band it sits in, and what the system has
+          done with it.
         </p>
 
         <div className="b-grid">
@@ -135,7 +123,7 @@ export default function CpiSection() {
       <style jsx>{`
         .b-grid {
           display: grid;
-          grid-template-columns: repeat(5, 1fr);
+          grid-template-columns: repeat(4, 1fr);
           gap: var(--sp-3);
           margin-bottom: var(--sp-7);
         }
@@ -156,7 +144,6 @@ export default function CpiSection() {
 
         .b-head {
           display: flex;
-          justify-content: space-between;
           align-items: baseline;
           margin-bottom: var(--sp-3);
         }
@@ -166,14 +153,6 @@ export default function CpiSection() {
           font-weight: 800;
           color: var(--band-color);
           line-height: 1;
-        }
-        .b-range {
-          font-family: var(--font-display);
-          font-size: 10.5px;
-          font-weight: 700;
-          letter-spacing: 1.6px;
-          text-transform: uppercase;
-          color: var(--text-muted);
         }
         .b-label {
           font-family: var(--font-display);
@@ -287,7 +266,7 @@ export default function CpiSection() {
         }
 
         @media (max-width: 1024px) {
-          .b-grid { grid-template-columns: repeat(3, 1fr); }
+          .b-grid { grid-template-columns: repeat(2, 1fr); }
         }
         @media (max-width: 640px) {
           .b-grid { grid-template-columns: 1fr; }

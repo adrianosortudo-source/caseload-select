@@ -13,11 +13,12 @@
  * Calibration discipline:
  *   - Sample A produces Band A or high B (immigration appeal, urgent, fee-ready)
  *   - Sample B produces Band B (criminal defense, out-of-jurisdiction wrinkle)
- *   - Sample C produces Band C or D (real estate, modest stakes, fee unclear)
- *   - Sample D is the "your own" track — no pre-fill, lawyer answers from scratch
+ *   - Sample C produces Band C (real estate, modest stakes, fee unclear)
+ *   - Custom is the "your own" track: no pre-fill, lawyer answers from scratch
  *
- * The calibration spread is deliberate: one A, one B, one C/D. The lawyer
- * who runs all three samples sees the Screen behave consistently across the
+ * The calibration spread is deliberate: one A, one B, one C. Band D (out of
+ * scope for the firm) cannot occur in this demo; see _lib/scoring.ts. The
+ * lawyer who runs all three samples sees the Screen behave consistently across the
  * banding spectrum, which builds confidence in the methodology.
  */
 
@@ -55,7 +56,7 @@ export const SAMPLE_IMMIGRATION: SampleCase = {
   title: "Refused application, wants to appeal",
   description:
     "A prospective client in Mississauga whose work-permit application was refused last week. They have 30 days to file an appeal. They have already spoken to two firms and are ready to retain.",
-  expectedOutcome: "Band A · Priority",
+  expectedOutcome: "Band A · High Priority",
   expectedBand: "A",
   isCustom: false,
   defaultAnswers: {
@@ -77,7 +78,7 @@ export const SAMPLE_CRIMINAL: SampleCase = {
   title: "Partner charged with impaired driving in a neighbouring jurisdiction",
   description:
     "A prospective client whose partner was charged with impaired driving in Quebec last weekend. They live in Toronto. First appearance in three weeks. They understand legal work costs money but want to compare fees.",
-  expectedOutcome: "Band B · Qualified",
+  expectedOutcome: "Band B · Mid Priority",
   expectedBand: "B",
   isCustom: false,
   defaultAnswers: {
@@ -90,7 +91,7 @@ export const SAMPLE_CRIMINAL: SampleCase = {
 };
 
 /* ──────────────────────────────────────────────────────────────────
- *  Sample C · Real estate transactional, fee unclear → Band C/D
+ *  Sample C · Real estate transactional, fee unclear → Band C
  * ────────────────────────────────────────────────────────────────── */
 
 export const SAMPLE_REAL_ESTATE: SampleCase = {
@@ -99,7 +100,7 @@ export const SAMPLE_REAL_ESTATE: SampleCase = {
   title: "Residential closing in three weeks",
   description:
     "A first-time buyer in Scarborough closing on a condo in three weeks. They asked if you do free first consultations before committing. They have not asked about your fee structure.",
-  expectedOutcome: "Band C · Review",
+  expectedOutcome: "Band C · Low Priority",
   expectedBand: "C",
   isCustom: false,
   defaultAnswers: {
@@ -120,7 +121,7 @@ export const SAMPLE_CUSTOM: SampleCase = {
   tag: "Your own inquiry",
   title: "Score a real inquiry your firm received recently",
   description:
-    "Walk through the Screen as if your last inquiry were filling it out now. The report shows how the Screen would have routed that case before your partner read a word.",
+    "Walk through the Screen as if your last inquiry were filling it out now. The report shows how the Screen would have routed that case before the lawyer read a word.",
   expectedOutcome: "Personalized report",
   expectedBand: "A", // not used for custom — chip suppressed in UI
   isCustom: true,

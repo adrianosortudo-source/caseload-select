@@ -1,7 +1,12 @@
-"use client";
-
+import type { Metadata } from "next";
 import Image from "next/image";
 import MarketingNav from "../../components/MarketingNav";
+
+export const metadata: Metadata = {
+  title: "DRG Law Case Study | CaseLoad Select",
+  description:
+    "How a solo Toronto corporate and real estate practice replaced a Wix site and an unqualified booking form with a new brand system, a screened intake path, and a live voice channel in a 90-day pilot.",
+};
 
 export default function DRGLawCaseStudyPage() {
   return (
@@ -253,7 +258,12 @@ export default function DRGLawCaseStudyPage() {
               <div className="cs-timeline-content">
                 <h3 className="cs-timeline-title">Target</h3>
                 <ul className="cs-timeline-list">
-                  <li>Google Ads account structure designed for Phase 2 (pending Damaris approval on budget)</li>
+                  <li>
+                    Google Ads account structure designed for Phase 2{" "}
+                    <span className="cs-status-label cs-status-scheduled">
+                      Scheduled, pending client budget approval
+                    </span>
+                  </li>
                   <li>Landing page slots identified per practice area for future campaign targeting</li>
                   <li>Target keyword set built from practice-area query research (29 tracked terms)</li>
                 </ul>
@@ -286,7 +296,10 @@ export default function DRGLawCaseStudyPage() {
             <h2 className="cs-section-title cs-title-light">The new site</h2>
             <p className="cs-section-lead cs-lead-light">
               Screenshots from drglaw.ca captured June 2026. The Wix site is
-              gone. The intake Screen is the contact path.
+              gone. The intake Screen is the contact path. See it live at{" "}
+              <a href="https://drglaw.ca" className="cs-inline-link" target="_blank" rel="noopener noreferrer">
+                drglaw.ca
+              </a>.
             </p>
           </div>
 
@@ -402,7 +415,7 @@ export default function DRGLawCaseStudyPage() {
           </h2>
           <div className="cs-cta-actions">
             <a
-              href="https://api.leadconnectorhq.com/widget/booking/strategy-call"
+              href="/next-steps"
               className="cs-btn-primary"
             >
               Book a Strategy Call
@@ -543,6 +556,12 @@ export default function DRGLawCaseStudyPage() {
           max-width: 680px;
         }
         .cs-lead-light { color: rgba(255,255,255,0.65); }
+        .cs-inline-link {
+          color: #C4B49A;
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+        .cs-inline-link:hover { color: #D8CAAE; }
 
         /* ── Before findings ─────────────────────────────── */
         .cs-findings-grid {
@@ -678,6 +697,23 @@ export default function DRGLawCaseStudyPage() {
           background: #C4B49A;
           border-radius: 50%;
         }
+        .cs-status-label {
+          display: inline-block;
+          font-family: var(--font-display, 'Oxanium', sans-serif);
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.6px;
+          text-transform: uppercase;
+          padding: 3px 8px;
+          border-radius: 3px;
+          vertical-align: middle;
+          margin-left: 2px;
+        }
+        .cs-status-scheduled {
+          color: #8A6D1F;
+          background: rgba(196,180,154,0.28);
+          border: 1px solid rgba(196,180,154,0.5);
+        }
 
         /* ── After screenshots ───────────────────────────── */
         .cs-screenshots-after-row {
@@ -695,8 +731,8 @@ export default function DRGLawCaseStudyPage() {
           margin-bottom: 40px;
           padding: 24px 28px;
           background: rgba(196,180,154,0.12);
-          border-left: 3px solid #C4B49A;
-          border-radius: 2px;
+          border: 1px solid #C4B49A;
+          border-radius: 4px;
         }
         .cs-results-grid {
           display: grid;

@@ -196,10 +196,10 @@ function buildEmailHtml({ firmName, caseTitle, band, cpi }: EmailHtmlInput): str
             that produced the score.
           </p>
           <p style="font-size:14px;color:#6B7A8D;line-height:1.65;margin:0 0 24px;">
-            Save the PDF for later. Forward it to your partner. The artifact is yours.
+            Save the PDF for later. Share it with anyone else at the firm. The artifact is yours.
           </p>
 
-          <div style="background:#FFF4E0;border-left:3px solid #C4B49A;padding:14px 18px;margin:0 0 24px;border-radius:0 4px 4px 0;">
+          <div style="background:#FFF4E0;border:1px solid #C4B49A;padding:14px 18px;margin:0 0 24px;border-radius:4px;">
             <div style="font-family:'Oxanium',monospace;font-size:10px;font-weight:700;letter-spacing:1.8px;color:#9E9070;text-transform:uppercase;margin-bottom:4px;">
               Demonstration report
             </div>

@@ -1,15 +1,25 @@
 "use client";
 
 /**
- * ClientResultSection — Damaris testimonial + three stat counters
+ * ClientResultSection: Damaris Regina Guimaraes testimonial + verified
+ * activity facts for the DRG Law engagement.
  *
  * Sits between the CPI section (the wham moment) and the Why section
  * (the RTBs). The most concrete proof asset the brand owns from a real
- * client. Stats count up on scroll-into-view.
+ * client.
  *
- * Per brand book: "Specific, named, attributed accurately. Projected
- * outcomes are framed as projected. Delivered outcomes are named as
- * delivered." The numbers below are from DRG Law's first 90 days.
+ * Corrected 2026-07-02: the testimonial attribution named "Damaris
+ * Gutierrez", the wrong name (the lawyer's correct full name is Damaris
+ * Regina Guimaraes). The three stat counters that stood here (3x faster
+ * decisions, 100% same-day review, +42% priority lift) were not
+ * independently verifiable and contradicted the DRG case study page's own
+ * "pilot in progress, results publish August 2026" stance. Per brand book:
+ * "Specific, named, attributed accurately. Projected outcomes are framed
+ * as projected. Delivered outcomes are named as delivered." Replaced with
+ * the verified activity facts already used on the case study page
+ * (findings fixed, channels live, routes shipped) plus the honest pilot
+ * note. Do not re-add outcome counters here until real numbers exist and
+ * can be sourced with a method note.
  */
 
 import StatCounter from "./StatCounter";
@@ -29,7 +39,7 @@ export default function ClientResultSection() {
             right ones<span className="ts" />
           </p>
           <footer className="r-attribution">
-            <div className="r-attr-name">Damaris Gutierrez</div>
+            <div className="r-attr-name">Damaris Regina Guimaraes</div>
             <div className="r-attr-firm">Principal, DRG Law · Toronto</div>
           </footer>
         </blockquote>
@@ -37,26 +47,30 @@ export default function ClientResultSection() {
         <div className="r-stats">
           <div className="r-stat reveal reveal-delay-1">
             <div className="r-stat-num">
-              <StatCounter target={3} suffix="×" />
+              <StatCounter target={8} />
             </div>
-            <div className="r-stat-label">Faster intake decisions</div>
-            <div className="r-stat-note">Triage time cut from 12 minutes to under 4</div>
+            <div className="r-stat-label">Diagnostic findings fixed</div>
+            <div className="r-stat-note">Before launch, first 90 days</div>
           </div>
           <div className="r-stat reveal reveal-delay-2">
             <div className="r-stat-num">
-              <StatCounter target={100} suffix="%" />
+              <StatCounter target={7} />
             </div>
-            <div className="r-stat-label">Briefs reviewed same day</div>
-            <div className="r-stat-note">Across all Band A and B inquiries, first 90 days</div>
+            <div className="r-stat-label">Intake channels live</div>
+            <div className="r-stat-note">Web, voice, WhatsApp, SMS, and more, all scored the same way</div>
           </div>
           <div className="r-stat reveal reveal-delay-3">
             <div className="r-stat-num">
-              <StatCounter target={42} prefix="+" suffix="%" />
+              <StatCounter target={18} />
             </div>
-            <div className="r-stat-label">Priority score lift</div>
-            <div className="r-stat-note">Average case-quality score up across signed matters</div>
+            <div className="r-stat-label">Public routes shipped</div>
+            <div className="r-stat-note">Replacing the prior Wix template</div>
           </div>
         </div>
+
+        <p className="r-pilot-note reveal">
+          Pilot results publish August 2026.
+        </p>
       </div>
 
       <style jsx>{`
@@ -139,6 +153,13 @@ export default function ClientResultSection() {
           font-size: 12.5px;
           color: var(--text-muted);
           line-height: 1.55;
+        }
+        .r-pilot-note {
+          text-align: center;
+          margin: var(--sp-5) auto 0;
+          font-size: 12.5px;
+          color: var(--text-muted);
+          letter-spacing: 0.3px;
         }
 
         @media (max-width: 880px) {

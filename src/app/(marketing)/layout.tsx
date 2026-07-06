@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./styles/tokens.css";
 import "./styles/marketing.css";
 import RevealOnScroll from "./components/RevealOnScroll";
+import Footer from "./components/Footer";
 
 export const metadata: Metadata = {
   title: "CaseLoad Select · Sign Better Cases",
@@ -39,6 +40,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
     <div className="cls-marketing">
       <RevealOnScroll />
       {children}
+      <Footer />
     </div>
   );
 }

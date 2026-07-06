@@ -10,10 +10,12 @@
  * Drift between marketing demo and product is acceptable.
  *
  * SCORING MODEL
- * Each answer carries deltas mapped to the v2.1 Fit/Value scoring axes:
+ * Each answer carries deltas mapped to the demo's own Fit/Value scoring axes:
  *   Fit Score (30 max)   = geo (0-10) + contactability (0-10) + legitimacy (0-10)
  *   Value Score (70 max) = complexity (0-25) + urgency (0-20) + strategic (0-15) + fee (0-10)
- * Total CPI = Fit + Value, banded A (>=90) / B (>=75) / C (>=60) / D (>=45) / E (<45).
+ * Total CPI = Fit + Value, banded A (>=80) / B (>=65) / C (below 65). See
+ * _lib/scoring.ts for why this is a three-band split, matching the live
+ * product's real bands (A/B/C in scope; D, out of scope, cannot occur here).
  *
  * Q1 sets practice area (used for report narrative only, no scoring delta).
  * Q2-Q5 each contribute deltas across the scoring axes.
@@ -191,7 +193,7 @@ export const Q4_STAKES: Question = {
   total: 5,
   prompt: "How much is at stake, and how complex is the matter likely to be?",
   context:
-    "The Screen looks for cases worth your partner's time. Stakes and complexity together signal the depth of work required.",
+    "The Screen looks for cases worth the lawyer's time. Stakes and complexity together signal the depth of work required.",
   options: [
     {
       id: "high_stakes_complex",

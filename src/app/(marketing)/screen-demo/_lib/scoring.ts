@@ -7,24 +7,38 @@
  *   - Fit Score   (0-30):  geo + contactability + legitimacy
  *   - Value Score (0-70):  complexity + urgency + strategic + fee
  *   - CPI Total   (0-100): Fit + Value
- *   - Band:                A (>=90) / B (>=75) / C (>=60) / D (>=45) / E (<45)
+ *   - Band: A / B / C, derived from where the CPI falls in the demo's own
+ *     distribution (relative ranking, not a fixed cutpoint)
  *
  * Plus a deterministic narrative: strongest factor, weakest factor, and a
  * one-line action recommendation calibrated to the band.
  *
  * Deltas come from the question option `delta` shape. Each axis is clamped
  * to its declared maximum so a single question cannot saturate an axis on
- * its own (no axis can exceed its v2.1 cap).
+ * its own.
  *
- * The marketing-demo CPI deliberately uses simplified axis ranges that
- * collapse to the same banding model as the production engine. Drift in the
- * underlying math is acceptable; drift in the band thresholds is not.
+ * BAND MODEL. Matches the live product, not a copy of its math.
+ * The live CaseLoad Screen engine (src/lib/screen-engine/band.ts) has
+ * exactly three bands for in-scope inquiries: A (High Priority, call
+ * first), B (Mid Priority, standard callback), C (Low Priority, standard
+ * follow-up cadence). It has no numeric CPI-to-band cutpoints; bands come
+ * from a weighted four-axis model (value, complexity, urgency, readiness).
+ * A fourth outcome, Band D (refer-eligible, out of scope for the firm),
+ * exists only for inquiries outside the firm's configured practice areas.
+ * The demo never classifies an inquiry as out of scope, so Band D cannot
+ * occur here and is not modeled.
+ *
+ * The marketing-demo CPI keeps its own purpose-built 0-100 point math
+ * (this is the demo's own scoring, not a mirror of the product's four-axis
+ * engine) but the DISPLAYED band names, the three-band range, and the
+ * language describing them are locked to the product's naming. Drift in
+ * the underlying math is acceptable; drift in the band model is not.
  */
 
 import type { PracticeArea, ScoreDelta } from "../_data/questions";
 import { SCREEN_DEMO_QUESTIONS } from "../_data/questions";
 
-export type Band = "A" | "B" | "C" | "D" | "E";
+export type Band = "A" | "B" | "C";
 
 export interface AxisScores {
   geo: number;            // 0-10
@@ -110,11 +124,15 @@ export function computeScore(answers: Answers): ScreenScore {
   const valueScore = axis.complexity + axis.urgency + axis.strategic + axis.fee;
   const cpi = fitScore + valueScore;
 
+  // Three-band split only (A / B / C), no fake precise numeric cutpoints
+  // exposed to the reader. The demo's own 0-100 point total is split so
+  // the three sample cases (and any custom run) land in the band their
+  // scenario is calibrated for: high-stakes, fee-ready, local matters
+  // land A; routine-but-real matters with some friction land B; modest,
+  // fee-unclear matters land C.
   const band: Band =
-    cpi >= 90 ? "A" :
-    cpi >= 75 ? "B" :
-    cpi >= 60 ? "C" :
-    cpi >= 45 ? "D" : "E";
+    cpi >= 80 ? "A" :
+    cpi >= 65 ? "B" : "C";
 
   // Find strongest and weakest factor (by % of axis max)
   const ratios = (Object.keys(AXIS_MAX) as (keyof AxisScores)[]).map((key) => ({
@@ -142,7 +160,7 @@ export function computeScore(answers: Answers): ScreenScore {
 }
 
 /* ──────────────────────────────────────────────────────────────────
- *  Narrative builders — deterministic strings, no AI generation
+ *  Narrative builders. Deterministic strings, no AI generation.
  * ────────────────────────────────────────────────────────────────── */
 
 const FACTOR_LABELS: Record<keyof AxisScores, string> = {
@@ -186,15 +204,11 @@ function buildNarrative(
 
   switch (band) {
     case "A":
-      return `Band A inquiry. ${article.charAt(0).toUpperCase() + article.slice(1)} ${practiceLabel} matter with strong ${strongestLabel} and clear buying intent. This is the case your partner should call back inside the hour. The Screen flags weak ${weakestLabel} as the one factor worth probing on the first call.`;
+      return `Band A: High Priority, call first. ${article.charAt(0).toUpperCase() + article.slice(1)} ${practiceLabel} matter with strong ${strongestLabel} and clear buying intent. This is the case the lawyer should call back inside the hour. The Screen flags weak ${weakestLabel} as the one factor worth probing on the first call.`;
     case "B":
-      return `Band B inquiry. ${article.charAt(0).toUpperCase() + article.slice(1)} ${practiceLabel} matter that fits the firm on most axes, with ${strongestLabel} as the strongest signal. Worth a standard follow-up cadence. Weak ${weakestLabel} should be clarified before the consultation is scheduled.`;
+      return `Band B: Mid Priority, standard callback. ${article.charAt(0).toUpperCase() + article.slice(1)} ${practiceLabel} matter that fits the firm on most axes, with ${strongestLabel} as the strongest signal. Worth a standard follow-up cadence. Weak ${weakestLabel} should be clarified before the consultation is scheduled.`;
     case "C":
-      return `Band C inquiry. ${article.charAt(0).toUpperCase() + article.slice(1)} ${practiceLabel} matter sitting in the middle of the queue. Decent ${strongestLabel} but weak ${weakestLabel}. Worth a look when the calendar opens, not before the Band A and B leads have been worked.`;
-    case "D":
-      return `Band D inquiry. ${article.charAt(0).toUpperCase() + article.slice(1)} ${practiceLabel} matter that is refer-eligible. ${strongestLabel.charAt(0).toUpperCase() + strongestLabel.slice(1)} is present but weak ${weakestLabel} pulls the case below the firm's threshold. The Screen surfaces Refer or Pass as the primary affordances.`;
-    case "E":
-      return `Band E inquiry. ${article.charAt(0).toUpperCase() + article.slice(1)} ${practiceLabel} matter that scored below the firm's qualification floor. Weak ${weakestLabel} dominates. The Screen would auto-decline this with a polite holding response; your partner never reads the brief.`;
+      return `Band C: Low Priority, standard follow-up cadence. ${article.charAt(0).toUpperCase() + article.slice(1)} ${practiceLabel} matter sitting in the queue behind higher-priority inquiries. Decent ${strongestLabel} but weak ${weakestLabel}. Worth a look once the Band A and B leads have been worked.`;
   }
 }
 
@@ -203,8 +217,6 @@ function recommendedActionFor(band: Band): string {
     case "A": return "Immediate callback. Within 60 minutes during business hours, before noon next business day overnight.";
     case "B": return "Standard follow-up cadence. Within 4 business hours.";
     case "C": return "Ranked queue. Reviewed after Band A and B inquiries cleared.";
-    case "D": return "Refer-eligible. Surface Refer / Take / Pass to the lawyer with a 96-hour window.";
-    case "E": return "Auto-decline with a polite holding response. Lawyer not notified.";
   }
 }
 
@@ -213,8 +225,6 @@ function recommendedSequenceFor(band: Band): string {
     case "A": return "J1 New Lead Response (immediate) + J4 Persistence Engine if no booking inside 48h.";
     case "B": return "J1 New Lead Response (standard cadence) + J4 Persistence Engine.";
     case "C": return "J4 Persistence Engine only. No high-priority callback.";
-    case "D": return "Decline-with-grace cadence with a referral suggestion to a fit-appropriate firm.";
-    case "E": return "Auto-decline template. No further sequences.";
   }
 }
 
@@ -223,36 +233,30 @@ function responseWindowFor(band: Band): string {
     case "A": return "Inside 1 hour";
     case "B": return "Inside 4 business hours";
     case "C": return "Inside 1 business day";
-    case "D": return "Inside 96 hours";
-    case "E": return "Auto-handled, no lawyer time";
   }
 }
 
 /* ──────────────────────────────────────────────────────────────────
- *  Band colours — matches the brand book priority bands palette
+ *  Band colours. Matches the brand book priority bands palette.
  * ────────────────────────────────────────────────────────────────── */
 
 export const BAND_COLOR: Record<Band, string> = {
-  A: "#2E7D5B",
+  A: "#C4B49A",
   B: "#5A8A6E",
-  C: "#B58D2E",
-  D: "#C07A2E",
-  E: "#9C5B5B",
+  C: "#8B9099",
 };
 
 export const BAND_LABEL: Record<Band, string> = {
-  A: "Priority",
-  B: "Qualified",
-  C: "Review",
-  D: "Refer-eligible",
-  E: "Auto-decline",
+  A: "High Priority",
+  B: "Mid Priority",
+  C: "Low Priority",
 };
 
-// Production CPI thresholds (v2.1): A >= 90, B >= 75, C >= 60, D >= 45, E < 45
+// Qualitative description only. The live product bands on a weighted
+// four-axis model, not a fixed numeric CPI cutpoint, so no numeric range
+// is shown to the reader here either (see band.ts for the source of truth).
 export const BAND_RANGE: Record<Band, string> = {
-  A: "90 – 100",
-  B: "75 – 89",
-  C: "60 – 74",
-  D: "45 – 59",
-  E: "0 – 44",
+  A: "Call first",
+  B: "Standard callback",
+  C: "Standard follow-up cadence",
 };

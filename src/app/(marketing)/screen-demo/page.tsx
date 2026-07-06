@@ -29,7 +29,7 @@ export default function ScreenDemoEntry() {
           </h1>
           <p className="cls-demo-sub">
             The Screen is the qualifier that runs between every inquiry and
-            every minute of your partner&apos;s time. Walk through a sample case
+            every minute of the lawyer&apos;s time. Walk through a sample case
             below. We&apos;ll produce the same Screen report your firm would
             receive if this prospect landed in your intake queue today.
           </p>
