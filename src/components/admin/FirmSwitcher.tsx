@@ -12,54 +12,36 @@ const FIRM_SCOPED_RE = /^\/admin\/firms\/([^/]+)\/(.*)/;
 // being viewed and its Firm-portal links point at the right firm.
 const PORTAL_SCOPED_RE = /^\/portal\/([^/]+)(?:\/(.*))?$/;
 
-type NavLink =
-  | {
-      label: string;
-      href: (id: string) => string;
-      active: (p: string, id: string) => boolean;
-      external?: false;
-    }
-  | {
-      label: string;
-      href: string;
-      external: true;
-    };
-
-const NAV_LINKS: NavLink[] = [
+const NAV_LINKS = [
   {
-    label: "Routing",
+    label: "Lead routing",
     href: (id: string) => `/admin/firms/${id}/routing`,
     active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/routing`),
   },
   {
-    label: "Portal access",
+    label: "Team logins",
     href: (id: string) => `/admin/firms/${id}/access`,
     active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/access`),
   },
   {
-    label: "Content",
+    label: "Content studio",
     href: (id: string) => `/admin/firms/${id}/content-studio`,
     active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/content-studio`),
   },
   {
-    label: "Messages",
+    label: "Firm chat",
     href: (id: string) => `/admin/firms/${id}/messages`,
     active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/messages`),
   },
   {
-    label: "Onboarding",
+    label: "Setup checklist",
     href: (id: string) => `/admin/firms/${id}/onboarding`,
     active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/onboarding`),
   },
   {
-    label: "Metrics",
+    label: "Website analytics",
     href: (id: string) => `/admin/firms/${id}/metrics`,
     active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/metrics`),
-  },
-  {
-    label: "GA Metrics",
-    href: "https://analytics.google.com/",
-    external: true,
   },
 ];
 
@@ -70,10 +52,10 @@ const NAV_LINKS: NavLink[] = [
 // operator had to route through Portal access to reach the firm's triage
 // queue; the day-to-day engagement surface should be one click from here.
 const FIRM_PORTAL_LINKS = [
-  { label: "Triage queue", href: (id: string) => `/portal/${id}/triage` },
-  { label: "Inbox", href: (id: string) => `/portal/${id}/inbox` },
+  { label: "New leads", href: (id: string) => `/portal/${id}/triage` },
+  { label: "Messages", href: (id: string) => `/portal/${id}/inbox` },
   { label: "Clients", href: (id: string) => `/portal/${id}/clients` },
-  { label: "Boards", href: (id: string) => `/portal/${id}/boards` },
+  { label: "Dashboards", href: (id: string) => `/portal/${id}/boards` },
 ];
 
 // Client-acquisition tools (selling CaseLoad Select, prospecting law firms).
@@ -81,21 +63,21 @@ const FIRM_PORTAL_LINKS = [
 const SELL_LINKS = [
   { label: "Agency CRM", href: "/admin/agency-crm" },
   { label: "SEO check", href: "/admin/seo-check" },
-  { label: "Prospecting diagnostic", href: "/admin/prospecting-diagnostic" },
-  { label: "Diagnostics", href: "/admin/diagnostic-builder" },
+  { label: "Marketing Diagnostic 2.0", href: "/admin/prospecting-diagnostic" },
+  { label: "Marketing Diagnostic 1.0", href: "/admin/diagnostic-builder" },
 ];
 
 // Cross-firm operations and infrastructure. Triage and Webhook outbox moved
 // here from the per-firm group: both link to global routes (the cross-firm
 // triage queue narrows by ?firm_id), so they were never firm-scoped (finding 06).
 const SYSTEM_LINKS = [
-  { label: "Triage", href: "/admin/triage" },
-  { label: "Screen metrics", href: "/admin/screen-metrics" },
-  { label: "Webhook outbox", href: "/admin/webhook-outbox" },
-  { label: "Cadence shadow", href: "/admin/cadence-shadow" },
+  { label: "All leads (every firm)", href: "/admin/triage" },
+  { label: "Screening stats", href: "/admin/screen-metrics" },
+  { label: "Webhook log", href: "/admin/webhook-outbox" },
+  { label: "Cadence preview", href: "/admin/cadence-shadow" },
   { label: "Cadence rules", href: "/admin/cadence-rules" },
-  { label: "Onboarding desk", href: "/admin/onboarding-submissions" },
-  { label: "Health", href: "/admin/health" },
+  { label: "Firm signups", href: "/admin/onboarding-submissions" },
+  { label: "System health", href: "/admin/health" },
 ];
 
 const NAV_LINK_CLASS =
@@ -255,37 +237,26 @@ export default function FirmSwitcher({ firms }: { firms: Firm[] }) {
         )}
       </div>
 
-      {/* Firm nav */}
-      <nav className="px-3 space-y-0.5 pb-4">
-        {NAV_LINKS.map((item) => {
-          if (item.external) {
+      {/* Firm nav (set up / configure this firm) */}
+      <div className="px-3 pb-4">
+        <div className="label px-2 mb-1.5 text-white/30">Set up firm</div>
+        <nav className="space-y-0.5">
+          {NAV_LINKS.map((item) => {
+            const href = item.href(currentFirmId);
+            const isActive = item.active(pathname, currentFirmId);
             return (
-              <a
-                key={item.href}
-                href={item.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`${NAV_LINK_CLASS} ${NAV_IDLE}`}
-              >
+              <Link key={href} href={href} className={`${NAV_LINK_CLASS} ${isActive ? NAV_ACTIVE : NAV_IDLE}`}>
                 {item.label}
-                <span className="ml-1 text-[9px] opacity-50">↗</span>
-              </a>
+              </Link>
             );
-          }
-          const href = item.href(currentFirmId);
-          const isActive = item.active(pathname, currentFirmId);
-          return (
-            <Link key={href} href={href} className={`${NAV_LINK_CLASS} ${isActive ? NAV_ACTIVE : NAV_IDLE}`}>
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
+          })}
+        </nav>
+      </div>
 
       {/* Firm portal (Layer A engagement surfaces, opens the firm's portal) */}
       {currentFirmId && (
         <div className="px-3 pb-4">
-          <div className="label px-2 mb-1.5 text-white/30">Firm portal</div>
+          <div className="label px-2 mb-1.5 text-white/30">Run firm</div>
           <nav className="space-y-0.5">
             {FIRM_PORTAL_LINKS.map((item) => {
               const href = item.href(currentFirmId);
@@ -302,7 +273,7 @@ export default function FirmSwitcher({ firms }: { firms: Firm[] }) {
 
       {/* Sell and prospect nav */}
       <div className="mt-2 px-3 border-t border-white/5 pt-4">
-        <div className="label px-2 mb-1.5 text-white/30">Sell and prospect</div>
+        <div className="label px-2 mb-1.5 text-white/30">Grow agency</div>
         <nav className="space-y-0.5">
           {SELL_LINKS.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
