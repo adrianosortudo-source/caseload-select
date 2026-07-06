@@ -6,7 +6,11 @@
  * Uses the config's deterministic `id` (UUID) as the stable identity key
  * so concurrent callers are race-safe.
  *
- * Authentication: requires ADMIN_SECRET header matching ADMIN_API_SECRET env var.
+ * Authentication: EITHER a valid operator session (getOperatorSession(),
+ * same as every other route in this tree) OR the x-admin-secret header
+ * matching ADMIN_API_SECRET (kept for the automation/script use case that
+ * has no session cookie). If ADMIN_API_SECRET is unset, only the secret
+ * path is unavailable; an operator session still succeeds.
  *
  * Optional body: { slug: "sakuraba-law" }  -  provision only one client.
  *
@@ -14,6 +18,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { getOperatorSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { CLIENT_CONFIGS, buildClientQuestionSets, type ClientConfig } from "@/lib/client-configs";
 
@@ -86,21 +91,30 @@ async function provisionClient(cfg: ClientConfig): Promise<{
 }
 
 export async function POST(req: Request) {
-  // Auth check
-  const adminSecret = process.env.ADMIN_API_SECRET;
-  if (!adminSecret) {
-    return NextResponse.json({ error: "ADMIN_API_SECRET not configured" }, { status: 500 });
-  }
-
-  const authHeader = req.headers.get("x-admin-secret");
-  const { timingSafeEqual } = await import("crypto");
-  const headerBuf = Buffer.from(authHeader ?? "");
-  const secretBuf = Buffer.from(adminSecret);
-  const match =
-    headerBuf.length === secretBuf.length &&
-    timingSafeEqual(headerBuf, secretBuf);
-  if (!match) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Auth check: EITHER a valid operator session OR the shared x-admin-secret
+  // header. This is the only route under /api/admin/** that previously
+  // accepted only the shared secret; every other route accepts the operator
+  // session used across the console. Checking the session first also fixes
+  // the prior bug where an unset ADMIN_API_SECRET 500'd the whole route even
+  // for a legitimate operator  -  now only the secret path is considered
+  // closed/unavailable when the env var is unset.
+  const session = await getOperatorSession();
+  if (session) {
+    console.log("[provision-clients] auth=operator_session");
+  } else {
+    const adminSecret = process.env.ADMIN_API_SECRET;
+    const authHeader = req.headers.get("x-admin-secret");
+    const { timingSafeEqual } = await import("crypto");
+    const headerBuf = Buffer.from(authHeader ?? "");
+    const secretBuf = Buffer.from(adminSecret ?? "");
+    const match =
+      !!adminSecret &&
+      headerBuf.length === secretBuf.length &&
+      timingSafeEqual(headerBuf, secretBuf);
+    if (!match) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    console.log("[provision-clients] auth=admin_secret");
   }
 
   // Optional: provision only a specific client
