@@ -12,7 +12,20 @@ const FIRM_SCOPED_RE = /^\/admin\/firms\/([^/]+)\/(.*)/;
 // being viewed and its Firm-portal links point at the right firm.
 const PORTAL_SCOPED_RE = /^\/portal\/([^/]+)(?:\/(.*))?$/;
 
-const NAV_LINKS = [
+type NavLink =
+  | {
+      label: string;
+      href: (id: string) => string;
+      active: (p: string, id: string) => boolean;
+      external?: false;
+    }
+  | {
+      label: string;
+      href: string;
+      external: true;
+    };
+
+const NAV_LINKS: NavLink[] = [
   {
     label: "Routing",
     href: (id: string) => `/admin/firms/${id}/routing`,
@@ -42,6 +55,11 @@ const NAV_LINKS = [
     label: "Metrics",
     href: (id: string) => `/admin/firms/${id}/metrics`,
     active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/metrics`),
+  },
+  {
+    label: "GA Metrics",
+    href: "https://analytics.google.com/",
+    external: true,
   },
 ];
 
@@ -240,6 +258,20 @@ export default function FirmSwitcher({ firms }: { firms: Firm[] }) {
       {/* Firm nav */}
       <nav className="px-3 space-y-0.5 pb-4">
         {NAV_LINKS.map((item) => {
+          if (item.external) {
+            return (
+              <a
+                key={item.href}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${NAV_LINK_CLASS} ${NAV_IDLE}`}
+              >
+                {item.label}
+                <span className="ml-1 text-[9px] opacity-50">↗</span>
+              </a>
+            );
+          }
           const href = item.href(currentFirmId);
           const isActive = item.active(pathname, currentFirmId);
           return (
