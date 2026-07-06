@@ -478,6 +478,14 @@ export function buildIssues(pages: PageResult[]): Issue[] {
     detail: string;
     urls: Set<string>;
     types: Set<PageType>;
+    // URLs/types of the FAIL instances only. A finding whose reported status is
+    // "fail" (e.g. "Meta description: Missing") must cite only the pages that
+    // actually fail, not pages that merely warn under the same label (e.g. a
+    // page that HAS a meta description but it is too long). Merging them made
+    // the finding claim pages were "Missing" a description they in fact have
+    // (field case rozekandco.com: the homepage carries a 167-char description).
+    failUrls: Set<string>;
+    failTypes: Set<PageType>;
   };
   const map = new Map<string, Acc>();
 
@@ -490,26 +498,30 @@ export function buildIssues(pages: PageResult[]): Issue[] {
         // "structured data" issue already carries the actionable finding.
         if (cat.name === "Schema & Structured Data" && item.label === "JSON-LD validity" && /no blocks to validate/i.test(item.detail)) continue;
         const key = `${cat.name}::${item.label}`;
-        const existing = map.get(key);
-        if (!existing) {
-          map.set(key, {
+        let acc = map.get(key);
+        if (!acc) {
+          acc = {
             category: cat.name,
             label: item.label,
             status: item.status,
             fix: item.fix,
             detail: item.detail,
-            urls: new Set([page.url]),
-            types: new Set([page.pageType]),
-          });
-        } else {
-          existing.urls.add(page.url);
-          existing.types.add(page.pageType);
-          if (item.status === "fail") {
-            existing.status = "fail";
-            // Prefer a failing instance's detail/fix as representative.
-            existing.detail = item.detail;
-            if (item.fix) existing.fix = item.fix;
-          }
+            urls: new Set(),
+            types: new Set(),
+            failUrls: new Set(),
+            failTypes: new Set(),
+          };
+          map.set(key, acc);
+        }
+        acc.urls.add(page.url);
+        acc.types.add(page.pageType);
+        if (item.status === "fail") {
+          acc.failUrls.add(page.url);
+          acc.failTypes.add(page.pageType);
+          acc.status = "fail";
+          // Prefer a failing instance's detail/fix as representative.
+          acc.detail = item.detail;
+          if (item.fix) acc.fix = item.fix;
         }
       }
     }
@@ -523,8 +535,14 @@ export function buildIssues(pages: PageResult[]): Issue[] {
     // headline reads as a false claim of absence.
     if (acc.label === "Policy / disclaimer pages" && hasPolicyPage) continue;
 
-    const affectedCount = acc.urls.size;
-    const pageTypeImpact = [...acc.types];
+    // A "fail" finding cites only its failing pages; a "warn" finding has no
+    // fails, so its warn set IS the full set. This keeps a page that warns
+    // under a label (e.g. meta description too long) out of the same label's
+    // "Missing" (fail) evidence.
+    const reportedUrls = acc.status === "fail" ? acc.failUrls : acc.urls;
+    const reportedTypes = acc.status === "fail" ? acc.failTypes : acc.types;
+    const affectedCount = reportedUrls.size;
+    const pageTypeImpact = [...reportedTypes];
     const hitsCommercial = pageTypeImpact.some((t) => COMMERCIAL_PAGE_TYPES.includes(t));
     const policyOnly = pageTypeImpact.length > 0 && pageTypeImpact.every((t) => t === "policy");
 
@@ -561,8 +579,8 @@ export function buildIssues(pages: PageResult[]): Issue[] {
 
     const { note, angle } = internalAngle(acc.category, severity);
     const evidence = affectedCount === 1
-      ? `1 page: ${[...acc.urls][0]}`
-      : `${affectedCount} of ${totalPages} pages, including ${distinctEvidencePaths([...acc.urls]).slice(0, 3).join(", ")}`;
+      ? `1 page: ${[...reportedUrls][0]}`
+      : `${affectedCount} of ${totalPages} pages, including ${distinctEvidencePaths([...reportedUrls]).slice(0, 3).join(", ")}`;
 
     issues.push({
       id: slug(acc.category, acc.label),
@@ -573,7 +591,7 @@ export function buildIssues(pages: PageResult[]): Issue[] {
       detail: acc.detail,
       fix: acc.fix,
       evidence,
-      affectedUrls: [...acc.urls],
+      affectedUrls: [...reportedUrls],
       affectedCount,
       totalPages,
       pageTypeImpact,

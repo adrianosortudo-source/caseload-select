@@ -93,7 +93,10 @@ describe("buildIssues", () => {
     expect(Number.isNaN(indexIssue?.priority)).toBe(false);
   });
 
-  it("aggregates one issue across pages and counts affected pages", () => {
+  it("a fail finding counts only its failing pages, not same-label warn pages", () => {
+    // fail (missing) and warn (too long/short) under the same label are
+    // different sub-issues. The "fail" finding must cite only the failing page,
+    // or it claims a page is "Missing" a title it in fact has (just suboptimal).
     const c = (s: CheckItem["status"]) => cat("On-Page SEO", [{ label: "Page title", status: s, detail: "d" }]);
     const pages = [
       mkPage({ url: "https://x.com/", pageType: "homepage", categories: [c("fail")] }),
@@ -103,9 +106,30 @@ describe("buildIssues", () => {
     const issues = buildIssues(pages);
     const titleIssue = issues.find((i) => i.title === "Page title");
     expect(titleIssue).toBeTruthy();
-    expect(titleIssue?.affectedCount).toBe(2); // fail + warn pages, not the pass
     expect(titleIssue?.status).toBe("fail"); // worst wins
+    expect(titleIssue?.affectedCount).toBe(1); // only the failing homepage
+    expect(titleIssue?.affectedUrls).toEqual(["https://x.com/"]); // warn page excluded
     expect(titleIssue?.totalPages).toBe(3);
+  });
+
+  it("does not label a page 'missing' a meta description it has (rozekandco warn/fail merge)", () => {
+    // Field case rozekandco.com: 5 pages truly lack a meta description (fail),
+    // 4 have one that is too long (warn). The merged finding read "Missing
+    // (9 of 10, including /)" even though the homepage carries a 167-char
+    // description. The fail finding must cite only the 5 genuinely-missing pages.
+    const md = (s: CheckItem["status"], d: string) => cat("On-Page SEO", [{ label: "Meta description", status: s, detail: d }]);
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [md("warn", "Long (167 chars). May be truncated.")] }),
+      mkPage({ url: "https://x.com/services/corporate", pageType: "practice", categories: [md("warn", "Long (168 chars). May be truncated.")] }),
+      mkPage({ url: "https://x.com/contact", pageType: "contact", categories: [md("fail", "Missing. This is the snippet Google shows.")] }),
+      mkPage({ url: "https://x.com/services/tax", pageType: "practice", categories: [md("fail", "Missing. This is the snippet Google shows.")] }),
+    ];
+    const issue = buildIssues(pages).find((i) => i.title === "Meta description");
+    expect(issue?.status).toBe("fail");
+    expect(issue?.detail).toMatch(/Missing/);
+    expect(issue?.affectedCount).toBe(2); // the two truly-missing pages only
+    expect(issue?.affectedUrls).not.toContain("https://x.com/"); // homepage HAS one
+    expect(issue?.evidence).not.toContain("https://x.com/,"); // homepage not cited
   });
 
   it("keeps long page titles below high while preserving missing-title blockers", () => {
