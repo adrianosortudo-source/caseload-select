@@ -165,6 +165,14 @@ describe("URL normalization / skip / page-type", () => {
     expect(isWpDefaultContent("https://x.com/2020/09/02/hello-world/", realContent)).toBe(false);
     // Real page that merely mentions the boilerplate phrase but is not the slug.
     expect(isWpDefaultContent("https://x.com/practice/family-law", sampleBody)).toBe(false);
+    // Boilerplate body stripped but the default TITLE remains and no real
+    // content was written (field case: chaabanelaw's hello-world lost its
+    // default text yet still titles itself "Hello world!").
+    const strippedTitleOnly = `<html><head><title>Hello world! | Nadia Chaabane Law</title></head><body><h1>Hello world!</h1></body></html>`;
+    expect(isWpDefaultContent("https://x.com/2020/09/02/hello-world/", strippedTitleOnly)).toBe(true);
+    // Repurposed in place: real title + real content => scored normally.
+    const repurposed = `<html><head><title>Criminal Defence in Toronto | Firm</title></head><body><h1>Criminal Defence</h1><p>Real content here.</p></body></html>`;
+    expect(isWpDefaultContent("https://x.com/sample-page/", repurposed)).toBe(false);
   });
   it("skips transactional pages routed through query strings (jsmlaw newsletter form)", () => {
     // /?fuseaction=member.registerShort is a newsletter-signup form, correctly

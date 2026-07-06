@@ -412,11 +412,24 @@ export function shouldSkipUrl(url: string): boolean {
 // two untouched WordPress defaults, its entire published site).
 const WP_STARTER_SLUG_RE = /(^|\/)(hello-world|sample-page)(\/|$)/;
 const WP_STARTER_BODY_RE = /this is an example page|as a new wordpress user|welcome to wordpress\.?\s*this is your first post|edit or delete it,? then start writing/i;
+// The WordPress default title survives even when a firm strips the boilerplate
+// body but never writes real content (field case chaabanelaw.com: the
+// hello-world post lost its default text yet still titles itself "Hello
+// world!" with no real content). A genuinely repurposed page carries a real
+// title, so requiring the default title (or the default body) keeps a firm
+// that reused the slug for real content from being flagged. Any site-name
+// suffix is separated by whitespace or a pipe (a " - Site" separator starts
+// with a space, so plain whitespace already covers it).
+const WP_STARTER_TITLE_RE = /^\s*(hello world!?|sample page)(\s|$|\|)/i;
 
 export function isWpDefaultContent(url: string, html: string): boolean {
   let slug = false;
   try { slug = WP_STARTER_SLUG_RE.test(new URL(url).pathname.toLowerCase()); } catch { return false; }
-  return slug && WP_STARTER_BODY_RE.test(html);
+  if (!slug) return false;
+  if (WP_STARTER_BODY_RE.test(html)) return true;
+  const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() || "";
+  const h1 = (html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] || "").replace(/<[^>]+>/g, "").trim();
+  return WP_STARTER_TITLE_RE.test(title) || WP_STARTER_TITLE_RE.test(h1);
 }
 
 export function crawlUrlKey(url: string): string {
