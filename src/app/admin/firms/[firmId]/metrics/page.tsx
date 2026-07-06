@@ -100,7 +100,22 @@ function GA4Panel({ report, deepLink, propertyId }: { report: GA4Report | null; 
     );
   }
   return (
-    <Panel title="Website traffic (GA4)" subtitle={deepLink ? <a href={deepLink} target="_blank" rel="noopener noreferrer" className="text-navy hover:underline">Open in Google Analytics &rarr;</a> : "Last 7 days"}>
+    <Panel
+      title="Website traffic (GA4)"
+      subtitle={
+        <span className="inline-flex items-center gap-2">
+          <span>Last 7 days</span>
+          {deepLink && (
+            <>
+              <span aria-hidden>&middot;</span>
+              <a href={deepLink} target="_blank" rel="noopener noreferrer" className="text-navy hover:underline">
+                Open in Google Analytics &rarr;
+              </a>
+            </>
+          )}
+        </span>
+      }
+    >
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <MetricCard label="Sessions" value={fmt(report.sessions.value)} delta={report.sessions.delta} />
         <MetricCard label="Users" value={fmt(report.users.value)} delta={report.users.delta} />
