@@ -305,35 +305,11 @@ export async function POST(
     );
   }
 
-  // Audit catch 2026-06-26 HIGH 2: refuse compliance formats that require
-  // structured-output generation until the JSON-schema generator branch ships.
-  // The current generator always emits Markdown and stores only body_markdown;
-  // these formats need structured JSON output matching their renderer input
-  // contract (paid_traffic_landing section ordering, review_request channel-
-  // specific shape, review_response TEARS subformat discrimination).
-  // Accepting them now would produce Markdown that misses the format's
-  // structural validators downstream.
-  //
-  // canonical_service_page removed from this set 2026-07-02: it has its own
-  // structured-output branch below (generateCanonicalServicePageDraft), the
-  // first format built per the SEO/AEO spec's operator-confirmed build order
-  // (docs/CONTENT_STUDIO_SEO_AEO_SPEC.md, Section 10). The other three formats
-  // are unchanged and stay gated until their own branches ship.
-  const STRUCTURED_OUTPUT_REQUIRED_FORMATS = new Set([
-    "paid_traffic_landing",
-    "review_request",
-    "review_response",
-  ]);
-  if (STRUCTURED_OUTPUT_REQUIRED_FORMATS.has(piece.format)) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: `Format "${piece.format}" requires structured JSON output and the generator branch has not shipped yet. This format is accepted by the format taxonomy migration but cannot be drafted by the Markdown-only path. Track in project_content_studio_p0_delta_compliance_shipped.md.`,
-        code: "structured_output_required",
-      },
-      { status: 422 }
-    );
-  }
+  // Ses.17 WP-5: paid_traffic_landing, review_request, and review_response
+  // draft through the plain Markdown path below, same as counsel_note; none
+  // of the three need a separate structured-output branch (no JSON-LD, no
+  // FAQ block). STRUCTURED_OUTPUT_REQUIRED_FORMATS is gone; the pre-existing
+  // audit-catch 2026-06-26 note that lived here is stale as of this commit.
 
   // Validate source brief exists
   const sourceBrief = piece.source_brief as Record<string, unknown> | null;
@@ -345,6 +321,26 @@ export async function POST(
       },
       { status: 422 }
     );
+  }
+
+  // review_response cannot draft without the review it is responding to
+  // (Article IV: nothing invented). rating drives the TEARS subformat
+  // selection in the system prompt (negative vs positive).
+  if (piece.format === "review_response") {
+    const reviewContext = sourceBrief.review_context as
+      | { rating?: number; review_text?: string }
+      | undefined;
+    if (!reviewContext || !reviewContext.review_text || !reviewContext.review_text.trim()) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "source_brief.review_context (with at least review_text) is required to draft a review response. Responding to a review requires the review's actual content.",
+          code: "review_context_required",
+        },
+        { status: 422 }
+      );
+    }
   }
 
   // Load the strategy for prompt building

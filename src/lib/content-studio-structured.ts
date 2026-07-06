@@ -397,7 +397,8 @@ interface AnthropicMessageResult {
 }
 
 export function extractToolUseInput(
-  aiResult: AnthropicMessageResult
+  aiResult: AnthropicMessageResult,
+  toolName: string = CANONICAL_SERVICE_PAGE_TOOL_NAME
 ): { ok: true; input: unknown } | { ok: false; error: string } {
   // A max_tokens stop truncates the tool call mid-JSON; the partial input
   // then fails shape validation with misleading "field missing" errors.
@@ -411,7 +412,7 @@ export function extractToolUseInput(
     };
   }
   const toolBlock = aiResult.content?.find(
-    (block) => block.type === "tool_use" && block.name === CANONICAL_SERVICE_PAGE_TOOL_NAME
+    (block) => block.type === "tool_use" && block.name === toolName
   );
   if (!toolBlock) {
     const textBlock = aiResult.content?.find((b) => b.type === "text" && b.text);

@@ -176,6 +176,125 @@ export function buildSystemPrompt(
     );
   }
 
+  // ─── COMPLIANCE FORMAT FACTS LAYER (Ses.17 WP-5) ───
+  // paid_traffic_landing, review_request, and review_response are the three
+  // formats that used to be blocked from drafting entirely
+  // (STRUCTURED_OUTPUT_REQUIRED_FORMATS in draft/route.ts). They draft
+  // through this same Markdown path, not a separate structured-output
+  // branch: none of the three need JSON-LD or a FAQ block (canonical_service_
+  // page's actual reasons for structured output), they need strict
+  // compliance, which the pre-existing text validators
+  // (validateReviewRequest, validateNegativeReviewResponse,
+  // validateNoFreeConsultLure, validateNoDistressHero, validateNoUsTrustBadges,
+  // validateNoLsaQualityClaim) already enforce and were already wired into
+  // runDeterministicValidators before this session. Entity facts (credentials,
+  // testimonials, CASL sender identification) are injected here as literal
+  // verbatim text the model must reproduce, not left to the model to invent
+  // (Article IV), same principle as canonical_service_page's deterministic
+  // assembly, applied via prompt injection instead of post-hoc assembly since
+  // there is no separate structured-output step for these formats.
+  if (format === "paid_traffic_landing") {
+    const nap = strategyJson.canonical_nap as Record<string, unknown> | undefined;
+    const name = nap?.lawyer_public_facing_name as string | undefined;
+    const lsoNumber = nap?.lso_member_number as string | undefined;
+    const legalEntity = nap?.legal_entity as string | undefined;
+    const credentialParts = [name, lsoNumber ? `Law Society of Ontario, member ${lsoNumber}` : undefined].filter(
+      (v): v is string => !!v
+    );
+    const primaryCta = (formatSpec.primary_cta as string | undefined) ?? "Submit for review";
+    const noCostLine = formatSpec.sub_copy_no_cost_allowed as string | undefined;
+    const testimonials =
+      (sourceBrief.testimonials as Array<{ quote?: string; attribution?: string }> | undefined) ?? [];
+
+    parts.push(
+      "This is a paid-traffic landing page (paid search or paid social). Strip any firm navigation from " +
+        "your output; write only the page content. Order matters: the benefit headline comes first, " +
+        "credentials come after it, never before."
+    );
+    if (credentialParts.length > 0) {
+      parts.push(
+        `Include this credential line verbatim, positioned after the headline, do not alter the wording: ` +
+          `"${credentialParts.join(", ")}"${legalEntity ? ` (${legalEntity})` : ""}.`
+      );
+    }
+    if (testimonials.length > 0) {
+      const block = testimonials
+        .filter((t) => t.quote)
+        .slice(0, 2)
+        .map((t) => `"${t.quote}", attributed to ${t.attribution ?? "a former client"}`)
+        .join("; ");
+      parts.push(`Include one or two testimonials VERBATIM, do not paraphrase, invent, or alter them: ${block}`);
+    } else {
+      parts.push("No verified testimonials were supplied for this brief. Do not invent a testimonial or client quote.");
+    }
+    parts.push(
+      `Primary call to action label: "${primaryCta}". Never offer "Free Consultation" as the headline or ` +
+        `primary CTA; it implies guaranteed advice.`
+    );
+    if (noCostLine) {
+      parts.push(`If mentioning cost, use only this framing: "${noCostLine}". Never promise free legal advice.`);
+    }
+    parts.push(
+      "Hero image guidance (describe the intended image, do not generate one): a professional photo of the " +
+        "lawyer, or a calm, situation-neutral image. Never a funeral, divorce papers, hospital bed, accident " +
+        "scene, or crying/distress imagery."
+    );
+    parts.push(
+      "Trust block: reference only Law Society of Ontario membership. Never reference US-only credentialing " +
+        "(BBB, Verisign, a US state bar, US chamber of commerce, or Avvo, Martindale, or Super Lawyers badges)."
+    );
+  }
+
+  if (format === "review_request") {
+    const nap = strategyJson.canonical_nap as Record<string, unknown> | undefined;
+    const legalEntity = nap?.legal_entity as string | undefined;
+    parts.push(
+      "This is a review-request message sent identically to every closed-matter client, regardless of how " +
+        "the matter went. Never gate the ask on sentiment (no 'if you had a good experience' branching, no " +
+        "private-feedback detour, no promoter/detractor routing). Never offer an incentive (gift card, " +
+        "discount, bonus, prize) for leaving a review. Never ask the reviewer to mention a staff member by " +
+        "name. Never reference capturing the review on-site (tablet, kiosk, office WiFi). Never script or " +
+        "template the review's content; the ask is for the client's own words."
+    );
+    parts.push(
+      "Produce four short pieces of copy under these exact headings, each on its own line starting with " +
+        "'## ': 'Email subject', 'Email body', 'SMS body', 'Closing letter insert', 'Email signature line'."
+    );
+    if (legalEntity) {
+      parts.push(
+        `Include, verbatim, this sender identification in the Email body and SMS body: "Sent by ${legalEntity}." ` +
+          `Include an unsubscribe line in the Email body and SMS body ('reply STOP to unsubscribe' or ` +
+          `equivalent). Do not alter this wording.`
+      );
+    }
+  }
+
+  if (format === "review_response") {
+    const reviewContext = sourceBrief.review_context as
+      | { rating?: number; review_text?: string; reviewer_name?: string }
+      | undefined;
+    const subformat = (reviewContext?.rating ?? 5) <= 3 ? "negative" : "positive";
+    if (subformat === "negative") {
+      parts.push(
+        "This is a response to a negative public review. LSO Rule 3.3: client confidentiality survives the " +
+          "matter, and truth is no defence. Never confirm the reviewer was a client. Never disclose case " +
+          "facts (fee, date, outcome, judgment, settlement). Never apologize for a specific case or matter " +
+          "outcome, only for the reviewer's general experience. TEARS structure: Thank for the feedback, " +
+          "Empathize generally (not for a named matter), state that professional obligations prevent a " +
+          "substantive public response, and close by offering an offline channel (call or email the firm). " +
+          "This reply is sent once; it does not invite further public exchange."
+      );
+    } else {
+      parts.push(
+        "This is a response to a positive public review. Tone: warm, brief, factual. Thank the reviewer, " +
+          "acknowledge briefly, no keyword stuffing, no invented case details."
+      );
+    }
+    if (reviewContext?.review_text) {
+      parts.push(`The review being responded to, verbatim, is: "${reviewContext.review_text}"`);
+    }
+  }
+
   // ─── SEO/AEO LAYER (Step 5 retrofit) ───
   // Task-shaping, same category as the format/word-count directives above,
   // not identity-shaping (Lexicon and later layers), so it sits here. A

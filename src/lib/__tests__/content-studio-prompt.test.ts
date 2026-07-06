@@ -204,6 +204,91 @@ describe("buildEnLanguageDirective / buildPtLanguageDirective", () => {
   });
 });
 
+// Ses.17 WP-5: paid_traffic_landing, review_request, and review_response
+// draft through this same Markdown path (not a separate structured-output
+// branch). Entity facts (credentials, testimonials, CASL identification) are
+// injected as literal verbatim text, never left for the model to invent.
+describe("buildSystemPrompt compliance formats (Ses.17 WP-5)", () => {
+  it("paid_traffic_landing: includes the credential line verbatim and orders it after the headline", () => {
+    const strategy = makeStrategy({
+      strategy_json: {
+        canonical_nap: {
+          lawyer_public_facing_name: "Damaris Regina Guimaraes",
+          lso_member_number: "91022I",
+          legal_entity: "DRG Law Professional Corporation",
+        },
+      },
+    });
+    const prompt = buildSystemPrompt(strategy, "paid_traffic_landing", {});
+    expect(prompt).toContain("Damaris Regina Guimaraes, Law Society of Ontario, member 91022I");
+    expect(prompt).toContain("credentials come after it, never before");
+  });
+
+  it("paid_traffic_landing: includes supplied testimonials verbatim and forbids inventing one when absent", () => {
+    const withTestimonials = buildSystemPrompt(
+      makeStrategy(),
+      "paid_traffic_landing",
+      { testimonials: [{ quote: "A lawyer reviewed our lease in two days.", attribution: "Toronto retail tenant" }] }
+    );
+    expect(withTestimonials).toContain("A lawyer reviewed our lease in two days.");
+    expect(withTestimonials).toContain("attributed to Toronto retail tenant");
+
+    const withoutTestimonials = buildSystemPrompt(makeStrategy(), "paid_traffic_landing", {});
+    expect(withoutTestimonials).toContain("Do not invent a testimonial or client quote.");
+  });
+
+  it("paid_traffic_landing: forbids Free Consultation as the primary CTA and states the approved CTA label", () => {
+    const strategy = makeStrategy({
+      format_specs: {
+        paid_traffic_landing: { primary_cta: "Submit for review", sub_copy_no_cost_allowed: "no fee for the initial review" },
+      },
+    });
+    const prompt = buildSystemPrompt(strategy, "paid_traffic_landing", {});
+    expect(prompt).toContain('Primary call to action label: "Submit for review"');
+    expect(prompt).toContain('Never offer "Free Consultation" as the headline or');
+    expect(prompt).toContain("no fee for the initial review");
+  });
+
+  it("review_request: bans incentive, gating, staff-name, and on-premises patterns and asks for four labeled sections", () => {
+    const prompt = buildSystemPrompt(makeStrategy(), "review_request", {});
+    expect(prompt).toContain("Never offer an incentive");
+    expect(prompt).toContain("Never gate the ask on sentiment");
+    expect(prompt).toContain("Never ask the reviewer to mention a staff member by name");
+    expect(prompt).toContain("'Email subject', 'Email body', 'SMS body', 'Closing letter insert', 'Email signature line'");
+  });
+
+  it("review_request: injects the CASL sender identification verbatim when the firm's legal_entity is on file", () => {
+    const strategy = makeStrategy({
+      strategy_json: { canonical_nap: { legal_entity: "DRG Law Professional Corporation" } },
+    });
+    const prompt = buildSystemPrompt(strategy, "review_request", {});
+    expect(prompt).toContain('Sent by DRG Law Professional Corporation.');
+    expect(prompt).toContain("unsubscribe");
+  });
+
+  it("review_response: selects the negative TEARS subformat when review_context.rating is 3 or below", () => {
+    const prompt = buildSystemPrompt(makeStrategy(), "review_response", {
+      review_context: { rating: 2, review_text: "The response time was slower than I expected." },
+    });
+    expect(prompt).toContain("LSO Rule 3.3");
+    expect(prompt).toContain("Never confirm the reviewer was a client");
+    expect(prompt).toContain("The response time was slower than I expected.");
+  });
+
+  it("review_response: selects the positive subformat when review_context.rating is 4 or above", () => {
+    const prompt = buildSystemPrompt(makeStrategy(), "review_response", {
+      review_context: { rating: 5, review_text: "Excellent, thorough, and fast." },
+    });
+    expect(prompt).toContain("warm, brief, factual");
+    expect(prompt).not.toContain("LSO Rule 3.3");
+  });
+
+  it("review_response: defaults to positive when no rating is supplied at all", () => {
+    const prompt = buildSystemPrompt(makeStrategy(), "review_response", {});
+    expect(prompt).toContain("warm, brief, factual");
+  });
+});
+
 describe("buildUserPrompt", () => {
   it("renders the new SEO/AEO fields as labeled lines", () => {
     const prompt = buildUserPrompt(
