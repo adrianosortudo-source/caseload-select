@@ -218,14 +218,25 @@ async function safeResource(url: string, timeoutMs: number): Promise<string | nu
    Sitemap fetch + link extraction
    ──────────────────────────────────────────────────────── */
 
-async function fetchSitemapUrls(sitemapUrl: string, domain: string, depth = 0): Promise<string[]> {
+// Sitemap traversal budgets. A large multi-location firm (field case:
+// preszlerlaw.com) publishes a sitemap index with a dozen child sitemaps and
+// well over a thousand URLs; the practice-area sitemap that lists every
+// location page sits 12th of 13. The old 5-child / 500-URL caps stopped short
+// of it, so every location page read as "not in the sitemap" when it was there.
+// These budgets cover any realistic firm site many times over; SITEMAP_TRUNCATED
+// records when we still could not read the whole thing.
+const SITEMAP_URL_BUDGET = 10000;
+const SITEMAP_CHILD_LIMIT = 50;
+
+async function fetchSitemapUrls(sitemapUrl: string, domain: string, depth = 0): Promise<{ urls: string[]; truncated: boolean }> {
   try {
     const parsed = new URL(sitemapUrl);
-    if (isSsrfBlocked(parsed.hostname)) return [];
+    if (isSsrfBlocked(parsed.hostname)) return { urls: [], truncated: false };
     const raw = await safeResource(sitemapUrl, 6000);
-    if (!raw) return [];
+    if (!raw) return { urls: [], truncated: false };
     const urls: string[] = [];
     const childSitemaps: string[] = [];
+    let truncated = false;
     const locPattern = /<loc>\s*(https?:\/\/[^\s<]+)\s*<\/loc>/gi;
     for (const [, url] of raw.matchAll(locPattern)) {
       const trimmed = url.trim();
@@ -237,17 +248,20 @@ async function fetchSitemapUrls(sitemapUrl: string, domain: string, depth = 0): 
       if (isSameOrigin(trimmed, domain)) {
         try { const u = new URL(trimmed); u.hash = ""; urls.push(u.href); } catch { /* skip */ }
       }
-      if (urls.length >= 200) break;
+      if (urls.length >= SITEMAP_URL_BUDGET) { truncated = true; break; }
     }
     if (depth === 0) {
-      for (const child of childSitemaps.slice(0, 5)) {
-        const childUrls = await fetchSitemapUrls(child, domain, 1);
-        for (const u of childUrls) urls.push(u);
-        if (urls.length >= 500) break;
+      const reachable = childSitemaps.slice(0, SITEMAP_CHILD_LIMIT);
+      if (childSitemaps.length > reachable.length) truncated = true;
+      for (const child of reachable) {
+        if (urls.length >= SITEMAP_URL_BUDGET) { truncated = true; break; }
+        const childResult = await fetchSitemapUrls(child, domain, 1);
+        for (const u of childResult.urls) urls.push(u);
+        if (childResult.truncated) truncated = true;
       }
     }
-    return urls;
-  } catch { return []; }
+    return { urls, truncated };
+  } catch { return { urls: [], truncated: false }; }
 }
 
 function extractInternalLinks(html: string, baseUrl: string, domain: string): string[] {
@@ -362,21 +376,30 @@ function hasKeyDeep(root: unknown, keys: string[]): boolean {
   return false;
 }
 
-function extractSchemaSummary(html: string): SchemaSummary {
+export function extractSchemaSummary(html: string): SchemaSummary {
   const scriptTags = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
   const types = new Set<string>();
   let invalidBlocks = 0;
   const parsed: unknown[] = [];
+  // Track how many SEPARATE blocks declare a business entity, and whether any
+  // block uses @graph. Organization + LocalBusiness + LegalService inside one
+  // block (or one @graph) is the recommended law-firm pattern, not a conflict.
+  const BUSINESS_TYPES = ["organization", "localbusiness", "legalservice"];
+  let businessTypeBlockCount = 0;
+  let hasGraph = false;
   for (const tag of scriptTags) {
     const jsonStr = tag.replace(/<script[^>]*>/i, "").replace(/<\/script>/i, "").trim();
     try {
       const obj = JSON.parse(jsonStr);
       parsed.push(obj);
-      collectTypes(obj, types);
+      const blockTypes = new Set<string>();
+      collectTypes(obj, blockTypes);
+      for (const bt of blockTypes) types.add(bt);
+      if (hasKeyDeep(obj, ["@graph"])) hasGraph = true;
+      if (BUSINESS_TYPES.some((b) => blockTypes.has(b))) businessTypeBlockCount++;
     } catch { invalidBlocks++; }
   }
   const t = (name: string) => types.has(name);
-  const orgLike = (t("organization") ? 1 : 0) + (t("localbusiness") ? 1 : 0) + (t("legalservice") ? 1 : 0) + (t("attorney") ? 1 : 0);
   return {
     blocks: scriptTags.length,
     invalidBlocks,
@@ -400,8 +423,12 @@ function extractSchemaSummary(html: string): SchemaSummary {
       priceRange: hasKeyDeep(parsed, ["pricerange"]),
       openingHours: hasKeyDeep(parsed, ["openinghours", "openinghoursspecification"]),
     },
-    // Two or more distinct top-level business-entity types can confuse parsers.
-    conflictingEntity: orgLike >= 2,
+    // A genuine conflict is two or more SEPARATE, unlinked business-entity
+    // blocks (two disconnected business cards). Multiple entity types inside
+    // one block, or linked through @graph, is correct rich schema, so it never
+    // fires. Field case: preszlerlaw.com declares Organization + LegalService +
+    // 22 LocalBusiness locations in one @graph, which is best practice.
+    conflictingEntity: businessTypeBlockCount >= 2 && !hasGraph,
   };
 }
 
@@ -671,7 +698,7 @@ function checkSchemaMarkup(schema: SchemaSummary): CategoryResult {
   }
 
   if (schema.conflictingEntity) {
-    items.push({ label: "Schema conflicts", status: "warn", detail: "Two or more business entity types declared. Conflicting entities can confuse parsers.", fix: "Consolidate to a single primary business entity type (for example LegalService) and reference others through it." });
+    items.push({ label: "Schema conflicts", status: "warn", detail: "Business entity types are declared in separate, unlinked blocks, which can read as competing entities.", fix: "Connect them in one @graph, or link them with @id references, so parsers read a single business entity." });
   } else {
     items.push({ label: "Schema conflicts", status: "pass", detail: "No conflicting business entity declarations." });
   }
@@ -1025,7 +1052,8 @@ function buildIndexability(
   requestedUrl: string,
   redirectHops: number,
   domain: string,
-  sitemapSet: Set<string> | null
+  sitemapSet: Set<string> | null,
+  sitemapComplete = true
 ): Indexability {
   const metaRobots = (extractMetaContent(html, "robots") || "").toLowerCase();
   const xRobots = (headers.get("x-robots-tag") || "").toLowerCase();
@@ -1064,6 +1092,10 @@ function buildIndexability(
     if (!inSitemap) {
       try { if ((new URL(finalUrl).pathname || "/") === "/") inSitemap = true; } catch { /* keep computed value */ }
     }
+    // If the sitemap was too large to read fully, we cannot prove a page is
+    // absent from it, so we do not fire the false "not listed" finding. Treat
+    // membership as unproven-but-present rather than asserting a gap.
+    if (!inSitemap && !sitemapComplete) inSitemap = true;
   }
 
   return {
@@ -1103,7 +1135,8 @@ function buildPageResult(
   parsedRobots: ParsedRobots | null,
   llmsTxt: string | null,
   sitemapSet: Set<string> | null,
-  intent: NormalizedIntent | null
+  intent: NormalizedIntent | null,
+  sitemapComplete = true
 ): PageResult {
   const pageHostname = new URL(finalUrl).hostname.replace(/^www\./, "");
   const rawPageTitle = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim() ?? null;
@@ -1112,7 +1145,7 @@ function buildPageResult(
 
   const schema = extractSchemaSummary(html);
   const lawFirm = extractLawFirmSignals(html, schema);
-  const idx = buildIndexability(html, headers, finalUrl, requestedUrl, redirectHops, domain, sitemapSet);
+  const idx = buildIndexability(html, headers, finalUrl, requestedUrl, redirectHops, domain, sitemapSet, sitemapComplete);
   const bodyText = extractBodyText(html);
   const wordCount = countWords(bodyText);
   const rendering = analyzeRenderingSnapshot(html, wordCount);
@@ -1179,7 +1212,8 @@ async function scanPage(
   parsedRobots: ParsedRobots | null,
   llmsTxt: string | null,
   sitemapSet: Set<string> | null,
-  intent: NormalizedIntent | null
+  intent: NormalizedIntent | null,
+  sitemapComplete = true
 ): Promise<{ page: PageResult; html: string } | null> {
   let handle: SafeFetchResult | null = null;
   try {
@@ -1192,7 +1226,7 @@ async function scanPage(
     if (!ct.includes("html") && !ct.includes("xhtml")) return null;
     const read = await readCappedText(res, MAX_HTML_BYTES);
     if (!read.ok) return null;
-    const page = buildPageResult(read.text, finalUrl, url, res.headers, ttfbMs, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent);
+    const page = buildPageResult(read.text, finalUrl, url, res.headers, ttfbMs, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete);
     return { page, html: read.text };
   } catch { return null; }
   finally { handle?.cleanup(); }
@@ -1336,14 +1370,24 @@ export async function POST(req: NextRequest) {
         sitemapRawUrls.push(u);
       }
     };
-    for (const u of await fetchSitemapUrls(`https://${domain}/sitemap.xml`, domain)) collectSitemapUrl(u);
+    let sitemapTruncated = false;
+    const rootSm = await fetchSitemapUrls(`https://${domain}/sitemap.xml`, domain);
+    for (const u of rootSm.urls) collectSitemapUrl(u);
+    if (rootSm.truncated) sitemapTruncated = true;
     if (parsedRobots) {
-      const sameOriginSitemaps = parsedRobots.sitemaps.filter((s) => isSameOrigin(s, domain)).slice(0, 3);
-      for (const sm of sameOriginSitemaps) {
-        for (const u of await fetchSitemapUrls(sm, domain)) collectSitemapUrl(u);
+      const sameOriginSitemaps = parsedRobots.sitemaps.filter((s) => isSameOrigin(s, domain));
+      if (sameOriginSitemaps.length > 5) sitemapTruncated = true;
+      for (const sm of sameOriginSitemaps.slice(0, 5)) {
+        const smResult = await fetchSitemapUrls(sm, domain);
+        for (const u of smResult.urls) collectSitemapUrl(u);
+        if (smResult.truncated) sitemapTruncated = true;
       }
     }
     const sitemapSet = sitemapUrls.size > 0 ? sitemapUrls : null;
+    // When the sitemap was too large to read in full, a page missing from the
+    // partial set is unproven, so we must not assert "not listed" (see the
+    // budget note on fetchSitemapUrls).
+    const sitemapComplete = !sitemapTruncated;
 
     // Scan homepage first.
     let homePage: PageResult;
@@ -1369,7 +1413,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error }, { status: 422 });
       }
       homeHtml = read.text;
-      homePage = buildPageResult(read.text, finalUrl, homeUrl, res.headers, ttfbMs, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent);
+      homePage = buildPageResult(read.text, finalUrl, homeUrl, res.headers, ttfbMs, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete);
     } catch (fetchErr: unknown) {
       const msg = fetchErr instanceof Error ? fetchErr.message : "unknown";
       if (msg === "ssrf_blocked") return NextResponse.json({ error: "That domain cannot be checked." }, { status: 400 });
@@ -1426,7 +1470,7 @@ export async function POST(req: NextRequest) {
         if (visited.has(key)) continue;
         visited.add(key);
 
-        const scanned = await scanPage(next.url, domain, parsedRobots, llmsTxt, sitemapSet, intent);
+        const scanned = await scanPage(next.url, domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete);
         if (!scanned) continue;
         visited.add(crawlUrlKey(scanned.page.url));
         pages.push(scanned.page);
