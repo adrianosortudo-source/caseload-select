@@ -194,8 +194,17 @@ export function validateEmDash(text: string): ValidatorResult {
 export function validateItalicsMarkup(text: string): ValidatorResult {
   const findings: Finding[] = [];
   const italicPatterns = [
-    /\*[^*\n]+\*/g,
-    /_[^_\n]+_/g,
+    // Single-asterisk italics only. The lookbehind/lookahead exclude any `*`
+    // that is part of a `**bold**` pair, so a bold phrase (a legitimate,
+    // encouraged emphasis pattern in this codebase's Markdown output) is
+    // never miscounted as italics. Confirmed false-positive class caught
+    // during the Ses.16 WP-4 run: a body with zero italics and three bold
+    // subheads reported "3 italic marker(s) found" under the prior pattern
+    // (`/\*[^*\n]+\*/g`), which matches the inner `*text*` hiding inside
+    // `**text**` because it does not check what is on either side of the
+    // asterisks it captures.
+    /(?<!\*)\*(?!\*)[^*\n]+(?<!\*)\*(?!\*)/g,
+    /(?<!_)_(?!_)[^_\n]+(?<!_)_(?!_)/g,
     /<em>/gi,
     /<i>/gi,
     /font-style:\s*italic/gi,
@@ -308,7 +317,16 @@ export function validateLsoCompliance(text: string): ValidatorResult {
   const findings: Finding[] = [];
 
   const outcomePromises = [
-    /\bguarantee[sd]?\b/i,
+    // "Guarantee" as a promise-shaped construction only, not the bare noun.
+    // A bare `\bguarantee[sd]?\b` also matches "personal guarantee" and
+    // "guarantee clause", real legal-instrument terms with load-bearing use
+    // in real estate/commercial content (a lease's personal guarantee is
+    // the subject of an already-live DRG Law article). Confirmed
+    // false-positive class during the Ses.16 WP-4 run.
+    /\b(we|our firm|i)\s+(can\s+|will\s+)?guarantee[sd]?\b/i,
+    /\bguarantee[sd]?\s+(you|your)\b/i,
+    /\b(is|are|will\s+be)\s+guaranteed\s+to\b/i,
+    /\bguaranteed\s+(win|victory|result|outcome|success|results|outcomes)\b/i,
     /\bensure[sd]?\s+(you|your|the)\b/i,
     /\bwill\s+win\b/i,
     /\bwill\s+succeed\b/i,
@@ -328,7 +346,11 @@ export function validateLsoCompliance(text: string): ValidatorResult {
   const superlatives = [
     /\bbest\s+(lawyer|firm|attorney|legal)\b/i,
     /\btop[-\s]rated\b/i,
-    /\b#\s*1\b/i,
+    // `#` is not a word character, so a leading `\b` can never match before
+    // it (no word/non-word boundary exists between a space and `#`); the
+    // prior `/\b#\s*1\b/i` never matched anything. Found via the regression
+    // test written alongside the guarantee-pattern fix above.
+    /#\s*1\b/i,
     /\bnumber\s+one\b/i,
     /\bunmatched\b/i,
     /\bunparalleled\b/i,

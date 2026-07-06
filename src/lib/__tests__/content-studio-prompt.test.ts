@@ -102,6 +102,30 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("LSO Rule 4.2-1 is mandatory and blocking.");
     expect(prompt).toContain("Never use em dashes.");
   });
+
+  it("surfaces the five_line_brief literal labels when the format spec defines them (Ses.16 WP-4 bugfix)", () => {
+    const prompt = buildSystemPrompt(
+      makeStrategy({
+        format_specs: {
+          counsel_note: {
+            word_range: [600, 900],
+            structure: ["intro", "body", "five_line_brief"],
+            five_line_brief: ["risk", "price", "timeline", "decision", "next_step"],
+          },
+        },
+      }),
+      "counsel_note",
+      {}
+    );
+    expect(prompt).toContain("five_line_brief section is five short lines");
+    expect(prompt).toContain("risk, price, timeline, decision, next step");
+    expect(prompt).toContain('the risk line contains the word "risk"');
+  });
+
+  it("omits the five_line_brief instruction entirely when the format spec has no such array", () => {
+    const prompt = buildSystemPrompt(makeStrategy(), "counsel_note", {});
+    expect(prompt).not.toContain("five_line_brief section is five short lines");
+  });
 });
 
 describe("buildUserPrompt", () => {

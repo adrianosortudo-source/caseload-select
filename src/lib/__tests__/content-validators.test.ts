@@ -11,6 +11,17 @@
 // of the structured validators above, retrofitted for counsel_note/checklist
 // (Markdown formats with no body_structured/seo_metadata). Still does not
 // expand coverage of the pre-existing pre-Step-3 validators themselves.
+//
+// Ses.16 WP-4 addendum (2026-07-05): the next-20% autonomous build run
+// produced real counsel_note pieces and found two of those pre-Step-3
+// validators actively broken (never covered by a test anywhere in this
+// repo before now). validateItalicsMarkup miscounted every `**bold**`
+// phrase as italics (its regex captured the inner `*text*` hiding inside
+// `**text**`), and validateLsoCompliance's bare `guarantee` pattern flagged
+// the legal noun "personal guarantee", a load-bearing term in commercial
+// lease content, as an LSO outcome-promise violation. Both are fixed below
+// and get narrow regression coverage; this does not become a general
+// initiative to backfill coverage for the rest of the pre-Step-3 battery.
 
 import { describe, it, expect } from "vitest";
 import {
@@ -28,6 +39,8 @@ import {
   validatePrimaryQueryPresenceText,
   validateJurisdictionServiceAreaEarlyText,
   runDeterministicValidators,
+  validateItalicsMarkup,
+  validateLsoCompliance,
   type ValidatorConfig,
 } from "../content-validators";
 import { SERVICE_PAGE_SECTION_KEYS, type ServicePageBlock } from "../content-studio-structured";
@@ -592,5 +605,96 @@ describe("Markdown-format SEO/AEO validators (Step 5 retrofit)", () => {
       expect(keys).toContain("jurisdiction_service_area_early_text");
       expect(keys).not.toContain("primary_query_presence_text");
     });
+  });
+});
+
+describe("validateItalicsMarkup (Ses.16 WP-4 bugfix regression)", () => {
+  it("passes clean text with no emphasis markup at all", () => {
+    const result = validateItalicsMarkup("Plain text with no emphasis of any kind.");
+    expect(result.status).toBe("pass");
+  });
+
+  it("does not flag bold (**text**) phrases as italics", () => {
+    const result = validateItalicsMarkup(
+      "**Share register versus actual ownership.** The register must match. " +
+        "**Dividend resolutions versus declared dividends.** Both must align."
+    );
+    expect(result.status).toBe("pass");
+  });
+
+  it("still catches genuine single-asterisk italics", () => {
+    const result = validateItalicsMarkup("This word is *truly emphasized* in the sentence.");
+    expect(result.status).toBe("fail");
+    expect(result.findings[0].message).toContain("1 italic marker");
+  });
+
+  it("still catches genuine single-underscore italics", () => {
+    const result = validateItalicsMarkup("This word is _truly emphasized_ in the sentence.");
+    expect(result.status).toBe("fail");
+  });
+
+  it("does not flag bold text written with double underscores", () => {
+    const result = validateItalicsMarkup("This is __bold text__ using underscores.");
+    expect(result.status).toBe("pass");
+  });
+
+  it("still catches <em> and <i> tags and inline italic CSS", () => {
+    expect(validateItalicsMarkup("Some <em>emphasized</em> text.").status).toBe("fail");
+    expect(validateItalicsMarkup("Some <i>emphasized</i> text.").status).toBe("fail");
+    expect(validateItalicsMarkup('<span style="font-style: italic;">text</span>').status).toBe("fail");
+  });
+
+  it("counts mixed bold and italic correctly: bold contributes zero, italic contributes one", () => {
+    const result = validateItalicsMarkup("**A bold lead-in.** Then *one italic phrase* follows.");
+    expect(result.status).toBe("fail");
+    expect(result.findings[0].message).toContain("1 italic marker");
+  });
+});
+
+describe("validateLsoCompliance (Ses.16 WP-4 bugfix regression)", () => {
+  it("does not flag 'personal guarantee' as an outcome promise", () => {
+    const result = validateLsoCompliance(
+      "The personal guarantee survives the assignment unless the lease says otherwise. " +
+        "A guarantee is a specific legal instrument, not a promise about the case."
+    );
+    expect(result.status).toBe("pass");
+  });
+
+  it("does not flag 'guarantor' or bare contractual usage", () => {
+    const result = validateLsoCompliance(
+      "The guarantor's obligations continue. The guarantee clause caps the exposure."
+    );
+    expect(result.status).toBe("pass");
+  });
+
+  it("still catches a first-person outcome guarantee", () => {
+    const result = validateLsoCompliance("We guarantee you will win this case.");
+    expect(result.status).toBe("fail");
+  });
+
+  it("still catches 'guarantee you' as a second-person promise", () => {
+    const result = validateLsoCompliance("Our process will guarantee you the best possible result.");
+    expect(result.status).toBe("fail");
+  });
+
+  it("still catches 'guaranteed to' as a promise construction", () => {
+    const result = validateLsoCompliance("This approach is guaranteed to succeed in every case.");
+    expect(result.status).toBe("fail");
+  });
+
+  it("still catches 'guaranteed results'", () => {
+    const result = validateLsoCompliance("We deliver guaranteed results for every client.");
+    expect(result.status).toBe("fail");
+  });
+
+  it("still catches the pre-existing will-win/will-succeed/will-recover patterns", () => {
+    expect(validateLsoCompliance("We will win your case.").status).toBe("fail");
+    expect(validateLsoCompliance("You will succeed with our help.").status).toBe("fail");
+    expect(validateLsoCompliance("We will recover your losses.").status).toBe("fail");
+  });
+
+  it("still catches unverifiable superlatives", () => {
+    expect(validateLsoCompliance("We are the best lawyer in Toronto.").status).toBe("fail");
+    expect(validateLsoCompliance("Rated the #1 firm in Ontario.").status).toBe("fail");
   });
 });

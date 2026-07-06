@@ -104,6 +104,28 @@ export function buildSystemPrompt(
     parts.push(`Required structure sections: ${sections.join(", ")}.`);
   }
 
+  // Five-line-brief literal labels (Ses.16 WP-4 bugfix, 2026-07-05).
+  // format_specs.<format>.five_line_brief (e.g. counsel_note's
+  // ["risk","price","timeline","decision","next_step"]) was defined in the
+  // strategy JSON but never reached the model: the structure-sections line
+  // above only told it a section named "five_line_brief" should exist, not
+  // which five words to use inside it. content-validators.ts's
+  // validateRequiredSections then checks for those exact words literally,
+  // so a well-written five-line brief that happened not to use them (a real
+  // case found in a generated power-of-attorney piece) failed for a reason
+  // that had nothing to do with its actual quality. This closes the gap
+  // between what the strategy promises and what the model is told.
+  if (Array.isArray(formatSpec.five_line_brief) && formatSpec.five_line_brief.length > 0) {
+    const labels = formatSpec.five_line_brief as string[];
+    parts.push(
+      `The five_line_brief section is five short lines, one for each of these labels, in this order: ` +
+        `${labels.map((l) => l.replace(/_/g, " ")).join(", ")}. Use the literal word for each label ` +
+        `somewhere in its line (for example the risk line contains the word "risk"), even for a matter type ` +
+        `where that dimension is not obviously the main story; state briefly what that dimension is or why ` +
+        `it is minimal for this matter, rather than omitting the word.`
+    );
+  }
+
   // ─── SEO/AEO LAYER (Step 5 retrofit) ───
   // Task-shaping, same category as the format/word-count directives above,
   // not identity-shaping (Lexicon and later layers), so it sits here. A
