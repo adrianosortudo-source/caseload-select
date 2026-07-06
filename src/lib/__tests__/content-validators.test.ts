@@ -49,6 +49,7 @@ import {
   significantWords,
   validatePtJurisdictionDisclosure,
   runPtValidators,
+  validateSourceIntegrity,
   type ValidatorConfig,
 } from "../content-validators";
 import { SERVICE_PAGE_SECTION_KEYS, type ServicePageBlock } from "../content-studio-structured";
@@ -1074,5 +1075,48 @@ describe("runPtValidators", () => {
     );
     const emDash = results.find((r) => r.key === "em_dash");
     expect(emDash?.status).toBe("fail");
+  });
+});
+
+// Ses.17 WP-5: found live during the paid_traffic_landing/review_request
+// prod smoke test. validateSourceIntegrity ran unconditionally for every
+// format with a source_brief, requiring decision_question/legal_distinction/
+// consequence even for the three compliance formats that don't use that
+// brief shape at all (a clean review_request draft failed for fields the
+// format was never designed around).
+describe("validateSourceIntegrity (Ses.17 WP-5 format gating)", () => {
+  it("still requires the three fields for a decision-document format like counsel_note", () => {
+    const result = validateSourceIntegrity({}, "counsel_note");
+    expect(result.status).toBe("fail");
+    expect(result.findings).toHaveLength(3);
+  });
+
+  it("still requires the three fields when format is omitted (backward compatible default)", () => {
+    const result = validateSourceIntegrity({});
+    expect(result.status).toBe("fail");
+  });
+
+  it("passes (info) for paid_traffic_landing regardless of the three fields being present", () => {
+    expect(validateSourceIntegrity({}, "paid_traffic_landing").status).toBe("pass");
+  });
+
+  it("passes (info) for review_request regardless of the three fields being present", () => {
+    expect(validateSourceIntegrity({}, "review_request").status).toBe("pass");
+  });
+
+  it("passes (info) for review_response regardless of the three fields being present", () => {
+    expect(validateSourceIntegrity({}, "review_response").status).toBe("pass");
+  });
+
+  it("passes when all three fields are present, for a decision-document format", () => {
+    const result = validateSourceIntegrity(
+      {
+        decision_question: "Should I sign?",
+        legal_distinction: "Commercial leases are not consumer-protected.",
+        consequence: "A costly move can be forced.",
+      },
+      "counsel_note"
+    );
+    expect(result.status).toBe("pass");
   });
 });

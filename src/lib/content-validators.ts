@@ -429,10 +429,27 @@ export function validateOpeningDiscipline(text: string): ValidatorResult {
   };
 }
 
+// Ses.17 WP-5: paid_traffic_landing, review_request, and review_response
+// don't use the decision_question/legal_distinction/consequence brief shape
+// at all (their format_specs define an entirely different set of fields:
+// testimonials, review_context, channel-specific structure). Found live
+// during the WP-5 prod smoke test: a clean review_request draft failed
+// validation on three fields that format was never designed around, because
+// this check ran unconditionally for every format with a source_brief.
+const NO_DECISION_BRIEF_FORMATS = new Set([
+  "paid_traffic_landing",
+  "review_request",
+  "review_response",
+]);
+
 export function validateSourceIntegrity(
-  sourceBrief: Record<string, unknown>
+  sourceBrief: Record<string, unknown>,
+  format?: string
 ): ValidatorResult {
   const findings: Finding[] = [];
+  if (format && NO_DECISION_BRIEF_FORMATS.has(format)) {
+    return { key: "source_integrity", status: "pass", severity: "info", findings };
+  }
   const required = ["decision_question", "legal_distinction", "consequence"];
   for (const field of required) {
     const val = sourceBrief[field];
@@ -2230,7 +2247,7 @@ export function runDeterministicValidators(
   }
 
   if (sourceBrief) {
-    results.push(validateSourceIntegrity(sourceBrief));
+    results.push(validateSourceIntegrity(sourceBrief, config.format));
 
     // SEO/AEO retrofit (Step 5). Each validator already no-ops internally
     // when its field is missing; gating the push here too so a piece that
