@@ -94,6 +94,12 @@ export function matchesFieldChangeTrigger(
  * threshold: does a numeric field value satisfy the rule's boundary? Config
  * shape { field, op, value } with op one of >= > <= < ==. Missing/non-numeric
  * inputs never match (fail-closed).
+ *
+ * No caller in cadence-runner.ts today (only field_change is ever enrolled),
+ * and the cadence_rules.trigger_type CHECK constraint now enforces
+ * field_change-only at the DB layer (Codex audit 2026-07-06, finding 5) until
+ * an enrollment pass for this trigger class exists. Kept here, tested, as the
+ * documented contract for that future pass.
  */
 export function matchesThresholdTrigger(
   rule: CadenceRule,
