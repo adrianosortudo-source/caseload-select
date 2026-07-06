@@ -4,11 +4,21 @@ import { getPiece, getCurrentVersion } from "@/lib/content-studio";
 import { checkLegalGateEntryCondition } from "@/lib/content-studio-gates";
 import { addVersion } from "@/lib/deliverables";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import {
-  renderServicePagePreview,
-  renderMarkdownToSafeHtml,
-  type ServicePageBlock,
-} from "@/lib/content-studio-structured";
+import { renderReviewPayload, type ReviewVersionInput } from "@/lib/content-studio-review";
+
+/** Latest validate_deterministic run's validator rows for a version, or null. */
+async function latestValidationFor(versionId: string): Promise<{ status: string }[] | null> {
+  const { data: run } = await supabaseAdmin
+    .from("content_ai_runs")
+    .select("result")
+    .eq("piece_version_id", versionId)
+    .eq("run_type", "validate_deterministic")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const result = run?.result as { validators?: { status: string }[] } | undefined;
+  return result?.validators ?? null;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -65,19 +75,7 @@ export async function POST(
   }
 
   const version = await getCurrentVersion(id, "en");
-  let latestValidationResults: { status: string }[] | null = null;
-  if (version) {
-    const { data: run } = await supabaseAdmin
-      .from("content_ai_runs")
-      .select("result")
-      .eq("piece_version_id", version.id)
-      .eq("run_type", "validate_deterministic")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const result = run?.result as { validators?: { status: string }[] } | undefined;
-    latestValidationResults = result?.validators ?? null;
-  }
+  const latestValidationResults = version ? await latestValidationFor(version.id) : null;
 
   const entryCheck = checkLegalGateEntryCondition({
     hasCurrentVersion: !!version,
@@ -90,31 +88,40 @@ export async function POST(
     );
   }
 
-  const enHtml =
-    piece.format === "canonical_service_page"
-      ? renderServicePagePreview(
-          (version!.body_structured as ServicePageBlock[] | null) ?? [],
-          (version!.seo_metadata as Record<string, unknown> | null) ?? undefined
-        ).html
-      : renderMarkdownToSafeHtml(version!.body_markdown as string | null);
-
-  // Ses.17 WP-4: when a current PT version exists, append it beneath the EN
-  // content behind a labeled divider. One sign-off then covers both
-  // languages; the drift guard in deliverables.ts already forces
-  // re-approval whenever any new version (EN or PT) posts after an approval.
+  // Ses.17 WP-4: when a current PT version exists, it is posted beneath the EN
+  // content behind a labeled divider. One sign-off then covers both languages;
+  // the drift guard in deliverables.ts already forces re-approval whenever any
+  // new version (EN or PT) posts after an approval.
   const ptVersion = piece.language_mode === "bilingual" ? await getCurrentVersion(id, "pt") : null;
-  const ptHtml = ptVersion
-    ? piece.format === "canonical_service_page"
-      ? renderServicePagePreview(
-          (ptVersion.body_structured as ServicePageBlock[] | null) ?? [],
-          (ptVersion.seo_metadata as Record<string, unknown> | null) ?? undefined
-        ).html
-      : renderMarkdownToSafeHtml(ptVersion.body_markdown as string | null)
-    : null;
 
-  const html = ptHtml
-    ? `${enHtml}\n<hr>\n<h2>Portuguese version</h2>\n${ptHtml}`
-    : enHtml;
+  // Codex audit F3/F5: the PT half must clear validation before it can reach
+  // the lawyer's review surface, exactly as EN does. Previously PT was appended
+  // with no validation gate, so a Portuguese draft with fail-severity findings
+  // could ship into review under an EN-only zero-fail run.
+  if (ptVersion) {
+    const ptValidation = await latestValidationFor(ptVersion.id);
+    const ptEntry = checkLegalGateEntryCondition({
+      hasCurrentVersion: true,
+      latestValidationResults: ptValidation,
+    });
+    if (!ptEntry.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Portuguese version: ${ptEntry.reason}`,
+          code: "send_to_review_pt_blocked",
+        },
+        { status: 422 }
+      );
+    }
+  }
+
+  const html = renderReviewPayload({
+    format: piece.format,
+    languageMode: piece.language_mode,
+    en: version as ReviewVersionInput,
+    pt: (ptVersion as ReviewVersionInput | null) ?? null,
+  });
 
   const versioned = await addVersion({
     deliverableId: piece.deliverable_id,

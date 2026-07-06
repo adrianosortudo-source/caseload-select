@@ -5,6 +5,7 @@ import {
   updatePiece,
   getCurrentVersion,
   resolvePublishGateStatus,
+  checkApprovalIdentity,
 } from "@/lib/content-studio";
 import { checkLegalGateExitCondition } from "@/lib/content-studio-gates";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -62,6 +63,23 @@ export async function POST(
   if (!exitCheck.ok) {
     return NextResponse.json(
       { ok: false, error: exitCheck.reason, code: "publish_record_blocked" },
+      { status: 422 }
+    );
+  }
+
+  // Codex audit F1/F3: recording a publish is an assertion that the approved
+  // content is live. Bind it to the exact lawyer-approved version; a
+  // post-approval drift must be re-reviewed first.
+  const identity = await checkApprovalIdentity({
+    id,
+    firm_id: piece.firm_id,
+    format: piece.format,
+    language_mode: piece.language_mode,
+    deliverable_id: piece.deliverable_id,
+  });
+  if (!identity.ok) {
+    return NextResponse.json(
+      { ok: false, error: identity.reason, code: identity.code },
       { status: 422 }
     );
   }

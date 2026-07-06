@@ -6,6 +6,8 @@ import {
   buildMarkdownSeoMetadata,
   buildPtLanguageDirective,
   buildEnLanguageDirective,
+  resolveReviewResponseSubformat,
+  reviewResponseHasExplicitSentiment,
 } from "../content-studio-prompt";
 import type { StrategyRow } from "../content-studio";
 
@@ -257,13 +259,15 @@ describe("buildSystemPrompt compliance formats (Ses.17 WP-5)", () => {
     expect(prompt).toContain("'Email subject', 'Email body', 'SMS body', 'Closing letter insert', 'Email signature line'");
   });
 
-  it("review_request: injects the CASL sender identification verbatim when the firm's legal_entity is on file", () => {
+  it("review_request: injects the CASL sender identification when the firm's legal_entity is on file (F7)", () => {
     const strategy = makeStrategy({
       strategy_json: { canonical_nap: { legal_entity: "DRG Law Professional Corporation" } },
     });
     const prompt = buildSystemPrompt(strategy, "review_request", {});
-    expect(prompt).toContain('Sent by DRG Law Professional Corporation.');
+    expect(prompt).toContain("CASL compliance is mandatory");
+    expect(prompt).toContain("DRG Law Professional Corporation");
     expect(prompt).toContain("unsubscribe");
+    expect(prompt).toContain("STOP");
   });
 
   it("review_response: selects the negative TEARS subformat when review_context.rating is 3 or below", () => {
@@ -283,9 +287,15 @@ describe("buildSystemPrompt compliance formats (Ses.17 WP-5)", () => {
     expect(prompt).not.toContain("LSO Rule 3.3");
   });
 
-  it("review_response: defaults to positive when no rating is supplied at all", () => {
+  it("review_response: defaults a MISSING rating to the NEGATIVE (safe) prompt, not positive (Codex F6)", () => {
+    // Before the F6 fix this defaulted to positive ("warm, brief, factual"),
+    // which dropped the LSO Rule 3.3 confidentiality guardrails when a negative
+    // review arrived with no numeric rating. The draft route now also refuses
+    // to generate without an explicit rating/sentiment; this asserts the pure
+    // builder's safe fallback.
     const prompt = buildSystemPrompt(makeStrategy(), "review_response", {});
-    expect(prompt).toContain("warm, brief, factual");
+    expect(prompt).toContain("negative public review");
+    expect(prompt).not.toContain("warm, brief, factual");
   });
 });
 
@@ -501,5 +511,94 @@ describe("buildMarkdownSeoMetadata", () => {
     expect(metadata.answer_summary).toBeNull();
     expect(metadata.jurisdiction).toBeNull();
     expect(metadata.service_area).toBeNull();
+  });
+});
+
+// ── Codex audit F6: review_response subformat resolution ──────────────────────
+describe("resolveReviewResponseSubformat", () => {
+  it("uses an explicit sentiment over anything else", () => {
+    expect(resolveReviewResponseSubformat({ sentiment: "negative", rating: 5 })).toBe("negative");
+    expect(resolveReviewResponseSubformat({ sentiment: "positive", rating: 1 })).toBe("positive");
+  });
+
+  it("uses rating <= 3 as negative, > 3 as positive", () => {
+    expect(resolveReviewResponseSubformat({ rating: 1 })).toBe("negative");
+    expect(resolveReviewResponseSubformat({ rating: 3 })).toBe("negative");
+    expect(resolveReviewResponseSubformat({ rating: 4 })).toBe("positive");
+    expect(resolveReviewResponseSubformat({ rating: 5 })).toBe("positive");
+  });
+
+  it("defaults a MISSING rating to negative (safe), never positive", () => {
+    expect(resolveReviewResponseSubformat(undefined)).toBe("negative");
+    expect(resolveReviewResponseSubformat({})).toBe("negative");
+    expect(resolveReviewResponseSubformat({ review_text: "bad" })).toBe("negative");
+  });
+});
+
+describe("reviewResponseHasExplicitSentiment", () => {
+  it("true only when a numeric rating or explicit sentiment is present", () => {
+    expect(reviewResponseHasExplicitSentiment({ rating: 2 })).toBe(true);
+    expect(reviewResponseHasExplicitSentiment({ sentiment: "positive" })).toBe(true);
+    expect(reviewResponseHasExplicitSentiment({ review_text: "x" })).toBe(false);
+    expect(reviewResponseHasExplicitSentiment({})).toBe(false);
+    expect(reviewResponseHasExplicitSentiment(undefined)).toBe(false);
+    expect(reviewResponseHasExplicitSentiment({ sentiment: "meh" })).toBe(false);
+  });
+});
+
+describe("buildSystemPrompt review_response subformat (F6)", () => {
+  const napStrategy = makeStrategy({
+    strategy_json: {
+      canonical_nap: { legal_entity: "DRG Law Professional Corporation" },
+    },
+  });
+
+  it("uses the negative TEARS/confidentiality prompt when rating <= 3", () => {
+    const prompt = buildSystemPrompt(napStrategy, "review_response", {
+      review_context: { rating: 2, review_text: "Slow to respond." },
+    });
+    expect(prompt).toContain("negative public review");
+    expect(prompt).toContain("LSO Rule 3.3");
+  });
+
+  it("uses the negative prompt when sentiment is negative even with no rating", () => {
+    const prompt = buildSystemPrompt(napStrategy, "review_response", {
+      review_context: { sentiment: "negative", review_text: "Bad experience." },
+    });
+    expect(prompt).toContain("negative public review");
+  });
+
+  it("uses the positive prompt when rating is 4 or 5", () => {
+    const prompt = buildSystemPrompt(napStrategy, "review_response", {
+      review_context: { rating: 5, review_text: "Great!" },
+    });
+    expect(prompt).toContain("positive public review");
+    expect(prompt).not.toContain("LSO Rule 3.3");
+  });
+});
+
+describe("buildSystemPrompt review_request CASL injection (F7)", () => {
+  const napStrategy = makeStrategy({
+    strategy_json: {
+      canonical_nap: {
+        legal_entity: "DRG Law Professional Corporation",
+        mailing_address: "PO Box 26033 RPO Broadway, Toronto, ON M4P 0A8",
+      },
+    },
+  });
+
+  it("requires firm identity, mailing address, contact channel, and unsubscribe in the Email body", () => {
+    const prompt = buildSystemPrompt(napStrategy, "review_request", {});
+    expect(prompt).toContain("CASL compliance is mandatory");
+    expect(prompt).toContain("PO Box 26033 RPO Broadway, Toronto, ON M4P 0A8");
+    expect(prompt).toContain("DRG Law Professional Corporation");
+    expect(prompt.toLowerCase()).toContain("unsubscribe");
+    expect(prompt).toContain("STOP");
+  });
+
+  it("falls back to defaults when the strategy has no mailing address on file", () => {
+    const prompt = buildSystemPrompt(makeStrategy(), "review_request", {});
+    expect(prompt).toContain("PO Box 26033 RPO Broadway, Toronto, ON M4P 0A8");
+    expect(prompt).toContain("DRG Law Professional Corporation");
   });
 });

@@ -201,15 +201,18 @@ export function PieceActions({
 }) {
   const router = useRouter();
   const [validateState, setValidateState] = useState<ActionState>("idle");
+  const [validatePtState, setValidatePtState] = useState<ActionState>("idle");
   const [draftState, setDraftState] = useState<ActionState>("idle");
   const [draftPtState, setDraftPtState] = useState<ActionState>("idle");
   const [advanceState, setAdvanceState] = useState<ActionState>("idle");
   const [exportState, setExportState] = useState<ActionState>("idle");
+  const [exportPtState, setExportPtState] = useState<ActionState>("idle");
   const [publishState, setPublishState] = useState<ActionState>("idle");
   const [sendToReviewState, setSendToReviewState] = useState<ActionState>("idle");
   const [publishedUrl, setPublishedUrl] = useState("");
   const [exportUrls, setExportUrls] = useState<Record<string, string> | null>(null);
   const [resultMsg, setResultMsg] = useState<string | null>(null);
+  const isBilingual = languageMode === "bilingual";
 
   const currentIndex = GATE_ORDER.indexOf(currentGate);
   const nextGate =
@@ -282,6 +285,33 @@ export function PieceActions({
     ).then((d) => {
       if (d?.version) {
         setResultMsg(`Portuguese draft v${d.version.version_number} generated`);
+      }
+    });
+
+  const handleValidatePt = () =>
+    runAction(
+      `/api/admin/content-studio/pieces/${pieceId}/validate`,
+      "POST",
+      { language: "pt" },
+      setValidatePtState
+    ).then((d) => {
+      if (d?.summary) {
+        setResultMsg(
+          `Portuguese: ${d.summary.pass} pass, ${d.summary.warn} warn, ${d.summary.fail} fail`
+        );
+      }
+    });
+
+  const handleExportPt = () =>
+    runAction(
+      `/api/admin/content-studio/pieces/${pieceId}/export`,
+      "POST",
+      { language: "pt" },
+      setExportPtState
+    ).then((d) => {
+      if (d?.signed_urls) {
+        setExportUrls(d.signed_urls);
+        setResultMsg(`Exported Portuguese v${d.version_number}. Links are valid for 1 hour.`);
       }
     });
 
@@ -401,6 +431,25 @@ export function PieceActions({
           </button>
         )}
 
+        {isBilingual && (
+          <button
+            onClick={handleValidatePt}
+            disabled={validatePtState === "loading" || !hasVersion}
+            className={btnClass(
+              validatePtState,
+              "w-full text-left rounded border border-amber-200 bg-amber-50/60 px-3 py-2.5 hover:bg-amber-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            )}
+          >
+            <div className="text-sm font-medium text-amber-700">
+              {validatePtState === "loading" ? "Validating Portuguese..." : "Validate Portuguese"}
+            </div>
+            <div className="text-xs text-amber-600/60 mt-0.5">
+              Runs the Portuguese validator battery. The PT version must pass
+              (zero fails) before it can be sent to review.
+            </div>
+          </button>
+        )}
+
         {nextGate && (
           <button
             onClick={handleAdvance}
@@ -466,9 +515,29 @@ export function PieceActions({
             </div>
             <div className="text-xs text-black/40 mt-0.5">
               Requires a lawyer-approved deliverable (or an active publish
-              delegation). Writes page.html + schema.json + meta.json.
+              delegation) that matches the current version. Writes page.html +
+              schema.json + meta.json.
             </div>
           </button>
+
+          {isBilingual && (
+            <button
+              onClick={handleExportPt}
+              disabled={exportPtState === "loading" || !hasVersion}
+              className={btnClass(
+                exportPtState,
+                "w-full mt-2 text-left rounded border border-amber-200 bg-amber-50/60 px-3 py-2.5 hover:bg-amber-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              )}
+            >
+              <div className="text-sm font-medium text-amber-700">
+                {exportPtState === "loading" ? "Exporting Portuguese..." : "Export Portuguese bundle"}
+              </div>
+              <div className="text-xs text-amber-600/60 mt-0.5">
+                Exports the Portuguese version with its Portuguese LSO banner.
+                Same approval gate as the English export.
+              </div>
+            </button>
+          )}
 
           {exportUrls && (
             <div className="mt-2 rounded border border-sky-200 bg-sky-50 px-3 py-2 space-y-1">
@@ -518,9 +587,12 @@ export function PieceActions({
           <div
             className={`text-xs rounded px-3 py-2 ${
               validateState === "error" ||
+              validatePtState === "error" ||
               draftState === "error" ||
+              draftPtState === "error" ||
               advanceState === "error" ||
               exportState === "error" ||
+              exportPtState === "error" ||
               publishState === "error" ||
               sendToReviewState === "error"
                 ? "bg-rose-50 text-rose-700 border border-rose-200"

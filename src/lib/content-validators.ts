@@ -39,6 +39,7 @@ export type ValidatorKey =
   | "weasel_words"
   | "rejected_cta"
   | "review_request"
+  | "review_request_casl"
   | "negative_review_response"
   | "testimonial_content"
   | "lso_superlative"
@@ -1333,6 +1334,151 @@ export function validateReviewRequest(
 }
 
 // -----------------------------------------------------------------------------
+// review_request CASL coverage (Codex audit F7, 2026-07-07)
+//
+// review_request generates a multi-channel body: an Email body and an SMS body
+// (plus subject, closing-letter insert, and signature line), each under its own
+// "## Heading". validateEmailRespect explicitly EXCLUDES review_request, and no
+// other validator checked CASL identity/unsubscribe for it, so the review-
+// request Email could ship with no firm name, no mailing address, no contact
+// channel, and no unsubscribe, and the SMS with no sender identity and no STOP.
+//
+// This validator splits the body by the "## Heading" markers the prompt
+// requires and checks each channel's CASL floor:
+//   Email body  -> firm name, mailing address, a contact channel, unsubscribe
+//   SMS body    -> sender identity (firm name), STOP/unsubscribe
+// plus that the expected Email body and SMS body sections are present at all.
+// -----------------------------------------------------------------------------
+const REVIEW_REQUEST_CASL_FORMATS = new Set([
+  "review_request",
+  "review_request_email",
+  "review_request_sms",
+]);
+
+// Split a markdown body into { headingLowercased -> sectionText } by "## " lines.
+function splitByH2Sections(text: string): Map<string, string> {
+  const sections = new Map<string, string>();
+  const lines = text.split(/\r?\n/);
+  let currentHeading: string | null = null;
+  let buffer: string[] = [];
+  const flush = () => {
+    if (currentHeading !== null) {
+      sections.set(currentHeading, buffer.join("\n").trim());
+    }
+  };
+  for (const line of lines) {
+    const m = line.match(/^\s*#{2,3}\s+(.+?)\s*$/);
+    if (m) {
+      flush();
+      currentHeading = m[1].trim().toLowerCase();
+      buffer = [];
+    } else {
+      buffer.push(line);
+    }
+  }
+  flush();
+  return sections;
+}
+
+function findSection(sections: Map<string, string>, needle: string): string | null {
+  for (const [heading, body] of sections) {
+    if (heading.includes(needle)) return body;
+  }
+  return null;
+}
+
+export function validateReviewRequestCasl(text: string, format?: string): ValidatorResult {
+  const findings: Finding[] = [];
+  if (!format || !REVIEW_REQUEST_CASL_FORMATS.has(format)) {
+    return { key: "review_request_casl", status: "pass", severity: "info", findings };
+  }
+
+  const sections = splitByH2Sections(text);
+  const emailBody = findSection(sections, "email body");
+  const smsBody = findSection(sections, "sms body");
+
+  if (emailBody === null) {
+    findings.push({
+      rule: "review_request_casl",
+      severity: "fail",
+      message:
+        "review_request is missing an 'Email body' section (expected under a '## Email body' heading). CASL identity and unsubscribe cannot be verified.",
+    });
+  } else {
+    const hasFirmName = /DRG\s+Law/i.test(emailBody);
+    const hasAddress = /(?:PO\s+Box|M4P\s*0A8|Toronto,?\s+ON|Ontario)/i.test(emailBody);
+    const hasChannel =
+      /(?:\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|drglaw\.ca|https?:\/\/[^\s]+|\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b)/i.test(
+        emailBody,
+      );
+    const hasUnsub =
+      /\b(?:unsubscribe|opt[-\s]?out|update\s+(?:your\s+)?preferences|stop\s+receiving)\b/i.test(emailBody);
+    if (!hasFirmName) {
+      findings.push({
+        rule: "review_request_casl",
+        severity: "fail",
+        message: "review_request Email body must name the firm (DRG Law) for CASL identification.",
+      });
+    }
+    if (!hasAddress) {
+      findings.push({
+        rule: "review_request_casl",
+        severity: "fail",
+        message:
+          "review_request Email body must include the firm's mailing address (PO Box 26033 RPO Broadway, Toronto, ON M4P 0A8) per CASL.",
+      });
+    }
+    if (!hasChannel) {
+      findings.push({
+        rule: "review_request_casl",
+        severity: "fail",
+        message: "review_request Email body must include at least one contact channel (phone, email, or website).",
+      });
+    }
+    if (!hasUnsub) {
+      findings.push({
+        rule: "review_request_casl",
+        severity: "fail",
+        message: "review_request Email body must include an unsubscribe or update-preferences affordance per CASL.",
+      });
+    }
+  }
+
+  if (smsBody === null) {
+    findings.push({
+      rule: "review_request_casl",
+      severity: "fail",
+      message:
+        "review_request is missing an 'SMS body' section (expected under a '## SMS body' heading). Sender identity and STOP cannot be verified.",
+    });
+  } else {
+    const hasFirmName = /DRG\s+Law/i.test(smsBody);
+    const hasStop = /\bSTOP\b|\bunsubscribe\b|\bopt[-\s]?out\b/i.test(smsBody);
+    if (!hasFirmName) {
+      findings.push({
+        rule: "review_request_casl",
+        severity: "fail",
+        message: "review_request SMS body must identify the sender (DRG Law) per CASL.",
+      });
+    }
+    if (!hasStop) {
+      findings.push({
+        rule: "review_request_casl",
+        severity: "fail",
+        message: "review_request SMS body must include STOP/unsubscribe language per CASL.",
+      });
+    }
+  }
+
+  return {
+    key: "review_request_casl",
+    status: findings.length > 0 ? "fail" : "pass",
+    severity: findings.length > 0 ? "fail" : "info",
+    findings,
+  };
+}
+
+// -----------------------------------------------------------------------------
 // 3.A2 validateNegativeReviewResponse
 // LSO Rule 3.3 confidentiality: cannot confirm client relationship, cannot
 // disclose case detail, no apology for the matter. TEARS adapted (L8).
@@ -2121,6 +2267,64 @@ export function validatePtJurisdictionDisclosure(text: string): ValidatorResult 
   };
 }
 
+/**
+ * Format-safe LSO / brand text-compliance floor (Codex audit F4, 2026-07-07).
+ *
+ * The subset of the deterministic battery that operates on raw text and is
+ * meaningful for ANY prose format, including the structured
+ * canonical_service_page once its blocks are flattened. Excludes the
+ * Markdown-structural checks (required sections, page structure, opening
+ * discipline, SEO-field checks) that assume a Markdown body or a source brief
+ * shape. runDeterministicValidators still runs every one of these inline for
+ * Markdown formats; this function is the shared floor the canonical branch in
+ * content-studio.ts appends so the flagship format cannot bypass the LSO/brand
+ * safeguards by being on a different validation branch.
+ */
+export function runSharedTextComplianceFloor(
+  text: string,
+  config: ValidatorConfig,
+  sourceBrief?: Record<string, unknown>,
+): ValidatorResult[] {
+  const results: ValidatorResult[] = [];
+
+  results.push(validateBannedVocabulary(text, config.banned_vocabulary));
+  results.push(validateLsoCompliance(text));
+
+  if (config.formatting_rules.no_timing_promises ?? true) {
+    results.push(validateTimingPromise(text));
+  }
+  if (config.formatting_rules.no_specialist_language ?? true) {
+    results.push(validateSpecialistSelfDesignation(text));
+  }
+  if (config.formatting_rules.no_factual_hallucination ?? true) {
+    const verifiedFacts = sourceBrief?.verified_facts === true;
+    results.push(validateFactualClaim(text, verifiedFacts));
+  }
+  if (config.formatting_rules.no_fake_scarcity ?? true) {
+    results.push(validateFakeScarcity(text));
+  }
+  if (config.formatting_rules.no_weasel_words ?? true) {
+    results.push(validateWeaselWords(text));
+  }
+  if (config.formatting_rules.no_lso_superlatives ?? true) {
+    results.push(validateLsoSuperlatives(text, config.certified_specialists));
+  }
+  if (config.formatting_rules.no_referral_violations ?? true) {
+    results.push(validateReferralCopy(text));
+  }
+  if (config.formatting_rules.no_review_removal_copy ?? true) {
+    results.push(validateNoReviewRemovalCopy(text, sourceBrief));
+  }
+  if (config.formatting_rules.no_us_trust_badges ?? true) {
+    results.push(validateNoUsTrustBadges(text));
+  }
+  if (config.formatting_rules.no_lsa_quality_claim ?? true) {
+    results.push(validateNoLsaQualityClaim(text));
+  }
+
+  return results;
+}
+
 export function runPtValidators(text: string, config: ValidatorConfig): ValidatorResult[] {
   const results: ValidatorResult[] = [];
   if (config.formatting_rules.no_em_dashes) {
@@ -2139,6 +2343,25 @@ export function runPtValidators(text: string, config: ValidatorConfig): Validato
     results.push(validateRuleOfThree(text));
   }
   results.push(validatePtJurisdictionDisclosure(text));
+
+  // Codex audit F5 (2026-07-07): the PT battery was formatting-only. Add the
+  // language-NEUTRAL compliance checks that carry real LSO/CASL risk and do
+  // not false-positive on Portuguese prose because they match numeric/statute
+  // patterns and US brand names, not English sentence shapes: unverified
+  // factual/statute/dollar/percentage claims, US trust badges, and LSA
+  // ("Google Screened"/"Google Guaranteed") quality claims. English-sentence
+  // validators (timing-promise phrasing, opening discipline, banned-vocab
+  // English list) are still excluded because they would be noise, not
+  // assurance, against Portuguese text.
+  if (config.formatting_rules.no_factual_hallucination ?? true) {
+    results.push(validateFactualClaim(text, false));
+  }
+  if (config.formatting_rules.no_us_trust_badges ?? true) {
+    results.push(validateNoUsTrustBadges(text));
+  }
+  if (config.formatting_rules.no_lsa_quality_claim ?? true) {
+    results.push(validateNoLsaQualityClaim(text));
+  }
   return results;
 }
 
@@ -2222,6 +2445,9 @@ export function runDeterministicValidators(
   // ─── P0 delta batch (compliance-blocking, 2026-06-26) ─────────────────────
   if (config.formatting_rules.enforce_review_request_compliance ?? true) {
     results.push(validateReviewRequest(text, config.format));
+    // Codex audit F7: CASL identity + unsubscribe for the review_request
+    // Email/SMS channels (validateEmailRespect excludes review_request).
+    results.push(validateReviewRequestCasl(text, config.format));
   }
   if (config.formatting_rules.enforce_negative_review_response ?? true) {
     results.push(validateNegativeReviewResponse(text, config.format));

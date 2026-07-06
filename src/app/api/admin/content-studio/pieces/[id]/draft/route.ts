@@ -28,6 +28,9 @@ import {
   buildMarkdownSeoMetadata,
   buildPtLanguageDirective,
   buildEnLanguageDirective,
+  resolveReviewResponseSubformat,
+  reviewResponseHasExplicitSentiment,
+  type ReviewContext,
 } from "@/lib/content-studio-prompt";
 import { filterInternalLinkTargetsToFirmHost, type InternalLinkTarget } from "@/lib/content-studio-links";
 
@@ -324,12 +327,16 @@ export async function POST(
   }
 
   // review_response cannot draft without the review it is responding to
-  // (Article IV: nothing invented). rating drives the TEARS subformat
+  // (Article IV: nothing invented). rating/sentiment drives the TEARS subformat
   // selection in the system prompt (negative vs positive).
+  //
+  // Codex audit F6 (2026-07-07): an explicit rating (number) or sentiment
+  // ("negative"/"positive") is now REQUIRED. Previously only review_text was
+  // required, and a missing rating silently defaulted to the POSITIVE prompt,
+  // dropping the LSO Rule 3.3 confidentiality guardrails for a negative review.
+  let reviewSubformat: "negative" | "positive" | null = null;
   if (piece.format === "review_response") {
-    const reviewContext = sourceBrief.review_context as
-      | { rating?: number; review_text?: string }
-      | undefined;
+    const reviewContext = sourceBrief.review_context as ReviewContext | undefined;
     if (!reviewContext || !reviewContext.review_text || !reviewContext.review_text.trim()) {
       return NextResponse.json(
         {
@@ -341,6 +348,18 @@ export async function POST(
         { status: 422 }
       );
     }
+    if (!reviewResponseHasExplicitSentiment(reviewContext)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "review_response requires an explicit source_brief.review_context.rating (number) or review_context.sentiment ('negative' | 'positive'). A missing rating must not be guessed; a negative review answered with the positive prompt drops the LSO Rule 3.3 confidentiality guardrails.",
+          code: "review_sentiment_required",
+        },
+        { status: 422 }
+      );
+    }
+    reviewSubformat = resolveReviewResponseSubformat(reviewContext);
   }
 
   // Load the strategy for prompt building
@@ -429,8 +448,25 @@ export async function POST(
     id: string;
     content: Array<{ type: string; text?: string }>;
     model: string;
+    stop_reason?: string | null;
     usage: { input_tokens: number; output_tokens: number };
   };
+
+  // Codex audit F10 (2026-07-07): the Markdown branch never checked
+  // stop_reason. A max_tokens truncation returns partial text with
+  // stop_reason="max_tokens"; saving that as a normal version ships a cut-off
+  // draft. Reject any non-complete end state before persisting a version.
+  if (aiResult.stop_reason === "max_tokens") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "The model output was truncated at the max_tokens ceiling before completing. Nothing was saved. Shorten the brief or raise max_tokens and retry.",
+        code: "generation_truncated",
+      },
+      { status: 502 }
+    );
+  }
 
   const generatedText =
     aiResult.content
@@ -482,6 +518,9 @@ export async function POST(
       strategy_version: strategy.version,
       format: piece.format,
       language,
+      // Codex audit F6: record which review_response subformat drove the prompt
+      // so the choice is auditable, not implicit.
+      ...(reviewSubformat ? { review_subformat: reviewSubformat } : {}),
     },
     result: {
       anthropic_message_id: aiResult.id,
