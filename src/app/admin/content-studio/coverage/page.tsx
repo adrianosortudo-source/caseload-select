@@ -23,6 +23,7 @@ type Piece = {
   source_brief: Record<string, unknown> | null;
   deliverable_id: string | null;
   calendar_slot_id: string | null;
+  language_mode: string;
 };
 
 type Version = {
@@ -30,12 +31,14 @@ type Version = {
   seo_metadata: Record<string, unknown> | null;
 };
 
+type PtVersion = { piece_id: string };
+
 type Deliverable = { id: string; status: string };
 
 type ValidationRun = {
   piece_id: string;
   created_at: string;
-  result: { validators?: Array<{ status: string }> } | null;
+  result: { validators?: Array<{ key: string; status: string }> } | null;
 };
 
 type Slot = {
@@ -142,7 +145,9 @@ export default async function ContentStudioCoveragePage({
   const [piecesRes, slotsRes] = await Promise.all([
     supabase
       .from("content_pieces")
-      .select("id,title_working,format,workflow_gate,status,source_brief,deliverable_id,calendar_slot_id")
+      .select(
+        "id,title_working,format,workflow_gate,status,source_brief,deliverable_id,calendar_slot_id,language_mode"
+      )
       .eq("firm_id", selected.id)
       .neq("status", "archived")
       .order("created_at", { ascending: false }),
@@ -158,13 +163,23 @@ export default async function ContentStudioCoveragePage({
   const pieceIds = pieces.map((p) => p.id);
   const deliverableIds = pieces.map((p) => p.deliverable_id).filter((id): id is string => !!id);
 
-  const [versionsRes, deliverablesRes, validationRunsRes] = await Promise.all([
+  const bilingualPieceIds = pieces.filter((p) => p.language_mode === "bilingual").map((p) => p.id);
+
+  const [versionsRes, ptVersionsRes, deliverablesRes, validationRunsRes] = await Promise.all([
     pieceIds.length > 0
       ? supabase
           .from("content_piece_versions")
           .select("piece_id,seo_metadata")
           .in("piece_id", pieceIds)
           .eq("language", "en")
+          .eq("is_current", true)
+      : Promise.resolve({ data: [] }),
+    bilingualPieceIds.length > 0
+      ? supabase
+          .from("content_piece_versions")
+          .select("piece_id")
+          .in("piece_id", bilingualPieceIds)
+          .eq("language", "pt")
           .eq("is_current", true)
       : Promise.resolve({ data: [] }),
     deliverableIds.length > 0
@@ -181,6 +196,7 @@ export default async function ContentStudioCoveragePage({
   ]);
 
   const versionByPiece = new Map((versionsRes.data as Version[]).map((v) => [v.piece_id, v]));
+  const piecesWithCurrentPt = new Set((ptVersionsRes.data as PtVersion[]).map((v) => v.piece_id));
   const deliverableById = new Map((deliverablesRes.data as Deliverable[]).map((d) => [d.id, d]));
   // Latest run per piece: rows are ordered created_at desc, first occurrence wins.
   const latestRunByPiece = new Map<string, ValidationRun>();
@@ -233,6 +249,8 @@ export default async function ContentStudioCoveragePage({
                   <th className="text-left">Primary query</th>
                   <th className="text-left">Gate</th>
                   <th className="text-left">Deliverable</th>
+                  <th className="text-left">PT</th>
+                  <th className="text-left">Cannibalization</th>
                   <th className="text-left">Published URL</th>
                   <th className="text-right px-4">Last validation</th>
                 </tr>
@@ -240,7 +258,7 @@ export default async function ContentStudioCoveragePage({
               <tbody>
                 {pieces.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-black/40">
+                    <td colSpan={9} className="py-8 text-center text-black/40">
                       No content pieces yet for {selected.name}.
                     </td>
                   </tr>
@@ -269,6 +287,9 @@ export default async function ContentStudioCoveragePage({
                         : validators.some((v) => v.status === "warn")
                           ? "warn"
                           : "pass";
+                  const isBilingual = piece.language_mode === "bilingual";
+                  const hasCurrentPt = piecesWithCurrentPt.has(piece.id);
+                  const cannibalization = validators.find((v) => v.key === "no_cannibalization");
 
                   return (
                     <tr key={piece.id} className="border-b border-black/5">
@@ -292,6 +313,32 @@ export default async function ContentStudioCoveragePage({
                           <Badge value={deliverable.status} tone={statusTone[deliverable.status]} />
                         ) : (
                           <span className="text-black/30 text-xs">None</span>
+                        )}
+                      </td>
+                      <td>
+                        {!isBilingual ? (
+                          <span className="text-black/30 text-xs">EN only</span>
+                        ) : hasCurrentPt ? (
+                          <span className="inline-block px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700">
+                            Exists
+                          </span>
+                        ) : (
+                          <span className="inline-block px-2.5 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700">
+                            Missing
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {!cannibalization ? (
+                          <span className="text-black/30 text-xs">Not checked</span>
+                        ) : cannibalization.status === "warn" ? (
+                          <span className="inline-block px-2.5 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700">
+                            Overlap flagged
+                          </span>
+                        ) : (
+                          <span className="inline-block px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700">
+                            Clear
+                          </span>
                         )}
                       </td>
                       <td>
