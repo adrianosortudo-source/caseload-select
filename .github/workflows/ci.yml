@@ -108,11 +108,16 @@ jobs:
         # `npm run check:engine-sync` locally and commit the refreshed manifest.
         # Only bash + sha256sum are needed, so this job skips the Node setup.
         #
-        # if-exists guard for the bootstrap window: older in-flight branches
-        # won't carry the script/manifest yet (mirrors the brief-equality job).
+        # The bootstrap window (an if-exists skip for branches predating
+        # DR-058) is over: both scripts/check-engine-manifest.sh and
+        # scripts/engine-sync.manifest have been on main since 2026-06-09
+        # (Ses.13 launch hardening). A missing file now is a real repo defect,
+        # not an expected pre-DR-058 branch, so it fails loud instead of
+        # silently passing this required check (Codex audit 2026-07-06,
+        # finding 9).
         run: |
-          if [ -f scripts/check-engine-manifest.sh ] && [ -f scripts/engine-sync.manifest ]; then
-            bash scripts/check-engine-manifest.sh
-          else
-            echo "engine-sync gate not present on this branch yet, skipping (ships with DR-058)."
+          if [ ! -f scripts/check-engine-manifest.sh ] || [ ! -f scripts/engine-sync.manifest ]; then
+            echo "::error::engine-sync manifest or check script is missing from this branch. Run scripts/check-engine-sync.sh locally and commit the refreshed scripts/engine-sync.manifest before merging."
+            exit 1
           fi
+          bash scripts/check-engine-manifest.sh
