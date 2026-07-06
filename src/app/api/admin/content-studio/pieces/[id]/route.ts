@@ -5,6 +5,7 @@ import {
   updatePiece,
   getCurrentVersion,
   resolvePublishGateStatus,
+  checkApprovalIdentity,
 } from "@/lib/content-studio";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createDeliverable, addVersion } from "@/lib/deliverables";
@@ -13,11 +14,7 @@ import {
   checkLegalGateExitCondition,
   checkBilingualAuthoringCondition,
 } from "@/lib/content-studio-gates";
-import {
-  renderServicePagePreview,
-  renderMarkdownToSafeHtml,
-  type ServicePageBlock,
-} from "@/lib/content-studio-structured";
+import { renderReviewPayload, type ReviewVersionInput } from "@/lib/content-studio-review";
 
 export const dynamic = "force-dynamic";
 
@@ -99,11 +96,15 @@ export async function PATCH(
   const { id } = await params;
   const body = await req.json();
 
+  // Codex audit F2 (2026-07-07): "status" is deliberately NOT in this
+  // allowlist. Before, a PATCH { status: "published" } skipped the legal-gate
+  // checks, the export route, AND the publish-record route (which is the only
+  // path that may set "published", and only after the approval-identity check
+  // passes), and spoofed the coverage page's published count.
   const allowedFields = [
     "title_working",
     "source_brief",
     "workflow_gate",
-    "status",
     "owner_name",
     "review_date",
     "ship_checks",
@@ -200,13 +201,20 @@ export async function PATCH(
       // internal workflow transition, not an operator announcing a
       // deliverable is ready, and the stop-line in the build plan forbids
       // any notification reaching the firm from this run.
-      const html =
-        currentPiece.format === "canonical_service_page"
-          ? renderServicePagePreview(
-              (version!.body_structured as ServicePageBlock[] | null) ?? [],
-              (version!.seo_metadata as Record<string, unknown> | null) ?? undefined
-            ).html
-          : renderMarkdownToSafeHtml(version!.body_markdown as string | null);
+      //
+      // Codex audit F1/F8: renderReviewPayload is the SINGLE renderer shared
+      // with send-to-review and the approval-identity check. Using it here
+      // means the approved deliverable body is exactly what the identity check
+      // re-renders later, and the lawyer-visible body now includes the
+      // export-critical SEO title/meta/JSON-LD summary.
+      const ptAtEntry =
+        currentPiece.language_mode === "bilingual" ? await getCurrentVersion(id, "pt") : null;
+      const html = renderReviewPayload({
+        format: currentPiece.format,
+        languageMode: currentPiece.language_mode,
+        en: version as ReviewVersionInput,
+        pt: (ptAtEntry as ReviewVersionInput | null) ?? null,
+      });
 
       const created = await createDeliverable({
         firmId: currentPiece.firm_id,
@@ -270,6 +278,25 @@ export async function PATCH(
       if (!bilingualCheck.ok) {
         return NextResponse.json(
           { ok: false, error: bilingualCheck.reason, code: "bilingual_authoring_blocked" },
+          { status: 422 }
+        );
+      }
+
+      // Codex audit F1/F3: leaving legal_gate must ship the EXACT content the
+      // lawyer approved. A regeneration or edit (or a PT version added/changed)
+      // after sign-off makes the current content drift from the approved
+      // deliverable version; block until the operator re-posts via
+      // send-to-review and the firm re-approves.
+      const identity = await checkApprovalIdentity({
+        id,
+        firm_id: currentPiece.firm_id,
+        format: currentPiece.format,
+        language_mode: currentPiece.language_mode,
+        deliverable_id: currentPiece.deliverable_id,
+      });
+      if (!identity.ok) {
+        return NextResponse.json(
+          { ok: false, error: identity.reason, code: identity.code },
           { status: 422 }
         );
       }

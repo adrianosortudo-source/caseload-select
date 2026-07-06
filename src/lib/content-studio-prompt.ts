@@ -46,6 +46,38 @@ export function buildEnLanguageDirective(): string {
   );
 }
 
+export interface ReviewContext {
+  rating?: number;
+  sentiment?: string;
+  review_text?: string;
+  reviewer_name?: string;
+}
+
+/**
+ * Codex audit F6 (2026-07-07): the review_response subformat used to default a
+ * MISSING rating to positive ((rating ?? 5) <= 3), which dropped the LSO Rule
+ * 3.3 confidentiality guardrails whenever a negative review was supplied
+ * without a numeric rating. This resolver never invents a positive stance:
+ * an explicit sentiment wins, then an explicit rating, and if neither is
+ * present it returns "negative" (the SAFE default that applies the
+ * confidentiality/offline-channel rules). The draft route additionally REQUIRES
+ * an explicit rating or sentiment before generation, so this default is a
+ * belt-and-suspenders fallback, not the primary path.
+ */
+export function resolveReviewResponseSubformat(rc?: ReviewContext): "negative" | "positive" {
+  if (rc?.sentiment === "negative") return "negative";
+  if (rc?.sentiment === "positive") return "positive";
+  if (typeof rc?.rating === "number") return rc.rating <= 3 ? "negative" : "positive";
+  return "negative";
+}
+
+/** True when the operator supplied an explicit rating (number) or sentiment. */
+export function reviewResponseHasExplicitSentiment(rc?: ReviewContext): boolean {
+  if (!rc) return false;
+  if (rc.sentiment === "negative" || rc.sentiment === "positive") return true;
+  return typeof rc.rating === "number" && Number.isFinite(rc.rating);
+}
+
 export function buildSystemPrompt(
   strategy: StrategyRow,
   format: string,
@@ -257,23 +289,28 @@ export function buildSystemPrompt(
         "template the review's content; the ask is for the client's own words."
     );
     parts.push(
-      "Produce four short pieces of copy under these exact headings, each on its own line starting with " +
+      "Produce five short pieces of copy under these exact headings, each on its own line starting with " +
         "'## ': 'Email subject', 'Email body', 'SMS body', 'Closing letter insert', 'Email signature line'."
     );
-    if (legalEntity) {
-      parts.push(
-        `Include, verbatim, this sender identification in the Email body and SMS body: "Sent by ${legalEntity}." ` +
-          `Include an unsubscribe line in the Email body and SMS body ('reply STOP to unsubscribe' or ` +
-          `equivalent). Do not alter this wording.`
-      );
-    }
+    // Codex audit F7: CASL identity + unsubscribe are mandatory and are
+    // deterministically verified downstream (validateReviewRequestCasl), so
+    // inject the exact facts the model must reproduce rather than leaving them
+    // conditional on an optional strategy field.
+    const nap2 = strategyJson.canonical_nap as Record<string, unknown> | undefined;
+    const senderName = (legalEntity ?? (nap2?.legal_entity as string | undefined)) ?? "DRG Law Professional Corporation";
+    const mailingAddress =
+      (nap2?.mailing_address as string | undefined) ?? "PO Box 26033 RPO Broadway, Toronto, ON M4P 0A8";
+    parts.push(
+      `CASL compliance is mandatory. In the Email body include, verbatim, the firm's identity and mailing ` +
+        `address: "${senderName}, ${mailingAddress}", at least one contact channel (phone, email, or the firm ` +
+        `website), and an unsubscribe or update-preferences line. In the SMS body include the sender identity ` +
+        `("${senderName}") and STOP/unsubscribe language ("Reply STOP to unsubscribe"). Do not omit any of these.`
+    );
   }
 
   if (format === "review_response") {
-    const reviewContext = sourceBrief.review_context as
-      | { rating?: number; review_text?: string; reviewer_name?: string }
-      | undefined;
-    const subformat = (reviewContext?.rating ?? 5) <= 3 ? "negative" : "positive";
+    const reviewContext = sourceBrief.review_context as ReviewContext | undefined;
+    const subformat = resolveReviewResponseSubformat(reviewContext);
     if (subformat === "negative") {
       parts.push(
         "This is a response to a negative public review. LSO Rule 3.3: client confidentiality survives the " +
