@@ -4,6 +4,8 @@ import {
   buildUserPrompt,
   buildArticleSchemaBlock,
   buildMarkdownSeoMetadata,
+  buildPtLanguageDirective,
+  buildEnLanguageDirective,
 } from "../content-studio-prompt";
 import type { StrategyRow } from "../content-studio";
 
@@ -145,6 +147,17 @@ describe("buildSystemPrompt Portuguese authoring (Ses.17 WP-4)", () => {
     expect(prompt).not.toContain("write this entire piece in Portuguese");
   });
 
+  it("states the English language explicitly, even when the source brief is in Portuguese (regression: found live 2026-07-06)", () => {
+    const prompt = buildSystemPrompt(
+      makeStrategy(),
+      "counsel_note",
+      { decision_question: "Devo assinar este contrato de locacao comercial?" },
+      "en"
+    );
+    expect(prompt).toContain("write this entire piece in English");
+    expect(prompt).not.toContain("write this entire piece in Portuguese");
+  });
+
   it("notes the Markdown format line should say 'entirely in Portuguese' for pt", () => {
     const ptPrompt = buildSystemPrompt(makeStrategy(), "counsel_note", {}, "pt");
     const enPrompt = buildSystemPrompt(makeStrategy(), "counsel_note", {}, "en");
@@ -180,6 +193,14 @@ describe("buildSystemPrompt Portuguese authoring (Ses.17 WP-4)", () => {
     expect(ptPrompt).not.toContain("This is the English excerpt.");
     expect(enPrompt).toContain("This is the English excerpt.");
     expect(enPrompt).not.toContain("Este é o trecho em português.");
+  });
+});
+
+describe("buildEnLanguageDirective / buildPtLanguageDirective", () => {
+  it("returns a distinct, non-empty string for each language", () => {
+    expect(buildEnLanguageDirective()).toContain("write this entire piece in English");
+    expect(buildPtLanguageDirective()).toContain("write this entire piece in Portuguese");
+    expect(buildEnLanguageDirective()).not.toBe(buildPtLanguageDirective());
   });
 });
 

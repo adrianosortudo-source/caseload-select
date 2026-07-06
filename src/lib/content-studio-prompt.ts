@@ -34,6 +34,18 @@ export function buildPtLanguageDirective(): string {
   );
 }
 
+// Ses.17 WP-4 (fixed same day as a live smoke-test finding): a bilingual
+// piece's source_brief can legitimately be authored in Portuguese, and
+// without this the model followed the brief's language for the EN
+// generation too, producing Portuguese content mislabeled as English.
+export function buildEnLanguageDirective(): string {
+  return (
+    "Language: write this entire piece in English, regardless of what language the source brief below " +
+    "is written in. The brief may be authored in Portuguese or another language; extract its meaning " +
+    "and author the piece in English."
+  );
+}
+
 export function buildSystemPrompt(
   strategy: StrategyRow,
   format: string,
@@ -84,9 +96,15 @@ export function buildSystemPrompt(
   // directives. Doctrine (strategy voice_traits.bilingual_at_depth,
   // non-negotiable): PT is authored from the same source brief with meaning
   // parity, never translated from finished English.
-  if (language === "pt") {
-    parts.push(buildPtLanguageDirective());
-  }
+  //
+  // The English branch states its language explicitly too, not just the
+  // Portuguese one. A bilingual piece's source_brief can legitimately be
+  // authored in Portuguese (the operator's own working language); without an
+  // explicit instruction the model followed the brief's language instead of
+  // defaulting to English, producing a Portuguese "EN" version mislabeled as
+  // English (found live during the Ses.17 WP-4 prod smoke test on a FIXTURE
+  // piece whose brief fields were written in Portuguese).
+  parts.push(language === "pt" ? buildPtLanguageDirective() : buildEnLanguageDirective());
 
   // ─── PERSONALITY LAYER ───
   // Voice tone (per-format override beats firm-level default).

@@ -27,6 +27,7 @@ import {
   buildArticleSchemaBlock,
   buildMarkdownSeoMetadata,
   buildPtLanguageDirective,
+  buildEnLanguageDirective,
 } from "@/lib/content-studio-prompt";
 import { filterInternalLinkTargetsToFirmHost, type InternalLinkTarget } from "@/lib/content-studio-links";
 
@@ -88,8 +89,8 @@ async function generateCanonicalServicePageDraft({
   // appends the same directive buildSystemPrompt's Markdown path uses,
   // post-hoc, rather than threading a language param through that file.
   const baseSystemPrompt = buildCanonicalServicePageSystemPrompt(strategy, filteredSourceBrief);
-  const systemPrompt =
-    language === "pt" ? `${baseSystemPrompt}\n\n${buildPtLanguageDirective()}` : baseSystemPrompt;
+  const languageDirective = language === "pt" ? buildPtLanguageDirective() : buildEnLanguageDirective();
+  const systemPrompt = `${baseSystemPrompt}\n\n${languageDirective}`;
   const userPrompt = buildCanonicalServicePageUserPrompt(filteredSourceBrief);
   const promptContextHash = hashString(systemPrompt + userPrompt);
 
