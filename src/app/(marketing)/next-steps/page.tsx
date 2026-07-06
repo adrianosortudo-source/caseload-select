@@ -70,7 +70,7 @@ export default function NextStepsPage() {
         </div>
       </section>
 
-      <style jsx>{`
+      <style>{`
         .ns-booking-frame {
           width: 100%;
           max-width: 900px;

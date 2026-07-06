@@ -46,7 +46,7 @@ export default function Footer() {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .cls-footer {
           background: var(--navy-deep);
           color: rgba(255, 255, 255, 0.7);

@@ -425,7 +425,7 @@ export default function DRGLawCaseStudyPage() {
         </div>
       </section>
 
-      <style jsx>{`
+      <style>{`
         /* ── Tokens ──────────────────────────────────────── */
         .cs-ts {
           display: inline-block;
