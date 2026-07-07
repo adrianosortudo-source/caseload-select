@@ -52,6 +52,8 @@ import {
   validateSourceIntegrity,
   validateNegativeReviewResponse,
   validateReviewRequest,
+  validateReviewRequestCasl,
+  runSharedTextComplianceFloor,
   type ValidatorConfig,
 } from "../content-validators";
 import { SERVICE_PAGE_SECTION_KEYS, type ServicePageBlock } from "../content-studio-structured";
@@ -1203,5 +1205,137 @@ describe("validateReviewRequest", () => {
       "review_request"
     );
     expect(result.status).toBe("pass");
+  });
+});
+
+// ── Codex audit F7: review_request CASL coverage ──────────────────────────────
+describe("validateReviewRequestCasl", () => {
+  const compliant = [
+    "## Email subject",
+    "How was your experience?",
+    "## Email body",
+    "Thank you for trusting DRG Law Professional Corporation with your matter. You are welcome to leave a review.",
+    "DRG Law Professional Corporation, PO Box 26033 RPO Broadway, Toronto, ON M4P 0A8. Call 647-584-0998 or visit drglaw.ca.",
+    "To stop receiving these messages, unsubscribe here.",
+    "## SMS body",
+    "DRG Law: thanks for trusting us. Leave a review: drglaw.ca. Reply STOP to unsubscribe.",
+  ].join("\n\n");
+
+  it("passes a fully CASL-compliant review_request (email + sms)", () => {
+    const r = validateReviewRequestCasl(compliant, "review_request");
+    expect(r.status).toBe("pass");
+  });
+
+  it("is a no-op (pass) for a non-review_request format", () => {
+    expect(validateReviewRequestCasl(compliant, "counsel_note").status).toBe("pass");
+    expect(validateReviewRequestCasl("anything", undefined).status).toBe("pass");
+  });
+
+  it("fails when the Email body lacks the mailing address", () => {
+    const noAddress = [
+      "## Email body",
+      "Thanks from DRG Law. Call 647-584-0998. Unsubscribe here.",
+      "## SMS body",
+      "DRG Law. Reply STOP to unsubscribe.",
+    ].join("\n\n");
+    const r = validateReviewRequestCasl(noAddress, "review_request");
+    expect(r.status).toBe("fail");
+    expect(r.findings.some((f) => /mailing address/i.test(f.message))).toBe(true);
+  });
+
+  it("fails when the Email body lacks an unsubscribe affordance", () => {
+    const noUnsub = [
+      "## Email body",
+      "Thanks from DRG Law, PO Box 26033 RPO Broadway, Toronto, ON M4P 0A8. Call 647-584-0998.",
+      "## SMS body",
+      "DRG Law. Reply STOP to unsubscribe.",
+    ].join("\n\n");
+    const r = validateReviewRequestCasl(noUnsub, "review_request");
+    expect(r.status).toBe("fail");
+    expect(r.findings.some((f) => /unsubscribe/i.test(f.message))).toBe(true);
+  });
+
+  it("fails when the SMS body lacks STOP/unsubscribe language", () => {
+    const noStop = [
+      "## Email body",
+      "Thanks from DRG Law, PO Box 26033 RPO Broadway, Toronto, ON M4P 0A8. Call 647-584-0998. Unsubscribe here.",
+      "## SMS body",
+      "DRG Law: thanks, please leave a review at drglaw.ca.",
+    ].join("\n\n");
+    const r = validateReviewRequestCasl(noStop, "review_request");
+    expect(r.status).toBe("fail");
+    expect(r.findings.some((f) => /SMS body must include STOP/i.test(f.message))).toBe(true);
+  });
+
+  it("fails when the SMS body section is missing entirely", () => {
+    const noSms = [
+      "## Email body",
+      "Thanks from DRG Law, PO Box 26033 RPO Broadway, Toronto, ON M4P 0A8. Call 647-584-0998. Unsubscribe here.",
+    ].join("\n\n");
+    const r = validateReviewRequestCasl(noSms, "review_request");
+    expect(r.status).toBe("fail");
+    expect(r.findings.some((f) => /missing an 'SMS body'/i.test(f.message))).toBe(true);
+  });
+});
+
+// ── Codex audit F4: shared text-compliance floor (used by canonical pages) ────
+describe("runSharedTextComplianceFloor", () => {
+  function makeConfig(overrides: Partial<ValidatorConfig> = {}): ValidatorConfig {
+    return {
+      banned_vocabulary: [],
+      approved_vocabulary: [],
+      lso_constraints: [],
+      formatting_rules: {
+        no_em_dashes: true,
+        no_italics: true,
+        no_orphan_words: true,
+        no_rule_of_three: true,
+      },
+      format_spec: {},
+      format: "canonical_service_page",
+      ...overrides,
+    };
+  }
+
+  it("catches a timing promise buried in flattened canonical text", () => {
+    const text =
+      "We review your commercial lease in Ontario. Our intake coordinator will respond promptly to every inquiry.";
+    const results = runSharedTextComplianceFloor(text, makeConfig());
+    const timing = results.find((r) => r.key === "timing_promise");
+    expect(timing?.status).toBe("fail");
+  });
+
+  it("catches a US trust badge in canonical text", () => {
+    const results = runSharedTextComplianceFloor("We are BBB accredited and Avvo rated.", makeConfig());
+    const badge = results.find((r) => r.key === "no_us_trust_badge");
+    expect(badge?.status).toBe("fail");
+  });
+
+  it("includes the core LSO/brand keys and excludes Markdown-structural checks", () => {
+    const keys = runSharedTextComplianceFloor("Plain compliant Ontario legal information.", makeConfig()).map(
+      (r) => r.key,
+    );
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        "banned_vocabulary",
+        "lso_compliance",
+        "timing_promise",
+        "specialist_self_designation",
+        "factual_claim",
+        "no_us_trust_badge",
+        "no_lsa_quality_claim",
+      ]),
+    );
+    // Structural / SEO-field checks belong to the Markdown path, not the floor.
+    expect(keys).not.toContain("opening_discipline");
+    expect(keys).not.toContain("required_sections");
+    expect(keys).not.toContain("page_structure");
+  });
+
+  it("passes clean, compliant canonical prose", () => {
+    const text =
+      "A lawyer reviews your commercial lease before you sign. The review covers relocation, assignment, and repair clauses under Ontario law.";
+    const results = runSharedTextComplianceFloor(text, makeConfig());
+    expect(results.every((r) => r.status === "pass")).toBe(true);
   });
 });

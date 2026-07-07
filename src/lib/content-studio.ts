@@ -3,6 +3,7 @@ import { supabaseAdmin } from "./supabase-admin";
 import {
   runDeterministicValidators,
   runCanonicalServicePageValidators,
+  runSharedTextComplianceFloor,
   runPtValidators,
   validateLastUpdatedDateVisible,
   significantWords,
@@ -12,7 +13,11 @@ import {
   type CanonicalServicePageValidationContext,
 } from "./content-validators";
 import { flattenServicePageToPlainText, type ServicePageBlock } from "./content-studio-structured";
-import type { DelegationGrant } from "./deliverables-pure";
+import {
+  evaluateApprovalIdentity,
+  type ReviewVersionInput,
+} from "./content-studio-review";
+import { canPublishUnderDelegation, type DelegationGrant } from "./deliverables-pure";
 
 export interface StrategyRow {
   id: string;
@@ -308,6 +313,92 @@ export async function resolvePublishGateStatus(piece: {
   return { deliverableStatus, delegation };
 }
 
+function toReviewVersionInput(
+  v: { body_markdown?: unknown; body_structured?: unknown; seo_metadata?: unknown } | null,
+): ReviewVersionInput | null {
+  if (!v) return null;
+  return {
+    body_markdown: (v.body_markdown as string | null) ?? null,
+    body_structured: (v.body_structured as unknown[] | null) ?? null,
+    seo_metadata: (v.seo_metadata as Record<string, unknown> | null) ?? null,
+  };
+}
+
+/**
+ * Approval-identity gate (Codex audit F1/F3/F8, 2026-07-07). Proves the CURRENT
+ * content (EN, plus PT for a bilingual piece) is byte-identical to the version
+ * body the firm's lawyer actually approved, by re-rendering the current
+ * versions through the SAME renderReviewPayload used to build the deliverable
+ * and comparing to the approved deliverable version's stored body_html.
+ *
+ * Called by export, publish-record, and the legal_gate exit (authoring /
+ * production) so none of them can ship a version that was edited, regenerated,
+ * or had its Portuguese half added/changed after sign-off.
+ *
+ * An active publish delegation covering the format bypasses the check: a
+ * delegation is the operator's own standing authorization to publish without a
+ * per-piece lawyer sign-off, so there is no approved snapshot to bind to. This
+ * matches checkLegalGateExitCondition, which already treats delegation as an
+ * alternative to approval.
+ */
+export async function checkApprovalIdentity(piece: {
+  id: string;
+  firm_id: string;
+  format: string;
+  language_mode: string;
+  deliverable_id: string | null;
+}): Promise<{ ok: true } | { ok: false; reason: string; code: string }> {
+  const { delegation } = await resolvePublishGateStatus({
+    firm_id: piece.firm_id,
+    deliverable_id: piece.deliverable_id,
+  });
+  if (canPublishUnderDelegation("operator", delegation, piece.format)) {
+    return { ok: true };
+  }
+
+  if (!piece.deliverable_id) {
+    return {
+      ok: false,
+      code: "approval_snapshot_missing",
+      reason:
+        "This piece has no linked deliverable. Advance to legal_gate and obtain lawyer sign-off before export or publish.",
+    };
+  }
+
+  const { data: deliverable } = await supabaseAdmin
+    .from("content_deliverables")
+    .select("status, approved_version_id")
+    .eq("id", piece.deliverable_id)
+    .maybeSingle();
+
+  const approvedVersionId = deliverable?.approved_version_id as string | null | undefined;
+  if (!deliverable || deliverable.status !== "approved" || !approvedVersionId) {
+    return {
+      ok: false,
+      code: "approval_snapshot_missing",
+      reason:
+        "The linked deliverable is not in an approved state. The firm's lawyer must approve the current version before export or publish.",
+    };
+  }
+
+  const { data: approvedVersion } = await supabaseAdmin
+    .from("deliverable_versions")
+    .select("body_html")
+    .eq("id", approvedVersionId)
+    .maybeSingle();
+
+  const en = await getCurrentVersion(piece.id, "en");
+  const pt = piece.language_mode === "bilingual" ? await getCurrentVersion(piece.id, "pt") : null;
+
+  return evaluateApprovalIdentity({
+    format: piece.format,
+    languageMode: piece.language_mode,
+    approvedBodyHtml: (approvedVersion?.body_html as string | null | undefined) ?? null,
+    en: toReviewVersionInput(en),
+    pt: toReviewVersionInput(pt),
+  });
+}
+
 export interface ValidationOutcome {
   results: ValidatorResult[];
   summary: {
@@ -483,6 +574,18 @@ export async function runAndRecordValidation(input: {
       firmWebsite,
     };
     results = runCanonicalServicePageValidators(blocks, seoMetadata, context);
+
+    // Codex audit F4 (2026-07-07): the flagship canonical_service_page format
+    // previously ran ONLY the structural SEO/AEO validators above, so a timing
+    // promise, credential self-designation, factual claim, fake scarcity, US
+    // trust badge, or LSA quality claim buried in a section body shipped
+    // unvalidated, even though the identical sentence in a Markdown format
+    // fails. Flatten the structured blocks and run the same format-safe LSO /
+    // brand text battery the Markdown path runs. Keys are disjoint from the
+    // structural validators above, so no result collides.
+    const flatText = flattenServicePageToPlainText(blocks);
+    const config = buildValidatorConfig(input.strategy, input.format);
+    results = results.concat(runSharedTextComplianceFloor(flatText, config, input.sourceBrief));
   } else {
     if (!input.version.body_markdown || input.version.body_markdown.trim().length === 0) {
       return { ok: false, error: "Version body is empty. Nothing to validate." };

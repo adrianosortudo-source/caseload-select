@@ -14,6 +14,7 @@ import {
   validateEditedServicePageBlocks,
 } from "@/lib/content-studio-edit";
 import { flattenServicePageToPlainText } from "@/lib/content-studio-structured";
+import { buildArticleSchemaBlock, buildMarkdownSeoMetadata } from "@/lib/content-studio-prompt";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,7 @@ export async function PUT(
   }
 
   const versionNumber = await getNextVersionNumber(id, language);
+  const strategy = await getActiveStrategy(piece.firm_id);
 
   let created: { id: string; body_markdown: string | null; body_structured: unknown[] | null; seo_metadata: Record<string, unknown> | null } | null =
     null;
@@ -87,10 +89,14 @@ export async function PUT(
       );
     }
 
-    // Carry the prior version's seo_metadata forward untouched except for
-    // title/meta_description when the operator edited them. The schema.*
-    // JSON-LD blocks were assembled from strategy facts (NAP, credentials)
-    // at generation time and stay valid; nothing here recomputes them.
+    // Carry the prior version's seo_metadata forward, applying any edited
+    // title/meta_description. Codex audit F9 (2026-07-07): the schema.* JSON-LD
+    // blocks (FAQPage, Article, etc.) were assembled from the ORIGINAL blocks at
+    // generation time; an edit to FAQ answers or section bodies makes them
+    // diverge from the visible content. Recomputing structured schema from
+    // edited canonical blocks is non-trivial, so mark it stale instead: the
+    // export route refuses a stale-schema version (regenerate to rebuild), and
+    // renderReviewPayload surfaces the staleness to the reviewing lawyer.
     const priorSeo = (priorVersion.seo_metadata as Record<string, unknown> | null) ?? {};
     const seoMetadata: Record<string, unknown> = {
       ...priorSeo,
@@ -100,6 +106,8 @@ export async function PUT(
       ...(typeof body.seo_meta_description === "string" && body.seo_meta_description.trim()
         ? { meta_description: body.seo_meta_description.trim() }
         : {}),
+      schema_stale: true,
+      schema_stale_reason: "operator_edit",
     };
 
     const flatText = flattenServicePageToPlainText(validated.blocks);
@@ -127,18 +135,43 @@ export async function PUT(
         { status: 400 }
       );
     }
-    // Ses.17 WP-3 integration fix: carry the prior version's seo_metadata
-    // (Article JSON-LD + last-updated marker, added by the draft route)
-    // forward unchanged, same as the canonical_service_page branch above.
-    // Before this, an operator edit silently dropped that metadata because
-    // this branch predates WP-3's Markdown seo_metadata assembly.
-    const priorSeo = (priorVersion.seo_metadata as Record<string, unknown> | null) ?? undefined;
+    // Codex audit F9 (2026-07-07): RECOMPUTE the Markdown Article schema +
+    // last-updated marker from the EDITED body instead of carrying the prior
+    // version's forward. The Article headline comes from the first heading and
+    // dateModified/generated_at from now, so an edited body never ships with a
+    // stale headline or last-updated date. (Cheap and correct here, unlike the
+    // canonical FAQPage rebuild, which is marked stale above.) Falls back to
+    // carrying prior metadata forward, marked stale, only if no active strategy
+    // is available to recompute against.
+    let seoMetadata: Record<string, unknown> | undefined;
+    if (strategy) {
+      const generatedAt = new Date().toISOString();
+      const articleSchema = buildArticleSchemaBlock({
+        strategy,
+        titleWorking: piece.title_working,
+        generatedText: validated.body,
+        generatedAt,
+        language,
+      });
+      const sourceBriefForMeta =
+        piece.source_brief && typeof piece.source_brief === "object"
+          ? (piece.source_brief as Record<string, unknown>)
+          : {};
+      seoMetadata = buildMarkdownSeoMetadata({
+        sourceBrief: sourceBriefForMeta,
+        articleSchema,
+        generatedAt,
+      });
+    } else {
+      const priorSeo = (priorVersion.seo_metadata as Record<string, unknown> | null) ?? {};
+      seoMetadata = { ...priorSeo, schema_stale: true, schema_stale_reason: "operator_edit" };
+    }
     const { data: version, error: versionErr } = await createPieceVersion({
       piece_id: id,
       version_number: versionNumber,
       language,
       body_markdown: validated.body,
-      seo_metadata: priorSeo,
+      seo_metadata: seoMetadata,
       text_hash: hashString(validated.body),
       created_by: "operator",
     });
@@ -156,7 +189,6 @@ export async function PUT(
   // edits instead of the English-pattern batteries.
   let validationSummary: unknown = null;
   {
-    const strategy = await getActiveStrategy(piece.firm_id);
     if (strategy && created) {
       const sourceBrief =
         piece.source_brief && typeof piece.source_brief === "object"

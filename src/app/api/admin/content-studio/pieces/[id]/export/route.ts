@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOperator } from "@/lib/admin-auth";
-import { getPiece, getCurrentVersion, resolvePublishGateStatus } from "@/lib/content-studio";
+import {
+  getPiece,
+  getCurrentVersion,
+  resolvePublishGateStatus,
+  checkApprovalIdentity,
+} from "@/lib/content-studio";
 import { checkLegalGateExitCondition } from "@/lib/content-studio-gates";
 import {
   renderServicePageExport,
@@ -68,10 +73,44 @@ export async function POST(
     );
   }
 
+  // Codex audit F1/F3: the current content must be byte-identical to the
+  // version the lawyer approved. A post-approval regeneration, edit, or PT
+  // change is blocked until the operator re-posts via send-to-review and the
+  // firm re-approves.
+  const identity = await checkApprovalIdentity({
+    id,
+    firm_id: piece.firm_id,
+    format: piece.format,
+    language_mode: piece.language_mode,
+    deliverable_id: piece.deliverable_id,
+  });
+  if (!identity.ok) {
+    return NextResponse.json(
+      { ok: false, error: identity.reason, code: identity.code },
+      { status: 422 }
+    );
+  }
+
   const version = await getCurrentVersion(id, language);
   if (!version) {
     return NextResponse.json(
       { ok: false, error: `No current ${language.toUpperCase()} version to export.` },
+      { status: 422 }
+    );
+  }
+
+  // Codex audit F9: an operator edit marks the structured schema/JSON-LD stale
+  // (it was not recomputed from the edited canonical blocks). Exporting a bundle
+  // whose <script type="application/ld+json"> no longer matches the visible body
+  // would ship divergent structured data. Block until a regeneration rebuilds it.
+  if ((version.seo_metadata as Record<string, unknown> | null)?.schema_stale === true) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "This version's structured data (JSON-LD/schema) is stale after an edit and was not recomputed. Regenerate the draft before export so the exported schema matches the body.",
+        code: "schema_stale",
+      },
       { status: 422 }
     );
   }
