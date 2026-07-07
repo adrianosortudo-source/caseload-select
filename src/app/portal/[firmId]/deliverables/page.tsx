@@ -14,8 +14,10 @@ import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
 import { getContentPlan } from "@/lib/deliverables";
 import { getFirmAbout } from "@/lib/firm-about";
+import { getContentCadence } from "@/lib/content-cadence";
 import ContentPlan from "@/components/portal/ContentPlan";
 import AboutPanel from "@/components/portal/AboutPanel";
+import ContentCadencePanel from "@/components/portal/ContentCadencePanel";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -42,9 +44,19 @@ export default async function DeliverablesPage({
     getFirmAbout(firmId),
   ]);
 
+  const cadence = getContentCadence(firmId);
+
   return (
     <div className="space-y-6">
-      {about ? <AboutPanel bodyHtml={about.body_html} links={about.links} /> : null}
+      {cadence ? (
+        <ContentCadencePanel
+          cadence={cadence}
+          variant="summary"
+          detailHref={`/portal/${firmId}/how-your-content-works`}
+        />
+      ) : about ? (
+        <AboutPanel bodyHtml={about.body_html} links={about.links} />
+      ) : null}
       <ContentPlan
         firmId={firmId}
         viewerRole={viewerRole}
