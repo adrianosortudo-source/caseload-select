@@ -20,6 +20,7 @@ import type {
   DeliverableAnnotation,
 } from "@/lib/types";
 import { DRGArticleFrame, type AnnotationPosition } from "./DRGArticleFrame";
+import { SocialPostFrame } from "./SocialPostFrame";
 import {
   STATUS_LABELS,
   CONTENT_KIND_LABELS,
@@ -453,6 +454,14 @@ function VersionSelector({
 // Damaris sees the draft close to how readers will see it on drglaw.ca.
 const DRG_FIRM_ID = "eec1d25e-a047-4827-8e4a-6eb96becca2b";
 
+// Short-copy social formats render through SocialPostFrame instead of
+// DRGArticleFrame. DRGArticleFrame's journal typography (46px display
+// headline, tight line-heights sized for a 700px-wide multi-paragraph
+// article, outer overflow:hidden) clipped the top of short GBP/LinkedIn
+// copy — those pieces have no long body to absorb that scaffolding. Fixed
+// 2026-07-07. Counsel Note and Clause in the Margin keep the journal frame.
+const SOCIAL_FORMATS = new Set(["Google Business Profile", "LinkedIn"]);
+
 function ContentViewer({
   version,
   deliverable,
@@ -480,6 +489,31 @@ function ContentViewer({
 }) {
   const contentKind = deliverable.content_kind;
   if (contentKind === "text") {
+    if (deliverable.firm_id === DRG_FIRM_ID && SOCIAL_FORMATS.has(deliverable.format ?? "")) {
+      return (
+        <div className="space-y-2">
+          <p className="flex items-center gap-2 text-xs text-navy bg-parchment-2 border border-border-brand px-3 py-2">
+            <span aria-hidden="true" className="font-bold">“ ”</span>
+            Select any passage, the title, or the lead to comment on it. Click
+            the hero image to comment on it.
+          </p>
+          <SocialPostFrame
+            title={deliverable.title}
+            excerpt={deliverable.excerpt}
+            format={deliverable.format}
+            heroImageUrl={deliverable.hero_image_url}
+            bodyHtml={version.body_html ?? ""}
+            onAnnotate={onAnnotate}
+            highlights={highlights}
+            elementAnchors={elementAnchors}
+            measureRef={measureRef}
+            onAnchors={onAnchors}
+            activeHighlightId={activeHighlightId}
+            onHighlightClick={onHighlightClick}
+          />
+        </div>
+      );
+    }
     if (deliverable.firm_id === DRG_FIRM_ID) {
       return (
         <div className="space-y-2">
