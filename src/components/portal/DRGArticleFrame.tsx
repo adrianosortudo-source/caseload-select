@@ -397,12 +397,20 @@ function landingBodyOnly(html: string): string {
   if (typeof DOMParser === "undefined") return html;
   const doc = new DOMParser().parseFromString(html, "text/html");
   const body = doc.body;
+  for (const node of Array.from(body.children)) {
+    if (isOptInPanelNode(node)) node.remove();
+  }
   const nodes = Array.from(body.children);
   const start = nodes.findIndex((node) =>
     /why we built this|most relocation clauses/i.test(node.textContent ?? ""),
   );
   if (start <= 0) return html;
   return nodes.slice(start).map((node) => node.outerHTML).join("");
+}
+
+function isOptInPanelNode(node: Element): boolean {
+  const text = (node.textContent ?? "").replace(/\s+/g, " ").trim();
+  return /send me the checklist|damaris will email it to you|where are you in the deal/i.test(text);
 }
 
 function PublicSiteHeader() {

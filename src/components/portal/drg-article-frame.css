@@ -476,6 +476,11 @@
   container-type: inline-size;
 }
 
+.cls-drg-article.is-landing-page .drg-optin-card,
+.cls-drg-article.is-landing-page [data-approval-preview-hide="opt-in"] {
+  display: none !important;
+}
+
 .cls-drg-article .drg-public-header {
   height: 88px;
   display: grid;
