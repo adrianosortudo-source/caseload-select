@@ -386,7 +386,11 @@ function formatDate(isoDate: string): string {
 }
 
 function isLeadMagnetLanding(title: string, bodyHtml: string): boolean {
-  return /\blead magnet\b|\blanding page\b/i.test(title) || /send me the checklist/i.test(bodyHtml);
+  const normalizedTitle = title.toLowerCase();
+  return (
+    (/\blead magnet\b/i.test(normalizedTitle) && /\blanding page\b/i.test(normalizedTitle)) ||
+    /send me the checklist/i.test(bodyHtml)
+  );
 }
 
 function cleanLandingTitle(title: string): string {
@@ -404,7 +408,7 @@ function landingBodyOnly(html: string): string {
   const start = nodes.findIndex((node) =>
     /why we built this|most relocation clauses/i.test(node.textContent ?? ""),
   );
-  if (start <= 0) return html;
+  if (start <= 0) return body.innerHTML;
   return nodes.slice(start).map((node) => node.outerHTML).join("");
 }
 
