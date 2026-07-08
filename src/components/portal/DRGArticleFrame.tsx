@@ -88,6 +88,8 @@ export function DRGArticleFrame({
     .map((e) => `${e.id}:${e.kind}`)
     .join("|");
   const commentedKinds = new Set((elementAnchors ?? []).map((e) => e.kind));
+  const isLandingPage = isLeadMagnetLanding(title, bodyHtml);
+  const publicTitle = cleanLandingTitle(title);
 
   const measureAndReport = useCallback(() => {
     const body = bodyRef.current;
@@ -239,6 +241,60 @@ export function DRGArticleFrame({
     onAnnotate({ type: "image", src: heroImageUrl, alt: title }, position);
   }
 
+  if (isLandingPage) {
+    return (
+      <div className="cls-drg-article is-landing-page">
+        <div className="drg-preview-band">Draft preview</div>
+        <PublicSiteHeader />
+
+        <section className="drg-landing-hero">
+          <div className="drg-landing-inner">
+            <div className="drg-landing-copy">
+              <div className="drg-landing-kicker">
+                {topic || "From the Journal - Checklist - Ontario commercial leases"}
+              </div>
+              <h1
+                ref={titleRef}
+                className={`drg-landing-title${commentedKinds.has("title") ? " is-commented" : ""}`}
+                onMouseUp={(e) => onFieldMouseUp("title", e)}
+                title="Select or click to comment on the title"
+              >
+                {publicTitle}
+              </h1>
+              {excerpt && (
+                <p
+                  ref={leadRef}
+                  className={`drg-landing-lead${commentedKinds.has("excerpt") ? " is-commented" : ""}`}
+                  onMouseUp={(e) => onFieldMouseUp("excerpt", e)}
+                  title="Select or click to comment on the lead"
+                >
+                  {excerpt}
+                </p>
+              )}
+              <ChecklistSummary />
+            </div>
+            <LeadMagnetFormCard />
+          </div>
+        </section>
+
+        <LegalNotice />
+        <TrustStrip />
+
+        <div className="drg-body-wrap drg-landing-body-wrap">
+          <div
+            ref={bodyRef}
+            className="drg-body drg-landing-body"
+            onMouseUp={onTextMouseUp}
+            onClick={onBodyClick}
+          />
+        </div>
+
+        <LegalNotice />
+        <PublicSiteFooter />
+      </div>
+    );
+  }
+
   return (
     <div className="cls-drg-article">
       <div className="drg-preview-band">
@@ -327,4 +383,122 @@ function formatDate(isoDate: string): string {
   if (Number.isNaN(d.getTime())) return isoDate;
   const month = d.toLocaleString("en-CA", { month: "long" });
   return `${month} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+function isLeadMagnetLanding(title: string, bodyHtml: string): boolean {
+  return /\blead magnet\b|\blanding page\b/i.test(title) || /send me the checklist/i.test(bodyHtml);
+}
+
+function cleanLandingTitle(title: string): string {
+  return title.replace(/^\s*\[?lead magnet\s*[·.-]\s*landing page\]?\s*/i, "").trim();
+}
+
+function PublicSiteHeader() {
+  return (
+    <header className="drg-public-header" aria-label="DRG Law public site header preview">
+      <div className="drg-logo-lockup">
+        <span className="drg-logo-rule" aria-hidden="true" />
+        <span className="drg-logo-main">DRG Law</span>
+        <span className="drg-logo-sub">Professional Corporation</span>
+      </div>
+      <nav className="drg-public-nav" aria-label="Public site navigation preview">
+        <span>Practice</span>
+        <span>Method</span>
+        <span>Pricing</span>
+        <span>Resources</span>
+        <span>About</span>
+        <span>Contact</span>
+      </nav>
+      <div className="drg-public-actions">
+        <span>EN | PT</span>
+        <span>Call 647-584-0998</span>
+        <span className="drg-question-btn">Send your question</span>
+      </div>
+    </header>
+  );
+}
+
+function ChecklistSummary() {
+  const items = [
+    ["01", "A signed note from Damaris.", "Why DRG built this checklist and how to use it before your next negotiation."],
+    ["02", "The standard clause annotated.", "Five short phrases that decide your exposure, marked and explained."],
+    ["03", "The negotiated alternative annotated.", "The same clause rewritten for the tenant, with five fixes called out."],
+    ["04", "Three negotiable terms with sample clause language.", "Substitute-space parameters, cost coverage, right to refuse. Each with a checklist and the exact phrasing to ask for."],
+    ["05", "Walk-away math and five questions.", "Put a number on the exposure, then five questions to ask any lawyer reviewing the lease."],
+  ];
+  return (
+    <div className="drg-checklist-summary">
+      <div className="drg-section-label">What is inside</div>
+      {items.map(([num, heading, body]) => (
+        <div className="drg-checklist-row" key={num}>
+          <span>{num}</span>
+          <p><strong>{heading}</strong> {body}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LeadMagnetFormCard() {
+  return (
+    <aside className="drg-optin-card" aria-label="Lead magnet form preview">
+      <div className="drg-section-label">Send me the checklist</div>
+      <h2>Damaris will email it to you and show it on the next page.</h2>
+      <p>No charge. No phone call required. The PDF arrives in your inbox and shows on screen as soon as you submit.</p>
+      <label>First name<span /></label>
+      <label>Email<span /></label>
+      <label>Where are you in the deal? <em>optional</em><span className="select">Choose one</span></label>
+      <button type="button">Send me the checklist -&gt;</button>
+      <p className="drg-privacy-note">We email you the weekly Journal so you receive future checklists in the same series. You can unsubscribe anytime. We do not share your information.</p>
+    </aside>
+  );
+}
+
+function LegalNotice() {
+  return (
+    <div className="drg-legal-notice">
+      <strong>Legal information, not legal advice.</strong> What you read on this website is general information about the law. It is not legal advice for your situation. Sending an intake does not make DRG Law your lawyer. That only happens after DRG Law checks for conflicts and both sides sign a written agreement.
+    </div>
+  );
+}
+
+function TrustStrip() {
+  const items = [
+    ["Ontario licensed", "LSO Reg. 910221"],
+    ["Toronto office", "Real estate and corporate practice"],
+    ["English and Portuguese", "Bilingual representation"],
+    ["Plain language", "Owner-readable legal writing"],
+  ];
+  return (
+    <div className="drg-trust-strip">
+      {items.map(([heading, body]) => (
+        <div key={heading}>
+          <strong>{heading}</strong>
+          <span>{body}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PublicSiteFooter() {
+  return (
+    <footer className="drg-public-footer">
+      <div className="drg-footer-grid">
+        <div>
+          <div className="drg-logo-lockup">
+            <span className="drg-logo-rule" aria-hidden="true" />
+            <span className="drg-logo-main">DRG Law</span>
+            <span className="drg-logo-sub">Professional Corporation</span>
+          </div>
+          <p>Decisions framed in legal clarity. DRG Law Professional Corporation. LSO Reg. 910221. English or Portuguese. Remote-first, serving Ontario.</p>
+        </div>
+        <div><strong>Practice</strong><span>Business Law</span><span>Real Estate</span><span>Wills & estates</span><span>Employment Law</span></div>
+        <div><strong>Other matters</strong><span>Ongoing counsel</span><span>Notary and Sworn Statements</span></div>
+        <div><strong>Read</strong><span>Resources</span><span>Common questions</span><span>How DRG Law works</span><span>About Damaris</span></div>
+        <div><strong>Contact</strong><span>Call 647-584-0998</span><span>WhatsApp 555-629-8048</span><span>info@drglaw.ca</span></div>
+      </div>
+      <div className="drg-copyright">Copyright 2026 DRG Law Professional Corporation - Toronto, Ontario - LSO Reg. 910221</div>
+    </footer>
+  );
 }
