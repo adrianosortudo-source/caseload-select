@@ -90,6 +90,7 @@ export function DRGArticleFrame({
   const commentedKinds = new Set((elementAnchors ?? []).map((e) => e.kind));
   const isLandingPage = isLeadMagnetLanding(title, bodyHtml);
   const publicTitle = cleanLandingTitle(title);
+  const renderedBodyHtml = isLandingPage ? landingBodyOnly(bodyHtml) : bodyHtml;
 
   const measureAndReport = useCallback(() => {
     const body = bodyRef.current;
@@ -147,11 +148,11 @@ export function DRGArticleFrame({
   useLayoutEffect(() => {
     const body = bodyRef.current;
     if (!body) return;
-    applyHighlights(body, bodyHtml, highlights ?? []);
+    applyHighlights(body, renderedBodyHtml, highlights ?? []);
     setActiveHighlight(body, activeHighlightId);
     measureAndReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bodyHtml, highlightsKey, elementAnchorsKey]);
+  }, [renderedBodyHtml, highlightsKey, elementAnchorsKey]);
 
   // Re-measure on reflow (resize, image/font load) without re-wrapping.
   useEffect(() => {
@@ -273,7 +274,6 @@ export function DRGArticleFrame({
               )}
               <ChecklistSummary />
             </div>
-            <LeadMagnetFormCard />
           </div>
         </section>
 
@@ -393,6 +393,18 @@ function cleanLandingTitle(title: string): string {
   return title.replace(/^\s*\[?lead magnet\s*[·.-]\s*landing page\]?\s*/i, "").trim();
 }
 
+function landingBodyOnly(html: string): string {
+  if (typeof DOMParser === "undefined") return html;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const body = doc.body;
+  const nodes = Array.from(body.children);
+  const start = nodes.findIndex((node) =>
+    /why we built this|most relocation clauses/i.test(node.textContent ?? ""),
+  );
+  if (start <= 0) return html;
+  return nodes.slice(start).map((node) => node.outerHTML).join("");
+}
+
 function PublicSiteHeader() {
   return (
     <header className="drg-public-header" aria-label="DRG Law public site header preview">
@@ -436,21 +448,6 @@ function ChecklistSummary() {
         </div>
       ))}
     </div>
-  );
-}
-
-function LeadMagnetFormCard() {
-  return (
-    <aside className="drg-optin-card" aria-label="Lead magnet form preview">
-      <div className="drg-section-label">Send me the checklist</div>
-      <h2>Damaris will email it to you and show it on the next page.</h2>
-      <p>No charge. No phone call required. The PDF arrives in your inbox and shows on screen as soon as you submit.</p>
-      <label>First name<span /></label>
-      <label>Email<span /></label>
-      <label>Where are you in the deal? <em>optional</em><span className="select">Choose one</span></label>
-      <button type="button">Send me the checklist -&gt;</button>
-      <p className="drg-privacy-note">We email you the weekly Journal so you receive future checklists in the same series. You can unsubscribe anytime. We do not share your information.</p>
-    </aside>
   );
 }
 
