@@ -843,14 +843,17 @@ Surfaces:
 | `/portal/[firmId]/deliverables/[id]` | Review surface: annotation layer (text select / image pin+region / PDF page-tag), comment thread with resolve, version history, post-new-version, sign-off panel (lawyer), approval record, archive. |
 | `GET/POST /api/portal/[firmId]/deliverables` | List + create |
 | `GET/PATCH /api/portal/[firmId]/deliverables/[id]` | Detail; PATCH `{action:'archive'}` |
-| `POST .../[id]/versions` | New version: JSON `{body_html,note}` for text, multipart `file+note` for image/pdf (50 MB cap) |
-| `POST .../[id]/comments` | Add comment `{version_id, body, annotation?, parent_comment_id?}` |
+| `POST .../[id]/versions` | New version: JSON `{body_html,note,responds_to_approval_id?}` for text, multipart `file+note+responds_to_approval_id?` for image/pdf (50 MB cap) |
+| `POST .../[id]/comments` | Add comment `{version_id, body, annotation?, parent_comment_id?, approval_record_id?, attachments?}` |
 | `PATCH .../[id]/comments/[commentId]` | Resolve / reopen `{resolved}` |
-| `POST .../[id]/approve` | Lawyer sign-off `{version_id, decision, agreed, note?}` |
+| `POST .../[id]/approve` | Lawyer sign-off `{version_id, decision, agreed, note?, attachments?}` |
+| `POST .../[id]/attachments` | Upload one feedback image/PDF (25 MB cap), returns `{storage_path,name,size,mime}` for use in the comments/approve bodies above |
 
 Key files: `lib/deliverables.ts` (I/O), `lib/deliverables-pure.ts` (validators, status machine, attestation copy), `lib/deliverables-auth.ts` (actor resolution), `components/portal/DeliverableReview.tsx` (the review client), `components/portal/DeliverableList.tsx`.
 
 Operator dependency: a lawyer cannot sign off until an email is on file (`firm_lawyers.email` for the signed-in member, or `intake_firms.branding.lawyer_email`). For DRG, add Damaris via `/admin/access`.
+
+**Change-request loop (DR-085, 2026-07-09).** Three additions to the append-only compliance record, none of which weaken it. Replies: a comment with `approval_record_id` set threads under the change-request record (server forces its `version_id` and null `annotation`; excluded from the passage margin and the open-comment count). Version-as-answer: a version posted while `changes_requested` links back via `deliverable_versions.responds_to_approval_id` (explicit id validated against this deliverable, or auto-linked to the latest open record when omitted); the composer quotes the open request, the approval-history panel renders "Addressed in vN..." instead of a dead end. Attachments: the change-request note and any reply may carry image/PDF evidence (`deliverables/{firmId}/{deliverableId}/feedback/` prefix, content-sniffed), frozen into `approval_records.attachments` at INSERT via the widened `record_approval_atomic` RPC, never by UPDATE. Migration `20260709_deliverable_change_request_loop.sql`. Build plan: `docs/BUILD_PLAN_deliverables_change_request_loop_v1.md`.
 
 ## Build Roadmap
 
