@@ -26,6 +26,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   // Public marketing site at /home (and any future marketing routes) must not
   // get the operator sidebar. Lives in src/app/(marketing)/.
   const isMarketing =
+    path === "/" ||
     path === "/home" ||
     path === "/about" ||
     path === "/pricing" ||
