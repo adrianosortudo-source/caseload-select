@@ -9,6 +9,9 @@ import type {
   DeliverableStatus,
   DeliverableActorRole,
   DeliverableAnnotation,
+  DeliverableAttachment,
+  DeliverableVersion,
+  ApprovalRecord,
 } from "./types";
 
 export const CONTENT_KINDS: ContentKind[] = ["text", "image", "pdf"];
@@ -243,6 +246,45 @@ export function validateAnnotation(raw: unknown): DeliverableAnnotation | null {
   }
 }
 
+const ATTACHMENT_MAX_COUNT = 5;
+const ATTACHMENT_NAME_MAX = 200;
+
+/**
+ * Validate and normalise a list of feedback attachments from an untrusted
+ * request body (a change-request note or a reply on the record). Returns
+ * null when the input is malformed (caller responds 400); an empty array is
+ * valid (no attachments). Each storage_path must live under this
+ * deliverable's own feedback prefix so a request cannot reference another
+ * deliverable's, or another firm's, uploaded file.
+ */
+export function validateDeliverableAttachments(
+  raw: unknown,
+  firmId: string,
+  deliverableId: string,
+): DeliverableAttachment[] | null {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) return null;
+  if (raw.length > ATTACHMENT_MAX_COUNT) return null;
+
+  const prefix = `deliverables/${firmId}/${deliverableId}/feedback/`;
+  const cleaned: DeliverableAttachment[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") return null;
+    const a = item as Record<string, unknown>;
+    if (typeof a.storage_path !== "string" || !a.storage_path.startsWith(prefix)) return null;
+    if (typeof a.name !== "string" || a.name.trim().length === 0) return null;
+    const size = isFiniteNumber(a.size) ? a.size : undefined;
+    const mime = typeof a.mime === "string" ? a.mime.slice(0, 100) : undefined;
+    cleaned.push({
+      storage_path: a.storage_path,
+      name: a.name.trim().slice(0, ATTACHMENT_NAME_MAX),
+      ...(size !== undefined ? { size } : {}),
+      ...(mime !== undefined ? { mime } : {}),
+    });
+  }
+  return cleaned;
+}
+
 /** Short human label for an annotation, used in lists + the comment card. */
 export function annotationLabel(annotation: DeliverableAnnotation | null): string {
   if (!annotation) return "General comment";
@@ -267,6 +309,44 @@ export function openCommentCount(
   comments: { resolved: boolean }[],
 ): number {
   return comments.filter((c) => !c.resolved).length;
+}
+
+// ─── Version state labels ────────────────────────────────────────────────────
+
+export type VersionOptionTag = "awaiting_review" | "approved" | "changes_requested" | null;
+
+export interface VersionOptionState {
+  isCurrent: boolean;
+  tag: VersionOptionTag;
+  /** ISO timestamp of the matching approval record; present when tag is approved/changes_requested. */
+  approvalCreatedAt: string | null;
+}
+
+/**
+ * State for one entry in the version picker. A version can carry at most one
+ * approval_records row (sign-off targets only the current version, so once a
+ * version is superseded it can never receive a later decision). The caller
+ * formats approvalCreatedAt (e.g. via formatTimestamp) and builds the final
+ * label string; this stays pure so it is cheaply unit-testable.
+ */
+export function versionOptionLabel(
+  version: Pick<DeliverableVersion, "id">,
+  deliverable: { current_version_id: string | null; status: DeliverableStatus },
+  approvals: Pick<ApprovalRecord, "version_id" | "decision" | "created_at">[],
+): VersionOptionState {
+  const isCurrent = version.id === deliverable.current_version_id;
+  const matching = approvals.find((a) => a.version_id === version.id) ?? null;
+
+  if (isCurrent && deliverable.status === "in_review") {
+    return { isCurrent, tag: "awaiting_review", approvalCreatedAt: null };
+  }
+  if (matching?.decision === "approved") {
+    return { isCurrent, tag: "approved", approvalCreatedAt: matching.created_at };
+  }
+  if (matching?.decision === "changes_requested") {
+    return { isCurrent, tag: "changes_requested", approvalCreatedAt: matching.created_at };
+  }
+  return { isCurrent, tag: null, approvalCreatedAt: null };
 }
 
 // ─── Content plan grouping ───────────────────────────────────────────────────

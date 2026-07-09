@@ -13,6 +13,8 @@ import {
   annotationLabel,
   openCommentCount,
   APPROVAL_ATTESTATION,
+  validateDeliverableAttachments,
+  versionOptionLabel,
 } from "@/lib/deliverables-pure";
 
 describe("validateAnnotation", () => {
@@ -141,5 +143,125 @@ describe("misc", () => {
 
   it("attestation references LSO Rule 4.2-1", () => {
     expect(APPROVAL_ATTESTATION).toContain("4.2-1");
+  });
+});
+
+describe("validateDeliverableAttachments", () => {
+  const FIRM = "f1";
+  const DELIV = "d1";
+  const PREFIX = `deliverables/${FIRM}/${DELIV}/feedback/`;
+
+  it("returns an empty array when omitted", () => {
+    expect(validateDeliverableAttachments(undefined, FIRM, DELIV)).toEqual([]);
+    expect(validateDeliverableAttachments(null, FIRM, DELIV)).toEqual([]);
+  });
+
+  it("accepts a well-formed attachment under this deliverable's feedback prefix", () => {
+    const result = validateDeliverableAttachments(
+      [{ storage_path: `${PREFIX}abc-shot.png`, name: "shot.png", size: 1024, mime: "image/png" }],
+      FIRM,
+      DELIV,
+    );
+    expect(result).toEqual([
+      { storage_path: `${PREFIX}abc-shot.png`, name: "shot.png", size: 1024, mime: "image/png" },
+    ]);
+  });
+
+  it("rejects more than 5 attachments", () => {
+    const many = Array.from({ length: 6 }, (_, i) => ({
+      storage_path: `${PREFIX}${i}.png`,
+      name: `${i}.png`,
+    }));
+    expect(validateDeliverableAttachments(many, FIRM, DELIV)).toBeNull();
+  });
+
+  it("rejects a storage_path outside this deliverable's feedback prefix", () => {
+    expect(
+      validateDeliverableAttachments(
+        [{ storage_path: "deliverables/other-firm/other-deliv/feedback/x.png", name: "x.png" }],
+        FIRM,
+        DELIV,
+      ),
+    ).toBeNull();
+    expect(
+      validateDeliverableAttachments(
+        [{ storage_path: `deliverables/${FIRM}/${DELIV}/x.png`, name: "x.png" }],
+        FIRM,
+        DELIV,
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects an empty name and caps a long one", () => {
+    expect(
+      validateDeliverableAttachments([{ storage_path: `${PREFIX}a.png`, name: "  " }], FIRM, DELIV),
+    ).toBeNull();
+    const result = validateDeliverableAttachments(
+      [{ storage_path: `${PREFIX}a.png`, name: "a".repeat(500) }],
+      FIRM,
+      DELIV,
+    );
+    expect(result![0].name.length).toBe(200);
+  });
+
+  it("rejects a non-array payload", () => {
+    expect(validateDeliverableAttachments({ storage_path: `${PREFIX}a.png` }, FIRM, DELIV)).toBeNull();
+  });
+});
+
+describe("versionOptionLabel", () => {
+  const V1 = "v1";
+  const V2 = "v2";
+
+  it("current version awaiting review", () => {
+    const state = versionOptionLabel(
+      { id: V1 },
+      { current_version_id: V1, status: "in_review" },
+      [],
+    );
+    expect(state).toEqual({ isCurrent: true, tag: "awaiting_review", approvalCreatedAt: null });
+  });
+
+  it("current version approved", () => {
+    const approvals = [{ version_id: V1, decision: "approved" as const, created_at: "2026-07-09T00:00:00Z" }];
+    const state = versionOptionLabel(
+      { id: V1 },
+      { current_version_id: V1, status: "approved" },
+      approvals,
+    );
+    expect(state).toEqual({ isCurrent: true, tag: "approved", approvalCreatedAt: "2026-07-09T00:00:00Z" });
+  });
+
+  it("older version that had changes requested", () => {
+    const approvals = [
+      { version_id: V1, decision: "changes_requested" as const, created_at: "2026-07-01T00:00:00Z" },
+    ];
+    const state = versionOptionLabel(
+      { id: V1 },
+      { current_version_id: V2, status: "in_review" },
+      approvals,
+    );
+    expect(state).toEqual({ isCurrent: false, tag: "changes_requested", approvalCreatedAt: "2026-07-01T00:00:00Z" });
+  });
+
+  it("older version that was approved (superseded by a later routine version)", () => {
+    const approvals = [
+      { version_id: V1, decision: "approved" as const, created_at: "2026-06-01T00:00:00Z" },
+    ];
+    const state = versionOptionLabel(
+      { id: V1 },
+      { current_version_id: V2, status: "in_review" },
+      approvals,
+    );
+    expect(state).toEqual({ isCurrent: false, tag: "approved", approvalCreatedAt: "2026-06-01T00:00:00Z" });
+  });
+
+  it("plain version with no approval record and not current", () => {
+    const state = versionOptionLabel(
+      { id: V1 },
+      { current_version_id: V2, status: "in_review" },
+      [],
+    );
+    expect(state).toEqual({ isCurrent: false, tag: null, approvalCreatedAt: null });
   });
 });

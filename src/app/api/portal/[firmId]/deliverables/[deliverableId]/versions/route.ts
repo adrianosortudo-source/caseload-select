@@ -17,10 +17,35 @@ import {
   getDeliverableDetail,
   addVersion,
   uploadDeliverableAsset,
+  type DeliverableDetail,
 } from "@/lib/deliverables";
 import { cleanNote } from "@/lib/deliverables-pure";
 import { sanitizeExplainerHtml } from "@/lib/explainer-html-sanitize";
 import { postDeliverableLifecycleToChannel } from "@/lib/deliverable-channel-post";
+
+/**
+ * Resolve which changes_requested approval_records row this version answers.
+ * An explicit id from the client must belong to this deliverable and be a
+ * changes_requested decision, or the request is rejected. When the client
+ * omits it and the deliverable is currently changes_requested, auto-link to
+ * the latest changes_requested record so the loop closes even when the
+ * posting client is an older UI that never sends the field.
+ */
+function resolveRespondsToApprovalId(
+  detail: DeliverableDetail,
+  explicit: unknown,
+): { ok: true; id: string | null } | { ok: false } {
+  if (typeof explicit === "string") {
+    const record = detail.approvals.find(
+      (a) => a.id === explicit && a.decision === "changes_requested",
+    );
+    if (!record) return { ok: false };
+    return { ok: true, id: record.id };
+  }
+  if (detail.deliverable.status !== "changes_requested") return { ok: true, id: null };
+  const latest = detail.approvals.find((a) => a.decision === "changes_requested");
+  return { ok: true, id: latest?.id ?? null };
+}
 
 async function announceNewVersion(
   firmId: string,
@@ -135,6 +160,13 @@ export async function POST(
 
     const note = cleanNote(form.get("note"));
     const silent = form.get("silent") === "true";
+    const responds = resolveRespondsToApprovalId(detail, form.get("responds_to_approval_id"));
+    if (!responds.ok) {
+      return NextResponse.json(
+        { error: "responds_to_approval_id not found in this deliverable" },
+        { status: 400 },
+      );
+    }
     const result = await addVersion({
       deliverableId,
       firmId,
@@ -146,6 +178,7 @@ export async function POST(
       note,
       actor: resolved.actor,
       silent,
+      respondsToApprovalId: responds.id,
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
     if (!silent) await announceNewVersion(firmId, deliverableId, detail.deliverable.title, resolved.actor);
@@ -159,7 +192,12 @@ export async function POST(
       { status: 400 },
     );
   }
-  let body: { body_html?: unknown; note?: unknown; silent?: unknown };
+  let body: {
+    body_html?: unknown;
+    note?: unknown;
+    silent?: unknown;
+    responds_to_approval_id?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
@@ -172,6 +210,13 @@ export async function POST(
     return NextResponse.json({ error: "body_html is required" }, { status: 400 });
   }
   const silent = body.silent === true;
+  const responds = resolveRespondsToApprovalId(detail, body.responds_to_approval_id);
+  if (!responds.ok) {
+    return NextResponse.json(
+      { error: "responds_to_approval_id not found in this deliverable" },
+      { status: 400 },
+    );
+  }
   const result = await addVersion({
     deliverableId,
     firmId,
@@ -183,6 +228,7 @@ export async function POST(
     note: cleanNote(body.note),
     actor: resolved.actor,
     silent,
+    respondsToApprovalId: responds.id,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
   if (!silent) await announceNewVersion(firmId, deliverableId, detail.deliverable.title, resolved.actor);

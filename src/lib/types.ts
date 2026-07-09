@@ -310,6 +310,19 @@ export interface ContentPlanSettings {
   updated_at: string;
 }
 
+/**
+ * A file attached to a change-request note or a reply on the record. Same
+ * shape as MatterAttachment (matter_messages, above) but declared separately
+ * to keep the deliverables surface decoupled from the matter messaging one.
+ */
+export interface DeliverableAttachment {
+  storage_path: string; // object key in the firm-files bucket
+  signed_url?: string;  // runtime only: pre-signed read URL
+  name: string;
+  size?: number;
+  mime?: string;
+}
+
 export interface DeliverableVersion {
   id: string;
   deliverable_id: string;
@@ -322,6 +335,12 @@ export interface DeliverableVersion {
   asset_size_bytes: number | null;
   asset_name: string | null;
   note: string | null;
+  /**
+   * When this version was posted in direct response to a changes_requested
+   * approval_records row, that record's id. Null for a version posted
+   * outside a change-request loop (e.g. the first version).
+   */
+  responds_to_approval_id: string | null;
   created_by_role: DeliverableActorRole;
   created_by_id: string | null;
   created_at: string;
@@ -337,10 +356,19 @@ export interface DeliverableComment {
   author_name: string | null;
   annotation: DeliverableAnnotation | null;
   body: string;
+  attachments: DeliverableAttachment[];
   resolved: boolean;
   resolved_at: string | null;
   resolved_by_role: DeliverableActorRole | null;
   parent_comment_id: string | null;
+  /**
+   * When set, this comment is a reply on an approval_records row (the
+   * change-request thread), not a passage-anchored comment on the article.
+   * version_id is forced server-side to the record's own version_id and
+   * annotation is forced to null. Excluded from the passage margin and the
+   * open-comment count.
+   */
+  approval_record_id: string | null;
   created_at: string;
 }
 
@@ -360,5 +388,6 @@ export interface ApprovalRecord {
   ip_address: string | null;
   user_agent: string | null;
   note: string | null;
+  attachments: DeliverableAttachment[];
   created_at: string;
 }

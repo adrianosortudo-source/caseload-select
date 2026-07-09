@@ -9,7 +9,7 @@
  * must attest. The sign-off applies to a SPECIFIC version: the request must
  * target the current version, so a sign-off can never land on a stale draft.
  *
- * Body: { version_id, decision: "approved" | "changes_requested", agreed, note? }
+ * Body: { version_id, decision: "approved" | "changes_requested", agreed, note?, attachments? }
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -19,6 +19,7 @@ import { getDeliverableDetail, recordApproval } from "@/lib/deliverables";
 import {
   canSignOff,
   cleanNote,
+  validateDeliverableAttachments,
   APPROVAL_ATTESTATION,
   CHANGES_ATTESTATION,
 } from "@/lib/deliverables-pure";
@@ -47,7 +48,13 @@ export async function POST(
     );
   }
 
-  let body: { version_id?: unknown; decision?: unknown; agreed?: unknown; note?: unknown };
+  let body: {
+    version_id?: unknown;
+    decision?: unknown;
+    agreed?: unknown;
+    note?: unknown;
+    attachments?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
@@ -62,6 +69,11 @@ export async function POST(
   const detail = await getDeliverableDetail(deliverableId);
   if (!detail || detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+
+  const attachments = validateDeliverableAttachments(body.attachments, firmId, deliverableId);
+  if (attachments === null) {
+    return NextResponse.json({ error: "invalid attachments" }, { status: 400 });
   }
 
   const versionId = typeof body.version_id === "string" ? body.version_id : null;
@@ -100,6 +112,7 @@ export async function POST(
     ipAddress,
     userAgent,
     note: cleanNote(body.note),
+    attachments,
   });
   if (!result.ok) {
     // stale = a newer version was posted during the sign-off (race with the

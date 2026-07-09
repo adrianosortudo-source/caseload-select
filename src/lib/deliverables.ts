@@ -21,6 +21,7 @@ import type {
   DeliverableVersion,
   DeliverableComment,
   ApprovalRecord,
+  DeliverableAttachment,
   ContentKind,
   DeliverableActorRole,
   DeliverableAnnotation,
@@ -72,7 +73,10 @@ export async function listDeliverables(
       .from("deliverable_comments")
       .select("deliverable_id, resolved")
       .in("deliverable_id", ids)
-      .eq("resolved", false),
+      .eq("resolved", false)
+      // Replies threaded under an approval record are not passage comments;
+      // exclude them so the "open comments" badge only counts article notes.
+      .is("approval_record_id", null),
     supabase
       .from("deliverable_versions")
       .select("deliverable_id")
@@ -280,12 +284,14 @@ export async function getDeliverableDetail(
   ]);
 
   const signedVersions = await signVersionAssets((versions ?? []) as DeliverableVersion[]);
+  const signedComments = await signCommentAttachments((comments ?? []) as DeliverableComment[]);
+  const signedApprovals = await signApprovalAttachments((approvals ?? []) as ApprovalRecord[]);
 
   return {
     deliverable: deliverable as ContentDeliverable,
     versions: signedVersions,
-    comments: (comments ?? []) as DeliverableComment[],
-    approvals: (approvals ?? []) as ApprovalRecord[],
+    comments: signedComments,
+    approvals: signedApprovals,
   };
 }
 
@@ -300,6 +306,42 @@ async function signVersionAssets(
         .createSignedUrl(v.storage_path, SIGNED_URL_TTL);
       return { ...v, signed_url: data?.signedUrl ?? undefined };
     }),
+  );
+}
+
+async function signAttachmentList(
+  attachments: DeliverableAttachment[],
+): Promise<DeliverableAttachment[]> {
+  if (!attachments || attachments.length === 0) return [];
+  return Promise.all(
+    attachments.map(async (a) => {
+      const { data } = await supabase.storage
+        .from(ASSET_BUCKET)
+        .createSignedUrl(a.storage_path, SIGNED_URL_TTL);
+      return { ...a, signed_url: data?.signedUrl ?? undefined };
+    }),
+  );
+}
+
+async function signCommentAttachments(
+  comments: DeliverableComment[],
+): Promise<DeliverableComment[]> {
+  return Promise.all(
+    comments.map(async (c) => ({
+      ...c,
+      attachments: await signAttachmentList(c.attachments ?? []),
+    })),
+  );
+}
+
+async function signApprovalAttachments(
+  approvals: ApprovalRecord[],
+): Promise<ApprovalRecord[]> {
+  return Promise.all(
+    approvals.map(async (a) => ({
+      ...a,
+      attachments: await signAttachmentList(a.attachments ?? []),
+    })),
   );
 }
 
@@ -350,6 +392,28 @@ export async function uploadDeliverableAsset(input: {
 }
 
 /**
+ * Upload an evidence attachment (screenshot, PDF) for a change-request note
+ * or a reply on the record. Stored under a feedback/ sub-prefix, distinct
+ * from the version-asset prefix above, so validateDeliverableAttachments can
+ * scope a request's storage_path claims to this deliverable alone.
+ */
+export async function uploadDeliverableFeedbackAsset(input: {
+  firmId: string;
+  deliverableId: string;
+  buffer: Buffer;
+  contentType: string;
+  filename: string;
+}): Promise<{ ok: true; storagePath: string } | { ok: false; error: string }> {
+  const safe = input.filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
+  const storagePath = `deliverables/${input.firmId}/${input.deliverableId}/feedback/${randomUUID()}-${safe}`;
+  const { error } = await supabase.storage
+    .from(ASSET_BUCKET)
+    .upload(storagePath, input.buffer, { contentType: input.contentType, upsert: false });
+  if (error) return { ok: false, error: `feedback asset upload failed: ${error.message}` };
+  return { ok: true, storagePath };
+}
+
+/**
  * Insert a new version, bump the version number, point the deliverable at it,
  * and return the deliverable to in_review. Best-effort notification to the
  * firm's lawyers that a version is ready for review.
@@ -371,6 +435,12 @@ export async function addVersion(input: {
    * `notifyPendingReviews` then fires one consolidated digest later.
    */
   silent?: boolean;
+  /**
+   * When this version answers a changes_requested approval_records row, that
+   * record's id. Links the version back to the request it addresses so the
+   * review UI can show "addressed in vN" instead of a dead-end record.
+   */
+  respondsToApprovalId?: string | null;
 }): Promise<{ ok: true; version: DeliverableVersion } | { ok: false; error: string }> {
   // Compute the next version number and insert. Two concurrent posts can read
   // the same MAX and collide on UNIQUE(deliverable_id, version_number); the DB
@@ -401,6 +471,7 @@ export async function addVersion(input: {
         asset_size_bytes: input.assetSizeBytes,
         asset_name: input.assetName,
         note: input.note,
+        responds_to_approval_id: input.respondsToApprovalId ?? null,
         created_by_role: input.actor.role,
         created_by_id: input.actor.id ?? null,
       })
@@ -515,6 +586,12 @@ export async function addComment(input: {
   body: string;
   parentCommentId: string | null;
   actor: DeliverableActor;
+  /**
+   * When set, this comment is a reply on an approval_records row (the
+   * change-request thread) rather than a passage comment on the article.
+   */
+  approvalRecordId?: string | null;
+  attachments?: DeliverableAttachment[];
 }): Promise<{ ok: true; comment: DeliverableComment } | { ok: false; error: string }> {
   const { data, error } = await supabase
     .from("deliverable_comments")
@@ -527,7 +604,9 @@ export async function addComment(input: {
       author_name: input.actor.name ?? null,
       annotation: input.annotation,
       body: input.body,
+      attachments: input.attachments ?? [],
       parent_comment_id: input.parentCommentId,
+      approval_record_id: input.approvalRecordId ?? null,
     })
     .select("*")
     .single();
@@ -535,13 +614,16 @@ export async function addComment(input: {
 
   // A comment from the operator pings the firm; a comment from the lawyer
   // pings the operator inbox.
+  const bodyPreview = input.approvalRecordId
+    ? `Reply to change request: ${input.body.slice(0, 220)}`
+    : input.body.slice(0, 240);
   await enqueueDeliverableNotification({
     firmId: input.firmId,
     deliverableId: input.deliverableId,
     eventType: "deliverable_comment_added",
     audience: input.actor.role === "operator" ? "firm" : "operator",
     actor: input.actor,
-    bodyPreview: input.body.slice(0, 240),
+    bodyPreview,
   }).catch((e) => console.warn("[deliverables] notify failed:", e));
 
   return { ok: true, comment: data as DeliverableComment };
@@ -583,6 +665,7 @@ export async function recordApproval(input: {
   ipAddress: string | null;
   userAgent: string | null;
   note: string | null;
+  attachments?: DeliverableAttachment[];
 }): Promise<{ ok: true; record: ApprovalRecord } | { ok: false; error: string; stale?: boolean }> {
   const approved = input.decision === "approved";
   void approved; // unused after the RPC took over; kept for future telemetry
@@ -608,6 +691,7 @@ export async function recordApproval(input: {
     p_ip_address:        input.ipAddress,
     p_user_agent:        input.userAgent,
     p_note:              input.note,
+    p_attachments:       input.attachments ?? [],
   });
   if (rpcErr) {
     return { ok: false, error: `approval rpc failed: ${rpcErr.message}` };
@@ -628,6 +712,9 @@ export async function recordApproval(input: {
     return { ok: false, error: `approval record fetch failed: ${error?.message ?? "missing"}` };
   }
 
+  const attachmentCount = input.attachments?.length ?? 0;
+  const attachmentSuffix =
+    attachmentCount > 0 ? ` (${attachmentCount} attachment${attachmentCount === 1 ? "" : "s"})` : "";
   await enqueueDeliverableNotification({
     firmId: input.firmId,
     deliverableId: input.deliverableId,
@@ -636,7 +723,7 @@ export async function recordApproval(input: {
     actor: { role: "lawyer", name: input.signer.name },
     bodyPreview: approved
       ? `${input.signer.name} approved version ${input.versionNumber}.`
-      : `${input.signer.name} requested changes to version ${input.versionNumber}.`,
+      : `${input.signer.name} requested changes to version ${input.versionNumber}.${attachmentSuffix}`,
   }).catch((e) => console.warn("[deliverables] notify failed:", e));
 
   return { ok: true, record: data as ApprovalRecord };

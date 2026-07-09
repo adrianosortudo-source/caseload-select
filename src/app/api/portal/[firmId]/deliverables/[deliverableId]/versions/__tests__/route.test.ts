@@ -55,12 +55,19 @@ import { POST } from "../route";
 
 const OPERATOR: Actor = { role: "operator", id: null, name: "Operator", email: null };
 
-function makeDetail(kind: "text" | "image" | "pdf", firmId = FIRM) {
+const APPROVAL_1 = "77777777-7777-7777-7777-777777777777";
+const APPROVAL_OLD = "88888888-8888-8888-8888-888888888888";
+
+function makeDetail(
+  kind: "text" | "image" | "pdf",
+  firmId = FIRM,
+  over: { status?: string; approvals?: Array<{ id: string; decision: string; created_at?: string }> } = {},
+) {
   return {
-    deliverable: { id: DELIV, firm_id: firmId, title: "T", content_kind: kind },
+    deliverable: { id: DELIV, firm_id: firmId, title: "T", content_kind: kind, status: over.status ?? "in_review" },
     versions: [],
     comments: [],
-    approvals: [],
+    approvals: over.approvals ?? [],
   };
 }
 
@@ -163,5 +170,59 @@ describe("POST versions", () => {
     expect(res.status).toBe(200);
     expect(state.addVersionArgs!.storagePath).toBe("deliverables/x/y/z.png");
     expect(state.addVersionArgs!.assetMime).toBe("image/png");
+  });
+
+  it("passes through an explicit responds_to_approval_id (JSON path)", async () => {
+    state.detail = makeDetail("text", FIRM, {
+      status: "changes_requested",
+      approvals: [{ id: APPROVAL_1, decision: "changes_requested" }],
+    });
+    const res = await POST(jsonReq({ body_html: "<p>fixed</p>", responds_to_approval_id: APPROVAL_1 }), params());
+    expect(res.status).toBe(200);
+    expect(state.addVersionArgs!.respondsToApprovalId).toBe(APPROVAL_1);
+  });
+
+  it("auto-links to the latest changes_requested record when the deliverable is changes_requested and the client omits the field", async () => {
+    state.detail = makeDetail("text", FIRM, {
+      status: "changes_requested",
+      approvals: [
+        { id: APPROVAL_1, decision: "changes_requested" },
+        { id: APPROVAL_OLD, decision: "approved" },
+      ],
+    });
+    const res = await POST(jsonReq({ body_html: "<p>fixed</p>" }), params());
+    expect(res.status).toBe(200);
+    expect(state.addVersionArgs!.respondsToApprovalId).toBe(APPROVAL_1);
+  });
+
+  it("does not auto-link when the deliverable is not changes_requested", async () => {
+    state.detail = makeDetail("text", FIRM, { status: "in_review" });
+    const res = await POST(jsonReq({ body_html: "<p>routine update</p>" }), params());
+    expect(res.status).toBe(200);
+    expect(state.addVersionArgs!.respondsToApprovalId).toBeNull();
+  });
+
+  it("400 when responds_to_approval_id does not belong to this deliverable", async () => {
+    state.detail = makeDetail("text", FIRM, { status: "changes_requested", approvals: [] });
+    const res = await POST(
+      jsonReq({ body_html: "<p>fixed</p>", responds_to_approval_id: "ffffffff-ffff-ffff-ffff-ffffffffffff" }),
+      params(),
+    );
+    expect(res.status).toBe(400);
+    expect(state.addVersionArgs).toBeNull();
+  });
+
+  it("passes through an explicit responds_to_approval_id (multipart path)", async () => {
+    state.detail = makeDetail("image", FIRM, {
+      status: "changes_requested",
+      approvals: [{ id: APPROVAL_1, decision: "changes_requested" }],
+    });
+    const form = new FormData();
+    const pngHeader = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
+    form.append("file", new File([pngHeader], "ad.png", { type: "image/png" }));
+    form.append("responds_to_approval_id", APPROVAL_1);
+    const res = await POST(multipartReq(form), params());
+    expect(res.status).toBe(200);
+    expect(state.addVersionArgs!.respondsToApprovalId).toBe(APPROVAL_1);
   });
 });

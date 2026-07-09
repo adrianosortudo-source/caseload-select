@@ -5,14 +5,23 @@
  * image pin/region, or PDF page) is optional; a null annotation is a general
  * comment on the version. Operator or firm-lawyer session.
  *
- * Body: { version_id, body, annotation?, parent_comment_id? }
+ * When approval_record_id is set, this is a reply on a change-request thread
+ * rather than a passage comment: version_id and annotation are forced
+ * server-side (never trusted from the client) to the record's own version and
+ * null respectively.
+ *
+ * Body: { version_id, body, annotation?, parent_comment_id?, approval_record_id?, attachments? }
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
 import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { getDeliverableDetail, addComment } from "@/lib/deliverables";
-import { cleanCommentBody, validateAnnotation } from "@/lib/deliverables-pure";
+import {
+  cleanCommentBody,
+  validateAnnotation,
+  validateDeliverableAttachments,
+} from "@/lib/deliverables-pure";
 import { postDeliverableCommentToChannel } from "@/lib/deliverable-channel-post";
 
 export async function POST(
@@ -30,6 +39,8 @@ export async function POST(
     body?: unknown;
     annotation?: unknown;
     parent_comment_id?: unknown;
+    approval_record_id?: unknown;
+    attachments?: unknown;
   };
   try {
     body = await req.json();
@@ -42,7 +53,26 @@ export async function POST(
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  const versionId = typeof body.version_id === "string" ? body.version_id : null;
+  // A reply on an approval record: resolve the record first so version_id and
+  // annotation can be forced to its own values rather than trusted from the
+  // client.
+  const approvalRecordId =
+    typeof body.approval_record_id === "string" ? body.approval_record_id : null;
+  const approvalRecord = approvalRecordId
+    ? (detail.approvals.find((a) => a.id === approvalRecordId) ?? null)
+    : null;
+  if (approvalRecordId && !approvalRecord) {
+    return NextResponse.json(
+      { error: "approval_record_id not found in this deliverable" },
+      { status: 400 },
+    );
+  }
+
+  const versionId = approvalRecord
+    ? approvalRecord.version_id
+    : typeof body.version_id === "string"
+      ? body.version_id
+      : null;
   if (!versionId || !detail.versions.some((v) => v.id === versionId)) {
     return NextResponse.json({ error: "valid version_id is required" }, { status: 400 });
   }
@@ -52,7 +82,7 @@ export async function POST(
     return NextResponse.json({ error: "comment body is required" }, { status: 400 });
   }
 
-  const annotation = validateAnnotation(body.annotation);
+  const annotation = approvalRecord ? null : validateAnnotation(body.annotation);
   const parentId =
     typeof body.parent_comment_id === "string" ? body.parent_comment_id : null;
   if (parentId && !detail.comments.some((c) => c.id === parentId)) {
@@ -60,6 +90,11 @@ export async function POST(
       { error: "parent_comment_id not found in this deliverable" },
       { status: 400 },
     );
+  }
+
+  const attachments = validateDeliverableAttachments(body.attachments, firmId, deliverableId);
+  if (attachments === null) {
+    return NextResponse.json({ error: "invalid attachments" }, { status: 400 });
   }
 
   const result = await addComment({
@@ -70,6 +105,8 @@ export async function POST(
     body: cleanBody,
     parentCommentId: parentId,
     actor: resolved.actor,
+    approvalRecordId,
+    attachments,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
 

@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
   type PointerEvent as ReactPointerEvent,
   type FormEvent,
+  type ChangeEvent,
   type RefObject,
 } from "react";
 import Link from "next/link";
@@ -18,12 +19,14 @@ import type {
   DeliverableComment,
   ApprovalRecord,
   DeliverableAnnotation,
+  DeliverableAttachment,
 } from "@/lib/types";
 import { DRGArticleFrame, type AnnotationPosition } from "./DRGArticleFrame";
 import {
   STATUS_LABELS,
   CONTENT_KIND_LABELS,
   annotationLabel,
+  versionOptionLabel,
 } from "@/lib/deliverables-pure";
 import { stackCards, stackBottom } from "@/lib/margin-stack";
 import type { HighlightItem } from "@/lib/highlight-dom";
@@ -93,7 +96,16 @@ export default function DeliverableReview({
   // 20260707_deliverable_current_version_invariant). If one ever recurs, the
   // sign-off panel says so explicitly instead of hiding the button silently.
   const currentVersionMissing = !deliverable.current_version_id && versions.length > 0;
-  const versionComments = comments.filter((c) => c.version_id === selectedVersionId);
+  // Newest changes_requested record (approvals load newest-first), used to
+  // quote the open request in the version composer and to resolve the
+  // addressed-by relationship once a version answers it.
+  const latestChangesRequestedApproval =
+    approvals.find((a) => a.decision === "changes_requested") ?? null;
+  // Replies threaded under a change-request record are not passage comments;
+  // they render in ApprovalHistory, never in the passage margin.
+  const versionComments = comments.filter(
+    (c) => c.version_id === selectedVersionId && !c.approval_record_id,
+  );
 
   const refetch = useCallback(async () => {
     const res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}`, {
@@ -255,8 +267,9 @@ export default function DeliverableReview({
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <VersionSelector
             versions={versions}
+            deliverable={deliverable}
+            approvals={approvals}
             selectedVersionId={selectedVersionId}
-            currentVersionId={deliverable.current_version_id}
             onSelect={(id) => {
               setSelectedVersionId(id);
               setPendingAnnotation(null);
@@ -277,6 +290,9 @@ export default function DeliverableReview({
             firmId={firmId}
             deliverableId={deliverableId}
             contentKind={deliverable.content_kind}
+            respondsToApproval={
+              deliverable.status === "changes_requested" ? latestChangesRequestedApproval : null
+            }
             onPosted={async () => {
               setShowVersionComposer(false);
               await refetch();
@@ -301,7 +317,22 @@ export default function DeliverableReview({
             onSigned={refetch}
           />
           <div className="space-y-3">
-            <ApprovalHistory approvals={approvals} />
+            <ApprovalHistory
+              firmId={firmId}
+              deliverableId={deliverableId}
+              viewerRole={viewerRole}
+              approvals={approvals}
+              comments={comments}
+              versions={versions}
+              deliverable={deliverable}
+              onSwitchVersion={(id) => {
+                setSelectedVersionId(id);
+                setPendingAnnotation(null);
+                setPendingPosition(null);
+                setActiveId(null);
+              }}
+              onChanged={refetch}
+            />
             <ArchiveControl
               firmId={firmId}
               deliverableId={deliverableId}
@@ -415,15 +446,36 @@ function StatusPill({ status }: { status: ContentDeliverable["status"] }) {
   );
 }
 
+function versionOptionText(
+  version: DeliverableVersion,
+  deliverable: ContentDeliverable,
+  approvals: ApprovalRecord[],
+): string {
+  const state = versionOptionLabel(version, deliverable, approvals);
+  const date = state.approvalCreatedAt
+    ? formatTimestamp(state.approvalCreatedAt, undefined, { dateStyle: "medium" })
+    : "";
+  if (state.tag === "awaiting_review") return `v${version.version_number} (current, awaiting review)`;
+  if (state.tag === "approved") {
+    return `v${version.version_number} (${state.isCurrent ? "current, " : ""}approved ${date})`;
+  }
+  if (state.tag === "changes_requested") {
+    return `v${version.version_number} (${state.isCurrent ? "current, " : ""}changes requested ${date})`;
+  }
+  return `v${version.version_number}${state.isCurrent ? " (current)" : ""}`;
+}
+
 function VersionSelector({
   versions,
+  deliverable,
+  approvals,
   selectedVersionId,
-  currentVersionId,
   onSelect,
 }: {
   versions: DeliverableVersion[];
+  deliverable: ContentDeliverable;
+  approvals: ApprovalRecord[];
   selectedVersionId: string | null;
-  currentVersionId: string | null;
   onSelect: (id: string) => void;
 }) {
   if (versions.length === 0) return <span className="text-xs text-black/40">No versions</span>;
@@ -437,8 +489,7 @@ function VersionSelector({
       >
         {versions.map((v) => (
           <option key={v.id} value={v.id}>
-            v{v.version_number}
-            {v.id === currentVersionId ? " (current)" : ""}
+            {versionOptionText(v, deliverable, approvals)}
           </option>
         ))}
       </select>
@@ -1283,6 +1334,7 @@ function SignOffPanel({
   const [decision, setDecision] = useState<"approved" | "changes_requested">("approved");
   const [agreed, setAgreed] = useState(false);
   const [note, setNote] = useState("");
+  const [attachments, setAttachments] = useState<DeliverableAttachment[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1313,6 +1365,7 @@ function SignOffPanel({
           decision,
           agreed,
           note: note.trim() || null,
+          attachments,
         }),
       });
       const json = await res.json();
@@ -1321,6 +1374,7 @@ function SignOffPanel({
       } else {
         setAgreed(false);
         setNote("");
+        setAttachments([]);
         await onSigned();
       }
     } catch (err) {
@@ -1363,6 +1417,7 @@ function SignOffPanel({
               onClick={() => {
                 setDecision("approved");
                 setAgreed(false);
+                setAttachments([]);
               }}
               className={`flex-1 px-2 py-1.5 text-xs font-semibold border ${
                 decision === "approved"
@@ -1389,13 +1444,24 @@ function SignOffPanel({
           </div>
 
           {decision === "changes_requested" && (
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={2}
-              placeholder="What needs to change (optional)"
-              className="w-full border border-border-brand px-2 py-1.5 text-sm"
-            />
+            <div className="space-y-1.5">
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={2}
+                placeholder="What needs to change (optional)"
+                className="w-full border border-border-brand px-2 py-1.5 text-sm"
+              />
+              <p className="text-[11px] text-black/50">
+                Attach a screenshot if it helps explain the change (PNG, JPG, or PDF, up to 25 MB).
+              </p>
+              <AttachmentPicker
+                firmId={firmId}
+                deliverableId={deliverableId}
+                attachments={attachments}
+                onChange={setAttachments}
+              />
+            </div>
           )}
 
           <p className="text-[11px] text-black/60 leading-relaxed bg-parchment p-2 border border-border-brand">
@@ -1439,33 +1505,352 @@ function SignOffPanel({
 
 // ─── Approval history ────────────────────────────────────────────────────────
 
-function ApprovalHistory({ approvals }: { approvals: ApprovalRecord[] }) {
+/** Read-only attachment chips: filename links to the signed URL in a new tab. */
+function AttachmentChips({ attachments }: { attachments: DeliverableAttachment[] }) {
+  if (!attachments || attachments.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-1.5">
+      {attachments.map((a, i) => (
+        <a
+          key={i}
+          href={a.signed_url ?? "#"}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 px-2 py-0.5 bg-parchment-2 border border-border-brand text-[11px] text-navy hover:underline"
+        >
+          {a.name}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+/** Upload-immediately-on-selection picker, mirrors the matter-messages ComposeForm pattern. */
+function AttachmentPicker({
+  firmId,
+  deliverableId,
+  attachments,
+  onChange,
+}: {
+  firmId: string;
+  deliverableId: string;
+  attachments: DeliverableAttachment[];
+  onChange: (next: DeliverableAttachment[]) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function onFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    e.target.value = "";
+    setError(null);
+    setUploading(true);
+    try {
+      let next = attachments;
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/attachments`, {
+          method: "POST",
+          body: fd,
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) {
+          setError(json.error ?? "Upload failed.");
+        } else {
+          next = [...next, json.attachment as DeliverableAttachment];
+          onChange(next);
+        }
+      }
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {attachments.map((a, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-parchment-2 border border-border-brand text-[11px] text-navy"
+            >
+              {a.name}
+              <button
+                type="button"
+                onClick={() => onChange(attachments.filter((_, j) => j !== i))}
+                className="text-black/40 hover:text-black leading-none"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploading}
+        className="text-[11px] font-semibold uppercase tracking-wider px-2 py-1 border border-border-brand text-black/60 hover:bg-parchment-2 disabled:opacity-50"
+      >
+        {uploading ? "Uploading..." : "Attach screenshot or PDF"}
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/png,image/jpeg,image/gif,image/webp,application/pdf"
+        onChange={onFileChange}
+        className="hidden"
+      />
+      {error && <p className="text-[11px] text-red-fail">{error}</p>}
+    </div>
+  );
+}
+
+/** Reply composer for one change-request thread. Posts a comment anchored to the record. */
+function ReplyComposer({
+  firmId,
+  deliverableId,
+  approvalRecordId,
+  versionId,
+  viewerRole,
+  onPosted,
+  onCancel,
+}: {
+  firmId: string;
+  deliverableId: string;
+  approvalRecordId: string;
+  versionId: string;
+  viewerRole: "operator" | "lawyer";
+  onPosted: () => Promise<void> | void;
+  onCancel: () => void;
+}) {
+  const [body, setBody] = useState("");
+  const [attachments, setAttachments] = useState<DeliverableAttachment[]>([]);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!body.trim() && attachments.length === 0) return;
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          version_id: versionId,
+          body: body.trim() || "(attachment)",
+          approval_record_id: approvalRecordId,
+          attachments,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setError(json.error ?? "Could not post.");
+      } else {
+        setBody("");
+        setAttachments([]);
+        await onPosted();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="mt-2 space-y-2 bg-parchment-2 border border-border-brand p-2">
+      <textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        rows={2}
+        placeholder={viewerRole === "lawyer" ? "Reply to the operator..." : "Reply to the firm..."}
+        className="w-full border border-border-brand px-2 py-1.5 text-sm resize-y bg-white"
+      />
+      <AttachmentPicker
+        firmId={firmId}
+        deliverableId={deliverableId}
+        attachments={attachments}
+        onChange={setAttachments}
+      />
+      {error && <p className="text-xs text-red-fail">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={sending || (!body.trim() && attachments.length === 0)}
+          className="px-3 py-1.5 text-xs font-semibold bg-navy text-white disabled:opacity-50"
+        >
+          {sending ? "Posting..." : "Post reply"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-3 py-1.5 text-xs font-semibold border border-border-brand text-black/60"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+interface ResolutionLine {
+  versionId: string;
+  versionNumber: number;
+  suffix: string;
+}
+
+/**
+ * Whether a version was posted in direct answer to this changes_requested
+ * record, and if so what happened to that version since (still current and
+ * awaiting re-review, or itself since approved). Null when no version has
+ * answered the record yet, which is the dead-end state this feature replaces.
+ */
+function resolutionLineFor(
+  record: ApprovalRecord,
+  versions: DeliverableVersion[],
+  approvals: ApprovalRecord[],
+  deliverable: ContentDeliverable,
+): ResolutionLine | null {
+  const v = versions.find((x) => x.responds_to_approval_id === record.id);
+  if (!v) return null;
+  const approvedRecord = approvals.find((a) => a.version_id === v.id && a.decision === "approved");
+  if (approvedRecord) {
+    const approvedDate = formatTimestamp(approvedRecord.created_at, undefined, { dateStyle: "medium" });
+    return { versionId: v.id, versionNumber: v.version_number, suffix: `. Approved ${approvedDate}.` };
+  }
+  const postedDate = formatTimestamp(v.created_at, undefined, { dateStyle: "medium" });
+  if (v.id === deliverable.current_version_id) {
+    return {
+      versionId: v.id,
+      versionNumber: v.version_number,
+      suffix: `, posted ${postedDate}. Awaiting re-review.`,
+    };
+  }
+  return { versionId: v.id, versionNumber: v.version_number, suffix: `, posted ${postedDate}.` };
+}
+
+function ApprovalHistory({
+  firmId,
+  deliverableId,
+  viewerRole,
+  approvals,
+  comments,
+  versions,
+  deliverable,
+  onSwitchVersion,
+  onChanged,
+}: {
+  firmId: string;
+  deliverableId: string;
+  viewerRole: "operator" | "lawyer";
+  approvals: ApprovalRecord[];
+  comments: DeliverableComment[];
+  versions: DeliverableVersion[];
+  deliverable: ContentDeliverable;
+  onSwitchVersion: (versionId: string) => void;
+  onChanged: () => Promise<void> | void;
+}) {
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+
   if (approvals.length === 0) return null;
   return (
     <div className="bg-white border border-border-brand p-4">
       <h3 className="text-sm font-bold text-navy mb-3">Approval record</h3>
-      <ul className="space-y-3">
-        {approvals.map((a) => (
-          <li key={a.id} className="text-xs border-l-2 pl-2 border-border-brand">
-            <div className="flex items-center gap-2">
-              <span
-                className={`uppercase tracking-wider font-bold text-[10px] ${
-                  a.decision === "approved" ? "text-green-pass" : "text-amber-700"
-                }`}
-              >
-                {a.decision === "approved" ? "Approved" : "Changes requested"}
-              </span>
-              <span className="text-black/40">v{a.version_number}</span>
-            </div>
-            <p className="text-black/70 mt-0.5">
-              {a.signer_name} ({a.signer_email})
-            </p>
-            <p className="text-black/40">
-              {formatTimestamp(a.created_at, undefined, { dateStyle: "medium", timeStyle: "short" })}
-            </p>
-            {a.note && <p className="text-black/60 mt-1">{a.note}</p>}
-          </li>
-        ))}
+      <ul className="space-y-4">
+        {approvals.map((a) => {
+          const replies = comments
+            .filter((c) => c.approval_record_id === a.id)
+            .sort((x, y) => (x.created_at < y.created_at ? -1 : x.created_at > y.created_at ? 1 : 0));
+          const resolution =
+            a.decision === "changes_requested"
+              ? resolutionLineFor(a, versions, approvals, deliverable)
+              : null;
+          return (
+            <li key={a.id} className="text-xs border-l-2 pl-2 border-border-brand">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`uppercase tracking-wider font-bold text-[10px] ${
+                    a.decision === "approved" ? "text-green-pass" : "text-amber-700"
+                  }`}
+                >
+                  {a.decision === "approved" ? "Approved" : "Changes requested"}
+                </span>
+                <span className="text-black/40">v{a.version_number}</span>
+              </div>
+              <p className="text-black/70 mt-0.5">
+                {a.signer_name} ({a.signer_email})
+              </p>
+              <p className="text-black/40">
+                {formatTimestamp(a.created_at, undefined, { dateStyle: "medium", timeStyle: "short" })}
+              </p>
+              {a.note && <p className="text-black/60 mt-1">{a.note}</p>}
+              <AttachmentChips attachments={a.attachments} />
+
+              {resolution && (
+                <p className="text-navy mt-1.5">
+                  Addressed in{" "}
+                  <button
+                    type="button"
+                    onClick={() => onSwitchVersion(resolution.versionId)}
+                    className="font-semibold underline hover:no-underline"
+                  >
+                    v{resolution.versionNumber}
+                  </button>
+                  {resolution.suffix}
+                </p>
+              )}
+
+              {a.decision === "changes_requested" && (
+                <div className="mt-2 space-y-2">
+                  {replies.map((r) => (
+                    <div key={r.id} className="ml-2 pl-2 border-l border-border-brand/60">
+                      <p className="text-black/70">
+                        <span className="font-semibold">
+                          {r.author_name ?? (r.author_role === "operator" ? "Operator" : "The firm")}
+                        </span>
+                        {" · "}
+                        {formatTimestamp(r.created_at, undefined, { dateStyle: "medium", timeStyle: "short" })}
+                      </p>
+                      <p className="text-black/70 mt-0.5">{r.body}</p>
+                      <AttachmentChips attachments={r.attachments} />
+                    </div>
+                  ))}
+
+                  {replyingTo === a.id ? (
+                    <ReplyComposer
+                      firmId={firmId}
+                      deliverableId={deliverableId}
+                      approvalRecordId={a.id}
+                      versionId={a.version_id}
+                      viewerRole={viewerRole}
+                      onCancel={() => setReplyingTo(null)}
+                      onPosted={async () => {
+                        setReplyingTo(null);
+                        await onChanged();
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setReplyingTo(a.id)}
+                      className="text-[11px] font-semibold uppercase tracking-wider text-navy hover:underline"
+                    >
+                      Reply
+                    </button>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -1477,12 +1862,15 @@ function VersionComposer({
   firmId,
   deliverableId,
   contentKind,
+  respondsToApproval,
   onPosted,
   onSelectNew,
 }: {
   firmId: string;
   deliverableId: string;
   contentKind: ContentDeliverable["content_kind"];
+  /** The open changes_requested record this version answers, if any. */
+  respondsToApproval: ApprovalRecord | null;
   onPosted: () => Promise<void> | void;
   onSelectNew: (id: string) => void;
 }) {
@@ -1491,6 +1879,7 @@ function VersionComposer({
   const [file, setFile] = useState<File | null>(null);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [noteExpanded, setNoteExpanded] = useState(false);
 
   async function post() {
     setPosting(true);
@@ -1501,7 +1890,11 @@ function VersionComposer({
         res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/versions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ body_html: bodyHtml, note: note.trim() || null }),
+          body: JSON.stringify({
+            body_html: bodyHtml,
+            note: note.trim() || null,
+            responds_to_approval_id: respondsToApproval?.id ?? null,
+          }),
         });
       } else {
         if (!file) {
@@ -1512,6 +1905,7 @@ function VersionComposer({
         const fd = new FormData();
         fd.append("file", file);
         if (note.trim()) fd.append("note", note.trim());
+        if (respondsToApproval) fd.append("responds_to_approval_id", respondsToApproval.id);
         res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/versions`, {
           method: "POST",
           body: fd,
@@ -1534,9 +1928,41 @@ function VersionComposer({
     }
   }
 
+  const requestNote = respondsToApproval?.note ?? "";
+  const requestNoteTruncated = requestNote.length > 400 && !noteExpanded;
+
   return (
     <div className="bg-parchment border border-border-brand p-3 space-y-2">
       <p className="text-xs font-semibold text-navy">Post a new version</p>
+
+      {respondsToApproval && (
+        <div className="bg-amber-50 border border-amber-200 px-3 py-2 text-xs">
+          <p className="uppercase tracking-wider font-bold text-amber-800 text-[10px]">
+            Responding to changes requested
+          </p>
+          <p className="text-amber-900 mt-0.5">
+            {respondsToApproval.signer_name}, v{respondsToApproval.version_number},{" "}
+            {formatTimestamp(respondsToApproval.created_at, undefined, { dateStyle: "medium" })}
+          </p>
+          {requestNote && (
+            <>
+              <p className="text-amber-900/90 mt-1">
+                {requestNoteTruncated ? `${requestNote.slice(0, 400)}...` : requestNote}
+              </p>
+              {requestNote.length > 400 && (
+                <button
+                  type="button"
+                  onClick={() => setNoteExpanded((s) => !s)}
+                  className="text-amber-800 underline hover:no-underline mt-0.5"
+                >
+                  {noteExpanded ? "Show less" : "Show more"}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {contentKind === "text" ? (
         <>
           <textarea
@@ -1564,12 +1990,21 @@ function VersionComposer({
           className="text-xs"
         />
       )}
-      <input
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="What changed in this version (optional)"
-        className="w-full border border-border-brand px-2 py-1.5 text-sm"
-      />
+      <div>
+        <label className="text-[11px] font-semibold text-black/60 uppercase tracking-wider">
+          What changed in this version
+        </label>
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder={
+            respondsToApproval
+              ? "Answer the request point by point. This note goes to the reviewer with the re-review notification."
+              : "Optional"
+          }
+          className="w-full border border-border-brand px-2 py-1.5 text-sm mt-1"
+        />
+      </div>
       {error && <p className="text-xs text-red-fail">{error}</p>}
       <button
         type="button"

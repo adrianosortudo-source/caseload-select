@@ -193,4 +193,34 @@ describe("POST approve", () => {
     const res = await POST(makeReq({ version_id: V_CUR, decision: "approved", agreed: true }), params());
     expect(res.status).toBe(409);
   });
+
+  it("200 on request-changes with a valid attachment scoped to this deliverable", async () => {
+    const path = `deliverables/${FIRM}/${DELIV}/feedback/abc-shot.png`;
+    const res = await POST(
+      makeReq({
+        version_id: V_CUR,
+        decision: "changes_requested",
+        agreed: true,
+        note: "see the attached screenshot",
+        attachments: [{ storage_path: path, name: "shot.png" }],
+      }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+    expect(state.recordArgs!.attachments).toEqual([{ storage_path: path, name: "shot.png" }]);
+  });
+
+  it("400 when attachments reference another deliverable's storage prefix", async () => {
+    const res = await POST(
+      makeReq({
+        version_id: V_CUR,
+        decision: "changes_requested",
+        agreed: true,
+        attachments: [{ storage_path: "deliverables/other-firm/other-deliv/feedback/x.png", name: "x.png" }],
+      }),
+      params(),
+    );
+    expect(res.status).toBe(400);
+    expect(state.recordArgs).toBeNull();
+  });
 });
