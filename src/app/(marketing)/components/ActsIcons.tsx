@@ -1,16 +1,14 @@
 /**
- * ACTS pillar icons
+ * ACTS pillar icons.
  *
- * Bespoke SVG, hand-built from primitives matching v45's stroke-width and
- * visual language. Each icon has its own metaphor:
+ * Selected premium family:
+ * - Authority: column / institution mark
+ * - Capture: channel intake paths
+ * - Target: focus frame
+ * - Screen: ranked intake gate
  *
- *   Authority — shield with check + radiating lines (trust signal)
- *   Capture   — beacon with pulse rings + downward target (visibility radiating outward)
- *   Target    — concentric rings with center dot and converging arrows (precision)
- *   Screen    — funnel with internal filter lines + score badge (qualification)
- *
- * All icons render at 42×42 in the hero pillar wrap. Stroke and fill come
- * from the parent .pillar-icon-wrap CSS, not from these components.
+ * Primary strokes inherit currentColor. Stone accents use the marketing token
+ * with a currentColor fallback for contexts outside the marketing shell.
  */
 
 const baseProps = {
@@ -23,17 +21,14 @@ const baseProps = {
 export function IconAuthority() {
   return (
     <svg {...baseProps} aria-hidden="true">
-      {/* Outer radiating dashed ring */}
-      <circle cx="50" cy="50" r="38" strokeDasharray="2 7" opacity="0.25" />
-      {/* Shield */}
-      <path d="M50 18L26 27v17c0 14 12 24 24 28 12-4 24-14 24-28V27L50 18Z" strokeWidth="1.8" />
-      {/* Inner shield outline */}
-      <path d="M50 28L34 34v11c0 9 7.5 16 16 19 8.5-3 16-10 16-19V34L50 28Z" opacity="0.45" />
-      {/* Check */}
-      <path d="M40 49l7 7 14-15" strokeWidth="2.4" />
-      {/* Authority dots */}
-      <circle cx="50" cy="12" r="1.6" fill="currentColor" opacity="0.6" />
-      <circle cx="50" cy="88" r="1.6" fill="currentColor" opacity="0.4" />
+      <path d="M24 76h52" strokeWidth="1.65" />
+      <path d="M30 68h40" strokeWidth="1.65" />
+      <path d="M35 32h30" strokeWidth="1.65" />
+      <path d="M40 32v36M50 32v36M60 32v36" strokeWidth="1.65" />
+      <path d="M26 28l24-12 24 12H26Z" strokeWidth="1.65" />
+      <path d="M32 82h36" strokeWidth="1.25" opacity="0.62" />
+      <path d="M50 8v8M50 84v8" strokeWidth="1.25" strokeDasharray="2.4 5" opacity="0.38" />
+      <rect x="47" y="23" width="6" height="6" fill="var(--stone, currentColor)" stroke="none" />
     </svg>
   );
 }
@@ -41,20 +36,13 @@ export function IconAuthority() {
 export function IconCapture() {
   return (
     <svg {...baseProps} aria-hidden="true">
-      {/* Beacon — vertical mast */}
-      <line x1="50" y1="22" x2="50" y2="72" strokeWidth="1.8" />
-      {/* Top dot (the source) */}
-      <circle cx="50" cy="22" r="3.5" strokeWidth="1.8" fill="currentColor" />
-      {/* Three concentric pulse arcs spreading out from the top */}
-      <path d="M36 30 Q50 24 64 30" opacity="0.85" />
-      <path d="M30 38 Q50 28 70 38" opacity="0.55" />
-      <path d="M24 46 Q50 32 76 46" opacity="0.3" />
-      {/* Ground base */}
-      <line x1="32" y1="78" x2="68" y2="78" strokeWidth="1.4" opacity="0.5" />
-      {/* Foot rays */}
-      <line x1="40" y1="78" x2="36" y2="86" opacity="0.45" />
-      <line x1="50" y1="78" x2="50" y2="88" opacity="0.7" />
-      <line x1="60" y1="78" x2="64" y2="86" opacity="0.45" />
+      <path d="M20 30h18M20 50h18M20 70h18" strokeWidth="1.25" opacity="0.62" />
+      <path d="M38 30c15 0 15 20 30 20M38 50h30M38 70c15 0 15-20 30-20" strokeWidth="1.65" />
+      <path d="M68 38h12v24H68V38Z" stroke="var(--stone, currentColor)" strokeWidth="2.15" />
+      <circle cx="26" cy="30" r="2.4" fill="currentColor" stroke="none" />
+      <circle cx="26" cy="50" r="2.4" fill="currentColor" stroke="none" />
+      <circle cx="26" cy="70" r="2.4" fill="currentColor" stroke="none" />
+      <rect x="74" y="47" width="5" height="5" fill="var(--stone, currentColor)" stroke="none" />
     </svg>
   );
 }
@@ -62,17 +50,10 @@ export function IconCapture() {
 export function IconTarget() {
   return (
     <svg {...baseProps} aria-hidden="true">
-      {/* Concentric rings */}
-      <circle cx="50" cy="50" r="30" opacity="0.35" />
-      <circle cx="50" cy="50" r="20" opacity="0.6" />
-      <circle cx="50" cy="50" r="10" opacity="0.85" />
-      {/* Center dot */}
-      <circle cx="50" cy="50" r="2.6" fill="currentColor" />
-      {/* Four converging arrows (NE / SE / SW / NW) */}
-      <path d="M76 24 L66 34 M70 28 L66 34 L72 34" strokeWidth="1.8" />
-      <path d="M76 76 L66 66 M72 66 L66 66 L66 72" strokeWidth="1.8" />
-      <path d="M24 76 L34 66 M34 72 L34 66 L28 66" strokeWidth="1.8" />
-      <path d="M24 24 L34 34 M28 34 L34 34 L34 28" strokeWidth="1.8" />
+      <path d="M24 38V24h14M62 24h14v14M76 62v14H62M38 76H24V62" strokeWidth="1.65" />
+      <path d="M50 28v12M50 60v12M28 50h12M60 50h12" strokeWidth="1.25" opacity="0.62" />
+      <circle cx="50" cy="50" r="11" strokeWidth="1.65" />
+      <rect x="47" y="47" width="6" height="6" fill="var(--stone, currentColor)" stroke="none" />
     </svg>
   );
 }
@@ -80,16 +61,11 @@ export function IconTarget() {
 export function IconScreen() {
   return (
     <svg {...baseProps} aria-hidden="true">
-      {/* Funnel outline — wide at top, narrow at bottom */}
-      <path d="M20 22 H80 L60 50 V70 L40 78 V50 L20 22 Z" strokeWidth="1.8" strokeLinejoin="round" />
-      {/* Internal filter lines (the screen) */}
-      <line x1="28" y1="32" x2="72" y2="32" opacity="0.55" />
-      <line x1="33" y1="40" x2="67" y2="40" opacity="0.4" />
-      {/* Score badge at the bottom (the qualified output) */}
-      <circle cx="50" cy="84" r="8" strokeWidth="1.8" />
-      <path d="M44 84 L48 88 L56 80" strokeWidth="2" />
-      {/* Drop trail from funnel to badge */}
-      <line x1="50" y1="78" x2="50" y2="76" opacity="0.4" />
+      <path d="M50 10a40 40 0 1 1 0 80 40 40 0 1 1 0-80Z" strokeWidth="1.25" strokeDasharray="2.4 5" opacity="0.38" />
+      <path d="M26 26h48v18L58 59v15L42 80V59L26 44V26Z" strokeWidth="1.65" />
+      <path d="M34 36h32M38 44h24" strokeWidth="1.25" opacity="0.62" />
+      <path d="M36 70h10M54 70h10" stroke="var(--stone, currentColor)" strokeWidth="2.15" />
+      <rect x="47" y="61" width="6" height="6" fill="var(--stone, currentColor)" stroke="none" />
     </svg>
   );
 }
