@@ -93,8 +93,10 @@ describe("portal operator-view contract (DR-076)", () => {
     const src = read(PORTAL_AUTH);
     expect(src.includes("export async function requirePortalViewer")).toBe(true);
     // The operator branch returns isOperator:true rather than redirecting.
+    // The window allows for the DR-084 preview-intent branch that sits
+    // between the role check and the first return.
     expect(
-      /role === "operator"[\s\S]{0,160}isOperator:\s*true/.test(src),
+      /role === "operator"[\s\S]{0,600}isOperator:\s*true/.test(src),
       "requirePortalViewer must return isOperator:true for operator sessions, not redirect them",
     ).toBe(true);
     // The real login route, not the firm-scoped 404 path.

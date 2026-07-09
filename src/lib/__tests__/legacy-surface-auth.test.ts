@@ -51,7 +51,13 @@ const GATED_PAGE_SEGMENTS = [
   path.join(APP_DIR, "settings"),
 ];
 
-/** Root operator dashboard, gated individually (it is src/app/page.tsx). */
+/**
+ * The legacy root operator dashboard (src/app/page.tsx) was deleted in
+ * 698b4bc: it collided with the relocated marketing homepage
+ * ((marketing)/page.tsx), which now serves `/` as a public surface. The
+ * operator console lives at /admin/triage. Pinned below as non-existence
+ * so the collision cannot silently return.
+ */
 const ROOT_DASHBOARD_PAGE = path.join(APP_DIR, "page.tsx");
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -152,15 +158,19 @@ describe("legacy surface auth: API routes", () => {
 // ── Pages ───────────────────────────────────────────────────────────────────
 
 describe("legacy surface auth: operator pages", () => {
-  const pageFiles = [
-    ROOT_DASHBOARD_PAGE,
-    ...GATED_PAGE_SEGMENTS.flatMap((seg) => walk(seg, "page.tsx")),
-  ];
+  const pageFiles = GATED_PAGE_SEGMENTS.flatMap((seg) => walk(seg, "page.tsx"));
+
+  it("the root dashboard stays deleted (698b4bc homepage collision fix)", () => {
+    expect(
+      fs.existsSync(ROOT_DASHBOARD_PAGE),
+      "src/app/page.tsx must not exist: it collides with (marketing)/page.tsx at `/`. A gated root dashboard belongs under /admin.",
+    ).toBe(false);
+  });
 
   it("finds the gated page files (sweep sanity check)", () => {
-    // Dashboard + pipeline + leads (2) + sequences (2) + reviews + firms (2)
+    // Pipeline + leads (2) + sequences (2) + reviews + firms (2)
     // + domains + conflict-register + analytics + onboarding + settings.
-    expect(pageFiles.length).toBeGreaterThanOrEqual(14);
+    expect(pageFiles.length).toBeGreaterThanOrEqual(13);
   });
 
   it.each(pageFiles.map((f) => [rel(f), f]))(
