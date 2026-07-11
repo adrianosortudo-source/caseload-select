@@ -85,6 +85,7 @@ export function buildValidatorConfig(
       no_distress_hero: fmt?.no_distress_hero ?? true,
       no_us_trust_badges: fmt?.no_us_trust_badges ?? true,
       no_lsa_quality_claim: fmt?.no_lsa_quality_claim ?? true,
+      no_structural_monotony: fmt?.no_structural_monotony ?? true,
     },
     format_spec: {
       word_range: formatSpec.word_range as [number, number] | undefined,

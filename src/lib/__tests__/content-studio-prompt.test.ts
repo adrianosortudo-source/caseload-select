@@ -112,6 +112,32 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("Never use em dashes.");
   });
 
+  it("adds the sentence-rhythm directive by default (structural_monotony prevention)", () => {
+    const prompt = buildSystemPrompt(makeStrategy(), "counsel_note", {});
+    expect(prompt).toContain("Vary sentence length deliberately");
+    expect(prompt).toContain("never write more than three consecutive sentences of similar length");
+  });
+
+  it("omits the sentence-rhythm directive when no_structural_monotony is explicitly false", () => {
+    const strategy = makeStrategy({
+      voice_rules: {
+        banned_vocabulary: ["placeholder-term"],
+        approved_vocabulary: ["Ontario"],
+        formatting_rules: {
+          no_em_dashes: true,
+          no_italics: true,
+          no_orphan_words: true,
+          no_rule_of_three: true,
+          no_structural_monotony: false,
+        },
+        lso_rules: { constraints: ["No outcome promises"] },
+        tone: "authoritative, direct, evidence-led",
+      },
+    });
+    const prompt = buildSystemPrompt(strategy, "counsel_note", {});
+    expect(prompt).not.toContain("Vary sentence length deliberately");
+  });
+
   it("surfaces the five_line_brief literal labels when the format spec defines them (Ses.16 WP-4 bugfix)", () => {
     const prompt = buildSystemPrompt(
       makeStrategy({
