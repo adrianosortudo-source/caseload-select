@@ -14,6 +14,9 @@ interface CheckItem {
   status: "pass" | "warn" | "fail";
   detail: string;
   fix?: string;
+  // Trust-fix pass WI-1/WI-8: false means this check is displayed and still
+  // generates a finding, but contributes to no grade.
+  scored?: boolean;
 }
 
 interface CategoryResult {
@@ -316,7 +319,10 @@ function CategoryCard({ cat }: { cat: CategoryResult }) {
             <li key={i} className="seo-item">
               <span className={`seo-item-icon seo-icon-${item.status}`}>{STATUS_ICON[item.status]}</span>
               <div className="seo-item-body">
-                <span className="seo-item-label">{item.label}</span>
+                <span className="seo-item-label">
+                  {item.label}
+                  {item.scored === false && <span className="seo-item-unscored">Unscored</span>}
+                </span>
                 <span className="seo-item-detail">{item.detail}</span>
                 {item.fix && item.status !== "pass" && (
                   <span className="seo-item-fix"><strong>How to fix:</strong> {item.fix}</span>
@@ -377,7 +383,7 @@ export default function SeoReport({
   const execText = [
     `SEO & AI Visibility diagnostic: ${result.domain}`,
     `Pages scanned: ${pagesScanned} (${result.scanMode ?? "scan"})`,
-    `SEO Health: ${result.overallScore}/100 (${result.grade}). AI Search: ${result.aiSearchScore}/100. AI Policy: ${result.aiPolicyScore ?? EMPTY}/100.`,
+    `SEO Health: ${result.overallScore}/100 (${result.grade}). AEO Readiness: ${result.aiSearchScore}/100. AI Policy: ${result.aiPolicyScore ?? EMPTY}/100.`,
     `Checks: ${passedChecks} passed, ${warnChecks} warnings, ${failChecks} failed.`,
     breakdown ? `Issues: ${breakdown.critical} critical, ${breakdown.high} high, ${breakdown.medium} medium, ${breakdown.low} low.` : "",
     "",
@@ -436,7 +442,7 @@ export default function SeoReport({
         <div className="seo-report-hero">
           <div className="seo-gauges">
             <GradeRing score={result.overallScore} grade={result.grade} label="SEO Health" />
-            <GradeRing score={result.aiSearchScore} grade={result.aiSearchGrade} label="AI Search" />
+            <GradeRing score={result.aiSearchScore} grade={result.aiSearchGrade} label="AEO Readiness" />
             {result.aiPolicyScore !== undefined && (
               <GradeRing score={result.aiPolicyScore} grade={result.aiPolicyGrade ?? "?"} label="Content Policy" size={116} />
             )}
@@ -469,6 +475,10 @@ export default function SeoReport({
             </div>
           </div>
         </div>
+
+        <p className="seo-aeo-note">
+          AEO Readiness measures on-site answer-engine readiness signals. It does not measure whether AI assistants actually cite this site.
+        </p>
 
         {breakdown && (
           <div className="seo-sev-strip">
@@ -825,6 +835,7 @@ const reportStyles = `
   .seo-report-eyebrow { font-family: var(--font-display); font-size: 10px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--stone-on-light); margin-bottom: var(--sp-2); }
   .seo-report-domain { font-family: var(--font-display); font-size: var(--fs-h3); font-weight: 800; color: var(--navy); margin: 0 0 var(--sp-2); word-break: break-word; }
   .seo-report-summary { font-size: 14px; color: var(--text-muted); line-height: 1.6; margin: 0 0 var(--sp-3); }
+  .seo-aeo-note { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin: var(--sp-3) 0 0; padding-top: var(--sp-3); border-top: 1px solid var(--border); }
   .seo-report-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
   .seo-mini-btn { font-family: var(--font-display); font-size: 10.5px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--navy); background: var(--parchment); border: 1px solid var(--border); padding: 7px 14px; border-radius: var(--r-tight); cursor: pointer; transition: background 0.15s, border-color 0.15s; }
   .seo-mini-btn:hover { border-color: var(--navy); }
@@ -976,6 +987,7 @@ const reportStyles = `
   .seo-icon-fail { color: var(--danger); background: rgba(192,57,43,0.08); }
   .seo-item-body { flex: 1; }
   .seo-item-label { font-size: 13px; font-weight: 600; color: var(--text); display: block; margin-bottom: 2px; }
+  .seo-item-unscored { font-size: 9.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--text-muted); background: var(--parchment); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; margin-left: 6px; vertical-align: middle; }
   .seo-item-detail { font-size: 12.5px; color: var(--text-muted); line-height: 1.55; display: block; }
 
   .seo-report-cta { margin-bottom: var(--sp-6); }

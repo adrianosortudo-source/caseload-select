@@ -44,6 +44,8 @@ function mkPage(opts: {
   schemaBlocks?: number;
   hasPerson?: boolean;
   practiceAreaIntent?: boolean;
+  wpDefault?: boolean;
+  wordCount?: number;
 }): PageResult {
   const allItems = opts.categories.flatMap((c) => c.items);
   return {
@@ -75,8 +77,9 @@ function mkPage(opts: {
       addressVisible: true, consultationCta: opts.cta ?? true, policyPagePresent: true, practiceAreaIntent: opts.practiceAreaIntent ?? true,
       trust: { testimonials: opts.testimonials ?? true, reviews: false, caseResults: false, awards: false, credentials: opts.credentials ?? true },
     },
-    wordCount: 500,
+    wordCount: opts.wordCount ?? 500,
     keyWarnings: [],
+    wpDefault: opts.wpDefault ?? false,
   };
 }
 
@@ -342,6 +345,93 @@ describe("buildIssues", () => {
       categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "" }])],
     })];
     expect(buildIssues(pages)).toHaveLength(0);
+  });
+});
+
+describe("buildIssues: placeholder-class severity gate (trust-fix pass WI-7)", () => {
+  const aiFindingsCat = cat("AI Visibility", [
+    { label: "Question-format headings", status: "fail", detail: "No question-format headings.", fix: "Add some." },
+    { label: "Direct-answer sentences", status: "fail", detail: "No direct-answer patterns detected.", fix: "Add some." },
+    { label: "Authoritative citations", status: "warn", detail: "No outbound links to authoritative legal sources.", fix: "Add some." },
+    { label: "Author / reviewer signals", status: "warn", detail: "No author or reviewer attribution.", fix: "Add some." },
+  ]);
+  const secCat = cat("Technical & Security", [
+    { label: "Content-Security-Policy", status: "warn", detail: "Missing. CSP helps prevent cross-site scripting.", fix: "Add CSP.", scored: false },
+    { label: "X-Content-Type-Options", status: "warn", detail: "Missing or incorrect.", fix: "Add nosniff.", scored: false },
+  ]);
+
+  it("collapses the four AI findings into one, and none of the four originals appear, on a placeholder-class site (1 real page, wpDefault pages excluded from findings)", () => {
+    // The homepage is the only real content; two WP-default stubs pad out
+    // pagesScanned/pages but are excluded from findings upstream (same as the
+    // live route.ts forFindings filter). effectiveContentPages = 1.
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [aiFindingsCat, secCat], wordCount: 300 }),
+    ];
+    const issues = buildIssues(pages, 1);
+    const titles = issues.map((i) => i.title);
+    expect(titles).not.toContain("Question-format headings");
+    expect(titles).not.toContain("Direct-answer sentences");
+    expect(titles).not.toContain("Authoritative citations");
+    expect(titles).not.toContain("Author / reviewer signals");
+    const collapsed = issues.filter((i) => i.title === "No informational content published yet");
+    expect(collapsed).toHaveLength(1);
+    expect(collapsed[0].severity).toBe("low");
+    expect(collapsed[0].category).toBe("AI Visibility");
+  });
+
+  it("does not collapse or cap anything when effectiveContentPages >= 2 (content-rich site, default behavior)", () => {
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [aiFindingsCat, secCat], wordCount: 300 }),
+      mkPage({ url: "https://x.com/services", pageType: "practice", categories: [aiFindingsCat, secCat], wordCount: 400 }),
+    ];
+    const issues = buildIssues(pages, 2);
+    const titles = issues.map((i) => i.title);
+    expect(titles).toContain("Question-format headings");
+    expect(titles).toContain("Direct-answer sentences");
+    expect(titles).toContain("Authoritative citations");
+    expect(titles).toContain("Author / reviewer signals");
+    expect(titles).not.toContain("No informational content published yet");
+  });
+
+  it("without the second argument (default Infinity), behavior is identical to the pre-WI-7 signature (existing callers unaffected)", () => {
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [aiFindingsCat, secCat], wordCount: 300 }),
+    ];
+    const withDefault = buildIssues(pages).map((i) => i.title).sort();
+    const withExplicitInfinity = buildIssues(pages, Infinity).map((i) => i.title).sort();
+    expect(withDefault).toEqual(withExplicitInfinity);
+    expect(withDefault).toContain("Question-format headings");
+    expect(withDefault).not.toContain("No informational content published yet");
+  });
+
+  // Two real (non-wpDefault) pages, one thin (< 150 words) so it does not
+  // count as "effective content" even though it is not a WordPress default.
+  // This mirrors the real shape buildIssues sees in production: forFindings
+  // only strips wpDefault pages, so a thin contact page still reaches
+  // buildIssues and still contributes to the commercial-coverage bump, while
+  // effectiveContentPages (computed separately in route.ts) correctly reads 1.
+  const twoRealPagesOneThin = (categories: CategoryResult[]) => [
+    mkPage({ url: "https://x.com/", pageType: "homepage", categories, wordCount: 300 }),
+    mkPage({ url: "https://x.com/contact", pageType: "contact", categories, wordCount: 50 }),
+  ];
+
+  it("caps CSP and X-Content-Type-Options severity at low on a placeholder-class site, but not on a content-rich one", () => {
+    const placeholderIssues = buildIssues(twoRealPagesOneThin([secCat]), 1);
+    const richIssues = buildIssues(twoRealPagesOneThin([secCat]).map((p) => ({ ...p, wordCount: 300 })), 2);
+    const placeholderCsp = placeholderIssues.find((i) => i.title === "Content-Security-Policy");
+    const richCsp = richIssues.find((i) => i.title === "Content-Security-Policy");
+    expect(placeholderCsp?.severity).toBe("low");
+    expect(richCsp?.severity).not.toBe("low");
+  });
+
+  it("does NOT cap HSTS severity on a placeholder-class site (calibrated severity holds regardless of site maturity)", () => {
+    const hstsCat = cat("Technical & Security", [
+      { label: "HSTS header", status: "warn", detail: "Missing. HSTS tells browsers to always use HTTPS.", fix: "Add it.", scored: false },
+    ]);
+    const notPlaceholder = buildIssues(twoRealPagesOneThin([hstsCat]).map((p) => ({ ...p, wordCount: 300 })), 2).find((i) => i.title === "HSTS header");
+    const placeholder = buildIssues(twoRealPagesOneThin([hstsCat]), 1).find((i) => i.title === "HSTS header");
+    // Same calibrated severity in both cases: WI-7 only caps CSP/XCTO, never HSTS.
+    expect(placeholder?.severity).toBe(notPlaceholder?.severity);
   });
 });
 

@@ -262,6 +262,18 @@ export interface SeoCheckResult {
    */
   buildSha?: string | null;
   checkedAt: string;
+  /**
+   * Trust-fix pass WI-8 (acceptance criterion): a site's grade must expose
+   * its contributing checks and weights. categoryWeights is the exact map
+   * computeWeightedScore used; unscoredLabels lists every check label that
+   * is displayed and still generates findings but contributes to no grade
+   * (security headers, llms.txt, FAQPage schema, Review/Rating schema).
+   */
+  scoring?: {
+    categoryWeights: Record<string, number>;
+    unscoredLabels: string[];
+    note: string;
+  };
 }
 
 /* ────────────────────────────────────────────────────────
@@ -311,6 +323,11 @@ const LABEL_SEVERITY: Record<string, Severity> = {
   // are still crawlable; missing a sitemap is a setup gap, not a suppression.
   // Kept low so a missing sitemap never triggers the "held back" Indexability angle.
   "Sitemap membership": "low",
+  // Trust-fix pass WI-2: this fires only on PRESENCE now (self-serving review
+  // markup ineligible for Google review stars). It is a verify-and-fix nit,
+  // not a missed opportunity, so it stays low rather than the category's
+  // medium default.
+  "Review / Rating schema": "low",
 };
 
 // Optional-policy labels: never raised by the commercial+sitewide coverage
@@ -387,7 +404,7 @@ function internalAngle(category: string, severity: Severity): { note: string; an
   if (c === "AI Visibility") {
     return {
       note: "AI search readiness gap. Good differentiator: most firms have not thought about AI answer engines yet.",
-      angle: "The site has useful material, but it is not packaged in a way AI search systems can confidently read and cite. That is becoming the new front door for high-intent legal questions.",
+      angle: "The site has useful material, but it is not packaged in a way that supports AI answer-engine extraction. That readiness gap matters as AI search becomes a front door for high-intent legal questions. Readiness does not guarantee citation.",
     };
   }
   if (c === "Legal Marketing") {
@@ -411,7 +428,7 @@ function internalAngle(category: string, severity: Severity): { note: string; an
   if (c === "Schema & Structured Data") {
     return {
       note: "Structured-data readiness gap. Affects both Google rich results eligibility and AI extraction.",
-      angle: "Search and AI systems are reading the site without the structured cues that tell them who the firm is and what it does. Adding that is mechanical, not creative.",
+      angle: "The site is missing the structured cues that identify who the firm is and what it does to search and AI parsers. Adding that is mechanical, not creative.",
     };
   }
   if (c === "On-Page SEO") {
@@ -463,8 +480,32 @@ function slug(category: string, label: string): string {
  * pages where it is non-pass (worst status wins), enriched with severity,
  * confidence, effort, affected page types, and a priority score.
  */
-export function buildIssues(pages: PageResult[]): Issue[] {
+// Trust-fix pass WI-7: on a placeholder-class site (at most one page with any
+// real content), the four content-dependent AI-visibility checks below cannot
+// exist yet, because they all read the body of pages that have no body.
+// Firing all four at full severity over-counts one root cause (no content
+// published) as four defects. Collapsed into one low-severity finding instead.
+const AI_CONTENT_DEPENDENT_LABELS = new Set([
+  "Question-format headings", "Direct-answer sentences", "Authoritative citations", "Author / reviewer signals",
+]);
+
+/**
+ * Build the de-duplicated, priority-ranked issue list from the per-page
+ * categories. Each (category, label) becomes one issue, aggregated across the
+ * pages where it is non-pass (worst status wins), enriched with severity,
+ * confidence, effort, affected page types, and a priority score.
+ *
+ * effectiveContentPages: count of pages with real, substantive content (see
+ * route.ts). Defaults to Infinity (never placeholder-class) so existing
+ * callers and tests are unaffected. When <= 1, the site is placeholder-class:
+ * the four AI_CONTENT_DEPENDENT_LABELS findings collapse into one, and CSP /
+ * X-Content-Type-Options severity is capped low (defense-in-depth headers on
+ * a site with no forms or input surface, not a search-visibility signal).
+ */
+export function buildIssues(pages: PageResult[], effectiveContentPages: number = Infinity): Issue[] {
   const totalPages = pages.length || 1;
+  const isPlaceholderClass = effectiveContentPages <= 1;
+  let anyAiContentFinding = false;
   // The crawl reached at least one policy page (disclaimer / privacy / terms),
   // so the firm demonstrably HAS policy pages. A per-page "no policy link
   // found" finding then claims an absence the crawler just disproved, so it is
@@ -535,6 +576,15 @@ export function buildIssues(pages: PageResult[]): Issue[] {
     // headline reads as a false claim of absence.
     if (acc.label === "Policy / disclaimer pages" && hasPolicyPage) continue;
 
+    // Trust-fix pass WI-7: on a placeholder-class site, drop the four
+    // individual AI-content findings; a single collapsed finding is pushed
+    // after this loop instead. Track that at least one would have fired so
+    // the collapsed finding only appears when there is something to report.
+    if (isPlaceholderClass && AI_CONTENT_DEPENDENT_LABELS.has(acc.label)) {
+      anyAiContentFinding = true;
+      continue;
+    }
+
     // A "fail" finding cites only its failing pages; a "warn" finding has no
     // fails, so its warn set IS the full set. This keeps a page that warns
     // under a label (e.g. meta description too long) out of the same label's
@@ -563,6 +613,16 @@ export function buildIssues(pages: PageResult[]): Issue[] {
     // at low. A practice or commercial page carrying the same block is NOT
     // policy-only, so a noindex'd service page keeps its critical severity.
     if (policyOnly && acc.category === "Indexability" && (severity === "critical" || severity === "high" || severity === "medium")) {
+      severity = "low";
+    }
+
+    // Trust-fix pass WI-7: on a placeholder-class site, CSP and XCTO are
+    // defense-in-depth on a site with no forms or user-input surface, not a
+    // search-visibility signal. HSTS is deliberately NOT capped here: the
+    // chaabanelaw.com field case found HTTP served with no HTTPS redirect at
+    // all, a genuinely higher-stakes gap that the calibrated severity should
+    // keep flagging regardless of site maturity.
+    if (isPlaceholderClass && (acc.label === "Content-Security-Policy" || acc.label === "X-Content-Type-Options")) {
       severity = "low";
     }
 
@@ -595,6 +655,35 @@ export function buildIssues(pages: PageResult[]): Issue[] {
       affectedCount,
       totalPages,
       pageTypeImpact,
+      confidence,
+      effort,
+      priority,
+      internalNote: note,
+      prospectingAngle: angle,
+    });
+  }
+
+  // Trust-fix pass WI-7: the single collapsed replacement for the four
+  // AI-content-dependent findings, only when at least one would have fired.
+  if (isPlaceholderClass && anyAiContentFinding) {
+    const severity: Severity = "low";
+    const confidence: Confidence = "high";
+    const effort = EFFORT_BY_CATEGORY["AI Visibility"] ?? "medium";
+    const coverage = 0.6 + 0.4 * (1 / totalPages);
+    const priority = Math.round((SEVERITY_WEIGHT[severity] * CONFIDENCE_WEIGHT[confidence] * coverage) / EFFORT_DIVISOR[effort]);
+    const { note, angle } = internalAngle("AI Visibility", severity);
+    issues.push({
+      id: slug("AI Visibility", "No informational content published yet"),
+      category: "AI Visibility",
+      severity,
+      status: "fail",
+      title: "No informational content published yet",
+      detail: "The site has at most one substantive page, so answer-engine content signals (question headings, direct answers, citations, authorship) cannot exist yet. Publish practice-area content first; these checks become meaningful afterwards.",
+      evidence: `Site structure across ${totalPages} scanned page${totalPages > 1 ? "s" : ""}`,
+      affectedUrls: [pages[0]?.url ?? ""],
+      affectedCount: 1,
+      totalPages,
+      pageTypeImpact: ["homepage"],
       confidence,
       effort,
       priority,
@@ -766,10 +855,10 @@ export function buildSiteStructureIssues(
       "The firm's attorney bios exist, but robots.txt is quietly blocking search engines and AI systems from reading them. That is a five-minute fix with real visibility upside.", 60);
   } else if (!hasTeamSignal) {
     push("structure-attorney", "AI Visibility", capForLowConfidence("medium"), "No attorney / team page found",
-      "No attorney or team page was found. These pages carry the expertise and authorship signals search and AI weight." + lowConfidenceSuffix,
+      "No attorney or team page was found. These pages carry expertise and authorship signals consistent with published search and AI guidance." + lowConfidenceSuffix,
       "Add an attorney/team page with each lawyer's bio, credentials, and Person schema.",
       "medium", "Authority and AI-authorship gap. Easy to package, helps E-E-A-T and AI sourcing.",
-      "There is no page establishing who the lawyers are, which is exactly the expertise signal search and AI systems look for.", 58);
+      "There is no page establishing who the lawyers are, an expertise signal consistent with published search and AI guidance.", 58);
   }
 
   if (wpStarterUrls.length > 0) {
