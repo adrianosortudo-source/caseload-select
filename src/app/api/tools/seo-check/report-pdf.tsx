@@ -222,7 +222,7 @@ export function AuditReportPdf({ result }: { result: AuditPdfResult }) {
               <Text style={s.scoreValue}>{result.grade ?? "?"} · {result.overallScore ?? "?"}/100</Text>
             </View>
             <View style={s.scoreBlock}>
-              <Text style={s.scoreLabel}>AI SEARCH</Text>
+              <Text style={s.scoreLabel}>AEO READINESS</Text>
               <Text style={s.scoreValue}>{result.aiSearchGrade ?? "?"} · {result.aiSearchScore ?? "?"}/100</Text>
             </View>
             {result.aiPolicyScore !== undefined && (
@@ -258,6 +258,10 @@ export function AuditReportPdf({ result }: { result: AuditPdfResult }) {
                 so "not found" findings below may reflect a discovery gap rather than a genuine absence. Verify manually before citing them.
               </Text>
             )}
+            <Text style={[s.para, { color: COLORS.textMuted, marginTop: 4 }]}>
+              AEO Readiness measures on-site answer-engine readiness signals. It does not measure whether AI assistants actually cite this site.
+              Unscored checks (security headers, llms.txt, FAQ and review markup) are reported but excluded from all grades.
+            </Text>
           </Section>
 
           {/* Issues */}

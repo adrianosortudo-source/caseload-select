@@ -24,6 +24,12 @@ export interface CheckItem {
   status: "pass" | "warn" | "fail";
   detail: string;
   fix?: string;
+  // false means the item is displayed and still generates an issues-list
+  // finding, but contributes nothing to any score (scoreItems / aiScoresFromItems
+  // skip it entirely). Used for signals with no established search benefit
+  // (llms.txt, FAQPage/Review schema) and for security-hygiene headers that
+  // should never imply a search-visibility gain. Absent/undefined means scored.
+  scored?: boolean;
 }
 
 export interface CategoryResult {
@@ -553,8 +559,10 @@ export function pageTypeLabel(t: PageType): string {
 
 export function scoreItems(items: CheckItem[]): { score: number; maxScore: number } {
   let score = 0;
-  const maxScore = items.length * 10;
+  let maxScore = 0;
   for (const item of items) {
+    if (item.scored === false) continue;
+    maxScore += 10;
     if (item.status === "pass") score += 10;
     else if (item.status === "warn") score += 5;
   }
@@ -582,8 +590,12 @@ export function computeWeightedScore(categories: CategoryResult[]): number {
   let weightedSum = 0;
   let totalWeight = 0;
   for (const cat of categories) {
+    // A category with no scored items (every item unscored, or an empty
+    // category) contributes nothing rather than reading as 0% failing: its
+    // absence must never drag the overall score down.
+    if (cat.maxScore <= 0) continue;
     const weight = CATEGORY_WEIGHTS[cat.name] ?? 6;
-    let pct = cat.maxScore > 0 ? (cat.score / cat.maxScore) * 100 : 0;
+    let pct = (cat.score / cat.maxScore) * 100;
     // Soft floor penalty: badly failing categories are pulled down so the
     // headline score is not propped up by many trivial passes elsewhere.
     if (pct < 35) pct = pct * 0.8;
@@ -599,7 +611,7 @@ export function computeWeightedScore(categories: CategoryResult[]): number {
  * policy (the training-bot control item alone).
  */
 export function aiScoresFromItems(items: CheckItem[]): { search: number; policy: number } {
-  const searchItems = items.filter((i) => i.label !== "AI training bot control");
+  const searchItems = items.filter((i) => i.label !== "AI training bot control" && i.scored !== false);
   const search = searchItems.length > 0
     ? Math.round(
         (searchItems.reduce((sum, i) => sum + (i.status === "pass" ? 10 : i.status === "warn" ? 5 : 0), 0) /

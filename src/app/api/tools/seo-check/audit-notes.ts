@@ -47,6 +47,10 @@ const VERIFY_MANUALLY_LABELS = new Set([
   "Server-rendered content", "JavaScript app-shell dependency", "Noscript fallback",
   "Consultation call to action", "Contact form / direct contact",
   "No clear contact path", "No attorney / team page found",
+  // Trust-fix pass WI-2: fires on presence (review markup ineligible for
+  // Google review stars). Whether it is misleading depends on comparing the
+  // markup to reviews actually visible on the page, a human judgment call.
+  "Review / Rating schema",
 ]);
 
 const HYGIENE_LABELS = new Set([

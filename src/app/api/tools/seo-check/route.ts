@@ -42,6 +42,7 @@ import {
   computeWeightedScore,
   scoreItems,
   aiScoresFromItems,
+  CATEGORY_WEIGHTS,
 } from "./engine-core";
 
 import {
@@ -639,7 +640,7 @@ function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean;
 }
 
 /* 3. Schema & Structured Data */
-function checkSchemaMarkup(schema: SchemaSummary): CategoryResult {
+export function checkSchemaMarkup(schema: SchemaSummary): CategoryResult {
   const items: CheckItem[] = [];
 
   if (schema.blocks === 0) {
@@ -680,16 +681,27 @@ function checkSchemaMarkup(schema: SchemaSummary): CategoryResult {
     items.push({ label: "Business schema fields", status: "fail", detail: "No business entity to evaluate fields on.", fix: "Add a LegalService or LocalBusiness block first, then populate name, address, telephone, and areaServed." });
   }
 
+  // Unscored both directions (trust-fix pass WI-3): Google limited FAQ rich
+  // results to government and health sites in August 2023, so the markup
+  // itself has no established benefit for a law firm and its absence is not a
+  // defect. Visible question-and-answer quality is already scored separately
+  // via Question-format headings and Direct-answer sentences.
   if (schema.hasFaq) {
-    items.push({ label: "FAQPage schema", status: "pass", detail: "Present. Supports FAQ readiness for search and AI answers." });
+    items.push({ label: "FAQPage schema", status: "pass", scored: false, detail: "Present. Informational only: Google limits FAQ rich results to government and health sites, so the markup itself is not scored. Visible question-and-answer content is what the audit scores." });
   } else {
-    items.push({ label: "FAQPage schema", status: "warn", detail: "Not found. FAQ schema packages common questions for search and AI answer engines.", fix: "Add FAQPage structured data wrapping your most common client questions and answers." });
+    items.push({ label: "FAQPage schema", status: "pass", scored: false, detail: "Not present. Optional markup with no established rich-result benefit for law firms. Visible question-and-answer content is what the audit scores (see Question-format headings and Direct-answer sentences)." });
   }
 
+  // Trust-fix pass WI-2: presence is the flag, not absence. Google rules
+  // self-serving reviews on a LocalBusiness or Organization ineligible for
+  // review stars, so this markup cannot earn the snippet on a firm's own site
+  // and reads as misleading when it does not match reviews visible on the
+  // page. Absence is neutral and never a recommendation. Unscored both
+  // directions.
   if (schema.hasReview) {
-    items.push({ label: "Review / Rating schema", status: "pass", detail: "Review markup found. Supports star-rating readiness in search results." });
+    items.push({ label: "Review / Rating schema", status: "warn", scored: false, detail: "Present. Self-serving review markup on a firm's own site is ineligible for Google review stars, and can read as misleading if it does not match reviews visible on the page.", fix: "Verify the markup mirrors real, visible client reviews. Do not expect star snippets from it; Google excludes self-serving reviews for LocalBusiness and Organization entities." });
   } else {
-    items.push({ label: "Review / Rating schema", status: "warn", detail: "Not found. Review schema can support star ratings in search results.", fix: "Add AggregateRating or Review schema for your client testimonials." });
+    items.push({ label: "Review / Rating schema", status: "pass", scored: false, detail: "Not present. Not recommended for a firm's own site: self-serving review markup is ineligible for Google review stars. Visible client testimonials and Google Business Profile reviews are what count." });
   }
 
   if (schema.hasBreadcrumb) {
@@ -709,7 +721,7 @@ function checkSchemaMarkup(schema: SchemaSummary): CategoryResult {
 }
 
 /* 4. AI Visibility */
-function checkAiVisibility(html: string, parsedRobots: ParsedRobots | null, llmsTxt: string | null, schema: SchemaSummary): CategoryResult {
+export function checkAiVisibility(html: string, parsedRobots: ParsedRobots | null, llmsTxt: string | null, schema: SchemaSummary): CategoryResult {
   const items: CheckItem[] = [];
   const bodyText = extractBodyText(html);
 
@@ -720,7 +732,7 @@ function checkAiVisibility(html: string, parsedRobots: ParsedRobots | null, llms
     if (blockedSearch.length === 0) {
       items.push({ label: "AI search bot access", status: "pass", detail: "All major AI search crawlers can access your site." });
     } else if (blockedSearch.length <= 2) {
-      items.push({ label: "AI search bot access", status: "warn", detail: `${blockedSearch.length} AI search crawler${blockedSearch.length > 1 ? "s" : ""} blocked: ${blockedSearch.map((b) => b.label).join(", ")}.`, fix: "Unblock AI search crawlers in robots.txt. These bots cite your content in AI search results." });
+      items.push({ label: "AI search bot access", status: "warn", detail: `${blockedSearch.length} AI search crawler${blockedSearch.length > 1 ? "s" : ""} blocked: ${blockedSearch.map((b) => b.label).join(", ")}.`, fix: "Unblock AI search crawlers in robots.txt so they can read this content. Reading does not guarantee citation." });
     } else {
       items.push({ label: "AI search bot access", status: "fail", detail: `${blockedSearch.length} of ${AI_SEARCH_BOTS.length} AI search crawlers blocked. Your content will not surface in AI search.`, fix: "Remove Disallow rules for AI search bots (ChatGPT-User, PerplexityBot, ClaudeBot) in robots.txt." });
     }
@@ -745,13 +757,13 @@ function checkAiVisibility(html: string, parsedRobots: ParsedRobots | null, llms
   } else if (orgDesc) {
     items.push({ label: "Entity description", status: "warn", detail: "A meta description exists, but no named business entity is described in structured data.", fix: "Add a LegalService or Organization schema block with a clear name and description." });
   } else {
-    items.push({ label: "Entity description", status: "fail", detail: "No clear entity description for AI systems to read.", fix: "Add a structured-data entity with a name and description, and a strong meta description." });
+    items.push({ label: "Entity description", status: "fail", detail: "No clear, machine-readable entity description on the page.", fix: "Add a structured-data entity with a name and description, and a strong meta description." });
   }
 
   if (schema.hasAttorney || schema.hasPerson) {
     items.push({ label: "Attorney / person schema", status: "pass", detail: "Attorney or Person schema present. Supports authorship and expertise signals." });
   } else {
-    items.push({ label: "Attorney / person schema", status: "warn", detail: "No Attorney or Person schema. AI systems weight identified, credentialed authors.", fix: "Add Attorney or Person schema for the firm's lawyers, linked to the business entity." });
+    items.push({ label: "Attorney / person schema", status: "warn", detail: "No Attorney or Person schema. Identified, credentialed authors are consistent with published guidance for consequential legal content.", fix: "Add Attorney or Person schema for the firm's lawyers, linked to the business entity." });
   }
 
   const h2s = extractAllTags(html, "h2");
@@ -760,21 +772,21 @@ function checkAiVisibility(html: string, parsedRobots: ParsedRobots | null, llms
     (h) => h.endsWith("?") || /^(what|how|when|where|why|who|can|do|does|is|are|should|will)\b/i.test(h)
   );
   if (questionHeadings.length >= 3) {
-    items.push({ label: "Question-format headings", status: "pass", detail: `${questionHeadings.length} question headings found. These match how people ask AI assistants.` });
+    items.push({ label: "Question-format headings", status: "pass", detail: `${questionHeadings.length} question headings found. Matches question-style queries; may support answer extraction.` });
   } else if (questionHeadings.length > 0) {
-    items.push({ label: "Question-format headings", status: "warn", detail: `Only ${questionHeadings.length} question heading${questionHeadings.length > 1 ? "s" : ""}. More can help AI systems pull answers from the page.`, fix: "Reframe section headings as questions people actually ask, like \"What happens if...\" or \"How long does...\"" });
+    items.push({ label: "Question-format headings", status: "warn", detail: `Only ${questionHeadings.length} question heading${questionHeadings.length > 1 ? "s" : ""}. More may support answer extraction; usefulness depends on the questions matching real queries.`, fix: "Reframe section headings as questions people actually ask, like \"What happens if...\" or \"How long does...\"" });
   } else {
-    items.push({ label: "Question-format headings", status: "fail", detail: "No question-format headings. AI models look for Q&A patterns to extract answers.", fix: "Add H2 or H3 headings phrased as questions that match queries people type into AI search." });
+    items.push({ label: "Question-format headings", status: "fail", detail: "No question-format headings. Question-shaped headings may support answer extraction. No citation outcome can be inferred from this check alone.", fix: "Add H2 or H3 headings phrased as questions that match queries people type into AI search." });
   }
 
   const sentences = bodyText.split(/[.!?]+/).filter((s) => s.trim().length > 20);
   const directAnswers = sentences.filter((s) => /\b(is|are|means|refers to|defined as|consists of|requires|involves)\b/i.test(s));
   if (directAnswers.length >= 5) {
-    items.push({ label: "Direct-answer sentences", status: "pass", detail: "Content includes clear definitional sentences that AI models can extract as answers." });
+    items.push({ label: "Direct-answer sentences", status: "pass", detail: "Content includes clear definitional sentences, a structure consistent with answer extraction." });
   } else if (directAnswers.length > 0) {
-    items.push({ label: "Direct-answer sentences", status: "warn", detail: "Some direct-answer content found. Adding more clear definitions can help AI systems extract answers.", fix: "Write more sentences that directly answer questions: \"X is...\", \"X means...\", \"X requires...\"" });
+    items.push({ label: "Direct-answer sentences", status: "warn", detail: "Some direct-answer content found. Adding more clear definitions may support answer extraction.", fix: "Write more sentences that directly answer questions: \"X is...\", \"X means...\", \"X requires...\"" });
   } else {
-    items.push({ label: "Direct-answer sentences", status: "fail", detail: "No direct-answer patterns detected. AI models prefer content that directly answers questions.", fix: "Include explicit definitional sentences. Example: \"A power of attorney is a legal document that...\"" });
+    items.push({ label: "Direct-answer sentences", status: "fail", detail: "No direct-answer patterns detected. Definitional sentences may support answer extraction; this check detects structure, not outcomes.", fix: "Include explicit definitional sentences. Example: \"A power of attorney is a legal document that...\"" });
   }
 
   const anchorTags = html.match(/<a[^>]+href=["']https?:\/\/([^"']+)["']/gi) || [];
@@ -792,10 +804,12 @@ function checkAiVisibility(html: string, parsedRobots: ParsedRobots | null, llms
     items.push({ label: "Author / reviewer signals", status: "warn", detail: "No author or reviewer attribution. Identified authorship is a useful credibility signal for search and AI.", fix: "Add author metadata or Person schema, and a reviewed-by line where a lawyer has checked the content." });
   }
 
+  // Trust-fix pass WI-4: unscored both directions, framed experimental. No
+  // major search or AI-visibility benefit has been established for this file.
   if (llmsTxt && llmsTxt.length > 50) {
-    items.push({ label: "llms.txt file", status: "pass", detail: "Present. Provides AI-friendly content guidance, a small positive signal." });
+    items.push({ label: "llms.txt file", status: "pass", scored: false, detail: "Present. Experimental: no major search or AI-visibility benefit has been established for this file. Harmless to keep." });
   } else {
-    items.push({ label: "llms.txt file", status: "warn", detail: "Not found. An emerging, optional file that summarises your site for AI models.", fix: "Optionally add a /llms.txt with a short Markdown summary of your site and key URLs. Low priority." });
+    items.push({ label: "llms.txt file", status: "pass", scored: false, detail: "Not present. Experimental, optional file. No established visibility benefit; not scored and not a recommendation." });
   }
 
   const semanticTags = ["<header", "<nav", "<main", "<article", "<section", "<footer"];
@@ -805,7 +819,7 @@ function checkAiVisibility(html: string, parsedRobots: ParsedRobots | null, llms
   } else if (foundSemantic.length >= 2) {
     items.push({ label: "Semantic HTML structure", status: "warn", detail: `Only ${foundSemantic.length} semantic elements. More helps AI parse content structure.`, fix: "Use semantic tags: <header>, <nav>, <main>, <article>, <section>, <footer>." });
   } else {
-    items.push({ label: "Semantic HTML structure", status: "fail", detail: "Minimal semantic HTML. AI models struggle to parse div-only pages.", fix: "Use semantic HTML elements instead of generic containers." });
+    items.push({ label: "Semantic HTML structure", status: "fail", detail: "Minimal semantic HTML. Semantic elements make structure machine-readable; div-only markup gives parsers less to work with.", fix: "Use semantic HTML elements instead of generic containers." });
   }
 
   const { score, maxScore } = scoreItems(items);
@@ -918,7 +932,7 @@ export function countMixedContentResources(html: string): number {
 }
 
 /* 7. Technical & Security */
-function checkTechnicalSecurity(html: string, url: string, headers: Headers): CategoryResult {
+export function checkTechnicalSecurity(html: string, url: string, headers: Headers): CategoryResult {
   const items: CheckItem[] = [];
 
   items.push(url.startsWith("https://")
@@ -930,25 +944,32 @@ function checkTechnicalSecurity(html: string, url: string, headers: Headers): Ca
     ? { label: "Mixed content", status: "pass", detail: "No insecure HTTP resources detected." }
     : { label: "Mixed content", status: "warn", detail: `${mixedCount} HTTP resource${mixedCount > 1 ? "s" : ""} on an HTTPS page.`, fix: "Change all http:// resource URLs to https:// or use protocol-relative URLs." });
 
+  // Trust-fix pass WI-5: CSP, HSTS, and X-Content-Type-Options are security
+  // hygiene, not search-visibility signals. They stay visible (and their
+  // issues-list findings keep firing at their calibrated severities) but are
+  // excluded from the score, so a site cannot grade higher merely for having
+  // them, and a placeholder site with none is not marked down for it either.
+  // HTTPS and Mixed content above remain scored: they directly affect
+  // accessibility and search eligibility.
   const hsts = headers.get("strict-transport-security");
   if (hsts) {
     const maxAge = parseInt(hsts.match(/max-age=(\d+)/)?.[1] || "0");
     items.push(maxAge >= 31536000
-      ? { label: "HSTS header", status: "pass", detail: "Present with max-age of at least one year." }
-      : { label: "HSTS header", status: "warn", detail: `Present but max-age is low (${maxAge}s). Recommended: at least 31536000.`, fix: "Set Strict-Transport-Security: max-age=31536000; includeSubDomains." });
+      ? { label: "HSTS header", status: "pass", scored: false, detail: "Present with max-age of at least one year. Security hygiene; shown for completeness and excluded from the SEO score." }
+      : { label: "HSTS header", status: "warn", scored: false, detail: `Present but max-age is low (${maxAge}s). Recommended: at least 31536000. Security hygiene; shown for completeness and excluded from the SEO score.`, fix: "Set Strict-Transport-Security: max-age=31536000; includeSubDomains." });
   } else {
-    items.push({ label: "HSTS header", status: "warn", detail: "Missing. HSTS tells browsers to always use HTTPS.", fix: "Add Strict-Transport-Security: max-age=31536000; includeSubDomains to response headers." });
+    items.push({ label: "HSTS header", status: "warn", scored: false, detail: "Missing. HSTS tells browsers to always use HTTPS. Security hygiene; shown for completeness and excluded from the SEO score.", fix: "Add Strict-Transport-Security: max-age=31536000; includeSubDomains to response headers." });
   }
 
   const xcto = headers.get("x-content-type-options");
   items.push(xcto?.toLowerCase() === "nosniff"
-    ? { label: "X-Content-Type-Options", status: "pass", detail: "Set to nosniff." }
-    : { label: "X-Content-Type-Options", status: "warn", detail: "Missing or incorrect. Prevents MIME-type sniffing.", fix: "Add X-Content-Type-Options: nosniff to response headers." });
+    ? { label: "X-Content-Type-Options", status: "pass", scored: false, detail: "Set to nosniff. Security hygiene; shown for completeness and excluded from the SEO score." }
+    : { label: "X-Content-Type-Options", status: "warn", scored: false, detail: "Missing or incorrect. Prevents MIME-type sniffing. Security hygiene; shown for completeness and excluded from the SEO score.", fix: "Add X-Content-Type-Options: nosniff to response headers." });
 
   const csp = headers.get("content-security-policy");
   items.push(csp
-    ? { label: "Content-Security-Policy", status: "pass", detail: "Present. Reduces the risk of injection attacks." }
-    : { label: "Content-Security-Policy", status: "warn", detail: "Missing. CSP helps prevent cross-site scripting.", fix: "Configure a Content-Security-Policy header, starting in report-only mode." });
+    ? { label: "Content-Security-Policy", status: "pass", scored: false, detail: "Present. Reduces the risk of injection attacks. Security hygiene; shown for completeness and excluded from the SEO score." }
+    : { label: "Content-Security-Policy", status: "warn", scored: false, detail: "Missing. CSP helps prevent cross-site scripting. Security hygiene; shown for completeness and excluded from the SEO score.", fix: "Configure a Content-Security-Policy header, starting in report-only mode." });
 
   items.push(/<meta[^>]+name=["']viewport["']/i.test(html)
     ? { label: "Viewport meta tag", status: "pass", detail: "Present. Required for mobile rendering." }
@@ -1575,6 +1596,13 @@ export async function POST(req: NextRequest) {
     const scored = pages.some((p) => p.wpDefault) ? pages.filter((p) => !p.wpDefault) : pages;
     const forFindings = scored.length > 0 ? scored : pages;
 
+    // Trust-fix pass WI-7: placeholder-class signal (bare WordPress install,
+    // single-page firm site). Pages with no real content cannot carry
+    // answer-engine content signals (question headings, citations,
+    // authorship), so buildIssues collapses those four findings into one
+    // honest "publish content first" finding on this class of site.
+    const effectiveContentPages = pages.filter((p) => !p.wpDefault && p.wordCount >= 150).length;
+
     // Backward-compatible aggregation.
     const aggregatedCategories = aggregateCategories(forFindings);
     const overallScore = computeWeightedScore(aggregatedCategories);
@@ -1598,7 +1626,7 @@ export async function POST(req: NextRequest) {
 
     // Professional layer.
     const discoveryConfidence = computeDiscoveryConfidence(pages.length, sitemapSet?.size ?? 0, homeInternalLinkCount, maxPages);
-    const pageIssues = buildIssues(forFindings);
+    const pageIssues = buildIssues(forFindings, effectiveContentPages);
     const structureIssues = buildSiteStructureIssues(pages, !!sitemapSet, parsedRobots, discoveryConfidence, uncrawledUrls, wpStarterUrls);
     const issues = [...pageIssues, ...structureIssues].sort(compareIssuesByPriority);
     const internalSummary = buildInternalSummary(pages, issues, overallScore, aiSearchScore);
@@ -1635,6 +1663,18 @@ export async function POST(req: NextRequest) {
       discoveryConfidence,
       buildSha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
       checkedAt: new Date().toISOString(),
+      // Trust-fix pass WI-8 (acceptance criterion): expose exactly which
+      // checks contribute to no grade, built from the actual scored:false
+      // flags set this scan (not a hand-maintained list that can drift).
+      scoring: {
+        categoryWeights: CATEGORY_WEIGHTS,
+        unscoredLabels: [...new Set(
+          pages.flatMap((p) => p.categories.flatMap((c) => c.items))
+            .filter((i) => i.scored === false)
+            .map((i) => i.label)
+        )].sort(),
+        note: "Unscored checks are shown for completeness and excluded from every grade.",
+      },
     };
 
     // Auto-save every operator scan, so it is recoverable without the
