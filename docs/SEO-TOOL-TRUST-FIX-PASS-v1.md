@@ -1,10 +1,11 @@
 # SEO Tool Trust-Fix Pass v1 (execution plan)
 
 Status: READY FOR EXECUTION
-Date authored: 2026-07-06
+Date authored: 2026-07-12
 Authored by: Opus 4.8 session (five-site adversarial calibration arc)
 Executor: Sonnet 5
 Approver: Adriano (operator). Scope approved verbatim in session, with three refinements folded in below.
+Branch note: authored on `fix/restore-marketing-homepage`, which contains the trust-pass baseline commit `ac2369c`. Execute on whatever branch is checked out, confirm `git merge-base --is-ancestor ac2369c HEAD` first, and re-derive any drifted line numbers by grep before editing.
 
 ## Objective
 
