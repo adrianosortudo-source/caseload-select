@@ -108,10 +108,19 @@ export default function DeliverableReview({
   const latestChangesRequestedApproval =
     approvals.find((a) => a.decision === "changes_requested") ?? null;
   // Replies threaded under a change-request record are not passage comments;
-  // they render in ApprovalHistory, never in the passage margin.
-  const versionComments = comments.filter(
-    (c) => c.version_id === selectedVersionId && !c.approval_record_id,
-  );
+  // they render in ApprovalHistory, never in the passage margin. Passage
+  // threads from earlier versions remain visible on the current version,
+  // matching Google Docs' comment continuity across revisions. When an old
+  // version is explicitly selected, keep its historical margin isolated.
+  const versionComments = comments.filter((c) => {
+    if (c.approval_record_id) return false;
+    if (c.version_id === selectedVersionId) return true;
+    if (!isCurrent || !selectedVersion) return false;
+    const commentVersion = versions.find((v) => v.id === c.version_id);
+    return Boolean(
+      commentVersion && commentVersion.version_number <= selectedVersion.version_number,
+    );
+  });
 
   const refetch = useCallback(async () => {
     const res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}`, {
