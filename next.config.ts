@@ -112,14 +112,6 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
-  // Pins webpack's output-file-tracing root the same way turbopack.root
-  // pins Turbopack's, above. Needed in this specific worktree checkout
-  // (D:\...\.claude\worktrees\publication-readiness): without it, `next
-  // build --webpack`'s trace step intermittently throws "EISDIR: illegal
-  // operation on a directory, readlink" on an arbitrary, different file
-  // each run, a known Windows/@vercel-nft class of bug when the trace
-  // walker's root is ambiguous relative to a deeply nested worktree path.
-  outputFileTracingRoot: __dirname,
   async headers() {
     return [
       {
