@@ -25,6 +25,7 @@ vi.mock("@/lib/deliverable-channel-post", () => ({
 }));
 
 const FIRM = "11111111-1111-1111-1111-111111111111";
+const DRG_FIRM = "eec1d25e-a047-4827-8e4a-6eb96becca2b";
 const DELIV = "22222222-2222-2222-2222-222222222222";
 
 type Actor = { role: string; id: string | null; name: string | null; email: string | null } | null;
@@ -54,6 +55,7 @@ vi.mock("@/lib/deliverables", () => ({
 import { POST } from "../route";
 
 const OPERATOR: Actor = { role: "operator", id: null, name: "Operator", email: null };
+const LAWYER: Actor = { role: "lawyer", id: "lawyer-1", name: "Damaris", email: "info@drglaw.ca" };
 
 const APPROVAL_1 = "77777777-7777-7777-7777-777777777777";
 const APPROVAL_OLD = "88888888-8888-8888-8888-888888888888";
@@ -97,6 +99,7 @@ function multipartReq(form: FormData) {
 }
 
 const params = () => ({ params: Promise.resolve({ firmId: FIRM, deliverableId: DELIV }) }) as never;
+const drgParams = () => ({ params: Promise.resolve({ firmId: DRG_FIRM, deliverableId: DELIV }) }) as never;
 
 beforeEach(() => {
   state.actor = OPERATOR;
@@ -115,6 +118,14 @@ describe("POST versions", () => {
     state.detail = makeDetail("text", "99999999-9999-9999-9999-999999999999");
     const res = await POST(jsonReq({ body_html: "<p>hi</p>" }), params());
     expect(res.status).toBe(404);
+  });
+
+  it("403 when the DRG lawyer attempts to post a text version directly", async () => {
+    state.actor = LAWYER;
+    state.detail = makeDetail("text", DRG_FIRM);
+    const res = await POST(jsonReq({ body_html: "<p>direct edit</p>" }), drgParams());
+    expect(res.status).toBe(403);
+    expect(state.addVersionArgs).toBeNull();
   });
 
   it("400 when a text deliverable is posted as multipart", async () => {

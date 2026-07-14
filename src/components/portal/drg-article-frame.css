@@ -225,6 +225,24 @@
   box-shadow: 0 0 0 1px var(--brass);
 }
 
+.cls-drg-article .drg-body mark.drg-suggestion-original {
+  background: #f7dede;
+  color: inherit;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: #8f2d2d;
+  cursor: pointer;
+}
+
+.cls-drg-article .drg-body ins.drg-suggestion-inserted {
+  background: #dff2e5;
+  color: #145c35;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: #145c35;
+  cursor: pointer;
+}
+
 .cls-drg-article .drg-body p {
   font-family: var(--font-serif);
   font-weight: 400;

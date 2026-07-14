@@ -25,6 +25,9 @@ import type {
   ContentKind,
   DeliverableActorRole,
   DeliverableAnnotation,
+  DeliverableSuggestion,
+  DeliverableSuggestionEvent,
+  DeliverableSuggestionOperation,
   ApprovalDecision,
 } from "@/lib/types";
 import {
@@ -253,6 +256,8 @@ export interface DeliverableDetail {
   versions: DeliverableVersion[]; // newest first, assets signed
   comments: DeliverableComment[]; // chronological
   approvals: ApprovalRecord[]; // newest first
+  suggestions: DeliverableSuggestion[]; // chronological, append-only
+  suggestionEvents: DeliverableSuggestionEvent[]; // chronological, append-only
 }
 
 export async function getDeliverableDetail(
@@ -265,7 +270,7 @@ export async function getDeliverableDetail(
     .maybeSingle();
   if (!deliverable) return null;
 
-  const [{ data: versions }, { data: comments }, { data: approvals }] = await Promise.all([
+  const [{ data: versions }, { data: comments }, { data: approvals }, { data: suggestions }] = await Promise.all([
     supabase
       .from("deliverable_versions")
       .select("*")
@@ -281,7 +286,23 @@ export async function getDeliverableDetail(
       .select("*")
       .eq("deliverable_id", deliverableId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("deliverable_suggestions")
+      .select("*")
+      .eq("deliverable_id", deliverableId)
+      .order("created_at", { ascending: true }),
   ]);
+
+  const suggestionRows = (suggestions ?? []) as DeliverableSuggestion[];
+  const suggestionIds = suggestionRows.map((suggestion) => suggestion.id);
+  const suggestionEvents = suggestionIds.length > 0
+    ? await supabase
+        .from("deliverable_suggestion_events")
+        .select("*")
+        .eq("firm_id", deliverable.firm_id)
+        .in("suggestion_id", suggestionIds)
+        .order("created_at", { ascending: true })
+    : { data: [] as DeliverableSuggestionEvent[] };
 
   const signedVersions = await signVersionAssets((versions ?? []) as DeliverableVersion[]);
   const signedComments = await signCommentAttachments((comments ?? []) as DeliverableComment[]);
@@ -292,6 +313,8 @@ export async function getDeliverableDetail(
     versions: signedVersions,
     comments: signedComments,
     approvals: signedApprovals,
+    suggestions: suggestionRows,
+    suggestionEvents: (suggestionEvents.data ?? []) as DeliverableSuggestionEvent[],
   };
 }
 
@@ -426,6 +449,8 @@ export async function addVersion(input: {
   assetMime: string | null;
   assetSizeBytes: number | null;
   assetName: string | null;
+  assetSha256?: string | null;
+  assetValidation?: Record<string, unknown> | null;
   note: string | null;
   actor: DeliverableActor;
   /**
@@ -470,6 +495,8 @@ export async function addVersion(input: {
         asset_mime: input.assetMime,
         asset_size_bytes: input.assetSizeBytes,
         asset_name: input.assetName,
+        asset_sha256: input.assetSha256 ?? null,
+        asset_validation: input.assetValidation ?? null,
         note: input.note,
         responds_to_approval_id: input.respondsToApprovalId ?? null,
         created_by_role: input.actor.role,
@@ -578,6 +605,38 @@ export async function notifyPendingReviews(input: {
   return { ok: true, notified };
 }
 
+/**
+ * Announce a single version created outside addVersion (currently the atomic
+ * suggestion-apply RPC). The database writer clears review_notified_at first;
+ * this stamps it only after the outbox row has been created successfully.
+ */
+export async function notifyVersionReady(input: {
+  firmId: string;
+  deliverableId: string;
+  versionNumber: number;
+  actor: DeliverableActor;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await enqueueDeliverableNotification({
+      firmId: input.firmId,
+      deliverableId: input.deliverableId,
+      eventType: "deliverable_review_requested",
+      audience: "firm",
+      actor: input.actor,
+      bodyPreview: `Version ${input.versionNumber} is ready for your review.`,
+    });
+    const { error } = await supabase
+      .from("content_deliverables")
+      .update({ review_notified_at: new Date().toISOString() })
+      .eq("id", input.deliverableId)
+      .eq("firm_id", input.firmId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "notification failed" };
+  }
+}
+
 export async function addComment(input: {
   deliverableId: string;
   versionId: string;
@@ -627,6 +686,69 @@ export async function addComment(input: {
   }).catch((e) => console.warn("[deliverables] notify failed:", e));
 
   return { ok: true, comment: data as DeliverableComment };
+}
+
+export async function createSuggestion(input: {
+  deliverableId: string;
+  versionId: string;
+  firmId: string;
+  annotation: Extract<DeliverableAnnotation, { type: "text" }>;
+  operation: DeliverableSuggestionOperation;
+  originalText: string;
+  replacementText: string | null;
+  rationale: string | null;
+  sourceBodySha256: string;
+  actor: DeliverableActor;
+}): Promise<{ ok: true; suggestion: DeliverableSuggestion } | { ok: false; error: string }> {
+  const { data, error } = await supabase.rpc("create_deliverable_suggestion_atomic", {
+    p_deliverable_id: input.deliverableId,
+    p_version_id: input.versionId,
+    p_firm_id: input.firmId,
+    p_author_role: input.actor.role,
+    p_author_id: input.actor.id ?? null,
+    p_author_name: input.actor.name ?? null,
+    p_operation: input.operation,
+    p_annotation: input.annotation,
+    p_original_text: input.originalText,
+    p_replacement_text: input.replacementText,
+    p_rationale: input.rationale,
+    p_source_body_sha256: input.sourceBodySha256,
+  });
+  if (error) return { ok: false, error: `suggestion insert failed: ${error.message}` };
+
+  const suggestion = data as DeliverableSuggestion;
+  await enqueueDeliverableNotification({
+    firmId: input.firmId,
+    deliverableId: input.deliverableId,
+    eventType: "deliverable_comment_added",
+    audience: input.actor.role === "operator" ? "firm" : "operator",
+    actor: input.actor,
+    bodyPreview: `Suggested ${input.operation}: “${input.originalText.slice(0, 160)}”`,
+  }).catch((e) => console.warn("[deliverables] suggestion notification failed:", e));
+  return { ok: true, suggestion };
+}
+
+export async function addSuggestionEvent(input: {
+  suggestionId: string;
+  firmId: string;
+  eventType: "needs_discussion" | "declined" | "withdrawn" | "superseded";
+  actor: DeliverableActor;
+  note?: string | null;
+}): Promise<{ ok: true; event: DeliverableSuggestionEvent } | { ok: false; error: string }> {
+  const { data, error } = await supabase
+    .from("deliverable_suggestion_events")
+    .insert({
+      suggestion_id: input.suggestionId,
+      firm_id: input.firmId,
+      event_type: input.eventType,
+      actor_role: input.actor.role,
+      actor_id: input.actor.id ?? null,
+      note: input.note ?? null,
+    })
+    .select("*")
+    .single();
+  if (error) return { ok: false, error: `suggestion event failed: ${error.message}` };
+  return { ok: true, event: data as DeliverableSuggestionEvent };
 }
 
 export async function setCommentResolved(input: {

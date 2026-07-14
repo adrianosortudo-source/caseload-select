@@ -63,6 +63,7 @@ async function announceNewVersion(
 }
 
 const MAX_ASSET_BYTES = 50 * 1024 * 1024; // 50 MB
+const DRG_FIRM_ID = "eec1d25e-a047-4827-8e4a-6eb96becca2b";
 
 const IMAGE_MIME = new Set([
   "image/jpeg",
@@ -107,6 +108,9 @@ export async function POST(
   }
   const kind = detail.deliverable.content_kind;
   const contentType = req.headers.get("content-type") ?? "";
+  if (firmId === DRG_FIRM_ID && kind === "text" && resolved.actor.role === "lawyer") {
+    return NextResponse.json({ error: "lawyer text edits must be submitted as suggestions" }, { status: 403 });
+  }
 
   // ── Asset path (image / pdf) ──
   if (contentType.startsWith("multipart/form-data")) {

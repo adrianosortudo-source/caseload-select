@@ -21,6 +21,15 @@ export interface HighlightItem {
   quote: string;
 }
 
+export interface SuggestionHighlightItem {
+  id: string;
+  start: number;
+  end: number;
+  quote: string;
+  replacementText: string | null;
+  operation: "replace" | "delete";
+}
+
 /** Reset the body to its original HTML, then wrap each stored range in a mark. */
 export function applyHighlights(
   container: HTMLElement,
@@ -48,6 +57,57 @@ export function applyHighlights(
   // Order does not affect correctness: wrapping keeps total text length, so each
   // pass re-walks the live DOM and recomputes valid offsets.
   for (const it of resolved) wrapRange(container, it);
+}
+
+/** Add redline marks after comment marks have been applied. The original text
+ * is retained and the proposed text is rendered as an adjacent insertion so
+ * the reviewer can switch back to the clean version without losing context. */
+export function applySuggestionHighlights(
+  container: HTMLElement,
+  items: SuggestionHighlightItem[],
+): void {
+  const fullText = container.textContent ?? "";
+  // Insert proposed text from the end of the document backwards so an
+  // insertion cannot shift the stored offsets of a suggestion that follows.
+  const ordered = [...items].sort((a, b) => b.start - a.start);
+  for (const it of ordered) {
+    let start = it.start;
+    if (fullText.slice(start, it.end) !== it.quote) {
+      const found = fullText.indexOf(it.quote);
+      if (found < 0) continue;
+      start = found;
+    }
+    const end = start + it.quote.length;
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    let off = 0;
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      const text = node as Text;
+      const nodeStart = off;
+      const nodeEnd = off + text.data.length;
+      off = nodeEnd;
+      if (start < nodeStart || end > nodeEnd) continue;
+      const range = document.createRange();
+      range.setStart(text, start - nodeStart);
+      range.setEnd(text, end - nodeStart);
+      const mark = document.createElement("mark");
+      mark.className = "drg-suggestion-original";
+      mark.dataset.suggestionId = it.id;
+      try {
+        range.surroundContents(mark);
+        if (it.operation === "replace" && it.replacementText) {
+          const ins = document.createElement("ins");
+          ins.className = "drg-suggestion-inserted";
+          ins.dataset.suggestionId = it.id;
+          ins.textContent = it.replacementText;
+          mark.after(ins);
+        }
+      } catch {
+        // Cross-node selections remain comment-only in phase one.
+      }
+      break;
+    }
+  }
 }
 
 function wrapRange(container: HTMLElement, it: HighlightItem): void {
@@ -102,7 +162,9 @@ export function measureAnchors(
 ): Map<string, number> {
   const map = new Map<string, number>();
   for (const id of ids) {
-    const el = container.querySelector(`mark.drg-hl[data-hl-id="${escapeId(id)}"]`);
+    const el = container.querySelector(
+      `mark.drg-hl[data-hl-id="${escapeId(id)}"], mark.drg-suggestion-original[data-suggestion-id="${escapeId(id)}"]`,
+    );
     if (el) map.set(id, (el as HTMLElement).getBoundingClientRect().top - refTop);
   }
   return map;

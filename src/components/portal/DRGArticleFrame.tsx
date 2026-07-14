@@ -4,9 +4,11 @@ import { useRef, useEffect, useLayoutEffect, useCallback, type RefObject } from 
 import type { DeliverableAnnotation } from "@/lib/types";
 import {
   applyHighlights,
+  applySuggestionHighlights,
   measureAnchors,
   setActiveHighlight,
   type HighlightItem,
+  type SuggestionHighlightItem,
 } from "@/lib/highlight-dom";
 import "./drg-article-frame.css";
 
@@ -44,11 +46,13 @@ export function DRGArticleFrame({
   bodyHtml,
   onAnnotate,
   highlights,
+  suggestions,
   elementAnchors,
   measureRef,
   onAnchors,
   activeHighlightId = null,
   onHighlightClick,
+  onSuggestionClick,
 }: {
   title: string;
   excerpt: string | null;
@@ -61,6 +65,8 @@ export function DRGArticleFrame({
   onAnnotate: (annotation: DeliverableAnnotation, position: AnnotationPosition) => void;
   /** Stored text-comment ranges to keep highlighted in the body. */
   highlights?: HighlightItem[];
+  /** Proposed text edits shown as a Google-Docs-style redline. */
+  suggestions?: SuggestionHighlightItem[];
   /**
    * Whole-element comments anchored to the header title, the lead, or the hero
    * image. These cannot be inline-marked (React owns those nodes), so the
@@ -75,6 +81,7 @@ export function DRGArticleFrame({
   activeHighlightId?: string | null;
   /** Fires when a highlighted passage is clicked. */
   onHighlightClick?: (commentId: string) => void;
+  onSuggestionClick?: (suggestionId: string) => void;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const heroImgRef = useRef<HTMLImageElement>(null);
@@ -83,6 +90,9 @@ export function DRGArticleFrame({
 
   const highlightsKey = (highlights ?? [])
     .map((h) => `${h.id}:${h.start}:${h.end}:${h.num}`)
+    .join("|");
+  const suggestionsKey = (suggestions ?? [])
+    .map((s) => `${s.id}:${s.start}:${s.end}:${s.replacementText ?? ""}`)
     .join("|");
   const elementAnchorsKey = (elementAnchors ?? [])
     .map((e) => `${e.id}:${e.kind}`)
@@ -97,7 +107,7 @@ export function DRGArticleFrame({
     const ref = measureRef?.current;
     if (!body || !ref || !onAnchors) return;
     const refTop = ref.getBoundingClientRect().top;
-    const ids = (highlights ?? []).map((h) => h.id);
+    const ids = [...(highlights ?? []).map((h) => h.id), ...(suggestions ?? []).map((s) => s.id)];
     const map = measureAnchors(body, refTop, ids);
     // Add the header-element comments, anchored to the element's top.
     for (const ea of elementAnchors ?? []) {
@@ -111,7 +121,7 @@ export function DRGArticleFrame({
     }
     onAnchors(map);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [measureRef, onAnchors, highlightsKey, elementAnchorsKey]);
+  }, [measureRef, onAnchors, highlightsKey, suggestionsKey, elementAnchorsKey]);
 
   // Select text in (or click) the title or lead to comment on it. The header is
   // React-owned, so this produces a whole-element "field" annotation rather than
@@ -149,10 +159,11 @@ export function DRGArticleFrame({
     const body = bodyRef.current;
     if (!body) return;
     applyHighlights(body, renderedBodyHtml, highlights ?? []);
+    applySuggestionHighlights(body, suggestions ?? []);
     setActiveHighlight(body, activeHighlightId);
     measureAndReport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [renderedBodyHtml, highlightsKey, elementAnchorsKey]);
+  }, [renderedBodyHtml, highlightsKey, suggestionsKey, elementAnchorsKey]);
 
   // Re-measure on reflow (resize, image/font load) without re-wrapping.
   useEffect(() => {
@@ -215,6 +226,14 @@ export function DRGArticleFrame({
       const id = mark.dataset.hlId;
       if (id) {
         onHighlightClick(id);
+        return;
+      }
+    }
+    const suggestionMark = target.closest?.("[data-suggestion-id]") as HTMLElement | null;
+    if (suggestionMark && onSuggestionClick) {
+      const id = suggestionMark.dataset.suggestionId;
+      if (id) {
+        onSuggestionClick(id);
         return;
       }
     }

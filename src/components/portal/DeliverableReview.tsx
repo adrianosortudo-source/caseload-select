@@ -20,6 +20,8 @@ import type {
   ApprovalRecord,
   DeliverableAnnotation,
   DeliverableAttachment,
+  DeliverableSuggestion,
+  DeliverableSuggestionEvent,
 } from "@/lib/types";
 import { DRGArticleFrame, type AnnotationPosition } from "./DRGArticleFrame";
 import {
@@ -29,7 +31,8 @@ import {
   versionOptionLabel,
 } from "@/lib/deliverables-pure";
 import { stackCards, stackBottom } from "@/lib/margin-stack";
-import type { HighlightItem } from "@/lib/highlight-dom";
+import type { HighlightItem, SuggestionHighlightItem } from "@/lib/highlight-dom";
+import { latestSuggestionState } from "@/lib/suggestions-pure";
 import { formatTimestamp } from "@/lib/firm-timezone";
 
 interface Detail {
@@ -37,6 +40,8 @@ interface Detail {
   versions: DeliverableVersion[];
   comments: DeliverableComment[];
   approvals: ApprovalRecord[];
+  suggestions: DeliverableSuggestion[];
+  suggestionEvents: DeliverableSuggestionEvent[];
 }
 
 function cssEscapeId(id: string): string {
@@ -56,7 +61,7 @@ function sameMap(a: Map<string, number>, b: Map<string, number>): boolean {
 
 function scrollMarkIntoView(rowEl: HTMLElement | null, id: string) {
   const mark = rowEl?.querySelector(
-    `mark.drg-hl[data-hl-id="${cssEscapeId(id)}"]`,
+    `mark.drg-hl[data-hl-id="${cssEscapeId(id)}"], mark.drg-suggestion-original[data-suggestion-id="${cssEscapeId(id)}"]`,
   ) as HTMLElement | null;
   mark?.scrollIntoView({ block: "center", behavior: "smooth" });
 }
@@ -79,7 +84,7 @@ export default function DeliverableReview({
   initialDetail: Detail;
 }) {
   const [detail, setDetail] = useState<Detail>(initialDetail);
-  const { deliverable, versions, comments, approvals } = detail;
+  const { deliverable, versions, comments, approvals, suggestions, suggestionEvents } = detail;
   const deliverableId = deliverable.id;
 
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
@@ -88,6 +93,7 @@ export default function DeliverableReview({
   const [pendingAnnotation, setPendingAnnotation] = useState<DeliverableAnnotation | null>(null);
   const [pendingPosition, setPendingPosition] = useState<AnnotationPosition | null>(null);
   const [showVersionComposer, setShowVersionComposer] = useState(versions.length === 0);
+  const [suggestionView, setSuggestionView] = useState<"redline" | "clean">("redline");
 
   const selectedVersion = versions.find((v) => v.id === selectedVersionId) ?? null;
   const isCurrent = selectedVersionId === deliverable.current_version_id;
@@ -119,6 +125,8 @@ export default function DeliverableReview({
         versions: json.versions,
         comments: json.comments,
         approvals: json.approvals,
+        suggestions: json.suggestions ?? [],
+        suggestionEvents: json.suggestionEvents ?? [],
       });
     }
   }, [firmId, deliverableId]);
@@ -203,6 +211,18 @@ export default function DeliverableReview({
   }
   const isDrgText =
     deliverable.content_kind === "text" && deliverable.firm_id === DRG_FIRM_ID;
+  const openSuggestions = suggestions.filter((s) => {
+    const state = latestSuggestionState(suggestionEvents, s.id);
+    return s.version_id === selectedVersionId && (state === "open" || state === "needs_discussion");
+  });
+  const suggestionHighlights: SuggestionHighlightItem[] = openSuggestions.map((s) => ({
+    id: s.id,
+    start: s.annotation.start,
+    end: s.annotation.end,
+    quote: s.annotation.quote,
+    replacementText: s.replacement_text,
+    operation: s.operation,
+  }));
 
   return (
     <div className="space-y-5">
@@ -277,15 +297,26 @@ export default function DeliverableReview({
               setActiveId(null);
             }}
           />
-          <button
-            onClick={() => setShowVersionComposer((s) => !s)}
-            className="text-xs font-semibold uppercase tracking-wider px-3 py-1.5 border border-navy text-navy hover:bg-navy hover:text-white transition-colors"
-          >
-            {showVersionComposer ? "Close" : "Post new version"}
-          </button>
+          {!(isDrgText && viewerRole === "lawyer") && (
+            <button
+              onClick={() => setShowVersionComposer((s) => !s)}
+              className="text-xs font-semibold uppercase tracking-wider px-3 py-1.5 border border-navy text-navy hover:bg-navy hover:text-white transition-colors"
+            >
+              {showVersionComposer ? "Close" : "Post new version"}
+            </button>
+          )}
+          {isDrgText && (
+            <button
+              type="button"
+              onClick={() => setSuggestionView((v) => (v === "redline" ? "clean" : "redline"))}
+              className="text-xs font-semibold uppercase tracking-wider px-3 py-1.5 border border-ox text-ox hover:bg-ox hover:text-white transition-colors"
+            >
+              {suggestionView === "redline" ? "Hide suggestions" : `Show suggestions${openSuggestions.length ? ` (${openSuggestions.length})` : ""}`}
+            </button>
+          )}
         </div>
 
-        {showVersionComposer && (
+        {showVersionComposer && !(isDrgText && viewerRole === "lawyer") && (
           <VersionComposer
             firmId={firmId}
             deliverableId={deliverableId}
@@ -312,6 +343,7 @@ export default function DeliverableReview({
             changesAttestation={changesAttestation}
             selectedVersion={selectedVersion}
             isCurrentVersion={isCurrent}
+            hasOpenSuggestions={isCurrent && openSuggestions.length > 0}
             currentVersionMissing={currentVersionMissing}
             status={deliverable.status}
             onSigned={refetch}
@@ -366,6 +398,8 @@ export default function DeliverableReview({
               onAnchors={handleAnchors}
               activeHighlightId={activeId}
               onHighlightClick={focusFromHighlight}
+              suggestions={suggestionView === "redline" && isDrgText ? suggestionHighlights : undefined}
+              onSuggestionClick={focusFromCard}
             />
           ) : (
             <div className="bg-white border border-border-brand px-6 py-10 text-center text-sm text-black/55">
@@ -420,6 +454,24 @@ export default function DeliverableReview({
             activeId={activeId}
             onActivate={focusFromCard}
             onChanged={refetch}
+          />
+        )}
+        {isDrgText && selectedVersion && (
+          <SuggestionReviewPanel
+            className="lg:col-span-2"
+            firmId={firmId}
+            deliverableId={deliverableId}
+            viewerRole={viewerRole}
+            versionId={selectedVersion.id}
+            suggestions={suggestions.filter((s) => s.version_id === selectedVersion.id)}
+            events={suggestionEvents}
+            onChanged={refetch}
+            onApplied={(versionId) => {
+              setSelectedVersionId(versionId);
+              setPendingAnnotation(null);
+              setPendingPosition(null);
+              setActiveId(null);
+            }}
           />
         )}
       </div>
@@ -516,6 +568,8 @@ function ContentViewer({
   onAnchors,
   activeHighlightId,
   onHighlightClick,
+  suggestions,
+  onSuggestionClick,
 }: {
   version: DeliverableVersion;
   deliverable: ContentDeliverable;
@@ -528,6 +582,8 @@ function ContentViewer({
   onAnchors?: (anchors: Map<string, number>) => void;
   activeHighlightId?: string | null;
   onHighlightClick?: (commentId: string) => void;
+  suggestions?: SuggestionHighlightItem[];
+  onSuggestionClick?: (suggestionId: string) => void;
 }) {
   const contentKind = deliverable.content_kind;
   if (contentKind === "text") {
@@ -551,11 +607,13 @@ function ContentViewer({
             bodyHtml={version.body_html ?? ""}
             onAnnotate={onAnnotate}
             highlights={highlights}
+            suggestions={suggestions}
             elementAnchors={elementAnchors}
             measureRef={measureRef}
             onAnchors={onAnchors}
             activeHighlightId={activeHighlightId}
             onHighlightClick={onHighlightClick}
+            onSuggestionClick={onSuggestionClick}
           />
         </div>
       );
@@ -813,6 +871,8 @@ function FloatingAnnotationPopover({
   onPosted: () => Promise<void>;
 }) {
   const [body, setBody] = useState("");
+  const [mode, setMode] = useState<"comment" | "suggest">("comment");
+  const [replacement, setReplacement] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -871,12 +931,18 @@ function FloatingAnnotationPopover({
     setSending(true);
     setError(null);
     try {
+      const endpoint = mode === "suggest"
+        ? `/api/portal/${firmId}/deliverables/${deliverableId}/suggestions`
+        : `/api/portal/${firmId}/deliverables/${deliverableId}/comments`;
+      const payload = mode === "suggest"
+        ? { version_id: versionId, annotation, operation: replacement.trim() ? "replace" : "delete", replacement_text: replacement.trim() || null, rationale: body.trim() }
+        : { version_id: versionId, body: body.trim(), annotation };
       const res = await fetch(
-        `/api/portal/${firmId}/deliverables/${deliverableId}/comments`,
+        endpoint,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ version_id: versionId, body: body.trim(), annotation }),
+          body: JSON.stringify(payload),
         },
       );
       const json = await res.json();
@@ -909,13 +975,28 @@ function FloatingAnnotationPopover({
           {annotationChip(annotation)}
         </p>
       </div>
+      {annotation.type === "text" && (
+        <div className="flex border-b border-border-brand">
+          <button type="button" onClick={() => setMode("comment")} className={`flex-1 px-2 py-1.5 text-[11px] ${mode === "comment" ? "bg-navy text-white" : "text-black/55"}`}>Comment</button>
+          <button type="button" onClick={() => setMode("suggest")} className={`flex-1 px-2 py-1.5 text-[11px] ${mode === "suggest" ? "bg-ox text-white" : "text-black/55"}`}>Suggest edit</button>
+        </div>
+      )}
       <form onSubmit={onSubmit} className="p-3 space-y-2">
+        {mode === "suggest" && annotation.type === "text" && (
+          <textarea
+            value={replacement}
+            onChange={(e) => setReplacement(e.target.value)}
+            rows={3}
+            placeholder="Proposed replacement (leave blank to suggest deletion)"
+            className="w-full border border-border-brand px-2 py-1.5 text-sm resize-none"
+          />
+        )}
         <textarea
           ref={taRef}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={3}
-          placeholder={
+          placeholder={mode === "suggest" ? "Why should this wording change?" :
             viewerRole === "lawyer"
               ? "Add a comment for the operator..."
               : "Add a note for the firm..."
@@ -936,7 +1017,7 @@ function FloatingAnnotationPopover({
             disabled={sending || !body.trim()}
             className="px-3 py-1.5 text-xs font-semibold bg-navy text-white disabled:opacity-50 whitespace-nowrap"
           >
-            {sending ? "Posting..." : "Comment"}
+            {sending ? "Posting..." : mode === "suggest" ? "Post suggestion" : "Comment"}
           </button>
           <button
             type="button"
@@ -1071,6 +1152,116 @@ function CommentComposer({
  * general / image comments stack below. Below `lg` it degrades to a plain
  * stacked list.
  */
+function SuggestionReviewPanel({
+  className,
+  firmId,
+  deliverableId,
+  viewerRole,
+  versionId,
+  suggestions,
+  events,
+  onChanged,
+  onApplied,
+}: {
+  className?: string;
+  firmId: string;
+  deliverableId: string;
+  viewerRole: "operator" | "lawyer";
+  versionId: string;
+  suggestions: DeliverableSuggestion[];
+  events: DeliverableSuggestionEvent[];
+  onChanged: () => Promise<void>;
+  onApplied: (versionId: string) => void;
+}) {
+  const open = suggestions.filter((s) => {
+    const state = latestSuggestionState(events, s.id);
+    return state === "open" || state === "needs_discussion";
+  });
+  const [selected, setSelected] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (suggestions.length === 0) return null;
+
+  async function event(id: string, eventType: "needs_discussion" | "declined" | "withdrawn") {
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/suggestions/${id}/events`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event_type: eventType }),
+      });
+      const json = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || !json?.ok) throw new Error(json?.error ?? "Could not update the suggestion.");
+      setSelected((current) => current.filter((suggestionId) => suggestionId !== id));
+      await onChanged();
+    } catch (eventError) {
+      setError(eventError instanceof Error ? eventError.message : "Could not update the suggestion.");
+    } finally { setBusy(false); }
+  }
+
+  async function applySelected() {
+    if (!selected.length) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/suggestions/apply`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ suggestion_ids: selected }),
+      });
+      const json = await response.json().catch(() => null) as {
+        ok?: boolean;
+        error?: string;
+        version?: { version_id?: string };
+      } | null;
+      if (!response.ok || !json?.ok || !json.version?.version_id) {
+        throw new Error(json?.error ?? "Could not apply the selected suggestions.");
+      }
+      setSelected([]);
+      await onChanged();
+      onApplied(json.version.version_id);
+    } catch (applyError) {
+      setError(applyError instanceof Error ? applyError.message : "Could not apply the selected suggestions.");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <section className={`${className ?? ""} border border-border-brand bg-white p-4 space-y-3`}>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold text-navy">Suggested edits</h2>
+          <p className="text-xs text-black/50 mt-0.5">Original wording stays intact until an operator applies a new version.</p>
+        </div>
+        {viewerRole === "operator" && open.length > 0 && (
+          <button type="button" onClick={applySelected} disabled={busy || selected.length === 0} className="px-3 py-1.5 text-xs font-semibold bg-navy text-white disabled:opacity-40">Apply selected</button>
+        )}
+      </div>
+      {error && <p role="alert" className="text-xs text-red-fail bg-red-50 border border-red-200 p-2">{error}</p>}
+      {suggestions.map((s) => {
+        const state = latestSuggestionState(events, s.id);
+        const isOpen = state === "open" || state === "needs_discussion";
+        return (
+          <div key={s.id} className={`border p-3 ${isOpen ? "border-ox/40 bg-[#fffaf5]" : "border-border-brand bg-black/[.02]"}`}>
+            <div className="flex items-start gap-2">
+              {viewerRole === "operator" && isOpen && <input aria-label="Select suggestion" type="checkbox" checked={selected.includes(s.id)} onChange={(e) => setSelected((prev) => e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id))} />}
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-black/55"><span className="font-semibold text-navy">{s.author_name ?? s.author_role}</span> suggested {s.operation}</p>
+                <p className="mt-1 text-sm line-through text-red-900/70">{s.original_text}</p>
+                {s.operation === "replace" && <p className="mt-1 text-sm text-green-900 underline">{s.replacement_text}</p>}
+                {s.rationale && <p className="mt-2 text-xs text-black/60">{s.rationale}</p>}
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] uppercase tracking-wider text-black/45">{state === "open" ? "Open" : state.replace("_", " ")}</span>
+                  {isOpen && viewerRole === "operator" && <><button type="button" disabled={busy} onClick={() => event(s.id, "needs_discussion")} className="text-[11px] text-navy underline">Discuss</button><button type="button" disabled={busy} onClick={() => event(s.id, "declined")} className="text-[11px] text-red-800 underline">Decline</button></>}
+                  {isOpen && viewerRole === "lawyer" && <button type="button" disabled={busy} onClick={() => event(s.id, "withdrawn")} className="text-[11px] text-black/55 underline">Withdraw</button>}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {viewerRole === "lawyer" && open.length > 0 && <p className="text-[11px] text-black/45">The operator reviews suggestions and creates the next immutable version. Approval still applies only to that new version.</p>}
+      <span className="sr-only">Source version {versionId}</span>
+    </section>
+  );
+}
+
 function MarginComments({
   firmId,
   deliverableId,
@@ -1314,6 +1505,7 @@ function SignOffPanel({
   changesAttestation,
   selectedVersion,
   isCurrentVersion,
+  hasOpenSuggestions,
   currentVersionMissing,
   status,
   onSigned,
@@ -1327,6 +1519,7 @@ function SignOffPanel({
   changesAttestation: string;
   selectedVersion: DeliverableVersion | null;
   isCurrentVersion: boolean;
+  hasOpenSuggestions: boolean;
   currentVersionMissing: boolean;
   status: ContentDeliverable["status"];
   onSigned: () => Promise<void> | void;
@@ -1337,6 +1530,13 @@ function SignOffPanel({
   const [attachments, setAttachments] = useState<DeliverableAttachment[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (hasOpenSuggestions && decision === "approved") {
+      setDecision("changes_requested");
+      setAgreed(false);
+    }
+  }, [hasOpenSuggestions, decision]);
 
   if (viewerRole !== "lawyer") {
     return (
@@ -1354,6 +1554,10 @@ function SignOffPanel({
 
   async function submit() {
     if (!selectedVersion) return;
+    if (decision === "approved" && hasOpenSuggestions) {
+      setError("Resolve or apply the open suggestions before approving this version.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -1411,9 +1615,16 @@ function SignOffPanel({
         </p>
       ) : (
         <div className="space-y-2">
+          {hasOpenSuggestions && (
+            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 p-2">
+              This version has open wording suggestions. They must be applied,
+              declined, or withdrawn before this version can be approved.
+            </p>
+          )}
           <div className="flex gap-2">
             <button
               type="button"
+              disabled={hasOpenSuggestions}
               onClick={() => {
                 setDecision("approved");
                 setAgreed(false);
@@ -1423,7 +1634,7 @@ function SignOffPanel({
                 decision === "approved"
                   ? "border-green-pass/30 bg-green-pass/10 text-green-pass"
                   : "border-border-brand text-black/60"
-              }`}
+              } disabled:opacity-40`}
             >
               Approve
             </button>

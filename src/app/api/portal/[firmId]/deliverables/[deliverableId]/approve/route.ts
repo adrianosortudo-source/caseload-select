@@ -24,6 +24,7 @@ import {
   CHANGES_ATTESTATION,
 } from "@/lib/deliverables-pure";
 import { postDeliverableLifecycleToChannel } from "@/lib/deliverable-channel-post";
+import { latestSuggestionState } from "@/lib/suggestions-pure";
 
 export async function POST(
   req: NextRequest,
@@ -87,6 +88,19 @@ export async function POST(
   const version = detail.versions.find((v) => v.id === versionId);
   if (!version) {
     return NextResponse.json({ error: "version not found" }, { status: 404 });
+  }
+  if (
+    decision === "approved" &&
+    detail.suggestions.some((suggestion) => {
+      if (suggestion.version_id !== versionId) return false;
+      const state = latestSuggestionState(detail.suggestionEvents, suggestion.id);
+      return state === "open" || state === "needs_discussion";
+    })
+  ) {
+    return NextResponse.json(
+      { error: "resolve or apply the open suggestions before approving this version" },
+      { status: 409 },
+    );
   }
 
   const attestation = decision === "approved" ? APPROVAL_ATTESTATION : CHANGES_ATTESTATION;

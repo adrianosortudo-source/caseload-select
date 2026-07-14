@@ -66,7 +66,12 @@ import { POST } from "../route";
 const LAWYER: Actor = { role: "lawyer", id: "law1", name: "Damaris", email: "damaris@firm.ca" };
 const OPERATOR: Actor = { role: "operator", id: null, name: "Operator", email: null };
 
-function makeDetail(over: { firm_id?: string; current_version_id?: string | null } = {}) {
+function makeDetail(over: {
+  firm_id?: string;
+  current_version_id?: string | null;
+  suggestions?: unknown[];
+  suggestionEvents?: unknown[];
+} = {}) {
   return {
     deliverable: {
       id: DELIV,
@@ -80,6 +85,8 @@ function makeDetail(over: { firm_id?: string; current_version_id?: string | null
     ],
     comments: [],
     approvals: [],
+    suggestions: over.suggestions ?? [],
+    suggestionEvents: over.suggestionEvents ?? [],
   };
 }
 
@@ -178,6 +185,41 @@ describe("POST approve", () => {
     expect(state.recordArgs!.decision).toBe("changes_requested");
     expect(state.recordArgs!.attestation).toBe(CHANGES_ATTESTATION);
     expect(state.recordArgs!.note).toBe("tighten the headline");
+  });
+
+  it("409 when approving a version with an open wording suggestion", async () => {
+    state.detail = makeDetail({
+      suggestions: [{ id: "suggestion-1", version_id: V_CUR }],
+      suggestionEvents: [{
+        id: "event-1",
+        suggestion_id: "suggestion-1",
+        event_type: "created",
+        created_at: "2026-07-13T12:00:00.000Z",
+      }],
+    });
+    const res = await POST(
+      makeReq({ version_id: V_CUR, decision: "approved", agreed: true }),
+      params(),
+    );
+    expect(res.status).toBe(409);
+    expect(state.recordArgs).toBeNull();
+  });
+
+  it("allows request-changes while wording suggestions remain open", async () => {
+    state.detail = makeDetail({
+      suggestions: [{ id: "suggestion-1", version_id: V_CUR }],
+      suggestionEvents: [{
+        id: "event-1",
+        suggestion_id: "suggestion-1",
+        event_type: "created",
+        created_at: "2026-07-13T12:00:00.000Z",
+      }],
+    });
+    const res = await POST(
+      makeReq({ version_id: V_CUR, decision: "changes_requested", agreed: true }),
+      params(),
+    );
+    expect(res.status).toBe(200);
   });
 
   it("500 when the record write fails", async () => {

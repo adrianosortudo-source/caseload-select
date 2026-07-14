@@ -334,6 +334,10 @@ export interface DeliverableVersion {
   asset_mime: string | null;
   asset_size_bytes: number | null;
   asset_name: string | null;
+  /** SHA-256 of the immutable artifact at storage_path, when one is bound. */
+  asset_sha256: string | null;
+  /** Machine validation report captured for the immutable artifact. */
+  asset_validation: Record<string, unknown> | null;
   note: string | null;
   /**
    * When this version was posted in direct response to a changes_requested
@@ -369,6 +373,44 @@ export interface DeliverableComment {
    * open-comment count.
    */
   approval_record_id: string | null;
+  created_at: string;
+}
+
+export type DeliverableSuggestionOperation = "replace" | "delete";
+export type DeliverableSuggestionEventType =
+  | "created"
+  | "needs_discussion"
+  | "applied"
+  | "declined"
+  | "withdrawn"
+  | "superseded";
+
+export interface DeliverableSuggestion {
+  id: string;
+  deliverable_id: string;
+  version_id: string;
+  firm_id: string;
+  author_role: DeliverableActorRole;
+  author_id: string | null;
+  author_name: string | null;
+  operation: DeliverableSuggestionOperation;
+  annotation: Extract<DeliverableAnnotation, { type: "text" }>;
+  original_text: string;
+  replacement_text: string | null;
+  rationale: string | null;
+  source_body_sha256: string | null;
+  created_at: string;
+}
+
+export interface DeliverableSuggestionEvent {
+  id: string;
+  suggestion_id: string;
+  firm_id: string;
+  event_type: DeliverableSuggestionEventType;
+  actor_role: DeliverableActorRole;
+  actor_id: string | null;
+  note: string | null;
+  resulting_version_id: string | null;
   created_at: string;
 }
 
