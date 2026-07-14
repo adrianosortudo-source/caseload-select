@@ -31,7 +31,11 @@ export async function POST(
   if (eventType === "declined" || eventType === "superseded") {
     if (resolved.actor.role !== "operator") return NextResponse.json({ error: "operator required" }, { status: 403 });
   }
-  if (eventType === "withdrawn" && suggestion.author_id && suggestion.author_id !== resolved.actor.id && resolved.actor.role !== "operator") {
+  if (
+    eventType === "withdrawn"
+    && resolved.actor.role !== "operator"
+    && (!suggestion.author_id || suggestion.author_id !== resolved.actor.id)
+  ) {
     return NextResponse.json({ error: "only the author or operator may withdraw" }, { status: 403 });
   }
   const result = await addSuggestionEvent({ suggestionId, firmId, eventType, actor: resolved.actor, note: cleanNote(body.note) });
