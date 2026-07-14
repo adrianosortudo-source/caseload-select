@@ -259,6 +259,31 @@ vercel redeploy <prod-url>
 
 Wait for `Ready` and verify the production alias (`app.caseloadselect.ca`) is updated.
 
+## Content Studio release migration gate
+
+For migrations that affect deliverable suggestions, comments, approval history,
+or version creation, use the following stricter sequence in addition to the
+infrastructure cutover steps above:
+
+1. Apply the migration before deploying code that calls the new RPC or reads
+   the new field.
+2. Verify the exact function signature with `pg_proc`, the trigger with
+   `pg_trigger`, and `service_role`/non-service-role execution privileges with
+   `has_function_privilege`.
+3. Confirm that RLS being enabled without policies is intentional when the app
+   uses service-role access; do not mistake that informational advisor notice
+   for complete integrity enforcement.
+4. Confirm that triggers still enforce append-only and approval-blocking rules
+   under service-role access. RLS and grants are not substitutes for triggers.
+5. Verify row counts for `deliverable_suggestions`,
+   `deliverable_suggestion_events`, `approval_records`, and
+   `deliverable_versions` before and after the migration.
+6. If a direct SQL repair creates a new review version, also create the
+   corresponding lifecycle event, notification outbox row, and
+   `review_notified_at` stamp. A successful version insert alone is incomplete.
+7. Record migration version, function signatures, trigger names, advisor
+   results, and rollback/forward-repair instructions in the release note.
+
 ## Phase 8 — Smoke test
 
 Liveness:
