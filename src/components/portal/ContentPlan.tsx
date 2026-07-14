@@ -16,6 +16,8 @@ import {
   type PlanDeliverable,
   type PlanOverview,
 } from "@/lib/deliverables-pure";
+import PublicationReadinessSummary from "@/components/portal/PublicationReadinessSummary";
+import { sliceReadinessForPeriod, type DeliverableReadiness } from "@/lib/publication-readiness";
 
 const PLAN_STATUS: Record<DeliverableStatus, { label: string; cls: string }> = {
   draft: { label: "Draft", cls: "bg-parchment-2 text-muted border-border-brand" },
@@ -48,6 +50,12 @@ function fmtRange(s: string, e: string): string {
   return `${ds.getDate()} ${mS} ${yS} to ${de.getDate()} ${mE} ${yE}`;
 }
 
+export interface PlanReadinessProp {
+  summary: { active: number; ready: number; blocked: number; excluded: number };
+  items: DeliverableReadiness[];
+  titles: Record<string, string>;
+}
+
 export default function ContentPlan({
   firmId,
   viewerRole,
@@ -55,6 +63,7 @@ export default function ContentPlan({
   periods,
   deliverables,
   settings,
+  planReadiness,
 }: {
   firmId: string;
   viewerRole: "operator" | "lawyer";
@@ -62,6 +71,7 @@ export default function ContentPlan({
   periods: ContentPeriod[];
   deliverables: PlanDeliverable[];
   settings: ContentPlanSettings | null;
+  planReadiness?: PlanReadinessProp;
 }) {
   const router = useRouter();
   const [showNewWeek, setShowNewWeek] = useState(false);
@@ -129,6 +139,7 @@ export default function ContentPlan({
         firmId={firmId}
         settings={settings}
         onChanged={refresh}
+        planReadiness={planReadiness}
       />
 
       {isOperator && showNewWeek && (
@@ -160,6 +171,19 @@ export default function ContentPlan({
         const items = live.filter((d) => d.period_id === period.id);
         const { approved, total } = planProgress(items);
         const groups = groupByFormat(items);
+        // Slice the whole-plan readiness set down to this period's own
+        // deliverables. Reuses the ids already computed above rather than
+        // adding a second period-scoped data load; sliceReadinessForPeriod
+        // keeps the per-period counts using the exact same rules as the
+        // whole-plan summary (see publication-readiness.test.ts for the
+        // proof this slicing is correct, and
+        // PublicationReadinessSummary.test.tsx for the proof the resulting
+        // periodId reaches the rendered "download manifest" link).
+        const periodDeliverableIds = new Set(items.map((d) => d.id));
+        const sliced = sliceReadinessForPeriod(planReadiness?.items ?? [], periodDeliverableIds);
+        const periodReadiness: PlanReadinessProp | undefined = planReadiness
+          ? { summary: sliced.summary, items: sliced.items, titles: planReadiness.titles }
+          : undefined;
         return (
           <PeriodCard
             key={period.id}
@@ -171,6 +195,7 @@ export default function ContentPlan({
             groups={groups}
             periods={periods}
             onChanged={refresh}
+            periodReadiness={periodReadiness}
           />
         );
       })}
@@ -248,12 +273,14 @@ function ReviewOverview({
   firmId,
   settings,
   onChanged,
+  planReadiness,
 }: {
   overview: PlanOverview;
   isOperator: boolean;
   firmId: string;
   settings: ContentPlanSettings | null;
   onChanged: () => void;
+  planReadiness?: PlanReadinessProp;
 }) {
   const [editing, setEditing] = useState(false);
   const { total, approved, pending, changes, draft, weeks, byFormat, nextPublish } = overview;
@@ -357,6 +384,15 @@ function ReviewOverview({
             />
           )}
         </div>
+      )}
+
+      {planReadiness && (
+        <PublicationReadinessSummary
+          firmId={firmId}
+          isOperator={isOperator}
+          readiness={{ summary: planReadiness.summary, items: planReadiness.items }}
+          titles={planReadiness.titles}
+        />
       )}
     </div>
   );
@@ -463,6 +499,7 @@ function PeriodCard({
   groups,
   periods,
   onChanged,
+  periodReadiness,
 }: {
   firmId: string;
   isOperator: boolean;
@@ -472,6 +509,7 @@ function PeriodCard({
   groups: ReturnType<typeof groupByFormat>;
   periods: ContentPeriod[];
   onChanged: () => void;
+  periodReadiness?: PlanReadinessProp;
 }) {
   const [editing, setEditing] = useState(false);
   const pct = total > 0 ? Math.round((approved / total) * 100) : 0;
@@ -506,6 +544,18 @@ function PeriodCard({
           )}
         </div>
       </div>
+
+      {periodReadiness && (
+        <div className="px-6 py-3 border-b border-border-brand/60">
+          <PublicationReadinessSummary
+            firmId={firmId}
+            isOperator={isOperator}
+            readiness={{ summary: periodReadiness.summary, items: periodReadiness.items }}
+            titles={periodReadiness.titles}
+            periodId={period.id}
+          />
+        </div>
+      )}
 
       {isOperator && editing ? (
         <div className="px-6 py-4 border-b border-border-brand/60 bg-parchment-2/30">

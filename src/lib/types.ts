@@ -277,7 +277,31 @@ export interface ContentDeliverable {
   // Content-plan placement (migration 20260624_content_periods.sql).
   period_id: string | null;   // FK to content_periods; null = unscheduled
   format: string | null;      // editorial format label, e.g. "Counsel Note"
+  // Publication metadata (migration 20260714101200_publication_metadata.sql).
+  // See publication-requirements.ts for how these drive readiness.
+  locale: string | null;                       // BCP-47-shaped, e.g. "en-CA"
+  deliverable_role: DeliverableRole | null;
+  publication_destination: PublicationDestination | null;
+  publication_path: string | null;
+  // Per-row overrides only. NULL means "use deliverable_role's profile
+  // default" (see resolveRequirementProfile in publication-requirements.ts).
+  requires_legal_approval: boolean | null;
+  requires_image: boolean | null;
+  requires_file: boolean | null;
+  requires_localized_route: boolean | null;
 }
+
+export type DeliverableRole =
+  | "article"
+  | "social_post"
+  | "gbp_post"
+  | "lead_magnet_pdf"
+  | "landing_page";
+
+export type PublicationDestination =
+  | "firm_website"
+  | "linkedin"
+  | "google_business_profile";
 
 /**
  * A weekly content period: the editorial frame the firm sees above a batch of
@@ -341,8 +365,108 @@ export interface DeliverableVersion {
    * outside a change-request loop (e.g. the first version).
    */
   responds_to_approval_id: string | null;
+  // Immutable-artifact binding for this version's own single asset (migration
+  // 20260713185808_pdf_artifact_integrity.sql). Canonical for the
+  // lead_magnet_pdf requirement profile; publication_artifacts (below)
+  // covers every other artifact type a version may additionally need.
+  asset_sha256: string | null;
+  asset_validation: Record<string, unknown> | null;
   created_by_role: DeliverableActorRole;
   created_by_id: string | null;
+  created_at: string;
+}
+
+// ─── Publication Readiness (Workstreams 1-8) ────────────────────────────────
+// See migrations 20260714101200_publication_metadata.sql and
+// 20260714101300_publication_artifacts.sql, and publication-requirements.ts
+// / publication-readiness.ts for the profile and evaluator that consume
+// these shapes.
+
+export type PublicationArtifactType =
+  | "hero_image"
+  | "social_image"
+  | "pdf"
+  | "webpage"
+  | "email"
+  | "thank_you_page"
+  | "form"
+  | "external_post";
+
+export interface PublicationArtifact {
+  id: string;
+  firm_id: string;
+  deliverable_id: string;
+  version_id: string;
+  artifact_type: PublicationArtifactType;
+  locale: string | null;
+  destination: PublicationDestination | null;
+  storage_bucket: string | null;
+  storage_path: string | null;
+  public_url: string | null;
+  repository: string | null;
+  repository_path: string | null;
+  deployment_commit: string | null;
+  deployment_url: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  sha256: string | null;
+  validation_result: Record<string, unknown> | null;
+  created_by_role: "operator" | "lawyer" | "system";
+  created_by_id: string | null;
+  created_at: string;
+  superseded_at: string | null; // insert-time-only note; never read for staleness
+}
+
+export type PublicationArtifactValidator =
+  | "storage_object_check"
+  | "sha256_check"
+  | "route_check"
+  | "deployment_check";
+
+export interface PublicationArtifactValidation {
+  id: string;
+  artifact_id: string;
+  firm_id: string;
+  validator: PublicationArtifactValidator;
+  result: "pass" | "fail" | "error";
+  details: Record<string, unknown> | null;
+  validated_by_role: "operator" | "system";
+  validated_by_id: string | null;
+  created_at: string;
+}
+
+export type PublicationReleaseStatus =
+  | "draft"
+  | "blocked"
+  | "ready"
+  | "authorized"
+  | "publishing"
+  | "published"
+  | "failed"
+  | "rolled_back";
+
+export interface PublicationRelease {
+  id: string;
+  firm_id: string;
+  period_id: string;
+  status: PublicationReleaseStatus;
+  manifest_snapshot: Record<string, unknown>;
+  authorized_by_role: "operator" | "lawyer" | null;
+  authorized_by_id: string | null;
+  authorized_at: string | null;
+  created_at: string;
+}
+
+export interface PublicationReleaseItem {
+  id: string;
+  release_id: string;
+  firm_id: string;
+  deliverable_id: string;
+  version_id: string;
+  artifact_snapshot: PublicationArtifact[];
+  readiness_snapshot: Record<string, unknown>;
+  included: boolean;
+  exclusion_reason: string | null;
   created_at: string;
 }
 

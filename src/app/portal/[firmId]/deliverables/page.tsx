@@ -15,6 +15,7 @@ import { getPortalSession } from "@/lib/portal-auth";
 import { getContentPlan } from "@/lib/deliverables";
 import { getFirmAbout } from "@/lib/firm-about";
 import { getContentCadence } from "@/lib/content-cadence";
+import { loadPlanPublicationReadiness } from "@/lib/publication-readiness-loader";
 import ContentPlan from "@/components/portal/ContentPlan";
 import AboutPanel from "@/components/portal/AboutPanel";
 import ContentCadencePanel from "@/components/portal/ContentCadencePanel";
@@ -46,6 +47,16 @@ export default async function DeliverablesPage({
 
   const cadence = getContentCadence(firmId);
 
+  // Additive: Publication Readiness (Workstream 5). loadPlanPublicationReadiness
+  // never throws on its own, but the .catch below is a second, independent
+  // guard so a readiness-load failure can never take down a page that
+  // rendered fine before this feature existed.
+  const planReadiness = await loadPlanPublicationReadiness(firmId).catch(() => ({
+    summary: { active: 0, ready: 0, blocked: 0, excluded: 0 },
+    items: [],
+    titles: {},
+  }));
+
   return (
     <div className="space-y-6">
       {cadence ? (
@@ -64,6 +75,7 @@ export default async function DeliverablesPage({
         periods={plan.periods}
         deliverables={plan.deliverables}
         settings={plan.settings}
+        planReadiness={planReadiness}
       />
     </div>
   );
