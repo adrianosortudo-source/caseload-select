@@ -277,7 +277,7 @@ export interface ContentDeliverable {
   // Content-plan placement (migration 20260624_content_periods.sql).
   period_id: string | null;   // FK to content_periods; null = unscheduled
   format: string | null;      // editorial format label, e.g. "Counsel Note"
-  // Publication metadata (migration 20260714101200_publication_metadata.sql).
+  // Publication metadata (migration 20260714141535_publication_metadata.sql).
   // See publication-requirements.ts for how these drive readiness.
   locale: string | null;                       // BCP-47-shaped, e.g. "en-CA"
   deliverable_role: DeliverableRole | null;
@@ -377,8 +377,8 @@ export interface DeliverableVersion {
 }
 
 // ─── Publication Readiness (Workstreams 1-8) ────────────────────────────────
-// See migrations 20260714101200_publication_metadata.sql and
-// 20260714101300_publication_artifacts.sql, and publication-requirements.ts
+// See migrations 20260714141535_publication_metadata.sql and
+// 20260714141612_publication_artifacts.sql, and publication-requirements.ts
 // / publication-readiness.ts for the profile and evaluator that consume
 // these shapes.
 

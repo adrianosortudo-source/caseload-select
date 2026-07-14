@@ -211,3 +211,41 @@ duplicate active evidence for the same slot. Verified live in a
 rollback-wrapped transaction: re-inserting the exact Counsel Note hero-image
 row raised `unique_violation` as expected, then rolled back cleanly with
 zero rows left behind.
+
+**Authenticated release-gate walkthrough** (2026-07-14, against commit
+`71b4c0e`, the exact commit the Vercel preview built): Vercel Deployment
+Protection SSO-gates the preview at the platform level with no automation
+bypass available in this environment, so the walkthrough ran against a local
+`next dev` server on the same worktree/commit, using a short-lived (2h)
+operator session token minted with the real `PORTAL_SECRET` for the actual
+`firm_lawyers` operator row (`47941c38-...`, `adriano@caseloadselect.ca`) —
+the same signing function (`generatePortalToken`) and the same
+`/api/portal/login` verification path a real clicked magic-link email uses.
+The token and the script that minted it were deleted immediately after use
+(confirmed empty scratch directory, 2026-07-14T20:17:00Z). No deliverable
+was approved, edited, archived, or published during the walkthrough.
+
+Confirmed: `GET /api/admin/content-periods/187a18a7-.../publication-manifest`
+returned `"summary":{"active_deliverables":13,"ready":0,"blocked":13,
+"excluded_archived":1}` and `"generated_by":{"role":"operator","id":
+"47941c38-..."}` — exact expected counts, under a real operator session.
+The per-period `PeriodCard` for Founder Vesting rendered its own "Download
+manifest" link scoped to that period's real id (distinct from 7 other
+period cards on the same page, each with its own distinct periodId, and
+distinct from the whole-plan `ReviewOverview` aggregate section, which
+correctly has no download link). Blocked-reason lists rendered specific,
+accurate per-deliverable issues (e.g. the lead-magnet landing page showing
+exactly the four unmet requirements: legal approval, delivery email,
+thank-you page, journey validation). The deliverable detail page for
+"Founder vesting checklist" rendered its existing version history, sign-off
+notice ("The operator cannot sign on the licensee's behalf"), archive
+control, and comment system unchanged, with no generate, translate,
+approve-on-behalf, publish, or schedule action anywhere on the page.
+
+Not independently re-tested live: client/lawyer-role rejection from
+`/api/admin/*`. This is proven by the same code path `getOperatorSession()`
+uses for the operator check (`session.role !== "operator"` rejects lawyer
+and client alike, `src/lib/portal-auth.ts`), already covered by the passing
+test suite, and was not re-tested with a second minted token in order to
+keep this walkthrough scoped to the single real operator row the release
+gate specified.

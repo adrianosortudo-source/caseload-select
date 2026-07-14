@@ -16,8 +16,9 @@
 --
 -- Trigger and RLS pattern copied deliberately from the most recent
 -- precedent in this schema, deliverable_suggestions
--- (20260713234632_deliverable_suggestions.sql /
--- 20260714004511_deliverable_suggestion_release_hardening.sql): a
+-- (production migration versions 20260713234759_deliverable_suggestions /
+-- 20260714011950_deliverable_suggestion_release_hardening, tracked pending
+-- rename on origin/feat/deliverable-suggestions-release): a
 -- before-insert scope-validation trigger, a before-update-or-delete
 -- unconditional-raise append-only trigger, RLS enabled + forced with zero
 -- policies (service-role-only access, matching the Database Access
