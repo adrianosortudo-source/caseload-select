@@ -146,6 +146,17 @@ async function signEvidence(r: PublicationReceipt): Promise<PublicationReceipt> 
   return { ...r, evidence_signed_url: data?.signedUrl ?? undefined };
 }
 
+export async function getReceiptById(receiptId: string): Promise<PublicationReceipt | null> {
+  const { data, error } = await supabase
+    .from("publication_receipts")
+    .select("*")
+    .eq("id", receiptId)
+    .maybeSingle();
+  if (error) throw new Error(`could not load receipt: ${error.message}`);
+  if (!data) return null;
+  return signEvidence(data as PublicationReceipt);
+}
+
 export async function listReceiptsForDeliverable(deliverableId: string): Promise<PublicationReceipt[]> {
   const { data, error } = await supabase
     .from("publication_receipts")
@@ -180,10 +191,43 @@ export async function getCurrentReceiptForPlacement(
   placementId: string,
 ): Promise<PublicationReceipt | null> {
   const all = await listReceiptsForPlacement(placementId);
-  if (all.length === 0) return null;
+  return currentReceiptFromChain(all);
+}
+
+function currentReceiptFromChain(receipts: PublicationReceipt[]): PublicationReceipt | null {
+  if (receipts.length === 0) return null;
   const reconciledIds = new Set(
-    all.map((r) => r.reconciles_receipt_id).filter((id): id is string => id !== null),
+    receipts.map((r) => r.reconciles_receipt_id).filter((id): id is string => id !== null),
   );
-  const tip = all.find((r) => !reconciledIds.has(r.id));
-  return tip ?? all[0];
+  const tip = receipts.find((r) => !reconciledIds.has(r.id));
+  return tip ?? receipts[0];
+}
+
+/**
+ * The current receipt per placement for every placement belonging to one
+ * deliverable, in a single query. Used by the preflight report (Workstream
+ * 7), which needs this for every placement on every active deliverable in
+ * a period and cannot afford an N+1 fetch per placement.
+ */
+export async function listCurrentReceiptsByPlacementForDeliverable(
+  deliverableId: string,
+): Promise<Record<string, PublicationReceipt | null>> {
+  const { data, error } = await supabase
+    .from("publication_receipts")
+    .select("*")
+    .eq("deliverable_id", deliverableId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`could not load receipts: ${error.message}`);
+  const rows = (data ?? []) as PublicationReceipt[];
+  const byPlacement = new Map<string, PublicationReceipt[]>();
+  for (const r of rows) {
+    const list = byPlacement.get(r.placement_id) ?? [];
+    list.push(r);
+    byPlacement.set(r.placement_id, list);
+  }
+  const result: Record<string, PublicationReceipt | null> = {};
+  for (const [placementId, list] of byPlacement) {
+    result[placementId] = currentReceiptFromChain(list);
+  }
+  return result;
 }
