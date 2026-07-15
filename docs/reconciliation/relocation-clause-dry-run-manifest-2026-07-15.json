@@ -355,7 +355,8 @@
         "verified_gbp_evidence": "not_applicable",
         "human_confirmation_required": "confirming delivery_email_present and thank_you_page_present would require submitting the live client-facing form, which is not authorized in a dry run or a reconciliation pass; matches the Founder Vesting precedent exactly (docs/PUBLICATION_READINESS_OPERATING_MODEL.md, 'Deliberately not registered')"
       },
-      "classification": "verified_and_bindable_partial — the webpage route itself is bindable; the delivery-email and thank-you-page requirements are inaccessible_with_current_permissions, not missing"
+      "classification": "verified_and_bindable_partial",
+      "classification_detail": "the webpage route itself is bindable; the delivery-email and thank-you-page requirements are inaccessible_with_current_permissions, not missing"
     },
     {
       "deliverable_id": "e3fa2f5e-d1fb-4011-92a8-089817b2c9c1",
@@ -386,7 +387,7 @@
     "summary": "Real historical evidence/placement reconciliation for this period has not started. Everything applied to production so far is metadata (what a deliverable IS and where it SHOULD live), not evidence (proof it actually IS there).",
     "items": [
       "Register publication_artifacts rows for the 2 deliverables classified fully verified_and_bindable (the EN counsel-note webpage, the EN checklist PDF), plus the 1 partially bindable item (the EN checklist landing page's webpage route -- the route itself is verified_and_bindable, but that same deliverable's delivery_email_present and thank_you_page_present requirements remain inaccessible_with_current_permissions, not bindable) -- an operator must personally load each URL/download each file and record it via the manual insert path in docs/PUBLICATION_READINESS_OPERATING_MODEL.md, then run POST /api/admin/content-deliverables/[deliverableId]/reconcile-artifacts to validate it.",
-      "Deploy drg-law-website to close the 4 confirmed 404 deploy-gap items (demolition-clause-ontario EN article, relocation-clause-checklist PT PDF, relocation-clause-checklist PT landing page) -- these are pre-existing production gaps independent of Publication Readiness.",
+      "Deploy drg-law-website to close the 3 confirmed 404 deploy-gap items (demolition-clause-ontario EN article, relocation-clause-checklist PT PDF, relocation-clause-checklist PT landing page) -- these are pre-existing production gaps independent of Publication Readiness. (The PT counsel-note is a separate 'never authored' gap, not a deploy timing issue; see the next item.)",
       "Author the PT relocation-clause and demolition-clause article pages (no PT source exists anywhere for either), or make an operator decision to drop the PT locale requirement for those two specific deliverables.",
       "Obtain LinkedIn and Google Business Profile account access (or operator-supplied screenshots/permalinks) to check the 5 deliverables currently classified inaccessible_with_current_permissions.",
       "Await the firm's lawyer's review of the PT 'Clause in the Margin' deliverable (b767ef14), currently in_review -- no reconciliation action can substitute for that approval.",

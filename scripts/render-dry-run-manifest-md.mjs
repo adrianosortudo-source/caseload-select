@@ -49,7 +49,7 @@ lines.push("");
 lines.push("## Evidence classification, per active deliverable");
 lines.push("");
 lines.push(
-  "Classification vocabulary: `verified_and_bindable` (confirmed real, an operator can register it as evidence in a separate reviewed step) · `missing` (confirmed absent) · `inaccessible_with_current_permissions` (this dry run has no access to check, e.g. no LinkedIn/GBP account, or checking would require an unauthorized live action like submitting a client form) · `ambiguous` · `pending_legal_approval` · `not_applicable`.",
+  "Classification vocabulary: `verified_and_bindable` (confirmed real, an operator can register it as evidence in a separate reviewed step) · `verified_and_bindable_partial` (part of the deliverable's evidence is confirmed live and bindable, the rest is not; see `classification_detail` on the deliverable for which part) · `missing` (confirmed absent) · `inaccessible_with_current_permissions` (this dry run has no access to check, e.g. no LinkedIn/GBP account, or checking would require an unauthorized live action like submitting a client form) · `ambiguous` · `pending_legal_approval` · `not_applicable`.",
 );
 lines.push("");
 
@@ -63,7 +63,7 @@ for (const d of m.deliverables) {
   if (d.evaluator_output.missing_requirements.length) {
     lines.push(`- Requirements not yet met: ${d.evaluator_output.missing_requirements.join(", ")}`);
   }
-  lines.push(`- Classification: **${d.classification}**`);
+  lines.push(`- Classification: **${d.classification}**${d.classification_detail ? ` (${d.classification_detail})` : ""}`);
   lines.push(`- Website route: ${d.evidence.verified_website_route}`);
   if (d.evidence.verified_pdf !== "not_applicable") lines.push(`- PDF: ${d.evidence.verified_pdf}`);
   if (d.evidence.verified_image_asset !== "not_applicable") lines.push(`- Image: ${d.evidence.verified_image_asset}`);

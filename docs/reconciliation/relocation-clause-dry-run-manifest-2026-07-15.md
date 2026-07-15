@@ -33,7 +33,7 @@ Predicted by this file's original dry run, then reconfirmed by direct query agai
 
 ## Evidence classification, per active deliverable
 
-Classification vocabulary: `verified_and_bindable` (confirmed real, an operator can register it as evidence in a separate reviewed step) · `missing` (confirmed absent) · `inaccessible_with_current_permissions` (this dry run has no access to check, e.g. no LinkedIn/GBP account, or checking would require an unauthorized live action like submitting a client form) · `ambiguous` · `pending_legal_approval` · `not_applicable`.
+Classification vocabulary: `verified_and_bindable` (confirmed real, an operator can register it as evidence in a separate reviewed step) · `verified_and_bindable_partial` (part of the deliverable's evidence is confirmed live and bindable, the rest is not; see `classification_detail` on the deliverable for which part) · `missing` (confirmed absent) · `inaccessible_with_current_permissions` (this dry run has no access to check, e.g. no LinkedIn/GBP account, or checking would require an unauthorized live action like submitting a client form) · `ambiguous` · `pending_legal_approval` · `not_applicable`.
 
 ### [COUNSEL NOTE] What an Ontario commercial lease relocation clause actually lets your landlord do.
 
@@ -188,7 +188,7 @@ Classification vocabulary: `verified_and_bindable` (confirmed real, an operator 
 - Current version: 2 · Approval: approved (current version == approved version)
 - Display state after migration: **historical_unreconciled**
 - Requirements not yet met: webpage_artifact, localized_route, form_present, delivery_email_present, thank_you_page_present, journey_validated
-- Classification: **verified_and_bindable_partial — the webpage route itself is bindable; the delivery-email and thank-you-page requirements are inaccessible_with_current_permissions, not missing**
+- Classification: **verified_and_bindable_partial** (the webpage route itself is bindable; the delivery-email and thank-you-page requirements are inaccessible_with_current_permissions, not missing)
 - Website route: verified_and_bindable — HTTP GET returned 200 on 2026-07-15; the email-gate form is visually confirmed present on the live page
 - Human confirmation required: confirming delivery_email_present and thank_you_page_present would require submitting the live client-facing form, which is not authorized in a dry run or a reconciliation pass; matches the Founder Vesting precedent exactly (docs/PUBLICATION_READINESS_OPERATING_MODEL.md, 'Deliberately not registered')
 
@@ -208,7 +208,7 @@ Classification vocabulary: `verified_and_bindable` (confirmed real, an operator 
 Real historical evidence/placement reconciliation for this period has not started. Everything applied to production so far is metadata (what a deliverable IS and where it SHOULD live), not evidence (proof it actually IS there).
 
 1. Register publication_artifacts rows for the 2 deliverables classified fully verified_and_bindable (the EN counsel-note webpage, the EN checklist PDF), plus the 1 partially bindable item (the EN checklist landing page's webpage route -- the route itself is verified_and_bindable, but that same deliverable's delivery_email_present and thank_you_page_present requirements remain inaccessible_with_current_permissions, not bindable) -- an operator must personally load each URL/download each file and record it via the manual insert path in docs/PUBLICATION_READINESS_OPERATING_MODEL.md, then run POST /api/admin/content-deliverables/[deliverableId]/reconcile-artifacts to validate it.
-2. Deploy drg-law-website to close the 4 confirmed 404 deploy-gap items (demolition-clause-ontario EN article, relocation-clause-checklist PT PDF, relocation-clause-checklist PT landing page) -- these are pre-existing production gaps independent of Publication Readiness.
+2. Deploy drg-law-website to close the 3 confirmed 404 deploy-gap items (demolition-clause-ontario EN article, relocation-clause-checklist PT PDF, relocation-clause-checklist PT landing page) -- these are pre-existing production gaps independent of Publication Readiness. (The PT counsel-note is a separate 'never authored' gap, not a deploy timing issue; see the next item.)
 3. Author the PT relocation-clause and demolition-clause article pages (no PT source exists anywhere for either), or make an operator decision to drop the PT locale requirement for those two specific deliverables.
 4. Obtain LinkedIn and Google Business Profile account access (or operator-supplied screenshots/permalinks) to check the 5 deliverables currently classified inaccessible_with_current_permissions.
 5. Await the firm's lawyer's review of the PT 'Clause in the Margin' deliverable (b767ef14), currently in_review -- no reconciliation action can substitute for that approval.
