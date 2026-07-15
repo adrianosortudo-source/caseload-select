@@ -515,3 +515,72 @@ export interface ApprovalRecord {
   attachments: DeliverableAttachment[];
   created_at: string;
 }
+
+// ─── Publishing evidence system (Content Studio release integrity) ─────────
+// See supabase/migrations/20260715130100_content_placements.sql and
+// 20260715130200_publication_receipts.sql. content_placements models
+// destination independently from editorial format (deliverable_role):
+// a single deliverable can have several placements. publication_receipts
+// is the append-only evidence a placement was actually published.
+
+export type PlacementDestination =
+  | "firm_website"
+  | "linkedin_article"
+  | "linkedin_post"
+  | "linkedin_company_page"
+  | "google_business_profile"
+  | "email_delivery";
+
+export type PlacementState = "planned" | "ready" | "published" | "retired";
+
+export interface ContentPlacement {
+  id: string;
+  firm_id: string;
+  period_id: string | null;
+  deliverable_id: string;
+  destination: PlacementDestination;
+  locale: string | null;
+  intended_path: string | null;
+  required_artifact_type: PublicationArtifactType | null;
+  scheduled_publish_date: string | null;
+  state: PlacementState;
+  created_by_role: DeliverableActorRole;
+  created_by_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ReceiptVerificationState = "unverified" | "verified" | "failed" | "reconciling";
+export type ReceiptVerificationMethod =
+  | "url_fetch"
+  | "manual_screenshot"
+  | "external_api"
+  | "operator_attestation";
+
+export interface PublicationReceipt {
+  id: string;
+  firm_id: string;
+  period_id: string | null;
+  deliverable_id: string;
+  placement_id: string;
+  destination: PlacementDestination;
+  locale: string | null;
+  approved_version_id: string;
+  artifact_id: string | null;
+  artifact_sha256: string | null;
+  public_url: string | null;
+  external_post_id: string | null;
+  published_at: string;
+  actor_role: "operator" | "lawyer" | "system";
+  actor_id: string | null;
+  actor_name: string | null;
+  verification_state: ReceiptVerificationState;
+  verified_at: string | null;
+  verification_method: ReceiptVerificationMethod | null;
+  evidence_storage_bucket: string | null;
+  evidence_storage_path: string | null;
+  evidence_signed_url?: string;
+  failure_reason: string | null;
+  reconciles_receipt_id: string | null;
+  created_at: string;
+}
