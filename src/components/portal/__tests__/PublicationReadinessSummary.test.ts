@@ -102,6 +102,22 @@ describe("PublicationReadinessSummary: periodId reaches the rendered manifest li
     expect(html).not.toContain("Download manifest");
   });
 
+  it("does not expose the readiness panel or internal blocked labels to a lawyer", () => {
+    const html = renderToStaticMarkup(
+      createElement(PublicationReadinessSummary, {
+        firmId: FIRM_ID,
+        isOperator: false,
+        readiness: buildReadiness(),
+        titles: { d1: "Founder vesting in Ontario corporations" },
+        periodId: REAL_FOUNDER_VESTING_PERIOD_ID,
+      }),
+    );
+
+    expect(html).toBe("");
+    expect(html).not.toContain("Blocked");
+    expect(html).not.toContain("metadata");
+  });
+
   it("renders the blocked deliverable's real title and the fixed no-generation notice, never a generate/publish/approve control", () => {
     const html = renderToStaticMarkup(
       createElement(PublicationReadinessSummary, {

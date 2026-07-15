@@ -78,6 +78,11 @@ export default function PublicationReadinessSummary({
   /** Scopes "Download manifest" to one week. Omit for the whole-plan summary (the manifest endpoint is per period). */
   periodId?: string;
 }) {
+  // Publication readiness is an operator control surface. Lawyers need the
+  // approval workflow, not internal artifact/metadata diagnostics or release
+  // gate labels that are not actionable in their view.
+  if (!isOperator) return null;
+
   const { summary, items } = readiness;
   if (summary.active === 0 && summary.excluded === 0) return null;
 
