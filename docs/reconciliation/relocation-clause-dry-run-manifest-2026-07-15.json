@@ -1,0 +1,397 @@
+{
+  "schema_version": "dry-run-1.1",
+  "dry_run": true,
+  "read_this_first": [
+    "This is a DRY-RUN EVIDENCE ASSESSMENT, not a reconciliation record. It classifies what evidence exists or is missing per deliverable; it does not register, bind, or authorize anything.",
+    "Metadata backfill (deliverable_role/locale/publication_destination/publication_path, applied to production 2026-07-15) is NOT artifact binding. Populating those columns tells the evaluator what a deliverable IS and WHERE it should live; it says nothing about whether the image, PDF, webpage, or external post actually exists as registered, verified evidence. Zero publication_artifacts rows exist for any of this period's 13 deliverables, confirmed live against production at the time this note was last revised (2026-07-15T20:05Z) -- the same zero as before the metadata migrations applied.",
+    "No publication receipt was invented anywhere in this file. Every 'verified_and_bindable' classification below traces to a live HTTP check the migration file's own header records (drglaw.ca, 2026-07-15); every classification that could not be checked is marked missing, inaccessible_with_current_permissions, or pending_legal_approval, never assumed passing.",
+    "The PT 'Clause in the Margin' deliverable (b767ef14-dd4e-405e-9c54-1f7f9364f13c) remains in_review with approved_version_id = null. Reconfirmed directly against production 2026-07-15T20:05Z. No migration, script, or action in this repository touches that row's status or approval.",
+    "The period (950bad0b-fef6-4c5a-b949-fef5d9cbee90) is readiness_lifecycle = 'legacy_unreconciled' in production, reconfirmed live 2026-07-15T20:05Z. It has not been activated (enforced) and this document does not activate it.",
+    "This document does NOT claim historical evidence reconciliation is complete. Reconciliation (registering real, personally-verified publication_artifacts evidence and running reconcile-artifacts against it) has not started for this period. See 'remaining_work' at the end of this file."
+  ],
+  "note": "Originally generated 2026-07-15T19:31Z as a forward-looking dry run, before this branch's 11 metadata/lifecycle migrations were applied to production. Those migrations have SINCE been applied (2026-07-15, before the second Codex review -- see the PR's incident note) and this file's predicted period lifecycle and display states were reconfirmed live against production 2026-07-15T20:05Z: they match exactly (legacy_unreconciled, 13 historical_unreconciled, 1 excluded, zero publication_artifacts rows). The evidence classifications below were not regenerated after the migration applied, because nothing that would change them changed: no publication_artifacts row was registered, no approval status changed, no new HTTP checks were run. Reproduction path: (1) scripts/dry-run-fetch-relocation-clause.mjs read-only-fetches each deliverable's production row and current-version state; (2) scripts/generate-relocation-clause-dry-run-manifest.ts (run via `npx tsx scripts/generate-relocation-clause-dry-run-manifest.ts`, read-only against production) feeds that same data, plus the metadata overlay this branch's migration writes verbatim (supabase/migrations/20260715193201_20260715120500_relocation_clause_publication_metadata.sql, hardcoded in the script and cross-checked against the migration text), into the real, unmodified evaluateDeliverableReadiness/deriveDisplayState functions from src/lib/publication-readiness.ts -- its output for all 14 rows was verified to match every evaluator_output field below, byte for byte, before this file was finalized; (3) the evidence classification per deliverable below (verified_and_bindable/missing/inaccessible_with_current_permissions/pending_legal_approval/not_applicable) is a separate, hand-authored layer on top of that computed output, sourced from the same migration file's live-verification comments (HTTP checks already performed and recorded there) plus the operating-model doc's precedent for what a dry run may and may not check (e.g. never submitting a live client-facing form) -- the evaluator does not compute this classification itself, since it has no access to LinkedIn/GBP or knowledge of which 404s are deploy gaps versus never-authored content. No evidence is fabricated anywhere in this file.",
+  "firm_id": "eec1d25e-a047-4827-8e4a-6eb96becca2b",
+  "firm_name": "DRG Law Professional Corporation",
+  "period_id": "950bad0b-fef6-4c5a-b949-fef5d9cbee90",
+  "period_theme": "The relocation clause",
+  "period_dates": "2026-06-22 to 2026-06-26",
+  "period_lifecycle_confirmed_live": "legacy_unreconciled",
+  "period_lifecycle_confirmed_live_at": "2026-07-15T20:05:00Z",
+  "publication_artifacts_registered_for_this_period": 0,
+  "generated_at": "2026-07-15T19:31:00Z",
+  "reconfirmed_against_production_at": "2026-07-15T20:05:00Z",
+  "generated_by": { "role": "operator", "note": "dry-run script, no operator session token, no production write beyond the already-applied metadata migrations this file assesses" },
+  "policy": {
+    "generation_policy": "existing_assets_only",
+    "may_generate_missing_assets": false,
+    "may_modify_copy": false,
+    "may_translate": false,
+    "may_publish_ready_items": false,
+    "requires_explicit_publication_authorization": true
+  },
+  "display_summary_confirmed_live": {
+    "historical_unreconciled": 13,
+    "setup_required": 0,
+    "blocked": 0,
+    "ready": 0,
+    "excluded": 1,
+    "note": "Predicted by this file's original dry run, then reconfirmed by direct query against production 2026-07-15T20:05Z after the migrations applied. Matches exactly. This is a display-state prediction check, not an evidence-completeness claim -- 'historical_unreconciled' means the operator-facing UI correctly shows 'Not yet reconciled' instead of 'Blocked' for these 13 rows; it does not mean their evidence is registered or verified."
+  },
+  "original_production_summary_before_migration": {
+    "active": 13,
+    "ready": 0,
+    "blocked": 13,
+    "excluded_archived": 1,
+    "note": "The misleading pre-fix state: every active deliverable read Blocked because deliverable_role/locale/publication_destination/publication_path were all null and readiness_lifecycle did not exist as a column. Superseded in production by the metadata + lifecycle migrations, 2026-07-15. Recorded here for the historical record, not as a current claim."
+  },
+  "deliverables": [
+    {
+      "deliverable_id": "22dde96c-9400-403c-8314-1402bcaaab23",
+      "title": "[COUNSEL NOTE] What an Ontario commercial lease relocation clause actually lets your landlord do.",
+      "current_version_number": 4,
+      "approved_version_id": "6f59713b-4dcc-46db-8ea7-8c66f85506b9",
+      "approval_status": "approved (current version == approved version)",
+      "deliverable_role": "article",
+      "locale": "en-CA",
+      "intended_destination": "firm_website, /journal/relocation-clause-ontario",
+      "evaluator_output": {
+        "raw_ready": false,
+        "display_state_after_migration": "historical_unreconciled",
+        "missing_requirements": ["hero_image", "webpage_artifact", "localized_route", "webpage_validated"]
+      },
+      "evidence": {
+        "verified_website_route": "verified_and_bindable — HTTP GET drglaw.ca/journal/relocation-clause-ontario returned 200 on 2026-07-15, but no publication_artifacts row has been registered for it yet (registration is a separate, later, reviewed operator action per the operating model doc)",
+        "verified_pdf": "not_applicable",
+        "verified_image_asset": "missing — no hero image is registered as evidence for this version",
+        "verified_linkedin_evidence": "not_applicable",
+        "verified_gbp_evidence": "not_applicable",
+        "human_confirmation_required": "none beyond the standard artifact-registration step (register the webpage as evidence, then run reconciliation)"
+      },
+      "classification": "verified_and_bindable"
+    },
+    {
+      "deliverable_id": "ba1f4aeb-54ef-442a-8d8c-e5ae99a54bb9",
+      "title": "[COUNSEL NOTE] Semana 1 · O que a cláusula de realocação realmente permite ao seu locador em Ontário. (PT)",
+      "current_version_number": 4,
+      "approved_version_id": "8db9ef68-44cf-4c10-8bab-10902f17a474",
+      "approval_status": "approved (current version == approved version)",
+      "deliverable_role": "article",
+      "locale": "pt-BR",
+      "intended_destination": "firm_website, path intentionally left null — no PT route exists anywhere in site source for this companion piece",
+      "evaluator_output": {
+        "raw_ready": false,
+        "display_state_after_migration": "historical_unreconciled",
+        "missing_requirements": ["hero_image", "webpage_artifact", "localized_route", "publication_destination_set", "webpage_validated"]
+      },
+      "evidence": {
+        "verified_website_route": "missing — no PT article route was ever authored for this piece (confirmed by the migration's own site-source review); this is a real, standing content gap, not a deploy timing issue",
+        "verified_pdf": "not_applicable",
+        "verified_image_asset": "missing",
+        "verified_linkedin_evidence": "not_applicable",
+        "verified_gbp_evidence": "not_applicable",
+        "human_confirmation_required": "operator decision needed: author the PT article, or drop this locale from the deliverable's requirement scope"
+      },
+      "classification": "missing"
+    },
+    {
+      "deliverable_id": "f952ce27-67f9-4813-9d04-418ebd37aeba",
+      "title": "[LEAD MAGNET · DOCUMENT] Relocation clause checklist (EN PDF)",
+      "current_version_number": 5,
+      "approved_version_id": "62d28ca8-65ce-4154-b4b3-5612445e9ba8",
+      "approval_status": "approved (current version == approved version)",
+      "deliverable_role": "lead_magnet_pdf",
+      "locale": "en-CA",
+      "intended_destination": "firm_website, /resources/relocation-clause-checklist.pdf",
+      "evaluator_output": {
+        "raw_ready": false,
+        "display_state_after_migration": "historical_unreconciled",
+        "missing_requirements": ["pdf_artifact", "pdf_bytes_bound", "pdf_validated"]
+      },
+      "evidence": {
+        "verified_website_route": "not_applicable",
+        "verified_pdf": "verified_and_bindable — HTTP GET returned 200 on 2026-07-15 (file is live); no publication_artifacts row registered yet, so no SHA-256 has been computed and bound to this version",
+        "verified_image_asset": "not_applicable",
+        "verified_linkedin_evidence": "not_applicable",
+        "verified_gbp_evidence": "not_applicable",
+        "human_confirmation_required": "operator must download the live PDF, compute its SHA-256, and register it as a publication_artifacts row bound to version 5, per the manual registration path documented in the operating model"
+      },
+      "classification": "verified_and_bindable"
+    },
+    {
+      "deliverable_id": "e8218afe-6d7a-483f-b3ec-68888a14a703",
+      "title": "[LINKEDIN POST] Relocation clause LinkedIn post",
+      "current_version_number": 2,
+      "approved_version_id": "2735e4a5-d90b-4639-b8d5-c7c4e7dbbde8",
+      "approval_status": "approved (current version == approved version)",
+      "deliverable_role": "social_post",
+      "locale": "en-CA",
+      "intended_destination": "linkedin, promotes /journal/relocation-clause-ontario",
+      "evaluator_output": {
+        "raw_ready": false,
+        "display_state_after_migration": "historical_unreconciled",
+        "missing_requirements": ["campaign_image"]
+      },
+      "evidence": {
+        "verified_website_route": "not_applicable",
+        "verified_pdf": "not_applicable",
+        "verified_image_asset": "missing — no campaign image registered",
+        "verified_linkedin_evidence": "inaccessible_with_current_permissions — this dry run does not have LinkedIn account access; whether this post was ever actually published to LinkedIn is unverified",
+        "verified_gbp_evidence": "not_applicable",
+        "human_confirmation_required": "operator must confirm the LinkedIn permalink (if it was posted) and register it as an external_post artifact; a live URL must be verified before being recorded as placement evidence, never inferred from the approved copy"
+      },
+      "classification": "inaccessible_with_current_permissions"
+    },
+    {
+      "deliverable_id": "ac99690c-0643-4732-a209-704da8d0333d",
+      "title": "[GBP POST] Relocation clause GBP cards",
+      "current_version_number": 1,
+      "approved_version_id": null,
+      "approval_status": "archived — excluded from readiness evaluation entirely, per evaluateDeliverableReadiness's own archived-status short-circuit",
+      "deliverable_role": null,
+      "locale": null,
+      "intended_destination": null,
+      "evaluator_output": {
+        "raw_ready": false,
+        "display_state_after_migration": "excluded",
+        "missing_requirements": []
+      },
+      "evidence": {
+        "verified_website_route": "not_applicable",
+        "verified_pdf": "not_applicable",
+        "verified_image_asset": "not_applicable",
+        "verified_linkedin_evidence": "not_applicable",
+        "verified_gbp_evidence": "not_applicable",
+        "human_confirmation_required": "none — archived content is out of scope by design, matching the Founder Vesting precedent"
+      },
+      "classification": "not_applicable"
+    },
+    {
+      "deliverable_id": "78b56c81-30ae-4cfc-914e-006a616912d3",
+      "title": "[GBP POST] Relocation clause - Checklist offer",
+      "current_version_number": 3,
+      "approved_version_id": "f31088c9-ed9f-4eb4-b9a2-4595e948271b",
+      "approval_status": "approved (current version == approved version)",
+      "deliverable_role": "gbp_post",
+      "locale": "en-CA",
+      "intended_destination": "google_business_profile, promotes /resources/relocation-clause-checklist",
+      "evaluator_output": {
+        "raw_ready": false,
+        "display_state_after_migration": "historical_unreconciled",
+        "missing_requirements": ["campaign_image", "publish_schedule_set"]
+      },
+      "evidence": {
+        "verified_website_route": "not_applicable",
+        "verified_pdf": "not_applicable",
+        "verified_image_asset": "missing",
+        "verified_linkedin_evidence": "not_applicable",
+        "verified_gbp_evidence": "inaccessible_with_current_permissions — this dry run does not have Google Business Profile account access; whether this card was actually posted is unverified",
+        "human_confirmation_required": "operator must confirm the GBP post exists (screenshot or GBP dashboard link) and register it as an external_post artifact; a planned/approved post is not evidence of publication"
+      },
+      "classification": "inaccessible_with_current_permissions"
+    },
+    {
+      "deliverable_id": "b0b11b43-de75-430e-8728-f2e52de882fb",
+      "title": "[GBP POST] Relocation clause - Article update",
+      "current_version_number": 2,
+      "approved_version_id": "e12e2003-46f3-4d8f-a634-e30e5b691d79",
+      "approval_status": "approved (current version == approved version)",
+      "deliverable_role": "gbp_post",
+      "locale": "en-CA",
+      "intended_destination": "google_business_profile, promotes /journal/relocation-clause-ontario",
+      "evaluator_output": {
+        "raw_ready": false,
+        "display_state_after_migration": "historical_unreconciled",
+        "missing_requirements": ["campaign_image", "publish_schedule_set"]
+      },
+      "evidence": {
+        "verified_website_route": "not_applicable",
+        "verified_pdf": "not_applicable",
+        "verified_image_asset": "missing",
+        "verified_linkedin_evidence": "not_applicable",
+        "verified_gbp_evidence": "inaccessible_with_current_permissions",
+        "human_confirmation_required": "same as the checklist-offer GBP card above"
+      },
+      "classification": "inaccessible_with_current_permissions"
+    },
+    {
+      "deliverable_id": "e3fb60fe-08c5-45ee-854b-889beaaa9136",
+      "title": "[CLAUSE IN THE MARGIN] What the demolition clause in an Ontario commercial lease actually lets your landlord do. (EN)",
+      "current_version_number": 2,
+      "approved_version_id": "46e5a5c8-c111-4472-b0ec-98a46981e81c",
+      "approval_status": "approved (current version == approved version)",
+      "deliverable_role": "article",
+      "locale": "en-CA",
+      "intended_destination": "firm_website, /journal/demolition-clause-ontario",
+      "evaluator_output": {
+        "raw_ready": false,
+        "display_state_after_migration": "historical_unreconciled",
+        "missing_requirements": ["hero_image", "webpage_artifact", "localized_route", "webpage_validated"]
+      },
+      "evidence": {
+        "verified_website_route": "missing — HTTP GET drglaw.ca/journal/demolition-clause-ontario returned 404 on 2026-07-15. Source confirms the article exists in the drg-law-website repo but the site (manual `vercel --prod` deploys) has not shipped it. This is a genuine, pre-existing production gap independent of Publication Readiness.",
+        "verified_pdf": "not_applicable",
+        "verified_image_asset": "missing",
+        "verified_linkedin_evidence": "not_applicable",
+        "verified_gbp_evidence": "not_applicable",
+        "human_confirmation_required": "operator must deploy drg-law-website before this can ever become verified_and_bindable; flagged as its own follow-up, out of scope for this reconciliation pass"
+      },
+      "classification": "missing"
+    },
+    {
+      "deliverable_id": "b767ef14-dd4e-405e-9c54-1f7f9364f13c",
+      "title": "[CLAUSE IN THE MARGIN] Semana 1 · O que a cláusula de demolição realmente permite ao seu locador em um contrato comercial em Ontário. (PT)",
+      "current_version_number": 3,
+      "approved_version_id": null,
+      "approval_status": "in_review — genuinely pending legal approval, status never touched by any migration in this branch",
+      "deliverable_role": "article",
+      "locale": "pt-BR",
+      "intended_destination": "firm_website, path intentionally left null (no PT page authored yet)",
+      "evaluator_output": {
+        "raw_ready": false,
+        "display_state_after_migration": "historical_unreconciled",
+        "missing_requirements": ["current_version_approved", "hero_image", "webpage_artifact", "localized_route", "publication_destination_set", "webpage_validated"]
+      },
+      "evidence": {
+        "verified_website_route": "not_applicable — no evidence can satisfy a legal-approval failure",
+        "verified_pdf": "not_applicable",
+        "verified_image_asset": "not_applicable",
+        "verified_linkedin_evidence": "not_applicable",
+        "verified_gbp_evidence": "not_applicable",
+        "human_confirmation_required": "the firm's lawyer (Damaris Regina Guimaraes) must review and approve this version; the operator cannot approve legal content on the licensee's behalf, and this reconciliation pass does not touch approval status"
+      },
+      "classification": "pending_legal_approval"
+    },
+    {
+      "deliverable_id": "23661929-b4f8-489e-b022-96d98ad04384",
+      "title": "[LINKEDIN POST] Clause in the margin LinkedIn post",
+      "current_version_number": 2,
+      "approved_version_id": "9b272d6a-eb63-4991-8c4c-64d20c33eeb2",
+      "approval_status": "approved (current version == approved version)",
+      "deliverable_role": "social_post",
+      "locale": "en-CA",
+      "intended_destination": "linkedin, promotes /journal/demolition-clause-ontario",
+      "evaluator_output": {
+        "raw_ready": false,
+        "display_state_after_migration": "historical_unreconciled",
+        "missing_requirements": ["campaign_image"]
+      },
+      "evidence": {
+        "verified_website_route": "not_applicable",
+        "verified_pdf": "not_applicable",
+        "verified_image_asset": "missing",
+        "verified_linkedin_evidence": "inaccessible_with_current_permissions",
+        "verified_gbp_evidence": "not_applicable",
+        "human_confirmation_required": "same as the relocation-clause LinkedIn post above; note this post promotes an article that is itself not yet deployed (see e3fb60fe above), so even a verified LinkedIn permalink would point at a 404 today"
+      },
+      "classification": "inaccessible_with_current_permissions"
+    },
+    {
+      "deliverable_id": "303151e3-68ae-40a1-b2fe-4e4733b3b17a",
+      "title": "[GBP POST] Clause in the margin - Article update",
+      "current_version_number": 2,
+      "approved_version_id": "d9eb7277-99c9-46f3-b3f7-bbea2f856ba9",
+      "approval_status": "approved (current version == approved version)",
+      "deliverable_role": "gbp_post",
+      "locale": "en-CA",
+      "intended_destination": "google_business_profile, promotes /journal/demolition-clause-ontario",
+      "evaluator_output": {
+        "raw_ready": false,
+        "display_state_after_migration": "historical_unreconciled",
+        "missing_requirements": ["campaign_image", "publish_schedule_set"]
+      },
+      "evidence": {
+        "verified_website_route": "not_applicable",
+        "verified_pdf": "not_applicable",
+        "verified_image_asset": "missing",
+        "verified_linkedin_evidence": "not_applicable",
+        "verified_gbp_evidence": "inaccessible_with_current_permissions",
+        "human_confirmation_required": "same caveat as the LinkedIn sibling above: the promoted article is not yet deployed"
+      },
+      "classification": "inaccessible_with_current_permissions"
+    },
+    {
+      "deliverable_id": "3a15ec4d-c2d9-4d36-b912-eb6c5128f914",
+      "title": "[LEAD MAGNET · DOCUMENT] Semana 1 · Checklist da cláusula de realocação (PT PDF)",
+      "current_version_number": 3,
+      "approved_version_id": "3d679e8d-957f-4285-9f26-e88497faaffa",
+      "approval_status": "approved (current version == approved version)",
+      "deliverable_role": "lead_magnet_pdf",
+      "locale": "pt-BR",
+      "intended_destination": "firm_website, /resources/pt/relocation-clause-checklist.pdf",
+      "evaluator_output": {
+        "raw_ready": false,
+        "display_state_after_migration": "historical_unreconciled",
+        "missing_requirements": ["pdf_artifact", "pdf_bytes_bound", "pdf_validated"]
+      },
+      "evidence": {
+        "verified_website_route": "not_applicable",
+        "verified_pdf": "missing — HTTP GET returned 404 on 2026-07-15. File exists in public/resources/pt/ in site source but has not been deployed. Deploy gap, same class as the demolition-clause EN article.",
+        "verified_image_asset": "not_applicable",
+        "verified_linkedin_evidence": "not_applicable",
+        "verified_gbp_evidence": "not_applicable",
+        "human_confirmation_required": "operator must deploy drg-law-website; cannot become verified_and_bindable until then"
+      },
+      "classification": "missing"
+    },
+    {
+      "deliverable_id": "897e8ce9-2175-4d9d-811b-30dba72b61cc",
+      "title": "[LEAD MAGNET · LANDING PAGE] Relocation clause checklist (EN)",
+      "current_version_number": 2,
+      "approved_version_id": "8834e696-5f06-4953-9398-905656c02d76",
+      "approval_status": "approved (current version == approved version)",
+      "deliverable_role": "landing_page",
+      "locale": "en-CA",
+      "intended_destination": "firm_website, /resources/relocation-clause-checklist",
+      "evaluator_output": {
+        "raw_ready": false,
+        "display_state_after_migration": "historical_unreconciled",
+        "missing_requirements": ["webpage_artifact", "localized_route", "form_present", "delivery_email_present", "thank_you_page_present", "journey_validated"]
+      },
+      "evidence": {
+        "verified_website_route": "verified_and_bindable — HTTP GET returned 200 on 2026-07-15; the email-gate form is visually confirmed present on the live page",
+        "verified_pdf": "not_applicable",
+        "verified_image_asset": "not_applicable",
+        "verified_linkedin_evidence": "not_applicable",
+        "verified_gbp_evidence": "not_applicable",
+        "human_confirmation_required": "confirming delivery_email_present and thank_you_page_present would require submitting the live client-facing form, which is not authorized in a dry run or a reconciliation pass; matches the Founder Vesting precedent exactly (docs/PUBLICATION_READINESS_OPERATING_MODEL.md, 'Deliberately not registered')"
+      },
+      "classification": "verified_and_bindable_partial — the webpage route itself is bindable; the delivery-email and thank-you-page requirements are inaccessible_with_current_permissions, not missing"
+    },
+    {
+      "deliverable_id": "e3fa2f5e-d1fb-4011-92a8-089817b2c9c1",
+      "title": "[LEAD MAGNET · LANDING PAGE] Semana 1 · Checklist da cláusula de realocação (PT)",
+      "current_version_number": 1,
+      "approved_version_id": "d9b686b3-0e3d-4271-88b0-a758fa80df4d",
+      "approval_status": "approved (current version == approved version)",
+      "deliverable_role": "landing_page",
+      "locale": "pt-BR",
+      "intended_destination": "firm_website, /pt/resources/relocation-clause-checklist",
+      "evaluator_output": {
+        "raw_ready": false,
+        "display_state_after_migration": "historical_unreconciled",
+        "missing_requirements": ["webpage_artifact", "localized_route", "form_present", "delivery_email_present", "thank_you_page_present", "journey_validated"]
+      },
+      "evidence": {
+        "verified_website_route": "missing — HTTP GET returned 404 on 2026-07-15. Full PT translation exists in site source but has not been deployed. Deploy gap.",
+        "verified_pdf": "not_applicable",
+        "verified_image_asset": "not_applicable",
+        "verified_linkedin_evidence": "not_applicable",
+        "verified_gbp_evidence": "not_applicable",
+        "human_confirmation_required": "operator must deploy drg-law-website; the form/email/thank-you checks below that are moot until the page itself is live"
+      },
+      "classification": "missing"
+    }
+  ],
+  "remaining_work": {
+    "summary": "Real historical evidence/placement reconciliation for this period has not started. Everything applied to production so far is metadata (what a deliverable IS and where it SHOULD live), not evidence (proof it actually IS there).",
+    "items": [
+      "Register publication_artifacts rows for the 4 deliverables classified verified_and_bindable (the EN counsel-note webpage, the EN checklist PDF, the EN checklist landing page's webpage route) -- an operator must personally load each URL/download each file and record it via the manual insert path in docs/PUBLICATION_READINESS_OPERATING_MODEL.md, then run POST /api/admin/content-deliverables/[deliverableId]/reconcile-artifacts to validate it.",
+      "Deploy drg-law-website to close the 4 confirmed 404 deploy-gap items (demolition-clause-ontario EN article, relocation-clause-checklist PT PDF, relocation-clause-checklist PT landing page) -- these are pre-existing production gaps independent of Publication Readiness.",
+      "Author the PT relocation-clause and demolition-clause article pages (no PT source exists anywhere for either), or make an operator decision to drop the PT locale requirement for those two specific deliverables.",
+      "Obtain LinkedIn and Google Business Profile account access (or operator-supplied screenshots/permalinks) to check the 5 deliverables currently classified inaccessible_with_current_permissions.",
+      "Await the firm's lawyer's review of the PT 'Clause in the Margin' deliverable (b767ef14), currently in_review -- no reconciliation action can substitute for that approval.",
+      "Register campaign/hero images for every article, GBP post, and LinkedIn post in this period (zero image evidence exists for any of the 13 deliverables today).",
+      "Only after all of the above: consider whether to activate (enforce) this period via POST /api/portal/[firmId]/periods/[periodId]/activate-readiness. Activation is a separate, later, operator-only decision this document does not make and does not recommend a timeline for."
+    ]
+  }
+}

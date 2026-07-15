@@ -60,6 +60,8 @@ export interface PlanReadinessProp {
   titles: Record<string, string>;
   /** DR-097: deliverable id to its period's explicit readiness lifecycle. */
   lifecycleByDeliverableId: Record<string, PeriodLifecycle>;
+  /** True only on a load failure, never on a legitimately empty plan. */
+  unavailable?: boolean;
 }
 
 export default function ContentPlan({
@@ -193,6 +195,12 @@ export default function ContentPlan({
               items: sliced.items,
               titles: planReadiness.titles,
               lifecycleByDeliverableId: planReadiness.lifecycleByDeliverableId,
+              // A whole-plan load failure means every period's slice is
+              // equally unreliable, not just the aggregate: propagate it so
+              // each PeriodCard's own readiness panel shows the unavailable
+              // state too, instead of a misleadingly clean per-period slice
+              // of data that was never actually loaded.
+              unavailable: planReadiness.unavailable,
             }
           : undefined;
         return (
@@ -278,7 +286,7 @@ function daysLabel(days: number): string {
   return `in ${days} day${days === 1 ? "" : "s"}`;
 }
 
-function ReviewOverview({
+export function ReviewOverview({
   overview,
   isOperator,
   firmId,
@@ -295,6 +303,33 @@ function ReviewOverview({
 }) {
   const [editing, setEditing] = useState(false);
   const { total, approved, pending, changes, draft, weeks, byFormat, nextPublish } = overview;
+  // A genuinely empty plan (total === 0) normally means "nothing to show
+  // here yet" and the whole card returns null. But total comes from a
+  // SEPARATE content_deliverables query than planReadiness -- a brand new
+  // firm, or one whose content is all archived, has total === 0 for a
+  // reason that has nothing to do with whether the readiness read itself
+  // succeeded. If that read failed (planReadiness.unavailable), that is
+  // still a real data error worth surfacing to an operator, not something
+  // the empty-plan early return should silently swallow. Render only the
+  // minimal unavailable banner in that case, not the full progress card
+  // (which would otherwise divide by a zero total and show a meaningless
+  // NaN% for a plan that may not actually be empty).
+  if (total === 0 && planReadiness?.unavailable && isOperator) {
+    return (
+      <div className="bg-white border border-border-brand p-5">
+        <div className="flex items-center gap-2 border border-red-fail/30 bg-red-fail/10 px-3 py-2.5 text-sm text-red-fail">
+          <span className="flex-none text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 border rounded-full bg-red-fail/10 border-red-fail/30">
+            Unavailable
+          </span>
+          <span className="flex-1 min-w-0">
+            Publication readiness could not be loaded. This is a data error,
+            not a clean state, it does not mean nothing needs attention.
+            Reload the page; if this persists, check the server logs.
+          </span>
+        </div>
+      </div>
+    );
+  }
   if (total === 0) return null;
   const pct = Math.round((approved / total) * 100);
   const waiting = pending + changes;
@@ -401,7 +436,7 @@ function ReviewOverview({
         <PublicationReadinessSummary
           firmId={firmId}
           isOperator={isOperator}
-          readiness={{ summary: planReadiness.summary, items: planReadiness.items }}
+          readiness={{ summary: planReadiness.summary, items: planReadiness.items, unavailable: planReadiness.unavailable }}
           titles={planReadiness.titles}
           lifecycleByDeliverableId={planReadiness.lifecycleByDeliverableId}
         />
@@ -563,7 +598,7 @@ function PeriodCard({
           <PublicationReadinessSummary
             firmId={firmId}
             isOperator={isOperator}
-            readiness={{ summary: periodReadiness.summary, items: periodReadiness.items }}
+            readiness={{ summary: periodReadiness.summary, items: periodReadiness.items, unavailable: periodReadiness.unavailable }}
             titles={periodReadiness.titles}
             periodId={period.id}
             lifecycleByDeliverableId={periodReadiness.lifecycleByDeliverableId}
