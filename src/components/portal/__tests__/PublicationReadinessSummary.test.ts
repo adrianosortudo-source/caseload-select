@@ -159,6 +159,69 @@ describe("PublicationReadinessSummary: periodId reaches the rendered manifest li
   });
 });
 
+// Codex second-pass correction: a failed readiness load must render as an
+// explicit, unmissable "unavailable" state for an operator, never as the
+// same empty markup a genuinely clean/empty plan produces, and it must
+// still be invisible to a lawyer (the unavailable check runs strictly
+// after the isOperator gate).
+describe("PublicationReadinessSummary: unavailable state (Codex second-pass correction)", () => {
+  const EMPTY_READINESS = { summary: { active: 0, ready: 0, blocked: 0, excluded: 0 }, items: [] };
+
+  it("renders an explicit unavailable banner for an operator, distinct from the clean-empty state", () => {
+    const html = renderToStaticMarkup(
+      createElement(PublicationReadinessSummary, {
+        firmId: FIRM_ID,
+        isOperator: true,
+        readiness: { ...EMPTY_READINESS, unavailable: true },
+      }),
+    );
+
+    expect(html).toContain("Unavailable");
+    expect(html).toContain("could not be loaded");
+    expect(html).not.toBe("");
+  });
+
+  it("the clean-empty state (unavailable: false, zero active/excluded) renders nothing, proving the two are visually distinct", () => {
+    const html = renderToStaticMarkup(
+      createElement(PublicationReadinessSummary, {
+        firmId: FIRM_ID,
+        isOperator: true,
+        readiness: { ...EMPTY_READINESS, unavailable: false },
+      }),
+    );
+
+    expect(html).toBe("");
+  });
+
+  it("renders nothing for a lawyer even when the load failed -- the lawyer-hide gate runs before the unavailable check", () => {
+    const html = renderToStaticMarkup(
+      createElement(PublicationReadinessSummary, {
+        firmId: FIRM_ID,
+        isOperator: false,
+        readiness: { ...EMPTY_READINESS, unavailable: true },
+      }),
+    );
+
+    expect(html).toBe("");
+    expect(html).not.toContain("Unavailable");
+  });
+
+  it("the unavailable banner takes precedence over blocked-item rendering when both are somehow present", () => {
+    const html = renderToStaticMarkup(
+      createElement(PublicationReadinessSummary, {
+        firmId: FIRM_ID,
+        isOperator: true,
+        readiness: { ...buildReadiness(), unavailable: true },
+        titles: { d1: "Founder vesting in Ontario corporations" },
+        lifecycleByDeliverableId: ENFORCED_D1,
+      }),
+    );
+
+    expect(html).toContain("Unavailable");
+    expect(html).not.toContain("Blocked");
+  });
+});
+
 // DR-097: the release-gate bug this remediates, and the follow-up bug the
 // review caught in the first fix (a nullable-timestamp-only model wrongly
 // labelled the current/future period as historical, and made "Setup

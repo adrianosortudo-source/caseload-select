@@ -32,7 +32,7 @@ import {
   statusAfterDecision,
   type PlanDeliverable,
 } from "@/lib/deliverables-pure";
-import { evaluateActivationPreflight } from "@/lib/publication-readiness";
+import { evaluateActivationPreflight, type DeliverableReadiness } from "@/lib/publication-readiness";
 import { loadPeriodPublicationReadiness } from "@/lib/publication-readiness-loader";
 
 const ASSET_BUCKET = "firm-files";
@@ -260,7 +260,18 @@ export async function activatePeriodReadiness(input: {
     return { ok: true, period: period as ContentPeriod };
   }
 
-  const items = await loadPeriodPublicationReadiness(input.periodId, input.firmId);
+  // loadPeriodPublicationReadiness throws on a query error or exception
+  // rather than returning [] (Codex second-pass correction): an empty
+  // items array would make evaluateActivationPreflight report
+  // canActivate=true for the wrong reason (nothing to check) rather than
+  // the right one (everything checked out). Surface the failure honestly
+  // instead of letting it read as a clean preflight.
+  let items: DeliverableReadiness[];
+  try {
+    items = await loadPeriodPublicationReadiness(input.periodId, input.firmId);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "readiness data unavailable" };
+  }
   const preflight = evaluateActivationPreflight(items);
   if (!preflight.canActivate) {
     return {
