@@ -25,6 +25,14 @@ import {
 export interface PlanPublicationReadiness {
   summary: { active: number; ready: number; blocked: number; excluded: number };
   items: DeliverableReadiness[];
+  /**
+   * Codex second-pass correction: true only when the underlying data load
+   * failed (a Supabase query error or exception), never for a firm that
+   * genuinely has zero deliverables. Must render as an explicit,
+   * unmissable state, never silently as "nothing to report" -- a database
+   * failure that looks like "all clear" is worse than no panel at all.
+   */
+  unavailable?: boolean;
 }
 
 const ASSET_REQUIREMENT_KEYS = new Set([
@@ -94,8 +102,28 @@ export default function PublicationReadinessSummary({
 }) {
   // Publication readiness is an operator control surface. Lawyers need the
   // approval workflow, not internal artifact/metadata diagnostics or release
-  // gate labels that are not actionable in their view.
+  // gate labels that are not actionable in their view. This gate runs
+  // before the unavailable check below too: a failed readiness load is
+  // still an internal operational detail, not something a lawyer session
+  // should see any trace of.
   if (!isOperator) return null;
+
+  if (readiness.unavailable) {
+    return (
+      <div className="border-t border-border-brand/60 pt-4 mt-1">
+        <div className="flex items-center gap-2 border border-red-fail/30 bg-red-fail/10 px-3 py-2.5 text-sm text-red-fail">
+          <span className="flex-none text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 border rounded-full bg-red-fail/10 border-red-fail/30">
+            Unavailable
+          </span>
+          <span className="flex-1 min-w-0">
+            Publication readiness could not be loaded. This is a data error,
+            not a clean state -- it does not mean nothing needs attention.
+            Reload the page; if this persists, check the server logs.
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   const { summary, items } = readiness;
   if (summary.active === 0 && summary.excluded === 0) return null;

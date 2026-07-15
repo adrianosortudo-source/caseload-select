@@ -56,6 +56,13 @@ export default async function DeliverablesPage({
     items: [],
     titles: {},
     lifecycleByDeliverableId: {},
+    // loadPlanPublicationReadiness does not throw on its own (it resolves
+    // every internal failure to an unavailable:true result); this .catch is
+    // a second, independent guard for anything unexpected reaching this
+    // far. It must mark unavailable too, for the same reason the loader's
+    // own error paths do: an empty result here must never render as "all
+    // clear" to the operator.
+    unavailable: true,
   }));
 
   return (

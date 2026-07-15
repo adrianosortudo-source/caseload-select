@@ -60,6 +60,8 @@ export interface PlanReadinessProp {
   titles: Record<string, string>;
   /** DR-097: deliverable id to its period's explicit readiness lifecycle. */
   lifecycleByDeliverableId: Record<string, PeriodLifecycle>;
+  /** True only on a load failure, never on a legitimately empty plan. */
+  unavailable?: boolean;
 }
 
 export default function ContentPlan({
@@ -193,6 +195,12 @@ export default function ContentPlan({
               items: sliced.items,
               titles: planReadiness.titles,
               lifecycleByDeliverableId: planReadiness.lifecycleByDeliverableId,
+              // A whole-plan load failure means every period's slice is
+              // equally unreliable, not just the aggregate: propagate it so
+              // each PeriodCard's own readiness panel shows the unavailable
+              // state too, instead of a misleadingly clean per-period slice
+              // of data that was never actually loaded.
+              unavailable: planReadiness.unavailable,
             }
           : undefined;
         return (
@@ -401,7 +409,7 @@ function ReviewOverview({
         <PublicationReadinessSummary
           firmId={firmId}
           isOperator={isOperator}
-          readiness={{ summary: planReadiness.summary, items: planReadiness.items }}
+          readiness={{ summary: planReadiness.summary, items: planReadiness.items, unavailable: planReadiness.unavailable }}
           titles={planReadiness.titles}
           lifecycleByDeliverableId={planReadiness.lifecycleByDeliverableId}
         />
@@ -563,7 +571,7 @@ function PeriodCard({
           <PublicationReadinessSummary
             firmId={firmId}
             isOperator={isOperator}
-            readiness={{ summary: periodReadiness.summary, items: periodReadiness.items }}
+            readiness={{ summary: periodReadiness.summary, items: periodReadiness.items, unavailable: periodReadiness.unavailable }}
             titles={periodReadiness.titles}
             periodId={period.id}
             lifecycleByDeliverableId={periodReadiness.lifecycleByDeliverableId}
