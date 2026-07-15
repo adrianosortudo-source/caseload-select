@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import FirmSwitcher from "./FirmSwitcher";
+import AdminSidebarShell from "./AdminSidebarShell";
 
 export default async function AdminSidebar() {
   const { data } = await supabaseAdmin
@@ -12,8 +13,11 @@ export default async function AdminSidebar() {
     name: (f.name as string | null) ?? "Unnamed firm",
   }));
 
+  // AdminSidebarShell owns the <aside> element + responsive drawer chrome; this
+  // component only supplies the interior (fetched server-side so the firm query
+  // never ships to the client).
   return (
-    <aside className="w-60 shrink-0 bg-deep-black flex flex-col sticky top-0 h-screen overflow-y-auto border-r border-white/5 print:hidden">
+    <AdminSidebarShell>
       {/* Brand mark links to the console home */}
       <Link href="/admin" className="block px-5 pt-5 pb-4 border-b border-white/8 shrink-0 hover:bg-white/4 transition-colors">
         <div className="font-display text-[11px] uppercase tracking-[0.2em] font-semibold text-gold">
@@ -40,6 +44,6 @@ export default async function AdminSidebar() {
           </button>
         </form>
       </div>
-    </aside>
+    </AdminSidebarShell>
   );
 }
