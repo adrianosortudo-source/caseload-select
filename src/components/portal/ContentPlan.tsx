@@ -540,6 +540,7 @@ function PeriodCard({
               >
                 {editing ? "Close" : "Edit week"}
               </button>
+              <DownloadBundleButton periodId={period.id} />
             </div>
           )}
         </div>
@@ -594,6 +595,44 @@ function PeriodCard({
         )}
       </div>
     </section>
+  );
+}
+
+// Independent of Publication Readiness (rendered outside that panel above):
+// pulls the exact, already-stored deliverable content for this period via
+// GET /api/admin/content-periods/[periodId]/content-export, operator-only,
+// no readiness activation required. See content-period-export.ts.
+function DownloadBundleButton({ periodId }: { periodId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative inline-block">
+      <button
+        onClick={() => setOpen((s) => !s)}
+        className="text-[11px] font-semibold text-navy/70 hover:text-navy"
+      >
+        {open ? "Close" : "Download publishing bundle"}
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-1 z-10 bg-white border border-border-brand shadow-sm flex flex-col min-w-[130px]">
+          <a
+            href={`/api/admin/content-periods/${periodId}/content-export?format=json`}
+            target="_blank"
+            rel="noreferrer"
+            className="px-3 py-2 text-xs font-semibold text-black/70 hover:bg-parchment-2 hover:text-navy whitespace-nowrap"
+          >
+            JSON
+          </a>
+          <a
+            href={`/api/admin/content-periods/${periodId}/content-export?format=markdown`}
+            target="_blank"
+            rel="noreferrer"
+            className="px-3 py-2 text-xs font-semibold text-black/70 hover:bg-parchment-2 hover:text-navy border-t border-border-brand/60 whitespace-nowrap"
+          >
+            Markdown
+          </a>
+        </div>
+      )}
+    </div>
   );
 }
 
