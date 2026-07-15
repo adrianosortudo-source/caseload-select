@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Operator Console Mobile Drawer Prototype</title>
+<style>
+  :root{
+    --navy:#1E2F58;
+    --gold:#C4B49A;
+    --parchment:#F4F3EF;
+    --deep-black:#0D1520;
+    --white:#ffffff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:#e7e5df;
+    color:var(--deep-black);
+    padding:28px 16px 60px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:860px;margin:0 auto}
+  h1{font-size:22px;letter-spacing:-0.01em;margin-bottom:6px}
+  .sub{color:#5c5c5c;font-size:14px;line-height:1.5;margin-bottom:22px;max-width:620px}
+  .controls{display:flex;gap:8px;margin-bottom:26px;flex-wrap:wrap;align-items:center}
+  .seg{display:inline-flex;background:#fff;border:1px solid #d7d5cf;border-radius:999px;padding:4px;gap:2px}
+  .seg button{
+    border:0;background:transparent;font:inherit;font-size:13px;font-weight:600;
+    padding:8px 16px;border-radius:999px;cursor:pointer;color:#666;transition:.15s;
+  }
+  .seg button.active{background:var(--navy);color:#fff}
+  .hint{font-size:12.5px;color:#777}
+  .stage{display:flex;gap:34px;align-items:flex-start;flex-wrap:wrap}
+  /* Phone frame */
+  .phone{
+    width:340px;height:700px;background:#000;border-radius:44px;padding:11px;
+    box-shadow:0 22px 50px rgba(0,0,0,.28);flex-shrink:0;position:relative;
+  }
+  .screen{
+    width:100%;height:100%;background:var(--parchment);border-radius:34px;overflow:hidden;
+    position:relative;display:flex;flex-direction:column;
+  }
+  .notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:110px;height:26px;background:#000;border-radius:0 0 16px 16px;z-index:60}
+  .statusbar{height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600;color:var(--deep-black)}
+  .callout{max-width:300px}
+  .callout h3{font-size:15px;margin-bottom:8px}
+  .callout p{font-size:13.5px;line-height:1.55;color:#4a4a4a;margin-bottom:12px}
+  .callout code{background:#fff;border:1px solid #ddd;border-radius:4px;padding:1px 6px;font-size:12px;color:var(--navy)}
+  .tag{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:3px 9px;border-radius:5px;margin-bottom:12px}
+  .tag.bad{background:#fbe4e4;color:#a12626}
+  .tag.good{background:#e3f0e6;color:#1f6b37}
+
+  /* ===== Shared console pieces ===== */
+  .sidebar{
+    background:var(--deep-black);color:#fff;display:flex;flex-direction:column;
+    width:210px;flex-shrink:0;height:100%;
+  }
+  .sidebar .brand{padding:16px 18px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .brand .k{font-size:10px;letter-spacing:.2em;text-transform:uppercase;font-weight:700;color:var(--gold)}
+  .brand .s{font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.4);margin-top:3px}
+  .navsec{padding:10px 0}
+  .navlabel{font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.35);padding:8px 18px 5px;display:flex;justify-content:space-between}
+  .navlabel .new{color:var(--gold)}
+  .navitem{display:block;padding:8px 18px;font-size:13px;color:rgba(255,255,255,.82);text-decoration:none;cursor:pointer}
+  .navitem:hover{background:rgba(255,255,255,.05)}
+  .navitem.active{color:#fff;box-shadow:inset 2px 0 0 var(--gold);background:rgba(255,255,255,.04)}
+  .firmrow{padding:10px 18px;border-bottom:1px solid rgba(255,255,255,.06)}
+  .firmrow .fk{font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.4)}
+  .firmrow .fv{font-size:12px;color:#fff;margin-top:4px;display:flex;align-items:center;gap:6px}
+  .signout{margin-top:auto;padding:14px 18px;border-top:1px solid rgba(255,255,255,.06);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.4);font-weight:700}
+
+  .content{flex:1;min-width:0;overflow-y:auto;padding:18px 16px 40px}
+  .eyebrow{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-weight:700}
+  .h-home{font-size:30px;font-weight:800;line-height:1.05;color:var(--navy);margin:6px 0 10px}
+  .lede{font-size:15px;color:#3f3f3f;line-height:1.4;margin-bottom:20px}
+  .secttl{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8a8a8a;font-weight:700;margin:18px 0 10px}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .card{background:#fff;border:1px solid #e4e2db;border-radius:8px;padding:12px}
+  .card.alert{background:#fdecec;border-color:#f3caca}
+  .card .num{font-size:26px;font-weight:800;color:var(--navy);line-height:1}
+  .card.alert .num{color:#c0392b}
+  .card .lbl{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#7a7a7a;font-weight:700;margin-top:6px;line-height:1.25}
+  .card.alert .lbl{color:#c0392b}
+
+  /* ===== BROKEN mode: sidebar never shrinks ===== */
+  .console{display:flex;height:100%;overflow:hidden}
+  .broken .sidebar{width:210px}          /* eats the screen */
+  .broken .content{overflow-x:hidden}
+
+  /* ===== FIXED mode ===== */
+  .topbar{
+    display:none;height:52px;flex-shrink:0;background:var(--deep-black);
+    align-items:center;gap:12px;padding:0 14px;color:#fff;
+  }
+  .fixed .topbar{display:flex}
+  .burger{width:34px;height:34px;border:0;background:rgba(255,255,255,.08);border-radius:8px;cursor:pointer;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px}
+  .burger span{width:16px;height:2px;background:#fff;border-radius:2px;display:block}
+  .topbar .tk{font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;color:var(--gold)}
+  .topbar .ts{font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.4)}
+  .fixed .console{position:relative}
+  .fixed .sidebar{
+    position:absolute;inset:0 auto 0 0;z-index:50;transform:translateX(-100%);
+    transition:transform .28s cubic-bezier(.4,0,.2,1);box-shadow:6px 0 24px rgba(0,0,0,.3);
+  }
+  .fixed .console.open .sidebar{transform:translateX(0)}
+  .backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .28s;z-index:40}
+  .fixed .console.open .backdrop{opacity:1;pointer-events:auto}
+  .drawer-close{position:absolute;top:10px;right:12px;width:30px;height:30px;border:0;background:rgba(255,255,255,.1);color:#fff;border-radius:8px;font-size:16px;cursor:pointer;z-index:55}
+  .fixed .sidebar .drawer-close{display:block}
+  .sidebar .drawer-close{display:none}
+
+  /* desktop preview column */
+  .desk{flex:1;min-width:320px}
+  .desk .frame{background:#fff;border:1px solid #d7d5cf;border-radius:12px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+  .desk .bar{height:34px;background:#f0efe9;border-bottom:1px solid #e2e0da;display:flex;align-items:center;gap:6px;padding:0 12px}
+  .desk .dot{width:10px;height:10px;border-radius:50%;background:#d0cec8}
+  .desk .console{height:360px}
+  .desk .sidebar{width:150px}
+  .desk .content{padding:14px}
+  .desk .h-home{font-size:20px}
+  .desk .cards{grid-template-columns:1fr 1fr}
+  .desknote{font-size:12.5px;color:#777;margin-top:10px}
+
+  .legend{margin-top:30px;font-size:13px;color:#555;line-height:1.6;background:#fff;border:1px solid #e2e0da;border-radius:10px;padding:16px 18px;max-width:760px}
+  .legend b{color:var(--navy)}
+  @media(max-width:560px){.phone{width:300px;height:620px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Operator console, mobile fix prototype</h1>
+  <p class="sub">The console sidebar is a fixed 210 to 240px column that never collapses, so on a phone it crushes the content into a strip (your screenshots). This prototype shows the current behavior next to the proposed responsive drawer fix. The phone is interactive: in the "After" mode, tap the menu button.</p>
+
+  <div class="controls">
+    <div class="seg" id="seg">
+      <button data-mode="broken">Before (current)</button>
+      <button data-mode="fixed" class="active">After (the fix)</button>
+    </div>
+    <span class="hint" id="hint">Tap the menu button in the phone to open the drawer. Tap a nav item or the dark area to close it.</span>
+  </div>
+
+  <div class="stage">
+    <!-- PHONE -->
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen fixed" id="screen">
+        <div class="statusbar"><span>6:17</span><span>5G &#9679;</span></div>
+
+        <!-- mobile top bar (fixed mode only) -->
+        <div class="topbar">
+          <button class="burger" id="burger" aria-label="Open menu"><span></span><span></span><span></span></button>
+          <div>
+            <div class="tk">CaseLoad Select</div>
+            <div class="ts">Operator console</div>
+          </div>
+        </div>
+
+        <div class="console" id="console">
+          <div class="backdrop" id="backdrop"></div>
+          <aside class="sidebar">
+            <button class="drawer-close" id="drawerClose" aria-label="Close menu">&times;</button>
+            <div class="brand">
+              <div class="k">CaseLoad Select</div>
+              <div class="s">Operator console</div>
+            </div>
+            <div class="firmrow">
+              <div class="fk">Firm</div>
+              <div class="fv">DRG Law Professional Corp&#8230; &#9662;</div>
+            </div>
+            <div class="navsec">
+              <div class="navlabel"><span>Set up firm</span></div>
+              <a class="navitem active">Console</a>
+              <a class="navitem nav-close">Lead routing</a>
+              <a class="navitem nav-close">Team logins</a>
+              <a class="navitem nav-close">Content studio</a>
+              <a class="navitem nav-close">Website analytics</a>
+              <div class="navlabel"><span>Run firm</span></div>
+              <a class="navitem nav-close">New leads</a>
+              <a class="navitem nav-close">Messages</a>
+              <a class="navitem nav-close">Clients</a>
+              <a class="navitem nav-close">Deliverables</a>
+            </div>
+            <div class="signout">Sign out</div>
+          </aside>
+
+          <div class="content">
+            <div class="eyebrow">Operator console</div>
+            <div class="h-home">Console home</div>
+            <div class="lede">What needs you now, across every firm.</div>
+
+            <div class="secttl">Attention</div>
+            <div class="cards">
+              <div class="card"><div class="num">0</div><div class="lbl">Leads expiring under 4h</div></div>
+              <div class="card alert"><div class="num">1</div><div class="lbl">Notifications failed</div></div>
+              <div class="card"><div class="num">0</div><div class="lbl">Webhooks failed</div></div>
+              <div class="card"><div class="num">0</div><div class="lbl">Tokens expiring under 14d</div></div>
+            </div>
+
+            <div class="secttl">Firms</div>
+            <div class="cards">
+              <div class="card"><div class="num">1</div><div class="lbl">Open leads</div></div>
+              <div class="card"><div class="num">0</div><div class="lbl">Matters</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DESKTOP unchanged + notes -->
+    <div class="desk">
+      <div class="callout" style="margin-bottom:18px">
+        <span class="tag good" id="stateTag">After: responsive drawer</span>
+        <h3 id="calloutTitle">The fix</h3>
+        <p id="calloutBody">A mobile top bar with a menu button appears under the <code>md</code> breakpoint (768px). The sidebar becomes a slide-in drawer with a tap-to-close backdrop, and closes on its own when you tap a nav item. The content column goes full width.</p>
+      </div>
+
+      <div class="frame">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+        <div class="console desktop">
+          <aside class="sidebar">
+            <div class="brand"><div class="k">CaseLoad Select</div><div class="s">Operator console</div></div>
+            <div class="navsec">
+              <a class="navitem active">Console</a>
+              <a class="navitem">Lead routing</a>
+              <a class="navitem">New leads</a>
+              <a class="navitem">Clients</a>
+            </div>
+          </aside>
+          <div class="content">
+            <div class="eyebrow">Operator console</div>
+            <div class="h-home">Console home</div>
+            <div class="cards" style="margin-top:12px">
+              <div class="card"><div class="num">0</div><div class="lbl">Expiring 4h</div></div>
+              <div class="card alert"><div class="num">1</div><div class="lbl">Failed</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="desknote">Desktop (<code>md</code> and up) is untouched: the sidebar stays put. All mobile behavior is gated behind the breakpoint, so nothing about the current desktop console changes.</p>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>What actually changes in the codebase:</b> one new client component wrapping the sidebar (holds the open/close state, the menu top bar, and the backdrop), the existing <code>AdminSidebar.tsx</code> keeps its server-side firm fetch and passes markup down, and <code>admin/layout.tsx</code> gets mobile top padding so content clears the bar. No data, auth, or page logic touched. Applies to every <code>/admin</code> screen at once: triage, briefs, routing, content studio, this console home.
+  </div>
+</div>
+
+<script>
+  const seg = document.getElementById('seg');
+  const screen = document.getElementById('screen');
+  const consoleEl = document.getElementById('console');
+  const burger = document.getElementById('burger');
+  const backdrop = document.getElementById('backdrop');
+  const drawerClose = document.getElementById('drawerClose');
+  const hint = document.getElementById('hint');
+  const stateTag = document.getElementById('stateTag');
+  const calloutTitle = document.getElementById('calloutTitle');
+  const calloutBody = document.getElementById('calloutBody');
+
+  const copy = {
+    broken: {
+      cls:'broken',
+      tag:'Before: sidebar never collapses', tagCls:'tag bad',
+      title:'The bug',
+      body:'The sidebar is w-60 shrink-0 (fixed 240px) with sticky top-0 h-screen and no breakpoint. On a 375px phone it takes about 64% of the width and the content column (flex-1 min-w-0) is crushed into the strip on the right. There is no menu button, no drawer: the desktop sidebar just renders as-is.',
+      hint:'This is the broken state. Notice the content squeezed to the right, exactly like the screenshots.'
+    },
+    fixed: {
+      cls:'fixed',
+      tag:'After: responsive drawer', tagCls:'tag good',
+      title:'The fix',
+      body:'A mobile top bar with a menu button appears under the md breakpoint (768px). The sidebar becomes a slide-in drawer with a tap-to-close backdrop, and closes on its own when you tap a nav item. The content column goes full width.',
+      hint:'Tap the menu button in the phone to open the drawer. Tap a nav item or the dark backdrop to close it.'
+    }
+  };
+
+  function setMode(mode){
+    const c = copy[mode];
+    screen.className = 'screen ' + c.cls;
+    consoleEl.classList.remove('open');
+    hint.textContent = c.hint;
+    stateTag.className = c.tagCls;
+    stateTag.textContent = c.tag;
+    calloutTitle.textContent = c.title;
+    calloutBody.innerHTML = c.body
+      .replace(/(w-60|shrink-0|sticky top-0 h-screen|flex-1 min-w-0|md breakpoint \(768px\)|375px|240px)/g, m => '<code>'+m+'</code>');
+    [...seg.children].forEach(b=>b.classList.toggle('active', b.dataset.mode===mode));
+  }
+
+  seg.addEventListener('click', e=>{ if(e.target.dataset.mode) setMode(e.target.dataset.mode); });
+  burger.addEventListener('click', ()=> consoleEl.classList.add('open'));
+  backdrop.addEventListener('click', ()=> consoleEl.classList.remove('open'));
+  drawerClose.addEventListener('click', ()=> consoleEl.classList.remove('open'));
+  document.querySelectorAll('.nav-close').forEach(n=>n.addEventListener('click',()=>consoleEl.classList.remove('open')));
+
+  setMode('fixed');
+</script>
+</body>
+</html>
