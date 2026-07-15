@@ -15,7 +15,12 @@
  */
 
 import { useState } from "react";
-import type { DeliverableReadiness, ReadinessCheck } from "@/lib/publication-readiness";
+import {
+  deriveDisplayState,
+  type DeliverableReadiness,
+  type PeriodLifecycle,
+  type ReadinessCheck,
+} from "@/lib/publication-readiness";
 
 export interface PlanPublicationReadiness {
   summary: { active: number; ready: number; blocked: number; excluded: number };
@@ -68,6 +73,7 @@ export default function PublicationReadinessSummary({
   readiness,
   titles,
   periodId,
+  lifecycleByDeliverableId,
 }: {
   firmId: string;
   isOperator: boolean;
@@ -77,6 +83,14 @@ export default function PublicationReadinessSummary({
   titles?: Record<string, string>;
   /** Scopes "Download manifest" to one week. Omit for the whole-plan summary (the manifest endpoint is per period). */
   periodId?: string;
+  /**
+   * DR-097: deliverable id to ITS period's explicit lifecycle. Missing/
+   * omitted defaults every item to "setup_required", the safe default: an
+   * item never renders as red "Blocked" for missing metadata, and never
+   * renders "Historical" either, unless its period was explicitly
+   * classified one way or the other.
+   */
+  lifecycleByDeliverableId?: Record<string, PeriodLifecycle>;
 }) {
   // Publication readiness is an operator control surface. Lawyers need the
   // approval workflow, not internal artifact/metadata diagnostics or release
@@ -86,9 +100,27 @@ export default function PublicationReadinessSummary({
   const { summary, items } = readiness;
   if (summary.active === 0 && summary.excluded === 0) return null;
 
+  const lifecycles = lifecycleByDeliverableId ?? {};
   const active = items.filter((i) => !i.excluded);
-  const blocked = active.filter((i) => !i.ready);
-  const counts = breakdown(active);
+  const withState = active.map((item) => ({
+    item,
+    state: deriveDisplayState(item, lifecycles[item.deliverableId] ?? "setup_required"),
+  }));
+  const ready = withState.filter((w) => w.state === "ready");
+  const blocked = withState.filter((w) => w.state === "blocked");
+  // Within a not-yet-activated period, "setup_required" is a blanket,
+  // per-period label (deriveDisplayState never differentiates by item once
+  // the period itself isn't enforced -- red "Blocked" must never appear
+  // pre-activation). But a piece whose OWN readiness is already fully
+  // clean (e.g. Founder Vesting, fully metadata-complete today) should not
+  // read as "needs role/locale set" alongside one that genuinely does --
+  // split the bucket here, in rendering only, using the always-pure
+  // item.ready flag.
+  const setupRequired = withState.filter((w) => w.state === "setup_required");
+  const setupRequiredNeedsWork = setupRequired.filter((w) => !w.item.ready);
+  const setupRequiredAlreadyClean = setupRequired.filter((w) => w.item.ready);
+  const historical = withState.filter((w) => w.state === "historical_unreconciled");
+  const counts = breakdown(blocked.map((w) => w.item));
 
   return (
     <div className="border-t border-border-brand/60 pt-4 mt-1 space-y-3">
@@ -117,20 +149,29 @@ export default function PublicationReadinessSummary({
 
       <div className="flex flex-wrap gap-1.5">
         <CountChip n={summary.active} label="active" cls="bg-parchment-2 text-muted border-border-brand" />
-        <CountChip n={summary.ready} label="ready" cls="bg-green-pass/10 text-green-pass border-green-pass/30" />
-        <CountChip n={summary.blocked} label="blocked" cls="bg-red-fail/10 text-red-fail border-red-fail/30" />
+        <CountChip n={ready.length} label="ready" cls="bg-green-pass/10 text-green-pass border-green-pass/30" />
+        {blocked.length > 0 && (
+          <CountChip n={blocked.length} label="blocked" cls="bg-red-fail/10 text-red-fail border-red-fail/30" />
+        )}
+        {setupRequired.length > 0 && (
+          <CountChip
+            n={setupRequired.length}
+            label="setup required"
+            cls="bg-amber-50 text-amber-800 border-amber-200"
+          />
+        )}
+        {historical.length > 0 && (
+          <CountChip
+            n={historical.length}
+            label="historical, not reconciled"
+            cls="bg-parchment-2 text-muted border-border-brand"
+          />
+        )}
         <CountChip n={summary.excluded} label="excluded" cls="bg-parchment-2 text-muted border-border-brand" />
       </div>
 
-      {summary.blocked > 0 && (
+      {blocked.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {counts.metadataIncomplete > 0 && (
-            <CountChip
-              n={counts.metadataIncomplete}
-              label="metadata incomplete"
-              cls="bg-amber-50 text-amber-800 border-amber-200"
-            />
-          )}
           {counts.missingApproval > 0 && (
             <CountChip
               n={counts.missingApproval}
@@ -157,7 +198,7 @@ export default function PublicationReadinessSummary({
 
       {blocked.length > 0 && (
         <div className="space-y-1.5">
-          {blocked.map((item) => (
+          {blocked.map(({ item }) => (
             <BlockedDeliverable
               key={item.deliverableId}
               firmId={firmId}
@@ -167,6 +208,51 @@ export default function PublicationReadinessSummary({
             />
           ))}
         </div>
+      )}
+
+      {setupRequiredNeedsWork.length > 0 && (
+        <details className="bg-amber-50/40 border border-amber-200 text-sm">
+          <summary className="cursor-pointer list-none flex items-center gap-2 px-3 py-2 select-none">
+            <span className="flex-none text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 border rounded-full bg-amber-50 text-amber-800 border-amber-200">
+              Setup required
+            </span>
+            <span className="flex-1 min-w-0 text-black/70">
+              {setupRequiredNeedsWork.length} piece{setupRequiredNeedsWork.length === 1 ? "" : "s"} still need
+              work before this period can activate
+            </span>
+          </summary>
+          <ul className="px-3 pb-3 pt-1 space-y-1 border-t border-amber-200/60">
+            {setupRequiredNeedsWork.map(({ item }) => (
+              <li key={item.deliverableId} className="text-[13px] text-black/70 truncate">
+                {titles?.[item.deliverableId] ?? item.deliverableId}
+                {item.missingRequirements.length > 0 && (
+                  <span className="text-black/45"> &middot; missing {item.missingRequirements.join(", ")}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {setupRequiredAlreadyClean.length > 0 && (
+        <details className="bg-parchment-2/40 border border-border-brand text-sm">
+          <summary className="cursor-pointer list-none flex items-center gap-2 px-3 py-2 select-none">
+            <span className="flex-none text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 border rounded-full bg-green-pass/10 text-green-pass border-green-pass/30">
+              Ready to activate
+            </span>
+            <span className="flex-1 min-w-0 text-black/70">
+              {setupRequiredAlreadyClean.length} piece{setupRequiredAlreadyClean.length === 1 ? "" : "s"} already
+              pass every check; this period just has not been activated yet
+            </span>
+          </summary>
+          <ul className="px-3 pb-3 pt-1 space-y-1 border-t border-border-brand/60">
+            {setupRequiredAlreadyClean.map(({ item }) => (
+              <li key={item.deliverableId} className="text-[13px] text-black/70 truncate">
+                {titles?.[item.deliverableId] ?? item.deliverableId}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );

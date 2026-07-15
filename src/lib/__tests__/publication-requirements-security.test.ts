@@ -54,6 +54,7 @@ function makeDeliverable(overrides: Partial<ContentDeliverable> = {}): ContentDe
     deliverable_role: "article",
     publication_destination: "firm_website",
     publication_path: "/journal/test",
+    cta_target_path: null,
     requires_legal_approval: null,
     requires_image: null,
     requires_file: null,

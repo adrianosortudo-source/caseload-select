@@ -13,8 +13,13 @@ import "server-only";
 import { supabaseAdmin as supabase } from "./supabase-admin";
 import {
   evaluateDeliverableReadiness,
+  deriveDisplayState,
+  summarizeDisplayStates,
   type DeliverableReadiness,
   type EvaluateReadinessInput,
+  type PeriodReadinessState,
+  type PeriodLifecycle,
+  type DisplayStateCounts,
 } from "./publication-readiness";
 import { resolveRequirements } from "./publication-requirements";
 import type {
@@ -32,6 +37,17 @@ export interface PublicationManifest {
     starts_on: string;
     ends_on: string;
     theme: string | null;
+    /**
+     * DR-097. Explicit lifecycle classification, mirroring
+     * content_periods.readiness_lifecycle exactly (never derived from a
+     * date). Unless this is "enforced", every deliverable's
+     * `ready`/`missing_requirements` below are still the raw, unconditional
+     * evaluation -- `display_state` (never the raw fields) is what a
+     * consumer should render as this period's actual status, since raw
+     * "blocked" is expected and non-alarming while the period is not yet
+     * enforced.
+     */
+    lifecycle: PeriodLifecycle;
   };
   policy: {
     generation_policy: "existing_assets_only";
@@ -47,6 +63,8 @@ export interface PublicationManifest {
     blocked: number;
     excluded_archived: number;
   };
+  /** DR-097: the same rollup, but keyed by display_state, respecting period.lifecycle. */
+  display_summary: DisplayStateCounts;
   deliverables: ManifestDeliverable[];
   excluded_deliverables: ManifestDeliverable[];
   generated_at: string;
@@ -70,6 +88,8 @@ export interface ManifestDeliverable {
   stale_artifacts: string[];
   missing_requirements: string[];
   ready: boolean;
+  /** DR-097: the state to actually render. See PublicationManifest.period.lifecycle. */
+  display_state: PeriodReadinessState;
   permitted_actions: string[];
   prohibited_actions: string[];
 }
@@ -85,11 +105,20 @@ const PROHIBITED_ACTIONS = [
 
 const PERMITTED_ACTIONS_BASE = ["view_readiness", "reconcile_evidence", "download_manifest"];
 
+const DISPLAY_STATE_LABEL: Record<PeriodReadinessState, string> = {
+  historical_unreconciled: "Historical, not reconciled",
+  setup_required: "Setup required",
+  blocked: "Blocked",
+  ready: "Ready",
+  excluded: "Excluded (archived)",
+};
+
 function toManifestDeliverable(
   deliverable: ContentDeliverable,
   currentVersion: DeliverableVersion | null,
   readiness: DeliverableReadiness,
   artifacts: PublicationArtifact[],
+  periodLifecycle: PeriodLifecycle,
 ): ManifestDeliverable {
   const currentArtifacts = artifacts.filter(
     (a) => a.deliverable_id === deliverable.id && a.version_id === deliverable.current_version_id,
@@ -118,6 +147,7 @@ function toManifestDeliverable(
     stale_artifacts: readiness.staleArtifacts,
     missing_requirements: readiness.missingRequirements,
     ready: readiness.ready,
+    display_state: deriveDisplayState(readiness, periodLifecycle),
     permitted_actions: PERMITTED_ACTIONS_BASE,
     prohibited_actions: PROHIBITED_ACTIONS,
   };
@@ -129,11 +159,12 @@ export async function buildPublicationManifest(
 ): Promise<{ ok: true; manifest: PublicationManifest } | { ok: false; error: string }> {
   const { data: period, error: periodErr } = await supabase
     .from("content_periods")
-    .select("id, firm_id, starts_on, ends_on, theme")
+    .select("id, firm_id, starts_on, ends_on, theme, readiness_lifecycle")
     .eq("id", periodId)
     .maybeSingle();
   if (periodErr) return { ok: false, error: periodErr.message };
   if (!period) return { ok: false, error: "period not found" };
+  const periodLifecycle = period.readiness_lifecycle as PeriodLifecycle;
 
   const { data: deliverables, error: delErr } = await supabase
     .from("content_deliverables")
@@ -172,6 +203,7 @@ export async function buildPublicationManifest(
 
   const included: ManifestDeliverable[] = [];
   const excluded: ManifestDeliverable[] = [];
+  const allReadiness: DeliverableReadiness[] = [];
 
   for (const deliverable of rows) {
     const currentVersion = deliverable.current_version_id ? (versionById.get(deliverable.current_version_id) ?? null) : null;
@@ -182,7 +214,8 @@ export async function buildPublicationManifest(
       latestValidationByArtifactId,
     };
     const readiness = evaluateDeliverableReadiness(input);
-    const manifestRow = toManifestDeliverable(deliverable, currentVersion, readiness, allArtifacts);
+    allReadiness.push(readiness);
+    const manifestRow = toManifestDeliverable(deliverable, currentVersion, readiness, allArtifacts, periodLifecycle);
     if (readiness.excluded) excluded.push(manifestRow);
     else included.push(manifestRow);
   }
@@ -191,7 +224,12 @@ export async function buildPublicationManifest(
     schema_version: "1.0",
     firm_id: period.firm_id,
     period_id: period.id,
-    period: { starts_on: period.starts_on, ends_on: period.ends_on, theme: period.theme },
+    period: {
+      starts_on: period.starts_on,
+      ends_on: period.ends_on,
+      theme: period.theme,
+      lifecycle: periodLifecycle,
+    },
     policy: {
       generation_policy: "existing_assets_only",
       may_generate_missing_assets: false,
@@ -206,6 +244,7 @@ export async function buildPublicationManifest(
       blocked: included.filter((d) => !d.ready).length,
       excluded_archived: excluded.length,
     },
+    display_summary: summarizeDisplayStates(allReadiness, periodLifecycle),
     deliverables: included,
     excluded_deliverables: excluded,
     generated_at: new Date().toISOString(),
@@ -232,15 +271,33 @@ export function renderManifestMarkdown(manifest: PublicationManifest): string {
   lines.push("- Report missing requirements.");
   lines.push("- Wait for explicit authorization.");
   lines.push("");
+  if (manifest.period.lifecycle === "legacy_unreconciled") {
+    lines.push("## Legacy period: not reconciled");
+    lines.push(
+      "This period was explicitly classified as pre-existing content that predates the readiness ledger. The raw ready/blocked counts below reflect the unconditional requirement checks, not action-required blockers: a deliverable missing only metadata here is historical, not genuinely blocked. See each item's Status line, not the raw Ready field.",
+    );
+    lines.push("");
+  } else if (manifest.period.lifecycle === "setup_required") {
+    lines.push("## Not yet activated: setup required");
+    lines.push(
+      "This period has not passed the activation preflight (or has not been submitted for activation). The raw ready/blocked counts below reflect the unconditional requirement checks, not action-required blockers: nothing here is genuinely \"Blocked\" until the period is activated. See each item's Status line, not the raw Ready field.",
+    );
+    lines.push("");
+  }
   lines.push(
     `## Summary: ${manifest.summary.active_deliverables} active, ${manifest.summary.ready} ready, ${manifest.summary.blocked} blocked, ${manifest.summary.excluded_archived} excluded (archived)`,
+  );
+  lines.push(
+    `## Status: ${manifest.display_summary.ready} ready, ${manifest.display_summary.blocked} blocked, ${manifest.display_summary.setupRequired} setup required, ${manifest.display_summary.historicalUnreconciled} historical (not reconciled), ${manifest.display_summary.excluded} excluded`,
   );
   lines.push("");
   for (const d of manifest.deliverables) {
     lines.push(`### ${d.title}`);
     lines.push(`- Role: ${d.deliverable_role ?? "unknown"} · Locale: ${d.locale ?? "unknown"} · Destination: ${d.publication_destination ?? "unknown"}`);
-    lines.push(`- Ready: ${d.ready ? "yes" : "no"}`);
-    if (!d.ready) lines.push(`- Missing: ${d.missing_requirements.join(", ") || "none listed"}`);
+    lines.push(`- Status: ${DISPLAY_STATE_LABEL[d.display_state]}`);
+    if (d.display_state === "blocked" || d.display_state === "setup_required") {
+      lines.push(`- Missing: ${d.missing_requirements.join(", ") || "none listed"}`);
+    }
     if (d.stale_artifacts.length) lines.push(`- Stale evidence: ${d.stale_artifacts.join(", ")}`);
     lines.push("");
   }

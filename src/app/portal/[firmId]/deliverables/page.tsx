@@ -55,6 +55,7 @@ export default async function DeliverablesPage({
     summary: { active: 0, ready: 0, blocked: 0, excluded: 0 },
     items: [],
     titles: {},
+    lifecycleByDeliverableId: {},
   }));
 
   return (

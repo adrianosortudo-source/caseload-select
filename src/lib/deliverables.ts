@@ -32,6 +32,8 @@ import {
   statusAfterDecision,
   type PlanDeliverable,
 } from "@/lib/deliverables-pure";
+import { evaluateActivationPreflight } from "@/lib/publication-readiness";
+import { loadPeriodPublicationReadiness } from "@/lib/publication-readiness-loader";
 
 const ASSET_BUCKET = "firm-files";
 const SIGNED_URL_TTL = 3600; // 1 hour; review pages stay open a while
@@ -217,6 +219,71 @@ export async function deletePeriod(input: {
     .eq("firm_id", input.firmId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/**
+ * DR-097: activates publication-readiness enforcement for one period --
+ * transitions readiness_lifecycle to "enforced" and stamps
+ * readiness_enforced_at. Gated by evaluateActivationPreflight -- every
+ * active (non-archived) deliverable in the period must already have
+ * deliverable_role, locale, publication_destination, and (where its role
+ * has one) placement set, or activation is refused with the blocking
+ * deliverable ids so the operator knows exactly what to finish
+ * backfilling first. This app-level preflight is a fast, itemized
+ * pre-check ONLY; the database trigger trg_validate_readiness_activation
+ * (20260715120000_content_periods_readiness_activation.sql) is the
+ * authoritative, atomic enforcement, since this app writes with the
+ * Supabase service role and a SELECT-then-UPDATE pair alone cannot close
+ * the race between the preflight check and the activating write. If the
+ * trigger rejects the UPDATE (something changed between the preflight and
+ * this call), that surfaces as a normal Supabase error below, not a crash.
+ * Idempotent: re-activating an already-enforced period just returns it
+ * unchanged rather than re-stamping the timestamp, so a retried request
+ * can never silently reset when enforcement first began.
+ */
+export async function activatePeriodReadiness(input: {
+  periodId: string;
+  firmId: string;
+}): Promise<
+  | { ok: true; period: ContentPeriod }
+  | { ok: false; error: string; blockingDeliverableIds?: string[] }
+> {
+  const { data: period, error: periodErr } = await supabase
+    .from("content_periods")
+    .select("*")
+    .eq("id", input.periodId)
+    .eq("firm_id", input.firmId)
+    .maybeSingle();
+  if (periodErr) return { ok: false, error: periodErr.message };
+  if (!period) return { ok: false, error: "period not found for this firm" };
+  if ((period as ContentPeriod).readiness_lifecycle === "enforced") {
+    return { ok: true, period: period as ContentPeriod };
+  }
+
+  const items = await loadPeriodPublicationReadiness(input.periodId, input.firmId);
+  const preflight = evaluateActivationPreflight(items);
+  if (!preflight.canActivate) {
+    return {
+      ok: false,
+      error: `${preflight.blockingDeliverableIds.length} active deliverable${preflight.blockingDeliverableIds.length === 1 ? "" : "s"} still missing role, locale, destination, or placement`,
+      blockingDeliverableIds: preflight.blockingDeliverableIds,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("content_periods")
+    .update({
+      readiness_lifecycle: "enforced",
+      readiness_enforced_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.periodId)
+    .eq("firm_id", input.firmId)
+    .select("*")
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "period not found for this firm" };
+  return { ok: true, period: data as ContentPeriod };
 }
 
 /** Operator: assign a deliverable to a week and/or set its format label. */
