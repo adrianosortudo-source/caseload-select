@@ -1,0 +1,255 @@
+/**
+ * Content Studio publishing evidence system, Workstream 6: channel-specific
+ * validation. Each validator answers one question -- "does the evidence on
+ * this receipt actually support the publication claim it makes" -- and
+ * never fabricates a result it cannot check.
+ *
+ * Website and PDF/lead-magnet destinations are independently verifiable: a
+ * plain HTTP request either finds the claimed content live or it does not.
+ * LinkedIn and Google Business Profile are NOT independently verifiable
+ * here (per mega-assignment doctrine: "do not add direct LinkedIn or GBP
+ * publishing automation unless a functioning authorized integration
+ * already exists"); their validator can only confirm the RECEIPT itself
+ * carries the evidence an operator is expected to supply (a URL/external
+ * post id, or a screenshot), never that the live post actually exists.
+ * Every result records exactly which question it did and did not answer.
+ */
+
+import "server-only";
+import { createHash } from "node:crypto";
+import type { PlacementDestination, PublicationArtifactType, PublicationReceipt } from "@/lib/types";
+
+export type ChannelValidationOutcome = "verified" | "failed" | "unverifiable";
+
+export interface ChannelValidationResult {
+  outcome: ChannelValidationOutcome;
+  method: "url_fetch" | "operator_attestation";
+  checks: Record<string, boolean | string | number | null>;
+  reason: string | null;
+}
+
+const FETCH_TIMEOUT_MS = 10_000;
+
+async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal, redirect: "follow" });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Website destination: the receipt's public_url must be a real, live page.
+ * Checks status 200 and, where a firm hostname is supplied, that the
+ * resolved URL actually resolves to that firm's own domain -- a live page
+ * on someone else's site is not evidence this firm published anything.
+ */
+export async function validateWebsiteReceipt(
+  receipt: Pick<PublicationReceipt, "public_url">,
+  expectedHost?: string | null,
+): Promise<ChannelValidationResult> {
+  if (!receipt.public_url) {
+    return {
+      outcome: "failed",
+      method: "url_fetch",
+      checks: { has_url: false },
+      reason: "no public_url on this receipt to check",
+    };
+  }
+
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(receipt.public_url, { method: "GET" });
+  } catch (err) {
+    return {
+      outcome: "failed",
+      method: "url_fetch",
+      checks: { has_url: true, fetch_error: err instanceof Error ? err.message : "fetch failed" },
+      reason: "could not reach public_url",
+    };
+  }
+
+  const resolvedHost = new URL(res.url).host;
+  const hostMatches = expectedHost ? resolvedHost === expectedHost : null;
+  const statusOk = res.status === 200;
+
+  if (!statusOk) {
+    return {
+      outcome: "failed",
+      method: "url_fetch",
+      checks: { status: res.status, resolved_host: resolvedHost, host_matches: hostMatches },
+      reason: `public_url returned HTTP ${res.status}`,
+    };
+  }
+  if (hostMatches === false) {
+    return {
+      outcome: "failed",
+      method: "url_fetch",
+      checks: { status: res.status, resolved_host: resolvedHost, host_matches: false },
+      reason: `public_url resolves to ${resolvedHost}, not the firm's own domain (${expectedHost})`,
+    };
+  }
+  return {
+    outcome: "verified",
+    method: "url_fetch",
+    checks: { status: res.status, resolved_host: resolvedHost, host_matches: hostMatches },
+    reason: null,
+  };
+}
+
+/**
+ * PDF / lead-magnet destination: fetches the file and confirms it is
+ * actually a PDF (content-type), and, when the deliverable's approved
+ * version carries its own asset_sha256, that the LIVE file's hash matches
+ * -- proof the live artifact is byte-identical to the approved version,
+ * not merely a file with the right name at the right path.
+ */
+export async function validatePdfReceipt(
+  receipt: Pick<PublicationReceipt, "public_url">,
+  expectedSha256?: string | null,
+): Promise<ChannelValidationResult> {
+  if (!receipt.public_url) {
+    return {
+      outcome: "failed",
+      method: "url_fetch",
+      checks: { has_url: false },
+      reason: "no public_url on this receipt to check",
+    };
+  }
+
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(receipt.public_url, { method: "GET" });
+  } catch (err) {
+    return {
+      outcome: "failed",
+      method: "url_fetch",
+      checks: { has_url: true, fetch_error: err instanceof Error ? err.message : "fetch failed" },
+      reason: "could not reach public_url",
+    };
+  }
+
+  if (res.status !== 200) {
+    return {
+      outcome: "failed",
+      method: "url_fetch",
+      checks: { status: res.status },
+      reason: `public_url returned HTTP ${res.status}`,
+    };
+  }
+
+  const contentType = res.headers.get("content-type") ?? "";
+  const isPdf = contentType.includes("application/pdf");
+  if (!isPdf) {
+    return {
+      outcome: "failed",
+      method: "url_fetch",
+      checks: { status: res.status, content_type: contentType },
+      reason: `expected application/pdf, got "${contentType}"`,
+    };
+  }
+
+  if (!expectedSha256) {
+    return {
+      outcome: "verified",
+      method: "url_fetch",
+      checks: { status: res.status, content_type: contentType, sha256_checked: false },
+      reason: null,
+    };
+  }
+
+  const buf = Buffer.from(await res.arrayBuffer());
+  const actualSha256 = createHash("sha256").update(buf).digest("hex");
+  const hashMatches = actualSha256 === expectedSha256;
+  return {
+    outcome: hashMatches ? "verified" : "failed",
+    method: "url_fetch",
+    checks: {
+      status: res.status,
+      content_type: contentType,
+      sha256_checked: true,
+      sha256_matches: hashMatches,
+    },
+    reason: hashMatches
+      ? null
+      : `live file's sha256 (${actualSha256}) does not match the approved artifact's sha256 (${expectedSha256})`,
+  };
+}
+
+/**
+ * LinkedIn / GBP destinations: no authorized posting or read API is wired
+ * up, so this never claims to have checked the live post. It can only
+ * confirm the receipt itself carries SOME independently-inspectable
+ * evidence (a URL/external post id, or a screenshot in evidence storage)
+ * and reports "unverifiable" rather than fabricating a pass. An operator
+ * who has manually confirmed the live post uses verification_method
+ * 'operator_attestation' on the receipt directly; this validator is not
+ * that attestation.
+ */
+export function validateSocialReceipt(
+  receipt: Pick<PublicationReceipt, "public_url" | "external_post_id" | "evidence_storage_path">,
+): ChannelValidationResult {
+  const hasUrl = Boolean(receipt.public_url);
+  const hasExternalId = Boolean(receipt.external_post_id);
+  const hasScreenshot = Boolean(receipt.evidence_storage_path);
+
+  if (!hasUrl && !hasExternalId) {
+    return {
+      outcome: "failed",
+      method: "operator_attestation",
+      checks: { has_url: false, has_external_post_id: false, has_screenshot: hasScreenshot },
+      reason: "no public_url or external_post_id recorded on this receipt",
+    };
+  }
+  return {
+    outcome: "unverifiable",
+    method: "operator_attestation",
+    checks: { has_url: hasUrl, has_external_post_id: hasExternalId, has_screenshot: hasScreenshot },
+    reason:
+      "this platform has no authorized read API wired up; an operator must manually confirm the live post and record verification_method='operator_attestation'",
+  };
+}
+
+/**
+ * Dispatches to the correct validator for a placement's destination. This
+ * is the single entry point callers (the verify route, the preflight
+ * endpoint) should use rather than importing individual validators.
+ *
+ * `firm_website` covers two shapes that need different checks: an ordinary
+ * HTML page (requiredArtifactType 'webpage' or unset) and a downloadable
+ * PDF lead magnet (requiredArtifactType 'pdf'). The destination alone
+ * cannot distinguish them -- a PDF hosted on the firm's own site is still
+ * `firm_website` -- so requiredArtifactType (from the placement) picks the
+ * validator.
+ */
+export async function validateReceiptForDestination(
+  destination: PlacementDestination,
+  receipt: PublicationReceipt,
+  opts?: {
+    expectedHost?: string | null;
+    expectedSha256?: string | null;
+    requiredArtifactType?: PublicationArtifactType | null;
+  },
+): Promise<ChannelValidationResult> {
+  switch (destination) {
+    case "firm_website":
+      return opts?.requiredArtifactType === "pdf"
+        ? validatePdfReceipt(receipt, opts?.expectedSha256)
+        : validateWebsiteReceipt(receipt, opts?.expectedHost);
+    case "email_delivery":
+      // A sent email has no independently-fetchable public artifact; treat
+      // like a social destination (evidence-presence only).
+      return validateSocialReceipt(receipt);
+    case "linkedin_article":
+    case "linkedin_post":
+    case "linkedin_company_page":
+    case "google_business_profile":
+      return validateSocialReceipt(receipt);
+    default: {
+      const exhaustive: never = destination;
+      throw new Error(`unhandled destination: ${exhaustive}`);
+    }
+  }
+}
