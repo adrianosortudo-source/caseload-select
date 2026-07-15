@@ -164,17 +164,34 @@ const ROLES_WITH_OWN_PLACEMENT = new Set(["article", "landing_page", "lead_magne
 
 function evaluateMayPublish(
   deliverable: ContentDeliverable,
+  currentVersionExists: boolean,
+  approvedVersionExists: boolean,
 ): { may_publish: boolean; reason: string | null } {
   // Rule: may_publish is true only when the current version IS the
-  // formally approved version, and no unresolved change-request state
+  // formally approved version, that version actually exists as a row
+  // owned by this deliverable, and no unresolved change-request state
   // invalidates that approval. Never inferred from status alone, and
   // never from an approval bound to an older version: both the status
   // AND the exact version-id match are required, and the deliverable's
   // own status/approved_version_id pair is the single source of truth
   // (content_deliverables never carries a display-only status separate
-  // from this pair -- there is nothing else to infer from).
+  // from this pair -- there is nothing else to infer from). ID equality
+  // on the deliverable row alone is not sufficient: current_version_id /
+  // approved_version_id are pointers, and a pointer can go stale (the
+  // row was deleted) or, if data integrity is ever compromised, point at
+  // a version that belongs to a DIFFERENT deliverable. currentVersionExists
+  // / approvedVersionExists already encode "the row exists AND its own
+  // deliverable_id matches this deliverable's id" (see resolveOwnedVersion),
+  // so a corrupted or foreign pointer is never treated as publishable.
   if (!deliverable.current_version_id) {
     return { may_publish: false, reason: "No current version exists for this deliverable." };
+  }
+  if (!currentVersionExists) {
+    return {
+      may_publish: false,
+      reason:
+        "current_version_id does not resolve to an existing version row owned by this deliverable.",
+    };
   }
   if (deliverable.status !== "approved") {
     return {
@@ -185,6 +202,13 @@ function evaluateMayPublish(
   if (!deliverable.approved_version_id) {
     return { may_publish: false, reason: "No approved_version_id is recorded on this deliverable." };
   }
+  if (!approvedVersionExists) {
+    return {
+      may_publish: false,
+      reason:
+        "approved_version_id does not resolve to an existing version row owned by this deliverable.",
+    };
+  }
   if (deliverable.approved_version_id !== deliverable.current_version_id) {
     return {
       may_publish: false,
@@ -193,6 +217,27 @@ function evaluateMayPublish(
     };
   }
   return { may_publish: true, reason: null };
+}
+
+/**
+ * Resolves a version-id pointer to its row, but only if that row actually
+ * exists AND its own deliverable_id matches the deliverable doing the
+ * pointing. A version that exists but belongs to a different deliverable
+ * is treated exactly like a missing version everywhere in this module
+ * (never exported as this deliverable's content, never counted toward
+ * may_publish): this is the defense-in-depth check against a corrupted or
+ * cross-wired current_version_id / approved_version_id pointer.
+ */
+function resolveOwnedVersion(
+  versionId: string | null,
+  deliverableId: string,
+  versionById: Map<string, DeliverableVersion>,
+): { version: DeliverableVersion | null; foreign: boolean } {
+  if (!versionId) return { version: null, foreign: false };
+  const v = versionById.get(versionId) ?? null;
+  if (!v) return { version: null, foreign: false };
+  if (v.deliverable_id !== deliverableId) return { version: null, foreign: true };
+  return { version: v, foreign: false };
 }
 
 function toVersionBody(v: DeliverableVersion): ContentExportVersionBody {
@@ -345,18 +390,31 @@ export async function buildContentExportBundle(
       warnings.push("No publication_path recorded for a role that has its own placement.");
     }
 
-    const rawCurrent = d.current_version_id ? (versionById.get(d.current_version_id) ?? null) : null;
-    if (!rawCurrent) warnings.push("No current version exists.");
-    const currentVersionSigned = rawCurrent ? await signVersionAsset(rawCurrent) : null;
+    const currentResolved = resolveOwnedVersion(d.current_version_id, d.id, versionById);
+    if (!d.current_version_id) {
+      warnings.push("No current version exists.");
+    } else if (!currentResolved.version) {
+      warnings.push(
+        currentResolved.foreign
+          ? "current_version_id resolves to a version belonging to a different deliverable; treated as missing."
+          : "current_version_id does not resolve to any existing version row; treated as missing.",
+      );
+    }
+    const currentVersionSigned = currentResolved.version ? await signVersionAsset(currentResolved.version) : null;
     const currentVersion = currentVersionSigned ? toVersionBody(currentVersionSigned) : null;
 
+    const approvedResolved = resolveOwnedVersion(d.approved_version_id, d.id, versionById);
+    if (d.approved_version_id && !approvedResolved.version) {
+      warnings.push(
+        approvedResolved.foreign
+          ? "approved_version_id resolves to a version belonging to a different deliverable; treated as missing."
+          : "approved_version_id does not resolve to any existing version row; treated as missing.",
+      );
+    }
     let approvedVersion: ContentExportVersionBody | null = null;
-    if (d.approved_version_id && d.approved_version_id !== d.current_version_id) {
-      const rawApproved = versionById.get(d.approved_version_id) ?? null;
-      if (rawApproved) {
-        const signedApproved = await signVersionAsset(rawApproved);
-        approvedVersion = toVersionBody(signedApproved);
-      }
+    if (d.approved_version_id && d.approved_version_id !== d.current_version_id && approvedResolved.version) {
+      const signedApproved = await signVersionAsset(approvedResolved.version);
+      approvedVersion = toVersionBody(signedApproved);
     }
 
     const deliverableArtifacts = artifactsByDeliverable.get(d.id) ?? [];
@@ -416,7 +474,11 @@ export async function buildContentExportBundle(
       }),
     );
 
-    const { may_publish, reason } = evaluateMayPublish(d);
+    const { may_publish, reason } = evaluateMayPublish(
+      d,
+      Boolean(currentResolved.version),
+      Boolean(approvedResolved.version),
+    );
 
     exportDeliverables.push({
       id: d.id,
@@ -430,7 +492,7 @@ export async function buildContentExportBundle(
       current_version_id: d.current_version_id,
       approved_version_id: d.approved_version_id,
       is_current_version_approved:
-        d.current_version_id !== null && d.approved_version_id === d.current_version_id,
+        currentResolved.version !== null && d.approved_version_id === d.current_version_id,
       may_publish,
       may_publish_reason: reason,
       current_version: currentVersion,

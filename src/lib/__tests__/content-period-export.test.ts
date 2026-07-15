@@ -257,6 +257,74 @@ describe("buildContentExportBundle: may_publish", () => {
     expect(d1.current_version?.id).toBe("v2");
     expect(d1.approved_version?.id).toBe("v1");
   });
+
+  it("an approved pointer to a version row that does not exist never authorizes publish (dangling pointer)", async () => {
+    state.deliverables = [
+      // Both current_version_id and approved_version_id point at "v-ghost",
+      // which is never inserted into state.versions -- a deleted or
+      // never-created row, ID-equal but nonexistent.
+      makeDeliverable({ id: "d1", status: "approved", current_version_id: "v-ghost", approved_version_id: "v-ghost" }),
+    ];
+    state.versions = [];
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    const d1 = result.bundle.deliverables[0];
+    expect(d1.may_publish).toBe(false);
+    expect(d1.may_publish_reason).toMatch(/does not resolve to an existing version row/);
+    expect(d1.is_current_version_approved).toBe(false);
+    expect(d1.current_version).toBeNull();
+    expect(d1.warnings).toContain(
+      "current_version_id does not resolve to any existing version row; treated as missing.",
+    );
+  });
+
+  it("a version row that exists but belongs to a different deliverable never authorizes publish and its content is never leaked", async () => {
+    state.deliverables = [
+      makeDeliverable({ id: "d1", status: "approved", current_version_id: "v-foreign", approved_version_id: "v-foreign" }),
+      // d2 is a second REAL active deliverable in this same bundle and is
+      // the legitimate owner of v-foreign. This is what makes the scenario
+      // a genuine cross-deliverable mix-up rather than a simple dangling
+      // pointer: v-foreign is correctly fetched into this bundle's version
+      // set (it belongs to an active deliverable in scope), d1 just points
+      // at it by mistake.
+      makeDeliverable({ id: "d2", status: "draft", current_version_id: "v-foreign", approved_version_id: null }),
+    ];
+    state.versions = [
+      makeVersion({ id: "v-foreign", deliverable_id: "d2", body_html: "<p>Belongs to d2, not d1</p>" }),
+    ];
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    const d1 = result.bundle.deliverables.find((d) => d.id === "d1");
+    if (!d1) throw new Error("expected d1");
+    expect(d1.may_publish).toBe(false);
+    expect(d1.may_publish_reason).toMatch(/does not resolve to an existing version row/);
+    expect(d1.is_current_version_approved).toBe(false);
+    // The critical assertion: d2's content is never exported under d1's
+    // entry, even though the row was fetched into this bundle's version set.
+    expect(d1.current_version).toBeNull();
+    expect(d1.warnings).toContain(
+      "current_version_id resolves to a version belonging to a different deliverable; treated as missing.",
+    );
+    // d2 itself correctly owns and exports the same version.
+    const d2 = result.bundle.deliverables.find((d) => d.id === "d2");
+    expect(d2?.current_version?.id).toBe("v-foreign");
+    expect(d2?.current_version?.body_html).toBe("<p>Belongs to d2, not d1</p>");
+  });
+
+  it("an approved_version_id that is itself a foreign or missing pointer never authorizes publish, even with a valid current version", async () => {
+    state.deliverables = [
+      makeDeliverable({ id: "d1", status: "approved", current_version_id: "v1", approved_version_id: "v-foreign" }),
+    ];
+    state.versions = [
+      makeVersion({ id: "v1", deliverable_id: "d1" }),
+      makeVersion({ id: "v-foreign", deliverable_id: "d-other" }),
+    ];
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    const d1 = result.bundle.deliverables[0];
+    expect(d1.may_publish).toBe(false);
+    expect(d1.may_publish_reason).toMatch(/approved_version_id does not resolve to an existing version row/);
+  });
 });
 
 describe("buildContentExportBundle: missing metadata never removes a deliverable", () => {
