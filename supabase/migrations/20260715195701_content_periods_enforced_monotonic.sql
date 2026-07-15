@@ -19,15 +19,25 @@
 --
 -- The fix makes `enforced` monotonic under ordinary writes: once a period
 -- is enforced, only the audited RPC below (deactivate_period_readiness_atomic)
--- can move it away from `enforced`, and only that RPC's own transaction may
--- do so, via a transaction-local session flag no ordinary
--- INSERT/UPDATE statement sets. Every other write path -- the app's
--- normal activatePeriodReadiness flow, an operator's future edits to the
--- deliverable data, a direct Supabase Studio edit -- is refused with an
+-- can move it away from `enforced`. Authorization is proven by
+-- current_user, not by a settable flag: the RPC is SECURITY DEFINER,
+-- owned by postgres, so current_user is 'postgres' only for the duration
+-- of that function's own execution; the app's own writes always run as
+-- service_role (Database Access Invariant), never as postgres, so an
+-- ordinary UPDATE issued directly (by this app, a future admin script, or
+-- a Studio session connected as service_role) is refused with an
 -- exception, exactly as an unmet activation preflight already is refused.
 --
--- Not applied to production by this branch. Awaiting the second Codex
--- release review before any apply_migration/db push runs.
+-- A third-review correction (Codex, second pass) replaced the first draft
+-- of this fix, which used a transaction-local custom GUC
+-- (publication_readiness.downgrade_authorized) as the authorization
+-- signal. That was rejected: PostgreSQL lets any session SET a custom
+-- GUC with no privilege check, so a session already holding UPDATE on
+-- this table (service_role, the app's own normal write path) could set
+-- the flag itself and bypass the guard with zero audit row -- the exact
+-- silent-downgrade failure this migration exists to close. current_user,
+-- by contrast, cannot be forged by a plain SET/SET LOCAL; it only becomes
+-- 'postgres' by actually executing inside a function postgres owns.
 
 -- ---------------------------------------------------------------------------
 -- 1) Append-only audit trail for the one exceptional path that IS allowed
@@ -110,11 +120,24 @@ begin
       raise exception 'cannot activate readiness for period %: % active deliverable(s) missing role, locale, destination, or placement', new.id, v_incomplete_count;
     end if;
   elsif tg_op = 'UPDATE' and old.readiness_lifecycle = 'enforced' and new.readiness_lifecycle is distinct from 'enforced' then
-    -- NEW: enforced is monotonic under ordinary writes. Only
-    -- deactivate_period_readiness_atomic sets this transaction-local flag;
-    -- no INSERT/UPDATE statement issued directly against content_periods
-    -- (by this app, a future admin script, or a manual Studio edit) does.
-    if coalesce(current_setting('publication_readiness.downgrade_authorized', true), '') is distinct from 'true' then
+    -- NEW: enforced is monotonic under ordinary writes. The app always
+    -- writes through service_role (Database Access Invariant), never as
+    -- postgres. deactivate_period_readiness_atomic is SECURITY DEFINER,
+    -- owned by postgres, so current_user becomes 'postgres' only for the
+    -- duration of that function's own execution (including the UPDATE
+    -- that fires this trigger) -- a property no ordinary session can
+    -- forge by setting a GUC or any other session-local value; it can
+    -- only be true by actually running inside that function.
+    --
+    -- A bare custom GUC (the first draft of this migration, reviewed and
+    -- rejected before ever reaching production) fails this: PostgreSQL
+    -- lets any session SET a custom-namespaced GUC with no privilege
+    -- check at all, so a session already holding UPDATE on this table
+    -- (service_role, exactly the app's own normal write path) could set
+    -- the flag itself and bypass the guard with zero audit row, which is
+    -- the same "ordinary write silently un-enforces the period" failure
+    -- this whole migration exists to close.
+    if current_user <> 'postgres' then
       raise exception 'cannot move period % from enforced to % via an ordinary update; use deactivate_period_readiness_atomic, which records an audited reason', new.id, new.readiness_lifecycle;
     end if;
   end if;
@@ -181,8 +204,10 @@ begin
     return jsonb_build_object('ok', false, 'error', format('period is %s, not enforced; nothing to deactivate', v_from_lifecycle));
   end if;
 
-  perform set_config('publication_readiness.downgrade_authorized', 'true', true);
-
+  -- No flag to set: current_user is 'postgres' for the duration of this
+  -- SECURITY DEFINER call by virtue of the function's own ownership, which
+  -- is what the trigger above actually checks. Nothing here authorizes
+  -- the write; the fact that we are running inside this function does.
   update public.content_periods
      set readiness_lifecycle   = p_to_lifecycle,
          readiness_enforced_at = null,
@@ -243,4 +268,14 @@ notify pgrst, 'reload schema';
 --   8. Call deactivate_period_readiness_atomic a second time on the same
 --      (now setup_required) period -- must return {"ok": false, "error":
 --      "period is setup_required, not enforced..."}.
+--   9. Regression check against the rejected first draft: re-activate the
+--      period to enforced, then run
+--      "SET LOCAL publication_readiness.downgrade_authorized = 'true';"
+--      followed by an ordinary UPDATE ... SET readiness_lifecycle =
+--      'setup_required' in the SAME transaction -- must still raise "cannot
+--      move period ... via an ordinary update", proving the GUC has no
+--      effect under the current_user-based design.
+--   10. readiness_enforced_at must be non-null after check 1 (activation)
+--       and null again after check 6 (deactivation) -- assert the column
+--       value directly, not only readiness_lifecycle.
 -- ---------------------------------------------------------------------------

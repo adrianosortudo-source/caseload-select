@@ -81,6 +81,59 @@ describe("loadPlanPublicationReadiness: success paths never report unavailable",
     expect(result.unavailable).toBe(false);
     expect(result.summary).toEqual({ active: 0, ready: 0, blocked: 0, excluded: 0 });
   });
+
+  it("a genuinely populated, fully-successful load is NOT unavailable and reports real counts", async () => {
+    state.responses.content_deliverables = {
+      data: [
+        {
+          id: "d1", firm_id: FIRM_ID, current_version_id: "v1", period_id: PERIOD_ID, title: "T1",
+          status: "approved", content_kind: "text",
+        },
+        {
+          id: "d2", firm_id: FIRM_ID, current_version_id: null, period_id: PERIOD_ID, title: "T2",
+          status: "in_review", content_kind: "text",
+        },
+      ],
+      error: null,
+    };
+    state.responses.deliverable_versions = {
+      data: [{ id: "v1", deliverable_id: "d1", firm_id: FIRM_ID, body_html: "<p>real</p>" }],
+      error: null,
+    };
+    state.responses.publication_artifacts = { data: [], error: null };
+    state.responses.publication_artifact_validations = { data: [], error: null };
+    state.responses.content_periods = {
+      data: [{ id: PERIOD_ID, readiness_lifecycle: "enforced" }],
+      error: null,
+    };
+
+    const result = await loadPlanPublicationReadiness(FIRM_ID);
+    expect(result.unavailable).toBe(false);
+    expect(result.items).toHaveLength(2);
+    expect(result.titles).toEqual({ d1: "T1", d2: "T2" });
+    expect(result.lifecycleByDeliverableId).toEqual({ d1: "enforced", d2: "enforced" });
+    expect(result.summary.active).toBe(2);
+  });
+});
+
+describe("loadPlanPublicationReadiness: an unexpected thrown exception also reports unavailable, not clean-empty", () => {
+  it("a synchronous throw from the first query resolves to unavailable:true, never EMPTY_PLAN_READINESS's summary", async () => {
+    const { supabaseAdmin } = await import("@/lib/supabase-admin");
+    const originalFrom = supabaseAdmin.from;
+    // Force the very first query in the chain to throw synchronously,
+    // exercising the top-level try/catch rather than any single query's
+    // own { data, error } branch.
+    (supabaseAdmin as unknown as { from: unknown }).from = () => {
+      throw new Error("unexpected connection failure");
+    };
+    try {
+      const result = await loadPlanPublicationReadiness(FIRM_ID);
+      expect(result.unavailable).toBe(true);
+      expect(result.summary).toEqual({ active: 0, ready: 0, blocked: 0, excluded: 0 });
+    } finally {
+      (supabaseAdmin as unknown as { from: unknown }).from = originalFrom;
+    }
+  });
 });
 
 describe("loadPlanPublicationReadiness: every query-failure path reports unavailable, not clean-empty", () => {
@@ -142,6 +195,37 @@ describe("loadPlanPublicationReadiness: every query-failure path reports unavail
 describe("loadPeriodPublicationReadiness: throws on failure instead of silently returning []", () => {
   it("throws when the content_deliverables query errors, rather than returning an empty array", async () => {
     state.responses.content_deliverables = { data: null, error: { message: "connection reset" } };
+    await expect(loadPeriodPublicationReadiness(PERIOD_ID, FIRM_ID)).rejects.toThrow(/readiness data unavailable/);
+  });
+
+  it("throws when the deliverable_versions query errors, not just when it is null (an incomplete evaluation must never masquerade as canActivate=true)", async () => {
+    state.responses.content_deliverables = {
+      data: [{ id: "d1", firm_id: FIRM_ID, current_version_id: "v1", period_id: PERIOD_ID, title: "T", status: "approved" }],
+      error: null,
+    };
+    state.responses.deliverable_versions = { data: null, error: { message: "timeout" } };
+    await expect(loadPeriodPublicationReadiness(PERIOD_ID, FIRM_ID)).rejects.toThrow(/readiness data unavailable/);
+  });
+
+  it("throws when the publication_artifacts query errors", async () => {
+    state.responses.content_deliverables = {
+      data: [{ id: "d1", firm_id: FIRM_ID, current_version_id: null, period_id: PERIOD_ID, title: "T", status: "approved" }],
+      error: null,
+    };
+    state.responses.publication_artifacts = { data: null, error: { message: "rls denied" } };
+    await expect(loadPeriodPublicationReadiness(PERIOD_ID, FIRM_ID)).rejects.toThrow(/readiness data unavailable/);
+  });
+
+  it("throws when the publication_artifact_validations query errors", async () => {
+    state.responses.content_deliverables = {
+      data: [{ id: "d1", firm_id: FIRM_ID, current_version_id: null, period_id: PERIOD_ID, title: "T", status: "approved" }],
+      error: null,
+    };
+    state.responses.publication_artifacts = {
+      data: [{ id: "a1", deliverable_id: "d1", version_id: null, artifact_type: "webpage" }],
+      error: null,
+    };
+    state.responses.publication_artifact_validations = { data: null, error: { message: "timeout" } };
     await expect(loadPeriodPublicationReadiness(PERIOD_ID, FIRM_ID)).rejects.toThrow(/readiness data unavailable/);
   });
 

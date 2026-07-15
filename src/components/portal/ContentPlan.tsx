@@ -286,7 +286,7 @@ function daysLabel(days: number): string {
   return `in ${days} day${days === 1 ? "" : "s"}`;
 }
 
-function ReviewOverview({
+export function ReviewOverview({
   overview,
   isOperator,
   firmId,
@@ -303,6 +303,33 @@ function ReviewOverview({
 }) {
   const [editing, setEditing] = useState(false);
   const { total, approved, pending, changes, draft, weeks, byFormat, nextPublish } = overview;
+  // A genuinely empty plan (total === 0) normally means "nothing to show
+  // here yet" and the whole card returns null. But total comes from a
+  // SEPARATE content_deliverables query than planReadiness -- a brand new
+  // firm, or one whose content is all archived, has total === 0 for a
+  // reason that has nothing to do with whether the readiness read itself
+  // succeeded. If that read failed (planReadiness.unavailable), that is
+  // still a real data error worth surfacing to an operator, not something
+  // the empty-plan early return should silently swallow. Render only the
+  // minimal unavailable banner in that case, not the full progress card
+  // (which would otherwise divide by a zero total and show a meaningless
+  // NaN% for a plan that may not actually be empty).
+  if (total === 0 && planReadiness?.unavailable && isOperator) {
+    return (
+      <div className="bg-white border border-border-brand p-5">
+        <div className="flex items-center gap-2 border border-red-fail/30 bg-red-fail/10 px-3 py-2.5 text-sm text-red-fail">
+          <span className="flex-none text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 border rounded-full bg-red-fail/10 border-red-fail/30">
+            Unavailable
+          </span>
+          <span className="flex-1 min-w-0">
+            Publication readiness could not be loaded. This is a data error,
+            not a clean state, it does not mean nothing needs attention.
+            Reload the page; if this persists, check the server logs.
+          </span>
+        </div>
+      </div>
+    );
+  }
   if (total === 0) return null;
   const pct = Math.round((approved / total) * 100);
   const waiting = pending + changes;
