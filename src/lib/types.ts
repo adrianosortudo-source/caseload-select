@@ -283,6 +283,13 @@ export interface ContentDeliverable {
   deliverable_role: DeliverableRole | null;
   publication_destination: PublicationDestination | null;
   publication_path: string | null;
+  // DR-097 (migration 20260715120200_content_deliverables_cta_target_path.sql).
+  // For deliverable_role in (gbp_post, social_post) ONLY: the on-site path
+  // this post promotes. publication_path stays null for these two roles
+  // (no GBP post id / LinkedIn permalink is ever recorded); for every
+  // other role, cta_target_path stays null and publication_path keeps
+  // meaning "this deliverable's own placement", unchanged.
+  cta_target_path: string | null;
   // Per-row overrides only. NULL means "use deliverable_role's profile
   // default" (see resolveRequirementProfile in publication-requirements.ts).
   requires_legal_approval: boolean | null;
@@ -321,6 +328,21 @@ export interface ContentPeriod {
   created_by_id: string | null;
   created_at: string;
   updated_at: string;
+  // DR-097: explicit, reviewed lifecycle classification -- never inferred
+  // from starts_on/ends_on. "legacy_unreconciled" (pre-existing content,
+  // predates the readiness ledger, renders "Historical -- not
+  // reconciled") | "setup_required" (current/future/stalled work not yet
+  // activated, the default for every new period, renders "Setup
+  // required") | "enforced" (activation preflight passed; "Blocked" is
+  // now genuine). See publication-readiness.ts's PeriodLifecycle type and
+  // 20260715120000_content_periods_readiness_activation.sql.
+  readiness_lifecycle: "legacy_unreconciled" | "setup_required" | "enforced";
+  // Pure audit timestamp: WHEN readiness_lifecycle transitioned to
+  // "enforced". Carries no branching logic of its own -- a database CHECK
+  // constraint keeps it in lockstep with readiness_lifecycle. Set only by
+  // activatePeriodReadiness (lib/deliverables.ts) after
+  // evaluateActivationPreflight passes and the database trigger confirms it.
+  readiness_enforced_at: string | null;
 }
 
 /**

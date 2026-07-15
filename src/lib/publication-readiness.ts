@@ -368,3 +368,169 @@ export function sliceReadinessForPeriod(
   const sliced = items.filter((r) => periodDeliverableIds.has(r.deliverableId));
   return { items: sliced, summary: summarizeReadiness(sliced) };
 }
+
+/**
+ * Publication Readiness remediation (DR-097, revised after review): the
+ * display states a lawyer or operator actually needs to distinguish,
+ * layered on top of the raw pass/fail evaluation above. The raw evaluator
+ * (evaluateDeliverableReadiness) stays unconditional and always correct;
+ * a period's EXPLICIT lifecycle classification (never a date, never a
+ * nullable-timestamp proxy) changes how that raw result is DISPLAYED,
+ * never how it is computed.
+ *
+ * PeriodLifecycle mirrors content_periods.readiness_lifecycle exactly
+ * (see 20260715120000_content_periods_readiness_activation.sql):
+ *   - legacy_unreconciled: pre-existing content, explicitly classified as
+ *     predating the readiness ledger. Every active deliverable renders
+ *     "Historical, not reconciled" regardless of metadata completeness.
+ *   - setup_required: the default for every period that is not explicitly
+ *     legacy -- current work, future work, and stalled/unapproved
+ *     backlogs alike. Every active deliverable renders "Setup required"
+ *     until the period is activated, even one whose own metadata is
+ *     already fully backfilled (that deliverable is ready FOR
+ *     ACTIVATION, not yet "ready" in the enforced sense).
+ *   - enforced: the activation preflight passed (and the database
+ *     confirmed it atomically). Only now does a deliverable's raw
+ *     ready/blocked result drive its display state.
+ *
+ * A first draft of this model derived display state from a single
+ * nullable readiness_enforced_at timestamp ("null = historical"), which
+ * wrongly labelled the CURRENT publishing period (Founder Vesting,
+ * already fully metadata-complete) as historical. This revision fixes
+ * that by keying off the explicit lifecycle column instead.
+ */
+export type PeriodLifecycle = "legacy_unreconciled" | "setup_required" | "enforced";
+
+export type PeriodReadinessState =
+  | "historical_unreconciled"
+  | "setup_required"
+  | "blocked"
+  | "ready"
+  | "excluded";
+
+/**
+ * The requirement keys that represent "this hasn't been configured yet"
+ * rather than "something is genuinely wrong": unset deliverable_role/
+ * locale (role_and_locale_known), an unset publication destination/path
+ * for an article (publication_destination_set), or an unset placement for
+ * a lead-magnet PDF (landing_page_placement). A deliverable failing ONLY
+ * these is "setup_required" once its period is enforced, never a red
+ * "blocked": that label is reserved for a deliverable that IS configured
+ * but still fails a real production requirement (missing image, missing
+ * approval, stale artifact, unvalidated route, etc). This set matches
+ * exactly what the database activation trigger requires
+ * (trg_validate_readiness_activation) -- see the role-aware placement
+ * note there: gbp_post/social_post deliverables have no placement concept
+ * of their own (cta_target_path is descriptive only, never a requirement),
+ * so no requirement key for them appears here.
+ */
+const METADATA_ONLY_KEYS = new Set<RequirementKey>([
+  "role_and_locale_known",
+  "publication_destination_set",
+  "landing_page_placement",
+]);
+
+/**
+ * Derives the display state for one deliverable's already-evaluated
+ * readiness, given its period's EXPLICIT lifecycle classification. Pure:
+ * periodLifecycle is resolved once by the caller from
+ * content_periods.readiness_lifecycle (or "setup_required" when the
+ * deliverable has no period_id at all: unscheduled content was never
+ * activated for readiness either, and is not legacy either, so it gets
+ * the same "needs setup" treatment as a brand-new period rather than a
+ * spurious red Blocked or a spurious Historical label).
+ */
+export function deriveDisplayState(
+  item: DeliverableReadiness,
+  periodLifecycle: PeriodLifecycle,
+): PeriodReadinessState {
+  if (item.excluded) return "excluded";
+  if (periodLifecycle === "legacy_unreconciled") return "historical_unreconciled";
+  if (periodLifecycle === "setup_required") return "setup_required";
+  // periodLifecycle === "enforced": the database guarantees metadata is
+  // complete for every active deliverable at the moment of activation, so
+  // a metadata-only failure here would mean something changed after the
+  // fact in a way the triggers should have refused. Fail calm, not
+  // alarming, as a defense-in-depth signal rather than a false "blocked".
+  if (item.ready) return "ready";
+  const nonMetadataFailures = item.missingRequirements.filter(
+    (k) => !METADATA_ONLY_KEYS.has(k as RequirementKey),
+  );
+  return nonMetadataFailures.length === 0 ? "setup_required" : "blocked";
+}
+
+export interface DisplayStateCounts {
+  historicalUnreconciled: number;
+  setupRequired: number;
+  blocked: number;
+  ready: number;
+  excluded: number;
+}
+
+/** Same rollup shape as summarizeReadiness, but over display states. */
+export function summarizeDisplayStates(
+  items: DeliverableReadiness[],
+  periodLifecycle: PeriodLifecycle,
+): DisplayStateCounts {
+  const counts: DisplayStateCounts = {
+    historicalUnreconciled: 0,
+    setupRequired: 0,
+    blocked: 0,
+    ready: 0,
+    excluded: 0,
+  };
+  for (const item of items) {
+    switch (deriveDisplayState(item, periodLifecycle)) {
+      case "excluded":
+        counts.excluded++;
+        break;
+      case "historical_unreconciled":
+        counts.historicalUnreconciled++;
+        break;
+      case "setup_required":
+        counts.setupRequired++;
+        break;
+      case "blocked":
+        counts.blocked++;
+        break;
+      case "ready":
+        counts.ready++;
+        break;
+    }
+  }
+  return counts;
+}
+
+export interface PeriodActivationCheck {
+  canActivate: boolean;
+  /** Active (non-archived) deliverable ids still missing role/locale/destination/placement. */
+  blockingDeliverableIds: string[];
+}
+
+/**
+ * The activation preflight (DR-097): a period's readiness_lifecycle may
+ * only transition to "enforced" once every ACTIVE deliverable in it has
+ * role, locale, destination, and (where the role has one) placement set.
+ * Reuses the same raw evaluateDeliverableReadiness output a not-yet-
+ * enforced period already has available: metadata completeness is
+ * checkable before enforcement exists, by design, so a period can be
+ * validated before it is flipped on. Archived deliverables are exempt,
+ * matching evaluateDeliverableReadiness's own exclusion. This is an
+ * application-level PRE-check for a fast, itemized error message; the
+ * database trigger trg_validate_readiness_activation
+ * (20260715120000_content_periods_readiness_activation.sql) is the
+ * authoritative, atomic enforcement -- this function must stay a subset
+ * of what that trigger allows, never a looser gate.
+ */
+export function evaluateActivationPreflight(
+  items: DeliverableReadiness[],
+): PeriodActivationCheck {
+  const active = items.filter((i) => !i.excluded);
+  const incomplete = active.filter((i) =>
+    i.missingRequirements.some((k) => METADATA_ONLY_KEYS.has(k as RequirementKey)),
+  );
+  return {
+    canActivate: incomplete.length === 0,
+    blockingDeliverableIds: incomplete.map((i) => i.deliverableId),
+  };
+}

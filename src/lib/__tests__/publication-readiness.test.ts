@@ -3,6 +3,9 @@ import {
   evaluateDeliverableReadiness,
   evaluatePeriodReadiness,
   sliceReadinessForPeriod,
+  deriveDisplayState,
+  evaluateActivationPreflight,
+  summarizeDisplayStates,
   type EvaluateReadinessInput,
 } from "../publication-readiness";
 import { resolveRequirements, profileForRole } from "../publication-requirements";
@@ -41,6 +44,7 @@ function makeDeliverable(overrides: Partial<ContentDeliverable> = {}): ContentDe
     deliverable_role: "article",
     publication_destination: "firm_website",
     publication_path: "/journal/test",
+    cta_target_path: null,
     requires_legal_approval: null,
     requires_image: null,
     requires_file: null,
@@ -415,5 +419,162 @@ describe("sliceReadinessForPeriod: real periodId threading (release-gate fix)", 
     const empty = sliceReadinessForPeriod([someOtherPeriodItem], new Set(["this-period-has-nothing"]));
     expect(empty.items).toEqual([]);
     expect(empty.summary).toEqual({ active: 0, ready: 0, blocked: 0, excluded: 0 });
+  });
+});
+
+// DR-097 (revised after review): explicit three-state period lifecycle.
+// Regression coverage for TWO distinct bugs the first draft had:
+// (1) every legacy period (deliverable_role/locale never backfilled)
+// rendered as red "Blocked", indistinguishable from a genuine current
+// publication blocker; (2) the first fix keyed display state off a single
+// nullable timestamp, which wrongly labelled the CURRENT/future period
+// (e.g. Founder Vesting, already fully metadata-complete) as "Historical",
+// and made "Setup required" unreachable. This suite pins that a period
+// explicitly classified "setup_required" (current/future/stalled work)
+// renders differently from one explicitly classified
+// "legacy_unreconciled", and that only "enforced" ever produces a genuine
+// ready/blocked split.
+describe("deriveDisplayState", () => {
+  it("is 'excluded' for an archived deliverable regardless of lifecycle", () => {
+    const archived = evaluateDeliverableReadiness(makeInput({ deliverable: makeDeliverable({ status: "archived" }) }));
+    expect(deriveDisplayState(archived, "legacy_unreconciled")).toBe("excluded");
+    expect(deriveDisplayState(archived, "setup_required")).toBe("excluded");
+    expect(deriveDisplayState(archived, "enforced")).toBe("excluded");
+  });
+
+  it("is 'historical_unreconciled' ONLY for a period explicitly classified legacy_unreconciled", () => {
+    const noMetadata = evaluateDeliverableReadiness(makeInput({ deliverable: makeDeliverable({ deliverable_role: null, locale: null }) }));
+    expect(deriveDisplayState(noMetadata, "legacy_unreconciled")).toBe("historical_unreconciled");
+  });
+
+  it("is 'setup_required' for a setup_required period, never 'historical_unreconciled' -- this is the Founder Vesting case: current work, not legacy", () => {
+    // Fully metadata-complete deliverable (matches Founder Vesting's real
+    // state today) in a period that is current/active but not yet
+    // activated. Must read as "needs activation", never "historical".
+    const metadataComplete = evaluateDeliverableReadiness(makeInput());
+    expect(deriveDisplayState(metadataComplete, "setup_required")).toBe("setup_required");
+    expect(deriveDisplayState(metadataComplete, "setup_required")).not.toBe("historical_unreconciled");
+  });
+
+  it("is 'setup_required' for a setup_required period even when metadata is genuinely missing (Relocation Clause's un-backfilled case)", () => {
+    const noMetadata = evaluateDeliverableReadiness(makeInput({ deliverable: makeDeliverable({ deliverable_role: null, locale: null }) }));
+    expect(deriveDisplayState(noMetadata, "setup_required")).toBe("setup_required");
+  });
+
+  it("never returns 'blocked' for a period that is not enforced, regardless of how badly a deliverable fails", () => {
+    // Missing hero_image/webpage_artifact/webpage_validated (a "genuine"
+    // failure once enforced) must still read as calm "setup_required"
+    // while the period itself has not been activated -- red "Blocked"
+    // is reserved for enforced periods only.
+    const wouldBeBlockedIfEnforced = evaluateDeliverableReadiness(makeInput());
+    expect(deriveDisplayState(wouldBeBlockedIfEnforced, "legacy_unreconciled")).not.toBe("blocked");
+    expect(deriveDisplayState(wouldBeBlockedIfEnforced, "setup_required")).not.toBe("blocked");
+  });
+
+  it("is 'blocked' for an enforced period when metadata is complete but a real requirement fails", () => {
+    // Default makeInput() has full role/locale/destination metadata but no
+    // artifacts, so hero_image/webpage_artifact/webpage_validated fail --
+    // a genuine, current publication blocker, not a legacy metadata gap.
+    const genuinelyBlocked = evaluateDeliverableReadiness(makeInput());
+    expect(genuinelyBlocked.missingRequirements).not.toContain("role_and_locale_known");
+    expect(deriveDisplayState(genuinelyBlocked, "enforced")).toBe("blocked");
+  });
+
+  it("is 'ready' for an enforced period when every requirement passes", () => {
+    const hero = makeArtifact({ id: "hero-2", artifact_type: "hero_image", version_id: CURRENT_VERSION_ID, locale: "en-CA" });
+    const webpage = makeArtifact({ id: "wp-2", artifact_type: "webpage", version_id: CURRENT_VERSION_ID, locale: "en-CA", public_url: "https://drglaw.ca/journal/test" });
+    const fullyReady = evaluateDeliverableReadiness(
+      makeInput({ artifacts: [hero, webpage], latestValidationByArtifactId: { "wp-2": makePassingValidation("wp-2") } }),
+    );
+    expect(deriveDisplayState(fullyReady, "enforced")).toBe("ready");
+  });
+
+  it("stays 'setup_required', not 'blocked', when a metadata-only failure survives into an enforced period (defense in depth)", () => {
+    // resolveRequirements collapses to just [role_and_locale_known] when
+    // deliverable_role is unset (publication-requirements.ts), so a
+    // null-role deliverable's ONLY failing check is ever the metadata one.
+    // The database trigger should make this state unreachable in practice
+    // (it refuses to enforce a period with incomplete metadata), but the
+    // pure function still fails calm, not alarming, if it ever occurs.
+    const noMetadata = evaluateDeliverableReadiness(makeInput({ deliverable: makeDeliverable({ deliverable_role: null }) }));
+    expect(deriveDisplayState(noMetadata, "enforced")).toBe("setup_required");
+  });
+});
+
+describe("summarizeDisplayStates", () => {
+  it("buckets a mixed set of items correctly for an enforced period", () => {
+    const hero = makeArtifact({ id: "hero-3", artifact_type: "hero_image", version_id: CURRENT_VERSION_ID, locale: "en-CA" });
+    const webpage = makeArtifact({ id: "wp-3", artifact_type: "webpage", version_id: CURRENT_VERSION_ID, locale: "en-CA", public_url: "https://drglaw.ca/journal/test" });
+    const ready = evaluateDeliverableReadiness(
+      makeInput({
+        deliverable: makeDeliverable({ id: "ready-1" }),
+        artifacts: [hero, webpage],
+        latestValidationByArtifactId: { "wp-3": makePassingValidation("wp-3") },
+      }),
+    );
+    const blocked = evaluateDeliverableReadiness(makeInput({ deliverable: makeDeliverable({ id: "blocked-1" }) }));
+    const setupRequired = evaluateDeliverableReadiness(
+      makeInput({ deliverable: makeDeliverable({ id: "setup-1", deliverable_role: null, locale: null }) }),
+    );
+    const archived = evaluateDeliverableReadiness(makeInput({ deliverable: makeDeliverable({ id: "archived-1", status: "archived" }) }));
+
+    const counts = summarizeDisplayStates([ready, blocked, setupRequired, archived], "enforced");
+    expect(counts).toEqual({ historicalUnreconciled: 0, setupRequired: 1, blocked: 1, ready: 1, excluded: 1 });
+  });
+
+  it("puts every non-excluded item into historical_unreconciled for a legacy_unreconciled period", () => {
+    const blocked = evaluateDeliverableReadiness(makeInput({ deliverable: makeDeliverable({ id: "blocked-2" }) }));
+    const setupRequired = evaluateDeliverableReadiness(
+      makeInput({ deliverable: makeDeliverable({ id: "setup-2", deliverable_role: null }) }),
+    );
+    const counts = summarizeDisplayStates([blocked, setupRequired], "legacy_unreconciled");
+    expect(counts).toEqual({ historicalUnreconciled: 2, setupRequired: 0, blocked: 0, ready: 0, excluded: 0 });
+  });
+
+  it("puts every non-excluded item into setup_required for a setup_required period -- proves it is NOT the same bucket as legacy_unreconciled", () => {
+    const metadataComplete = evaluateDeliverableReadiness(makeInput({ deliverable: makeDeliverable({ id: "current-1" }) }));
+    const metadataMissing = evaluateDeliverableReadiness(
+      makeInput({ deliverable: makeDeliverable({ id: "current-2", deliverable_role: null }) }),
+    );
+    const counts = summarizeDisplayStates([metadataComplete, metadataMissing], "setup_required");
+    expect(counts).toEqual({ historicalUnreconciled: 0, setupRequired: 2, blocked: 0, ready: 0, excluded: 0 });
+  });
+});
+
+describe("evaluateActivationPreflight", () => {
+  it("canActivate is true when every active deliverable has role/locale/destination set", () => {
+    const complete1 = evaluateDeliverableReadiness(makeInput({ deliverable: makeDeliverable({ id: "c1" }) }));
+    const complete2 = evaluateDeliverableReadiness(makeInput({ deliverable: makeDeliverable({ id: "c2" }) }));
+    const preflight = evaluateActivationPreflight([complete1, complete2]);
+    expect(preflight.canActivate).toBe(true);
+    expect(preflight.blockingDeliverableIds).toEqual([]);
+  });
+
+  it("canActivate is false and lists the blocking ids when any active deliverable is missing metadata", () => {
+    const complete = evaluateDeliverableReadiness(makeInput({ deliverable: makeDeliverable({ id: "c1" }) }));
+    const incomplete = evaluateDeliverableReadiness(
+      makeInput({ deliverable: makeDeliverable({ id: "incomplete-1", deliverable_role: null, locale: null }) }),
+    );
+    const preflight = evaluateActivationPreflight([complete, incomplete]);
+    expect(preflight.canActivate).toBe(false);
+    expect(preflight.blockingDeliverableIds).toEqual(["incomplete-1"]);
+  });
+
+  it("exempts archived deliverables from the preflight even with missing metadata", () => {
+    const archivedIncomplete = evaluateDeliverableReadiness(
+      makeInput({ deliverable: makeDeliverable({ id: "archived-incomplete", deliverable_role: null, status: "archived" }) }),
+    );
+    const preflight = evaluateActivationPreflight([archivedIncomplete]);
+    expect(preflight.canActivate).toBe(true);
+    expect(preflight.blockingDeliverableIds).toEqual([]);
+  });
+
+  it("also blocks activation when role/locale are set but publication_destination/path are not", () => {
+    const noDestination = evaluateDeliverableReadiness(
+      makeInput({ deliverable: makeDeliverable({ id: "no-dest", publication_destination: null, publication_path: null }) }),
+    );
+    const preflight = evaluateActivationPreflight([noDestination]);
+    expect(preflight.canActivate).toBe(false);
+    expect(preflight.blockingDeliverableIds).toEqual(["no-dest"]);
   });
 });

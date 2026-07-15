@@ -17,7 +17,11 @@ import {
   type PlanOverview,
 } from "@/lib/deliverables-pure";
 import PublicationReadinessSummary from "@/components/portal/PublicationReadinessSummary";
-import { sliceReadinessForPeriod, type DeliverableReadiness } from "@/lib/publication-readiness";
+import {
+  sliceReadinessForPeriod,
+  type DeliverableReadiness,
+  type PeriodLifecycle,
+} from "@/lib/publication-readiness";
 
 const PLAN_STATUS: Record<DeliverableStatus, { label: string; cls: string }> = {
   draft: { label: "Draft", cls: "bg-parchment-2 text-muted border-border-brand" },
@@ -54,6 +58,8 @@ export interface PlanReadinessProp {
   summary: { active: number; ready: number; blocked: number; excluded: number };
   items: DeliverableReadiness[];
   titles: Record<string, string>;
+  /** DR-097: deliverable id to its period's explicit readiness lifecycle. */
+  lifecycleByDeliverableId: Record<string, PeriodLifecycle>;
 }
 
 export default function ContentPlan({
@@ -182,7 +188,12 @@ export default function ContentPlan({
         const periodDeliverableIds = new Set(items.map((d) => d.id));
         const sliced = sliceReadinessForPeriod(planReadiness?.items ?? [], periodDeliverableIds);
         const periodReadiness: PlanReadinessProp | undefined = planReadiness
-          ? { summary: sliced.summary, items: sliced.items, titles: planReadiness.titles }
+          ? {
+              summary: sliced.summary,
+              items: sliced.items,
+              titles: planReadiness.titles,
+              lifecycleByDeliverableId: planReadiness.lifecycleByDeliverableId,
+            }
           : undefined;
         return (
           <PeriodCard
@@ -392,6 +403,7 @@ function ReviewOverview({
           isOperator={isOperator}
           readiness={{ summary: planReadiness.summary, items: planReadiness.items }}
           titles={planReadiness.titles}
+          lifecycleByDeliverableId={planReadiness.lifecycleByDeliverableId}
         />
       )}
     </div>
@@ -547,14 +559,18 @@ function PeriodCard({
       </div>
 
       {periodReadiness && (
-        <div className="px-6 py-3 border-b border-border-brand/60">
+        <div className="px-6 py-3 border-b border-border-brand/60 space-y-2">
           <PublicationReadinessSummary
             firmId={firmId}
             isOperator={isOperator}
             readiness={{ summary: periodReadiness.summary, items: periodReadiness.items }}
             titles={periodReadiness.titles}
             periodId={period.id}
+            lifecycleByDeliverableId={periodReadiness.lifecycleByDeliverableId}
           />
+          {isOperator && period.readiness_lifecycle !== "enforced" && periodReadiness.summary.active > 0 && (
+            <ActivateReadinessButton firmId={firmId} periodId={period.id} onActivated={onChanged} />
+          )}
         </div>
       )}
 
@@ -632,6 +648,67 @@ function DownloadBundleButton({ periodId }: { periodId: string }) {
           </a>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * DR-097/DR-098. Operator-only. Activates publication-readiness enforcement
+ * for this period, gated server-side by the activation preflight: refuses
+ * with the blocking piece count if any active deliverable is still missing
+ * role, locale, or destination. Never a blanket/bulk action; one period at
+ * a time, and the operator sees exactly what to finish backfilling first
+ * on refusal.
+ */
+function ActivateReadinessButton({
+  firmId,
+  periodId,
+  onActivated,
+}: {
+  firmId: string;
+  periodId: string;
+  onActivated: () => void;
+}) {
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function activate() {
+    setState("loading");
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/portal/${firmId}/periods/${periodId}/activate-readiness`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        setState("error");
+        const blockingCount = Array.isArray(json.blockingDeliverableIds) ? json.blockingDeliverableIds.length : 0;
+        setMessage(
+          blockingCount > 0
+            ? `${blockingCount} piece${blockingCount === 1 ? "" : "s"} still need role, locale, or destination set. See "Setup required" below.`
+            : (json.error ?? "Could not activate readiness."),
+        );
+        return;
+      }
+      setState("idle");
+      onActivated();
+    } catch (err) {
+      setState("error");
+      setMessage(err instanceof Error ? err.message : "Network error.");
+    }
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={activate}
+        disabled={state === "loading"}
+        className="text-[11px] font-semibold text-navy/70 hover:text-navy disabled:opacity-50"
+      >
+        {state === "loading" ? "Checking metadata..." : "Activate readiness for this week"}
+      </button>
+      {message && <p className="text-[11px] mt-1 text-amber-800">{message}</p>}
     </div>
   );
 }
