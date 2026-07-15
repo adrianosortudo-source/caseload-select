@@ -54,8 +54,19 @@ export interface ContentExportVersionBody {
   id: string;
   version_number: number;
   body_html: string | null;
+  /** Durable identity: the storage bucket this storage_path lives in, so the bundle is self-describing without the source constant. Null only when storage_path is null. */
+  storage_bucket: string | null;
   storage_path: string | null;
   signed_url: string | null;
+  /**
+   * When signed_url expires (ISO 8601), null when signed_url is null. This
+   * is a temporary access convenience, never durable evidence: storage_path
+   * / asset_sha256 / asset_mime / asset_size_bytes are the canonical asset
+   * identity and never expire. To get a fresh signed_url after expiry,
+   * re-request this same endpoint; every GET re-signs from the current
+   * storage_path with a new TTL, so there is nothing to "renew" separately.
+   */
+  signed_url_expires_at: string | null;
   asset_mime: string | null;
   asset_size_bytes: number | null;
   asset_name: string | null;
@@ -240,13 +251,15 @@ function resolveOwnedVersion(
   return { version: v, foreign: false };
 }
 
-function toVersionBody(v: DeliverableVersion): ContentExportVersionBody {
+function toVersionBody(v: DeliverableVersion, signedUrlExpiresAt: string | null): ContentExportVersionBody {
   return {
     id: v.id,
     version_number: v.version_number,
     body_html: v.body_html,
+    storage_bucket: v.storage_path ? ASSET_BUCKET : null,
     storage_path: v.storage_path,
     signed_url: v.signed_url ?? null,
+    signed_url_expires_at: v.signed_url ? signedUrlExpiresAt : null,
     asset_mime: v.asset_mime,
     asset_size_bytes: v.asset_size_bytes,
     asset_name: v.asset_name,
@@ -281,6 +294,11 @@ export async function buildContentExportBundle(
     .maybeSingle();
   if (periodErr) return { ok: false, error: periodErr.message };
   if (!period) return { ok: false, error: "period not found" };
+
+  // Shared across every asset signed in this one bundle build: all of them
+  // are signed within the same request and share one TTL countdown, so one
+  // expiry timestamp describes all of them rather than drifting per-call.
+  const signedUrlExpiresAt = new Date(Date.now() + SIGNED_URL_TTL * 1000).toISOString();
 
   const { data: firm } = await supabase
     .from("intake_firms")
@@ -401,7 +419,7 @@ export async function buildContentExportBundle(
       );
     }
     const currentVersionSigned = currentResolved.version ? await signVersionAsset(currentResolved.version) : null;
-    const currentVersion = currentVersionSigned ? toVersionBody(currentVersionSigned) : null;
+    const currentVersion = currentVersionSigned ? toVersionBody(currentVersionSigned, signedUrlExpiresAt) : null;
 
     const approvedResolved = resolveOwnedVersion(d.approved_version_id, d.id, versionById);
     if (d.approved_version_id && !approvedResolved.version) {
@@ -414,7 +432,7 @@ export async function buildContentExportBundle(
     let approvedVersion: ContentExportVersionBody | null = null;
     if (d.approved_version_id && d.approved_version_id !== d.current_version_id && approvedResolved.version) {
       const signedApproved = await signVersionAsset(approvedResolved.version);
-      approvedVersion = toVersionBody(signedApproved);
+      approvedVersion = toVersionBody(signedApproved, signedUrlExpiresAt);
     }
 
     const deliverableArtifacts = artifactsByDeliverable.get(d.id) ?? [];
@@ -554,7 +572,14 @@ function renderVersionSection(label: string, version: ContentExportVersionBody |
   }
   if (version.storage_path) {
     lines.push(`- Storage path: \`${version.storage_path}\``);
-    if (version.signed_url) lines.push(`- Signed URL, 1 hour from export time: ${version.signed_url}`);
+    if (version.signed_url) {
+      lines.push(
+        `- Signed URL (temporary access only, not durable evidence): ${version.signed_url}`,
+      );
+      lines.push(
+        `- Signed URL expires: ${version.signed_url_expires_at ?? "unknown"}. To refresh, re-request this export; storage_path/asset_sha256 below are the durable identity.`,
+      );
+    }
     if (version.asset_name) lines.push(`- Asset name: ${version.asset_name}`);
     if (version.asset_mime) lines.push(`- Asset MIME: ${version.asset_mime}`);
     if (version.asset_size_bytes !== null) lines.push(`- Asset size: ${version.asset_size_bytes} bytes`);
