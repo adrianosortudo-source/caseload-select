@@ -62,6 +62,38 @@ An agent receiving this instruction should treat "from its Content Studio
 publishing bundle" as the whole method statement: fetch the bundle first,
 act only on what it contains, and do nothing else in its place.
 
+## Standing publishing instruction (locked, operator-authored)
+
+Every publishing task, regardless of how it is phrased, begins with this
+instruction:
+
+> Download the period's Content Studio publishing bundle first. Use only
+> deliverables with `may_publish: true`. Never generate, rewrite,
+> translate, or infer missing content. For every `may_publish: false`
+> item, report the exact reason and stop. Publish each approved
+> deliverable independently and record its destination URL.
+
+Five clauses, each mapped to a rule already stated above so there is one
+authoritative phrasing an agent can be handed verbatim:
+
+1. **Download the bundle first.** Never conversation history, never
+   filesystem search (see "The permanent rule" above).
+2. **Only `may_publish: true`.** As of the version-ownership hardening
+   fix, this is true only when the current version both IS the approved
+   version and actually resolves to a real, owned `deliverable_versions`
+   row, never on ID equality alone.
+3. **Never generate, rewrite, translate, or infer.** The bundle's
+   `generation_policy` states this machine-readably; this clause states it
+   in plain language for the agent executing the instruction.
+4. **On `may_publish: false`, report the reason and stop.** The exact
+   string is already on the deliverable as `may_publish_reason`; quote it,
+   do not paraphrase or guess at why.
+5. **Publish each approved deliverable independently and record its
+   destination URL.** Deliverables are never batch-published as one unit
+   (an approved article does not carry its unapproved companion LinkedIn
+   post along with it); each publish action, and the resulting live URL,
+   is tracked per deliverable id.
+
 ## How the agent obtains the bundle
 
 1. Call `GET /api/admin/content-periods/<period_id>/content-export` with an
