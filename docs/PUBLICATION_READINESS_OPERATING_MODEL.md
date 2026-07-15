@@ -2,8 +2,8 @@
 doc-type: operating-playbook
 scope: publication-readiness-manifest-and-artifact-evidence
 status: active
-version: v1
-last-edited: 2026-07-14
+version: v2
+last-edited: 2026-07-15
 ---
 
 # Publication readiness operating model
@@ -42,6 +42,160 @@ Published is not the same as live and verified.
 The manifest endpoint answers the middle of that chain (approved through
 destination ready). It does not authorize, publish, or verify live status.
 Nothing in this system does those things yet; see Known limitations below.
+
+## The activation boundary (DR-098, v2 addition)
+
+Every period, past or future, carries an explicit `readiness_lifecycle` on
+`content_periods`: `legacy_unreconciled` | `setup_required` | `enforced`.
+This is not derived from a date, a deliverable count, or any other proxy.
+It is set once, deliberately, by a reviewed migration or an operator
+action, and the pure evaluator's raw pass/fail result is never trusted to
+decide it on its own.
+
+**The four states a lawyer or operator actually sees, and what each one
+means:**
+
+- **Not yet reconciled** (`legacy_unreconciled`, rendered
+  `historical_unreconciled`). This period predates the readiness ledger.
+  Its content may already be approved, live, and correct; that has simply
+  never been checked against this system. The label is a statement about
+  the *evidence record*, not about the content's legal or publication
+  status. Nothing here implies the content is unsafe, unapproved, or
+  wrong; it implies only that nobody has yet walked through the
+  reconciliation workflow below for it.
+- **Setup required** (`setup_required`, the default for every period not
+  explicitly classified otherwise, past, present, or future). Current
+  work, future work, and stalled/incomplete backlogs alike. Not
+  historical, not yet activated, not alarming. A deliverable can sit here
+  even after its own metadata is fully backfilled; that just means it is
+  ready *for activation*, not "ready" in the enforced sense below.
+- **Blocked** (`enforced` period, deliverable fails a genuine, current
+  requirement). Reserved exclusively for a period an operator has
+  explicitly activated, where a specific deliverable is missing a real
+  production requirement, an image, an approval, a live route, a stale
+  artifact bound to the wrong version. A deliverable that fails only a
+  metadata-shaped requirement (see `METADATA_ONLY_KEYS` in
+  `publication-readiness.ts`) inside an enforced period still renders
+  "Setup required," not "Blocked," because the activation trigger already
+  guarantees metadata completeness at the moment of activation; a
+  metadata gap appearing after that point is a defense-in-depth signal,
+  not a normal-path outcome.
+- **Ready** (`enforced` period, every blocking requirement passes). The
+  only state that means "this specific version, with this specific
+  evidence, is actually fit to publish." Never inferred, never assumed;
+  every constituent check is evaluated fresh, every time.
+- **Excluded** (archived deliverables). Out of scope regardless of period
+  lifecycle, matching `evaluateDeliverableReadiness`'s own short-circuit.
+
+**Who may activate a period, and how.** Activation (the transition to
+`enforced`) is operator-only, one period at a time, never a bulk or
+scheduled operation. `POST /api/portal/[firmId]/periods/[periodId]/activate-readiness`
+rejects a missing session with 401 and a non-operator session with 403.
+Before writing, it runs the same preflight
+(`evaluateActivationPreflight`) the database trigger
+(`trg_validate_readiness_activation`) will re-check atomically: every
+active deliverable in the period must already have `deliverable_role`,
+`locale`, and `publication_destination` set, and, for roles that carry
+their own placement (`article`, `landing_page`, `lead_magnet_pdf`),
+`publication_path` too. A period failing that check gets a 409 with the
+exact list of blocking deliverable ids, never a silent partial
+activation. **Activation itself never claims a deliverable is ready.** It
+only turns on the strict evaluation; every deliverable inside a
+freshly-activated period still has to pass its own requirements, exactly
+like a brand-new one would. Re-activating an already-enforced period is a
+no-op (the timestamp is never re-stamped); there is no separate
+deactivation path today. A future exceptional deactivation path (moving
+an enforced period back to `setup_required`, e.g. to correct a
+misclassification) would need its own reviewed migration and its own
+audit trail; nothing in the app exposes that action, and none should be
+added without a corresponding DR.
+
+**How historical reconciliation actually works, end to end.** For a
+period found to be `legacy_unreconciled` (or one an operator later
+decides to move toward activation), the workflow is always: (1) inventory
+every active deliverable's current metadata gaps and evidence state,
+producing a dry-run reconciliation manifest (see below), never a live
+write; (2) an operator personally verifies whatever evidence the dry run
+flagged as checkable (loads the live URL, downloads the PDF and computes
+its hash, confirms an image exists in storage) and registers it as a
+`publication_artifacts` row through the manual insert path described
+below; (3) the operator backfills the deliverable's own metadata columns
+(`deliverable_role`/`locale`/`publication_destination`/`publication_path`)
+via a reviewed migration, grounded only in facts already true (a title
+string implying a format, a route that already exists in the site's
+source, never an invented one); (4) once every active deliverable in the
+period has complete metadata, the operator runs the activation endpoint;
+(5) from that point the period behaves exactly like any other enforced
+period, "Blocked" now means something real, and further evidence
+registration goes through `reconcile-artifacts` like any other
+deliverable. A partially reconciled period can be resumed at any point in
+this sequence: metadata backfill and evidence registration are both
+idempotent, additive operations (a migration that sets already-correct
+values is a no-op; a duplicate artifact registration is rejected by
+`publication_artifacts_dedupe_idx`), so there is no "resume token" to
+track, only "how many of the active deliverables still fail the
+activation preflight," which the preflight itself reports on every call.
+
+**Evidence provenance and the standing prohibition against invented
+receipts.** Every fact that ends up in a metadata backfill migration or a
+`publication_artifacts` row must trace to something a human actually
+did: loaded a URL and saw it resolve, downloaded a file and hashed it,
+read a route that already exists in a site's source tree. A planned
+publication date is not evidence of publication. A matching title is not
+evidence of a live page. A portal approval is not evidence of external
+placement. An expiring signed URL is an access mechanism, not a durable
+receipt; the durable identity of a storage-backed artifact is always its
+bucket/path pair. When no real evidence exists for a slot, the correct
+value is `null`, recorded with a comment explaining why, never a guessed
+path or a fabricated hash. The relocation-clause metadata migration
+(`20260715120500_relocation_clause_publication_metadata.sql`) is the
+worked example: three PT-locale rows are left with `publication_path =
+null` because no Portuguese page exists anywhere in site source, and two
+EN rows keep their real, designed path even though that path currently
+404s live, because the gap is an undeployed-but-authored page, not a
+missing one, and the migration says so in its own comments rather than
+routing around it.
+
+**Pending legal approval is never bypassed by reconciliation.** A
+deliverable whose current version has not been approved by the firm's
+lawyer (`approved_version_id !== current_version_id`, or `status =
+'in_review'`) fails `current_version_approved` regardless of period
+lifecycle, regardless of how much other evidence exists, and no
+reconciliation action in this system can change that. The operator
+cannot approve on the licensee's behalf; the only way a deliverable
+clears that check is the firm's lawyer signing off through the existing
+approval workflow (`docs/CONTENT_STUDIO_APPROVAL_PLAYBOOK.md`). The
+relocation-clause period's own "Clause in the Margin" PT article
+(`b767ef14-dd4e-405e-9c54-1f7f9364f13c`) is `in_review` today and stays
+that way through every migration in this feature; nothing here touches
+its `status` or `approved_version_id`.
+
+**Rollback and recovery.** The lifecycle columns and their two triggers
+are purely additive (new columns, new constraints, new triggers on
+existing tables); rolling back means dropping the two triggers, the two
+CHECK constraints, and the two columns, in that order, which reverts
+every period to having no lifecycle concept at all and reintroduces the
+original false-"Blocked" bug for anything except Founder Vesting. A
+partially-applied migration set (e.g. the activation-invariant migration
+applied but a later metadata-backfill migration not yet run) is safe by
+construction: every period defaults to `setup_required` until explicitly
+classified, so an interrupted rollout never produces a mislabeled
+"Blocked" state, only a temporarily-incomplete "Setup required" one.
+Because activation is gated by a database trigger, a bad application-code
+deploy cannot force an under-classified period into `enforced`; the
+worst a code bug can do is refuse a legitimate activation, never grant an
+illegitimate one.
+
+**The Codex review and release gate.** No migration in this feature
+applies to production, and no code from this branch deploys, until an
+independent Codex architecture and release review has run against the
+open PR and approved it. This document, the dry-run reconciliation
+manifest under `docs/reconciliation/`, and the PR description together
+are the review artifact; Codex should specifically re-verify the
+no-fabrication claims above against the actual migration SQL, not just
+this doc's prose. See the migration/deployment runbook,
+`docs/runbooks/publication-readiness-legacy-reconciliation-migration.md`,
+for the exact application order once that review clears.
 
 ## The manifest endpoint (read only)
 
