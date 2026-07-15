@@ -286,6 +286,46 @@ export async function activatePeriodReadiness(input: {
   return { ok: true, period: data as ContentPeriod };
 }
 
+/**
+ * DR-099: the one audited, exceptional path off "enforced". Ordinary writes
+ * to content_periods cannot move a period away from enforced once
+ * activatePeriodReadiness has set it -- trg_validate_readiness_activation
+ * (updated by 20260715195701_content_periods_enforced_monotonic.sql)
+ * refuses that UPDATE unless a transaction-local flag is set, and nothing
+ * sets that flag except the deactivate_period_readiness_atomic RPC this
+ * function calls. Operator-only at the API layer (the calling route must
+ * reject a non-operator actor before ever reaching this function, exactly
+ * like activatePeriodReadiness's own route); the RPC itself additionally
+ * refuses a non-operator actor_role as defense in depth. Every call is
+ * recorded, append-only, in content_periods_enforcement_audit -- there is
+ * no way to reopen a period without a reason on file.
+ */
+export async function deactivatePeriodReadiness(input: {
+  periodId: string;
+  firmId: string;
+  toLifecycle: "setup_required" | "legacy_unreconciled";
+  reason: string;
+  actor: { role: "operator"; id: string | null; name: string | null };
+}): Promise<{ ok: true; auditId: string; createdAt: string } | { ok: false; error: string }> {
+  const { data: rpcData, error: rpcErr } = await supabase.rpc("deactivate_period_readiness_atomic", {
+    p_period_id: input.periodId,
+    p_firm_id: input.firmId,
+    p_to_lifecycle: input.toLifecycle,
+    p_reason: input.reason,
+    p_actor_role: input.actor.role,
+    p_actor_id: input.actor.id,
+    p_actor_name: input.actor.name,
+  });
+  if (rpcErr) {
+    return { ok: false, error: `deactivate readiness rpc failed: ${rpcErr.message}` };
+  }
+  const result = (rpcData ?? {}) as { ok?: boolean; error?: string; audit_id?: string; created_at?: string };
+  if (!result.ok) {
+    return { ok: false, error: result.error ?? "deactivation failed" };
+  }
+  return { ok: true, auditId: result.audit_id as string, createdAt: result.created_at as string };
+}
+
 /** Operator: assign a deliverable to a week and/or set its format label. */
 export async function setDeliverablePlacement(input: {
   deliverableId: string;
