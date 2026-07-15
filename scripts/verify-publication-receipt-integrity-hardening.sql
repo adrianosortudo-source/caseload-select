@@ -1,5 +1,10 @@
 -- Runnable verification for
--- supabase/migrations/20260715220000_publication_receipt_integrity_hardening.sql.
+-- supabase/migrations/20260715225139_publication_receipt_integrity_hardening.sql
+-- (checks 1-13) and
+-- supabase/migrations/20260715231733_publication_receipt_hardening_supplement.sql
+-- (checks 14-18, added on adversarial re-review: superseded artifact,
+-- hash auto-populate, locale mismatch, and the two new verification-state
+-- purity constraints for 'unverified' and 'reconciling').
 --
 -- NOT run automatically by anything. Wrapped in BEGIN/ROLLBACK end to end
 -- so it leaves no trace regardless of outcome. Uses DRG's real firm_id
@@ -23,8 +28,12 @@ declare
   v_period_b         uuid;
   v_artifact_v1       uuid; -- bound to v1, matching sha
   v_artifact_v2       uuid; -- bound to v2 (wrong version relative to a v1 receipt)
+  v_artifact_superseded uuid; -- bound to v1, superseded_at set (check 14)
+  v_placement_c       uuid; -- distinct placement, locale = 'en-CA' (check 16)
   v_receipt_ok        uuid;
   v_receipt_id_preset uuid;
+  v_receipt_for_reconciling uuid; -- second happy-path receipt, reconciled by check 18
+  v_stored_sha        text;
   v_raised            boolean;
 begin
   raise notice '=== setup: one approved deliverable (2 versions), one placement, one artifact ===';
@@ -53,21 +62,35 @@ begin
      set current_version_id = v_v1, approved_version_id = v_v1
    where id = v_deliverable_id;
 
-  insert into public.content_placements (id, firm_id, period_id, deliverable_id, destination, state)
-  values (gen_random_uuid(), v_firm_id, v_period_a, v_deliverable_id, 'firm_website', 'ready')
+  insert into public.content_placements (id, firm_id, period_id, deliverable_id, destination, state, created_by_role)
+  values (gen_random_uuid(), v_firm_id, v_period_a, v_deliverable_id, 'firm_website', 'ready', 'operator')
   returning id into v_placement_a;
 
-  insert into public.content_placements (id, firm_id, period_id, deliverable_id, destination, state)
-  values (gen_random_uuid(), v_firm_id, v_period_a, v_deliverable_id, 'linkedin_post', 'ready')
+  insert into public.content_placements (id, firm_id, period_id, deliverable_id, destination, state, created_by_role)
+  values (gen_random_uuid(), v_firm_id, v_period_a, v_deliverable_id, 'linkedin_post', 'ready', 'operator')
   returning id into v_placement_b;
 
-  insert into public.publication_artifacts (id, firm_id, deliverable_id, version_id, artifact_type, sha256)
-  values (gen_random_uuid(), v_firm_id, v_deliverable_id, v_v1, 'webpage', repeat('a', 64))
+  insert into public.publication_artifacts (id, firm_id, deliverable_id, version_id, artifact_type, sha256, created_by_role)
+  values (gen_random_uuid(), v_firm_id, v_deliverable_id, v_v1, 'webpage', repeat('a', 64), 'operator')
   returning id into v_artifact_v1;
 
-  insert into public.publication_artifacts (id, firm_id, deliverable_id, version_id, artifact_type, sha256)
-  values (gen_random_uuid(), v_firm_id, v_deliverable_id, v_v2, 'webpage', repeat('b', 64))
+  insert into public.publication_artifacts (id, firm_id, deliverable_id, version_id, artifact_type, sha256, created_by_role)
+  values (gen_random_uuid(), v_firm_id, v_deliverable_id, v_v2, 'webpage', repeat('b', 64), 'operator')
   returning id into v_artifact_v2;
+
+  -- Distinct locale ('fr-CA') vs v_artifact_v1's null so the two rows
+  -- don't collide on publication_artifacts_dedupe_idx (unique on
+  -- deliverable_id, version_id, artifact_type, coalesce(locale,''),
+  -- coalesce(destination,'')); the artifact's own locale is never
+  -- compared against anything by the trigger, so this is inert for the
+  -- superseded-artifact check itself.
+  insert into public.publication_artifacts (id, firm_id, deliverable_id, version_id, artifact_type, sha256, superseded_at, created_by_role, locale)
+  values (gen_random_uuid(), v_firm_id, v_deliverable_id, v_v1, 'webpage', repeat('c', 64), now(), 'operator', 'fr-CA')
+  returning id into v_artifact_superseded;
+
+  insert into public.content_placements (id, firm_id, period_id, deliverable_id, destination, state, locale, created_by_role)
+  values (gen_random_uuid(), v_firm_id, v_period_a, v_deliverable_id, 'firm_website', 'ready', 'en-CA', 'operator')
+  returning id into v_placement_c;
 
   insert into public.content_deliverables (id, firm_id, title, status, content_kind)
   values (gen_random_uuid(), v_firm_id, 'VERIFY not-approved deliverable', 'in_review', 'text')
@@ -239,18 +262,24 @@ begin
   end;
   if not v_raised then raise exception 'CHECK 11 FAIL: verification_state=reconciling with no reconciles_receipt_id was NOT refused'; end if;
 
-  -- Check 12: deliverable not approved.
+  -- Check 12: deliverable not approved. Uses v_v1 (a real version row that
+  -- belongs to the OTHER deliverable) as approved_version_id: the FK is
+  -- satisfied (v_v1 exists in deliverable_versions), so the trigger fires,
+  -- and the status check ('in_review' <> 'approved') runs before the
+  -- version-ownership or placement-ownership checks in the function body,
+  -- so this correctly isolates the not-approved rejection. An earlier
+  -- version of this check selected a version FROM v_deliverable_id_2's own
+  -- (deliberately empty) deliverable_versions -- since that SELECT matches
+  -- zero rows, the INSERT ... SELECT silently inserted zero rows, raised no
+  -- exception, and never exercised the check at all (caught on re-run: the
+  -- DO block still reached "CHECK 12 FAIL" because v_raised stayed false).
   v_raised := false;
   begin
     insert into public.publication_receipts (
       id, firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, actor_role
-    )
-    select gen_random_uuid(), v_firm_id, v_deliverable_id_2, v_placement_a, 'firm_website', dv.id, now(), 'operator'
-    from public.deliverable_versions dv where dv.deliverable_id = v_deliverable_id_2
-    limit 1;
-    -- deliverable_id_2 has no versions at all, so this insert should fail
-    -- on the approved_version_id/deliverable ownership check regardless;
-    -- exercised distinctly for clarity of which failure fires first.
+    ) values (
+      gen_random_uuid(), v_firm_id, v_deliverable_id_2, v_placement_a, 'firm_website', v_v1, now(), 'operator'
+    );
   exception when others then
     v_raised := true;
     raise notice 'CHECK 12 PASS: not-approved deliverable path raised: %', sqlerrm;
@@ -275,7 +304,97 @@ begin
   end;
   if not v_raised then raise exception 'CHECK 13 FAIL: a receipt on a deliverable with approved<>current version drift was NOT refused'; end if;
 
-  raise notice '=== ALL 13 CHECKS PASSED ===';
+  -- Undo the check-13 drift so checks 14+ (which need approved=current) pass.
+  update public.content_deliverables set current_version_id = v_v1 where id = v_deliverable_id;
+
+  -- Check 14: artifact_id references a SUPERSEDED artifact.
+  v_raised := false;
+  begin
+    insert into public.publication_receipts (
+      id, firm_id, deliverable_id, placement_id, destination, approved_version_id, artifact_id, published_at, actor_role
+    ) values (
+      gen_random_uuid(), v_firm_id, v_deliverable_id, v_placement_a, 'firm_website', v_v1, v_artifact_superseded, now(), 'operator'
+    );
+  exception when others then
+    v_raised := true;
+    raise notice 'CHECK 14 PASS: superseded-artifact receipt raised: %', sqlerrm;
+  end;
+  if not v_raised then raise exception 'CHECK 14 FAIL: a receipt bound to a superseded artifact was NOT refused'; end if;
+
+  -- Check 15: artifact_id set (artifact HAS a real sha256), the receipt's
+  -- own artifact_sha256 left null -- must succeed, and the STORED row
+  -- must have artifact_sha256 auto-populated from the artifact.
+  insert into public.publication_receipts (
+    id, firm_id, deliverable_id, placement_id, destination, approved_version_id, artifact_id, published_at, actor_role
+  ) values (
+    gen_random_uuid(), v_firm_id, v_deliverable_id, v_placement_a, 'firm_website', v_v1, v_artifact_v1, now(), 'operator'
+  ) returning artifact_sha256 into v_stored_sha;
+  if v_stored_sha is distinct from repeat('a', 64) then
+    raise exception 'CHECK 15 FAIL: omitted artifact_sha256 was not auto-populated from the artifact (got %)', v_stored_sha;
+  end if;
+  raise notice 'CHECK 15 PASS: omitted hash auto-populated from the trusted artifact row: %', v_stored_sha;
+
+  -- Check 16: locale disagreeing with the placement's own locale
+  -- (v_placement_c has locale = 'en-CA').
+  v_raised := false;
+  begin
+    insert into public.publication_receipts (
+      id, firm_id, deliverable_id, placement_id, destination, locale, approved_version_id, published_at, actor_role
+    ) values (
+      gen_random_uuid(), v_firm_id, v_deliverable_id, v_placement_c, 'firm_website', 'pt-BR', v_v1, now(), 'operator'
+    );
+  exception when others then
+    v_raised := true;
+    raise notice 'CHECK 16 PASS: locale-mismatched receipt raised: %', sqlerrm;
+  end;
+  if not v_raised then raise exception 'CHECK 16 FAIL: a receipt locale disagreeing with its placement''s locale was NOT refused'; end if;
+
+  -- Check 17: verification_state = 'unverified' (the default) but carrying
+  -- verified_at + verification_method (satisfies the pre-existing pair
+  -- check, so this isolates the NEW unverified-purity constraint).
+  v_raised := false;
+  begin
+    insert into public.publication_receipts (
+      id, firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, actor_role,
+      verification_state, verified_at, verification_method
+    ) values (
+      gen_random_uuid(), v_firm_id, v_deliverable_id, v_placement_a, 'firm_website', v_v1, now(), 'operator',
+      'unverified', now(), 'url_fetch'
+    );
+  exception when others then
+    v_raised := true;
+    raise notice 'CHECK 17 PASS: unverified-with-metadata raised: %', sqlerrm;
+  end;
+  if not v_raised then raise exception 'CHECK 17 FAIL: verification_state=unverified carrying verified_at/method was NOT refused'; end if;
+
+  -- Check 18: verification_state = 'reconciling' with a VALID
+  -- reconciles_receipt_id (passes the pre-existing reconciling-requires-id
+  -- check) but also carrying verified_at + verification_method (isolates
+  -- the NEW reconciling-purity constraint).
+  insert into public.publication_receipts (
+    id, firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, actor_role,
+    verification_state, verified_at, verification_method
+  ) values (
+    gen_random_uuid(), v_firm_id, v_deliverable_id, v_placement_a, 'firm_website', v_v1, now(), 'operator',
+    'verified', now(), 'url_fetch'
+  ) returning id into v_receipt_for_reconciling;
+
+  v_raised := false;
+  begin
+    insert into public.publication_receipts (
+      id, firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, actor_role,
+      reconciles_receipt_id, verification_state, verified_at, verification_method
+    ) values (
+      gen_random_uuid(), v_firm_id, v_deliverable_id, v_placement_a, 'firm_website', v_v1, now(), 'operator',
+      v_receipt_for_reconciling, 'reconciling', now(), 'url_fetch'
+    );
+  exception when others then
+    v_raised := true;
+    raise notice 'CHECK 18 PASS: reconciling-with-metadata raised: %', sqlerrm;
+  end;
+  if not v_raised then raise exception 'CHECK 18 FAIL: verification_state=reconciling carrying verified_at/method was NOT refused'; end if;
+
+  raise notice '=== ALL 18 CHECKS PASSED ===';
 end $$;
 
 rollback;
