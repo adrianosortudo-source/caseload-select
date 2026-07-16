@@ -148,6 +148,15 @@ describe('extractSections', () => {
     const sections = extractSections(html);
     expect(sections[0].text).toContain('Landlords & tenants');
   });
+
+  it('decodes hex and decimal numeric character references (real drglaw.ca apostrophe encoding)', () => {
+    const html = `<main><p>${"The owner&#x27;s obligations confirm the company&#39;s duties under the lease. ".repeat(3)}</p></main>`;
+    const sections = extractSections(html);
+    expect(sections[0].text).toContain("owner's obligations");
+    expect(sections[0].text).toContain("company's duties");
+    expect(sections[0].text).not.toContain('&#x27;');
+    expect(sections[0].text).not.toContain('&#39;');
+  });
 });
 
 describe('chunkSections', () => {
