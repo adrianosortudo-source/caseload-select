@@ -189,6 +189,41 @@ describe("verifyReceipt", () => {
     // The original row's own actor fields are untouched (append-only).
     expect(state.receipts.find((r) => r.id === created.receipt.id)?.actor_role).toBe("system");
   });
+
+  it("always copies approved_version_id from the original receipt unchanged", async () => {
+    // The DB trigger's post-revision fix (20260716120000, see
+    // scripts/verify-publication-receipt-verification-after-revision-fix.sql)
+    // exempts a verification/failure row from the deliverable's CURRENT
+    // approval-state gates, on the condition that it asserts the SAME
+    // approved_version_id as the receipt it reconciles -- never a
+    // different one. That condition is a property of what this function
+    // sends to the database, not something the trigger itself can be
+    // exercised against here (this suite's fake has no trigger). Pinning
+    // it at this layer is what keeps the two halves of the fix in sync: if
+    // this line ever started copying a re-derived or caller-supplied
+    // version instead of the original's own, the DB-level exemption would
+    // silently stop being sound.
+    const created = await createReceipt({
+      firmId: FIRM_ID,
+      deliverableId: DELIVERABLE_ID,
+      placementId: PLACEMENT_ID,
+      destination: "firm_website",
+      approvedVersionId: VERSION_ID,
+      publicUrl: "https://drglaw.ca/journal/example",
+      publishedAt: new Date().toISOString(),
+      actorRole: "operator",
+    });
+    if (!created.ok) throw new Error("expected ok");
+
+    const verified = await verifyReceipt(created.receipt.id, {
+      method: "url_fetch",
+      passed: true,
+      verifierRole: "operator",
+    });
+    if (!verified.ok) throw new Error("expected ok");
+    expect(verified.receipt.approved_version_id).toBe(VERSION_ID);
+    expect(verified.receipt.approved_version_id).toBe(created.receipt.approved_version_id);
+  });
 });
 
 describe("getCurrentReceiptForPlacement", () => {
