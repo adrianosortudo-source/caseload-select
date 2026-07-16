@@ -43,6 +43,11 @@ const NAV_LINKS = [
     href: (id: string) => `/admin/firms/${id}/metrics`,
     active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/metrics`),
   },
+  {
+    label: "Firm Assist",
+    href: (id: string) => `/admin/firms/${id}/assist`,
+    active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/assist`),
+  },
 ];
 
 // Layer A engagement surfaces for the selected firm: these open the firm's
