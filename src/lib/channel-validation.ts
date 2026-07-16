@@ -22,6 +22,30 @@ import type { PlacementDestination, PublicationArtifactType, PublicationReceipt 
 
 export type ChannelValidationOutcome = "verified" | "failed" | "unverifiable";
 
+/**
+ * Corrective-release finding 5: the explicit allowlist of destinations
+ * where manual (operator-attestation) verification is permitted, because
+ * their automated validator (validateSocialReceipt above) can never itself
+ * return "verified" or "failed" -- there is no authorized read API to check
+ * the live post against, only evidence-presence on the receipt. Every
+ * OTHER destination (today: firm_website, which covers both the webpage
+ * and PDF sub-cases via validateWebsiteReceipt/validatePdfReceipt) has a
+ * real automated check and must go through it; manual verification for
+ * those destinations is rejected even for an operator, so URL/byte/hash
+ * evidence can never be bypassed by an attestation.
+ */
+export const MANUALLY_VERIFIABLE_DESTINATIONS: readonly PlacementDestination[] = [
+  "linkedin_article",
+  "linkedin_post",
+  "linkedin_company_page",
+  "google_business_profile",
+  "email_delivery",
+];
+
+export function isManuallyVerifiableDestination(destination: PlacementDestination): boolean {
+  return (MANUALLY_VERIFIABLE_DESTINATIONS as PlacementDestination[]).includes(destination);
+}
+
 export interface ChannelValidationResult {
   outcome: ChannelValidationOutcome;
   method: "url_fetch" | "operator_attestation";

@@ -18,7 +18,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireOperator } from "@/lib/admin-auth";
-import { getOperatorSession } from "@/lib/portal-auth";
+import { resolveDeliverableActor } from "@/lib/deliverables-auth";
 import { getDeliverableDetail } from "@/lib/deliverables";
 import { createReceipt, listReceiptsForPlacement } from "@/lib/publication-receipts";
 import { listPlacementsForDeliverable } from "@/lib/content-placements";
@@ -49,10 +49,20 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ firmId: string; deliverableId: string; placementId: string }> },
 ) {
-  const denied = await requireOperator();
-  if (denied) return denied;
-
   const { firmId, deliverableId, placementId } = await params;
+
+  // Corrective-release finding 5 (extended): resolveDeliverableActor (not
+  // the plain requireOperator gate) so this route has the real,
+  // currently-authenticated operator's identity to record on the receipt
+  // -- the same resolver the verify route already uses, closing the same
+  // "every receipt attributed to the literal string Operator" gap at the
+  // route that records the PRIMARY publish evidence, not just its later
+  // verification.
+  const resolved = await resolveDeliverableActor(firmId);
+  if (!resolved) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  if (resolved.actor.role !== "operator") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   const detail = await getDeliverableDetail(deliverableId);
   if (!detail || detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -109,7 +119,6 @@ export async function POST(
       ? body.published_at
       : new Date().toISOString();
 
-  const session = await getOperatorSession();
   const result = await createReceipt({
     firmId,
     deliverableId,
@@ -123,8 +132,8 @@ export async function POST(
     externalPostId: typeof body.external_post_id === "string" ? body.external_post_id : null,
     publishedAt,
     actorRole: "operator",
-    actorId: session?.lawyer_id ?? null,
-    actorName: "Operator",
+    actorId: resolved.actor.id ?? null,
+    actorName: resolved.actor.name ?? "Operator",
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
 

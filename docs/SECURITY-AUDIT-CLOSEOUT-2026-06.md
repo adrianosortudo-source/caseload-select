@@ -30,15 +30,18 @@ Critical/High to fix-completeness gaps and false positives.
    request `firmId` lets any holder post leads to any firm. Needs per-firm tool tokens with the firm
    derived from the token. Token-issuance / infra decision.
 
-3. **`undici` advisories.** Blocked on a runtime decision. `undici@8` (the fix) requires
-   Node 22.19.0 or newer; this project has no Node pin, so it inherits Vercel's default. Bumping
-   without first confirming/pinning Vercel's Node to 22.19+ risks a production-wide build break. Steps:
-   (a) confirm/pin Vercel Node 22.19+ (`engines.node` plus the project setting), (b) `npm install undici@^8`,
-   (c) re-verify the SSRF agent (Agent, `connect.lookup`, and `dispatcher` cross-version compat, plus
-   the `localtest.me` to 400 block and the engine-core tests), (d) full suite. The decompression
-   vector is bounded in the interim by the streaming byte cap (an earlier `Accept-Encoding: identity`
-   mitigation was reverted: it broke the crawler's compression check for every site and added little
-   over the cap). (Also: `next` vendors its own `postcss@8.4.31`; that clears only on a future Next release.)
+3. **`undici` advisories.** Partially unblocked (2026-07-16 corrective release). The project previously
+   had no Node pin at all; `package.json` now declares `"engines": { "node": ">=18.17.0" }`, matching the
+   currently-installed `undici@6.27.0`'s own floor. Confirmed via the Vercel API: production's actual
+   `nodeVersion` project setting is `24.x`, and CI (`.github/workflows/ci.yml`) pins Node 20 -- both
+   comfortably clear the `>=18.17.0` floor, and 24.x already clears `undici@8`'s Node 22.19.0 floor too.
+   The `undici@8` bump itself remains a separate, not-yet-scheduled upgrade (out of scope for the
+   corrective release that added the pin): (a) `npm install undici@^8`, (b) re-verify the SSRF agent
+   (Agent, `connect.lookup`, and `dispatcher` cross-version compat, plus the `localtest.me` to 400 block
+   and the engine-core tests), (c) full suite. The decompression vector is bounded in the interim by the
+   streaming byte cap (an earlier `Accept-Encoding: identity` mitigation was reverted: it broke the
+   crawler's compression check for every site and added little over the cap). (Also: `next` vendors its
+   own `postcss@8.4.31`; that clears only on a future Next release.)
 
 4. **`VOICE_HMAC_REQUIRED`.** Operator env flip. Set `VOICE_HMAC_REQUIRED=true` in Vercel prod; DRG's
    `voice_webhook_secret` is already populated. A firm with a secret already requires a valid

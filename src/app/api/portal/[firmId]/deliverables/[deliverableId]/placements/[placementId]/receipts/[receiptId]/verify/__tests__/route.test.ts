@@ -64,11 +64,20 @@ vi.mock("@/lib/publication-receipts", () => ({
   },
 }));
 
+const MANUALLY_VERIFIABLE = new Set([
+  "linkedin_article",
+  "linkedin_post",
+  "linkedin_company_page",
+  "google_business_profile",
+  "email_delivery",
+]);
+
 vi.mock("@/lib/channel-validation", () => ({
   validateReceiptForDestination: (destination: string, receipt: unknown, opts: Record<string, unknown>) => {
     state.validateCallArgs = { destination, receipt, opts };
     return Promise.resolve(state.validateResult);
   },
+  isManuallyVerifiableDestination: (destination: string) => MANUALLY_VERIFIABLE.has(destination),
 }));
 
 vi.mock("@/lib/supabase-admin", () => ({
@@ -144,6 +153,7 @@ describe("POST verify: verifier identity threading (Workstream 5)", () => {
 
   it("passes the resolved operator's real identity into verifyReceipt on the manual-attestation path", async () => {
     state.resolvedActor = { role: "operator", id: "op-42", name: "Operator", email: null };
+    state.placements = [{ id: PLACEMENT, destination: "linkedin_post", required_artifact_type: null }];
     await POST(makeReq({ manualOutcome: "verified" }), params());
     const args = (state.verifyReceiptArgs as { args: { verifierRole: string; verifierId: string } }).args;
     expect(args.verifierRole).toBe("operator");
@@ -292,7 +302,15 @@ describe("POST verify: automated path", () => {
   });
 });
 
-describe("POST verify: manual attestation path", () => {
+describe("POST verify: manual attestation path (Workstream 6 / corrective-release finding 5)", () => {
+  beforeEach(() => {
+    // Every test in this block targets a destination on the manual
+    // allowlist (linkedin_post) -- firm_website's default fixture from the
+    // top-level beforeEach is exactly the machine-verifiable case the
+    // rejection tests below cover instead.
+    state.placements = [{ id: PLACEMENT, destination: "linkedin_post", required_artifact_type: null }];
+  });
+
   it("records an operator's manual attestation without running the automated validator", async () => {
     const res = await POST(makeReq({ manualOutcome: "verified" }), params());
     expect(res.status).toBe(200);
@@ -310,5 +328,46 @@ describe("POST verify: manual attestation path", () => {
     expect(
       (state.verifyReceiptArgs as { args: { failureReason: string } }).args.failureReason,
     ).toBe("post was deleted");
+  });
+
+  it("allows manual attestation for every destination on the allowlist", async () => {
+    for (const destination of ["linkedin_article", "linkedin_post", "linkedin_company_page", "google_business_profile", "email_delivery"]) {
+      state.placements = [{ id: PLACEMENT, destination, required_artifact_type: null }];
+      state.verifyReceiptArgs = null;
+      const res = await POST(makeReq({ manualOutcome: "verified" }), params());
+      expect(res.status, `destination ${destination} should accept manual verification`).toBe(200);
+      expect(state.verifyReceiptArgs, `destination ${destination} should have recorded the attestation`).not.toBeNull();
+    }
+  });
+});
+
+describe("POST verify: manual verification rejected for machine-verifiable destinations (corrective-release finding 5)", () => {
+  it("rejects manualOutcome:'verified' for a firm_website webpage placement, even for an operator", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", required_artifact_type: "webpage" }];
+    const res = await POST(makeReq({ manualOutcome: "verified" }), params());
+    expect(res.status).toBe(422);
+    expect(state.verifyReceiptArgs).toBeNull();
+    const body = await res.json();
+    expect(body.error).toMatch(/manual verification is not permitted/i);
+  });
+
+  it("rejects manualOutcome:'verified' for a firm_website PDF placement, even for an operator", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", required_artifact_type: "pdf" }];
+    const res = await POST(makeReq({ manualOutcome: "verified" }), params());
+    expect(res.status).toBe(422);
+    expect(state.verifyReceiptArgs).toBeNull();
+  });
+
+  it("rejects manualOutcome:'failed' for firm_website too -- the block is on the destination, not the outcome value", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", required_artifact_type: "webpage" }];
+    const res = await POST(makeReq({ manualOutcome: "failed", manualReason: "trust me" }), params());
+    expect(res.status).toBe(422);
+    expect(state.verifyReceiptArgs).toBeNull();
+  });
+
+  it("never calls the automated validator when manual verification is rejected -- the request is refused outright, not silently downgraded to automated", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", required_artifact_type: "webpage" }];
+    await POST(makeReq({ manualOutcome: "verified" }), params());
+    expect(state.validateCallArgs).toBeNull();
   });
 });
