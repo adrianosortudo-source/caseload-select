@@ -39,9 +39,15 @@
 -- HISTORICAL NOTE (kept for an accurate forward-only record): this
 -- migration was authored from a pre-fetch of
 -- validate_publication_receipt_scope() that predated a concurrent
--- session's 20260716144315_publication_receipt_verification_after_revision_fix.sql,
--- which had already been applied to production by the time this migration
--- ran (both share the same author-observed apply window). Because both use
+-- session's fix, applied to production as ledger version 20260716144315
+-- and later committed as
+-- supabase/migrations/20260716120000_publication_receipt_verification_after_revision_fix.sql
+-- via PR #39 (that file's own filename prefix does not match its real
+-- applied version -- see docs/audits/MIGRATION-LINEAGE-REPORT-2026-07-16.md,
+-- which was updated to record this as a second live instance of the
+-- filename-drift class it documents). That fix had already been applied
+-- to production by the time this migration ran (both share the same
+-- author-observed apply window). Because both use
 -- CREATE OR REPLACE FUNCTION on the same function, applying this one
 -- reverted that one on production for a few minutes. Both fixes were
 -- restored together, immediately upon discovery, by

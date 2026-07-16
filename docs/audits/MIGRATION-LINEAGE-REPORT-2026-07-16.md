@@ -146,17 +146,30 @@ recurring apply-without-committing risk:
    `pg_get_functiondef` inspection right after applying), corrected within
    minutes by a third migration
    (`20260716144723_publication_receipt_reconcile_concurrency_lock_merge.sql`)
-   that merges both fixes, and re-verified against production. All three
-   migrations now have correctly-versioned repository files; the recovered
-   `20260716144315` file documents the collision in its own header for
-   anyone reading the history later. See this release's final report for
-   the full incident account.
+   that merges both fixes, and re-verified against production. See this
+   release's final report for the full incident account.
+
+   The other session subsequently committed its own fix as PR #39
+   (`supabase/migrations/20260716120000_publication_receipt_verification_after_revision_fix.sql`,
+   merged to `origin/main`). That file's own filename prefix
+   (`20260716120000`) does not match its real, ledger-recorded applied
+   version (`20260716144315`) -- **a third, live instance of exactly the
+   drift class this report exists to catch, discovered while this very
+   report was being written.** This corrective release's own byte-recovered
+   copy of the same fix (originally filed at the correct
+   `20260716144315_...` name) was removed once PR #39's officially-authored
+   version landed, to avoid two files representing the same fix; PR #39's
+   file is the one that should eventually be renamed to
+   `20260716144315_publication_receipt_verification_after_revision_fix.sql`
+   in the migration-hygiene follow-up below. This release's own
+   `20260716144510` and `20260716144723` files were both correctly named
+   from the moment they were applied and remain so.
 
 This is the same underlying risk finding #1 above describes (apply now,
 commit the file later, and meanwhile a second author touches the same
-function) -- just observed live instead of only inferred from the ledger.
-It reinforces the recommendation below, particularly the CI-check item: a
-same-function collision window would have been far safer with an
+function) -- just observed live, twice, instead of only inferred from the
+ledger. It reinforces the recommendation below, particularly the CI-check
+item: a same-function collision window would have been far safer with an
 `OR REPLACE`-aware CI check flagging "this migration redefines a function
 another uncommitted, already-applied migration also touches."
 
@@ -167,8 +180,10 @@ that: (a) introspects the live schema for the seven objects above and
 reconstructs equivalent, idempotent migration files under their correct
 ledger-recorded filenames; (b) renames
 `20260716000000_firm_assist_corpus.sql` to
-`20260716022452_firm_assist_corpus.sql` with identical content; (c) adds a
-CI check (or extends an existing one) that fails a PR introducing a new
-`supabase/migrations/*.sql` file whose filename prefix doesn't match what
-`apply_migration` actually recorded, to stop this class of drift recurring a
-third time.
+`20260716022452_firm_assist_corpus.sql` with identical content; (c) renames
+`20260716120000_publication_receipt_verification_after_revision_fix.sql`
+(PR #39) to `20260716144315_publication_receipt_verification_after_revision_fix.sql`
+with identical content; (d) adds a CI check (or extends an existing one)
+that fails a PR introducing a new `supabase/migrations/*.sql` file whose
+filename prefix doesn't match what `apply_migration` actually recorded, to
+stop this class of drift recurring a fourth time.
