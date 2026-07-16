@@ -19,13 +19,25 @@ const HTML_ENTITIES: Record<string, string> = {
   lt: '<',
   gt: '>',
   quot: '"',
-  '#39': "'",
   apos: "'",
   nbsp: ' ',
 };
 
+/**
+ * Decodes named entities from HTML_ENTITIES plus numeric character
+ * references (decimal &#39; and hex &#x27;). Field-detected 2026-07-16
+ * live-verifying the DRG corpus: apostrophes on the real site render as
+ * &#x27; (hex), which the named-only version silently left in retrieved
+ * chunk text and would have surfaced verbatim in generated answers.
+ */
 function decodeEntities(text: string): string {
-  return text.replace(/&(#39|amp|lt|gt|quot|apos|nbsp);/g, (_m, code: string) => HTML_ENTITIES[code] ?? _m);
+  return text.replace(/&(#x[0-9a-f]+|#[0-9]+|amp|lt|gt|quot|apos|nbsp);/gi, (m, code: string) => {
+    if (code[0] === '#') {
+      const codePoint = code[1]?.toLowerCase() === 'x' ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : m;
+    }
+    return HTML_ENTITIES[code.toLowerCase()] ?? m;
+  });
 }
 
 function stripTags(html: string): string {
