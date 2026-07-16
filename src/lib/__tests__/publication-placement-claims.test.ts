@@ -129,4 +129,118 @@ describe("claimPlacementForPublish", () => {
     const call = state.rpcArgs as { args: Record<string, unknown> };
     expect(call.args.p_supersedes_claim_id).toBeNull();
   });
+
+  describe("malformed RPC response handling (runtime validation, not a bare cast)", () => {
+    const baseInput = {
+      firmId: FIRM,
+      deliverableId: DELIVERABLE,
+      placementId: PLACEMENT,
+      approvedVersionId: VERSION,
+      idempotencyKey: "key-1",
+      actor: { role: "operator" as const, id: "op-1", name: "Adriano", email: null },
+    };
+
+    it.each([
+      ["a string", "unexpected string"],
+      ["a number", 42],
+      ["an array", [1, 2, 3]],
+    ])("fails closed when data is %s, not an object", async (_label, malformed) => {
+      state.rpcResponse = { data: malformed, error: null };
+      const result = await claimPlacementForPublish(baseInput);
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/^malformed claim_placement_for_publish response:/);
+    });
+
+    it("fails closed when data is null", async () => {
+      state.rpcResponse = { data: null, error: null };
+      const result = await claimPlacementForPublish(baseInput);
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/^malformed claim_placement_for_publish response:/);
+    });
+
+    it("fails closed when data is undefined", async () => {
+      state.rpcResponse = { data: undefined, error: null };
+      const result = await claimPlacementForPublish(baseInput);
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/^malformed claim_placement_for_publish response:/);
+    });
+
+    it("fails closed when the ok field is missing entirely", async () => {
+      state.rpcResponse = { data: { claim_id: "c1" }, error: null };
+      const result = await claimPlacementForPublish(baseInput);
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/"ok" must be a boolean/);
+    });
+
+    it.each([["the string \"true\"", "true"], ["the number 1", 1]])(
+      "fails closed when ok is %s instead of a real boolean (regression: old Boolean(...) coercion failed open)",
+      async (_label, badOkValue) => {
+        state.rpcResponse = { data: { ok: badOkValue, claim_id: "c1" }, error: null };
+        const result = await claimPlacementForPublish(baseInput);
+        expect(result.ok).toBe(false);
+        expect(result.error).toMatch(/"ok" must be a boolean/);
+      },
+    );
+
+    it("fails closed when ok:true but claim_id is missing", async () => {
+      state.rpcResponse = { data: { ok: true }, error: null };
+      const result = await claimPlacementForPublish(baseInput);
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/"claim_id" must be a non-empty string/);
+    });
+
+    it("fails closed when ok:true but claim_id is not a string", async () => {
+      state.rpcResponse = { data: { ok: true, claim_id: 12345 }, error: null };
+      const result = await claimPlacementForPublish(baseInput);
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/"claim_id" must be a non-empty string/);
+    });
+
+    it("fails closed when ok:true with an unrecognized status value", async () => {
+      state.rpcResponse = { data: { ok: true, claim_id: "c1", status: "bogus" }, error: null };
+      const result = await claimPlacementForPublish(baseInput);
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/unrecognized "status" value/);
+    });
+
+    it("fails closed when ok:false with an unrecognized next_action value", async () => {
+      state.rpcResponse = {
+        data: { ok: false, error: "some rejection", next_action: "do_something_unknown" },
+        error: null,
+      };
+      const result = await claimPlacementForPublish(baseInput);
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/unrecognized "next_action" value/);
+    });
+
+    it.each([
+      "approve_deliverable",
+      "resolve_version_drift",
+      "already_published",
+      "needs_reverification",
+    ] as const)("accepts and threads through the documented next_action value %s", async (nextAction) => {
+      state.rpcResponse = {
+        data: { ok: false, error: "rejected", next_action: nextAction },
+        error: null,
+      };
+      const result = await claimPlacementForPublish(baseInput);
+      expect(result.ok).toBe(false);
+      expect(result.nextAction).toBe(nextAction);
+      expect(result.error).toBe("rejected");
+    });
+
+    it.each(["active", "released", "superseded"] as const)(
+      "accepts the documented status value %s when ok:true",
+      async (status) => {
+        state.rpcResponse = {
+          data: { ok: true, claim_id: "c1", status },
+          error: null,
+        };
+        const result = await claimPlacementForPublish(baseInput);
+        expect(result.ok).toBe(true);
+        expect(result.claimId).toBe("c1");
+        expect(result.status).toBe(status);
+      },
+    );
+  });
 });

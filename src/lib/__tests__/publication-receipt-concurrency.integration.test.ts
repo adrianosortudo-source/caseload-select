@@ -11,6 +11,14 @@
  * the database here would test that the mock behaves as programmed, not
  * that Postgres actually serializes the two transactions.
  *
+ * Also covers the claim_id binding rules added by
+ * supabase/migrations/20260716200000_publication_receipt_claim_binding.sql:
+ * a root receipt (reconciles_receipt_id null) must name a real, active,
+ * scope-matching claim; two receipt-insert attempts racing to consume the
+ * SAME claim_id must yield exactly one winner; a NULL claim_id on a root
+ * receipt is rejected outright; and a receipt cannot release a claim held
+ * by a different actor.
+ *
  * Gated behind DIRECT_DATABASE_URL (a direct, non-pooled Postgres
  * connection string -- Supabase project settings -> Database -> Connection
  * string -> "Direct connection"; the pooled/PgBouncer transaction-mode URL
@@ -23,9 +31,28 @@
  * repeatable regression test in any environment (local dev, a dedicated CI
  * job) that supplies real database credentials.
  *
+ * Fixture ids are generated fresh (crypto.randomUUID()) per test run, so
+ * repeated or parallel runs never collide and a prior run's leftover rows
+ * (if any) can never poison a new run. Cleanup does not attempt to DELETE
+ * from publication_receipts, publication_placement_claims, or
+ * content_placements: all three reject DELETE unconditionally (append-only
+ * / identity-locked evidence tables -- see
+ * supabase/migrations/20260715191218_20260715130100_content_placements.sql
+ * and 20260716210000_publication_placement_claim_mutation_lockdown.sql),
+ * and once a test has actually inserted a real receipt or claim, the
+ * remaining fixture rows (content_deliverables, deliverable_versions,
+ * intake_firms) become undeletable too via ON DELETE RESTRICT foreign keys
+ * pointing at the now-permanent evidence rows. This is intentional
+ * production behavior, not a gap: publication evidence is a permanent
+ * audit trail. Against the genuinely ephemeral Postgres instance this
+ * suite runs on in CI (a fresh `supabase start` stack, torn down after the
+ * job) that is a complete non-issue; the only cleanup this file performs
+ * is closing the two pg connections.
+ *
  * Run locally: DIRECT_DATABASE_URL="postgresql://postgres:<pw>@db.<ref>.supabase.co:5432/postgres" npx vitest run src/lib/__tests__/publication-receipt-concurrency.integration.test.ts
  */
 
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
 const DB_URL = process.env.DIRECT_DATABASE_URL;
@@ -39,19 +66,32 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
   let connA: import("pg").Client;
   let connB: import("pg").Client;
 
-  const firmId = "99999999-0000-0000-0000-000000000001";
-  const deliverableId = "99999999-0000-0000-0000-000000000002";
-  const placementId = "99999999-0000-0000-0000-000000000003";
-  const versionOld = "99999999-0000-0000-0000-000000000004";
-  const versionNew = "99999999-0000-0000-0000-000000000005";
+  // Fresh random ids per run -- never collide across repeated or parallel
+  // runs, and a previous run's rows (undeletable evidence, see file
+  // docstring) can never block a new run's inserts.
+  const firmId = randomUUID();
+  const deliverableId = randomUUID();
+  const placementId = randomUUID();
+  const versionOld = randomUUID();
+  const versionNew = randomUUID();
+  const versionNewer = randomUUID();
 
-  async function cleanup(client: import("pg").Client) {
-    await client.query(`delete from publication_receipts where firm_id = $1`, [firmId]);
-    await client.query(`delete from content_placements where firm_id = $1`, [firmId]);
-    await client.query(`delete from deliverable_versions where deliverable_id = $1`, [deliverableId]);
-    await client.query(`delete from content_deliverables where id = $1`, [deliverableId]);
-    await client.query(`delete from intake_firms where id = $1`, [firmId]);
-  }
+  // Second and third independent deliverable/placement/version fixtures,
+  // isolated from the version-race pair above, for the claim_id-binding
+  // scenarios that don't need a version race of their own.
+  const deliverableId2 = randomUUID();
+  const placementId2 = randomUUID();
+  const versionId2 = randomUUID();
+
+  const deliverableId3 = randomUUID();
+  const placementId3 = randomUUID();
+  const versionId3 = randomUUID();
+
+  // Obtained once in beforeAll: a claim on the OLD version, needed to
+  // thread claim_id through even the receipt insert test 1 expects to be
+  // rejected (a real caller would already hold a claim before attempting
+  // to publish). Superseded by test 2's own claim on the NEW version.
+  let claimOldId: string;
 
   beforeAll(async () => {
     ({ Client } = await import("pg"));
@@ -59,13 +99,14 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
     connB = new Client({ connectionString: DB_URL });
     await connA.connect();
     await connB.connect();
-    await cleanup(connA);
 
     // Throwaway fixture, fully self-contained (no real firm/client data).
     await connA.query(
-      `insert into intake_firms (id, custom_domain, subdomain) values ($1, null, 'concurrency-test-fixture')`,
-      [firmId],
+      `insert into intake_firms (id, name, custom_domain, subdomain) values ($1, 'Publication Receipt Concurrency Fixture', null, $2)`,
+      [firmId, `concurrency-test-fixture-${firmId}`],
     );
+
+    // --- Fixture 1: the version-race pair used by test 1 and test 2. ---
     await connA.query(
       `insert into content_deliverables
          (id, firm_id, title, content_kind, status, created_by_role)
@@ -82,6 +123,11 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
        values ($1, $2, $3, 2, '<p>v2</p>', 'operator')`,
       [versionNew, deliverableId, firmId],
     );
+    await connA.query(
+      `insert into deliverable_versions (id, deliverable_id, firm_id, version_number, body_html, created_by_role)
+       values ($1, $2, $3, 3, '<p>v3</p>', 'operator')`,
+      [versionNewer, deliverableId, firmId],
+    );
     // Approve the OLD version first -- this is the state a caller reads
     // before racing a receipt insert against a concurrent re-approval.
     await connA.query(
@@ -89,17 +135,74 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
       [versionOld, deliverableId],
     );
     await connA.query(
-      `insert into content_placements (id, firm_id, deliverable_id, destination, required_artifact_type)
-       values ($1, $2, $3, 'firm_website', 'webpage')`,
+      `insert into content_placements (id, firm_id, deliverable_id, destination, required_artifact_type, created_by_role)
+       values ($1, $2, $3, 'firm_website', 'webpage', 'operator')`,
       [placementId, firmId, deliverableId],
+    );
+
+    // A real caller would already hold a claim before attempting to
+    // publish -- obtain one on the OLD version now, while it is still the
+    // deliverable's current approved version.
+    const claimOld = await connA.query(
+      `select claim_placement_for_publish($1, $2, $3, $4, $5, 'operator', null, 'Test Operator') as result`,
+      [firmId, deliverableId, placementId, versionOld, "fixture-claim-old"],
+    );
+    claimOldId = claimOld.rows[0].result.claim_id;
+
+    // --- Fixture 2: independent deliverable/placement/version for the
+    // claim_id NULL-rejection and actor-mismatch scenarios. ---
+    await connA.query(
+      `insert into content_deliverables (id, firm_id, title, content_kind, status, created_by_role)
+       values ($1, $2, 'claim binding fixture', 'text', 'draft', 'operator')`,
+      [deliverableId2, firmId],
+    );
+    await connA.query(
+      `insert into deliverable_versions (id, deliverable_id, firm_id, version_number, body_html, created_by_role)
+       values ($1, $2, $3, 1, '<p>v1</p>', 'operator')`,
+      [versionId2, deliverableId2, firmId],
+    );
+    await connA.query(
+      `update content_deliverables set status = 'approved', approved_version_id = $1, current_version_id = $1 where id = $2`,
+      [versionId2, deliverableId2],
+    );
+    await connA.query(
+      `insert into content_placements (id, firm_id, deliverable_id, destination, created_by_role)
+       values ($1, $2, $3, 'linkedin_post', 'operator')`,
+      [placementId2, firmId, deliverableId2],
+    );
+
+    // --- Fixture 3: independent deliverable/placement/version for the
+    // concurrent-same-claim_id receipt race. ---
+    await connA.query(
+      `insert into content_deliverables (id, firm_id, title, content_kind, status, created_by_role)
+       values ($1, $2, 'same claim_id race fixture', 'text', 'draft', 'operator')`,
+      [deliverableId3, firmId],
+    );
+    await connA.query(
+      `insert into deliverable_versions (id, deliverable_id, firm_id, version_number, body_html, created_by_role)
+       values ($1, $2, $3, 1, '<p>v1</p>', 'operator')`,
+      [versionId3, deliverableId3, firmId],
+    );
+    await connA.query(
+      `update content_deliverables set status = 'approved', approved_version_id = $1, current_version_id = $1 where id = $2`,
+      [versionId3, deliverableId3],
+    );
+    await connA.query(
+      `insert into content_placements (id, firm_id, deliverable_id, destination, created_by_role)
+       values ($1, $2, $3, 'linkedin_post', 'operator')`,
+      [placementId3, firmId, deliverableId3],
     );
   }, 30000);
 
   afterAll(async () => {
-    if (connA) {
-      await cleanup(connA);
-      await connA.end();
-    }
+    // No row cleanup: see the file docstring for why. Every table this
+    // suite writes to either rejects DELETE outright (publication_receipts,
+    // publication_placement_claims, content_placements) or is left
+    // FK-restricted by those tables once real evidence rows exist
+    // (content_deliverables, deliverable_versions, intake_firms). Against
+    // the ephemeral, per-job Postgres instance this suite runs on in CI,
+    // that is expected and harmless.
+    if (connA) await connA.end();
     if (connB) await connB.end();
   });
 
@@ -116,12 +219,15 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
 
     // Session B: concurrently attempt to insert a receipt for the OLD
     // (pre-update) approved_version_id -- this should BLOCK on A's lock,
-    // not read a stale snapshot and succeed.
+    // not read a stale snapshot and succeed. Names the claim obtained in
+    // beforeAll: the version-drift check fires before the claim checks in
+    // validate_publication_receipt_scope(), so this is still expected to
+    // fail on the drift error, not a claim-related one.
     const insertStale = connB.query(
       `insert into publication_receipts
-         (firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, public_url, actor_role, actor_name)
-       values ($1, $2, $3, 'firm_website', $4, now(), 'https://example.test/stale', 'operator', 'Test Operator')`,
-      [firmId, deliverableId, placementId, versionOld],
+         (firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, public_url, actor_role, actor_name, claim_id)
+       values ($1, $2, $3, 'firm_website', $4, now(), 'https://example.test/stale', 'operator', 'Test Operator', $5)`,
+      [firmId, deliverableId, placementId, versionOld, claimOldId],
     );
 
     // Give B's blocked query a moment to actually reach the database and
@@ -149,24 +255,41 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
       [deliverableId, versionOld],
     );
     expect(rows[0].n).toBe(0);
+
+    // The rejected insert never got far enough to release the claim.
+    const claimStatus = await connA.query(`select status from publication_placement_claims where id = $1`, [claimOldId]);
+    expect(claimStatus.rows[0].status).toBe("active");
   }, 30000);
 
   it("allows a legitimate receipt to commit and then serializes the version bump after it", async () => {
+    // Test 1 committed the deliverable onto versionNew. Claim it now --
+    // superseding the still-active claim from beforeAll/test 1 on
+    // versionOld, which was never released because that insert was
+    // rejected before the release trigger ever ran.
+    const claimNew = await connA.query(
+      `select claim_placement_for_publish($1, $2, $3, $4, $5, 'operator', null, 'Test Operator', $6) as result`,
+      [firmId, deliverableId, placementId, versionNew, "fixture-claim-new", claimOldId],
+    );
+    const claimNewResult = claimNew.rows[0].result;
+    expect(claimNewResult.ok).toBe(true);
+    const claimNewId: string = claimNewResult.claim_id;
+
     // Mirror ordering: B claims the lock first with a currently-valid
-    // receipt; A's concurrent version bump must wait for B, not race it.
+    // receipt (for the now-current versionNew); A's concurrent version
+    // bump (to a further versionNewer) must wait for B, not race it.
     await connB.query("begin");
     const insertValid = connB.query(
       `insert into publication_receipts
-         (firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, public_url, actor_role, actor_name)
-       values ($1, $2, $3, 'firm_website', $4, now(), 'https://example.test/valid', 'operator', 'Test Operator')
+         (firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, public_url, actor_role, actor_name, claim_id)
+       values ($1, $2, $3, 'firm_website', $4, now(), 'https://example.test/valid', 'operator', 'Test Operator', $5)
        returning id`,
-      [firmId, deliverableId, placementId, versionOld],
+      [firmId, deliverableId, placementId, versionNew, claimNewId],
     );
     await insertValid;
 
     const updateBlocked = connA.query(
       `update content_deliverables set approved_version_id = $1, current_version_id = $1 where id = $2`,
-      [versionNew, deliverableId],
+      [versionNewer, deliverableId],
     );
 
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -175,8 +298,87 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
 
     const { rows } = await connA.query(
       `select count(*)::int as n from publication_receipts where deliverable_id = $1 and approved_version_id = $2 and public_url = 'https://example.test/valid'`,
-      [deliverableId, versionOld],
+      [deliverableId, versionNew],
     );
+    expect(rows[0].n).toBe(1);
+
+    // The committed receipt released its claim.
+    const claimStatus = await connA.query(`select status from publication_placement_claims where id = $1`, [claimNewId]);
+    expect(claimStatus.rows[0].status).toBe("released");
+  }, 30000);
+
+  it("rejects a root receipt insert with claim_id explicitly NULL", async () => {
+    await expect(
+      connA.query(
+        `insert into publication_receipts
+           (firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, public_url, actor_role, actor_name, claim_id)
+         values ($1, $2, $3, 'linkedin_post', $4, now(), 'https://example.test/no-claim', 'operator', 'Test Operator', null)`,
+        [firmId, deliverableId2, placementId2, versionId2],
+      ),
+    ).rejects.toThrow(/claim_id/i);
+  }, 30000);
+
+  it("rejects a receipt whose actor does not match the claim's claimed-by identity, leaving the claim active", async () => {
+    const operatorId = randomUUID();
+    const otherActorId = randomUUID();
+
+    const claimResult = await connA.query(
+      `select claim_placement_for_publish($1, $2, $3, $4, $5, 'operator', $6, 'Real Operator') as result`,
+      [firmId, deliverableId2, placementId2, versionId2, "scenario-7-key", operatorId],
+    );
+    const claim = claimResult.rows[0].result;
+    expect(claim.ok).toBe(true);
+    const claimId: string = claim.claim_id;
+
+    await expect(
+      connA.query(
+        `insert into publication_receipts
+           (firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, public_url, actor_role, actor_id, actor_name, claim_id)
+         values ($1, $2, $3, 'linkedin_post', $4, now(), 'https://example.test/wrong-actor', 'operator', $5, 'Wrong Operator', $6)`,
+        [firmId, deliverableId2, placementId2, versionId2, otherActorId, claimId],
+      ),
+    ).rejects.toThrow(/actor/i);
+
+    const { rows } = await connA.query(`select status from publication_placement_claims where id = $1`, [claimId]);
+    expect(rows[0].status).toBe("active");
+  }, 30000);
+
+  it("two concurrent receipt inserts naming the SAME claim_id yield exactly one root receipt", async () => {
+    const claimResult = await connA.query(
+      `select claim_placement_for_publish($1, $2, $3, $4, $5, 'operator', null, 'Test Operator') as result`,
+      [firmId, deliverableId3, placementId3, versionId3, "scenario-5-key"],
+    );
+    const claim = claimResult.rows[0].result;
+    expect(claim.ok).toBe(true);
+    const claimId: string = claim.claim_id;
+
+    const insertSql = `insert into publication_receipts
+         (firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, public_url, actor_role, actor_name, claim_id)
+       values ($1, $2, $3, 'linkedin_post', $4, now(), $5, 'operator', 'Test Operator', $6)
+       returning id`;
+
+    // Fire both concurrently -- neither awaited before the other starts --
+    // via two separate connections, so this is a genuine race for the same
+    // claim row, not a sequential check. Promise.allSettled (rather than
+    // Promise.all) so we can inspect BOTH outcomes: exactly one is expected
+    // to reject, and Promise.all would otherwise short-circuit on the first
+    // rejection.
+    const results = await Promise.allSettled([
+      connA.query(insertSql, [firmId, deliverableId3, placementId3, versionId3, "https://example.test/claim-race-a", claimId]),
+      connB.query(insertSql, [firmId, deliverableId3, placementId3, versionId3, "https://example.test/claim-race-b", claimId]),
+    ]);
+
+    const fulfilledCount = results.filter((r) => r.status === "fulfilled").length;
+    expect(fulfilledCount).toBe(1);
+
+    const rejectedResult = results.find((r) => r.status === "rejected");
+    expect(rejectedResult).toBeDefined();
+    if (rejectedResult && rejectedResult.status === "rejected") {
+      const message = String(rejectedResult.reason?.message ?? rejectedResult.reason);
+      expect(message).toMatch(/claim_id|not active/i);
+    }
+
+    const { rows } = await connA.query(`select count(*)::int as n from publication_receipts where claim_id = $1`, [claimId]);
     expect(rows[0].n).toBe(1);
   }, 30000);
 });

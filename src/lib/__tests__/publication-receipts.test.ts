@@ -23,7 +23,22 @@ function chainable(rows: Row[]) {
       current = current.filter((r) => r[col] === val);
       return builder;
     },
-    order: () => builder,
+    // Real Supabase calls this as .order("created_at", { ascending: false })
+    // to get the tip of a reconciliation chain first; this mock previously
+    // no-opped, which happened to work only because these tests inserted
+    // rows in an order that coincidentally matched. Sorting for real here
+    // makes the mock faithful to production ordering.
+    order: (col: string, opts?: { ascending?: boolean }) => {
+      const ascending = opts?.ascending ?? true;
+      current = [...current].sort((a, b) => {
+        const av = String(a[col] ?? "");
+        const bv = String(b[col] ?? "");
+        if (av < bv) return ascending ? -1 : 1;
+        if (av > bv) return ascending ? 1 : -1;
+        return 0;
+      });
+      return builder;
+    },
     maybeSingle: () => Promise.resolve({ data: current[0] ?? null, error: null }),
     insert: (row: Row) => {
       const inserted: Row = {
@@ -70,12 +85,16 @@ import {
   verifyReceipt,
   listReceiptsForPlacement,
   getCurrentReceiptForPlacement,
+  listCurrentReceiptsByPlacementForDeliverable,
 } from "@/lib/publication-receipts";
 
 const FIRM_ID = "f1111111-1111-1111-1111-111111111111";
 const DELIVERABLE_ID = "d1111111-1111-1111-1111-111111111111";
 const PLACEMENT_ID = "pl111111-1111-1111-1111-111111111111";
 const VERSION_ID = "v1111111-1111-1111-1111-111111111111";
+const VERSION_ID_2 = "v2222222-2222-2222-2222-222222222222";
+const CLAIM_ID = "cl111111-1111-1111-1111-111111111111";
+const CLAIM_ID_2 = "cl222222-2222-2222-2222-222222222222";
 
 beforeEach(() => {
   state.receipts = [];
@@ -89,6 +108,7 @@ describe("createReceipt", () => {
       placementId: PLACEMENT_ID,
       destination: "linkedin_post",
       approvedVersionId: VERSION_ID,
+      claimId: CLAIM_ID,
       publicUrl: "https://linkedin.com/posts/example",
       publishedAt: new Date().toISOString(),
       actorRole: "operator",
@@ -108,6 +128,7 @@ describe("verifyReceipt", () => {
       placementId: PLACEMENT_ID,
       destination: "firm_website",
       approvedVersionId: VERSION_ID,
+      claimId: CLAIM_ID,
       publicUrl: "https://drglaw.ca/journal/example",
       publishedAt: new Date().toISOString(),
       actorRole: "operator",
@@ -139,6 +160,7 @@ describe("verifyReceipt", () => {
       placementId: PLACEMENT_ID,
       destination: "firm_website",
       approvedVersionId: VERSION_ID,
+      claimId: CLAIM_ID,
       publicUrl: "https://drglaw.ca/journal/example",
       publishedAt: new Date().toISOString(),
       actorRole: "operator",
@@ -168,6 +190,7 @@ describe("verifyReceipt", () => {
       placementId: PLACEMENT_ID,
       destination: "firm_website",
       approvedVersionId: VERSION_ID,
+      claimId: CLAIM_ID,
       publicUrl: "https://drglaw.ca/journal/example",
       publishedAt: new Date().toISOString(),
       actorRole: "system",
@@ -209,6 +232,7 @@ describe("verifyReceipt", () => {
       placementId: PLACEMENT_ID,
       destination: "firm_website",
       approvedVersionId: VERSION_ID,
+      claimId: CLAIM_ID,
       publicUrl: "https://drglaw.ca/journal/example",
       publishedAt: new Date().toISOString(),
       actorRole: "operator",
@@ -234,6 +258,7 @@ describe("getCurrentReceiptForPlacement", () => {
       placementId: PLACEMENT_ID,
       destination: "firm_website",
       approvedVersionId: VERSION_ID,
+      claimId: CLAIM_ID,
       publicUrl: "https://drglaw.ca/journal/example",
       publishedAt: new Date().toISOString(),
       actorRole: "operator",
@@ -255,6 +280,90 @@ describe("getCurrentReceiptForPlacement", () => {
     const current = await getCurrentReceiptForPlacement("pl-nonexistent");
     expect(current).toBeNull();
   });
+
+  it("(workstream 2) scopes the chain lookup by approvedVersionId, so a verified older version never masks a later version's own chain", async () => {
+    const v1 = await createReceipt({
+      firmId: FIRM_ID,
+      deliverableId: DELIVERABLE_ID,
+      placementId: PLACEMENT_ID,
+      destination: "firm_website",
+      approvedVersionId: VERSION_ID,
+      claimId: CLAIM_ID,
+      publicUrl: "https://drglaw.ca/journal/v1",
+      publishedAt: new Date().toISOString(),
+      actorRole: "operator",
+    });
+    if (!v1.ok) throw new Error("expected ok");
+    const v1Verified = await verifyReceipt(v1.receipt.id, {
+      method: "url_fetch",
+      passed: true,
+      verifierRole: "operator",
+    });
+    if (!v1Verified.ok) throw new Error("expected ok");
+
+    const v2 = await createReceipt({
+      firmId: FIRM_ID,
+      deliverableId: DELIVERABLE_ID,
+      placementId: PLACEMENT_ID,
+      destination: "firm_website",
+      approvedVersionId: VERSION_ID_2,
+      claimId: CLAIM_ID_2,
+      publicUrl: "https://drglaw.ca/journal/v2",
+      publishedAt: new Date().toISOString(),
+      actorRole: "operator",
+    });
+    if (!v2.ok) throw new Error("expected ok");
+
+    const currentForV1 = await getCurrentReceiptForPlacement(PLACEMENT_ID, VERSION_ID);
+    expect(currentForV1?.id).toBe(v1Verified.receipt.id);
+    expect(currentForV1?.verification_state).toBe("verified");
+
+    const currentForV2 = await getCurrentReceiptForPlacement(PLACEMENT_ID, VERSION_ID_2);
+    expect(currentForV2?.id).toBe(v2.receipt.id);
+    expect(currentForV2?.verification_state).toBe("unverified");
+
+    // Unscoped (no approvedVersionId) preserves the old whole-history tip
+    // behavior for callers that genuinely want it.
+    const unscoped = await getCurrentReceiptForPlacement(PLACEMENT_ID);
+    expect(unscoped?.id).toBe(v2.receipt.id);
+  });
+});
+
+describe("listCurrentReceiptsByPlacementForDeliverable", () => {
+  it("(workstream 2) scopes each placement's chain by the approvedVersionId passed in, not the whole history", async () => {
+    const v1 = await createReceipt({
+      firmId: FIRM_ID,
+      deliverableId: DELIVERABLE_ID,
+      placementId: PLACEMENT_ID,
+      destination: "firm_website",
+      approvedVersionId: VERSION_ID,
+      claimId: CLAIM_ID,
+      publicUrl: "https://drglaw.ca/journal/v1",
+      publishedAt: new Date().toISOString(),
+      actorRole: "operator",
+    });
+    if (!v1.ok) throw new Error("expected ok");
+    await verifyReceipt(v1.receipt.id, { method: "url_fetch", passed: true, verifierRole: "operator" });
+
+    const v2 = await createReceipt({
+      firmId: FIRM_ID,
+      deliverableId: DELIVERABLE_ID,
+      placementId: PLACEMENT_ID,
+      destination: "firm_website",
+      approvedVersionId: VERSION_ID_2,
+      claimId: CLAIM_ID_2,
+      publicUrl: "https://drglaw.ca/journal/v2",
+      publishedAt: new Date().toISOString(),
+      actorRole: "operator",
+    });
+    if (!v2.ok) throw new Error("expected ok");
+
+    const byPlacementV2 = await listCurrentReceiptsByPlacementForDeliverable(DELIVERABLE_ID, VERSION_ID_2);
+    expect(byPlacementV2[PLACEMENT_ID]?.id).toBe(v2.receipt.id);
+
+    const byPlacementV1 = await listCurrentReceiptsByPlacementForDeliverable(DELIVERABLE_ID, VERSION_ID);
+    expect(byPlacementV1[PLACEMENT_ID]?.verification_state).toBe("verified");
+  });
 });
 
 describe("listReceiptsForPlacement", () => {
@@ -265,6 +374,7 @@ describe("listReceiptsForPlacement", () => {
       placementId: PLACEMENT_ID,
       destination: "linkedin_post",
       approvedVersionId: VERSION_ID,
+      claimId: CLAIM_ID,
       publicUrl: "https://linkedin.com/posts/example",
       publishedAt: new Date().toISOString(),
       actorRole: "operator",

@@ -588,6 +588,7 @@ export interface PublicationReceipt {
   destination: PlacementDestination;
   locale: string | null;
   approved_version_id: string;
+  claim_id: string | null;
   artifact_id: string | null;
   artifact_sha256: string | null;
   public_url: string | null;

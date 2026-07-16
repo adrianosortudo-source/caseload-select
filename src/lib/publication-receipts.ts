@@ -32,8 +32,14 @@ export interface CreateReceiptInput {
   destination: PlacementDestination;
   locale?: string | null;
   approvedVersionId: string;
+  // Workstream 1: every root receipt this function creates must bind to the
+  // exact active placement claim it publishes under -- the database enforces
+  // this via a NOT NULL-when-root CHECK plus the validate_publication_
+  // receipt_scope trigger, but the caller (the receipts route) resolves and
+  // validates the claim before calling here so the failure is a clean
+  // 409/422, not a raw Postgres exception.
+  claimId: string;
   artifactId?: string | null;
-  artifactSha256?: string | null;
   publicUrl?: string | null;
   externalPostId?: string | null;
   publishedAt: string;
@@ -62,8 +68,12 @@ export async function createReceipt(
       destination: input.destination,
       locale: input.locale ?? null,
       approved_version_id: input.approvedVersionId,
+      claim_id: input.claimId,
       artifact_id: input.artifactId ?? null,
-      artifact_sha256: input.artifactSha256 ?? null,
+      // artifact_sha256 is intentionally never set from caller input here --
+      // it is server-trusted only, derived by the DB trigger from
+      // publication_artifacts.sha256 when artifact_id is bound (workstream
+      // 4: a caller-supplied hash must never become trusted evidence).
       public_url: input.publicUrl ?? null,
       external_post_id: input.externalPostId ?? null,
       published_at: input.publishedAt,
@@ -193,26 +203,43 @@ export async function listReceiptsForPlacement(placementId: string): Promise<Pub
 
 /**
  * The current, authoritative receipt for a placement: the most recent row
- * in its reconciliation chain (a receipt with no other receipt pointing
- * back at IT via reconciles_receipt_id, i.e. the tip of the chain). Used
- * by the preflight/export layer to answer "is this placement actually
- * published, and was it verified" without the caller re-deriving the
- * reconciliation chain itself.
+ * in the reconciliation chain rooted at the placement's root receipt FOR
+ * approvedVersionId (a receipt with no other receipt pointing back at it via
+ * reconciles_receipt_id, i.e. the tip of that chain). Used by the
+ * preflight/export layer to answer "is this placement actually published
+ * for its current approved version, and was it verified" without the caller
+ * re-deriving the reconciliation chain itself.
+ *
+ * Workstream 2: scoped by approvedVersionId, not just placementId -- a
+ * placement's receipt history can now contain root receipts for more than
+ * one approved version (a later version republishing after an earlier one
+ * was verified), so "the tip of ALL receipts for this placement" would pick
+ * up a stale prior version's chain. When approvedVersionId is omitted the
+ * unscoped tip-of-everything behavior is preserved for callers that
+ * genuinely want the whole history (e.g. an audit view).
  */
 export async function getCurrentReceiptForPlacement(
   placementId: string,
+  approvedVersionId?: string | null,
 ): Promise<PublicationReceipt | null> {
   const all = await listReceiptsForPlacement(placementId);
-  return currentReceiptFromChain(all);
+  return currentReceiptFromChain(all, approvedVersionId);
 }
 
-function currentReceiptFromChain(receipts: PublicationReceipt[]): PublicationReceipt | null {
+function currentReceiptFromChain(
+  receipts: PublicationReceipt[],
+  approvedVersionId?: string | null,
+): PublicationReceipt | null {
   if (receipts.length === 0) return null;
+  const scoped = approvedVersionId
+    ? receipts.filter((r) => r.approved_version_id === approvedVersionId)
+    : receipts;
+  if (scoped.length === 0) return null;
   const reconciledIds = new Set(
-    receipts.map((r) => r.reconciles_receipt_id).filter((id): id is string => id !== null),
+    scoped.map((r) => r.reconciles_receipt_id).filter((id): id is string => id !== null),
   );
-  const tip = receipts.find((r) => !reconciledIds.has(r.id));
-  return tip ?? receipts[0];
+  const tip = scoped.find((r) => !reconciledIds.has(r.id));
+  return tip ?? scoped[0];
 }
 
 /**
@@ -220,9 +247,16 @@ function currentReceiptFromChain(receipts: PublicationReceipt[]): PublicationRec
  * deliverable, in a single query. Used by the preflight report (Workstream
  * 7), which needs this for every placement on every active deliverable in
  * a period and cannot afford an N+1 fetch per placement.
+ *
+ * approvedVersionId scopes each placement's chain lookup to that specific
+ * version (see currentReceiptFromChain) -- pass the deliverable's OWN
+ * current approved_version_id, not an arbitrary/historical one, so a
+ * verified receipt from a superseded version never masks readiness for the
+ * version actually up for publication now.
  */
 export async function listCurrentReceiptsByPlacementForDeliverable(
   deliverableId: string,
+  approvedVersionId: string | null,
 ): Promise<Record<string, PublicationReceipt | null>> {
   const { data, error } = await supabase
     .from("publication_receipts")
@@ -239,7 +273,7 @@ export async function listCurrentReceiptsByPlacementForDeliverable(
   }
   const result: Record<string, PublicationReceipt | null> = {};
   for (const [placementId, list] of byPlacement) {
-    result[placementId] = currentReceiptFromChain(list);
+    result[placementId] = currentReceiptFromChain(list, approvedVersionId);
   }
   return result;
 }

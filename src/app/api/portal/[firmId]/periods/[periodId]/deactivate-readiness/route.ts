@@ -1,15 +1,21 @@
 /**
  * POST /api/portal/[firmId]/periods/[periodId]/deactivate-readiness
  *
- * DR-099. Operator-only. The one audited, exceptional path off an
- * enforced period's readiness_lifecycle. Once activatePeriodReadiness has
- * set a period to enforced, an ordinary UPDATE against content_periods
- * can no longer move it away (trg_validate_readiness_activation refuses
- * it, see 20260715210116_content_periods_enforced_monotonic.sql); this
- * route, and only this route, can. Requires a non-empty reason, which is
- * recorded append-only in content_periods_enforcement_audit alongside the
- * actor and the from/to lifecycle values. Never a blanket/bulk operation;
- * one period at a time, reviewed by the operator.
+ * DR-099. Operator-only. The one audited, exceptional application path
+ * off an enforced period's readiness_lifecycle. Once activatePeriodReadiness
+ * has set a period to enforced, an ordinary UPDATE against content_periods
+ * -- via service_role, the app's normal DB connection -- can no longer
+ * move it away: trg_validate_readiness_activation checks
+ * current_user = 'postgres' and refuses it otherwise (see
+ * 20260715210116_content_periods_enforced_monotonic.sql); this route, and
+ * only this route, is the supported application path that can. (A
+ * Postgres database owner/superuser retains administrative override
+ * capability outside the app entirely -- disabling the trigger,
+ * connecting directly as postgres, etc. -- a documented, accepted
+ * limitation, not a gap this route closes.) Requires a non-empty reason,
+ * which is recorded append-only in content_periods_enforcement_audit
+ * alongside the actor and the from/to lifecycle values. Never a
+ * blanket/bulk operation; one period at a time, reviewed by the operator.
  *
  * Body: { toLifecycle: "setup_required" | "legacy_unreconciled", reason: string }
  */
