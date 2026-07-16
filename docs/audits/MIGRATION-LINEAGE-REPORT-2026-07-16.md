@@ -187,3 +187,123 @@ with identical content; (d) adds a CI check (or extends an existing one)
 that fails a PR introducing a new `supabase/migrations/*.sql` file whose
 filename prefix doesn't match what `apply_migration` actually recorded, to
 stop this class of drift recurring a fourth time.
+
+## Supplement, 2026-07-16 (second corrective pass): exhaustive full-ledger sweep
+
+Everything above was authored against a targeted window (the range this
+corrective release's findings 1-6 actually touch, plus items already known
+from PR #23/#28). This supplement, written from a fresh session picking up
+this release's remaining findings, instead walks the **entire** live ledger
+(114 entries as of repository tip `e91b769c616263fab8636af3948fd90d0dffc3ae`)
+against every file under `supabase/migrations/` (165 files), mechanically,
+one ledger entry at a time. The full per-entry result is the durable
+machine-readable mapping finding 8 (this release's finding 9 in the second
+corrective pass) asked for:
+`docs/audits/migration-lineage-mapping-2026-07-16.json`.
+
+**Method, precisely.** For each ledger entry: (1) does a repo file's
+filename start with the exact recorded `version`? If so, `exact_match` --
+this is authoritative by construction, since that version string is what
+Supabase itself assigned this file when it was pushed. (2) If not, does a
+repo file's name (after its own prefix) equal the ledger's `name`? A match
+under a short (8-digit `YYYYMMDD`, or `YYYYMMDD` + a disambiguating
+letter) prefix is `legacy_pre_tracking` -- the established, confirmed-normal
+pattern this report's own body already documents: Supabase assigns the
+real applied timestamp at push time, and an authoring-date filename
+legitimately never matches it. A match under a **14-digit** prefix that
+still doesn't equal the ledger version is `wrong_prefix_unreconciled` --
+that is real, actionable drift (a full-precision timestamp was typed by
+hand rather than recorded from the push), not an instance of the
+short-form convention. (3) No candidate found by prefix or name anywhere
+in the tree: `production_only_no_repository_source`.
+
+**Confirms the existing findings, one now independently closed mid-sweep.**
+This report originally named two `wrong_prefix_unreconciled` cases:
+`20260716000000_firm_assist_corpus.sql` (recorded version `20260716022452`)
+and `20260716120000_publication_receipt_verification_after_revision_fix.sql`
+(recorded version `20260716144315`, PR #39). While this supplement was
+being written, a concurrent session closed the second one directly (PR
+#42, a pure rename to `20260716144315_publication_receipt_verification_after_revision_fix.sql`,
+zero content change, citing this report's own finding as the reason). This
+supplement's entry for that migration reflects that rename (`exact_match`)
+rather than the stale `wrong_prefix_unreconciled` state; only
+`firm_assist_corpus` remains open. No new instance of this category was
+found beyond what was already known. The six `production_only_no_repository_source`
+entries in the `20260712`-`20260714` range are the same six this report
+already found (the seventh, `20260715232702`, is now `exact_match`, PR #37
+having recovered it, exactly as this report's update section already
+notes).
+
+**Extends the existing findings: six additional production-only gaps,
+outside the window this report's original sweep covered.** All six are
+confirmed by two independent negative searches (no filename-prefix match,
+no whole-tree substring match on any plausible fragment of the name) --
+not merely "not found by this script," but re-checked by hand:
+
+| Ledger version | Ledger name |
+|---|---|
+| `20260518193933` | `enable_required_extensions` |
+| `20260626100000` | `content_studio_format_taxonomy` |
+| `20260626100100` | `content_studio_doctrine_p0` |
+| `20260626100200` | `content_studio_compliance_formats` |
+| `20260628234330` | `20260626_screened_conflict_checks` |
+| `20260628235155` | `20260611_voice_turn_sessions` |
+
+The first is notable: it is the **very first** migration in the entire
+production ledger (enabling required Postgres extensions), with no
+repository file at all. Consistent with finding 1's own thesis (apply now,
+commit the file later) recurring at the very start of this project's
+history, not only in its most recent week. These six join the existing
+table's seven (now six, post-PR-#37) as `production_only_no_repository_source`
+-- reconstruction, per this release's scope boundary, belongs in the same
+separate, non-applied migration-hygiene PR already recommended above, not
+in this corrective release or its docs-only follow-up.
+
+**Repository-only files: a real regional-cutover explanation for most, eleven
+genuinely unaccounted for.** 165 repository files map to only 114 ledger
+entries; 63 files have no ledger match at all. Fifty-two of those are
+every migration dated `20260413` through `20260516` -- entirely explained
+by PR #9 ("chore(supabase): post-migration hygiene after ca-central-1
+cutover") and confirmed via `list_projects`: this production project
+(`ssxryjxifwiivghglqer`, region `ca-central-1`, created 2026-05-18) is
+**not** the project these files were originally applied to. An earlier
+project (`qpzopweonveumvuqkqgw`, region `us-east-2`, status `INACTIVE`)
+predates it; these 52 files' applied history lives in that now-inactive
+project's own ledger, not this one's. They are `legacy_pre_tracking` in
+the fullest sense -- pre-dating this production ledger's own existence --
+not a gap in this repository.
+
+Eleven files remain genuinely unaccounted for after that explanation, all
+dated within this ledger's own active window (`20260617` through
+`20260626`), plus one non-timestamped operator script:
+
+```
+20260617_firm_onboarding_customer_base.sql
+20260623_deliverables_article_meta.sql
+20260623_deliverables_review_notified_at.sql
+20260623_firm_analytics_config.sql
+20260624_content_studio_foundation.sql
+20260624_deliverables_kicker.sql
+20260625_firm_onboarding_v2_phase1_bing_apple_fees.sql
+20260625_screened_leads_contact_postal_code.sql
+20260626_fix_cron_health_http_correlation.sql
+20260626_screened_leads_consent.sql
+OPERATOR_APPLY_supabase_admin_default_acl.sql
+```
+
+Per finding 9's own instruction ("if historical equivalence cannot be
+proven, report the exact unresolved entries rather than guessing"), no
+claim is made about these: they may be committed-but-never-pushed files, a
+name divergent enough from its own ledger entry's recorded name that this
+sweep's matching missed a real pairing, or (for the `OPERATOR_APPLY_`
+script specifically, whose name itself signals a manually-run, ledger-
+untracked action) legitimately outside the migration-ledger's own scope.
+Resolving which is which needs the same live-schema introspection the
+migration-hygiene PR above already has to do for the
+`production_only_no_repository_source` rows, and belongs there, not here.
+
+**What this supplement does not do**, for the same reason the original
+report didn't: no repository migration file's SQL content was modified,
+no file was renamed, and no production schema was touched. Everything
+above is read-only comparison of two things that already exist: the live
+ledger and the repository tree.
