@@ -1,16 +1,59 @@
 ---
 doc_meta:
   version: v1
-  status: Ready for execution
+  status: Phases 1-4 shipped and live-verified against production (2026-07-16); Phase 5 deferred
   owner: Adriano Domingues
-  author: Claude (planning session 2026-07-15)
+  author: Claude (planning session 2026-07-15; executed 2026-07-16)
   executor: Claude Code (Sonnet 5)
   created: 2026-07-15
-  updated: 2026-07-15
+  updated: 2026-07-16
   scope: caseload-select-app + drg-law-website (Phase 3 only)
 ---
 
 # Build Plan: Firm Assist v1 (grounded website answer surface)
+
+## Execution status (2026-07-16)
+
+Phases 1-4 shipped via PRs #34, #36, #38 (all merged to `main`, CI green, Vercel
+production deployments confirmed READY). Live-verified end to end against the
+real DRG production site:
+
+- DRG corpus seeded from the live sitemap (74 URLs found, 70 included after
+  DR-101 seed-exclude rules) and reindexed: 698 chunks, zero errors.
+- Two real defects found and fixed during live verification (not caught by
+  unit tests, since no test exercised the real Gemini API or real site HTML):
+  `text-embedding-004` is not available on this project's API key (switched
+  to `gemini-embedding-001` with `outputDimensionality: 768` via direct REST
+  calls); the real site's apostrophes render as `&#x27;` hex numeric
+  character references, which the named-entity-only decoder left literal in
+  chunk text (decoder now handles numeric refs generically).
+- All three answer intents verified live via curl against
+  `app.caseloadselect.ca` AND via a real browser driving the actual
+  `AskTheFirm` module on `drglaw.ca` (typed question, clicked Ask, read the
+  rendered answer/sources or the screen_handoff CTA out of the live DOM):
+  informational (grounded answer + 4 real source links), case_specific
+  (fixed screen_handoff copy, CTA to `#matter-review`), out_of_corpus (fixed
+  no_coverage copy).
+- Capability gate confirmed: the module is absent on non-pilot pages
+  (`/journal/corporate-decisions`) and present with correct EN/PT copy on
+  all four pilot routes (`/faq`, `/pt/faq`, `/journal/read-before-sign`,
+  `/journal/commercial-lease-clauses-ontario`).
+- `ASSIST_HASH_SALT` set in the app's Vercel production env;
+  `NEXT_PUBLIC_CASELOAD_SELECT_URL` / `NEXT_PUBLIC_CASELOAD_SELECT_FIRM_ID`
+  set in the DRG site's Vercel production env. DRG's `intake_firms.embed_origins`
+  updated to allow `https://drglaw.ca` and `https://www.drglaw.ca`.
+- Operator console (`/admin/firms/[firmId]/assist`) code is deployed and its
+  underlying APIs (pages list, PATCH include toggle, reindex) are proven live;
+  the console's own UI was not visually screenshotted (httpOnly session
+  cookie blocks browser-side auth injection outside the real magic-link
+  flow), but it follows the exact same pattern as the already-proven
+  `/admin/firms/[firmId]/routing` console.
+- Upstash rate-limit env vars remain unset in Vercel (known posture,
+  pre-existing across the app); the `assist` bucket fails open until set.
+
+Not yet done: weekly pg_cron reindex schedule (the route exists at
+`/api/cron/assist-reindex`, wiring the actual cron entry is an operator SQL
+step, same posture as other crons in this app); Phase 5 content-gap mining.
 
 ## 1. What this is
 
@@ -181,4 +224,5 @@ Per the closing-loop standing instruction: every phase ends with commit + push +
 |---|---|---|---|---|---|---|---|
 | 2026-07-15 | Firm Assist build plan v1 | Phase 5 content-gap mining + FAQ JSON-LD loop deferred until real query volume exists | M | 05_Product/caseload-select-app/src/lib/assist/ | Revisit after 30 days of DRG pilot data | Adriano + Claude | Open |
 | 2026-07-15 | Firm Assist build plan v1 | assist_queries not yet folded into lib/data-retention.ts PIPEDA sweep | M | 05_Product/caseload-select-app/src/lib/data-retention.ts | Add retention rule (suggest 365d anonymize question text) when Phase 2 ships | Claude | Open |
-| 2026-07-15 | Firm Assist build plan v1 | Upstash env vars still unset in Vercel; all rate limits fail-open | H | Vercel env config | Set UPSTASH_REDIS_REST_URL + TOKEN before promoting assist beyond DRG pilot | Adriano | Open |
+| 2026-07-15 | Firm Assist build plan v1 | Upstash env vars still unset in Vercel; all rate limits fail-open, including the new assist bucket, now live on the DRG pilot | H | Vercel env config | Set UPSTASH_REDIS_REST_URL + TOKEN | Adriano | Open |
+| 2026-07-16 | Firm Assist Phase 1 live verification | Weekly pg_cron reindex job not yet scheduled; DRG corpus was seeded/reindexed manually via the operator route and will go stale without a recurring job | M | supabase pg_cron config; /api/cron/assist-reindex already exists | Schedule via Supabase MCP or SQL editor, following the 20260506_pg_cron_pg_net_setup.sql pattern | Adriano | Open |
