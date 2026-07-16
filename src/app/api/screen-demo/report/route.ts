@@ -34,6 +34,7 @@ import { Resend } from "resend";
 import { getCase } from "../../../(marketing)/screen-demo/_data/cases";
 import { computeScore, type Answers } from "../../../(marketing)/screen-demo/_lib/scoring";
 import { ReportPdf } from "../../../(marketing)/screen-demo/_lib/report-pdf";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -56,6 +57,14 @@ function isValidEmail(s: string): boolean {
 }
 
 export async function POST(req: Request) {
+  const rl = await checkRateLimit("screenDemoReport", ipFromRequest(req));
+  if (!rl.ok) {
+    return NextResponse.json(
+      { ok: false, error: "rate limited" },
+      { status: 429, headers: rateLimitHeaders(rl) },
+    );
+  }
+
   let body: RequestBody;
   try {
     body = (await req.json()) as RequestBody;

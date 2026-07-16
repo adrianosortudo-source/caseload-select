@@ -68,6 +68,32 @@
  *       run up the bill against a single firm while staying under a
  *       global-IP ceiling.
  *
+ *   memo              60 per minute
+ *     - /api/memo/[sessionId]. Read-only lookup by session UUID, no
+ *       write cost. Two callers share this route: the widget polls it
+ *       anonymously after Round 3 (the session_id IS the capability
+ *       token for that caller, by design, see the route's own
+ *       docstring), and a logged-in portal lawyer polls it with an
+ *       ownership check layered on top. 60/min is generous for either
+ *       polling pattern; the bucket exists to blunt scripted UUID
+ *       scraping, not to gate legitimate use.
+ *
+ *   screenDemoReport   10 per hour
+ *     - /api/screen-demo/report. Public marketing surface (no auth).
+ *       Each call renders a PDF and sends an email from the brand
+ *       domain via Resend. Same tight shape as firmOnboarding: a
+ *       generous single visitor never approaches 10/hour, a script
+ *       does.
+ *
+ *   discoveryReport    20 per hour
+ *     - /api/discovery-report. Invoked by a ChatGPT GPT Action (Adriano's
+ *       own Discovery Intelligence GPT), so the caller is OpenAI's
+ *       infrastructure, not the operator's browser. CORS stays `*`
+ *       because the Action's runtime has no fixed browser origin. Each
+ *       call writes a row and sends an email; low expected volume
+ *       (one operator, occasional Discovery interviews), so the cap is
+ *       purely an abuse backstop.
+ *
  * Per-route bucket selection is done by the caller. Caller passes the
  * bucket name + the IP. We never trust the request body for IP
  * resolution; the helper reads x-forwarded-for and x-real-ip in that
@@ -91,7 +117,10 @@ export type RateLimitBucket =
   | "otpSend"
   | "otpVerify"
   | "seoCheck"
-  | "assist";
+  | "assist"
+  | "memo"
+  | "screenDemoReport"
+  | "discoveryReport";
 
 interface BucketConfig {
   limit: number;
@@ -109,6 +138,9 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   otpVerify:      { limit: 10, windowSeconds: 600 },   // 10 per 10 minutes
   seoCheck:       { limit: 8,  windowSeconds: 600 },   // 8 per 10 minutes (public, unauth only)
   assist:         { limit: 8,  windowSeconds: 60 },    // 8 per minute (public, unauth, per firmId:ip)
+  memo:              { limit: 60, windowSeconds: 60 },   // 60 per minute (read-only, widget + portal)
+  screenDemoReport:  { limit: 10, windowSeconds: 3600 }, // 10 per hour (public marketing form)
+  discoveryReport:   { limit: 20, windowSeconds: 3600 }, // 20 per hour (ChatGPT Action caller)
 };
 
 /**

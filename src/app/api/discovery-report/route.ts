@@ -14,6 +14,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 const RECIPIENT = "adriano@caseloadselect.ca";
 const SUBJECT_PREFIX = "CaseLoad Select Discovery Report: ";
@@ -33,6 +34,14 @@ export async function OPTIONS() {
 
 export async function POST(req: Request) {
   const headers = corsHeaders();
+
+  const rl = await checkRateLimit("discoveryReport", ipFromRequest(req));
+  if (!rl.ok) {
+    return NextResponse.json(
+      { status: "error", message: "Rate limited, try again shortly", stored: false, emailed: false },
+      { status: 429, headers: { ...headers, ...rateLimitHeaders(rl) } },
+    );
+  }
 
   try {
     const body = await req.json() as {
