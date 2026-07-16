@@ -12,6 +12,19 @@
  * so no caller re-derives it independently. Fails closed by construction:
  * every branch that is not an explicit pass returns mayPublish=false with
  * a stated reason; there is no default-true path.
+ *
+ * mayPublish=true is a NECESSARY precondition, not sufficient permission
+ * to act (corrective-release finding 4). This function is read-only and
+ * makes no database write, so two concurrent callers can both read
+ * mayPublish=true for the same placement/version and both believe they
+ * may proceed. The actual atomic authority is
+ * claim_placement_for_publish() (see publication-placement-claims.ts and
+ * supabase/migrations/20260716150130_publication_placement_claims.sql),
+ * which locks the deliverable and placement rows, re-runs these same
+ * readiness conditions under lock, and issues a stable claim only one
+ * caller can hold per placement at a time. A publishing agent must obtain
+ * a claim before acting; a mayPublish=true report on its own is never
+ * sufficient.
  */
 
 import type {
