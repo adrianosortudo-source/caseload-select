@@ -160,3 +160,62 @@ describe("validateOutboundUrl", () => {
     expect(result.ok).toBe(true);
   });
 });
+
+/**
+ * These cases go through `new URL()` on purpose.
+ *
+ * Every caller reaches this classifier via a URL's `hostname`, never via a
+ * hand-written literal, and WHATWG re-serializes IPv6 to its own canonical
+ * hex form. A suite that only calls ipInBlockedRange("::ffff:127.0.0.1")
+ * with the dotted string tests a shape production can never produce, and so
+ * stayed green while "[::ffff:7f00:1]" was reachable. Assert on the same
+ * input shape the real code path sees.
+ */
+describe("validateOutboundUrl: IPv4-in-IPv6 embeddings via new URL() (the real input shape)", () => {
+  it.each([
+    ["IPv4-mapped cloud metadata", "https://[::ffff:169.254.169.254]/latest/meta-data/"],
+    ["IPv4-mapped loopback", "https://[::ffff:127.0.0.1]/"],
+    ["IPv4-mapped RFC1918 10/8", "https://[::ffff:10.0.0.1]/"],
+    ["IPv4-mapped RFC1918 192.168/16", "https://[::ffff:192.168.1.1]/"],
+    ["IPv4-compatible metadata (deprecated ::/96)", "https://[::a9fe:a9fe]/"],
+    ["IPv4-translated metadata (RFC 2765)", "https://[::ffff:0:a9fe:a9fe]/"],
+  ])("blocks %s", (_label, url) => {
+    const result = validateOutboundUrl(new URL(url));
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/blocked/);
+  });
+
+  it("blocks the mapped form after new URL() has normalized it to hex", () => {
+    // Pins the exact normalization that made the dotted-only match dead code.
+    const url = new URL("https://[::ffff:127.0.0.1]/");
+    expect(url.hostname).toBe("[::ffff:7f00:1]");
+    expect(validateOutboundUrl(url).ok).toBe(false);
+  });
+
+  it("still allows legitimate public IPv6 destinations", () => {
+    expect(validateOutboundUrl(new URL("https://[2606:4700:4700::1111]/")).ok).toBe(true);
+    expect(validateOutboundUrl(new URL("https://[2001:4860:4860::8888]/")).ok).toBe(true);
+  });
+});
+
+describe("ipInBlockedRange: IPv6 spelling equivalence", () => {
+  it("blocks the dotted and hex spellings of the same mapped address alike", () => {
+    expect(ipInBlockedRange("::ffff:127.0.0.1")).toBe(true);
+    expect(ipInBlockedRange("::ffff:7f00:1")).toBe(true);
+    expect(ipInBlockedRange("::ffff:169.254.169.254")).toBe(true);
+    expect(ipInBlockedRange("::ffff:a9fe:a9fe")).toBe(true);
+  });
+
+  it("blocks an uncompressed mapped address", () => {
+    expect(ipInBlockedRange("0:0:0:0:0:ffff:7f00:1")).toBe(true);
+  });
+
+  it("refuses a malformed IPv6 rather than defaulting to allowed", () => {
+    expect(ipInBlockedRange("::ffff:zzzz:1")).toBe(true);
+    expect(ipInBlockedRange("not-an-ip")).toBe(true);
+  });
+
+  it("does not block a public address that merely starts with zeroes", () => {
+    expect(ipInBlockedRange("2606:4700:4700::1111")).toBe(false);
+  });
+});

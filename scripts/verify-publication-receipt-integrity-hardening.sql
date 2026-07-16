@@ -233,18 +233,29 @@ begin
   );
   raise notice 'CHECK 10 setup: first reconciliation of v_receipt_ok inserted';
 
+  -- The negative row must be valid in EVERY respect except the one property
+  -- under test, so the unique partial index is the only thing that can reject
+  -- it. failure_reason is supplied because verification_state = 'failed'
+  -- without one violates publication_receipts_failed_requires_reason_check,
+  -- which Postgres evaluates before the index is ever consulted: the insert
+  -- would abort on the CHECK and a bare "when others" would report a pass for
+  -- an index it never reached. Catching sqlstate 23505 specifically (rather
+  -- than "others") is what keeps that failure mode from returning.
   v_raised := false;
   begin
     insert into public.publication_receipts (
       id, firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, actor_role,
-      reconciles_receipt_id, verification_state, verified_at, verification_method
+      reconciles_receipt_id, verification_state, verified_at, verification_method, failure_reason
     ) values (
       gen_random_uuid(), v_firm_id, v_deliverable_id, v_placement_a, 'firm_website', v_v1, now(), 'operator',
-      v_receipt_ok, 'failed', now(), 'url_fetch'
+      v_receipt_ok, 'failed', now(), 'url_fetch', 'verify script: second reconciliation of the same original'
     );
-  exception when others then
-    v_raised := true;
-    raise notice 'CHECK 10 PASS: duplicate reconciliation fork raised: %', sqlerrm;
+  exception
+    when unique_violation then
+      v_raised := true;
+      raise notice 'CHECK 10 PASS: duplicate reconciliation fork refused by the unique index: %', sqlerrm;
+    when others then
+      raise exception 'CHECK 10 FAIL: expected unique_violation (23505) from publication_receipts_reconciles_single_chain_idx, got %: %', sqlstate, sqlerrm;
   end;
   if not v_raised then raise exception 'CHECK 10 FAIL: a second receipt reconciling the same original was NOT refused (chain forked)'; end if;
 

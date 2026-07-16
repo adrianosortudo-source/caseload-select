@@ -22,6 +22,71 @@ export const BLOCKED_HOSTNAMES = new Set([
 ]);
 
 /**
+ * Expands a validated IPv6 literal into its 8 numeric hextets, resolving the
+ * "::" zero run and any trailing dotted quad (::ffff:127.0.0.1). Returns null
+ * on anything it cannot parse, so callers can refuse rather than guess.
+ *
+ * Text matching alone is not safe for IPv6: the same address has many legal
+ * spellings, and WHATWG `new URL()` re-serializes to its own canonical form.
+ * Comparing numbers, not strings, is what makes the range checks total.
+ */
+function ipv6ToHextets(v: string): number[] | null {
+  let s = v;
+  // A trailing dotted quad occupies the final two hextets.
+  const dotted = s.match(/:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (dotted) {
+    const o = dotted[1].split(".").map(Number);
+    if (o.length !== 4 || o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return null;
+    const h1 = ((o[0] << 8) | o[1]).toString(16);
+    const h2 = ((o[2] << 8) | o[3]).toString(16);
+    s = s.slice(0, s.length - dotted[1].length) + `${h1}:${h2}`;
+  }
+  const dbl = s.indexOf("::");
+  let head: string[];
+  let tail: string[];
+  if (dbl >= 0) {
+    const before = s.slice(0, dbl);
+    const after = s.slice(dbl + 2);
+    head = before ? before.split(":") : [];
+    tail = after ? after.split(":") : [];
+  } else {
+    head = s.split(":");
+    tail = [];
+  }
+  const fill = 8 - head.length - tail.length;
+  if (fill < 0) return null;
+  if (dbl < 0 && fill !== 0) return null; // uncompressed form must be exactly 8 groups
+  const groups = [...head, ...Array(fill).fill("0"), ...tail];
+  if (groups.length !== 8) return null;
+  const out = groups.map((g) => (g === "" ? NaN : parseInt(g, 16)));
+  if (out.some((n) => !Number.isInteger(n) || n < 0 || n > 0xffff)) return null;
+  return out;
+}
+
+/**
+ * Returns the embedded IPv4 (dotted) when an IPv6 address carries one in its
+ * low 32 bits, else null. Covers all three ::-prefixed embeddings:
+ *   ::a.b.c.d          IPv4-compatible, ::/96 (deprecated)
+ *   ::ffff:a.b.c.d     IPv4-mapped, ::ffff:0:0/96
+ *   ::ffff:0:a.b.c.d   IPv4-translated, ::ffff:0:0:0/96 (RFC 2765)
+ *
+ * All three are reachable as URL hostnames and all three decode to a real
+ * IPv4 destination, so each must be range-checked as that IPv4. The mapped
+ * form is the one that matters most in practice: `new URL()` normalizes
+ * "[::ffff:127.0.0.1]" to "[::ffff:7f00:1]", so a dotted-only text match
+ * never fires on a URL-derived hostname and the address reads as unblocked.
+ */
+function embeddedIpv4(h: number[]): string | null {
+  const zeroHigh = h[0] === 0 && h[1] === 0 && h[2] === 0 && h[3] === 0;
+  if (!zeroHigh) return null;
+  const compatible = h[4] === 0 && h[5] === 0;
+  const mapped = h[4] === 0 && h[5] === 0xffff;
+  const translated = h[4] === 0xffff && h[5] === 0;
+  if (!compatible && !mapped && !translated) return null;
+  return `${(h[6] >> 8) & 255}.${h[6] & 255}.${(h[7] >> 8) & 255}.${h[7] & 255}`;
+}
+
+/**
  * Returns true when an IP literal falls in a private, reserved, loopback,
  * link-local, CGNAT, deprecated site-local, or multicast range. Used both as
  * a fast literal check and inside the DNS-validating lookup hook in
@@ -54,8 +119,13 @@ export function ipInBlockedRange(ip: string): boolean {
     const zone = v.indexOf("%");
     if (zone >= 0) v = v.slice(0, zone);
     if (v === "::1" || v === "::") return true; // loopback / unspecified
-    const mapped = v.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/); // IPv4-mapped
-    if (mapped) return ipInBlockedRange(mapped[1]);
+    // Decode any IPv4 embedded in the low 32 bits (compatible / mapped /
+    // translated) and range-check it as that IPv4. Numeric, so it holds for
+    // every legal spelling including the hex form new URL() produces.
+    const hextets = ipv6ToHextets(v);
+    if (!hextets) return true; // unparseable: refuse
+    const embedded = embeddedIpv4(hextets);
+    if (embedded) return ipInBlockedRange(embedded);
     // NAT64 well-known prefix 64:ff9b::/96 embeds an IPv4 in the low 32 bits.
     // 64:ff9b::a9fe:a9fe and 64:ff9b::169.254.169.254 both mean 169.254.169.254,
     // so a private/metadata IPv4 can be smuggled past the v6 range checks.
