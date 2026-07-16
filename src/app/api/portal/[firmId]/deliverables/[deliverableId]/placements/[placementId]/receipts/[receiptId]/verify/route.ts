@@ -20,7 +20,7 @@ import { resolveDeliverableActor } from "@/lib/deliverables-auth";
 import { getDeliverableDetail } from "@/lib/deliverables";
 import { listPlacementsForDeliverable } from "@/lib/content-placements";
 import { getReceiptById, verifyReceipt } from "@/lib/publication-receipts";
-import { validateReceiptForDestination } from "@/lib/channel-validation";
+import { validateReceiptForDestination, isManuallyVerifiableDestination } from "@/lib/channel-validation";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const APP_DOMAIN = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "caseloadselect.ca";
@@ -70,6 +70,20 @@ export async function POST(
   }
 
   if (body.manualOutcome === "verified" || body.manualOutcome === "failed") {
+    // Corrective-release finding 5: destination is checked BEFORE a manual
+    // outcome is ever accepted. Without this, an operator (honestly or
+    // maliciously) could record manualOutcome:"verified" against a
+    // machine-verifiable destination (a website page, a PDF) without the
+    // URL, byte, or hash checks ever running -- the exact bypass this gate
+    // closes. Rejected even for an operator; there is no override.
+    if (!isManuallyVerifiableDestination(placement.destination)) {
+      return NextResponse.json(
+        {
+          error: `manual verification is not permitted for destination "${placement.destination}"; it must go through automated validation`,
+        },
+        { status: 422 },
+      );
+    }
     const result = await verifyReceipt(receiptId, {
       method: "operator_attestation",
       passed: body.manualOutcome === "verified",

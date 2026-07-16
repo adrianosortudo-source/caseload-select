@@ -30,9 +30,34 @@ export async function resolveDeliverableActor(
   if (session.role === "client") return null;
 
   if (session.role === "operator") {
+    // Corrective-release finding 5: an operator's identity was previously
+    // always the literal string "Operator", regardless of who was
+    // actually signed in -- every operator verification/action was
+    // indistinguishable in the append-only history. session.lawyer_id is
+    // the operator's own firm_lawyers.id when their token carries one (see
+    // portal-auth.ts's PortalSession doc comment); resolve their real
+    // display_name/email the same way the lawyer branch below does. Falls
+    // back to the literal "Operator" only when no row can be resolved
+    // (legacy tokens not tied to a firm_lawyers row), never as the default.
+    let operatorName: string | null = null;
+    let operatorEmail: string | null = null;
+    if (session.lawyer_id) {
+      const { data } = await supabase
+        .from("firm_lawyers")
+        .select("display_name, email")
+        .eq("id", session.lawyer_id)
+        .maybeSingle();
+      operatorName = data?.display_name ?? null;
+      operatorEmail = data?.email ?? null;
+    }
     return {
       session,
-      actor: { role: "operator", id: session.lawyer_id ?? null, name: "Operator", email: null },
+      actor: {
+        role: "operator",
+        id: session.lawyer_id ?? null,
+        name: operatorName ?? "Operator",
+        email: operatorEmail,
+      },
     };
   }
 
