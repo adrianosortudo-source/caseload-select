@@ -1,0 +1,11 @@
+-- Follow-up to 20260716200000_publication_receipt_claim_binding.sql, found via
+-- get_advisors(security) immediately after that migration went live: newly
+-- created functions default to PUBLIC EXECUTE in Postgres, and
+-- release_placement_claim_on_receipt() -- SECURITY DEFINER, owned by postgres
+-- -- was left with that default, unlike every other SECURITY DEFINER function
+-- in this codebase (claim_placement_for_publish, deactivate_period_readiness_
+-- atomic, record_approval_atomic all already have EXECUTE revoked from
+-- anon/authenticated). Matches the established pattern; no behavior change
+-- for the legitimate call path (it is only ever invoked as a trigger, by
+-- postgres, never directly via PostgREST).
+revoke all on function public.release_placement_claim_on_receipt() from anon, authenticated, public;
