@@ -2,8 +2,8 @@
 doc-type: operating-playbook
 scope: publication-readiness-manifest-and-artifact-evidence
 status: active
-version: v2
-last-edited: 2026-07-15
+version: v3
+last-edited: 2026-07-16
 ---
 
 # Publication readiness operating model
@@ -103,12 +103,42 @@ activation. **Activation itself never claims a deliverable is ready.** It
 only turns on the strict evaluation; every deliverable inside a
 freshly-activated period still has to pass its own requirements, exactly
 like a brand-new one would. Re-activating an already-enforced period is a
-no-op (the timestamp is never re-stamped); there is no separate
-deactivation path today. A future exceptional deactivation path (moving
-an enforced period back to `setup_required`, e.g. to correct a
-misclassification) would need its own reviewed migration and its own
-audit trail; nothing in the app exposes that action, and none should be
-added without a corresponding DR.
+no-op (the timestamp is never re-stamped). An *ordinary* UPDATE against
+`content_periods` can never move a period away from `enforced` once
+activation has been recorded: `trg_validate_readiness_activation` refuses
+it unconditionally (see `20260715210116_content_periods_enforced_monotonic.sql`).
+That monotonic guarantee is deliberate — an operator, a bad migration, or
+a bug in application code cannot silently un-enforce a period through the
+same trigger that guards activation.
+
+**The one audited, exceptional path off enforcement (DR-099).**
+`POST /api/portal/[firmId]/periods/[periodId]/deactivate-readiness` is the
+sole route that can move a period back from `enforced` to
+`setup_required` or `legacy_unreconciled`, and it exists specifically to
+correct a misclassification, never to routinely toggle enforcement. It
+rejects a missing session with 401 and a non-operator session (lawyer or
+client) with 403; it requires a non-empty `reason` string and a
+`toLifecycle` of `setup_required` or `legacy_unreconciled`, anything else
+is a 400. It never acts on a period without a human-supplied
+justification, and it is never a blanket or bulk operation — one period,
+one call, one reason, every time.
+
+The route performs no writes of its own. It calls
+`deactivatePeriodReadiness()` (`src/lib/deliverables.ts`), which delegates
+to the `deactivate_period_readiness_atomic` SECURITY DEFINER RPC (the same
+pattern as `record_approval_atomic`). That RPC is the *only* code path
+`trg_validate_readiness_activation` exempts from its monotonic check —
+no other function, no direct table update, and no service-role script can
+move an enforced period backward. Every call inserts exactly one
+append-only row into `content_periods_enforcement_audit`, recording the
+period, the firm, the actor (operator id and name), the reason, and the
+from/to lifecycle values. That table carries its own
+`trg_block_content_periods_enforcement_audit_mutation` trigger (blocks
+every UPDATE and DELETE unconditionally) and RLS enabled and forced with
+`anon`/`authenticated`/`public` all revoked, so the only way to read or
+write it is a service-role query or the RPC itself: there is no way to
+reopen a period without a reason on file, and no way to later edit or
+erase why one was recorded.
 
 **How historical reconciliation actually works, end to end.** For a
 period found to be `legacy_unreconciled` (or one an operator later
