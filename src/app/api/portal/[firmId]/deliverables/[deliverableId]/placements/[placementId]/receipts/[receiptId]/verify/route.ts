@@ -23,6 +23,8 @@ import { getReceiptById, verifyReceipt } from "@/lib/publication-receipts";
 import { validateReceiptForDestination } from "@/lib/channel-validation";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
+const APP_DOMAIN = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "caseloadselect.ca";
+
 export async function POST(
   req: NextRequest,
   {
@@ -82,10 +84,20 @@ export async function POST(
 
   const { data: firm } = await supabaseAdmin
     .from("intake_firms")
-    .select("custom_domain")
+    .select("custom_domain, subdomain")
     .eq("id", firmId)
     .maybeSingle();
-  const expectedHost = (firm as { custom_domain?: string | null } | null)?.custom_domain ?? null;
+  const firmRow = firm as { custom_domain?: string | null; subdomain?: string | null } | null;
+  // custom_domain covers legacy firms; new firms onboard via the
+  // subdomain column instead (src/middleware.ts), so a firm with no
+  // custom_domain is NOT a firm with no expected host -- it is a firm
+  // whose host lives under APP_DOMAIN. Falling through to null here
+  // silently disables host verification for every subdomain-onboarded
+  // firm: safeFetch still blocks private/loopback/metadata IPs, but with
+  // no allowedHosts it accepts a 200 response from ANY public URL as
+  // "verified" evidence this firm published the content.
+  const expectedHost =
+    firmRow?.custom_domain ?? (firmRow?.subdomain ? `${firmRow.subdomain}.${APP_DOMAIN}` : null);
 
   // A trusted sha256 to check the live PDF bytes against, resolved
   // server-side -- never from the request body, which a caller could set

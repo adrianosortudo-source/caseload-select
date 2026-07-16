@@ -29,6 +29,22 @@ describe("ipInBlockedRange", () => {
     }
   });
 
+  it("blocks the RFC 5737 documentation (TEST-NET) ranges", () => {
+    expect(ipInBlockedRange("192.0.2.1")).toBe(true); // TEST-NET-1
+    expect(ipInBlockedRange("198.51.100.1")).toBe(true); // TEST-NET-2
+    expect(ipInBlockedRange("203.0.113.1")).toBe(true); // TEST-NET-3
+  });
+
+  it("blocks the RFC 2544 benchmarking range 198.18.0.0/15", () => {
+    expect(ipInBlockedRange("198.18.0.1")).toBe(true);
+    expect(ipInBlockedRange("198.19.255.254")).toBe(true);
+    expect(ipInBlockedRange("198.20.0.1")).toBe(false); // just outside the /15
+  });
+
+  it("blocks the RFC 3068 6to4 relay anycast range 192.88.99.0/24", () => {
+    expect(ipInBlockedRange("192.88.99.1")).toBe(true);
+  });
+
   it("blocks IPv6 loopback and unspecified", () => {
     expect(ipInBlockedRange("::1")).toBe(true);
     expect(ipInBlockedRange("::")).toBe(true);
@@ -43,6 +59,22 @@ describe("ipInBlockedRange", () => {
   it("blocks NAT64-embedded private/metadata IPv4 addresses", () => {
     expect(ipInBlockedRange("64:ff9b::169.254.169.254")).toBe(true);
     expect(ipInBlockedRange("64:ff9b::a9fe:a9fe")).toBe(true); // 169.254.169.254 in hex groups
+  });
+
+  it("blocks 6to4-embedded private/metadata IPv4 addresses", () => {
+    // 2002:AABB:CCDD::/48 encodes AA.BB.CC.DD immediately after the /16 prefix.
+    expect(ipInBlockedRange("2002:a9fe:a9fe::")).toBe(true); // 169.254.169.254
+    expect(ipInBlockedRange("2002:7f00:1::")).toBe(true); // 127.0.0.1
+    expect(ipInBlockedRange("2002:0a00:0001::")).toBe(true); // 10.0.0.1
+  });
+
+  it("allows a 6to4 address that embeds a genuinely public IPv4", () => {
+    expect(ipInBlockedRange("2002:0808:0808::")).toBe(false); // 8.8.8.8
+  });
+
+  it("blocks the Teredo tunneling range 2001:0000::/32 outright", () => {
+    expect(ipInBlockedRange("2001:0:4136:e378:8000:63bf:3fff:fdd2")).toBe(true);
+    expect(ipInBlockedRange("2001::1")).toBe(true);
   });
 
   it("blocks IPv6 link-local, unique-local, deprecated site-local, and multicast", () => {
