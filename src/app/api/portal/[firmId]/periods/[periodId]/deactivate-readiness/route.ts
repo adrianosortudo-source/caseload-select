@@ -5,7 +5,7 @@
  * enforced period's readiness_lifecycle. Once activatePeriodReadiness has
  * set a period to enforced, an ordinary UPDATE against content_periods
  * can no longer move it away (trg_validate_readiness_activation refuses
- * it, see 20260715195701_content_periods_enforced_monotonic.sql); this
+ * it, see 20260715210116_content_periods_enforced_monotonic.sql); this
  * route, and only this route, can. Requires a non-empty reason, which is
  * recorded append-only in content_periods_enforcement_audit alongside the
  * actor and the from/to lifecycle values. Never a blanket/bulk operation;

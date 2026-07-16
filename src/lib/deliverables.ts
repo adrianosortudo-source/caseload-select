@@ -301,7 +301,7 @@ export async function activatePeriodReadiness(input: {
  * DR-099: the one audited, exceptional path off "enforced". Ordinary writes
  * to content_periods cannot move a period away from enforced once
  * activatePeriodReadiness has set it -- trg_validate_readiness_activation
- * (updated by 20260715195701_content_periods_enforced_monotonic.sql)
+ * (updated by 20260715210116_content_periods_enforced_monotonic.sql)
  * refuses that UPDATE unless a transaction-local flag is set, and nothing
  * sets that flag except the deactivate_period_readiness_atomic RPC this
  * function calls. Operator-only at the API layer (the calling route must

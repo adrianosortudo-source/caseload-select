@@ -1,9 +1,10 @@
 /**
  * DR-099: pins deactivatePeriodReadiness's contract with the
- * deactivate_period_readiness_atomic RPC (20260715195701_content_periods_
- * enforced_monotonic.sql, NOT applied to production -- this test exercises
- * only the TypeScript call boundary, mocking the RPC response; the actual
- * Postgres trigger/function logic is covered separately by
+ * deactivate_period_readiness_atomic RPC (20260715210116_content_periods_
+ * enforced_monotonic.sql, confirmed applied to production 2026-07-16 via
+ * the Supabase migration ledger -- this test exercises only the TypeScript
+ * call boundary, mocking the RPC response; the actual Postgres
+ * trigger/function logic is covered separately by
  * scripts/verify-content-periods-enforced-monotonic.sql, run by hand
  * against a development branch or staging).
  *

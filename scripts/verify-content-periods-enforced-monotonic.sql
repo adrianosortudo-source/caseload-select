@@ -1,5 +1,9 @@
 -- Runnable verification for
--- supabase/migrations/20260715195701_content_periods_enforced_monotonic.sql.
+-- supabase/migrations/20260715210116_content_periods_enforced_monotonic.sql.
+-- (Filename reconciled 2026-07-16; this script previously pointed at the
+-- pre-reconciliation name 20260715195701_content_periods_enforced_monotonic.sql,
+-- which no longer exists on disk. See docs/audits for the migration-lineage
+-- reconciliation this corrective release performed.)
 --
 -- NOT run automatically by anything. Run this by hand against a Supabase
 -- development branch or a staging copy of the database, AFTER applying the
