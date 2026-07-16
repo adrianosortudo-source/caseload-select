@@ -114,7 +114,11 @@ describe("verifyReceipt", () => {
     });
     if (!created.ok) throw new Error("expected ok");
 
-    const verified = await verifyReceipt(created.receipt.id, { method: "url_fetch", passed: true });
+    const verified = await verifyReceipt(created.receipt.id, {
+      method: "url_fetch",
+      passed: true,
+      verifierRole: "operator",
+    });
     expect(verified.ok).toBe(true);
     if (!verified.ok) return;
     expect(verified.receipt.id).not.toBe(created.receipt.id);
@@ -145,10 +149,45 @@ describe("verifyReceipt", () => {
       method: "url_fetch",
       passed: false,
       failureReason: "404 not found",
+      verifierRole: "operator",
     });
     if (!verified.ok) throw new Error("expected ok");
     expect(verified.receipt.verification_state).toBe("failed");
     expect(verified.receipt.failure_reason).toBe("404 not found");
+  });
+
+  it("records the VERIFIER's identity, not the original receipt's actor (Workstream 5)", async () => {
+    // The original receipt was published as 'system' (e.g. a channel-originated
+    // receipt) with no operator identity at all; the verification pass is a
+    // completely different actor (the operator who confirmed it live). Before
+    // this fix, actor_role/actor_id/actor_name were copied from the original
+    // row, so the verifying operator's identity was silently discarded.
+    const created = await createReceipt({
+      firmId: FIRM_ID,
+      deliverableId: DELIVERABLE_ID,
+      placementId: PLACEMENT_ID,
+      destination: "firm_website",
+      approvedVersionId: VERSION_ID,
+      publicUrl: "https://drglaw.ca/journal/example",
+      publishedAt: new Date().toISOString(),
+      actorRole: "system",
+    });
+    if (!created.ok) throw new Error("expected ok");
+
+    const verified = await verifyReceipt(created.receipt.id, {
+      method: "url_fetch",
+      passed: true,
+      verifierRole: "operator",
+      verifierId: "op-1",
+      verifierName: "Operator",
+    });
+    if (!verified.ok) throw new Error("expected ok");
+    expect(verified.receipt.actor_role).toBe("operator");
+    expect(verified.receipt.actor_id).toBe("op-1");
+    expect(verified.receipt.actor_name).toBe("Operator");
+
+    // The original row's own actor fields are untouched (append-only).
+    expect(state.receipts.find((r) => r.id === created.receipt.id)?.actor_role).toBe("system");
   });
 });
 
@@ -165,7 +204,11 @@ describe("getCurrentReceiptForPlacement", () => {
       actorRole: "operator",
     });
     if (!created.ok) throw new Error("expected ok");
-    const verified = await verifyReceipt(created.receipt.id, { method: "url_fetch", passed: true });
+    const verified = await verifyReceipt(created.receipt.id, {
+      method: "url_fetch",
+      passed: true,
+      verifierRole: "operator",
+    });
     if (!verified.ok) throw new Error("expected ok");
 
     const current = await getCurrentReceiptForPlacement(PLACEMENT_ID);
