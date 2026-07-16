@@ -7,11 +7,14 @@
  *
  *   - NAP block at the top (Name + Phone + Postal code + Email)
  *   - "Why this is Band X" four-axis breakdown inside the Decision section
- *     (Value · Complexity · Urgency · Readiness), each card carrying a
+ *     (Value, Simplicity, Urgency, Readiness), each card carrying a
  *     0-10 score, a qualitative band (Low / Moderate / High), and a single
  *     lawyer-facing prose sentence. v2 rewrite (2026-06-05): the engine's
  *     raw `reasons` strings are no longer surfaced; the renderer synthesises
- *     matter-aware prose from the score band + matter family.
+ *     matter-aware prose from the score band + matter family. The
+ *     Simplicity axis (DR-103, 2026-07-15) displays 10 - the engine's raw
+ *     `complexity` score so all four axes read higher-is-better; the
+ *     underlying raw score/band still drives the prose and card colour.
  *   - Commercial angle, Call preparation, Facts and reasoning sections
  *
  * If any of these silently drop out of the renderer, this test fails loud
@@ -98,17 +101,17 @@ describe('renderBriefHtmlServer — four-axis breakdown', () => {
     expect(html).toContain('axis-breakdown');
   });
 
-  it('renders four axis cards: Value, Complexity, Urgency, Readiness', () => {
+  it('renders four axis cards: Value, Simplicity, Urgency, Readiness', () => {
     const html = renderBriefHtmlServer(buildFakeReport(), 'web', 'en');
     expect(html).toContain('>Value<');
-    expect(html).toContain('>Complexity<');
+    expect(html).toContain('>Simplicity<');
     expect(html).toContain('>Urgency<');
     expect(html).toContain('>Readiness<');
-    // The v1 "Simplicity" rename is gone — the brief now shows raw Complexity.
-    expect(html).not.toContain('>Simplicity<');
+    // DR-103 (2026-07-15): raw "Complexity" is no longer shown as an axis name.
+    expect(html).not.toContain('>Complexity<');
   });
 
-  it('shows the raw complexity score (no longer inverted to simplicity)', () => {
+  it('shows the inverted simplicity score (10 - raw complexity), per DR-103', () => {
     const html = renderBriefHtmlServer(
       buildFakeReport({
         axis_reasoning: {
@@ -122,12 +125,12 @@ describe('renderBriefHtmlServer — four-axis breakdown', () => {
       'web',
       'en',
     );
-    // Complexity 9/10 (raw, no inversion). And the v1 "1/10" inversion never appears.
+    // Raw complexity 9 displays as Simplicity 1/10 (10 - 9). Raw 9/10 never appears.
     // The /10 denominator sits in its own span as of 2026-06-07 (CSS sizes it
     // smaller than the numerator); the regex tolerates tags between the score
     // and the denominator.
-    expect(html).toMatch(/Complexity[\s\S]*?9[\s\S]*?\/10/);
-    expect(html).not.toMatch(/Simplicity[\s\S]*?1[\s\S]*?\/10/);
+    expect(html).toMatch(/Simplicity[\s\S]*?1[\s\S]*?\/10/);
+    expect(html).not.toMatch(/Complexity[\s\S]*?9[\s\S]*?\/10/);
   });
 
   it('marks a high-complexity axis as drag (red-ish border)', () => {
@@ -161,8 +164,9 @@ describe('renderBriefHtmlServer — four-axis breakdown', () => {
       'web',
       'en',
     );
-    // The Complexity card must carry the positive border class.
-    expect(html).toMatch(/axis-block-positive[\s\S]*?Complexity/);
+    // Low raw complexity displays as high Simplicity; the card must still
+    // carry the positive border class (kind is computed from the raw score).
+    expect(html).toMatch(/axis-block-positive[\s\S]*?Simplicity/);
   });
 
   it('marks an unanswered Readiness axis as pending (dashed border)', () => {
@@ -201,24 +205,27 @@ describe('renderBriefHtmlServer — four-axis breakdown', () => {
     expect(html).not.toContain(' slots.');
   });
 
-  it('emits the raw axis score as N/10 for each axis (Complexity no longer inverted)', () => {
+  it('emits the axis score as N/10 for each axis (Simplicity is 10 - raw complexity, per DR-103)', () => {
     const html = renderBriefHtmlServer(buildFakeReport(), 'web', 'en');
-    // Each axis renders a raw 0-10 score inside its own card. As of the
-    // 2026-06-07 scan-speed pass, the renderer wraps the "/10"
-    // denominator in its own span (.axis-block-score-denom) so the CSS
-    // can size it smaller than the numerator. The score number and the
-    // /10 are therefore not adjacent in the raw HTML; we match each
-    // axis name followed by the score number followed by /10 with
-    // arbitrary tags in between.
+    // Value / Urgency / Readiness render their raw 0-10 score. Simplicity
+    // renders 10 - the raw complexity score (fixture complexity: 4, so
+    // displayed Simplicity is 6). As of the 2026-06-07 scan-speed pass, the
+    // renderer wraps the "/10" denominator in its own span
+    // (.axis-block-score-denom) so the CSS can size it smaller than the
+    // numerator. The score number and the /10 are therefore not adjacent in
+    // the raw HTML; we match each axis name followed by the score number
+    // followed by /10 with arbitrary tags in between.
     expect(html).toMatch(/Value[\s\S]*?6[\s\S]*?\/10/);
-    expect(html).toMatch(/Complexity[\s\S]*?4[\s\S]*?\/10/);
+    expect(html).toMatch(/Simplicity[\s\S]*?6[\s\S]*?\/10/);
     expect(html).toMatch(/Urgency[\s\S]*?5[\s\S]*?\/10/);
     expect(html).toMatch(/Readiness[\s\S]*?7[\s\S]*?\/10/);
   });
 
   it('renders a qualitative band label (Low / Moderate / High) per axis card', () => {
     const html = renderBriefHtmlServer(buildFakeReport(), 'web', 'en');
-    // Value 6 → Moderate, Complexity 4 → Moderate, Urgency 5 → Moderate, Readiness 7 → High
+    // Value 6 -> Moderate, raw complexity 4 -> displayed Simplicity 6 -> Moderate
+    // (badge thresholds mirror exactly under 10-x), Urgency 5 -> Moderate,
+    // Readiness 7 -> High.
     expect(html).toMatch(/data-axis="value"[\s\S]*?Moderate/);
     expect(html).toMatch(/data-axis="complexity"[\s\S]*?Moderate/);
     expect(html).toMatch(/data-axis="urgency"[\s\S]*?Moderate/);

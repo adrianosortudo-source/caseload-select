@@ -535,10 +535,10 @@ function napBlock(facts: ResolvedFact[], channel: string | null | undefined): st
 
 // ─── Four-axis breakdown (Why this is Band X) ──────────────────────────────
 //
-// Renders the four-axis scorer's output (Value · Complexity · Urgency ·
+// Renders the four-axis scorer's output (Value, Simplicity, Urgency,
 // Readiness) as four cards inside the Decision section, each with a 0-10
 // score, a qualitative band (Low / Moderate / High), and a single prose
-// sentence explaining what the score means for THIS matter — not how the
+// sentence explaining what the score means for THIS matter, not how the
 // scoring engine computed it.
 //
 // Rewrite history (2026-06-05): the previous renderer passed the engine's
@@ -551,14 +551,21 @@ function napBlock(facts: ResolvedFact[], channel: string | null | undefined): st
 // available on `report.axis_reasoning.<axis>.reasons` for debug/dev use
 // (preserved in `brief_json`) but are not surfaced in the brief HTML.
 //
-// Also renamed: the v1 renderer presented "Complexity" to the lawyer as
-// "Simplicity" with the score flipped (10 - complexity.score) so all four
-// axes read "higher = better". That label confused lawyers (who think in
-// terms of complexity, not simplicity) and inverted the score they actually
-// see in `brief_json`. v2 shows **Complexity** with the raw engine score
-// (higher = more complex), and uses the card border colour to signal whether
-// the score helps or hurts the matter (low complexity → positive border,
-// high complexity → drag border).
+// Axis label (DR-103, 2026-07-15): the engine's internal `complexity` axis
+// (0-10, subtractive drag) displays as **Simplicity**, computed as
+// `10 - complexity.score`, so all four axes read "higher = better". A v1
+// renderer shipped this same display (methodology decision D012) and it was
+// reverted 2026-06-05 because the label confused lawyers. Since that revert,
+// every other live surface (the triage queue cards, the persisted band
+// summary string, the CRM Bible, the sandbox brief renderer, the GHL
+// custom-field set) re-adopted the Simplicity label anyway, so the brief was
+// the one surface left showing raw Complexity next to a queue card already
+// showing inverted "Smp" for the same lead. DR-103 unifies on Simplicity.
+// The qualitative prose and the card border colour (kind) are computed from
+// the RAW complexity score/band exactly as before: an unchanged underlying
+// fact ("current facts suggest a standard matter") reads correctly whether
+// the card calls it Low Complexity or High Simplicity. Only the displayed
+// name, score, and badge word for this one axis are inverted.
 //
 // Card border colour (kind), unchanged:
 //   - positive → navy/gold confidence
@@ -746,9 +753,11 @@ function axisProse(
 }
 
 /**
- * Card border colour. Preserved from v1 for value / urgency / readiness; for
- * complexity (no longer shown as "simplicity"), low complexity reads as
- * positive (easy file to run) and high complexity reads as drag.
+ * Card border colour. Unchanged for value / urgency / readiness. For the
+ * complexity axis (displayed to the lawyer as Simplicity, DR-103), the kind
+ * is computed from the RAW complexity score: low complexity reads as
+ * positive (easy file to run, high displayed Simplicity) and high complexity
+ * reads as drag (low displayed Simplicity).
  */
 function axisKind(
   axis: AxisName,
@@ -817,18 +826,23 @@ function axisBreakdown(
     );
   }
 
-  // Complexity (renamed from "Simplicity" — show raw score)
+  // Simplicity (DR-103): the engine's raw `complexity` axis, displayed
+  // inverted (10 - score) so this card reads higher-is-better like the other
+  // three. Prose and card-colour kind are computed from the RAW score/band,
+  // not the displayed one, since they describe an unchanged underlying fact.
   {
-    const score = reasoning.complexity.score;
-    const band = bandOf(score);
+    const rawScore = reasoning.complexity.score;
+    const rawBand = bandOf(rawScore);
+    const displayScore = 10 - rawScore;
+    const displayBand = bandOf(displayScore);
     cards.push(
       axisCard(
         'complexity',
-        'Complexity',
-        score,
-        band,
-        axisProse('complexity', band, family, reasoning.readinessAnswered),
-        axisKind('complexity', score, reasoning.readinessAnswered),
+        'Simplicity',
+        displayScore,
+        displayBand,
+        axisProse('complexity', rawBand, family, reasoning.readinessAnswered),
+        axisKind('complexity', rawScore, reasoning.readinessAnswered),
       ),
     );
   }

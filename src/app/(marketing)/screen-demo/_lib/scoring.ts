@@ -167,7 +167,7 @@ const FACTOR_LABELS: Record<keyof AxisScores, string> = {
   geo: "jurisdiction fit",
   contactability: "contactability",
   legitimacy: "intent signals",
-  complexity: "matter complexity",
+  complexity: "depth of work",
   urgency: "time sensitivity",
   strategic: "strategic value",
   fee: "fee fit",

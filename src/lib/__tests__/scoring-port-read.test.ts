@@ -73,7 +73,7 @@ describe('buildScoringDeltaForInsert', () => {
     expect(typeof cols!.score_explanation).toBe('string');
     expect(Array.isArray(cols!.score_missing_fields)).toBe(true);
     expect(typeof cols!.field_provenance).toBe('object');
-    expect(cols!.score_version).toBe(1);
+    expect(cols!.score_version).toBe(2); // CURRENT_SCORE_VERSION (DR-103 wording bump)
     expect(cols!.calibration_version).toBeNull();
   });
 
@@ -217,6 +217,34 @@ describe('shadowCompareScoringPort', () => {
     };
     shadowCompareScoringPort(row);
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  // DR-103 acceptance criterion: a row persisted under the OLD explanation
+  // wording (score_version 1) must not trigger a drift warning just because
+  // the live code now computes version 2 with different prose. DR-059
+  // forbids retroactively recomputing historical rows, so this disagreement
+  // is permanent and must stay silent, not noisy, on every brief open.
+  it('does not warn when a historical v1 row disagrees with a fresh v2 recompute', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Real confidence/completeness for this fixture, straight from the write
+    // path, so only score_version + score_explanation are deliberately stale
+    // (a genuine v1-vintage row); everything else matches the fresh recompute.
+    const cols = buildScoringDeltaForInsert(CRE_SLOT_ANSWERS, 'commercial_real_estate', 'B')!;
+    const row: ShadowComparatorRow = {
+      id: 'legacy-v1',
+      matter_type: 'commercial_real_estate',
+      band: 'B',
+      slot_answers: CRE_SLOT_ANSWERS,
+      score_confidence: cols.score_confidence,
+      score_completeness: cols.score_completeness,
+      score_explanation: 'High complexity drags the weighted score down.', // pre-DR-103 prose, deliberately stale
+      score_version: 1,
+    };
+    shadowCompareScoringPort(row);
+
+    const driftWarnings = warnSpy.mock.calls.filter(([msg]) => String(msg).includes('drift detected'));
+    expect(driftWarnings).toHaveLength(0);
   });
 });
 

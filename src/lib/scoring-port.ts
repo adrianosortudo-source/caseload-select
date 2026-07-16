@@ -163,7 +163,7 @@ export function buildScoreExplanation(scores: FourAxisScores, ctx: ExplanationCo
   }
 
   if (dragRatio >= 0.5) {
-    parts.push('High complexity drags the weighted score down.');
+    parts.push('Low simplicity drags the weighted score down.');
   }
 
   if (ctx.confidence === 'low' && ctx.scoringGaps > 0) {

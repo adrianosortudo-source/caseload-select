@@ -14,7 +14,12 @@
  * in columnPopulation, and the distributions still computed from the fresh port.
  */
 import { computeScorePort, rehydrateScoredState } from '@/lib/scoring-port';
-import { scorePortToColumns, type ScoringDeltaColumns } from '@/lib/scoring-port-persistence';
+import {
+  scorePortToColumns,
+  CURRENT_SCORE_VERSION,
+  HISTORICAL_SCORE_VERSIONS,
+  type ScoringDeltaColumns,
+} from '@/lib/scoring-port-persistence';
 import type { EngineState, Band } from '@/lib/screen-engine/types';
 
 export type ShadowSkipReason = 'null_firm_id' | 'out_of_scope' | 'null_band' | 'malformed_slot_answers';
@@ -124,7 +129,20 @@ function diffRow(row: ShadowRow, expected: ScoringDeltaColumns): ShadowMismatch[
       push('score_completeness', persisted, expected.score_completeness);
     }
   }
-  if (isPopulated(row.score_explanation) && row.score_explanation !== expected.score_explanation) {
+  // A persisted score_version that is an older KNOWN version than the fresh
+  // recompute is not drift: it means the explanation prose changed (DR-103)
+  // and this row was written before the bump. DR-059 forbids retroactive
+  // recompute, so this disagreement is permanent and expected, not a defect.
+  const versionIsHistorical =
+    isPopulated(row.score_version) &&
+    row.score_version !== expected.score_version &&
+    HISTORICAL_SCORE_VERSIONS.has(row.score_version as number);
+
+  if (
+    isPopulated(row.score_explanation) &&
+    row.score_explanation !== expected.score_explanation &&
+    !versionIsHistorical
+  ) {
     push('score_explanation', row.score_explanation, expected.score_explanation);
   }
   if (isPopulated(row.score_missing_fields) && stable(row.score_missing_fields) !== stable(expected.score_missing_fields)) {
@@ -133,7 +151,7 @@ function diffRow(row: ShadowRow, expected: ScoringDeltaColumns): ShadowMismatch[
   if (isPopulated(row.field_provenance) && stable(row.field_provenance) !== stable(expected.field_provenance)) {
     push('field_provenance', row.field_provenance, expected.field_provenance);
   }
-  if (isPopulated(row.score_version) && row.score_version !== expected.score_version) {
+  if (isPopulated(row.score_version) && row.score_version !== expected.score_version && !versionIsHistorical) {
     push('score_version', row.score_version, expected.score_version);
   }
   return out;
@@ -165,8 +183,14 @@ export function buildShadowReport(rows: ShadowRow[]): ShadowReport {
       if (isPopulated(row[col])) columnPopulation[col].populated += 1;
       else columnPopulation[col].nulls += 1;
     }
-    // score_version must be null or 1; calibration_version must be null (C5 reserved).
-    if ((row.score_version !== null && row.score_version !== 1) || row.calibration_version !== null) {
+    // score_version must be null, a historical version (1), or the current
+    // version (2, DR-103); calibration_version must be null (C5 reserved).
+    if (
+      (row.score_version !== null &&
+        row.score_version !== CURRENT_SCORE_VERSION &&
+        !HISTORICAL_SCORE_VERSIONS.has(row.score_version)) ||
+      row.calibration_version !== null
+    ) {
       versionAnomalies.push({
         id: row.id,
         score_version: row.score_version,

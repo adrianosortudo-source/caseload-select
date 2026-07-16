@@ -240,7 +240,7 @@ const LABEL_MAP: Record<string, string> = {
   geo: "Jurisdiction fit",
   contactability: "Contactability",
   legitimacy: "Intent signals",
-  complexity: "Matter complexity",
+  complexity: "Depth of work",
   urgency: "Time sensitivity",
   strategic: "Strategic value",
   fee: "Fee fit",

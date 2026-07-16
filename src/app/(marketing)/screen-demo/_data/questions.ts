@@ -191,14 +191,14 @@ export const Q4_STAKES: Question = {
   id: "stakes",
   num: 4,
   total: 5,
-  prompt: "How much is at stake, and how complex is the matter likely to be?",
+  prompt: "How much is at stake, and how much work is the matter likely to need?",
   context:
-    "The Screen looks for cases worth the lawyer's time. Stakes and complexity together signal the depth of work required.",
+    "The Screen looks for cases worth the lawyer's time. Stakes and the depth of work involved signal how substantial the file is.",
   options: [
     {
       id: "high_stakes_complex",
-      label: "High stakes, complex matter",
-      sub: "Charges with jail exposure, major financial dispute, complex corporate transaction, or contested family proceeding",
+      label: "High stakes, many moving parts",
+      sub: "Charges with jail exposure, major financial dispute, layered corporate transaction, or contested family proceeding",
       delta: { complexity: 25, strategic: 13, legitimacy: 9 },
     },
     {
@@ -209,7 +209,7 @@ export const Q4_STAKES: Question = {
     },
     {
       id: "moderate_complex",
-      label: "Moderate stakes, some complexity",
+      label: "Moderate stakes, some moving parts",
       sub: "Mid-tier dispute, employment claim with negotiation room, contested but resolvable family matter",
       delta: { complexity: 14, strategic: 8, legitimacy: 8 },
     },

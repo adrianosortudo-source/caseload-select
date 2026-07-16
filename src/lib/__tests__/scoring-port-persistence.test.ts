@@ -56,7 +56,7 @@ describe('scoring-port backfill path: slot_answers -> computeScorePort -> column
     expect(cols.score_explanation.length).toBeGreaterThan(0);
     expect(Array.isArray(cols.score_missing_fields)).toBe(true);
     expect(typeof cols.field_provenance).toBe('object');
-    expect(cols.score_version).toBe(1);
+    expect(cols.score_version).toBe(2); // CURRENT_SCORE_VERSION (DR-103 wording bump)
     expect(cols.calibration_version).toBeNull();
   });
 
