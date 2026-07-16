@@ -22,6 +22,25 @@ import type {
 } from "@/lib/types";
 import type { PeriodLifecycle } from "@/lib/publication-readiness";
 
+/**
+ * What an operator or publishing agent should do next for this placement.
+ * "publish" is the only value that pairs with mayPublish=true; every other
+ * value is a terminal or blocking state that mayPublish=false already
+ * covers with its own reason, surfaced here as a stable machine-readable
+ * label instead of forcing callers to pattern-match the reason string.
+ */
+export type PreflightNextAction =
+  | "already_retired"
+  | "already_published"
+  | "needs_reverification"
+  | "needs_verification"
+  | "activate_period"
+  | "approve_deliverable"
+  | "resolve_version_drift"
+  | "await_readiness"
+  | "resolve_comments"
+  | "publish";
+
 export interface PreflightPlacementReport {
   placementId: string;
   deliverableId: string;
@@ -30,6 +49,7 @@ export interface PreflightPlacementReport {
   locale: string | null;
   intendedPath: string | null;
   requiredArtifactType: ContentPlacement["required_artifact_type"];
+  placementState: ContentPlacement["state"];
   approvedVersionId: string | null;
   currentVersionId: string | null;
   deliverableReady: boolean;
@@ -43,12 +63,25 @@ export interface PreflightPlacementReport {
   } | null;
   mayPublish: boolean;
   reason: string | null;
+  nextAction: PreflightNextAction;
+}
+
+export interface PreflightDeliverableGap {
+  deliverableId: string;
+  deliverableTitle: string;
 }
 
 export interface PreflightPeriodReport {
   periodId: string;
   periodLifecycle: PeriodLifecycle;
   placements: PreflightPlacementReport[];
+  /**
+   * Active, non-archived deliverables with zero placements. Silently
+   * omitted from `placements` otherwise (there is nothing to push there
+   * for them), which reads as "fully covered" when it is really an
+   * uncovered gap -- surfaced explicitly instead.
+   */
+  deliverablesWithNoPlacements: PreflightDeliverableGap[];
 }
 
 function countUnresolvedComments(comments: DeliverableComment[]): number {
@@ -77,6 +110,7 @@ function reportOnePlacement(input: {
     locale: placement.locale,
     intendedPath: placement.intended_path,
     requiredArtifactType: placement.required_artifact_type,
+    placementState: placement.state,
     approvedVersionId: deliverable.approved_version_id,
     currentVersionId: deliverable.current_version_id,
     deliverableReady,
@@ -92,6 +126,45 @@ function reportOnePlacement(input: {
       : null,
   };
 
+  // Idempotency checks first, ahead of the legal-gate checks below: a
+  // retired placement or one that already has a receipt is a terminal or
+  // in-flight state regardless of whether the deliverable would otherwise
+  // pass every legal gate. Without this, a retired placement, or one with
+  // an already-verified receipt, or one with a failed verification, all
+  // returned mayPublish=true whenever the legal gates happened to pass --
+  // "may publish" must never say yes to something already published or
+  // deliberately retired.
+  if (placement.state === "retired") {
+    return { ...base, mayPublish: false, reason: "placement is retired", nextAction: "already_retired" };
+  }
+  if (currentReceipt) {
+    if (currentReceipt.verification_state === "verified") {
+      return {
+        ...base,
+        mayPublish: false,
+        reason: "already published and verified",
+        nextAction: "already_published",
+      };
+    }
+    if (currentReceipt.verification_state === "failed") {
+      return {
+        ...base,
+        mayPublish: false,
+        reason: "the current receipt's verification failed; needs manual review before any republish",
+        nextAction: "needs_reverification",
+      };
+    }
+    // 'unverified' or 'reconciling': a publish attempt already happened
+    // and has not been resolved yet. The next action is to verify the
+    // existing receipt, not to create another one.
+    return {
+      ...base,
+      mayPublish: false,
+      reason: "a receipt exists for this placement but has not been verified yet",
+      nextAction: "needs_verification",
+    };
+  }
+
   if (periodLifecycle !== "enforced") {
     return {
       ...base,
@@ -100,29 +173,42 @@ function reportOnePlacement(input: {
         periodLifecycle === "legacy_unreconciled"
           ? "this period is historical and has not been reconciled against the readiness ledger"
           : "this period has not yet been activated for enforcement (setup required)",
+      nextAction: "activate_period",
     };
   }
   if (deliverable.status !== "approved") {
-    return { ...base, mayPublish: false, reason: `deliverable status is "${deliverable.status}", not approved` };
+    return {
+      ...base,
+      mayPublish: false,
+      reason: `deliverable status is "${deliverable.status}", not approved`,
+      nextAction: "approve_deliverable",
+    };
   }
   if (deliverable.approved_version_id !== deliverable.current_version_id) {
     return {
       ...base,
       mayPublish: false,
       reason: "approved_version_id does not match current_version_id (version drift)",
+      nextAction: "resolve_version_drift",
     };
   }
   if (!deliverableReady) {
-    return { ...base, mayPublish: false, reason: "deliverable fails one or more publication readiness checks" };
+    return {
+      ...base,
+      mayPublish: false,
+      reason: "deliverable fails one or more publication readiness checks",
+      nextAction: "await_readiness",
+    };
   }
   if (unresolvedCommentCount > 0) {
     return {
       ...base,
       mayPublish: false,
       reason: `${unresolvedCommentCount} unresolved comment${unresolvedCommentCount === 1 ? "" : "s"} on this deliverable`,
+      nextAction: "resolve_comments",
     };
   }
-  return { ...base, mayPublish: true, reason: null };
+  return { ...base, mayPublish: true, reason: null, nextAction: "publish" };
 }
 
 export function buildPreflightReport(input: {
@@ -135,12 +221,17 @@ export function buildPreflightReport(input: {
   currentReceiptsByPlacementId: Record<string, PublicationReceipt | null>;
 }): PreflightPeriodReport {
   const placements: PreflightPlacementReport[] = [];
+  const deliverablesWithNoPlacements: PreflightDeliverableGap[] = [];
   for (const deliverable of input.deliverables) {
     if (deliverable.status === "archived") continue; // excluded, matches the readiness evaluator's own rule
     const deliverableReady = input.readyByDeliverableId[deliverable.id] ?? false;
     const comments = input.commentsByDeliverableId[deliverable.id] ?? [];
     const unresolvedCommentCount = countUnresolvedComments(comments);
     const deliverablePlacements = input.placementsByDeliverableId[deliverable.id] ?? [];
+    if (deliverablePlacements.length === 0) {
+      deliverablesWithNoPlacements.push({ deliverableId: deliverable.id, deliverableTitle: deliverable.title });
+      continue;
+    }
     for (const placement of deliverablePlacements) {
       placements.push(
         reportOnePlacement({
@@ -154,5 +245,10 @@ export function buildPreflightReport(input: {
       );
     }
   }
-  return { periodId: input.periodId, periodLifecycle: input.periodLifecycle, placements };
+  return {
+    periodId: input.periodId,
+    periodLifecycle: input.periodLifecycle,
+    placements,
+    deliverablesWithNoPlacements,
+  };
 }

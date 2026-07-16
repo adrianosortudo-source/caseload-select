@@ -114,7 +114,13 @@ describe("verifyReceipt", () => {
     });
     if (!created.ok) throw new Error("expected ok");
 
-    const verified = await verifyReceipt(created.receipt.id, { method: "url_fetch", passed: true });
+    const verified = await verifyReceipt(created.receipt.id, {
+      method: "url_fetch",
+      passed: true,
+      verifierRole: "system",
+      verifierId: null,
+      verifierName: "Automated Check",
+    });
     expect(verified.ok).toBe(true);
     if (!verified.ok) return;
     expect(verified.receipt.id).not.toBe(created.receipt.id);
@@ -126,6 +132,37 @@ describe("verifyReceipt", () => {
       "unverified",
     );
     expect(state.receipts).toHaveLength(2);
+  });
+
+  it("attributes the verification to the verifier, not the original publisher (WS5)", async () => {
+    const created = await createReceipt({
+      firmId: FIRM_ID,
+      deliverableId: DELIVERABLE_ID,
+      placementId: PLACEMENT_ID,
+      destination: "firm_website",
+      approvedVersionId: VERSION_ID,
+      publicUrl: "https://drglaw.ca/journal/example",
+      publishedAt: new Date().toISOString(),
+      actorRole: "operator",
+      actorId: null,
+      actorName: "Operator",
+    });
+    if (!created.ok) throw new Error("expected ok");
+
+    // Verifier is a DIFFERENT identity than the original publisher, so a
+    // regression back to copying the original receipt's own actor fields
+    // would be caught here.
+    const verified = await verifyReceipt(created.receipt.id, {
+      method: "operator_attestation",
+      passed: true,
+      verifierRole: "lawyer",
+      verifierId: "law-999",
+      verifierName: "Damaris",
+    });
+    if (!verified.ok) throw new Error("expected ok");
+    expect(verified.receipt.actor_role).toBe("lawyer");
+    expect(verified.receipt.actor_id).toBe("law-999");
+    expect(verified.receipt.actor_name).toBe("Damaris");
   });
 
   it("records a failed verification with the failure reason, still as a new row", async () => {
@@ -145,6 +182,9 @@ describe("verifyReceipt", () => {
       method: "url_fetch",
       passed: false,
       failureReason: "404 not found",
+      verifierRole: "system",
+      verifierId: null,
+      verifierName: "Automated Check",
     });
     if (!verified.ok) throw new Error("expected ok");
     expect(verified.receipt.verification_state).toBe("failed");
@@ -165,7 +205,13 @@ describe("getCurrentReceiptForPlacement", () => {
       actorRole: "operator",
     });
     if (!created.ok) throw new Error("expected ok");
-    const verified = await verifyReceipt(created.receipt.id, { method: "url_fetch", passed: true });
+    const verified = await verifyReceipt(created.receipt.id, {
+      method: "url_fetch",
+      passed: true,
+      verifierRole: "system",
+      verifierId: null,
+      verifierName: "Automated Check",
+    });
     if (!verified.ok) throw new Error("expected ok");
 
     const current = await getCurrentReceiptForPlacement(PLACEMENT_ID);

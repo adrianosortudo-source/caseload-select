@@ -34,10 +34,19 @@ const state = {
   },
   verifyReceiptArgs: null as unknown,
   validateCallArgs: null as { destination: string; receipt: unknown; opts: Record<string, unknown> } | null,
+  operatorSession: { firm_id: FIRM, role: "operator", lawyer_id: "law-1" } as {
+    firm_id: string;
+    role: "operator";
+    lawyer_id: string | null;
+  } | null,
 };
 
 vi.mock("@/lib/admin-auth", () => ({
   requireOperator: () => Promise.resolve(null),
+}));
+
+vi.mock("@/lib/portal-auth", () => ({
+  getOperatorSession: () => Promise.resolve(state.operatorSession),
 }));
 
 vi.mock("@/lib/deliverables", () => ({
@@ -104,6 +113,7 @@ beforeEach(() => {
   state.validateResult = { outcome: "verified", method: "url_fetch", checks: {}, reason: null };
   state.verifyReceiptArgs = null;
   state.validateCallArgs = null;
+  state.operatorSession = { firm_id: FIRM, role: "operator", lawyer_id: "law-1" };
 });
 
 describe("POST verify: expectedSha256 resolution (Workstream 2)", () => {
@@ -221,6 +231,23 @@ describe("POST verify: automated path", () => {
     expect(body.persisted).toBe(false);
     expect(state.verifyReceiptArgs).toBeNull();
     expect(body.hint).toMatch(/manualOutcome/);
+  });
+
+  it("attributes the automated verification to the signed-in operator session, not a hardcoded identity (WS5)", async () => {
+    state.operatorSession = { firm_id: FIRM, role: "operator", lawyer_id: "law-42" };
+    await POST(makeReq(), params());
+    const args = (state.verifyReceiptArgs as { args: { verifierRole: string; verifierId: string | null; verifierName: string } }).args;
+    expect(args.verifierRole).toBe("operator");
+    expect(args.verifierId).toBe("law-42");
+    expect(args.verifierName).toBe("Operator");
+  });
+
+  it("falls back to a null verifierId when there is no operator session (still attributes the role)", async () => {
+    state.operatorSession = null;
+    await POST(makeReq(), params());
+    const args = (state.verifyReceiptArgs as { args: { verifierRole: string; verifierId: string | null } }).args;
+    expect(args.verifierRole).toBe("operator");
+    expect(args.verifierId).toBeNull();
   });
 });
 

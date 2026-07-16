@@ -240,7 +240,7 @@ describe("buildPreflightReport: archived exclusion and receipt passthrough", () 
     expect(report.placements).toHaveLength(0);
   });
 
-  it("surfaces the current receipt when one exists, without letting it override may_publish logic", () => {
+  it("surfaces the current receipt when one exists, and an already-verified receipt blocks mayPublish (idempotency, WS4)", () => {
     const deliverable = makeDeliverable();
     const placement = makePlacement({ deliverable_id: deliverable.id });
     const receipt: PublicationReceipt = {
@@ -279,6 +279,110 @@ describe("buildPreflightReport: archived exclusion and receipt passthrough", () 
       publicUrl: receipt.public_url,
       externalPostId: null,
     });
+    // A placement that is already published and verified is a terminal
+    // state, not something "may publish" should ever say yes to again.
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].nextAction).toBe("already_published");
+  });
+});
+
+describe("buildPreflightReport: idempotency -- retired placements and existing receipts (WS4)", () => {
+  function receiptWithState(
+    placementId: string,
+    deliverableId: string,
+    verificationState: PublicationReceipt["verification_state"],
+  ): PublicationReceipt {
+    return {
+      id: "r-" + verificationState,
+      firm_id: FIRM,
+      period_id: PERIOD,
+      deliverable_id: deliverableId,
+      placement_id: placementId,
+      destination: "firm_website",
+      locale: "en-CA",
+      approved_version_id: VERSION,
+      artifact_id: null,
+      artifact_sha256: null,
+      public_url: "https://drglaw.ca/journal/example",
+      external_post_id: null,
+      published_at: new Date().toISOString(),
+      actor_role: "operator",
+      actor_id: null,
+      actor_name: "Operator",
+      verification_state: verificationState,
+      verified_at: verificationState === "verified" || verificationState === "failed" ? new Date().toISOString() : null,
+      verification_method: verificationState === "verified" || verificationState === "failed" ? "url_fetch" : null,
+      evidence_storage_bucket: null,
+      evidence_storage_path: null,
+      failure_reason: verificationState === "failed" ? "HTTP 404" : null,
+      reconciles_receipt_id: null,
+      created_at: new Date().toISOString(),
+    };
+  }
+
+  it("a retired placement never mayPublish, regardless of deliverable readiness", () => {
+    const deliverable = makeDeliverable();
+    const placement = makePlacement({ deliverable_id: deliverable.id, state: "retired" });
+    const report = buildPreflightReport(baseInput({ deliverable, placements: [placement] }));
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].reason).toMatch(/retired/);
+    expect(report.placements[0].nextAction).toBe("already_retired");
+  });
+
+  it("a failed verification blocks mayPublish and routes to needs_reverification, not a silent republish", () => {
+    const deliverable = makeDeliverable();
+    const placement = makePlacement({ deliverable_id: deliverable.id });
+    const receipt = receiptWithState(placement.id, deliverable.id, "failed");
+    const report = buildPreflightReport(
+      baseInput({ deliverable, placements: [placement], receipts: { [placement.id]: receipt } }),
+    );
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].nextAction).toBe("needs_reverification");
+  });
+
+  it("an unverified receipt blocks mayPublish and routes to needs_verification (verify the existing receipt, don't create another)", () => {
+    const deliverable = makeDeliverable();
+    const placement = makePlacement({ deliverable_id: deliverable.id });
+    const receipt = receiptWithState(placement.id, deliverable.id, "unverified");
+    const report = buildPreflightReport(
+      baseInput({ deliverable, placements: [placement], receipts: { [placement.id]: receipt } }),
+    );
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].nextAction).toBe("needs_verification");
+  });
+
+  it("a reconciling receipt blocks mayPublish and routes to needs_verification", () => {
+    const deliverable = makeDeliverable();
+    const placement = makePlacement({ deliverable_id: deliverable.id });
+    const receipt = receiptWithState(placement.id, deliverable.id, "reconciling");
+    const report = buildPreflightReport(
+      baseInput({ deliverable, placements: [placement], receipts: { [placement.id]: receipt } }),
+    );
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].nextAction).toBe("needs_verification");
+  });
+
+  it("the genuine pass case carries nextAction 'publish'", () => {
+    const report = buildPreflightReport(baseInput({}));
     expect(report.placements[0].mayPublish).toBe(true);
+    expect(report.placements[0].nextAction).toBe("publish");
+  });
+});
+
+describe("buildPreflightReport: zero-placement deliverables surfaced as a gap (WS4)", () => {
+  it("a deliverable with no placements is NOT silently omitted -- it appears in deliverablesWithNoPlacements", () => {
+    const deliverable = makeDeliverable();
+    const report = buildPreflightReport(
+      baseInput({ deliverable, placements: [] }),
+    );
+    expect(report.placements).toHaveLength(0);
+    expect(report.deliverablesWithNoPlacements).toEqual([
+      { deliverableId: deliverable.id, deliverableTitle: deliverable.title },
+    ]);
+  });
+
+  it("a deliverable with at least one placement does not appear in the gap list", () => {
+    const report = buildPreflightReport(baseInput({}));
+    expect(report.deliverablesWithNoPlacements).toHaveLength(0);
   });
 });

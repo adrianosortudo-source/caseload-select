@@ -83,6 +83,15 @@ export interface VerifyReceiptInput {
   passed: boolean;
   failureReason?: string | null;
   evidenceStoragePath?: string | null;
+  /**
+   * Who actually performed this verification. Never defaulted from the
+   * original receipt's own actor fields: a lawyer or system check
+   * verifying an operator's publish (or vice versa) must be attributed to
+   * itself, not silently misattributed to whoever originally published.
+   */
+  verifierRole: "operator" | "lawyer" | "system";
+  verifierId?: string | null;
+  verifierName?: string | null;
 }
 
 /**
@@ -121,9 +130,9 @@ export async function verifyReceipt(
       public_url: o.public_url,
       external_post_id: o.external_post_id,
       published_at: o.published_at,
-      actor_role: o.actor_role,
-      actor_id: o.actor_id,
-      actor_name: o.actor_name,
+      actor_role: verification.verifierRole,
+      actor_id: verification.verifierId ?? null,
+      actor_name: verification.verifierName ?? null,
       verification_state: verification.passed ? "verified" : "failed",
       verified_at: new Date().toISOString(),
       verification_method: verification.method,

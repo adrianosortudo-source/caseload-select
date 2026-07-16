@@ -17,6 +17,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireOperator } from "@/lib/admin-auth";
+import { getOperatorSession } from "@/lib/portal-auth";
 import { getDeliverableDetail } from "@/lib/deliverables";
 import { listPlacementsForDeliverable } from "@/lib/content-placements";
 import { getReceiptById, verifyReceipt } from "@/lib/publication-receipts";
@@ -57,11 +58,16 @@ export async function POST(
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
+  const verifierSession = await getOperatorSession();
+
   if (body.manualOutcome === "verified" || body.manualOutcome === "failed") {
     const result = await verifyReceipt(receiptId, {
       method: "operator_attestation",
       passed: body.manualOutcome === "verified",
       failureReason: typeof body.manualReason === "string" ? body.manualReason : undefined,
+      verifierRole: "operator",
+      verifierId: verifierSession?.lawyer_id ?? null,
+      verifierName: "Operator",
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
     return NextResponse.json({ ok: true, receipt: result.receipt, automated: false });
@@ -116,6 +122,9 @@ export async function POST(
     method: check.method,
     passed: check.outcome === "verified",
     failureReason: check.reason,
+    verifierRole: "operator",
+    verifierId: verifierSession?.lawyer_id ?? null,
+    verifierName: "Operator",
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
   return NextResponse.json({ ok: true, automated: true, persisted: true, check, receipt: result.receipt });
