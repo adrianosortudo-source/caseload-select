@@ -106,6 +106,39 @@ export function shouldExcludeBySeedRule(url: string): SeedExcludeResult {
 }
 
 // ---------------------------------------------------------------------------
+// Same-site gate (Ses.18 audit F2)
+// ---------------------------------------------------------------------------
+
+/**
+ * True when `url` belongs to the same site as `seedOrigin` (the operator-
+ * provided root the firm's sitemap was seeded from). http(s) only; the
+ * `www.` prefix is ignored in both directions so `drglaw.ca` and
+ * `www.drglaw.ca` match each other, but a different subdomain
+ * (`blog.drglaw.ca`) or a different host entirely does not.
+ *
+ * A malicious or compromised client-site sitemap can list <loc> entries
+ * pointing anywhere; without this gate, seedPagesFromSitemap would insert
+ * (and reindexFirm would later fetch, even through safeFetch's SSRF
+ * filter) arbitrary public URLs into a firm's corpus. This is a
+ * data-integrity gate, separate from and in addition to safeFetch's
+ * network-layer SSRF protection.
+ */
+export function isSameSiteUrl(url: string, seedOrigin: string): boolean {
+  let target: URL;
+  let seed: URL;
+  try {
+    target = new URL(url);
+    seed = new URL(seedOrigin);
+  } catch {
+    return false;
+  }
+  if (target.protocol !== 'http:' && target.protocol !== 'https:') return false;
+
+  const bareHost = (h: string) => (h.startsWith('www.') ? h.slice(4) : h);
+  return bareHost(target.hostname.toLowerCase()) === bareHost(seed.hostname.toLowerCase());
+}
+
+// ---------------------------------------------------------------------------
 // HTML content extraction + chunking
 // ---------------------------------------------------------------------------
 

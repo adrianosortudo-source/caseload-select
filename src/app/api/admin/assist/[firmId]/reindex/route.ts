@@ -18,6 +18,9 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { seedPagesFromSitemap, reindexFirm } from '@/lib/assist/corpus-ingest';
 
 export const dynamic = 'force-dynamic';
+// Ses.18 audit F3: a real reindex against a 70-page corpus already runs
+// minutes; the default Vercel function timeout is too short.
+export const maxDuration = 300;
 
 export async function POST(
   req: NextRequest,

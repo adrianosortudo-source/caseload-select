@@ -135,4 +135,46 @@ describe('buildExitResponse', () => {
       expect(result.answer_html).toContain('Safe text');
     }
   });
+
+  describe('href host constraint (Ses.18 audit F6b)', () => {
+    it('keeps a link pointing at a source page host', () => {
+      const modelResponse: AnswerModelResponse = {
+        intent: 'informational',
+        answer_html: '<p>See <a href="https://drglaw.ca/journal/leases">this page</a>.</p>',
+        source_page_ids: ['page-1'],
+      };
+      const result = buildExitResponse(modelResponse, pagesById);
+      expect(result.exit).toBe('answered');
+      if (result.exit === 'answered') {
+        expect(result.answer_html).toContain('<a href="https://drglaw.ca/journal/leases">');
+      }
+    });
+
+    it('unwraps a link to a host that is neither a source page nor the custom domain', () => {
+      const modelResponse: AnswerModelResponse = {
+        intent: 'informational',
+        answer_html: '<p>See <a href="https://evil.example/steal">this</a>.</p>',
+        source_page_ids: [],
+      };
+      const result = buildExitResponse(modelResponse, pagesById);
+      expect(result.exit).toBe('answered');
+      if (result.exit === 'answered') {
+        expect(result.answer_html).not.toContain('<a ');
+        expect(result.answer_html).not.toContain('evil.example');
+      }
+    });
+
+    it('keeps a link to the firm custom_domain even without a matching source page', () => {
+      const modelResponse: AnswerModelResponse = {
+        intent: 'informational',
+        answer_html: '<p><a href="https://drglaw.ca/contact">Contact</a></p>',
+        source_page_ids: [],
+      };
+      const result = buildExitResponse(modelResponse, pagesById, 'drglaw.ca');
+      expect(result.exit).toBe('answered');
+      if (result.exit === 'answered') {
+        expect(result.answer_html).toContain('<a href="https://drglaw.ca/contact">');
+      }
+    });
+  });
 });

@@ -80,16 +80,29 @@ export type AssistExitResponse =
   | { exit: 'screen_handoff'; message: string }
   | { exit: 'no_coverage'; message: string };
 
+function hostnameOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Maps the model's raw response to the fixed-copy exit shape the frontend
  * renders. case_specific and no_coverage messages are constants, never
  * model-generated text, so LSO-sensitive copy is never at the model's
  * discretion. Hallucinated source_page_ids (not present in pagesById) are
  * dropped silently rather than surfaced as a broken link.
+ *
+ * customDomain (Ses.18 audit F6b, optional) constrains any <a href> in the
+ * model's answer_html to the firm's own source-page hosts plus its custom
+ * domain when set; an offsite link is unwrapped by sanitizeAnswerHtml.
  */
 export function buildExitResponse(
   modelResponse: AnswerModelResponse,
   pagesById: Map<string, SourcePage>,
+  customDomain?: string | null,
 ): AssistExitResponse {
   if (modelResponse.intent === 'case_specific') {
     return { exit: 'screen_handoff', message: SCREEN_HANDOFF_MESSAGE };
@@ -103,9 +116,16 @@ export function buildExitResponse(
     .filter((p): p is SourcePage => Boolean(p))
     .map((p) => ({ title: p.title, url: p.url }));
 
+  const allowedHosts = new Set<string>();
+  for (const page of pagesById.values()) {
+    const host = hostnameOf(page.url);
+    if (host) allowedHosts.add(host);
+  }
+  if (customDomain) allowedHosts.add(customDomain.trim().toLowerCase());
+
   return {
     exit: 'answered',
-    answer_html: sanitizeAnswerHtml(modelResponse.answer_html),
+    answer_html: sanitizeAnswerHtml(modelResponse.answer_html, allowedHosts),
     sources,
   };
 }

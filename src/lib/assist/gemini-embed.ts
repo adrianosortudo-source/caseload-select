@@ -65,7 +65,10 @@ async function sleep(ms: number): Promise<void> {
 }
 
 async function embedOneBatch(texts: string[], taskType: TaskType, apiKey: string): Promise<number[][]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:batchEmbedContents?key=${apiKey}`;
+  // Ses.18 audit F6a: key travels as a header, not a ?key= query param.
+  // URL query strings are far more likely to be captured in intermediate
+  // request logging (proxies, CDN access logs, error trackers) than headers.
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:batchEmbedContents`;
   const body = {
     requests: texts.map((text) => ({
       model: `models/${EMBEDDING_MODEL}`,
@@ -77,7 +80,7 @@ async function embedOneBatch(texts: string[], taskType: TaskType, apiKey: string
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify(body),
   });
 
