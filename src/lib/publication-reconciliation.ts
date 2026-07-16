@@ -15,6 +15,7 @@
 
 import "server-only";
 import { supabaseAdmin as supabase } from "./supabase-admin";
+import { ssrfSafeFetch } from "./ssrf-fetch";
 import type { PublicationArtifact, PublicationArtifactValidator } from "./types";
 
 export interface ReconciliationResult {
@@ -76,12 +77,18 @@ async function checkRoute(artifact: PublicationArtifact): Promise<Reconciliation
   if (!url) {
     return { artifact_id: artifact.id, validator: "route_check", result: "fail", details: { reason: "no public_url or deployment_url recorded" } };
   }
+  // artifact.public_url/deployment_url is operator-supplied, server-side
+  // fetched input -- the same trust class ssrf.ts/ssrf-fetch.ts exist for.
+  // A raw fetch() here would bypass every SSRF protection (private/
+  // loopback/link-local/metadata IP blocking, DNS-rebinding-safe pinned
+  // resolution, redirect re-validation per hop) that receipt verification
+  // enforces for the identical class of input.
   try {
-    const res = await fetch(url, { method: "GET", redirect: "follow" });
+    const { res, finalUrl } = await ssrfSafeFetch(url, { timeoutMs: 10_000, allowedSchemes: ["http:", "https:"] });
     if (!res.ok) {
-      return { artifact_id: artifact.id, validator: "route_check", result: "fail", details: { reason: `route returned HTTP ${res.status}`, url } };
+      return { artifact_id: artifact.id, validator: "route_check", result: "fail", details: { reason: `route returned HTTP ${res.status}`, url: finalUrl } };
     }
-    return { artifact_id: artifact.id, validator: "route_check", result: "pass", details: { url, status: res.status } };
+    return { artifact_id: artifact.id, validator: "route_check", result: "pass", details: { url: finalUrl, status: res.status } };
   } catch (err) {
     return { artifact_id: artifact.id, validator: "route_check", result: "error", details: { error: err instanceof Error ? err.message : String(err), url } };
   }

@@ -39,7 +39,12 @@ export function ipInBlockedRange(ip: string): boolean {
     if (a === 169 && b === 254) return true; // link-local (includes cloud metadata 169.254.169.254)
     if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 private
     if (a === 192 && b === 168) return true; // 192.168.0.0/16 private
-    if (a === 192 && b === 0 && c === 0) return true; // 192.0.0.0/24
+    if (a === 192 && b === 0 && c === 0) return true; // 192.0.0.0/24 IETF protocol assignments
+    if (a === 192 && b === 0 && c === 2) return true; // 192.0.2.0/24 TEST-NET-1
+    if (a === 192 && b === 88 && c === 99) return true; // 192.88.99.0/24 6to4 relay anycast
+    if (a === 198 && (b === 18 || b === 19)) return true; // 198.18.0.0/15 benchmarking
+    if (a === 198 && b === 51 && c === 100) return true; // 198.51.100.0/24 TEST-NET-2
+    if (a === 203 && b === 0 && c === 113) return true; // 203.0.113.0/24 TEST-NET-3
     if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
     if (a >= 224) return true; // multicast + reserved
     return false;
@@ -67,6 +72,26 @@ export function ipInBlockedRange(ip: string): boolean {
       }
       return true; // unparseable NAT64 embedding: refuse
     }
+    // 6to4 2002::/16 embeds an IPv4 in the 32 bits immediately after the
+    // prefix (2002:AABB:CCDD::/48 encodes AA.BB.CC.DD), the same
+    // encode-a-private-IPv4-as-IPv6 shape as the NAT64/mapped forms above.
+    if (v.startsWith("2002:")) {
+      const parts = v.split(":");
+      const h1 = parseInt(parts[1] || "", 16);
+      const h2 = parseInt(parts[2] || "", 16);
+      if (Number.isFinite(h1) && Number.isFinite(h2)) {
+        return ipInBlockedRange(`${(h1 >> 8) & 255}.${h1 & 255}.${(h2 >> 8) & 255}.${h2 & 255}`);
+      }
+      return true; // unparseable 6to4 embedding: refuse
+    }
+    // Teredo tunneling 2001:0000::/32 is IPv4-in-IPv6 encapsulation
+    // infrastructure, never a legitimate direct fetch destination; block
+    // the whole prefix rather than decode its obfuscated embedded address.
+    // Matches both the RFC5952-canonical isolated-zero form ("2001:0:...",
+    // the shape a real Teredo address takes since its Server-IPv4 group
+    // right after the fixed "0" group is essentially never itself zero)
+    // and any further "::"-compressed form of the same /32 prefix.
+    if (v.startsWith("2001:0:") || v.startsWith("2001::")) return true;
     const firstHex = v.startsWith("::") ? 0 : parseInt(v.split(":")[0] || "0", 16);
     if (Number.isNaN(firstHex)) return true; // malformed: refuse
     if (firstHex >= 0xfe80 && firstHex <= 0xfebf) return true; // link-local fe80::/10

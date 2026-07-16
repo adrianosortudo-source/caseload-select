@@ -40,6 +40,8 @@ const state = {
     name: string | null;
     email: string | null;
   } | null,
+  customDomain: "drglaw.ca" as string | null,
+  subdomain: null as string | null,
 };
 
 vi.mock("@/lib/deliverables-auth", () => ({
@@ -75,7 +77,8 @@ vi.mock("@/lib/supabase-admin", () => ({
       select: () => ({
         eq: () => ({
           maybeSingle: () => {
-            if (table === "intake_firms") return Promise.resolve({ data: { custom_domain: "drglaw.ca" } });
+            if (table === "intake_firms")
+              return Promise.resolve({ data: { custom_domain: state.customDomain, subdomain: state.subdomain } });
             if (table === "deliverable_versions") return Promise.resolve({ data: state.versionRow });
             return Promise.resolve({ data: null });
           },
@@ -111,6 +114,8 @@ beforeEach(() => {
   state.verifyReceiptArgs = null;
   state.validateCallArgs = null;
   state.resolvedActor = { role: "operator", id: "op-1", name: "Operator", email: null };
+  state.customDomain = "drglaw.ca";
+  state.subdomain = null;
 });
 
 describe("POST verify: auth gate (Workstream 5)", () => {
@@ -220,6 +225,29 @@ describe("POST verify: expectedSha256 resolution (Workstream 2)", () => {
     expect(state.validateCallArgs?.opts.expectedSha256).toBeNull();
     expect(body.persisted).toBe(false);
     expect(state.verifyReceiptArgs).toBeNull();
+  });
+});
+
+describe("POST verify: expectedHost falls back to subdomain (Workstream 3 residual gap)", () => {
+  it("uses custom_domain when set (legacy firms)", async () => {
+    state.customDomain = "drglaw.ca";
+    state.subdomain = null;
+    await POST(makeReq(), params());
+    expect(state.validateCallArgs?.opts.expectedHost).toBe("drglaw.ca");
+  });
+
+  it("falls back to `${subdomain}.caseloadselect.ca` when custom_domain is null (current onboarding path)", async () => {
+    state.customDomain = null;
+    state.subdomain = "drglaw";
+    await POST(makeReq(), params());
+    expect(state.validateCallArgs?.opts.expectedHost).toBe("drglaw.caseloadselect.ca");
+  });
+
+  it("is null only when the firm has neither custom_domain nor subdomain configured", async () => {
+    state.customDomain = null;
+    state.subdomain = null;
+    await POST(makeReq(), params());
+    expect(state.validateCallArgs?.opts.expectedHost).toBeNull();
   });
 });
 
