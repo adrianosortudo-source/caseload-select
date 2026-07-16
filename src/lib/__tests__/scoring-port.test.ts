@@ -124,7 +124,7 @@ describe('buildScoreExplanation (C2 + 8.4)', () => {
       confidence: 'high',
       scoringGaps: 0,
     });
-    expect(e).toContain('High complexity drags the weighted score down.');
+    expect(e).toContain('Low simplicity drags the weighted score down.');
   });
 
   it('adds the low-confidence note with the gap count', () => {

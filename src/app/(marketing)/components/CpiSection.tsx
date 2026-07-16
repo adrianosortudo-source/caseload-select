@@ -76,7 +76,7 @@ export default function CpiSection() {
           The Case Priority Index<span className="ts" />
         </h2>
         <p className="section-sub reveal" style={{ marginBottom: "var(--sp-7)" }}>
-          Every inquiry is scored on value, complexity, urgency, and readiness
+          Every inquiry is scored on value, simplicity, urgency, and readiness
           before a lawyer reads it. The score routes the brief into one of
           four bands. Each band has a predetermined action. You open the file
           already knowing which band it sits in, and what the system has

@@ -15,7 +15,11 @@
  */
 
 import { computeScorePort, rehydrateScoredState } from '@/lib/scoring-port';
-import { scorePortToColumns, type ScoringDeltaColumns } from '@/lib/scoring-port-persistence';
+import {
+  scorePortToColumns,
+  HISTORICAL_SCORE_VERSIONS,
+  type ScoringDeltaColumns,
+} from '@/lib/scoring-port-persistence';
 import type { Band } from '@/lib/screen-engine/types';
 
 // Firm config
@@ -128,6 +132,16 @@ export function shadowCompareScoringPort(row: ShadowComparatorRow): void {
 
   const drifts: string[] = [];
 
+  // A persisted score_version that is an older KNOWN version than the fresh
+  // recompute is not drift: it means the explanation prose changed (DR-103)
+  // and this row was written before the bump. DR-059 forbids retroactive
+  // recompute, so this disagreement is permanent and expected, not a defect.
+  const versionIsHistorical =
+    row.score_version !== null &&
+    row.score_version !== undefined &&
+    row.score_version !== expected.score_version &&
+    HISTORICAL_SCORE_VERSIONS.has(row.score_version);
+
   if (
     row.score_confidence !== null &&
     row.score_confidence !== undefined &&
@@ -150,7 +164,8 @@ export function shadowCompareScoringPort(row: ShadowComparatorRow): void {
   if (
     row.score_version !== null &&
     row.score_version !== undefined &&
-    row.score_version !== expected.score_version
+    row.score_version !== expected.score_version &&
+    !versionIsHistorical
   ) {
     drifts.push(
       `score_version: persisted=${row.score_version} expected=${expected.score_version}`,
@@ -160,7 +175,8 @@ export function shadowCompareScoringPort(row: ShadowComparatorRow): void {
   if (
     row.score_explanation !== null &&
     row.score_explanation !== undefined &&
-    row.score_explanation !== expected.score_explanation
+    row.score_explanation !== expected.score_explanation &&
+    !versionIsHistorical
   ) {
     drifts.push('score_explanation: drift');
   }
