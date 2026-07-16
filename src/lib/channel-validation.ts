@@ -17,6 +17,7 @@
 
 import "server-only";
 import { createHash } from "node:crypto";
+import { ssrfSafeFetch } from "@/lib/ssrf-fetch";
 import type { PlacementDestination, PublicationArtifactType, PublicationReceipt } from "@/lib/types";
 
 export type ChannelValidationOutcome = "verified" | "failed" | "unverifiable";
@@ -30,14 +31,17 @@ export interface ChannelValidationResult {
 
 const FETCH_TIMEOUT_MS = 10_000;
 
-async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal, redirect: "follow" });
-  } finally {
-    clearTimeout(timeout);
-  }
+/**
+ * Fetches a receipt's public_url with SSRF protection (see ssrf-fetch.ts):
+ * HTTPS-only, no embedded credentials, no localhost/private/link-local/CGNAT/
+ * cloud-metadata host on the initial URL OR any redirect hop, DNS pinned to
+ * the validated address to close the rebinding gap. Returns the finalUrl the
+ * request actually landed on after any redirects, since that -- not
+ * whatever a naive res.url would report under manual redirect handling -- is
+ * what a caller's host-match check must inspect.
+ */
+async function fetchWithTimeout(url: string, method: string): Promise<{ res: Response; finalUrl: string }> {
+  return ssrfSafeFetch(url, { method, timeoutMs: FETCH_TIMEOUT_MS });
 }
 
 /**
@@ -60,8 +64,9 @@ export async function validateWebsiteReceipt(
   }
 
   let res: Response;
+  let finalUrl: string;
   try {
-    res = await fetchWithTimeout(receipt.public_url, { method: "GET" });
+    ({ res, finalUrl } = await fetchWithTimeout(receipt.public_url, "GET"));
   } catch (err) {
     return {
       outcome: "failed",
@@ -71,7 +76,7 @@ export async function validateWebsiteReceipt(
     };
   }
 
-  const resolvedHost = new URL(res.url).host;
+  const resolvedHost = new URL(finalUrl).host;
   const hostMatches = expectedHost ? resolvedHost === expectedHost : null;
   const statusOk = res.status === 200;
 
@@ -101,10 +106,13 @@ export async function validateWebsiteReceipt(
 
 /**
  * PDF / lead-magnet destination: fetches the file and confirms it is
- * actually a PDF (content-type), and, when the deliverable's approved
- * version carries its own asset_sha256, that the LIVE file's hash matches
- * -- proof the live artifact is byte-identical to the approved version,
- * not merely a file with the right name at the right path.
+ * actually a PDF (content-type), and that the LIVE file's hash matches the
+ * caller-supplied expectedSha256 -- proof the live artifact is
+ * byte-identical to the approved version, not merely a file with the right
+ * name at the right path. When no trusted hash is available to compare
+ * against, this reports "unverifiable" rather than "verified": a live,
+ * correctly-typed file is not the same claim as byte-identity, and this
+ * validator never reports a check it did not actually run.
  */
 export async function validatePdfReceipt(
   receipt: Pick<PublicationReceipt, "public_url">,
@@ -121,7 +129,7 @@ export async function validatePdfReceipt(
 
   let res: Response;
   try {
-    res = await fetchWithTimeout(receipt.public_url, { method: "GET" });
+    ({ res } = await fetchWithTimeout(receipt.public_url, "GET"));
   } catch (err) {
     return {
       outcome: "failed",
@@ -152,11 +160,17 @@ export async function validatePdfReceipt(
   }
 
   if (!expectedSha256) {
+    // A live, correctly-typed file is not the same claim as "byte-identical
+    // to the approved version" -- the whole point of registering a PDF
+    // artifact. With no trusted hash to compare against (neither the
+    // artifact nor the approved version carries one), that claim was never
+    // actually checked, so this reports unverifiable rather than fabricating
+    // "verified" for a check that did not run. See the docstring above.
     return {
-      outcome: "verified",
+      outcome: "unverifiable",
       method: "url_fetch",
       checks: { status: res.status, content_type: contentType, sha256_checked: false },
-      reason: null,
+      reason: "no trusted sha256 on file (neither the artifact nor the approved version carries one) to compare the live bytes against",
     };
   }
 

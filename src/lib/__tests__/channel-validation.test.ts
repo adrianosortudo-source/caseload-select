@@ -86,6 +86,57 @@ describe("validateWebsiteReceipt", () => {
     expect(result.outcome).toBe("failed");
     expect(result.reason).toMatch(/could not reach/);
   });
+
+  it("refuses a public_url pointing at the cloud metadata address without ever calling fetch (SSRF)", async () => {
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy;
+    const result = await validateWebsiteReceipt({ public_url: "https://169.254.169.254/latest/meta-data/" });
+    expect(result.outcome).toBe("failed");
+    expect(result.checks.fetch_error).toMatch(/blocked/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("refuses a non-https public_url (SSRF: scheme check)", async () => {
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy;
+    const result = await validateWebsiteReceipt({ public_url: "http://drglaw.ca/journal/example" });
+    expect(result.outcome).toBe("failed");
+    expect(result.checks.fetch_error).toMatch(/unsupported protocol/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("refuses to follow a redirect into a blocked address, never reaching it (SSRF via redirect)", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 302,
+        headers: new Headers({ location: "http://169.254.169.254/steal" }),
+      } as unknown as Response);
+    global.fetch = fetchSpy;
+    const result = await validateWebsiteReceipt({ public_url: "https://drglaw.ca/redirector" });
+    expect(result.outcome).toBe("failed");
+    expect(result.checks.fetch_error).toMatch(/unsupported protocol|blocked/);
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // the malicious hop was never requested
+  });
+
+  it("follows a legitimate same-host www redirect and lands on the correct final host", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: 301,
+        headers: new Headers({ location: "https://www.drglaw.ca/journal/example" }),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        status: 200,
+        headers: new Headers(),
+        url: "https://www.drglaw.ca/journal/example",
+      } as unknown as Response);
+    global.fetch = fetchSpy;
+    const result = await validateWebsiteReceipt({ public_url: "https://drglaw.ca/journal/example" }, "www.drglaw.ca");
+    expect(result.outcome).toBe("verified");
+    expect(result.checks.resolved_host).toBe("www.drglaw.ca");
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("validatePdfReceipt", () => {
@@ -99,15 +150,16 @@ describe("validatePdfReceipt", () => {
     expect(result.reason).toMatch(/expected application\/pdf/);
   });
 
-  it("verifies a PDF with no expected hash to check against (presence-only)", async () => {
+  it("reports unverifiable (never a fabricated 'verified') when no trusted hash exists to check the live bytes against", async () => {
     mockFetchOnce({
       status: 200,
       headers: new Headers({ "content-type": "application/pdf" }),
       arrayBuffer: async () => new TextEncoder().encode("pdf bytes").buffer,
     });
     const result = await validatePdfReceipt({ public_url: "https://drglaw.ca/resources/checklist.pdf" });
-    expect(result.outcome).toBe("verified");
+    expect(result.outcome).toBe("unverifiable");
     expect(result.checks.sha256_checked).toBe(false);
+    expect(result.reason).toMatch(/no trusted sha256/);
   });
 
   it("verifies when the live file's sha256 matches the approved artifact's sha256", async () => {

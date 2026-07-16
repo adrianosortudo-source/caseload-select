@@ -18,7 +18,14 @@ const RECEIPT = "r1111111-1111-1111-1111-111111111111";
 const state = {
   detail: null as { deliverable: { firm_id: string } } | null,
   placements: [] as Array<{ id: string; destination: string; required_artifact_type: string | null }>,
-  receipt: null as { id: string; placement_id: string } | null,
+  receipt: null as {
+    id: string;
+    placement_id: string;
+    artifact_id?: string | null;
+    artifact_sha256?: string | null;
+    approved_version_id?: string | null;
+  } | null,
+  versionRow: null as { asset_sha256: string | null } | null,
   validateResult: { outcome: "verified", method: "url_fetch", checks: {}, reason: null } as {
     outcome: string;
     method: string;
@@ -26,6 +33,7 @@ const state = {
     reason: string | null;
   },
   verifyReceiptArgs: null as unknown,
+  validateCallArgs: null as { destination: string; receipt: unknown; opts: Record<string, unknown> } | null,
 };
 
 vi.mock("@/lib/admin-auth", () => ({
@@ -49,15 +57,22 @@ vi.mock("@/lib/publication-receipts", () => ({
 }));
 
 vi.mock("@/lib/channel-validation", () => ({
-  validateReceiptForDestination: () => Promise.resolve(state.validateResult),
+  validateReceiptForDestination: (destination: string, receipt: unknown, opts: Record<string, unknown>) => {
+    state.validateCallArgs = { destination, receipt, opts };
+    return Promise.resolve(state.validateResult);
+  },
 }));
 
 vi.mock("@/lib/supabase-admin", () => ({
   supabaseAdmin: {
-    from: () => ({
+    from: (table: string) => ({
       select: () => ({
         eq: () => ({
-          maybeSingle: () => Promise.resolve({ data: { custom_domain: "drglaw.ca" } }),
+          maybeSingle: () => {
+            if (table === "intake_firms") return Promise.resolve({ data: { custom_domain: "drglaw.ca" } });
+            if (table === "deliverable_versions") return Promise.resolve({ data: state.versionRow });
+            return Promise.resolve({ data: null });
+          },
         }),
       }),
     }),
@@ -85,8 +100,87 @@ beforeEach(() => {
   state.detail = { deliverable: { firm_id: FIRM } };
   state.placements = [{ id: PLACEMENT, destination: "firm_website", required_artifact_type: "webpage" }];
   state.receipt = { id: RECEIPT, placement_id: PLACEMENT };
+  state.versionRow = null;
   state.validateResult = { outcome: "verified", method: "url_fetch", checks: {}, reason: null };
   state.verifyReceiptArgs = null;
+  state.validateCallArgs = null;
+});
+
+describe("POST verify: expectedSha256 resolution (Workstream 2)", () => {
+  it("resolves expectedSha256 from receipt.artifact_sha256 when artifact_id is set on a pdf placement", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", required_artifact_type: "pdf" }];
+    state.receipt = {
+      id: RECEIPT,
+      placement_id: PLACEMENT,
+      artifact_id: "art-1",
+      artifact_sha256: "a".repeat(64),
+      approved_version_id: null,
+    };
+    await POST(makeReq(), params());
+    expect(state.validateCallArgs?.opts.expectedSha256).toBe("a".repeat(64));
+  });
+
+  it("falls back to deliverable_versions.asset_sha256 when the receipt has no artifact_id", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", required_artifact_type: "pdf" }];
+    state.receipt = {
+      id: RECEIPT,
+      placement_id: PLACEMENT,
+      artifact_id: null,
+      artifact_sha256: null,
+      approved_version_id: "v-1",
+    };
+    state.versionRow = { asset_sha256: "b".repeat(64) };
+    await POST(makeReq(), params());
+    expect(state.validateCallArgs?.opts.expectedSha256).toBe("b".repeat(64));
+  });
+
+  it("never resolves a hash for a non-pdf placement (webpage)", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", required_artifact_type: "webpage" }];
+    state.receipt = {
+      id: RECEIPT,
+      placement_id: PLACEMENT,
+      artifact_id: "art-1",
+      artifact_sha256: "a".repeat(64),
+      approved_version_id: null,
+    };
+    await POST(makeReq(), params());
+    expect(state.validateCallArgs?.opts.expectedSha256).toBeNull();
+  });
+
+  it("never trusts a hash supplied in the request body -- resolution is server-side only", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", required_artifact_type: "pdf" }];
+    state.receipt = {
+      id: RECEIPT,
+      placement_id: PLACEMENT,
+      artifact_id: "art-1",
+      artifact_sha256: "a".repeat(64),
+      approved_version_id: null,
+    };
+    await POST(makeReq({ expectedSha256: "f".repeat(64) }), params());
+    expect(state.validateCallArgs?.opts.expectedSha256).toBe("a".repeat(64));
+  });
+
+  it("missing trusted hash never silently produces a fabricated 'verified' -- the validator itself reports unverifiable and the route does not persist it", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", required_artifact_type: "pdf" }];
+    state.receipt = {
+      id: RECEIPT,
+      placement_id: PLACEMENT,
+      artifact_id: null,
+      artifact_sha256: null,
+      approved_version_id: null,
+    };
+    state.validateResult = {
+      outcome: "unverifiable",
+      method: "url_fetch",
+      checks: { sha256_checked: false },
+      reason: "no trusted sha256 on file",
+    };
+    const res = await POST(makeReq(), params());
+    const body = await res.json();
+    expect(state.validateCallArgs?.opts.expectedSha256).toBeNull();
+    expect(body.persisted).toBe(false);
+    expect(state.verifyReceiptArgs).toBeNull();
+  });
 });
 
 describe("POST verify: entity mismatches", () => {

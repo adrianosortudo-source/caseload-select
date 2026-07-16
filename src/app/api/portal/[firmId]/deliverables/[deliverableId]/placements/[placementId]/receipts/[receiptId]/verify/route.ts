@@ -74,8 +74,31 @@ export async function POST(
     .maybeSingle();
   const expectedHost = (firm as { custom_domain?: string | null } | null)?.custom_domain ?? null;
 
+  // A trusted sha256 to check the live PDF bytes against, resolved
+  // server-side -- never from the request body, which a caller could set
+  // to anything. receipt.artifact_sha256 is itself trustworthy whenever
+  // artifact_id is set: the publication_receipt_integrity_hardening
+  // trigger guarantees it either matches, or was auto-populated from,
+  // publication_artifacts.sha256 at insert time, so no extra query is
+  // needed for that case. Falls back to the approved version's own
+  // asset_sha256 for a receipt with no artifact_id.
+  let expectedSha256: string | null = null;
+  if (placement.required_artifact_type === "pdf") {
+    if (receipt.artifact_id) {
+      expectedSha256 = receipt.artifact_sha256;
+    } else if (receipt.approved_version_id) {
+      const { data: version } = await supabaseAdmin
+        .from("deliverable_versions")
+        .select("asset_sha256")
+        .eq("id", receipt.approved_version_id)
+        .maybeSingle();
+      expectedSha256 = (version as { asset_sha256?: string | null } | null)?.asset_sha256 ?? null;
+    }
+  }
+
   const check = await validateReceiptForDestination(placement.destination, receipt, {
     expectedHost,
+    expectedSha256,
     requiredArtifactType: placement.required_artifact_type,
   });
 
