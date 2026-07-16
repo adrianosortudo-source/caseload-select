@@ -42,6 +42,7 @@ export async function loadPublicationPreflightForPeriod(
 
   const rows = (deliverables ?? []) as ContentDeliverable[];
   const activeIds = rows.filter((d) => d.status !== "archived").map((d) => d.id);
+  const approvedVersionByDeliverableId = new Map(rows.map((d) => [d.id, d.approved_version_id ?? null]));
 
   const [comments, placementsByDeliverableId, receiptsByPlacementParts] = await Promise.all([
     activeIds.length
@@ -66,7 +67,11 @@ export async function loadPublicationPreflightForPeriod(
             return byDeliverable;
           })
       : Promise.resolve({} as Record<string, ContentPlacement[]>),
-    Promise.all(activeIds.map((id) => listCurrentReceiptsByPlacementForDeliverable(id))),
+    Promise.all(
+      activeIds.map((id) =>
+        listCurrentReceiptsByPlacementForDeliverable(id, approvedVersionByDeliverableId.get(id) ?? null),
+      ),
+    ),
   ]);
 
   const commentsByDeliverableId: Record<string, DeliverableComment[]> = {};

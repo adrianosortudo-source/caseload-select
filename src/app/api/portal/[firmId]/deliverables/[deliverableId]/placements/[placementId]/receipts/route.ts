@@ -7,13 +7,29 @@
  * route is the only way a receipt is ever created; there is no PATCH or
  * DELETE by design (the database enforces this too).
  *
- * Body (POST): { approved_version_id, published_at, public_url?,
- *   external_post_id?, artifact_id?, artifact_sha256? }
+ * Body (POST): { approved_version_id, claim_id, published_at, public_url?,
+ *   external_post_id?, artifact_id? }
  *
  * approved_version_id must be the deliverable's OWN current
  * approved_version_id (never an arbitrary version): this route refuses to
  * record a receipt for anything else, so a receipt can never claim to
  * publish content the lawyer did not actually approve as current.
+ *
+ * claim_id (corrective release, workstream 1) is required for every new
+ * root receipt: it must name an active publication_placement_claims row
+ * obtained beforehand via POST .../claim, matching this firm, deliverable,
+ * placement, and approved_version_id, and (where the claim carries an
+ * authenticated identity) this same operator. A stale, released,
+ * superseded, mismatched, or missing claim is rejected here with a clear
+ * next_action before the insert is attempted; the database trigger is the
+ * final authority regardless (defense in depth -- see
+ * validate_publication_receipt_scope in
+ * supabase/migrations/20260716200000_publication_receipt_claim_binding.sql).
+ *
+ * There is no artifact_sha256 field in this contract: a PDF's hash is never
+ * caller-supplied. When artifact_id is bound, the server derives
+ * artifact_sha256 exclusively from publication_artifacts.sha256 (and
+ * rejects an active PDF artifact that has none registered).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -22,6 +38,77 @@ import { resolveDeliverableActor } from "@/lib/deliverables-auth";
 import { getDeliverableDetail } from "@/lib/deliverables";
 import { createReceipt, listReceiptsForPlacement } from "@/lib/publication-receipts";
 import { listPlacementsForDeliverable } from "@/lib/content-placements";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+
+interface ClaimRow {
+  id: string;
+  firm_id: string;
+  deliverable_id: string;
+  placement_id: string;
+  approved_version_id: string;
+  status: "active" | "released" | "superseded";
+  claimed_by_role: "operator" | "lawyer" | "system";
+  claimed_by_id: string | null;
+}
+
+type ClaimValidation =
+  | { ok: true; claim: ClaimRow }
+  | { ok: false; status: number; error: string; nextAction: string };
+
+/**
+ * Server-loads and validates the claim named in the request -- never
+ * accepts a claim's identity fields from the caller, only its id. Returns a
+ * specific status/next_action per failure mode so the client knows whether
+ * to reclaim, re-verify, or escalate, rather than a generic 400.
+ */
+async function loadAndValidateClaim(
+  claimId: string,
+  scope: { firmId: string; deliverableId: string; placementId: string; approvedVersionId: string },
+  actor: { role: "operator" | "lawyer" | "system"; id: string | null },
+): Promise<ClaimValidation> {
+  const { data, error } = await supabaseAdmin
+    .from("publication_placement_claims")
+    .select("id, firm_id, deliverable_id, placement_id, approved_version_id, status, claimed_by_role, claimed_by_id")
+    .eq("id", claimId)
+    .maybeSingle();
+  if (error) {
+    return { ok: false, status: 500, error: error.message, nextAction: "retry" };
+  }
+  if (!data) {
+    return { ok: false, status: 404, error: "claim_id does not reference an existing placement claim", nextAction: "reclaim_placement" };
+  }
+  const claim = data as ClaimRow;
+  if (
+    claim.firm_id !== scope.firmId ||
+    claim.deliverable_id !== scope.deliverableId ||
+    claim.placement_id !== scope.placementId ||
+    claim.approved_version_id !== scope.approvedVersionId
+  ) {
+    return {
+      ok: false,
+      status: 422,
+      error: "claim_id does not match this firm, deliverable, placement, and approved_version_id",
+      nextAction: "reclaim_placement",
+    };
+  }
+  if (claim.status !== "active") {
+    return {
+      ok: false,
+      status: 409,
+      error: `claim is ${claim.status}, not active; claims must still be active at receipt insertion time`,
+      nextAction: "reclaim_placement",
+    };
+  }
+  if (claim.claimed_by_role !== actor.role || (claim.claimed_by_id !== null && claim.claimed_by_id !== actor.id)) {
+    return {
+      ok: false,
+      status: 403,
+      error: "claim was reserved by a different operator",
+      nextAction: "reclaim_placement",
+    };
+  }
+  return { ok: true, claim };
+}
 
 export async function GET(
   _req: NextRequest,
@@ -76,11 +163,11 @@ export async function POST(
 
   let body: {
     approved_version_id?: unknown;
+    claim_id?: unknown;
     published_at?: unknown;
     public_url?: unknown;
     external_post_id?: unknown;
     artifact_id?: unknown;
-    artifact_sha256?: unknown;
   };
   try {
     body = await req.json();
@@ -107,6 +194,25 @@ export async function POST(
     );
   }
 
+  const claimId = typeof body.claim_id === "string" ? body.claim_id : null;
+  if (!claimId) {
+    return NextResponse.json(
+      { error: "claim_id is required; obtain one from POST .../claim first", nextAction: "reclaim_placement" },
+      { status: 400 },
+    );
+  }
+  const claimValidation = await loadAndValidateClaim(
+    claimId,
+    { firmId, deliverableId, placementId, approvedVersionId },
+    { role: "operator", id: resolved.actor.id ?? null },
+  );
+  if (!claimValidation.ok) {
+    return NextResponse.json(
+      { error: claimValidation.error, nextAction: claimValidation.nextAction },
+      { status: claimValidation.status },
+    );
+  }
+
   if (!body.public_url && !body.external_post_id) {
     return NextResponse.json(
       { error: "at least one of public_url or external_post_id is required as evidence" },
@@ -126,8 +232,8 @@ export async function POST(
     destination: placement.destination,
     locale: placement.locale,
     approvedVersionId,
+    claimId,
     artifactId: typeof body.artifact_id === "string" ? body.artifact_id : null,
-    artifactSha256: typeof body.artifact_sha256 === "string" ? body.artifact_sha256 : null,
     publicUrl: typeof body.public_url === "string" ? body.public_url : null,
     externalPostId: typeof body.external_post_id === "string" ? body.external_post_id : null,
     publishedAt,
@@ -135,7 +241,17 @@ export async function POST(
     actorId: resolved.actor.id ?? null,
     actorName: resolved.actor.name ?? "Operator",
   });
-  if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+  if (!result.ok) {
+    // Defense in depth: the route's own claim validation above should catch
+    // every ordinary case, but if the claim state changed between that
+    // check and this insert (a genuine race), the DB trigger's rejection
+    // still surfaces as a clean, actionable response rather than a flat 400.
+    const isClaimIssue = /claim_id/i.test(result.error);
+    return NextResponse.json(
+      { error: result.error, ...(isClaimIssue ? { nextAction: "reclaim_placement" } : {}) },
+      { status: isClaimIssue ? 409 : 400 },
+    );
+  }
 
   return NextResponse.json({ ok: true, receipt: result.receipt });
 }

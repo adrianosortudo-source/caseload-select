@@ -47,12 +47,122 @@ export interface ClaimPlacementResult {
   nextAction?: ClaimNextAction;
 }
 
+const KNOWN_CLAIM_STATUSES: ReadonlySet<string> = new Set([
+  "active",
+  "released",
+  "superseded",
+]);
+
+const KNOWN_NEXT_ACTIONS: ReadonlySet<string> = new Set([
+  "approve_deliverable",
+  "resolve_version_drift",
+  "already_published",
+  "needs_reverification",
+]);
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function describeType(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value;
+}
+
+/**
+ * Runtime guard for the claim_placement_for_publish RPC's jsonb response
+ * (authoritative shape: supabase/migrations/20260716200000_publication_
+ * receipt_claim_binding.sql). Postgres returns untyped jsonb over the wire,
+ * so nothing upstream of this function guarantees the shape actually
+ * matches ClaimPlacementResult -- a bare `as` cast previously trusted it
+ * blindly, and `Boolean(result.ok)` coerced any truthy-but-wrong value
+ * (e.g. `{ok: "true"}`, `{ok: 1}`) into an accepted claim. This hand-written
+ * guard replaces both: no schema library is used because none is a
+ * dependency of this codebase and the shape is small enough that a manual
+ * check is simpler than adding one.
+ *
+ * Every branch that cannot prove the response matches the documented shape
+ * returns a fail-closed ok:false result instead of throwing or silently
+ * passing an ambiguous value through as ok:true.
+ */
+function parseClaimPlacementResponse(data: unknown): ClaimPlacementResult {
+  const fail = (reason: string): ClaimPlacementResult => ({
+    ok: false,
+    error: `malformed claim_placement_for_publish response: ${reason}`,
+  });
+
+  if (!isPlainObject(data)) {
+    return fail(`expected an object, got ${describeType(data)}`);
+  }
+  if (typeof data.ok !== "boolean") {
+    return fail(`"ok" must be a boolean, got ${describeType(data.ok)}`);
+  }
+
+  const idempotentReplayRaw = data.idempotent_replay;
+  if (idempotentReplayRaw !== undefined && typeof idempotentReplayRaw !== "boolean") {
+    return fail(
+      `"idempotent_replay" must be a boolean when present, got ${describeType(idempotentReplayRaw)}`,
+    );
+  }
+
+  const statusRaw = data.status;
+  if (
+    statusRaw !== undefined &&
+    (typeof statusRaw !== "string" || !KNOWN_CLAIM_STATUSES.has(statusRaw))
+  ) {
+    return fail(`unrecognized "status" value: ${JSON.stringify(statusRaw)}`);
+  }
+
+  const errorRaw = data.error;
+  if (errorRaw !== undefined && typeof errorRaw !== "string") {
+    return fail(`"error" must be a string when present, got ${describeType(errorRaw)}`);
+  }
+
+  const existingClaimIdRaw = data.existing_claim_id;
+  if (existingClaimIdRaw !== undefined && typeof existingClaimIdRaw !== "string") {
+    return fail(
+      `"existing_claim_id" must be a string when present, got ${describeType(existingClaimIdRaw)}`,
+    );
+  }
+
+  const nextActionRaw = data.next_action;
+  if (
+    nextActionRaw !== undefined &&
+    (typeof nextActionRaw !== "string" || !KNOWN_NEXT_ACTIONS.has(nextActionRaw))
+  ) {
+    return fail(`unrecognized "next_action" value: ${JSON.stringify(nextActionRaw)}`);
+  }
+
+  const claimIdRaw = data.claim_id;
+  if (data.ok === true) {
+    if (typeof claimIdRaw !== "string" || claimIdRaw.length === 0) {
+      return fail(
+        `"claim_id" must be a non-empty string when ok is true, got ${describeType(claimIdRaw)}`,
+      );
+    }
+  } else if (claimIdRaw !== undefined && typeof claimIdRaw !== "string") {
+    return fail(`"claim_id" must be a string when present, got ${describeType(claimIdRaw)}`);
+  }
+
+  return {
+    ok: data.ok,
+    claimId: typeof claimIdRaw === "string" ? claimIdRaw : undefined,
+    idempotentReplay: idempotentReplayRaw as boolean | undefined,
+    status: statusRaw as ClaimPlacementResult["status"],
+    error: errorRaw as string | undefined,
+    existingClaimId: existingClaimIdRaw as string | undefined,
+    nextAction: nextActionRaw as ClaimNextAction | undefined,
+  };
+}
+
 /**
  * Atomically claims a placement/version for publish. Returns ok:false
  * (never throws) for every expected rejection -- version drift, an
  * already-active competing claim, an already-published placement -- so
  * the calling route can surface a precise reason rather than a generic
- * 500.
+ * 500. Also returns ok:false, fail-closed, if the RPC response itself
+ * does not match the documented shape (see parseClaimPlacementResponse).
  */
 export async function claimPlacementForPublish(
   input: ClaimPlacementInput,
@@ -71,22 +181,5 @@ export async function claimPlacementForPublish(
   if (error) {
     return { ok: false, error: `claim rpc failed: ${error.message}` };
   }
-  const result = (data ?? {}) as {
-    ok?: boolean;
-    claim_id?: string;
-    idempotent_replay?: boolean;
-    status?: "active" | "released" | "superseded";
-    error?: string;
-    existing_claim_id?: string;
-    next_action?: ClaimNextAction;
-  };
-  return {
-    ok: Boolean(result.ok),
-    claimId: result.claim_id,
-    idempotentReplay: result.idempotent_replay,
-    status: result.status,
-    error: result.error,
-    existingClaimId: result.existing_claim_id,
-    nextAction: result.next_action,
-  };
+  return parseClaimPlacementResponse(data);
 }

@@ -5,6 +5,11 @@
 #   2. Full vitest suite (1894+ tests)
 #   3. DR-039 brief-equality eval (explicit regression guard for
 #      language-agnostic intake parity across en/fr/es/pt/zh)
+#   4. Publication receipt/claim concurrency integration tests, against a
+#      genuinely ephemeral local Supabase Postgres instance (see the
+#      integration-test job below) -- real two-connection Postgres
+#      row-locking races that `test` (job 2, mocked Supabase clients) does
+#      not and cannot exercise.
 #
 # Engine sandbox-vs-app drift (DR-033/DR-058) is gated here via a committed
 # fingerprint. The full check (scripts/check-engine-sync.sh) needs the sandbox,
@@ -19,6 +24,36 @@
 #   - test
 #   - brief-equality-eval
 #   - engine-sync
+#
+# integration-test (below) is a NEW job, intentionally not in the list above.
+# It is written to be added as a 5th required check, but branch protection is
+# GitHub repo configuration this workflow file cannot change -- a human with
+# repo admin access must add "Publication concurrency integration tests" to
+# the required-checks list once this job is confirmed green on main.
+#
+# KNOWN BLOCKER for integration-test (corrective-release workstream 6, filed
+# 2026-07-16): `supabase start` applies every file in supabase/migrations/ in
+# order to a FRESH, empty Postgres. That directory only contains incremental
+# changes starting 2026-04-13; intake_firms, law_firm_clients, leads, and
+# roughly a dozen other tables were created directly against production
+# before this repo adopted tracked migrations and are never CREATE TABLE'd by
+# any file in supabase/migrations/ (confirmed via the Supabase CLI locally --
+# `supabase status -o env` parses and runs correctly against CLI 2.109.1 --
+# and independently via the Supabase MCP: `list_migrations` on project
+# ssxryjxifwiivghglqer starts at 20260518193933, and `list_tables` shows
+# intake_firms etc. with no corresponding CREATE TABLE anywhere in this
+# directory). The very first substantive migration
+# (20260414_portal_clio.sql, `ALTER TABLE intake_firms ADD COLUMN ...`) will
+# fail on a from-scratch database, and since intake_firms is a base
+# dependency, `supabase start` cannot get through the rest of the migration
+# chain either. This job is wired correctly and will fail LOUDLY on that
+# missing-baseline error (not silently skip) until a human authors a
+# baseline/bootstrap migration capturing the pre-2026-04-13 schema (e.g. via
+# `supabase db dump --linked --schema-only` against production, reviewed
+# before being committed as the first file in supabase/migrations/). That
+# reconstruction is a separate, larger undertaking outside this workstream's
+# scope (repair 2 test files + wire CI to run them) and is not attempted
+# here -- see the flagged follow-up task.
 
 name: CI
 
@@ -121,3 +156,84 @@ jobs:
             exit 1
           fi
           bash scripts/check-engine-manifest.sh
+
+  integration-test:
+    name: Publication concurrency integration tests (real Postgres)
+    runs-on: ubuntu-latest
+    # A dedicated job, not a step tacked onto `test`: standing up the local
+    # Supabase/Docker stack adds real wall-clock time and a real (currently
+    # known-broken -- see the KNOWN BLOCKER note at the top of this file)
+    # infrastructure failure mode, and isolating it here means that failure
+    # blocks only this specific, clearly-named check instead of the fast
+    # unit-test job everything else depends on.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Supabase CLI
+        # Pinned to the version this workflow was authored and verified
+        # against (`npx supabase@latest --version` => 2.109.1, 2026-07-16).
+        # CLI flags for `supabase status -o env` / `--override-name` have
+        # changed across versions before; bump this deliberately, not
+        # silently via a floating tag, and re-verify the flags below still
+        # parse (`supabase status --help`) when you do.
+        uses: supabase/setup-cli@v3
+        with:
+          version: '2.109.1'
+
+      - name: Start local Supabase stack (applies supabase/migrations/*.sql to a fresh Postgres)
+        # `supabase start` spins up the full local stack via Docker (real
+        # Postgres 17 plus the auth/storage/extensions schemas and the
+        # anon/authenticated/service_role roles this project's migrations
+        # and RLS policies assume -- a bare `postgres:` service container
+        # would have none of that) and applies every file in
+        # supabase/migrations/ in order. It blocks until every service
+        # reports healthy and exits non-zero if any migration fails or a
+        # service never becomes healthy -- i.e. this step itself is the
+        # "wait for ready" gate; no separate polling step is needed. See the
+        # KNOWN BLOCKER note at the top of this file for why this step is
+        # currently expected to fail until a baseline migration is added --
+        # that is a real, intentional, loud CI failure, not a bug in this
+        # step.
+        run: supabase start
+
+      - name: Export DIRECT_DATABASE_URL from the running stack
+        # `supabase status -o env` prints dotenv-style KEY=value lines;
+        # `--override-name db.url=DIRECT_DATABASE_URL` renames just the
+        # local Postgres direct-connection URL entry (default name DB_URL)
+        # to the variable name these test files read, without also leaking
+        # the local anon/service_role JWTs into the job environment.
+        # Appending to $GITHUB_ENV makes it available to every subsequent
+        # step in this job, not just this one's shell.
+        run: |
+          supabase status -o env --override-name db.url=DIRECT_DATABASE_URL >> "$GITHUB_ENV"
+
+      - name: Verify DIRECT_DATABASE_URL was exported
+        # Both integration test files gate on `describe.skipIf(!DIRECT_DATABASE_URL)`
+        # -- correct for local dev, but it means a silent provisioning
+        # hiccup here (e.g. an --override-name key that stopped matching
+        # after a CLI upgrade) would make the next step pass green having
+        # run zero assertions, exactly the failure mode this job exists to
+        # close. Fail loudly here instead, before vitest ever runs.
+        run: |
+          if [ -z "${DIRECT_DATABASE_URL:-}" ]; then
+            echo "::error::DIRECT_DATABASE_URL was not exported by 'supabase status -o env'. The integration tests would silently skip instead of running -- failing this job explicitly rather than passing green with 0 assertions."
+            exit 1
+          fi
+          echo "DIRECT_DATABASE_URL is set; integration tests will run for real."
+
+      - name: Run publication concurrency integration tests
+        run: npx vitest run src/lib/__tests__/publication-receipt-concurrency.integration.test.ts src/lib/__tests__/publication-placement-claim-concurrency.integration.test.ts
+
+      - name: Stop local Supabase stack
+        if: always()
+        run: supabase stop

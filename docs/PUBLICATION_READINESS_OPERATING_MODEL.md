@@ -104,12 +104,17 @@ only turns on the strict evaluation; every deliverable inside a
 freshly-activated period still has to pass its own requirements, exactly
 like a brand-new one would. Re-activating an already-enforced period is a
 no-op (the timestamp is never re-stamped). An *ordinary* UPDATE against
-`content_periods` can never move a period away from `enforced` once
-activation has been recorded: `trg_validate_readiness_activation` refuses
-it unconditionally (see `20260715210116_content_periods_enforced_monotonic.sql`).
-That monotonic guarantee is deliberate — an operator, a bad migration, or
-a bug in application code cannot silently un-enforce a period through the
-same trigger that guards activation.
+`content_periods`, issued through the app's normal `service_role`
+connection, can never move a period away from `enforced` once activation
+has been recorded: `trg_validate_readiness_activation` checks
+`current_user = 'postgres'` and refuses anything else unconditionally
+(see `20260715210116_content_periods_enforced_monotonic.sql`). That
+monotonic guarantee is deliberate — an operator action taken through the
+app, or a bug in application code, cannot silently un-enforce a period
+through the same trigger that guards activation. (A migration applied
+with elevated database privileges, or a database owner acting directly,
+sits in a different category — see the honest limitation spelled out
+below.)
 
 **The one audited, exceptional path off enforcement (DR-099).**
 `POST /api/portal/[firmId]/periods/[periodId]/deactivate-readiness` is the
@@ -126,10 +131,24 @@ one call, one reason, every time.
 The route performs no writes of its own. It calls
 `deactivatePeriodReadiness()` (`src/lib/deliverables.ts`), which delegates
 to the `deactivate_period_readiness_atomic` SECURITY DEFINER RPC (the same
-pattern as `record_approval_atomic`). That RPC is the *only* code path
-`trg_validate_readiness_activation` exempts from its monotonic check —
-no other function, no direct table update, and no service-role script can
-move an enforced period backward. Every call inserts exactly one
+pattern as `record_approval_atomic`). That RPC is the sole supported,
+audited *application* path off enforcement:
+`trg_validate_readiness_activation` checks `current_user = 'postgres'`
+and refuses the downgrade for anyone else, and the RPC is the only
+function owned by `postgres` that performs this write, so no ordinary
+application code, no other function, and no direct table update issued
+through the app's normal `service_role` connection can move an enforced
+period backward. That is a statement about ordinary application and
+service-role write paths, not an unconditional claim about every
+possible Postgres session: a database owner or Postgres superuser
+retains administrative authority over the database itself (disabling or
+dropping the trigger, or connecting directly as the `postgres` role and
+issuing a plain UPDATE, which the trigger explicitly permits when
+`current_user = 'postgres'`). That is a documented, accepted limitation
+of this design, not a gap it attempts to close — the invariant this
+trigger provides is "ordinary application/service-role code paths cannot
+bypass the audited RPC," not "no Postgres session anywhere, ever, can
+move this backward." Every call through the RPC inserts exactly one
 append-only row into `content_periods_enforcement_audit`, recording the
 period, the firm, the actor (operator id and name), the reason, and the
 from/to lifecycle values. That table carries its own

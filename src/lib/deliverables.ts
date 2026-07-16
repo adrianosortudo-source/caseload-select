@@ -298,18 +298,26 @@ export async function activatePeriodReadiness(input: {
 }
 
 /**
- * DR-099: the one audited, exceptional path off "enforced". Ordinary writes
- * to content_periods cannot move a period away from enforced once
- * activatePeriodReadiness has set it -- trg_validate_readiness_activation
+ * DR-099: the one audited, exceptional application path off "enforced".
+ * Ordinary writes to content_periods -- via service_role, the app's
+ * normal DB connection -- cannot move a period away from enforced once
+ * activatePeriodReadiness has set it: trg_validate_readiness_activation
  * (updated by 20260715210116_content_periods_enforced_monotonic.sql)
- * refuses that UPDATE unless a transaction-local flag is set, and nothing
- * sets that flag except the deactivate_period_readiness_atomic RPC this
- * function calls. Operator-only at the API layer (the calling route must
- * reject a non-operator actor before ever reaching this function, exactly
- * like activatePeriodReadiness's own route); the RPC itself additionally
- * refuses a non-operator actor_role as defense in depth. Every call is
- * recorded, append-only, in content_periods_enforcement_audit -- there is
- * no way to reopen a period without a reason on file.
+ * checks current_user = 'postgres' and refuses the downgrade for anyone
+ * else. deactivate_period_readiness_atomic is the only function owned by
+ * postgres (SECURITY DEFINER) that performs this write, which is why
+ * this function -- the one that calls it -- is the sole supported
+ * application path off enforcement. This blocks ordinary application and
+ * service-role writes; it does not, and cannot, stop a Postgres database
+ * owner or superuser who administratively overrides the trigger itself
+ * (disabling it, or connecting directly as postgres) -- a documented,
+ * accepted limitation, not a gap this function closes. Operator-only at
+ * the API layer (the calling route must reject a non-operator actor
+ * before ever reaching this function, exactly like activatePeriodReadiness's
+ * own route); the RPC itself additionally refuses a non-operator
+ * actor_role as defense in depth. Every call is recorded, append-only, in
+ * content_periods_enforcement_audit -- there is no way to reopen a period
+ * without a reason on file.
  */
 export async function deactivatePeriodReadiness(input: {
   periodId: string;
