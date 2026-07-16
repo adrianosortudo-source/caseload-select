@@ -3,6 +3,7 @@ import {
   isSitemapIndex,
   extractLocs,
   shouldExcludeBySeedRule,
+  isSameSiteUrl,
   extractTitle,
   extractSections,
   chunkSections,
@@ -74,6 +75,46 @@ describe('shouldExcludeBySeedRule', () => {
     const result = shouldExcludeBySeedRule('not a url');
     expect(result.exclude).toBe(true);
     expect(result.reason).toBe('seed_rule:invalid_url');
+  });
+});
+
+describe('isSameSiteUrl', () => {
+  it('matches the exact same host', () => {
+    expect(isSameSiteUrl('https://drglaw.ca/faq', 'https://drglaw.ca')).toBe(true);
+  });
+
+  it('matches www-prefixed target against bare seed', () => {
+    expect(isSameSiteUrl('https://www.drglaw.ca/faq', 'https://drglaw.ca')).toBe(true);
+  });
+
+  it('matches bare target against www-prefixed seed', () => {
+    expect(isSameSiteUrl('https://drglaw.ca/faq', 'https://www.drglaw.ca')).toBe(true);
+  });
+
+  it('rejects a different subdomain', () => {
+    expect(isSameSiteUrl('https://blog.drglaw.ca/faq', 'https://drglaw.ca')).toBe(false);
+  });
+
+  it('rejects a completely different host', () => {
+    expect(isSameSiteUrl('https://evil.example/faq', 'https://drglaw.ca')).toBe(false);
+  });
+
+  it('accepts plain http on the same host', () => {
+    expect(isSameSiteUrl('http://drglaw.ca/faq', 'https://drglaw.ca')).toBe(true);
+  });
+
+  it('rejects a non-http(s) scheme even on the same host', () => {
+    expect(isSameSiteUrl('javascript:alert(1)', 'https://drglaw.ca')).toBe(false);
+    expect(isSameSiteUrl('file:///etc/passwd', 'https://drglaw.ca')).toBe(false);
+  });
+
+  it('rejects a malformed target or seed URL rather than throwing', () => {
+    expect(isSameSiteUrl('not a url', 'https://drglaw.ca')).toBe(false);
+    expect(isSameSiteUrl('https://drglaw.ca/faq', 'not a url')).toBe(false);
+  });
+
+  it('is case-insensitive on hostname', () => {
+    expect(isSameSiteUrl('https://DRGLaw.ca/faq', 'https://drglaw.ca')).toBe(true);
   });
 });
 

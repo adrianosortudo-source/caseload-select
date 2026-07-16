@@ -31,7 +31,7 @@ export interface AssistQueryLogRow {
 }
 
 interface ReindexSummary {
-  seed: { total_found: number; inserted: number; skipped_existing: number; errors: string[] } | null;
+  seed: { total_found: number; inserted: number; skipped_existing: number; skipped_offsite: number; errors: string[] } | null;
   reindex: { pages_processed: number; pages_ok: number; pages_unchanged: number; pages_errored: number; pages_disabled: number };
 }
 
@@ -172,7 +172,8 @@ export default function AssistConsolePanel({
             {summary.seed && (
               <p>
                 Seed: {summary.seed.total_found} URLs found, {summary.seed.inserted} new,{' '}
-                {summary.seed.skipped_existing} already known.
+                {summary.seed.skipped_existing} already known
+                {summary.seed.skipped_offsite > 0 ? `, ${summary.seed.skipped_offsite} skipped (offsite)` : ''}.
                 {summary.seed.errors.length > 0 ? ` Errors: ${summary.seed.errors.join('; ')}` : ''}
               </p>
             )}

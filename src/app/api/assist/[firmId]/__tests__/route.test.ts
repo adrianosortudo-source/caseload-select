@@ -21,6 +21,8 @@ const state = vi.hoisted(() => ({
   pageRows: [] as Array<Record<string, unknown>>,
   insertCalls: [] as unknown[],
   insertShouldThrow: false,
+  dailyCount: 0 as number | null,
+  dailyCountError: null as { message: string } | null,
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -61,6 +63,12 @@ vi.mock('@/lib/supabase-admin', () => {
     }
     if (table === 'assist_queries') {
       return {
+        // Ses.18 audit F1: fail-closed daily ceiling count query.
+        select: () => ({
+          eq: () => ({
+            gte: () => Promise.resolve({ count: state.dailyCount, error: state.dailyCountError }),
+          }),
+        }),
         insert: (row: unknown) => {
           state.insertCalls.push(row);
           if (state.insertShouldThrow) return Promise.reject(new Error('insert failed'));
@@ -107,6 +115,8 @@ beforeEach(() => {
   state.pageRows = [];
   state.insertCalls = [];
   state.insertShouldThrow = false;
+  state.dailyCount = 0;
+  state.dailyCountError = null;
 });
 
 let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
@@ -160,6 +170,44 @@ describe('POST /api/assist/[firmId]', () => {
     expect(mocks.embedQuery).not.toHaveBeenCalled();
   });
 
+  describe('daily ceiling (Ses.18 audit F1)', () => {
+    it('returns 429 when the daily ceiling is already reached, without calling embedQuery', async () => {
+      state.dailyCount = 500; // DEFAULT_DAILY_CEILING
+      const res = await POST(makeRequest({ question: 'Do you handle leases?' }), makeParams());
+      expect(res.status).toBe(429);
+      const json = await res.json();
+      expect(json.error).toMatch(/daily limit/);
+      expect(mocks.embedQuery).not.toHaveBeenCalled();
+    });
+
+    it('proceeds when under the daily ceiling', async () => {
+      state.dailyCount = 499;
+      mocks.embedQuery.mockResolvedValue({ mode: 'live', vectors: [[0.1, 0.2, 0.3]] });
+      mocks.retrieveChunks.mockResolvedValue([]);
+      mocks.generateAnswer.mockResolvedValue({
+        mode: 'live',
+        response: { intent: 'out_of_corpus', answer_html: '', source_page_ids: [] },
+      });
+      const res = await POST(makeRequest({ question: 'What is the capital of France?' }), makeParams());
+      expect(res.status).toBe(200);
+      expect(mocks.embedQuery).toHaveBeenCalled();
+    });
+
+    it('allows the request through and warns when the count query itself errors', async () => {
+      state.dailyCountError = { message: 'connection reset' };
+      mocks.embedQuery.mockResolvedValue({ mode: 'live', vectors: [[0.1, 0.2, 0.3]] });
+      mocks.retrieveChunks.mockResolvedValue([]);
+      mocks.generateAnswer.mockResolvedValue({
+        mode: 'live',
+        response: { intent: 'out_of_corpus', answer_html: '', source_page_ids: [] },
+      });
+      const res = await POST(makeRequest({ question: 'What is the capital of France?' }), makeParams());
+      expect(res.status).toBe(200);
+      expect(mocks.embedQuery).toHaveBeenCalled();
+      expect(consoleWarnSpy).toHaveBeenCalled();
+    });
+  });
+
   it('returns 503 when Gemini is not configured (embedding disabled)', async () => {
     mocks.embedQuery.mockResolvedValue({ mode: 'disabled', vectors: [], reason: 'no key' });
     const res = await POST(makeRequest({ question: 'Do you handle leases?' }), makeParams());
@@ -188,6 +236,23 @@ describe('POST /api/assist/[firmId]', () => {
     expect(json.sources).toEqual([{ title: 'Commercial Leases', url: 'https://drglaw.ca/journal/leases' }]);
     expect(state.insertCalls).toHaveLength(1);
     expect((state.insertCalls[0] as { intent: string }).intent).toBe('informational');
+    // Ses.18 audit F4: source_page_ids logs real assist_corpus_pages ids,
+    // not URLs (the column is id-typed).
+    expect((state.insertCalls[0] as { source_page_ids: string[] }).source_page_ids).toEqual(['page-1']);
+  });
+
+  it('F4: drops a hallucinated source_page_id from the logged row (never logs an id absent from pagesById)', async () => {
+    mocks.embedQuery.mockResolvedValue({ mode: 'live', vectors: [[0.1, 0.2, 0.3]] });
+    mocks.retrieveChunks.mockResolvedValue([{ page_id: 'page-1', heading: 'Leases', chunk_text: 'The firm reviews leases.' }]);
+    mocks.generateAnswer.mockResolvedValue({
+      mode: 'live',
+      response: { intent: 'informational', answer_html: '<p>Some answer.</p>', source_page_ids: ['page-1', 'page-does-not-exist'] },
+    });
+    state.pageRows = [{ id: 'page-1', title: 'Commercial Leases', url: 'https://drglaw.ca/journal/leases' }];
+
+    const res = await POST(makeRequest({ question: 'Do you handle commercial leases?' }), makeParams());
+    expect(res.status).toBe(200);
+    expect((state.insertCalls[0] as { source_page_ids: string[] }).source_page_ids).toEqual(['page-1']);
   });
 
   it('screen_handoff: case-specific question never returns model-authored text', async () => {

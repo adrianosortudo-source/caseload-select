@@ -27,6 +27,19 @@ import { loadFirmAssistConfig } from '@/lib/assist/firm-config';
 
 export const dynamic = 'force-dynamic';
 
+// Fail-closed per-firm daily ceiling (Ses.18 audit F1). Per-IP rate limiting
+// alone does not stop abuse: it fails open when Upstash is unconfigured
+// (the current posture), and a distributed script can rotate IPs anyway.
+// This ceiling is enforced against assist_queries directly, so it holds
+// regardless of the Upstash env vars.
+const DEFAULT_DAILY_CEILING = 500;
+
+function dailyCeiling(): number {
+  const raw = process.env.ASSIST_DAILY_CEILING;
+  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_DAILY_CEILING;
+}
+
 function corsHeaders(origin: string): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': origin,
@@ -78,15 +91,34 @@ export async function POST(
   }
   const question = validation.question;
 
-  // Per-IP bucket. A per-firm daily ceiling is a documented followup
-  // (BUILD_PLAN_firm_assist_v1.md section 6); the per-IP bucket alone
-  // stops a single scripted client from running up the Gemini bill.
+  // Per-IP bucket. Fails open when Upstash is unconfigured (see the
+  // fail-closed ceiling below, which does not depend on Upstash).
   const ip = ipFromRequest(req);
   const decision = await checkRateLimit('assist', `${firmId}:${ip}`);
   if (!decision.ok) {
     return NextResponse.json(
       { ok: false, error: 'rate limited, try again shortly' },
       { status: 429, headers: { ...headers, ...rateLimitHeaders(decision) } },
+    );
+  }
+
+  // Fail-closed per-firm daily ceiling (Ses.18 audit F1). Checked before
+  // embedQuery so a capped request costs nothing. A count-query error is
+  // logged and the request is allowed through: guard-rail infrastructure
+  // failures never hard-block a public surface, but a successful count is
+  // a hard cap.
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const { count: dailyCount, error: countErr } = await supabase
+    .from('assist_queries')
+    .select('id', { count: 'exact', head: true })
+    .eq('firm_id', firmId)
+    .gte('created_at', since);
+  if (countErr) {
+    console.warn('[assist route] daily ceiling count query failed, allowing request:', countErr.message);
+  } else if ((dailyCount ?? 0) >= dailyCeiling()) {
+    return NextResponse.json(
+      { ok: false, error: 'daily limit reached, try again tomorrow' },
+      { status: 429, headers },
     );
   }
 
@@ -119,20 +151,24 @@ export async function POST(
     (pageRows ?? []).map((p) => [p.id as string, { id: p.id as string, title: p.title as string | null, url: p.url as string }]),
   );
 
-  const exitResponse = buildExitResponse(genResult.response, pagesById);
+  const exitResponse = buildExitResponse(genResult.response, pagesById, firm.customDomain);
   const latencyMs = Date.now() - startedAt;
 
   // Best-effort logging. Never blocks or fails the response to the visitor.
+  // source_page_ids stores real assist_corpus_pages.id values (Ses.18 audit
+  // F4; previously logged URLs into an id-named column). Filtered against
+  // pagesById so a hallucinated id from the model can never land here.
   try {
     const ua = req.headers.get('user-agent') ?? '';
     const salt = process.env.ASSIST_HASH_SALT ?? '';
     const visitorHash = createHash('sha256').update(`${ip}:${ua}:${salt}`).digest('hex');
+    const loggedPageIds = genResult.response.source_page_ids.filter((id) => pagesById.has(id));
     await supabase.from('assist_queries').insert({
       firm_id: firmId,
       question,
       intent: genResult.response.intent,
       answer_html: exitResponse.exit === 'answered' ? exitResponse.answer_html : null,
-      source_page_ids: exitResponse.exit === 'answered' ? exitResponse.sources.map((s) => s.url) : [],
+      source_page_ids: exitResponse.exit === 'answered' ? loggedPageIds : [],
       exit_type: exitResponse.exit,
       latency_ms: latencyMs,
       model: 'gemini-2.5-flash',

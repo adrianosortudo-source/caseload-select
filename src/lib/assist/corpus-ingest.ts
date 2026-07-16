@@ -12,11 +12,13 @@
  */
 
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { safeFetch } from '@/lib/safe-outbound-fetch';
 import { embedDocuments } from './gemini-embed';
 import {
   isSitemapIndex,
   extractLocs,
   shouldExcludeBySeedRule,
+  isSameSiteUrl,
   extractTitle,
   extractSections,
   chunkSections,
@@ -28,26 +30,37 @@ const MAX_SITEMAP_CHILDREN = 20;
 const MAX_PAGES_PER_FIRM = 500;
 const EMBED_BATCH_SIZE = 20;
 
+// Ses.18 audit F2: every outbound fetch in this file (the operator-provided
+// sitemap root, any sitemap-index children, every page reindex) goes
+// through the APP-003 SSRF wrapper. A GET, explicitly: safeFetch defaults
+// to POST for its other caller (the GHL webhook path).
 async function fetchText(url: string): Promise<string> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, { signal: controller.signal, headers: { 'user-agent': 'CaseLoadSelect-FirmAssist/1.0' } });
-    if (!res.ok) throw new Error(`fetch ${url} returned ${res.status}`);
-    return await res.text();
-  } finally {
-    clearTimeout(timeout);
+  const result = await safeFetch(url, {
+    method: 'GET',
+    headers: { 'user-agent': 'CaseLoadSelect-FirmAssist/1.0' },
+    timeoutMs: FETCH_TIMEOUT_MS,
+  });
+  if (!result.ok) {
+    throw new Error(result.reason ?? (result.status != null ? `http ${result.status}` : 'fetch failed'));
   }
+  return result.body ?? '';
 }
 
-/** Recursively resolves a sitemap (or sitemap index) into a flat list of page URLs. */
-async function resolveSitemapUrls(sitemapUrl: string): Promise<string[]> {
+/**
+ * Recursively resolves a sitemap (or sitemap index) into a flat list of
+ * page URLs. `siteRoot` gates sitemap-index child URLs to the same site
+ * (Ses.18 audit F2) before they are ever fetched: a malicious child-sitemap
+ * URL never reaches fetchText, let alone gets its <loc> entries harvested.
+ */
+async function resolveSitemapUrls(sitemapUrl: string, siteRoot: string): Promise<string[]> {
   const xml = await fetchText(sitemapUrl);
   if (!isSitemapIndex(xml)) {
     return extractLocs(xml);
   }
 
-  const childSitemaps = extractLocs(xml).slice(0, MAX_SITEMAP_CHILDREN);
+  const childSitemaps = extractLocs(xml)
+    .filter((u) => isSameSiteUrl(u, siteRoot))
+    .slice(0, MAX_SITEMAP_CHILDREN);
   const pageUrls: string[] = [];
   for (const child of childSitemaps) {
     try {
@@ -64,6 +77,7 @@ export interface SeedResult {
   total_found: number;
   inserted: number;
   skipped_existing: number;
+  skipped_offsite: number;
   errors: string[];
 }
 
@@ -73,17 +87,24 @@ export async function seedPagesFromSitemap(firmId: string, siteUrl: string): Pro
 
   let urls: string[];
   try {
-    urls = await resolveSitemapUrls(sitemapUrl);
+    urls = await resolveSitemapUrls(sitemapUrl, root);
   } catch (err) {
     return {
       total_found: 0,
       inserted: 0,
       skipped_existing: 0,
+      skipped_offsite: 0,
       errors: [`sitemap fetch failed: ${err instanceof Error ? err.message : String(err)}`],
     };
   }
 
-  const uniqueUrls = Array.from(new Set(urls)).slice(0, MAX_PAGES_PER_FIRM);
+  const discoveredUrls = Array.from(new Set(urls));
+  // Ses.18 audit F2: page URLs are gated to the same site as the seed root,
+  // same rationale as the sitemap-index child gate above.
+  const onSiteUrls = discoveredUrls.filter((u) => isSameSiteUrl(u, root));
+  const skippedOffsite = discoveredUrls.length - onSiteUrls.length;
+  const uniqueUrls = onSiteUrls.slice(0, MAX_PAGES_PER_FIRM);
+
   const { data: existingRows } = await supabase
     .from('assist_corpus_pages')
     .select('url')
@@ -117,6 +138,7 @@ export async function seedPagesFromSitemap(firmId: string, siteUrl: string): Pro
     total_found: uniqueUrls.length,
     inserted,
     skipped_existing: uniqueUrls.length - toInsert.length,
+    skipped_offsite: skippedOffsite,
     errors,
   };
 }
@@ -139,6 +161,7 @@ export interface ReindexSummary {
   pages_unchanged: number;
   pages_errored: number;
   pages_disabled: number;
+  pages_skipped_budget: number;
   results: ReindexPageResult[];
 }
 
@@ -236,16 +259,41 @@ async function reindexOnePage(page: { id: string; url: string }, firmId: string)
   return { page_id: page.id, url: page.url, status: 'ok', chunk_count: rows.length };
 }
 
-export async function reindexFirm(firmId: string): Promise<ReindexSummary> {
+export interface ReindexOptions {
+  /**
+   * When set (Ses.18 audit F3), stops starting new pages once this many ms
+   * have elapsed since reindexFirm began, so a large corpus never runs past
+   * a cron invocation's time budget. Remaining pages are reported as
+   * pages_skipped_budget rather than silently dropped; the next cron run
+   * picks them up first because pages are processed oldest-crawled-first.
+   * Omitted entirely by the operator-triggered route, which has no budget.
+   */
+  budgetMs?: number;
+}
+
+export async function reindexFirm(firmId: string, options: ReindexOptions = {}): Promise<ReindexSummary> {
+  // Oldest-crawled-first (nulls, i.e. never-crawled, first): makes the
+  // function resumable under a budget without any extra state. A run that
+  // stops partway through always leaves the least-recently-refreshed pages
+  // for next time.
   const { data: pages } = await supabase
     .from('assist_corpus_pages')
     .select('id, url')
     .eq('firm_id', firmId)
-    .eq('include', true);
+    .eq('include', true)
+    .order('last_crawled_at', { ascending: true, nullsFirst: true });
 
+  const allPages = pages ?? [];
   const results: ReindexPageResult[] = [];
-  for (const page of pages ?? []) {
-    results.push(await reindexOnePage(page, firmId));
+  const startedAt = Date.now();
+  let pagesSkippedBudget = 0;
+
+  for (let i = 0; i < allPages.length; i++) {
+    if (options.budgetMs != null && Date.now() - startedAt > options.budgetMs) {
+      pagesSkippedBudget = allPages.length - i;
+      break;
+    }
+    results.push(await reindexOnePage(allPages[i], firmId));
   }
 
   return {
@@ -254,6 +302,7 @@ export async function reindexFirm(firmId: string): Promise<ReindexSummary> {
     pages_unchanged: results.filter((r) => r.status === 'unchanged').length,
     pages_errored: results.filter((r) => r.status === 'error').length,
     pages_disabled: results.filter((r) => r.status === 'disabled').length,
+    pages_skipped_budget: pagesSkippedBudget,
     results,
   };
 }
