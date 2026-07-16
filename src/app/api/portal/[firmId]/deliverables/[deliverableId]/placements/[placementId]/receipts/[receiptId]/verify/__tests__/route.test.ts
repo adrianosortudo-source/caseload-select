@@ -34,10 +34,16 @@ const state = {
   },
   verifyReceiptArgs: null as unknown,
   validateCallArgs: null as { destination: string; receipt: unknown; opts: Record<string, unknown> } | null,
+  resolvedActor: { role: "operator", id: "op-1", name: "Operator", email: null } as {
+    role: string;
+    id: string | null;
+    name: string | null;
+    email: string | null;
+  } | null,
 };
 
-vi.mock("@/lib/admin-auth", () => ({
-  requireOperator: () => Promise.resolve(null),
+vi.mock("@/lib/deliverables-auth", () => ({
+  resolveDeliverableActor: () => Promise.resolve(state.resolvedActor ? { actor: state.resolvedActor } : null),
 }));
 
 vi.mock("@/lib/deliverables", () => ({
@@ -104,6 +110,40 @@ beforeEach(() => {
   state.validateResult = { outcome: "verified", method: "url_fetch", checks: {}, reason: null };
   state.verifyReceiptArgs = null;
   state.validateCallArgs = null;
+  state.resolvedActor = { role: "operator", id: "op-1", name: "Operator", email: null };
+});
+
+describe("POST verify: auth gate (Workstream 5)", () => {
+  it("401s when there is no session at all", async () => {
+    state.resolvedActor = null;
+    const res = await POST(makeReq(), params());
+    expect(res.status).toBe(401);
+  });
+
+  it("403s when the resolved actor is a lawyer, not an operator", async () => {
+    state.resolvedActor = { role: "lawyer", id: "law-1", name: "Damaris", email: "damaris@drglaw.ca" };
+    const res = await POST(makeReq(), params());
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("POST verify: verifier identity threading (Workstream 5)", () => {
+  it("passes the resolved operator's real identity into verifyReceipt on the automated path", async () => {
+    state.resolvedActor = { role: "operator", id: "op-42", name: "Operator", email: null };
+    await POST(makeReq(), params());
+    const args = (state.verifyReceiptArgs as { args: { verifierRole: string; verifierId: string; verifierName: string } }).args;
+    expect(args.verifierRole).toBe("operator");
+    expect(args.verifierId).toBe("op-42");
+    expect(args.verifierName).toBe("Operator");
+  });
+
+  it("passes the resolved operator's real identity into verifyReceipt on the manual-attestation path", async () => {
+    state.resolvedActor = { role: "operator", id: "op-42", name: "Operator", email: null };
+    await POST(makeReq({ manualOutcome: "verified" }), params());
+    const args = (state.verifyReceiptArgs as { args: { verifierRole: string; verifierId: string } }).args;
+    expect(args.verifierRole).toBe("operator");
+    expect(args.verifierId).toBe("op-42");
+  });
 });
 
 describe("POST verify: expectedSha256 resolution (Workstream 2)", () => {

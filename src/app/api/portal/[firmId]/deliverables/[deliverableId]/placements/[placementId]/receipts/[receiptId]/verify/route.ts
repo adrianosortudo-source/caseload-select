@@ -16,7 +16,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requireOperator } from "@/lib/admin-auth";
+import { resolveDeliverableActor } from "@/lib/deliverables-auth";
 import { getDeliverableDetail } from "@/lib/deliverables";
 import { listPlacementsForDeliverable } from "@/lib/content-placements";
 import { getReceiptById, verifyReceipt } from "@/lib/publication-receipts";
@@ -29,10 +29,20 @@ export async function POST(
     params,
   }: { params: Promise<{ firmId: string; deliverableId: string; placementId: string; receiptId: string }> },
 ) {
-  const denied = await requireOperator();
-  if (denied) return denied;
-
   const { firmId, deliverableId, placementId, receiptId } = await params;
+
+  // Workstream 5: resolveDeliverableActor (not the plain requireOperator
+  // gate) so this route has the real, currently-authenticated actor to
+  // pass into verifyReceipt below -- the same resolver
+  // deactivate-readiness/route.ts already uses for its own audited,
+  // operator-only action.
+  const resolved = await resolveDeliverableActor(firmId);
+  if (!resolved) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  if (resolved.actor.role !== "operator") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  const verifier = { role: resolved.actor.role, id: resolved.actor.id, name: resolved.actor.name };
+
   const detail = await getDeliverableDetail(deliverableId);
   if (!detail || detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -62,6 +72,9 @@ export async function POST(
       method: "operator_attestation",
       passed: body.manualOutcome === "verified",
       failureReason: typeof body.manualReason === "string" ? body.manualReason : undefined,
+      verifierRole: verifier.role,
+      verifierId: verifier.id,
+      verifierName: verifier.name,
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
     return NextResponse.json({ ok: true, receipt: result.receipt, automated: false });
@@ -116,6 +129,9 @@ export async function POST(
     method: check.method,
     passed: check.outcome === "verified",
     failureReason: check.reason,
+    verifierRole: verifier.role,
+    verifierId: verifier.id,
+    verifierName: verifier.name,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
   return NextResponse.json({ ok: true, automated: true, persisted: true, check, receipt: result.receipt });

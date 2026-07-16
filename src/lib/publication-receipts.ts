@@ -83,6 +83,18 @@ export interface VerifyReceiptInput {
   passed: boolean;
   failureReason?: string | null;
   evidenceStoragePath?: string | null;
+  // Workstream 5: who actually ran this verification. Previously this
+  // function copied actor_role/actor_id/actor_name from the ORIGINAL
+  // receipt, so every verification -- regardless of who genuinely
+  // performed it -- was permanently misattributed to whoever originally
+  // published the receipt (which could be a different operator, or
+  // 'system' for a channel-originated receipt). The caller (the verify
+  // route) is responsible for resolving the real, currently-authenticated
+  // actor and supplying it here, the same way deactivatePeriodReadiness
+  // requires its own explicit actor param rather than inferring one.
+  verifierRole: "operator" | "lawyer" | "system";
+  verifierId?: string | null;
+  verifierName?: string | null;
 }
 
 /**
@@ -121,9 +133,9 @@ export async function verifyReceipt(
       public_url: o.public_url,
       external_post_id: o.external_post_id,
       published_at: o.published_at,
-      actor_role: o.actor_role,
-      actor_id: o.actor_id,
-      actor_name: o.actor_name,
+      actor_role: verification.verifierRole,
+      actor_id: verification.verifierId ?? null,
+      actor_name: verification.verifierName ?? null,
       verification_state: verification.passed ? "verified" : "failed",
       verified_at: new Date().toISOString(),
       verification_method: verification.method,

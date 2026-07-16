@@ -49,6 +49,12 @@ export interface PreflightPeriodReport {
   periodId: string;
   periodLifecycle: PeriodLifecycle;
   placements: PreflightPlacementReport[];
+  // Workstream 4: a non-archived deliverable with zero rows in
+  // placementsByDeliverableId never enters the placements loop below, so
+  // without this list it silently vanishes from the report -- a real
+  // publishing-coverage gap (this deliverable has nowhere to go) that
+  // reads identically to "nothing to do here" unless surfaced explicitly.
+  deliverablesWithNoPlacements: Array<{ deliverableId: string; deliverableTitle: string }>;
 }
 
 function countUnresolvedComments(comments: DeliverableComment[]): number {
@@ -122,6 +128,36 @@ function reportOnePlacement(input: {
       reason: `${unresolvedCommentCount} unresolved comment${unresolvedCommentCount === 1 ? "" : "s"} on this deliverable`,
     };
   }
+
+  // Workstream 4: placement.state and the current receipt's
+  // verification_state were never consulted here, so a retired placement,
+  // one already published, or one with an unresolved (or even a
+  // successfully verified) receipt all reported mayPublish=true if the
+  // deliverable-level gates above happened to pass -- a caller re-running
+  // preflight against the same placement could republish it indefinitely.
+  // These two checks make the report idempotent: once a placement has
+  // moved past "ready" or already carries a receipt, mayPublish is false
+  // with a reason naming exactly why, matching the fail-closed contract
+  // this file's own docstring states.
+  if (placement.state === "retired") {
+    return { ...base, mayPublish: false, reason: "placement is retired, no longer intended for publication" };
+  }
+  if (placement.state === "published") {
+    return { ...base, mayPublish: false, reason: "placement is already marked published" };
+  }
+  if (placement.state === "planned") {
+    return { ...base, mayPublish: false, reason: "placement has not been marked ready for publication" };
+  }
+  if (currentReceipt) {
+    const reasonByState: Record<PublicationReceipt["verification_state"], string> = {
+      verified: "a receipt for this placement already exists and is verified",
+      failed: "a previous publish attempt for this placement failed verification; investigate before retrying",
+      unverified: "a receipt for this placement already exists and has not yet been verified",
+      reconciling: "a receipt correction is in progress for this placement",
+    };
+    return { ...base, mayPublish: false, reason: reasonByState[currentReceipt.verification_state] };
+  }
+
   return { ...base, mayPublish: true, reason: null };
 }
 
@@ -135,12 +171,17 @@ export function buildPreflightReport(input: {
   currentReceiptsByPlacementId: Record<string, PublicationReceipt | null>;
 }): PreflightPeriodReport {
   const placements: PreflightPlacementReport[] = [];
+  const deliverablesWithNoPlacements: Array<{ deliverableId: string; deliverableTitle: string }> = [];
   for (const deliverable of input.deliverables) {
     if (deliverable.status === "archived") continue; // excluded, matches the readiness evaluator's own rule
     const deliverableReady = input.readyByDeliverableId[deliverable.id] ?? false;
     const comments = input.commentsByDeliverableId[deliverable.id] ?? [];
     const unresolvedCommentCount = countUnresolvedComments(comments);
     const deliverablePlacements = input.placementsByDeliverableId[deliverable.id] ?? [];
+    if (deliverablePlacements.length === 0) {
+      deliverablesWithNoPlacements.push({ deliverableId: deliverable.id, deliverableTitle: deliverable.title });
+      continue;
+    }
     for (const placement of deliverablePlacements) {
       placements.push(
         reportOnePlacement({
@@ -154,5 +195,10 @@ export function buildPreflightReport(input: {
       );
     }
   }
-  return { periodId: input.periodId, periodLifecycle: input.periodLifecycle, placements };
+  return {
+    periodId: input.periodId,
+    periodLifecycle: input.periodLifecycle,
+    placements,
+    deliverablesWithNoPlacements,
+  };
 }

@@ -52,7 +52,10 @@ function makePlacement(overrides: Partial<ContentPlacement> = {}): ContentPlacem
     intended_path: "/journal/example",
     required_artifact_type: "webpage",
     scheduled_publish_date: null,
-    state: "planned",
+    // "ready" so the deliverable-level-gate tests below exercise exactly
+    // the gate they name, not this fixture's own placement.state; the
+    // Workstream 4 describe block below overrides this per-case.
+    state: "ready",
     created_by_role: "operator",
     created_by_id: null,
     created_at: new Date().toISOString(),
@@ -240,7 +243,7 @@ describe("buildPreflightReport: archived exclusion and receipt passthrough", () 
     expect(report.placements).toHaveLength(0);
   });
 
-  it("surfaces the current receipt when one exists, without letting it override may_publish logic", () => {
+  it("surfaces the current receipt when one exists, and its existence itself blocks may_publish (Workstream 4 idempotency)", () => {
     const deliverable = makeDeliverable();
     const placement = makePlacement({ deliverable_id: deliverable.id });
     const receipt: PublicationReceipt = {
@@ -279,6 +282,98 @@ describe("buildPreflightReport: archived exclusion and receipt passthrough", () 
       publicUrl: receipt.public_url,
       externalPostId: null,
     });
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].reason).toMatch(/already exists and is verified/);
+  });
+});
+
+describe("buildPreflightReport: Workstream 4 idempotency (placement.state + existing receipt)", () => {
+  function receiptWith(verification_state: PublicationReceipt["verification_state"]): PublicationReceipt {
+    return {
+      id: "r1",
+      firm_id: FIRM,
+      period_id: PERIOD,
+      deliverable_id: "d1111111-1111-1111-1111-111111111111",
+      placement_id: "pl111111-1111-1111-1111-111111111111",
+      destination: "firm_website",
+      locale: "en-CA",
+      approved_version_id: VERSION,
+      artifact_id: null,
+      artifact_sha256: null,
+      public_url: "https://drglaw.ca/journal/example",
+      external_post_id: null,
+      published_at: new Date().toISOString(),
+      actor_role: "operator",
+      actor_id: null,
+      actor_name: "Operator",
+      verification_state,
+      verified_at: verification_state === "verified" || verification_state === "failed" ? new Date().toISOString() : null,
+      verification_method: verification_state === "verified" || verification_state === "failed" ? "url_fetch" : null,
+      evidence_storage_bucket: null,
+      evidence_storage_path: null,
+      failure_reason: verification_state === "failed" ? "HTTP 404" : null,
+      reconciles_receipt_id: null,
+      created_at: new Date().toISOString(),
+    };
+  }
+
+  it("retired placement -> may_publish false", () => {
+    const report = buildPreflightReport(baseInput({ placements: [makePlacement({ state: "retired" })] }));
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].reason).toMatch(/retired/);
+  });
+
+  it("published placement -> may_publish false (already done, not a fresh publish target)", () => {
+    const report = buildPreflightReport(baseInput({ placements: [makePlacement({ state: "published" })] }));
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].reason).toMatch(/already marked published/);
+  });
+
+  it("planned placement (not yet marked ready) -> may_publish false", () => {
+    const report = buildPreflightReport(baseInput({ placements: [makePlacement({ state: "planned" })] }));
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].reason).toMatch(/not been marked ready/);
+  });
+
+  it("ready placement, no receipt -> the one genuine pass case", () => {
+    const report = buildPreflightReport(baseInput({ placements: [makePlacement({ state: "ready" })] }));
     expect(report.placements[0].mayPublish).toBe(true);
+  });
+
+  it.each(["verified", "failed", "unverified", "reconciling"] as const)(
+    "an existing receipt in verification_state=%s blocks republishing the same placement",
+    (state) => {
+      const placement = makePlacement({ state: "ready" });
+      const report = buildPreflightReport(
+        baseInput({ placements: [placement], receipts: { [placement.id]: receiptWith(state) } }),
+      );
+      expect(report.placements[0].mayPublish).toBe(false);
+      expect(report.placements[0].reason).toBeTruthy();
+    },
+  );
+});
+
+describe("buildPreflightReport: Workstream 4 deliverablesWithNoPlacements coverage gap", () => {
+  it("a non-archived deliverable with zero placements is surfaced explicitly, not silently dropped", () => {
+    const deliverable = makeDeliverable();
+    const report = buildPreflightReport(
+      baseInput({ deliverable, placements: [] }),
+    );
+    expect(report.placements).toHaveLength(0);
+    expect(report.deliverablesWithNoPlacements).toEqual([
+      { deliverableId: deliverable.id, deliverableTitle: deliverable.title },
+    ]);
+  });
+
+  it("an archived deliverable with zero placements is excluded from both lists (matches the readiness evaluator's own rule)", () => {
+    const deliverable = makeDeliverable({ status: "archived" });
+    const report = buildPreflightReport(baseInput({ deliverable, placements: [] }));
+    expect(report.placements).toHaveLength(0);
+    expect(report.deliverablesWithNoPlacements).toHaveLength(0);
+  });
+
+  it("a deliverable WITH placements never appears in deliverablesWithNoPlacements", () => {
+    const report = buildPreflightReport(baseInput({}));
+    expect(report.deliverablesWithNoPlacements).toHaveLength(0);
   });
 });
