@@ -61,6 +61,13 @@
  *       (5 wrong tries invalidates the code); the IP bucket slows a
  *       distributed sweep across many sessions.
  *
+ *   assist             8 per minute
+ *     - /api/assist/[firmId]. Public, cross-origin, no auth (Firm Assist,
+ *       DR-100). Each call costs one embedding + one Gemini generation
+ *       call. Identity is `${firmId}:${ip}` so one scripted client can't
+ *       run up the bill against a single firm while staying under a
+ *       global-IP ceiling.
+ *
  * Per-route bucket selection is done by the caller. Caller passes the
  * bucket name + the IP. We never trust the request body for IP
  * resolution; the helper reads x-forwarded-for and x-real-ip in that
@@ -83,7 +90,8 @@ export type RateLimitBucket =
   | "transcribe"
   | "otpSend"
   | "otpVerify"
-  | "seoCheck";
+  | "seoCheck"
+  | "assist";
 
 interface BucketConfig {
   limit: number;
@@ -100,6 +108,7 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   otpSend:        { limit: 5,  windowSeconds: 600 },   // 5 per 10 minutes
   otpVerify:      { limit: 10, windowSeconds: 600 },   // 10 per 10 minutes
   seoCheck:       { limit: 8,  windowSeconds: 600 },   // 8 per 10 minutes (public, unauth only)
+  assist:         { limit: 8,  windowSeconds: 60 },    // 8 per minute (public, unauth, per firmId:ip)
 };
 
 /**
