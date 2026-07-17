@@ -49,6 +49,19 @@ export interface CreateReceiptInput {
   reconcilesReceiptId?: string | null;
 }
 
+export interface CreateReceiptFailure {
+  ok: false;
+  error: string;
+  // Stable Postgres SQLSTATE for the underlying rejection, when the insert
+  // failed at the database layer (e.g. 'CLM01' for every claim-binding
+  // rejection raised by validate_publication_receipt_scope() -- see
+  // supabase/migrations/
+  // 20260717001444_publication_receipt_actor_binding_and_hash_trust_fix.sql).
+  // Callers should classify failures by this code, not by pattern-matching
+  // the human-readable message, which can change wording without notice.
+  code?: string;
+}
+
 /**
  * Records that a placement was published. Verification is a separate,
  * later step (verifyReceipt below); a fresh receipt always starts
@@ -57,7 +70,7 @@ export interface CreateReceiptInput {
  */
 export async function createReceipt(
   input: CreateReceiptInput,
-): Promise<{ ok: true; receipt: PublicationReceipt } | { ok: false; error: string }> {
+): Promise<{ ok: true; receipt: PublicationReceipt } | CreateReceiptFailure> {
   const { data, error } = await supabase
     .from("publication_receipts")
     .insert({
@@ -84,7 +97,7 @@ export async function createReceipt(
     })
     .select("*")
     .single();
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: error.message, code: error.code };
   return { ok: true, receipt: data as PublicationReceipt };
 }
 

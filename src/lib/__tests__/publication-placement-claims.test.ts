@@ -30,6 +30,7 @@ const FIRM = "f1111111-1111-1111-1111-111111111111";
 const DELIVERABLE = "d1111111-1111-1111-1111-111111111111";
 const PLACEMENT = "p1111111-1111-1111-1111-111111111111";
 const VERSION = "v1111111-1111-1111-1111-111111111111";
+const CLAIM = "c1111111-1111-1111-1111-111111111111";
 
 beforeEach(() => {
   state.rpcArgs = null;
@@ -38,7 +39,7 @@ beforeEach(() => {
 
 describe("claimPlacementForPublish", () => {
   it("calls the RPC with snake_case params matching the migration's function signature", async () => {
-    state.rpcResponse = { data: { ok: true, claim_id: "c1", idempotent_replay: false, status: "active" }, error: null };
+    state.rpcResponse = { data: { ok: true, claim_id: CLAIM, idempotent_replay: false, status: "active" }, error: null };
     await claimPlacementForPublish({
       firmId: FIRM,
       deliverableId: DELIVERABLE,
@@ -64,7 +65,7 @@ describe("claimPlacementForPublish", () => {
   });
 
   it("maps a successful RPC response into camelCase, non-throwing", async () => {
-    state.rpcResponse = { data: { ok: true, claim_id: "c1", idempotent_replay: true, status: "active" }, error: null };
+    state.rpcResponse = { data: { ok: true, claim_id: CLAIM, idempotent_replay: true, status: "active" }, error: null };
     const result = await claimPlacementForPublish({
       firmId: FIRM,
       deliverableId: DELIVERABLE,
@@ -75,7 +76,7 @@ describe("claimPlacementForPublish", () => {
     });
     expect(result).toEqual({
       ok: true,
-      claimId: "c1",
+      claimId: CLAIM,
       idempotentReplay: true,
       status: "active",
       error: undefined,
@@ -117,7 +118,10 @@ describe("claimPlacementForPublish", () => {
   });
 
   it("defaults supersedesClaimId to null when omitted", async () => {
-    state.rpcResponse = { data: { ok: true, claim_id: "c1" }, error: null };
+    state.rpcResponse = {
+      data: { ok: true, claim_id: CLAIM, idempotent_replay: false, status: "active" },
+      error: null,
+    };
     await claimPlacementForPublish({
       firmId: FIRM,
       deliverableId: DELIVERABLE,
@@ -186,14 +190,14 @@ describe("claimPlacementForPublish", () => {
       state.rpcResponse = { data: { ok: true }, error: null };
       const result = await claimPlacementForPublish(baseInput);
       expect(result.ok).toBe(false);
-      expect(result.error).toMatch(/"claim_id" must be a non-empty string/);
+      expect(result.error).toMatch(/"claim_id" must be a UUID string/);
     });
 
     it("fails closed when ok:true but claim_id is not a string", async () => {
       state.rpcResponse = { data: { ok: true, claim_id: 12345 }, error: null };
       const result = await claimPlacementForPublish(baseInput);
       expect(result.ok).toBe(false);
-      expect(result.error).toMatch(/"claim_id" must be a non-empty string/);
+      expect(result.error).toMatch(/"claim_id" must be a UUID string/);
     });
 
     it("fails closed when ok:true with an unrecognized status value", async () => {
@@ -233,14 +237,98 @@ describe("claimPlacementForPublish", () => {
       "accepts the documented status value %s when ok:true",
       async (status) => {
         state.rpcResponse = {
-          data: { ok: true, claim_id: "c1", status },
+          data: { ok: true, claim_id: CLAIM, idempotent_replay: false, status },
           error: null,
         };
         const result = await claimPlacementForPublish(baseInput);
         expect(result.ok).toBe(true);
-        expect(result.claimId).toBe("c1");
+        expect(result.claimId).toBe(CLAIM);
         expect(result.status).toBe(status);
       },
     );
+
+    describe("adversarial-review follow-up (finding 3: fail-closed on every ok:true shape gap)", () => {
+      it.each([
+        ["a non-empty non-UUID string", "not-a-uuid"],
+        ["a numeric string", "12345"],
+        ["a whitespace-only string", "   "],
+        ["an array", ["c1111111-1111-1111-1111-111111111111"]],
+        ["an object", { id: "c1111111-1111-1111-1111-111111111111" }],
+      ])("fails closed when ok:true and claim_id is %s, not a UUID", async (_label, badClaimId) => {
+        state.rpcResponse = {
+          data: { ok: true, claim_id: badClaimId, idempotent_replay: false, status: "active" },
+          error: null,
+        };
+        const result = await claimPlacementForPublish(baseInput);
+        expect(result.ok).toBe(false);
+        expect(result.error).toMatch(/"claim_id" must be a UUID string/);
+      });
+
+      it("accepts an uppercase-hex UUID for claim_id (case-insensitive)", async () => {
+        state.rpcResponse = {
+          data: {
+            ok: true,
+            claim_id: "C1111111-1111-1111-1111-111111111111",
+            idempotent_replay: false,
+            status: "active",
+          },
+          error: null,
+        };
+        const result = await claimPlacementForPublish(baseInput);
+        expect(result.ok).toBe(true);
+        expect(result.claimId).toBe("C1111111-1111-1111-1111-111111111111");
+      });
+
+      it("fails closed when ok:true and status is missing entirely", async () => {
+        state.rpcResponse = {
+          data: { ok: true, claim_id: CLAIM, idempotent_replay: false },
+          error: null,
+        };
+        const result = await claimPlacementForPublish(baseInput);
+        expect(result.ok).toBe(false);
+        expect(result.error).toMatch(/"status" is required when ok is true/);
+      });
+
+      it("fails closed when ok:true and idempotent_replay is missing entirely", async () => {
+        state.rpcResponse = {
+          data: { ok: true, claim_id: CLAIM, status: "active" },
+          error: null,
+        };
+        const result = await claimPlacementForPublish(baseInput);
+        expect(result.ok).toBe(false);
+        expect(result.error).toMatch(/"idempotent_replay" is required when ok is true/);
+      });
+
+      it("fails closed when ok:false and next_action is an unrecognized value tacked onto an otherwise-valid rejection", async () => {
+        state.rpcResponse = {
+          data: {
+            ok: false,
+            error: "rejected",
+            existing_claim_id: CLAIM,
+            next_action: "use_new_idempotency_keyyy",
+          },
+          error: null,
+        };
+        const result = await claimPlacementForPublish(baseInput);
+        expect(result.ok).toBe(false);
+        expect(result.error).toMatch(/unrecognized "next_action" value/);
+      });
+
+      it("accepts and threads through the new use_new_idempotency_key next_action (finding 4)", async () => {
+        state.rpcResponse = {
+          data: {
+            ok: false,
+            error: "idempotency_key was already used for a different request",
+            existing_claim_id: CLAIM,
+            next_action: "use_new_idempotency_key",
+          },
+          error: null,
+        };
+        const result = await claimPlacementForPublish(baseInput);
+        expect(result.ok).toBe(false);
+        expect(result.nextAction).toBe("use_new_idempotency_key");
+        expect(result.existingClaimId).toBe(CLAIM);
+      });
+    });
   });
 });

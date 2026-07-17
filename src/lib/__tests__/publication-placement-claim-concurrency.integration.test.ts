@@ -20,7 +20,7 @@
  * repeated or parallel runs never collide. Cleanup does not attempt to
  * DELETE from publication_placement_claims, publication_receipts, or
  * content_placements: all three reject DELETE unconditionally (see
- * supabase/migrations/20260716210000_publication_placement_claim_mutation_lockdown.sql
+ * supabase/migrations/20260716205829_publication_placement_claim_mutation_lockdown.sql
  * and 20260715191218_20260715130100_content_placements.sql), and once a
  * test has actually inserted a real claim, the remaining fixture rows
  * become undeletable too via ON DELETE RESTRICT foreign keys. Against the
@@ -195,5 +195,76 @@ describe.skipIf(!DB_URL)("claim_placement_for_publish concurrency (real Postgres
       [placementId2],
     );
     expect(rows[0].n).toBe(1);
+  }, 30000);
+
+  // Adversarial-review follow-up, finding 4
+  // (20260717001510_publication_placement_claim_idempotency_identity_scoping.sql):
+  // the SAME idempotency key reused with a DIFFERENT request identity must
+  // fail closed, never silently hand back the original claim as a "replay."
+  // Self-contained fixture (own firm/deliverable/placement/versions) so it
+  // does not interact with the two races above.
+  it("the same idempotency key reused with a different approved_version_id fails closed instead of returning the mismatched claim as a replay", async () => {
+    const firm = randomUUID();
+    const deliverable = randomUUID();
+    const placement = randomUUID();
+    const versionA = randomUUID();
+    const versionB = randomUUID();
+    const actorId = randomUUID();
+
+    await connA.query(`insert into intake_firms (id, name, custom_domain, subdomain) values ($1, 'Idempotency Scoping Fixture', null, $2)`, [firm, `idempotency-scoping-fixture-${firm}`]);
+    await connA.query(
+      `insert into content_deliverables (id, firm_id, title, content_kind, status, created_by_role) values ($1, $2, 'idempotency scoping fixture', 'text', 'draft', 'operator')`,
+      [deliverable, firm],
+    );
+    await connA.query(
+      `insert into deliverable_versions (id, deliverable_id, firm_id, version_number, body_html, created_by_role) values ($1, $2, $3, 1, '<p>v1</p>', 'operator')`,
+      [versionA, deliverable, firm],
+    );
+    await connA.query(
+      `insert into deliverable_versions (id, deliverable_id, firm_id, version_number, body_html, created_by_role) values ($1, $2, $3, 2, '<p>v2</p>', 'operator')`,
+      [versionB, deliverable, firm],
+    );
+    await connA.query(`update content_deliverables set status = 'approved', approved_version_id = $1, current_version_id = $1 where id = $2`, [versionA, deliverable]);
+    await connA.query(
+      `insert into content_placements (id, firm_id, deliverable_id, destination, created_by_role) values ($1, $2, $3, 'linkedin_post', 'operator')`,
+      [placement, firm, deliverable],
+    );
+
+    const key = "same-key-different-identity";
+    const first = await connA.query(
+      `select claim_placement_for_publish($1, $2, $3, $4, $5, 'operator', $6, 'Actor A') as result`,
+      [firm, deliverable, placement, versionA, key, actorId],
+    );
+    expect(first.rows[0].result.ok).toBe(true);
+    const realClaimId: string = first.rows[0].result.claim_id;
+
+    // Same key, different approved_version_id -- must fail closed, not
+    // return realClaimId as an ok:true replay.
+    const mismatched = await connA.query(
+      `select claim_placement_for_publish($1, $2, $3, $4, $5, 'operator', $6, 'Actor A') as result`,
+      [firm, deliverable, placement, versionB, key, actorId],
+    );
+    const result = mismatched.rows[0].result;
+    expect(result.ok).toBe(false);
+    expect(result.next_action).toBe("use_new_idempotency_key");
+    expect(result.existing_claim_id).toBe(realClaimId);
+
+    // The real claim was never mutated by the mismatched-identity attempt.
+    const { rows } = await connA.query(
+      `select status, approved_version_id from publication_placement_claims where id = $1`,
+      [realClaimId],
+    );
+    expect(rows[0].status).toBe("active");
+    expect(rows[0].approved_version_id).toBe(versionA);
+
+    // The identical request (same key, same full identity) still replays
+    // cleanly -- the fix must not have broken genuine idempotent replay.
+    const replay = await connA.query(
+      `select claim_placement_for_publish($1, $2, $3, $4, $5, 'operator', $6, 'Actor A') as result`,
+      [firm, deliverable, placement, versionA, key, actorId],
+    );
+    expect(replay.rows[0].result.ok).toBe(true);
+    expect(replay.rows[0].result.claim_id).toBe(realClaimId);
+    expect(replay.rows[0].result.idempotent_replay).toBe(true);
   }, 30000);
 });

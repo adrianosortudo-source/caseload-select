@@ -24,7 +24,8 @@
  * next_action before the insert is attempted; the database trigger is the
  * final authority regardless (defense in depth -- see
  * validate_publication_receipt_scope in
- * supabase/migrations/20260716200000_publication_receipt_claim_binding.sql).
+ * supabase/migrations/20260717001444_publication_receipt_actor_binding_and_hash_trust_fix.sql,
+ * the current definition of the function).
  *
  * There is no artifact_sha256 field in this contract: a PDF's hash is never
  * caller-supplied. When artifact_id is bound, the server derives
@@ -246,7 +247,15 @@ export async function POST(
     // every ordinary case, but if the claim state changed between that
     // check and this insert (a genuine race), the DB trigger's rejection
     // still surfaces as a clean, actionable response rather than a flat 400.
-    const isClaimIssue = /claim_id/i.test(result.error);
+    //
+    // Classified by the trigger's stable custom SQLSTATE ('CLM01', set by
+    // validate_publication_receipt_scope() for every claim-binding
+    // rejection), not by pattern-matching the exception message: a prior
+    // /claim_id/i regex missed several of the trigger's own claim-related
+    // messages (e.g. the actor_role and actor-identity mismatches, which
+    // say "claim's", not "claim_id") and would silently misclassify any
+    // future wording change as a generic error.
+    const isClaimIssue = result.code === "CLM01";
     return NextResponse.json(
       { error: result.error, ...(isClaimIssue ? { nextAction: "reclaim_placement" } : {}) },
       { status: isClaimIssue ? 409 : 400 },
