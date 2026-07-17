@@ -117,6 +117,10 @@ declare
   v_deliverable uuid := '88888888-0000-0000-0000-000000000011';
   v_placement uuid := '88888888-0000-0000-0000-000000000012';
   v_version uuid := '88888888-0000-0000-0000-000000000013';
+  -- Distinct approved version for CHECK 6: publication_receipts enforces at
+  -- most one root receipt per (placement_id, approved_version_id), and
+  -- CHECK 5 already consumed that slot for v_version.
+  v_version2 uuid := '88888888-0000-0000-0000-000000000016';
   v_artifact_non_pdf uuid := '88888888-0000-0000-0000-000000000014';
   v_result jsonb;
   v_claim uuid;
@@ -130,6 +134,8 @@ begin
     values (v_deliverable, v_firm, 'hash clear fixture', 'text', 'draft', 'operator');
   insert into deliverable_versions (id, deliverable_id, firm_id, version_number, body_html, created_by_role)
     values (v_version, v_deliverable, v_firm, 1, '<p>a</p>', 'operator');
+  insert into deliverable_versions (id, deliverable_id, firm_id, version_number, body_html, created_by_role)
+    values (v_version2, v_deliverable, v_firm, 2, '<p>b</p>', 'operator');
   update content_deliverables set status = 'approved', approved_version_id = v_version, current_version_id = v_version where id = v_deliverable;
   insert into content_placements (id, firm_id, deliverable_id, destination, created_by_role)
     values (v_placement, v_firm, v_deliverable, 'linkedin_post', 'operator');
@@ -151,17 +157,22 @@ begin
 
   -- CHECK 6: a non-PDF artifact WITH a registered hash still gets its real
   -- hash applied (the fix does not accidentally null out legitimate,
-  -- server-derived hashes for non-PDF artifact types).
+  -- server-derived hashes for non-PDF artifact types). Bound to v_version2
+  -- (a distinct approved version, re-approved below) since CHECK 5 already
+  -- consumed the one-root-receipt-per-(placement,version) slot for v_version.
   insert into publication_artifacts (id, firm_id, deliverable_id, version_id, artifact_type, storage_bucket, storage_path, sha256, created_by_role)
-    values (v_artifact_non_pdf, v_firm, v_deliverable, v_version, 'html', 'firm-files', 'x/page.html',
+    values (v_artifact_non_pdf, v_firm, v_deliverable, v_version2, 'webpage', 'firm-files', 'x/page.html',
             'cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe', 'operator');
-  v_result := claim_placement_for_publish(v_firm, v_deliverable, v_placement, v_version, 'hash-key-2', 'operator', null, 'Verify', v_claim);
+  update content_deliverables set approved_version_id = v_version2, current_version_id = v_version2 where id = v_deliverable;
+  -- CHECK 5's receipt already released v_claim, so no active claim remains
+  -- on this placement -- no supersession needed.
+  v_result := claim_placement_for_publish(v_firm, v_deliverable, v_placement, v_version2, 'hash-key-2', 'operator', null, 'Verify');
   v_claim2 := (v_result->>'claim_id')::uuid;
   if v_claim2 is null then
-    v_fails := v_fails || ('CHECK6-SETUP: could not supersede+reclaim: ' || v_result::text);
+    v_fails := v_fails || ('CHECK6-SETUP: could not claim v_version2: ' || v_result::text);
   else
     insert into publication_receipts (firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, public_url, actor_role, actor_name, claim_id, artifact_id, artifact_sha256)
-      values (v_firm, v_deliverable, v_placement, 'linkedin_post', v_version, now(), 'https://example.test/with-artifact', 'operator', 'Verify', v_claim2, v_artifact_non_pdf, null)
+      values (v_firm, v_deliverable, v_placement, 'linkedin_post', v_version2, now(), 'https://example.test/with-artifact', 'operator', 'Verify', v_claim2, v_artifact_non_pdf, null)
       returning id, artifact_sha256 into v_receipt_id, v_stored_hash;
     if v_stored_hash is distinct from 'cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe' then
       v_fails := v_fails || ('CHECK6: bound-artifact hash not applied, got ' || coalesce(v_stored_hash, 'null'));
