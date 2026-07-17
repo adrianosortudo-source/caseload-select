@@ -388,6 +388,11 @@ export function buildSystemPrompt(
       "Never make timing or response-speed promises ('within hours', 'same-day response', 'fast turnaround', 'within a minute'). Describe the service feature instead (who reads the intake, bilingual capacity)."
     );
   }
+  if (formattingRules.no_structural_monotony !== false) {
+    formatRules.push(
+      "Vary sentence length deliberately: mix short declarative sentences with longer clauses, and never write more than three consecutive sentences of similar length. Vary paragraph length the same way."
+    );
+  }
   if (formatRules.length > 0) {
     parts.push(`Formatting rules: ${formatRules.join(" ")}`);
   }

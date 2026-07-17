@@ -66,7 +66,8 @@ export type ValidatorKey =
   | "secondary_query_coverage"
   | "service_area_presence"
   | "no_cannibalization"
-  | "pt_jurisdiction_disclosure";
+  | "pt_jurisdiction_disclosure"
+  | "structural_monotony";
 
 export type Severity = "fail" | "warn" | "info";
 
@@ -112,6 +113,7 @@ export interface ValidatorConfig {
     no_distress_hero?: boolean;
     no_us_trust_badges?: boolean;
     no_lsa_quality_claim?: boolean;
+    no_structural_monotony?: boolean;
   };
   rejected_ctas?: string[];
   certified_specialists?: Array<{ lawyer: string; areas: string[] }>;
@@ -2267,6 +2269,159 @@ export function validatePtJurisdictionDisclosure(text: string): ValidatorResult 
   };
 }
 
+// Abbreviations that end in a period but do not end a sentence. Guards the
+// sentence splitter against "Rule 4.2-1", "s. 7", "Inc.", legal citations,
+// and initials so structural_monotony's word counts stay accurate.
+const SENTENCE_SPLIT_ABBR = /\b(?:Inc|No|Mr|Mrs|Ms|Dr|St|Rd|Ave|Ont|v|e\.g|i\.e|Rule|s)\.\s*$/i;
+
+/**
+ * Splits body prose into sentence strings for rhythm measurement. Excludes
+ * headings (# lines), list/numbered items, blockquotes, table rows, and bold
+ * standalone lines (CTAs) before splitting, since those are legitimately
+ * parallel in length and are not the "AI cadence" this validator targets.
+ * Guards against splitting on decimals, statute citations, and abbreviations.
+ */
+export function extractProseUnits(text: string): { sentences: string[]; paragraphs: string[] } {
+  const rawParagraphs = text.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const proseParagraphs = rawParagraphs.filter((p) => {
+    if (/^#{1,6}\s/.test(p)) return false; // heading
+    if (/^[-*]\s/.test(p) || /^\d+[.)]\s/.test(p)) return false; // list item
+    if (/^>/.test(p)) return false; // blockquote
+    if (/^\|/.test(p)) return false; // table row
+    if (/^\*\*[^*]+\*\*$/.test(p)) return false; // bold-only standalone (CTA)
+    return true;
+  });
+
+  const sentences: string[] = [];
+  for (const para of proseParagraphs) {
+    const raw = para.split(/(?<=[.?!])\s+(?=[A-Z"'“])/g);
+    for (const seg of raw) {
+      const trimmed = seg.trim();
+      if (!trimmed) continue;
+      const prev = sentences[sentences.length - 1];
+      const prevEndsAbbrOrDigit =
+        prev !== undefined &&
+        (SENTENCE_SPLIT_ABBR.test(prev) || (/\d$/.test(prev.replace(/[.?!]+$/, "")) && /^\d/.test(trimmed)));
+      if (prevEndsAbbrOrDigit) {
+        sentences[sentences.length - 1] = prev + " " + trimmed;
+      } else {
+        sentences.push(trimmed);
+      }
+    }
+  }
+  // Drop fragments under 3 words (stray artifacts of the split, not real sentences).
+  const filteredSentences = sentences.filter((s) => s.split(/\s+/).filter(Boolean).length >= 3);
+
+  return { sentences: filteredSentences, paragraphs: proseParagraphs };
+}
+
+function wordCount(s: string): number {
+  return s.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function coefficientOfVariation(lengths: number[]): number {
+  const n = lengths.length;
+  if (n === 0) return 0;
+  const mean = lengths.reduce((a, b) => a + b, 0) / n;
+  if (mean === 0) return 0;
+  const variance = lengths.reduce((a, b) => a + (b - mean) ** 2, 0) / n;
+  return Math.sqrt(variance) / mean;
+}
+
+function longestSimilarLengthRun(lengths: number[]): number {
+  let best = lengths.length > 0 ? 1 : 0;
+  let cur = 1;
+  for (let i = 1; i < lengths.length; i++) {
+    const a = lengths[i - 1];
+    const b = lengths[i];
+    const within = Math.abs(a - b) <= 0.2 * Math.max(a, b);
+    if (within) {
+      cur++;
+      best = Math.max(best, cur);
+    } else {
+      cur = 1;
+    }
+  }
+  return best;
+}
+
+/**
+ * Structural-monotony check (warn-only): flags uniform sentence length,
+ * long runs of near-identical sentence length, and uniform paragraph length,
+ * the cadence signature the humanizeaitext.io teardown (2026-07-10) named as
+ * the residual AI tell this codebase's lexical validators (banned vocab, em
+ * dash, rule of three, orphan words) do not catch. The fix is human
+ * restructuring, never a synonym-swap pass, so this never fails a gate.
+ *
+ * Thresholds calibrated (2026-07-10) against real DRG Law human-edited prose
+ * (drg-law-website /about, 14 sentences: sentence CV 0.358, longest similar
+ * run 3, 8 paragraphs: paragraph CV 0.281) versus a synthetically flattened
+ * counterpart on the same topic (sentence CV 0.076, longest run 16,
+ * paragraph CV 0.023). Thresholds sit with margin below the human floor and
+ * well above the flattened ceiling; re-calibrate against a larger corpus of
+ * approved live pieces as they accumulate.
+ */
+export function validateStructuralMonotony(text: string): ValidatorResult {
+  const findings: Finding[] = [];
+  const { sentences, paragraphs } = extractProseUnits(text);
+
+  const MIN_SENTENCES = 10;
+  const MIN_PARAGRAPHS = 4;
+  if (sentences.length < MIN_SENTENCES || paragraphs.length < MIN_PARAGRAPHS) {
+    return {
+      key: "structural_monotony",
+      status: "pass",
+      severity: "info",
+      findings: [
+        {
+          rule: "structural_monotony",
+          severity: "info",
+          message: `Sample too small to measure rhythm (${sentences.length} prose sentences, ${paragraphs.length} prose paragraphs; needs ${MIN_SENTENCES}+ and ${MIN_PARAGRAPHS}+).`,
+        },
+      ],
+    };
+  }
+
+  const sentLens = sentences.map(wordCount);
+  const paraLens = paragraphs.map(wordCount);
+  const sentCv = coefficientOfVariation(sentLens);
+  const paraCv = coefficientOfVariation(paraLens);
+  const run = longestSimilarLengthRun(sentLens);
+
+  const SENT_CV_FLOOR = 0.25;
+  const PARA_CV_FLOOR = 0.18;
+  const RUN_CEILING = 7;
+
+  if (sentCv < SENT_CV_FLOOR) {
+    findings.push({
+      rule: "structural_monotony",
+      severity: "warn",
+      message: `Sentence rhythm is flat (length variance ${sentCv.toFixed(2)}, below the ${SENT_CV_FLOOR} floor). Mix short declaratives with longer clauses; do not synonym-swap, restructure by hand.`,
+    });
+  }
+  if (run >= RUN_CEILING) {
+    findings.push({
+      rule: "structural_monotony",
+      severity: "warn",
+      message: `${run} consecutive sentences of near-identical length. Break the run by combining two sentences or shortening one sharply.`,
+    });
+  }
+  if (paraCv < PARA_CV_FLOOR) {
+    findings.push({
+      rule: "structural_monotony",
+      severity: "warn",
+      message: `Paragraph length is uniform (variance ${paraCv.toFixed(2)}, below the ${PARA_CV_FLOOR} floor). Let some paragraphs run long and others land in one or two sentences.`,
+    });
+  }
+
+  return {
+    key: "structural_monotony",
+    status: findings.length > 0 ? "warn" : "pass",
+    severity: findings.length > 0 ? "warn" : "info",
+    findings,
+  };
+}
+
 /**
  * Format-safe LSO / brand text-compliance floor (Codex audit F4, 2026-07-07).
  *
@@ -2321,6 +2476,9 @@ export function runSharedTextComplianceFloor(
   if (config.formatting_rules.no_lsa_quality_claim ?? true) {
     results.push(validateNoLsaQualityClaim(text));
   }
+  if (config.formatting_rules.no_structural_monotony ?? true) {
+    results.push(validateStructuralMonotony(text));
+  }
 
   return results;
 }
@@ -2361,6 +2519,12 @@ export function runPtValidators(text: string, config: ValidatorConfig): Validato
   }
   if (config.formatting_rules.no_lsa_quality_claim ?? true) {
     results.push(validateNoLsaQualityClaim(text));
+  }
+  // Punctuation-based (sentence/paragraph length), not English-phrase-based,
+  // so it carries over to Portuguese prose without false-positiving on
+  // sentence shape the way the English-pattern checks would.
+  if (config.formatting_rules.no_structural_monotony ?? true) {
+    results.push(validateStructuralMonotony(text));
   }
   return results;
 }
@@ -2527,6 +2691,9 @@ export function runDeterministicValidators(
 
   if (config.entity_names?.length) {
     results.push(validateEntityPresent(text, config.entity_names));
+  }
+  if (config.formatting_rules.no_structural_monotony ?? true) {
+    results.push(validateStructuralMonotony(text));
   }
 
   return results;

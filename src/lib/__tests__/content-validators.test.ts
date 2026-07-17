@@ -54,6 +54,8 @@ import {
   validateReviewRequest,
   validateReviewRequestCasl,
   runSharedTextComplianceFloor,
+  validateStructuralMonotony,
+  extractProseUnits,
   type ValidatorConfig,
 } from "../content-validators";
 import { SERVICE_PAGE_SECTION_KEYS, type ServicePageBlock } from "../content-studio-structured";
@@ -618,6 +620,174 @@ describe("Markdown-format SEO/AEO validators (Step 5 retrofit)", () => {
       expect(keys).toContain("jurisdiction_service_area_early_text");
       expect(keys).not.toContain("primary_query_presence_text");
     });
+  });
+});
+
+describe("validateStructuralMonotony", () => {
+  // Real DRG Law human-edited prose (drg-law-website /about, 2026-07-10
+  // calibration corpus): sentence CV 0.358, longest similar run 3, paragraph
+  // CV 0.281. Sits comfortably above every warn floor.
+  const HUMAN_PROSE = `Damaris Regina Guimaraes helps business owners understand the legal risk, cost, timeline, and next step before they sign, close, transfer, or commit.
+
+Her work covers business, real estate, contracts, and the owner decisions that need clear written advice before the document moves. Every matter ends in one short written note the owner can read, share with the accountant, and act on.
+
+She runs DRG Law from Ontario by video, phone, or at the client's location.
+
+Live files carry a written status the owner can read at any time. For windows when Damaris is away, DRG Law arranges coverage with named co-counsel. The handoff is short, named, and time-limited.
+
+Before founding DRG Law in Ontario, Damaris trained and practised law in Brazil. That background supports her work with clients who need clear legal explanation in English or Portuguese, but the practice itself is focused on Ontario law.
+
+Damaris begins with what the owner needs to decide: buy, sell, lease, incorporate, transfer, finance, protect, or wait. The legal work follows the decision, not the other way around.
+
+She explains the risk, cost, timeline, and tradeoff early enough for the client to act before signing, closing, or restructuring. No surprises after the document moves.
+
+Every matter is written down in plain English or Portuguese so the client knows what happens next, who is doing what, and by when.`;
+
+  // Synthetic AI-flattened counterpart on the same topic: uniform 13-19 word
+  // sentences, uniform 2-sentence paragraphs. Calibration corpus: sentence CV
+  // 0.076, longest similar run 16, paragraph CV 0.023.
+  const FLATTENED_PROSE = `DRG Law helps business owners understand legal risk before they sign any major contract or agreement. The firm reviews leases, contracts, and transfers so owners know their exposure clearly.
+
+Every matter receives a written summary that owners can share with their accountant or financial advisor. The firm explains timelines and costs so owners can plan their next steps confidently.
+
+DRG Law operates from Ontario and serves clients through video calls, phone calls, and in-person meetings. The firm maintains clear communication throughout every matter from intake through resolution and closing.
+
+When the lawyer is away, coverage is arranged through named co-counsel who understand the file. Clients always have a clear point of contact and a written status update available.
+
+The firm trained across two legal systems, which supports bilingual client communication in two languages. This background helps clients who need explanations in English or Portuguese for their matters.
+
+Every engagement begins with a clear discussion of what decision the client actually needs to make. The legal work then follows that decision rather than following a generic legal process.
+
+The firm explains risk, cost, and timeline early so clients can act before committing to anything. This approach avoids surprises after documents are signed or transactions are finalized completely.
+
+Every matter concludes with a written note explaining next steps and responsibilities for all parties. Clients always know what happens next and who is responsible for each task.`;
+
+  it("passes clean on real human-edited prose (calibration floor)", () => {
+    const result = validateStructuralMonotony(HUMAN_PROSE);
+    expect(result.status).toBe("pass");
+    expect(result.findings).toHaveLength(0);
+  });
+
+  it("warns on all three metrics for synthetically flattened prose", () => {
+    const result = validateStructuralMonotony(FLATTENED_PROSE);
+    expect(result.status).toBe("warn");
+    expect(result.findings.length).toBeGreaterThanOrEqual(3);
+    const messages = result.findings.map((f) => f.message).join(" ");
+    expect(messages).toMatch(/rhythm is flat/);
+    expect(messages).toMatch(/consecutive sentences/);
+    expect(messages).toMatch(/[Pp]aragraph length is uniform/);
+  });
+
+  it("passes with an info finding when the sample is too small to measure", () => {
+    const result = validateStructuralMonotony(
+      "This is one short piece.\n\nIt only has two paragraphs and three sentences. That is not enough to measure rhythm reliably."
+    );
+    expect(result.status).toBe("pass");
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].message).toMatch(/[Ss]ample too small/);
+  });
+
+  it("does not flag a locally flat run when the global variance is healthy (run detection)", () => {
+    // Eight near-identical 16-word sentences (a locally flat run, above the
+    // 7-sentence run ceiling) followed by a handful of sharply varied
+    // sentences. Global CV alone could pass this by averaging the flat run
+    // against the varied tail; the run check must still catch it independently.
+    const flatRun = Array.from(
+      { length: 8 },
+      (_, i) => `This is sentence number ${i} and it runs to about fifteen words in total length here.`
+    ).join(" ");
+    const variedTail =
+      "Short one. " +
+      "This next sentence stretches out considerably longer to break the pattern the run established earlier on. " +
+      "Brief. " +
+      "One more mid-length sentence to round out the paragraph naturally.";
+    const text = `${flatRun}\n\n${variedTail}\n\nA third paragraph adds enough bulk to clear the paragraph-count floor for this test case here.\n\nA fourth paragraph, short.`;
+    const result = validateStructuralMonotony(text);
+    expect(result.status).toBe("warn");
+    expect(result.findings.some((f) => f.message.includes("consecutive sentences"))).toBe(true);
+  });
+});
+
+describe("extractProseUnits (segmentation guards)", () => {
+  it("does not split on a statute citation like 'Rule 4.2-1'", () => {
+    const { sentences } = extractProseUnits(
+      "The engine follows LSO Rule 4.2-1 in every generated piece. It never makes an outcome promise. This keeps the content compliant across every format the firm publishes today."
+    );
+    expect(sentences).toHaveLength(3);
+    expect(sentences[0]).toContain("Rule 4.2-1");
+  });
+
+  it("does not split on an abbreviated citation like 's. 7'", () => {
+    const { sentences } = extractProseUnits(
+      "The obligation is set out in s. 7 of the governing statute. A lawyer reviews the section before advising the client on next steps."
+    );
+    expect(sentences).toHaveLength(2);
+    expect(sentences[0]).toContain("s. 7");
+  });
+
+  it("does not split on a corporate abbreviation like 'Inc.'", () => {
+    const { sentences } = extractProseUnits(
+      "The lease was signed by Acme Holdings Inc. before the amendment took effect. The tenant later disputed the assignment clause in writing."
+    );
+    expect(sentences).toHaveLength(2);
+    expect(sentences[0]).toContain("Inc.");
+  });
+
+  it("excludes headings, numbered list items, and FAQ-shaped questions from measurement", () => {
+    const text =
+      "## Commercial Lease Review\n\n" +
+      "1. Submit the lease for review by counsel.\n" +
+      "2. Receive a written summary of the risk points identified.\n\n" +
+      "### Frequently asked questions\n\n" +
+      "**Do I need a lawyer to review my lease?**\n\n" +
+      "A review before signing identifies clauses that shift cost or liability onto the tenant while changes are still possible to negotiate.";
+    const { sentences, paragraphs } = extractProseUnits(text);
+    expect(paragraphs.some((p) => p.startsWith("##"))).toBe(false);
+    expect(paragraphs.some((p) => /^\d+[.)]\s/.test(p))).toBe(false);
+    expect(paragraphs.some((p) => /^\*\*[^*]+\*\*$/.test(p))).toBe(false);
+    expect(sentences.some((s) => s.includes("A review before signing"))).toBe(true);
+  });
+});
+
+describe("structural_monotony wiring across the three battery runners", () => {
+  function minimalConfig(overrides?: Partial<ValidatorConfig["formatting_rules"]>): ValidatorConfig {
+    return {
+      banned_vocabulary: [],
+      approved_vocabulary: [],
+      lso_constraints: [],
+      formatting_rules: {
+        no_em_dashes: false,
+        no_italics: false,
+        no_orphan_words: false,
+        no_rule_of_three: false,
+        ...overrides,
+      },
+      format_spec: {},
+      format: "counsel_note",
+    };
+  }
+
+  it("runs by default inside runDeterministicValidators (Markdown formats)", () => {
+    const results = runDeterministicValidators("Some draft body text with a few sentences in it.", minimalConfig());
+    expect(results.map((r) => r.key)).toContain("structural_monotony");
+  });
+
+  it("runs by default inside runSharedTextComplianceFloor (canonical_service_page)", () => {
+    const results = runSharedTextComplianceFloor("Some flattened structured-page text.", minimalConfig());
+    expect(results.map((r) => r.key)).toContain("structural_monotony");
+  });
+
+  it("runs by default inside runPtValidators (Portuguese, punctuation-based only)", () => {
+    const results = runPtValidators("Algum texto em português para o teste de validação.", minimalConfig());
+    expect(results.map((r) => r.key)).toContain("structural_monotony");
+  });
+
+  it("can be opted out per-piece via no_structural_monotony: false", () => {
+    const results = runDeterministicValidators(
+      "Some draft body text.",
+      minimalConfig({ no_structural_monotony: false })
+    );
+    expect(results.map((r) => r.key)).not.toContain("structural_monotony");
   });
 });
 
