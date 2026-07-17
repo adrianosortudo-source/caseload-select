@@ -1,5 +1,5 @@
 -- Runnable, single-session verification for
--- supabase/migrations/20260717010000_publication_placement_claim_idempotency_firm_scoping.sql
+-- supabase/migrations/20260717015014_publication_placement_claim_idempotency_firm_scoping.sql
 -- (Codex independent release review of PR #47, gap 1).
 --
 -- Wrapped in BEGIN/ROLLBACK end to end so it leaves no trace regardless of

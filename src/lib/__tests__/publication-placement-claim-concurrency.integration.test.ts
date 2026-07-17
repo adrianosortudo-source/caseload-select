@@ -269,7 +269,7 @@ describe.skipIf(!DB_URL)("claim_placement_for_publish concurrency (real Postgres
   }, 30000);
 
   // Codex independent release review of PR #47, gap 1
-  // (20260717010000_publication_placement_claim_idempotency_firm_scoping.sql):
+  // (20260717015014_publication_placement_claim_idempotency_firm_scoping.sql):
   // the finding-4 identity guard above compared deliverable_id,
   // approved_version_id, claimed_by_role, claimed_by_id, and
   // supersedes_claim_id, but never firm_id -- since the lookup itself is
