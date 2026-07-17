@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import {
   renderReviewPayload,
   renderSeoSummary,
+  renderDirectAnswerSummary,
   evaluateApprovalIdentity,
   type ReviewVersionInput,
 } from "../content-studio-review";
@@ -192,5 +193,105 @@ describe("evaluateApprovalIdentity", () => {
       pt: ptEdited,
     });
     expect(r.ok).toBe(false);
+  });
+});
+
+describe("renderDirectAnswerSummary (direct answer / quotable definition rule)", () => {
+  it("returns empty string when no decision is on file", () => {
+    expect(renderDirectAnswerSummary(null)).toBe("");
+    expect(renderDirectAnswerSummary({ generator: "x" })).toBe("");
+  });
+
+  it("renders a not_applicable decision with its rationale", () => {
+    const html = renderDirectAnswerSummary({
+      direct_answer: {
+        applicability: "not_applicable",
+        not_applicable_reason: "single-CTA ad landing page",
+      },
+    });
+    expect(html).toContain("Not applicable");
+    expect(html).toContain("single-CTA ad landing page");
+  });
+
+  it("renders text, classification, jurisdiction/scope, and source status for a required decision", () => {
+    const html = renderDirectAnswerSummary({
+      direct_answer: {
+        applicability: "required",
+        text: "A shareholder agreement is a contract among a corporation's shareholders.",
+        classification: "binding_rule",
+        jurisdiction_scope: "Ontario",
+        source_status: "mapped",
+        source_refs: ["OBCA s. 108"],
+      },
+    });
+    expect(html).toContain("A shareholder agreement is a contract");
+    expect(html).toContain("Binding legal rule");
+    expect(html).toContain("Ontario");
+    expect(html).toContain("OBCA s. 108");
+    expect(html).toContain("Confirm the scope and source before sign-off");
+  });
+
+  it("distinguishes firm judgment from a legal proposition in the rendered note", () => {
+    const html = renderDirectAnswerSummary({
+      direct_answer: {
+        applicability: "optional",
+        text: "Clients most often miss the relocation clause.",
+        classification: "firm_judgment",
+        source_status: "not_required",
+      },
+    });
+    expect(html).toContain("firm judgment");
+    expect(html).not.toContain("binding law");
+  });
+
+  it("escapes HTML in the definition text", () => {
+    const html = renderDirectAnswerSummary({
+      direct_answer: { applicability: "required", text: "<script>alert(1)</script>", classification: "explanatory" },
+    });
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).toContain("&lt;script&gt;");
+  });
+
+  it("is included in renderReviewPayload for the EN version", () => {
+    const payload = renderReviewPayload({
+      format: "counsel_note",
+      languageMode: "en",
+      en: mdVersion("# Title\n\nBody.", {
+        direct_answer: {
+          applicability: "required",
+          text: "A shareholder agreement is a contract.",
+          classification: "explanatory",
+        },
+      }),
+      pt: null,
+    });
+    expect(payload).toContain("Direct answer / quotable definition");
+    expect(payload).toContain("A shareholder agreement is a contract.");
+  });
+});
+
+describe("evaluateApprovalIdentity picks up direct-answer drift (no separate staleness mechanism)", () => {
+  it("BLOCKS when the direct-answer decision changes after approval with no new body edit", () => {
+    const seoV1 = {
+      direct_answer: { applicability: "required", text: "Definition A.", classification: "firm_judgment" },
+    };
+    const seoV2 = {
+      direct_answer: { applicability: "required", text: "Definition A.", classification: "binding_rule" },
+    };
+    const approvedBodyHtml = renderReviewPayload({
+      format: "counsel_note",
+      languageMode: "en",
+      en: mdVersion("# Title\n\nBody unchanged.", seoV1),
+      pt: null,
+    });
+    const r = evaluateApprovalIdentity({
+      format: "counsel_note",
+      languageMode: "en",
+      approvedBodyHtml,
+      en: mdVersion("# Title\n\nBody unchanged.", seoV2),
+      pt: null,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("approval_stale");
   });
 });

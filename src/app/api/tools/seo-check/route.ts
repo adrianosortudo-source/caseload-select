@@ -779,6 +779,16 @@ export function checkAiVisibility(html: string, parsedRobots: ParsedRobots | nul
     items.push({ label: "Question-format headings", status: "fail", detail: "No question-format headings. Question-shaped headings may support answer extraction. No citation outcome can be inferred from this check alone.", fix: "Add H2 or H3 headings phrased as questions that match queries people type into AI search." });
   }
 
+  // Boundary note: this is a coarse, general-purpose structural heuristic for
+  // ANY external site scanned by this public/operator tool, with no access to
+  // authored editorial metadata. It is a separate, disconnected system from
+  // Content Studio's own direct-answer / quotable-definition doctrine
+  // (docs/CONTENT_STUDIO_SEO_AEO_SPEC.md Section 4A, enforced by
+  // validateDirectAnswerDefinition in src/lib/content-validators.ts), which
+  // is the authoritative check for CaseLoad-authored long-form content: it
+  // reads the operator's actual applicability/classification/source decision
+  // rather than guessing from sentence shape. Do not treat this check's
+  // pass/fail as a proxy for that doctrine's compliance.
   const sentences = bodyText.split(/[.!?]+/).filter((s) => s.trim().length > 20);
   const directAnswers = sentences.filter((s) => /\b(is|are|means|refers to|defined as|consists of|requires|involves)\b/i.test(s));
   if (directAnswers.length >= 5) {

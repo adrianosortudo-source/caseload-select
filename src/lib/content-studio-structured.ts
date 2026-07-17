@@ -760,6 +760,10 @@ export function buildSeoMetadata(
     answer_summary: sourceBrief.answer_summary ?? null,
     jurisdiction: sourceBrief.jurisdiction ?? null,
     service_area: sourceBrief.service_area ?? null,
+    // Direct answer / quotable definition rule: snapshot the brief's
+    // decision onto this version, the same no-new-column pattern as every
+    // other field above. Null when the brief has not made a decision.
+    direct_answer: (sourceBriefRaw as Record<string, unknown>).direct_answer ?? null,
     title: output.seo.title,
     meta_description: output.seo.meta_description,
     internal_links_used: output.seo.internal_links_used ?? [],

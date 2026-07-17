@@ -851,10 +851,11 @@ export default async function ContentPieceDetailPage({
           <div className="lg:col-span-2 space-y-6">
             <SourceBriefForm
               pieceId={piece.id}
+              format={piece.format}
               initial={
                 piece.source_brief &&
                 typeof piece.source_brief === "object"
-                  ? (piece.source_brief as Record<string, string>)
+                  ? (piece.source_brief as Record<string, unknown>)
                   : null
               }
             />
