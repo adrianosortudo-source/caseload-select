@@ -607,3 +607,74 @@ export interface PublicationReceipt {
   reconciles_receipt_id: string | null;
   created_at: string;
 }
+
+// ─── Content Performance / Content-to-Matter Attribution ───────────────────
+// See supabase/migrations/20260717030000_content_attribution_evidence.sql.
+// content_attribution_evidence is an append-only evidence ledger: every
+// fact is a distinct observation, never a mutated "current attribution"
+// field. content_attribution_current is a derived, read-only view (no
+// stored state) picking the best evidence per lead by state priority.
+
+export type AttributionState =
+  | "known_first_touch"
+  | "known_assisted"
+  | "self_reported"
+  | "offline_referral"
+  | "unknown";
+
+export type AttributionEvidenceMethod =
+  | "verified_utm"
+  | "observed_referrer"
+  | "verified_landing_path"
+  | "self_report"
+  | "operator_offline_referral"
+  | "imported_crm_outcome"
+  | "insufficient_evidence";
+
+export type AttributionSelfReportCategory =
+  | "referral"
+  | "search"
+  | "social"
+  | "ai_tool"
+  | "event"
+  | "existing_client"
+  | "other";
+
+export interface ContentAttributionEvidence {
+  id: string;
+  firm_id: string;
+  screened_lead_id: string;
+  deliverable_id: string | null;
+  deliverable_version_id: string | null;
+  placement_id: string | null;
+  receipt_id: string | null;
+  attribution_state: AttributionState;
+  evidence_method: AttributionEvidenceMethod;
+  self_report_category: AttributionSelfReportCategory | null;
+  evidence_payload: Record<string, unknown> | null;
+  evidence_note: string | null;
+  observed_at: string;
+  recorded_by_role: "system" | "operator" | "lawyer";
+  recorded_by_id: string | null;
+  recorded_by_name: string | null;
+  supersedes_evidence_id: string | null;
+  created_at: string;
+}
+
+export interface ContentAttributionCurrent {
+  firm_id: string;
+  screened_lead_id: string;
+  evidence_id: string;
+  deliverable_id: string | null;
+  deliverable_version_id: string | null;
+  placement_id: string | null;
+  receipt_id: string | null;
+  attribution_state: AttributionState;
+  evidence_method: AttributionEvidenceMethod;
+  self_report_category: AttributionSelfReportCategory | null;
+  evidence_note: string | null;
+  observed_at: string;
+  created_at: string;
+  matter_id: string | null;
+  matter_stage: string | null;
+}
