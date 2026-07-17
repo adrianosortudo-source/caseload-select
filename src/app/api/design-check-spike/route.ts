@@ -6,6 +6,7 @@ import { scoreColorContrast } from "@/lib/design-check/dimensions/color-contrast
 import { scoreForms } from "@/lib/design-check/dimensions/forms";
 import { scoreMobile } from "@/lib/design-check/dimensions/mobile";
 import { scorePerformance } from "@/lib/design-check/dimensions/performance";
+import { scoreSpacing } from "@/lib/design-check/dimensions/spacing";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -69,6 +70,7 @@ export async function GET(request: NextRequest) {
         forms: scoreForms(c.domSnapshot),
         ...(c.viewport === "mobile" ? { mobile: scoreMobile(c.domSnapshot) } : {}),
         performance: scorePerformance(c.domSnapshot, c.webVitals),
+        spacing: scoreSpacing(c.domSnapshot),
       },
       };
     });

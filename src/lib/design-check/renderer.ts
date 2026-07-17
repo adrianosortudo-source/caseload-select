@@ -71,6 +71,9 @@ export interface ImageSample {
 }
 
 export interface DomSnapshot {
+  /** Non-zero margin/padding values (px, one entry per side per element)
+   * sampled from layout containers, for the spacing-scale-adherence check. */
+  spacingValuesPx: number[];
   h1Count: number;
   h1Text: string | null;
   headingOrder: string[]; // e.g. ["h1","h2","h2","h3"] in DOM order
@@ -321,6 +324,19 @@ const DOM_SNAPSHOT_SCRIPT = /* js */ `
     hamburgerMenu.hasAccessibleLabel = hasAria || hasLabelledby || hasVisibleText;
   }
 
+  // Spacing: non-zero margin/padding values from layout containers, for
+  // the scale-adherence histogram check. Capped sample; zero values are
+  // excluded since they carry no scale-decision information.
+  var spacingValuesPx = [];
+  var layoutEls = Array.from(document.querySelectorAll('section,header,footer,nav,article,main,div')).slice(0, 150);
+  layoutEls.forEach(function (el) {
+    var cs = getComputedStyle(el);
+    ['marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'].forEach(function (prop) {
+      var v = parseFloat(cs[prop]);
+      if (v && v > 0) spacingValuesPx.push(Math.round(v));
+    });
+  });
+
   // Images: format inventory. Logos guessed by alt/src/class containing
   // "logo" or sitting inside <header>.
   var images = Array.from(document.querySelectorAll('img')).slice(0, 60).map(function (img) {
@@ -345,6 +361,7 @@ const DOM_SNAPSHOT_SCRIPT = /* js */ `
     tapTargets: tapTargets,
     hamburgerMenu: hamburgerMenu,
     images: images,
+    spacingValuesPx: spacingValuesPx,
   };
 })();
 `;
