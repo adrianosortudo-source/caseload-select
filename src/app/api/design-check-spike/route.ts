@@ -3,6 +3,9 @@ import { renderUrl } from "@/lib/design-check/renderer";
 import { checkOutboundRequest } from "@/lib/design-check/ssrf-guard";
 import { scoreTypography } from "@/lib/design-check/dimensions/typography";
 import { scoreColorContrast } from "@/lib/design-check/dimensions/color-contrast";
+import { scoreForms } from "@/lib/design-check/dimensions/forms";
+import { scoreMobile } from "@/lib/design-check/dimensions/mobile";
+import { scorePerformance } from "@/lib/design-check/dimensions/performance";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -63,6 +66,9 @@ export async function GET(request: NextRequest) {
       dimensions: {
         typography: scoreTypography(c.domSnapshot),
         colorContrast: scoreColorContrast(c.domSnapshot),
+        forms: scoreForms(c.domSnapshot),
+        ...(c.viewport === "mobile" ? { mobile: scoreMobile(c.domSnapshot) } : {}),
+        performance: scorePerformance(c.domSnapshot, c.webVitals),
       },
       };
     });

@@ -38,6 +38,38 @@ export interface RenderCapture {
   renderMs: number;
 }
 
+export interface FormFieldSample {
+  tag: string;
+  type: string | null;
+  hasLabel: boolean;
+  isPlaceholderOnly: boolean;
+  isRequired: boolean;
+}
+
+export interface FormSample {
+  fieldCount: number;
+  fields: FormFieldSample[];
+  formTextMentionsRequired: boolean;
+}
+
+export interface TapTargetSample {
+  tag: string;
+  text: string;
+  widthPx: number;
+  heightPx: number;
+}
+
+export interface HamburgerMenuInfo {
+  found: boolean;
+  hasAccessibleLabel: boolean;
+}
+
+export interface ImageSample {
+  src: string;
+  format: string;
+  isLikelyLogo: boolean;
+}
+
 export interface DomSnapshot {
   h1Count: number;
   h1Text: string | null;
@@ -46,6 +78,10 @@ export interface DomSnapshot {
   bodyTextSample: TextBlockSample[];
   hasHorizontalOverflow: boolean;
   viewportMetaContent: string | null;
+  forms: FormSample[];
+  tapTargets: TapTargetSample[];
+  hamburgerMenu: HamburgerMenuInfo;
+  images: ImageSample[];
 }
 
 export interface TextBlockSample {
@@ -228,6 +264,75 @@ const DOM_SNAPSHOT_SCRIPT = /* js */ `
     if (el && (el.innerText || '').trim().length > 0) headingSamples.push(sampleText(el));
   });
 
+  // Forms: real <label> vs placeholder-only, required markers, field count.
+  var forms = Array.from(document.querySelectorAll('form')).map(function (form) {
+    var fields = Array.from(form.querySelectorAll('input,textarea,select')).filter(function (el) {
+      var t = (el.getAttribute('type') || '').toLowerCase();
+      return t !== 'hidden' && t !== 'submit' && t !== 'button' && t !== 'image';
+    });
+    var fieldSamples = fields.map(function (el) {
+      var id = el.getAttribute('id');
+      var hasLabel = !!(id && document.querySelector('label[for="' + id + '"]')) || !!el.closest('label');
+      var hasPlaceholder = !!el.getAttribute('placeholder');
+      return {
+        tag: el.tagName.toLowerCase(),
+        type: el.getAttribute('type'),
+        hasLabel: hasLabel,
+        isPlaceholderOnly: hasPlaceholder && !hasLabel,
+        isRequired: el.hasAttribute('required') || el.getAttribute('aria-required') === 'true',
+      };
+    });
+    return {
+      fieldCount: fieldSamples.length,
+      fields: fieldSamples,
+      formTextMentionsRequired: /required/i.test(form.innerText || ''),
+    };
+  });
+
+  // Tap targets: CTA-like anchors/buttons, for mobile tap-size checks.
+  var tapTargets = Array.from(document.querySelectorAll('a,button')).slice(0, 40)
+    .filter(function (el) { return (el.innerText || '').trim().length > 0; })
+    .map(function (el) {
+      var rect = el.getBoundingClientRect();
+      return {
+        tag: el.tagName.toLowerCase(),
+        text: (el.innerText || '').trim().slice(0, 60),
+        widthPx: rect.width,
+        heightPx: rect.height,
+      };
+    });
+
+  // Hamburger menu: a small icon-only control commonly used to reveal
+  // mobile navigation. Heuristic match on common naming, then check for
+  // an accessible name (visible text, aria-label, or aria-labelledby).
+  var hamburgerCandidates = Array.from(document.querySelectorAll('button,[role="button"],a')).filter(function (el) {
+    var cls = (el.className && el.className.toString) ? el.className.toString().toLowerCase() : '';
+    var aria = (el.getAttribute('aria-label') || '').toLowerCase();
+    var text = (el.innerText || '').trim();
+    var looksLikeIconOnly = text.length === 0 && el.querySelector('svg,img');
+    return (looksLikeIconOnly) && (/menu|hamburger|nav-?toggle|burger/.test(cls) || /menu/.test(aria));
+  });
+  var hamburgerMenu = { found: hamburgerCandidates.length > 0, hasAccessibleLabel: false };
+  if (hamburgerCandidates[0]) {
+    var hEl = hamburgerCandidates[0];
+    var hasAria = !!(hEl.getAttribute('aria-label') && /menu/i.test(hEl.getAttribute('aria-label')));
+    var hasLabelledby = !!(hEl.getAttribute('aria-labelledby'));
+    var hasVisibleText = /menu/i.test((hEl.innerText || '').trim());
+    hamburgerMenu.hasAccessibleLabel = hasAria || hasLabelledby || hasVisibleText;
+  }
+
+  // Images: format inventory. Logos guessed by alt/src/class containing
+  // "logo" or sitting inside <header>.
+  var images = Array.from(document.querySelectorAll('img')).slice(0, 60).map(function (img) {
+    var src = img.currentSrc || img.src || '';
+    var extMatch = src.match(/\\.([a-z0-9]+)(?:\\?|#|$)/i);
+    var format = extMatch ? extMatch[1].toLowerCase() : 'unknown';
+    var alt = (img.getAttribute('alt') || '').toLowerCase();
+    var cls = (img.className && img.className.toString) ? img.className.toString().toLowerCase() : '';
+    var isLikelyLogo = /logo/.test(alt) || /logo/.test(cls) || !!img.closest('header');
+    return { src: src, format: format, isLikelyLogo: isLikelyLogo };
+  });
+
   return {
     h1Count: h1s.length,
     h1Text: h1s[0] ? (h1s[0].innerText || '').trim().slice(0, 200) : null,
@@ -236,6 +341,10 @@ const DOM_SNAPSHOT_SCRIPT = /* js */ `
     bodyTextSample: samples,
     hasHorizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
     viewportMetaContent: viewportMeta ? viewportMeta.getAttribute('content') : null,
+    forms: forms,
+    tapTargets: tapTargets,
+    hamburgerMenu: hamburgerMenu,
+    images: images,
   };
 })();
 `;
