@@ -212,12 +212,32 @@ lawyer (`approved_version_id !== current_version_id`, or `status =
 lifecycle, regardless of how much other evidence exists, and no
 reconciliation action in this system can change that. The operator
 cannot approve on the licensee's behalf; the only way a deliverable
-clears that check is the firm's lawyer signing off through the existing
-approval workflow (`docs/CONTENT_STUDIO_APPROVAL_PLAYBOOK.md`). The
-relocation-clause period's own "Clause in the Margin" PT article
-(`b767ef14-dd4e-405e-9c54-1f7f9364f13c`) is `in_review` today and stays
-that way through every migration in this feature; nothing here touches
-its `status` or `approved_version_id`.
+clears that check through `evaluateDeliverableReadiness` (this document's
+`ready`/manifest surface) is the firm's lawyer signing off through the
+existing approval workflow. The relocation-clause period's own "Clause in
+the Margin" PT article (`b767ef14-dd4e-405e-9c54-1f7f9364f13c`) is
+`in_review` today and stays that way through every migration in this
+feature; nothing here touches its `status` or `approved_version_id`.
+
+**Standing Publishing Authorization (2026-07-17) is a narrower, separate
+exception at the claim layer, not a change to this document's readiness
+evaluator.** `evaluateDeliverableReadiness`'s `current_version_approved`
+check above is unchanged and still passes only via individual lawyer
+sign-off -- a firm's standing authorization does not flip it, and a
+deliverable relying on standing authorization still shows
+`current_version_approved: fail` in this manifest/readiness surface. The
+actual second path lives one layer down, in
+`claim_placement_for_publish()` (see `lib/publication-placement-claims.ts`
+and `supabase/migrations/20260717230956_standing_publishing_authorization.sql`):
+a claim may proceed either because the version was individually approved
+(this document's existing path, unchanged) or because the firm's latest
+`standing_publishing_authorizations` event is `'enabled'` and the version
+is not flagged `requires_individual_review`. Every other requirement this
+document describes -- role/locale metadata, artifact binding, placement
+readiness, journey validation -- applies identically on both paths; only
+the single "has a lawyer individually signed this exact version"
+condition gets a second way to be satisfied. See the CLAUDE.md "Standing
+Publishing Authorization (DR-104)" section for the full model.
 
 **Rollback and recovery.** The lifecycle columns and their two triggers
 are purely additive (new columns, new constraints, new triggers on

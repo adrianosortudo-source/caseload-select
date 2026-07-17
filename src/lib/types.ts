@@ -396,6 +396,19 @@ export interface DeliverableVersion {
   created_by_role: DeliverableActorRole;
   created_by_id: string | null;
   created_at: string;
+  // Standing Publishing Authorization: operator-only per-version exception.
+  // See migration 20260717230956_standing_publishing_authorization.sql and
+  // set_deliverable_version_individual_review_requirement. When true, this
+  // exact version can never be released via standing authorization
+  // (claim_placement_for_publish falls back to requiring an individual
+  // lawyer approval), regardless of whether the firm currently holds an
+  // enabled authorization.
+  requires_individual_review: boolean;
+  requires_individual_review_reason: string | null;
+  requires_individual_review_set_by_role: "operator" | null;
+  requires_individual_review_set_by_id: string | null;
+  requires_individual_review_set_by_name: string | null;
+  requires_individual_review_set_at: string | null;
 }
 
 // ─── Publication Readiness (Workstreams 1-8) ────────────────────────────────
@@ -606,4 +619,12 @@ export interface PublicationReceipt {
   failure_reason: string | null;
   reconciles_receipt_id: string | null;
   created_at: string;
+  // Standing Publishing Authorization (migration
+  // 20260717230956_standing_publishing_authorization.sql): which of the two
+  // release paths authorized this publication. Derived from the matching
+  // publication_placement_claims row when the receipt doesn't set it
+  // explicitly (see derive_publication_receipt_release_path); null only for
+  // receipts written before this feature existed.
+  release_path: "individual_approval" | "standing_authorization" | null;
+  standing_authorization_event_id: string | null;
 }

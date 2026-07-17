@@ -272,6 +272,8 @@ describe("buildPreflightReport: archived exclusion and receipt passthrough", () 
       failure_reason: null,
       reconciles_receipt_id: null,
       created_at: new Date().toISOString(),
+      release_path: null,
+      standing_authorization_event_id: null,
     };
     const report = buildPreflightReport(
       baseInput({ deliverable, placements: [placement], receipts: { [placement.id]: receipt } }),
@@ -316,6 +318,8 @@ describe("buildPreflightReport: Workstream 4 idempotency (placement.state + exis
       failure_reason: verification_state === "failed" ? "HTTP 404" : null,
       reconciles_receipt_id: null,
       created_at: new Date().toISOString(),
+      release_path: null,
+      standing_authorization_event_id: null,
     };
   }
 
