@@ -7,6 +7,7 @@ import { scoreForms } from "@/lib/design-check/dimensions/forms";
 import { scoreMobile } from "@/lib/design-check/dimensions/mobile";
 import { scorePerformance } from "@/lib/design-check/dimensions/performance";
 import { scoreSpacing } from "@/lib/design-check/dimensions/spacing";
+import { judgeScreenshot } from "@/lib/design-check/vision-judgment";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -38,42 +39,60 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, stage: "ssrf_guard_smoke_test", ssrfChecks }, { status: 500 });
   }
 
+  // Vision judgment costs real tokens; only run it when explicitly asked,
+  // never on every spike request by default.
+  const runVision = request.nextUrl.searchParams.get("vision") === "1";
+
   try {
     const start = Date.now();
     const result = await renderUrl(url);
     const elapsedMs = Date.now() - start;
 
     const outDir = "C:\\Users\\adria\\AppData\\Local\\Temp\\claude\\D--\\dae522db-78ad-496b-9275-71ba5ba48553\\scratchpad";
-    const summary = result.captures.map((c) => {
-      const outPath = path.join(outDir, `design-check-spike-${domain}-${c.viewport}.png`);
-      writeFileSync(outPath, c.screenshotPng);
-      return {
-      viewport: c.viewport,
-      finalUrl: c.finalUrl,
-      renderMs: c.renderMs,
-      screenshotBytes: c.screenshotPng.length,
-      screenshotWrittenTo: outPath,
-      domSnapshot: {
-        h1Count: c.domSnapshot.h1Count,
-        h1Text: c.domSnapshot.h1Text,
-        headingOrder: c.domSnapshot.headingOrder,
-        hasHorizontalOverflow: c.domSnapshot.hasHorizontalOverflow,
-        viewportMetaContent: c.domSnapshot.viewportMetaContent,
-        bodyTextSampleCount: c.domSnapshot.bodyTextSample.length,
-        bodyTextSample: c.domSnapshot.bodyTextSample,
-      },
-      webVitals: c.webVitals,
-      blockedRequests: c.blockedRequests,
-      dimensions: {
-        typography: scoreTypography(c.domSnapshot),
-        colorContrast: scoreColorContrast(c.domSnapshot),
-        forms: scoreForms(c.domSnapshot),
-        ...(c.viewport === "mobile" ? { mobile: scoreMobile(c.domSnapshot) } : {}),
-        performance: scorePerformance(c.domSnapshot, c.webVitals),
-        spacing: scoreSpacing(c.domSnapshot),
-      },
-      };
-    });
+    const summary = await Promise.all(
+      result.captures.map(async (c) => {
+        const outPath = path.join(outDir, `design-check-spike-${domain}-${c.viewport}.png`);
+        writeFileSync(outPath, c.screenshotPng);
+        const dimensions = {
+          typography: scoreTypography(c.domSnapshot),
+          colorContrast: scoreColorContrast(c.domSnapshot),
+          forms: scoreForms(c.domSnapshot),
+          ...(c.viewport === "mobile" ? { mobile: scoreMobile(c.domSnapshot) } : {}),
+          performance: scorePerformance(c.domSnapshot, c.webVitals),
+          spacing: scoreSpacing(c.domSnapshot),
+        };
+
+        let vision: Awaited<ReturnType<typeof judgeScreenshot>> | { error: string } | null = null;
+        if (runVision && c.viewport === "desktop") {
+          try {
+            vision = await judgeScreenshot(c.screenshotPng, Object.values(dimensions));
+          } catch (visionErr) {
+            vision = { error: visionErr instanceof Error ? visionErr.message : String(visionErr) };
+          }
+        }
+
+        return {
+          viewport: c.viewport,
+          finalUrl: c.finalUrl,
+          renderMs: c.renderMs,
+          screenshotBytes: c.screenshotPng.length,
+          screenshotWrittenTo: outPath,
+          domSnapshot: {
+            h1Count: c.domSnapshot.h1Count,
+            h1Text: c.domSnapshot.h1Text,
+            headingOrder: c.domSnapshot.headingOrder,
+            hasHorizontalOverflow: c.domSnapshot.hasHorizontalOverflow,
+            viewportMetaContent: c.domSnapshot.viewportMetaContent,
+            bodyTextSampleCount: c.domSnapshot.bodyTextSample.length,
+            bodyTextSample: c.domSnapshot.bodyTextSample,
+          },
+          webVitals: c.webVitals,
+          blockedRequests: c.blockedRequests,
+          dimensions,
+          vision,
+        };
+      })
+    );
 
     return NextResponse.json({
       ok: true,
