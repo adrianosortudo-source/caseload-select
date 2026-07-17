@@ -12,7 +12,7 @@
  * that Postgres actually serializes the two transactions.
  *
  * Also covers the claim_id binding rules added by
- * supabase/migrations/20260716200000_publication_receipt_claim_binding.sql:
+ * supabase/migrations/20260716205822_publication_receipt_claim_binding.sql:
  * a root receipt (reconciles_receipt_id null) must name a real, active,
  * scope-matching claim; two receipt-insert attempts racing to consume the
  * SAME claim_id must yield exactly one winner; a NULL claim_id on a root
@@ -38,7 +38,7 @@
  * content_placements: all three reject DELETE unconditionally (append-only
  * / identity-locked evidence tables -- see
  * supabase/migrations/20260715191218_20260715130100_content_placements.sql
- * and 20260716210000_publication_placement_claim_mutation_lockdown.sql),
+ * and 20260716205829_publication_placement_claim_mutation_lockdown.sql),
  * and once a test has actually inserted a real receipt or claim, the
  * remaining fixture rows (content_deliverables, deliverable_versions,
  * intake_firms) become undeletable too via ON DELETE RESTRICT foreign keys
@@ -380,5 +380,94 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
 
     const { rows } = await connA.query(`select count(*)::int as n from publication_receipts where claim_id = $1`, [claimId]);
     expect(rows[0].n).toBe(1);
+  }, 30000);
+
+  // --- Adversarial-review follow-up: findings 1 + 2
+  // (20260716220000_publication_receipt_actor_binding_and_hash_trust_fix.sql).
+  // Each test below is fully self-contained (creates its own firm /
+  // deliverable / placement / version fixtures inline) rather than reusing
+  // the beforeAll fixtures above, to avoid coupling to the existing races'
+  // claim/version state.
+
+  it("finding 1: rejects a root receipt with actor_id NULL against an actor-owned claim, leaving the claim active", async () => {
+    const firm = randomUUID();
+    const deliverable = randomUUID();
+    const placement = randomUUID();
+    const version = randomUUID();
+    const ownerActorId = randomUUID();
+
+    await connA.query(`insert into intake_firms (id, name, custom_domain, subdomain) values ($1, 'Actor Binding Fixture', null, $2)`, [firm, `actor-binding-fixture-${firm}`]);
+    await connA.query(
+      `insert into content_deliverables (id, firm_id, title, content_kind, status, created_by_role) values ($1, $2, 'actor binding fixture', 'text', 'draft', 'operator')`,
+      [deliverable, firm],
+    );
+    await connA.query(
+      `insert into deliverable_versions (id, deliverable_id, firm_id, version_number, body_html, created_by_role) values ($1, $2, $3, 1, '<p>v1</p>', 'operator')`,
+      [version, deliverable, firm],
+    );
+    await connA.query(`update content_deliverables set status = 'approved', approved_version_id = $1, current_version_id = $1 where id = $2`, [version, deliverable]);
+    await connA.query(
+      `insert into content_placements (id, firm_id, deliverable_id, destination, created_by_role) values ($1, $2, $3, 'linkedin_post', 'operator')`,
+      [placement, firm, deliverable],
+    );
+
+    const claimResult = await connA.query(
+      `select claim_placement_for_publish($1, $2, $3, $4, $5, 'operator', $6, 'Owner Operator') as result`,
+      [firm, deliverable, placement, version, "actor-binding-key", ownerActorId],
+    );
+    const claimId: string = claimResult.rows[0].result.claim_id;
+
+    // The vulnerability finding 1 fixes: actor_id NULL against a claim
+    // that IS actor-owned must be rejected, not silently accepted.
+    await expect(
+      connA.query(
+        `insert into publication_receipts
+           (firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, public_url, actor_role, actor_id, actor_name, claim_id)
+         values ($1, $2, $3, 'linkedin_post', $4, now(), 'https://example.test/null-actor', 'operator', null, 'Anonymous', $5)`,
+        [firm, deliverable, placement, version, claimId],
+      ),
+    ).rejects.toThrow(/authenticated operator identity/i);
+
+    const { rows } = await connA.query(`select status from publication_placement_claims where id = $1`, [claimId]);
+    expect(rows[0].status).toBe("active");
+  }, 30000);
+
+  it("finding 2: clears a caller-supplied artifact_sha256 when artifact_id is NULL, on every receipt path", async () => {
+    const firm = randomUUID();
+    const deliverable = randomUUID();
+    const placement = randomUUID();
+    const version = randomUUID();
+
+    await connA.query(`insert into intake_firms (id, name, custom_domain, subdomain) values ($1, 'Hash Clear Fixture', null, $2)`, [firm, `hash-clear-fixture-${firm}`]);
+    await connA.query(
+      `insert into content_deliverables (id, firm_id, title, content_kind, status, created_by_role) values ($1, $2, 'hash clear fixture', 'text', 'draft', 'operator')`,
+      [deliverable, firm],
+    );
+    await connA.query(
+      `insert into deliverable_versions (id, deliverable_id, firm_id, version_number, body_html, created_by_role) values ($1, $2, $3, 1, '<p>v1</p>', 'operator')`,
+      [version, deliverable, firm],
+    );
+    await connA.query(`update content_deliverables set status = 'approved', approved_version_id = $1, current_version_id = $1 where id = $2`, [version, deliverable]);
+    await connA.query(
+      `insert into content_placements (id, firm_id, deliverable_id, destination, created_by_role) values ($1, $2, $3, 'linkedin_post', 'operator')`,
+      [placement, firm, deliverable],
+    );
+
+    const claimResult = await connA.query(
+      `select claim_placement_for_publish($1, $2, $3, $4, $5, 'operator', null, 'Test Operator') as result`,
+      [firm, deliverable, placement, version, "hash-clear-key"],
+    );
+    const claimId: string = claimResult.rows[0].result.claim_id;
+
+    // The vulnerability finding 2 fixes: artifact_id NULL, but an arbitrary
+    // sha256 supplied directly on the insert. Must be stored as NULL.
+    const { rows } = await connA.query(
+      `insert into publication_receipts
+         (firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, public_url, actor_role, actor_name, claim_id, artifact_id, artifact_sha256)
+       values ($1, $2, $3, 'linkedin_post', $4, now(), 'https://example.test/no-artifact-fake-hash', 'operator', 'Test Operator', $5, null, $6)
+       returning artifact_sha256`,
+      [firm, deliverable, placement, version, claimId, "deadbeef".repeat(8)],
+    );
+    expect(rows[0].artifact_sha256).toBeNull();
   }, 30000);
 });

@@ -157,6 +157,20 @@ describe("POST claim: idempotency and competing claims", () => {
     expect(res.status).toBe(422);
   });
 
+  it("returns 409 when the RPC reports the idempotency_key was reused for a different request (finding 4)", async () => {
+    state.claimResult = {
+      ok: false,
+      error: "idempotency_key was already used for a different request",
+      existingClaimId: "claim-other",
+      nextAction: "use_new_idempotency_key",
+    };
+    const res = await POST(makeReq({ approved_version_id: VERSION, idempotency_key: "k4b" }), params());
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.nextAction).toBe("use_new_idempotency_key");
+    expect(body.existingClaimId).toBe("claim-other");
+  });
+
   it("passes supersedes_claim_id through to the RPC wrapper when supplied", async () => {
     await POST(
       makeReq({ approved_version_id: VERSION, idempotency_key: "k5", supersedes_claim_id: "claim-old" }),

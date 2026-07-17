@@ -1,7 +1,10 @@
 -- Runnable, single-session verification for
--- supabase/migrations/20260716200000_publication_receipt_claim_binding.sql
+-- supabase/migrations/20260716205822_publication_receipt_claim_binding.sql
 -- and
--- supabase/migrations/20260716210000_publication_placement_claim_mutation_lockdown.sql.
+-- supabase/migrations/20260716205829_publication_placement_claim_mutation_lockdown.sql
+-- (filenames corrected 2026-07-16 -- these migrations were renamed on
+-- apply, see 20260716205822's own commit message; this script's comment
+-- had drifted to the pre-rename local filenames).
 --
 -- Wrapped in BEGIN/ROLLBACK end to end so it leaves no trace regardless of
 -- outcome. Fixture ids use the 77777777-... prefix to stay out of the way of

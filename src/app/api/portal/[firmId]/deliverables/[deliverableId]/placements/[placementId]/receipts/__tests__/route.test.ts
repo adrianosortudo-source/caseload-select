@@ -90,10 +90,19 @@ vi.mock("@/lib/content-placements", () => ({
   listPlacementsForDeliverable: () => Promise.resolve(state.placements),
 }));
 
+const createReceiptResult = {
+  value: { ok: true, receipt: { id: "receipt-1" } } as
+    | { ok: true; receipt: unknown }
+    | { ok: false; error: string; code?: string },
+};
+
 vi.mock("@/lib/publication-receipts", () => ({
   createReceipt: (args: unknown) => {
     state.createReceiptArgs = args;
-    return Promise.resolve({ ok: true, receipt: { id: "receipt-1", ...(args as object) } });
+    if (createReceiptResult.value.ok) {
+      return Promise.resolve({ ok: true, receipt: { id: "receipt-1", ...(args as object) } });
+    }
+    return Promise.resolve(createReceiptResult.value);
   },
   listReceiptsForPlacement: () => Promise.resolve(state.receipts),
 }));
@@ -141,6 +150,7 @@ beforeEach(() => {
   state.createReceiptArgs = null;
   state.receipts = [];
   state.claimsById = { [CLAIM_ID]: defaultClaim() };
+  createReceiptResult.value = { ok: true, receipt: { id: "receipt-1" } };
 });
 
 describe("GET receipts: auth gate (unchanged)", () => {
@@ -312,5 +322,54 @@ describe("POST receipts: claim_id contract (corrective release, workstream 1)", 
     );
     const args = state.createReceiptArgs as Record<string, unknown>;
     expect(args.artifactSha256).toBeUndefined();
+  });
+});
+
+describe("POST receipts: insert-time claim rejection classified by stable error code (finding 5)", () => {
+  it("409s with next_action reclaim_placement when the DB insert fails with the CLM01 errcode (a genuine race after the route's own pre-check passed)", async () => {
+    createReceiptResult.value = {
+      ok: false,
+      error: "publication receipt actor does not match the claim's authenticated operator identity",
+      code: "CLM01",
+    };
+    const res = await POST(makePostReq({ approved_version_id: VERSION, claim_id: CLAIM_ID, public_url: "https://example.test" }), params());
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.nextAction).toBe("reclaim_placement");
+  });
+
+  it("400s without a claim next_action when the DB insert fails for an unrelated reason (no CLM01 code)", async () => {
+    createReceiptResult.value = {
+      ok: false,
+      error: "duplicate key value violates unique constraint",
+      code: "23505",
+    };
+    const res = await POST(makePostReq({ approved_version_id: VERSION, claim_id: CLAIM_ID, public_url: "https://example.test" }), params());
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.nextAction).toBeUndefined();
+  });
+
+  it("400s without a claim next_action when the DB insert fails with no error code at all", async () => {
+    createReceiptResult.value = {
+      ok: false,
+      error: "some other rejection",
+    };
+    const res = await POST(makePostReq({ approved_version_id: VERSION, claim_id: CLAIM_ID, public_url: "https://example.test" }), params());
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.nextAction).toBeUndefined();
+  });
+
+  it("classifies a claim-related rejection whose message does not literally contain the substring claim_id (regression: the prior /claim_id/i regex missed this)", async () => {
+    createReceiptResult.value = {
+      ok: false,
+      error: "publication receipt actor_role (lawyer) does not match the claim's claimed_by_role (operator)",
+      code: "CLM01",
+    };
+    const res = await POST(makePostReq({ approved_version_id: VERSION, claim_id: CLAIM_ID, public_url: "https://example.test" }), params());
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.nextAction).toBe("reclaim_placement");
   });
 });

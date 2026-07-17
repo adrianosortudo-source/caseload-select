@@ -35,7 +35,8 @@ export type ClaimNextAction =
   | "approve_deliverable"
   | "resolve_version_drift"
   | "already_published"
-  | "needs_reverification";
+  | "needs_reverification"
+  | "use_new_idempotency_key";
 
 export interface ClaimPlacementResult {
   ok: boolean;
@@ -58,7 +59,12 @@ const KNOWN_NEXT_ACTIONS: ReadonlySet<string> = new Set([
   "resolve_version_drift",
   "already_published",
   "needs_reverification",
+  "use_new_idempotency_key",
 ]);
+
+// RFC 4122 textual form, case-insensitive (Postgres's uuid::text output is
+// lowercase, but this guards the wire shape, not a specific serializer).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -70,17 +76,29 @@ function describeType(value: unknown): string {
   return typeof value;
 }
 
+function isValidUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID_RE.test(value);
+}
+
 /**
  * Runtime guard for the claim_placement_for_publish RPC's jsonb response
- * (authoritative shape: supabase/migrations/20260716200000_publication_
- * receipt_claim_binding.sql). Postgres returns untyped jsonb over the wire,
- * so nothing upstream of this function guarantees the shape actually
- * matches ClaimPlacementResult -- a bare `as` cast previously trusted it
- * blindly, and `Boolean(result.ok)` coerced any truthy-but-wrong value
- * (e.g. `{ok: "true"}`, `{ok: 1}`) into an accepted claim. This hand-written
- * guard replaces both: no schema library is used because none is a
- * dependency of this codebase and the shape is small enough that a manual
- * check is simpler than adding one.
+ * (authoritative shape: supabase/migrations/
+ * 20260716221000_publication_placement_claim_idempotency_identity_scoping.sql,
+ * the current definition of the function). Postgres returns untyped jsonb
+ * over the wire, so nothing upstream of this function guarantees the shape
+ * actually matches ClaimPlacementResult -- a bare `as` cast previously
+ * trusted it blindly, and `Boolean(result.ok)` coerced any truthy-but-wrong
+ * value (e.g. `{ok: "true"}`, `{ok: 1}`) into an accepted claim. This
+ * hand-written guard replaces both: no schema library is used because none
+ * is a dependency of this codebase and the shape is small enough that a
+ * manual check is simpler than adding one.
+ *
+ * Adversarial-review follow-up: an ok:true response now also requires
+ * claim_id to be UUID-shaped (not merely non-empty), and status /
+ * idempotent_replay to both be PRESENT (not just correctly typed when
+ * present) -- the RPC always returns both on every ok:true path, so their
+ * absence is itself a signal the response does not match the documented
+ * contract and must fail closed, not be treated as "optional and missing."
  *
  * Every branch that cannot prove the response matches the documented shape
  * returns a fail-closed ok:false result instead of throwing or silently
@@ -136,10 +154,22 @@ function parseClaimPlacementResponse(data: unknown): ClaimPlacementResult {
 
   const claimIdRaw = data.claim_id;
   if (data.ok === true) {
-    if (typeof claimIdRaw !== "string" || claimIdRaw.length === 0) {
+    // Fail-closed shape requirements for every ok:true response: the RPC
+    // always returns claim_id, status, and idempotent_replay together on
+    // every ok:true code path (see the migration), so a response missing
+    // any of them, or substituting a non-UUID/whitespace/nested value for
+    // claim_id, does not match the documented contract and must not be
+    // treated as an accepted claim.
+    if (!isValidUuid(claimIdRaw)) {
       return fail(
-        `"claim_id" must be a non-empty string when ok is true, got ${describeType(claimIdRaw)}`,
+        `"claim_id" must be a UUID string when ok is true, got ${describeType(claimIdRaw)}: ${JSON.stringify(claimIdRaw)}`,
       );
+    }
+    if (statusRaw === undefined) {
+      return fail(`"status" is required when ok is true`);
+    }
+    if (idempotentReplayRaw === undefined) {
+      return fail(`"idempotent_replay" is required when ok is true`);
     }
   } else if (claimIdRaw !== undefined && typeof claimIdRaw !== "string") {
     return fail(`"claim_id" must be a string when present, got ${describeType(claimIdRaw)}`);

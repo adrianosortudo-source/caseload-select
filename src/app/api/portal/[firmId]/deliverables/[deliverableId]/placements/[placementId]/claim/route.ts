@@ -79,7 +79,18 @@ export async function POST(
   });
 
   if (!result.ok) {
-    const status = result.nextAction === "already_published" || result.nextAction === "needs_reverification" ? 409 : 422;
+    // use_new_idempotency_key (finding 4: idempotency identity scoping): the
+    // same idempotency_key was already used for a materially different
+    // request (different version/deliverable/actor/supersession) -- a real
+    // conflict on the key's identity, the same class of 409 as an
+    // already-active competing claim, not a 422 validation problem with the
+    // request as submitted.
+    const status =
+      result.nextAction === "already_published" ||
+      result.nextAction === "needs_reverification" ||
+      result.nextAction === "use_new_idempotency_key"
+        ? 409
+        : 422;
     return NextResponse.json(
       { error: result.error, existingClaimId: result.existingClaimId, nextAction: result.nextAction },
       { status },
