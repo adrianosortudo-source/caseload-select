@@ -32,25 +32,53 @@
 # the required-checks list once this job is confirmed green on main.
 #
 # KNOWN BLOCKER for integration-test (corrective-release workstream 6, filed
-# 2026-07-16): `supabase start` applies every file in supabase/migrations/ in
-# order to a FRESH, empty Postgres. That directory only contains incremental
-# changes starting 2026-04-13; intake_firms, law_firm_clients, leads, and
-# roughly a dozen other tables were created directly against production
-# before this repo adopted tracked migrations and are never CREATE TABLE'd by
-# any file in supabase/migrations/ (confirmed via the Supabase CLI locally --
-# `supabase status -o env` parses and runs correctly against CLI 2.109.1 --
-# and independently via the Supabase MCP: `list_migrations` on project
-# ssxryjxifwiivghglqer starts at 20260518193933, and `list_tables` shows
-# intake_firms etc. with no corresponding CREATE TABLE anywhere in this
-# directory). The very first substantive migration
-# (20260414_portal_clio.sql, `ALTER TABLE intake_firms ADD COLUMN ...`) will
-# fail on a from-scratch database, and since intake_firms is a base
-# dependency, `supabase start` cannot get through the rest of the migration
-# chain either. This job is wired correctly and will fail LOUDLY on that
-# missing-baseline error (not silently skip) until a human authors a
-# baseline/bootstrap migration capturing the pre-2026-04-13 schema (e.g. via
-# `supabase db dump --linked --schema-only` against production, reviewed
-# before being committed as the first file in supabase/migrations/). That
+# 2026-07-16; corrected 2026-07-17 after a Codex independent release review
+# found the original wording overclaimed the scope): `supabase start`
+# applies every file in supabase/migrations/ in order to a FRESH, empty
+# Postgres. That directory only contains incremental changes starting
+# 2026-04-13, and TWO SEPARATE problems block a from-scratch run --
+# conflating them (as an earlier version of this comment did) makes the fix
+# sound bigger and less tractable than it is:
+#
+#   1. A SMALL set of foundational tables (intake_firms, law_firm_clients,
+#      leads, diagnostics, sequence_templates, sequence_steps,
+#      email_sequences, review_requests, state_history -- 9 tables,
+#      case-insensitive-scanned 2026-07-17) have NO CREATE TABLE statement
+#      anywhere in supabase/migrations/ at all. This is the actual
+#      from-scratch blocker: the very first substantive migration
+#      (20260414_portal_clio.sql, `ALTER TABLE intake_firms ADD COLUMN ...`)
+#      fails immediately on a from-scratch database, and since intake_firms
+#      is a base dependency, `supabase start` cannot get through the rest of
+#      the migration chain either (confirmed via the Supabase CLI locally --
+#      `supabase status -o env` parses and runs correctly against CLI
+#      2.109.1 -- and independently via the Supabase MCP: `list_tables` on
+#      project ssxryjxifwiivghglqer shows these tables live with no
+#      corresponding CREATE TABLE anywhere in this directory).
+#   2. A LARGER set of tables (firm_lawyers, conflict_register,
+#      conflict_checks, industry_benchmarks, matter_routing,
+#      retainer_agreements, screened_leads, sub_type_conflicts,
+#      unconfirmed_inquiries, webhook_outbox, firm_decline_templates,
+#      firm_onboarding_intake, channel_intake_sessions -- 13 tables) DO have
+#      a real CREATE TABLE file already committed in supabase/migrations/;
+#      that file is just missing from Supabase's own tracked production
+#      ledger (`list_migrations` on ssxryjxifwiivghglqer starts at
+#      20260518193933, after all 13 of these files' dates). This is a
+#      provenance/drift-auditing gap, not a from-scratch-executability
+#      blocker -- these 13 tables' own migration files are correct and would
+#      apply fine to a fresh Postgres once problem 1 is fixed.
+#
+# This job is wired correctly and will fail LOUDLY on the missing-baseline
+# error (not silently skip) until a human authors a baseline/bootstrap
+# migration covering the 9 problem-1 tables. Do NOT do this by dumping
+# production's CURRENT schema and prepending it before replaying all
+# existing migrations -- a current-state dump already contains the
+# cumulative effect of everything that ran after 2026-04-13, so replaying
+# those same migrations on top of it would fail on duplicate-object errors
+# or silently diverge from what actually ran in production. The two safe
+# strategies (reconstruct the pre-2026-04-13 baseline and replay history
+# unmodified, OR a new current-state squash baseline with the existing
+# migrations explicitly excluded from fresh-install replay) are documented
+# in the `supabase-baseline-migration-gap` memory record. That
 # reconstruction is a separate, larger undertaking outside this workstream's
 # scope (repair 2 test files + wire CI to run them) and is not attempted
 # here -- see the flagged follow-up task.

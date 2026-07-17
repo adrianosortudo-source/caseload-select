@@ -267,4 +267,76 @@ describe.skipIf(!DB_URL)("claim_placement_for_publish concurrency (real Postgres
     expect(replay.rows[0].result.claim_id).toBe(realClaimId);
     expect(replay.rows[0].result.idempotent_replay).toBe(true);
   }, 30000);
+
+  // Codex independent release review of PR #47, gap 1
+  // (20260717010000_publication_placement_claim_idempotency_firm_scoping.sql):
+  // the finding-4 identity guard above compared deliverable_id,
+  // approved_version_id, claimed_by_role, claimed_by_id, and
+  // supersedes_claim_id, but never firm_id -- since the lookup itself is
+  // scoped only by (placement_id, idempotency_key), a same-key request
+  // naming a DIFFERENT firm_id could still pass every other check and be
+  // handed back another firm's claim as an ok:true "replay." Self-contained
+  // two-firm fixture so it does not interact with any other race in this
+  // file.
+  it("the same idempotency key reused with a different p_firm_id (otherwise identical inputs) fails closed instead of returning the other firm's claim as a replay", async () => {
+    const firmA = randomUUID();
+    const firmB = randomUUID();
+    const deliverable = randomUUID();
+    const placement = randomUUID();
+    const version = randomUUID();
+    const actorId = randomUUID();
+
+    await connA.query(`insert into intake_firms (id, name, custom_domain, subdomain) values ($1, 'Firm Scoping Fixture A', null, $2)`, [firmA, `firm-scoping-fixture-a-${firmA}`]);
+    await connA.query(`insert into intake_firms (id, name, custom_domain, subdomain) values ($1, 'Firm Scoping Fixture B', null, $2)`, [firmB, `firm-scoping-fixture-b-${firmB}`]);
+    await connA.query(
+      `insert into content_deliverables (id, firm_id, title, content_kind, status, created_by_role) values ($1, $2, 'firm scoping fixture', 'text', 'draft', 'operator')`,
+      [deliverable, firmA],
+    );
+    await connA.query(
+      `insert into deliverable_versions (id, deliverable_id, firm_id, version_number, body_html, created_by_role) values ($1, $2, $3, 1, '<p>v1</p>', 'operator')`,
+      [version, deliverable, firmA],
+    );
+    await connA.query(`update content_deliverables set status = 'approved', approved_version_id = $1, current_version_id = $1 where id = $2`, [version, deliverable]);
+    await connA.query(
+      `insert into content_placements (id, firm_id, deliverable_id, destination, created_by_role) values ($1, $2, $3, 'linkedin_post', 'operator')`,
+      [placement, firmA, deliverable],
+    );
+
+    const key = "same-key-different-firm";
+    const first = await connA.query(
+      `select claim_placement_for_publish($1, $2, $3, $4, $5, 'operator', $6, 'Actor A') as result`,
+      [firmA, deliverable, placement, version, key, actorId],
+    );
+    expect(first.rows[0].result.ok).toBe(true);
+    const realClaimId: string = first.rows[0].result.claim_id;
+
+    // Same placement_id + idempotency_key, DIFFERENT p_firm_id, otherwise
+    // identical inputs (same deliverable/placement/version/actor as
+    // firmA's real claim) -- must fail closed, not return realClaimId as
+    // an ok:true replay for firmB.
+    const crossFirm = await connA.query(
+      `select claim_placement_for_publish($1, $2, $3, $4, $5, 'operator', $6, 'Actor A') as result`,
+      [firmB, deliverable, placement, version, key, actorId],
+    );
+    const result = crossFirm.rows[0].result;
+    expect(result.ok).toBe(false);
+    expect(result.next_action).toBe("use_new_idempotency_key");
+    expect(result.existing_claim_id).toBe(realClaimId);
+
+    // The original firm-A claim was never mutated by the cross-firm attempt.
+    const { rows } = await connA.query(
+      `select status, firm_id from publication_placement_claims where id = $1`,
+      [realClaimId],
+    );
+    expect(rows[0].status).toBe("active");
+    expect(rows[0].firm_id).toBe(firmA);
+
+    // Exactly one row exists for this key -- no cross-firm duplicate claim
+    // was ever created.
+    const { rows: countRows } = await connA.query(
+      `select count(*)::int as n from publication_placement_claims where idempotency_key = $1`,
+      [key],
+    );
+    expect(countRows[0].n).toBe(1);
+  }, 30000);
 });
