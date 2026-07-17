@@ -56,7 +56,7 @@ export interface CreateReceiptFailure {
   // failed at the database layer (e.g. 'CLM01' for every claim-binding
   // rejection raised by validate_publication_receipt_scope() -- see
   // supabase/migrations/
-  // 20260716220000_publication_receipt_actor_binding_and_hash_trust_fix.sql).
+  // 20260717001444_publication_receipt_actor_binding_and_hash_trust_fix.sql).
   // Callers should classify failures by this code, not by pattern-matching
   // the human-readable message, which can change wording without notice.
   code?: string;

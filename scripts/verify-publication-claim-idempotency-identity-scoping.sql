@@ -1,5 +1,5 @@
 -- Runnable, single-session verification for
--- supabase/migrations/20260716221000_publication_placement_claim_idempotency_identity_scoping.sql
+-- supabase/migrations/20260717001510_publication_placement_claim_idempotency_identity_scoping.sql
 -- (corrective-release follow-up audit, finding 4).
 --
 -- Wrapped in BEGIN/ROLLBACK end to end so it leaves no trace regardless of

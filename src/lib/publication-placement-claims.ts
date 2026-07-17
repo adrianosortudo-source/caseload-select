@@ -83,7 +83,7 @@ function isValidUuid(value: unknown): value is string {
 /**
  * Runtime guard for the claim_placement_for_publish RPC's jsonb response
  * (authoritative shape: supabase/migrations/
- * 20260716221000_publication_placement_claim_idempotency_identity_scoping.sql,
+ * 20260717001510_publication_placement_claim_idempotency_identity_scoping.sql,
  * the current definition of the function). Postgres returns untyped jsonb
  * over the wire, so nothing upstream of this function guarantees the shape
  * actually matches ClaimPlacementResult -- a bare `as` cast previously

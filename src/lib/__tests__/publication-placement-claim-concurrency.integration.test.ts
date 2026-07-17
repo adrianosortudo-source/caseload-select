@@ -198,7 +198,7 @@ describe.skipIf(!DB_URL)("claim_placement_for_publish concurrency (real Postgres
   }, 30000);
 
   // Adversarial-review follow-up, finding 4
-  // (20260716221000_publication_placement_claim_idempotency_identity_scoping.sql):
+  // (20260717001510_publication_placement_claim_idempotency_identity_scoping.sql):
   // the SAME idempotency key reused with a DIFFERENT request identity must
   // fail closed, never silently hand back the original claim as a "replay."
   // Self-contained fixture (own firm/deliverable/placement/versions) so it

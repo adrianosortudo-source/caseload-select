@@ -383,7 +383,7 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
   }, 30000);
 
   // --- Adversarial-review follow-up: findings 1 + 2
-  // (20260716220000_publication_receipt_actor_binding_and_hash_trust_fix.sql).
+  // (20260717001444_publication_receipt_actor_binding_and_hash_trust_fix.sql).
   // Each test below is fully self-contained (creates its own firm /
   // deliverable / placement / version fixtures inline) rather than reusing
   // the beforeAll fixtures above, to avoid coupling to the existing races'

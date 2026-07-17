@@ -24,7 +24,7 @@
  * next_action before the insert is attempted; the database trigger is the
  * final authority regardless (defense in depth -- see
  * validate_publication_receipt_scope in
- * supabase/migrations/20260716220000_publication_receipt_actor_binding_and_hash_trust_fix.sql,
+ * supabase/migrations/20260717001444_publication_receipt_actor_binding_and_hash_trust_fix.sql,
  * the current definition of the function).
  *
  * There is no artifact_sha256 field in this contract: a PDF's hash is never

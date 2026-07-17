@@ -1,5 +1,5 @@
 -- Runnable, single-session verification for
--- supabase/migrations/20260716220000_publication_receipt_actor_binding_and_hash_trust_fix.sql
+-- supabase/migrations/20260717001444_publication_receipt_actor_binding_and_hash_trust_fix.sql
 -- (corrective-release follow-up audit, findings 1 + 2).
 --
 -- Wrapped in BEGIN/ROLLBACK end to end so it leaves no trace regardless of
