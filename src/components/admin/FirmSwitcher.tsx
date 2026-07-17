@@ -26,7 +26,12 @@ const NAV_LINKS = [
   {
     label: "Content studio",
     href: (id: string) => `/admin/firms/${id}/content-studio`,
-    active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/content-studio`),
+    active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/content-studio`) && !p.includes("/attribution"),
+  },
+  {
+    label: "Content performance",
+    href: (id: string) => `/admin/firms/${id}/content-studio/attribution`,
+    active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/content-studio/attribution`),
   },
   {
     label: "Firm chat",
