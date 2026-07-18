@@ -855,6 +855,83 @@ Operator dependency: a lawyer cannot sign off until an email is on file (`firm_l
 
 **Change-request loop (DR-085, 2026-07-09).** Three additions to the append-only compliance record, none of which weaken it. Replies: a comment with `approval_record_id` set threads under the change-request record (server forces its `version_id` and null `annotation`; excluded from the passage margin and the open-comment count). Version-as-answer: a version posted while `changes_requested` links back via `deliverable_versions.responds_to_approval_id` (explicit id validated against this deliverable, or auto-linked to the latest open record when omitted); the composer quotes the open request, the approval-history panel renders "Addressed in vN..." instead of a dead end. Attachments: the change-request note and any reply may carry image/PDF evidence (`deliverables/{firmId}/{deliverableId}/feedback/` prefix, content-sniffed), frozen into `approval_records.attachments` at INSERT via the widened `record_approval_atomic` RPC, never by UPDATE. Migration `20260709_deliverable_change_request_loop.sql`. Build plan: `docs/BUILD_PLAN_deliverables_change_request_loop_v1.md`.
 
+### Standing Publishing Authorization (DR-104, 2026-07-17)
+
+A client-controlled, per-firm alternative to individual per-version lawyer
+approval. **Standing authorization permits release after QA; it does not
+represent individual lawyer review of a particular version** -- never call
+it, describe it, or display it as "blanket legal approval," "automatic
+legal approval," or "approval by [lawyer name]." Only the firm's own
+lawyer/client decision-maker can turn it on or off, from
+`/portal/[firmId]/how-your-content-works`; an operator can never enable it
+for a client (checked both at the portal route, via `getFirmSession` which
+structurally cannot admit an operator session, and independently at the
+database layer).
+
+State is append-only, migration `20260717230956_standing_publishing_authorization.sql`:
+
+```
+standing_publishing_authorizations (id, firm_id, event_seq [identity, the
+  authoritative ordering column], event[enabled|disabled], actor_role[lawyer
+  only], actor_id, actor_name, actor_email, authorization_text, policy_version,
+  scope, notification_preference[per_publication|weekly_digest], reason,
+  ip_address, user_agent, effective_at, created_at)  -- append-only, RPC-only
+```
+
+"Current state" is always derived by reading the latest row (`order by
+event_seq desc limit 1`), never a separately-maintained boolean/projection.
+Writes go exclusively through `set_standing_publishing_authorization`
+(SECURITY DEFINER, owned by `postgres`), which locks the `intake_firms` row
+so two concurrent enable/disable calls for the same firm serialize instead
+of racing, and independently rejects any `actor_role` other than `'lawyer'`
+as defense in depth against an application bug. `authorization_text` is
+never accepted from the request body -- `buildStandingAuthorizationText()`
+(`lib/standing-publishing-authorization.ts`) assembles the canonical,
+firm-name-interpolated wording server-side, so the frozen copy can never
+diverge from what the lawyer actually saw and confirmed.
+
+**Operator-only exception.** `deliverable_versions.requires_individual_review`
+(+ reason/actor audit columns) lets an operator force one specific version
+back onto the individual-approval path -- "unusual, sensitive, uncertain, or
+high-risk" content -- via `set_deliverable_version_individual_review_requirement`
+(operator-only, independently enforced at the RPC layer, mirroring the
+lawyer-only check above but inverted).
+
+**Release-gate integration.** `claim_placement_for_publish` (see the
+publishing-evidence system above) now accepts a version either because it
+was individually approved (unchanged path A) or because the firm's latest
+authorization event is `'enabled'` and the version does not carry the
+individual-review exception (new path B, `standing_authorization`). Every
+other gate the RPC already enforced -- version-must-be-current, no
+competing active claim, no already-verified receipt -- is byte-for-byte
+unchanged and applies identically on both paths; nothing upstream of this
+substitution (QA, artifact validation, placement, metadata) is bypassed.
+`publication_placement_claims.release_path` +
+`standing_authorization_event_id` record which path authorized a given
+claim; because the referenced `standing_publishing_authorizations` row is
+itself immutable, that foreign key durably preserves the authorization
+snapshot even after the firm later disables authorization --
+`derive_publication_receipt_release_path()` propagates the same two
+columns onto `publication_receipts` for any receipt that doesn't set them
+explicitly. Status language is never collapsed: "Individually approved"
+and "Authorized for publication under standing authorization" are always
+shown as distinct states (`components/portal/PublicationStatusSummary.tsx`).
+
+DRG Law was **not** silently activated from the WhatsApp conversation that
+prompted this feature -- it ships with authorization off, and Damaris must
+confirm through the portal herself so the system captures her authenticated
+identity, the exact wording, and a durable audit event.
+
+Key files: `lib/standing-publishing-authorization.ts` (I/O + canonical
+text), `components/portal/StandingAuthorizationCard.tsx` (the on/off
+control + inline confirmation), `components/portal/PublicationStatusSummary.tsx`
+(deliverable-detail status). Postgres verification:
+`scripts/verify-standing-publishing-authorization.sql` (rollback-wrapped,
+run via the Supabase MCP against production) and
+`src/lib/__tests__/standing-publishing-authorization-concurrency.integration.test.ts`
+(gated on `DIRECT_DATABASE_URL`, same convention as the publication-claim
+concurrency suite).
+
 ## Content Performance / Content-to-Matter Attribution (2026-07-17)
 
 Content Studio's initial, evidence-first home for tracing an enquiry back to the published content it may relate to. Full doctrine: `docs/CONTENT_PERFORMANCE_ATTRIBUTION_MODEL.md`. Operator runbook: `docs/runbooks/content-performance-attribution-runbook.md`.

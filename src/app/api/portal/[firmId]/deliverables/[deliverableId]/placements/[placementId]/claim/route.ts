@@ -102,5 +102,6 @@ export async function POST(
     claimId: result.claimId,
     idempotentReplay: result.idempotentReplay,
     status: result.status,
+    releasePath: result.releasePath,
   });
 }

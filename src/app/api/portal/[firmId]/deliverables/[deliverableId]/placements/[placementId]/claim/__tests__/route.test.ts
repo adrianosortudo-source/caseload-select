@@ -195,6 +195,24 @@ describe("POST claim: no external publisher is ever invoked", () => {
   it("the successful response contains only claim metadata, never a publish/post result", async () => {
     const res = await POST(makeReq({ approved_version_id: VERSION, idempotency_key: "k7" }), params());
     const body = await res.json();
+    // releasePath is omitted here because the mocked claimResult doesn't set
+    // it (undefined values are dropped by JSON serialization) -- see the
+    // next describe block for the case where it's present.
     expect(Object.keys(body).sort()).toEqual(["claimId", "idempotentReplay", "ok", "status"].sort());
+  });
+});
+
+describe("POST claim: standing publishing authorization release path", () => {
+  it("surfaces releasePath when the RPC reports the claim went through standing authorization", async () => {
+    state.claimResult = {
+      ok: true,
+      claimId: "claim-1",
+      idempotentReplay: false,
+      status: "active",
+      releasePath: "standing_authorization",
+    } as typeof state.claimResult & { releasePath: string };
+    const res = await POST(makeReq({ approved_version_id: VERSION, idempotency_key: "k8" }), params());
+    const body = await res.json();
+    expect(body.releasePath).toBe("standing_authorization");
   });
 });

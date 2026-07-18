@@ -260,7 +260,7 @@ jobs:
           echo "DIRECT_DATABASE_URL is set; integration tests will run for real."
 
       - name: Run publication concurrency integration tests
-        run: npx vitest run src/lib/__tests__/publication-receipt-concurrency.integration.test.ts src/lib/__tests__/publication-placement-claim-concurrency.integration.test.ts
+        run: npx vitest run src/lib/__tests__/publication-receipt-concurrency.integration.test.ts src/lib/__tests__/publication-placement-claim-concurrency.integration.test.ts src/lib/__tests__/standing-publishing-authorization-concurrency.integration.test.ts
 
       - name: Stop local Supabase stack
         if: always()
