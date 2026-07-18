@@ -67,7 +67,25 @@ const DB_URL = process.env.DIRECT_DATABASE_URL;
 // mechanism (a base URL's own host leaking through) regardless of which
 // Node version is spec-correct.
 function parseDirectDatabaseUrl(url: string) {
-  const parsed = new URL(url);
+  // Defensive normalization: a later CI run threw "Invalid URL" with the
+  // (GH-Actions-masked) input showing literal surrounding double-quote
+  // characters, e.g. "***127.0.0.1:54322/postgres" -- consistent with the
+  // `supabase status -o env` step's dotenv-style KEY="value" output line
+  // getting appended to $GITHUB_ENV, whose simple KEY=VALUE parser takes
+  // everything after the first `=` literally, quotes included, unless the
+  // multiline heredoc form is used. The Setup Supabase CLI step does not
+  // pin an exact version, so the CLI's exact -o env quoting behaviour at
+  // any given run is not something this file controls. Stripping one
+  // matching pair of leading/trailing quotes (plus incidental whitespace)
+  // before parsing is safe unconditionally: a well-formed URL never
+  // legitimately starts or ends with a quote character.
+  const trimmed = url.trim();
+  const unquoted =
+    trimmed.length >= 2 &&
+    ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'")))
+      ? trimmed.slice(1, -1)
+      : trimmed;
+  const parsed = new URL(unquoted);
   return {
     host: decodeURIComponent(parsed.hostname),
     port: parsed.port ? Number(parsed.port) : undefined,
