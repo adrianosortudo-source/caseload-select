@@ -1,0 +1,828 @@
+[
+  {
+    "original": "20260414_conflict_check.sql",
+    "newFilename": "20260414000001_conflict_check.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260414_custom_domain.sql",
+    "newFilename": "20260414000002_custom_domain.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260414_intake_firms_location.sql",
+    "newFilename": "20260414000003_intake_firms_location.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260414_j10_re_engagement.sql",
+    "newFilename": "20260414000004_j10_re_engagement.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260414_j11_j12_relationship_nurture.sql",
+    "newFilename": "20260414000005_j11_j12_relationship_nurture.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260414_j2_consultation_reminders.sql",
+    "newFilename": "20260414000006_j2_consultation_reminders.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260414_j7_welcome_onboarding.sql",
+    "newFilename": "20260414000007_j7_welcome_onboarding.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260414_j8_matter_active.sql",
+    "newFilename": "20260414000008_j8_matter_active.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260414_j9_review_request.sql",
+    "newFilename": "20260414000009_j9_review_request.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260414_journey_sequences.sql",
+    "newFilename": "20260414000010_journey_sequences.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260414_portal_clio.sql",
+    "newFilename": "20260414000011_portal_clio.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260414_retainer_agreements.sql",
+    "newFilename": "20260414000012_retainer_agreements.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260415_dashboard_columns.sql",
+    "newFilename": "20260415000001_dashboard_columns.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260415_dashboard_v2.sql",
+    "newFilename": "20260415000002_dashboard_v2.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260415_leads_intake_session_id.sql",
+    "newFilename": "20260415000003_leads_intake_session_id.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260417_round3_memo.sql",
+    "newFilename": "20260417000001_round3_memo.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260417_sub_type_conflicts.sql",
+    "newFilename": "20260417000002_sub_type_conflicts.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260418_matter_routing.sql",
+    "newFilename": "20260418000001_matter_routing.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260418_retainer_fks.sql",
+    "newFilename": "20260418000002_retainer_fks.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260418_storage_intake_attachments.sql",
+    "newFilename": "20260418000003_storage_intake_attachments.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260423_leads_cpi_explainability.sql",
+    "newFilename": "20260423000001_leads_cpi_explainability.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260423_leads_scoring_model.sql",
+    "newFilename": "20260423000002_leads_scoring_model.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260423_rls_hardening.sql",
+    "newFilename": "20260423000003_rls_hardening.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260423_rls_hardening_fix.sql",
+    "newFilename": "20260423000004_rls_hardening_fix.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260423_rls_hardening_sweep.sql",
+    "newFilename": "20260423000005_rls_hardening_sweep.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260505_firm_decline_templates.sql",
+    "newFilename": "20260505000001_firm_decline_templates.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260505_screened_leads.sql",
+    "newFilename": "20260505000002_screened_leads.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260505_screened_leads_dashboard_indexes.sql",
+    "newFilename": "20260505000003_screened_leads_dashboard_indexes.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260505_webhook_outbox.sql",
+    "newFilename": "20260505000004_webhook_outbox.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260506_firm_files.sql",
+    "newFilename": "20260506000001_firm_files.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260506_firm_lawyers.sql",
+    "newFilename": "20260506000002_firm_lawyers.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260506_pg_cron_pg_net_setup.sql",
+    "newFilename": "20260506000003_pg_cron_pg_net_setup.sql",
+    "bucket": "C_MUST_NOT_BE_MADE_PENDING_contains_non_idempotent_sql",
+    "dangerousPatterns": [
+      "UPDATE (data mutation)"
+    ],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260513_cron_health_rpc.sql",
+    "newFilename": "20260513000001_cron_health_rpc.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260513_firm_onboarding_access_grant_status.sql",
+    "newFilename": "20260513000002_firm_onboarding_access_grant_status.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260513_firm_onboarding_booking_url.sql",
+    "newFilename": "20260513000003_firm_onboarding_booking_url.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260513_firm_onboarding_channels_and_signature.sql",
+    "newFilename": "20260513000004_firm_onboarding_channels_and_signature.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260513_firm_onboarding_gbp_admin_status.sql",
+    "newFilename": "20260513000005_firm_onboarding_gbp_admin_status.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260513_firm_onboarding_intake.sql",
+    "newFilename": "20260513000006_firm_onboarding_intake.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260513_firm_onboarding_intake_doc_upload.sql",
+    "newFilename": "20260513000007_firm_onboarding_intake_doc_upload.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260513_firm_onboarding_practice_scope_and_systems.sql",
+    "newFilename": "20260513000008_firm_onboarding_practice_scope_and_systems.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260513_voice_webhook_secret.sql",
+    "newFilename": "20260513000009_voice_webhook_secret.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260514_intake_firms_channel_asset_ids.sql",
+    "newFilename": "20260514000001_intake_firms_channel_asset_ids.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260514_screened_leads_actor_role.sql",
+    "newFilename": "20260514000002_screened_leads_actor_role.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260515_band_d_and_referred_status.sql",
+    "newFilename": "20260515000001_band_d_and_referred_status.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260515_screened_leads_utm_referrer.sql",
+    "newFilename": "20260515000002_screened_leads_utm_referrer.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260516_channel_intake_sessions.sql",
+    "newFilename": "20260516000001_channel_intake_sessions.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260516_intake_firms_meta_access_tokens.sql",
+    "newFilename": "20260516000002_intake_firms_meta_access_tokens.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260516_unconfirmed_inquiries.sql",
+    "newFilename": "20260516000003_unconfirmed_inquiries.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260520_firm_onboarding_directory_prep.sql",
+    "newFilename": "20260520173822_firm_onboarding_directory_prep.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260520_firm_onboarding_notification_tracking.sql",
+    "newFilename": "20260520192341_firm_onboarding_notification_tracking.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260520_s8p1_client_matters.sql",
+    "newFilename": "20260522014558_s8p1_client_matters.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260520_s8p1_explainer_articles.sql",
+    "newFilename": "20260522014657_s8p1_explainer_articles.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260520_s8p1_firm_lawyers_roles.sql",
+    "newFilename": "20260522014449_s8p1_firm_lawyers_roles.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260520_s8p1_intake_firms_routing.sql",
+    "newFilename": "20260522014515_s8p1_intake_firms_routing.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260520_s8p1_matter_messages.sql",
+    "newFilename": "20260522014628_s8p1_matter_messages.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260520_s8p1_notification_batch_cron.sql",
+    "newFilename": "20260522014741_s8p1_notification_batch_cron.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260520_s8p1_notification_outbox.sql",
+    "newFilename": "20260522014728_s8p1_notification_outbox.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260521_intake_firms_ghl_location_id.sql",
+    "newFilename": "20260521232106_intake_firms_ghl_location_id.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260521_intake_firms_voice_api_token.sql",
+    "newFilename": "20260521225705_intake_firms_voice_api_token.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260526_channel_sessions_screened_lead_link.sql",
+    "newFilename": "20260526133906_channel_sessions_screened_lead_link.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260526_intake_firms_token_expiry.sql",
+    "newFilename": "20260526040314_intake_firms_token_expiry.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260526_intake_firms_token_expiry_trigger.sql",
+    "newFilename": "20260526134701_intake_firms_token_expiry_trigger.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260609_otp_attempt_cap.sql",
+    "newFilename": "20260610012500_otp_attempt_cap.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260609_processed_channel_messages.sql",
+    "newFilename": "20260610012439_processed_channel_messages.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260609_screened_leads_notification_state.sql",
+    "newFilename": "20260610012451_screened_leads_notification_state.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260609_webhook_outbox_action_check_expand.sql",
+    "newFilename": "20260610012511_webhook_outbox_action_check_expand.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260616_firm_files_links_and_sections.sql",
+    "newFilename": "20260616190231_firm_files_links_and_sections.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [
+      "UPDATE (data mutation)"
+    ],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260616_firm_lawyers_disabled.sql",
+    "newFilename": "20260616195645_firm_lawyers_disabled.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260617_firm_onboarding_customer_base.sql",
+    "newFilename": "20260617000001_firm_onboarding_customer_base.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260617_firm_onboarding_v2_fields.sql",
+    "newFilename": "20260618002440_firm_onboarding_v2_fields.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260617_screened_leads_archive.sql",
+    "newFilename": "20260617183933_screened_leads_archive.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260623_approval_rpc_atomic.sql",
+    "newFilename": "20260624005320_approval_rpc_atomic.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260623_content_approval.sql",
+    "newFilename": "20260623214957_content_approval.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260623_content_approval_rls_lockdown.sql",
+    "newFilename": "20260623225040_content_approval_rls_lockdown.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": false
+  },
+  {
+    "original": "20260623_deliverables_article_meta.sql",
+    "newFilename": "20260623000004_deliverables_article_meta.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260623_deliverables_review_notified_at.sql",
+    "newFilename": "20260623000005_deliverables_review_notified_at.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260623_firm_analytics_config.sql",
+    "newFilename": "20260623000006_firm_analytics_config.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260623_intake_attachments_private.sql",
+    "newFilename": "20260623235317_intake_attachments_private.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": false
+  },
+  {
+    "original": "20260623_intake_firms_is_demo.sql",
+    "newFilename": "20260624015747_intake_firms_is_demo.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [
+      "RENAME TO (structural rename)"
+    ],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260623_matter_messages_threading.sql",
+    "newFilename": "20260623213534_matter_messages_threading.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260624_content_periods.sql",
+    "newFilename": "20260624173013_content_periods.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260624_content_plan_settings.sql",
+    "newFilename": "20260624181016_content_plan_settings.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260624_content_studio_foundation.sql",
+    "newFilename": "20260624000003_content_studio_foundation.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260624_deliverables_kicker.sql",
+    "newFilename": "20260624000004_deliverables_kicker.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260624_force_rls_three_pii_tables.sql",
+    "newFilename": "20260624145957_force_rls_three_pii_tables.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": false
+  },
+  {
+    "original": "20260624_notification_outbox_deliverable_events.sql",
+    "newFilename": "20260624131132_notification_outbox_deliverable_events.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260624_operator_firm_messages_context.sql",
+    "newFilename": "20260624173258_operator_firm_messages_context.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260624_operator_firm_messaging.sql",
+    "newFilename": "20260624132001_operator_firm_messaging.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [
+      "CREATE TABLE without IF NOT EXISTS"
+    ],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260624_operator_firm_messaging_phase2.sql",
+    "newFilename": "20260624145310_operator_firm_messaging_phase2.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260625_agency_crm.sql",
+    "newFilename": "20260625184449_agency_crm.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260625_firm_about_explainer.sql",
+    "newFilename": "20260625215747_firm_about_explainer.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260625_firm_about_links.sql",
+    "newFilename": "20260625222355_firm_about_links.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260625_firm_onboarding_v2_phase1_bing_apple_fees.sql",
+    "newFilename": "20260625000004_firm_onboarding_v2_phase1_bing_apple_fees.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260625_intake_firms_read_scoring_port.sql",
+    "newFilename": "20260626031528_intake_firms_read_scoring_port.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260625_portal_signin_codes.sql",
+    "newFilename": "20260625011646_portal_signin_codes.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260625_screened_leads_contact_postal_code.sql",
+    "newFilename": "20260625000007_screened_leads_contact_postal_code.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260625_screened_leads_scoring_delta.sql",
+    "newFilename": "20260625224856_screened_leads_scoring_delta.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [
+      "UPDATE (data mutation)"
+    ],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260626_fix_cron_health_http_correlation.sql",
+    "newFilename": "20260626000001_fix_cron_health_http_correlation.sql",
+    "bucket": "B_appears_idempotent_but_would_still_show_pending",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260626_matter_promotion_events.sql",
+    "newFilename": "20260626173506_matter_promotion_events.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260626_screened_leads_axis_reasoning.sql",
+    "newFilename": "20260626174343_screened_leads_axis_reasoning.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260626_screened_leads_consent.sql",
+    "newFilename": "20260626203055_screened_leads_consent.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260702_screened_leads_deadline_reminder.sql",
+    "newFilename": "20260702145505_screened_leads_deadline_reminder.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260702_seo_check_runs.sql",
+    "newFilename": "20260703185959_seo_check_runs.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260705_booking_adapter_wp6.sql",
+    "newFilename": "20260705181015_booking_adapter_wp6.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260705_cadence_audit_fixes.sql",
+    "newFilename": "20260705233907_cadence_audit_fixes.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260705_cadence_wp1_extensions.sql",
+    "newFilename": "20260705171351_cadence_wp1_extensions.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [
+      "UPDATE (data mutation)"
+    ],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260705_dashboard_views_wp5.sql",
+    "newFilename": "20260705180445_dashboard_views_wp5.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260705_ghl_export_wp8.sql",
+    "newFilename": "20260705182716_ghl_export_wp8.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260705_review_automation_wp4.sql",
+    "newFilename": "20260705175533_review_automation_wp4.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [
+      "UPDATE (data mutation)"
+    ],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260706_agency_prospects_dedupe_key.sql",
+    "newFilename": "20260706040407_agency_prospects_dedupe_key.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260706_cadence_rules_trigger_type_field_change_only.sql",
+    "newFilename": "20260706040354_cadence_rules_trigger_type_field_change_only.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260706_consent_log_repair_cron.sql",
+    "newFilename": "20260706045625_consent_log_repair_cron.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260706_screened_leads_gclid.sql",
+    "newFilename": "20260706041720_screened_leads_gclid.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260706_web_intake_sessions_gclid.sql",
+    "newFilename": "20260706042154_web_intake_sessions_gclid.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260707_consent_log_repair_antijoin_fn.sql",
+    "newFilename": "20260706142705_consent_log_repair_antijoin_fn.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  },
+  {
+    "original": "20260707_deliverable_current_version_invariant.sql",
+    "newFilename": "20260706162509_deliverable_current_version_invariant.sql",
+    "bucket": "A_safe_matched_to_true_ledger_version",
+    "dangerousPatterns": [],
+    "hasIdempotentMarkers": true
+  }
+]

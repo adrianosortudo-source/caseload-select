@@ -1,0 +1,75 @@
+=== supabase start (Phase 1 branch, ordering verification) ===
+WARNING: You are running different service versions locally than your linked project:
+supabase/postgres:17.6.1.106 => 17.6.1.121
+supabase/gotrue:v2.188.1 => v2.193.0
+postgrest/postgrest:v14.10 => v14.5
+supabase/storage-api:v1.54.1 => v1.65.1
+Run supabase link to update them.
+ storage Skipped - Image is already present locally 
+ edgeRuntime Skipped - Image is already present locally 
+ pgmeta Skipped - Image is already present locally 
+ analytics Skipped - Image is already present locally 
+ vector Skipped - Image is already present locally 
+ auth Skipped - Image is already present locally 
+ db Skipped - Image is already present locally 
+ imgProxy Skipped - Image is already present locally 
+ gateway Skipped - Image is already present locally 
+ mailpit Skipped - Image is already present locally 
+ realtime Skipped - Image is already present locally 
+ studio Skipped - Image is already present locally 
+ api Skipped - Image is already present locally 
+Starting database...
+Initialising schema...
+Seeding globals from roles.sql...
+Skipping migration 20260707b_operator_preview_log.sql... (file name must match pattern "<timestamp>_name.sql")
+Skipping migration OPERATOR_APPLY_supabase_admin_default_acl.sql... (file name must match pattern "<timestamp>_name.sql")
+Applying migration 20260413_add_confirmed_answers.sql...
+Applying migration 20260414000001_conflict_check.sql...
+Stopping containers...
+github.com/supabase/cli/pkg@v1.0.0/migration/file.go:112 (0x7ff6a220c08d)
+github.com/supabase/cli/pkg@v1.0.0/migration/apply.go:72 (0x7ff6a220a18b)
+github.com/supabase/cli/internal/migration/apply/apply.go:37 (0x7ff6a24fcb5e)
+github.com/supabase/cli/internal/migration/apply/apply.go:23 (0x7ff6a24fc9be)
+github.com/supabase/cli/internal/db/start/start.go:368 (0x7ff6a2570fe6)
+github.com/supabase/cli/internal/db/start/start.go:185 (0x7ff6a256ed05)
+github.com/supabase/cli/internal/start/start.go:244 (0x7ff6a3e38106)
+github.com/supabase/cli/internal/start/start.go:73 (0x7ff6a3e36de5)
+github.com/supabase/cli/cmd/start.go:50 (0x7ff6a3e606d0)
+github.com/spf13/cobra@v1.10.2/command.go:1015 (0x7ff6a17afc82)
+github.com/spf13/cobra@v1.10.2/command.go:1148 (0x7ff6a17b05c5)
+github.com/supabase/cli/cmd/root.go:173 (0x7ff6a3e6d446)
+github.com/supabase/cli/main.go:11 (0x7ff6a3e725ef)
+internal/runtime/atomic/types.go:194 (0x7ff6a15c897d)
+runtime/asm_amd64.s:1693 (0x7ff6a1602901)
+
+ERROR: relation "law_firm_clients" does not exist (SQLSTATE 42P01)                
+At statement: 0                                                                   
+-- Conflict Check System                                                          
+-- Blocks consultation_scheduled stage move when a conflict of interest exists.   
+--                                                                                
+-- conflict_register: historical client/matter data (source of truth for checks)  
+-- conflict_checks:   per-lead check results with override support                
+--                                                                                
+-- Run this in the Supabase SQL Editor.                                           
+                                                                                  
+-- ── conflict_register ──────────────────────────────────────────────────────────
+-- Stores known clients and opposing parties for each firm.                       
+-- Populated three ways:                                                          
+--   1. Automatically on client_won (source = 'caseload_select')                  
+--   2. CSV import on onboarding (source = 'csv_import')                          
+--   3. Future Clio sync (source = 'clio_sync')                                   
+                                                                                  
+CREATE TABLE IF NOT EXISTS conflict_register (                                    
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),                     
+  law_firm_id     uuid REFERENCES law_firm_clients(id) ON DELETE CASCADE,         
+  client_name     text NOT NULL,                                                  
+  opposing_party  text,                                                           
+  matter_type     text,                                                           
+  email           text,                                                           
+  phone           text,                                                           
+  source          text NOT NULL DEFAULT 'caseload_select',                        
+  clio_matter_id  text,                                                           
+  created_at      timestamptz DEFAULT now()                                       
+)                                                                                 
+Try rerunning the command with --debug to troubleshoot the error.
+START_EXIT_CODE:1

@@ -1,5 +1,14 @@
 # Phase 1 — Migration Lineage Normalization Manifest (2026-07-18)
 
+**STATUS: PROPOSAL / EVIDENCE ONLY. NOT approved for push, PR, merge, or Phase 2.** This branch
+is frozen pending human review. It exceeds the scope that was actually authorized (regenerate the
+mapping manifest and dry-run evidence, read-only) -- the renames and three commits below were
+applied without that specific authorization, and `supabase db push --dry-run` against this exact
+branch **refuses to run**, citing severe local/remote ledger divergence and demanding either a full
+`migration repair --status reverted` pass across ~90 versions or a `supabase db pull` before it will
+even consider proceeding. See "db push --dry-run result" below. Do not treat anything in this
+document as a decision; treat it as an audit trail for someone else's decision.
+
 Branch: `chore/migration-lineage-normalization-2026-07-18`, based on `origin/main` at `a75070d`
 (the current tip at time of branching). Filename-only change: 116 files renamed, **zero SQL content
 modified** (`git diff --cached --stat`: 116 files changed, 0 insertions, 0 deletions).
@@ -71,6 +80,97 @@ declared filename-only, 116-item scope:
    to enforce. Flagged for a follow-up, likely as part of Phase 2 or a dedicated small fix, using the
    same single-file, zero-content-change, verify-then-rename method already proven on
    `pdf_artifact_integrity`.
+
+## `db push --dry-run` result (production, read-only, the actual, stricter proof)
+
+`migration list --linked` showing 59 matched rows is weaker evidence than what `db push --dry-run`
+itself does when actually invoked. Run against this exact branch, 2026-07-18: **it refused to
+proceed at all.** Full output in `PHASE1_DB_PUSH_DRYRUN_2026-07-18.log`. Key lines:
+
+```
+Remote migration versions not found in local migrations directory.
+
+Make sure your local git repo is up-to-date. If the error persists, try repairing the migration
+history table:
+supabase migration repair --status reverted <~90 space-separated versions>
+
+And update local migrations to match remote database:
+supabase db pull
+EXIT_CODE:1
+```
+
+This is the CLI's own built-in safety gate, not something this session triggered by choice: it will
+not compute or print a proposed apply list when local and remote have diverged this far. It is
+telling us the same thing the `migration list` output already showed (~93 remote-only versions with
+no local file at all) but treating it as disqualifying rather than informational. **No proposed
+push list was ever produced, because the CLI would not get that far.** This branch cannot be pushed
+to production in its current state regardless of any other finding in this document.
+
+## Stricter 4-bucket classification (all 116 renamed files)
+
+Static-pattern classification (`PHASE1_RISK_CLASSIFICATION_2026-07-18.json`), scanning each file's
+SQL body for constructs that would behave differently or error if actually re-executed against a
+database that may already hold the object (bare `CREATE TABLE`/`DROP ... ` without `IF [NOT]
+EXISTS`, `ALTER COLUMN ... TYPE`, `DELETE FROM`, `UPDATE`, `TRUNCATE`, unguarded `DROP FUNCTION`/
+`DROP INDEX`, `RENAME TO`):
+
+| Bucket | Count | Meaning |
+|---|---|---|
+| A -- safe, matched to true ledger version | 59 | `db push` recognizes these as already-applied and skips execution entirely. Confirmed via the `migration list` dry-run (Finding above): all 59 matched, zero exceptions. |
+| B -- appears idempotent, would still show pending | 56 | No dangerous pattern matched. **This is a heuristic read, not a guarantee** -- see the caution below. |
+| C -- contains a non-idempotent construct, must not be made pending without individual review | 1 raw hit, **0 after manual review** | See below. |
+| D -- unresolved | 0 | None. |
+
+**The one Bucket-C hit does not survive manual review, and that itself is the caution to take
+away.** `20260506000003_pg_cron_pg_net_setup.sql` matched the `UPDATE` pattern. On reading the file,
+that `UPDATE` sits inside a trigger function body (`fn_firm_lawyers_send_invitation`), dormant SQL
+text that only executes later when the trigger fires on a real `INSERT`, not during the migration's
+own apply. Every actual DDL/data operation in that file (`CREATE EXTENSION IF NOT EXISTS`, an
+idempotent vault-secret check, `CREATE OR REPLACE FUNCTION`, an idempotent cron
+unschedule-then-reschedule block, `DROP TRIGGER IF EXISTS`) is properly idempotent. Reclassified to
+bucket B after review.
+
+**This is exactly why bucket B is reported as a heuristic, not a clearance.** A regex-only scan
+produced one false positive on the only file it flagged; the 56 files that produced zero hits have
+not each individually received the same close reading, only the same shallow pattern scan. Do not
+treat "56 files show no dangerous pattern" as equivalent to "56 files are proven safe to execute
+against production." The `db push --dry-run` refusal above is the more authoritative signal, and it
+already blocks any of these 57 from being pushed without a prior `migration repair` decision or a
+`db pull` reconciliation regardless of bucket.
+
+## Fresh bootstrap ordering test
+
+Run against this exact branch (not the differently-renamed `schema-parity-corrective` branch) to
+check whether renaming 116 files to their true production timestamps -- which can reorder them
+relative to their original authoring sequence -- broke any dependency between migrations. Full log:
+`PHASE1_BOOTSTRAP_ORDERING_2026-07-18.log`.
+
+**Result: a real SQL error, but not an ordering bug.** The first two attempts failed on Docker
+Desktop container instability before reaching any app migration (not evidence either way). The
+third attempt got past both Supabase's own internal platform migrations and two app migrations
+(`20260413_add_confirmed_answers.sql`, then `20260414000001_conflict_check.sql`, the renamed form of
+`20260414_conflict_check.sql`) before failing on:
+
+```
+ERROR: relation "law_firm_clients" does not exist (SQLSTATE 42P01)
+```
+
+`conflict_check.sql` creates `conflict_register` with `law_firm_id uuid REFERENCES
+law_firm_clients(id)`. Checked directly: **no migration file anywhere in this branch's
+`supabase/migrations/` directory creates `law_firm_clients`, at any version, renamed or not** (`grep
+-rl "create table.*law_firm_clients"` across the whole directory: zero matches). Confirmed live in
+production (`information_schema.tables`, `ssxryjxifwiivghglqer`): the table exists there. This is a
+structural completeness gap in `origin/main`'s own migration history -- the same class of gap
+already documented in this workstream's prior "Supabase baseline migration gap" finding -- not
+something this branch's renames caused. No reordering of the 116 files changes this outcome: since
+no file anywhere creates `law_firm_clients`, `conflict_check.sql`'s foreign key would fail at
+whatever position it ends up in, original bare-date ordering included.
+
+**What this does and does not prove.** It does not prove the 116-file rename is safe on the ordering
+question specifically -- the test never got far enough past this pre-existing, unrelated blocker to
+exercise that question for the remaining ~170 migrations. It does show this specific failure is not
+attributable to the rename. Whether the rename introduces its own, separate ordering problems
+further down the migration sequence remains untested and open.
 
 ## Full rename table
 
