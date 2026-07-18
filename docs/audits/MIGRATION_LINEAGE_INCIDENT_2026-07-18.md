@@ -265,6 +265,8 @@ Provenance: introspection of the pre-cutover project + current production (see `
 
 These are real, applied production content with zero corresponding `.sql` file under any name in this repo's git history, and are NOT covered by the historical baseline file either. One of these (`standing_publishing_authorization_notification_pref_null_fix`) is already documented in `CLAUDE.md` as a known, deliberately-unreconstructed gap. The other 6 have not been previously documented as gaps as far as this reconciliation found.
 
+**Requirement for remediation:** each of these 7 is its own, individually documented provenance investigation — not a single blanket reconstruction pass. Current production schema shape (table/column/function definitions read live) is necessary evidence but is not by itself sufficient to justify writing a migration file and claiming it as that migration's original content: shape alone cannot prove the reconstructed SQL matches what was actually run, in what order, or with what since-superseded intermediate state. `docs/BASELINE_MIGRATION_DECISION_RECORD.md`'s own methodology for the historical baseline file (Sections 2-4: cross-referencing two independent live databases, git-history search across every branch, explicit "what is NOT invented" accounting) is the evidentiary bar each of these 7 should be held to, not a lower one.
+
 ## Summary counts
 
 | Category | Count |
@@ -283,6 +285,8 @@ These are real, applied production content with zero corresponding `.sql` file u
 ### Footnote: a genuine repo-level duplicate, not just a ledger duplicate
 
 `20260626000004_screened_leads_consent.sql` and `20260626203055_20260626_screened_leads_consent.sql` are two **separate files on disk**, not just two ledger rows. Their bodies are otherwise identical but their header comments contradict each other: one says `STATUS: DRAFT. NOT APPLIED TO PROD`, the other says `STATUS: APPLIED TO PROD (confirmed live via Supabase MCP 2026-07-02...)`. The second, corrected file is accurate (the content is live). The first, stale file should eventually be resolved as part of remediation — not removed unilaterally now, per the freeze.
+
+**Requirement for remediation:** this is a source-control hygiene issue, resolved by an approved source-of-truth decision about which file (or a merged replacement) stays — it is never resolved by any `migration repair` or other production-ledger operation. The ledger already has the correct single applied version for this content; nothing about the ledger needs to change to fix this. Do not conflate cleaning up the duplicate file with touching production's migration bookkeeping.
 
 ### Cross-reference to the 2026-07-16 report
 
