@@ -82,7 +82,6 @@ const originalDnsLookup = dns.lookup;
 // monkeypatched implementation; this file only ever exercises the
 // (hostname, options, callback) shape net.connect() uses.
 dns.lookup = (hostname: string, ...rest: unknown[]) => {
-  console.error(`[dns.lookup patched] resolving "${hostname}"`);
   const family = net.isIP(hostname);
   if (family) {
     const callback = rest[rest.length - 1] as (
@@ -93,6 +92,13 @@ dns.lookup = (hostname: string, ...rest: unknown[]) => {
     callback(null, hostname, family);
     return;
   }
+  // A previous CI run confirmed dns.lookup() IS the call site, and that the
+  // hostname being resolved is literally "base" -- not 127.0.0.1, not
+  // anything from DIRECT_DATABASE_URL. That call falls through to here
+  // (not an IP literal) and fails for real. The stack trace identifies the
+  // actual caller, which the prior diagnostic round (hostname only) did
+  // not capture.
+  console.error(`[dns.lookup patched] resolving non-IP hostname "${hostname}"\n${new Error("dns.lookup call site").stack}`);
   // @ts-expect-error see above
   return originalDnsLookup.call(dns, hostname, ...rest);
 };
