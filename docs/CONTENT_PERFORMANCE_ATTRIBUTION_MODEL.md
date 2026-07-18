@@ -53,13 +53,35 @@ Only what `screened_leads` already captures: `utm_source`, `utm_medium`,
 `utm_campaign`, `utm_term`, `utm_content`, `referrer`. A deliverable/placement
 link is attached only when `utm_content` or `utm_term` exactly equals a real
 `content_placements.id` for that firm -- no fuzzy matching, no topic
-inference. When no such tag exists (true for essentially all traffic today,
-since no publishing workflow yet embeds a placement id in outbound links),
-the evidence still upgrades to `known_first_touch` (we know the channel) but
-carries no deliverable/placement link (we do not know which piece). This is
-intentional, not a bug: "correlated" is not "attributed," and a piece of
-evidence that only proves a channel is still real evidence, just narrower
-than a piece that proves a specific placement.
+inference. When no such tag exists, the evidence still upgrades to
+`known_first_touch` (we know the channel) but carries no deliverable/
+placement link (we do not know which piece). This is intentional, not a bug:
+"correlated" is not "attributed," and a piece of evidence that only proves a
+channel is still real evidence, just narrower than a piece that proves a
+specific placement.
+
+**Placement-tagged tracking (added Ses.21).** `content-placement-tracking-pure.ts`
+generates deterministic tracking parameters per placement
+(`utm_source=content_studio`, `utm_medium` mapped from destination,
+`utm_content=<placement id>`, never a fabricated value). It does not store
+or infer a firm's public website domain anywhere -- `intake_firms` has no
+such field, and guessing one would itself be an invented fact -- so every
+function operates on the query string / whatever base URL the operator
+supplies, never a domain the app assumed. The receipts route enforces a
+release gate for the one destination where this is honestly verifiable:
+a `firm_website` receipt's `public_url` must carry the placement's exact
+`utm_content` before it can be recorded (`urlCarriesPlacementTracking`).
+LinkedIn/GBP/email are not gated the same way -- their receipt `public_url`
+typically identifies the platform post, not the outbound link embedded in
+it, and this repo's existing `channel-validation.ts` doctrine already treats
+those destinations as unverifiable beyond operator attestation; for those,
+the tracking parameters are surfaced as copy-paste help
+(`PlacementsTrackingPanel.tsx`, operator-only, on the deliverable review
+page) rather than hard-enforced. Until every publishing path actually uses
+the generated link, most traffic will still land as `unknown` or
+`self_reported` -- the gate closes the loop going forward, it does not
+retroactively fix historical volume (see the historical-backfill exclusion
+above).
 
 ### What requires self-report or operator entry
 
