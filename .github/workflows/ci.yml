@@ -31,57 +31,53 @@
 # repo admin access must add "Publication concurrency integration tests" to
 # the required-checks list once this job is confirmed green on main.
 #
-# KNOWN BLOCKER for integration-test (corrective-release workstream 6, filed
-# 2026-07-16; corrected 2026-07-17 after a Codex independent release review
-# found the original wording overclaimed the scope): `supabase start`
-# applies every file in supabase/migrations/ in order to a FRESH, empty
-# Postgres. That directory only contains incremental changes starting
-# 2026-04-13, and TWO SEPARATE problems block a from-scratch run --
-# conflating them (as an earlier version of this comment did) makes the fix
-# sound bigger and less tractable than it is:
+# RESOLVED (Supabase baseline workstream, 2026-07-17): the KNOWN BLOCKER
+# formerly documented here is fixed. `supabase start` now applies all 178
+# files in supabase/migrations/ to a genuinely fresh, empty Postgres with
+# zero errors, verified locally via CLI 2.109.1. Two separate, independently
+# root-caused defects were involved -- history kept below since the same
+# failure classes can recur if a future migration reintroduces either
+# pattern:
 #
-#   1. A SMALL set of foundational tables (intake_firms, law_firm_clients,
-#      leads, diagnostics, sequence_templates, sequence_steps,
-#      email_sequences, review_requests, state_history -- 9 tables,
-#      case-insensitive-scanned 2026-07-17) have NO CREATE TABLE statement
-#      anywhere in supabase/migrations/ at all. This is the actual
-#      from-scratch blocker: the very first substantive migration
-#      (20260414_portal_clio.sql, `ALTER TABLE intake_firms ADD COLUMN ...`)
-#      fails immediately on a from-scratch database, and since intake_firms
-#      is a base dependency, `supabase start` cannot get through the rest of
-#      the migration chain either (confirmed via the Supabase CLI locally --
-#      `supabase status -o env` parses and runs correctly against CLI
-#      2.109.1 -- and independently via the Supabase MCP: `list_tables` on
-#      project ssxryjxifwiivghglqer shows these tables live with no
-#      corresponding CREATE TABLE anywhere in this directory).
-#   2. A LARGER set of tables (firm_lawyers, conflict_register,
-#      conflict_checks, industry_benchmarks, matter_routing,
-#      retainer_agreements, screened_leads, sub_type_conflicts,
-#      unconfirmed_inquiries, webhook_outbox, firm_decline_templates,
-#      firm_onboarding_intake, channel_intake_sessions -- 13 tables) DO have
-#      a real CREATE TABLE file already committed in supabase/migrations/;
-#      that file is just missing from Supabase's own tracked production
-#      ledger (`list_migrations` on ssxryjxifwiivghglqer starts at
-#      20260518193933, after all 13 of these files' dates). This is a
-#      provenance/drift-auditing gap, not a from-scratch-executability
-#      blocker -- these 13 tables' own migration files are correct and would
-#      apply fine to a fresh Postgres once problem 1 is fixed.
+#   1. Missing baseline content (9 foundational tables plus one function,
+#      get_dashboard_stats, discovered only after fixing problem 2 let the
+#      bootstrap run far enough to reach the statement that revoked EXECUTE
+#      on it) had no CREATE anywhere in this repo's history. Fixed by
+#      supabase/migrations/20260412235959_historical_baseline_pre_cutover.sql,
+#      sourced from introspecting the pre-cutover project (qpzopweonveumvuqkqgw)
+#      and cross-checked byte-identical against current production
+#      (ssxryjxifwiivghglqer) where no local ALTER migration exists for that
+#      object. Evidence trail: docs/BASELINE_MIGRATION_DECISION_RECORD.md.
+#   2. A pre-existing, previously-undiscovered defect: 116 of 178 filenames
+#      carried only an 8-digit date prefix (no time component), so 25 dates
+#      had multiple files sharing one "version". Supabase's local migration
+#      bookkeeping keys on that version as a primary key, so the second file
+#      in any such group made `supabase start` fail with a duplicate-key
+#      error before ever reaching the missing-baseline error problem 1
+#      describes -- this is why problem 1 alone looked sufficient from
+#      static analysis but wasn't, and why this comment now documents both.
+#      Fixed by disambiguating all 116 filenames with a synthetic six-digit
+#      sequence appended to each date (preserving byte-order alphabetical
+#      order within each group), then correcting two real ordering bugs the
+#      rename surfaced (screened_leads before its own index file; a real
+#      dependency case, firm_files needing firm_lawyers to exist first, that
+#      happens to sort the wrong way alphabetically) plus 5 more found via a
+#      static cross-file dependency scan before the final clean run.
+#      Filename changes only; zero SQL content changed. Production's actual
+#      migration ledger (list_migrations) assigns each applied migration its
+#      own independent, full-precision version at apply time, decoupled from
+#      the checked-in filename, so this rename is inert with respect to
+#      anything already live in production -- confirmed directly, and the
+#      resulting ledger/filename drift was reconciled via
+#      `supabase migration repair` (metadata-only, zero SQL executed; see
+#      docs/BASELINE_MIGRATION_DECISION_RECORD.md for the full before/after
+#      ledger record).
 #
-# This job is wired correctly and will fail LOUDLY on the missing-baseline
-# error (not silently skip) until a human authors a baseline/bootstrap
-# migration covering the 9 problem-1 tables. Do NOT do this by dumping
-# production's CURRENT schema and prepending it before replaying all
-# existing migrations -- a current-state dump already contains the
-# cumulative effect of everything that ran after 2026-04-13, so replaying
-# those same migrations on top of it would fail on duplicate-object errors
-# or silently diverge from what actually ran in production. The two safe
-# strategies (reconstruct the pre-2026-04-13 baseline and replay history
-# unmodified, OR a new current-state squash baseline with the existing
-# migrations explicitly excluded from fresh-install replay) are documented
-# in the `supabase-baseline-migration-gap` memory record. That
-# reconstruction is a separate, larger undertaking outside this workstream's
-# scope (repair 2 test files + wire CI to run them) and is not attempted
-# here -- see the flagged follow-up task.
+# This job is now expected to pass. A failure here on a future PR means a
+# newly-added migration broke fresh-database bootstrap (most likely a
+# reintroduced bare-date filename collision or a genuine forward-dependency
+# ordering bug) -- treat it as a real regression, not a known/expected
+# failure.
 
 name: CI
 
