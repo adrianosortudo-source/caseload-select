@@ -52,10 +52,46 @@
  * Run locally: DIRECT_DATABASE_URL="postgresql://postgres:<pw>@db.<ref>.supabase.co:5432/postgres" npx vitest run src/lib/__tests__/publication-receipt-concurrency.integration.test.ts
  */
 
+import dns from "node:dns";
+import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
 const DB_URL = process.env.DIRECT_DATABASE_URL;
+
+// pg forwards a `lookup` option straight through to net.connect(), which
+// otherwise always calls dns.lookup() -- even for a literal IP host like
+// the 127.0.0.1 this file's DIRECT_DATABASE_URL always points at in CI and
+// local dev. A GitHub Actions run of this file failed twice with
+// "getaddrinfo EAI_AGAIN base" (a DNS resolution error) despite the target
+// being a plain IP; the failure did not reproduce locally against an
+// identically-migrated real Postgres instance, and only manifested under
+// CI's pinned Node 20 (this repo runs Node 24 locally). Short-circuiting
+// DNS for IP literals removes the lookup path entirely regardless of root
+// cause; a real hostname (the "run locally against a hosted Supabase
+// project" case in this file's docstring) still resolves normally.
+// @types/pg does not declare `lookup` even though the runtime accepts it,
+// hence the local intersection type instead of an inline object literal.
+type ClientConfigWithLookup = import("pg").ClientConfig & {
+  lookup?: (
+    hostname: string,
+    options: dns.LookupOptions,
+    callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void,
+  ) => void;
+};
+
+function lookupPreferringIpLiteral(
+  hostname: string,
+  options: dns.LookupOptions,
+  callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void,
+): void {
+  const family = net.isIP(hostname);
+  if (family) {
+    callback(null, hostname, family);
+    return;
+  }
+  dns.lookup(hostname, options as dns.LookupOneOptions, callback);
+}
 
 describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two connections)", () => {
   // Imported lazily and only inside the gated branch: `pg` is a devDependency
@@ -95,8 +131,9 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
 
   beforeAll(async () => {
     ({ Client } = await import("pg"));
-    connA = new Client({ connectionString: DB_URL });
-    connB = new Client({ connectionString: DB_URL });
+    const clientOptions: ClientConfigWithLookup = { connectionString: DB_URL, lookup: lookupPreferringIpLiteral };
+    connA = new Client(clientOptions);
+    connB = new Client(clientOptions);
     await connA.connect();
     await connB.connect();
 
