@@ -81,11 +81,18 @@ export default async function PublicationPlacementDetailPage({
     );
   }
 
-  const [result, latestClaim, receipts] = await Promise.all([
-    loadPublicationExecutionManifest(firmId, placementId, { role: "operator", id: null, name: "Operator" }),
-    getLatestClaimForPlacement(placementId),
-    listReceiptsForPlacement(placementId),
-  ]);
+  // Firm-scoping check first, in isolation: getLatestClaimForPlacement and
+  // listReceiptsForPlacement are keyed only by placementId (no firm filter
+  // of their own), so they must never be called until the manifest load
+  // above has confirmed this placement actually belongs to firmId. Fetching
+  // another firm's claim/receipt rows before that check -- even if the
+  // result were then discarded and never rendered -- is exactly the kind of
+  // defense-in-depth gap a later refactor could turn into a real leak.
+  const result = await loadPublicationExecutionManifest(firmId, placementId, {
+    role: "operator",
+    id: null,
+    name: "Operator",
+  });
 
   if (!result.ok) {
     return (
@@ -99,6 +106,10 @@ export default async function PublicationPlacementDetailPage({
   }
 
   const { manifest } = result;
+  const [latestClaim, receipts] = await Promise.all([
+    getLatestClaimForPlacement(placementId),
+    listReceiptsForPlacement(placementId),
+  ]);
   const adapter = getPublicationAdapter(manifest.destination);
   const preflightStatus = adapter.preflight(manifest);
   const configuration = adapter.validateConfiguration(manifest);
