@@ -85,6 +85,13 @@ describe.skipIf(!DB_URL)("set_standing_publishing_authorization concurrency (rea
 
   beforeAll(async () => {
     ({ Client } = await import("pg"));
+    // Diagnostic: pg-connection-string's parse() returns host: "base" for
+    // both the literal string "base" AND an empty string -- the previous
+    // round's stack trace proved connA/connB are the exact Client
+    // instances hitting the DNS failure, so this settles what DB_URL
+    // actually is at the moment new Client() runs, versus what the CI
+    // step's own env: dump claims it exported.
+    console.error(`[DB_URL diagnostic] typeof=${typeof DB_URL} length=${DB_URL?.length} json=${JSON.stringify(DB_URL)}`);
     connA = new Client({ connectionString: DB_URL });
     connB = new Client({ connectionString: DB_URL });
     await connA.connect();
