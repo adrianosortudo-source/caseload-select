@@ -90,8 +90,14 @@ describe.skipIf(!DB_URL)("set_standing_publishing_authorization concurrency (rea
     expect(rows[0].n).toBe(2);
 
     // "Latest state" is unambiguous: exactly one row has the max event_seq.
+    // event_seq::int (not the raw bigint) so it compares cleanly against
+    // seqs[1], which came through jsonb_build_object and is already a JS
+    // number -- pg returns bigint columns as strings by default, and this
+    // repo's convention for a bare numeric compare is an explicit ::int
+    // cast (see the `count(*)::int` pattern in the sibling concurrency
+    // suites), not a raw bigint column.
     const latest = await connA.query(
-      `select id, event_seq from standing_publishing_authorizations where firm_id = $1 order by event_seq desc limit 1`,
+      `select id, event_seq::int as event_seq from standing_publishing_authorizations where firm_id = $1 order by event_seq desc limit 1`,
       [firmId],
     );
     expect(latest.rows).toHaveLength(1);
