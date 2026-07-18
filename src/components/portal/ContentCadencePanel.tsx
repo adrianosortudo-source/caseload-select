@@ -227,11 +227,11 @@ export default function ContentCadencePanel({
           {links.length > 0 ? (
             <div className="ccp-ref">
               <p className="ccp-ref-rl">Reference</p>
-              <ul style={{ display: "flex", flexWrap: "wrap", gap: "20px", listStyle: "none", margin: 0, padding: 0 }}>
+              <ul className="ccp-ref-list">
                 {links.map((l) => (
                   <li key={l.url}>
                     <a href={l.url} target="_blank" rel="noopener noreferrer">
-                      {l.label} <span aria-hidden>&nearr;</span>
+                       <span>{l.label}</span><span className="ccp-ref-arrow" aria-hidden="true">&#8599;</span>
                     </a>
                   </li>
                 ))}

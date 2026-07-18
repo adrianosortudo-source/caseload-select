@@ -128,5 +128,7 @@
 .ccp-adhoc b{color:var(--ccp-navy)}
 .ccp-ref{padding-top:16px;border-top:1px solid var(--ccp-line)}
 .ccp-ref-rl{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ccp-ink-soft);margin-bottom:8px}
-.ccp-ref a{font-size:14px;font-weight:600;color:var(--ccp-navy);text-decoration:none}
-.ccp-ref a:hover{text-decoration:underline}
+.ccp-ref-list{display:flex;flex-wrap:wrap;gap:12px;list-style:none;margin:0;padding:0}
+.ccp-ref a{display:inline-flex;align-items:center;gap:9px;padding:10px 14px;border:1px solid var(--ccp-navy);border-radius:4px;background:#fff;font-size:13px;font-weight:700;color:var(--ccp-navy);text-decoration:none;transition:background .15s ease,color .15s ease,box-shadow .15s ease}
+.ccp-ref a:hover{background:var(--ccp-navy);color:#fff;box-shadow:0 3px 10px rgba(18,39,82,.16)}
+.ccp-ref-arrow{font-size:16px;line-height:1}
