@@ -117,8 +117,27 @@ describe("SYSTEM_PROMPT", () => {
   });
 
   it("contains the confidentiality rule about client names", () => {
-    expect(SYSTEM_PROMPT).toMatch(/strip client names/);
+    // The prompt is hard-wrapped for readability in the spec's fenced block,
+    // so this phrase spans a line break in the actual string; \s+ tolerates
+    // the newline and indentation between words.
+    expect(SYSTEM_PROMPT).toMatch(/describe situations in\s+general terms/);
     expect(SYSTEM_PROMPT).toMatch(/Never reproduce a client's name/);
+  });
+
+  // v3 (operator correction, 2026-07-17): the interview must never ask the
+  // lawyer to paste or upload source material (client emails, transcripts).
+  // Every writing sample comes from live, typed answers instead.
+  it("never asks the lawyer to paste or upload source material", () => {
+    expect(SYSTEM_PROMPT).toMatch(/I will never paste or upload anything/);
+    expect(SYSTEM_PROMPT).not.toMatch(/Paste things you have written/);
+    expect(SYSTEM_PROMPT).not.toMatch(/Paste a transcript/);
+    expect(SYSTEM_PROMPT).not.toMatch(/Paste one piece of writing/);
+  });
+
+  it("contains the v3 live-writing exercises in Section 2", () => {
+    expect(SYSTEM_PROMPT).toMatch(/REAL WORDS, RIGHT HERE/);
+    expect(SYSTEM_PROMPT).toMatch(/Type the first two or three sentences/);
+    expect(SYSTEM_PROMPT).toMatch(/mid-matter check-in/);
   });
 
   // Regression guard: a live Gemini run (BUILD_PLAN Phase 3 G2) found that

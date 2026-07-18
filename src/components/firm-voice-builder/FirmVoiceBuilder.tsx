@@ -202,14 +202,17 @@ export default function FirmVoiceBuilder() {
           AI so its drafts finally sound like you wrote them.
         </p>
         <p className="text-sm text-body leading-relaxed mb-3">
-          Two things are built into the profile: Ontario advertising rails (no outcome promises, no
-          unverifiable claims) and a blocklist for the vocabulary and constructions that make AI writing
-          sound like AI writing.
+          It works entirely through conversation, about 25 questions, 25 minutes. There is nothing to paste
+          and nothing to upload; every answer you type back is itself a writing sample.
         </p>
         <p className="text-sm text-body leading-relaxed mb-3">
-          You will be asked to paste real writing, including client emails. Remove client names and
-          identifying details before you paste; the tool does not need them. Nothing you type here is
-          stored on our servers; the conversation lives in your browser for this session only.
+          Nothing you type here is stored on our servers; the conversation lives in your browser for this
+          session only. Describe situations in general terms rather than naming real clients; the tool does
+          not need a real name to learn how you write.
+        </p>
+        <p className="text-sm text-body leading-relaxed mb-3">
+          The finished profile also carries two things quietly built in: the Law Society&apos;s advertising
+          rules, and a blocklist for the vocabulary that makes AI writing sound like AI writing.
         </p>
         <button type="button" className="btn-gold mt-2" onClick={startFresh}>
           Start the interview
@@ -259,7 +262,7 @@ export default function FirmVoiceBuilder() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-2 sticky bottom-0 bg-parchment/95 backdrop-blur py-3">
         <textarea
           className="input min-h-[96px] resize-y"
-          placeholder="Type your answer. Paste real writing when asked; longer is better."
+          placeholder="Type your answer. Write it out the way you actually would."
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
