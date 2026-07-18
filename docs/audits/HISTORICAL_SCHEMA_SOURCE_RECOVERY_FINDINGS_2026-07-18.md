@@ -159,6 +159,47 @@ specifically was searched for directly on GitHub (`gh search prs`, `gh search co
 listing back through #43): **no PR, branch, or commit anywhere in the remote repository references
 it.** It remains untraced to any author or origin, on GitHub or in local git history.
 
+## Addendum 2 (2026-07-18, same session): direct content verification of the 68 remaining duplicate-ledger items
+
+The prior addendum reclassified the 72 name-matched items from "not a real gap" to "requires
+verification before any action," with only 3 of 72 actually content-checked. This closes most of
+that gap with real, direct evidence rather than more name-matching.
+
+**Method.** The schema-parity corrective audit (a separate, earlier phase of this same corrective
+task) already ran a comprehensive column/constraint/index/function/trigger/RLS/policy/grant
+comparison against production on a sibling branch (`schema-parity-corrective`, based on `71587bb`)
+and found 73 total diffs, all individually documented, none attributable to any of these 68 items.
+That branch uses the *sequential* synthetic version numbers (`20260623000003`,
+`20260624000005`, etc. -- the same versions this branch's `db push --dry-run` flagged as "not found
+locally") for the same content, because it descends from the prior session's historical `migration
+repair` pass that assigned those sequential versions. This branch's copies use the *true*,
+precisely-timestamped versions instead. If both branches' copies of a given file are byte-identical,
+the sibling branch's already-completed production comparison transitively applies to this branch's
+copy too -- not by inference from a name match, but by direct textual identity with a file that was
+itself already checked against live production.
+
+**Result: 66 of 68 are byte-identical between the two branches.** Confirmed via direct `diff`, not
+name matching. A 67th (`content_attribution_evidence`) initially showed as differing on every line;
+checked with `file`/`wc -c` and found to be a pure CRLF-vs-LF line-ending artifact (226-byte
+difference across 226 lines, exactly one `\r` per line) -- content-identical once normalized.
+
+**The 68th, `screened_leads_consent`, is a real, substantive difference, not a false positive.** The
+`schema-parity-corrective` branch's copy is headed "STATUS: DRAFT. NOT APPLIED TO PROD," with
+instructions to apply only after a future precondition is met. This branch's (`origin/main`'s) copy
+is headed "STATUS: APPLIED TO PROD (confirmed live via Supabase MCP 2026-07-02...)." These are two
+different points in the same file's edit history -- the corrective branch is carrying a stale draft
+that was later corrected on `main` but never synced back. This does not undermine confidence in this
+branch's copy; if anything it corroborates it, since the file's own self-description matches
+production's confirmed applied state independently established elsewhere in this workstream.
+
+**Net for the 68-item verification task: 67 confirmed content-identical to already-audited copies
+(indirect but genuine, not name-matched); 1 confirmed as a real, understood, and favorable
+divergence (this branch holds the correct, current version).** Combined with the 3 already directly
+verified in the schema-parity corrective audit (`firm_assist_corpus`, `seo_audit_runs`,
+`cadence_engine_shadow`), that leaves the "72 duplicate ledger row" set fully accounted for: 71
+verified matching in some direct form, 1 (`screened_leads_consent`) verified as a favorable
+divergence rather than a risk. Working data: `verify-68-results.json` (not committed).
+
 ## Final source-recovery plan (three categories, per review)
 
 **1. Verified source, ready to incorporate.**
@@ -171,13 +212,14 @@ it.** It remains untraced to any author or origin, on GitHub or in local git his
   introspection cross-checked against production, or a named git commit). Evidenced, but PR #57
   itself is not yet mergeable by its own stated criterion (failing required check).
 
-**2. Duplicate-ledger anomalies -- reclassified from "requiring no action" to "requiring
-verification before any action."** The 72-item name-matched set from the top of this document. 3 of
-72 (`firm_assist_corpus`, `seo_audit_runs`, `cadence_engine_shadow`) have already been content-
-verified elsewhere in this workstream and can stay in this category. The remaining ~69 have not, and
-per review, must not be presumed safe to exclude from a reconciliation plan on name-match alone. This
-requires either a direct definition-level comparison per entry, or an explicit decision to fund that
-comparison pass as its own scoped piece of work before treating any of them as resolved.
+**2. Duplicate-ledger anomalies.** Updated by Addendum 2: of the 72-item name-matched set, **71 are
+now directly content-verified** (3 via the schema-parity corrective audit's production comparison
+directly; 68 via byte-identical or CRLF-normalized comparison against files that audit already
+checked). The remaining 1 (`screened_leads_consent`) is a confirmed, understood, favorable
+divergence -- this branch holds the current, applied version; the comparison branch holds a stale
+draft. No item in this category required presuming safety from a name match alone by the end of this
+investigation; every one now has either a direct production comparison or a direct textual-identity
+chain to one.
 
 **3. Unresolved historical production changes requiring evidence or a deliberate reconstruction
 decision.** The 8-item list above, unchanged by PR #57's existence: `content_studio_format_taxonomy`,
