@@ -40,6 +40,38 @@ correct and by design, not an error, and this phase does **not** attempt to clos
 `migration repair` (that decision belongs to a later, explicitly-reviewed phase per the corrective
 task's own safety boundary #4).
 
+## Dry-run proof (production, read-only)
+
+`supabase migration list --linked` was run from this branch against `ssxryjxifwiivghglqer` on
+2026-07-18. Result: **all 59 of the ledger-matched renames confirmed matched** (local version = remote
+version, for every single one, zero exceptions) — the exact proof this phase exists to produce. None
+of the 59 will be replayed, re-applied, or trigger a spurious duplicate ledger row. Full raw output is
+in `phase1-dry-run.log` alongside this manifest's source materials.
+
+The 57 unmatched-by-design files show correctly as local-only, as expected. Two things surfaced during
+verification, both documented rather than silently fixed, since fixing either is outside this phase's
+declared filename-only, 116-item scope:
+
+1. **A CLI display artifact, not a real gap.** `20260626203055` (`screened_leads_consent`) appears
+   twice in the raw `migration list` output — once correctly matched, once as a spurious local-only
+   duplicate of the same version. There is only one file on disk at that version (the filesystem
+   cannot hold two); this is the CLI's own comparison/rendering logic double-counting under some
+   condition, the same class of cosmetic defect as the bare-8-digit-date bug already documented
+   elsewhere in this workstream's audit trail. Not fixed, not a ledger write.
+
+2. **A genuine, pre-existing version-mismatch bug on `origin/main` itself, unrelated to this rename.**
+   `20260717030000_content_attribution_evidence.sql` already exists on `origin/main` untouched by this
+   branch's rename plan (it postdates the 116-item collision set entirely). Production's actual ledger
+   row for that exact content is `20260717224806` — over 19 hours later, presumably the true apply
+   time. This is the identical bug class documented in the schema-parity corrective audit's Finding 14
+   (`pdf_artifact_integrity`'s version mismatch), except this instance lives on `main` today, was never
+   introduced by any work in this session, and was found purely as a side effect of running this
+   phase's dry-run proof. **Not fixed here** — it is outside Phase 1's declared scope (the 116-item
+   rename set only) and touching it now would blur exactly the scope discipline this phased plan exists
+   to enforce. Flagged for a follow-up, likely as part of Phase 2 or a dedicated small fix, using the
+   same single-file, zero-content-change, verify-then-rename method already proven on
+   `pdf_artifact_integrity`.
+
 ## Full rename table
 
 | Original filename | New filename | True ledger version? | Reason |
