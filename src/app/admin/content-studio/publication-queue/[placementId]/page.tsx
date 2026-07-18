@@ -157,11 +157,26 @@ export default async function PublicationPlacementDetailPage({
           </div>
         )}
 
-        <Section title="Approved-version preview">
+        <Section title="Release-version preview">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="Title" value={manifest.title ?? "—"} />
             <Field label="Excerpt" value={manifest.excerpt ?? "—"} />
-            <Field label="Approved version" value={manifest.approvedVersionId ?? "—"} />
+            <Field label="Deliverable's own approved version" value={manifest.approvedVersionId ?? "—"} />
+            <Field
+              label="Release version (what would actually publish)"
+              value={
+                manifest.releaseVersionId ? (
+                  <>
+                    {manifest.releaseVersionId}
+                    {manifest.releaseVersionId !== manifest.approvedVersionId && (
+                      <span className="ml-2 text-amber-700 text-xs">(differs from approved — releasing via standing authorization)</span>
+                    )}
+                  </>
+                ) : (
+                  "—"
+                )
+              }
+            />
             <Field label="Version body hash (sha256)" value={<code className="text-xs">{manifest.versionBodyHash ?? "—"}</code>} />
           </div>
           {manifest.body && (
@@ -207,6 +222,28 @@ export default async function PublicationPlacementDetailPage({
               }
             />
           </div>
+          {manifest.ctaTargetPath && (
+            <div className="mt-4 pt-4 border-t border-black/8">
+              <div className="text-xs uppercase tracking-wider text-black/40 mb-2">
+                CTA target (resolved against the firm's website, independent of this placement's own destination)
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field label="CTA target URL" value={manifest.ctaTargetUrl ?? "Not resolved — no validated website base on record"} />
+                <Field
+                  label="CTA tracked URL"
+                  value={
+                    manifest.ctaTrackedUrl ? (
+                      <a href={manifest.ctaTrackedUrl} target="_blank" rel="noopener noreferrer" className="text-sky-600 hover:underline break-all">
+                        {manifest.ctaTrackedUrl}
+                      </a>
+                    ) : (
+                      "Not resolved"
+                    )
+                  }
+                />
+              </div>
+            </div>
+          )}
         </Section>
 
         <Section title="Assets (ordered, hashed)">

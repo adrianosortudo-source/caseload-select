@@ -6,6 +6,14 @@
  * convention (see publication-preflight-loader.ts): every branching
  * decision lives in the pure builder (publication-execution-manifest.ts),
  * this file only fetches and shapes rows for it.
+ *
+ * Two-phase fetch (corrective pass, post-review): phase 1 loads everything
+ * needed to DECIDE which version would actually release (resolveReleaseVersion
+ * needs both approvedVersion and currentVersion plus standing-authorization
+ * state); phase 2, run only after that decision, scopes the receipt lookup
+ * to the exact resolved release version rather than hardcoding
+ * approved_version_id, so a standing-authorization placement's prior receipt
+ * (bound to current_version_id) is found correctly.
  */
 
 import "server-only";
@@ -16,6 +24,7 @@ import { getCurrentReceiptForPlacement } from "@/lib/publication-receipts";
 import { getLatestClaimForPlacement } from "@/lib/publication-placement-claims";
 import {
   buildPublicationExecutionManifest,
+  resolveReleaseVersion,
   type PublicationExecutionManifest,
   type ManifestGeneratorIdentity,
 } from "@/lib/publication-execution-manifest";
@@ -25,43 +34,53 @@ import type {
   ContentPlacement,
   DeliverableVersion,
   PublicationArtifact,
-  PlacementDestination,
 } from "@/lib/types";
 
 /**
- * Resolves a real, previously-verified destination base URL for this firm +
- * destination from EXISTING evidence only -- the most recent 'webpage'
- * publication_artifacts row across the firm's deliverables that carries a
- * public_url, or failing that the most recent verified firm_website receipt.
- * Never guesses, never hardcodes a per-firm domain. Returns null when no
- * such evidence exists yet (a brand-new firm's first-ever placement).
+ * Resolves the firm's real, VALIDATED website base URL from existing
+ * evidence only -- the most recent 'webpage' publication_artifacts row (of
+ * a bounded recent set) that has at least one passing
+ * publication_artifact_validations record, or failing that the most recent
+ * verified firm_website receipt (receipts are already validation-gated by
+ * their own verification_state). Never guesses, never hardcodes a per-firm
+ * domain, and never trusts a merely-REGISTERED artifact whose evidence was
+ * never actually checked -- registration is an operator's claim; validation
+ * is proof the claim was verified (corrective-pass fix: the prior version
+ * of this function trusted the latest registered artifact unconditionally).
  *
- * Scoped to destination === "firm_website" only: LinkedIn/GBP/email have no
- * concept of a "base URL" an intended_path resolves against (see
- * publication-execution-manifest.ts's resolveDestinationAccount for why
- * those destinations always report unconfigured).
+ * This is destination-agnostic by design: it always resolves the firm's
+ * WEBSITE identity, independent of which destination the current placement
+ * targets, because a GBP/LinkedIn post's CTA points at the website
+ * regardless of where the post itself publishes.
  */
-async function resolveDestinationBaseUrlForFirm(
-  firmId: string,
-  destination: PlacementDestination,
-): Promise<string | null> {
-  if (destination !== "firm_website") return null;
-
+async function resolveValidatedWebsiteBaseUrl(firmId: string): Promise<string | null> {
   const { data: artifactRows } = await supabase
     .from("publication_artifacts")
-    .select("public_url, created_at")
+    .select("id, public_url, created_at")
     .eq("firm_id", firmId)
     .eq("artifact_type", "webpage")
     .not("public_url", "is", null)
     .order("created_at", { ascending: false })
-    .limit(1);
+    .limit(20);
 
-  const artifactUrl = (artifactRows?.[0] as { public_url: string | null } | undefined)?.public_url ?? null;
-  if (artifactUrl) {
-    try {
-      return new URL(artifactUrl).origin;
-    } catch {
-      // fall through to receipts
+  const candidates = (artifactRows ?? []) as Array<{ id: string; public_url: string; created_at: string }>;
+  if (candidates.length > 0) {
+    const { data: validations } = await supabase
+      .from("publication_artifact_validations")
+      .select("artifact_id, result")
+      .in(
+        "artifact_id",
+        candidates.map((c) => c.id),
+      )
+      .eq("result", "pass");
+    const validatedIds = new Set(((validations ?? []) as Array<{ artifact_id: string }>).map((v) => v.artifact_id));
+    const validated = candidates.find((c) => validatedIds.has(c.id));
+    if (validated) {
+      try {
+        return new URL(validated.public_url).origin;
+      } catch {
+        // fall through to receipts
+      }
     }
   }
 
@@ -117,36 +136,64 @@ export async function loadPublicationExecutionManifest(
   if (!deliverableRow) return { ok: false, error: "deliverable not found for this firm", status: 404 };
   const deliverable = deliverableRow as ContentDeliverable;
 
-  const [{ data: firmRow }, periodResult, versionResult, artifactsResult, standingAuth, currentReceipt, baseUrl, latestClaim] =
+  const relevantVersionIds = [deliverable.approved_version_id, deliverable.current_version_id].filter(
+    (id): id is string => id !== null,
+  );
+  const uniqueVersionIds = [...new Set(relevantVersionIds)];
+
+  // Phase 1: everything needed to decide which version would release.
+  const [{ data: firmRow }, periodResult, approvedVersionResult, currentVersionResult, artifactsResult, standingAuth, websiteBaseUrl, latestClaim] =
     await Promise.all([
       supabase.from("intake_firms").select("id, location, name").eq("id", firmId).maybeSingle(),
       placement.period_id
         ? supabase.from("content_periods").select("*").eq("id", placement.period_id).maybeSingle()
         : Promise.resolve({ data: null as ContentPeriod | null }),
       deliverable.approved_version_id
-        ? supabase
-            .from("deliverable_versions")
-            .select("*")
-            .eq("id", deliverable.approved_version_id)
-            .maybeSingle()
+        ? supabase.from("deliverable_versions").select("*").eq("id", deliverable.approved_version_id).maybeSingle()
         : Promise.resolve({ data: null as DeliverableVersion | null }),
-      deliverable.approved_version_id
-        ? supabase
-            .from("publication_artifacts")
-            .select("*")
-            .eq("version_id", deliverable.approved_version_id)
+      deliverable.current_version_id
+        ? supabase.from("deliverable_versions").select("*").eq("id", deliverable.current_version_id).maybeSingle()
+        : Promise.resolve({ data: null as DeliverableVersion | null }),
+      uniqueVersionIds.length > 0
+        ? supabase.from("publication_artifacts").select("*").in("version_id", uniqueVersionIds)
         : Promise.resolve({ data: [] as PublicationArtifact[] }),
       getStandingAuthorizationState(firmId),
-      deliverable.approved_version_id
-        ? getCurrentReceiptForPlacement(placementId, deliverable.approved_version_id)
-        : Promise.resolve(null),
-      resolveDestinationBaseUrlForFirm(firmId, placement.destination),
+      resolveValidatedWebsiteBaseUrl(firmId),
       getLatestClaimForPlacement(placementId),
     ]);
 
   const period = (periodResult as { data: ContentPeriod | null }).data;
-  const approvedVersion = (versionResult as { data: DeliverableVersion | null }).data;
+  const approvedVersion = (approvedVersionResult as { data: DeliverableVersion | null }).data;
+  const currentVersion = (currentVersionResult as { data: DeliverableVersion | null }).data;
   const assets = ((artifactsResult as { data: PublicationArtifact[] | null }).data ?? []) as PublicationArtifact[];
+
+  const validatedArtifactIds = new Set<string>();
+  if (assets.length > 0) {
+    const { data: validations } = await supabase
+      .from("publication_artifact_validations")
+      .select("artifact_id, result")
+      .in(
+        "artifact_id",
+        assets.map((a) => a.id),
+      )
+      .eq("result", "pass");
+    for (const v of (validations ?? []) as Array<{ artifact_id: string }>) validatedArtifactIds.add(v.artifact_id);
+  }
+
+  // Phase 2: now that path A/B eligibility is knowable, scope the receipt
+  // lookup to the version that would actually release, not a hardcoded
+  // approved_version_id (which is wrong under standing authorization).
+  const release = resolveReleaseVersion({
+    deliverable,
+    approvedVersion,
+    currentVersion,
+    standingAuthorizationActive: standingAuth?.active ?? false,
+  });
+  const currentReceipt = release.releaseVersionId
+    ? await getCurrentReceiptForPlacement(placementId, release.releaseVersionId)
+    : null;
+
+  const resolvedDestinationBaseUrl = placement.destination === "firm_website" ? websiteBaseUrl : null;
 
   const manifest = buildPublicationExecutionManifest({
     now: new Date().toISOString(),
@@ -155,11 +202,14 @@ export async function loadPublicationExecutionManifest(
     period: period ? { id: period.id, readinessLifecycle: period.readiness_lifecycle } : null,
     deliverable,
     approvedVersion,
+    currentVersion,
     placement,
     assets,
+    validatedArtifactIds,
     currentReceipt,
     standingAuthorizationActive: standingAuth?.active ?? false,
-    resolvedDestinationBaseUrl: baseUrl,
+    resolvedDestinationBaseUrl,
+    resolvedWebsiteBaseUrl: websiteBaseUrl,
     scheduledTimezone: resolveFirmTimezone(firmRow ? { location: firmRow.location } : null),
     latestClaim: latestClaim
       ? { status: latestClaim.status, approvedVersionId: latestClaim.approved_version_id }

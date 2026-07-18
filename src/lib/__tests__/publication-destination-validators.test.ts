@@ -9,7 +9,7 @@ import type { PublicationExecutionManifest } from "@/lib/publication-execution-m
 
 function baseManifest(overrides: Partial<PublicationExecutionManifest> = {}): PublicationExecutionManifest {
   return {
-    schemaVersion: "publication-execution-manifest-1.0",
+    schemaVersion: "publication-execution-manifest-1.1",
     generatedAt: "2026-07-18T00:00:00.000Z",
     generatedBy: { role: "operator", id: "op-1", name: "Op" },
     idempotencyKey: "key",
@@ -18,6 +18,7 @@ function baseManifest(overrides: Partial<PublicationExecutionManifest> = {}): Pu
     periodLifecycle: "enforced",
     deliverableId: "deliverable-1",
     approvedVersionId: "version-1",
+    releaseVersionId: "version-1",
     versionBodyHash: "hash",
     releaseAuthorizationPath: "individual_approval",
     placementId: "placement-1",
@@ -30,6 +31,8 @@ function baseManifest(overrides: Partial<PublicationExecutionManifest> = {}): Pu
     ctaTargetPath: null,
     canonicalUrl: "https://drglaw.ca/journal/founder-vesting-ontario",
     trackedUrl: "https://drglaw.ca/journal/founder-vesting-ontario?utm_content=placement-1",
+    ctaTargetUrl: null,
+    ctaTrackedUrl: null,
     assets: [],
     scheduledPublishDate: null,
     scheduledTimezone: null,
@@ -88,7 +91,7 @@ describe("validateDestinationFormat — linkedin_article", () => {
     const manifest = baseManifest({
       destination: "linkedin_article",
       title: "a".repeat(LINKEDIN_ARTICLE_HEADLINE_MAX_CHARS + 1),
-      assets: [{ artifactId: "a1", artifactType: "hero_image", storageBucket: null, storagePath: null, publicUrl: null, mimeType: null, sizeBytes: null, sha256: null }],
+      assets: [{ artifactId: "a1", artifactType: "hero_image", storageBucket: null, storagePath: null, publicUrl: null, mimeType: null, sizeBytes: null, sha256: null, validated: true }],
     });
     expect(validateDestinationFormat(manifest).some((i) => i.code === "linkedin_article_headline_over_limit")).toBe(true);
   });
@@ -106,7 +109,7 @@ describe("validateDestinationFormat — google_business_profile", () => {
     const manifest = baseManifest({
       destination: "google_business_profile",
       body: "a".repeat(GBP_POST_BODY_MAX_CHARS + 1),
-      assets: [{ artifactId: "a1", artifactType: "social_image", storageBucket: null, storagePath: null, publicUrl: null, mimeType: null, sizeBytes: null, sha256: null }],
+      assets: [{ artifactId: "a1", artifactType: "social_image", storageBucket: null, storagePath: null, publicUrl: null, mimeType: null, sizeBytes: null, sha256: null, validated: true }],
     });
     expect(validateDestinationFormat(manifest).some((i) => i.code === "gbp_post_over_limit")).toBe(true);
   });
@@ -119,7 +122,7 @@ describe("validateDestinationFormat — google_business_profile", () => {
   it("warns, does not block, when no CTA target path is set", () => {
     const manifest = baseManifest({
       destination: "google_business_profile",
-      assets: [{ artifactId: "a1", artifactType: "social_image", storageBucket: null, storagePath: null, publicUrl: null, mimeType: null, sizeBytes: null, sha256: null }],
+      assets: [{ artifactId: "a1", artifactType: "social_image", storageBucket: null, storagePath: null, publicUrl: null, mimeType: null, sizeBytes: null, sha256: null, validated: true }],
       ctaTargetPath: null,
     });
     const issue = validateDestinationFormat(manifest).find((i) => i.code === "gbp_missing_cta_target");
