@@ -105,9 +105,25 @@ export default function StandingAuthorizationCard({
             Standing publishing authorization is {active ? "on" : "off"}
           </h2>
         </div>
-        <p className="text-xs text-black/55">
-          Only the firm&apos;s authorized lawyer/client decision-maker can turn this on or off from
-          this page. Operator view is read-only.
+        {!active && (
+          <h2 className="text-lg sm:text-xl font-bold text-navy mb-2">Choose how content approval works</h2>
+        )}
+        <p className="text-sm text-black/70 leading-relaxed mb-4">
+          {active
+            ? "Future eligible content may be published after it passes the agreed quality and legal-safety checks."
+            : "The firm can authorize CaseLoad Select to publish future content after it passes the agreed quality and legal-safety checks."}
+        </p>
+        <button
+          type="button"
+          disabled
+          aria-disabled="true"
+          className="w-full sm:w-auto px-4 py-3 sm:py-2.5 text-sm font-semibold text-white bg-green-pass disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {active ? "Turn off authorization" : "Turn on standing publishing authorization"}
+        </button>
+        <p className="mt-3 text-xs text-black/55">
+          This is a read-only operator preview. Only the firm&apos;s authorized lawyer/client
+          decision-maker can use this control from their own portal session.
         </p>
       </section>
     );
