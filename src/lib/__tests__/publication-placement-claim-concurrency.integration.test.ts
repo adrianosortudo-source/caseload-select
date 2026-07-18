@@ -31,56 +31,45 @@
  * Run locally: DIRECT_DATABASE_URL="postgresql://postgres:<pw>@db.<ref>.supabase.co:5432/postgres" npx vitest run src/lib/__tests__/publication-placement-claim-concurrency.integration.test.ts
  */
 
-import dns from "node:dns";
-import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
 const DB_URL = process.env.DIRECT_DATABASE_URL;
 
-// A GitHub Actions run of this file failed, deterministically, with
-// "Error: getaddrinfo EAI_AGAIN base" -- a DNS resolution failure for a
-// hostname string that appears nowhere in this file; DIRECT_DATABASE_URL's
-// host is always the literal IP 127.0.0.1 in CI and local dev, and it did
-// not reproduce locally against an identically-migrated real Postgres
-// instance. A first attempted fix (a custom `lookup` on the pg
-// ClientConfig) did not help: pg's non-native Client never reads that
-// option -- its Connection calls `this.stream.connect(port, host)` with no
-// options object at all (see node_modules/pg/lib/connection.js), so any DNS
-// lookup happens inside Node's own net.Socket.connect(), which is not
-// configurable per-socket. The only interception point reachable from
-// userland is the shared dns.lookup() function itself. Monkeypatching it
-// here to short-circuit IP-literal hosts (which this file's host always
-// is) removes the DNS pathway entirely regardless of why Node/CI was
-// invoking it for a literal IP; a real hostname still resolves through the
-// original implementation. The console.error is deliberate: it surfaces in
-// CI logs so a future recurrence shows exactly what dns.lookup() was asked
-// to resolve, instead of the same unattributable error.
-const originalDnsLookup = dns.lookup;
-// @ts-expect-error dns.lookup's overload set doesn't model a single
-// monkeypatched implementation; this file only ever exercises the
-// (hostname, options, callback) shape net.connect() uses.
-dns.lookup = (hostname: string, ...rest: unknown[]) => {
-  const family = net.isIP(hostname);
-  if (family) {
-    const callback = rest[rest.length - 1] as (
-      err: NodeJS.ErrnoException | null,
-      address: string,
-      family: number,
-    ) => void;
-    callback(null, hostname, family);
-    return;
-  }
-  // A previous CI run confirmed dns.lookup() IS the call site, and that the
-  // hostname being resolved is literally "base" -- not 127.0.0.1, not
-  // anything from DIRECT_DATABASE_URL. That call falls through to here
-  // (not an IP literal) and fails for real. The stack trace identifies the
-  // actual caller, which the prior diagnostic round (hostname only) did
-  // not capture.
-  console.error(`[dns.lookup patched] resolving non-IP hostname "${hostname}"\n${new Error("dns.lookup call site").stack}`);
-  // @ts-expect-error see above
-  return originalDnsLookup.call(dns, hostname, ...rest);
-};
+// Root cause of a CI-only "Error: getaddrinfo EAI_AGAIN base" failure,
+// found after five rounds of diagnosis (see PR #57 description for the
+// full trail): pg-connection-string's parse() -- what `new Client({
+// connectionString })` uses internally -- calls
+// `new URL(str, 'postgres://base')` (node_modules/pg-connection-string/
+// index.js), passing its own dummy placeholder base URL whose hostname is
+// literally "base". `postgresql:` is not in the WHATWG URL "special
+// schemes" list (http/https/ws/wss/ftp/file), and non-special-scheme URL
+// parsing has genuinely changed across Node/V8 versions. Under CI's pinned
+// Node 20 (this repo runs Node 24 locally, where it never reproduced),
+// that dummy base's own hostname leaks through into the parsed result
+// instead of being correctly ignored for what is already a fully
+// qualified absolute URL. Confirmed directly: a diagnostic round proved
+// DIRECT_DATABASE_URL itself was the correct, full connection string at
+// the exact moment `new Client()` ran, ruling out every other
+// explanation -- the bug is inside pg-connection-string's own parsing,
+// version-pinned identically between local and CI.
+//
+// Fix: parse DIRECT_DATABASE_URL ourselves with a bare `new URL(url)` --
+// no base argument at all -- and pass discrete host/port/user/password/
+// database fields to Client instead of `connectionString`. This never
+// invokes pg-connection-string's parser, sidestepping the exact
+// mechanism (a base URL's own host leaking through) regardless of which
+// Node version is spec-correct.
+function parseDirectDatabaseUrl(url: string) {
+  const parsed = new URL(url);
+  return {
+    host: decodeURIComponent(parsed.hostname),
+    port: parsed.port ? Number(parsed.port) : undefined,
+    user: decodeURIComponent(parsed.username),
+    password: decodeURIComponent(parsed.password),
+    database: parsed.pathname.replace(/^\//, "") || undefined,
+  };
+}
 
 describe.skipIf(!DB_URL)("claim_placement_for_publish concurrency (real Postgres, two connections)", () => {
   let Client: typeof import("pg").Client;
@@ -103,15 +92,9 @@ describe.skipIf(!DB_URL)("claim_placement_for_publish concurrency (real Postgres
 
   beforeAll(async () => {
     ({ Client } = await import("pg"));
-    // Diagnostic: pg-connection-string's parse() returns host: "base" for
-    // both the literal string "base" AND an empty string -- the previous
-    // round's stack trace proved connA/connB are the exact Client
-    // instances hitting the DNS failure, so this settles what DB_URL
-    // actually is at the moment new Client() runs, versus what the CI
-    // step's own env: dump claims it exported.
-    console.error(`[DB_URL diagnostic] typeof=${typeof DB_URL} length=${DB_URL?.length} json=${JSON.stringify(DB_URL)}`);
-    connA = new Client({ connectionString: DB_URL });
-    connB = new Client({ connectionString: DB_URL });
+    const connectionOptions = parseDirectDatabaseUrl(DB_URL!);
+    connA = new Client(connectionOptions);
+    connB = new Client(connectionOptions);
     await connA.connect();
     await connB.connect();
 
