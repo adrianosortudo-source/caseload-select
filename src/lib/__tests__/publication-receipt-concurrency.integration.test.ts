@@ -59,39 +59,43 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
 const DB_URL = process.env.DIRECT_DATABASE_URL;
 
-// pg forwards a `lookup` option straight through to net.connect(), which
-// otherwise always calls dns.lookup() -- even for a literal IP host like
-// the 127.0.0.1 this file's DIRECT_DATABASE_URL always points at in CI and
-// local dev. A GitHub Actions run of this file failed twice with
-// "getaddrinfo EAI_AGAIN base" (a DNS resolution error) despite the target
-// being a plain IP; the failure did not reproduce locally against an
-// identically-migrated real Postgres instance, and only manifested under
-// CI's pinned Node 20 (this repo runs Node 24 locally). Short-circuiting
-// DNS for IP literals removes the lookup path entirely regardless of root
-// cause; a real hostname (the "run locally against a hosted Supabase
-// project" case in this file's docstring) still resolves normally.
-// @types/pg does not declare `lookup` even though the runtime accepts it,
-// hence the local intersection type instead of an inline object literal.
-type ClientConfigWithLookup = import("pg").ClientConfig & {
-  lookup?: (
-    hostname: string,
-    options: dns.LookupOptions,
-    callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void,
-  ) => void;
-};
-
-function lookupPreferringIpLiteral(
-  hostname: string,
-  options: dns.LookupOptions,
-  callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void,
-): void {
+// A GitHub Actions run of this file failed, deterministically, with
+// "Error: getaddrinfo EAI_AGAIN base" -- a DNS resolution failure for a
+// hostname string that appears nowhere in this file; DIRECT_DATABASE_URL's
+// host is always the literal IP 127.0.0.1 in CI and local dev, and it did
+// not reproduce locally against an identically-migrated real Postgres
+// instance. A first attempted fix (a custom `lookup` on the pg
+// ClientConfig) did not help: pg's non-native Client never reads that
+// option -- its Connection calls `this.stream.connect(port, host)` with no
+// options object at all (see node_modules/pg/lib/connection.js), so any DNS
+// lookup happens inside Node's own net.Socket.connect(), which is not
+// configurable per-socket. The only interception point reachable from
+// userland is the shared dns.lookup() function itself. Monkeypatching it
+// here to short-circuit IP-literal hosts (which this file's host always
+// is) removes the DNS pathway entirely regardless of why Node/CI was
+// invoking it for a literal IP; a real hostname still resolves through the
+// original implementation. The console.error is deliberate: it surfaces in
+// CI logs so a future recurrence shows exactly what dns.lookup() was asked
+// to resolve, instead of the same unattributable error.
+const originalDnsLookup = dns.lookup;
+// @ts-expect-error dns.lookup's overload set doesn't model a single
+// monkeypatched implementation; this file only ever exercises the
+// (hostname, options, callback) shape net.connect() uses.
+dns.lookup = (hostname: string, ...rest: unknown[]) => {
+  console.error(`[dns.lookup patched] resolving "${hostname}"`);
   const family = net.isIP(hostname);
   if (family) {
+    const callback = rest[rest.length - 1] as (
+      err: NodeJS.ErrnoException | null,
+      address: string,
+      family: number,
+    ) => void;
     callback(null, hostname, family);
     return;
   }
-  dns.lookup(hostname, options as dns.LookupOneOptions, callback);
-}
+  // @ts-expect-error see above
+  return originalDnsLookup.call(dns, hostname, ...rest);
+};
 
 describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two connections)", () => {
   // Imported lazily and only inside the gated branch: `pg` is a devDependency
@@ -131,9 +135,8 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
 
   beforeAll(async () => {
     ({ Client } = await import("pg"));
-    const clientOptions: ClientConfigWithLookup = { connectionString: DB_URL, lookup: lookupPreferringIpLiteral };
-    connA = new Client(clientOptions);
-    connB = new Client(clientOptions);
+    connA = new Client({ connectionString: DB_URL });
+    connB = new Client({ connectionString: DB_URL });
     await connA.connect();
     await connB.connect();
 
