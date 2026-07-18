@@ -24,13 +24,19 @@ any historical-source recovery work (those are separate, later phases).
 
 ## The two categories
 
-**59 files renamed to their true, verified production ledger version.** Each of these was
-cross-checked read-only against `ssxryjxifwiivghglqer` (`supabase_migrations.schema_migrations`,
-matched by base migration name, not by date, since `migration repair`'s version-date and the
-content's original authored date frequently differ — see the schema-parity corrective audit's
-Finding 14 for the mechanism). For these 59, `supabase db push` / `migration list` will now recognize
-the local file as already-applied at that exact version, with **zero `migration repair` calls
-required** going forward.
+**Correction (2026-07-18, post-review): the 59 are not "safe."** They are **verified ledger-version
+rename candidates** -- each cross-checked read-only against `ssxryjxifwiivghglqer`
+(`supabase_migrations.schema_migrations`, matched by base migration name, not by date, since
+`migration repair`'s version-date and the content's original authored date frequently differ — see
+the schema-parity corrective audit's Finding 14). That verification is real and stands. But `supabase
+db push --dry-run` against this branch refuses to run *at all* (see below) -- it is a global refusal,
+not a per-file one -- so **no subset of these 116 files, including these 59, currently has production-apply
+clearance.** "Zero `migration repair` calls required" describes what would be true for these 59 in
+isolation if the branch's other 57 files and the ~90 discrepancy set weren't blocking `db push`
+entirely; it is not a standalone safety claim.
+
+**59 files renamed to their true, verified production ledger version** (rename-candidate status only,
+see correction above).
 
 **57 files given deterministic, collision-only naming (date + zero-padded sequence number).** No
 unique production ledger row exists to match:
@@ -116,10 +122,29 @@ EXISTS`, `ALTER COLUMN ... TYPE`, `DELETE FROM`, `UPDATE`, `TRUNCATE`, unguarded
 
 | Bucket | Count | Meaning |
 |---|---|---|
-| A -- safe, matched to true ledger version | 59 | `db push` recognizes these as already-applied and skips execution entirely. Confirmed via the `migration list` dry-run (Finding above): all 59 matched, zero exceptions. |
+| A -- verified ledger-version rename candidate, no production-apply clearance | 59 | `migration list` confirms all 59 match their true remote version, zero exceptions -- but `db push --dry-run` refuses to run for the branch as a whole (see above), so this is a per-file verification result, not a per-file green light. "Safe" was the wrong word; corrected here. |
 | B -- appears idempotent, would still show pending | 56 | No dangerous pattern matched. **This is a heuristic read, not a guarantee** -- see the caution below. |
 | C -- contains a non-idempotent construct, must not be made pending without individual review | 1 raw hit, **0 after manual review** | See below. |
-| D -- unresolved | 0 | None. |
+| D -- unresolved at the per-file level | 0 | None -- every one of the 116 files was assigned a bucket. **This does not mean the branch has 0 unresolved items; see "System-level unresolved items" below, which this per-file table cannot represent.** |
+
+### System-level unresolved items (not captured by the per-file table above)
+
+The per-file classification above answers "does this specific file's SQL look dangerous to
+re-execute." It does not answer, and was never able to answer, whether the branch as a whole is
+safe or complete. At the system level, at least three things remain genuinely unresolved:
+
+1. **`law_firm_clients` (and by extension any other production object like it) has no tracked
+   migration source anywhere in `origin/main`.** Found via the bootstrap test below. Unknown how
+   many other objects share this gap until a dedicated recovery pass is done.
+2. **The `standing_publishing_authorization_notification_pref_null_fix` migration** (schema-parity
+   corrective audit's Finding 14/15) has no committed source anywhere in the repo and was
+   deliberately left unreconstructed.
+3. **The full ~90-version local/remote discrepancy set** that caused `db push --dry-run` to refuse
+   outright has not been individually triaged version-by-version -- only the aggregate count is
+   known, not a per-version disposition.
+
+None of these are closed by this branch's per-file bucket table, and no per-file bucket status
+changes that.
 
 **The one Bucket-C hit does not survive manual review, and that itself is the caution to take
 away.** `20260506000003_pg_cron_pg_net_setup.sql` matched the `UPDATE` pattern. On reading the file,
