@@ -145,6 +145,7 @@ function baseInput(overrides: Partial<BuildManifestInput> = {}): BuildManifestIn
     standingAuthorizationActive: false,
     resolvedDestinationBaseUrl: "https://drglaw.ca",
     resolvedWebsiteBaseUrl: "https://drglaw.ca",
+    explicitDestinationConfig: null,
     scheduledTimezone: "America/Toronto",
     latestClaim: null,
     ...overrides,
@@ -432,7 +433,7 @@ describe("buildPublicationExecutionManifest — destination account, never guess
     expect(manifest.blocked).toBe(true);
   });
 
-  it("always reports LinkedIn and GBP destinations as unconfigured (no integration exists anywhere in this system)", () => {
+  it("always reports LinkedIn and GBP destinations as unconfigured absent explicit configuration (no integration exists anywhere in this system)", () => {
     for (const destination of ["linkedin_post", "linkedin_article", "linkedin_company_page", "google_business_profile"] as const) {
       const manifest = buildPublicationExecutionManifest(
         baseInput({
@@ -443,6 +444,54 @@ describe("buildPublicationExecutionManifest — destination account, never guess
       expect(manifest.destinationAccount.configured).toBe(false);
       expect(manifest.destinationAccount.identifier).toBe(null);
     }
+  });
+});
+
+describe("buildPublicationExecutionManifest — explicit destination configuration, corrective pass", () => {
+  it("an explicit publication_destination_configs entry wins over firm_website evidence-based inference", () => {
+    const manifest = buildPublicationExecutionManifest(
+      baseInput({
+        resolvedDestinationBaseUrl: "https://inferred-from-evidence.example",
+        explicitDestinationConfig: { identifier: "https://drglaw.ca", label: "DRG Law primary site" },
+      }),
+    );
+    expect(manifest.destinationAccount.configured).toBe(true);
+    expect(manifest.destinationAccount.identifier).toBe("https://drglaw.ca");
+    expect(manifest.destinationAccount.note).toContain("explicitly configured");
+    expect(manifest.destinationAccount.note).toContain("DRG Law primary site");
+  });
+
+  it("explicit configuration is the only way a LinkedIn/GBP/email destination can ever report configured:true", () => {
+    for (const destination of [
+      "linkedin_post",
+      "linkedin_article",
+      "linkedin_company_page",
+      "google_business_profile",
+      "email_delivery",
+    ] as const) {
+      const manifest = buildPublicationExecutionManifest(
+        baseInput({
+          placement: basePlacement({ destination, required_artifact_type: null }),
+          resolvedDestinationBaseUrl: null,
+          explicitDestinationConfig: { identifier: "urn:li:organization:12345", label: null },
+        }),
+      );
+      expect(manifest.destinationAccount.configured).toBe(true);
+      expect(manifest.destinationAccount.identifier).toBe("urn:li:organization:12345");
+    }
+  });
+
+  it("firm_website falls back to evidence-based inference only when no explicit configuration exists, and the note discloses the lower-trust fallback tier", () => {
+    const manifest = buildPublicationExecutionManifest(
+      baseInput({
+        explicitDestinationConfig: null,
+        resolvedDestinationBaseUrl: "https://drglaw.ca",
+      }),
+    );
+    expect(manifest.destinationAccount.configured).toBe(true);
+    expect(manifest.destinationAccount.identifier).toBe("https://drglaw.ca");
+    expect(manifest.destinationAccount.note).toContain("no explicit publication_destination_configs entry");
+    expect(manifest.destinationAccount.note).toContain("lower-trust");
   });
 });
 

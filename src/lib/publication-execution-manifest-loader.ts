@@ -34,7 +34,42 @@ import type {
   ContentPlacement,
   DeliverableVersion,
   PublicationArtifact,
+  PlacementDestination,
 } from "@/lib/types";
+
+/**
+ * The operator's explicit, current publishing-account configuration for
+ * this firm and destination (publication_destination_configs -- corrective-
+ * pass addition, migration authored but NOT YET APPLIED anywhere; see
+ * supabase/migrations/20260718121500_publication_destination_configs.sql).
+ * Deploy-safety guarded exactly like getFirmAbout/resolveEmailBranding
+ * elsewhere in this codebase: the table does not exist in any environment
+ * yet, so this query is expected to error until the migration is reviewed
+ * and applied, and that error is swallowed as "no explicit configuration
+ * exists" -- the same fallback behavior the loader already had before this
+ * table existed. Never throws.
+ */
+async function resolveExplicitDestinationConfig(
+  firmId: string,
+  destination: PlacementDestination,
+): Promise<{ identifier: string; label: string | null } | null> {
+  try {
+    const { data, error } = await supabase
+      .from("publication_destination_configs")
+      .select("identifier, label")
+      .eq("firm_id", firmId)
+      .eq("destination", destination)
+      .eq("active", true)
+      .order("config_seq", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    const row = data as { identifier: string; label: string | null };
+    return { identifier: row.identifier, label: row.label ?? null };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Resolves the firm's real, VALIDATED website base URL from existing
@@ -142,25 +177,35 @@ export async function loadPublicationExecutionManifest(
   const uniqueVersionIds = [...new Set(relevantVersionIds)];
 
   // Phase 1: everything needed to decide which version would release.
-  const [{ data: firmRow }, periodResult, approvedVersionResult, currentVersionResult, artifactsResult, standingAuth, websiteBaseUrl, latestClaim] =
-    await Promise.all([
-      supabase.from("intake_firms").select("id, location, name").eq("id", firmId).maybeSingle(),
-      placement.period_id
-        ? supabase.from("content_periods").select("*").eq("id", placement.period_id).maybeSingle()
-        : Promise.resolve({ data: null as ContentPeriod | null }),
-      deliverable.approved_version_id
-        ? supabase.from("deliverable_versions").select("*").eq("id", deliverable.approved_version_id).maybeSingle()
-        : Promise.resolve({ data: null as DeliverableVersion | null }),
-      deliverable.current_version_id
-        ? supabase.from("deliverable_versions").select("*").eq("id", deliverable.current_version_id).maybeSingle()
-        : Promise.resolve({ data: null as DeliverableVersion | null }),
-      uniqueVersionIds.length > 0
-        ? supabase.from("publication_artifacts").select("*").in("version_id", uniqueVersionIds)
-        : Promise.resolve({ data: [] as PublicationArtifact[] }),
-      getStandingAuthorizationState(firmId),
-      resolveValidatedWebsiteBaseUrl(firmId),
-      getLatestClaimForPlacement(placementId),
-    ]);
+  const [
+    { data: firmRow },
+    periodResult,
+    approvedVersionResult,
+    currentVersionResult,
+    artifactsResult,
+    standingAuth,
+    websiteBaseUrl,
+    latestClaim,
+    explicitDestinationConfig,
+  ] = await Promise.all([
+    supabase.from("intake_firms").select("id, location, name").eq("id", firmId).maybeSingle(),
+    placement.period_id
+      ? supabase.from("content_periods").select("*").eq("id", placement.period_id).maybeSingle()
+      : Promise.resolve({ data: null as ContentPeriod | null }),
+    deliverable.approved_version_id
+      ? supabase.from("deliverable_versions").select("*").eq("id", deliverable.approved_version_id).maybeSingle()
+      : Promise.resolve({ data: null as DeliverableVersion | null }),
+    deliverable.current_version_id
+      ? supabase.from("deliverable_versions").select("*").eq("id", deliverable.current_version_id).maybeSingle()
+      : Promise.resolve({ data: null as DeliverableVersion | null }),
+    uniqueVersionIds.length > 0
+      ? supabase.from("publication_artifacts").select("*").in("version_id", uniqueVersionIds)
+      : Promise.resolve({ data: [] as PublicationArtifact[] }),
+    getStandingAuthorizationState(firmId),
+    resolveValidatedWebsiteBaseUrl(firmId),
+    getLatestClaimForPlacement(placementId),
+    resolveExplicitDestinationConfig(firmId, placement.destination),
+  ]);
 
   const period = (periodResult as { data: ContentPeriod | null }).data;
   const approvedVersion = (approvedVersionResult as { data: DeliverableVersion | null }).data;
@@ -210,6 +255,7 @@ export async function loadPublicationExecutionManifest(
     standingAuthorizationActive: standingAuth?.active ?? false,
     resolvedDestinationBaseUrl,
     resolvedWebsiteBaseUrl: websiteBaseUrl,
+    explicitDestinationConfig,
     scheduledTimezone: resolveFirmTimezone(firmRow ? { location: firmRow.location } : null),
     latestClaim: latestClaim
       ? { status: latestClaim.status, approvedVersionId: latestClaim.approved_version_id }

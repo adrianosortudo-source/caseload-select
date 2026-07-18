@@ -50,6 +50,17 @@
  * non-null releaseAuthorizationPath for the same placement and only one
  * claim can ever succeed. Same caveat publication-preflight.ts already
  * states for mayPublish.
+ *
+ * Destination account resolution, corrected (corrective pass, post-review).
+ * A destination's publishing account is now resolved in a strict priority
+ * order: (1) explicit, operator-set configuration
+ * (publication_destination_configs, authored not yet applied -- see
+ * BuildManifestInput.explicitDestinationConfig), (2) for firm_website only,
+ * inference from prior VALIDATED evidence as a lower-trust fallback, (3)
+ * unconfigured. Explicit configuration is the only path by which a
+ * non-website destination (LinkedIn, GBP, email) can ever report
+ * configured:true; no inference tier exists for those, so they stay
+ * honestly blocked_missing_configuration until an operator configures them.
  */
 
 import { createHash } from "crypto";
@@ -183,8 +194,10 @@ export interface BuildManifestInput {
   currentReceipt: PublicationReceipt | null;
   /** Whether the firm's latest standing_publishing_authorizations event is 'enabled'. */
   standingAuthorizationActive: boolean;
-  /** A previously-registered, real, VALIDATED destination base URL for this firm+destination (resolved by the loader). Never guessed, never hardcoded per-firm, never trusted from a merely-registered-but-unvalidated artifact. */
+  /** A previously-registered, real, VALIDATED destination base URL for this firm+destination (resolved by the loader). Never guessed, never hardcoded per-firm, never trusted from a merely-registered-but-unvalidated artifact. Consulted only as a fallback when explicitDestinationConfig is absent (see below). */
   resolvedDestinationBaseUrl: string | null;
+  /** The operator's explicit, current publishing-account configuration for this firm and destination (publication_destination_configs -- corrective-pass addition; the loader guards against the table not existing yet and reports null in that case, never throwing). When present, this is authoritative over resolvedDestinationBaseUrl: an explicit configuration always wins over inference from historical evidence, and is the only way a non-website destination (LinkedIn, GBP, email) can ever report configured:true. */
+  explicitDestinationConfig: { identifier: string; label: string | null } | null;
   /** The firm's website base URL, resolved independently of this placement's own destination -- used only for CTA target resolution (a GBP/LinkedIn post's CTA points at the website regardless of where the post itself publishes). Same validation discipline as resolvedDestinationBaseUrl. */
   resolvedWebsiteBaseUrl: string | null;
   scheduledTimezone: string | null;
@@ -281,41 +294,55 @@ export function resolveReleaseVersion(input: {
 function resolveDestinationAccount(
   destination: PlacementDestination,
   resolvedDestinationBaseUrl: string | null,
+  explicitConfig: { identifier: string; label: string | null } | null,
 ): ManifestDestinationAccount {
+  // Explicit, operator-set configuration (publication_destination_configs)
+  // always wins over any inference tier, for every destination -- this is
+  // the corrective-pass fix for "destination identity inferred from
+  // historical evidence instead of explicit approved configuration".
+  if (explicitConfig) {
+    return {
+      configured: true,
+      identifier: explicitConfig.identifier,
+      note: explicitConfig.label
+        ? `explicitly configured by the operator for this firm and destination: "${explicitConfig.label}" (publication_destination_configs)`
+        : "explicitly configured by the operator for this firm and destination (publication_destination_configs)",
+    };
+  }
   if (destination === "firm_website") {
     if (resolvedDestinationBaseUrl) {
       return {
         configured: true,
         identifier: resolvedDestinationBaseUrl,
-        note: "resolved from a prior VALIDATED publication_artifacts/publication_receipts record for this firm; never guessed, never trusted from an unvalidated registration",
+        note: "no explicit publication_destination_configs entry exists yet for this firm and destination; falling back to inference from a prior VALIDATED publication_artifacts/publication_receipts record. This inferred tier is lower-trust than explicit configuration and should be replaced by one.",
       };
     }
     return {
       configured: false,
       identifier: null,
       note:
-        "no destination website is on record for this firm yet (no prior validated webpage/pdf artifact or verified receipt exists to resolve a base URL from); this system does not store a firm's public marketing-site domain as configuration",
+        "no destination website is on record for this firm yet: no explicit publication_destination_configs entry, and no prior validated webpage/pdf artifact or verified receipt exists to infer a base URL from",
     };
   }
   if (destination === "linkedin_article" || destination === "linkedin_post" || destination === "linkedin_company_page") {
     return {
       configured: false,
       identifier: null,
-      note: "no LinkedIn account, company page, or API integration is configured anywhere in this system",
+      note: "no LinkedIn account or company page is configured for this firm (publication_destination_configs has no active entry, and no other configuration source exists)",
     };
   }
   if (destination === "google_business_profile") {
     return {
       configured: false,
       identifier: null,
-      note: "no Google Business Profile location or API integration is configured anywhere in this system",
+      note: "no Google Business Profile location is configured for this firm (publication_destination_configs has no active entry, and no other configuration source exists)",
     };
   }
   // email_delivery
   return {
     configured: false,
     identifier: null,
-    note: "no email delivery destination configuration exists for placements in this system",
+    note: "no email delivery destination is configured for this firm (publication_destination_configs has no active entry, and no other configuration source exists)",
   };
 }
 
@@ -400,7 +427,11 @@ export function buildPublicationExecutionManifest(input: BuildManifestInput): Pu
     );
   }
 
-  const destinationAccount = resolveDestinationAccount(placement.destination, input.resolvedDestinationBaseUrl);
+  const destinationAccount = resolveDestinationAccount(
+    placement.destination,
+    input.resolvedDestinationBaseUrl,
+    input.explicitDestinationConfig,
+  );
   if (!destinationAccount.configured) {
     blockReasons.push(`destination not configured: ${destinationAccount.note}`);
   }
