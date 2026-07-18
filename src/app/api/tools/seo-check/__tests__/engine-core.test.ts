@@ -17,7 +17,10 @@ import {
   decodeHtmlEntities,
   MAX_PAGES_HARD_CAP,
   SCAN_MODE_DEFAULTS,
+  applyPageTypeApplicability,
+  isHomepageOrLanguageRoot,
   type CheckItem,
+  type CategoryResult,
 } from "../engine-core";
 
 describe("ipInBlockedRange / SSRF ranges", () => {
@@ -140,6 +143,19 @@ describe("URL normalization / skip / page-type", () => {
     expect(classifyPageType("https://x.com/privacy")).toBe("policy");
     expect(classifyPageType("https://x.com/something-else")).toBe("other");
   });
+  it("classifies intake/conversion funnels and interactive tools distinctly from practice content (field case drglaw.ca)", () => {
+    expect(classifyPageType("https://drglaw.ca/intake")).toBe("intake");
+    expect(classifyPageType("https://drglaw.ca/pt/intake")).toBe("intake");
+    // /tools/estate-structure-check otherwise substring-matches "estate" in
+    // the practice-area regex and misclassifies a checklist widget as a
+    // written practice page.
+    expect(classifyPageType("https://drglaw.ca/tools/estate-structure-check")).toBe("tool");
+    expect(classifyPageType("https://drglaw.ca/pt/tools/estate-structure-check")).toBe("tool");
+    expect(classifyPageType("https://x.com/tools/business-readiness-score")).toBe("tool");
+    // A real practice page whose slug happens to contain "estate" is still a
+    // practice page: only the /tools/ and /intake/ segments take precedence.
+    expect(classifyPageType("https://x.com/real-estate")).toBe("practice");
+  });
   it("never classifies a query-string URL as the homepage (jsmlaw fuseaction case)", () => {
     // ColdFusion routes whole page trees through the root path. Classifying
     // /?fuseaction=... as "homepage" gave utility cruft top crawl priority
@@ -249,5 +265,78 @@ describe("decodeHtmlEntities", () => {
     expect(decodeHtmlEntities("a &unknownthing; b")).toBe("a &unknownthing; b");
     expect(decodeHtmlEntities("no entities here")).toBe("no entities here");
     expect(decodeHtmlEntities("bad numeric &#xZZ; stays")).toBe("bad numeric &#xZZ; stays");
+  });
+});
+
+describe("isHomepageOrLanguageRoot", () => {
+  it("is true for the homepage page type", () => {
+    expect(isHomepageOrLanguageRoot("homepage", "https://x.com/")).toBe(true);
+  });
+  it("is true for a bare language-root path like /pt (field case drglaw.ca)", () => {
+    expect(isHomepageOrLanguageRoot("other", "https://drglaw.ca/pt")).toBe(true);
+    expect(isHomepageOrLanguageRoot("other", "https://drglaw.ca/pt/")).toBe(true);
+    expect(isHomepageOrLanguageRoot("other", "https://x.com/fr-ca")).toBe(true);
+  });
+  it("is false for a non-root page under a language prefix", () => {
+    expect(isHomepageOrLanguageRoot("contact", "https://drglaw.ca/pt/contact")).toBe(false);
+  });
+  it("is false for an unrelated short path", () => {
+    expect(isHomepageOrLanguageRoot("other", "https://x.com/faq")).toBe(false);
+  });
+});
+
+describe("applyPageTypeApplicability", () => {
+  function mkCategory(name: string, items: CheckItem[]): CategoryResult {
+    const score = items.reduce((s, i) => s + (i.status === "pass" ? 10 : i.status === "warn" ? 5 : 0), 0);
+    return { name, score, maxScore: items.length * 10, items };
+  }
+
+  it("downgrades AEO/content-depth checks to pass on a contact page (field case: contact pages should not require citations or question headings)", () => {
+    const categories = [
+      mkCategory("AI Visibility", [
+        { label: "Question-format headings", status: "fail", detail: "No question headings.", fix: "Add some." },
+        { label: "Authoritative citations", status: "warn", detail: "No citations.", fix: "Add some." },
+      ]),
+      mkCategory("Links & Content", [{ label: "Word count", status: "fail", detail: "50 words.", fix: "Expand." }]),
+    ];
+    const out = applyPageTypeApplicability(categories, "contact", "https://x.com/contact");
+    const items = out.flatMap((c) => c.items);
+    expect(items.every((i) => i.status === "pass")).toBe(true);
+    expect(items.every((i) => i.fix === undefined)).toBe(true);
+    expect(items.find((i) => i.label === "Word count")?.detail).toMatch(/not required for a contact page/i);
+  });
+
+  it("leaves AEO/content-depth checks alone on a practice page", () => {
+    const categories = [mkCategory("AI Visibility", [{ label: "Question-format headings", status: "fail", detail: "No question headings.", fix: "Add some." }])];
+    const out = applyPageTypeApplicability(categories, "practice", "https://x.com/real-estate");
+    expect(out).toBe(categories); // unchanged reference: no rewrite needed
+    expect(out[0].items[0].status).toBe("fail");
+  });
+
+  it("exempts H2 subheadings on intake/tool pages but not the AEO-only labels' broader exemption elsewhere (field case drglaw.ca /intake)", () => {
+    const categories = [mkCategory("On-Page SEO", [{ label: "H2 subheadings", status: "warn", detail: "No H2 tags.", fix: "Add H2s." }])];
+    const outIntake = applyPageTypeApplicability(categories, "intake", "https://drglaw.ca/intake");
+    expect(outIntake[0].items[0].status).toBe("pass");
+    const outTool = applyPageTypeApplicability(categories, "tool", "https://drglaw.ca/tools/estate-structure-check");
+    expect(outTool[0].items[0].status).toBe("pass");
+  });
+
+  it("does not exempt H2 subheadings on a contact page (narrower than the AEO-only exemption)", () => {
+    const categories = [mkCategory("On-Page SEO", [{ label: "H2 subheadings", status: "warn", detail: "No H2 tags.", fix: "Add H2s." }])];
+    const out = applyPageTypeApplicability(categories, "contact", "https://x.com/contact");
+    expect(out[0].items[0].status).toBe("warn");
+  });
+
+  it("exempts breadcrumb schema on the homepage and a language root, but not elsewhere", () => {
+    const categories = [mkCategory("Schema & Structured Data", [{ label: "Breadcrumb schema", status: "warn", detail: "Not found.", fix: "Add BreadcrumbList." }])];
+    expect(applyPageTypeApplicability(categories, "homepage", "https://x.com/")[0].items[0].status).toBe("pass");
+    expect(applyPageTypeApplicability(categories, "other", "https://drglaw.ca/pt")[0].items[0].status).toBe("pass");
+    expect(applyPageTypeApplicability(categories, "practice", "https://x.com/real-estate")[0].items[0].status).toBe("warn");
+  });
+
+  it("never downgrades an item that already passes", () => {
+    const categories = [mkCategory("Links & Content", [{ label: "Word count", status: "pass", detail: "500 words." }])];
+    const out = applyPageTypeApplicability(categories, "contact", "https://x.com/contact");
+    expect(out[0].items[0].detail).toBe("500 words.");
   });
 });

@@ -46,6 +46,7 @@ function mkPage(opts: {
   practiceAreaIntent?: boolean;
   wpDefault?: boolean;
   wordCount?: number;
+  serviceAreaLikely?: boolean;
 }): PageResult {
   const allItems = opts.categories.flatMap((c) => c.items);
   return {
@@ -75,6 +76,7 @@ function mkPage(opts: {
     lawFirm: {
       phoneVisible: opts.phone ?? true, contactFormPresent: opts.contactForm ?? true,
       addressVisible: true, consultationCta: opts.cta ?? true, policyPagePresent: true, practiceAreaIntent: opts.practiceAreaIntent ?? true,
+      serviceAreaLikely: opts.serviceAreaLikely ?? false,
       trust: { testimonials: opts.testimonials ?? true, reviews: false, caseResults: false, awards: false, credentials: opts.credentials ?? true },
     },
     wordCount: opts.wordCount ?? 500,
@@ -337,6 +339,57 @@ describe("buildIssues", () => {
     const missingIssue = buildIssues(mk(missing)).find((i) => i.title === "HSTS header");
     expect(["low", "info"]).toContain(shortIssue?.severity);
     expect(missingIssue?.severity).toBe("high");
+  });
+
+  it("caps report-only CSP to low and never bumps it to high across commercial pages (field case drglaw.ca)", () => {
+    // The live audit reported "High Content-Security-Policy ... 50/50 pages"
+    // even though the site served Content-Security-Policy-Report-Only
+    // sitewide, the audit's own recommended first rollout step.
+    const reportOnly = cat("Technical & Security", [{
+      label: "Content-Security-Policy", status: "warn",
+      detail: "Monitoring enabled (Content-Security-Policy-Report-Only); enforcement still pending. Violations are logged but nothing is blocked yet, so this is not an enforced security control.",
+    }]);
+    const missing = cat("Technical & Security", [{ label: "Content-Security-Policy", status: "warn", detail: "Missing. CSP helps prevent cross-site scripting." }]);
+    const mk = (c: CategoryResult) => [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [c] }),
+      mkPage({ url: "https://x.com/contact", pageType: "contact", categories: [c] }),
+      mkPage({ url: "https://x.com/practice", pageType: "practice", categories: [c] }),
+    ];
+    const reportOnlyIssue = buildIssues(mk(reportOnly)).find((i) => i.title === "Content-Security-Policy");
+    const missingIssue = buildIssues(mk(missing)).find((i) => i.title === "Content-Security-Policy");
+    // Pinned at "low" (not dropped further to "info"): there is a concrete
+    // next action (promote to enforced), so this must stay out of the
+    // report's "informational" tier. See severityFor and classifyActionTier.
+    expect(reportOnlyIssue?.severity).toBe("low");
+    expect(reportOnlyIssue?.severity).not.toBe("high");
+    // A genuinely missing header still gets the sitewide-commercial bump.
+    expect(missingIssue?.severity).toBe("high");
+  });
+
+  it("merges the duplicate Address / NAP finding (Legal Marketing + Local SEO) into one issue for the same root cause", () => {
+    const legal = cat("Legal Marketing", [{ label: "Address / NAP", status: "warn", detail: "No street address detected." }]);
+    const local = cat("Local SEO", [{ label: "Street address (NAP)", status: "warn", detail: "No street address detected." }]);
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [legal, local] }),
+      mkPage({ url: "https://x.com/contact", pageType: "contact", categories: [legal, local] }),
+    ];
+    const issues = buildIssues(pages);
+    expect(issues.filter((i) => i.title === "Address / NAP")).toHaveLength(1);
+    expect(issues.find((i) => i.title === "Street address (NAP)")).toBeUndefined();
+  });
+
+  it("does not merge Address / NAP findings when the affected page sets genuinely differ", () => {
+    const legal = cat("Legal Marketing", [{ label: "Address / NAP", status: "warn", detail: "No street address detected." }]);
+    const local = cat("Local SEO", [{ label: "Street address (NAP)", status: "warn", detail: "No street address detected." }]);
+    const pages = [
+      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [legal, local] }),
+      // Only the Legal Marketing check fires on this page (schema disagrees
+      // with body-text detection); the two findings now cover different URLs.
+      mkPage({ url: "https://x.com/contact", pageType: "contact", categories: [legal] }),
+    ];
+    const issues = buildIssues(pages);
+    expect(issues.find((i) => i.title === "Address / NAP")?.affectedCount).toBe(2);
+    expect(issues.find((i) => i.title === "Street address (NAP)")?.affectedCount).toBe(1);
   });
 
   it("returns no issues when everything passes", () => {
