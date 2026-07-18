@@ -957,6 +957,8 @@ Surfaces: `src/app/admin/content-studio/attribution/**` (operator: deliverable b
 
 Never touches consent (`consent_log`, `screened_leads.*_consent_*`) or the live customer-facing intake widget -- self-report/offline capture is operator-console-only by design; adding a source question to the public intake funnel is a distinct, higher-risk product decision this build explicitly deferred. Never a bulk historical backfill: `syncObservedEvidenceForLead` is deterministic and idempotent but always per-lead, operator-triggered.
 
+**Placement-tagged tracking + release gate (Ses.21 follow-up).** `lib/content-placement-tracking-pure.ts` generates deterministic `utm_content=<placement id>` tracking parameters per placement, never a fabricated domain (`intake_firms` has none to guess). The receipts route (`.../placements/[placementId]/receipts`) rejects a `firm_website` receipt whose `public_url` does not carry the placement's exact tracking marker -- the one destination where this is honestly enforceable without assuming a domain. `PlacementsTrackingPanel.tsx` (operator-only, on the deliverable review page) surfaces the parameters for every destination as copy-paste help. LinkedIn/GBP/email are not hard-gated, consistent with `channel-validation.ts`'s existing unverifiable-beyond-attestation posture for those destinations.
+
 ## Build Roadmap
 
 | Session | Scope | Status |

@@ -31,6 +31,7 @@ import {
 import { stackCards, stackBottom } from "@/lib/margin-stack";
 import type { HighlightItem } from "@/lib/highlight-dom";
 import { formatTimestamp } from "@/lib/firm-timezone";
+import PlacementsTrackingPanel from "./PlacementsTrackingPanel";
 
 interface Detail {
   deliverable: ContentDeliverable;
@@ -423,6 +424,17 @@ export default function DeliverableReview({
           />
         )}
       </div>
+
+      {viewerRole === "operator" && (
+        <div className="border-t border-black/8 pt-5">
+          <h2 className="text-sm font-semibold text-navy mb-2">Placements &amp; tracked links</h2>
+          <p className="text-xs text-black/50 mb-3">
+            Use the tracking parameters below when publishing each placement, so a resulting
+            enquiry can be linked back to it in Content Performance.
+          </p>
+          <PlacementsTrackingPanel firmId={firmId} deliverableId={deliverableId} />
+        </div>
+      )}
     </div>
   );
 }

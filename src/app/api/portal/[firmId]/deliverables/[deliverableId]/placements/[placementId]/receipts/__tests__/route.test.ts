@@ -325,6 +325,68 @@ describe("POST receipts: claim_id contract (corrective release, workstream 1)", 
   });
 });
 
+describe("POST receipts: placement-tracking release gate (Content Performance follow-up)", () => {
+  it("400s a firm_website receipt whose public_url does not carry this placement's utm_content", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", locale: null }];
+    const res = await POST(
+      makePostReq({ approved_version_id: VERSION, claim_id: CLAIM_ID, public_url: "https://example.com/article" }),
+      params(),
+    );
+    expect(res.status).toBe(400);
+    expect(state.createReceiptArgs).toBeNull();
+    const json = await res.json();
+    expect(json.error).toContain(PLACEMENT);
+  });
+
+  it("succeeds when the firm_website public_url carries the exact utm_content=placementId", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", locale: null }];
+    const res = await POST(
+      makePostReq({
+        approved_version_id: VERSION,
+        claim_id: CLAIM_ID,
+        public_url: `https://example.com/article?utm_source=content_studio&utm_medium=organic&utm_content=${PLACEMENT}`,
+      }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects a near-miss utm_content that only partially matches the placement id", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", locale: null }];
+    const res = await POST(
+      makePostReq({
+        approved_version_id: VERSION,
+        claim_id: CLAIM_ID,
+        public_url: `https://example.com/article?utm_content=${PLACEMENT}-extra`,
+      }),
+      params(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("does not gate non-website destinations (LinkedIn/GBP public_url is the platform post, not the content link)", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "linkedin_post", locale: null }];
+    const res = await POST(
+      makePostReq({
+        approved_version_id: VERSION,
+        claim_id: CLAIM_ID,
+        public_url: "https://www.linkedin.com/posts/some-post-id",
+      }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("does not gate a firm_website receipt recorded with only external_post_id (no public_url to check)", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", locale: null }];
+    const res = await POST(
+      makePostReq({ approved_version_id: VERSION, claim_id: CLAIM_ID, external_post_id: "some-id" }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+  });
+});
+
 describe("POST receipts: insert-time claim rejection classified by stable error code (finding 5)", () => {
   it("409s with next_action reclaim_placement when the DB insert fails with the CLM01 errcode (a genuine race after the route's own pre-check passed)", async () => {
     createReceiptResult.value = {

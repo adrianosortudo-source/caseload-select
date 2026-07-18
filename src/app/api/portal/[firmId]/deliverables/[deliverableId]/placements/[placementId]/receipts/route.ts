@@ -39,6 +39,7 @@ import { resolveDeliverableActor } from "@/lib/deliverables-auth";
 import { getDeliverableDetail } from "@/lib/deliverables";
 import { createReceipt, listReceiptsForPlacement } from "@/lib/publication-receipts";
 import { listPlacementsForDeliverable } from "@/lib/content-placements";
+import { urlCarriesPlacementTracking, buildPlacementTrackingQueryString } from "@/lib/content-placement-tracking-pure";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 interface ClaimRow {
@@ -217,6 +218,29 @@ export async function POST(
   if (!body.public_url && !body.external_post_id) {
     return NextResponse.json(
       { error: "at least one of public_url or external_post_id is required as evidence" },
+      { status: 400 },
+    );
+  }
+
+  // Release gate (Content Performance / Content-to-Matter Attribution
+  // follow-up): a firm_website receipt's public_url is verifiably the
+  // content's own URL, so it is the one destination where tracking can
+  // be enforced without knowing the firm's domain in advance -- the
+  // check operates on the query string only, not the domain. LinkedIn/
+  // GBP/email receipts are not gated here: their public_url (when
+  // present) typically identifies the platform post itself, not the
+  // outbound link embedded in it, and this repo's existing doctrine
+  // already treats those destinations as unverifiable beyond operator
+  // attestation (see channel-validation.ts).
+  if (
+    placement.destination === "firm_website" &&
+    typeof body.public_url === "string" &&
+    !urlCarriesPlacementTracking(body.public_url, placementId)
+  ) {
+    return NextResponse.json(
+      {
+        error: `public_url must carry this placement's tracking parameters before it can be recorded as published. Append ?${buildPlacementTrackingQueryString(placementId, placement.destination)} (or merge with any existing query string) to the URL and resubmit.`,
+      },
       { status: 400 },
     );
   }
