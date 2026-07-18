@@ -19,6 +19,7 @@ export interface AuditableIssue {
   severity: "critical" | "high" | "medium" | "low" | "info";
   confidence: "high" | "medium" | "low";
   pageTypeImpact?: string[];
+  detail?: string;
 }
 
 export const AUDIT_NOTE_LABEL: Record<AuditNoteKind, string> = {
@@ -74,4 +75,57 @@ export function classifyAuditNote(issue: AuditableIssue): AuditNoteKind {
     return "hygiene";
   }
   return "safe";
+}
+
+/* ────────────────────────────────────────────────────────
+   Action tiers: the report-level grouping (top of report-pdf.tsx /
+   SeoReport.tsx). classifyAuditNote above answers "how much do I trust this
+   finding"; classifyActionTier answers "what kind of thing is this and what,
+   if anything, should the reader DO about it" so the report can stop
+   headlining every warning as an undifferentiated "issue" and instead group
+   by what response it actually calls for.
+   ──────────────────────────────────────────────────────── */
+
+export type ActionTier = "action_required" | "optimization" | "policy_decision" | "verify" | "informational";
+
+export const ACTION_TIER_LABEL: Record<ActionTier, string> = {
+  action_required: "Action required",
+  optimization: "Optimization opportunity",
+  policy_decision: "Policy / business decision",
+  verify: "Diagnostic requiring verification",
+  informational: "Informational",
+};
+
+export const ACTION_TIER_ORDER: ActionTier[] = ["action_required", "optimization", "policy_decision", "verify", "informational"];
+
+// Findings that describe a legitimate business/policy choice, not a defect.
+// Blocking AI-training crawlers is opting OUT of having content used to
+// train models, a decision a firm might deliberately make either way; it is
+// not evidence the site is broken or unmaintained.
+const POLICY_DECISION_LABELS = new Set<string>(["AI training bot control"]);
+
+// Findings that are a static-analysis PROXY for a real-world outcome (actual
+// page-load performance, actual AI citation) rather than a direct
+// observation of it, so they need corroborating evidence before being acted
+// on as a confirmed problem.
+const DIAGNOSTIC_LABELS = new Set<string>(["Render-blocking resources", "Content-to-HTML ratio"]);
+
+/**
+ * Classify an issue into one of five report-level buckets. Order matters:
+ * a policy choice is never "action required" regardless of severity, and a
+ * diagnostic that only proxies for a real outcome (or a single-sample
+ * measurement, or anything classifyAuditNote already flagged as unreliable
+ * or needing a manual look) is "verify" before severity is even considered.
+ */
+export function classifyActionTier(issue: AuditableIssue): ActionTier {
+  if (POLICY_DECISION_LABELS.has(issue.title)) return "policy_decision";
+
+  const note = classifyAuditNote(issue);
+  if (note === "crawler_limitation" || note === "verify") return "verify";
+  if (DIAGNOSTIC_LABELS.has(issue.title)) return "verify";
+  if (issue.detail && /single-sample/i.test(issue.detail)) return "verify";
+
+  if (issue.severity === "info") return "informational";
+  if ((issue.severity === "critical" || issue.severity === "high") && issue.confidence !== "low") return "action_required";
+  return "optimization";
 }

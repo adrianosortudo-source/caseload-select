@@ -1,6 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import {
+  classifyAuditNote,
+  classifyActionTier,
+  AUDIT_NOTE_LABEL,
+  ACTION_TIER_LABEL,
+  ACTION_TIER_ORDER,
+  type ActionTier,
+} from "@/app/api/tools/seo-check/audit-notes";
 
 /* ────────────────────────────────────────────────────────
    Types (mirror the API response; new fields optional for
@@ -186,72 +194,19 @@ const SEVERITY_LABEL: Record<Severity, string> = {
 const PAGE_TYPE_LABEL: Record<string, string> = {
   homepage: "Homepage", contact: "Contact", about: "About", attorney: "Attorney / team",
   practice: "Practice area", location: "Location", faq: "FAQ", blog: "Blog / guide",
-  policy: "Policy", other: "Other",
+  policy: "Policy", intake: "Intake / conversion", tool: "Tool / calculator", other: "Other",
+};
+const ACTION_TIER_DESCRIPTION: Record<ActionTier, string> = {
+  action_required: "High-confidence, high-severity findings worth fixing first.",
+  optimization: "Worthwhile improvements at medium or low severity. Not urgent.",
+  policy_decision: "The current setup reflects a legitimate business choice, not a defect.",
+  verify: "The evidence needs a manual look before being cited as a confirmed problem.",
+  informational: "Context worth knowing. No action implied.",
 };
 const EMPTY = "n/a";
 
 function sevClass(s: Severity): string {
   return `sev-${s}`;
-}
-
-/* ────────────────────────────────────────────────────────
-   Audit notes (operator only): a deterministic read on how safe an issue
-   is to cite in outreach, derived from category/severity/confidence/evidence.
-   Not a new signal, just a classification of signals the engine already
-   produced, so it applies to saved historical runs without a re-scan.
-   ──────────────────────────────────────────────────────── */
-
-type AuditNoteKind = "safe" | "verify" | "hygiene" | "crawler_limitation";
-
-const AUDIT_NOTE_LABEL: Record<AuditNoteKind, string> = {
-  safe: "Safe to mention",
-  verify: "Verify manually",
-  hygiene: "Low-priority hygiene",
-  crawler_limitation: "Crawler limitation",
-};
-
-// Content-extraction findings depend on parsing raw server HTML for meaning
-// (definitions, Q&A patterns, authorship). A JS-rendered page can read as a
-// false negative here even when the content exists after hydration.
-const CONTENT_EXTRACTION_LABELS = new Set([
-  "Semantic HTML structure", "Direct-answer sentences", "Question-format headings",
-  "Author / reviewer signals", "Entity description",
-]);
-
-// Rendering and structure findings are prone to the same class of false
-// negative the SEO tool itself has been calibrated against: CTA text, contact
-// widgets, and team bios that render client-side are invisible to a raw-HTML
-// crawl even though a visitor sees them. "No practice-area pages found" is
-// deliberately NOT here: it is a URL/page-type inventory fact (hardened
-// against the same client-render class of false positive already), so it
-// falls through to the safe-to-mention default below.
-const VERIFY_MANUALLY_LABELS = new Set([
-  "Server-rendered content", "JavaScript app-shell dependency", "Noscript fallback",
-  "Consultation call to action", "Contact form / direct contact",
-  "No clear contact path", "No attorney / team page found",
-]);
-
-const HYGIENE_LABELS = new Set([
-  "Image alt text", "Meta description", "H1 heading", "H2 subheadings",
-  "Content-to-HTML ratio", "HTML document size", "Anchor text quality",
-  "Open Graph tags", "Word count", "Heading hierarchy", "Internal links",
-  "External links",
-]);
-
-function classifyAuditNote(issue: Issue): AuditNoteKind {
-  const policyOnly = issue.pageTypeImpact && issue.pageTypeImpact.length > 0
-    && issue.pageTypeImpact.every((t) => t === "policy");
-
-  if (issue.confidence === "low" || policyOnly || CONTENT_EXTRACTION_LABELS.has(issue.title)) {
-    return "crawler_limitation";
-  }
-  if (VERIFY_MANUALLY_LABELS.has(issue.title)) {
-    return "verify";
-  }
-  if (HYGIENE_LABELS.has(issue.title) || issue.severity === "low" || issue.severity === "info") {
-    return "hygiene";
-  }
-  return "safe";
 }
 
 /* ────────────────────────────────────────────────────────
@@ -371,6 +326,13 @@ export default function SeoReport({
           totalPages: pagesScanned, confidence: "high" as const, effort: "medium" as const, priority: 0,
         }))
       );
+
+  // Grouped by what response a finding actually calls for, so the report
+  // does not headline every warning as an undifferentiated "issue."
+  const tierGroups: Record<ActionTier, Issue[]> = {
+    action_required: [], optimization: [], policy_decision: [], verify: [], informational: [],
+  };
+  for (const it of allIssues) tierGroups[classifyActionTier(it)].push(it);
 
   const totalChecks = result.categories.reduce((s, c) => s + c.items.length, 0);
   const failChecks = result.categories.flatMap((c) => c.items).filter((i) => i.status === "fail").length;
@@ -495,7 +457,7 @@ export default function SeoReport({
       {/* Tabs */}
       <div className="seo-tabs">
         <button className={`seo-tab ${tab === "summary" ? "seo-tab-active" : ""}`} onClick={() => setTab("summary")} type="button">Summary</button>
-        <button className={`seo-tab ${tab === "issues" ? "seo-tab-active" : ""}`} onClick={() => setTab("issues")} type="button">Issues ({allIssues.length})</button>
+        <button className={`seo-tab ${tab === "issues" ? "seo-tab-active" : ""}`} onClick={() => setTab("issues")} type="button">Findings ({allIssues.length})</button>
         {pages.length > 1 && <button className={`seo-tab ${tab === "pages" ? "seo-tab-active" : ""}`} onClick={() => setTab("pages")} type="button">Pages ({pages.length})</button>}
         <button className={`seo-tab ${tab === "categories" ? "seo-tab-active" : ""}`} onClick={() => setTab("categories")} type="button">Categories</button>
       </div>
@@ -584,7 +546,8 @@ export default function SeoReport({
           )}
       </div>
 
-      {/* Issues section */}
+      {/* Issues section, grouped by what response each finding calls for
+          rather than headlined as one undifferentiated list. */}
       <div className={paneClass("issues")}>
           {allIssues.length === 0 && <p className="seo-empty">No issues found. All checks passed.</p>}
           {showInternal && allIssues.length > 0 && (
@@ -595,30 +558,42 @@ export default function SeoReport({
               raw HTML the engine could not fully evaluate.
             </p>
           )}
-          <ul className="seo-issue-list">
-            {allIssues.map((it) => {
-              const note = showInternal ? classifyAuditNote(it) : null;
-              return (
-                <li key={it.id} className="seo-issue-card">
-                  <div className="seo-issue-head">
-                    <span className={`seo-sev-tag ${sevClass(it.severity)}`}>{SEVERITY_LABEL[it.severity]}</span>
-                    <span className="seo-issue-title">{it.title}</span>
-                    <span className="seo-fix-cat">{it.category}</span>
-                    {it.affectedCount > 0 && (
-                      <span className="seo-fix-pages">{it.affectedCount}{it.totalPages ? `/${it.totalPages}` : ""} page{it.affectedCount > 1 ? "s" : ""}</span>
-                    )}
-                    <span className="seo-fix-effort">{it.effort} effort, {it.confidence} confidence</span>
-                    {note && <span className={`seo-audit-tag seo-audit-${note}`}>{AUDIT_NOTE_LABEL[note]}</span>}
-                  </div>
-                  <p className="seo-issue-detail">{it.detail}</p>
-                  {it.fix && <p className="seo-item-fix"><strong>How to fix:</strong> {it.fix}</p>}
-                  {it.evidence && <p className="seo-issue-evidence">Evidence: {it.evidence}</p>}
-                  {showInternal && it.internalNote && (<p className="seo-issue-internal"><strong>Internal:</strong> {it.internalNote}</p>)}
-                  {showInternal && it.prospectingAngle && (<p className="seo-issue-angle"><strong>Angle:</strong> {it.prospectingAngle}</p>)}
-                </li>
-              );
-            })}
-          </ul>
+          {ACTION_TIER_ORDER.map((tier) => {
+            const group = tierGroups[tier];
+            if (group.length === 0) return null;
+            return (
+              <section key={tier} className="seo-tier-group">
+                <h3 className="seo-tier-heading">
+                  {ACTION_TIER_LABEL[tier]} <span className="seo-tier-count">({group.length})</span>
+                </h3>
+                <p className="seo-tier-desc">{ACTION_TIER_DESCRIPTION[tier]}</p>
+                <ul className="seo-issue-list">
+                  {group.map((it) => {
+                    const note = showInternal ? classifyAuditNote(it) : null;
+                    return (
+                      <li key={it.id} className="seo-issue-card">
+                        <div className="seo-issue-head">
+                          <span className={`seo-sev-tag ${sevClass(it.severity)}`}>{SEVERITY_LABEL[it.severity]}</span>
+                          <span className="seo-issue-title">{it.title}</span>
+                          <span className="seo-fix-cat">{it.category}</span>
+                          {it.affectedCount > 0 && (
+                            <span className="seo-fix-pages">{it.affectedCount}{it.totalPages ? `/${it.totalPages}` : ""} page{it.affectedCount > 1 ? "s" : ""}</span>
+                          )}
+                          <span className="seo-fix-effort">{it.effort} effort, {it.confidence} confidence</span>
+                          {note && <span className={`seo-audit-tag seo-audit-${note}`}>{AUDIT_NOTE_LABEL[note]}</span>}
+                        </div>
+                        <p className="seo-issue-detail">{it.detail}</p>
+                        {it.fix && <p className="seo-item-fix"><strong>How to fix:</strong> {it.fix}</p>}
+                        {it.evidence && <p className="seo-issue-evidence">Evidence: {it.evidence}</p>}
+                        {showInternal && it.internalNote && (<p className="seo-issue-internal"><strong>Internal:</strong> {it.internalNote}</p>)}
+                        {showInternal && it.prospectingAngle && (<p className="seo-issue-angle"><strong>Angle:</strong> {it.prospectingAngle}</p>)}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            );
+          })}
       </div>
 
       {/* Pages section */}

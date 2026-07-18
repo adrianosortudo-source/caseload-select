@@ -25,7 +25,7 @@ import {
   Font,
 } from "@react-pdf/renderer";
 import path from "node:path";
-import { classifyAuditNote, AUDIT_NOTE_LABEL, type AuditNoteKind } from "./audit-notes";
+import { classifyAuditNote, AUDIT_NOTE_LABEL, type AuditNoteKind, classifyActionTier, ACTION_TIER_LABEL, ACTION_TIER_ORDER, type ActionTier } from "./audit-notes";
 
 const FONTS_DIR = path.join(process.cwd(), "public", "fonts");
 Font.register({ family: "Manrope", src: path.join(FONTS_DIR, "Manrope-VF.ttf") });
@@ -56,6 +56,20 @@ const SEV_COLOR: Record<Sev, string> = {
 const AUDIT_NOTE_COLOR: Record<AuditNoteKind, string> = {
   safe: COLORS.navy, verify: COLORS.stoneOnLight, hygiene: COLORS.textMuted,
   crawler_limitation: COLORS.danger,
+};
+const ACTION_TIER_COLOR: Record<ActionTier, string> = {
+  action_required: COLORS.danger,
+  optimization: COLORS.navy,
+  policy_decision: COLORS.stoneOnLight,
+  verify: COLORS.stoneOnLight,
+  informational: COLORS.textMuted,
+};
+const ACTION_TIER_DESCRIPTION: Record<ActionTier, string> = {
+  action_required: "High-confidence, high-severity findings worth fixing first.",
+  optimization: "Worthwhile improvements at medium or low severity. Not urgent.",
+  policy_decision: "The current setup reflects a legitimate business choice, not a defect.",
+  verify: "The evidence needs a manual look before being cited as a confirmed problem.",
+  informational: "Context worth knowing. No action implied.",
 };
 
 /* ── Loose input types: the saved result is persisted JSON, so guard every read. ── */
@@ -184,6 +198,18 @@ function Section({ title, first, children }: { title: string; first?: boolean; c
 
 export function AuditReportPdf({ result }: { result: AuditPdfResult }) {
   const issues = Array.isArray(result.issues) ? result.issues.slice(0, 120) : [];
+  // Grouped by what response the finding actually calls for, so the report
+  // does not headline every warning as an undifferentiated "issue." A
+  // duplicate symptom sharing a root cause (see analysis.ts's address-finding
+  // dedup) is already merged upstream, before this grouping runs.
+  const tierGroups: Record<ActionTier, IssueLike[]> = {
+    action_required: [], optimization: [], policy_decision: [], verify: [], informational: [],
+  };
+  for (const it of issues) {
+    const sev = sevOf(it.severity);
+    const tier = classifyActionTier({ title: it.title ?? "", severity: sev, confidence: it.confidence ?? "high", pageTypeImpact: it.pageTypeImpact, detail: it.detail });
+    tierGroups[tier].push(it);
+  }
   const pages = Array.isArray(result.pages) ? result.pages.slice(0, 60) : [];
   const bots = Array.isArray(result.aiBots) ? result.aiBots : [];
   const searchBots = bots.filter((b) => b.category === "search");
@@ -264,34 +290,46 @@ export function AuditReportPdf({ result }: { result: AuditPdfResult }) {
             </Text>
           </Section>
 
-          {/* Issues */}
-          <Section title={`Issues (${issues.length})`}>
-            {issues.length === 0 && <Text style={s.para}>No issues found. All checks passed.</Text>}
-            {issues.map((it, i) => {
-              const sev = sevOf(it.severity);
-              const note = internal ? classifyAuditNote({ title: it.title ?? "", severity: sev, confidence: (it.confidence ?? "high"), pageTypeImpact: it.pageTypeImpact }) : null;
-              return (
-                <View key={it.id ?? i} style={s.issue} wrap={false}>
-                  <View style={s.issueHead}>
-                    <Text style={[s.tag, { color: SEV_COLOR[sev] }]}>{SEV_LABEL[sev]}</Text>
-                    <Text style={s.issueTitle}>{it.title ?? "Issue"}</Text>
-                    <Text style={s.meta}>
-                      {it.category ?? ""}
-                      {it.affectedCount ? ` · ${it.affectedCount}/${it.totalPages ?? "?"} page${it.affectedCount > 1 ? "s" : ""}` : ""}
-                      {it.effort ? ` · ${it.effort} effort` : ""}
-                      {it.confidence ? ` · ${it.confidence} confidence` : ""}
-                    </Text>
-                    {note && <Text style={[s.tag, { color: AUDIT_NOTE_COLOR[note] }]}>{AUDIT_NOTE_LABEL[note]}</Text>}
-                  </View>
-                  {it.detail && <Text style={s.issueDetail}>{it.detail}</Text>}
-                  {it.fix && <Text style={s.fix}><Text style={s.fixLabel}>FIX  </Text>{it.fix}</Text>}
-                  {it.evidence && <Text style={s.evidence}>Evidence: {it.evidence}</Text>}
-                  {internal && it.internalNote && <Text style={s.internalLine}>Internal: {it.internalNote}</Text>}
-                  {internal && it.prospectingAngle && <Text style={s.internalLine}>Angle: {it.prospectingAngle}</Text>}
-                </View>
-              );
-            })}
-          </Section>
+          {/* Findings, grouped by what response they call for rather than
+              headlined as one undifferentiated "Issues (N)" list. */}
+          {issues.length === 0 && (
+            <Section title="Findings (0)">
+              <Text style={s.para}>No issues found. All checks passed.</Text>
+            </Section>
+          )}
+          {ACTION_TIER_ORDER.map((tier) => {
+            const group = tierGroups[tier];
+            if (group.length === 0) return null;
+            return (
+              <Section key={tier} title={`${ACTION_TIER_LABEL[tier]} (${group.length})`}>
+                <Text style={[s.para, { marginTop: -2 }]}>{ACTION_TIER_DESCRIPTION[tier]}</Text>
+                {group.map((it, i) => {
+                  const sev = sevOf(it.severity);
+                  const note = internal ? classifyAuditNote({ title: it.title ?? "", severity: sev, confidence: (it.confidence ?? "high"), pageTypeImpact: it.pageTypeImpact }) : null;
+                  return (
+                    <View key={it.id ?? i} style={s.issue} wrap={false}>
+                      <View style={s.issueHead}>
+                        <Text style={[s.tag, { color: ACTION_TIER_COLOR[tier] }]}>{SEV_LABEL[sev]}</Text>
+                        <Text style={s.issueTitle}>{it.title ?? "Issue"}</Text>
+                        <Text style={s.meta}>
+                          {it.category ?? ""}
+                          {it.affectedCount ? ` · ${it.affectedCount}/${it.totalPages ?? "?"} page${it.affectedCount > 1 ? "s" : ""}` : ""}
+                          {it.effort ? ` · ${it.effort} effort` : ""}
+                          {it.confidence ? ` · ${it.confidence} confidence` : ""}
+                        </Text>
+                        {note && <Text style={[s.tag, { color: AUDIT_NOTE_COLOR[note] }]}>{AUDIT_NOTE_LABEL[note]}</Text>}
+                      </View>
+                      {it.detail && <Text style={s.issueDetail}>{it.detail}</Text>}
+                      {it.fix && <Text style={s.fix}><Text style={s.fixLabel}>FIX  </Text>{it.fix}</Text>}
+                      {it.evidence && <Text style={s.evidence}>Evidence: {it.evidence}</Text>}
+                      {internal && it.internalNote && <Text style={s.internalLine}>Internal: {it.internalNote}</Text>}
+                      {internal && it.prospectingAngle && <Text style={s.internalLine}>Angle: {it.prospectingAngle}</Text>}
+                    </View>
+                  );
+                })}
+              </Section>
+            );
+          })}
 
           {/* Pages */}
           {pages.length > 0 && (

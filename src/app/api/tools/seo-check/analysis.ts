@@ -30,6 +30,12 @@ import {
 // from it", which is a materially different (and more actionable) finding.
 const TEAM_PATH_RE = /team|attorney|lawyer|our-team|staff|people|bio|counsel/i;
 
+function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+
 function disallowedPaths(parsedRobots: ParsedRobots | null): string[] {
   if (!parsedRobots) return [];
   const paths: string[] = [];
@@ -134,6 +140,12 @@ export interface LawFirmSignals {
   consultationCta: boolean;
   policyPagePresent: boolean;
   practiceAreaIntent: boolean;
+  // True when the page shows no street address but reads as a legitimate
+  // service-area / remote practice (areaServed schema + language like "by
+  // video" or "serving clients across X"), rather than an incomplete NAP.
+  // Downgrades address findings instead of recommending the firm invent or
+  // expose a private address. See content-signals.ts.
+  serviceAreaLikely: boolean;
   trust: {
     testimonials: boolean;
     reviews: boolean;
@@ -389,6 +401,18 @@ function severityFor(category: string, label: string, status: "warn" | "fail", d
   // change): the warn read as HIGH 6/6 and ranked third overall. A missing
   // HSTS header keeps the category's high severity.
   if (label === "HSTS header" && /max-age is low/i.test(detail)) base = "low";
+  // Report-only CSP is the audit's own recommended first step and is
+  // mid-rollout, not absent; do not score it at the same severity as no CSP
+  // at all. Field case drglaw.ca: report-only was present sitewide and the
+  // finding still read as a High-severity gap.
+  if (label === "Content-Security-Policy" && /report-only/i.test(detail)) {
+    // Pinned at "low" rather than run through the normal warn-drop to "info":
+    // report-only has a concrete next action (promote to enforced), so it
+    // must land in the report's "optimization opportunity" tier, not
+    // "informational" (which reads as no action needed and risks implying
+    // the site's CSP posture is more complete than it is).
+    return "low";
+  }
   return status === "fail" ? base : dropSeverity(base);
 }
 
@@ -568,6 +592,24 @@ export function buildIssues(pages: PageResult[], effectiveContentPages: number =
     }
   }
 
+  // Root-cause dedup: "Address / NAP" (Legal Marketing) and "Street address
+  // (NAP)" (Local SEO) are two category views of the exact same regex test
+  // against the exact same page HTML, so an unpublished address currently
+  // surfaces as two separate findings for one underlying fact. When their
+  // affected-page sets are identical, drop the Local SEO duplicate and note
+  // its category impact on the surviving Legal Marketing finding, rather than
+  // reporting the same root cause twice. Only merges on identical evidence,
+  // so a page where the two checks genuinely disagree (e.g. schema declares
+  // an address the body text does not print) keeps both findings.
+  const legalAddress = map.get("Legal Marketing::Address / NAP");
+  const localAddress = map.get("Local SEO::Street address (NAP)");
+  if (legalAddress && localAddress && setsEqual(legalAddress.urls, localAddress.urls) && legalAddress.status === localAddress.status) {
+    map.delete("Local SEO::Street address (NAP)");
+    if (!/Local SEO/.test(legalAddress.detail)) {
+      legalAddress.detail += " (Same finding as Local SEO's Street address (NAP) check; shown once here.)";
+    }
+  }
+
   const issues: Issue[] = [];
   for (const acc of map.values()) {
     // Do not report "no policy / disclaimer link" when the firm has policy
@@ -597,11 +639,16 @@ export function buildIssues(pages: PageResult[], effectiveContentPages: number =
     const policyOnly = pageTypeImpact.length > 0 && pageTypeImpact.every((t) => t === "policy");
 
     let severity = severityFor(acc.category, acc.label, acc.status, acc.detail);
+    // Report-only CSP is capped to "low" above because it is implementation
+    // in progress, not an absent control; sitewide coverage of a rollout in
+    // progress should not bump it back up to High the way sitewide absence
+    // of a control would.
+    const isReportOnlyCsp = acc.label === "Content-Security-Policy" && /report-only/i.test(acc.detail);
     // Bump one level when the issue lands on commercial pages and is sitewide.
     // The coverage bump does NOT manufacture "critical": that tier is reserved
     // for explicitly critical checks (noindex, HTTPS, missing contact path),
     // so a sitewide minor finding caps at "high".
-    if (hitsCommercial && affectedCount >= Math.max(2, Math.ceil(totalPages / 2)) && severity !== "critical" && !NO_COVERAGE_BUMP_LABELS.has(acc.label)) {
+    if (hitsCommercial && affectedCount >= Math.max(2, Math.ceil(totalPages / 2)) && severity !== "critical" && !NO_COVERAGE_BUMP_LABELS.has(acc.label) && !isReportOnlyCsp) {
       const order: Severity[] = ["critical", "high", "medium", "low", "info"];
       const bumped = order[Math.max(0, order.indexOf(severity) - 1)];
       severity = bumped === "critical" ? "high" : bumped;

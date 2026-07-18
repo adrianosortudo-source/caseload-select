@@ -55,17 +55,31 @@ export type PageType =
   | "faq"
   | "blog"
   | "policy"
+  | "intake"
+  | "tool"
   | "other";
 
 // Page types that carry direct commercial weight for a law firm. Issues that
-// affect these pages are scored higher in the priority model.
+// affect these pages are scored higher in the priority model. "intake" is
+// included: a matter-review/intake funnel is the direct conversion action,
+// not a supporting page.
 export const COMMERCIAL_PAGE_TYPES: PageType[] = [
   "homepage",
   "contact",
   "practice",
   "attorney",
   "location",
+  "intake",
 ];
+
+// The page types where article-shaped AEO/content checks (question headings,
+// direct-answer sentences, citations, authorship, substantive word count) are
+// treated as a requirement. Elsewhere the checks still run and their evidence
+// stays visible, but a miss is not scored as a defect: a contact form, an
+// intake funnel, a homepage, or an interactive tool is not an article and was
+// never meant to carry a 300-word definitional essay. See
+// applyPageTypeApplicability.
+export const CONTENT_REQUIRED_PAGE_TYPES: PageType[] = ["practice", "faq", "blog"];
 
 /* ────────────────────────────────────────────────────────
    Scan modes
@@ -406,6 +420,15 @@ export function classifyPageType(url: string): PageType {
     if (/contact/.test(q)) return "contact";
     return "other";
   }
+  // Conversion/funnel pages: matter-intake forms and interactive
+  // tools/calculators. Checked before the contact and practice-area regexes
+  // because path segments like /tools/estate-structure-check otherwise
+  // substring-match "estate" inside PRACTICE_INTENT_PATH_RE and misclassify a
+  // checklist widget as a written practice page, which then gets held to
+  // word-count/question-heading article rules it was never meant to carry
+  // (field case drglaw.ca: /tools/estate-structure-check read as "practice").
+  if (/(^|\/)intake(\/|$)/.test(p)) return "intake";
+  if (/(^|\/)tools?(\/|$)/.test(p)) return "tool";
   if (/(^|\/)(contact|contact-us|get-in-touch|book|consultation|schedule)(\/|$|-)/.test(p)) return "contact";
   if (/(^|\/)(privacy|terms|disclaimer|accessibility|cookie|legal-notice|sitemap)(\/|$|-)/.test(p)) return "policy";
   if (PRACTICE_INTENT_PATH_RE.test(p)) return "practice";
@@ -420,10 +443,12 @@ export function classifyPageType(url: string): PageType {
 const PAGE_TYPE_PRIORITY: Record<PageType, number> = {
   homepage: 100,
   contact: 90,
+  intake: 82,
   practice: 85,
   attorney: 78,
   about: 74,
   location: 72,
+  tool: 68,
   faq: 64,
   blog: 42,
   policy: 25,
@@ -476,8 +501,94 @@ export function pageTypeLabel(t: PageType): string {
     case "faq": return "FAQ";
     case "blog": return "Blog / guide";
     case "policy": return "Policy / utility";
+    case "intake": return "Intake / conversion";
+    case "tool": return "Tool / calculator";
     default: return "Other";
   }
+}
+
+/* ────────────────────────────────────────────────────────
+   Page-type applicability
+   ──────────────────────────────────────────────────────── */
+
+// AEO / authorship / depth checks intended for genuine content pages
+// (practice write-ups, FAQ answers, blog/journal articles). Firing these as a
+// requirement on a contact form, an intake funnel, a homepage, or an
+// interactive tool manufactures a requirement nobody asked for: a conversion
+// page's job is to convert, not to carry a 300-word definitional essay or a
+// citation to a law-society resource. The checks still RUN everywhere (so a
+// genuine gap on a practice page is still caught, and the evidence stays
+// available for a manual look); applyPageTypeApplicability only stops a miss
+// outside CONTENT_REQUIRED_PAGE_TYPES from being scored as a defect.
+export const CONTENT_ONLY_LABELS = new Set<string>([
+  "Question-format headings",
+  "Direct-answer sentences",
+  "Authoritative citations",
+  "Author / reviewer signals",
+  "Word count",
+  "Practice-area intent",
+]);
+
+// A conversion funnel (a form) or an interactive tool (a checklist widget)
+// is not an unstructured article either, but the article-depth structural
+// checks above are already covered by CONTENT_ONLY_LABELS. What is left is
+// the more basic "break your content into sections" expectation, which does
+// not fit a one-screen form or a question-by-question checklist. Narrower
+// than CONTENT_ONLY_LABELS on purpose: contact/about/attorney pages still
+// read as prose and keep the normal H2 expectation.
+const FUNNEL_PAGE_TYPES: PageType[] = ["intake", "tool"];
+const FUNNEL_EXEMPT_LABELS = new Set<string>(["H2 subheadings"]);
+
+const LANGUAGE_ROOT_RE = /^\/[a-z]{2}(-[a-z]{2,4})?\/?$/i;
+
+/** True for the homepage and a bare language-root path (e.g. "/pt", "/fr-ca"). */
+export function isHomepageOrLanguageRoot(pageType: PageType, url: string): boolean {
+  if (pageType === "homepage") return true;
+  try {
+    return LANGUAGE_ROOT_RE.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Downgrade checks that do not apply to this page's type from a requirement
+ * (warn/fail) to an explicit not-applicable pass. Breadcrumb schema is
+ * handled the same way for the homepage / a language root: there is nothing
+ * above it in the site hierarchy for a BreadcrumbList to describe.
+ */
+export function applyPageTypeApplicability(
+  categories: CategoryResult[],
+  pageType: PageType,
+  url: string
+): CategoryResult[] {
+  const contentPage = CONTENT_REQUIRED_PAGE_TYPES.includes(pageType);
+  const breadcrumbExempt = isHomepageOrLanguageRoot(pageType, url);
+  const funnelPage = FUNNEL_PAGE_TYPES.includes(pageType);
+  if (contentPage && !breadcrumbExempt && !funnelPage) return categories;
+
+  return categories.map((cat) => {
+    let changed = false;
+    const items = cat.items.map((item) => {
+      const exemptForType = !contentPage && CONTENT_ONLY_LABELS.has(item.label);
+      const exemptFunnel = funnelPage && FUNNEL_EXEMPT_LABELS.has(item.label);
+      const exemptBreadcrumb = item.label === "Breadcrumb schema" && breadcrumbExempt;
+      if ((exemptForType || exemptFunnel || exemptBreadcrumb) && item.status !== "pass") {
+        changed = true;
+        return {
+          label: item.label,
+          status: "pass" as const,
+          detail: exemptBreadcrumb
+            ? `Not required on the homepage or a language root. ${item.detail}`
+            : `Not required for a ${pageTypeLabel(pageType).toLowerCase()} page. ${item.detail}`,
+        };
+      }
+      return item;
+    });
+    if (!changed) return cat;
+    const { score, maxScore } = scoreItems(items);
+    return { ...cat, items, score, maxScore };
+  });
 }
 
 /* ────────────────────────────────────────────────────────
