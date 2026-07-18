@@ -8,10 +8,10 @@ import type {
 
 /**
  * "How your content works" panel. Structured, brand-styled explainer of the
- * weekly content cadence for the firm's lawyer. Presentational and static, so
+ * content production model for the firm's lawyer. Presentational and static, so
  * it can render on the server.
  *
- * variant="summary": intro + approval box + 1→3→6 band + a link to the full
+ * variant="summary": intro + production metrics + a link to the full
  *   page. Rendered on the deliverables portal in place of AboutPanel.
  * variant="full": the whole thing (pieces, weekly schedule, lead magnet). Lives
  *   at /portal/[firmId]/how-your-content-works.
@@ -48,21 +48,15 @@ export default function ContentCadencePanel({
           <aside className="ccp-approve">
             <p className="ccp-approve-at">
               <CheckIcon />
-              What you approve
+              {cadence.approve.heading}
             </p>
             <div className="ccp-metrics">
-              <div className="ccp-metric">
-                <strong>3</strong>
-                <span>{cadence.approve.pieces}</span>
-              </div>
-              <div className="ccp-metric">
-                <strong>1</strong>
-                <span>{cadence.approve.theme}</span>
-              </div>
-              <div className="ccp-metric">
-                <strong>Tue</strong>
-                <span>{cadence.approve.day}</span>
-              </div>
+              {cadence.approve.metrics.map((metric) => (
+                <div className="ccp-metric" key={metric.label}>
+                  <strong>{metric.value}</strong>
+                  <span>{metric.label}</span>
+                </div>
+              ))}
             </div>
             <p className="ccp-approve-note">{cadence.approve.note}</p>
           </aside>
@@ -71,19 +65,19 @@ export default function ContentCadencePanel({
 
       {/* Promise band */}
       <div className="ccp-promise">
-        <div className="ccp-big">
-          <span className="ccp-u">1</span> approval
-        </div>
-        <span className="ccp-arrow" aria-hidden>
-          &rarr;
-        </span>
-        <div className="ccp-big">3 pieces</div>
-        <span className="ccp-arrow" aria-hidden>
-          &rarr;
-        </span>
-        <div className="ccp-big">
-          <span className="ccp-u">6</span> posts
-        </div>
+        {cadence.promise.metrics.map((metric, index) => (
+          <div className="ccp-promise-stage" key={metric.label}>
+            {index > 0 ? (
+              <span className="ccp-arrow" aria-hidden>
+                &rarr;
+              </span>
+            ) : null}
+            <div className="ccp-big">
+              <span className={metric.underline ? "ccp-u" : undefined}>{metric.value}</span>{" "}
+              {metric.label}
+            </div>
+          </div>
+        ))}
         <p className="ccp-promise-lbl">{cadence.promise.label}</p>
       </div>
 
@@ -91,18 +85,18 @@ export default function ContentCadencePanel({
         detailHref ? (
           <div className="ccp-summary-cta">
             <a className="ccp-btn" href={detailHref}>
-              See how your week works
+              {cadence.summaryCta}
               <ArrowRightIcon />
             </a>
           </div>
         ) : null
       ) : (
         <div className="ccp-pad ccp-stack">
-          {/* 1. Three pieces */}
+          {/* 1. Owned content families */}
           <div>
             <div className="ccp-sec-label">
               <span className="ccp-sec-num">1</span>
-              <span className="ccp-sec-title">What you approve each week</span>
+              <span className="ccp-sec-title">{cadence.sectionLabels.pieces}</span>
             </div>
             <div className="ccp-pieces">
               {cadence.pieces.map((p, i) => (
@@ -119,11 +113,11 @@ export default function ContentCadencePanel({
 
           <div className="ccp-divider" />
 
-          {/* 2. Weekly schedule */}
+          {/* 2. Publishing map */}
           <div>
             <div className="ccp-sec-label">
               <span className="ccp-sec-num">2</span>
-              <span className="ccp-sec-title">Where each piece goes across the week</span>
+              <span className="ccp-sec-title">{cadence.sectionLabels.schedule}</span>
             </div>
             <div className="ccp-legend">
               <span>
@@ -160,7 +154,7 @@ export default function ContentCadencePanel({
                             <div className={`ccp-card ccp-c-${row.channel === "website" ? "site" : row.channel === "linkedin" ? "li" : "gbp"}`} key={k}>
                               <span className="ccp-t">{c.slot}</span>
                               <b>{c.piece}</b>
-                              {c.detail}
+                              {c.detail} · {c.count} {c.count === 1 ? "deliverable" : "deliverables"}
                             </div>
                           ))
                         ) : (
@@ -185,11 +179,11 @@ export default function ContentCadencePanel({
 
           <div className="ccp-divider" />
 
-          {/* 3. Lead magnet */}
+          {/* 3. Lead magnet and required marketing consent */}
           <div>
             <div className="ccp-sec-label">
               <span className="ccp-sec-num">3</span>
-              <span className="ccp-sec-title">The Checklist does a second job</span>
+              <span className="ccp-sec-title">{cadence.sectionLabels.magnet}</span>
             </div>
             <div className="ccp-magnet">
               <div className="ccp-magnet-vis" aria-hidden>
@@ -226,8 +220,8 @@ export default function ContentCadencePanel({
           </div>
 
           <div className="ccp-adhoc">
-            <b>The weekly batch is the default, not a limit.</b>{" "}
-            {cadence.adhoc.replace("The weekly batch is the default, not a limit. ", "")}
+            <b>{cadence.transition.heading}</b>{" "}
+            {cadence.transition.body}
           </div>
 
           {links.length > 0 ? (

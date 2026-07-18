@@ -1,13 +1,15 @@
 /**
- * Per-firm "How your content works" cadence config.
+ * Per-firm "How your content works" configuration.
  *
  * Drives the ContentCadencePanel on the deliverables portal (summary variant)
  * and its own /portal/[firmId]/how-your-content-works page (full variant). This
- * is structured data, NOT operator free-HTML, so it renders as a real component
+ * is structured data, not operator free HTML, so it renders as a real component
  * instead of going through the firm_about sanitizer allowlist.
  *
- * Source of truth for the schedule: drg_strategy_v2.upload.json
- * weekly_edition_cadence (6x/week: 3 GBP + 3 LinkedIn, Tuesday + Thursday).
+ * DRG's current entry documents the finite 13-deliverable weekly backlog that
+ * was already produced. It is not the future v5.2 cadence. After the backlog
+ * is reviewed, placed, and published, the capacity-controlled v5.2 model takes
+ * over.
  *
  * A firm with no entry here falls back to the plain AboutPanel on the
  * deliverables page. Adding a firm is a data entry, not a rebuild.
@@ -30,6 +32,7 @@ export interface CadenceCard {
   slot: string;
   piece: string;
   detail: string;
+  count: number;
 }
 
 export interface CadenceRow {
@@ -54,68 +57,110 @@ export interface CadenceReferenceLink {
   url: string;
 }
 
+export interface CadenceMetric {
+  value: string;
+  label: string;
+  underline?: boolean;
+}
+
 export interface ContentCadence {
   eyebrow: string;
   headline: string;
   lede: string;
-  approve: { pieces: string; theme: string; day: string; note: string };
-  promise: { label: string };
+  approve: { heading: string; metrics: CadenceMetric[]; note: string };
+  promise: { metrics: CadenceMetric[]; label: string };
+  sectionLabels: { pieces: string; schedule: string; magnet: string };
+  summaryCta: string;
   pieces: CadencePiece[];
   days: CadenceDay[];
   rows: CadenceRow[];
   counts: { n: string; l: string }[];
   magnet: { heading: string; body: string; steps: CadenceStep[] };
-  adhoc: string;
+  transition: { heading: string; body: string };
   referenceLinks: CadenceReferenceLink[];
 }
 
 const DRG_CADENCE: ContentCadence = {
   eyebrow: "About this content",
-  headline: "One approval builds a full week of visibility",
+  headline: "Each completed week contains 13 coordinated deliverables",
   lede:
-    "Every Tuesday you approve three pieces in a single batch. From that one decision, your firm publishes an edition and posts to social six times across the week. Here is where each piece goes.",
+    "The weeks already produced were built as 13-deliverable batches: eight owned English and Portuguese assets, two LinkedIn posts, and three Google Business Profile posts. Those batches will be reviewed, placed, and published before the v5.2 model begins.",
   approve: {
-    pieces: "pieces, one batch",
-    theme: "theme, every channel",
-    day: "publication day",
+    heading: "What each completed week contains",
+    metrics: [
+      { value: "13", label: "deliverables" },
+      { value: "2", label: "languages" },
+      { value: "3", label: "channels" },
+    ],
     note:
-      "The weekly batch is the default. You can still add an off-cycle item any time something urgent needs to go out.",
+      "This is the current publication backlog, not the future weekly quota. The v5.2 capacity-controlled model starts after these completed weeks are live.",
   },
   promise: {
-    label: "Your whole week of content, from one batch you sign off on.",
+    metrics: [
+      { value: "1", label: "weekly theme", underline: true },
+      { value: "13", label: "deliverables" },
+      { value: "3", label: "channels", underline: true },
+    ],
+    label: "One weekly theme, carried through the 13 deliverables already produced.",
   },
+  sectionLabels: {
+    pieces: "What the completed 13-deliverable week contains",
+    schedule: "Where the 13 deliverables publish",
+    magnet: "The Preparation Artifact also captures consented interest",
+  },
+  summaryCta: "See the 13-piece week",
   pieces: [
     {
-      kind: "Counsel Note",
-      name: "The main article",
-      desc: "A full walk-through of one decision an Ontario business owner actually faces.",
-      tag: "Anchor piece",
+      kind: "Counsel Note · EN + PT",
+      name: "Two owned articles",
+      desc: "The same Ontario decision authored independently for English and Portuguese readers.",
+      tag: "2 deliverables",
       icon: "note",
     },
     {
-      kind: "Clause in the Margin",
-      name: "One clause, read closely",
-      desc: "A short close-read of a single clause owners sign without negotiating.",
-      tag: "Clause review",
+      kind: "Clause in the Margin · EN + PT",
+      name: "Two owned close-reads",
+      desc: "One representative clause examined in two original language versions.",
+      tag: "2 deliverables",
       icon: "clause",
     },
     {
-      kind: "Checklist",
-      name: "A one-page action list",
-      desc: "A practical, download-ready page tied to the week's theme.",
-      tag: "Action tool + lead magnet",
+      kind: "Preparation Artifact · EN + PT",
+      name: "Two PDFs and two landing pages",
+      desc: "A practical working document plus its complete English and Portuguese placement.",
+      tag: "4 deliverables",
       icon: "checklist",
     },
   ],
-  days: [{ label: "Tuesday" }, { label: "Wednesday", quiet: true }, { label: "Thursday" }],
+  days: [{ label: "Tuesday" }, { label: "Wednesday" }, { label: "Thursday" }],
   rows: [
     {
       channel: "website",
-      label: "Website",
+      label: "Owned by DRG",
       cells: [
-        [{ slot: "AM · full edition", piece: "All three pieces", detail: "publish together as one weekly edition" }],
+        [
+          {
+            slot: "Article pair",
+            piece: "Counsel Note · EN + PT",
+            detail: "two canonical website articles",
+            count: 2,
+          },
+          {
+            slot: "Article pair",
+            piece: "Clause in the Margin · EN + PT",
+            detail: "two canonical close-read articles",
+            count: 2,
+          },
+        ],
         null,
-        null,
+        [
+          {
+            slot: "Lead-magnet pair",
+            piece: "Preparation Artifact · EN + PT",
+            detail: "two PDFs plus two landing pages",
+            count: 4,
+          },
+        ],
       ],
     },
     {
@@ -123,11 +168,22 @@ const DRG_CADENCE: ContentCadence = {
       label: "LinkedIn",
       cells: [
         [
-          { slot: "Post · AM", piece: "Counsel Note", detail: "links to the new article" },
-          { slot: "Post · PM", piece: "Checklist", detail: "promotes the free download" },
+          {
+            slot: "Native post · EN",
+            piece: "English reader entry point",
+            detail: "extends the weekly theme",
+            count: 1,
+          },
         ],
         null,
-        [{ slot: "Post", piece: "Clause in the Margin", detail: "links to its own article" }],
+        [
+          {
+            slot: "Native post · PT",
+            piece: "Portuguese reader entry point",
+            detail: "extends the weekly theme",
+            count: 1,
+          },
+        ],
       ],
     },
     {
@@ -135,32 +191,59 @@ const DRG_CADENCE: ContentCadence = {
       label: "Google profile",
       cells: [
         [
-          { slot: "AM card", piece: "Counsel Note", detail: "drives readers to the article" },
-          { slot: "PM card", piece: "Checklist", detail: "drives the free download" },
+          {
+            slot: "Decision ad",
+            piece: "Counsel Note",
+            detail: "drives readers to the article",
+            count: 1,
+          },
         ],
-        null,
-        [{ slot: "AM card", piece: "Clause in the Margin", detail: "drives readers to the article" }],
+        [
+          {
+            slot: "Decision ad",
+            piece: "Preparation Artifact",
+            detail: "drives the consented download",
+            count: 1,
+          },
+        ],
+        [
+          {
+            slot: "Decision ad",
+            piece: "Clause in the Margin",
+            detail: "drives readers to the close-read",
+            count: 1,
+          },
+        ],
       ],
     },
   ],
   counts: [
-    { n: "1×", l: "website edition" },
-    { n: "3×", l: "LinkedIn posts" },
-    { n: "3×", l: "Google profile posts" },
-    { n: "6×", l: "social touches, one approval" },
+    { n: "8", l: "owned EN/PT assets" },
+    { n: "2", l: "LinkedIn posts" },
+    { n: "3", l: "Google profile posts" },
+    { n: "13", l: "deliverables in one completed week" },
   ],
   magnet: {
-    heading: "The same Checklist, offered as a free download",
+    heading: "The EN/PT Preparation Artifact is also the week's lead magnet",
     body:
-      "The Checklist you already approved also sits behind a short form on your site. A reader gives a name and email, the file unlocks, and you keep a way to reach someone who liked your content but was not ready to submit for review yet.",
+      "Each completed week includes the English and Portuguese PDFs and their matching landing pages. The form asks for delivery information and requires affirmative consent to marketing communications. When the reader consents, the PDF is delivered and the contact enters the approved follow-up path. Consent and unsubscribe state remain recorded.",
     steps: [
-      { title: "Reader wants it", desc: "The Checklist promises something practical." },
-      { title: "Form asks name + email", desc: "Two fields unlock the PDF." },
-      { title: "You keep the contact", desc: "A follow-up path stays open." },
+      { title: "Reader wants it", desc: "The artifact promises something practical." },
+      {
+        title: "Form records consent",
+        desc: "Name, email, and affirmative marketing consent are required for delivery.",
+      },
+      {
+        title: "Delivery and follow-up begin",
+        desc: "The PDF is delivered and the consented contact enters the approved communication path.",
+      },
     ],
   },
-  adhoc:
-    "The weekly batch is the default, not a limit. If you ever want to publish outside this rhythm, an off-cycle update, a one-off note, an urgent clarification, the portal still accepts it any time.",
+  transition: {
+    heading: "Finish the existing 13-deliverable backlog first.",
+    body:
+      "The weeks already produced remain the current publication plan. Once those assets are reviewed, placed, and published, DRG moves to the v5.2 capacity-controlled model. The 13-piece week is a finite backlog, not the future quota.",
+  },
   referenceLinks: [],
 };
 
@@ -168,7 +251,7 @@ const CADENCE_BY_FIRM: Record<string, ContentCadence> = {
   [DRG_FIRM_ID]: DRG_CADENCE,
 };
 
-/** Returns the firm's cadence config, or null when the firm has none. Pure. */
+/** Returns the firm's content model, or null when the firm has none. Pure. */
 export function getContentCadence(firmId: string): ContentCadence | null {
   return CADENCE_BY_FIRM[firmId] ?? null;
 }

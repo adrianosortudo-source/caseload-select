@@ -41,11 +41,12 @@
 .ccp-approve-note{margin-top:13px;font-size:12.5px;color:var(--ccp-ink);line-height:1.5}
 
 .ccp-promise{background:var(--ccp-black);color:var(--ccp-white);display:flex;align-items:center;gap:22px;flex-wrap:wrap;padding:20px 34px}
+.ccp-promise-stage{display:flex;align-items:center;gap:22px}
 .ccp-big{font-family:var(--font-manrope),system-ui,sans-serif;font-weight:800;font-size:26px;line-height:1;color:var(--ccp-white)}
 .ccp-big .ccp-u{color:var(--ccp-gold)}
 .ccp-arrow{color:var(--ccp-gold);font-size:19px;font-weight:700}
 .ccp-promise-lbl{font-size:13px;color:rgba(255,255,255,.72);max-width:22ch;line-height:1.4}
-@media(max-width:640px){.ccp-promise{padding:18px}.ccp-big{font-size:22px}}
+@media(max-width:640px){.ccp-promise{padding:18px}.ccp-promise-stage{gap:14px}.ccp-big{font-size:22px}}
 
 .ccp-summary-cta{padding:20px 34px 26px}
 @media(max-width:640px){.ccp-summary-cta{padding:18px}}
