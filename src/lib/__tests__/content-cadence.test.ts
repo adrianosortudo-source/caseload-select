@@ -37,11 +37,12 @@ describe("DRG cadence v5.2 model — headline and lede", () => {
 });
 
 describe("DRG cadence v5.2 model — historical note", () => {
-  it("preserves the required historical-backlog callout text", () => {
+  it("preserves the required historical-backlog callout text and does not tie the new model to The Renewal Clause", () => {
     const cadence = requireCadence();
     expect(cadence.historicalNote.body).toBe(
-      "Previously completed 13-deliverable batches remain the current backlog. Starting with The Renewal Clause, new releases use the updated model.",
+      "The completed 13-deliverable weeks are the current backlog. Starting with the next new weekly theme, DRG's capacity-controlled model may include the DRG Law Minute as a fourteenth artifact across four channels.",
     );
+    expect(cadence.historicalNote.body).not.toMatch(/Renewal Clause/);
     expect(cadence.historicalNote.heading.length).toBeGreaterThan(0);
   });
 });

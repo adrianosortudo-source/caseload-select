@@ -10,11 +10,14 @@
  * coordinated artifacts per approved theme, across two languages and four
  * channels (website, LinkedIn, Google Business Profile, and the new weekly
  * "DRG Law Minute" relationship email), released on a Tuesday-Wednesday
- * window. This is the going-forward model starting with The Renewal Clause.
- * The previously completed 13-deliverable, 3-channel batches (the finite
- * backlog produced before v5.2) are preserved as an explicit historical
- * callout (`historicalNote`) rather than deleted, since those weeks are still
- * being reviewed, placed, and published.
+ * window. This model starts with the next NEW weekly theme, not with The
+ * Renewal Clause: that period is a completed 13-deliverable, 3-channel
+ * historical batch and stays one (no Minute row, no email destination exist
+ * for it, and none is being added retroactively). The previously completed
+ * 13-deliverable, 3-channel batches (the finite backlog produced before
+ * v5.2) are preserved as an explicit historical callout (`historicalNote`)
+ * rather than deleted, since those weeks are still being reviewed, placed,
+ * and published.
  *
  * A firm with no entry here falls back to the plain AboutPanel on the
  * deliverables page. Adding a firm is a data entry, not a rebuild.
@@ -109,7 +112,7 @@ const DRG_CADENCE: ContentCadence = {
   historicalNote: {
     heading: "The 13-deliverable batches are the backlog, not the new standard",
     body:
-      "Previously completed 13-deliverable batches remain the current backlog. Starting with The Renewal Clause, new releases use the updated model.",
+      "The completed 13-deliverable weeks are the current backlog. Starting with the next new weekly theme, DRG's capacity-controlled model may include the DRG Law Minute as a fourteenth artifact across four channels.",
   },
   approve: {
     heading: "What one approved theme can produce",
