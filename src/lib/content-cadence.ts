@@ -6,10 +6,15 @@
  * is structured data, not operator free HTML, so it renders as a real component
  * instead of going through the firm_about sanitizer allowlist.
  *
- * DRG's current entry documents the finite 13-deliverable weekly backlog that
- * was already produced. It is not the future v5.2 cadence. After the backlog
- * is reviewed, placed, and published, the capacity-controlled v5.2 model takes
- * over.
+ * DRG's entry now documents the capacity-controlled v5.2 model: up to 14
+ * coordinated artifacts per approved theme, across two languages and four
+ * channels (website, LinkedIn, Google Business Profile, and the new weekly
+ * "DRG Law Minute" relationship email), released on a Tuesday-Wednesday
+ * window. This is the going-forward model starting with The Renewal Clause.
+ * The previously completed 13-deliverable, 3-channel batches (the finite
+ * backlog produced before v5.2) are preserved as an explicit historical
+ * callout (`historicalNote`) rather than deleted, since those weeks are still
+ * being reviewed, placed, and published.
  *
  * A firm with no entry here falls back to the plain AboutPanel on the
  * deliverables page. Adding a firm is a data entry, not a rebuild.
@@ -17,8 +22,8 @@
 
 const DRG_FIRM_ID = "eec1d25e-a047-4827-8e4a-6eb96becca2b";
 
-export type PieceIcon = "note" | "clause" | "checklist";
-export type Channel = "website" | "linkedin" | "gbp";
+export type PieceIcon = "note" | "clause" | "checklist" | "minute";
+export type Channel = "website" | "linkedin" | "gbp" | "email";
 
 export interface CadencePiece {
   kind: string;
@@ -63,76 +68,106 @@ export interface CadenceMetric {
   underline?: boolean;
 }
 
+export interface CadenceHistoricalNote {
+  heading: string;
+  body: string;
+}
+
+export interface CadenceMinute {
+  heading: string;
+  intro: string;
+  rules: string[];
+  readinessNote: string;
+}
+
 export interface ContentCadence {
   eyebrow: string;
   headline: string;
   lede: string;
+  /** Explicit callout preserving the historical 13-deliverable backlog facts. */
+  historicalNote: CadenceHistoricalNote;
   approve: { heading: string; metrics: CadenceMetric[]; note: string };
   promise: { metrics: CadenceMetric[]; label: string };
-  sectionLabels: { pieces: string; schedule: string; magnet: string };
+  sectionLabels: { pieces: string; schedule: string; magnet: string; minute: string };
   summaryCta: string;
   pieces: CadencePiece[];
   days: CadenceDay[];
   rows: CadenceRow[];
   counts: { n: string; l: string }[];
   magnet: { heading: string; body: string; steps: CadenceStep[] };
+  /** The DRG Law Minute weekly relationship email, section 4 of the full panel. */
+  minute: CadenceMinute;
   transition: { heading: string; body: string };
   referenceLinks: CadenceReferenceLink[];
 }
 
 const DRG_CADENCE: ContentCadence = {
   eyebrow: "About this content",
-  headline: "Each completed week contains 13 coordinated deliverables",
+  headline: "One approved theme can produce up to 14 coordinated artifacts",
   lede:
-    "The weeks already produced were built as 13-deliverable batches: eight owned English and Portuguese assets, two LinkedIn posts, and three Google Business Profile posts. Those batches will be reviewed, placed, and published before the v5.2 model begins.",
+    "This is a ceiling per approved theme, not a fixed weekly quota: up to 14 coordinated artifacts across two languages and four channels, and anything not ready, reviewed, or compliant does not ship that week.",
+  historicalNote: {
+    heading: "The 13-deliverable batches are the backlog, not the new standard",
+    body:
+      "Previously completed 13-deliverable batches remain the current backlog. Starting with The Renewal Clause, new releases use the updated model.",
+  },
   approve: {
-    heading: "What each completed week contains",
+    heading: "What one approved theme can produce",
     metrics: [
-      { value: "13", label: "deliverables" },
+      { value: "14", label: "artifacts" },
       { value: "2", label: "languages" },
-      { value: "3", label: "channels" },
+      { value: "4", label: "channels" },
+      { value: "Tue-Wed", label: "release window" },
     ],
     note:
-      "This is the current publication backlog, not the future weekly quota. The v5.2 capacity-controlled model starts after these completed weeks are live.",
+      "Capacity is a ceiling, not a promise: the artifacts above are what one theme can produce at most, and quality gates decide how many actually ship.",
   },
   promise: {
     metrics: [
       { value: "1", label: "weekly theme", underline: true },
-      { value: "13", label: "deliverables" },
-      { value: "3", label: "channels", underline: true },
+      { value: "14", label: "artifacts" },
+      { value: "4", label: "channels", underline: true },
     ],
-    label: "One weekly theme, carried through the 13 deliverables already produced.",
+    label: "One weekly theme, produced across up to 14 artifacts and 4 channels.",
   },
   sectionLabels: {
-    pieces: "What the completed 13-deliverable week contains",
-    schedule: "Where the 13 deliverables publish",
+    pieces: "The four artifact families in every theme",
+    schedule: "Where the artifacts publish",
     magnet: "The Preparation Artifact also captures consented interest",
+    minute: "The fourth channel: a weekly relationship email",
   },
-  summaryCta: "See the 13-piece week",
+  summaryCta: "See the full production model",
   pieces: [
     {
-      kind: "Counsel Note · EN + PT",
-      name: "Two owned articles",
+      kind: "Explain",
+      name: "Counsel Note · EN + PT",
       desc: "The same Ontario decision authored independently for English and Portuguese readers.",
-      tag: "2 deliverables",
+      tag: "2 artifacts",
       icon: "note",
     },
     {
-      kind: "Clause in the Margin · EN + PT",
-      name: "Two owned close-reads",
+      kind: "Examine",
+      name: "Clause in the Margin · EN + PT",
       desc: "One representative clause examined in two original language versions.",
-      tag: "2 deliverables",
+      tag: "2 artifacts",
       icon: "clause",
     },
     {
-      kind: "Preparation Artifact · EN + PT",
-      name: "Two PDFs and two landing pages",
+      kind: "Prepare",
+      name: "Preparation Artifact · EN + PT",
       desc: "A practical working document plus its complete English and Portuguese placement.",
-      tag: "4 deliverables",
+      tag: "4 artifacts",
       icon: "checklist",
     },
+    {
+      kind: "Maintain relationship",
+      name: "The DRG Law Minute",
+      desc: "A short English-only weekly note to clients who already said yes to hearing from the firm, not another lead-generation push.",
+      tag: "1 artifact",
+      icon: "minute",
+    },
   ],
-  days: [{ label: "Tuesday" }, { label: "Wednesday" }, { label: "Thursday" }],
+  days: [{ label: "Tuesday" }, { label: "Wednesday" }],
   rows: [
     {
       channel: "website",
@@ -151,9 +186,6 @@ const DRG_CADENCE: ContentCadence = {
             detail: "two canonical close-read articles",
             count: 2,
           },
-        ],
-        null,
-        [
           {
             slot: "Lead-magnet pair",
             piece: "Preparation Artifact · EN + PT",
@@ -161,6 +193,7 @@ const DRG_CADENCE: ContentCadence = {
             count: 4,
           },
         ],
+        null,
       ],
     },
     {
@@ -176,14 +209,6 @@ const DRG_CADENCE: ContentCadence = {
           },
         ],
         null,
-        [
-          {
-            slot: "Native post · PT",
-            piece: "Portuguese reader entry point",
-            detail: "extends the weekly theme",
-            count: 1,
-          },
-        ],
       ],
     },
     {
@@ -198,19 +223,19 @@ const DRG_CADENCE: ContentCadence = {
             count: 1,
           },
         ],
+        null,
+      ],
+    },
+    {
+      channel: "email",
+      label: "The DRG Law Minute",
+      cells: [
+        null,
         [
           {
-            slot: "Decision ad",
-            piece: "Preparation Artifact",
-            detail: "drives the consented download",
-            count: 1,
-          },
-        ],
-        [
-          {
-            slot: "Decision ad",
-            piece: "Clause in the Margin",
-            detail: "drives readers to the close-read",
+            slot: "Weekly note",
+            piece: "The DRG Law Minute",
+            detail: "sends only after Tuesday's linked pages verify live",
             count: 1,
           },
         ],
@@ -219,14 +244,15 @@ const DRG_CADENCE: ContentCadence = {
   ],
   counts: [
     { n: "8", l: "owned EN/PT assets" },
-    { n: "2", l: "LinkedIn posts" },
-    { n: "3", l: "Google profile posts" },
-    { n: "13", l: "deliverables in one completed week" },
+    { n: "1", l: "LinkedIn post" },
+    { n: "1", l: "Google profile post" },
+    { n: "1", l: "weekly Minute" },
+    { n: "14", l: "artifacts possible per theme" },
   ],
   magnet: {
     heading: "The EN/PT Preparation Artifact is also the week's lead magnet",
     body:
-      "Each completed week includes the English and Portuguese PDFs and their matching landing pages. The form asks for delivery information and requires affirmative consent to marketing communications. When the reader consents, the PDF is delivered and the contact enters the approved follow-up path. Consent and unsubscribe state remain recorded.",
+      "Each theme includes the English and Portuguese PDFs and their matching landing pages. The form asks for delivery information and requires affirmative consent to marketing communications. When the reader consents, the PDF is delivered and the contact enters the approved follow-up path. Consent and unsubscribe state remain recorded.",
     steps: [
       { title: "Reader wants it", desc: "The artifact promises something practical." },
       {
@@ -239,10 +265,22 @@ const DRG_CADENCE: ContentCadence = {
       },
     ],
   },
+  minute: {
+    heading: "The DRG Law Minute keeps the relationship warm",
+    intro:
+      "A short, English-only weekly note to clients who have already said yes to hearing from the firm. It is relationship correspondence, not a lead-generation push, and it carries no promotional or intake call to action.",
+    rules: [
+      "Sent Wednesday only, after Tuesday's linked pages are verified live.",
+      "Goes only to recipients with a documented active consent basis, no recorded unsubscribe, and a valid applicable sending basis, checked in a consent audit before every send.",
+      "Sender identity is Damaris Guimaraes of DRG Law, reply-to info@drglaw.ca, triaged by the team; a reply is not a guarantee Damaris personally answers it.",
+      "Every linked page is verified live before the note goes out.",
+    ],
+    readinessNote: "If any requirement is unmet, the edition does not send that week, full stop.",
+  },
   transition: {
-    heading: "Finish the existing 13-deliverable backlog first.",
+    heading: "Capacity discipline, not incomplete shipping",
     body:
-      "The weeks already produced remain the current publication plan. Once those assets are reviewed, placed, and published, DRG moves to the v5.2 capacity-controlled model. The 13-piece week is a finite backlog, not the future quota.",
+      "An artifact that fails legal-review capacity, source readiness, consent integrity, linked-page readiness, or sender setup does not ship. It waits for the next week it clears every gate, rather than going out incomplete.",
   },
   referenceLinks: [],
 };

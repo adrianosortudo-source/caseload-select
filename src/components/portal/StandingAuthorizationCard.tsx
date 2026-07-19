@@ -38,7 +38,7 @@ export default function StandingAuthorizationCard({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const authorizationText = `By turning this on, you authorize CaseLoad Select to publish future ${firmName} content after it passes the agreed quality and legal-safety checks, without waiting for your individual review of every item. You may turn this off at any time. You can review published content later and request changes.`;
+  const authorizationText = `By turning this on, you authorize CaseLoad Select to publish future ${firmName} content after it passes the agreed quality and legal-safety checks, without waiting for your individual review of every item. It does not waive consent verification, legal review, live-link verification, sender verification, unsubscribe requirements, or capacity constraints: it only removes the need for your individual per-item review once those other checks are already satisfied. You may turn this off at any time. You can review published content later and request changes.`;
 
   function resetConfirmState() {
     setConfirming(null);

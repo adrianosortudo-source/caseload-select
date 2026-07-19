@@ -49,6 +49,23 @@ describe("groupByFormat", () => {
     ]);
   });
 
+  it("pins DRG Law Minute after the other named formats (v5.2 cadence model, 4th channel)", () => {
+    const groups = groupByFormat([
+      item({ id: "minute", format: "DRG Law Minute", publish_date: "2026-07-14" }),
+      item({ id: "gbp", format: "Google Business Profile", publish_date: "2026-07-15" }),
+      item({ id: "cn", format: "Counsel Note", publish_date: "2026-07-16" }),
+      item({ id: "unfiled", format: null, publish_date: "2026-07-13" }),
+      item({ id: "unknown", format: "Decision Tool", publish_date: "2026-07-17" }),
+    ]);
+    expect(groups.map((g) => g.format)).toEqual([
+      "Counsel Note",
+      "Google Business Profile",
+      "DRG Law Minute",
+      "Decision Tool",
+      null,
+    ]);
+  });
+
   it("sinks unfiled (null/blank format) to the end", () => {
     const groups = groupByFormat([
       item({ id: "u", format: null, publish_date: "2026-06-20" }),

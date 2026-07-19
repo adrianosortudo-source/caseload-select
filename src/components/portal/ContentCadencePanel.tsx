@@ -43,6 +43,10 @@ export default function ContentCadencePanel({
               <span className="ccp-sq" aria-hidden />
             </h2>
             <p className="ccp-lede">{cadence.lede}</p>
+            <div className="ccp-historical-note">
+              <b>{cadence.historicalNote.heading}</b>
+              {cadence.historicalNote.body}
+            </div>
           </div>
 
           <aside className="ccp-approve">
@@ -129,6 +133,9 @@ export default function ContentCadencePanel({
               <span>
                 <i className="ccp-dot ccp-d-gbp" /> Google Business Profile
               </span>
+              <span>
+                <i className="ccp-dot ccp-d-email" /> The DRG Law Minute email
+              </span>
             </div>
 
             <div className="ccp-week">
@@ -151,7 +158,18 @@ export default function ContentCadencePanel({
                       <div className={`ccp-cell${quiet ? " ccp-q" : ""}`} key={ci}>
                         {cell && cell.length > 0 ? (
                           cell.map((c, k) => (
-                            <div className={`ccp-card ccp-c-${row.channel === "website" ? "site" : row.channel === "linkedin" ? "li" : "gbp"}`} key={k}>
+                            <div
+                              className={`ccp-card ccp-c-${
+                                row.channel === "website"
+                                  ? "site"
+                                  : row.channel === "linkedin"
+                                    ? "li"
+                                    : row.channel === "gbp"
+                                      ? "gbp"
+                                      : "email"
+                              }`}
+                              key={k}
+                            >
                               <span className="ccp-t">{c.slot}</span>
                               <b>{c.piece}</b>
                               {c.detail} · {c.count} {c.count === 1 ? "deliverable" : "deliverables"}
@@ -219,6 +237,24 @@ export default function ContentCadencePanel({
             </div>
           </div>
 
+          <div className="ccp-divider" />
+
+          {/* 4. The DRG Law Minute relationship email */}
+          <div>
+            <div className="ccp-sec-label">
+              <span className="ccp-sec-num">4</span>
+              <span className="ccp-sec-title">{cadence.sectionLabels.minute}</span>
+            </div>
+            <h3 className="ccp-minute-h">{cadence.minute.heading}</h3>
+            <p className="ccp-minute-intro">{cadence.minute.intro}</p>
+            <ul className="ccp-minute-rules">
+              {cadence.minute.rules.map((rule) => (
+                <li key={rule}>{rule}</li>
+              ))}
+            </ul>
+            <p className="ccp-minute-readiness">{cadence.minute.readinessNote}</p>
+          </div>
+
           <div className="ccp-adhoc">
             <b>{cadence.transition.heading}</b>{" "}
             {cadence.transition.body}
@@ -271,10 +307,18 @@ function PieceIconGlyph({ icon }: { icon: PieceIcon }) {
       </svg>
     );
   }
+  if (icon === "checklist") {
+    return (
+      <svg {...common}>
+        <rect x="5" y="3" width="14" height="18" rx="1.5" />
+        <path d="M9 8l1.2 1.2L12.5 7M9 13l1.2 1.2L12.5 12M15 8.2h1.5M15 13.2h1.5" />
+      </svg>
+    );
+  }
   return (
     <svg {...common}>
-      <rect x="5" y="3" width="14" height="18" rx="1.5" />
-      <path d="M9 8l1.2 1.2L12.5 7M9 13l1.2 1.2L12.5 12M15 8.2h1.5M15 13.2h1.5" />
+      <rect x="4" y="6" width="16" height="12" rx="1.5" />
+      <path d="m5 7.5 7 5.5 7-5.5" />
     </svg>
   );
 }
@@ -296,10 +340,18 @@ function ChannelIcon({ channel }: { channel: Channel }) {
       </svg>
     );
   }
+  if (channel === "gbp") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}>
+        <path d="M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10z" />
+        <circle cx="12" cy="11" r="2.2" />
+      </svg>
+    );
+  }
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}>
-      <path d="M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10z" />
-      <circle cx="12" cy="11" r="2.2" />
+      <rect x="3" y="5" width="18" height="14" rx="1.5" />
+      <path d="m4 6.5 8 6 8-6" />
     </svg>
   );
 }
