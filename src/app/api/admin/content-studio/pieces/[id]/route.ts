@@ -240,7 +240,7 @@ export async function PATCH(
         assetName: null,
         note: "Auto-created from Content Studio legal gate advance.",
         actor: GATE_ACTOR,
-        silent: true,
+        clientNotificationChoice: "silent",
       });
       if (!versioned.ok) {
         return NextResponse.json(

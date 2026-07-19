@@ -19,7 +19,7 @@ import {
   uploadDeliverableAsset,
   type DeliverableDetail,
 } from "@/lib/deliverables";
-import { cleanNote } from "@/lib/deliverables-pure";
+import { cleanNote, normalizeClientNotificationChoice } from "@/lib/deliverables-pure";
 import { sanitizeExplainerHtml } from "@/lib/explainer-html-sanitize";
 import { postDeliverableLifecycleToChannel } from "@/lib/deliverable-channel-post";
 
@@ -47,6 +47,15 @@ function resolveRespondsToApprovalId(
   return { ok: true, id: latest?.id ?? null };
 }
 
+/**
+ * Posts a system line into the internal CaseLoad Connect channel (operator
+ * and firm-lawyer collaboration thread, not a client-facing email). Always
+ * fires regardless of the client-notification choice: it sets
+ * suppressNotification internally (see deliverable-channel-post.ts) so it
+ * never independently emails anyone, it only makes the activity visible in
+ * the portal, the same way the version/comment itself always stays visible
+ * regardless of whether an email was sent.
+ */
 async function announceNewVersion(
   firmId: string,
   deliverableId: string,
@@ -159,7 +168,9 @@ export async function POST(
     if (!uploaded.ok) return NextResponse.json({ error: uploaded.error }, { status: 500 });
 
     const note = cleanNote(form.get("note"));
-    const silent = form.get("silent") === "true";
+    const clientNotificationChoice = normalizeClientNotificationChoice(
+      form.get("client_notification_choice"),
+    );
     const responds = resolveRespondsToApprovalId(detail, form.get("responds_to_approval_id"));
     if (!responds.ok) {
       return NextResponse.json(
@@ -177,12 +188,12 @@ export async function POST(
       assetName: file.name,
       note,
       actor: resolved.actor,
-      silent,
+      clientNotificationChoice,
       respondsToApprovalId: responds.id,
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
-    if (!silent) await announceNewVersion(firmId, deliverableId, detail.deliverable.title, resolved.actor);
-    return NextResponse.json({ ok: true, version: result.version });
+    await announceNewVersion(firmId, deliverableId, detail.deliverable.title, resolved.actor);
+    return NextResponse.json({ ok: true, version: result.version, notification: result.notification });
   }
 
   // ── Text path ──
@@ -195,7 +206,7 @@ export async function POST(
   let body: {
     body_html?: unknown;
     note?: unknown;
-    silent?: unknown;
+    client_notification_choice?: unknown;
     responds_to_approval_id?: unknown;
   };
   try {
@@ -209,7 +220,7 @@ export async function POST(
   if (!sanitised) {
     return NextResponse.json({ error: "body_html is required" }, { status: 400 });
   }
-  const silent = body.silent === true;
+  const clientNotificationChoice = normalizeClientNotificationChoice(body.client_notification_choice);
   const responds = resolveRespondsToApprovalId(detail, body.responds_to_approval_id);
   if (!responds.ok) {
     return NextResponse.json(
@@ -227,10 +238,10 @@ export async function POST(
     assetName: null,
     note: cleanNote(body.note),
     actor: resolved.actor,
-    silent,
+    clientNotificationChoice,
     respondsToApprovalId: responds.id,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
-  if (!silent) await announceNewVersion(firmId, deliverableId, detail.deliverable.title, resolved.actor);
-  return NextResponse.json({ ok: true, version: result.version });
+  await announceNewVersion(firmId, deliverableId, detail.deliverable.title, resolved.actor);
+  return NextResponse.json({ ok: true, version: result.version, notification: result.notification });
 }

@@ -41,8 +41,9 @@ const SEND_TO_REVIEW_ACTOR = {
  *
  * Requires: a linked deliverable (piece.deliverable_id set) and a zero-fail
  * validation run on the current EN version, same entry condition as
- * advancing to legal_gate in the first place. addVersion({ silent: true })
- * means no notification fires; the version-drift guard in deliverables.ts
+ * advancing to legal_gate in the first place.
+ * addVersion({ clientNotificationChoice: "silent" }) means no notification
+ * fires; the version-drift guard in deliverables.ts
  * then does the correct thing on its own: the deliverable returns to
  * in_review and any stale approval pointer clears, so a re-approval is
  * required and it always covers what the lawyer actually sees.
@@ -133,7 +134,7 @@ export async function POST(
     assetName: null,
     note: "Sent for review from Content Studio (revision).",
     actor: SEND_TO_REVIEW_ACTOR,
-    silent: true,
+    clientNotificationChoice: "silent",
   });
   if (!versioned.ok) {
     return NextResponse.json(
