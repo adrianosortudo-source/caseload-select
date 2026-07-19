@@ -42,43 +42,84 @@ export default function ContentCadencePanel({
               {cadence.headline}
               <span className="ccp-sq" aria-hidden />
             </h2>
-            <p className="ccp-lede">{cadence.lede}</p>
+            <p className="ccp-lede">{cadence.intro}</p>
+            <div className="ccp-historical-note">
+              <b>{cadence.historicalNote.heading}</b>
+              {cadence.historicalNote.body}
+            </div>
           </div>
 
           <aside className="ccp-approve">
-            <p className="ccp-approve-at">
-              <CheckIcon />
-              {cadence.approve.heading}
-            </p>
-            <div className="ccp-metrics">
-              {cadence.approve.metrics.map((metric) => (
-                <div className="ccp-metric" key={metric.label}>
-                  <strong>{metric.value}</strong>
-                  <span>{metric.label}</span>
+            <div className="ccp-approve-cols">
+              <div className="ccp-approve-col">
+                <p className="ccp-approve-at ccp-approve-at-current">
+                  <CheckIcon />
+                  {cadence.approve.current.label}
+                </p>
+                <div className="ccp-metrics">
+                  {cadence.approve.current.metrics.map((metric) => (
+                    <div className="ccp-metric" key={metric.label}>
+                      <strong>{metric.value}</strong>
+                      <span>{metric.label}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+              <div className="ccp-approve-divider" aria-hidden />
+              <div className="ccp-approve-col ccp-approve-col-next">
+                <p className="ccp-approve-at ccp-approve-at-next">
+                  {cadence.approve.next.label}
+                </p>
+                <div className="ccp-metrics">
+                  {cadence.approve.next.metrics.map((metric) => (
+                    <div className="ccp-metric" key={metric.label}>
+                      <strong>{metric.value}</strong>
+                      <span>{metric.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-            <p className="ccp-approve-note">{cadence.approve.note}</p>
+            <p className="ccp-approve-note">{cadence.approve.capacityNote}</p>
           </aside>
         </div>
       </div>
 
-      {/* Promise band */}
+      {/* Promise band: current backlog, then the smaller next-model line beneath it */}
       <div className="ccp-promise">
-        {cadence.promise.metrics.map((metric, index) => (
-          <div className="ccp-promise-stage" key={metric.label}>
-            {index > 0 ? (
-              <span className="ccp-arrow" aria-hidden>
-                &rarr;
-              </span>
-            ) : null}
-            <div className="ccp-big">
-              <span className={metric.underline ? "ccp-u" : undefined}>{metric.value}</span>{" "}
-              {metric.label}
+        <div className="ccp-promise-line">
+          <span className="ccp-promise-line-lbl">{cadence.promise.current.label}</span>
+          {cadence.promise.current.metrics.map((metric, index) => (
+            <div className="ccp-promise-stage" key={metric.label}>
+              {index > 0 ? (
+                <span className="ccp-arrow" aria-hidden>
+                  &rarr;
+                </span>
+              ) : null}
+              <div className="ccp-big">
+                <span className={metric.underline ? "ccp-u" : undefined}>{metric.value}</span>{" "}
+                {metric.label}
+              </div>
             </div>
-          </div>
-        ))}
-        <p className="ccp-promise-lbl">{cadence.promise.label}</p>
+          ))}
+        </div>
+        <div className="ccp-promise-line ccp-promise-line-next">
+          <span className="ccp-promise-line-lbl">{cadence.promise.next.label}</span>
+          {cadence.promise.next.metrics.map((metric, index) => (
+            <div className="ccp-promise-stage" key={metric.label}>
+              {index > 0 ? (
+                <span className="ccp-arrow" aria-hidden>
+                  &rarr;
+                </span>
+              ) : null}
+              <div className="ccp-big ccp-big-sm">
+                <span className={metric.underline ? "ccp-u" : undefined}>{metric.value}</span>{" "}
+                {metric.label}
+              </div>
+            </div>
+          ))}
+          <span className="ccp-promise-line-note">{cadence.promise.next.note}</span>
+        </div>
       </div>
 
       {variant === "summary" ? (
@@ -108,6 +149,23 @@ export default function ContentCadencePanel({
                   <span className="ccp-piece-tag">{p.tag}</span>
                 </div>
               ))}
+            </div>
+            <div className="ccp-count-strip">
+              {cadence.counts.map((c) => (
+                <div className="ccp-count" key={c.l}>
+                  <div className="ccp-count-n">{c.n}</div>
+                  <div className="ccp-count-l">{c.l}</div>
+                </div>
+              ))}
+            </div>
+            <div className="ccp-future-format" aria-label="Future-only format, not part of the current backlog">
+              <p className="ccp-future-format-eyebrow">{cadence.futureFormat.eyebrow}</p>
+              <p className="ccp-future-format-nm">
+                {cadence.futureFormat.name}
+                <span className="ccp-future-format-tag">{cadence.futureFormat.tag}</span>
+              </p>
+              <p className="ccp-future-format-ds">{cadence.futureFormat.desc}</p>
+              <p className="ccp-future-format-avail">{cadence.futureFormat.availabilityLabel}</p>
             </div>
           </div>
 
@@ -151,7 +209,18 @@ export default function ContentCadencePanel({
                       <div className={`ccp-cell${quiet ? " ccp-q" : ""}`} key={ci}>
                         {cell && cell.length > 0 ? (
                           cell.map((c, k) => (
-                            <div className={`ccp-card ccp-c-${row.channel === "website" ? "site" : row.channel === "linkedin" ? "li" : "gbp"}`} key={k}>
+                            <div
+                              className={`ccp-card ccp-c-${
+                                row.channel === "website"
+                                  ? "site"
+                                  : row.channel === "linkedin"
+                                    ? "li"
+                                    : row.channel === "gbp"
+                                      ? "gbp"
+                                      : "email"
+                              }`}
+                              key={k}
+                            >
                               <span className="ccp-t">{c.slot}</span>
                               <b>{c.piece}</b>
                               {c.detail} · {c.count} {c.count === 1 ? "deliverable" : "deliverables"}
@@ -163,15 +232,6 @@ export default function ContentCadencePanel({
                       </div>
                     );
                   })}
-                </div>
-              ))}
-            </div>
-
-            <div className="ccp-count-strip">
-              {cadence.counts.map((c) => (
-                <div className="ccp-count" key={c.l}>
-                  <div className="ccp-count-n">{c.n}</div>
-                  <div className="ccp-count-l">{c.l}</div>
                 </div>
               ))}
             </div>
@@ -217,6 +277,24 @@ export default function ContentCadencePanel({
                 </div>
               </div>
             </div>
+          </div>
+
+          <div className="ccp-divider" />
+
+          {/* 4. The DRG Law Minute relationship email */}
+          <div>
+            <div className="ccp-sec-label">
+              <span className="ccp-sec-num">4</span>
+              <span className="ccp-sec-title">{cadence.sectionLabels.minute}</span>
+            </div>
+            <h3 className="ccp-minute-h">{cadence.minute.heading}</h3>
+            <p className="ccp-minute-intro">{cadence.minute.intro}</p>
+            <ul className="ccp-minute-rules">
+              {cadence.minute.rules.map((rule) => (
+                <li key={rule}>{rule}</li>
+              ))}
+            </ul>
+            <p className="ccp-minute-readiness">{cadence.minute.readinessNote}</p>
           </div>
 
           <div className="ccp-adhoc">
@@ -271,10 +349,18 @@ function PieceIconGlyph({ icon }: { icon: PieceIcon }) {
       </svg>
     );
   }
+  if (icon === "checklist") {
+    return (
+      <svg {...common}>
+        <rect x="5" y="3" width="14" height="18" rx="1.5" />
+        <path d="M9 8l1.2 1.2L12.5 7M9 13l1.2 1.2L12.5 12M15 8.2h1.5M15 13.2h1.5" />
+      </svg>
+    );
+  }
   return (
     <svg {...common}>
-      <rect x="5" y="3" width="14" height="18" rx="1.5" />
-      <path d="M9 8l1.2 1.2L12.5 7M9 13l1.2 1.2L12.5 12M15 8.2h1.5M15 13.2h1.5" />
+      <rect x="4" y="6" width="16" height="12" rx="1.5" />
+      <path d="m5 7.5 7 5.5 7-5.5" />
     </svg>
   );
 }
@@ -296,10 +382,18 @@ function ChannelIcon({ channel }: { channel: Channel }) {
       </svg>
     );
   }
+  if (channel === "gbp") {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}>
+        <path d="M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10z" />
+        <circle cx="12" cy="11" r="2.2" />
+      </svg>
+    );
+  }
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}>
-      <path d="M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10z" />
-      <circle cx="12" cy="11" r="2.2" />
+      <rect x="3" y="5" width="18" height="14" rx="1.5" />
+      <path d="m4 6.5 8 6 8-6" />
     </svg>
   );
 }

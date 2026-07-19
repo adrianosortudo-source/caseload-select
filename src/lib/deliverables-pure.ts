@@ -381,6 +381,15 @@ function comparePublishDate(a: PlanDeliverable, b: PlanDeliverable): number {
  * first, then its lighter derivatives, in the order Adriano reviews them
  * (locked 2026-07-06). Formats not listed here (e.g. Decision Tool, Counsel
  * Letter) sink after the named ones but before the null/unfiled group.
+ *
+ * "DRG Law Minute" (added with the v5.2 capacity-controlled cadence model,
+ * see content-cadence.ts) is pinned last among the named formats rather than
+ * left to the UNKNOWN_FORMAT_RANK fallback: it is the weekly relationship
+ * email, gated to send only after every other Tuesday artifact is verified
+ * live, so it is reviewed last by design, not by accident of insertion
+ * order. Pinning it also protects that ordering from drifting if another
+ * unnamed format is introduced later and would otherwise tie with it at the
+ * fallback rank.
  */
 const FORMAT_PRIORITY: Record<string, number> = {
   "Counsel Note": 0,
@@ -388,6 +397,7 @@ const FORMAT_PRIORITY: Record<string, number> = {
   "Clause in the Margin": 2,
   "Lead Magnet": 3,
   "Google Business Profile": 4,
+  "DRG Law Minute": 5,
 };
 const UNKNOWN_FORMAT_RANK = 999;
 
