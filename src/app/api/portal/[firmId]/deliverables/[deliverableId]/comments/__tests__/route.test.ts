@@ -14,10 +14,13 @@ vi.mock("server-only", () => ({}));
 
 // The route fans the comment into the CaseLoad Connect channel; mock that
 // module so the test does not pull in the real supabase-admin chain.
-vi.mock("@/lib/deliverable-channel-post", () => ({
+// vi.hoisted is required because vi.mock's factory is hoisted above this
+// file's own top-level const declarations.
+const channelPostMock = vi.hoisted(() => ({
   postDeliverableCommentToChannel: vi.fn(() => Promise.resolve()),
   postDeliverableLifecycleToChannel: vi.fn(() => Promise.resolve()),
 }));
+vi.mock("@/lib/deliverable-channel-post", () => channelPostMock);
 
 const FIRM = "11111111-1111-1111-1111-111111111111";
 const DELIV = "22222222-2222-2222-2222-222222222222";
@@ -29,7 +32,13 @@ const state: {
   actor: Actor;
   detail: unknown;
   addArgs: Record<string, unknown> | null;
-} = { actor: null, detail: null, addArgs: null };
+  notification: { requested: boolean; status: string; error?: string };
+} = {
+  actor: null,
+  detail: null,
+  addArgs: null,
+  notification: { requested: false, status: "not_requested" },
+};
 
 vi.mock("@/lib/deliverables-auth", () => ({
   resolveDeliverableActor: () =>
@@ -40,13 +49,14 @@ vi.mock("@/lib/deliverables", () => ({
   getDeliverableDetail: () => Promise.resolve(state.detail),
   addComment: (args: Record<string, unknown>) => {
     state.addArgs = args;
-    return Promise.resolve({ ok: true, comment: { id: "c1" } });
+    return Promise.resolve({ ok: true, comment: { id: "c1" }, notification: state.notification });
   },
 }));
 
 import { POST } from "../route";
 
 const LAWYER: Actor = { role: "lawyer", id: "law1", name: "Damaris", email: "d@firm.ca" };
+const OPERATOR: Actor = { role: "operator", id: null, name: "Operator", email: null };
 
 const APPROVAL_1 = "55555555-5555-5555-5555-555555555555";
 const V_OTHER = "66666666-6666-6666-6666-666666666666";
@@ -83,6 +93,8 @@ beforeEach(() => {
   state.actor = LAWYER;
   state.detail = makeDetail();
   state.addArgs = null;
+  state.notification = { requested: false, status: "not_requested" };
+  channelPostMock.postDeliverableCommentToChannel.mockClear();
 });
 
 describe("POST comments", () => {
@@ -178,5 +190,67 @@ describe("POST comments", () => {
     );
     expect(res.status).toBe(200);
     expect(state.addArgs!.attachments).toEqual([{ storage_path: path, name: "shot.png" }]);
+  });
+});
+
+describe("POST comments: client_notification_choice (fail-safe explicit opt-in)", () => {
+  it("defaults to silent when the field is omitted (operator comment)", async () => {
+    state.actor = OPERATOR;
+    const res = await POST(req({ version_id: V_CUR, body: "looks good" }), params());
+    expect(res.status).toBe(200);
+    expect(state.addArgs!.clientNotificationChoice).toBe("silent");
+  });
+
+  it("passes notify_now through explicitly (operator comment)", async () => {
+    state.actor = OPERATOR;
+    const res = await POST(
+      req({ version_id: V_CUR, body: "posted the corrected version", client_notification_choice: "notify_now" }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+    expect(state.addArgs!.clientNotificationChoice).toBe("notify_now");
+  });
+
+  it("an invalid/legacy value resolves to silent, never to notify", async () => {
+    state.actor = OPERATOR;
+    const res = await POST(
+      req({ version_id: V_CUR, body: "looks good", client_notification_choice: "email" }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+    expect(state.addArgs!.clientNotificationChoice).toBe("silent");
+  });
+
+  it("surfaces a failed notification in the response so the UI can show the warning", async () => {
+    state.actor = OPERATOR;
+    state.notification = { requested: true, status: "failed", error: "outbox insert failed" };
+    const res = await POST(
+      req({ version_id: V_CUR, body: "looks good", client_notification_choice: "notify_now" }),
+      params(),
+    );
+    const json = await res.json();
+    expect(res.status).toBe(200);
+    expect(json.notification.status).toBe("failed");
+  });
+
+  it("posts to the CaseLoad Connect channel unconditionally, regardless of the notification choice", async () => {
+    state.actor = OPERATOR;
+    await POST(req({ version_id: V_CUR, body: "silent note" }), params());
+    expect(channelPostMock.postDeliverableCommentToChannel).toHaveBeenCalledTimes(1);
+    await POST(
+      req({ version_id: V_CUR, body: "notify note", client_notification_choice: "notify_now" }),
+      params(),
+    );
+    expect(channelPostMock.postDeliverableCommentToChannel).toHaveBeenCalledTimes(2);
+  });
+
+  it("still passes client_notification_choice through for a lawyer-authored comment (the lib layer decides applicability, not the route)", async () => {
+    state.actor = LAWYER;
+    const res = await POST(
+      req({ version_id: V_CUR, body: "a reply from the lawyer", client_notification_choice: "notify_now" }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+    expect(state.addArgs!.clientNotificationChoice).toBe("notify_now");
   });
 });

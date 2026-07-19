@@ -15,7 +15,45 @@ import {
   APPROVAL_ATTESTATION,
   validateDeliverableAttachments,
   versionOptionLabel,
+  normalizeClientNotificationChoice,
 } from "@/lib/deliverables-pure";
+
+describe("normalizeClientNotificationChoice", () => {
+  it("accepts the literal 'notify_now'", () => {
+    expect(normalizeClientNotificationChoice("notify_now")).toBe("notify_now");
+  });
+
+  it("resolves 'silent' unchanged", () => {
+    expect(normalizeClientNotificationChoice("silent")).toBe("silent");
+  });
+
+  it("resolves undefined/omitted to silent (missing choice is silent)", () => {
+    expect(normalizeClientNotificationChoice(undefined)).toBe("silent");
+  });
+
+  it("resolves null to silent", () => {
+    expect(normalizeClientNotificationChoice(null)).toBe("silent");
+  });
+
+  it("resolves an empty string to silent", () => {
+    expect(normalizeClientNotificationChoice("")).toBe("silent");
+  });
+
+  it("resolves a boolean true to silent (invalid choice cannot trigger email)", () => {
+    expect(normalizeClientNotificationChoice(true)).toBe("silent");
+  });
+
+  it("resolves a stale/legacy value to silent", () => {
+    expect(normalizeClientNotificationChoice("send")).toBe("silent");
+    expect(normalizeClientNotificationChoice("email")).toBe("silent");
+    expect(normalizeClientNotificationChoice("yes")).toBe("silent");
+  });
+
+  it("resolves an object/array to silent", () => {
+    expect(normalizeClientNotificationChoice({ notify_now: true })).toBe("silent");
+    expect(normalizeClientNotificationChoice(["notify_now"])).toBe("silent");
+  });
+});
 
 describe("validateAnnotation", () => {
   it("accepts a valid text annotation", () => {

@@ -30,7 +30,9 @@ import type {
 import {
   statusAfterNewVersion,
   statusAfterDecision,
+  normalizeClientNotificationChoice,
   type PlanDeliverable,
+  type ClientNotificationChoice,
 } from "@/lib/deliverables-pure";
 import { evaluateActivationPreflight, type DeliverableReadiness } from "@/lib/publication-readiness";
 import { loadPeriodPublicationReadiness } from "@/lib/publication-readiness-loader";
@@ -46,6 +48,21 @@ export interface DeliverableActor {
   id?: string | null;
   name?: string | null;
   email?: string | null;
+}
+
+/**
+ * Outcome of a client-notification attempt, kept separate from whether the
+ * underlying version/comment was persisted. `requested` is true only when the
+ * caller's ClientNotificationChoice was "notify_now" for this action.
+ * "sent" means the notification was successfully enqueued to
+ * notification_outbox (the existing 5-minute digest cron delivers it from
+ * there, same as every other deliverable notification); "failed" means the
+ * enqueue itself threw and the version/comment was still persisted.
+ */
+export interface NotificationOutcome {
+  requested: boolean;
+  status: "not_requested" | "sent" | "failed";
+  error?: string;
 }
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
@@ -555,19 +572,24 @@ export async function addVersion(input: {
   note: string | null;
   actor: DeliverableActor;
   /**
-   * When true, do NOT enqueue the firm-side review notification and do NOT
-   * stamp review_notified_at. Used for bulk seed flows where the operator
-   * wants to verify placement in the portal before announcing.
-   * `notifyPendingReviews` then fires one consolidated digest later.
+   * Explicit per-action choice for the firm-side review-requested email.
+   * Fail-safe default (omitted, invalid, or legacy value) is "silent": no
+   * enqueue, no review_notified_at stamp. Used for bulk seed / automated
+   * flows too, where the caller wants to verify placement in the portal
+   * before announcing. `notifyPendingReviews` fires one consolidated digest
+   * later for anything left silent.
    */
-  silent?: boolean;
+  clientNotificationChoice?: ClientNotificationChoice;
   /**
    * When this version answers a changes_requested approval_records row, that
    * record's id. Links the version back to the request it addresses so the
    * review UI can show "addressed in vN" instead of a dead-end record.
    */
   respondsToApprovalId?: string | null;
-}): Promise<{ ok: true; version: DeliverableVersion } | { ok: false; error: string }> {
+}): Promise<
+  | { ok: true; version: DeliverableVersion; notification: NotificationOutcome }
+  | { ok: false; error: string }
+> {
   // Compute the next version number and insert. Two concurrent posts can read
   // the same MAX and collide on UNIQUE(deliverable_id, version_number); the DB
   // protects integrity (the second insert is rejected with 23505), and we
@@ -631,7 +653,8 @@ export async function addVersion(input: {
     return { ok: false, error: `deliverable update failed: ${updateErr.message}` };
   }
 
-  if (input.silent !== true) {
+  let notification: NotificationOutcome = { requested: false, status: "not_requested" };
+  if (normalizeClientNotificationChoice(input.clientNotificationChoice) === "notify_now") {
     // Enqueue FIRST; stamp review_notified_at only after the outbox insert
     // succeeds. If the enqueue throws (e.g. CHECK constraint violation),
     // the stamp is skipped and notifyPendingReviews can pick up the row later.
@@ -648,12 +671,14 @@ export async function addVersion(input: {
         .from("content_deliverables")
         .update({ review_notified_at: new Date().toISOString() })
         .eq("id", input.deliverableId);
+      notification = { requested: true, status: "sent" };
     } catch (e) {
       console.warn("[deliverables] notify failed (review_notified_at NOT stamped):", e);
+      notification = { requested: true, status: "failed", error: e instanceof Error ? e.message : String(e) };
     }
   }
 
-  return { ok: true, version };
+  return { ok: true, version, notification };
 }
 
 /**
@@ -718,7 +743,18 @@ export async function addComment(input: {
    */
   approvalRecordId?: string | null;
   attachments?: DeliverableAttachment[];
-}): Promise<{ ok: true; comment: DeliverableComment } | { ok: false; error: string }> {
+  /**
+   * Explicit per-action choice for the client-facing email an OPERATOR
+   * comment can trigger. Fail-safe default (omitted, invalid, or legacy
+   * value) is "silent". Only meaningful when actor.role === "operator": a
+   * lawyer/client-authored comment always notifies the operator, unchanged,
+   * regardless of this field (that notification path is out of scope here).
+   */
+  clientNotificationChoice?: ClientNotificationChoice;
+}): Promise<
+  | { ok: true; comment: DeliverableComment; notification: NotificationOutcome }
+  | { ok: false; error: string }
+> {
   const { data, error } = await supabase
     .from("deliverable_comments")
     .insert({
@@ -738,21 +774,40 @@ export async function addComment(input: {
     .single();
   if (error) return { ok: false, error: `comment insert failed: ${error.message}` };
 
-  // A comment from the operator pings the firm; a comment from the lawyer
-  // pings the operator inbox.
+  // A comment from the operator pings the firm and is gated by the explicit
+  // per-action notification choice (fail-safe silent by default). A comment
+  // from the lawyer/client always pings the operator inbox, unchanged: that
+  // notification is out of scope for the client-notification opt-in.
   const bodyPreview = input.approvalRecordId
     ? `Reply to change request: ${input.body.slice(0, 220)}`
     : input.body.slice(0, 240);
-  await enqueueDeliverableNotification({
-    firmId: input.firmId,
-    deliverableId: input.deliverableId,
-    eventType: "deliverable_comment_added",
-    audience: input.actor.role === "operator" ? "firm" : "operator",
-    actor: input.actor,
-    bodyPreview,
-  }).catch((e) => console.warn("[deliverables] notify failed:", e));
+  const isOperatorComment = input.actor.role === "operator";
+  const shouldNotify =
+    !isOperatorComment ||
+    normalizeClientNotificationChoice(input.clientNotificationChoice) === "notify_now";
 
-  return { ok: true, comment: data as DeliverableComment };
+  let notification: NotificationOutcome = { requested: false, status: "not_requested" };
+  if (shouldNotify) {
+    notification.requested = isOperatorComment;
+    try {
+      await enqueueDeliverableNotification({
+        firmId: input.firmId,
+        deliverableId: input.deliverableId,
+        eventType: "deliverable_comment_added",
+        audience: isOperatorComment ? "firm" : "operator",
+        actor: input.actor,
+        bodyPreview,
+      });
+      if (isOperatorComment) notification.status = "sent";
+    } catch (e) {
+      console.warn("[deliverables] notify failed:", e);
+      if (isOperatorComment) {
+        notification = { requested: true, status: "failed", error: e instanceof Error ? e.message : String(e) };
+      }
+    }
+  }
+
+  return { ok: true, comment: data as DeliverableComment, notification };
 }
 
 export async function setCommentResolved(input: {

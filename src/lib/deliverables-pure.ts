@@ -16,6 +16,24 @@ import type {
 
 export const CONTENT_KINDS: ContentKind[] = ["text", "image", "pdf"];
 
+/**
+ * Whether a deliverable-version or deliverable-comment action should also
+ * email the firm's lawyers (the "client" from the operator's side of this
+ * surface). Silent is the only safe default: missing, malformed, stale, or
+ * legacy values must never be interpreted as consent to send.
+ */
+export type ClientNotificationChoice = "silent" | "notify_now";
+
+/**
+ * Fail-safe normaliser: anything other than the literal string "notify_now"
+ * resolves to "silent", including undefined, null, "", "true", a stale enum
+ * value from an older client build, or a client bug that omits the field
+ * entirely. There is no other way to opt in to a client-facing email.
+ */
+export function normalizeClientNotificationChoice(value: unknown): ClientNotificationChoice {
+  return value === "notify_now" ? "notify_now" : "silent";
+}
+
 export const DELIVERABLE_STATUSES: DeliverableStatus[] = [
   "draft",
   "in_review",

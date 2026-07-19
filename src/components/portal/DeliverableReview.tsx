@@ -27,6 +27,7 @@ import {
   CONTENT_KIND_LABELS,
   annotationLabel,
   versionOptionLabel,
+  type ClientNotificationChoice,
 } from "@/lib/deliverables-pure";
 import { stackCards, stackBottom } from "@/lib/margin-stack";
 import type { HighlightItem } from "@/lib/highlight-dom";
@@ -1005,8 +1006,11 @@ function CommentComposer({
   onPosted: () => Promise<void> | void;
 }) {
   const [body, setBody] = useState("");
+  const [notify, setNotify] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notifyWarning, setNotifyWarning] = useState<string | null>(null);
+  const isOperator = viewerRole === "operator";
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -1021,6 +1025,7 @@ function CommentComposer({
           version_id: versionId,
           body: body.trim(),
           annotation: pendingAnnotation,
+          client_notification_choice: isOperator && notify ? "notify_now" : "silent",
         }),
       });
       const json = await res.json();
@@ -1028,7 +1033,13 @@ function CommentComposer({
         setError(json.error ?? "Could not post.");
       } else {
         setBody("");
+        setNotify(false);
         onClearAnnotation();
+        if (isOperator && json.notification?.status === "failed") {
+          setNotifyWarning("The comment was posted, but the notification email could not be sent.");
+        } else {
+          setNotifyWarning(null);
+        }
         await onPosted();
       }
     } catch (err) {
@@ -1063,13 +1074,35 @@ function CommentComposer({
         }
         className="w-full border border-border-brand px-2 py-1.5 text-sm resize-y"
       />
+      {isOperator && (
+        <label className="flex items-center gap-2 text-xs text-black/70">
+          <input
+            type="checkbox"
+            checked={notify}
+            onChange={(e) => setNotify(e.target.checked)}
+          />
+          Notify the client by email
+        </label>
+      )}
+      {isOperator && (
+        <p className="text-xs text-black/50">
+          {notify
+            ? "The comment will be posted and the client will receive an email."
+            : "The comment will be posted without sending an email."}
+        </p>
+      )}
       {error && <p className="text-xs text-red-fail">{error}</p>}
+      {notifyWarning && <p className="text-xs text-amber-800">{notifyWarning}</p>}
       <button
         type="submit"
         disabled={sending || !body.trim()}
         className="px-3 py-1.5 text-sm font-semibold bg-navy text-white disabled:opacity-50"
       >
-        {sending ? "Posting..." : pendingAnnotation ? "Comment on selection" : "Add comment"}
+        {sending
+          ? "Posting..."
+          : `${pendingAnnotation ? "Comment on selection" : "Add comment"}${
+              isOperator && notify ? " and notify" : ""
+            }`}
       </button>
     </form>
   );
@@ -1643,8 +1676,11 @@ function ReplyComposer({
 }) {
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<DeliverableAttachment[]>([]);
+  const [notify, setNotify] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notifyWarning, setNotifyWarning] = useState<string | null>(null);
+  const isOperator = viewerRole === "operator";
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -1660,6 +1696,7 @@ function ReplyComposer({
           body: body.trim() || "(attachment)",
           approval_record_id: approvalRecordId,
           attachments,
+          client_notification_choice: isOperator && notify ? "notify_now" : "silent",
         }),
       });
       const json = await res.json();
@@ -1668,6 +1705,12 @@ function ReplyComposer({
       } else {
         setBody("");
         setAttachments([]);
+        setNotify(false);
+        if (isOperator && json.notification?.status === "failed") {
+          setNotifyWarning("The reply was posted, but the notification email could not be sent.");
+        } else {
+          setNotifyWarning(null);
+        }
         await onPosted();
       }
     } catch (err) {
@@ -1692,14 +1735,32 @@ function ReplyComposer({
         attachments={attachments}
         onChange={setAttachments}
       />
+      {isOperator && (
+        <label className="flex items-center gap-2 text-xs text-black/70">
+          <input
+            type="checkbox"
+            checked={notify}
+            onChange={(e) => setNotify(e.target.checked)}
+          />
+          Notify the client by email
+        </label>
+      )}
+      {isOperator && (
+        <p className="text-xs text-black/50">
+          {notify
+            ? "The comment will be posted and the client will receive an email."
+            : "The comment will be posted without sending an email."}
+        </p>
+      )}
       {error && <p className="text-xs text-red-fail">{error}</p>}
+      {notifyWarning && <p className="text-xs text-amber-800">{notifyWarning}</p>}
       <div className="flex gap-2">
         <button
           type="submit"
           disabled={sending || (!body.trim() && attachments.length === 0)}
           className="px-3 py-1.5 text-xs font-semibold bg-navy text-white disabled:opacity-50"
         >
-          {sending ? "Posting..." : "Post reply"}
+          {sending ? "Posting..." : isOperator && notify ? "Post reply and notify" : "Post reply"}
         </button>
         <button
           type="button"
@@ -1870,6 +1931,100 @@ function ApprovalHistory({
 
 // ─── Version composer ────────────────────────────────────────────────────────
 
+/**
+ * Confirmation modal shown before a version is posted. Silent is always
+ * preselected and there is no way to carry a prior choice forward: this
+ * component is unmounted (not just hidden) whenever it is closed, so the
+ * next open always starts from a fresh "silent" default.
+ */
+function PostVersionConfirmModal({
+  posting,
+  onCancel,
+  onConfirm,
+}: {
+  posting: boolean;
+  onCancel: () => void;
+  onConfirm: (choice: ClientNotificationChoice) => void;
+}) {
+  const [choice, setChoice] = useState<ClientNotificationChoice>("silent");
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-40 flex items-end md:items-center justify-center p-4">
+      <div className="bg-white max-w-lg w-full border border-black/10 max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-black/8">
+          <h2 className="text-lg font-bold text-navy">Post this version</h2>
+          <p className="mt-1 text-sm text-black/60">
+            The updated content will become the current version. Choose whether the client
+            should receive an email about this update.
+          </p>
+        </div>
+        <div className="px-6 py-4 space-y-2">
+          <label className="flex items-start gap-3 border border-border-brand px-3 py-2.5 cursor-pointer has-[:checked]:border-navy has-[:checked]:bg-parchment-2">
+            <input
+              type="radio"
+              name="version-notify-choice"
+              checked={choice === "silent"}
+              onChange={() => setChoice("silent")}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="block text-sm font-semibold text-navy">Save without notifying</span>
+              <span className="block text-xs text-black/60 mt-0.5">
+                Create the version and make it available in the portal without sending an email.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 border border-border-brand px-3 py-2.5 cursor-pointer has-[:checked]:border-navy has-[:checked]:bg-parchment-2">
+            <input
+              type="radio"
+              name="version-notify-choice"
+              checked={choice === "notify_now"}
+              onChange={() => setChoice("notify_now")}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="block text-sm font-semibold text-navy">Save and notify the client now</span>
+              <span className="block text-xs text-black/60 mt-0.5">
+                Create the version and send one review-notification email after it is saved
+                successfully.
+              </span>
+            </span>
+          </label>
+        </div>
+        <div className="px-6 py-3 bg-parchment-2 border-t border-black/8">
+          <p className="text-xs text-black/60 mb-2">
+            {choice === "silent"
+              ? "No email will be sent."
+              : "The client will receive a notification email."}
+          </p>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={posting}
+              className="text-sm font-semibold uppercase tracking-wider text-black/60 hover:text-navy px-3 py-2 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => onConfirm(choice)}
+              disabled={posting}
+              className="bg-navy text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-navy-deep disabled:opacity-50"
+            >
+              {posting
+                ? "Posting..."
+                : choice === "silent"
+                  ? "Post version without notifying"
+                  : "Post version and notify"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function VersionComposer({
   firmId,
   deliverableId,
@@ -1892,8 +2047,24 @@ function VersionComposer({
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [noteExpanded, setNoteExpanded] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [notifyWarning, setNotifyWarning] = useState<string | null>(null);
 
-  async function post() {
+  function openConfirm() {
+    setError(null);
+    if (contentKind !== "text" && !file) {
+      setError("Choose a file.");
+      return;
+    }
+    if (contentKind === "text" && !bodyHtml.trim()) {
+      setError("Content is required.");
+      return;
+    }
+    setNotifyWarning(null);
+    setShowConfirm(true);
+  }
+
+  async function post(choice: ClientNotificationChoice) {
     setPosting(true);
     setError(null);
     try {
@@ -1906,6 +2077,7 @@ function VersionComposer({
             body_html: bodyHtml,
             note: note.trim() || null,
             responds_to_approval_id: respondsToApproval?.id ?? null,
+            client_notification_choice: choice,
           }),
         });
       } else {
@@ -1918,6 +2090,7 @@ function VersionComposer({
         fd.append("file", file);
         if (note.trim()) fd.append("note", note.trim());
         if (respondsToApproval) fd.append("responds_to_approval_id", respondsToApproval.id);
+        fd.append("client_notification_choice", choice);
         res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/versions`, {
           method: "POST",
           body: fd,
@@ -1926,15 +2099,21 @@ function VersionComposer({
       const json = await res.json();
       if (!res.ok || !json.ok) {
         setError(json.error ?? "Could not post version.");
+        setShowConfirm(false);
       } else {
         setBodyHtml("");
         setNote("");
         setFile(null);
+        setShowConfirm(false);
+        if (json.notification?.status === "failed") {
+          setNotifyWarning("The version was posted, but the notification email could not be sent.");
+        }
         if (json.version?.id) onSelectNew(json.version.id);
         await onPosted();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error.");
+      setShowConfirm(false);
     } finally {
       setPosting(false);
     }
@@ -2018,14 +2197,22 @@ function VersionComposer({
         />
       </div>
       {error && <p className="text-xs text-red-fail">{error}</p>}
+      {notifyWarning && <p className="text-xs text-amber-800">{notifyWarning}</p>}
       <button
         type="button"
-        onClick={post}
+        onClick={openConfirm}
         disabled={posting}
         className="px-3 py-1.5 text-sm font-semibold bg-navy text-white disabled:opacity-50"
       >
-        {posting ? "Posting..." : "Post version for review"}
+        Post version for review
       </button>
+      {showConfirm && (
+        <PostVersionConfirmModal
+          posting={posting}
+          onCancel={() => setShowConfirm(false)}
+          onConfirm={post}
+        />
+      )}
     </div>
   );
 }
