@@ -19,24 +19,26 @@ describe("getContentCadence", () => {
   });
 });
 
-describe("DRG cadence v5.2 model — headline and lede", () => {
-  it("headline communicates the up-to-14 ceiling and carries no trailing period (the .ccp-sq square is the period)", () => {
+describe("DRG cadence — headline and intro state both tiers, never blended", () => {
+  it("headline states both the completed-now count and the going-forward ceiling, no trailing period (the .ccp-sq square is the period)", () => {
     const cadence = requireCadence();
-    expect(cadence.headline).toMatch(/up to 14/i);
+    expect(cadence.headline).toBe("Thirteen completed assets now. Up to fourteen going forward");
     expect(cadence.headline.endsWith(".")).toBe(false);
     expect(cadence.headline.endsWith("!")).toBe(false);
     expect(cadence.headline.endsWith("?")).toBe(false);
   });
 
-  it("lede frames capacity as a per-theme ceiling, not a fixed weekly quota", () => {
+  it("intro separates the historical backlog (3 channels) from the future model (4th channel: email)", () => {
     const cadence = requireCadence();
-    expect(cadence.lede).toMatch(/ceiling/i);
-    expect(cadence.lede).toMatch(/not a fixed weekly quota/i);
-    expect(cadence.lede).toMatch(/does not ship/i);
+    expect(cadence.intro).toMatch(/13-deliverable batches/i);
+    expect(cadence.intro).toMatch(/current publication backlog/i);
+    expect(cadence.intro).toMatch(/next new weekly theme/i);
+    expect(cadence.intro).toMatch(/fourteenth artifact/i);
+    expect(cadence.intro).toMatch(/fourth channel: email/i);
   });
 });
 
-describe("DRG cadence v5.2 model — historical note", () => {
+describe("DRG cadence — historical note", () => {
   it("preserves the required historical-backlog callout text and does not tie the new model to The Renewal Clause", () => {
     const cadence = requireCadence();
     expect(cadence.historicalNote.body).toBe(
@@ -47,117 +49,142 @@ describe("DRG cadence v5.2 model — historical note", () => {
   });
 });
 
-describe("DRG cadence v5.2 model — metrics", () => {
-  it("approve.metrics carries the four-part 14/2/4/Tue-Wed shape", () => {
+describe("DRG cadence — two-column current/next summary (never merged into one set of numbers)", () => {
+  it("current backlog column is exactly 13 deliverables / 2 languages / 3 channels", () => {
     const cadence = requireCadence();
-    expect(cadence.approve.metrics).toHaveLength(4);
-    const values = cadence.approve.metrics.map((m) => m.value);
-    const labels = cadence.approve.metrics.map((m) => m.label);
-    expect(values).toContain("14");
-    expect(values).toContain("2");
-    expect(values).toContain("4");
-    expect(labels.some((l) => /channel/i.test(l))).toBe(true);
-    expect(labels.some((l) => /language/i.test(l))).toBe(true);
-    expect(labels.some((l) => /release window/i.test(l))).toBe(true);
-    // The fourth metric is the non-numeric Tuesday-Wednesday release window.
-    const windowMetric = cadence.approve.metrics.find((m) => m.label === "release window");
-    expect(windowMetric?.value).toMatch(/tue.*wed/i);
+    const values = cadence.approve.current.metrics.map((m) => `${m.value} ${m.label}`);
+    expect(values).toContain("13 deliverables");
+    expect(values).toContain("2 languages");
+    expect(values).toContain("3 channels");
+    expect(cadence.approve.current.metrics).toHaveLength(3);
   });
 
-  it("promise.metrics states the up-to-14 ceiling across 4 channels", () => {
+  it("next model column is exactly Up to 14 artifacts / 2 languages / 4 channels", () => {
     const cadence = requireCadence();
-    const values = cadence.promise.metrics.map((m) => m.value);
-    expect(values).toContain("14");
-    expect(values).toContain("4");
-    expect(cadence.promise.label).toMatch(/up to 14/i);
-    expect(cadence.promise.label).toMatch(/4 channels/i);
+    const values = cadence.approve.next.metrics.map((m) => `${m.value} ${m.label}`);
+    expect(values).toContain("Up to 14 artifacts");
+    expect(values).toContain("2 languages");
+    expect(values).toContain("4 channels");
+    expect(cadence.approve.next.metrics).toHaveLength(3);
+  });
+
+  it("carries the exact capacity-condition line: up to is not a quota", () => {
+    const cadence = requireCadence();
+    expect(cadence.approve.capacityNote).toBe(
+      "“Up to” is not a quota. It depends on Damaris's available legal-review capacity and every applicable quality, legal-safety, consent, route, asset, and release requirement.",
+    );
   });
 });
 
-describe("DRG cadence v5.2 model — pieces (4 artifact families including the Minute)", () => {
-  it("has exactly 4 pieces", () => {
+describe("DRG cadence — flow band: two lines, current then next, never one blended line", () => {
+  it("current line reads 1 weekly theme, 13 deliverables, 3 channels", () => {
     const cadence = requireCadence();
-    expect(cadence.pieces).toHaveLength(4);
+    const values = cadence.promise.current.metrics.map((m) => m.value);
+    expect(values).toEqual(["1", "13", "3"]);
+    expect(cadence.promise.current.label).toMatch(/current backlog/i);
   });
 
-  it("carries the four content jobs as `kind`: Explain / Examine / Prepare / Maintain relationship", () => {
+  it("next line reads 1 weekly theme, up to 14 artifacts, 4 channels, with the capacity-met note", () => {
     const cadence = requireCadence();
+    const values = cadence.promise.next.metrics.map((m) => m.value);
+    expect(values).toEqual(["1", "Up to 14", "4"]);
+    expect(cadence.promise.next.label).toMatch(/next model/i);
+    expect(cadence.promise.next.note).toMatch(/capacity and release requirements are met/i);
+  });
+});
+
+describe("DRG cadence — format breakdown is historical-only, the Minute is never folded in", () => {
+  it("has exactly 3 pieces: Counsel Note, Clause in the Margin, Preparation Artifact", () => {
+    const cadence = requireCadence();
+    expect(cadence.pieces).toHaveLength(3);
     expect(cadence.pieces.map((p) => p.kind)).toEqual([
-      "Explain",
-      "Examine",
-      "Prepare",
-      "Maintain relationship",
+      "Counsel Note · EN + PT",
+      "Clause in the Margin · EN + PT",
+      "Preparation Artifact · EN + PT",
     ]);
   });
 
-  it("includes The DRG Law Minute as the 4th piece with the minute icon", () => {
+  it("no piece represents the Minute", () => {
     const cadence = requireCadence();
-    const minutePiece = cadence.pieces[3];
-    expect(minutePiece.name).toBe("The DRG Law Minute");
-    expect(minutePiece.icon).toBe("minute");
-    expect(minutePiece.kind).toBe("Maintain relationship");
+    expect(cadence.pieces.some((p) => p.icon === "minute")).toBe(false);
+    expect(cadence.pieces.some((p) => /minute/i.test(p.name) || /minute/i.test(p.kind))).toBe(false);
   });
 
-  it("keeps the historical Counsel Note / Clause in the Margin / Preparation Artifact families intact", () => {
+  it("counts total exactly 8 + 2 + 3 = 13, matching the required total line", () => {
     const cadence = requireCadence();
-    expect(cadence.pieces[0].name).toBe("Counsel Note · EN + PT");
-    expect(cadence.pieces[1].name).toBe("Clause in the Margin · EN + PT");
-    expect(cadence.pieces[2].name).toBe("Preparation Artifact · EN + PT");
+    const byLabel = Object.fromEntries(cadence.counts.map((c) => [c.l, c.n]));
+    expect(byLabel["owned EN/PT assets"]).toBe("8");
+    expect(byLabel["LinkedIn posts"]).toBe("2");
+    expect(byLabel["GBP decision ads"]).toBe("3");
+    expect(byLabel["deliverables"]).toBe("13");
   });
 });
 
-describe("DRG cadence v5.2 model — schedule (2 days, 4 channel rows)", () => {
-  it("has exactly 2 days: Tuesday then Wednesday", () => {
+describe("DRG cadence — future-only Minute card, structurally separate from `pieces`", () => {
+  it("carries the exact required future-format copy", () => {
     const cadence = requireCadence();
-    expect(cadence.days.map((d) => d.label)).toEqual(["Tuesday", "Wednesday"]);
+    expect(cadence.futureFormat.eyebrow).toBe("Future relationship format");
+    expect(cadence.futureFormat.name).toBe("The DRG Law Minute");
+    expect(cadence.futureFormat.tag).toBe("1 English client newsletter");
+    expect(cadence.futureFormat.desc).toBe(
+      "Maintains DRG's judgment between matters through one useful weekly idea and a reply-or-forward relationship close.",
+    );
   });
 
-  it("has exactly 4 channel rows: website, linkedin, gbp, email", () => {
+  it("is explicitly labelled as not part of the existing 13-deliverable backlog", () => {
     const cadence = requireCadence();
-    expect(cadence.rows.map((r) => r.channel)).toEqual(["website", "linkedin", "gbp", "email"]);
+    expect(cadence.futureFormat.availabilityLabel).toMatch(/next new weekly theme/i);
+    expect(cadence.futureFormat.availabilityLabel).toMatch(/not part of the existing 13-deliverable backlog/i);
+  });
+});
+
+describe("DRG cadence — schedule reflects only the historical 13-piece backlog (3 days, 3 channels, no Minute)", () => {
+  it("has exactly 3 days: Tuesday, Wednesday, Thursday", () => {
+    const cadence = requireCadence();
+    expect(cadence.days.map((d) => d.label)).toEqual(["Tuesday", "Wednesday", "Thursday"]);
   });
 
-  it("every row's cells array is aligned 1:1 with days (length 2)", () => {
+  it("has exactly 3 channel rows: website, linkedin, gbp -- no email row", () => {
+    const cadence = requireCadence();
+    expect(cadence.rows.map((r) => r.channel)).toEqual(["website", "linkedin", "gbp"]);
+    expect(cadence.rows.some((r) => r.channel === "email")).toBe(false);
+  });
+
+  it("every row's cells array is aligned 1:1 with days (length 3)", () => {
     const cadence = requireCadence();
     for (const row of cadence.rows) {
-      expect(row.cells).toHaveLength(2);
+      expect(row.cells).toHaveLength(3);
     }
   });
 
-  it("website, linkedin, and gbp rows carry Tuesday content and a null Wednesday cell", () => {
+  it("the linkedin row carries two English-only native posts (matches the real Renewal Clause data: both en-CA)", () => {
     const cadence = requireCadence();
-    for (const channel of ["website", "linkedin", "gbp"] as const) {
-      const row = cadence.rows.find((r) => r.channel === channel);
-      expect(row).toBeDefined();
-      expect(row!.cells[0]).not.toBeNull();
-      expect(row!.cells[0]!.length).toBeGreaterThan(0);
-      expect(row!.cells[1]).toBeNull();
+    const row = cadence.rows.find((r) => r.channel === "linkedin");
+    expect(row).toBeDefined();
+    const allCards = row!.cells.flatMap((c) => c ?? []);
+    expect(allCards).toHaveLength(2);
+    for (const card of allCards) {
+      expect(card.slot).toMatch(/EN/);
     }
   });
 
-  it("the email row is Wednesday-only: null Tuesday cell, one card sending after link verification", () => {
+  it("no card anywhere in the schedule mentions the Minute", () => {
     const cadence = requireCadence();
-    const emailRow = cadence.rows.find((r) => r.channel === "email");
-    expect(emailRow).toBeDefined();
-    expect(emailRow!.cells[0]).toBeNull();
-    expect(emailRow!.cells[1]).not.toBeNull();
-    expect(emailRow!.cells[1]).toHaveLength(1);
-    const card = emailRow!.cells[1]![0];
-    expect(card.piece).toBe("The DRG Law Minute");
-    expect(card.count).toBe(1);
-    expect(card.detail).toMatch(/verify live/i);
+    const allCards = cadence.rows.flatMap((r) => r.cells.flatMap((c) => c ?? []));
+    expect(allCards.some((c) => /minute/i.test(c.piece) || /minute/i.test(c.slot))).toBe(false);
   });
 });
 
-describe("DRG cadence v5.2 model — minute section (section 4)", () => {
-  it("has a section label wired for the numbered section 4 title", () => {
+describe("DRG cadence — Minute operating-rules section restates it is future-only", () => {
+  it("has a section label wired for the numbered section title", () => {
     const cadence = requireCadence();
     expect(cadence.sectionLabels.minute.length).toBeGreaterThan(0);
   });
 
-  it("states the Minute is English-only, relationship-purpose, with no promotional or intake CTA", () => {
+  it("intro states the Minute is not part of the existing backlog and not added retroactively", () => {
     const cadence = requireCadence();
-    expect(cadence.minute.intro).toMatch(/english-only/i);
+    expect(cadence.minute.intro).toMatch(/not part of the existing 13-deliverable backlog/i);
+    expect(cadence.minute.intro).toMatch(/not added to it retroactively/i);
     expect(cadence.minute.intro).toMatch(/no promotional or intake call to action/i);
   });
 
@@ -193,18 +220,18 @@ describe("DRG cadence v5.2 model — minute section (section 4)", () => {
     );
   });
 
-  it("readinessNote states the edition simply does not send when a requirement is unmet", () => {
+  it("readinessNote states it cannot be represented as an actual deliverable until the schema decision is approved", () => {
     const cadence = requireCadence();
-    expect(cadence.minute.readinessNote).toBe(
-      "If any requirement is unmet, the edition does not send that week, full stop.",
+    expect(cadence.minute.readinessNote).toMatch(
+      /cannot be represented as an actual deliverable until the schema and data-model decision is approved/i,
     );
+    expect(cadence.minute.readinessNote).toMatch(/does not send that week, full stop/i);
   });
 });
 
-describe("DRG cadence v5.2 model — transition and reference links", () => {
-  it("transition describes capacity discipline instead of the old backlog-first framing", () => {
+describe("DRG cadence — transition and reference links", () => {
+  it("transition describes capacity discipline", () => {
     const cadence = requireCadence();
-    expect(cadence.transition.body).not.toMatch(/backlog/i);
     expect(cadence.transition.body).toMatch(/does not ship/i);
   });
 
