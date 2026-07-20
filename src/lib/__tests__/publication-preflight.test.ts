@@ -10,6 +10,7 @@
 
 import { describe, it, expect } from "vitest";
 import { buildPreflightReport } from "@/lib/publication-preflight";
+import { isVersionReleaseAuthorized } from "@/lib/release-authorization";
 import type { ContentDeliverable, ContentPlacement, DeliverableComment, PublicationReceipt } from "@/lib/types";
 
 const FIRM = "f1111111-1111-1111-1111-111111111111";
@@ -381,5 +382,79 @@ describe("buildPreflightReport: Workstream 4 deliverablesWithNoPlacements covera
   it("a deliverable WITH placements never appears in deliverablesWithNoPlacements", () => {
     const report = buildPreflightReport(baseInput({}));
     expect(report.deliverablesWithNoPlacements).toHaveLength(0);
+  });
+});
+
+describe("buildPreflightReport: optional releaseAuthorizationByDeliverableId (canonical two-path result)", () => {
+  it("omitted entirely -> falls back to the original individual-approval-only check, byte-identical to every other test in this file", () => {
+    const deliverable = makeDeliverable({ status: "in_review" });
+    const report = buildPreflightReport(baseInput({ deliverable }));
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].reason).toContain('"in_review"');
+  });
+
+  it("supplied and authorized (standing_authorization path) -> bypasses the individual-approval-only check even though status is not approved", () => {
+    const deliverable = makeDeliverable({ status: "in_review", approved_version_id: null });
+    const authorization = isVersionReleaseAuthorized({
+      deliverableStatus: deliverable.status,
+      approvedVersionId: deliverable.approved_version_id,
+      targetVersionId: deliverable.current_version_id!,
+      versionRequiresIndividualReview: false,
+      standingAuthorizationActive: true,
+    });
+    expect(authorization.authorized).toBe(true);
+    expect(authorization.kind).toBe("standing_authorization");
+
+    const report = buildPreflightReport({
+      ...baseInput({ deliverable }),
+      releaseAuthorizationByDeliverableId: { [deliverable.id]: authorization },
+    });
+    // Never blocked on deliverable status or version-id equality when the
+    // canonical result says authorized -- proceeds to the readiness/comment/
+    // lifecycle gates below, same as any other authorized placement.
+    expect(report.placements[0].mayPublish).toBe(true);
+    expect(report.placements[0].reason).toBeNull();
+  });
+
+  it("supplied and NOT authorized -> reason names the canonical kind, never the old 'not approved'/'version drift' wording", () => {
+    const deliverable = makeDeliverable({ status: "draft", approved_version_id: null });
+    const authorization = isVersionReleaseAuthorized({
+      deliverableStatus: deliverable.status,
+      approvedVersionId: deliverable.approved_version_id,
+      targetVersionId: deliverable.current_version_id!,
+      versionRequiresIndividualReview: false,
+      standingAuthorizationActive: false,
+    });
+    expect(authorization.authorized).toBe(false);
+    expect(authorization.kind).toBe("standing_authorization_inactive");
+
+    const report = buildPreflightReport({
+      ...baseInput({ deliverable }),
+      releaseAuthorizationByDeliverableId: { [deliverable.id]: authorization },
+    });
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].reason).toMatch(/not release-authorized/);
+    expect(report.placements[0].reason).toContain("standing_authorization_inactive");
+    expect(report.placements[0].reason).not.toMatch(/not approved"/);
+    expect(report.placements[0].reason).not.toMatch(/version drift/);
+  });
+
+  it("a releaseAuthorizationByDeliverableId map with no entry for THIS deliverable falls back to the individual-approval-only check for it specifically", () => {
+    const deliverable = makeDeliverable({ status: "in_review" });
+    const someOtherDeliverableId = "d9999999-9999-9999-9999-999999999999";
+    const report = buildPreflightReport({
+      ...baseInput({ deliverable }),
+      releaseAuthorizationByDeliverableId: {
+        [someOtherDeliverableId]: isVersionReleaseAuthorized({
+          deliverableStatus: "approved",
+          approvedVersionId: "irrelevant",
+          targetVersionId: "irrelevant",
+          versionRequiresIndividualReview: false,
+          standingAuthorizationActive: false,
+        }),
+      },
+    });
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].reason).toContain('"in_review"');
   });
 });

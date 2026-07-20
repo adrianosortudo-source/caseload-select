@@ -25,6 +25,16 @@
  * caller can hold per placement at a time. A publishing agent must obtain
  * a claim before acting; a mayPublish=true report on its own is never
  * sufficient.
+ *
+ * Optionally accepts a per-deliverable canonical release-authorization
+ * result (release-authorization.ts's isVersionReleaseAuthorized()) so a
+ * caller that already resolved the two-path authorization bar -- today,
+ * only release-graph-audit.ts -- can have this function defer to it
+ * instead of this function's own, narrower, individual-approval-only
+ * default check. See reportOnePlacement's own doc comment and
+ * docs/publication-operator/publishing-agent-release-resolution-requirements-2026-07-20.md
+ * §13.2f for why this is additive/opt-in rather than a change to every
+ * caller's default behavior.
  */
 
 import type {
@@ -34,6 +44,7 @@ import type {
   PublicationReceipt,
 } from "@/lib/types";
 import type { PeriodLifecycle } from "@/lib/publication-readiness";
+import type { ReleaseAuthorizationResult } from "@/lib/release-authorization";
 
 export interface PreflightPlacementReport {
   placementId: string;
@@ -84,8 +95,30 @@ function reportOnePlacement(input: {
   placement: ContentPlacement;
   unresolvedCommentCount: number;
   currentReceipt: PublicationReceipt | null;
+  /**
+   * The canonical two-path release-authorization result for this exact
+   * deliverable/version, from isVersionReleaseAuthorized()
+   * (release-authorization.ts) -- OPTIONAL and backward-compatible.
+   *
+   * When a caller supplies this (currently only release-graph-audit.ts,
+   * which computes it once per audit for fact 1/fact 7 and passes the same
+   * result here so all three consumers agree), it is used AS-IS: this
+   * function never re-derives status/approved_version_id/current_version_id
+   * equality itself when a canonical result is present.
+   *
+   * When omitted (every other existing caller of buildPreflightReport --
+   * the live /publication-preflight and /claim API routes, via
+   * publication-preflight-loader.ts and publication-placement-claims.ts),
+   * this function falls back to its own original individual-approval-only
+   * check, UNCHANGED, to preserve exact existing behavior (including the
+   * exact reason strings publication-preflight.test.ts already locks in).
+   * Widening those callers to the two-path model is a separate, deliberate
+   * decision outside this correction's scope -- see this addendum's §13.2f
+   * for why that boundary was drawn here rather than silently expanded.
+   */
+  releaseAuthorization?: ReleaseAuthorizationResult;
 }): PreflightPlacementReport {
-  const { periodLifecycle, deliverable, deliverableReady, placement, unresolvedCommentCount, currentReceipt } =
+  const { periodLifecycle, deliverable, deliverableReady, placement, unresolvedCommentCount, currentReceipt, releaseAuthorization } =
     input;
 
   const base = {
@@ -121,15 +154,30 @@ function reportOnePlacement(input: {
           : "this period has not yet been activated for enforcement (setup required)",
     };
   }
-  if (deliverable.status !== "approved") {
-    return { ...base, mayPublish: false, reason: `deliverable status is "${deliverable.status}", not approved` };
-  }
-  if (deliverable.approved_version_id !== deliverable.current_version_id) {
-    return {
-      ...base,
-      mayPublish: false,
-      reason: "approved_version_id does not match current_version_id (version drift)",
-    };
+  if (releaseAuthorization) {
+    if (!releaseAuthorization.authorized) {
+      return {
+        ...base,
+        mayPublish: false,
+        reason: `not release-authorized (${releaseAuthorization.kind}): ${releaseAuthorization.reason}`,
+      };
+    }
+    // Authorized through either canonical path -- fall through to the
+    // readiness/comments/lifecycle/receipt checks below, same as before.
+  } else {
+    // Backward-compatible default for every caller that has not supplied
+    // the canonical two-path result: the original individual-approval-only
+    // check, unchanged.
+    if (deliverable.status !== "approved") {
+      return { ...base, mayPublish: false, reason: `deliverable status is "${deliverable.status}", not approved` };
+    }
+    if (deliverable.approved_version_id !== deliverable.current_version_id) {
+      return {
+        ...base,
+        mayPublish: false,
+        reason: "approved_version_id does not match current_version_id (version drift)",
+      };
+    }
   }
   if (!deliverableReady) {
     return { ...base, mayPublish: false, reason: "deliverable fails one or more publication readiness checks" };
@@ -182,6 +230,8 @@ export function buildPreflightReport(input: {
   commentsByDeliverableId: Record<string, DeliverableComment[]>;
   placementsByDeliverableId: Record<string, ContentPlacement[]>;
   currentReceiptsByPlacementId: Record<string, PublicationReceipt | null>;
+  /** See reportOnePlacement's own doc comment: optional, backward-compatible, canonical two-path authorization result per deliverable id. Omitted by every caller except release-graph-audit.ts today. */
+  releaseAuthorizationByDeliverableId?: Record<string, ReleaseAuthorizationResult>;
 }): PreflightPeriodReport {
   const placements: PreflightPlacementReport[] = [];
   const deliverablesWithNoPlacements: Array<{ deliverableId: string; deliverableTitle: string }> = [];
@@ -204,6 +254,7 @@ export function buildPreflightReport(input: {
           placement,
           unresolvedCommentCount,
           currentReceipt: input.currentReceiptsByPlacementId[placement.id] ?? null,
+          releaseAuthorization: input.releaseAuthorizationByDeliverableId?.[deliverable.id],
         }),
       );
     }

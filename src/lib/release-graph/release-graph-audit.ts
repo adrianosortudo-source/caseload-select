@@ -50,6 +50,8 @@ import {
   type PeriodLifecycle,
 } from "@/lib/publication-readiness";
 import { buildPreflightReport } from "@/lib/publication-preflight";
+import { isVersionReleaseAuthorized } from "@/lib/release-authorization";
+import type { ReleaseAuthorizationResult } from "@/lib/release-authorization";
 import type {
   GapClassification,
   ReleaseGraphFact,
@@ -64,63 +66,19 @@ import type {
 /** The one firm this phase has a genuine, source-faithful website template for (DRGArticleFrame). */
 export const DRG_FIRM_ID = "eec1d25e-a047-4827-8e4a-6eb96becca2b";
 
-export type ReleaseAuthorizationPath = "individual_approval" | "standing_authorization";
-
-export interface ReleaseAuthorizationInput {
-  deliverableStatus: ContentDeliverable["status"];
-  approvedVersionId: string | null;
-  targetVersionId: string;
-  versionRequiresIndividualReview: boolean;
-  /** intake_firms' current standing-authorization state for this firm (standing-publishing-authorization.ts's getStandingAuthorizationState().active). */
-  standingAuthorizationActive: boolean;
-}
-
-export interface ReleaseAuthorizationResult {
-  authorized: boolean;
-  path: ReleaseAuthorizationPath | null;
-}
-
-/**
- * The canonical two-path release-authorization bar, ported faithfully from
- * claim_placement_for_publish()'s own logic (supabase/migrations/
- * 20260717230956_standing_publishing_authorization.sql, the "Path A" /
- * "Path B" branch around line 407) -- the actual, authoritative source of
- * this rule in this codebase. No pure, importable TypeScript
- * implementation of it exists on origin/main: the RPC itself is the only
- * enforcement, and calling it performs a real database write (it creates a
- * publication_placement_claims row), which a read-only, dry-run audit must
- * never do. This is a faithful, read-only port of that same decision --
- * one shared helper, not a second, competing authorization rule invented
- * for this module. Every caller in this file uses this function; none
- * re-implements any part of the two-path check inline.
- *
- * A version is authorized only when it is release-authorized through
- * either:
- *   A. individual lawyer approval of that exact version
- *      (deliverableStatus === "approved" AND approvedVersionId === targetVersionId); or
- *   B. an active standing publishing authorization for the firm, PROVIDED
- *      the version is not flagged requires_individual_review -- that flag
- *      always overrides path B and fails closed, exactly as the RPC
- *      rejects on that flag before ever consulting the firm's
- *      authorization state.
- * The RPC's own third precondition -- the target version must be the
- * deliverable's current_version_id -- is not re-checked here because every
- * caller in this module only ever evaluates the deliverable's actual
- * current version (see resolveAndAuditReleaseGraph); callers passing a
- * different version are responsible for that invariant themselves.
- */
-export function isVersionReleaseAuthorized(input: ReleaseAuthorizationInput): ReleaseAuthorizationResult {
-  if (input.deliverableStatus === "approved" && input.approvedVersionId === input.targetVersionId) {
-    return { authorized: true, path: "individual_approval" };
-  }
-  if (input.versionRequiresIndividualReview) {
-    return { authorized: false, path: null };
-  }
-  if (input.standingAuthorizationActive) {
-    return { authorized: true, path: "standing_authorization" };
-  }
-  return { authorized: false, path: null };
-}
+// Re-exported for backward compatibility with existing importers of this
+// module -- the canonical definitions now live in release-authorization.ts
+// (a lower-level, dependency-free module publication-preflight.ts can also
+// import from, which this file must not depend on in reverse). No logic
+// lives here; this file is a consumer like any other, same as
+// publication-preflight.ts.
+export { isVersionReleaseAuthorized };
+export type {
+  ReleaseAuthorizationPath,
+  ReleaseAuthorizationInput,
+  ReleaseAuthorizationResult,
+  ReleaseAuthorizationResultKind,
+} from "@/lib/release-authorization";
 
 export interface CtaTargetResolution {
   /** True when the promoted content itself carries a linkedin_article placement -- the strategy requires the native Article, never the plain website URL. */
@@ -300,8 +258,15 @@ type SourceSurfaceUnresolvedReason = "no_website_placement" | "wrong_role" | "ve
 interface SourceSurfaceResolution {
   surface: RegistrySourceSurface | null;
   reason: SourceSurfaceUnresolvedReason | null;
-  /** Which path authorized the version, when resolution succeeded -- carried through for evidence text, never re-derived. */
-  authorizationPath: ReleaseAuthorizationPath | null;
+  /**
+   * The full canonical result from isVersionReleaseAuthorized(), carried
+   * through verbatim -- never re-derived or re-summarized. Null only when
+   * the check short-circuited before ever calling it: no firm_website
+   * placement, wrong deliverable role, or no current version to evaluate.
+   * Callers read authorization.reason/kind/authorizationPath directly for
+   * evidence text rather than reconstructing their own explanation.
+   */
+  authorization: ReleaseAuthorizationResult | null;
 }
 
 /**
@@ -337,28 +302,22 @@ function resolveWebsiteArticleSourceSurface(
   currentVersion: DeliverableVersion | null,
   deliverablePlacements: ContentPlacement[],
   artifacts: PublicationArtifact[],
-  standingAuthorizationActive: boolean,
+  /** The one canonical release-authorization result, computed once by resolveAndAuditReleaseGraph and passed in verbatim -- never recomputed here. Null exactly when currentVersion is null (nothing to authorize). */
+  releaseAuthorization: ReleaseAuthorizationResult | null,
 ): SourceSurfaceResolution {
   const hasWebsitePlacement = deliverablePlacements.some((p) => p.destination === "firm_website");
-  if (!hasWebsitePlacement) return { surface: null, reason: "no_website_placement", authorizationPath: null };
+  if (!hasWebsitePlacement) return { surface: null, reason: "no_website_placement", authorization: null };
 
-  if (deliverable.deliverable_role !== "article") return { surface: null, reason: "wrong_role", authorizationPath: null };
+  if (deliverable.deliverable_role !== "article") return { surface: null, reason: "wrong_role", authorization: null };
 
-  if (!currentVersion) return { surface: null, reason: "version_not_release_authorized", authorizationPath: null };
+  if (!currentVersion || !releaseAuthorization) return { surface: null, reason: "version_not_release_authorized", authorization: null };
 
-  const authorization = isVersionReleaseAuthorized({
-    deliverableStatus: deliverable.status,
-    approvedVersionId: deliverable.approved_version_id,
-    targetVersionId: currentVersion.id,
-    versionRequiresIndividualReview: currentVersion.requires_individual_review,
-    standingAuthorizationActive,
-  });
-  if (!authorization.authorized) return { surface: null, reason: "version_not_release_authorized", authorizationPath: null };
+  if (!releaseAuthorization.authorized) return { surface: null, reason: "version_not_release_authorized", authorization: releaseAuthorization };
 
   const boundArtifact = artifacts.find((a) => a.artifact_type === "webpage" && a.version_id === currentVersion.id);
-  if (!boundArtifact) return { surface: null, reason: "no_version_bound_artifact", authorizationPath: authorization.path };
+  if (!boundArtifact) return { surface: null, reason: "no_version_bound_artifact", authorization: releaseAuthorization };
 
-  return { surface: "website_article", reason: null, authorizationPath: authorization.path };
+  return { surface: "website_article", reason: null, authorization: releaseAuthorization };
 }
 
 function finding(
@@ -414,6 +373,7 @@ function findArtifact(
 function resolveFact1And2SourceAndSurface(
   input: ResolveReleaseGraphInput,
   canonicalSource: string,
+  releaseAuthorization: ReleaseAuthorizationResult | null,
 ): ReleaseGraphFinding[] {
   const { deliverable, currentVersion } = input;
   const out: ReleaseGraphFinding[] = [];
@@ -469,7 +429,26 @@ function resolveFact1And2SourceAndSurface(
     );
   }
 
-  if (deliverable.approved_version_id !== deliverable.current_version_id) {
+  // The ONE canonical release-authorization decision for this version,
+  // computed exactly once by resolveAndAuditReleaseGraph and passed in --
+  // never re-derived here. fact 7 (resolveWebsiteArticleSourceSurface) and
+  // existingPreflightGate (via resolveAndAuditReleaseGraph's call into
+  // buildPreflightReport) both consult this exact same object, so all
+  // three can never disagree about whether a given version is
+  // release-authorized. currentVersion is guaranteed non-null at this
+  // point (the hasBody check above already returned early otherwise), so
+  // releaseAuthorization is guaranteed non-null too -- the `?? ` below is
+  // a defensive fallback only, never expected to actually fire.
+  const authorization =
+    releaseAuthorization ??
+    isVersionReleaseAuthorized({
+      deliverableStatus: deliverable.status,
+      approvedVersionId: deliverable.approved_version_id,
+      targetVersionId: currentVersion.id,
+      versionRequiresIndividualReview: currentVersion.requires_individual_review,
+      standingAuthorizationActive: input.standingAuthorizationActive,
+    });
+  if (!authorization.authorized) {
     out.push(
       finding(
         "source_path_unverified",
@@ -477,15 +456,13 @@ function resolveFact1And2SourceAndSurface(
         "Release-authorization identity not confirmed",
         {
           releaseImpact: "needs_human_confirmation",
-          factualEvidence: `approved_version_id=${deliverable.approved_version_id ?? "null"}, current_version_id=${deliverable.current_version_id}`,
-          canonicalSourceConsulted: "content_deliverables (approved_version_id vs. current_version_id)",
-          immediateDisposition: "Hold. Which version is actually release-authorized cannot yet be confirmed from stored state alone.",
-          rootCause: deliverable.approved_version_id
-            ? "Version drift: the current version is not the one the lawyer (or standing authorization) actually approved."
-            : "The current version has never been formally approved by legal counsel.",
-          proposedDurableSolution: "The firm's lawyer reviews and approves the current version (or the operator confirms an active standing authorization covers it) through the existing approval workflow -- never assumed from a live-looking public page.",
+          factualEvidence: authorization.reason,
+          canonicalSourceConsulted: "content_deliverables (approved_version_id vs. current_version_id) and standing_publishing_authorizations (via getStandingAuthorizationState)",
+          immediateDisposition: "Hold. This version is not release-authorized through either legitimate path.",
+          rootCause: `${authorization.kind} -- ${authorization.reason}`,
+          proposedDurableSolution: "The firm's lawyer individually approves the current version, or -- when the version is not flagged requires_individual_review -- an active standing publishing authorization for the firm covers it, through the existing approval/authorization workflow -- never assumed from a live-looking public page.",
           authorityRequired: "Firm's lawyer (individual approval) or an active standing publishing authorization -- never the operator alone.",
-          reusablePreflightRule: "Resolve fact 1 (release-authorized source version) via the two-path bar (individual approval OR active standing authorization not flagged requires_individual_review) before evaluating any other fact -- an unresolved identity here makes every downstream fact provisional.",
+          reusablePreflightRule: "Resolve fact 1 (release-authorized source version) exclusively via isVersionReleaseAuthorized's canonical two-path bar -- never re-derive authorization from approved_version_id equality alone; every release-graph consumer (this fact, fact 7, existingPreflightGate) must reach the same authorized/kind result for the same inputs.",
         },
       ),
     );
@@ -718,63 +695,50 @@ function resolveFact5DownloadableArtifact(
   ];
 }
 
-/**
- * Produces the precise, cause-specific evidence sentence for a
- * version_not_release_authorized finding. There are two distinct real
- * causes (plus the degenerate no-current-version case), and conflating
- * them would misdirect the operator: a version flagged
- * requires_individual_review=true is blocked regardless of standing
- * authorization (an override, not a missing grant), while a version with
- * requires_individual_review=false is blocked only when BOTH paths are
- * actually absent.
- */
-function describeSourceVersionNotAuthorized(
-  deliverable: ContentDeliverable,
-  currentVersion: DeliverableVersion | null,
-  standingAuthorizationActive: boolean,
-): string {
-  if (!currentVersion) {
-    return `This deliverable has a firm_website placement, but current_version_id is null -- there is no current version to evaluate for release authorization.`;
-  }
-  if (currentVersion.requires_individual_review) {
-    return `This deliverable has a firm_website placement, but version ${currentVersion.id} is flagged requires_individual_review=true, which overrides any standing publishing authorization unconditionally -- and approved_version_id=${deliverable.approved_version_id ?? "null"} does not match current_version_id=${currentVersion.id}, so it is not individually approved either. Neither release-authorization path is satisfied.`;
-  }
-  return `This deliverable has a firm_website placement, but approved_version_id=${deliverable.approved_version_id ?? "null"} does not match current_version_id=${currentVersion.id} (not individually approved), and this firm has no active standing publishing authorization covering it either (standingAuthorizationActive=${standingAuthorizationActive}) -- neither release-authorization path is satisfied, so the version being evaluated for republication is not release-authorized.`;
-}
-
 function resolveFact7ComplianceWrapper(
   input: ResolveReleaseGraphInput,
   canonicalSource: string,
+  releaseAuthorization: ReleaseAuthorizationResult | null,
 ): ReleaseGraphFinding[] {
-  const { deliverable, currentVersion, placement, deliverablePlacements, artifacts, emailBranding, standingAuthorizationActive } = input;
+  const { deliverable, currentVersion, placement, deliverablePlacements, artifacts, emailBranding } = input;
 
   if (placement.destination === "linkedin_article") {
     const locale = deliverable.locale ?? "en-CA";
     const destinationSurface = registryDestinationSurfaceFor(placement.destination);
-    const { surface: sourceSurface, reason } = resolveWebsiteArticleSourceSurface(
+    const { surface: sourceSurface, reason, authorization } = resolveWebsiteArticleSourceSurface(
       deliverable,
       currentVersion,
       deliverablePlacements,
       artifacts,
-      standingAuthorizationActive,
+      releaseAuthorization,
     );
 
     // Fail closed on the SOURCE edge before ever consulting the rule
     // mirror. Never assume a linkedin_article placement republishes the
     // CURRENT version of a website_article -- derive it from this
     // deliverable's actual content graph, including version binding, not
-    // merely from a placement object's existence.
+    // merely from a placement object's existence. The version-authorization
+    // reason/rootCause text below is read directly from isVersionReleaseAuthorized's
+    // own result (authorization.reason/kind) -- never re-derived or
+    // re-summarized here, so this finding can never drift from what the
+    // canonical helper actually decided.
     if (!sourceSurface || !destinationSurface) {
+      const versionNotAuthorizedEvidence = authorization
+        ? `This deliverable has a firm_website placement, but its current version is not release-authorized. ${authorization.reason}`
+        : `This deliverable has a firm_website placement, but current_version_id is null -- there is no current version to evaluate for release authorization.`;
+      const versionNotAuthorizedRootCause = authorization
+        ? `source_version_not_authorized (${authorization.kind}) -- ${authorization.reason}`
+        : "source_version_not_authorized (no_current_version) -- there is no current version to evaluate for release authorization.";
       const evidenceByReason: Record<SourceSurfaceUnresolvedReason, string> = {
         no_website_placement: `This deliverable's content_placements rows include no firm_website destination. The content-graph rule (preflight design §5/§4.1) requires a linkedin_article placement to republish the SAME deliverable's own firm_website placement; no such sibling placement exists.`,
         wrong_role: `This deliverable has a firm_website placement, but deliverable_role="${deliverable.deliverable_role}", not "article" -- its content-graph source surface is not website_article, so no DR-105 lookup can be attempted.`,
-        version_not_release_authorized: describeSourceVersionNotAuthorized(deliverable, currentVersion, standingAuthorizationActive),
+        version_not_release_authorized: versionNotAuthorizedEvidence,
         no_version_bound_artifact: `This deliverable has a firm_website placement and its current version is release-authorized, but no publication_artifacts row of type webpage is bound to version ${currentVersion?.id} specifically. Any existing webpage artifact for this deliverable belongs to a different (older) version and must never be read as this release's source edge -- content-changed-since-last-publish is exactly the case this check exists to catch.`,
       };
       const rootCauseByReason: Record<SourceSurfaceUnresolvedReason, string> = {
         no_website_placement: "source_surface_unresolved -- this placement has no sibling firm_website placement to establish a website_article source edge.",
         wrong_role: "source_surface_unsupported -- a website placement exists but is not an article, so it does not correspond to the registry's website_article source surface.",
-        version_not_release_authorized: "source_version_not_authorized -- the current version satisfies neither the individual-approval path nor the standing-authorization path of this firm's release-authorization bar (or is flagged requires_individual_review, which overrides standing authorization unconditionally), so it is not eligible to be treated as a release-authorized source, independent of any placement or artifact evidence.",
+        version_not_release_authorized: versionNotAuthorizedRootCause,
         no_version_bound_artifact: "source_artifact_version_mismatch -- a webpage artifact exists for this deliverable, but not for the exact version being republished; the source edge is stale, not resolved.",
       };
       const proposedSolutionByReason: Record<SourceSurfaceUnresolvedReason, string> = {
@@ -802,7 +766,7 @@ function resolveFact7ComplianceWrapper(
             rootCause: rootCauseByReason[reason as SourceSurfaceUnresolvedReason],
             proposedDurableSolution: proposedSolutionByReason[reason as SourceSurfaceUnresolvedReason],
             authorityRequired: reason === "version_not_release_authorized" ? "Firm's lawyer (individual approval) or an active standing publishing authorization -- never the operator alone." : "Operator -- resolving which content-graph edge applies, not a wrapper-wording decision.",
-            reusablePreflightRule: "Never assume a linkedin_article placement's source surface is website_article from placement existence alone -- derive it from the deliverable's actual role, release-authorization status, AND a webpage artifact bound to the exact current version, failing closed on any one of the four.",
+            reusablePreflightRule: "Never assume a linkedin_article placement's source surface is website_article from placement existence alone -- derive it from the deliverable's actual role, release-authorization status (via isVersionReleaseAuthorized, the one shared canonical helper), AND a webpage artifact bound to the exact current version, failing closed on any one of the four.",
           },
         ),
       ];
@@ -1053,6 +1017,24 @@ export function resolveAndAuditReleaseGraph(input: ResolveReleaseGraphInput): Re
 
   const canonicalSource = `content_deliverables.id=${deliverable.id}, deliverable_versions.id=${currentVersion?.id ?? "null"}`;
 
+  // The ONE canonical release-authorization decision for this exact
+  // deliverable/version, computed exactly once and passed to every
+  // consumer below (fact 1, fact 7, and the existing-preflight-gate) --
+  // never recomputed or re-derived independently by any of them, so all
+  // three are structurally guaranteed to agree, not merely likely to.
+  // Null only when there is no current version to evaluate at all (fact 1
+  // itself reports that as content_absent, a separate, prior-in-priority
+  // fact never conflated with authorization).
+  const releaseAuthorization: ReleaseAuthorizationResult | null = currentVersion
+    ? isVersionReleaseAuthorized({
+        deliverableStatus: deliverable.status,
+        approvedVersionId: deliverable.approved_version_id,
+        targetVersionId: currentVersion.id,
+        versionRequiresIndividualReview: currentVersion.requires_individual_review,
+        standingAuthorizationActive: input.standingAuthorizationActive,
+      })
+    : null;
+
   const readinessInput: EvaluateReadinessInput = {
     deliverable,
     currentVersion,
@@ -1069,13 +1051,14 @@ export function resolveAndAuditReleaseGraph(input: ResolveReleaseGraphInput): Re
     commentsByDeliverableId: { [deliverable.id]: comments },
     placementsByDeliverableId: { [deliverable.id]: [placement] },
     currentReceiptsByPlacementId: { [placement.id]: currentReceipt },
+    releaseAuthorizationByDeliverableId: releaseAuthorization ? { [deliverable.id]: releaseAuthorization } : undefined,
   });
   const existingPreflightGate = existingPreflight.placements[0]
     ? { mayPublish: existingPreflight.placements[0].mayPublish, reason: existingPreflight.placements[0].reason }
     : { mayPublish: false, reason: "no placement report resolved" };
 
   const findings: ReleaseGraphFinding[] = [
-    ...resolveFact1And2SourceAndSurface(input, canonicalSource),
+    ...resolveFact1And2SourceAndSurface(input, canonicalSource, releaseAuthorization),
   ];
 
   // Facts 3-10 are moot without canonical content (fact 1 already returned
@@ -1087,7 +1070,7 @@ export function resolveAndAuditReleaseGraph(input: ResolveReleaseGraphInput): Re
       ...resolveFact3And6Destination(input, canonicalSource),
       ...resolveFact4VisualRendition(input, canonicalSource),
       ...resolveFact5DownloadableArtifact(input, canonicalSource),
-      ...resolveFact7ComplianceWrapper(input, canonicalSource),
+      ...resolveFact7ComplianceWrapper(input, canonicalSource, releaseAuthorization),
       ...resolveFact8ChannelAuth(input, canonicalSource),
       ...resolveUnsubscribeEndpoint(input, canonicalSource),
       ...resolveFact9PreviewFaithful(readiness.staleArtifacts, canonicalSource),

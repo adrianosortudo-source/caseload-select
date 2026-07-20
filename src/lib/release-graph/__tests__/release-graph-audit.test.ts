@@ -508,7 +508,7 @@ describe("all fifteen gap classifications are independently reachable", () => {
     const unresolved = audit.findings.find((f) => f.fact === "compliance_wrapper_and_sender" && f.classification === "source_path_unverified");
     expect(unresolved).toBeDefined();
     expect(unresolved!.rootCause).toMatch(/source_version_not_authorized/);
-    expect(unresolved!.factualEvidence).toMatch(/no active standing publishing authorization/);
+    expect(unresolved!.factualEvidence).toMatch(/standing publishing authorization is not currently active/);
   });
 
   it("fails closed — old version-bound webpage artifact, unchanged by the two-path fix (evidence gate is independent of authorization path)", () => {
@@ -546,7 +546,7 @@ describe("all fifteen gap classifications are independently reachable", () => {
     const unresolved = audit.findings.find((f) => f.fact === "compliance_wrapper_and_sender" && f.classification === "source_path_unverified");
     expect(unresolved).toBeDefined();
     expect(unresolved!.rootCause).toMatch(/source_version_not_authorized/);
-    expect(unresolved!.factualEvidence).toMatch(/no active standing publishing authorization/);
+    expect(unresolved!.factualEvidence).toMatch(/standing publishing authorization is not currently active/);
   });
 
   it("compliance_wrapper_missing — same firm/locale, but WRONG source surface (a landing_page, not an article) resolves fail-closed, never 'documented'", () => {
@@ -947,5 +947,150 @@ describe("computeReleaseVerdict priority order", () => {
 
   it("zero findings is publish_now", () => {
     expect(computeReleaseVerdict([])).toBe("publish_now");
+  });
+});
+
+// ─── Release-authorization consistency: fact 1, fact 7, and existingPreflightGate
+// must never disagree about whether a version is release-authorized -- all
+// three read the SAME isVersionReleaseAuthorized() result, computed once by
+// resolveAndAuditReleaseGraph. Scenarios A-I from the correction spec. ──────
+
+describe("release-authorization consistency: fact 1, fact 7, and existingPreflightGate never disagree", () => {
+  const MISMATCHED_VERSION_ID = "v-mismatched-9999";
+
+  function authInput(overrides: {
+    approvedStatus?: ContentDeliverable["status"];
+    approvedVersionId?: string | null;
+    requiresIndividualReview?: boolean;
+    standingAuthorizationActive?: boolean;
+  }) {
+    return baseInput({
+      deliverable: makeDeliverable({
+        status: overrides.approvedStatus ?? "draft",
+        approved_version_id: overrides.approvedVersionId ?? null,
+      }),
+      currentVersion: makeVersion({ requires_individual_review: overrides.requiresIndividualReview ?? false }),
+      placement: makePlacement({ destination: "linkedin_article" }),
+      artifacts: [makeArtifact()],
+      standingAuthorizationActive: overrides.standingAuthorizationActive ?? false,
+    });
+  }
+
+  function assertConsistent(audit: ReturnType<typeof resolveAndAuditReleaseGraph>, expected: { authorized: boolean; kind: string }) {
+    const fact1 = audit.findings.find((f) => f.fact === "release_authorized_source_version" && f.classification === "source_path_unverified");
+    const fact7Unresolved = audit.findings.find((f) => f.fact === "compliance_wrapper_and_sender" && f.classification === "source_path_unverified");
+    const fact7Wrapper = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+
+    if (expected.authorized) {
+      expect(fact1).toBeUndefined();
+      expect(fact7Unresolved).toBeUndefined();
+      // fact 7 proceeds past the source-edge check to the DR-105 lookup
+      // itself (compliance_wrapper_missing, either sub-variant) rather than
+      // failing closed on authorization -- proof it treated this version as
+      // release-authorized, not merely that it didn't complain.
+      expect(fact7Wrapper).toBeDefined();
+      expect(audit.existingPreflightGate.reason ?? "").not.toMatch(/not release-authorized/);
+    } else {
+      expect(fact1).toBeDefined();
+      expect(fact1!.rootCause).toContain(expected.kind);
+      expect(fact7Unresolved).toBeDefined();
+      expect(fact7Unresolved!.rootCause).toContain(expected.kind);
+      expect(fact7Wrapper).toBeUndefined();
+      expect(audit.existingPreflightGate.mayPublish).toBe(false);
+      expect(audit.existingPreflightGate.reason).toMatch(/not release-authorized/);
+      expect(audit.existingPreflightGate.reason).toContain(expected.kind);
+    }
+  }
+
+  it("A. individual approval (requires_individual_review=false) -> all three agree: authorized", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      authInput({ approvedStatus: "approved", approvedVersionId: CURRENT_VERSION_ID, requiresIndividualReview: false, standingAuthorizationActive: false }),
+    );
+    assertConsistent(audit, { authorized: true, kind: "individually_approved" });
+  });
+
+  it("A. individual approval (requires_individual_review=true) -> all three agree: authorized (approval is unaffected by the review flag)", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      authInput({ approvedStatus: "approved", approvedVersionId: CURRENT_VERSION_ID, requiresIndividualReview: true, standingAuthorizationActive: false }),
+    );
+    assertConsistent(audit, { authorized: true, kind: "individually_approved" });
+  });
+
+  it("B. valid standing authorization (no individual approval, requires_individual_review=false) -> all three agree: authorized", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      authInput({ approvedStatus: "draft", approvedVersionId: null, requiresIndividualReview: false, standingAuthorizationActive: true }),
+    );
+    assertConsistent(audit, { authorized: true, kind: "standing_authorization" });
+  });
+
+  it("C. requires_individual_review=true blocks an otherwise-active standing authorization -> all three agree: blocked", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      authInput({ approvedStatus: "draft", approvedVersionId: null, requiresIndividualReview: true, standingAuthorizationActive: true }),
+    );
+    assertConsistent(audit, { authorized: false, kind: "blocked_requires_individual_review" });
+  });
+
+  it("D. individual approval overrides the need for the standing path even when requires_individual_review=true -> all three agree: authorized", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      authInput({ approvedStatus: "approved", approvedVersionId: CURRENT_VERSION_ID, requiresIndividualReview: true, standingAuthorizationActive: false }),
+    );
+    assertConsistent(audit, { authorized: true, kind: "individually_approved" });
+  });
+
+  it("E. stale approval (approved_version_id references another version), standing authorization inactive -> all three agree: blocked, never called approved", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      authInput({ approvedStatus: "approved", approvedVersionId: MISMATCHED_VERSION_ID, requiresIndividualReview: false, standingAuthorizationActive: false }),
+    );
+    assertConsistent(audit, { authorized: false, kind: "approved_version_mismatch" });
+  });
+
+  it("F. stale approval PLUS valid standing authorization -> all three agree: authorized through standing authorization, not individual approval", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      authInput({ approvedStatus: "approved", approvedVersionId: MISMATCHED_VERSION_ID, requiresIndividualReview: false, standingAuthorizationActive: true }),
+    );
+    assertConsistent(audit, { authorized: true, kind: "standing_authorization" });
+  });
+
+  it("G. inactive/revoked standing authorization, no individual approval on record -> all three agree: blocked", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      authInput({ approvedStatus: "draft", approvedVersionId: null, requiresIndividualReview: false, standingAuthorizationActive: false }),
+    );
+    assertConsistent(audit, { authorized: false, kind: "standing_authorization_inactive" });
+  });
+
+  it("H. authorized through either path, but the exact-version webpage artifact is missing -> authorization passes, the artifact/source-edge fact fails independently, release never reaches publish_now", () => {
+    const individuallyApprovedNoArtifact = resolveAndAuditReleaseGraph(
+      baseInput({
+        deliverable: makeDeliverable({ status: "approved", approved_version_id: CURRENT_VERSION_ID }),
+        currentVersion: makeVersion({ requires_individual_review: false }),
+        placement: makePlacement({ destination: "linkedin_article" }),
+        artifacts: [], // no webpage artifact for ANY version
+        standingAuthorizationActive: false,
+      }),
+    );
+    expect(
+      individuallyApprovedNoArtifact.findings.find((f) => f.fact === "release_authorized_source_version" && f.classification === "source_path_unverified"),
+    ).toBeUndefined();
+    const fact7a = individuallyApprovedNoArtifact.findings.find((f) => f.fact === "compliance_wrapper_and_sender" && f.classification === "source_path_unverified");
+    expect(fact7a).toBeDefined();
+    expect(fact7a!.rootCause).toMatch(/source_artifact_version_mismatch/);
+    expect(individuallyApprovedNoArtifact.verdict).not.toBe("publish_now");
+
+    const standingAuthorizedStaleArtifact = resolveAndAuditReleaseGraph(
+      baseInput({
+        deliverable: makeDeliverable({ status: "draft", approved_version_id: null }),
+        currentVersion: makeVersion({ requires_individual_review: false }),
+        placement: makePlacement({ destination: "linkedin_article" }),
+        artifacts: [makeArtifact({ version_id: MISMATCHED_VERSION_ID })], // bound to a DIFFERENT version
+        standingAuthorizationActive: true,
+      }),
+    );
+    expect(
+      standingAuthorizedStaleArtifact.findings.find((f) => f.fact === "release_authorized_source_version" && f.classification === "source_path_unverified"),
+    ).toBeUndefined();
+    const fact7b = standingAuthorizedStaleArtifact.findings.find((f) => f.fact === "compliance_wrapper_and_sender" && f.classification === "source_path_unverified");
+    expect(fact7b).toBeDefined();
+    expect(fact7b!.rootCause).toMatch(/source_artifact_version_mismatch/);
+    expect(standingAuthorizedStaleArtifact.verdict).not.toBe("publish_now");
   });
 });
