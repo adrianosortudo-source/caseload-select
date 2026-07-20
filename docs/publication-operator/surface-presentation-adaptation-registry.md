@@ -42,6 +42,31 @@ conditions have something concrete to point at.
 4. Record every field under `evidence_required` against the actual
    publication attempt.
 
+## Source-authorization eligibility (`immutable_release_authorized_version`)
+
+Every rule in this registry requires the source version to satisfy
+`source_approval_requirement: immutable_release_authorized_version`. A
+source version is eligible only when it is immutable and
+release-authorized through either:
+
+1. an individual lawyer approval; or
+2. an active standing publishing authorization that covers the current
+   version.
+
+**Exception:** when the version carries `requires_individual_review =
+true`, an active standing authorization is not sufficient and individual
+lawyer approval remains required, regardless of the firm's standing
+authorization state.
+
+This is the same two-path resolution `resolveReleaseVersion()` already
+performs for fact A of the Publication Resolution preflight (see
+`docs/publication-operator/publication-resolution-preflight-design-2026-07-19.md`
+§4, fact A) — this registry does not define a separate or looser
+authorization concept. Neither this registry nor any agent may approve
+substantive legal content on the firm's lawyer's behalf; both paths above
+still require the lawyer's own action, either an individual approval, or
+the lawyer's own decision to enable and maintain standing authorization.
+
 ## Rule: `drg_en_website_article_to_linkedin_article_lso_notice_v1`
 
 The only rule currently defined in this registry. Portuguese and every
@@ -54,7 +79,7 @@ firm: DRG Law Professional Corporation
 locale: en-CA
 source_surface: website_article
 destination_surface: linkedin_native_article
-source_approval_requirement: immutable_individually_approved_version
+source_approval_requirement: immutable_release_authorized_version
 allowed_output_changes:
   - linkedin_title_and_masthead_formatting
   - exact_destination_compliance_block
@@ -81,6 +106,22 @@ evidence_required:
   - actor_id
   - timestamp
 ```
+
+### `platform_link_formatting` scope
+
+`platform_link_formatting`, in `allowed_output_changes` above, permits
+exactly one thing: rendering an already-approved, existing link in the
+destination platform's required format (for example, LinkedIn's native
+link-preview or mention syntax for a URL that is already present in the
+approved source).
+
+It never permits: changing the URL itself; changing the destination the
+link points to; changing a CTA target; changing what the anchor text
+means; adding a link that was not in the approved source; removing a
+link the approved source requires; or substituting a plain website URL
+for a destination surface that requires the native LinkedIn Article URL
+specifically. Any of those is a substantive change and resolves
+`substantive_adaptation_requires_approval`, never `platform_link_formatting`.
 
 ### Provenance
 

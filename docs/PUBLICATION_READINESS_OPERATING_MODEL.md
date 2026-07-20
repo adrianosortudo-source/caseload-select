@@ -356,6 +356,22 @@ This section is doctrine only as of 2026-07-19: the manifest evaluator
 does not yet call a `resolve_surface_presentation_adaptation` step, and
 no code path reads the registry file above at runtime.
 
+The registry's own source-authorization eligibility bar
+(`immutable_release_authorized_version`) is the same two-path model this
+document already describes above under "Standing Publishing Authorization
+(2026-07-17)": a source version is eligible for a Surface-Presentation
+Adaptation only when it is immutable and release-authorized through an
+individual lawyer approval, or through an active standing authorization
+covering a version that is not flagged `requires_individual_review`. This
+is not a separate or looser authorization concept unique to surface
+adaptation; it is the identical bar `claim_placement_for_publish()`
+already applies. A registered adaptation rule's `platform_link_formatting`
+allowance is narrow in the same way: it may only re-render an
+already-approved, existing link in the destination platform's required
+format, never change the URL, destination, CTA target, or anchor
+meaning, and never add, remove, or substitute a link (see the registry's
+own scope note for the exact boundary).
+
 ## Registering a new artifact today (manual, no UI yet)
 
 There is no admin UI and no API route that writes to `publication_artifacts`
