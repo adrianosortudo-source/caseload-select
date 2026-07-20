@@ -141,7 +141,7 @@ export async function loadReleaseGraphAuditForPeriod(
     supabase.from("publication_artifacts").select("*").in("deliverable_id", deliverableIds),
     supabase.from("deliverable_comments").select("*").in("deliverable_id", deliverableIds),
     supabase.from("content_placements").select("*").in("deliverable_id", deliverableIds),
-    supabase.from("intake_firms").select("branding").eq("id", firmId).maybeSingle(),
+    supabase.from("intake_firms").select("branding, ghl_location_id").eq("id", firmId).maybeSingle(),
   ]);
 
   const versionById = new Map(((versions ?? []) as DeliverableVersion[]).map((v) => [v.id, v]));
@@ -165,6 +165,7 @@ export async function loadReleaseGraphAuditForPeriod(
   }
 
   const emailBranding = resolveEmailBranding((firm?.branding as FirmBranding | null) ?? null);
+  const firmGhlLocationId = (firm?.ghl_location_id as string | null) ?? null;
   const resolvedAt = new Date().toISOString();
 
   const audits: ReleaseGraphAudit[] = [];
@@ -200,6 +201,7 @@ export async function loadReleaseGraphAuditForPeriod(
           periodLifecycle,
           emailBranding,
           ctaResolution,
+          firmGhlLocationId,
           resolvedAt,
         }),
       );

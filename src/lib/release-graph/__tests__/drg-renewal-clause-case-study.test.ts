@@ -116,6 +116,11 @@ function baseAuditInput(overrides: Partial<ResolveReleaseGraphInput> = {}): Reso
     periodLifecycle: "enforced",
     emailBranding: null,
     ctaResolution: null,
+    // DRG already has a live GHL Voice/SMS integration (intake_firms.ghl_location_id
+    // is set for this firm per CLAUDE.md's Voice channel build-out) -- the
+    // realistic case for DRG specifically is "account connected, endpoint
+    // unverified," not "no account at all."
+    firmGhlLocationId: "drg-ghl-location-id",
     resolvedAt: RESOLVED_AT,
     ...overrides,
   };

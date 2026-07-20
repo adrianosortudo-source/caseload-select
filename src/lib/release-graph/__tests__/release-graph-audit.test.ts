@@ -211,6 +211,7 @@ function baseInput(overrides: Partial<ResolveReleaseGraphInput> = {}): ResolveRe
     periodLifecycle: "enforced",
     emailBranding: null,
     ctaResolution: null,
+    firmGhlLocationId: "loc_test_ghl_123",
     resolvedAt: RESOLVED_AT,
     ...overrides,
   };
@@ -333,11 +334,45 @@ describe("all fifteen gap classifications are independently reachable", () => {
     expect(classificationsOf(audit.findings)).toContain("preview_not_publish_faithful");
   });
 
-  it("compliance_wrapper_missing — linkedin_article destination, no DR-105 registry reader exists", () => {
+  it("compliance_wrapper_missing — linkedin_article, DR-105 rule IS documented for this firm/locale (system_improvement, not a content gap)", () => {
+    // makeDeliverable() defaults to DRG_FIRM_ID/en-CA, which matches the one
+    // real, documented registry rule.
     const audit = resolveAndAuditReleaseGraph(baseInput({ placement: makePlacement({ destination: "linkedin_article" }) }));
     const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
     expect(cw).toBeDefined();
     expect(cw!.releaseImpact).toBe("system_improvement");
+    expect(cw!.factualEvidence).toContain("drg_en_website_article_to_linkedin_article_lso_notice_v1");
+    expect(cw!.rootCause).toMatch(/runtime_lookup_not_implemented/);
+    expect(cw!.authorityRequired).toMatch(/Engineering work only/);
+  });
+
+  it("compliance_wrapper_missing — linkedin_article, NO DR-105 rule documented for this firm/locale (blocks_today, a real content gap)", () => {
+    const otherFirmDeliverable = makeDeliverable({ firm_id: "11111111-1111-1111-1111-111111111111", locale: "en-CA" });
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({ deliverable: otherFirmDeliverable, currentVersion: makeVersion({ firm_id: "11111111-1111-1111-1111-111111111111" }), placement: makePlacement({ destination: "linkedin_article" }) }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeDefined();
+    expect(cw!.releaseImpact).toBe("blocks_today");
+    expect(cw!.rootCause).toMatch(/wrapper_absent/);
+    expect(cw!.authorityRequired).toMatch(/lawyer sign-off/);
+    // Never conflate "no rule documented" with "no runtime reader exists" -- distinct root causes.
+    expect(cw!.rootCause).not.toMatch(/runtime_lookup_not_implemented/);
+  });
+
+  it("compliance_wrapper_missing does not cite a repository code search as evidence of the wrapper's own state", () => {
+    const documented = resolveAndAuditReleaseGraph(baseInput({ placement: makePlacement({ destination: "linkedin_article" }) }));
+    const absent = resolveAndAuditReleaseGraph(
+      baseInput({
+        deliverable: makeDeliverable({ firm_id: "22222222-2222-2222-2222-222222222222" }),
+        currentVersion: makeVersion({ firm_id: "22222222-2222-2222-2222-222222222222" }),
+        placement: makePlacement({ destination: "linkedin_article" }),
+      }),
+    );
+    for (const audit of [documented, absent]) {
+      const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing")!;
+      expect(cw.canonicalSourceConsulted).toBe("docs/publication-operator/surface-presentation-adaptation-registry.md");
+    }
   });
 
   it("compliance_wrapper_missing — email_delivery destination with no branding configured", () => {
@@ -350,13 +385,42 @@ describe("all fifteen gap classifications are independently reachable", () => {
     expect(classificationsOf(audit.findings)).toContain("channel_auth_missing");
   });
 
-  it("unsubscribe_endpoint_pending — email_delivery destination, always fires regardless of content completeness", () => {
+  it("unsubscribe_endpoint_pending — no delivery account connected at all for this firm", () => {
     const audit = resolveAndAuditReleaseGraph(
-      baseInput({ placement: makePlacement({ destination: "email_delivery" }), emailBranding: DRG_EMAIL_BRANDING }),
+      baseInput({ placement: makePlacement({ destination: "email_delivery" }), emailBranding: DRG_EMAIL_BRANDING, firmGhlLocationId: null }),
     );
-    expect(classificationsOf(audit.findings)).toContain("unsubscribe_endpoint_pending");
+    const f = audit.findings.find((x) => x.classification === "unsubscribe_endpoint_pending");
+    expect(f).toBeDefined();
+    expect(f!.releaseImpact).toBe("system_improvement");
+    expect(f!.canonicalSourceConsulted).toBe("intake_firms.ghl_location_id");
+    expect(f!.factualEvidence).toMatch(/ghl_location_id is null/);
     // channel_auth_missing must not ALSO fire for email -- unsubscribe_endpoint_pending is the more specific classification.
     expect(classificationsOf(audit.findings)).not.toContain("channel_auth_missing");
+  });
+
+  it("unsubscribe_endpoint_pending — delivery account connected, but no record confirms the endpoint (needs_human_confirmation, not a code-search conclusion)", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({ placement: makePlacement({ destination: "email_delivery" }), emailBranding: DRG_EMAIL_BRANDING, firmGhlLocationId: "loc_abc123" }),
+    );
+    const f = audit.findings.find((x) => x.classification === "unsubscribe_endpoint_pending");
+    expect(f).toBeDefined();
+    expect(f!.releaseImpact).toBe("needs_human_confirmation");
+    expect(f!.factualEvidence).toMatch(/ghl_location_id is set/);
+    expect(f!.factualEvidence).toMatch(/external to this repository/);
+  });
+
+  it("no unsubscribe/compliance-wrapper finding ever cites a repository-wide code search as its evidence source", () => {
+    const cases = [
+      resolveAndAuditReleaseGraph(baseInput({ placement: makePlacement({ destination: "email_delivery" }), emailBranding: DRG_EMAIL_BRANDING, firmGhlLocationId: null })),
+      resolveAndAuditReleaseGraph(baseInput({ placement: makePlacement({ destination: "email_delivery" }), emailBranding: DRG_EMAIL_BRANDING, firmGhlLocationId: "loc_abc123" })),
+      resolveAndAuditReleaseGraph(baseInput({ placement: makePlacement({ destination: "linkedin_article" }) })),
+    ];
+    for (const audit of cases) {
+      for (const f of audit.findings) {
+        expect(f.factualEvidence.toLowerCase()).not.toContain("grep");
+        expect(f.canonicalSourceConsulted).not.toBe("src/ (repository-wide search)");
+      }
+    }
   });
 
   it("publication_receipt_missing — placement marked published with no receipt on record", () => {

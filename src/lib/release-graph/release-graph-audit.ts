@@ -88,8 +88,36 @@ export interface ResolveReleaseGraphInput {
   emailBranding: EmailBranding | null;
   /** Cross-deliverable CTA-target resolution for a teaser/GBP post whose cta_target_path points elsewhere. Null when not applicable. */
   ctaResolution: CtaTargetResolution | null;
+  /**
+   * intake_firms.ghl_location_id for this firm, or null if unset. The only
+   * real, existing per-firm delivery-account signal this schema has today
+   * (used elsewhere for GHL Voice/SMS, not specifically for email) -- used
+   * by fact 7/unsubscribe resolution to distinguish "no delivery account is
+   * connected for this firm at all" from "an account is connected but this
+   * system holds no record of its unsubscribe-endpoint configuration."
+   * Never treated as proof that GHL email sending or its unsubscribe link
+   * is actually working -- GHL itself is external to this repository and
+   * this audit cannot verify its internal state.
+   */
+  firmGhlLocationId: string | null;
   resolvedAt: string;
 }
+
+/**
+ * Hand-maintained mirror of the rule(s) currently registered in
+ * docs/publication-operator/surface-presentation-adaptation-registry.md.
+ * This exists ONLY so this audit can distinguish "no DR-105 rule has ever
+ * been authored for this firm/locale/surface tuple" (a real content/
+ * doctrine gap) from "a rule IS documented, but no runtime reader applies
+ * or binds it to a specific release" (a system-enforcement gap) -- it is
+ * NOT the runtime registry reader preflight design §10 item 4 describes,
+ * and must be updated by hand, in the same PR, whenever the registry file
+ * changes. If this table and the registry file drift, this audit will
+ * report a stale answer.
+ */
+const KNOWN_DR105_RULES: Array<{ firmId: string; locale: string; ruleId: string }> = [
+  { firmId: DRG_FIRM_ID, locale: "en-CA", ruleId: "drg_en_website_article_to_linkedin_article_lso_notice_v1" },
+];
 
 function finding(
   classification: GapClassification,
@@ -452,19 +480,50 @@ function resolveFact7ComplianceWrapper(
   input: ResolveReleaseGraphInput,
   canonicalSource: string,
 ): ReleaseGraphFinding[] {
-  const { placement, emailBranding } = input;
+  const { deliverable, placement, emailBranding } = input;
 
   if (placement.destination === "linkedin_article") {
+    const locale = deliverable.locale ?? "en-CA";
+    const matchingRule = KNOWN_DR105_RULES.find((r) => r.firmId === deliverable.firm_id && r.locale === locale);
+
+    if (!matchingRule) {
+      // Wrapper absent: no rule has ever been authored and reviewed for
+      // this exact firm/locale tuple, documented or otherwise. This is a
+      // real content/doctrine gap for THIS release, never a system-reader
+      // problem -- authoring a new rule requires a human decision this
+      // audit cannot make or infer.
+      return [
+        finding("compliance_wrapper_missing", "compliance_wrapper_and_sender", "No DR-105 rule documented for this firm/locale", {
+          releaseImpact: "blocks_today",
+          factualEvidence: `No entry in docs/publication-operator/surface-presentation-adaptation-registry.md (or its hand-maintained mirror in this audit) matches (firm=${deliverable.firm_id}, locale=${locale}). Distinct from a runtime-reader gap: even a human manually consulting the registry today would find nothing for this exact tuple.`,
+          canonicalSourceConsulted: "docs/publication-operator/surface-presentation-adaptation-registry.md",
+          immediateDisposition: "Hold this destination for this firm/locale. Do not draft, paraphrase, or copy another firm's wrapper wording as a substitute.",
+          rootCause: "wrapper_absent -- no DR-105 surface-adaptation rule has ever been authored and reviewed for this exact firm/locale/surface tuple.",
+          proposedDurableSolution: "Operator and the firm's lawyer author and review a new DR-105 rule for this tuple, at the same review bar as the one existing rule, before this destination is attempted for this firm/locale.",
+          authorityRequired: "Operator + firm's lawyer sign-off on the exact wrapper wording -- a real doctrine decision, not an engineering task.",
+          reusablePreflightRule: "Check the registry (or its mirror) for a matching (firm, locale) entry BEFORE citing the runtime-reader gap -- a missing rule and a missing reader are different facts with different owners.",
+        }),
+      ];
+    }
+
+    // A rule IS documented for this exact tuple (wrapper not absent), but
+    // no code path in this repository reads the registry file or binds a
+    // matched rule to a specific release/receipt at runtime -- so it has
+    // never been, and cannot currently be, applied/verified for any real
+    // release ("not bound"). Both facts stem from the same root cause
+    // (preflight design §4.1a's resolve_surface_presentation_adaptation
+    // step was designed but never implemented), so they are reported
+    // together rather than as two separate findings that could drift.
     return [
-      finding("compliance_wrapper_missing", "compliance_wrapper_and_sender", "No DR-105 registry reader exists", {
+      finding("compliance_wrapper_missing", "compliance_wrapper_and_sender", "Rule documented, but not runtime-bound to any release", {
         releaseImpact: "system_improvement",
-        factualEvidence: "docs/publication-operator/surface-presentation-adaptation-registry.md is documentation only; no code path in this repository reads it at runtime (confirmed by direct inspection, 2026-07-19/20).",
+        factualEvidence: `A matching DR-105 rule IS documented for (firm=${deliverable.firm_id}, locale=${locale}): rule_id=${matchingRule.ruleId}. No code path in this repository reads that file or binds it to a specific release/receipt at runtime (confirmed by direct inspection) -- so the rule, though it exists, has never been applied/bound to any actual release.`,
         canonicalSourceConsulted: "docs/publication-operator/surface-presentation-adaptation-registry.md",
-        immediateDisposition: "Hold this destination for every deliverable until the registry has a runtime reader -- never draft or improvise the compliance wrapper at publish time.",
-        rootCause: "The DR-105 registry lookup step (resolve_surface_presentation_adaptation) was designed in preflight design §4.1a but never implemented.",
-        proposedDurableSolution: "Implement the registry-lookup step as a manifest-loader function, exactly as preflight design §10 item 4 already specifies; wire it into this audit's fact 7 once it exists.",
-        authorityRequired: "Engineering work, reviewed at the same bar as the one existing registry rule.",
-        reusablePreflightRule: "compliance_wrapper_missing is a system_improvement finding for every linkedin_article destination until a registry reader exists -- never a per-deliverable content gap.",
+        immediateDisposition: "Hold automated publication for this destination; a human may still manually apply the documented rule text today if publishing by hand -- never draft new wording at publish time even so.",
+        rootCause: "runtime_lookup_not_implemented -- the resolve_surface_presentation_adaptation step (preflight design §4.1a) was designed but never implemented, so no release can ever reach a 'bound' state for this rule today, regardless of content readiness.",
+        proposedDurableSolution: "Implement the registry-lookup step as a manifest-loader function, exactly as preflight design §10 item 4 already specifies, and record its match as durable evidence (e.g. on the receipt) so 'bound' becomes a real, checkable state -- no further doctrine work is needed for this specific tuple, only engineering.",
+        authorityRequired: "Engineering work only -- the wrapper wording itself is already reviewed and approved for this tuple; no further lawyer/operator content decision is needed here.",
+        reusablePreflightRule: "compliance_wrapper_missing for linkedin_article must name the matched rule_id when one exists -- an unconditional identical message for every linkedin_article placement conflates a real doctrine gap with a pure engineering gap and hides which authority is actually needed.",
       }),
     ];
   }
@@ -503,29 +562,52 @@ function resolveFact7ComplianceWrapper(
 
 /**
  * The DRG Law Minute case study, formalized: an email deliverable can have
- * a fully approved/in-review HTML artifact and still not be send-ready,
- * because no delivery platform in this codebase has ever supplied a
- * functioning unsubscribe endpoint (confirmed: zero "unsubscribe"
- * references exist anywhere in src/, as of this audit's authoring). This
- * is checked and reported separately from compliance_wrapper_missing --
- * the legal-wrapper TEXT and the unsubscribe MECHANISM are two different
+ * a fully approved/in-review HTML artifact and still not be send-ready
+ * merely because a durable unsubscribe-endpoint record cannot be found.
+ *
+ * This resolves from the firm's actual delivery-configuration data
+ * (intake_firms.ghl_location_id), never from a search of this repository's
+ * own source code. A repository-wide code search can only ever prove facts
+ * about this codebase; the actual delivery platform (GHL, or any other) is
+ * external to this repository, so its real unsubscribe-endpoint state is
+ * outside what a code search can establish either way. Absence of a
+ * verifying RECORD is the finding; it is never presented as proof the
+ * external platform itself lacks the capability.
+ *
+ * Checked and reported separately from compliance_wrapper_missing -- the
+ * legal-wrapper TEXT and the unsubscribe MECHANISM are two different
  * facts, and conflating them would let a future fix to one silently read
  * as having fixed both.
  */
 function resolveUnsubscribeEndpoint(input: ResolveReleaseGraphInput, canonicalSource: string): ReleaseGraphFinding[] {
-  const { placement } = input;
+  const { placement, firmGhlLocationId } = input;
   if (placement.destination !== "email_delivery") return [];
 
+  if (!firmGhlLocationId) {
+    return [
+      finding("unsubscribe_endpoint_pending", "channel_authorization_availability", "No delivery-platform account is connected for this firm", {
+        releaseImpact: "system_improvement",
+        factualEvidence: "intake_firms.ghl_location_id is null for this firm -- no GHL (or other) delivery-platform account is connected at all, so no unsubscribe-endpoint record could exist for it.",
+        canonicalSourceConsulted: "intake_firms.ghl_location_id",
+        immediateDisposition: "Hard-block any send for this destination. No override.",
+        rootCause: "No delivery-platform account has been connected for this firm yet.",
+        proposedDurableSolution: "Operator connects a delivery-platform account for this firm (GHL location or otherwise), then a real unsubscribe-endpoint record can be established and checked.",
+        authorityRequired: "Operator (account connection) -- resolvable without new engineering once an account exists, but connecting one is an external platform step.",
+        reusablePreflightRule: "Resolve unsubscribe_endpoint_pending from the firm's own delivery-configuration record (e.g. intake_firms.ghl_location_id), never from a repository-wide code search -- the two prove different things, and the platform itself is external to this repository.",
+      }),
+    ];
+  }
+
   return [
-    finding("unsubscribe_endpoint_pending", "channel_authorization_availability", "No delivery platform supplies a functioning unsubscribe endpoint", {
-      releaseImpact: "system_improvement",
-      factualEvidence: "No code path in this repository reads, writes, or references an unsubscribe endpoint for any delivery platform (grep-confirmed against src/).",
-      canonicalSourceConsulted: "src/ (repository-wide search)",
-      immediateDisposition: "Hard-block any send for this destination, regardless of how complete the email's own copy is. No override.",
-      rootCause: "No email delivery-platform integration (GHL or otherwise) has been wired into this codebase yet.",
-      proposedDurableSolution: "Integrate a real delivery platform that supplies a functioning, verifiable unsubscribe endpoint, and wire a check for it into this fact before any send path is enabled.",
-      authorityRequired: "External platform/credential decision plus engineering integration -- not resolvable by an operator alone.",
-      reusablePreflightRule: "unsubscribe_endpoint_pending is independent of compliance_wrapper_missing -- registering canonical legal-wrapper text must never be read as also closing this gap.",
+    finding("unsubscribe_endpoint_pending", "channel_authorization_availability", "Delivery account connected, but no record confirms a working unsubscribe endpoint", {
+      releaseImpact: "needs_human_confirmation",
+      factualEvidence: `intake_firms.ghl_location_id is set for this firm (a GHL location is connected, used today for Voice/SMS), but no record anywhere in this system attests that this firm's email sends carry a functioning, verified unsubscribe endpoint. Whether GHL itself already provides one is unknown to this audit -- GHL is external to this repository and was not queried.`,
+      canonicalSourceConsulted: "intake_firms.ghl_location_id",
+      immediateDisposition: "Hard-block any automated send for this destination until an operator confirms directly with the delivery platform. No override based on this audit alone.",
+      rootCause: "This system has no durable record-keeping for delivery-platform-level configuration facts like unsubscribe-endpoint status -- the fact may already be true externally and simply unrecorded here.",
+      proposedDurableSolution: "Operator verifies directly in GHL (or the connected platform) whether a functioning unsubscribe endpoint exists for this firm's sends, then this system gains a durable way to record that confirmation (e.g. a delivery-configuration record) so future audits do not have to re-ask a human every time.",
+      authorityRequired: "Operator verification today; a durable recording mechanism is a separate, future engineering task.",
+      reusablePreflightRule: "A connected delivery-platform account is evidence a check is POSSIBLE, never evidence the check has been DONE -- unsubscribe_endpoint_pending must still fire until an actual confirmation is recorded, but the reason and the next action differ from the no-account-connected case.",
     }),
   ];
 }
