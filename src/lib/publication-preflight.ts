@@ -26,22 +26,28 @@
  * a claim before acting; a mayPublish=true report on its own is never
  * sufficient.
  *
- * Optionally accepts a per-deliverable canonical release-authorization
- * result (release-authorization.ts's isVersionReleaseAuthorized()) so a
- * caller that already resolved the two-path authorization bar can have this
- * function defer to it instead of this function's own, narrower,
- * individual-approval-only default check. Both real, non-test callers of
- * this function -- release-graph-audit.ts and, as of the §13.2g correction,
+ * Requires a per-deliverable canonical release-authorization result
+ * (release-authorization.ts's isVersionReleaseAuthorized()) to ever report
+ * mayPublish=true. There is no individual-approval-only fallback: when a
+ * caller has no canonical result for a deliverable (an omitted
+ * `releaseAuthorizationByDeliverableId` map, or a map with no entry for
+ * that deliverable id -- e.g. because its current-version metadata could
+ * not be resolved), this function returns mayPublish=false with the
+ * explicit, machine-readable `reasonCode: "release_authorization_context_unavailable"`
+ * rather than silently re-deriving authorization from
+ * status/approved_version_id/current_version_id itself. A prior version of
+ * this function DID have such a fallback; a re-audit (2026-07-21) rejected
+ * it -- two callers of one function that can each mean something different
+ * by "authorized," distinguished only by whether an optional argument was
+ * remembered, is not a safe design, even though that fallback always failed
+ * closed. See reportOnePlacement's own doc comment and
+ * docs/publication-operator/publishing-agent-release-resolution-requirements-2026-07-20.md
+ * §13.2f/§13.2g/§13.9 for the full history of this correction. Both real,
+ * non-test callers -- release-graph-audit.ts and
  * publication-preflight-loader.ts (the live /publication-preflight route)
- * -- now supply it; the individual-approval-only default exists only for
- * backward compatibility with any caller that genuinely cannot resolve
- * standing-authorization state, and is not exercised by any live route
- * today. NOTE: /claim never calls this function at all -- it enforces
- * authorization solely and correctly via claim_placement_for_publish()
- * directly (see publication-placement-claims.ts) and was never affected by
- * either version of this default. See reportOnePlacement's own doc comment
- * and docs/publication-operator/publishing-agent-release-resolution-requirements-2026-07-20.md
- * §13.2f/§13.2g for the full history of this correction.
+ * -- always supply a canonical result today. NOTE: /claim never calls this
+ * function at all -- it enforces authorization solely and correctly via
+ * claim_placement_for_publish() directly (see publication-placement-claims.ts).
  */
 
 import type {
@@ -52,6 +58,17 @@ import type {
 } from "@/lib/types";
 import type { PeriodLifecycle } from "@/lib/publication-readiness";
 import type { ReleaseAuthorizationResult } from "@/lib/release-authorization";
+
+/**
+ * Machine-readable codes for a subset of mayPublish=false reasons that
+ * callers may need to branch on programmatically, not just display. Not
+ * exhaustive -- most reasons remain prose-only in `reason` (version drift,
+ * unresolved comments, placement lifecycle state, etc., none of which any
+ * caller currently needs to distinguish programmatically). Extend this
+ * union, narrowly, only when a real caller needs to branch on a specific
+ * reason rather than merely display it.
+ */
+export type PreflightMayNotPublishReasonCode = "release_authorization_context_unavailable";
 
 export interface PreflightPlacementReport {
   placementId: string;
@@ -74,6 +91,8 @@ export interface PreflightPlacementReport {
   } | null;
   mayPublish: boolean;
   reason: string | null;
+  /** Non-null ONLY for the specific, currently-narrow set of reasons a caller may need to branch on programmatically -- see PreflightMayNotPublishReasonCode. Null for every other reason (including mayPublish=true), which remain prose-only in `reason`. */
+  reasonCode: PreflightMayNotPublishReasonCode | null;
 }
 
 export interface PreflightPeriodReport {
@@ -105,35 +124,35 @@ function reportOnePlacement(input: {
   /**
    * The canonical two-path release-authorization result for this exact
    * deliverable/version, from isVersionReleaseAuthorized()
-   * (release-authorization.ts) -- OPTIONAL and backward-compatible.
+   * (release-authorization.ts) -- OPTIONAL, but there is no fallback
+   * interpretation when it is absent (see below).
    *
    * When a caller supplies this, it is used AS-IS: this function never
    * re-derives status/approved_version_id/current_version_id equality
-   * itself when a canonical result is present. Both live, non-test callers
-   * supply it as of the §13.2g correction:
+   * itself. Both live, non-test callers supply it today:
    *   - release-graph-audit.ts computes it once per audit for fact 1/fact 7
    *     and passes the same result here so all three consumers agree.
    *   - publication-preflight-loader.ts (the live /publication-preflight
    *     route) computes it once per deliverable, reusing one
-   *     getStandingAuthorizationState() read per firm -- an independent
-   *     adversarial audit (2026-07-21) confirmed this route was previously
-   *     the one real production surface silently using the narrower
-   *     individual-approval-only default below, which could falsely report
-   *     a standing-authorized release as blocked; this correction closes
-   *     that gap.
+   *     getStandingAuthorizationState() read per firm.
    * publication-placement-claims.ts (the live /claim route) does NOT call
-   * this function at all -- it was never affected by either default, and
-   * must never be described as such (a documentation error corrected the
-   * same day this comment was updated).
+   * this function at all -- it enforces authorization solely via
+   * claim_placement_for_publish() and was never affected by anything below.
    *
-   * When omitted -- today, exercised only by publication-preflight.test.ts,
-   * exercising this function's own degrade-gracefully contract for a
-   * hypothetical future caller that cannot resolve standing-authorization
-   * state -- this function falls back to its own original
-   * individual-approval-only check, UNCHANGED, preserving the exact reason
-   * strings that test file already locks in. That fallback still fails
-   * closed (mayPublish is never true when it would not otherwise be), so
-   * omitting this parameter is safe, just narrower than the canonical rule.
+   * When omitted -- an omitted releaseAuthorizationByDeliverableId map on
+   * buildPreflightReport's own input, or a map with no entry for this
+   * deliverable id (e.g. because its current-version metadata could not be
+   * resolved) -- this function does NOT fall back to re-deriving
+   * authorization from status/approved_version_id/current_version_id
+   * itself. It returns mayPublish=false with the explicit, machine-readable
+   * reasonCode "release_authorization_context_unavailable". A prior version
+   * of this function had exactly such a fallback; a re-audit (2026-07-21)
+   * rejected it as unsafe DESIGN (never as an authorization bypass -- the
+   * fallback always failed closed) precisely because one function silently
+   * meant two different things by "authorized" depending on whether a
+   * caller remembered an optional argument. See
+   * docs/publication-operator/publishing-agent-release-resolution-requirements-2026-07-20.md
+   * §13.9 for the full correction.
    */
   releaseAuthorization?: ReleaseAuthorizationResult;
 }): PreflightPlacementReport {
@@ -161,6 +180,10 @@ function reportOnePlacement(input: {
           externalPostId: currentReceipt.external_post_id,
         }
       : null,
+    // Every branch below returns mayPublish=true or a prose-only reason
+    // EXCEPT the one explicit release_authorization_context_unavailable
+    // branch, which overrides this default -- see that branch for why.
+    reasonCode: null as PreflightMayNotPublishReasonCode | null,
   };
 
   if (periodLifecycle !== "enforced") {
@@ -173,31 +196,31 @@ function reportOnePlacement(input: {
           : "this period has not yet been activated for enforcement (setup required)",
     };
   }
-  if (releaseAuthorization) {
-    if (!releaseAuthorization.authorized) {
-      return {
-        ...base,
-        mayPublish: false,
-        reason: `not release-authorized (${releaseAuthorization.kind}): ${releaseAuthorization.reason}`,
-      };
-    }
-    // Authorized through either canonical path -- fall through to the
-    // readiness/comments/lifecycle/receipt checks below, same as before.
-  } else {
-    // Backward-compatible default for every caller that has not supplied
-    // the canonical two-path result: the original individual-approval-only
-    // check, unchanged.
-    if (deliverable.status !== "approved") {
-      return { ...base, mayPublish: false, reason: `deliverable status is "${deliverable.status}", not approved` };
-    }
-    if (deliverable.approved_version_id !== deliverable.current_version_id) {
-      return {
-        ...base,
-        mayPublish: false,
-        reason: "approved_version_id does not match current_version_id (version drift)",
-      };
-    }
+  // No fallback interpretation of "authorized" when the canonical result is
+  // absent -- fail closed EXPLICITLY, with a machine-readable code, rather
+  // than silently re-deriving a narrower authorization rule from
+  // status/approved_version_id/current_version_id. Covers every cause of
+  // absence identically: an omitted releaseAuthorizationByDeliverableId map
+  // on buildPreflightReport's own input, or a map that simply has no entry
+  // for this deliverable id (including because the caller could not
+  // resolve this deliverable's current-version metadata at all).
+  if (!releaseAuthorization) {
+    return {
+      ...base,
+      mayPublish: false,
+      reason: `release_authorization_context_unavailable: no canonical release-authorization result was supplied for this deliverable's current version (missing releaseAuthorizationByDeliverableId map, or no entry for deliverable id ${deliverable.id}). This is an explicit, fail-closed stop -- never a silent fallback to a narrower authorization interpretation.`,
+      reasonCode: "release_authorization_context_unavailable",
+    };
   }
+  if (!releaseAuthorization.authorized) {
+    return {
+      ...base,
+      mayPublish: false,
+      reason: `not release-authorized (${releaseAuthorization.kind}): ${releaseAuthorization.reason}`,
+    };
+  }
+  // Authorized through either canonical path -- fall through to the
+  // readiness/comments/lifecycle/receipt checks below.
   if (!deliverableReady) {
     return { ...base, mayPublish: false, reason: "deliverable fails one or more publication readiness checks" };
   }

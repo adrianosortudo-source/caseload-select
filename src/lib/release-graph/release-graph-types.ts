@@ -7,11 +7,17 @@
  * see release-graph-audit.ts's doc comment for exactly what is reused vs.
  * new). For every proposed release (one deliverable version × one intended
  * destination placement) this stage resolves and records ten facts and
- * classifies every gap found into one of fifteen precise categories —
- * never a single generic "blocked."
+ * classifies every gap found into one of eighteen precise categories —
+ * never a single generic "blocked." (Originally fifteen; three more were
+ * added 2026-07-21 under fact 8, `channel_authorization_availability`, for
+ * the exact-destination-identity gate -- see ../destination-identity.ts and
+ * this file's own GapClassification doc comment.)
  *
  * This module is audit-only. It creates no placement, claim, receipt, or
- * artifact row; it writes nothing anywhere; it calls no external API. See
+ * artifact row; it writes nothing anywhere; it calls no external API. The
+ * exact-destination-identity gate it composes with (../destination-identity.ts)
+ * likewise never calls an external API -- it only compares identities a
+ * caller supplies. See
  * docs/publication-operator/publishing-agent-release-resolution-requirements-2026-07-20.md
  * §13 for the full specification this module implements.
  */
@@ -29,7 +35,18 @@ export type ReleaseGraphFact =
   | "preview_artifact_current_and_faithful"
   | "publication_evidence_receipt";
 
-/** The fifteen gap classifications. Exhaustive -- do not add a sixteenth without updating the addendum. */
+/**
+ * The eighteen gap classifications. Exhaustive -- do not add a nineteenth
+ * without updating the addendum. Originally fifteen; three more
+ * (`destination_identity_unresolved`, `external_history_unavailable`,
+ * `external_verification_target_mismatch`) were added 2026-07-21 as part of
+ * the exact-destination-identity calibration -- see
+ * docs/publication-operator/publishing-agent-release-resolution-requirements-2026-07-20.md
+ * §13.8. All three are reported under fact 8
+ * (`channel_authorization_availability`), the same fact
+ * `channel_auth_missing` and `unsubscribe_endpoint_pending` already use for
+ * distinct, independently-reachable classifications.
+ */
 export type GapClassification =
   | "content_absent"
   | "source_path_unverified"
@@ -45,7 +62,10 @@ export type GapClassification =
   | "channel_auth_missing"
   | "unsubscribe_endpoint_pending"
   | "publication_receipt_missing"
-  | "ambiguous_external_state";
+  | "ambiguous_external_state"
+  | "destination_identity_unresolved"
+  | "external_history_unavailable"
+  | "external_verification_target_mismatch";
 
 /**
  * Website article/homepage media must be textless (headline rendered live
@@ -92,7 +112,7 @@ export type ReleaseImpact =
  * honestly must not report the finding at all.
  */
 export interface ReleaseGraphFinding {
-  /** Which of the fifteen classifications this finding is. */
+  /** Which of the eighteen classifications this finding is. */
   classification: GapClassification;
   /** Which of the ten facts this finding was found while resolving. */
   fact: ReleaseGraphFact;

@@ -108,9 +108,20 @@ export async function loadPublicationPreflightForPeriod(
   const standingAuthorizationActive = standingAuthorization?.active ?? false;
   const releaseAuthorizationByDeliverableId: Record<string, ReleaseAuthorizationResult> = {};
   for (const deliverable of rows) {
-    if (!deliverable.current_version_id) continue; // no version to evaluate -- buildPreflightReport's own checks (deliverableReady, etc.) already cover this deliverable-shaped gap without an authorization opinion.
+    // Two distinct ways this deliverable's current-version metadata can be
+    // unavailable: no current_version_id at all, or one that is set but
+    // whose deliverable_versions row failed to load (a data-integrity
+    // anomaly this loader's queries do not otherwise expect). Both
+    // deliberately leave this deliverable OUT of the map entirely, rather
+    // than inventing a synthetic ReleaseAuthorizationResult for either --
+    // buildPreflightReport's reportOnePlacement has no fallback
+    // interpretation for a missing map entry: it fails closed with the
+    // explicit, machine-readable reasonCode
+    // "release_authorization_context_unavailable" on its own, for exactly
+    // this reason, so there is nothing for this loader to construct here.
+    if (!deliverable.current_version_id) continue;
     const versionRequiresIndividualReview = requiresIndividualReviewByVersionId.get(deliverable.current_version_id);
-    if (versionRequiresIndividualReview === undefined) continue; // the version row failed to load (should not happen for a live current_version_id) -- fail closed by omission, never guess.
+    if (versionRequiresIndividualReview === undefined) continue;
     releaseAuthorizationByDeliverableId[deliverable.id] = isVersionReleaseAuthorized({
       deliverableStatus: deliverable.status,
       approvedVersionId: deliverable.approved_version_id,

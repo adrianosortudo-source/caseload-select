@@ -8,6 +8,8 @@ import {
   DRG_FIRM_ID,
   type ResolveReleaseGraphInput,
   type CtaTargetResolution,
+  type ConfiguredDestinationIdentity,
+  type ObservedExternalIdentity,
 } from "../release-graph-audit";
 import type { GapClassification, ReleaseGraphFinding } from "../release-graph-types";
 import type {
@@ -259,19 +261,20 @@ describe("every ReleaseGraphFinding carries the full structured output, never a 
 
 // ─── The 15 classifications, each independently reachable ──────────────────
 
-describe("all fifteen gap classifications are independently reachable", () => {
+describe("all eighteen gap classifications are independently reachable", () => {
   it("content_absent — no body content", () => {
     const audit = resolveAndAuditReleaseGraph(baseInput({ currentVersion: makeVersion({ body_html: null }) }));
     expect(classificationsOf(audit.findings)).toContain("content_absent");
     expect(audit.verdict).toBe("hold");
   });
 
-  it("content_absent — no current version at all -> existingPreflightGate uses canonical wording, not the legacy fallback's vocabulary (regression: an independent audit found this reverted to legacy phrasing)", () => {
+  it("content_absent — no current version at all -> existingPreflightGate reports release_authorization_context_unavailable, fails closed explicitly, never a legacy status/version-drift message", () => {
     const audit = resolveAndAuditReleaseGraph(baseInput({ currentVersion: null }));
     expect(classificationsOf(audit.findings)).toContain("content_absent");
     expect(audit.existingPreflightGate.mayPublish).toBe(false);
-    expect(audit.existingPreflightGate.reason).toMatch(/not release-authorized/);
-    expect(audit.existingPreflightGate.reason).toMatch(/no current version exists/);
+    expect(audit.existingPreflightGate.reason).toMatch(/^release_authorization_context_unavailable:/);
+    expect(audit.existingPreflightGate.reason).not.toMatch(/not approved"/);
+    expect(audit.existingPreflightGate.reason).not.toMatch(/version drift/);
   });
 
   it("source_path_unverified — approved_version_id drifted from current_version_id", () => {
@@ -409,7 +412,7 @@ describe("all fifteen gap classifications are independently reachable", () => {
     const unresolved = audit.findings.find((f) => f.classification === "source_path_unverified");
     expect(unresolved).toBeDefined();
     expect(unresolved!.rootCause).toMatch(/source_artifact_version_mismatch/);
-    expect(unresolved!.factualEvidence).toMatch(/different \(older\) version|belongs to a different/);
+    expect(unresolved!.factualEvidence).toMatch(/an older version|belonging to a different/);
     expect(unresolved!.canonicalSourceConsulted).toBe("publication_artifacts");
   });
 
@@ -431,6 +434,41 @@ describe("all fifteen gap classifications are independently reachable", () => {
     expect(unresolved!.rootCause).toMatch(/source_artifact_version_mismatch/);
     expect(unresolved!.factualEvidence).toMatch(/locale/i);
     expect(unresolved!.canonicalSourceConsulted).toBe("publication_artifacts");
+  });
+
+  it("compliance_wrapper_missing — website placement exists, bound artifact matches version AND locale but belongs to a DIFFERENT firm -> source_path_unverified, never 'documented' (regression: the pure audit must enforce firm_id itself, not rely on database-level integrity as a substitute)", () => {
+    const otherFirmId = "22222222-2222-2222-2222-222222222222";
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        placement: makePlacement({ destination: "linkedin_article" }),
+        // Version and locale match exactly, but the artifact belongs to a
+        // DIFFERENT firm entirely -- must never be read as this release's
+        // source edge, even though version_id and locale both match.
+        artifacts: [makeArtifact({ version_id: CURRENT_VERSION_ID, locale: "en-CA", firm_id: otherFirmId })],
+      }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeUndefined();
+    const unresolved = audit.findings.find((f) => f.classification === "source_path_unverified");
+    expect(unresolved).toBeDefined();
+    expect(unresolved!.rootCause).toMatch(/source_artifact_version_mismatch/);
+    expect(unresolved!.factualEvidence).toMatch(/firm/i);
+    expect(unresolved!.canonicalSourceConsulted).toBe("publication_artifacts");
+  });
+
+  it("compliance_wrapper_missing — bound artifact matches firm_id, version, AND locale exactly -> source edge resolves, no source_path_unverified finding (exact-match acceptance case)", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        placement: makePlacement({ destination: "linkedin_article" }),
+        artifacts: [makeArtifact({ version_id: CURRENT_VERSION_ID, locale: "en-CA", firm_id: DRG_FIRM_ID })],
+      }),
+    );
+    const unresolved = audit.findings.find(
+      (f) => f.fact === "compliance_wrapper_and_sender" && f.classification === "source_path_unverified",
+    );
+    expect(unresolved).toBeUndefined();
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeDefined();
   });
 
   it("compliance_wrapper_missing — website placement + version-bound artifact exist, but the current version satisfies NEITHER release-authorization path -> fail closed", () => {
@@ -760,6 +798,107 @@ describe("all fifteen gap classifications are independently reachable", () => {
     const ambiguous = audit.findings.find((f) => f.classification === "ambiguous_external_state");
     expect(ambiguous).toBeDefined();
     expect(ambiguous!.rootCause).toMatch(/failed verification/);
+  });
+
+  it("destination_identity_unresolved — a linkedin_post placement with no configured destination identity (today's default for every caller), no substitute lookup", () => {
+    const audit = resolveAndAuditReleaseGraph(baseInput({ placement: makePlacement({ destination: "linkedin_post" }) }));
+    const f = audit.findings.find((x) => x.classification === "destination_identity_unresolved");
+    expect(f).toBeDefined();
+    expect(f!.fact).toBe("channel_authorization_availability");
+    expect(f!.releaseImpact).toBe("system_improvement");
+    expect(f!.factualEvidence).toMatch(/No destination identity is configured/);
+    // channel_auth_missing (a distinct, independent gap) still fires alongside it -- neither suppresses the other.
+    expect(classificationsOf(audit.findings)).toContain("channel_auth_missing");
+  });
+
+  it("destination_identity_unresolved — a google_business_profile placement with no configured destination identity", () => {
+    const audit = resolveAndAuditReleaseGraph(baseInput({ placement: makePlacement({ destination: "google_business_profile" }) }));
+    expect(classificationsOf(audit.findings)).toContain("destination_identity_unresolved");
+  });
+
+  it("destination_identity_unresolved never fires for firm_website or email_delivery -- this gate is scoped to genuinely external platforms only", () => {
+    const website = resolveAndAuditReleaseGraph(baseInput());
+    const email = resolveAndAuditReleaseGraph(baseInput({ placement: makePlacement({ destination: "email_delivery" }) }));
+    expect(classificationsOf(website.findings)).not.toContain("destination_identity_unresolved");
+    expect(classificationsOf(email.findings)).not.toContain("destination_identity_unresolved");
+  });
+
+  it("external_history_unavailable — destination identity IS configured and active, but no authorized manager/API history surface exists, not 'unpublished'", () => {
+    const configuredIdentity: ConfiguredDestinationIdentity = {
+      firmId: DRG_FIRM_ID,
+      platform: "google_business_profile",
+      accountOrLocationId: "locations/1234567890",
+      destinationSurface: "google_business_profile_location",
+      status: "active",
+      hasAuthorizedHistoryAccess: false,
+    };
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({ placement: makePlacement({ destination: "google_business_profile" }), configuredDestinationIdentity: configuredIdentity }),
+    );
+    const f = audit.findings.find((x) => x.classification === "external_history_unavailable");
+    expect(f).toBeDefined();
+    expect(f!.releaseImpact).toBe("system_improvement");
+    expect(classificationsOf(audit.findings)).not.toContain("destination_identity_unresolved");
+    expect(f!.summary.toLowerCase()).not.toContain("unpublished");
+  });
+
+  it("external_verification_target_mismatch — LinkedIn queried against a personal profile when the configured target is the firm's Company Page, never 'absent'", () => {
+    const configuredIdentity: ConfiguredDestinationIdentity = {
+      firmId: DRG_FIRM_ID,
+      platform: "linkedin",
+      accountOrLocationId: "urn:li:organization:drg-law-company-page",
+      destinationSurface: "linkedin_company_page_profile",
+      status: "active",
+      hasAuthorizedHistoryAccess: true,
+    };
+    const observedIdentity: ObservedExternalIdentity = {
+      platform: "linkedin",
+      accountOrLocationId: "urn:li:person:damaris-guimaraes",
+      surface: "linkedin_personal_profile",
+    };
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        placement: makePlacement({ destination: "linkedin_company_page" }),
+        configuredDestinationIdentity: configuredIdentity,
+        observedExternalIdentity: observedIdentity,
+      }),
+    );
+    const f = audit.findings.find((x) => x.classification === "external_verification_target_mismatch");
+    expect(f).toBeDefined();
+    // A mismatch is a live, actionable misconfiguration for THIS release, not a missing system capability -- blocks_today, not system_improvement.
+    expect(f!.releaseImpact).toBe("blocks_today");
+    expect(f!.summary.toLowerCase()).not.toContain("absent");
+    expect(f!.factualEvidence.toLowerCase()).not.toContain("absent");
+    expect(audit.verdict).toBe("hold");
+  });
+
+  it("destination_identity_confirmed (exact match + authorized history access) clears the gate -- no destination-identity finding fires at all", () => {
+    const configuredIdentity: ConfiguredDestinationIdentity = {
+      firmId: DRG_FIRM_ID,
+      platform: "linkedin",
+      accountOrLocationId: "urn:li:organization:drg-law-company-page",
+      destinationSurface: "linkedin_company_page_profile",
+      status: "active",
+      hasAuthorizedHistoryAccess: true,
+    };
+    const observedIdentity: ObservedExternalIdentity = {
+      platform: "linkedin",
+      accountOrLocationId: "urn:li:organization:drg-law-company-page",
+      surface: "linkedin_company_page_profile",
+    };
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        placement: makePlacement({ destination: "linkedin_company_page" }),
+        configuredDestinationIdentity: configuredIdentity,
+        observedExternalIdentity: observedIdentity,
+      }),
+    );
+    const cs = classificationsOf(audit.findings);
+    expect(cs).not.toContain("destination_identity_unresolved");
+    expect(cs).not.toContain("external_history_unavailable");
+    expect(cs).not.toContain("external_verification_target_mismatch");
+    // channel_auth_missing is a wholly separate fact (no API/OAuth integration exists at all) and still fires regardless of destination-identity confirmation.
+    expect(cs).toContain("channel_auth_missing");
   });
 });
 

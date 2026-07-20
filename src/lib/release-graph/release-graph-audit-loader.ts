@@ -206,6 +206,16 @@ export async function loadReleaseGraphAuditForPeriod(
           ctaResolution,
           firmGhlLocationId,
           standingAuthorizationActive,
+          // No durable destination-identity configuration model exists yet
+          // (publication_destination_configs is proposed, not applied,
+          // blocked by the migration-lineage freeze -- see
+          // destination-identity.ts's header comment), and this loader
+          // never queries an external platform. Explicit null, not omitted,
+          // so this fail-closed default is visible at the one real call
+          // site rather than implicit in resolveAndAuditReleaseGraph's own
+          // optional-parameter fallback.
+          configuredDestinationIdentity: null,
+          observedExternalIdentity: null,
           resolvedAt,
         }),
       );

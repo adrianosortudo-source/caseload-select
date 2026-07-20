@@ -52,6 +52,12 @@ import {
 import { buildPreflightReport } from "@/lib/publication-preflight";
 import { isVersionReleaseAuthorized } from "@/lib/release-authorization";
 import type { ReleaseAuthorizationResult } from "@/lib/release-authorization";
+import { resolveDestinationIdentity } from "@/lib/destination-identity";
+import type {
+  ConfiguredDestinationIdentity,
+  ExternalVerifiablePlatform,
+  ObservedExternalIdentity,
+} from "@/lib/destination-identity";
 import type {
   GapClassification,
   ReleaseGraphFact,
@@ -79,6 +85,18 @@ export type {
   ReleaseAuthorizationResult,
   ReleaseAuthorizationResultKind,
 } from "@/lib/release-authorization";
+
+// Likewise for the exact-destination-identity gate (destination-identity.ts)
+// -- reported under fact 8, channel_authorization_availability, by
+// resolveExternalDestinationIdentity below.
+export { resolveDestinationIdentity };
+export type {
+  ConfiguredDestinationIdentity,
+  DestinationIdentityResolution,
+  DestinationIdentityResolutionKind,
+  ExternalVerifiablePlatform,
+  ObservedExternalIdentity,
+} from "@/lib/destination-identity";
 
 export interface CtaTargetResolution {
   /** True when the promoted content itself carries a linkedin_article placement -- the strategy requires the native Article, never the plain website URL. */
@@ -126,6 +144,24 @@ export interface ResolveReleaseGraphInput {
   firmGhlLocationId: string | null;
   /** This firm's current standing-authorization state (standing-publishing-authorization.ts's getStandingAuthorizationState().active) -- the second path isVersionReleaseAuthorized checks. */
   standingAuthorizationActive: boolean;
+  /**
+   * This firm's durably configured destination identity for THIS placement's
+   * external platform (see destination-identity.ts's header comment) --
+   * OPTIONAL, defaults to null. Every real caller in this codebase supplies
+   * null (or omits this field) today: no durable configuration model exists
+   * yet (blocked by the migration-lineage freeze). Present as an input,
+   * rather than hardcoded inside the resolver, so a future loader can start
+   * supplying a real value without any change to this module's own logic.
+   */
+  configuredDestinationIdentity?: ConfiguredDestinationIdentity | null;
+  /**
+   * The identity an actual evidence-source query returned for THIS
+   * placement's external destination, or null when no query was attempted
+   * -- the normal state today, since no live LinkedIn/GBP integration
+   * exists (channel_auth_missing already reports that gap separately).
+   * OPTIONAL, defaults to null.
+   */
+  observedExternalIdentity?: ObservedExternalIdentity | null;
   resolvedAt: string;
 }
 
@@ -292,15 +328,18 @@ interface SourceSurfaceResolution {
  *      requires_individual_review) -- the same canonical two-path bar the
  *      rest of this system already uses, never a narrower individual-
  *      approval-only check.
- *   4. A webpage publication_artifacts row is bound to THAT EXACT version
- *      AND THAT EXACT LOCALE (evidence, not merely intent) -- an artifact
- *      registered for an older version, or for a different locale than the
- *      deliverable's own, is stale/wrong and must never satisfy this
- *      check, even though the placement (intent) still exists. This locale
- *      predicate matches findArtifact()'s own pattern (used by facts 3/4
- *      in this same file); an independent adversarial audit (2026-07-21)
- *      found this check had drifted from that sibling pattern and would
- *      wrongly accept a version-matched but locale-mismatched artifact.
+ *   4. A webpage publication_artifacts row is bound to THAT EXACT firm, THAT
+ *      EXACT version, AND THAT EXACT LOCALE (evidence, not merely intent)
+ *      -- an artifact belonging to a different firm, an older version, or a
+ *      different locale than the deliverable's own is stale/wrong and must
+ *      never satisfy this check, even though the placement (intent) still
+ *      exists. The locale predicate matches findArtifact()'s own pattern
+ *      (used by facts 3/4 in this same file); a first adversarial audit
+ *      (2026-07-21) found the locale predicate had been dropped, and a
+ *      second found the firm_id predicate had never been added at all --
+ *      the pure audit must enforce the complete binding itself, not rely
+ *      on database-level integrity (e.g. a foreign key or RLS policy) as a
+ *      substitute for checking the actual row.
  */
 function resolveWebsiteArticleSourceSurface(
   deliverable: ContentDeliverable,
@@ -322,7 +361,11 @@ function resolveWebsiteArticleSourceSurface(
   if (!releaseAuthorization.authorized) return { surface: null, reason: "version_not_release_authorized", authorization: releaseAuthorization };
 
   const boundArtifact = artifacts.find(
-    (a) => a.artifact_type === "webpage" && a.version_id === currentVersion.id && a.locale === locale,
+    (a) =>
+      a.artifact_type === "webpage" &&
+      a.firm_id === deliverable.firm_id &&
+      a.version_id === currentVersion.id &&
+      a.locale === locale,
   );
   if (!boundArtifact) return { surface: null, reason: "no_version_bound_artifact", authorization: releaseAuthorization };
 
@@ -743,13 +786,13 @@ function resolveFact7ComplianceWrapper(
         no_website_placement: `This deliverable's content_placements rows include no firm_website destination. The content-graph rule (preflight design §5/§4.1) requires a linkedin_article placement to republish the SAME deliverable's own firm_website placement; no such sibling placement exists.`,
         wrong_role: `This deliverable has a firm_website placement, but deliverable_role="${deliverable.deliverable_role}", not "article" -- its content-graph source surface is not website_article, so no DR-105 lookup can be attempted.`,
         version_not_release_authorized: versionNotAuthorizedEvidence,
-        no_version_bound_artifact: `This deliverable has a firm_website placement and its current version is release-authorized, but no publication_artifacts row of type webpage is bound to BOTH version ${currentVersion?.id} AND locale ${locale} specifically. Any existing webpage artifact for this deliverable belongs to a different (older) version, or to a different locale, and must never be read as this release's source edge -- content-changed-since-last-publish and locale mismatch are both exactly what this check exists to catch.`,
+        no_version_bound_artifact: `This deliverable has a firm_website placement and its current version is release-authorized, but no publication_artifacts row of type webpage is bound to ALL THREE of firm_id ${deliverable.firm_id}, version ${currentVersion?.id}, AND locale ${locale} specifically. Any existing webpage artifact belonging to a different firm, an older version, or a different locale must never be read as this release's source edge -- a cross-firm mismatch, content-changed-since-last-publish, and a locale mismatch are all exactly what this check exists to catch.`,
       };
       const rootCauseByReason: Record<SourceSurfaceUnresolvedReason, string> = {
         no_website_placement: "source_surface_unresolved -- this placement has no sibling firm_website placement to establish a website_article source edge.",
         wrong_role: "source_surface_unsupported -- a website placement exists but is not an article, so it does not correspond to the registry's website_article source surface.",
         version_not_release_authorized: versionNotAuthorizedRootCause,
-        no_version_bound_artifact: "source_artifact_version_mismatch -- a webpage artifact exists for this deliverable, but not one bound to both the exact version AND the exact locale being republished; the source edge is stale or locale-mismatched, not resolved.",
+        no_version_bound_artifact: "source_artifact_version_mismatch -- a webpage artifact exists for this deliverable, but not one bound to the exact firm, the exact version, AND the exact locale being republished; the source edge is stale, cross-firm, or locale-mismatched, not resolved.",
       };
       const proposedSolutionByReason: Record<SourceSurfaceUnresolvedReason, string> = {
         no_website_placement: "Operator creates the deliverable's firm_website placement first (per the content-graph rule), or confirms this linkedin_article placement is not actually a website-article republication and needs its own distinct DR-105 support.",
@@ -940,6 +983,127 @@ function resolveFact8ChannelAuth(input: ResolveReleaseGraphInput, canonicalSourc
   ];
 }
 
+/**
+ * Maps a content_placements.destination value that is genuinely external
+ * (this codebase does not own or host it) to the platform + exact intended
+ * surface the destination-identity gate (destination-identity.ts) needs.
+ * Returns null for destinations this gate does not apply to:
+ *   - firm_website  -- this codebase deploys and owns the route itself
+ *     (fact 3's destination_target_unresolved already covers it).
+ *   - email_delivery -- identity is the firm's own delivery-platform
+ *     account (intake_firms.ghl_location_id), already resolved by
+ *     resolveUnsubscribeEndpoint above; a distinct concept from an external
+ *     social-platform account/page/location.
+ * All four remaining destinations are LinkedIn or GBP surfaces -- exactly
+ * the destinations channel_auth_missing already reports as having no
+ * integration at all today.
+ */
+function externalPlatformAndSurfaceFor(
+  destination: PlacementDestination,
+): { platform: ExternalVerifiablePlatform; destinationSurface: string } | null {
+  switch (destination) {
+    case "linkedin_article":
+      return { platform: "linkedin", destinationSurface: "linkedin_native_article" };
+    case "linkedin_post":
+      return { platform: "linkedin", destinationSurface: "linkedin_feed_post" };
+    case "linkedin_company_page":
+      return { platform: "linkedin", destinationSurface: "linkedin_company_page_profile" };
+    case "google_business_profile":
+      return { platform: "google_business_profile", destinationSurface: "google_business_profile_location" };
+    case "firm_website":
+    case "email_delivery":
+      return null;
+  }
+}
+
+/**
+ * The exact-destination-identity gate (destination-identity.ts), applied to
+ * every genuinely external placement. Reported under fact 8
+ * (channel_authorization_availability) alongside channel_auth_missing --
+ * both are real, independent gaps for the same destinations today
+ * (channel_auth_missing: no API/OAuth integration exists at all;
+ * destination_identity_unresolved/external_history_unavailable/
+ * external_verification_target_mismatch: even if an integration existed,
+ * this system does not yet know, or cannot yet confirm, EXACTLY which
+ * account/page/location it would be allowed to touch) -- fixing one does
+ * not fix the other, so both are reported, never collapsed into one.
+ *
+ * `configuredDestinationIdentity`/`observedExternalIdentity` are optional,
+ * defaulting to null: every real caller in this codebase supplies null
+ * today (no durable configuration model exists yet -- see
+ * destination-identity.ts's header comment), which resolves this gate to
+ * destination_identity_unresolved on every call. This function never
+ * queries an external platform, never derives an identity from the firm's
+ * name/domain, and never treats channel_auth_missing's absence-of-a-finding
+ * (were it ever to stop firing) as evidence that a destination identity is
+ * configured -- the two facts are checked and reported completely
+ * independently.
+ */
+function resolveExternalDestinationIdentity(input: ResolveReleaseGraphInput, canonicalSource: string): ReleaseGraphFinding[] {
+  const { deliverable, currentVersion, placement } = input;
+  const target = externalPlatformAndSurfaceFor(placement.destination);
+  if (!target) return [];
+
+  const resolution = resolveDestinationIdentity({
+    firmId: deliverable.firm_id,
+    platform: target.platform,
+    versionId: currentVersion?.id ?? null,
+    configuredIdentity: input.configuredDestinationIdentity ?? null,
+    observedIdentity: input.observedExternalIdentity ?? null,
+  });
+
+  if (resolution.kind === "destination_identity_confirmed") return [];
+
+  const summaryByKind: Record<Exclude<typeof resolution.kind, "destination_identity_confirmed">, string> = {
+    destination_identity_unresolved: "No exact destination identity is configured for this external platform",
+    external_history_unavailable: "Destination identity is known, but no authorized history surface exists to verify against",
+    external_verification_target_mismatch: "The queried account/location/surface does not match the configured destination identity",
+  };
+  const releaseImpactByKind: Record<Exclude<typeof resolution.kind, "destination_identity_confirmed">, ReleaseImpact> = {
+    // Missing SYSTEM capability (no durable config model, or no authorized
+    // history access exists yet) -- same category as channel_auth_missing,
+    // never a per-release content gap an operator can clear today.
+    destination_identity_unresolved: "system_improvement",
+    external_history_unavailable: "system_improvement",
+    // A mismatch means something IS configured and reachable, but it is
+    // demonstrably the WRONG target -- a live, current, actionable
+    // misconfiguration for this exact release, not a missing capability.
+    external_verification_target_mismatch: "blocks_today",
+  };
+
+  return [
+    finding(
+      resolution.kind as Exclude<typeof resolution.kind, "destination_identity_confirmed">,
+      "channel_authorization_availability",
+      summaryByKind[resolution.kind as Exclude<typeof resolution.kind, "destination_identity_confirmed">],
+      {
+        releaseImpact: releaseImpactByKind[resolution.kind as Exclude<typeof resolution.kind, "destination_identity_confirmed">],
+        factualEvidence: resolution.reason,
+        canonicalSourceConsulted: resolution.evidenceSourceConsulted ?? "src/lib/destination-identity.ts (no evidence source reached)",
+        immediateDisposition:
+          resolution.kind === "external_verification_target_mismatch"
+            ? "Hold. Do not verify, publish, or declare this content absent using the mismatched identity -- correct the configured/queried target first."
+            : "Hold every verify/publish/absence conclusion for this destination until the exact destination identity is resolved. Never query a substitute account or public page in its place.",
+        rootCause:
+          resolution.kind === "destination_identity_unresolved"
+            ? "No durable destination-identity configuration exists for this firm/platform (publication_destination_configs is proposed, not applied, and blocked by the migration-lineage freeze in effect since 2026-07-18)."
+            : resolution.kind === "external_history_unavailable"
+              ? "The exact account/page/location is known, but no authorized manager-level or API history surface has been established for it."
+              : "The identity actually queried does not match the firm's configured, intended destination identity.",
+        proposedDurableSolution:
+          resolution.kind === "external_verification_target_mismatch"
+            ? "Operator corrects whichever side is wrong -- the configured destination identity, or the account/query that produced the mismatched observation -- before any further verify/publish attempt for this destination."
+            : "Once a durable destination-identity configuration model exists (firm_id + platform + account_or_location_id + destination_surface + status + a controlled credential/integration reference) and this firm's exact identity is configured with authorized history access, this gate resolves automatically -- no change to this resolver itself is needed.",
+        authorityRequired:
+          resolution.kind === "external_verification_target_mismatch"
+            ? "Operator -- correcting a configuration/query mismatch, not a new platform/credential decision."
+            : "Operator + an external platform/credential decision (account ownership, API/manager access grant) -- the same authority channel_auth_missing already requires, plus the schema-design/migration-freeze remediation this durable model needs.",
+        reusablePreflightRule: "Never verify a placement as published, publish to it, or declare it absent for a genuinely external destination without first resolving its EXACT destination identity via resolveDestinationIdentity() -- destination_identity_unresolved/external_history_unavailable/external_verification_target_mismatch are distinct, independently-reachable fail-closed states, never collapsed into one generic 'not configured' message.",
+      },
+    ),
+  ];
+}
+
 function resolveFact9PreviewFaithful(
   readinessStaleArtifacts: string[],
   canonicalSource: string,
@@ -1063,29 +1227,16 @@ export function resolveAndAuditReleaseGraph(input: ResolveReleaseGraphInput): Re
     currentReceiptsByPlacementId: { [placement.id]: currentReceipt },
     releaseAuthorizationByDeliverableId: releaseAuthorization ? { [deliverable.id]: releaseAuthorization } : undefined,
   });
-  const rawExistingPreflightGate = existingPreflight.placements[0]
+  // No hand-rolled wording override for the !currentVersion case is needed
+  // here: buildPreflightReport itself now has no fallback interpretation
+  // when releaseAuthorizationByDeliverableId is absent for a deliverable
+  // (which it is, above, exactly when currentVersion is null) -- it
+  // reports release_authorization_context_unavailable directly, in
+  // canonical vocabulary, without this caller needing to patch its wording
+  // after the fact. See publication-preflight.ts's own §13.9 correction.
+  const existingPreflightGate = existingPreflight.placements[0]
     ? { mayPublish: existingPreflight.placements[0].mayPublish, reason: existingPreflight.placements[0].reason }
     : { mayPublish: false, reason: "no placement report resolved" };
-  // When there is no current version at all, releaseAuthorization is null,
-  // so the nested buildPreflightReport call above received no canonical
-  // result for this deliverable and fell back to its own legacy wording
-  // (e.g. "deliverable status is ..., not approved") -- a real, correct
-  // reason, but phrased in different vocabulary than fact 1's own
-  // content_absent finding for the exact same underlying fact. mayPublish
-  // is never true here (an independent audit confirmed every legacy branch
-  // that could fire in this state still fails closed); this only
-  // normalizes the REASON text so the report never shows two different
-  // vocabularies for one fact, without discarding whatever real reason
-  // buildPreflightReport actually found.
-  const existingPreflightGate =
-    !currentVersion && !rawExistingPreflightGate.mayPublish
-      ? {
-          ...rawExistingPreflightGate,
-          reason: `not release-authorized: no current version exists to evaluate for release authorization (matches fact 1's content_absent finding)${
-            rawExistingPreflightGate.reason ? ` -- underlying gate reason: ${rawExistingPreflightGate.reason}` : ""
-          }`,
-        }
-      : rawExistingPreflightGate;
 
   const findings: ReleaseGraphFinding[] = [
     ...resolveFact1And2SourceAndSurface(input, canonicalSource, releaseAuthorization),
@@ -1102,6 +1253,7 @@ export function resolveAndAuditReleaseGraph(input: ResolveReleaseGraphInput): Re
       ...resolveFact5DownloadableArtifact(input, canonicalSource),
       ...resolveFact7ComplianceWrapper(input, canonicalSource, releaseAuthorization),
       ...resolveFact8ChannelAuth(input, canonicalSource),
+      ...resolveExternalDestinationIdentity(input, canonicalSource),
       ...resolveUnsubscribeEndpoint(input, canonicalSource),
       ...resolveFact9PreviewFaithful(readiness.staleArtifacts, canonicalSource),
       ...resolveFact10Receipt(input, canonicalSource),
