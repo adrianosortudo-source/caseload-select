@@ -100,6 +100,22 @@ const ROWS: Row[] = [
     expectedAuthorized: false,
     expectedPath: null,
   },
+  {
+    // The ID literally matches -- only deliverableStatus disqualifies Path
+    // A. Both conditions are required (matching claim_placement_for_publish()'s
+    // own `status = 'approved' and approved_version_id = ...` check), so
+    // this correctly falls through to approved_version_mismatch -- but the
+    // REASON text must never claim the IDs don't match, since they do. This
+    // combination is believed unreachable via any real mutation path in
+    // this codebase today (status and approved_version_id are always
+    // written together), but this module does not itself enforce that
+    // invariant, so its own reason text must stay accurate regardless.
+    name: "approved_version_id matches the target version, but deliverableStatus is not \"approved\" -> blocked, reason must not claim an ID mismatch that isn't real",
+    input: { deliverableStatus: "draft", approvedVersionId: TARGET_VERSION_ID, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: false, standingAuthorizationActive: false },
+    expectedKind: "approved_version_mismatch",
+    expectedAuthorized: false,
+    expectedPath: null,
+  },
 ];
 
 describe("isVersionReleaseAuthorized: full two-path decision-tree matrix", () => {
@@ -162,5 +178,33 @@ describe("isVersionReleaseAuthorized: full two-path decision-tree matrix", () =>
       standingAuthorizationActive: true,
     });
     expect(standingResult.reason).toMatch(/Release-authorized through active standing publishing authorization/);
+  });
+
+  it("reason text never asserts an ID mismatch when approved_version_id actually matches the target version (status is the real blocker)", () => {
+    const result = isVersionReleaseAuthorized({
+      deliverableStatus: "draft",
+      approvedVersionId: TARGET_VERSION_ID,
+      targetVersionId: TARGET_VERSION_ID,
+      versionRequiresIndividualReview: false,
+      standingAuthorizationActive: false,
+    });
+    expect(result.kind).toBe("approved_version_mismatch");
+    expect(result.authorized).toBe(false);
+    expect(result.reason).not.toMatch(/does not match/);
+    expect(result.reason).toMatch(/matches the evaluated version/);
+    expect(result.reason).toMatch(/deliverableStatus="draft" is not "approved"/);
+  });
+
+  it("the same fix applies to the requires_individual_review-blocked reason text", () => {
+    const result = isVersionReleaseAuthorized({
+      deliverableStatus: "in_review",
+      approvedVersionId: TARGET_VERSION_ID,
+      targetVersionId: TARGET_VERSION_ID,
+      versionRequiresIndividualReview: true,
+      standingAuthorizationActive: true,
+    });
+    expect(result.kind).toBe("blocked_requires_individual_review");
+    expect(result.reason).not.toMatch(/does not match/);
+    expect(result.reason).toMatch(/matches the evaluated version/);
   });
 });

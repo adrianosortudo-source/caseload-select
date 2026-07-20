@@ -293,9 +293,14 @@ interface SourceSurfaceResolution {
  *      rest of this system already uses, never a narrower individual-
  *      approval-only check.
  *   4. A webpage publication_artifacts row is bound to THAT EXACT version
- *      (evidence, not merely intent) -- an artifact registered for an
- *      older version is stale and must never satisfy this check, even
- *      though the placement (intent) still exists.
+ *      AND THAT EXACT LOCALE (evidence, not merely intent) -- an artifact
+ *      registered for an older version, or for a different locale than the
+ *      deliverable's own, is stale/wrong and must never satisfy this
+ *      check, even though the placement (intent) still exists. This locale
+ *      predicate matches findArtifact()'s own pattern (used by facts 3/4
+ *      in this same file); an independent adversarial audit (2026-07-21)
+ *      found this check had drifted from that sibling pattern and would
+ *      wrongly accept a version-matched but locale-mismatched artifact.
  */
 function resolveWebsiteArticleSourceSurface(
   deliverable: ContentDeliverable,
@@ -304,6 +309,8 @@ function resolveWebsiteArticleSourceSurface(
   artifacts: PublicationArtifact[],
   /** The one canonical release-authorization result, computed once by resolveAndAuditReleaseGraph and passed in verbatim -- never recomputed here. Null exactly when currentVersion is null (nothing to authorize). */
   releaseAuthorization: ReleaseAuthorizationResult | null,
+  /** deliverable.locale ?? "en-CA" -- the same default resolveFact7ComplianceWrapper's caller already applies; passed in rather than re-defaulted here so there is exactly one place this default lives. */
+  locale: string,
 ): SourceSurfaceResolution {
   const hasWebsitePlacement = deliverablePlacements.some((p) => p.destination === "firm_website");
   if (!hasWebsitePlacement) return { surface: null, reason: "no_website_placement", authorization: null };
@@ -314,7 +321,9 @@ function resolveWebsiteArticleSourceSurface(
 
   if (!releaseAuthorization.authorized) return { surface: null, reason: "version_not_release_authorized", authorization: releaseAuthorization };
 
-  const boundArtifact = artifacts.find((a) => a.artifact_type === "webpage" && a.version_id === currentVersion.id);
+  const boundArtifact = artifacts.find(
+    (a) => a.artifact_type === "webpage" && a.version_id === currentVersion.id && a.locale === locale,
+  );
   if (!boundArtifact) return { surface: null, reason: "no_version_bound_artifact", authorization: releaseAuthorization };
 
   return { surface: "website_article", reason: null, authorization: releaseAuthorization };
@@ -711,6 +720,7 @@ function resolveFact7ComplianceWrapper(
       deliverablePlacements,
       artifacts,
       releaseAuthorization,
+      locale,
     );
 
     // Fail closed on the SOURCE edge before ever consulting the rule
@@ -733,13 +743,13 @@ function resolveFact7ComplianceWrapper(
         no_website_placement: `This deliverable's content_placements rows include no firm_website destination. The content-graph rule (preflight design §5/§4.1) requires a linkedin_article placement to republish the SAME deliverable's own firm_website placement; no such sibling placement exists.`,
         wrong_role: `This deliverable has a firm_website placement, but deliverable_role="${deliverable.deliverable_role}", not "article" -- its content-graph source surface is not website_article, so no DR-105 lookup can be attempted.`,
         version_not_release_authorized: versionNotAuthorizedEvidence,
-        no_version_bound_artifact: `This deliverable has a firm_website placement and its current version is release-authorized, but no publication_artifacts row of type webpage is bound to version ${currentVersion?.id} specifically. Any existing webpage artifact for this deliverable belongs to a different (older) version and must never be read as this release's source edge -- content-changed-since-last-publish is exactly the case this check exists to catch.`,
+        no_version_bound_artifact: `This deliverable has a firm_website placement and its current version is release-authorized, but no publication_artifacts row of type webpage is bound to BOTH version ${currentVersion?.id} AND locale ${locale} specifically. Any existing webpage artifact for this deliverable belongs to a different (older) version, or to a different locale, and must never be read as this release's source edge -- content-changed-since-last-publish and locale mismatch are both exactly what this check exists to catch.`,
       };
       const rootCauseByReason: Record<SourceSurfaceUnresolvedReason, string> = {
         no_website_placement: "source_surface_unresolved -- this placement has no sibling firm_website placement to establish a website_article source edge.",
         wrong_role: "source_surface_unsupported -- a website placement exists but is not an article, so it does not correspond to the registry's website_article source surface.",
         version_not_release_authorized: versionNotAuthorizedRootCause,
-        no_version_bound_artifact: "source_artifact_version_mismatch -- a webpage artifact exists for this deliverable, but not for the exact version being republished; the source edge is stale, not resolved.",
+        no_version_bound_artifact: "source_artifact_version_mismatch -- a webpage artifact exists for this deliverable, but not one bound to both the exact version AND the exact locale being republished; the source edge is stale or locale-mismatched, not resolved.",
       };
       const proposedSolutionByReason: Record<SourceSurfaceUnresolvedReason, string> = {
         no_website_placement: "Operator creates the deliverable's firm_website placement first (per the content-graph rule), or confirms this linkedin_article placement is not actually a website-article republication and needs its own distinct DR-105 support.",
@@ -1053,9 +1063,29 @@ export function resolveAndAuditReleaseGraph(input: ResolveReleaseGraphInput): Re
     currentReceiptsByPlacementId: { [placement.id]: currentReceipt },
     releaseAuthorizationByDeliverableId: releaseAuthorization ? { [deliverable.id]: releaseAuthorization } : undefined,
   });
-  const existingPreflightGate = existingPreflight.placements[0]
+  const rawExistingPreflightGate = existingPreflight.placements[0]
     ? { mayPublish: existingPreflight.placements[0].mayPublish, reason: existingPreflight.placements[0].reason }
     : { mayPublish: false, reason: "no placement report resolved" };
+  // When there is no current version at all, releaseAuthorization is null,
+  // so the nested buildPreflightReport call above received no canonical
+  // result for this deliverable and fell back to its own legacy wording
+  // (e.g. "deliverable status is ..., not approved") -- a real, correct
+  // reason, but phrased in different vocabulary than fact 1's own
+  // content_absent finding for the exact same underlying fact. mayPublish
+  // is never true here (an independent audit confirmed every legacy branch
+  // that could fire in this state still fails closed); this only
+  // normalizes the REASON text so the report never shows two different
+  // vocabularies for one fact, without discarding whatever real reason
+  // buildPreflightReport actually found.
+  const existingPreflightGate =
+    !currentVersion && !rawExistingPreflightGate.mayPublish
+      ? {
+          ...rawExistingPreflightGate,
+          reason: `not release-authorized: no current version exists to evaluate for release authorization (matches fact 1's content_absent finding)${
+            rawExistingPreflightGate.reason ? ` -- underlying gate reason: ${rawExistingPreflightGate.reason}` : ""
+          }`,
+        }
+      : rawExistingPreflightGate;
 
   const findings: ReleaseGraphFinding[] = [
     ...resolveFact1And2SourceAndSurface(input, canonicalSource, releaseAuthorization),

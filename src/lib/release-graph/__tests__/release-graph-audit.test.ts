@@ -266,6 +266,14 @@ describe("all fifteen gap classifications are independently reachable", () => {
     expect(audit.verdict).toBe("hold");
   });
 
+  it("content_absent — no current version at all -> existingPreflightGate uses canonical wording, not the legacy fallback's vocabulary (regression: an independent audit found this reverted to legacy phrasing)", () => {
+    const audit = resolveAndAuditReleaseGraph(baseInput({ currentVersion: null }));
+    expect(classificationsOf(audit.findings)).toContain("content_absent");
+    expect(audit.existingPreflightGate.mayPublish).toBe(false);
+    expect(audit.existingPreflightGate.reason).toMatch(/not release-authorized/);
+    expect(audit.existingPreflightGate.reason).toMatch(/no current version exists/);
+  });
+
   it("source_path_unverified — approved_version_id drifted from current_version_id", () => {
     const audit = resolveAndAuditReleaseGraph(baseInput({ deliverable: makeDeliverable({ approved_version_id: "some-older-version" }) }));
     expect(classificationsOf(audit.findings)).toContain("source_path_unverified");
@@ -402,6 +410,26 @@ describe("all fifteen gap classifications are independently reachable", () => {
     expect(unresolved).toBeDefined();
     expect(unresolved!.rootCause).toMatch(/source_artifact_version_mismatch/);
     expect(unresolved!.factualEvidence).toMatch(/different \(older\) version|belongs to a different/);
+    expect(unresolved!.canonicalSourceConsulted).toBe("publication_artifacts");
+  });
+
+  it("compliance_wrapper_missing — website placement exists, bound artifact matches the CURRENT version but a DIFFERENT locale -> source_path_unverified, never 'documented' (regression: an independent audit found this check was not locale-scoped, unlike its sibling findArtifact())", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        deliverable: makeDeliverable({ locale: "en-CA" }),
+        placement: makePlacement({ destination: "linkedin_article" }),
+        // Bound to the exact CURRENT version, but a different locale than
+        // the deliverable's own -- must never be read as this release's
+        // (en-CA) source edge, even though the version_id matches exactly.
+        artifacts: [makeArtifact({ version_id: CURRENT_VERSION_ID, locale: "pt-BR" })],
+      }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeUndefined();
+    const unresolved = audit.findings.find((f) => f.classification === "source_path_unverified");
+    expect(unresolved).toBeDefined();
+    expect(unresolved!.rootCause).toMatch(/source_artifact_version_mismatch/);
+    expect(unresolved!.factualEvidence).toMatch(/locale/i);
     expect(unresolved!.canonicalSourceConsulted).toBe("publication_artifacts");
   });
 

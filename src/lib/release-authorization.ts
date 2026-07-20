@@ -123,7 +123,19 @@ export function isVersionReleaseAuthorized(input: ReleaseAuthorizationInput): Re
     standingAuthorizationActive: input.standingAuthorizationActive,
   };
 
-  if (input.deliverableStatus === "approved" && input.approvedVersionId === input.targetVersionId) {
+  // Individual approval requires BOTH conditions -- status="approved" AND
+  // an ID match -- exactly as claim_placement_for_publish() does. This is
+  // deliberately computed once and reused below: every branch past this
+  // point that describes why individual approval did NOT apply must
+  // describe the ACTUAL reason (status wrong, ID wrong, or both), never
+  // assume it was the ID specifically. An independent adversarial audit
+  // (2026-07-21) found the ID-mismatch wording was asserted unconditionally
+  // in a state where the IDs can, in fact, match (status="draft" or similar
+  // with approved_version_id already equal to the evaluated version) --
+  // every reason string below now names only what is actually true.
+  const approvedVersionIdMatches = input.approvedVersionId === input.targetVersionId;
+
+  if (input.deliverableStatus === "approved" && approvedVersionIdMatches) {
     return {
       kind: "individually_approved",
       authorized: true,
@@ -133,12 +145,23 @@ export function isVersionReleaseAuthorized(input: ReleaseAuthorizationInput): Re
     };
   }
 
+  // Individual approval did not apply here -- describe precisely why, since
+  // this codebase's data can reach this point either because the ID didn't
+  // match, or because it matched but the deliverable's status was not
+  // "approved" (e.g. a later edit reverted status without clearing
+  // approved_version_id). Both are real, distinct, reachable states.
+  const individualApprovalGapReason = approvedVersionIdMatches
+    ? `approved_version_id matches the evaluated version (${input.targetVersionId}), but deliverableStatus="${input.deliverableStatus}" is not "approved" -- both conditions are required for individual approval`
+    : input.approvedVersionId !== null
+      ? `approved_version_id=${input.approvedVersionId} does not match the evaluated version (${input.targetVersionId})`
+      : `approved_version_id is null -- this version has never been individually approved`;
+
   if (input.versionRequiresIndividualReview) {
     return {
       kind: "blocked_requires_individual_review",
       authorized: false,
       authorizationPath: null,
-      reason: `Not release-authorized: version ${input.targetVersionId} is flagged requires_individual_review=true, which overrides any standing publishing authorization unconditionally. approved_version_id=${input.approvedVersionId ?? "null"} does not match this version either, so individual approval does not apply.`,
+      reason: `Not release-authorized: version ${input.targetVersionId} is flagged requires_individual_review=true, which overrides any standing publishing authorization unconditionally. ${individualApprovalGapReason}, so individual approval does not apply either.`,
       ...evidence,
     };
   }
@@ -158,7 +181,7 @@ export function isVersionReleaseAuthorized(input: ReleaseAuthorizationInput): Re
       kind: "approved_version_mismatch",
       authorized: false,
       authorizationPath: null,
-      reason: `Not release-authorized: approved_version_id=${input.approvedVersionId} does not match the evaluated version (${input.targetVersionId}) -- a different version was individually approved, and this firm has no active standing publishing authorization to cover the current one.`,
+      reason: `Not release-authorized: ${individualApprovalGapReason}, and this firm has no active standing publishing authorization to cover the current one.`,
       ...evidence,
     };
   }

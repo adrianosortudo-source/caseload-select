@@ -28,13 +28,20 @@
  *
  * Optionally accepts a per-deliverable canonical release-authorization
  * result (release-authorization.ts's isVersionReleaseAuthorized()) so a
- * caller that already resolved the two-path authorization bar -- today,
- * only release-graph-audit.ts -- can have this function defer to it
- * instead of this function's own, narrower, individual-approval-only
- * default check. See reportOnePlacement's own doc comment and
- * docs/publication-operator/publishing-agent-release-resolution-requirements-2026-07-20.md
- * §13.2f for why this is additive/opt-in rather than a change to every
- * caller's default behavior.
+ * caller that already resolved the two-path authorization bar can have this
+ * function defer to it instead of this function's own, narrower,
+ * individual-approval-only default check. Both real, non-test callers of
+ * this function -- release-graph-audit.ts and, as of the §13.2g correction,
+ * publication-preflight-loader.ts (the live /publication-preflight route)
+ * -- now supply it; the individual-approval-only default exists only for
+ * backward compatibility with any caller that genuinely cannot resolve
+ * standing-authorization state, and is not exercised by any live route
+ * today. NOTE: /claim never calls this function at all -- it enforces
+ * authorization solely and correctly via claim_placement_for_publish()
+ * directly (see publication-placement-claims.ts) and was never affected by
+ * either version of this default. See reportOnePlacement's own doc comment
+ * and docs/publication-operator/publishing-agent-release-resolution-requirements-2026-07-20.md
+ * §13.2f/§13.2g for the full history of this correction.
  */
 
 import type {
@@ -100,21 +107,33 @@ function reportOnePlacement(input: {
    * deliverable/version, from isVersionReleaseAuthorized()
    * (release-authorization.ts) -- OPTIONAL and backward-compatible.
    *
-   * When a caller supplies this (currently only release-graph-audit.ts,
-   * which computes it once per audit for fact 1/fact 7 and passes the same
-   * result here so all three consumers agree), it is used AS-IS: this
-   * function never re-derives status/approved_version_id/current_version_id
-   * equality itself when a canonical result is present.
+   * When a caller supplies this, it is used AS-IS: this function never
+   * re-derives status/approved_version_id/current_version_id equality
+   * itself when a canonical result is present. Both live, non-test callers
+   * supply it as of the §13.2g correction:
+   *   - release-graph-audit.ts computes it once per audit for fact 1/fact 7
+   *     and passes the same result here so all three consumers agree.
+   *   - publication-preflight-loader.ts (the live /publication-preflight
+   *     route) computes it once per deliverable, reusing one
+   *     getStandingAuthorizationState() read per firm -- an independent
+   *     adversarial audit (2026-07-21) confirmed this route was previously
+   *     the one real production surface silently using the narrower
+   *     individual-approval-only default below, which could falsely report
+   *     a standing-authorized release as blocked; this correction closes
+   *     that gap.
+   * publication-placement-claims.ts (the live /claim route) does NOT call
+   * this function at all -- it was never affected by either default, and
+   * must never be described as such (a documentation error corrected the
+   * same day this comment was updated).
    *
-   * When omitted (every other existing caller of buildPreflightReport --
-   * the live /publication-preflight and /claim API routes, via
-   * publication-preflight-loader.ts and publication-placement-claims.ts),
-   * this function falls back to its own original individual-approval-only
-   * check, UNCHANGED, to preserve exact existing behavior (including the
-   * exact reason strings publication-preflight.test.ts already locks in).
-   * Widening those callers to the two-path model is a separate, deliberate
-   * decision outside this correction's scope -- see this addendum's §13.2f
-   * for why that boundary was drawn here rather than silently expanded.
+   * When omitted -- today, exercised only by publication-preflight.test.ts,
+   * exercising this function's own degrade-gracefully contract for a
+   * hypothetical future caller that cannot resolve standing-authorization
+   * state -- this function falls back to its own original
+   * individual-approval-only check, UNCHANGED, preserving the exact reason
+   * strings that test file already locks in. That fallback still fails
+   * closed (mayPublish is never true when it would not otherwise be), so
+   * omitting this parameter is safe, just narrower than the canonical rule.
    */
   releaseAuthorization?: ReleaseAuthorizationResult;
 }): PreflightPlacementReport {

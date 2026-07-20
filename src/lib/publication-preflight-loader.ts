@@ -12,11 +12,14 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { loadPeriodPublicationReadiness } from "@/lib/publication-readiness-loader";
 import { listCurrentReceiptsByPlacementForDeliverable } from "@/lib/publication-receipts";
 import { buildPreflightReport, type PreflightPeriodReport } from "@/lib/publication-preflight";
+import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
+import { isVersionReleaseAuthorized, type ReleaseAuthorizationResult } from "@/lib/release-authorization";
 import type {
   ContentDeliverable,
   ContentPeriod,
   ContentPlacement,
   DeliverableComment,
+  DeliverableVersion,
   PublicationReceipt,
 } from "@/lib/types";
 
@@ -43,8 +46,9 @@ export async function loadPublicationPreflightForPeriod(
   const rows = (deliverables ?? []) as ContentDeliverable[];
   const activeIds = rows.filter((d) => d.status !== "archived").map((d) => d.id);
   const approvedVersionByDeliverableId = new Map(rows.map((d) => [d.id, d.approved_version_id ?? null]));
+  const currentVersionIds = rows.map((d) => d.current_version_id).filter((id): id is string => !!id);
 
-  const [comments, placementsByDeliverableId, receiptsByPlacementParts] = await Promise.all([
+  const [comments, placementsByDeliverableId, receiptsByPlacementParts, { data: currentVersions }, standingAuthorization] = await Promise.all([
     activeIds.length
       ? supabase
           .from("deliverable_comments")
@@ -72,6 +76,10 @@ export async function loadPublicationPreflightForPeriod(
         listCurrentReceiptsByPlacementForDeliverable(id, approvedVersionByDeliverableId.get(id) ?? null),
       ),
     ),
+    currentVersionIds.length
+      ? supabase.from("deliverable_versions").select("id, requires_individual_review").in("id", currentVersionIds)
+      : Promise.resolve({ data: [] as Pick<DeliverableVersion, "id" | "requires_individual_review">[] }),
+    getStandingAuthorizationState(firmId),
   ]);
 
   const commentsByDeliverableId: Record<string, DeliverableComment[]> = {};
@@ -84,6 +92,34 @@ export async function loadPublicationPreflightForPeriod(
   const currentReceiptsByPlacementId: Record<string, PublicationReceipt | null> = {};
   for (const part of receiptsByPlacementParts) Object.assign(currentReceiptsByPlacementId, part);
 
+  // The canonical two-path release-authorization result, computed once per
+  // deliverable (never per-placement -- authorization is a deliverable ×
+  // version fact, not a placement fact) and passed to buildPreflightReport
+  // so this live route reads the exact same rule release-graph-audit.ts
+  // does, never the narrower individual-approval-only fallback. Standing
+  // authorization is fetched once per firm and reused for every
+  // deliverable, matching release-graph-audit-loader.ts's own pattern.
+  const requiresIndividualReviewByVersionId = new Map(
+    ((currentVersions ?? []) as Pick<DeliverableVersion, "id" | "requires_individual_review">[]).map((v) => [
+      v.id,
+      v.requires_individual_review,
+    ]),
+  );
+  const standingAuthorizationActive = standingAuthorization?.active ?? false;
+  const releaseAuthorizationByDeliverableId: Record<string, ReleaseAuthorizationResult> = {};
+  for (const deliverable of rows) {
+    if (!deliverable.current_version_id) continue; // no version to evaluate -- buildPreflightReport's own checks (deliverableReady, etc.) already cover this deliverable-shaped gap without an authorization opinion.
+    const versionRequiresIndividualReview = requiresIndividualReviewByVersionId.get(deliverable.current_version_id);
+    if (versionRequiresIndividualReview === undefined) continue; // the version row failed to load (should not happen for a live current_version_id) -- fail closed by omission, never guess.
+    releaseAuthorizationByDeliverableId[deliverable.id] = isVersionReleaseAuthorized({
+      deliverableStatus: deliverable.status,
+      approvedVersionId: deliverable.approved_version_id,
+      targetVersionId: deliverable.current_version_id,
+      versionRequiresIndividualReview,
+      standingAuthorizationActive,
+    });
+  }
+
   return buildPreflightReport({
     periodId,
     periodLifecycle: periodRow.readiness_lifecycle,
@@ -92,5 +128,6 @@ export async function loadPublicationPreflightForPeriod(
     commentsByDeliverableId,
     placementsByDeliverableId,
     currentReceiptsByPlacementId,
+    releaseAuthorizationByDeliverableId,
   });
 }
