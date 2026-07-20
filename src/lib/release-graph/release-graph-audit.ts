@@ -64,6 +64,64 @@ import type {
 /** The one firm this phase has a genuine, source-faithful website template for (DRGArticleFrame). */
 export const DRG_FIRM_ID = "eec1d25e-a047-4827-8e4a-6eb96becca2b";
 
+export type ReleaseAuthorizationPath = "individual_approval" | "standing_authorization";
+
+export interface ReleaseAuthorizationInput {
+  deliverableStatus: ContentDeliverable["status"];
+  approvedVersionId: string | null;
+  targetVersionId: string;
+  versionRequiresIndividualReview: boolean;
+  /** intake_firms' current standing-authorization state for this firm (standing-publishing-authorization.ts's getStandingAuthorizationState().active). */
+  standingAuthorizationActive: boolean;
+}
+
+export interface ReleaseAuthorizationResult {
+  authorized: boolean;
+  path: ReleaseAuthorizationPath | null;
+}
+
+/**
+ * The canonical two-path release-authorization bar, ported faithfully from
+ * claim_placement_for_publish()'s own logic (supabase/migrations/
+ * 20260717230956_standing_publishing_authorization.sql, the "Path A" /
+ * "Path B" branch around line 407) -- the actual, authoritative source of
+ * this rule in this codebase. No pure, importable TypeScript
+ * implementation of it exists on origin/main: the RPC itself is the only
+ * enforcement, and calling it performs a real database write (it creates a
+ * publication_placement_claims row), which a read-only, dry-run audit must
+ * never do. This is a faithful, read-only port of that same decision --
+ * one shared helper, not a second, competing authorization rule invented
+ * for this module. Every caller in this file uses this function; none
+ * re-implements any part of the two-path check inline.
+ *
+ * A version is authorized only when it is release-authorized through
+ * either:
+ *   A. individual lawyer approval of that exact version
+ *      (deliverableStatus === "approved" AND approvedVersionId === targetVersionId); or
+ *   B. an active standing publishing authorization for the firm, PROVIDED
+ *      the version is not flagged requires_individual_review -- that flag
+ *      always overrides path B and fails closed, exactly as the RPC
+ *      rejects on that flag before ever consulting the firm's
+ *      authorization state.
+ * The RPC's own third precondition -- the target version must be the
+ * deliverable's current_version_id -- is not re-checked here because every
+ * caller in this module only ever evaluates the deliverable's actual
+ * current version (see resolveAndAuditReleaseGraph); callers passing a
+ * different version are responsible for that invariant themselves.
+ */
+export function isVersionReleaseAuthorized(input: ReleaseAuthorizationInput): ReleaseAuthorizationResult {
+  if (input.deliverableStatus === "approved" && input.approvedVersionId === input.targetVersionId) {
+    return { authorized: true, path: "individual_approval" };
+  }
+  if (input.versionRequiresIndividualReview) {
+    return { authorized: false, path: null };
+  }
+  if (input.standingAuthorizationActive) {
+    return { authorized: true, path: "standing_authorization" };
+  }
+  return { authorized: false, path: null };
+}
+
 export interface CtaTargetResolution {
   /** True when the promoted content itself carries a linkedin_article placement -- the strategy requires the native Article, never the plain website URL. */
   requiresNativeArticle: boolean;
@@ -108,6 +166,8 @@ export interface ResolveReleaseGraphInput {
    * this audit cannot verify its internal state.
    */
   firmGhlLocationId: string | null;
+  /** This firm's current standing-authorization state (standing-publishing-authorization.ts's getStandingAuthorizationState().active) -- the second path isVersionReleaseAuthorized checks. */
+  standingAuthorizationActive: boolean;
   resolvedAt: string;
 }
 
@@ -218,23 +278,30 @@ export function registryDestinationSurfaceFor(destination: PlacementDestination)
  *   wrong_role                     - a firm_website placement exists, but
  *                                     this deliverable's role is not
  *                                     "article" (e.g. landing_page).
- *   version_not_release_authorized - the CURRENT version is not the
- *                                     individually-approved one (path A
- *                                     only -- see the function doc comment
- *                                     for why path B is out of scope here).
+ *   version_not_release_authorized - the CURRENT version fails
+ *                                     isVersionReleaseAuthorized's
+ *                                     two-path bar (neither individually
+ *                                     approved nor covered by an active
+ *                                     standing authorization -- or flagged
+ *                                     requires_individual_review, which
+ *                                     overrides standing authorization
+ *                                     unconditionally).
  *   no_version_bound_artifact      - a firm_website placement and an
- *                                     approved current version both exist,
- *                                     but no webpage publication_artifacts
- *                                     row is bound to THIS EXACT version --
- *                                     any existing webpage artifact is for
- *                                     an older version and must never be
- *                                     read as this release's source edge.
+ *                                     authorized current version both
+ *                                     exist, but no webpage
+ *                                     publication_artifacts row is bound
+ *                                     to THIS EXACT version -- any existing
+ *                                     webpage artifact is for an older
+ *                                     version and must never be read as
+ *                                     this release's source edge.
  */
 type SourceSurfaceUnresolvedReason = "no_website_placement" | "wrong_role" | "version_not_release_authorized" | "no_version_bound_artifact";
 
 interface SourceSurfaceResolution {
   surface: RegistrySourceSurface | null;
   reason: SourceSurfaceUnresolvedReason | null;
+  /** Which path authorized the version, when resolution succeeded -- carried through for evidence text, never re-derived. */
+  authorizationPath: ReleaseAuthorizationPath | null;
 }
 
 /**
@@ -247,19 +314,19 @@ interface SourceSurfaceResolution {
  * Per the content-graph rule (preflight design §5/§4.1), a linkedin_article
  * placement is only ever a valid republication of the SAME deliverable's
  * own firm_website content, AT THE SAME RELEASE-AUTHORIZED VERSION being
- * republished. Three facts must all hold, checked in order, each capable
- * of independently failing closed:
+ * republished. Four facts must all hold, checked in order, each capable of
+ * independently failing closed:
  *   1. A firm_website placement exists on this deliverable (intent).
  *   2. The deliverable's role is "article" (this system's content graph
  *      only ever resolves an "article"-role firm_website placement to the
  *      registry's website_article surface; "landing_page" is a different,
  *      currently-unsupported source surface).
- *   3. The CURRENT version is release-authorized (approved_version_id
- *      matches current_version_id -- individual-approval path only; the
- *      standing-authorization path is a separate, firm-level fact this
- *      narrow check has no access to, and treating an unresolved case as
- *      ineligible is the conservative, fail-closed direction, never the
- *      permissive one).
+ *   3. The CURRENT version is release-authorized through EITHER path of
+ *      isVersionReleaseAuthorized (individual approval, or an active
+ *      standing authorization when the version is not flagged
+ *      requires_individual_review) -- the same canonical two-path bar the
+ *      rest of this system already uses, never a narrower individual-
+ *      approval-only check.
  *   4. A webpage publication_artifacts row is bound to THAT EXACT version
  *      (evidence, not merely intent) -- an artifact registered for an
  *      older version is stale and must never satisfy this check, even
@@ -270,20 +337,28 @@ function resolveWebsiteArticleSourceSurface(
   currentVersion: DeliverableVersion | null,
   deliverablePlacements: ContentPlacement[],
   artifacts: PublicationArtifact[],
+  standingAuthorizationActive: boolean,
 ): SourceSurfaceResolution {
   const hasWebsitePlacement = deliverablePlacements.some((p) => p.destination === "firm_website");
-  if (!hasWebsitePlacement) return { surface: null, reason: "no_website_placement" };
+  if (!hasWebsitePlacement) return { surface: null, reason: "no_website_placement", authorizationPath: null };
 
-  if (deliverable.deliverable_role !== "article") return { surface: null, reason: "wrong_role" };
+  if (deliverable.deliverable_role !== "article") return { surface: null, reason: "wrong_role", authorizationPath: null };
 
-  if (!currentVersion || deliverable.approved_version_id !== currentVersion.id) {
-    return { surface: null, reason: "version_not_release_authorized" };
-  }
+  if (!currentVersion) return { surface: null, reason: "version_not_release_authorized", authorizationPath: null };
+
+  const authorization = isVersionReleaseAuthorized({
+    deliverableStatus: deliverable.status,
+    approvedVersionId: deliverable.approved_version_id,
+    targetVersionId: currentVersion.id,
+    versionRequiresIndividualReview: currentVersion.requires_individual_review,
+    standingAuthorizationActive,
+  });
+  if (!authorization.authorized) return { surface: null, reason: "version_not_release_authorized", authorizationPath: null };
 
   const boundArtifact = artifacts.find((a) => a.artifact_type === "webpage" && a.version_id === currentVersion.id);
-  if (!boundArtifact) return { surface: null, reason: "no_version_bound_artifact" };
+  if (!boundArtifact) return { surface: null, reason: "no_version_bound_artifact", authorizationPath: authorization.path };
 
-  return { surface: "website_article", reason: null };
+  return { surface: "website_article", reason: null, authorizationPath: authorization.path };
 }
 
 function finding(
@@ -643,16 +718,46 @@ function resolveFact5DownloadableArtifact(
   ];
 }
 
+/**
+ * Produces the precise, cause-specific evidence sentence for a
+ * version_not_release_authorized finding. There are two distinct real
+ * causes (plus the degenerate no-current-version case), and conflating
+ * them would misdirect the operator: a version flagged
+ * requires_individual_review=true is blocked regardless of standing
+ * authorization (an override, not a missing grant), while a version with
+ * requires_individual_review=false is blocked only when BOTH paths are
+ * actually absent.
+ */
+function describeSourceVersionNotAuthorized(
+  deliverable: ContentDeliverable,
+  currentVersion: DeliverableVersion | null,
+  standingAuthorizationActive: boolean,
+): string {
+  if (!currentVersion) {
+    return `This deliverable has a firm_website placement, but current_version_id is null -- there is no current version to evaluate for release authorization.`;
+  }
+  if (currentVersion.requires_individual_review) {
+    return `This deliverable has a firm_website placement, but version ${currentVersion.id} is flagged requires_individual_review=true, which overrides any standing publishing authorization unconditionally -- and approved_version_id=${deliverable.approved_version_id ?? "null"} does not match current_version_id=${currentVersion.id}, so it is not individually approved either. Neither release-authorization path is satisfied.`;
+  }
+  return `This deliverable has a firm_website placement, but approved_version_id=${deliverable.approved_version_id ?? "null"} does not match current_version_id=${currentVersion.id} (not individually approved), and this firm has no active standing publishing authorization covering it either (standingAuthorizationActive=${standingAuthorizationActive}) -- neither release-authorization path is satisfied, so the version being evaluated for republication is not release-authorized.`;
+}
+
 function resolveFact7ComplianceWrapper(
   input: ResolveReleaseGraphInput,
   canonicalSource: string,
 ): ReleaseGraphFinding[] {
-  const { deliverable, currentVersion, placement, deliverablePlacements, artifacts, emailBranding } = input;
+  const { deliverable, currentVersion, placement, deliverablePlacements, artifacts, emailBranding, standingAuthorizationActive } = input;
 
   if (placement.destination === "linkedin_article") {
     const locale = deliverable.locale ?? "en-CA";
     const destinationSurface = registryDestinationSurfaceFor(placement.destination);
-    const { surface: sourceSurface, reason } = resolveWebsiteArticleSourceSurface(deliverable, currentVersion, deliverablePlacements, artifacts);
+    const { surface: sourceSurface, reason } = resolveWebsiteArticleSourceSurface(
+      deliverable,
+      currentVersion,
+      deliverablePlacements,
+      artifacts,
+      standingAuthorizationActive,
+    );
 
     // Fail closed on the SOURCE edge before ever consulting the rule
     // mirror. Never assume a linkedin_article placement republishes the
@@ -663,19 +768,19 @@ function resolveFact7ComplianceWrapper(
       const evidenceByReason: Record<SourceSurfaceUnresolvedReason, string> = {
         no_website_placement: `This deliverable's content_placements rows include no firm_website destination. The content-graph rule (preflight design §5/§4.1) requires a linkedin_article placement to republish the SAME deliverable's own firm_website placement; no such sibling placement exists.`,
         wrong_role: `This deliverable has a firm_website placement, but deliverable_role="${deliverable.deliverable_role}", not "article" -- its content-graph source surface is not website_article, so no DR-105 lookup can be attempted.`,
-        version_not_release_authorized: `This deliverable has a firm_website placement, but approved_version_id=${deliverable.approved_version_id ?? "null"} does not match current_version_id=${currentVersion?.id ?? "null"} -- the version being evaluated for republication is not (individually) release-authorized, so it cannot supply a source edge regardless of what any placement or artifact says.`,
-        no_version_bound_artifact: `This deliverable has a firm_website placement and its current version is individually approved, but no publication_artifacts row of type webpage is bound to version ${currentVersion?.id} specifically. Any existing webpage artifact for this deliverable belongs to a different (older) version and must never be read as this release's source edge -- content-changed-since-last-publish is exactly the case this check exists to catch.`,
+        version_not_release_authorized: describeSourceVersionNotAuthorized(deliverable, currentVersion, standingAuthorizationActive),
+        no_version_bound_artifact: `This deliverable has a firm_website placement and its current version is release-authorized, but no publication_artifacts row of type webpage is bound to version ${currentVersion?.id} specifically. Any existing webpage artifact for this deliverable belongs to a different (older) version and must never be read as this release's source edge -- content-changed-since-last-publish is exactly the case this check exists to catch.`,
       };
       const rootCauseByReason: Record<SourceSurfaceUnresolvedReason, string> = {
         no_website_placement: "source_surface_unresolved -- this placement has no sibling firm_website placement to establish a website_article source edge.",
         wrong_role: "source_surface_unsupported -- a website placement exists but is not an article, so it does not correspond to the registry's website_article source surface.",
-        version_not_release_authorized: "source_version_not_authorized -- the current version has not been individually approved, so it is not eligible to be treated as a release-authorized source, independent of any placement or artifact evidence.",
+        version_not_release_authorized: "source_version_not_authorized -- the current version satisfies neither the individual-approval path nor the standing-authorization path of this firm's release-authorization bar (or is flagged requires_individual_review, which overrides standing authorization unconditionally), so it is not eligible to be treated as a release-authorized source, independent of any placement or artifact evidence.",
         no_version_bound_artifact: "source_artifact_version_mismatch -- a webpage artifact exists for this deliverable, but not for the exact version being republished; the source edge is stale, not resolved.",
       };
       const proposedSolutionByReason: Record<SourceSurfaceUnresolvedReason, string> = {
         no_website_placement: "Operator creates the deliverable's firm_website placement first (per the content-graph rule), or confirms this linkedin_article placement is not actually a website-article republication and needs its own distinct DR-105 support.",
         wrong_role: "Operator confirms whether this deliverable is genuinely meant to be a website article (correcting deliverable_role), or that this linkedin_article placement needs its own distinct source-surface support, not assumed compatibility.",
-        version_not_release_authorized: "The firm's lawyer approves the current version (or an eligible standing authorization applies) through the existing approval workflow -- the same fact-1 gate this addendum already requires, re-checked here because fact 7 must never treat an unauthorized version as a valid source.",
+        version_not_release_authorized: "The firm's lawyer individually approves the current version, or -- when requires_individual_review is false -- this firm's standing publishing authorization is active and covers it, through the existing approval/authorization workflow -- the same release-authorization gate this addendum already requires, re-checked here because fact 7 must never treat an unauthorized version as a valid source.",
         no_version_bound_artifact: "Operator (re)generates and registers a webpage publication_artifacts row bound to the exact current version, then re-runs this audit -- never treat an older version's artifact as still applying.",
       };
       return [
@@ -685,14 +790,14 @@ function resolveFact7ComplianceWrapper(
           reason === "no_version_bound_artifact"
             ? "Website placement exists, but its bound artifact is for a different version than the one being republished"
             : reason === "version_not_release_authorized"
-              ? "Current version is not individually release-authorized -- cannot supply a source edge"
+              ? "Current version is not release-authorized (individually or via standing authorization) -- cannot supply a source edge"
               : reason === "wrong_role"
                 ? "This deliverable's website placement is not an article -- source surface unsupported"
                 : "No resolved website-article source edge for this native Article placement",
           {
             releaseImpact: "needs_human_confirmation",
             factualEvidence: evidenceByReason[reason as SourceSurfaceUnresolvedReason],
-            canonicalSourceConsulted: reason === "no_version_bound_artifact" ? "publication_artifacts" : reason === "version_not_release_authorized" ? "content_deliverables (approved_version_id vs. current_version_id)" : "content_placements",
+            canonicalSourceConsulted: reason === "no_version_bound_artifact" ? "publication_artifacts" : reason === "version_not_release_authorized" ? "content_deliverables (approved_version_id vs. current_version_id) and standing_publishing_authorizations (via getStandingAuthorizationState)" : "content_placements",
             immediateDisposition: "Fail closed. Do not classify any DR-105 wrapper rule as documented or absent for this placement until its source surface -- including exact version binding -- is actually resolved.",
             rootCause: rootCauseByReason[reason as SourceSurfaceUnresolvedReason],
             proposedDurableSolution: proposedSolutionByReason[reason as SourceSurfaceUnresolvedReason],

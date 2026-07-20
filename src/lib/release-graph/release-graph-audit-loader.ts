@@ -13,6 +13,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { resolveEmailBranding } from "@/lib/email-branding";
 import type { FirmBranding } from "@/lib/widget-theme";
 import { listCurrentReceiptsByPlacementForDeliverable } from "@/lib/publication-receipts";
+import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
 import type { PeriodLifecycle } from "@/lib/publication-readiness";
 import {
   resolveAndAuditReleaseGraph,
@@ -166,6 +167,7 @@ export async function loadReleaseGraphAuditForPeriod(
 
   const emailBranding = resolveEmailBranding((firm?.branding as FirmBranding | null) ?? null);
   const firmGhlLocationId = (firm?.ghl_location_id as string | null) ?? null;
+  const standingAuthorizationActive = (await getStandingAuthorizationState(firmId))?.active ?? false;
   const resolvedAt = new Date().toISOString();
 
   const audits: ReleaseGraphAudit[] = [];
@@ -203,6 +205,7 @@ export async function loadReleaseGraphAuditForPeriod(
           emailBranding,
           ctaResolution,
           firmGhlLocationId,
+          standingAuthorizationActive,
           resolvedAt,
         }),
       );

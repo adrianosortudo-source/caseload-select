@@ -122,6 +122,11 @@ function baseAuditInput(overrides: Partial<ResolveReleaseGraphInput> = {}): Reso
     // realistic case for DRG specifically is "account connected, endpoint
     // unverified," not "no account at all."
     firmGhlLocationId: "drg-ghl-location-id",
+    // DRG has never enabled standing publishing authorization (0 rows in
+    // standing_publishing_authorizations for this firm) -- individual
+    // lawyer approval is the only release-authorization path DRG actually
+    // uses today, matching baseDeliverable()'s approved_version_id default.
+    standingAuthorizationActive: false,
     resolvedAt: RESOLVED_AT,
     ...overrides,
   };

@@ -220,6 +220,12 @@ function baseInput(overrides: Partial<ResolveReleaseGraphInput> = {}): ResolveRe
     emailBranding: null,
     ctaResolution: null,
     firmGhlLocationId: "loc_test_ghl_123",
+    // Default: no active standing publishing authorization. Individual
+    // approval (see makeDeliverable()'s approved_version_id default) is
+    // the path exercised by default; tests below explicitly override this
+    // to exercise the standing-authorization path and its interaction
+    // with requires_individual_review.
+    standingAuthorizationActive: false,
     resolvedAt: RESOLVED_AT,
     ...overrides,
   };
@@ -399,12 +405,15 @@ describe("all fifteen gap classifications are independently reachable", () => {
     expect(unresolved!.canonicalSourceConsulted).toBe("publication_artifacts");
   });
 
-  it("compliance_wrapper_missing — website placement + version-bound artifact exist, but the current version is NOT individually release-authorized -> fail closed", () => {
+  it("compliance_wrapper_missing — website placement + version-bound artifact exist, but the current version satisfies NEITHER release-authorization path -> fail closed", () => {
     const audit = resolveAndAuditReleaseGraph(
       baseInput({
         deliverable: makeDeliverable({ approved_version_id: "some-other-approved-version" }),
         placement: makePlacement({ destination: "linkedin_article" }),
         artifacts: [makeArtifact()],
+        // Explicit, even though it's also the baseInput() default: this
+        // test's whole point is that NEITHER path is satisfied.
+        standingAuthorizationActive: false,
       }),
     );
     const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
@@ -419,6 +428,125 @@ describe("all fifteen gap classifications are independently reachable", () => {
     expect(wrapperFact!.rootCause).toMatch(/source_version_not_authorized/);
     expect(wrapperFact!.authorityRequired).toMatch(/Firm's lawyer/);
     expect(wrapperFact!.canonicalSourceConsulted).toMatch(/approved_version_id/);
+    expect(wrapperFact!.canonicalSourceConsulted).toMatch(/standing_publishing_authorizations/);
+    expect(wrapperFact!.factualEvidence).toMatch(/no active standing publishing authorization/);
+  });
+
+  // ─── Two-path release authorization: the version-bound source edge must
+  // respect BOTH legitimate authorization paths (individual approval OR
+  // active standing authorization, unless requires_individual_review
+  // overrides), never individual-approval alone. ────────────────────────
+
+  it("source edge resolves — current version is individually approved (path A)", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        // makeDeliverable()/makeVersion() defaults already satisfy path A:
+        // status="approved", approved_version_id === current_version_id.
+        placement: makePlacement({ destination: "linkedin_article" }),
+        artifacts: [makeArtifact()],
+        standingAuthorizationActive: false,
+      }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeDefined();
+    expect(cw!.releaseImpact).toBe("system_improvement");
+    const unresolved = audit.findings.find((f) => f.fact === "compliance_wrapper_and_sender" && f.classification === "source_path_unverified");
+    expect(unresolved).toBeUndefined();
+  });
+
+  it("source edge resolves — standing authorization active + requires_individual_review=false (path B)", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        // Not individually approved -- only path B can supply authorization here.
+        deliverable: makeDeliverable({ status: "draft", approved_version_id: null }),
+        currentVersion: makeVersion({ requires_individual_review: false }),
+        placement: makePlacement({ destination: "linkedin_article" }),
+        artifacts: [makeArtifact()],
+        standingAuthorizationActive: true,
+      }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeDefined();
+    expect(cw!.releaseImpact).toBe("system_improvement");
+    const unresolved = audit.findings.find((f) => f.fact === "compliance_wrapper_and_sender" && f.classification === "source_path_unverified");
+    expect(unresolved).toBeUndefined();
+  });
+
+  it("fails closed — standing authorization active BUT requires_individual_review=true overrides it unconditionally", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        deliverable: makeDeliverable({ status: "draft", approved_version_id: null }),
+        currentVersion: makeVersion({ requires_individual_review: true }),
+        placement: makePlacement({ destination: "linkedin_article" }),
+        artifacts: [makeArtifact()],
+        standingAuthorizationActive: true,
+      }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeUndefined();
+    const unresolved = audit.findings.find((f) => f.fact === "compliance_wrapper_and_sender" && f.classification === "source_path_unverified");
+    expect(unresolved).toBeDefined();
+    expect(unresolved!.rootCause).toMatch(/source_version_not_authorized/);
+    expect(unresolved!.factualEvidence).toMatch(/requires_individual_review=true/);
+    expect(unresolved!.factualEvidence).toMatch(/overrides any standing publishing authorization unconditionally/);
+  });
+
+  it("fails closed — standing authorization inactive/revoked/expired and not individually approved", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        deliverable: makeDeliverable({ status: "draft", approved_version_id: null }),
+        currentVersion: makeVersion({ requires_individual_review: false }),
+        placement: makePlacement({ destination: "linkedin_article" }),
+        artifacts: [makeArtifact()],
+        // Inactive covers revoked/expired too -- getStandingAuthorizationState's
+        // `active` flag is already false for any latest event other than "enabled".
+        standingAuthorizationActive: false,
+      }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeUndefined();
+    const unresolved = audit.findings.find((f) => f.fact === "compliance_wrapper_and_sender" && f.classification === "source_path_unverified");
+    expect(unresolved).toBeDefined();
+    expect(unresolved!.rootCause).toMatch(/source_version_not_authorized/);
+    expect(unresolved!.factualEvidence).toMatch(/no active standing publishing authorization/);
+  });
+
+  it("fails closed — old version-bound webpage artifact, unchanged by the two-path fix (evidence gate is independent of authorization path)", () => {
+    const olderVersionId = "v-older-9999";
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        // Authorized via path B this time, to prove the artifact-binding
+        // gate is checked independently of WHICH path authorized the version.
+        deliverable: makeDeliverable({ status: "draft", approved_version_id: null }),
+        currentVersion: makeVersion({ requires_individual_review: false }),
+        placement: makePlacement({ destination: "linkedin_article" }),
+        artifacts: [makeArtifact({ version_id: olderVersionId })],
+        standingAuthorizationActive: true,
+      }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeUndefined();
+    const unresolved = audit.findings.find((f) => f.fact === "compliance_wrapper_and_sender" && f.classification === "source_path_unverified");
+    expect(unresolved).toBeDefined();
+    expect(unresolved!.rootCause).toMatch(/source_artifact_version_mismatch/);
+  });
+
+  it("fails closed — neither individually approved nor standing-authorized (no override in play)", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        deliverable: makeDeliverable({ status: "draft", approved_version_id: null }),
+        currentVersion: makeVersion({ requires_individual_review: false }),
+        placement: makePlacement({ destination: "linkedin_article" }),
+        artifacts: [makeArtifact()],
+        standingAuthorizationActive: false,
+      }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeUndefined();
+    const unresolved = audit.findings.find((f) => f.fact === "compliance_wrapper_and_sender" && f.classification === "source_path_unverified");
+    expect(unresolved).toBeDefined();
+    expect(unresolved!.rootCause).toMatch(/source_version_not_authorized/);
+    expect(unresolved!.factualEvidence).toMatch(/no active standing publishing authorization/);
   });
 
   it("compliance_wrapper_missing — same firm/locale, but WRONG source surface (a landing_page, not an article) resolves fail-closed, never 'documented'", () => {
