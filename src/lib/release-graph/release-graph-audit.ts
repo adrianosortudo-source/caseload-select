@@ -210,14 +210,80 @@ export function registryDestinationSurfaceFor(destination: PlacementDestination)
  * article" -- both are equally unresolved/unsupported from this audit's
  * point of view, distinguished only in the finding's own evidence text.
  */
+/**
+ * Why a source-surface resolution came back null, so the caller can report
+ * exact, distinct evidence instead of one blended "unresolved" message:
+ *   no_website_placement           - no firm_website destination exists on
+ *                                     this deliverable at all.
+ *   wrong_role                     - a firm_website placement exists, but
+ *                                     this deliverable's role is not
+ *                                     "article" (e.g. landing_page).
+ *   version_not_release_authorized - the CURRENT version is not the
+ *                                     individually-approved one (path A
+ *                                     only -- see the function doc comment
+ *                                     for why path B is out of scope here).
+ *   no_version_bound_artifact      - a firm_website placement and an
+ *                                     approved current version both exist,
+ *                                     but no webpage publication_artifacts
+ *                                     row is bound to THIS EXACT version --
+ *                                     any existing webpage artifact is for
+ *                                     an older version and must never be
+ *                                     read as this release's source edge.
+ */
+type SourceSurfaceUnresolvedReason = "no_website_placement" | "wrong_role" | "version_not_release_authorized" | "no_version_bound_artifact";
+
+interface SourceSurfaceResolution {
+  surface: RegistrySourceSurface | null;
+  reason: SourceSurfaceUnresolvedReason | null;
+}
+
+/**
+ * Derives the candidate source surface for a linkedin_article placement
+ * from this deliverable's ACTUAL content graph -- never assumed, and never
+ * satisfied merely by a firm_website placement's existence (placements are
+ * not version-scoped in this schema; a placement object alone says nothing
+ * about which version's content it currently represents).
+ *
+ * Per the content-graph rule (preflight design §5/§4.1), a linkedin_article
+ * placement is only ever a valid republication of the SAME deliverable's
+ * own firm_website content, AT THE SAME RELEASE-AUTHORIZED VERSION being
+ * republished. Three facts must all hold, checked in order, each capable
+ * of independently failing closed:
+ *   1. A firm_website placement exists on this deliverable (intent).
+ *   2. The deliverable's role is "article" (this system's content graph
+ *      only ever resolves an "article"-role firm_website placement to the
+ *      registry's website_article surface; "landing_page" is a different,
+ *      currently-unsupported source surface).
+ *   3. The CURRENT version is release-authorized (approved_version_id
+ *      matches current_version_id -- individual-approval path only; the
+ *      standing-authorization path is a separate, firm-level fact this
+ *      narrow check has no access to, and treating an unresolved case as
+ *      ineligible is the conservative, fail-closed direction, never the
+ *      permissive one).
+ *   4. A webpage publication_artifacts row is bound to THAT EXACT version
+ *      (evidence, not merely intent) -- an artifact registered for an
+ *      older version is stale and must never satisfy this check, even
+ *      though the placement (intent) still exists.
+ */
 function resolveWebsiteArticleSourceSurface(
   deliverable: ContentDeliverable,
+  currentVersion: DeliverableVersion | null,
   deliverablePlacements: ContentPlacement[],
-): { surface: RegistrySourceSurface | null; hasWebsitePlacement: boolean } {
+  artifacts: PublicationArtifact[],
+): SourceSurfaceResolution {
   const hasWebsitePlacement = deliverablePlacements.some((p) => p.destination === "firm_website");
-  if (!hasWebsitePlacement) return { surface: null, hasWebsitePlacement: false };
-  if (deliverable.deliverable_role === "article") return { surface: "website_article", hasWebsitePlacement: true };
-  return { surface: null, hasWebsitePlacement: true };
+  if (!hasWebsitePlacement) return { surface: null, reason: "no_website_placement" };
+
+  if (deliverable.deliverable_role !== "article") return { surface: null, reason: "wrong_role" };
+
+  if (!currentVersion || deliverable.approved_version_id !== currentVersion.id) {
+    return { surface: null, reason: "version_not_release_authorized" };
+  }
+
+  const boundArtifact = artifacts.find((a) => a.artifact_type === "webpage" && a.version_id === currentVersion.id);
+  if (!boundArtifact) return { surface: null, reason: "no_version_bound_artifact" };
+
+  return { surface: "website_article", reason: null };
 }
 
 function finding(
@@ -581,42 +647,57 @@ function resolveFact7ComplianceWrapper(
   input: ResolveReleaseGraphInput,
   canonicalSource: string,
 ): ReleaseGraphFinding[] {
-  const { deliverable, placement, deliverablePlacements, emailBranding } = input;
+  const { deliverable, currentVersion, placement, deliverablePlacements, artifacts, emailBranding } = input;
 
   if (placement.destination === "linkedin_article") {
     const locale = deliverable.locale ?? "en-CA";
     const destinationSurface = registryDestinationSurfaceFor(placement.destination);
-    const { surface: sourceSurface, hasWebsitePlacement } = resolveWebsiteArticleSourceSurface(deliverable, deliverablePlacements);
+    const { surface: sourceSurface, reason } = resolveWebsiteArticleSourceSurface(deliverable, currentVersion, deliverablePlacements, artifacts);
 
     // Fail closed on the SOURCE edge before ever consulting the rule
-    // mirror. Never assume a linkedin_article placement republishes a
-    // website_article -- derive it from this deliverable's own placements.
-    // Two distinct sub-cases, same classification/impact, different
-    // evidence: no firm_website placement at all ("unresolved"), or one
-    // exists but this deliverable's role is not "article" ("unsupported").
+    // mirror. Never assume a linkedin_article placement republishes the
+    // CURRENT version of a website_article -- derive it from this
+    // deliverable's actual content graph, including version binding, not
+    // merely from a placement object's existence.
     if (!sourceSurface || !destinationSurface) {
+      const evidenceByReason: Record<SourceSurfaceUnresolvedReason, string> = {
+        no_website_placement: `This deliverable's content_placements rows include no firm_website destination. The content-graph rule (preflight design §5/§4.1) requires a linkedin_article placement to republish the SAME deliverable's own firm_website placement; no such sibling placement exists.`,
+        wrong_role: `This deliverable has a firm_website placement, but deliverable_role="${deliverable.deliverable_role}", not "article" -- its content-graph source surface is not website_article, so no DR-105 lookup can be attempted.`,
+        version_not_release_authorized: `This deliverable has a firm_website placement, but approved_version_id=${deliverable.approved_version_id ?? "null"} does not match current_version_id=${currentVersion?.id ?? "null"} -- the version being evaluated for republication is not (individually) release-authorized, so it cannot supply a source edge regardless of what any placement or artifact says.`,
+        no_version_bound_artifact: `This deliverable has a firm_website placement and its current version is individually approved, but no publication_artifacts row of type webpage is bound to version ${currentVersion?.id} specifically. Any existing webpage artifact for this deliverable belongs to a different (older) version and must never be read as this release's source edge -- content-changed-since-last-publish is exactly the case this check exists to catch.`,
+      };
+      const rootCauseByReason: Record<SourceSurfaceUnresolvedReason, string> = {
+        no_website_placement: "source_surface_unresolved -- this placement has no sibling firm_website placement to establish a website_article source edge.",
+        wrong_role: "source_surface_unsupported -- a website placement exists but is not an article, so it does not correspond to the registry's website_article source surface.",
+        version_not_release_authorized: "source_version_not_authorized -- the current version has not been individually approved, so it is not eligible to be treated as a release-authorized source, independent of any placement or artifact evidence.",
+        no_version_bound_artifact: "source_artifact_version_mismatch -- a webpage artifact exists for this deliverable, but not for the exact version being republished; the source edge is stale, not resolved.",
+      };
+      const proposedSolutionByReason: Record<SourceSurfaceUnresolvedReason, string> = {
+        no_website_placement: "Operator creates the deliverable's firm_website placement first (per the content-graph rule), or confirms this linkedin_article placement is not actually a website-article republication and needs its own distinct DR-105 support.",
+        wrong_role: "Operator confirms whether this deliverable is genuinely meant to be a website article (correcting deliverable_role), or that this linkedin_article placement needs its own distinct source-surface support, not assumed compatibility.",
+        version_not_release_authorized: "The firm's lawyer approves the current version (or an eligible standing authorization applies) through the existing approval workflow -- the same fact-1 gate this addendum already requires, re-checked here because fact 7 must never treat an unauthorized version as a valid source.",
+        no_version_bound_artifact: "Operator (re)generates and registers a webpage publication_artifacts row bound to the exact current version, then re-runs this audit -- never treat an older version's artifact as still applying.",
+      };
       return [
         finding(
           "source_path_unverified",
           "compliance_wrapper_and_sender",
-          hasWebsitePlacement
-            ? "This deliverable's website placement is not an article -- source surface unsupported"
-            : "No resolved website-article source edge for this native Article placement",
+          reason === "no_version_bound_artifact"
+            ? "Website placement exists, but its bound artifact is for a different version than the one being republished"
+            : reason === "version_not_release_authorized"
+              ? "Current version is not individually release-authorized -- cannot supply a source edge"
+              : reason === "wrong_role"
+                ? "This deliverable's website placement is not an article -- source surface unsupported"
+                : "No resolved website-article source edge for this native Article placement",
           {
             releaseImpact: "needs_human_confirmation",
-            factualEvidence: hasWebsitePlacement
-              ? `This deliverable has a firm_website placement, but deliverable_role="${deliverable.deliverable_role}", not "article" -- its content-graph source surface is not website_article, so no DR-105 lookup can be attempted.`
-              : `This deliverable's content_placements rows include no firm_website destination. The content-graph rule (preflight design §5/§4.1) requires a linkedin_article placement to republish the SAME deliverable's own firm_website placement; no such sibling placement exists.`,
-            canonicalSourceConsulted: "content_placements",
-            immediateDisposition: "Fail closed. Do not classify any DR-105 wrapper rule as documented or absent for this placement until its source surface is actually resolved.",
-            rootCause: hasWebsitePlacement
-              ? "source_surface_unsupported -- a website placement exists but is not an article, so it does not correspond to the registry's website_article source surface."
-              : "source_surface_unresolved -- this placement has no sibling firm_website placement to establish a website_article source edge.",
-            proposedDurableSolution: hasWebsitePlacement
-              ? "Operator confirms whether this deliverable is genuinely meant to be a website article (correcting deliverable_role), or that this linkedin_article placement needs its own distinct source-surface support, not assumed compatibility."
-              : "Operator creates the deliverable's firm_website placement first (per the content-graph rule), or confirms this linkedin_article placement is not actually a website-article republication and needs its own distinct DR-105 support.",
-            authorityRequired: "Operator -- resolving which content-graph edge applies, not a wrapper-wording decision.",
-            reusablePreflightRule: "Never assume a linkedin_article placement's source surface is website_article -- derive it from the deliverable's actual role and sibling placements before any DR-105 lookup runs, and fail closed (never 'absent', never 'documented') when it cannot be resolved.",
+            factualEvidence: evidenceByReason[reason as SourceSurfaceUnresolvedReason],
+            canonicalSourceConsulted: reason === "no_version_bound_artifact" ? "publication_artifacts" : reason === "version_not_release_authorized" ? "content_deliverables (approved_version_id vs. current_version_id)" : "content_placements",
+            immediateDisposition: "Fail closed. Do not classify any DR-105 wrapper rule as documented or absent for this placement until its source surface -- including exact version binding -- is actually resolved.",
+            rootCause: rootCauseByReason[reason as SourceSurfaceUnresolvedReason],
+            proposedDurableSolution: proposedSolutionByReason[reason as SourceSurfaceUnresolvedReason],
+            authorityRequired: reason === "version_not_release_authorized" ? "Firm's lawyer (individual approval) or an active standing publishing authorization -- never the operator alone." : "Operator -- resolving which content-graph edge applies, not a wrapper-wording decision.",
+            reusablePreflightRule: "Never assume a linkedin_article placement's source surface is website_article from placement existence alone -- derive it from the deliverable's actual role, release-authorization status, AND a webpage artifact bound to the exact current version, failing closed on any one of the four.",
           },
         ),
       ];

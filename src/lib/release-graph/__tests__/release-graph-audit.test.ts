@@ -4,6 +4,7 @@ import {
   auditDeliverableWithNoPlacements,
   computeReleaseVerdict,
   findKnownDr105Rule,
+  registryDestinationSurfaceFor,
   DRG_FIRM_ID,
   type ResolveReleaseGraphInput,
   type CtaTargetResolution,
@@ -17,6 +18,7 @@ import type {
   PublicationArtifactValidation,
   DeliverableComment,
   PublicationReceipt,
+  PlacementDestination,
 } from "@/lib/types";
 import type { EmailBranding } from "@/lib/email-branding";
 
@@ -341,9 +343,14 @@ describe("all fifteen gap classifications are independently reachable", () => {
   });
 
   it("compliance_wrapper_missing — linkedin_article, DR-105 rule IS documented for this firm/locale (system_improvement, not a content gap)", () => {
-    // makeDeliverable() defaults to DRG_FIRM_ID/en-CA, which matches the one
-    // real, documented registry rule.
-    const audit = resolveAndAuditReleaseGraph(baseInput({ placement: makePlacement({ destination: "linkedin_article" }) }));
+    // makeDeliverable() defaults to DRG_FIRM_ID/en-CA/article, with
+    // approved_version_id === current_version_id (individually approved),
+    // matching the one real, documented registry rule. A webpage artifact
+    // bound to the EXACT current version is required for the source edge
+    // to resolve at all (see the version-binding tests below).
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({ placement: makePlacement({ destination: "linkedin_article" }), artifacts: [makeArtifact()] }),
+    );
     const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
     expect(cw).toBeDefined();
     expect(cw!.releaseImpact).toBe("system_improvement");
@@ -353,9 +360,15 @@ describe("all fifteen gap classifications are independently reachable", () => {
   });
 
   it("compliance_wrapper_missing — linkedin_article, NO DR-105 rule documented for this firm/locale (blocks_today, a real content gap)", () => {
-    const otherFirmDeliverable = makeDeliverable({ firm_id: "11111111-1111-1111-1111-111111111111", locale: "en-CA" });
+    const otherFirmId = "11111111-1111-1111-1111-111111111111";
+    const otherFirmDeliverable = makeDeliverable({ firm_id: otherFirmId, locale: "en-CA" });
     const audit = resolveAndAuditReleaseGraph(
-      baseInput({ deliverable: otherFirmDeliverable, currentVersion: makeVersion({ firm_id: "11111111-1111-1111-1111-111111111111" }), placement: makePlacement({ destination: "linkedin_article" }) }),
+      baseInput({
+        deliverable: otherFirmDeliverable,
+        currentVersion: makeVersion({ firm_id: otherFirmId }),
+        placement: makePlacement({ destination: "linkedin_article" }),
+        artifacts: [makeArtifact({ firm_id: otherFirmId })],
+      }),
     );
     const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
     expect(cw).toBeDefined();
@@ -364,6 +377,48 @@ describe("all fifteen gap classifications are independently reachable", () => {
     expect(cw!.authorityRequired).toMatch(/lawyer sign-off/);
     // Never conflate "no rule documented" with "no runtime reader exists" -- distinct root causes.
     expect(cw!.rootCause).not.toMatch(/runtime_lookup_not_implemented/);
+  });
+
+  it("compliance_wrapper_missing — website placement exists, but its bound artifact is for a DIFFERENT version -> source_path_unverified, never 'documented'", () => {
+    const olderVersionId = "v-older-9999";
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        placement: makePlacement({ destination: "linkedin_article" }),
+        // The only webpage artifact on record is for an OLDER version, not
+        // the current one -- exactly the "content changed since last
+        // publish" scenario this check exists to catch.
+        artifacts: [makeArtifact({ version_id: olderVersionId })],
+      }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeUndefined();
+    const unresolved = audit.findings.find((f) => f.classification === "source_path_unverified");
+    expect(unresolved).toBeDefined();
+    expect(unresolved!.rootCause).toMatch(/source_artifact_version_mismatch/);
+    expect(unresolved!.factualEvidence).toMatch(/different \(older\) version|belongs to a different/);
+    expect(unresolved!.canonicalSourceConsulted).toBe("publication_artifacts");
+  });
+
+  it("compliance_wrapper_missing — website placement + version-bound artifact exist, but the current version is NOT individually release-authorized -> fail closed", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        deliverable: makeDeliverable({ approved_version_id: "some-other-approved-version" }),
+        placement: makePlacement({ destination: "linkedin_article" }),
+        artifacts: [makeArtifact()],
+      }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeUndefined();
+    // Version drift also trips fact 1's own, pre-existing check
+    // (defense in depth) -- select fact 7's specific finding rather than
+    // the first source_path_unverified match, and confirm both fired.
+    const sourcePathFindings = audit.findings.filter((f) => f.classification === "source_path_unverified");
+    expect(sourcePathFindings.length).toBeGreaterThanOrEqual(2);
+    const wrapperFact = sourcePathFindings.find((f) => f.fact === "compliance_wrapper_and_sender");
+    expect(wrapperFact).toBeDefined();
+    expect(wrapperFact!.rootCause).toMatch(/source_version_not_authorized/);
+    expect(wrapperFact!.authorityRequired).toMatch(/Firm's lawyer/);
+    expect(wrapperFact!.canonicalSourceConsulted).toMatch(/approved_version_id/);
   });
 
   it("compliance_wrapper_missing — same firm/locale, but WRONG source surface (a landing_page, not an article) resolves fail-closed, never 'documented'", () => {
@@ -442,13 +497,40 @@ describe("all fifteen gap classifications are independently reachable", () => {
     ).toBe("drg_en_website_article_to_linkedin_article_lso_notice_v1");
   });
 
+  it("registryDestinationSurfaceFor — linkedin_article is the ONLY PlacementDestination that maps to a registry destination surface", () => {
+    // Exhaustive over every real PlacementDestination value -- proves the
+    // linkedin_article -> linkedin_native_article vocabulary bridge is the
+    // one permitted mapping, not an assumption spot-checked on one value.
+    const allDestinations: PlacementDestination[] = [
+      "firm_website",
+      "linkedin_article",
+      "linkedin_post",
+      "linkedin_company_page",
+      "google_business_profile",
+      "email_delivery",
+    ];
+    const results = Object.fromEntries(allDestinations.map((d) => [d, registryDestinationSurfaceFor(d)]));
+    expect(results).toEqual({
+      firm_website: null,
+      linkedin_article: "linkedin_native_article",
+      linkedin_post: null,
+      linkedin_company_page: null,
+      google_business_profile: null,
+      email_delivery: null,
+    });
+  });
+
   it("compliance_wrapper_missing does not cite a repository code search as evidence of the wrapper's own state", () => {
-    const documented = resolveAndAuditReleaseGraph(baseInput({ placement: makePlacement({ destination: "linkedin_article" }) }));
+    const documented = resolveAndAuditReleaseGraph(
+      baseInput({ placement: makePlacement({ destination: "linkedin_article" }), artifacts: [makeArtifact()] }),
+    );
+    const otherFirmId = "22222222-2222-2222-2222-222222222222";
     const absent = resolveAndAuditReleaseGraph(
       baseInput({
-        deliverable: makeDeliverable({ firm_id: "22222222-2222-2222-2222-222222222222" }),
-        currentVersion: makeVersion({ firm_id: "22222222-2222-2222-2222-222222222222" }),
+        deliverable: makeDeliverable({ firm_id: otherFirmId }),
+        currentVersion: makeVersion({ firm_id: otherFirmId }),
         placement: makePlacement({ destination: "linkedin_article" }),
+        artifacts: [makeArtifact({ firm_id: otherFirmId })],
       }),
     );
     for (const audit of [documented, absent]) {
