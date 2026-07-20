@@ -959,6 +959,18 @@ Never touches consent (`consent_log`, `screened_leads.*_consent_*`) or the live 
 
 **Placement-tagged tracking + release gate (Ses.21 follow-up).** `lib/content-placement-tracking-pure.ts` generates deterministic `utm_content=<placement id>` tracking parameters per placement, never a fabricated domain (`intake_firms` has none to guess). The receipts route (`.../placements/[placementId]/receipts`) rejects a `firm_website` receipt whose `public_url` does not carry the placement's exact tracking marker -- the one destination where this is honestly enforceable without assuming a domain. `PlacementsTrackingPanel.tsx` (operator-only, on the deliverable review page) surfaces the parameters for every destination as copy-paste help. LinkedIn/GBP/email are not hard-gated, consistent with `channel-validation.ts`'s existing unverifiable-beyond-attestation posture for those destinations.
 
+### Surface-presentation adaptations (DR-105, 2026-07-19)
+
+Republishing an already-approved version on a different destination surface (e.g. a native LinkedIn Article for a version whose source surface is the firm's website) is not automatically a new editorial version and does not by itself require the lawyer to re-approve, but it is also never something an agent drafts at publish time. This is doctrine and a documented registry only as of 2026-07-19; nothing in the app reads or enforces it yet (no `resolve_surface_presentation_adaptation` code path exists). Full policy: DR-105 in the decision registry (`00_System/01_Doctrine/DECISION_RECORDS.md`), the registry contract in `docs/publication-operator/surface-presentation-adaptation-registry.md`, and the preflight step design in `docs/publication-operator/publication-resolution-preflight-design-2026-07-19.md` §4.1a/§5. Agents:
+
+- Resolve any destination-surface-required compliance wrapper (disclaimer banners, locale notices) by `firm + locale + source_surface + destination_surface`, never by copying the source surface's own wrapper verbatim onto a different surface.
+- Use only an exact, pre-registered adaptation rule from the registry above. Never draft, paraphrase, translate, or improve compliance wording at publish time, even when the requested change looks minor.
+- Never generalize one firm/locale/surface rule to any other firm, locale, or surface.
+- Treat a missing registry rule as a preflight failure (`surface_adaptation_rule_missing`) that blocks that surface, not as license to invent the missing wording.
+- Treat any request to change substantive content, legal claims, scope, CTA, translation, or the destination itself as `substantive_adaptation_requires_approval`, routed to the normal lawyer sign-off path, never resolved by an operator instruction alone.
+- A LinkedIn post promoting an editorial piece links to that piece's matching live native LinkedIn Article when that is the configured routing rule; it must not silently fall back to the website URL just because no Article exists yet (report the gap instead).
+- Passing this policy resolves the compliance-wording objection only. It does not, by itself, close the LinkedIn/GBP `channel_auth_missing` gap (no publishing credential or API integration exists in this codebase for either), implement the runtime registry lookup, add deterministic output-diff validation, or capture adaptation evidence -- see the design document's §10 for that separate, not-yet-started implementation work.
+
 ## Build Roadmap
 
 | Session | Scope | Status |

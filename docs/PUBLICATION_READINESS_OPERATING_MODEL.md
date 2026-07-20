@@ -330,6 +330,32 @@ on this route.
 Any instruction to publish begins with read-only reconciliation. Missing
 assets are blockers, never implied authorization to create them.
 
+## Approval binds to the version, not the rendering (DR-105)
+
+`may_modify_copy: false` in the manifest's policy block, above, governs
+the deliverable's own substantive copy. It does not, and was never meant
+to, forbid a separate, narrower thing: rendering an already-approved
+version's exact substantive content on a destination surface other than
+its source surface, wrapped in that destination's own required
+presentation and compliance boilerplate. DR-105 (`00_System/01_Doctrine/DECISION_RECORDS.md`)
+names this a Surface-Presentation Adaptation and gives it its own
+controlled path, `docs/publication-operator/surface-presentation-adaptation-registry.md`,
+so the two concerns stay distinct: an agent still may never regenerate,
+shorten, translate, or otherwise rewrite a deliverable's substantive
+copy, on this or any other route; a pre-registered, whitelisted
+presentation difference (most concretely, a compliance disclaimer whose
+website wording literally says "this website" and would be false on a
+different surface) is not that, and is resolved by exact registry
+lookup, never drafted at runtime. See `docs/publication-operator/publication-resolution-preflight-design-2026-07-19.md`
+§4.1a and §5 for where this sits in the full publication preflight, and
+"Pending legal approval is never bypassed by reconciliation," below, for
+the unrelated, unchanged rule this does not touch: individual lawyer
+sign-off on substantive content is never something a Surface-
+Presentation Adaptation, an operator, or an agent may substitute for.
+This section is doctrine only as of 2026-07-19: the manifest evaluator
+does not yet call a `resolve_surface_presentation_adaptation` step, and
+no code path reads the registry file above at runtime.
+
 ## Registering a new artifact today (manual, no UI yet)
 
 There is no admin UI and no API route that writes to `publication_artifacts`
