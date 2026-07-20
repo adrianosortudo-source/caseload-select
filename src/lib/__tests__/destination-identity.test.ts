@@ -75,6 +75,56 @@ describe("resolveDestinationIdentity — no configured identity", () => {
     expect(result.kind).toBe("destination_identity_unresolved");
     expect(result.reason).toMatch(/"revoked"/);
   });
+
+  it("configuredIdentity belongs to a DIFFERENT firm than the one being evaluated -> destination_identity_unresolved, never confirmed merely because SOME record was supplied", () => {
+    const otherFirmId = "11111111-1111-1111-1111-111111111111";
+    const result = resolveDestinationIdentity({
+      firmId: FIRM_ID,
+      platform: "linkedin",
+      versionId: "v1",
+      configuredIdentity: activeIdentity({ firmId: otherFirmId }),
+      observedIdentity: null,
+    });
+    expect(result.kind).toBe("destination_identity_unresolved");
+    expect(result.canVerifyPublished).toBe(false);
+    expect(result.canDeclareAbsent).toBe(false);
+    expect(result.evidenceSourceConsulted).toBeNull();
+    expect(result.reason).toMatch(new RegExp(otherFirmId));
+    expect(result.reason).toMatch(new RegExp(FIRM_ID));
+  });
+
+  it("configuredIdentity is configured for a DIFFERENT platform than the one being evaluated -> destination_identity_unresolved, even with no observedIdentity to catch the mismatch downstream", () => {
+    // No observedIdentity supplied -- the caller is only asking "may I
+    // proceed," which is exactly the case a platform-mismatched record
+    // must not silently clear, since there is no downstream comparison to
+    // catch it otherwise.
+    const result = resolveDestinationIdentity({
+      firmId: FIRM_ID,
+      platform: "linkedin",
+      versionId: "v1",
+      configuredIdentity: activeIdentity({ platform: "google_business_profile" }),
+      observedIdentity: null,
+    });
+    expect(result.kind).toBe("destination_identity_unresolved");
+    expect(result.canVerifyPublished).toBe(false);
+    expect(result.canDeclareAbsent).toBe(false);
+    expect(result.reason).toMatch(/"google_business_profile"/);
+    expect(result.reason).toMatch(/"linkedin"/);
+  });
+
+  it("wrong-firm and wrong-platform checks run BEFORE status/history, so an inactive or history-incapable record for the wrong firm/platform still reports the identity mismatch, not the status/history reason", () => {
+    const otherFirmId = "11111111-1111-1111-1111-111111111111";
+    const result = resolveDestinationIdentity({
+      firmId: FIRM_ID,
+      platform: "linkedin",
+      versionId: "v1",
+      configuredIdentity: activeIdentity({ firmId: otherFirmId, status: "inactive", hasAuthorizedHistoryAccess: false }),
+      observedIdentity: null,
+    });
+    expect(result.kind).toBe("destination_identity_unresolved");
+    expect(result.reason).not.toMatch(/"inactive"/);
+    expect(result.reason).toMatch(new RegExp(otherFirmId));
+  });
 });
 
 describe("resolveDestinationIdentity — history access", () => {

@@ -329,17 +329,20 @@ interface SourceSurfaceResolution {
  *      rest of this system already uses, never a narrower individual-
  *      approval-only check.
  *   4. A webpage publication_artifacts row is bound to THAT EXACT firm, THAT
- *      EXACT version, AND THAT EXACT LOCALE (evidence, not merely intent)
- *      -- an artifact belonging to a different firm, an older version, or a
+ *      EXACT deliverable, THAT EXACT version, AND THAT EXACT LOCALE
+ *      (evidence, not merely intent) -- an artifact belonging to a
+ *      different firm, a different deliverable, an older version, or a
  *      different locale than the deliverable's own is stale/wrong and must
  *      never satisfy this check, even though the placement (intent) still
  *      exists. The locale predicate matches findArtifact()'s own pattern
  *      (used by facts 3/4 in this same file); a first adversarial audit
- *      (2026-07-21) found the locale predicate had been dropped, and a
- *      second found the firm_id predicate had never been added at all --
- *      the pure audit must enforce the complete binding itself, not rely
- *      on database-level integrity (e.g. a foreign key or RLS policy) as a
- *      substitute for checking the actual row.
+ *      (2026-07-21) found the locale predicate had been dropped, a second
+ *      found the firm_id predicate had never been added at all, and a
+ *      third found the deliverable_id predicate had never been added
+ *      either -- the pure audit must enforce the complete binding itself,
+ *      never relying on database-level integrity (a foreign key, an RLS
+ *      policy) or a caller's own pre-filtering as a substitute for
+ *      checking the actual row.
  */
 function resolveWebsiteArticleSourceSurface(
   deliverable: ContentDeliverable,
@@ -364,6 +367,7 @@ function resolveWebsiteArticleSourceSurface(
     (a) =>
       a.artifact_type === "webpage" &&
       a.firm_id === deliverable.firm_id &&
+      a.deliverable_id === deliverable.id &&
       a.version_id === currentVersion.id &&
       a.locale === locale,
   );
@@ -786,13 +790,13 @@ function resolveFact7ComplianceWrapper(
         no_website_placement: `This deliverable's content_placements rows include no firm_website destination. The content-graph rule (preflight design §5/§4.1) requires a linkedin_article placement to republish the SAME deliverable's own firm_website placement; no such sibling placement exists.`,
         wrong_role: `This deliverable has a firm_website placement, but deliverable_role="${deliverable.deliverable_role}", not "article" -- its content-graph source surface is not website_article, so no DR-105 lookup can be attempted.`,
         version_not_release_authorized: versionNotAuthorizedEvidence,
-        no_version_bound_artifact: `This deliverable has a firm_website placement and its current version is release-authorized, but no publication_artifacts row of type webpage is bound to ALL THREE of firm_id ${deliverable.firm_id}, version ${currentVersion?.id}, AND locale ${locale} specifically. Any existing webpage artifact belonging to a different firm, an older version, or a different locale must never be read as this release's source edge -- a cross-firm mismatch, content-changed-since-last-publish, and a locale mismatch are all exactly what this check exists to catch.`,
+        no_version_bound_artifact: `This deliverable has a firm_website placement and its current version is release-authorized, but no publication_artifacts row of type webpage is bound to ALL FOUR of firm_id ${deliverable.firm_id}, deliverable_id ${deliverable.id}, version ${currentVersion?.id}, AND locale ${locale} specifically. Any existing webpage artifact belonging to a different firm, a different deliverable, an older version, or a different locale must never be read as this release's source edge -- a cross-firm mismatch, a cross-deliverable mismatch, content-changed-since-last-publish, and a locale mismatch are all exactly what this check exists to catch.`,
       };
       const rootCauseByReason: Record<SourceSurfaceUnresolvedReason, string> = {
         no_website_placement: "source_surface_unresolved -- this placement has no sibling firm_website placement to establish a website_article source edge.",
         wrong_role: "source_surface_unsupported -- a website placement exists but is not an article, so it does not correspond to the registry's website_article source surface.",
         version_not_release_authorized: versionNotAuthorizedRootCause,
-        no_version_bound_artifact: "source_artifact_version_mismatch -- a webpage artifact exists for this deliverable, but not one bound to the exact firm, the exact version, AND the exact locale being republished; the source edge is stale, cross-firm, or locale-mismatched, not resolved.",
+        no_version_bound_artifact: "source_artifact_version_mismatch -- a webpage artifact exists for this deliverable, but not one bound to the exact firm, the exact deliverable, the exact version, AND the exact locale being republished; the source edge is stale, cross-firm, cross-deliverable, or locale-mismatched, not resolved.",
       };
       const proposedSolutionByReason: Record<SourceSurfaceUnresolvedReason, string> = {
         no_website_placement: "Operator creates the deliverable's firm_website placement first (per the content-graph rule), or confirms this linkedin_article placement is not actually a website-article republication and needs its own distinct DR-105 support.",

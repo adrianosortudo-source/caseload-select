@@ -456,11 +456,32 @@ describe("all eighteen gap classifications are independently reachable", () => {
     expect(unresolved!.canonicalSourceConsulted).toBe("publication_artifacts");
   });
 
-  it("compliance_wrapper_missing — bound artifact matches firm_id, version, AND locale exactly -> source edge resolves, no source_path_unverified finding (exact-match acceptance case)", () => {
+  it("compliance_wrapper_missing — website placement exists, bound artifact matches firm, version, AND locale but belongs to a DIFFERENT deliverable -> source_path_unverified, never 'documented' (regression: the pure audit must enforce deliverable_id itself, not rely on the caller's own pre-filtering)", () => {
+    const otherDeliverableId = "d9999999-9999-9999-9999-999999999999";
     const audit = resolveAndAuditReleaseGraph(
       baseInput({
         placement: makePlacement({ destination: "linkedin_article" }),
-        artifacts: [makeArtifact({ version_id: CURRENT_VERSION_ID, locale: "en-CA", firm_id: DRG_FIRM_ID })],
+        // Firm, version, and locale all match exactly, but the artifact
+        // belongs to a DIFFERENT deliverable entirely (e.g. a sibling
+        // article at the same firm, same version numbering by coincidence)
+        // -- must never be read as this release's source edge.
+        artifacts: [makeArtifact({ version_id: CURRENT_VERSION_ID, locale: "en-CA", firm_id: DRG_FIRM_ID, deliverable_id: otherDeliverableId })],
+      }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeUndefined();
+    const unresolved = audit.findings.find((f) => f.classification === "source_path_unverified");
+    expect(unresolved).toBeDefined();
+    expect(unresolved!.rootCause).toMatch(/source_artifact_version_mismatch/);
+    expect(unresolved!.factualEvidence).toMatch(/deliverable/i);
+    expect(unresolved!.canonicalSourceConsulted).toBe("publication_artifacts");
+  });
+
+  it("compliance_wrapper_missing — bound artifact matches firm_id, deliverable_id, version, AND locale exactly -> source edge resolves, no source_path_unverified finding (exact-match acceptance case)", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        placement: makePlacement({ destination: "linkedin_article" }),
+        artifacts: [makeArtifact({ version_id: CURRENT_VERSION_ID, locale: "en-CA", firm_id: DRG_FIRM_ID, deliverable_id: DELIVERABLE_ID })],
       }),
     );
     const unresolved = audit.findings.find(

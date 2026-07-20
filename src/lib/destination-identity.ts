@@ -6,20 +6,29 @@
  * observation, or a same-firm-but-different-account guess.
  *
  * For every external placement (a destination this codebase does not itself
- * own or host -- today: LinkedIn and Google Business Profile), five things
+ * own or host -- today: LinkedIn and Google Business Profile), six things
  * must be resolved before any verification/publish/absence conclusion is
  * trustworthy:
- *   1. destination platform (e.g. "linkedin");
- *   2. the exact intended account/page/location identity on that platform
+ *   1. the exact firm this identity is configured for (never a record
+ *      belonging to a different firm, even if it is otherwise valid);
+ *   2. destination platform (e.g. "linkedin"; never a record configured
+ *      for a different platform);
+ *   3. the exact intended account/page/location identity on that platform
  *      (e.g. the DRG Law Company Page, never a lawyer's personal profile);
- *   3. the exact intended surface within that account (e.g. "native
+ *   4. the exact intended surface within that account (e.g. "native
  *      article" vs. "feed post" vs. the page's own profile surface);
- *   4. the version/source content being represented;
- *   5. the evidence source used for verification (an authorized
+ *   5. the version/source content being represented;
+ *   6. the evidence source used for verification (an authorized
  *      manager-level or API history surface -- never a public page view,
  *      which cannot prove a negative and can be spoofed or simply wrong).
+ * resolveDestinationIdentity() checks (1) and (2) as explicit equality
+ * predicates against the caller-supplied `firmId`/`platform` parameters,
+ * not merely as context carried through into evidence text -- a
+ * configuredIdentity record supplied for the wrong firm or the wrong
+ * platform resolves `destination_identity_unresolved`, exactly as if no
+ * record had been supplied at all.
  *
- * No durable configuration model for (1)-(3) exists in this codebase today.
+ * No durable configuration model for (1)-(4) exists in this codebase today.
  * `publication_destination_configs` -- firm_id + platform +
  * account_or_location_id + destination_surface + status + a controlled
  * credential/integration reference -- is the correct future home for it
@@ -143,6 +152,32 @@ export function resolveDestinationIdentity(input: ResolveDestinationIdentityInpu
       canVerifyPublished: false,
       canDeclareAbsent: false,
       reason: `No destination identity is configured for firm ${firmId} on platform "${platform}". The exact intended account/page/location and surface are not recorded anywhere this system can read. Never substitute a different account, a public page, or a guess derived from the firm's name or domain -- this is a fail-closed stop, not an invitation to look elsewhere.`,
+      evidenceSourceConsulted: null,
+    };
+  }
+  // A configuredIdentity record was supplied, but it belongs to a
+  // different firm or a different platform than the one actually being
+  // evaluated -- a caller-side mismatch (a stale or wrong record reused
+  // across firms/platforms) that must never be treated as "configured for
+  // this firm/platform" merely because SOME record happened to be passed
+  // in. Checked before status/history so a wrong-firm or wrong-platform
+  // record never gets far enough to be judged "active" or "history-capable"
+  // for a firm/platform it was never actually configured for.
+  if (configuredIdentity.firmId !== firmId) {
+    return {
+      kind: "destination_identity_unresolved",
+      canVerifyPublished: false,
+      canDeclareAbsent: false,
+      reason: `A destination identity record was supplied, but it belongs to firm ${configuredIdentity.firmId}, not the firm actually being evaluated (${firmId}). A record configured for a different firm is never treated as configured for this one -- this is a fail-closed stop, not an invitation to reuse a nearby record.`,
+      evidenceSourceConsulted: null,
+    };
+  }
+  if (configuredIdentity.platform !== platform) {
+    return {
+      kind: "destination_identity_unresolved",
+      canVerifyPublished: false,
+      canDeclareAbsent: false,
+      reason: `A destination identity record was supplied for firm ${firmId}, but it is configured for platform "${configuredIdentity.platform}", not the platform actually being evaluated ("${platform}"). A record configured for a different platform is never treated as configured for this one.`,
       evidenceSourceConsulted: null,
     };
   }
