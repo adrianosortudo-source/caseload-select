@@ -194,6 +194,7 @@ export async function loadReleaseGraphAuditForPeriod(
           deliverable,
           currentVersion,
           placement,
+          deliverablePlacements,
           artifacts: deliverableArtifacts,
           latestValidationByArtifactId,
           comments: deliverableComments,

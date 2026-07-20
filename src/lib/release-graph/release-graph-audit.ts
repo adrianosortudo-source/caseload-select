@@ -78,6 +78,14 @@ export interface ResolveReleaseGraphInput {
   deliverable: ContentDeliverable;
   currentVersion: DeliverableVersion | null;
   placement: ContentPlacement;
+  /**
+   * Every content_placements row for this SAME deliverable (including
+   * `placement` itself), not just the one being evaluated. Required so
+   * fact 7 can derive this placement's actual content-graph source edge
+   * (e.g. does this deliverable also carry a firm_website placement) rather
+   * than assuming one -- see resolveFact7ComplianceWrapper.
+   */
+  deliverablePlacements: ContentPlacement[];
   /** All publication_artifacts rows for this deliverable, any version -- same shape evaluateDeliverableReadiness expects. */
   artifacts: PublicationArtifact[];
   latestValidationByArtifactId: Record<string, PublicationArtifactValidation | undefined>;
@@ -104,20 +112,113 @@ export interface ResolveReleaseGraphInput {
 }
 
 /**
+ * The DR-105 registry's own source/destination-surface vocabulary
+ * (surface-presentation-adaptation-registry.md's `source_surface`/
+ * `destination_surface` fields), kept distinct from PlacementDestination --
+ * the two are related but not spelled the same (the registry's
+ * `linkedin_native_article` corresponds to a `content_placements.destination`
+ * value of `linkedin_article`, not the same string).
+ */
+export type RegistrySourceSurface = "website_article";
+export type RegistryDestinationSurface = "linkedin_native_article";
+
+/**
  * Hand-maintained mirror of the rule(s) currently registered in
- * docs/publication-operator/surface-presentation-adaptation-registry.md.
- * This exists ONLY so this audit can distinguish "no DR-105 rule has ever
- * been authored for this firm/locale/surface tuple" (a real content/
- * doctrine gap) from "a rule IS documented, but no runtime reader applies
+ * docs/publication-operator/surface-presentation-adaptation-registry.md,
+ * keyed on the SAME four-part tuple the registry itself uses --
+ * firm_id + locale + source_surface + destination_surface. This exists
+ * ONLY so this audit can distinguish "no DR-105 rule has ever been
+ * authored for this exact tuple" (a real content/doctrine gap) from "a
+ * rule IS documented for this exact tuple, but no runtime reader applies
  * or binds it to a specific release" (a system-enforcement gap) -- it is
  * NOT the runtime registry reader preflight design §10 item 4 describes,
  * and must be updated by hand, in the same PR, whenever the registry file
  * changes. If this table and the registry file drift, this audit will
  * report a stale answer.
+ *
+ * A two-dimensional (firm, locale) version of this table previously shipped
+ * and was corrected 2026-07-21: it could not distinguish a genuinely
+ * documented rule from one that merely shared a firm and locale with an
+ * unrelated source/destination pairing. Every field below is matched with
+ * exact equality; there is no wildcard, fallback, or "close enough" case.
  */
-const KNOWN_DR105_RULES: Array<{ firmId: string; locale: string; ruleId: string }> = [
-  { firmId: DRG_FIRM_ID, locale: "en-CA", ruleId: "drg_en_website_article_to_linkedin_article_lso_notice_v1" },
+export interface KnownDR105Rule {
+  firmId: string;
+  locale: string;
+  sourceSurface: RegistrySourceSurface;
+  destinationSurface: RegistryDestinationSurface;
+  ruleId: string;
+}
+
+export const KNOWN_DR105_RULES: KnownDR105Rule[] = [
+  {
+    firmId: DRG_FIRM_ID,
+    locale: "en-CA",
+    sourceSurface: "website_article",
+    destinationSurface: "linkedin_native_article",
+    ruleId: "drg_en_website_article_to_linkedin_article_lso_notice_v1",
+  },
 ];
+
+/**
+ * Exact four-field lookup against the mirror above. No field is optional,
+ * no field is inferred, and a match requires every field to be identical --
+ * this is the audit's own authorization boundary, not something it inherits
+ * from another part of the system.
+ */
+export function findKnownDr105Rule(candidate: {
+  firmId: string;
+  locale: string;
+  sourceSurface: string;
+  destinationSurface: string;
+}): KnownDR105Rule | null {
+  return (
+    KNOWN_DR105_RULES.find(
+      (r) =>
+        r.firmId === candidate.firmId &&
+        r.locale === candidate.locale &&
+        r.sourceSurface === candidate.sourceSurface &&
+        r.destinationSurface === candidate.destinationSurface,
+    ) ?? null
+  );
+}
+
+/**
+ * Maps a content_placements.destination value to the DR-105 registry's own
+ * destination_surface vocabulary. Only linkedin_article has a defined
+ * mapping today -- every other destination returns null, which callers
+ * must treat as "no DR-105 destination-surface concept applies here," never
+ * as a wildcard that could accidentally match a rule.
+ */
+export function registryDestinationSurfaceFor(destination: PlacementDestination): RegistryDestinationSurface | null {
+  if (destination === "linkedin_article") return "linkedin_native_article";
+  return null;
+}
+
+/**
+ * Derives the candidate source surface for a linkedin_article placement
+ * from this deliverable's ACTUAL content graph -- never assumed. Per the
+ * content-graph rule (preflight design §5/§4.1), a linkedin_article
+ * placement is only ever a valid republication of the SAME deliverable's
+ * own firm_website placement; this checks that a firm_website placement
+ * genuinely exists among this deliverable's OWN placements, and that the
+ * deliverable's role is "article" (the only role this system's content
+ * graph resolves to the registry's "website_article" surface -- a
+ * firm_website placement on a "landing_page"-role deliverable is a
+ * different, currently-unsupported source surface, not website_article).
+ * Returns null for both "no edge at all" and "edge exists but is not an
+ * article" -- both are equally unresolved/unsupported from this audit's
+ * point of view, distinguished only in the finding's own evidence text.
+ */
+function resolveWebsiteArticleSourceSurface(
+  deliverable: ContentDeliverable,
+  deliverablePlacements: ContentPlacement[],
+): { surface: RegistrySourceSurface | null; hasWebsitePlacement: boolean } {
+  const hasWebsitePlacement = deliverablePlacements.some((p) => p.destination === "firm_website");
+  if (!hasWebsitePlacement) return { surface: null, hasWebsitePlacement: false };
+  if (deliverable.deliverable_role === "article") return { surface: "website_article", hasWebsitePlacement: true };
+  return { surface: null, hasWebsitePlacement: true };
+}
 
 function finding(
   classification: GapClassification,
@@ -480,50 +581,88 @@ function resolveFact7ComplianceWrapper(
   input: ResolveReleaseGraphInput,
   canonicalSource: string,
 ): ReleaseGraphFinding[] {
-  const { deliverable, placement, emailBranding } = input;
+  const { deliverable, placement, deliverablePlacements, emailBranding } = input;
 
   if (placement.destination === "linkedin_article") {
     const locale = deliverable.locale ?? "en-CA";
-    const matchingRule = KNOWN_DR105_RULES.find((r) => r.firmId === deliverable.firm_id && r.locale === locale);
+    const destinationSurface = registryDestinationSurfaceFor(placement.destination);
+    const { surface: sourceSurface, hasWebsitePlacement } = resolveWebsiteArticleSourceSurface(deliverable, deliverablePlacements);
+
+    // Fail closed on the SOURCE edge before ever consulting the rule
+    // mirror. Never assume a linkedin_article placement republishes a
+    // website_article -- derive it from this deliverable's own placements.
+    // Two distinct sub-cases, same classification/impact, different
+    // evidence: no firm_website placement at all ("unresolved"), or one
+    // exists but this deliverable's role is not "article" ("unsupported").
+    if (!sourceSurface || !destinationSurface) {
+      return [
+        finding(
+          "source_path_unverified",
+          "compliance_wrapper_and_sender",
+          hasWebsitePlacement
+            ? "This deliverable's website placement is not an article -- source surface unsupported"
+            : "No resolved website-article source edge for this native Article placement",
+          {
+            releaseImpact: "needs_human_confirmation",
+            factualEvidence: hasWebsitePlacement
+              ? `This deliverable has a firm_website placement, but deliverable_role="${deliverable.deliverable_role}", not "article" -- its content-graph source surface is not website_article, so no DR-105 lookup can be attempted.`
+              : `This deliverable's content_placements rows include no firm_website destination. The content-graph rule (preflight design §5/§4.1) requires a linkedin_article placement to republish the SAME deliverable's own firm_website placement; no such sibling placement exists.`,
+            canonicalSourceConsulted: "content_placements",
+            immediateDisposition: "Fail closed. Do not classify any DR-105 wrapper rule as documented or absent for this placement until its source surface is actually resolved.",
+            rootCause: hasWebsitePlacement
+              ? "source_surface_unsupported -- a website placement exists but is not an article, so it does not correspond to the registry's website_article source surface."
+              : "source_surface_unresolved -- this placement has no sibling firm_website placement to establish a website_article source edge.",
+            proposedDurableSolution: hasWebsitePlacement
+              ? "Operator confirms whether this deliverable is genuinely meant to be a website article (correcting deliverable_role), or that this linkedin_article placement needs its own distinct source-surface support, not assumed compatibility."
+              : "Operator creates the deliverable's firm_website placement first (per the content-graph rule), or confirms this linkedin_article placement is not actually a website-article republication and needs its own distinct DR-105 support.",
+            authorityRequired: "Operator -- resolving which content-graph edge applies, not a wrapper-wording decision.",
+            reusablePreflightRule: "Never assume a linkedin_article placement's source surface is website_article -- derive it from the deliverable's actual role and sibling placements before any DR-105 lookup runs, and fail closed (never 'absent', never 'documented') when it cannot be resolved.",
+          },
+        ),
+      ];
+    }
+
+    const matchingRule = findKnownDr105Rule({ firmId: deliverable.firm_id, locale, sourceSurface, destinationSurface });
 
     if (!matchingRule) {
-      // Wrapper absent: no rule has ever been authored and reviewed for
-      // this exact firm/locale tuple, documented or otherwise. This is a
-      // real content/doctrine gap for THIS release, never a system-reader
-      // problem -- authoring a new rule requires a human decision this
-      // audit cannot make or infer.
+      // Wrapper absent: the source/destination surface tuple resolved
+      // cleanly, but no rule has ever been authored and reviewed for this
+      // exact (firm, locale, source_surface, destination_surface) tuple.
+      // This is a real content/doctrine gap for THIS release, never a
+      // system-reader problem -- authoring a new rule requires a human
+      // decision this audit cannot make or infer.
       return [
-        finding("compliance_wrapper_missing", "compliance_wrapper_and_sender", "No DR-105 rule documented for this firm/locale", {
+        finding("compliance_wrapper_missing", "compliance_wrapper_and_sender", "No DR-105 rule documented for this exact tuple", {
           releaseImpact: "blocks_today",
-          factualEvidence: `No entry in docs/publication-operator/surface-presentation-adaptation-registry.md (or its hand-maintained mirror in this audit) matches (firm=${deliverable.firm_id}, locale=${locale}). Distinct from a runtime-reader gap: even a human manually consulting the registry today would find nothing for this exact tuple.`,
+          factualEvidence: `No entry in docs/publication-operator/surface-presentation-adaptation-registry.md (or its hand-maintained mirror in this audit) matches (firm_id=${deliverable.firm_id}, locale=${locale}, source_surface=${sourceSurface}, destination_surface=${destinationSurface}). Distinct from a runtime-reader gap: even a human manually consulting the registry today would find nothing for this exact tuple.`,
           canonicalSourceConsulted: "docs/publication-operator/surface-presentation-adaptation-registry.md",
-          immediateDisposition: "Hold this destination for this firm/locale. Do not draft, paraphrase, or copy another firm's wrapper wording as a substitute.",
-          rootCause: "wrapper_absent -- no DR-105 surface-adaptation rule has ever been authored and reviewed for this exact firm/locale/surface tuple.",
-          proposedDurableSolution: "Operator and the firm's lawyer author and review a new DR-105 rule for this tuple, at the same review bar as the one existing rule, before this destination is attempted for this firm/locale.",
+          immediateDisposition: "Hold this destination for this exact tuple. Do not draft, paraphrase, or copy another firm's, locale's, or surface's wrapper wording as a substitute.",
+          rootCause: "wrapper_absent -- no DR-105 surface-adaptation rule has ever been authored and reviewed for this exact four-part tuple.",
+          proposedDurableSolution: "Operator and the firm's lawyer author and review a new DR-105 rule for this exact tuple, at the same review bar as the one existing rule, before this destination is attempted.",
           authorityRequired: "Operator + firm's lawyer sign-off on the exact wrapper wording -- a real doctrine decision, not an engineering task.",
-          reusablePreflightRule: "Check the registry (or its mirror) for a matching (firm, locale) entry BEFORE citing the runtime-reader gap -- a missing rule and a missing reader are different facts with different owners.",
+          reusablePreflightRule: "Check the registry (or its mirror) for a matching four-field tuple BEFORE citing the runtime-reader gap -- a missing rule and a missing reader are different facts with different owners, and a partial (firm, locale)-only match is not a real match.",
         }),
       ];
     }
 
-    // A rule IS documented for this exact tuple (wrapper not absent), but
-    // no code path in this repository reads the registry file or binds a
-    // matched rule to a specific release/receipt at runtime -- so it has
-    // never been, and cannot currently be, applied/verified for any real
-    // release ("not bound"). Both facts stem from the same root cause
-    // (preflight design §4.1a's resolve_surface_presentation_adaptation
+    // A rule IS documented for this exact four-part tuple (wrapper not
+    // absent), but no code path in this repository reads the registry file
+    // or binds a matched rule to a specific release/receipt at runtime --
+    // so it has never been, and cannot currently be, applied/verified for
+    // any real release ("not bound"). Both facts stem from the same root
+    // cause (preflight design §4.1a's resolve_surface_presentation_adaptation
     // step was designed but never implemented), so they are reported
     // together rather than as two separate findings that could drift.
     return [
-      finding("compliance_wrapper_missing", "compliance_wrapper_and_sender", "Rule documented, but not runtime-bound to any release", {
+      finding("compliance_wrapper_missing", "compliance_wrapper_and_sender", "Rule documented for this exact tuple, but not runtime-bound to any release", {
         releaseImpact: "system_improvement",
-        factualEvidence: `A matching DR-105 rule IS documented for (firm=${deliverable.firm_id}, locale=${locale}): rule_id=${matchingRule.ruleId}. No code path in this repository reads that file or binds it to a specific release/receipt at runtime (confirmed by direct inspection) -- so the rule, though it exists, has never been applied/bound to any actual release.`,
+        factualEvidence: `A matching DR-105 rule IS documented for (firm_id=${deliverable.firm_id}, locale=${locale}, source_surface=${sourceSurface}, destination_surface=${destinationSurface}): rule_id=${matchingRule.ruleId}. No code path in this repository reads that file or binds it to a specific release/receipt at runtime (confirmed by direct inspection) -- so the rule, though it exists for this exact tuple, has never been applied/bound to any actual release.`,
         canonicalSourceConsulted: "docs/publication-operator/surface-presentation-adaptation-registry.md",
         immediateDisposition: "Hold automated publication for this destination; a human may still manually apply the documented rule text today if publishing by hand -- never draft new wording at publish time even so.",
         rootCause: "runtime_lookup_not_implemented -- the resolve_surface_presentation_adaptation step (preflight design §4.1a) was designed but never implemented, so no release can ever reach a 'bound' state for this rule today, regardless of content readiness.",
-        proposedDurableSolution: "Implement the registry-lookup step as a manifest-loader function, exactly as preflight design §10 item 4 already specifies, and record its match as durable evidence (e.g. on the receipt) so 'bound' becomes a real, checkable state -- no further doctrine work is needed for this specific tuple, only engineering.",
-        authorityRequired: "Engineering work only -- the wrapper wording itself is already reviewed and approved for this tuple; no further lawyer/operator content decision is needed here.",
-        reusablePreflightRule: "compliance_wrapper_missing for linkedin_article must name the matched rule_id when one exists -- an unconditional identical message for every linkedin_article placement conflates a real doctrine gap with a pure engineering gap and hides which authority is actually needed.",
+        proposedDurableSolution: "Implement the registry-lookup step as a manifest-loader function, exactly as preflight design §10 item 4 already specifies, and record its match as durable evidence (e.g. on the receipt) so 'bound' becomes a real, checkable state -- no further doctrine work is needed for this exact tuple, only engineering.",
+        authorityRequired: "Engineering work only -- the wrapper wording itself is already reviewed and approved for this exact tuple; no further lawyer/operator content decision is needed here.",
+        reusablePreflightRule: "compliance_wrapper_missing for linkedin_article must name the matched rule_id and all four matched dimensions when one exists -- an unconditional identical message for every linkedin_article placement conflates a real doctrine gap with a pure engineering gap and hides which authority is actually needed.",
       }),
     ];
   }

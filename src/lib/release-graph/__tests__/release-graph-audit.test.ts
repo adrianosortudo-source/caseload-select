@@ -3,6 +3,7 @@ import {
   resolveAndAuditReleaseGraph,
   auditDeliverableWithNoPlacements,
   computeReleaseVerdict,
+  findKnownDr105Rule,
   DRG_FIRM_ID,
   type ResolveReleaseGraphInput,
   type CtaTargetResolution,
@@ -204,6 +205,11 @@ function baseInput(overrides: Partial<ResolveReleaseGraphInput> = {}): ResolveRe
     deliverable: makeDeliverable(),
     currentVersion: makeVersion(),
     placement: makePlacement(),
+    // Default: this deliverable also has a firm_website placement (its
+    // article surface), so a linkedin_article compliance-wrapper test can
+    // resolve a real website_article source edge unless a test explicitly
+    // overrides this to [] to exercise the fail-closed "no edge" path.
+    deliverablePlacements: [makePlacement()],
     artifacts: [],
     latestValidationByArtifactId: {},
     comments: [],
@@ -358,6 +364,82 @@ describe("all fifteen gap classifications are independently reachable", () => {
     expect(cw!.authorityRequired).toMatch(/lawyer sign-off/);
     // Never conflate "no rule documented" with "no runtime reader exists" -- distinct root causes.
     expect(cw!.rootCause).not.toMatch(/runtime_lookup_not_implemented/);
+  });
+
+  it("compliance_wrapper_missing — same firm/locale, but WRONG source surface (a landing_page, not an article) resolves fail-closed, never 'documented'", () => {
+    const landingPageDeliverable = makeDeliverable({ deliverable_role: "landing_page" });
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        deliverable: landingPageDeliverable,
+        placement: makePlacement({ destination: "linkedin_article" }),
+        // A firm_website placement DOES exist for this deliverable -- the
+        // edge is present, but the deliverable's own role means it is not
+        // an "article," so the source surface must not resolve to
+        // website_article.
+        deliverablePlacements: [makePlacement({ destination: "firm_website" })],
+      }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeUndefined();
+    const unresolved = audit.findings.find((f) => f.classification === "source_path_unverified");
+    expect(unresolved).toBeDefined();
+    expect(unresolved!.rootCause).toMatch(/source_surface_unsupported/);
+    expect(unresolved!.factualEvidence).toMatch(/not "article"/);
+  });
+
+  it("compliance_wrapper_missing — same firm/locale/source surface, but WRONG destination surface resolves no match (isolated findKnownDr105Rule test)", () => {
+    // The full pipeline can never reach this combination naturally (only
+    // linkedin_article ever consults the mirror, and it always maps to
+    // linkedin_native_article) -- this proves the lookup itself enforces
+    // all four fields independently, not just firm+locale, by directly
+    // supplying a destination_surface no real placement could ever produce.
+    const match = findKnownDr105Rule({
+      firmId: DRG_FIRM_ID,
+      locale: "en-CA",
+      sourceSurface: "website_article",
+      destinationSurface: "google_business_profile_post" as never,
+    });
+    expect(match).toBeNull();
+  });
+
+  it("compliance_wrapper_missing — a linkedin_article placement with NO resolved website source edge fails closed (source_path_unverified), never 'absent' or 'documented'", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        placement: makePlacement({ destination: "linkedin_article" }),
+        // No sibling firm_website placement at all -- the source edge itself is unresolved.
+        deliverablePlacements: [makePlacement({ destination: "linkedin_article" })],
+      }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeUndefined();
+    const unresolved = audit.findings.find((f) => f.classification === "source_path_unverified");
+    expect(unresolved).toBeDefined();
+    expect(unresolved!.releaseImpact).toBe("needs_human_confirmation");
+    expect(unresolved!.rootCause).toMatch(/source_surface_unresolved/);
+    expect(unresolved!.immediateDisposition).toMatch(/Fail closed/);
+  });
+
+  it("compliance_wrapper_missing — findKnownDr105Rule requires exact equality on every field, not a partial (firm, locale) match", () => {
+    // Correct firm+locale+destination, wrong source surface.
+    expect(
+      findKnownDr105Rule({ firmId: DRG_FIRM_ID, locale: "en-CA", sourceSurface: "landing_page" as never, destinationSurface: "linkedin_native_article" }),
+    ).toBeNull();
+    // Correct firm+locale+source, wrong destination surface.
+    expect(
+      findKnownDr105Rule({ firmId: DRG_FIRM_ID, locale: "en-CA", sourceSurface: "website_article", destinationSurface: "gbp_post" as never }),
+    ).toBeNull();
+    // Correct locale+source+destination, wrong firm.
+    expect(
+      findKnownDr105Rule({ firmId: "99999999-9999-9999-9999-999999999999", locale: "en-CA", sourceSurface: "website_article", destinationSurface: "linkedin_native_article" }),
+    ).toBeNull();
+    // Correct firm+source+destination, wrong locale.
+    expect(
+      findKnownDr105Rule({ firmId: DRG_FIRM_ID, locale: "pt-BR", sourceSurface: "website_article", destinationSurface: "linkedin_native_article" }),
+    ).toBeNull();
+    // All four correct -- the only combination that matches.
+    expect(
+      findKnownDr105Rule({ firmId: DRG_FIRM_ID, locale: "en-CA", sourceSurface: "website_article", destinationSurface: "linkedin_native_article" })?.ruleId,
+    ).toBe("drg_en_website_article_to_linkedin_article_lso_notice_v1");
   });
 
   it("compliance_wrapper_missing does not cite a repository code search as evidence of the wrapper's own state", () => {

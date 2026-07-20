@@ -109,6 +109,7 @@ function baseAuditInput(overrides: Partial<ResolveReleaseGraphInput> = {}): Reso
     deliverable: baseDeliverable(),
     currentVersion: baseVersion(),
     placement: basePlacement(),
+    deliverablePlacements: [basePlacement()],
     artifacts: [],
     latestValidationByArtifactId: {},
     comments: [],
