@@ -96,7 +96,7 @@ compliance_block_exact_text: |
   Legal information, not legal advice. What you read in this article is general information about the law. It is not legal advice for your situation. Sending an intake to DRG Law does not make DRG Law your lawyer. That only happens after DRG Law checks for conflicts and both sides sign a written agreement.
 evidence_required:
   - source_deliverable_id
-  - source_approved_version_id
+  - source_release_authorized_version_id  # the immutable version id resolved via the two-path "Source-authorization eligibility" rule above (individual approval or standing authorization) -- never merely "approved"
   - source_integrity_identity
   - destination_account_id
   - adaptation_rule_id
@@ -125,14 +125,25 @@ specifically. Any of those is a substantive change and resolves
 
 ### Provenance
 
-`compliance_block_exact_text` substitutes only the surface self-reference
-in the locked DR-082 English wrapper (`06_Clients/DRGLaw/03_Authority/Website/drg-law-website/src/components/layout/LsoDisclaimer.tsx`
-+ `src/lib/firm.ts`'s `lsoDisclaimer` string): "this website" becomes
-"this article," and "Sending an intake" becomes "Sending an intake to
-DRG Law" so the sentence still parses as a complete thought once
-detached from the website's own "DRG Law" masthead context. No other
-word changes. This exact substitution, and the reasoning for treating it
-as presentation rather than substantive legal content, is recorded in
+`compliance_block_exact_text` makes only these two surface-contextual
+substitutions to the locked DR-082 English wrapper: "this website"
+becomes "this article," and "Sending an intake" becomes "Sending an
+intake to DRG Law" so the sentence still parses as a complete thought
+once detached from the website's own "DRG Law" masthead context. No
+other word changes.
+
+Source of the locked wrapper text: the DRG Law website's own
+`LsoDisclaimer.tsx` component and `firm.ts`'s `lsoDisclaimer` string
+(`src/components/layout/LsoDisclaimer.tsx` + `src/lib/firm.ts`). That
+website is an external, separate, CLI-deployed repository
+(`06_Clients/DRGLaw/03_Authority/Website/drg-law-website`) -- it is not
+part of this codebase and its files do not resolve on this repo's
+`origin/main`. The path above is cited for provenance only, to show
+where the locked wrapper text came from, not as a path readable from
+this repository.
+
+These exact two substitutions, and the reasoning for treating them as
+presentation rather than substantive legal content, are recorded in
 DR-105.
 
 ### Scope discipline
