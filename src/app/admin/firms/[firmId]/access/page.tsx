@@ -56,11 +56,11 @@ export default async function FirmAccessPage({
 
       <div className="bg-white border border-border-brand p-4 flex items-center justify-between gap-3 flex-wrap">
         <a
-          href={`/portal/${firmId}`}
+          href={`/api/portal/${firmId}/workspace/enter?next=/portal/${firmId}/triage`}
           title={`Open ${firmName} portal`}
           className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider font-semibold px-3 py-1.5 border border-navy/30 text-navy hover:bg-navy hover:text-white transition-colors"
         >
-          Open portal <span aria-hidden>&#8599;</span>
+          Open Operator Workspace <span aria-hidden>&#8599;</span>
         </a>
       </div>
 

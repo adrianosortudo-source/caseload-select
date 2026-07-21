@@ -32,6 +32,7 @@ import { stackCards, stackBottom } from "@/lib/margin-stack";
 import type { HighlightItem } from "@/lib/highlight-dom";
 import { formatTimestamp } from "@/lib/firm-timezone";
 import PlacementsTrackingPanel from "./PlacementsTrackingPanel";
+import HeroImageControl from "./HeroImageControl";
 
 interface Detail {
   deliverable: ContentDeliverable;
@@ -372,6 +373,16 @@ export default function DeliverableReview({
             <div className="bg-white border border-border-brand px-6 py-10 text-center text-sm text-black/55">
               No version posted yet.
             </div>
+          )}
+
+          {selectedVersion && viewerRole === "operator" && (
+            <HeroImageControl
+              firmId={firmId}
+              deliverableId={deliverableId}
+              deliverableTitle={deliverable.title}
+              hasHero={Boolean(deliverable.hero_image_url)}
+              onSaved={refetch}
+            />
           )}
 
           {selectedVersion && (
