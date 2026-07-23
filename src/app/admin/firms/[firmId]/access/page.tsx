@@ -62,6 +62,13 @@ export default async function FirmAccessPage({
         >
           Open Operator Workspace <span aria-hidden>&#8599;</span>
         </a>
+        <a
+          href={`/admin/firms/${firmId}/support-preview`}
+          title={`Open ${firmName} support preview`}
+          className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider font-semibold px-3 py-1.5 border border-navy/30 text-navy hover:bg-navy hover:text-white transition-colors"
+        >
+          Open support preview
+        </a>
       </div>
 
       <MemberManager

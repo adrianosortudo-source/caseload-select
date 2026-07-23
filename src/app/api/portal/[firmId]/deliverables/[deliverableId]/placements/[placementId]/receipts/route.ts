@@ -36,6 +36,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOperator } from "@/lib/admin-auth";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { getDeliverableDetail } from "@/lib/deliverables";
 import { createReceipt, listReceiptsForPlacement } from "@/lib/publication-receipts";
 import { listPlacementsForDeliverable } from "@/lib/content-placements";
@@ -152,6 +153,10 @@ export async function POST(
   if (resolved.actor.role !== "operator") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
+
   const detail = await getDeliverableDetail(deliverableId);
   if (!detail || detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });

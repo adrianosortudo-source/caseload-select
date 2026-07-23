@@ -20,10 +20,22 @@ const state = {
     | { ok: true; eventId: string; eventSeq: number; event: "enabled" | "disabled"; effectiveAt: string }
     | { ok: false; error: string },
   enableCallArgs: null as unknown,
+  previewDenied: null as { status: number; body: { error: string; code: string } } | null,
 };
 
 vi.mock("@/lib/portal-auth", () => ({
   getFirmSession: () => Promise.resolve(state.firmSession),
+}));
+
+vi.mock("@/lib/preview-guard", () => ({
+  denyWriteIfPreview: () => {
+    if (!state.previewDenied) return Promise.resolve(null);
+    const denial = state.previewDenied;
+    return Promise.resolve({
+      status: denial.status,
+      json: async () => denial.body,
+    });
+  },
 }));
 
 vi.mock("@/lib/standing-publishing-authorization", () => ({
@@ -54,6 +66,33 @@ beforeEach(() => {
   state.firmName = "DRG Law";
   state.enableResult = { ok: true, eventId: "e1", eventSeq: 1, event: "enabled", effectiveAt: "2026-07-17T00:00:00Z" };
   state.enableCallArgs = null;
+  state.previewDenied = null;
+});
+
+describe("POST enable: support preview", () => {
+  it("returns the support-preview contract and never reaches getFirmSession when denyWriteIfPreview denies (guard-first)", async () => {
+    state.previewDenied = {
+      status: 403,
+      body: {
+        error: "Support preview is read-only. Complete this action from the firm’s own authorized session.",
+        code: "support_preview_read_only",
+      },
+    };
+    const res = await POST(makeReq({ notification_preference: "weekly_digest", agreed: true }), params());
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.code).toBe("support_preview_read_only");
+    expect(body.error).toBe(
+      "Support preview is read-only. Complete this action from the firm’s own authorized session.",
+    );
+    expect(state.enableCallArgs).toBeNull();
+  });
+
+  it("proceeds to the normal lawyer-only auth gate when denyWriteIfPreview allows (no active preview)", async () => {
+    state.previewDenied = null;
+    const res = await POST(makeReq({ notification_preference: "weekly_digest", agreed: true }), params());
+    expect(res.status).toBe(200);
+  });
 });
 
 describe("POST enable: auth gate", () => {

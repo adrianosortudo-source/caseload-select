@@ -13,6 +13,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
+import { getPreviewIntent } from "@/lib/preview-mode";
 import { getContentPlan } from "@/lib/deliverables";
 import { getFirmAbout } from "@/lib/firm-about";
 import { getContentCadence } from "@/lib/content-cadence";
@@ -39,7 +40,15 @@ export default async function DeliverablesPage({
   if (!session || session.role === "client") {
     redirect("/portal/login");
   }
-  const viewerRole = session.role === "operator" ? "operator" : "lawyer";
+  // DR-084: an operator in Lawyer decision-maker support preview for this
+  // firm renders the list exactly as the lawyer sees it, mirroring the
+  // individual deliverable page's existing preview-aware viewerRole. Every
+  // mutation on this list is still refused server-side (preview-guard.ts)
+  // regardless of what role this page renders as.
+  const preview = await getPreviewIntent();
+  const isLawyerPreview =
+    session.role === "operator" && preview?.target === "lawyer" && preview.firm_id === firmId;
+  const viewerRole = session.role === "operator" && !isLawyerPreview ? "operator" : "lawyer";
   const includeArchived = archived === "1";
 
   const [plan, about] = await Promise.all([

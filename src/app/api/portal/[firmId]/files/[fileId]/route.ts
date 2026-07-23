@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/portal-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import {
   getFirmFile,
   getFirmFileSignedUrl,
@@ -89,6 +90,9 @@ export async function DELETE(
   if (!session || !isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
 
   const file = await getFirmFile(fileId);
   if (!file || file.firm_id !== firmId) {

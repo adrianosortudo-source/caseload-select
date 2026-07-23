@@ -8,7 +8,7 @@
 
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
-import { getPreviewIntent } from "@/lib/preview-mode";
+import { getPreviewIntent, resolvePreviewForFirm } from "@/lib/preview-mode";
 import { getOperatorWorkspace } from "@/lib/operator-workspace";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { getFirmUnreadCount } from "@/lib/operator-firm-messaging";
@@ -52,6 +52,15 @@ export default async function PortalLayout({
   // plus the PreviewStrip. Lawyer preview keeps the lawyer tab nav; client
   // preview hides it, matching what a real client sees under this layout.
   const preview = isOperator ? await getPreviewIntent() : null;
+
+  // Support preview is server-bound to one firm. A live preview cookie for a
+  // different firm must not silently downgrade to the operator view of this
+  // firm: terminate the preview and return to the console (exit clears the
+  // cookie), so preview context can never follow the operator across firms.
+  if (isOperator && resolvePreviewForFirm(preview, firmId) === "mismatch") {
+    redirect(`/api/portal/${firmId}/preview/exit`);
+  }
+
   const workspace = isOperator ? await getOperatorWorkspace(firmId) : null;
   const isLawyerPreview = !!preview && preview.target === "lawyer" && preview.firm_id === firmId;
   const isClientPreview = !!preview && preview.target === "client" && preview.firm_id === firmId;
@@ -118,7 +127,8 @@ export default async function PortalLayout({
       {inPreview && (
         <PreviewStrip
           firmId={firmId}
-          label={isClientPreview ? "the client" : `${firmName} (lawyer view)`}
+          firmName={firmName}
+          audience={isClientPreview ? "client" : "lawyer"}
         />
       )}
 
@@ -169,10 +179,10 @@ function OperatorViewingBanner({ firmName, firmId }: { firmName: string; firmId:
       </span>
       <span className="flex items-center gap-4 whitespace-nowrap">
         <a
-          href={`/api/portal/${firmId}/preview/enter?target=lawyer`}
+          href={`/admin/firms/${firmId}/support-preview`}
           className="uppercase tracking-wider font-semibold text-navy/80 hover:text-navy underline underline-offset-2"
         >
-          View as the firm
+          Open support preview
         </a>
         <a
           href="/admin/triage"
