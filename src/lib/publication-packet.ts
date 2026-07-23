@@ -104,6 +104,7 @@ export type PublicationPacketCheckName =
   | "legal_authority"
   | "final_copy_exists"
   | "asset_exists_and_role_ok"
+  | "canonical_record"
   | "cta_exists"
   | "cta_resolves"
   | "draft_release_control"
@@ -189,6 +190,19 @@ export interface PublicationPacketEvidence {
   verifiedAt: string | null;
 }
 
+/**
+ * State exclusivity invariant (2026-07-22 audit follow-up): for any
+ * assembled packet, exactly ONE of these three narratives holds --
+ * published; readyToPublish (every check passes except publication_proof,
+ * which simply hasn't happened yet); or needsAttention (some check OTHER
+ * than publication_proof fails). readyToPublish and needsAttention must
+ * never both be true. publication_proof is a "has this actually happened
+ * yet" fact, not a defect signal -- its failure alone, with everything
+ * else clean, means "ready and waiting to be published," never "something
+ * is wrong." Conflating the two was exactly the calibration report's
+ * friction #1/#2 class of bug (an authorized-but-unpublished item looking
+ * indistinguishable from a genuinely blocked one).
+ */
 export interface PublicationPacket {
   identity: PublicationPacketIdentity;
   copy: PublicationPacketCopy;
@@ -434,7 +448,7 @@ export function checkCanonicalRecordMismatch(
 ): PublicationPacketCheck {
   if (placement.deliverable_id !== deliverable.id) {
     return failCheck(
-      "asset_exists_and_role_ok",
+      "canonical_record",
       "canonical_record_mismatch",
       `Placement's deliverable_id (${placement.deliverable_id}) does not match the packet's own deliverable (${deliverable.id}).`,
       deliverable.id,
@@ -444,14 +458,14 @@ export function checkCanonicalRecordMismatch(
     const artifact = artifacts.find((a) => a.id === image.artifactId);
     if (artifact && artifact.deliverable_id !== deliverable.id) {
       return failCheck(
-        "asset_exists_and_role_ok",
+        "canonical_record",
         "canonical_record_mismatch",
         `Hero/social image artifact ${image.artifactId} belongs to deliverable ${artifact.deliverable_id}, not this packet's deliverable ${deliverable.id}.`,
         deliverable.id,
       );
     }
   }
-  return passCheck("asset_exists_and_role_ok");
+  return passCheck("canonical_record");
 }
 
 // ─── Orchestrator (C3.1i) ────────────────────────────────────────────────
@@ -495,11 +509,17 @@ export function assemblePublicationPacket(input: AssemblePublicationPacketInput)
   const readiness = deliverable.status === "archived"
     ? { ready: false, excluded: true }
     : evaluateDeliverableReadiness({ deliverable, ...input.readinessInput });
-  const readyToPublish = legal.authorized && readiness.ready && checks.every((c) => c.pass);
 
+  // Computed BEFORE readyToPublish, and deliberately excluded from
+  // readyToPublish's own definition below, so "published" and
+  // "readyToPublish" can never both be true on the same packet -- see this
+  // file's PublicationPacket doc comment for the full state-exclusivity
+  // invariant this enforces.
   const evidence = classifyEvidence(currentReceipt);
-  checks.push(checkPublicationProof(evidence, deliverable.id));
   const published = evidence !== null;
+
+  const readyToPublish = !published && legal.authorized && readiness.ready && checks.every((c) => c.pass);
+  checks.push(checkPublicationProof(evidence, deliverable.id));
 
   const bodyHtmlVerbatim = currentVersion?.body_html ?? "";
 
@@ -526,7 +546,12 @@ export function assemblePublicationPacket(input: AssemblePublicationPacketInput)
     legalAuthorized: legal.authorized,
     readyToPublish,
     published,
-    needsAttention: !published && checks.some((c) => !c.pass),
+    // publication_proof failing alone (readyToPublish's own criteria already
+    // exclude it -- see readyToPublish's computation above) means "ready and
+    // waiting," never "needs attention." Only a failure of some OTHER check
+    // counts as a genuine defect. See this interface's own doc comment for
+    // the full state-exclusivity invariant.
+    needsAttention: !published && checks.some((c) => !c.pass && c.name !== "publication_proof"),
     evidence,
     checks,
   };

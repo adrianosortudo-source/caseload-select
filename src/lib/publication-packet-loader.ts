@@ -38,9 +38,10 @@ export interface PublicationPacketPeriodResult {
   packets: PublicationPacket[];
   /** deliverable id -> title, for surfaces that only have packets. */
   titles: Record<string, string>;
+  /** Mutually exclusive and always summing to total (2026-07-22 audit follow-up) -- every packet is published XOR readyToPublish XOR needsAttention, per PublicationPacket's own state-exclusivity invariant. */
   summary: { published: number; readyToPublish: number; needsAttention: number; total: number };
-  /** One precise reason per genuinely outstanding (not published, not ready) item -- calibration report requirement: "report published, pending, failed, and blocked items with one precise reason per exception." */
-  outstanding: Array<{ deliverableId: string; channel: ContentPlacement["destination"]; reasons: string[] }>;
+  /** One precise reason per genuinely outstanding (not yet published) item -- calibration report requirement: "report published, pending, failed, and blocked items with one precise reason per exception." state distinguishes "awaiting_publication" (readyToPublish -- everything checks out, publication just hasn't happened yet) from "blocked" (needsAttention -- a real check failure). An awaiting_publication entry's reasons list contains only the publication_proof line, never a defect. */
+  outstanding: Array<{ deliverableId: string; channel: ContentPlacement["destination"]; state: "awaiting_publication" | "blocked"; reasons: string[] }>;
 }
 
 async function checkCtaReachable(
@@ -130,11 +131,15 @@ export async function loadPublicationPacketsForPeriod(
     const deliverableArtifacts = allArtifacts.filter((a) => a.deliverable_id === deliverable.id);
     const ctaRequired = !!deliverable.deliverable_role && CTA_REQUIRED_ROLES.has(deliverable.deliverable_role);
 
+    // Computed ONCE per deliverable, not once per placement (2026-07-22 audit
+    // follow-up) -- cta_target_path is a deliverable-level fact, so a
+    // deliverable with N placements previously re-fetched the identical URL
+    // N times.
+    const ctaHttpCheckPassed: boolean | null = deliverable.cta_target_path
+      ? await checkCtaReachable(deliverable.cta_target_path, opts.siteOrigin, fetchImpl)
+      : null;
+
     for (const placement of placementsByDeliverableId.get(deliverable.id) ?? []) {
-      let ctaHttpCheckPassed: boolean | null = null;
-      if (deliverable.cta_target_path) {
-        ctaHttpCheckPassed = await checkCtaReachable(deliverable.cta_target_path, opts.siteOrigin, fetchImpl);
-      }
       const currentReceipt = receiptsByPlacementId[placement.id] ?? null;
 
       packets.push(
@@ -154,8 +159,13 @@ export async function loadPublicationPacketsForPeriod(
     }
   }
 
+  // Mutually exclusive by construction -- assemblePublicationPacket's own
+  // state-exclusivity invariant guarantees published/readyToPublish/
+  // needsAttention never overlap on one packet, so these three filters
+  // partition `packets` exactly (no defensive !p.published guard needed
+  // here; it would only mask a real regression in that invariant).
   const published = packets.filter((p) => p.published).length;
-  const readyToPublish = packets.filter((p) => !p.published && p.readyToPublish).length;
+  const readyToPublish = packets.filter((p) => p.readyToPublish).length;
   const needsAttention = packets.filter((p) => p.needsAttention).length;
 
   const outstanding = packets
@@ -163,6 +173,7 @@ export async function loadPublicationPacketsForPeriod(
     .map((p) => ({
       deliverableId: p.identity.deliverableId,
       channel: p.identity.channel,
+      state: (p.readyToPublish ? "awaiting_publication" : "blocked") as "awaiting_publication" | "blocked",
       reasons: p.checks.filter((c) => !c.pass).map((c) => `${c.name}: ${c.reason}`),
     }));
 

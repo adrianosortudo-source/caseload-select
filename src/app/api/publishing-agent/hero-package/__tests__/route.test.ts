@@ -155,7 +155,7 @@ describe("POST /api/publishing-agent/hero-package: auth", () => {
 });
 
 describe("POST /api/publishing-agent/hero-package: happy path", () => {
-  it("valid PNG, matching hash, matching identity -> 200, confirmed, all 12 receipt fields present, exactly one hero_image_url write", async () => {
+  it("valid PNG, matching hash, matching identity -> 200, confirmed, all 13 receipt fields present, exactly one hero_image_url write", async () => {
     const res = await POST(multipartReq({ altText: "DRG Law renewal-clause hero" }));
     expect(res.status).toBe(200);
     const body = await res.json();

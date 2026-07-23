@@ -58,22 +58,41 @@ describe("renderPacketText: exact calibration handoff format", () => {
   });
 });
 
-describe("defaultOutDir: OS-resolved, never a guessed root path", () => {
+describe("defaultOutDir: OS-resolved, never a guessed root path, LOCAL date never UTC", () => {
+  // 2026-07-22 audit follow-up: this Date is constructed from LOCAL
+  // year/month/day/hour components (never an ISO/UTC string), and the
+  // expected date string is built the same local-date-part way
+  // defaultOutDir itself computes it -- so this test is correct in every
+  // timezone, including ones where a UTC-anchored midnight timestamp would
+  // land on the previous or next local calendar day. Noon avoids any
+  // midnight/DST boundary entirely.
+  const FIXED_NOW = new Date(2026, 6, 22, 12, 0, 0); // July is month index 6
+  const expectedDateStr = `${FIXED_NOW.getFullYear()}-${String(FIXED_NOW.getMonth() + 1).padStart(2, "0")}-${String(FIXED_NOW.getDate()).padStart(2, "0")}`;
+
   it("resolves under the real os.homedir(), not a hardcoded drive-root guess", () => {
-    const dir = defaultOutDir("renewal-clause-week", new Date("2026-07-22T00:00:00Z"));
+    const dir = defaultOutDir("renewal-clause-week", FIXED_NOW);
     expect(dir.startsWith(homedir())).toBe(true);
     expect(dir).toContain("Downloads");
     expect(dir).toContain("DRG Law");
-    expect(dir).toContain("2026-07-22");
+    expect(dir).toContain(expectedDateStr);
     expect(dir).toContain("renewal-clause-week");
   });
 
   it("sanitizes an unsafe period id in the slug", () => {
-    const dir = defaultOutDir("../../etc/passwd", new Date("2026-07-22T00:00:00Z"));
+    const dir = defaultOutDir("../../etc/passwd", FIXED_NOW);
     expect(dir.startsWith(homedir())).toBe(true);
     // the traversal characters are neutralized into a literal safe segment, never actually escaping
-    const afterDate = dir.split("2026-07-22")[1];
+    const afterDate = dir.split(expectedDateStr)[1];
     expect(afterDate).not.toMatch(/[\\/]\.\.[\\/]/);
+  });
+
+  it("uses the LOCAL calendar date, not toISOString()'s UTC date -- a near-midnight local time never rolls to the wrong day", () => {
+    // 11:30 PM local time: toISOString() would very likely report a
+    // different UTC calendar date in most real timezones, which is exactly
+    // the bug this test guards against.
+    const lateLocal = new Date(2026, 6, 22, 23, 30, 0);
+    const dir = defaultOutDir("x", lateLocal);
+    expect(dir).toContain(`${lateLocal.getFullYear()}-${String(lateLocal.getMonth() + 1).padStart(2, "0")}-${String(lateLocal.getDate()).padStart(2, "0")}`);
   });
 });
 

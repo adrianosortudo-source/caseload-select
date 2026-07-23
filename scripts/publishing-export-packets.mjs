@@ -79,9 +79,18 @@ export function packetFileName(packet, index) {
  * resolved via os.homedir() (never a guessed root like C:\Downloads; see
  * the calibration report friction #10 this fixes). Only used when --out is
  * not supplied.
+ *
+ * The date is the operator's LOCAL calendar date (getFullYear/getMonth/
+ * getDate), never toISOString()'s UTC date -- 2026-07-22 audit follow-up:
+ * an evening run in a UTC-behind timezone (e.g. EDT) produced a folder
+ * dated tomorrow, which is exactly the kind of stale/wrong-date confusion
+ * calibration friction #7 is about.
  */
 export function defaultOutDir(periodId, now = new Date()) {
-  const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const dateStr = `${year}-${month}-${day}`;
   return resolve(homedir(), "Downloads", "DRG Law", dateStr, safeSlug(periodId));
 }
 

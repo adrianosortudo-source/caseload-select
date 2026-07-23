@@ -166,13 +166,53 @@ function makeReceipt(overrides: Partial<PublicationReceipt> = {}): PublicationRe
   } as PublicationReceipt;
 }
 
+const WEBPAGE_ARTIFACT_ID = "a2222222-2222-2222-2222-222222222222";
+
+function makeWebpageArtifact(overrides: Partial<PublicationArtifact> = {}): PublicationArtifact {
+  return makeArtifact({
+    id: WEBPAGE_ARTIFACT_ID,
+    artifact_type: "webpage",
+    public_url: "https://drglaw.ca/journal/renewal-clause-ontario",
+    storage_path: null,
+    ...overrides,
+  });
+}
+
+/**
+ * Article role's real requirement profile (publication-requirements.ts's
+ * ARTICLE spec) needs a validated webpage artifact for the current
+ * version/locale, not just a hero image -- basePacketInput's fixtures
+ * must satisfy that for real-readiness ("readyToPublish=true") scenarios
+ * to mean anything, rather than accidentally testing readiness.ready=false
+ * every time (2026-07-22 audit follow-up: this gap was invisible while no
+ * test asserted readyToPublish directly).
+ */
 function basePacketInput(overrides: Partial<AssemblePublicationPacketInput> = {}): AssemblePublicationPacketInput {
+  const heroArtifact = makeArtifact();
+  const webpageArtifact = makeWebpageArtifact();
+  const artifacts = [heroArtifact, webpageArtifact];
   return {
     deliverable: makeDeliverable(),
     currentVersion: makeVersion(),
     placement: makePlacement(),
-    artifacts: [makeArtifact()],
-    readinessInput: { currentVersion: makeVersion(), artifacts: [makeArtifact()], latestValidationByArtifactId: {} },
+    artifacts,
+    readinessInput: {
+      currentVersion: makeVersion(),
+      artifacts,
+      latestValidationByArtifactId: {
+        [WEBPAGE_ARTIFACT_ID]: {
+          id: "val-1",
+          artifact_id: WEBPAGE_ARTIFACT_ID,
+          firm_id: FIRM_ID,
+          validator: "route_check",
+          result: "pass",
+          details: null,
+          validated_by_role: "system",
+          validated_by_id: null,
+          created_at: new Date().toISOString(),
+        },
+      },
+    },
     standingAuthorizationActive: false,
     ctaRequired: false,
     ctaLabel: null,
@@ -318,10 +358,12 @@ describe("draft_release_control: draft/watermarked/failed assets never enter a p
 // ─── Approval never implies published (calibration friction #1, #11) ────
 
 describe("legal_authorized never implies published -- publication requires independent evidence", () => {
-  it("fully legal_authorized, ready, but no receipt at all -> published=false, needs_attention=true", () => {
+  it("fully legal_authorized, ready, but no receipt at all -> published=false, readyToPublish=true, needsAttention=false (awaiting publication is not a defect)", () => {
     const packet = assemblePublicationPacket(basePacketInput({ currentReceipt: null }));
     expect(packet.legalAuthorized).toBe(true);
     expect(packet.published).toBe(false);
+    expect(packet.readyToPublish).toBe(true);
+    expect(packet.needsAttention).toBe(false);
   });
 
   it("legal_authorized=true does not set published=true even when everything else is clean", () => {
@@ -470,5 +512,60 @@ describe("every failed check names itself and its owning asset -- never a generi
     const packet = assemblePublicationPacket(basePacketInput({ currentReceipt: makeReceipt() }));
     expect(packet.published).toBe(true);
     expect(packet.needsAttention).toBe(false);
+  });
+});
+
+// ─── State exclusivity invariant (2026-07-22 audit follow-up) ───────────
+
+describe("state exclusivity: published XOR readyToPublish XOR needsAttention, always", () => {
+  function narrativeCount(packet: ReturnType<typeof assemblePublicationPacket>): number {
+    return [packet.published, packet.readyToPublish, packet.needsAttention].filter(Boolean).length;
+  }
+
+  it("clean, unpublished packet -> readyToPublish=true, the ONLY true narrative", () => {
+    const packet = assemblePublicationPacket(basePacketInput({ currentReceipt: null }));
+    expect(narrativeCount(packet)).toBe(1);
+    expect(packet.readyToPublish).toBe(true);
+  });
+
+  it("published packet -> published=true, the ONLY true narrative (readyToPublish is never also true)", () => {
+    const packet = assemblePublicationPacket(basePacketInput({ currentReceipt: makeReceipt() }));
+    expect(narrativeCount(packet)).toBe(1);
+    expect(packet.published).toBe(true);
+  });
+
+  it("a genuinely blocked (non-proof check failing) packet -> needsAttention=true, the ONLY true narrative", () => {
+    const packet = assemblePublicationPacket(basePacketInput({ artifacts: [] }));
+    expect(narrativeCount(packet)).toBe(1);
+    expect(packet.needsAttention).toBe(true);
+  });
+
+  it("archived deliverable, no receipt -> exactly one narrative true (needsAttention, readiness excluded)", () => {
+    const packet = assemblePublicationPacket(basePacketInput({ deliverable: makeDeliverable({ status: "archived" }), currentReceipt: null }));
+    expect(narrativeCount(packet)).toBe(1);
+  });
+});
+
+describe("check names: no two checks in one packet share a name", () => {
+  it("a packet exercising every check still produces unique check names", () => {
+    const packet = assemblePublicationPacket(
+      basePacketInput({
+        deliverable: makeDeliverable({ status: "draft", approved_version_id: null }),
+        artifacts: [],
+        readinessInput: { currentVersion: makeVersion(), artifacts: [], latestValidationByArtifactId: {} },
+        ctaRequired: true,
+      }),
+    );
+    const names = packet.checks.map((c) => c.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("canonical_record is its own named check, distinct from asset_exists_and_role_ok", () => {
+    const packet = assemblePublicationPacket(basePacketInput({}));
+    const canonicalCheck = packet.checks.find((c) => c.name === "canonical_record");
+    const assetCheck = packet.checks.find((c) => c.name === "asset_exists_and_role_ok");
+    expect(canonicalCheck).toBeDefined();
+    expect(assetCheck).toBeDefined();
+    expect(canonicalCheck).not.toBe(assetCheck);
   });
 });

@@ -86,10 +86,12 @@ function baseDeliverable(overrides: Row = {}): Row {
     period_id: PERIOD_ID,
     title: "Renewal Clause",
     status: "approved",
+    content_kind: "text",
     current_version_id: VERSION_ID,
     approved_version_id: VERSION_ID,
     locale: "en-CA",
     deliverable_role: "article",
+    publication_destination: "firm_website",
     publication_path: "/journal/renewal-clause-ontario",
     cta_target_path: null,
     ...overrides,
@@ -138,12 +140,46 @@ function baseArtifact(overrides: Row = {}): Row {
   };
 }
 
+const WEBPAGE_ARTIFACT_ID = "a3333333-3333-3333-3333-333333333333";
+
+/** Article role's real requirement profile needs a validated webpage artifact, not just a hero image -- see publication-packet.test.ts's identical fixture note (2026-07-22 audit follow-up). */
+function baseWebpageArtifact(overrides: Row = {}): Row {
+  return {
+    id: WEBPAGE_ARTIFACT_ID,
+    firm_id: FIRM_ID,
+    deliverable_id: DELIVERABLE_ID,
+    version_id: VERSION_ID,
+    artifact_type: "webpage",
+    locale: "en-CA",
+    storage_path: null,
+    public_url: "https://drglaw.ca/journal/renewal-clause-ontario",
+    validation_result: null,
+    created_at: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+function passingValidation(artifactId: string, overrides: Row = {}): Row {
+  return {
+    id: `val-${artifactId}`,
+    artifact_id: artifactId,
+    firm_id: FIRM_ID,
+    validator: "route_check",
+    result: "pass",
+    details: null,
+    validated_by_role: "system",
+    validated_by_id: null,
+    created_at: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   state.deliverables = [baseDeliverable()];
   state.versions = [baseVersion()];
   state.placements = [basePlacement()];
-  state.artifacts = [baseArtifact()];
-  state.validations = [];
+  state.artifacts = [baseArtifact(), baseWebpageArtifact()];
+  state.validations = [passingValidation(WEBPAGE_ARTIFACT_ID)];
   state.receiptsByDeliverable = {};
   state.standingAuthorization = { active: false };
 });
@@ -210,12 +246,49 @@ describe("loadPublicationPacketsForPeriod: mocked-fetch CTA resolution", () => {
     const ctaCheck = result!.packets[0].checks.find((c) => c.name === "cta_exists");
     expect(ctaCheck?.pass).toBe(true); // not required, so absence is not a blocker
   });
+
+  it("a deliverable with TWO placements is fetched exactly ONCE, not once per placement (2026-07-22 audit follow-up)", async () => {
+    state.deliverables = [baseDeliverable({ deliverable_role: "gbp_post", cta_target_path: "/journal/renewal-clause-ontario" })];
+    state.placements = [
+      basePlacement({ id: PLACEMENT_ID, destination: "google_business_profile" }),
+      basePlacement({ id: PLACEMENT_ID_2, destination: "linkedin_post" }),
+    ];
+    const fetchImpl = vi.fn(async () => ({ status: 200 }) as Response);
+    const result = await loadPublicationPacketsForPeriod(PERIOD_ID, FIRM_ID, { siteOrigin: "https://drglaw.ca", fetchImpl });
+    expect(result!.packets).toHaveLength(2);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
 });
 
-describe("loadPublicationPacketsForPeriod: period summary and one-reason-per-exception", () => {
-  it("summary counts published/readyToPublish/needsAttention correctly across multiple packets", async () => {
-    state.deliverables = [baseDeliverable({ id: DELIVERABLE_ID }), baseDeliverable({ id: DELIVERABLE_ID_2, current_version_id: null, approved_version_id: null })];
-    state.placements = [basePlacement({ id: PLACEMENT_ID, deliverable_id: DELIVERABLE_ID }), basePlacement({ id: PLACEMENT_ID_2, deliverable_id: DELIVERABLE_ID_2 })];
+const DELIVERABLE_ID_3 = "d3333333-3333-3333-3333-333333333333";
+const PLACEMENT_ID_3 = "p3333333-3333-3333-3333-333333333333";
+const VERSION_ID_3 = "v3333333-3333-3333-3333-333333333333";
+const WEBPAGE_ARTIFACT_ID_3 = "a4444444-4444-4444-4444-444444444444";
+
+describe("loadPublicationPacketsForPeriod: period summary (mutually exclusive buckets) and one-reason-per-exception", () => {
+  function threeDeliverableScenario() {
+    // #1: published. #2: broken (no current version) -> blocked. #3: clean
+    // and unpublished -> awaiting publication. Exercises all three summary
+    // buckets simultaneously so their mutual exclusivity is actually tested,
+    // not just each one in isolation.
+    state.deliverables = [
+      baseDeliverable({ id: DELIVERABLE_ID }),
+      baseDeliverable({ id: DELIVERABLE_ID_2, current_version_id: null, approved_version_id: null }),
+      baseDeliverable({ id: DELIVERABLE_ID_3, current_version_id: VERSION_ID_3, approved_version_id: VERSION_ID_3 }),
+    ];
+    state.versions = [baseVersion(), baseVersion({ id: VERSION_ID_3, deliverable_id: DELIVERABLE_ID_3 })];
+    state.placements = [
+      basePlacement({ id: PLACEMENT_ID, deliverable_id: DELIVERABLE_ID }),
+      basePlacement({ id: PLACEMENT_ID_2, deliverable_id: DELIVERABLE_ID_2 }),
+      basePlacement({ id: PLACEMENT_ID_3, deliverable_id: DELIVERABLE_ID_3 }),
+    ];
+    state.artifacts = [
+      baseArtifact(),
+      baseWebpageArtifact(),
+      baseArtifact({ id: "a5555555-5555-5555-5555-555555555555", deliverable_id: DELIVERABLE_ID_3, version_id: VERSION_ID_3 }),
+      baseWebpageArtifact({ id: WEBPAGE_ARTIFACT_ID_3, deliverable_id: DELIVERABLE_ID_3, version_id: VERSION_ID_3, public_url: "https://drglaw.ca/journal/good-standing-clause-ontario" }),
+    ];
+    state.validations = [passingValidation(WEBPAGE_ARTIFACT_ID), passingValidation(WEBPAGE_ARTIFACT_ID_3)];
     state.receiptsByDeliverable[DELIVERABLE_ID] = {
       [PLACEMENT_ID]: {
         id: "r1",
@@ -231,10 +304,31 @@ describe("loadPublicationPacketsForPeriod: period summary and one-reason-per-exc
         published_at: new Date().toISOString(),
       },
     };
+  }
+
+  it("summary counts published/readyToPublish/needsAttention correctly, mutually exclusive, summing to total", async () => {
+    threeDeliverableScenario();
     const result = await loadPublicationPacketsForPeriod(PERIOD_ID, FIRM_ID, { siteOrigin: "https://drglaw.ca" });
-    expect(result!.summary.total).toBe(2);
+    expect(result!.summary.total).toBe(3);
     expect(result!.summary.published).toBe(1);
-    expect(result!.summary.needsAttention).toBe(1); // the second deliverable has no current version -> attention needed
+    expect(result!.summary.needsAttention).toBe(1); // deliverable #2: no current version
+    expect(result!.summary.readyToPublish).toBe(1); // deliverable #3: clean, just not published yet
+    expect(result!.summary.published + result!.summary.readyToPublish + result!.summary.needsAttention).toBe(result!.summary.total);
+  });
+
+  it("outstanding.state distinguishes awaiting_publication (ready, just not done) from blocked (a real defect)", async () => {
+    threeDeliverableScenario();
+    const result = await loadPublicationPacketsForPeriod(PERIOD_ID, FIRM_ID, { siteOrigin: "https://drglaw.ca" });
+    const blocked = result!.outstanding.find((o) => o.deliverableId === DELIVERABLE_ID_2);
+    const awaiting = result!.outstanding.find((o) => o.deliverableId === DELIVERABLE_ID_3);
+    expect(blocked?.state).toBe("blocked");
+    expect(awaiting?.state).toBe("awaiting_publication");
+    // An awaiting_publication entry's reasons list contains ONLY the
+    // publication_proof line -- never a defect reason alongside it.
+    expect(awaiting!.reasons).toHaveLength(1);
+    expect(awaiting!.reasons[0]).toMatch(/^publication_proof: /);
+    // A blocked entry's reasons must include at least one NON-proof reason.
+    expect(blocked!.reasons.some((r) => !r.startsWith("publication_proof:"))).toBe(true);
   });
 
   it("outstanding items each carry one precise reason string per failed check, not one generic message", async () => {
