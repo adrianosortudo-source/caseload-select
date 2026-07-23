@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { HERO_UPLOAD_ACCEPT, heroUploadPath, isAllowedHeroFile, readHeroUploadError } from "./hero-image-control-pure";
+import { HERO_UPLOAD_ACCEPT, HERO_UPLOAD_HELPER_TEXT, heroUploadPath, isAllowedHeroFile, readHeroUploadError } from "./hero-image-control-pure";
 
 export default function HeroImageControl({
   firmId, deliverableId, deliverableTitle, hasHero, onSaved,
@@ -61,7 +61,7 @@ export default function HeroImageControl({
         <div>
           <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-black/45">Operator control</p>
           <h2 className="text-sm font-semibold text-navy mt-1">{actionLabel}</h2>
-          <p className="text-xs text-black/55 mt-1">PNG, JPG, JPEG, or WebP · max 10 MB</p>
+          <p className="text-xs text-black/55 mt-1">{HERO_UPLOAD_HELPER_TEXT}</p>
         </div>
         {!file && (
           <label className="inline-flex cursor-pointer items-center border border-navy bg-white px-3 py-2 text-xs font-semibold text-navy transition-colors hover:bg-navy hover:text-white focus-within:ring-2 focus-within:ring-navy focus-within:ring-offset-2">

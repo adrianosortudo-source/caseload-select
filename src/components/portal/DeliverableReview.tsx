@@ -33,6 +33,7 @@ import type { HighlightItem } from "@/lib/highlight-dom";
 import { formatTimestamp } from "@/lib/firm-timezone";
 import PlacementsTrackingPanel from "./PlacementsTrackingPanel";
 import HeroImageControl from "./HeroImageControl";
+import { shouldShowHeroImageControl } from "./hero-image-control-pure";
 
 interface Detail {
   deliverable: ContentDeliverable;
@@ -375,7 +376,7 @@ export default function DeliverableReview({
             </div>
           )}
 
-          {selectedVersion && viewerRole === "operator" && (
+          {shouldShowHeroImageControl(selectedVersion?.id ?? null, viewerRole) && (
             <HeroImageControl
               firmId={firmId}
               deliverableId={deliverableId}

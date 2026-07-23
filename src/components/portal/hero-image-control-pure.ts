@@ -1,4 +1,14 @@
 export const HERO_UPLOAD_ACCEPT = ".png,.jpg,.jpeg,.webp";
+export const HERO_UPLOAD_HELPER_TEXT = "PNG, JPG, JPEG, or WebP \u00b7 max 10 MB";
+
+export type HeroImageViewerRole = "operator" | "lawyer" | "client";
+
+export function shouldShowHeroImageControl(
+  selectedVersionId: string | null,
+  viewerRole: HeroImageViewerRole,
+): boolean {
+  return Boolean(selectedVersionId) && viewerRole === "operator";
+}
 
 const ALLOWED_MIME_BY_EXTENSION: Record<string, string> = {
   ".png": "image/png",

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { heroUploadPath, isAllowedHeroFile, readHeroUploadError } from "../hero-image-control-pure";
+import {
+  HERO_UPLOAD_HELPER_TEXT,
+  heroUploadPath,
+  isAllowedHeroFile,
+  readHeroUploadError,
+  shouldShowHeroImageControl,
+} from "../hero-image-control-pure";
 
 describe("hero image operator upload contract", () => {
   it.each([
@@ -26,5 +32,24 @@ describe("hero image operator upload contract", () => {
       new Response(JSON.stringify({ error: "file type not allowed: image/gif" }), { status: 415 }),
     );
     expect(error).toBe("file type not allowed: image/gif");
+  });
+
+  it.each([
+    ["operator with selected version", "version-1", "operator", true],
+    ["operator without selected version", null, "operator", false],
+    ["lawyer with selected version", "version-1", "lawyer", false],
+    ["client with selected version", "version-1", "client", false],
+    ["lawyer preview with selected version", "version-1", "lawyer", false],
+  ])("visibility: %s", (_label, selectedVersionId, viewerRole, expected) => {
+    expect(shouldShowHeroImageControl(
+      selectedVersionId,
+      viewerRole as "operator" | "lawyer" | "client",
+    )).toBe(expected);
+  });
+
+  it("uses the exact encoding-safe helper text", () => {
+    expect(HERO_UPLOAD_HELPER_TEXT).toBe("PNG, JPG, JPEG, or WebP · max 10 MB");
+    expect(HERO_UPLOAD_HELPER_TEXT).not.toContain("Â");
+    expect(HERO_UPLOAD_HELPER_TEXT).not.toContain("Ã");
   });
 });
