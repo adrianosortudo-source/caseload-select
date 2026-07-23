@@ -1,13 +1,22 @@
 /**
- * Receives Vercel's deployment.created webhook and, for production-target
- * deployments only, registers a blocking check that Vercel will not assign
- * the production alias without. Ships the corrective action for issue #61:
- * a direct `vercel --prod` from a dirty tree can no longer reach
- * app.caseloadselect.ca without a green GitHub Actions run on the exact
- * committed (non-dirty) tree.
+ * Receives Vercel's deployment.created webhook. Free-tier Vercel cannot
+ * technically block alias assignment on this project (the Checks API
+ * requires an integration OAuth token, not a personal access token,
+ * confirmed 2026-07-22; Rolling Releases requires a paid plan upgrade,
+ * also confirmed 2026-07-22). Prevention of direct production deploys now
+ * lives elsewhere: a Claude Code PreToolUse hook
+ * (D:/00_Work/01_CaseLoad_Select/.claude/hooks/check-deploy-commands.mjs)
+ * blocks the commands before they run, and AGENTS.md carries the same rule
+ * for agents outside Claude Code.
+ *
+ * This route is the detection layer for whatever slips through: for
+ * production-target deployments only, it schedules a background check
+ * (evaluateAndAlarm) that emails the operator within about a minute if the
+ * deployment is dirty-tree, untraceable, or fails its GitHub Actions
+ * checks. A clean deployment produces no email.
  *
  * Signed by Vercel via x-vercel-signature (HMAC-SHA1 over the raw body,
- * VERCEL_WEBHOOK_SECRET). Ack fast, resolve in the background: GitHub
+ * VERCEL_WEBHOOK_SECRET). Ack fast, evaluate in the background: GitHub
  * Actions CI on this repo takes a few minutes, well past a single
  * invocation's budget.
  */
@@ -15,8 +24,7 @@
 import crypto from "crypto";
 import { waitUntil } from "@vercel/functions";
 import { requiresGate } from "@/lib/deploy-gate/verify";
-import { createDeploymentCheck } from "@/lib/deploy-gate/vercel-api";
-import { resolveDeployGate, CHECK_NAME } from "@/lib/deploy-gate/resolve";
+import { evaluateAndAlarm } from "@/lib/deploy-gate/resolve";
 
 interface VercelWebhookPayload {
   type: string;
@@ -59,15 +67,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ ok: true, skipped: "not_production" });
   }
 
-  const checkId = await createDeploymentCheck(deploymentId, CHECK_NAME);
-  if (!checkId) {
-    // Fail closed: could not register the blocking check at all. Vercel
-    // still has no succeeded check for this deployment, so the alias
-    // assignment stays blocked; nothing further to do here.
-    return Response.json({ ok: false, error: "check_creation_failed" }, { status: 502 });
-  }
+  waitUntil(evaluateAndAlarm(deploymentId));
 
-  waitUntil(resolveDeployGate(deploymentId, checkId));
-
-  return Response.json({ ok: true, checkId });
+  return Response.json({ ok: true, mode: "alarm" });
 }
