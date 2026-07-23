@@ -22,7 +22,7 @@ import {
 } from "@/lib/firm-files";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ firmId: string; fileId: string }> },
 ) {
   const { firmId, fileId } = await params;
@@ -50,6 +50,9 @@ export async function GET(
     if (!opened.ok) {
       return NextResponse.json({ error: opened.message }, { status: 500 });
     }
+    if (req.nextUrl.searchParams.get("download") === "1") {
+      return NextResponse.redirect(opened.url);
+    }
     return NextResponse.json({
       url: opened.url,
       kind: "link",
@@ -60,6 +63,10 @@ export async function GET(
   const signed = await getFirmFileSignedUrl({ file, actor });
   if (!signed.ok) {
     return NextResponse.json({ error: signed.message }, { status: 500 });
+  }
+
+  if (req.nextUrl.searchParams.get("download") === "1") {
+    return NextResponse.redirect(signed.url);
   }
 
   return NextResponse.json({
