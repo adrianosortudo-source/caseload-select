@@ -316,6 +316,23 @@ describe("loadPublicationPacketsForPeriod: period summary (mutually exclusive bu
     expect(result!.summary.published + result!.summary.readyToPublish + result!.summary.needsAttention).toBe(result!.summary.total);
   });
 
+  it("READINESS-ONLY failure (2026-07-22 audit follow-up: the exact partition-leak scenario) still sums to total -- a deliverable with a bound hero image but no deployed webpage counts as needsAttention, never a silent fourth state", async () => {
+    // Deliberately reuses the default beforeEach deliverable/version/placement
+    // but strips the webpage artifact + its validation, leaving only the
+    // hero image -- every packet-level check passes, only the readiness
+    // evaluator's webpage_artifact/webpage_validated/localized_route
+    // requirements fail.
+    state.artifacts = [baseArtifact()];
+    state.validations = [];
+    const result = await loadPublicationPacketsForPeriod(PERIOD_ID, FIRM_ID, { siteOrigin: "https://drglaw.ca" });
+    expect(result!.summary.total).toBe(1);
+    expect(result!.summary.needsAttention).toBe(1);
+    expect(result!.summary.published + result!.summary.readyToPublish + result!.summary.needsAttention).toBe(result!.summary.total);
+    const outstanding = result!.outstanding[0];
+    expect(outstanding.state).toBe("blocked");
+    expect(outstanding.reasons.some((r) => r.startsWith("readiness_requirements:"))).toBe(true);
+  });
+
   it("outstanding.state distinguishes awaiting_publication (ready, just not done) from blocked (a real defect)", async () => {
     threeDeliverableScenario();
     const result = await loadPublicationPacketsForPeriod(PERIOD_ID, FIRM_ID, { siteOrigin: "https://drglaw.ca" });

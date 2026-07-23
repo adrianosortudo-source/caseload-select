@@ -108,6 +108,7 @@ export type PublicationPacketCheckName =
   | "cta_exists"
   | "cta_resolves"
   | "draft_release_control"
+  | "readiness_requirements"
   | "publication_proof";
 
 export type PublicationPacketBlockerCode =
@@ -118,7 +119,7 @@ export type PublicationPacketBlockerCode =
   | "draft_or_unauthorized_asset"
   | "cta_missing"
   | "cta_unresolved"
-  | "not_ready"
+  | "readiness_requirements_unmet"
   | "no_publication_evidence"
   | "canonical_record_mismatch";
 
@@ -429,6 +430,38 @@ export function checkPublicationProof(evidence: PublicationPacketEvidence | null
   return passCheck("publication_proof");
 }
 
+/**
+ * 2026-07-22 audit follow-up (partition-leak fix): evaluateDeliverableReadiness
+ * (publication-readiness.ts) has its OWN internal requirement keys
+ * (webpage_artifact, webpage_validated, localized_route, etc.) that
+ * previously had no corresponding entry in this module's own `checks`
+ * array -- a deliverable failing ONLY one of those (e.g. approved content,
+ * hero image bound, but the website not yet deployed -- a normal mid-week
+ * state) produced published=false, readyToPublish=false, AND
+ * needsAttention=false: a fourth, silent, unnamed state that broke both
+ * the state-exclusivity invariant and "name the exact failed check."
+ * This check makes that gap a real, named, reasoned entry in `checks`
+ * instead, so readyToPublish's own checks.every(pass) already fails
+ * closed on it, and needsAttention (see assemblePublicationPacket) is now
+ * simply !published && !readyToPublish -- constructionally exact, no
+ * enumeration to keep in sync by hand.
+ */
+export function checkReadinessRequirements(
+  readiness: { ready: boolean; missingRequirements?: string[] },
+  deliverableId: string,
+): PublicationPacketCheck {
+  if (readiness.ready) return passCheck("readiness_requirements");
+  const missing = readiness.missingRequirements?.length
+    ? readiness.missingRequirements.join(", ")
+    : "deliverable is archived or otherwise excluded from readiness evaluation";
+  return failCheck(
+    "readiness_requirements",
+    "readiness_requirements_unmet",
+    `Publication readiness evaluator reports this deliverable is not ready: ${missing}.`,
+    deliverableId,
+  );
+}
+
 // ─── canonical_record_mismatch (C3.1h) ──────────────────────────────────
 
 /**
@@ -509,6 +542,12 @@ export function assemblePublicationPacket(input: AssemblePublicationPacketInput)
   const readiness = deliverable.status === "archived"
     ? { ready: false, excluded: true }
     : evaluateDeliverableReadiness({ deliverable, ...input.readinessInput });
+  // Makes a readiness-only failure (e.g. webpage_artifact/webpage_validated/
+  // localized_route -- requirements evaluateDeliverableReadiness tracks
+  // internally with no prior counterpart here) a real, named, reasoned
+  // entry in `checks`, not a silent gap. See checkReadinessRequirements's
+  // own doc comment for the full history.
+  checks.push(checkReadinessRequirements(readiness, deliverable.id));
 
   // Computed BEFORE readyToPublish, and deliberately excluded from
   // readyToPublish's own definition below, so "published" and
@@ -546,12 +585,15 @@ export function assemblePublicationPacket(input: AssemblePublicationPacketInput)
     legalAuthorized: legal.authorized,
     readyToPublish,
     published,
-    // publication_proof failing alone (readyToPublish's own criteria already
-    // exclude it -- see readyToPublish's computation above) means "ready and
-    // waiting," never "needs attention." Only a failure of some OTHER check
-    // counts as a genuine defect. See this interface's own doc comment for
-    // the full state-exclusivity invariant.
-    needsAttention: !published && checks.some((c) => !c.pass && c.name !== "publication_proof"),
+    // Constructionally exact (2026-07-22 audit follow-up), not an
+    // enumeration of "any non-proof check failed": needsAttention is simply
+    // "not published, and not ready to publish either." This is what
+    // guarantees the state-exclusivity invariant covers EVERY reason
+    // readyToPublish can be false -- including readiness.ready failures
+    // that have no packet-check counterpart -- rather than only the ones
+    // some hand-maintained exclusion list happened to name. See this
+    // interface's own doc comment for the full invariant.
+    needsAttention: !published && !readyToPublish,
     evidence,
     checks,
   };

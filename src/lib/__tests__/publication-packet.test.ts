@@ -14,6 +14,7 @@ import {
   checkDraftReleaseControl,
   classifyEvidence,
   checkCanonicalRecordMismatch,
+  checkReadinessRequirements,
   type AssemblePublicationPacketInput,
 } from "../publication-packet";
 
@@ -355,6 +356,31 @@ describe("draft_release_control: draft/watermarked/failed assets never enter a p
   });
 });
 
+// ─── readiness_requirements (2026-07-22 audit follow-up: partition-leak fix) ─
+
+describe("readiness_requirements: a readiness-evaluator-only failure is a named, reasoned check", () => {
+  it("readiness.ready=true -> passes", () => {
+    const check = checkReadinessRequirements({ ready: true }, DELIVERABLE_ID);
+    expect(check.pass).toBe(true);
+  });
+
+  it("readiness.ready=false with missingRequirements -> fails, blockerCode readiness_requirements_unmet, reason names the exact missing keys", () => {
+    const check = checkReadinessRequirements({ ready: false, missingRequirements: ["webpage_artifact", "webpage_validated"] }, DELIVERABLE_ID);
+    expect(check.pass).toBe(false);
+    expect(check.blockerCode).toBe("readiness_requirements_unmet");
+    expect(check.reason).toContain("webpage_artifact");
+    expect(check.reason).toContain("webpage_validated");
+    expect(check.owningAsset).toBe(DELIVERABLE_ID);
+  });
+
+  it("readiness.ready=false with no missingRequirements field (the archived-deliverable shape) -> fails with an explicit archived/excluded reason, never a blank one", () => {
+    const check = checkReadinessRequirements({ ready: false }, DELIVERABLE_ID);
+    expect(check.pass).toBe(false);
+    expect(check.reason).toBeTruthy();
+    expect(check.reason).toMatch(/archived|excluded/);
+  });
+});
+
 // ─── Approval never implies published (calibration friction #1, #11) ────
 
 describe("legal_authorized never implies published -- publication requires independent evidence", () => {
@@ -543,6 +569,29 @@ describe("state exclusivity: published XOR readyToPublish XOR needsAttention, al
   it("archived deliverable, no receipt -> exactly one narrative true (needsAttention, readiness excluded)", () => {
     const packet = assemblePublicationPacket(basePacketInput({ deliverable: makeDeliverable({ status: "archived" }), currentReceipt: null }));
     expect(narrativeCount(packet)).toBe(1);
+  });
+
+  it("READINESS-ONLY failure (2026-07-22 audit follow-up, the exact leak a probe test found): hero image bound (every packet check passes) but NO webpage artifact deployed -- previously published=false, readyToPublish=false, needsAttention=false all at once (a fourth, silent, unnamed state). Now needsAttention=true, the ONLY true narrative, with a named reason.", () => {
+    const heroOnly = [makeArtifact()]; // artifact_type: "hero_image" by default -- no "webpage" artifact at all
+    const packet = assemblePublicationPacket(
+      basePacketInput({
+        artifacts: heroOnly,
+        readinessInput: { currentVersion: makeVersion(), artifacts: heroOnly, latestValidationByArtifactId: {} },
+        currentReceipt: null,
+      }),
+    );
+    // Every packet-level check (asset_exists_and_role_ok included -- firm_website
+    // only requires a hero_image for its rendition role) passes on its own.
+    expect(packet.checks.filter((c) => c.name === "asset_exists_and_role_ok")[0]?.pass).toBe(true);
+    // The narrative that used to vanish is now exactly one, named, and reasoned.
+    expect(narrativeCount(packet)).toBe(1);
+    expect(packet.published).toBe(false);
+    expect(packet.readyToPublish).toBe(false);
+    expect(packet.needsAttention).toBe(true);
+    const readinessCheck = packet.checks.find((c) => c.name === "readiness_requirements");
+    expect(readinessCheck?.pass).toBe(false);
+    expect(readinessCheck?.blockerCode).toBe("readiness_requirements_unmet");
+    expect(readinessCheck?.reason).toContain("webpage_artifact");
   });
 });
 
