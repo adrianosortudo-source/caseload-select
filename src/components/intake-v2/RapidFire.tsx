@@ -33,7 +33,6 @@ export function RapidFire({ items, values, onChange }: Props) {
   useEffect(() => {
     setOtherOpenFor(null);
     setOtherTexts({});
-     
   }, [itemSignature]);
 
   function handleTap(itemId: string, optionValue: string, multi: boolean) {

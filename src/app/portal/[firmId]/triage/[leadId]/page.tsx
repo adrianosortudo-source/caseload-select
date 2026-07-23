@@ -342,7 +342,6 @@ function BriefFrame({ html }: { html: string }) {
   return (
     <div
       className="brief-frame px-2 md:px-4"
-       
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

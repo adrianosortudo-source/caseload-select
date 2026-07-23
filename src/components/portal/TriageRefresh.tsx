@@ -61,7 +61,6 @@ export default function TriageRefresh({
       const now = Date.now();
       if (now - lastRefreshAt.current < throttleMs) return;
       lastRefreshAt.current = now;
-       
       console.debug(`[triage-refresh] refreshing (${reason})`);
       router.refresh();
     }

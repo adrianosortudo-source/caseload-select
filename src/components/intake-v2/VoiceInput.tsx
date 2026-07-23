@@ -72,7 +72,6 @@ export function VoiceInput({ onTranscript, onError, onAvailabilityChange }: Prop
       stopRecorder();
       releaseStream();
     };
-     
   }, []);
 
   function stopTicker() {

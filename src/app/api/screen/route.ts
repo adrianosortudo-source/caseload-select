@@ -333,7 +333,6 @@ export async function POST(req: Request) {
       const ua = (req.headers.get("user-agent") ?? "").slice(0, 120);
       const ref = (req.headers.get("referer") ?? "").slice(0, 200);
       const origin = req.headers.get("origin") ?? "";
-       
       console.log(
         `[legacy-screen] caller firm_id=${firm_id ?? "none"} channel=${channel ?? "none"} session=${session_id ? "resume" : "new"} origin=${origin} ref=${ref} ua=${ua}`,
       );
