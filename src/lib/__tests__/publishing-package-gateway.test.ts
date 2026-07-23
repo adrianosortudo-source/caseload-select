@@ -93,6 +93,13 @@ describe("validateHeroPackageBytes", () => {
     expect(result.computedSha256).toBe(sha256Hex(PNG_MAGIC));
     expect(result.computedSha256).not.toBe("0".repeat(64));
   });
+
+  it("the CORRECT hash in uppercase hex is still rejected as hash_mismatch -- no case normalization, matching the manifest schema's own no-silent-normalization rule", () => {
+    const correctHashUppercase = sha256Hex(PNG_MAGIC).toUpperCase();
+    const result = validateHeroPackageBytes(PNG_MAGIC, correctHashUppercase);
+    expect(result.ok).toBe(false);
+    expect(result.rejectionReason).toBe("hash_mismatch");
+  });
 });
 
 describe("validateHeroPackageDeliverableIdentity", () => {

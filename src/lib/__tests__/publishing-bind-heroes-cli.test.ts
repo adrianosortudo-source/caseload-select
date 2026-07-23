@@ -16,7 +16,13 @@ import {
   resolveAssetPathWithinManifestFolder,
   preflightManifest,
   runCli,
+  SUPPORTED_LOCALES,
+  SUPPORTED_CONTENT_KINDS,
 } from "../../../scripts/publishing-bind-heroes.mjs";
+import {
+  SUPPORTED_HERO_PACKAGE_LOCALES,
+  SUPPORTED_HERO_PACKAGE_CONTENT_KINDS,
+} from "../publishing-package-gateway";
 
 const FIRM_ID = "eec1d25e-a047-4827-8e4a-6eb96becca2b";
 const DELIVERABLE_ID = "d1111111-1111-1111-1111-111111111111";
@@ -55,6 +61,24 @@ function baseOperation(overrides: Record<string, unknown> = {}) {
 function baseManifest(operations: unknown[]) {
   return { schema_version: 1, firm_id: FIRM_ID, operations };
 }
+
+describe("hand-maintained mirror sync: CLI locale/content-kind lists must match the core module exactly", () => {
+  // publishing-bind-heroes.mjs cannot import publishing-package-gateway.ts
+  // (a plain Node script importing a TS path-aliased module), so its
+  // SUPPORTED_LOCALES/SUPPORTED_CONTENT_KINDS are a deliberate, documented
+  // hand-maintained mirror (same pattern as release-graph-audit.ts's
+  // KNOWN_DR105_RULES). This test is the drift alarm: if either list is
+  // edited without updating its sibling, this fails loudly instead of the
+  // CLI silently accepting or rejecting a locale/content-kind the server
+  // itself disagrees with.
+  it("SUPPORTED_LOCALES (CLI) === SUPPORTED_HERO_PACKAGE_LOCALES (core), same order", () => {
+    expect(SUPPORTED_LOCALES).toEqual([...SUPPORTED_HERO_PACKAGE_LOCALES]);
+  });
+
+  it("SUPPORTED_CONTENT_KINDS (CLI) === SUPPORTED_HERO_PACKAGE_CONTENT_KINDS (core), same order", () => {
+    expect(SUPPORTED_CONTENT_KINDS).toEqual([...SUPPORTED_HERO_PACKAGE_CONTENT_KINDS]);
+  });
+});
 
 describe("validateManifestShape: schema-level rejections", () => {
   it("invalid UUID (firm_id) -> rejected", () => {

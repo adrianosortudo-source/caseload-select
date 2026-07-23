@@ -36,9 +36,9 @@
 import {
   SUPPORTED_HERO_PACKAGE_CONTENT_KINDS,
   SUPPORTED_HERO_PACKAGE_LOCALES,
+  HERO_PACKAGE_UUID_RE as UUID_RE,
 } from "@/lib/publishing-package-gateway";
 
-const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const SHA256_HEX_RE = /^[a-f0-9]{64}$/;
 
 export interface PublishingPackageManifestOperation {

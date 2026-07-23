@@ -90,6 +90,9 @@ export type HeroPackageContentKind = (typeof SUPPORTED_HERO_PACKAGE_CONTENT_KIND
 export const SUPPORTED_HERO_PACKAGE_LOCALES = ["en-CA", "pt-BR"] as const;
 export type HeroPackageLocale = (typeof SUPPORTED_HERO_PACKAGE_LOCALES)[number];
 
+/** Single shared UUID-shape check -- the endpoint and the manifest validator (publishing-package-manifest.ts) both import this exact constant rather than each maintaining their own copy, so "the same UUID regex" is a real invariant, not a hand-kept one. */
+export const HERO_PACKAGE_UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 /** MIME-sniffs actual image bytes -- never trusts a filename or a caller-supplied Content-Type. Same magic-byte signatures the existing hero upload endpoint already uses, plus the classic JPEG/PNG/WebP set the brief requires (JPG and JPEG are the same format/signature). */
 export function sniffHeroPackageMime(buf: Buffer): HeroPackageMimeType | null {
   if (buf.length < 4) return null;
@@ -149,6 +152,14 @@ export interface HeroPackageBytesValidation {
  * server-side and compared against the caller's expected hash). Every
  * check independently capable of failing closed; the caller must treat any
  * non-ok result as a hard rejection with no partial credit.
+ *
+ * expectedSha256Hex is compared EXACTLY, byte for byte -- never
+ * lowercased, trimmed, or otherwise normalized before comparison. This
+ * mirrors the manifest schema's own "no silent normalization" rule
+ * (publishing-package-manifest.ts): an uppercase-hex hash is a malformed
+ * hash, not a case-insensitive match, and every real caller in this
+ * codebase (the route, the CLI) already only ever produces lowercase hex
+ * via Node's own createHash(...).digest("hex").
  */
 export function validateHeroPackageBytes(bytes: Buffer, expectedSha256Hex: string): HeroPackageBytesValidation {
   const byteSize = bytes.length;
@@ -163,7 +174,7 @@ export function validateHeroPackageBytes(bytes: Buffer, expectedSha256Hex: strin
     return { ok: false, rejectionReason: "unsupported_mime", sniffedMime: null, computedSha256, byteSize };
   }
 
-  if (computedSha256 !== expectedSha256Hex.toLowerCase()) {
+  if (computedSha256 !== expectedSha256Hex) {
     return { ok: false, rejectionReason: "hash_mismatch", sniffedMime, computedSha256, byteSize };
   }
 
@@ -248,6 +259,8 @@ export interface HeroPackageReceipt {
   byteSize: number;
   computedSha256: string;
   expectedSha256: string;
+  /** Required accessibility text supplied with the upload -- transported and receipted, but NOT yet persisted (no hero_image_url-adjacent alt-text column exists; the migration-lineage freeze blocks adding one). See docs/publication-operator/publishing-package-gateway.md for the deferral. */
+  altText: string;
   storageKey: string | null;
   resultingHeroBinding: string | null;
   finalValidationOutcome: HeroPackageFinalOutcome;

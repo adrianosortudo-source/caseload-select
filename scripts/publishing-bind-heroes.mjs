@@ -229,6 +229,7 @@ export async function uploadOneOperation(op, endpoint, token, fetchImpl = fetch)
   form.set("expected_locale", op.expectedLocale);
   form.set("expected_content_kind", op.expectedContentKind);
   form.set("expected_sha256", op.expectedSha256);
+  form.set("alt_text", op.altText);
   form.set("file", new Blob([bytes]), basename(op.resolvedPath));
 
   const res = await fetchImpl(endpoint, {

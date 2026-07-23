@@ -13,10 +13,12 @@
  * nothing except this one route -- see the authorization-boundary tests in
  * __tests__/route.test.ts.
  *
- * Body: multipart/form-data with fields firm_id, deliverable_id,
- * expected_locale, expected_content_kind, expected_sha256, and a "file"
- * part carrying the actual image bytes. No JSON body, no url field --
- * this endpoint never fetches a remote URL and never accepts a
+ * Body: multipart/form-data with fields firm_id (UUID), deliverable_id
+ * (UUID), expected_locale, expected_content_kind, expected_sha256,
+ * alt_text (required, non-empty -- transported and receipted, not yet
+ * persisted; see docs/publication-operator/publishing-package-gateway.md),
+ * and a "file" part carrying the actual image bytes. No JSON body, no url
+ * field -- this endpoint never fetches a remote URL and never accepts a
  * caller-supplied storage path.
  *
  * Writes exactly one column on exactly one row on success:
@@ -29,6 +31,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isPublishingPackageGatewayAuthorized } from "@/lib/publishing-package-gateway-auth";
 import {
   HERO_PACKAGE_BUCKET,
+  HERO_PACKAGE_UUID_RE,
   SUPPORTED_HERO_PACKAGE_CONTENT_KINDS,
   SUPPORTED_HERO_PACKAGE_LOCALES,
   heroPackageStoragePath,
@@ -57,6 +60,7 @@ function blankReceipt(operationId: string, timestamp: string): Omit<HeroPackageR
     byteSize: 0,
     computedSha256: "",
     expectedSha256: "",
+    altText: "",
     storageKey: null,
     resultingHeroBinding: null,
   };
@@ -101,13 +105,20 @@ async function handlePost(req: NextRequest, operationId: string, timestamp: stri
   const expectedLocale = formData.get("expected_locale");
   const expectedContentKind = formData.get("expected_content_kind");
   const expectedSha256 = formData.get("expected_sha256");
+  const altText = formData.get("alt_text");
   const file = formData.get("file");
 
   if (typeof firmId !== "string" || !firmId) {
     return fail(400, "rejected_malformed_request", blankReceipt(operationId, timestamp), "firm_id is required");
   }
+  if (!HERO_PACKAGE_UUID_RE.test(firmId)) {
+    return fail(400, "rejected_malformed_request", blankReceipt(operationId, timestamp), "firm_id must be a valid UUID");
+  }
   if (typeof deliverableId !== "string" || !deliverableId) {
     return fail(400, "rejected_malformed_request", blankReceipt(operationId, timestamp), "deliverable_id is required");
+  }
+  if (!HERO_PACKAGE_UUID_RE.test(deliverableId)) {
+    return fail(400, "rejected_malformed_request", blankReceipt(operationId, timestamp), "deliverable_id must be a valid UUID");
   }
   if (typeof expectedLocale !== "string" || !(SUPPORTED_HERO_PACKAGE_LOCALES as readonly string[]).includes(expectedLocale)) {
     return fail(400, "rejected_locale_mismatch", blankReceipt(operationId, timestamp), "expected_locale is required and must be a supported locale");
@@ -121,6 +132,9 @@ async function handlePost(req: NextRequest, operationId: string, timestamp: stri
   if (typeof expectedSha256 !== "string" || !/^[a-f0-9]{64}$/.test(expectedSha256)) {
     return fail(400, "rejected_hash_mismatch", blankReceipt(operationId, timestamp), "expected_sha256 is required and must be 64 lowercase hex characters");
   }
+  if (typeof altText !== "string" || altText.trim().length === 0) {
+    return fail(400, "rejected_malformed_request", blankReceipt(operationId, timestamp), "alt_text is required and must be non-empty");
+  }
   if (!(file instanceof File)) {
     return fail(400, "rejected_malformed_request", blankReceipt(operationId, timestamp), 'field "file" is required and must be an actual file part -- no url field is accepted');
   }
@@ -132,6 +146,7 @@ async function handlePost(req: NextRequest, operationId: string, timestamp: stri
     deliverableId,
     fileName: safeHeroPackageFileName(file.name),
     expectedSha256,
+    altText,
     storageKey: null,
     resultingHeroBinding: null,
   };

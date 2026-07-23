@@ -113,6 +113,7 @@ function multipartReq(opts: {
   expectedLocale?: string | null;
   expectedContentKind?: string | null;
   expectedSha256?: string | null;
+  altText?: string | null;
   fileBytes?: Buffer | null;
   fileName?: string;
   omitFile?: boolean;
@@ -124,6 +125,7 @@ function multipartReq(opts: {
   if (opts.expectedContentKind !== null) fd.set("expected_content_kind", opts.expectedContentKind ?? "text");
   const bytes = opts.fileBytes === null ? null : (opts.fileBytes ?? PNG_MAGIC);
   if (opts.expectedSha256 !== null) fd.set("expected_sha256", opts.expectedSha256 ?? (bytes ? sha256Hex(bytes) : "0".repeat(64)));
+  if (opts.altText !== null) fd.set("alt_text", opts.altText ?? "DRG Law hero image");
   if (!opts.omitFile && bytes) {
     fd.set("file", new File([new Uint8Array(bytes)], opts.fileName ?? "hero.png", { type: "image/png" }));
   }
@@ -154,7 +156,7 @@ describe("POST /api/publishing-agent/hero-package: auth", () => {
 
 describe("POST /api/publishing-agent/hero-package: happy path", () => {
   it("valid PNG, matching hash, matching identity -> 200, confirmed, all 12 receipt fields present, exactly one hero_image_url write", async () => {
-    const res = await POST(multipartReq({}));
+    const res = await POST(multipartReq({ altText: "DRG Law renewal-clause hero" }));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
@@ -170,6 +172,7 @@ describe("POST /api/publishing-agent/hero-package: happy path", () => {
       "byteSize",
       "computedSha256",
       "expectedSha256",
+      "altText",
       "storageKey",
       "resultingHeroBinding",
       "finalValidationOutcome",
@@ -178,6 +181,7 @@ describe("POST /api/publishing-agent/hero-package: happy path", () => {
     }
     expect(r.firmId).toBe(FIRM_ID);
     expect(r.deliverableId).toBe(DELIVERABLE_ID);
+    expect(r.altText).toBe("DRG Law renewal-clause hero");
     expect(r.resultingHeroBinding).toBe("https://signed.example/hero.png");
     expect(state.updateCalls).toHaveLength(1);
     expect(state.updateCalls[0].payload).toMatchObject({ hero_image_url: "https://signed.example/hero.png" });
@@ -218,6 +222,33 @@ describe("POST /api/publishing-agent/hero-package: validation rejections leave t
   it("missing expected_sha256 field -> 400, no writes", async () => {
     const res = await POST(multipartReq({ expectedSha256: null }));
     expect(res.status).toBe(400);
+    expect(state.updateCalls).toHaveLength(0);
+  });
+
+  it("missing alt_text field -> 400, no writes", async () => {
+    const res = await POST(multipartReq({ altText: null }));
+    expect(res.status).toBe(400);
+    expect(state.updateCalls).toHaveLength(0);
+    expect(state.uploadCalls).toHaveLength(0);
+  });
+
+  it("blank (whitespace-only) alt_text -> 400, no writes", async () => {
+    const res = await POST(multipartReq({ altText: "   " }));
+    expect(res.status).toBe(400);
+    expect(state.updateCalls).toHaveLength(0);
+  });
+
+  it("non-UUID firm_id -> 400, rejected before any deliverable lookup, no writes", async () => {
+    const res = await POST(multipartReq({ firmId: "not-a-uuid" }));
+    expect(res.status).toBe(400);
+    expect(state.uploadCalls).toHaveLength(0);
+    expect(state.updateCalls).toHaveLength(0);
+  });
+
+  it("non-UUID deliverable_id -> 400, rejected before any deliverable lookup, no writes", async () => {
+    const res = await POST(multipartReq({ deliverableId: "not-a-uuid" }));
+    expect(res.status).toBe(400);
+    expect(state.uploadCalls).toHaveLength(0);
     expect(state.updateCalls).toHaveLength(0);
   });
 
@@ -285,6 +316,7 @@ describe("POST /api/publishing-agent/hero-package: validation rejections leave t
     fd.set("expected_locale", "en-CA");
     fd.set("expected_content_kind", "text");
     fd.set("expected_sha256", sha256Hex(PNG_MAGIC));
+    fd.set("alt_text", "DRG Law hero image");
     fd.set("storage_path", "../../arbitrary/escape/path.png"); // must be silently ignored, not read anywhere
     fd.set("file", new File([new Uint8Array(PNG_MAGIC)], "hero.png", { type: "image/png" }));
     const res = await POST(new Request(URL, { method: "POST", headers: { authorization: `Bearer ${TOKEN}` }, body: fd }) as unknown as NextRequest);
@@ -300,6 +332,7 @@ describe("POST /api/publishing-agent/hero-package: validation rejections leave t
     fd.set("expected_locale", "en-CA");
     fd.set("expected_content_kind", "text");
     fd.set("expected_sha256", sha256Hex(PNG_MAGIC));
+    fd.set("alt_text", "DRG Law hero image");
     fd.set("url", "https://attacker.example/payload.png"); // must never be fetched
     const res = await POST(new Request(URL, { method: "POST", headers: { authorization: `Bearer ${TOKEN}` }, body: fd }) as unknown as NextRequest);
     expect(res.status).toBe(400);
