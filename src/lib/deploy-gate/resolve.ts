@@ -1,17 +1,24 @@
 /**
- * Background resolution loop for a single deployment's gate check.
+ * Background alarm loop for a single production deployment.
  * Runs inside waitUntil() after the webhook handler has already ACKed
  * Vercel, since GitHub Actions CI (a few minutes on this repo) will not
  * finish inside a single webhook-handling invocation.
+ *
+ * This is detection, not prevention: the Checks API cannot block alias
+ * assignment on this project's plan (see vercel-api.ts). A dirty-tree or
+ * untraceable production deployment emails the operator right away; a
+ * deployment with GitHub Actions checks in progress is polled until they
+ * resolve, and only a failure or timeout triggers the alarm. A clean,
+ * fully green deployment produces no email at all.
  */
 
 import { evaluateGate, type DeploymentMeta } from "./verify";
-import { getDeploymentInfo, resolveDeploymentCheck } from "./vercel-api";
+import { getDeploymentInfo } from "./vercel-api";
 import { fetchCheckRuns } from "./github-status";
+import { sendDeployAlarm } from "./alarm";
 
 const POLL_INTERVAL_MS = 15_000;
 const MAX_WAIT_MS = 8 * 60_000;
-const CHECK_NAME = "Production deploy gate";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -36,13 +43,13 @@ function reasonSummary(reason: string): string {
   }
 }
 
-export async function resolveDeployGate(deploymentId: string, checkId: string): Promise<void> {
+export async function evaluateAndAlarm(deploymentId: string): Promise<void> {
   const deadline = Date.now() + MAX_WAIT_MS;
 
   while (Date.now() < deadline) {
     const info = await getDeploymentInfo(deploymentId);
     if (!info) {
-      await resolveDeploymentCheck(deploymentId, checkId, "failed", "Could not re-fetch deployment metadata.");
+      await sendDeployAlarm(deploymentId, "deployment metadata unavailable", {});
       return;
     }
 
@@ -53,11 +60,20 @@ export async function resolveDeployGate(deploymentId: string, checkId: string): 
       githubOrg: info.meta?.githubOrg,
       githubRepo: info.meta?.githubRepo,
     };
+    const alarmMeta = {
+      gitDirty: info.meta?.gitDirty,
+      githubCommitSha: info.meta?.githubCommitSha,
+      githubCommitRef: info.meta?.githubCommitRef,
+      actor: info.meta?.actor,
+    };
 
-    // gitDirty / no_git_source are terminal — no amount of waiting resolves them.
+    // gitDirty / no_git_source are terminal, no amount of waiting resolves
+    // them. These are exactly the two failure modes that reached production
+    // twice on 2026-07-22, so they alarm immediately rather than waiting on
+    // any poll cycle.
     if (meta.gitDirty === "1" || !meta.githubCommitSha) {
       const decision = evaluateGate(meta, null);
-      await resolveDeploymentCheck(deploymentId, checkId, "failed", reasonSummary(decision.reason));
+      await sendDeployAlarm(deploymentId, reasonSummary(decision.reason), alarmMeta);
       return;
     }
 
@@ -69,21 +85,18 @@ export async function resolveDeployGate(deploymentId: string, checkId: string): 
       continue;
     }
 
-    await resolveDeploymentCheck(
-      deploymentId,
-      checkId,
-      decision.pass ? "succeeded" : "failed",
-      reasonSummary(decision.reason),
-    );
+    if (decision.pass) {
+      // Clean deployment, all checks green: no email.
+      return;
+    }
+
+    await sendDeployAlarm(deploymentId, reasonSummary(decision.reason), alarmMeta);
     return;
   }
 
-  await resolveDeploymentCheck(
+  await sendDeployAlarm(
     deploymentId,
-    checkId,
-    "failed",
-    `Timed out after ${MAX_WAIT_MS / 60_000} minutes waiting for GitHub Actions checks. Rerun this check once CI completes.`,
+    `timed out waiting for GitHub checks (${MAX_WAIT_MS / 60_000} minutes)`,
+    {},
   );
 }
-
-export { CHECK_NAME };
