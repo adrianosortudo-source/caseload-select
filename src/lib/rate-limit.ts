@@ -68,6 +68,14 @@
  *       run up the bill against a single firm while staying under a
  *       global-IP ceiling.
  *
+ *   firmVoiceBuilder   20 per minute
+ *     - POST /api/tools/firm-voice-builder/turn. Public, same-origin, no
+ *       auth, no firmId scoping (standalone tool, not per-client-firm).
+ *       Each call is one Gemini generation. A real interview runs roughly
+ *       25+ turns over about 25 minutes, so 20/min/IP is generous for a
+ *       genuine session while still bounding a scripted loop's Gemini
+ *       spend. Identity is the IP alone.
+ *
  * Per-route bucket selection is done by the caller. Caller passes the
  * bucket name + the IP. We never trust the request body for IP
  * resolution; the helper reads x-forwarded-for and x-real-ip in that
@@ -91,7 +99,8 @@ export type RateLimitBucket =
   | "otpSend"
   | "otpVerify"
   | "seoCheck"
-  | "assist";
+  | "assist"
+  | "firmVoiceBuilder";
 
 interface BucketConfig {
   limit: number;
@@ -109,6 +118,7 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   otpVerify:      { limit: 10, windowSeconds: 600 },   // 10 per 10 minutes
   seoCheck:       { limit: 8,  windowSeconds: 600 },   // 8 per 10 minutes (public, unauth only)
   assist:         { limit: 8,  windowSeconds: 60 },    // 8 per minute (public, unauth, per firmId:ip)
+  firmVoiceBuilder: { limit: 20, windowSeconds: 60 },  // 20 per minute (public, unauth, per ip)
 };
 
 /**
