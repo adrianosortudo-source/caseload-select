@@ -18,7 +18,10 @@ import { fetchCheckRuns } from "./github-status";
 import { sendDeployAlarm } from "./alarm";
 
 const POLL_INTERVAL_MS = 15_000;
-const MAX_WAIT_MS = 8 * 60_000;
+// Stays safely under the route's maxDuration = 300 (route.ts), leaving
+// headroom for the initial signature verification, the final alarm send,
+// and platform overhead around the function's own execution budget.
+const MAX_WAIT_MS = 270_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -45,11 +48,12 @@ function reasonSummary(reason: string): string {
 
 export async function evaluateAndAlarm(deploymentId: string): Promise<void> {
   const deadline = Date.now() + MAX_WAIT_MS;
+  let lastKnownAlarmMeta = {};
 
   while (Date.now() < deadline) {
     const info = await getDeploymentInfo(deploymentId);
     if (!info) {
-      await sendDeployAlarm(deploymentId, "deployment metadata unavailable", {});
+      await sendDeployAlarm(deploymentId, "deployment metadata unavailable", lastKnownAlarmMeta);
       return;
     }
 
@@ -66,6 +70,7 @@ export async function evaluateAndAlarm(deploymentId: string): Promise<void> {
       githubCommitRef: info.meta?.githubCommitRef,
       actor: info.meta?.actor,
     };
+    lastKnownAlarmMeta = alarmMeta;
 
     // gitDirty / no_git_source are terminal, no amount of waiting resolves
     // them. These are exactly the two failure modes that reached production
@@ -96,7 +101,7 @@ export async function evaluateAndAlarm(deploymentId: string): Promise<void> {
 
   await sendDeployAlarm(
     deploymentId,
-    `timed out waiting for GitHub checks (${MAX_WAIT_MS / 60_000} minutes)`,
-    {},
+    `timed out waiting for GitHub checks (${Math.round(MAX_WAIT_MS / 60_000)} minutes)`,
+    lastKnownAlarmMeta,
   );
 }
