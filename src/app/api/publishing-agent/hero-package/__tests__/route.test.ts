@@ -9,6 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { NextRequest } from "next/server";
+import { createHash } from "node:crypto";
 
 vi.mock("server-only", () => ({}));
 
@@ -23,7 +24,7 @@ const URL = "https://app.caseloadselect.ca/api/publishing-agent/hero-package";
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
 
 function sha256Hex(buf: Buffer): string {
-  return require("node:crypto").createHash("sha256").update(buf).digest("hex");
+  return createHash("sha256").update(buf).digest("hex");
 }
 
 type DeliverableRow = { id: string; firm_id: string; status: string; locale: string | null; content_kind: string } | null;
