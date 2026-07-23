@@ -65,6 +65,7 @@ const FIRM_PORTAL_LINKS = [
   { label: "Open Operator Workspace", href: (id: string) => `/api/portal/${id}/workspace/enter?next=/portal/${id}/triage` },
   { label: "Messages", href: (id: string) => `/portal/${id}/inbox` },
   { label: "Clients", href: (id: string) => `/portal/${id}/clients` },
+  { label: "Files", href: (id: string) => `/portal/${id}/files` },
   { label: "Deliverables", href: (id: string) => `/portal/${id}/deliverables` },
   { label: "Dashboards", href: (id: string) => `/portal/${id}/boards` },
 ];
