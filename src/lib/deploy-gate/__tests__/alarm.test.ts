@@ -53,4 +53,20 @@ describe("sendDeployAlarm", () => {
     await expect(sendDeployAlarm("dpl_3", "checks_failed", {})).resolves.toBeUndefined();
     expect(console.error).toHaveBeenCalledTimes(1);
   });
+
+  it("uses the standard subject when no options are passed", async () => {
+    mocks.sendEmail.mockResolvedValue({ skipped: false, id: "email_4" });
+    await sendDeployAlarm("dpl_4", "test reason", {});
+    const [, subject, html] = mocks.sendEmail.mock.calls[0];
+    expect(subject).toBe("[DEPLOY ALARM] Unverified production deployment dpl_4");
+    expect(html).not.toContain("Synthetic test fire");
+  });
+
+  it("tags the subject and prepends the drill note when subjectTag is set", async () => {
+    mocks.sendEmail.mockResolvedValue({ skipped: false, id: "email_5" });
+    await sendDeployAlarm("dpl_5", "deployment metadata unavailable", {}, { subjectTag: "[TEST]" });
+    const [, subject, html] = mocks.sendEmail.mock.calls[0];
+    expect(subject).toBe("[DEPLOY ALARM][TEST] Unverified production deployment dpl_5");
+    expect(html).toContain("Synthetic test fire (operator drill)");
+  });
 });

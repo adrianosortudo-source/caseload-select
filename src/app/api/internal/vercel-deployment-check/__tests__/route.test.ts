@@ -35,9 +35,18 @@ function signedRequest(body: unknown, secretOverride = SECRET) {
   });
 }
 
+function bearerRequest(token: string, body: string) {
+  return new Request("https://app.caseloadselect.ca/api/internal/vercel-deployment-check", {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    body,
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.VERCEL_WEBHOOK_SECRET = SECRET;
+  process.env.ALARM_TEST_SECRET = "test-alarm-secret";
   mocks.evaluateAndAlarm.mockResolvedValue(undefined);
 });
 
@@ -101,5 +110,40 @@ describe("POST /api/internal/vercel-deployment-check", () => {
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body).toEqual({ ok: true, mode: "alarm" });
+  });
+});
+
+describe("synthetic test-fire mode", () => {
+  it("fires the [TEST] alarm pipeline on a valid token and body", async () => {
+    const res = await POST(bearerRequest("test-alarm-secret", JSON.stringify({ type: "synthetic.alarm-test" })));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body).toEqual({ ok: true, mode: "alarm-test" });
+    expect(mocks.evaluateAndAlarm).toHaveBeenCalledWith("dpl_SYNTHETIC_ALARM_TEST", { subjectTag: "[TEST]" });
+  });
+
+  it("rejects a wrong token with 403 and never schedules the pipeline", async () => {
+    const res = await POST(bearerRequest("wrong-token", JSON.stringify({ type: "synthetic.alarm-test" })));
+    expect(res.status).toBe(403);
+    expect(mocks.evaluateAndAlarm).not.toHaveBeenCalled();
+  });
+
+  it("rejects any bearer attempt with 403 when ALARM_TEST_SECRET is unset", async () => {
+    delete process.env.ALARM_TEST_SECRET;
+    const res = await POST(bearerRequest("test-alarm-secret", JSON.stringify({ type: "synthetic.alarm-test" })));
+    expect(res.status).toBe(403);
+    expect(mocks.evaluateAndAlarm).not.toHaveBeenCalled();
+  });
+
+  it("rejects a valid token with a wrong body type with 400", async () => {
+    const res = await POST(bearerRequest("test-alarm-secret", JSON.stringify({ type: "deployment.created" })));
+    expect(res.status).toBe(400);
+    expect(mocks.evaluateAndAlarm).not.toHaveBeenCalled();
+  });
+
+  it("rejects a valid token with malformed JSON with 400", async () => {
+    const res = await POST(bearerRequest("test-alarm-secret", "not json"));
+    expect(res.status).toBe(400);
+    expect(mocks.evaluateAndAlarm).not.toHaveBeenCalled();
   });
 });
