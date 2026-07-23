@@ -23,6 +23,19 @@ const eslintConfig = [
       "@typescript-eslint/no-require-imports": "off",
     },
   },
+  {
+    // One-off acceptance/dry-run scripts (not part of the shipped app, both
+    // say so in their own header comments) that query untyped
+    // supabase.from(...).select("*") rows directly. Real typing would mean
+    // generating and importing full DB schema types — out of scope here.
+    files: [
+      "scripts/acceptance-test-founder-vesting.ts",
+      "scripts/generate-relocation-clause-dry-run-manifest.ts",
+    ],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
 ];
 
 export default eslintConfig;
