@@ -12,6 +12,7 @@
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import Link from "next/link";
 import OnboardingFormLink from "@/components/admin/OnboardingFormLink";
+import { clientListStatusLabel } from "@/lib/firm-onboarding-client-list";
 
 interface SubmissionRow {
   id: string;
@@ -30,6 +31,10 @@ interface SubmissionRow {
   notification_sent_at: string | null;
   notification_error: string | null;
   notification_attempts: number | null;
+  client_list_path: string | null;
+  client_list_files: unknown;
+  client_list_import_verified_at: string | null;
+  client_list_working_copy_deleted_at: string | null;
 }
 
 export const dynamic = "force-dynamic";
@@ -44,7 +49,8 @@ export default async function OnboardingSubmissionsListPage() {
       will_add_operator_as_admin, consent_acknowledged,
       verification_doc_storage_path, verification_doc_original_name,
       submitted_at,
-      notification_sent_at, notification_error, notification_attempts
+      notification_sent_at, notification_error, notification_attempts,
+      client_list_path, client_list_files, client_list_import_verified_at, client_list_working_copy_deleted_at
     `)
     .order("submitted_at", { ascending: false })
     .limit(100)
@@ -71,6 +77,7 @@ export default async function OnboardingSubmissionsListPage() {
                 <th className="px-3 py-2 font-semibold">Rep</th>
                 <th className="px-3 py-2 font-semibold">Token</th>
                 <th className="px-3 py-2 font-semibold">Notify</th>
+                <th className="px-3 py-2 font-semibold">Client list</th>
                 <th className="px-3 py-2 font-semibold">WhatsApp</th>
                 <th className="px-3 py-2 font-semibold">Meta MBM</th>
                 <th className="px-3 py-2 font-semibold">Admin?</th>
@@ -114,6 +121,9 @@ export default async function OnboardingSubmissionsListPage() {
                       error={row.notification_error}
                       attempts={row.notification_attempts ?? 0}
                     />
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    {row.form_type === "profile" ? <ClientListBadge row={row} /> : <span className="text-black/30">n/a</span>}
                   </td>
                   <td className="px-3 py-2 align-top text-black/70">
                     {row.whatsapp_number_decision === "provision_new_ghl_number" ? (
@@ -212,6 +222,36 @@ function NotificationBadge({
       title={attempts > 0 ? `${attempts} attempt${attempts === 1 ? "" : "s"} so far` : "Never attempted"}
     >
       Pending
+    </span>
+  );
+}
+
+function ClientListBadge({
+  row,
+}: {
+  row: {
+    client_list_path: string | null;
+    client_list_files: unknown;
+    client_list_import_verified_at: string | null;
+    client_list_working_copy_deleted_at: string | null;
+  };
+}) {
+  const label = clientListStatusLabel(row);
+  const meta =
+    label === "deleted"
+      ? { text: "Deleted", className: "bg-black/5 text-black/60 border-black/15" }
+      : label === "verified"
+        ? { text: "Verified", className: "bg-emerald-100 text-emerald-900 border-emerald-300" }
+        : label === "self-upload"
+          ? { text: "Self-upload", className: "bg-gold/15 text-navy border-gold/40" }
+          : label === "none"
+            ? { text: "None", className: "bg-amber-50 text-amber-900 border-amber-300" }
+            : { text: label, className: "bg-amber-50 text-amber-900 border-amber-300" };
+  return (
+    <span
+      className={`inline-flex items-center font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 border ${meta.className}`}
+    >
+      {meta.text}
     </span>
   );
 }
