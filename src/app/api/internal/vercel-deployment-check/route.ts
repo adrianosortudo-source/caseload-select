@@ -19,6 +19,19 @@
  * VERCEL_WEBHOOK_SECRET). Ack fast, evaluate in the background: GitHub
  * Actions CI on this repo takes a few minutes, well past a single
  * invocation's budget.
+ *
+ * Test-fire mode (2026-07-23): a request carrying
+ * "Authorization: Bearer <ALARM_TEST_SECRET>" with body
+ * {"type":"synthetic.alarm-test"} bypasses the HMAC check and schedules
+ * the same background pipeline against a fixed fake deployment id. The
+ * metadata fetch cannot resolve that id, so the alarm arm (Vercel API
+ * miss, Resend send, operator inbox) fires end to end with a [TEST]
+ * subject tag and no deployment involved. The real Vercel webhook never
+ * sends an Authorization header, so this branch cannot shadow real
+ * events. ALARM_TEST_SECRET is deliberately a normal encrypted env var,
+ * not Sensitive: its blast radius is a test email to the operator inbox,
+ * and keeping it readable lets any session run the drill without secret
+ * archaeology. VERCEL_WEBHOOK_SECRET stays Sensitive.
  */
 
 import crypto from "crypto";
@@ -33,6 +46,12 @@ import { evaluateAndAlarm } from "@/lib/deploy-gate/resolve";
 // would have been killed mid-poll long before 8 minutes on most plans.
 // resolve.ts's MAX_WAIT_MS is kept safely under this ceiling.
 export const maxDuration = 300;
+
+// Fixed fake deployment id for the test-fire drill. getDeploymentInfo
+// cannot resolve it (404 at the Vercel API), which drives the
+// "deployment metadata unavailable" alarm, the exact arm this drill
+// exists to prove.
+const TEST_DEPLOYMENT_ID = "dpl_SYNTHETIC_ALARM_TEST";
 
 interface VercelWebhookPayload {
   type: string;
@@ -52,8 +71,41 @@ function verifySignature(rawBody: string, signature: string | null): boolean {
   return crypto.timingSafeEqual(a, b);
 }
 
+function timingSafeEquals(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+function handleTestFire(token: string, rawBody: string): Response {
+  const secret = process.env.ALARM_TEST_SECRET;
+  // One shared 403 for "not configured" and "wrong token" so the response
+  // does not reveal whether test mode exists on this deployment.
+  if (!secret || !timingSafeEquals(token, secret)) {
+    return Response.json({ error: "invalid_test_token" }, { status: 403 });
+  }
+  let json: unknown;
+  try {
+    json = JSON.parse(rawBody);
+  } catch {
+    return Response.json({ error: "invalid_test_body" }, { status: 400 });
+  }
+  if ((json as { type?: string }).type !== "synthetic.alarm-test") {
+    return Response.json({ error: "invalid_test_body" }, { status: 400 });
+  }
+  waitUntil(evaluateAndAlarm(TEST_DEPLOYMENT_ID, { subjectTag: "[TEST]" }));
+  return Response.json({ ok: true, mode: "alarm-test" });
+}
+
 export async function POST(request: Request): Promise<Response> {
   const rawBody = await request.text();
+
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    return handleTestFire(authHeader.slice("Bearer ".length), rawBody);
+  }
+
   const signature = request.headers.get("x-vercel-signature");
 
   if (!verifySignature(rawBody, signature)) {

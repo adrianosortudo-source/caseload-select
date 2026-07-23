@@ -1098,7 +1098,7 @@ See master `CLAUDE.md` Build Roadmap for the formal scope-removal note (S6 retir
 
 ## Env Vars to Add in Vercel
 
-`CLIO_CLIENT_ID` · `CLIO_CLIENT_SECRET` · `CLIO_REDIRECT_URI` · `VERCEL_API_TOKEN` · `VERCEL_PROJECT_ID` · `GEMINI_API_KEY` (used by `/api/voice-intake` for LLM extraction; if missing, the endpoint falls back to regex-only and the row still persists)
+`CLIO_CLIENT_ID` · `CLIO_CLIENT_SECRET` · `CLIO_REDIRECT_URI` · `VERCEL_API_TOKEN` · `VERCEL_PROJECT_ID` · `GEMINI_API_KEY` (used by `/api/voice-intake` for LLM extraction; if missing, the endpoint falls back to regex-only and the row still persists) · `ALARM_TEST_SECRET` (used by the test-fire mode of `POST /api/internal/vercel-deployment-check`: a Bearer-authenticated synthetic alarm drill that exercises the full alarm email path with no deployment involved; deliberately a normal encrypted env var, NOT Sensitive, so operator drills can pull it; if unset, test mode returns 403 and the HMAC webhook path is unaffected)
 
 (DocuGenerate and DocuSeal env vars are retired with S6; safe to unset in Vercel.)
 

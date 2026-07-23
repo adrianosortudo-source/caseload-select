@@ -26,6 +26,16 @@ export interface DeployAlarmMeta {
   actor?: string;
 }
 
+export interface DeployAlarmOptions {
+  /**
+   * Inserted into the subject directly after the [DEPLOY ALARM] prefix,
+   * e.g. "[TEST]" for the synthetic test-fire drill, so a drill is never
+   * mistaken for a real alarm while inbox filters on the prefix keep
+   * working. Also prepends an explicit drill note to the body.
+   */
+  subjectTag?: string;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -60,13 +70,14 @@ export async function sendDeployAlarm(
   deploymentId: string,
   reason: string,
   meta: DeployAlarmMeta,
+  options: DeployAlarmOptions = {},
 ): Promise<void> {
+  const subject = `[DEPLOY ALARM]${options.subjectTag ?? ""} Unverified production deployment ${deploymentId}`;
+  const drillNote = options.subjectTag
+    ? `<p style="font-family:sans-serif;font-size:14px;font-weight:600;">Synthetic test fire (operator drill). No real deployment involved.</p>\n`
+    : "";
   try {
-    const result = await sendEmail(
-      OPERATOR_EMAIL,
-      `[DEPLOY ALARM] Unverified production deployment ${deploymentId}`,
-      buildHtml(deploymentId, reason, meta),
-    );
+    const result = await sendEmail(OPERATOR_EMAIL, subject, drillNote + buildHtml(deploymentId, reason, meta));
     // sendEmail returns {skipped:true} rather than throwing when
     // RESEND_API_KEY is missing, so a silently-dropped alarm would
     // otherwise leave no trace anywhere. This is the one signal that a

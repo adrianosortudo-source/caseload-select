@@ -15,7 +15,7 @@
 import { evaluateGate, type DeploymentMeta } from "./verify";
 import { getDeploymentInfo } from "./vercel-api";
 import { fetchCheckRuns } from "./github-status";
-import { sendDeployAlarm } from "./alarm";
+import { sendDeployAlarm, type DeployAlarmOptions } from "./alarm";
 
 const POLL_INTERVAL_MS = 15_000;
 // Stays safely under the route's maxDuration = 300 (route.ts), leaving
@@ -46,14 +46,14 @@ function reasonSummary(reason: string): string {
   }
 }
 
-export async function evaluateAndAlarm(deploymentId: string): Promise<void> {
+export async function evaluateAndAlarm(deploymentId: string, options: DeployAlarmOptions = {}): Promise<void> {
   const deadline = Date.now() + MAX_WAIT_MS;
   let lastKnownAlarmMeta = {};
 
   while (Date.now() < deadline) {
     const info = await getDeploymentInfo(deploymentId);
     if (!info) {
-      await sendDeployAlarm(deploymentId, "deployment metadata unavailable", lastKnownAlarmMeta);
+      await sendDeployAlarm(deploymentId, "deployment metadata unavailable", lastKnownAlarmMeta, options);
       return;
     }
 
@@ -78,7 +78,7 @@ export async function evaluateAndAlarm(deploymentId: string): Promise<void> {
     // any poll cycle.
     if (meta.gitDirty === "1" || !meta.githubCommitSha) {
       const decision = evaluateGate(meta, null);
-      await sendDeployAlarm(deploymentId, reasonSummary(decision.reason), alarmMeta);
+      await sendDeployAlarm(deploymentId, reasonSummary(decision.reason), alarmMeta, options);
       return;
     }
 
@@ -95,7 +95,7 @@ export async function evaluateAndAlarm(deploymentId: string): Promise<void> {
       return;
     }
 
-    await sendDeployAlarm(deploymentId, reasonSummary(decision.reason), alarmMeta);
+    await sendDeployAlarm(deploymentId, reasonSummary(decision.reason), alarmMeta, options);
     return;
   }
 
@@ -103,5 +103,6 @@ export async function evaluateAndAlarm(deploymentId: string): Promise<void> {
     deploymentId,
     `timed out waiting for GitHub checks (${Math.round(MAX_WAIT_MS / 60_000)} minutes)`,
     lastKnownAlarmMeta,
+    options,
   );
 }

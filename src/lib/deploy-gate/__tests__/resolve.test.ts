@@ -100,4 +100,13 @@ describe("evaluateAndAlarm", () => {
     expect(deploymentId).toBe("dpl_missing");
     expect(reason).toBe("deployment metadata unavailable");
   });
+
+  it("threads options through to the alarm on metadata-unavailable", async () => {
+    mocks.getDeploymentInfo.mockResolvedValue(null);
+    await evaluateAndAlarm("dpl_test_fire", { subjectTag: "[TEST]" });
+    expect(mocks.sendDeployAlarm).toHaveBeenCalledTimes(1);
+    const call = mocks.sendDeployAlarm.mock.calls[0];
+    expect(call[0]).toBe("dpl_test_fire");
+    expect(call[3]).toEqual({ subjectTag: "[TEST]" });
+  });
 });
