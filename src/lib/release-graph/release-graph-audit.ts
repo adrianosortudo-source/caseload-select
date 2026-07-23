@@ -385,7 +385,12 @@ function finding(
   return { classification, fact, summary, ...parts };
 }
 
-function requiredRenditionRole(destination: PlacementDestination): VisualRenditionRole | null {
+// Exported (2026-07-22, Canonical Publication Packet work) so
+// publication-packet.ts can compose with the SAME rendition-role and
+// artifact-binding rules this file already defines, rather than
+// re-deriving them -- a pure visibility change, no behavior change. Every
+// existing caller in this file is unaffected.
+export function requiredRenditionRole(destination: PlacementDestination): VisualRenditionRole | null {
   switch (destination) {
     case "firm_website":
       return "textless_html_headline";
@@ -399,13 +404,13 @@ function requiredRenditionRole(destination: PlacementDestination): VisualRenditi
   }
 }
 
-function actualRenditionRole(artifactType: PublicationArtifactType): VisualRenditionRole | null {
+export function actualRenditionRole(artifactType: PublicationArtifactType): VisualRenditionRole | null {
   if (artifactType === "hero_image") return "textless_html_headline";
   if (artifactType === "social_image") return "baked_editorial_card";
   return null;
 }
 
-function findArtifact(
+export function findArtifact(
   artifacts: PublicationArtifact[],
   types: PublicationArtifactType[],
   versionId: string | null,
