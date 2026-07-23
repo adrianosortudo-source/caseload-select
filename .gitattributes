@@ -6,3 +6,13 @@
 # Engine-sync fingerprint: keep LF so the committed blob is identical across
 # Windows and Linux and the CI manifest diff stays clean.
 /scripts/engine-sync.manifest text eol=lf
+
+# Node CLI scripts under scripts/ start with a `#!/usr/bin/env node` shebang,
+# which is only valid at byte 0 of a module. On a CRLF checkout (Windows,
+# core.autocrlf=true) vitest's vite-node SSR transform fails to strip the
+# shebang and leaves it mid-module, so Node rejects it (SyntaxError: Invalid
+# or unexpected token) whenever a test imports one of these scripts (e.g.
+# publishing-bind-heroes-cli.test.ts importing scripts/publishing-bind-heroes.mjs).
+# The blobs are already LF; pinning eol=lf overrides autocrlf so the working
+# tree stays LF too. Same load-bearing reason as the *.sh rule above.
+*.mjs text eol=lf
