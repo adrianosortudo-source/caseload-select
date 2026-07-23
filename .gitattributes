@@ -16,3 +16,14 @@
 # The blobs are already LF; pinning eol=lf overrides autocrlf so the working
 # tree stays LF too. Same load-bearing reason as the *.sh rule above.
 *.mjs text eol=lf
+
+# Python operator scripts under scripts/ also start with a `#!/usr/bin/env
+# python3` shebang; same load-bearing reason as *.sh and *.mjs above. Only
+# two files match today (create-ghl-email-templates.py, qa-verify-templates.py).
+*.py text eol=lf
+
+# supabase/run-migrations.js is the one remaining shebang script not covered
+# by the *.mjs rule (it is plain .js, not .mjs). Not currently imported by
+# any test or invoked in CI, but pinned proactively so it can never regress
+# into the same class of bug as *.mjs above if that changes.
+/supabase/run-migrations.js text eol=lf
