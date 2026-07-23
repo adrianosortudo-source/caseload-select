@@ -15,6 +15,14 @@ const eslintConfig = [
       "react-hooks/static-components": "warn",
     },
   },
+  {
+    // Standalone CommonJS scripts (no "type": "module" in package.json) —
+    // require() is the correct import mechanism here, not a lint violation.
+    files: ["scripts/**/*.js", "supabase/*.js"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
 ];
 
 export default eslintConfig;

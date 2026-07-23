@@ -16,6 +16,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { openrouter, googleai, getIntakeModel, MODELS } from "@/lib/openrouter";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { buildSystemPrompt, SCREEN_PROMPT_VERSION, type FirmConfig, type Question } from "@/lib/screen-prompt";
@@ -2004,10 +2005,9 @@ export async function POST(req: Request) {
         // Log conflict to Supabase for monitoring (fire-and-forget, don't block response).
         // Uses the service-role key path  -  inserts from the anon client will be rejected by
         // RLS but the error is swallowed intentionally: telemetry must never block the session.
-        const situationHash = require("crypto")
-          .createHash("sha256")
+        const situationHash = createHash("sha256")
           .update(situationText.substring(0, 500))
-          .digest("hex") as string;
+          .digest("hex");
         void supabase
           .from("sub_type_conflicts")
           .insert({
