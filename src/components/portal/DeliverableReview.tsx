@@ -23,7 +23,7 @@ import type {
 } from "@/lib/types";
 import { DRGArticleFrame, type AnnotationPosition } from "./DRGArticleFrame";
 import {
-  STATUS_LABELS,
+  displayStatusLabel,
   CONTENT_KIND_LABELS,
   annotationLabel,
   versionOptionLabel,
@@ -75,6 +75,7 @@ export default function DeliverableReview({
   changesAttestation,
   initialDetail,
   supportPreview = false,
+  standingAuthEligible = false,
 }: {
   firmId: string;
   viewerRole: "operator" | "lawyer";
@@ -84,6 +85,7 @@ export default function DeliverableReview({
   changesAttestation: string;
   initialDetail: Detail;
   supportPreview?: boolean;
+  standingAuthEligible?: boolean;
 }) {
   const [detail, setDetail] = useState<Detail>(initialDetail);
   const { deliverable, versions, comments, approvals } = detail;
@@ -232,7 +234,7 @@ export default function DeliverableReview({
               <p className="text-sm text-black/55 mt-1">{deliverable.description}</p>
             )}
           </div>
-          <StatusPill status={deliverable.status} />
+          <StatusPill status={deliverable.status} standingAuthEligible={standingAuthEligible} />
         </div>
       </div>
 
@@ -467,7 +469,13 @@ export default function DeliverableReview({
 
 // ─── Status + version chrome ─────────────────────────────────────────────────
 
-function StatusPill({ status }: { status: ContentDeliverable["status"] }) {
+function StatusPill({
+  status,
+  standingAuthEligible = false,
+}: {
+  status: ContentDeliverable["status"];
+  standingAuthEligible?: boolean;
+}) {
   const styles: Record<string, string> = {
     draft: "bg-parchment-2 text-muted border-border-brand",
     in_review: "bg-navy/10 text-navy border-navy/20",
@@ -475,11 +483,16 @@ function StatusPill({ status }: { status: ContentDeliverable["status"] }) {
     approved: "bg-green-pass/10 text-green-pass border-green-pass/30",
     archived: "bg-parchment-2 text-muted border-border-brand",
   };
+  // DR-107: an in_review deliverable that is pre-approved for release under
+  // standing authorization gets the green Pre-approved treatment instead of
+  // the plain in_review styling.
+  const isPreApproved = status === "in_review" && standingAuthEligible;
+  const cls = isPreApproved ? "bg-green-pass/10 text-green-pass border-green-pass/30" : styles[status];
   return (
     <span
-      className={`text-[11px] uppercase tracking-wider font-semibold px-2.5 py-1 border whitespace-nowrap ${styles[status]}`}
+      className={`text-[11px] uppercase tracking-wider font-semibold px-2.5 py-1 border whitespace-nowrap ${cls}`}
     >
-      {STATUS_LABELS[status]}
+      {displayStatusLabel(status, { standingAuthActive: standingAuthEligible, requiresIndividualReview: false })}
     </span>
   );
 }

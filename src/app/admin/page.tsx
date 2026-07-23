@@ -27,6 +27,9 @@ import {
   getOperatorChannelPreviews,
   type OperatorChannelPreview,
 } from "@/lib/operator-firm-messaging";
+import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
+import { filterAwaitingSignoff } from "@/lib/deliverables-pure";
+import type { DeliverableStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -69,7 +72,8 @@ interface DeliverableRow {
   id: string;
   firm_id: string;
   title: string | null;
-  status: string;
+  status: DeliverableStatus;
+  current_version_id: string | null;
 }
 
 export default async function AdminHomePage() {
@@ -127,7 +131,7 @@ export default async function AdminHomePage() {
       .returns<OnboardingRow[]>(),
     supabase
       .from("content_deliverables")
-      .select("id, firm_id, title, status")
+      .select("id, firm_id, title, status, current_version_id")
       .in("status", ["in_review", "changes_requested"])
       .limit(50)
       .returns<DeliverableRow[]>(),
@@ -147,7 +151,41 @@ export default async function AdminHomePage() {
   const leads = leadsRes.data ?? [];
   const matters = mattersRes.data ?? [];
   const onboarding = onboardingRes.data ?? [];
-  const deliverables = (deliverablesRes.data ?? []).filter((d) => liveFirmIds.includes(d.firm_id));
+  const rawDeliverables = (deliverablesRes.data ?? []).filter((d) => liveFirmIds.includes(d.firm_id));
+
+  // DR-107: "awaiting sign-off" excludes deliverables pre-approved for
+  // release under standing authorization. Resolve auth state per firm
+  // (small N: only firms with an in_review/changes_requested row) and the
+  // requires_individual_review flag per current version, then apply the
+  // same pure filter the deliverables list/detail pages use.
+  const deliverableFirmIds = [...new Set(rawDeliverables.map((d) => d.firm_id))];
+  const authStates = await Promise.all(
+    deliverableFirmIds.map((id) => getStandingAuthorizationState(id).catch(() => null)),
+  );
+  const authActiveByFirm: Record<string, boolean> = {};
+  deliverableFirmIds.forEach((id, i) => {
+    authActiveByFirm[id] = authStates[i]?.active ?? false;
+  });
+
+  const inReviewVersionIds = [
+    ...new Set(
+      rawDeliverables
+        .filter((d) => d.status === "in_review" && d.current_version_id)
+        .map((d) => d.current_version_id as string),
+    ),
+  ];
+  const reviewRequiredByVersion: Record<string, boolean> = {};
+  if (inReviewVersionIds.length > 0) {
+    const { data: versionFlags } = await supabase
+      .from("deliverable_versions")
+      .select("id, requires_individual_review")
+      .in("id", inReviewVersionIds);
+    for (const v of versionFlags ?? []) {
+      reviewRequiredByVersion[v.id as string] = !!v.requires_individual_review;
+    }
+  }
+
+  const deliverables = filterAwaitingSignoff(rawDeliverables, authActiveByFirm, reviewRequiredByVersion);
   const contentPieces = contentRes.data ?? [];
   const webhookFailed = webhookFailedRes.count ?? 0;
   const voiceUnconfirmed = voiceUnconfirmedRes.count ?? 0;
@@ -376,6 +414,7 @@ export default async function AdminHomePage() {
             title="Deliverables awaiting sign-off"
             count={deliverables.length}
             emptyText="Nothing awaiting a firm signature."
+            subtitle="Pre-approved content under standing authorization is excluded (DR-107)."
           >
             {deliverables.slice(0, 6).map((d) => (
               <Link
@@ -551,18 +590,23 @@ function BacklogCard({
   count,
   href,
   emptyText,
+  subtitle,
   children,
 }: {
   title: string;
   count: number;
   href?: string;
   emptyText: string;
+  subtitle?: string;
   children: React.ReactNode;
 }) {
   const heading = (
-    <div className="flex items-center justify-between px-3 py-2.5">
-      <span className="text-sm font-semibold text-navy">{title}</span>
-      <span className="text-xs font-bold text-navy tabular-nums">{count}</span>
+    <div className="px-3 py-2.5">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold text-navy">{title}</span>
+        <span className="text-xs font-bold text-navy tabular-nums">{count}</span>
+      </div>
+      {subtitle && <p className="text-[11px] text-black/50 mt-0.5">{subtitle}</p>}
     </div>
   );
   return (

@@ -20,6 +20,7 @@ const EMPTY_OVERVIEW: PlanOverview = {
   total: 0,
   approved: 0,
   pending: 0,
+  preapproved: 0,
   changes: 0,
   draft: 0,
   weeks: 0,

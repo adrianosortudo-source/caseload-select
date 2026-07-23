@@ -56,6 +56,27 @@ export const STATUS_LABELS: Record<DeliverableStatus, string> = {
   archived: "Archived",
 };
 
+export const PRE_APPROVED_LABEL = "Pre-approved";
+
+/**
+ * DR-107: with the firm's standing publishing authorization enabled, an
+ * in_review deliverable whose current version is not flagged
+ * requires_individual_review displays as "Pre-approved" (ready to publish
+ * per the operator schedule). Derived at render time, never stored: the
+ * status machine is unchanged and toggling authorization off instantly
+ * restores the plain labels. All other statuses always keep their
+ * STATUS_LABELS entry.
+ */
+export function displayStatusLabel(
+  status: DeliverableStatus,
+  opts?: { standingAuthActive?: boolean; requiresIndividualReview?: boolean },
+): string {
+  if (status === "in_review" && opts?.standingAuthActive && !opts?.requiresIndividualReview) {
+    return PRE_APPROVED_LABEL;
+  }
+  return STATUS_LABELS[status];
+}
+
 /**
  * The statement a lawyer agrees to when approving. Frozen at sign-off time
  * into approval_records.attestation so the exact wording the signer saw is
@@ -378,6 +399,7 @@ export interface PlanDeliverable {
   format: string | null;
   period_id: string | null;
   publish_date: string | null;
+  requires_individual_review: boolean;
 }
 
 export interface FormatGroup {
@@ -464,7 +486,8 @@ export function planProgress(
 export interface PlanOverview {
   total: number;
   approved: number;
-  pending: number; // in_review, waiting on the firm
+  pending: number; // in_review still awaiting the firm (DR-107: pre-approved items counted separately)
+  preapproved: number; // in_review, DR-107 pre-approved under standing authorization
   changes: number; // changes_requested, back with the operator
   draft: number;
   weeks: number; // distinct weeks that hold content
@@ -475,19 +498,29 @@ export interface PlanOverview {
 /**
  * Whole-plan summary for the review-overview panel. Live counts, a format
  * tally, and the soonest publish date among pieces not yet approved (the
- * working deadline: review before it goes out).
+ * working deadline: review before it goes out). DR-107: when the firm's
+ * standing authorization is active, an in_review item not flagged
+ * requires_individual_review counts as preapproved instead of pending. With
+ * standingAuthActive false or omitted, behavior is byte-identical to before
+ * DR-107 (preapproved stays 0).
  */
-export function computeOverview(items: PlanDeliverable[]): PlanOverview {
+export function computeOverview(
+  items: PlanDeliverable[],
+  opts?: { standingAuthActive?: boolean },
+): PlanOverview {
   let approved = 0;
   let pending = 0;
+  let preapproved = 0;
   let changes = 0;
   let draft = 0;
   const weeks = new Set<string>();
   let next: { date: string; title: string } | null = null;
   for (const it of items) {
     if (it.status === "approved") approved++;
-    else if (it.status === "in_review") pending++;
-    else if (it.status === "changes_requested") changes++;
+    else if (it.status === "in_review") {
+      if (opts?.standingAuthActive && !it.requires_individual_review) preapproved++;
+      else pending++;
+    } else if (it.status === "changes_requested") changes++;
     else if (it.status === "draft") draft++;
     if (it.period_id) weeks.add(it.period_id);
     if (it.status !== "approved" && it.publish_date) {
@@ -504,10 +537,33 @@ export function computeOverview(items: PlanDeliverable[]): PlanOverview {
     total: items.length,
     approved,
     pending,
+    preapproved,
     changes,
     draft,
     weeks: weeks.size,
     byFormat,
     nextPublish: next,
   };
+}
+
+/**
+ * DR-107 console rule: "awaiting sign-off" counts only what genuinely
+ * awaits a human. changes_requested always counts. in_review counts only
+ * when the firm's standing authorization is off or the current version is
+ * flagged requires_individual_review. A row with no current version and
+ * authorization on does not count (nothing exists to sign).
+ */
+export function filterAwaitingSignoff<
+  T extends { status: DeliverableStatus; firm_id: string; current_version_id: string | null },
+>(
+  rows: T[],
+  authActiveByFirm: Record<string, boolean>,
+  reviewRequiredByVersion: Record<string, boolean>,
+): T[] {
+  return rows.filter((r) => {
+    if (r.status === "changes_requested") return true;
+    if (r.status !== "in_review") return false;
+    if (!authActiveByFirm[r.firm_id]) return true;
+    return r.current_version_id ? !!reviewRequiredByVersion[r.current_version_id] : false;
+  });
 }
