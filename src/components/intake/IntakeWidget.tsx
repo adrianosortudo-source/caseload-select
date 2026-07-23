@@ -1283,7 +1283,7 @@ export function IntakeWidget({
   // ── Cleanup tour timeouts on unmount ──────────────────────────────
   useEffect(() => {
     return () => {
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+       
       tourTimeoutsRef.current.forEach(clearTimeout);
     };
   }, []);
@@ -1374,7 +1374,7 @@ export function IntakeWidget({
     }
 
     addT(typeNext, 500);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [guidedTour, demoScenario, step]);
 
   // ── Guided tour: pause at questions  -  user clicks to see demo answers ──
@@ -1389,7 +1389,7 @@ export function IntakeWidget({
 
     // Pause  -  show the action button so user can read the questions first
     setTourAction("show-answers");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [guidedTour, step, questions]);
 
   // Round 3 is shown to the viewer in guided tour mode (not auto-skipped).

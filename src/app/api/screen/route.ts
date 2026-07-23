@@ -332,7 +332,7 @@ export async function POST(req: Request) {
       const ua = (req.headers.get("user-agent") ?? "").slice(0, 120);
       const ref = (req.headers.get("referer") ?? "").slice(0, 200);
       const origin = req.headers.get("origin") ?? "";
-      // eslint-disable-next-line no-console
+       
       console.log(
         `[legacy-screen] caller firm_id=${firm_id ?? "none"} channel=${channel ?? "none"} session=${session_id ? "resume" : "new"} origin=${origin} ref=${ref} ua=${ua}`,
       );
@@ -1347,7 +1347,7 @@ export async function POST(req: Request) {
     // _slot_answered: accumulated map of slot ID → answer value(s) across all turns.
     const slotRound = (sessionScoringRaw._slot_round as 1 | 2 | 3 | null) ?? null;
     const slotAnswered = (sessionScoringRaw._slot_answered as Record<string, string | string[]>) ?? {};
-    let updatedSlotAnswered: Record<string, string | string[]> = { ...slotAnswered };
+    const updatedSlotAnswered: Record<string, string | string[]> = { ...slotAnswered };
     let slotRoundUpdated: 1 | 2 | 3 = slotRound ?? 1;
 
     // Route slot-keyed widget answers (containing "__") into updatedSlotAnswered.

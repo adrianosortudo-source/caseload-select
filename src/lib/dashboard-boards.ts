@@ -65,7 +65,7 @@ export interface DashboardView {
 
 /** Saved views visible to this actor: firm-wide defaults plus their own. */
 export async function listDashboardViews(firmId: string, owner: string | null): Promise<DashboardView[]> {
-  let query = supabase.from('dashboard_views').select('*').eq('firm_id', firmId);
+  const query = supabase.from('dashboard_views').select('*').eq('firm_id', firmId);
   const { data } = owner
     ? await query.or(`owner.is.null,owner.eq.${owner}`)
     : await query.is('owner', null);

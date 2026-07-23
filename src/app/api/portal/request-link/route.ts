@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
   if (lawyerLookupError) {
     // Internal-only visibility. Never log the raw email (anti-enumeration /
     // privacy); the external response stays { ok: true } regardless.
-    // eslint-disable-next-line no-console
+     
     console.error(
       `[request-link] firm_lawyers lookup failed: ${lawyerLookupError.message}`,
     );
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
       .filter("branding->>lawyer_email", "eq", email);
     if (legacyLookupError) {
       // Same no-raw-email rule as above.
-      // eslint-disable-next-line no-console
+       
       console.error(
         `[request-link] legacy firm lookup failed: ${legacyLookupError.message}`,
       );
@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
     // Don't surface email failures to the caller. Operator can re-send via
     // /api/portal/generate if needed. Still log internally so a broken
     // send isn't invisible.
-    // eslint-disable-next-line no-console
+     
     console.error(
       `[request-link] email send failed: ${err instanceof Error ? err.message : String(err)}`,
     );

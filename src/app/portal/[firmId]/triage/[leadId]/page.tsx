@@ -342,7 +342,7 @@ function BriefFrame({ html }: { html: string }) {
   return (
     <div
       className="brief-frame px-2 md:px-4"
-      // eslint-disable-next-line react/no-danger
+       
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

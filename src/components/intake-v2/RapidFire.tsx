@@ -33,7 +33,7 @@ export function RapidFire({ items, values, onChange }: Props) {
   useEffect(() => {
     setOtherOpenFor(null);
     setOtherTexts({});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [itemSignature]);
 
   function handleTap(itemId: string, optionValue: string, multi: boolean) {

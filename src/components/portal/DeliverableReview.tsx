@@ -860,7 +860,6 @@ function FloatingAnnotationPopover({
   // Click outside to dismiss. Delayed 120ms so the same mouseup that opened
   // the popover does not immediately close it.
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
     function attach() {
       document.addEventListener("mousedown", handleOutside);
     }
@@ -869,7 +868,7 @@ function FloatingAnnotationPopover({
         onDismiss();
       }
     }
-    timer = setTimeout(attach, 120);
+    const timer = setTimeout(attach, 120);
     return () => {
       clearTimeout(timer);
       document.removeEventListener("mousedown", handleOutside);

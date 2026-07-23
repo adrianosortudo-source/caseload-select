@@ -131,7 +131,7 @@ function sanitizeForPrompt(input: unknown, maxLen: number): string {
   if (typeof input !== "string") return "";
   return input
     // Strip control chars (0x00-0x08, 0x0B-0x1F, 0x7F). Keep \n (0x0A) and \t (0x09).
-    // eslint-disable-next-line no-control-regex
+     
     .replace(/[\x00-\x08\x0B-\x1F\x7F]/g, "")
     // Strip our prompt's section-header markers
     .replace(/━+/g, "")
