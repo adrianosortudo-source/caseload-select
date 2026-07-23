@@ -30,7 +30,7 @@
  *
  * No durable configuration model for (1)-(4) exists in this codebase today.
  * `publication_destination_configs` -- firm_id + platform +
- * account_or_location_id + destination_surface + status + a controlled
+ * account_or_location_id + destination_surface + status + controlled
  * credential/integration reference -- is the correct future home for it
  * (see docs/publication-operator/publication-resolution-preflight-design-2026-07-19.md
  * §1 Tier 3), but it exists only as a drafted, unapplied migration on a

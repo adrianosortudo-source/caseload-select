@@ -477,6 +477,34 @@ describe("all eighteen gap classifications are independently reachable", () => {
     expect(unresolved!.canonicalSourceConsulted).toBe("publication_artifacts");
   });
 
+  it("compliance_wrapper_missing — website placement exists, bound artifact matches firm, deliverable, version, AND locale but has the WRONG artifact_type (hero_image, not webpage) -> source_path_unverified, never 'documented' (regression: 2026-07-22 audit found this fifth binding dimension had no dedicated rejection test, unlike its four siblings above)", () => {
+    const audit = resolveAndAuditReleaseGraph(
+      baseInput({
+        placement: makePlacement({ destination: "linkedin_article" }),
+        // Firm, deliverable, version, and locale all match exactly, but the
+        // only artifact on record is a hero_image, not a webpage -- must
+        // never be read as this release's website-article source edge,
+        // even though every other dimension matches.
+        artifacts: [
+          makeArtifact({
+            version_id: CURRENT_VERSION_ID,
+            locale: "en-CA",
+            firm_id: DRG_FIRM_ID,
+            deliverable_id: DELIVERABLE_ID,
+            artifact_type: "hero_image",
+          }),
+        ],
+      }),
+    );
+    const cw = audit.findings.find((f) => f.classification === "compliance_wrapper_missing");
+    expect(cw).toBeUndefined();
+    const unresolved = audit.findings.find((f) => f.classification === "source_path_unverified");
+    expect(unresolved).toBeDefined();
+    expect(unresolved!.rootCause).toMatch(/source_artifact_version_mismatch/);
+    expect(unresolved!.factualEvidence).toMatch(/webpage/i);
+    expect(unresolved!.canonicalSourceConsulted).toBe("publication_artifacts");
+  });
+
   it("compliance_wrapper_missing — bound artifact matches firm_id, deliverable_id, version, AND locale exactly -> source edge resolves, no source_path_unverified finding (exact-match acceptance case)", () => {
     const audit = resolveAndAuditReleaseGraph(
       baseInput({
