@@ -7,6 +7,8 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { NextRequest } from "next/server";
+import fs from "fs";
+import path from "path";
 
 vi.mock("server-only", () => ({}));
 
@@ -214,5 +216,29 @@ describe("POST claim: standing publishing authorization release path", () => {
     const res = await POST(makeReq({ approved_version_id: VERSION, idempotency_key: "k8" }), params());
     const body = await res.json();
     expect(body.releasePath).toBe("standing_authorization");
+  });
+});
+
+describe("POST claim is unaffected by publication-preflight.ts's fallback (static source check)", () => {
+  // Regression for the exact-destination-identity calibration (2026-07-21):
+  // an earlier pass of this codebase's own comments/docs incorrectly
+  // implied /claim was also affected by buildPreflightReport's optional-
+  // parameter fallback (corrected in publishing-agent-release-resolution-
+  // requirements-2026-07-20.md §13.2g). It never was: this route enforces
+  // authorization solely via claim_placement_for_publish() (the RPC),
+  // through publication-placement-claims.ts, which does not import
+  // buildPreflightReport or publication-preflight.ts at all. Scanning the
+  // actual source (no mocking) makes this a hard regression, not a comment
+  // a future edit could silently invalidate.
+  it("publication-placement-claims.ts (the module backing /claim) never imports buildPreflightReport -- a plain prose mention in its own header comment (explaining the relationship) is fine, an import is what would matter", () => {
+    const source = fs.readFileSync(path.join(process.cwd(), "src", "lib", "publication-placement-claims.ts"), "utf8");
+    // Import is the only way this file could actually CALL
+    // buildPreflightReport -- there is none. Its header comment does name
+    // buildPreflightReport() in prose to explain the relationship (a
+    // read-only preview, never itself sufficient permission to publish),
+    // which is expected and fine; only a real import would mean this file
+    // is affected by publication-preflight.ts's fallback.
+    expect(source).not.toMatch(/^import[\s\S]*?from ["']@\/lib\/publication-preflight["'];?$/m);
+    expect(source).toContain("claim_placement_for_publish");
   });
 });

@@ -10,6 +10,7 @@
 
 import { describe, it, expect } from "vitest";
 import { buildPreflightReport } from "@/lib/publication-preflight";
+import { isVersionReleaseAuthorized, type ReleaseAuthorizationResult } from "@/lib/release-authorization";
 import type { ContentDeliverable, ContentPlacement, DeliverableComment, PublicationReceipt } from "@/lib/types";
 
 const FIRM = "f1111111-1111-1111-1111-111111111111";
@@ -64,6 +65,28 @@ function makePlacement(overrides: Partial<ContentPlacement> = {}): ContentPlacem
   } as ContentPlacement;
 }
 
+/**
+ * Auto-derives a canonical release-authorization result from a deliverable's
+ * own status/version fields (individual-approval path only, since that's
+ * all this test file's fixtures ever populate) -- so every test in this
+ * file that isn't specifically ABOUT authorization gets a correct,
+ * automatically-consistent result matching the deliverable it constructed,
+ * without needing to think about authorization explicitly. Tests that ARE
+ * about authorization pass an explicit `releaseAuthorizationByDeliverableId`
+ * override (or `omitReleaseAuthorization: true`) instead.
+ */
+function authorizationFor(deliverable: ContentDeliverable): Record<string, ReleaseAuthorizationResult> {
+  return {
+    [deliverable.id]: isVersionReleaseAuthorized({
+      deliverableStatus: deliverable.status,
+      approvedVersionId: deliverable.approved_version_id,
+      targetVersionId: deliverable.current_version_id ?? "",
+      versionRequiresIndividualReview: false,
+      standingAuthorizationActive: false,
+    }),
+  };
+}
+
 function baseInput(overrides: {
   periodLifecycle?: "legacy_unreconciled" | "setup_required" | "enforced";
   deliverable?: ContentDeliverable;
@@ -71,10 +94,13 @@ function baseInput(overrides: {
   comments?: DeliverableComment[];
   placements?: ContentPlacement[];
   receipts?: Record<string, PublicationReceipt | null>;
+  releaseAuthorizationByDeliverableId?: Record<string, ReleaseAuthorizationResult>;
+  /** True to omit buildPreflightReport's releaseAuthorizationByDeliverableId key entirely -- distinct from supplying a map that simply lacks this deliverable's entry. */
+  omitReleaseAuthorization?: boolean;
 }) {
   const deliverable = overrides.deliverable ?? makeDeliverable();
   const placements = overrides.placements ?? [makePlacement({ deliverable_id: deliverable.id })];
-  return {
+  const base = {
     periodId: PERIOD,
     periodLifecycle: overrides.periodLifecycle ?? "enforced",
     deliverables: [deliverable],
@@ -82,6 +108,11 @@ function baseInput(overrides: {
     commentsByDeliverableId: { [deliverable.id]: overrides.comments ?? [] },
     placementsByDeliverableId: { [deliverable.id]: placements },
     currentReceiptsByPlacementId: overrides.receipts ?? {},
+  };
+  if (overrides.omitReleaseAuthorization) return base;
+  return {
+    ...base,
+    releaseAuthorizationByDeliverableId: overrides.releaseAuthorizationByDeliverableId ?? authorizationFor(deliverable),
   };
 }
 
@@ -99,20 +130,20 @@ describe("buildPreflightReport: fail-closed branches", () => {
     expect(report.placements[0].reason).toMatch(/historical/);
   });
 
-  it("enforced period, deliverable not approved -> may_publish false with exact status", () => {
-    const report = buildPreflightReport(
-      baseInput({ deliverable: makeDeliverable({ status: "in_review" }) }),
-    );
+  it("enforced period, deliverable not approved -> may_publish false via the canonical authorization result, not a locally re-derived status check", () => {
+    const deliverable = makeDeliverable({ status: "in_review" });
+    const report = buildPreflightReport(baseInput({ deliverable }));
     expect(report.placements[0].mayPublish).toBe(false);
-    expect(report.placements[0].reason).toContain('"in_review"');
+    expect(report.placements[0].reason).toMatch(/not release-authorized/);
+    expect(report.placements[0].reason).toContain("in_review");
   });
 
-  it("approved_version_id != current_version_id (drift) -> may_publish false", () => {
-    const report = buildPreflightReport(
-      baseInput({ deliverable: makeDeliverable({ approved_version_id: "stale-version-id" }) }),
-    );
+  it("approved_version_id != current_version_id (drift) -> may_publish false via the canonical authorization result", () => {
+    const deliverable = makeDeliverable({ approved_version_id: "stale-version-id" });
+    const report = buildPreflightReport(baseInput({ deliverable }));
     expect(report.placements[0].mayPublish).toBe(false);
-    expect(report.placements[0].reason).toMatch(/version drift/);
+    expect(report.placements[0].reason).toMatch(/not release-authorized/);
+    expect(report.placements[0].reason).toContain("approved_version_mismatch");
   });
 
   it("readiness evaluator says not ready -> may_publish false", () => {
@@ -381,5 +412,116 @@ describe("buildPreflightReport: Workstream 4 deliverablesWithNoPlacements covera
   it("a deliverable WITH placements never appears in deliverablesWithNoPlacements", () => {
     const report = buildPreflightReport(baseInput({}));
     expect(report.deliverablesWithNoPlacements).toHaveLength(0);
+  });
+});
+
+describe("buildPreflightReport: releaseAuthorizationByDeliverableId (canonical two-path result) -- no fallback interpretation when absent", () => {
+  it("releaseAuthorizationByDeliverableId omitted from buildPreflightReport's input entirely -> release_authorization_context_unavailable, fails closed explicitly, never re-derives from status/version equality", () => {
+    const deliverable = makeDeliverable({ status: "approved" }); // deliberately a status that WOULD have passed the old legacy check, to prove there is no fallback re-derivation at all
+    const report = buildPreflightReport(baseInput({ deliverable, omitReleaseAuthorization: true }));
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].reasonCode).toBe("release_authorization_context_unavailable");
+    expect(report.placements[0].reason).toMatch(/^release_authorization_context_unavailable:/);
+  });
+
+  it("releaseAuthorizationByDeliverableId supplied but with no entry for THIS deliverable -> release_authorization_context_unavailable, identical to full omission", () => {
+    const deliverable = makeDeliverable({ status: "approved" });
+    const someOtherDeliverableId = "d9999999-9999-9999-9999-999999999999";
+    const report = buildPreflightReport(
+      baseInput({
+        deliverable,
+        releaseAuthorizationByDeliverableId: {
+          [someOtherDeliverableId]: isVersionReleaseAuthorized({
+            deliverableStatus: "approved",
+            approvedVersionId: "irrelevant",
+            targetVersionId: "irrelevant",
+            versionRequiresIndividualReview: false,
+            standingAuthorizationActive: false,
+          }),
+        },
+      }),
+    );
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].reasonCode).toBe("release_authorization_context_unavailable");
+    expect(report.placements[0].reason).toMatch(/^release_authorization_context_unavailable:/);
+  });
+
+  it("every mayPublish=true placement, and every mayPublish=false placement for a reason OTHER than context-unavailability, carries reasonCode=null", () => {
+    const authorizedReport = buildPreflightReport(baseInput({}));
+    expect(authorizedReport.placements[0].mayPublish).toBe(true);
+    expect(authorizedReport.placements[0].reasonCode).toBeNull();
+
+    const unresolvedCommentReport = buildPreflightReport(
+      baseInput({
+        comments: [
+          {
+            id: "c1",
+            deliverable_id: "d1111111-1111-1111-1111-111111111111",
+            version_id: VERSION,
+            firm_id: FIRM,
+            author_role: "lawyer",
+            author_id: null,
+            author_name: null,
+            annotation: null,
+            body: "please fix",
+            attachments: [],
+            resolved: false,
+            resolved_at: null,
+            resolved_by_role: null,
+            parent_comment_id: null,
+            approval_record_id: null,
+            created_at: new Date().toISOString(),
+          } as DeliverableComment,
+        ],
+      }),
+    );
+    expect(unresolvedCommentReport.placements[0].mayPublish).toBe(false);
+    expect(unresolvedCommentReport.placements[0].reasonCode).toBeNull();
+  });
+
+  it("supplied and authorized (standing_authorization path) -> bypasses the individual-approval-only check even though status is not approved", () => {
+    const deliverable = makeDeliverable({ status: "in_review", approved_version_id: null });
+    const authorization = isVersionReleaseAuthorized({
+      deliverableStatus: deliverable.status,
+      approvedVersionId: deliverable.approved_version_id,
+      targetVersionId: deliverable.current_version_id!,
+      versionRequiresIndividualReview: false,
+      standingAuthorizationActive: true,
+    });
+    expect(authorization.authorized).toBe(true);
+    expect(authorization.kind).toBe("standing_authorization");
+
+    const report = buildPreflightReport({
+      ...baseInput({ deliverable }),
+      releaseAuthorizationByDeliverableId: { [deliverable.id]: authorization },
+    });
+    // Never blocked on deliverable status or version-id equality when the
+    // canonical result says authorized -- proceeds to the readiness/comment/
+    // lifecycle gates below, same as any other authorized placement.
+    expect(report.placements[0].mayPublish).toBe(true);
+    expect(report.placements[0].reason).toBeNull();
+  });
+
+  it("supplied and NOT authorized -> reason names the canonical kind, never the old 'not approved'/'version drift' wording", () => {
+    const deliverable = makeDeliverable({ status: "draft", approved_version_id: null });
+    const authorization = isVersionReleaseAuthorized({
+      deliverableStatus: deliverable.status,
+      approvedVersionId: deliverable.approved_version_id,
+      targetVersionId: deliverable.current_version_id!,
+      versionRequiresIndividualReview: false,
+      standingAuthorizationActive: false,
+    });
+    expect(authorization.authorized).toBe(false);
+    expect(authorization.kind).toBe("standing_authorization_inactive");
+
+    const report = buildPreflightReport({
+      ...baseInput({ deliverable }),
+      releaseAuthorizationByDeliverableId: { [deliverable.id]: authorization },
+    });
+    expect(report.placements[0].mayPublish).toBe(false);
+    expect(report.placements[0].reason).toMatch(/not release-authorized/);
+    expect(report.placements[0].reason).toContain("standing_authorization_inactive");
+    expect(report.placements[0].reason).not.toMatch(/not approved"/);
+    expect(report.placements[0].reason).not.toMatch(/version drift/);
   });
 });

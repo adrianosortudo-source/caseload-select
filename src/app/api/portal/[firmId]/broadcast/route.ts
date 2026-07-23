@@ -100,7 +100,7 @@ export async function POST(
   }
 
   const broadcastId = crypto.randomUUID();
-  const senderRole: 'admin' = 'admin'; // operator + lawyer both treated as admin for messages
+  const senderRole = 'admin' as const; // operator + lawyer both treated as admin for messages
   const results: Array<
     | { matter_id: string; ok: true; message_id: string }
     | { matter_id: string; ok: false; error: string }
