@@ -17,7 +17,9 @@
     "check:engine-sync": "bash scripts/check-engine-sync.sh",
     "check:engine-sync:win": "powershell -ExecutionPolicy Bypass -File scripts/check-engine-sync.ps1",
     "check:engine-manifest": "bash scripts/check-engine-manifest.sh",
-    "gen:engine-manifest": "bash scripts/gen-engine-manifest.sh"
+    "gen:engine-manifest": "bash scripts/gen-engine-manifest.sh",
+    "publishing:bind-heroes": "node scripts/publishing-bind-heroes.mjs",
+    "publishing:export-packets": "node scripts/publishing-export-packets.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
