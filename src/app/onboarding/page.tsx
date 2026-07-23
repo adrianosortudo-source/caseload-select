@@ -56,7 +56,7 @@ async function getFirmChecklists(): Promise<FirmChecklist[]> {
   const [firmsRes, sessionCountRes, conflictCountRes, clientListRes] = await Promise.all([
     supabase
       .from("intake_firms")
-      .select("id, name, practice_areas, geo_config, branding, ghl_webhook_url, clio_config, scoring_weights, custom_domain")
+      .select("id, name, practice_areas, geographic_config, branding, ghl_webhook_url, clio_config, custom_domain")
       .order("created_at", { ascending: true }),
     supabase
       .from("intake_sessions")
@@ -94,9 +94,8 @@ async function getFirmChecklists(): Promise<FirmChecklist[]> {
   return firms.map((firm) => {
     const practiceAreas = firm.practice_areas as string[] | null;
     const branding = firm.branding as Record<string, unknown> | null;
-    const geoConfig = firm.geo_config as Record<string, unknown> | null;
+    const geoConfig = firm.geographic_config as Record<string, unknown> | null;
     const clioConfig = firm.clio_config as Record<string, unknown> | null;
-    const scoringWeights = firm.scoring_weights as Record<string, unknown> | null;
     const hasSession = (sessionsByFirm[firm.id] ?? 0) > 0;
 
     const checklist: ChecklistItem[] = [
@@ -155,13 +154,6 @@ async function getFirmChecklists(): Promise<FirmChecklist[]> {
         label: "Custom domain",
         status: firm.custom_domain ? "pass" : "warn",
         detail: firm.custom_domain ?? "Using default domain",
-        required: false,
-      },
-      {
-        key: "scoring_weights",
-        label: "Scoring weights",
-        status: scoringWeights && Object.keys(scoringWeights).length > 0 ? "pass" : "warn",
-        detail: scoringWeights ? "Custom" : "Default",
         required: false,
       },
       {
