@@ -26,6 +26,14 @@ import { waitUntil } from "@vercel/functions";
 import { requiresGate } from "@/lib/deploy-gate/verify";
 import { evaluateAndAlarm } from "@/lib/deploy-gate/resolve";
 
+// 300s matches the proven precedent already live on this plan
+// (src/app/api/tools/seo-check/route.ts). The original design assumed an
+// 8-minute poll window; that duration was never achievable on any Vercel
+// function regardless of plan tier without this export, and the function
+// would have been killed mid-poll long before 8 minutes on most plans.
+// resolve.ts's MAX_WAIT_MS is kept safely under this ceiling.
+export const maxDuration = 300;
+
 interface VercelWebhookPayload {
   type: string;
   payload: {

@@ -62,11 +62,20 @@ export async function sendDeployAlarm(
   meta: DeployAlarmMeta,
 ): Promise<void> {
   try {
-    await sendEmail(
+    const result = await sendEmail(
       OPERATOR_EMAIL,
       `[DEPLOY ALARM] Unverified production deployment ${deploymentId}`,
       buildHtml(deploymentId, reason, meta),
     );
+    // sendEmail returns {skipped:true} rather than throwing when
+    // RESEND_API_KEY is missing, so a silently-dropped alarm would
+    // otherwise leave no trace anywhere. This is the one signal that a
+    // key rotation gap has gone unnoticed.
+    if (result.skipped) {
+      console.error(
+        `deploy-gate: sendDeployAlarm SKIPPED for ${deploymentId} (RESEND_API_KEY not set), reason: ${reason}`,
+      );
+    }
   } catch (err) {
     console.error("deploy-gate: sendDeployAlarm failed", err);
   }
