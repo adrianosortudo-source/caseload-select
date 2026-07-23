@@ -173,7 +173,7 @@ export default async function ClientMatterHomePage({ params }: PageProps) {
 
       {articles.length > 0 && (
         <section style={cardStyle}>
-          <p style={sectionEyebrow}>About what's happening</p>
+          <p style={sectionEyebrow}>About what&apos;s happening</p>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {articles.map((a) => (
               <li key={a.id} style={{ marginBottom: 12 }}>

@@ -167,7 +167,6 @@ function getRedis(): Redis | null {
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) {
     if (!_logged) {
-      // eslint-disable-next-line no-console
       console.warn(
         "[rate-limit] UPSTASH_REDIS_REST_URL / TOKEN not set; rate limiting is FAIL-OPEN. Set both env vars in Vercel to engage limits.",
       );
@@ -181,7 +180,6 @@ function getRedis(): Redis | null {
   } catch (err) {
     // Construction failure (malformed URL etc.) — fail open, log once.
     if (!_logged) {
-      // eslint-disable-next-line no-console
       console.warn(
         "[rate-limit] Redis client construction failed; rate limiting is FAIL-OPEN.",
         err instanceof Error ? err.message : String(err),
@@ -294,7 +292,6 @@ export async function checkRateLimit(
   } catch (err) {
     // Redis hiccup. Fail open and log; never block intake on a transient
     // rate-limiter failure.
-    // eslint-disable-next-line no-console
     console.warn(
       `[rate-limit] bucket=${bucket} identity=${identity} backing-store error, failing open:`,
       err instanceof Error ? err.message : String(err),

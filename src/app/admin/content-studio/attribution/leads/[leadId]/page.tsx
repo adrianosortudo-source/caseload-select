@@ -86,7 +86,7 @@ export default async function LeadAttributionPage({
                     {e.self_report_category && ` · ${SELF_REPORT_CATEGORY_LABELS[e.self_report_category]}`}
                     {supersededIds.has(e.id) && " · superseded by a later correction"}
                   </div>
-                  {e.evidence_note && <div className="text-xs text-black/70 mt-2 italic">"{e.evidence_note}"</div>}
+                  {e.evidence_note && <div className="text-xs text-black/70 mt-2 italic">&quot;{e.evidence_note}&quot;</div>}
                   <div className="text-[11px] text-black/40 mt-2">
                     Recorded by {e.recorded_by_role}
                     {e.recorded_by_name ? ` (${e.recorded_by_name})` : ""} · observed {formatTimestamp(e.observed_at)}

@@ -332,7 +332,6 @@ export function IntakeControllerV2({ firmId, firmName, mode = "standard", onScor
     // diagnose why the live scoring panel is missing fields. Cheap and silent
     // for normal users.
     if (typeof window !== "undefined" && typeof console !== "undefined") {
-      // eslint-disable-next-line no-console
       console.log("[CaseLoad-v2] /api/screen response:", { cpi: data.cpi, practice: data.practice_area, sub_type: (data as { practice_sub_type?: string }).practice_sub_type, finalize: data.finalize, collect_identity: data.collect_identity });
     }
 

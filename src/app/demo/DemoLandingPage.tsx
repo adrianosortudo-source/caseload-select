@@ -330,7 +330,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
                 The conversation, on WhatsApp
               </h2>
               <p className="text-base text-white/70 leading-relaxed mb-6">
-                Try the screen here in WhatsApp's format. The same engine drives the website widget above; the difference is the rhythm: one question at a time, plain text, quick-reply chips when they help.
+                Try the screen here in WhatsApp&apos;s format. The same engine drives the website widget above; the difference is the rhythm: one question at a time, plain text, quick-reply chips when they help.
               </p>
               <ul className="space-y-2.5 text-sm text-white/70 mb-8">
                 {[
