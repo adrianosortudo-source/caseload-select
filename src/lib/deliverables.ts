@@ -132,7 +132,9 @@ export async function getContentPlan(
 ): Promise<ContentPlanData> {
   let dq = supabase
     .from("content_deliverables")
-    .select("id, title, kicker, status, content_kind, format, period_id, publish_date")
+    .select(
+      "id, title, kicker, status, content_kind, format, period_id, publish_date, current_version_id",
+    )
     .eq("firm_id", firmId);
   if (!options.includeArchived) dq = dq.neq("status", "archived");
 
@@ -149,9 +151,48 @@ export async function getContentPlan(
   if (periodsRes.error) throw new Error(`periods load failed: ${periodsRes.error.message}`);
   if (delivRes.error) throw new Error(`plan deliverables load failed: ${delivRes.error.message}`);
 
+  const rawDeliverables = (delivRes.data ?? []) as Array<
+    Omit<PlanDeliverable, "requires_individual_review"> & { current_version_id: string | null }
+  >;
+
+  // DR-107: batch-load the requires_individual_review flag for whichever
+  // versions are each deliverable's CURRENT version, so the plan can derive
+  // the Pre-approved display state without a fresh query per row. Display
+  // data only: a failed flag query defaults every row to false (unflagged)
+  // rather than failing the whole plan load.
+  const currentVersionIds = [
+    ...new Set(rawDeliverables.map((d) => d.current_version_id).filter((id): id is string => !!id)),
+  ];
+  const flagByVersionId = new Map<string, boolean>();
+  if (currentVersionIds.length > 0) {
+    const { data: versionFlags, error: flagsError } = await supabase
+      .from("deliverable_versions")
+      .select("id, requires_individual_review")
+      .in("id", currentVersionIds);
+    if (!flagsError) {
+      for (const v of versionFlags ?? []) {
+        flagByVersionId.set(v.id as string, !!v.requires_individual_review);
+      }
+    }
+  }
+
+  const deliverables: PlanDeliverable[] = rawDeliverables.map((d) => ({
+    id: d.id,
+    title: d.title,
+    kicker: d.kicker,
+    status: d.status,
+    content_kind: d.content_kind,
+    format: d.format,
+    period_id: d.period_id,
+    publish_date: d.publish_date,
+    requires_individual_review: d.current_version_id
+      ? (flagByVersionId.get(d.current_version_id) ?? false)
+      : false,
+  }));
+
   return {
     periods: (periodsRes.data ?? []) as ContentPeriod[],
-    deliverables: (delivRes.data ?? []) as PlanDeliverable[],
+    deliverables,
     settings: (settingsRes.data ?? null) as ContentPlanSettings | null,
   };
 }

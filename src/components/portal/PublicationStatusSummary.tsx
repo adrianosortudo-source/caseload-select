@@ -1,10 +1,10 @@
 /**
- * Deliverable detail: truthful, per-placement publication status. Never
- * collapses "individually approved" and "authorized under standing
- * authorization" into the same label (product requirement) -- each
- * status below maps to exactly one of the two, or to "individual review
- * required" when neither applies, and never claims a lawyer reviewed a
- * version she did not review.
+ * Deliverable detail: truthful, per-placement publication status. Keeps
+ * "Individually approved" distinct from the DR-107 Pre-approved states
+ * (product requirement, amended 2026-07-23): each status below maps to
+ * exactly one label, or to "individual review required" when neither
+ * applies, and never claims a lawyer reviewed a version she did not
+ * review.
  */
 
 export type PlacementStatusKind =
@@ -25,8 +25,8 @@ export interface PlacementStatusRow {
 
 const LABELS: Record<PlacementStatusKind, string> = {
   individually_approved: "Individually approved",
-  authorized_standing: "Authorized for publication under standing authorization",
-  eligible_standing: "Ready for release (eligible under standing authorization)",
+  authorized_standing: "Pre-approved: publishing under standing authorization",
+  eligible_standing: "Pre-approved: ready to publish",
   individual_review_required: "Individual review required",
   not_yet_released: "Not yet released",
 };

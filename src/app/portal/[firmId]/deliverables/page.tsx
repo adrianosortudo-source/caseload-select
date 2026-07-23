@@ -97,6 +97,7 @@ export default async function DeliverablesPage({
         deliverables={plan.deliverables}
         settings={plan.settings}
         planReadiness={planReadiness}
+        standingAuthActive={authState?.active ?? false}
       />
     </div>
   );

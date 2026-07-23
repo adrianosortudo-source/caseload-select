@@ -13,6 +13,7 @@ import {
   groupByFormat,
   planProgress,
   computeOverview,
+  PRE_APPROVED_LABEL,
   type PlanDeliverable,
   type PlanOverview,
 } from "@/lib/deliverables-pure";
@@ -72,6 +73,7 @@ export default function ContentPlan({
   deliverables,
   settings,
   planReadiness,
+  standingAuthActive = false,
 }: {
   firmId: string;
   viewerRole: "operator" | "lawyer";
@@ -80,6 +82,7 @@ export default function ContentPlan({
   deliverables: PlanDeliverable[];
   settings: ContentPlanSettings | null;
   planReadiness?: PlanReadinessProp;
+  standingAuthActive?: boolean;
 }) {
   const router = useRouter();
   const [showNewWeek, setShowNewWeek] = useState(false);
@@ -89,7 +92,7 @@ export default function ContentPlan({
   const live = deliverables.filter((d) => d.status !== "archived");
   const unscheduled = live.filter((d) => !d.period_id);
   const archived = includeArchived ? deliverables.filter((d) => d.status === "archived") : [];
-  const overview = computeOverview(live);
+  const overview = computeOverview(live, { standingAuthActive });
 
   const refresh = () => router.refresh();
 
@@ -215,6 +218,7 @@ export default function ContentPlan({
             periods={periods}
             onChanged={refresh}
             periodReadiness={periodReadiness}
+            standingAuthActive={standingAuthActive}
           />
         );
       })}
@@ -235,6 +239,7 @@ export default function ContentPlan({
                 isOperator={isOperator}
                 group={g}
                 periods={periods}
+                standingAuthActive={standingAuthActive}
                 onChanged={refresh}
               />
             ))}
@@ -256,6 +261,7 @@ export default function ContentPlan({
                 item={d}
                 periods={periods}
                 onChanged={refresh}
+                standingAuthActive={standingAuthActive}
               />
             ))}
           </div>
@@ -302,7 +308,8 @@ export function ReviewOverview({
   planReadiness?: PlanReadinessProp;
 }) {
   const [editing, setEditing] = useState(false);
-  const { total, approved, pending, changes, draft, weeks, byFormat, nextPublish } = overview;
+  const { total, approved, pending, preapproved, changes, draft, weeks, byFormat, nextPublish } =
+    overview;
   // A genuinely empty plan (total === 0) normally means "nothing to show
   // here yet" and the whole card returns null. But total comes from a
   // SEPARATE content_deliverables query than planReadiness -- a brand new
@@ -390,6 +397,9 @@ export function ReviewOverview({
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12px]">
           <OverviewCount n={approved} label="approved" cls="text-green-pass" />
           <OverviewCount n={pending} label="pending" cls="text-amber-800" />
+          {preapproved > 0 && (
+            <OverviewCount n={preapproved} label="pre-approved" cls="text-green-pass" />
+          )}
           {changes > 0 && (
             <OverviewCount n={changes} label="changes requested" cls="text-amber-800" />
           )}
@@ -547,6 +557,7 @@ function PeriodCard({
   periods,
   onChanged,
   periodReadiness,
+  standingAuthActive,
 }: {
   firmId: string;
   isOperator: boolean;
@@ -557,6 +568,7 @@ function PeriodCard({
   periods: ContentPeriod[];
   onChanged: () => void;
   periodReadiness?: PlanReadinessProp;
+  standingAuthActive: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const pct = total > 0 ? Math.round((approved / total) * 100) : 0;
@@ -641,6 +653,7 @@ function PeriodCard({
               group={g}
               periods={periods}
               onChanged={onChanged}
+              standingAuthActive={standingAuthActive}
             />
           ))
         )}
@@ -767,12 +780,14 @@ function FormatGroupBlock({
   group,
   periods,
   onChanged,
+  standingAuthActive,
 }: {
   firmId: string;
   isOperator: boolean;
   group: ReturnType<typeof groupByFormat>[number];
   periods: ContentPeriod[];
   onChanged: () => void;
+  standingAuthActive: boolean;
 }) {
   return (
     <div className="mb-1.5">
@@ -792,6 +807,7 @@ function FormatGroupBlock({
           isOperator={isOperator}
           item={item}
           periods={periods}
+          standingAuthActive={standingAuthActive}
           onChanged={onChanged}
         />
       ))}
@@ -805,15 +821,23 @@ function DeliverableRow({
   item,
   periods,
   onChanged,
+  standingAuthActive,
 }: {
   firmId: string;
   isOperator: boolean;
   item: PlanDeliverable;
   periods: ContentPeriod[];
   onChanged: () => void;
+  standingAuthActive: boolean;
 }) {
   const [placing, setPlacing] = useState(false);
-  const st = PLAN_STATUS[item.status];
+  // DR-107: an in_review item pre-approved under standing authorization
+  // (not flagged requires_individual_review) shows Pre-approved instead of
+  // Pending. Every other status keeps its plain PLAN_STATUS entry.
+  const st =
+    item.status === "in_review" && standingAuthActive && !item.requires_individual_review
+      ? { label: PRE_APPROVED_LABEL, cls: "bg-green-pass/10 text-green-pass border-green-pass/30" }
+      : PLAN_STATUS[item.status];
   const dated = item.publish_date
     ? `${item.status === "approved" ? "Published" : "Publishes"} ${fmtDate(item.publish_date)}`
     : "No publish date set";

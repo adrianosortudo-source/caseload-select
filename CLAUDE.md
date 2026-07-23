@@ -856,13 +856,16 @@ Operator dependency: a lawyer cannot sign off until an email is on file (`firm_l
 
 **Change-request loop (DR-085, 2026-07-09).** Three additions to the append-only compliance record, none of which weaken it. Replies: a comment with `approval_record_id` set threads under the change-request record (server forces its `version_id` and null `annotation`; excluded from the passage margin and the open-comment count). Version-as-answer: a version posted while `changes_requested` links back via `deliverable_versions.responds_to_approval_id` (explicit id validated against this deliverable, or auto-linked to the latest open record when omitted); the composer quotes the open request, the approval-history panel renders "Addressed in vN..." instead of a dead end. Attachments: the change-request note and any reply may carry image/PDF evidence (`deliverables/{firmId}/{deliverableId}/feedback/` prefix, content-sniffed), frozen into `approval_records.attachments` at INSERT via the widened `record_approval_atomic` RPC, never by UPDATE. Migration `20260709_deliverable_change_request_loop.sql`. Build plan: `docs/BUILD_PLAN_deliverables_change_request_loop_v1.md`.
 
-### Standing Publishing Authorization (DR-104, 2026-07-17)
+### Standing Publishing Authorization (DR-104, 2026-07-17; display language amended by DR-107, 2026-07-23)
 
 A client-controlled, per-firm alternative to individual per-version lawyer
-approval. **Standing authorization permits release after QA; it does not
-represent individual lawyer review of a particular version** -- never call
-it, describe it, or display it as "blanket legal approval," "automatic
-legal approval," or "approval by [lawyer name]." Only the firm's own
+approval. Standing authorization permits release after QA; it does not
+represent individual lawyer review of a particular version. Per DR-107
+(2026-07-23), eligible in_review content displays as "Pre-approved" (ready
+to publish per the operator schedule): a display state derived at render
+time from the latest authorization event plus the current version's
+requires_individual_review flag, never a stored status and never a
+fabricated version-level approval record. Only the firm's own
 lawyer/client decision-maker can turn it on or off, from
 `/portal/[firmId]/how-your-content-works`; an operator can never enable it
 for a client (checked both at the portal route, via `getFirmSession` which
@@ -914,9 +917,9 @@ itself immutable, that foreign key durably preserves the authorization
 snapshot even after the firm later disables authorization --
 `derive_publication_receipt_release_path()` propagates the same two
 columns onto `publication_receipts` for any receipt that doesn't set them
-explicitly. Status language is never collapsed: "Individually approved"
-and "Authorized for publication under standing authorization" are always
-shown as distinct states (`components/portal/PublicationStatusSummary.tsx`).
+explicitly. Status language keeps "Individually approved" distinct from
+the DR-107 Pre-approved states (`components/portal/PublicationStatusSummary.tsx`);
+the two are never merged into one label.
 
 DRG Law was **not** silently activated from the WhatsApp conversation that
 prompted this feature -- it ships with authorization off, and Damaris must
