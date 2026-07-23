@@ -213,6 +213,10 @@ export interface OnboardingSubmissionRecord {
   notification_sent_at?: string | null;
   notification_attempts?: number | null;
   notification_error?: string | null;
+  // Client-list intake, two-path model (Firm Profile Section B).
+  client_list_path?: string | null;
+  client_list_files?: Array<{ original_name?: string | null }> | null;
+  client_list_attested_at?: string | null;
 }
 
 export function buildOperatorNotificationEmail(
@@ -238,6 +242,19 @@ function renderHtml(
     timeZone: "America/Toronto",
   });
   const adminUrl = `https://app.caseloadselect.ca/admin/onboarding-submissions/${encodeURIComponent(r.id)}`;
+
+  const clientListLabel =
+    r.client_list_path === "share_with_us"
+      ? `Shared with CaseLoad Select (${Array.isArray(r.client_list_files) ? r.client_list_files.length : 0} files)`
+      : r.client_list_path === "self_upload"
+        ? "Firm uploads it themselves"
+        : "Not provided";
+  const clientListFilesLabel = Array.isArray(r.client_list_files)
+    ? r.client_list_files.map((f) => f?.original_name ?? "(file)").join(", ")
+    : "";
+  const clientListAttestationLabel = r.client_list_attested_at
+    ? new Date(r.client_list_attested_at).toLocaleString("en-CA", { timeZone: "America/Toronto" })
+    : "Missing";
   const replayBanner = opts.replay
     ? `<p style="margin:0 0 6px;font-size:13px;background:#FFF4D6;border:1px solid #E2C66B;padding:10px 12px;color:#5C4A12;"><b>REPLAY:</b> this is a re-send of an earlier notification that did not deliver. The form was submitted at ${esc(submittedFmt)} Toronto time.</p>`
     : "";
@@ -325,6 +342,11 @@ ${
     ? `<tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Notes from the rep</td></tr>${row("Notes", r.notes)}`
     : ""
 }
+
+<tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Client list</td></tr>
+${row("Client list", clientListLabel)}
+${row("Client list files", clientListFilesLabel)}
+${row("Consent attestation", clientListAttestationLabel)}
 
 <tr><td colspan="2" style="padding:14px 12px 6px;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#C4B49A;font-weight:700;">Signature</td></tr>
 ${row("Signed by", r.signed_name)}

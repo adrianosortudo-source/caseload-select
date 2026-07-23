@@ -11,6 +11,7 @@
  */
 
 import { useState } from "react";
+import { MAX_CLIENT_LIST_FILES, type ClientListFile } from "@/lib/firm-onboarding-client-list";
 
 interface Props {
   token: string;
@@ -30,6 +31,9 @@ interface ProfileState {
   past_clients_closed: string;
   baseline_inquiry_volume: string;
   fee_structure: string;
+  fee_exclusions: string;
+  fee_deal_variation: string;
+  fee_publish_preference: string;
   payment_methods: string[];
   esignature_tool: string;
   marketing_crm: string;
@@ -46,10 +50,10 @@ interface ProfileState {
   profile_notes: string;
   signed_name: string;
   signed_email: string;
-  customer_base_storage_path: string | null;
-  customer_base_original_name: string | null;
-  customer_base_size_bytes: number | null;
-  customer_base_mime_type: string | null;
+  client_list_path: "" | "share_with_us" | "self_upload";
+  client_list_files: ClientListFile[];
+  client_list_attested: boolean;
+  client_list_self_upload_confirmed: boolean;
 }
 
 const INITIAL: ProfileState = {
@@ -65,6 +69,9 @@ const INITIAL: ProfileState = {
   past_clients_closed: "",
   baseline_inquiry_volume: "",
   fee_structure: "",
+  fee_exclusions: "",
+  fee_deal_variation: "",
+  fee_publish_preference: "",
   payment_methods: [],
   esignature_tool: "",
   marketing_crm: "",
@@ -81,10 +88,10 @@ const INITIAL: ProfileState = {
   profile_notes: "",
   signed_name: "",
   signed_email: "",
-  customer_base_storage_path: null,
-  customer_base_original_name: null,
-  customer_base_size_bytes: null,
-  customer_base_mime_type: null,
+  client_list_path: "",
+  client_list_files: [],
+  client_list_attested: false,
+  client_list_self_upload_confirmed: false,
 };
 
 type UploadState =
@@ -133,26 +140,27 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
       if (!res.ok || !json.ok) throw new Error(json?.error ?? "upload failed");
       setForm((prev) => ({
         ...prev,
-        customer_base_storage_path: json.storage_path,
-        customer_base_original_name: json.original_name,
-        customer_base_size_bytes: json.size_bytes,
-        customer_base_mime_type: json.mime_type,
+        client_list_files: [
+          ...prev.client_list_files,
+          {
+            storage_path: json.storage_path,
+            original_name: json.original_name,
+            size_bytes: json.size_bytes,
+            mime_type: json.mime_type,
+          },
+        ],
       }));
-      setUpload({ status: "done", name: json.original_name, sizeBytes: json.size_bytes });
+      setUpload({ status: "idle" });
     } catch (err) {
       setUpload({ status: "error", message: err instanceof Error ? err.message : "upload failed" });
     }
   }
 
-  function clearUpload() {
+  function removeFile(index: number) {
     setForm((prev) => ({
       ...prev,
-      customer_base_storage_path: null,
-      customer_base_original_name: null,
-      customer_base_size_bytes: null,
-      customer_base_mime_type: null,
+      client_list_files: prev.client_list_files.filter((_, i) => i !== index),
     }));
-    setUpload({ status: "idle" });
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -164,6 +172,22 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
     }
     if (!form.signed_name.trim()) {
       setError("Please sign the form at the bottom (type your full name).");
+      return;
+    }
+    if (!form.client_list_path) {
+      setError("Please choose how you want to hand over the client list.");
+      return;
+    }
+    if (form.client_list_path === "share_with_us" && form.client_list_files.length === 0) {
+      setError("Please upload at least one client file, or switch to the self-upload option.");
+      return;
+    }
+    if (form.client_list_path === "self_upload" && !form.client_list_self_upload_confirmed) {
+      setError("Please confirm the firm will upload the list itself.");
+      return;
+    }
+    if (!form.client_list_attested) {
+      setError("Please confirm the consent statement for the client list.");
       return;
     }
     setSubmitting(true);
@@ -250,7 +274,7 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
         </Field>
       </Section>
 
-      <Section title="B. Existing client base" subtitle="Rough numbers are fine. Upload your client list below so we can build relevant messages.">
+      <Section title="B. Existing client base" subtitle="Rough numbers are fine. Your client list is how the reactivation and review systems start, so this part is required.">
         <Field label="Approximate past-client count, segmented">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <SubInput label="Active matters" value={form.past_clients_active} onChange={(v) => update("past_clients_active", v)} placeholder="e.g. 12" />
@@ -261,17 +285,156 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
         <Field label="Baseline inquiry volume, last 90 days" hint="Roughly how many new inquiries or leads you got per month before CaseLoad Select. This is the number we measure lift against.">
           <input type="number" inputMode="numeric" value={form.baseline_inquiry_volume} onChange={(e) => update("baseline_inquiry_volume", e.target.value)} style={{ ...inputStyle, maxWidth: "280px" }} placeholder="Approx new inquiries per month" />
         </Field>
-        <Field
-          label="Upload your client list (optional)"
-          hint="A spreadsheet of your past and current clients with, for each one, their name, contact details (email or phone), and the practice area or type of matter. We do not need any case details, just enough to send relevant messages. CSV, Excel, or PDF."
-        >
-          <FileUploadBlock upload={upload} onPick={handleFileUpload} onClear={clearUpload} />
+
+        <Field label="How do you want to hand over the client list?">
+          <div className="space-y-2">
+            {CLIENT_LIST_PATH_OPTIONS.map((opt) => {
+              const checked = form.client_list_path === opt.value;
+              return (
+                <label
+                  key={opt.value}
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "12px",
+                    padding: "14px 16px",
+                    background: checked ? "#F4F3EF" : "#FBFAF6",
+                    border: checked ? "1px solid #1E2F58" : "1px solid #E4E2DB",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="client_list_path"
+                    checked={checked}
+                    onChange={() => update("client_list_path", opt.value)}
+                    style={{ marginTop: "3px" }}
+                  />
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                      <span style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 600, fontSize: "0.92rem", color: "#1E2F58" }}>
+                        {opt.label}
+                      </span>
+                      {opt.recommended ? (
+                        <span
+                          style={{
+                            fontFamily: "var(--font-oxanium), sans-serif",
+                            fontSize: "0.62rem",
+                            fontWeight: 700,
+                            letterSpacing: "0.12em",
+                            textTransform: "uppercase",
+                            color: "#8B7A5E",
+                            background: "#F4EFE3",
+                            border: "1px solid #C4B49A",
+                            borderRadius: "3px",
+                            padding: "2px 6px",
+                          }}
+                        >
+                          Recommended
+                        </span>
+                      ) : null}
+                    </div>
+                    <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.85rem", color: "#6B665E", marginTop: "4px", lineHeight: 1.5 }}>
+                      {opt.description}
+                    </p>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
         </Field>
+
+        {form.client_list_path === "share_with_us" ? (
+          <Field
+            label="Upload your client files"
+            hint="Any format you already have works: a spreadsheet, a PDF, an export from Outlook or your practice software, even photos of a printed list. Up to 10 files, 50 MB each. We need each client's name, email or phone, the practice area, and roughly when the matter closed. No case details, no documents from the file."
+          >
+            <ClientListFileUploader
+              files={form.client_list_files}
+              upload={upload}
+              onPick={handleFileUpload}
+              onRemove={removeFile}
+            />
+            <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.82rem", color: "#6B665E", marginTop: "10px", lineHeight: 1.5 }}>
+              How your data is handled: CaseLoad Select processes the list solely on the firm&apos;s behalf under PIPEDA, stores it on Canadian servers, and deletes its working copy once the import into your CRM is verified.
+            </p>
+          </Field>
+        ) : null}
+
+        {form.client_list_path === "self_upload" ? (
+          <div style={{ background: "#FBFAF6", border: "1px dashed #C4B49A", borderRadius: "4px", padding: "16px 18px" }}>
+            <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.9rem", color: "#3F3C36", lineHeight: 1.6, marginBottom: "12px" }}>
+              Download the template, fill the Client List tab (one row per client), and follow the guide. We will send CRM access for the upload.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "14px" }}>
+              <a
+                href="/firm-onboarding-guides/client-list-template.xlsx"
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.9rem", color: "#1E2F58", textDecoration: "underline" }}
+              >
+                Download the template (Excel)
+              </a>
+              <a
+                href="/firm-onboarding-guides/client-list.html"
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.9rem", color: "#1E2F58", textDecoration: "underline" }}
+              >
+                How to fill it in, including the consent rules
+              </a>
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={form.client_list_self_upload_confirmed}
+                onChange={(e) => update("client_list_self_upload_confirmed", e.target.checked)}
+              />
+              <span style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.9rem", color: "#3F3C36" }}>
+                We will upload the completed list to the CRM ourselves.
+              </span>
+            </label>
+          </div>
+        ) : null}
+
+        {form.client_list_path ? (
+          <div style={{ background: "#FBFAF6", border: "1px solid #C4B49A", borderRadius: "4px", padding: "18px 20px" }}>
+            <p style={{ fontFamily: "var(--font-oxanium), sans-serif", fontSize: "0.68rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#8B7A5E", fontWeight: 600, marginBottom: "12px" }}>
+              Consent
+            </p>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={form.client_list_attested}
+                onChange={(e) => update("client_list_attested", e.target.checked)}
+                style={{ marginTop: "3px" }}
+              />
+              <span style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.9rem", color: "#3F3C36", lineHeight: 1.6 }}>
+                I confirm the firm has a lawful basis under Canada&apos;s Anti-Spam Legislation (CASL) to email the clients on this list, or has recorded each client&apos;s consent basis (Express, Implied, or Unknown) so anyone without a valid basis is left out of every send. The firm remains the owner of this data.
+              </span>
+            </label>
+          </div>
+        ) : null}
       </Section>
 
       <Section title="C. Fees and engagement" subtitle="High level is enough. We refine the specifics together later.">
         <Field label="Fee structure summary" hint="Flat fee, hourly, or mixed, and which practice areas use which.">
           <textarea value={form.fee_structure} onChange={(e) => update("fee_structure", e.target.value)} style={areaStyle} placeholder="e.g. Flat fee for residential closings and simple wills; hourly for litigation; commercial real estate quoted per matter" />
+        </Field>
+        <Field label="What's excluded from your fee?" hint="Anything the client pays separately from your quoted fee: a registration fee, a lender fee, disbursements, HST, anything with its own number attached.">
+          <textarea value={form.fee_exclusions} onChange={(e) => update("fee_exclusions", e.target.value)} style={areaStyle} placeholder="e.g. Mortgage registration fee ($399-599, ours, not the lender's) is billed separately from the flat fee" />
+        </Field>
+        <Field label="Does your fee change by deal type?" hint="Cash vs. financed, insured vs. conventional, anything that changes what a client actually owes.">
+          <textarea value={form.fee_deal_variation} onChange={(e) => update("fee_deal_variation", e.target.value)} style={areaStyle} placeholder="e.g. Cash purchases pay the flat fee only; financed purchases add the mortgage registration fee" />
+        </Field>
+        <Field label="How should we publish your numbers?" hint="Controls how precise the public-facing pricing tools and copy get.">
+          <select value={form.fee_publish_preference} onChange={(e) => update("fee_publish_preference", e.target.value)} style={inputStyle}>
+            <option value="">Select</option>
+            <option value="line_item">Full line-item breakdown</option>
+            <option value="lump_estimate">One lump estimate or range</option>
+            <option value="confirm_first">Case-by-case, confirm with me before publishing</option>
+          </select>
         </Field>
         <Field label="How do clients pay you?" hint="Select all that apply.">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -453,52 +616,112 @@ function SubInput({ label, value, onChange, placeholder }: { label: string; valu
   );
 }
 
-function FileUploadBlock({
+const CLIENT_LIST_PATH_OPTIONS: Array<{
+  value: "share_with_us" | "self_upload";
+  label: string;
+  description: string;
+  recommended?: boolean;
+}> = [
+  {
+    value: "share_with_us",
+    label: "Share the list with CaseLoad Select",
+    description:
+      "Send whatever you already have. We clean it, format it, load it into your CRM, then delete our working copy. Nothing for you to prepare.",
+    recommended: true,
+  },
+  {
+    value: "self_upload",
+    label: "We will upload it ourselves",
+    description:
+      "You fill our template and upload the list to the CRM with access we send you. Choose this only if the firm prefers not to hand the file over.",
+  },
+];
+
+const CLIENT_LIST_ACCEPT =
+  ".csv,.xlsx,.xls,.ods,.numbers,.pdf,.doc,.docx,.rtf,.txt,.vcf,.png,.jpg,.jpeg,.heic,.heif,.webp";
+
+function ClientListFileUploader({
+  files,
   upload,
   onPick,
-  onClear,
+  onRemove,
 }: {
+  files: ClientListFile[];
   upload: UploadState;
   onPick: (file: File) => void;
-  onClear: () => void;
+  onRemove: (index: number) => void;
 }) {
-  const inputId = "customer-base-upload";
-  if (upload.status === "done") {
-    return (
-      <div style={{ background: "#FBFAF6", border: "1px dashed #C4B49A", borderRadius: "4px", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-        <span style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.9rem", color: "#1E2F58", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-          <span style={{ color: "#27834A", marginRight: "8px" }}>✓</span>
-          {upload.name}
-        </span>
-        <button type="button" onClick={onClear} style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.85rem", color: "#1E2F58", background: "transparent", border: "1px solid #C4B49A", padding: "8px 14px", borderRadius: "4px", cursor: "pointer" }}>
-          Replace
-        </button>
-      </div>
-    );
-  }
+  const inputId = "client-list-upload";
+  const atCap = files.length >= MAX_CLIENT_LIST_FILES;
   return (
-    <div style={{ background: "#FBFAF6", border: "1px dashed #C4B49A", borderRadius: "4px", padding: "14px 16px" }}>
-      <label htmlFor={inputId} style={{ display: "inline-block", fontFamily: "var(--font-manrope), sans-serif", fontWeight: 600, fontSize: "0.88rem", color: "#FFFFFF", background: "#1E2F58", padding: "10px 18px", borderRadius: "4px", cursor: "pointer" }}>
-        {upload.status === "uploading" ? "Uploading..." : "Choose a file"}
-      </label>
-      <input
-        id={inputId}
-        type="file"
-        accept=".csv,.xlsx,.xls,.pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onPick(f);
-          e.target.value = "";
-        }}
-        style={{ display: "none" }}
-      />
-      <span style={{ marginLeft: "12px", fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.85rem", color: "#6B665E" }}>
-        CSV, Excel, or PDF, up to 10 MB
-      </span>
-      {upload.status === "error" ? (
-        <p style={{ marginTop: "10px", fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.85rem", color: "#B00020" }}>
-          Upload failed: {upload.message}
-        </p>
+    <div>
+      {files.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "10px" }}>
+          {files.map((f, i) => (
+            <div
+              key={`${f.storage_path}-${i}`}
+              style={{
+                background: "#FBFAF6",
+                border: "1px dashed #C4B49A",
+                borderRadius: "4px",
+                padding: "10px 14px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-dm-sans), sans-serif",
+                  fontSize: "0.88rem",
+                  color: "#1E2F58",
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <span style={{ color: "#27834A", marginRight: "8px" }}>✓</span>
+                {f.original_name}
+              </span>
+              <button
+                type="button"
+                onClick={() => onRemove(i)}
+                style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.82rem", color: "#1E2F58", background: "transparent", border: "1px solid #C4B49A", padding: "6px 12px", borderRadius: "4px", cursor: "pointer" }}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {!atCap ? (
+        <div style={{ background: "#FBFAF6", border: "1px dashed #C4B49A", borderRadius: "4px", padding: "14px 16px" }}>
+          <label htmlFor={inputId} style={{ display: "inline-block", fontFamily: "var(--font-manrope), sans-serif", fontWeight: 600, fontSize: "0.88rem", color: "#FFFFFF", background: "#1E2F58", padding: "10px 18px", borderRadius: "4px", cursor: "pointer" }}>
+            {upload.status === "uploading" ? "Uploading..." : "Add a file"}
+          </label>
+          <input
+            id={inputId}
+            type="file"
+            accept={CLIENT_LIST_ACCEPT}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onPick(f);
+              e.target.value = "";
+            }}
+            style={{ display: "none" }}
+          />
+          <span style={{ marginLeft: "12px", fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.85rem", color: "#6B665E" }}>
+            Up to 10 files, 50 MB each
+          </span>
+          {upload.status === "error" ? (
+            <p style={{ marginTop: "10px", fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.85rem", color: "#B00020" }}>
+              Upload failed: {upload.message}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

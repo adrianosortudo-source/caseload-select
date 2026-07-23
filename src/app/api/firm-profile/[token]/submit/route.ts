@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sendOperatorNotification } from "@/lib/firm-onboarding-notification";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
+import { validateClientListSubmission } from "@/lib/firm-onboarding-client-list";
 
 interface ProfileBody {
   legal_name?: string;
@@ -26,6 +27,9 @@ interface ProfileBody {
   past_clients_closed?: string | number | null;
   baseline_inquiry_volume?: string | number | null;
   fee_structure?: string;
+  fee_exclusions?: string;
+  fee_deal_variation?: string;
+  fee_publish_preference?: string;
   payment_methods?: string[];
   esignature_tool?: string;
   marketing_crm?: string;
@@ -46,6 +50,10 @@ interface ProfileBody {
   customer_base_original_name?: string | null;
   customer_base_size_bytes?: number | null;
   customer_base_mime_type?: string | null;
+  client_list_path?: unknown;
+  client_list_files?: unknown;
+  client_list_attested?: unknown;
+  client_list_self_upload_confirmed?: unknown;
 }
 
 export async function POST(
@@ -80,6 +88,19 @@ export async function POST(
     );
   }
 
+  const clientList = validateClientListSubmission(
+    {
+      client_list_path: body.client_list_path,
+      client_list_files: body.client_list_files,
+      client_list_attested: body.client_list_attested,
+      client_list_self_upload_confirmed: body.client_list_self_upload_confirmed,
+    },
+    token,
+  );
+  if (!clientList.ok) {
+    return NextResponse.json({ ok: false, error: clientList.error }, { status: 400 });
+  }
+
   const ipAddress =
     req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
     req.headers.get("x-real-ip") ??
@@ -110,6 +131,9 @@ export async function POST(
       past_clients_closed: toInt(body.past_clients_closed),
       baseline_inquiry_volume: toInt(body.baseline_inquiry_volume),
       fee_structure: body.fee_structure?.trim() || null,
+      fee_exclusions: body.fee_exclusions?.trim() || null,
+      fee_deal_variation: body.fee_deal_variation?.trim() || null,
+      fee_publish_preference: body.fee_publish_preference?.trim() || null,
       payment_methods:
         Array.isArray(body.payment_methods) && body.payment_methods.length > 0 ? body.payment_methods : null,
       esignature_tool: body.esignature_tool?.trim() || null,
@@ -131,6 +155,10 @@ export async function POST(
       customer_base_original_name: body.customer_base_original_name ?? null,
       customer_base_size_bytes: body.customer_base_size_bytes ?? null,
       customer_base_mime_type: body.customer_base_mime_type ?? null,
+      client_list_path: clientList.value.path,
+      client_list_files: clientList.value.files,
+      client_list_attested_at: new Date().toISOString(),
+      client_list_self_upload_confirmed: clientList.value.selfUploadConfirmed,
       consent_acknowledged: true,
       ip_address: ipAddress,
       user_agent: userAgent,

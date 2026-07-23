@@ -16,6 +16,7 @@ import { redirect } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { getOperatorSession } from "@/lib/portal-auth";
+import { deriveClientListCheck, type ClientListCheckSubmission } from "@/lib/firm-onboarding-client-list";
 
 export const dynamic = "force-dynamic";
 
@@ -52,10 +53,10 @@ function statusBadge(status: CheckStatus) {
 }
 
 async function getFirmChecklists(): Promise<FirmChecklist[]> {
-  const [firmsRes, sessionCountRes, conflictCountRes] = await Promise.all([
+  const [firmsRes, sessionCountRes, conflictCountRes, clientListRes] = await Promise.all([
     supabase
       .from("intake_firms")
-      .select("id, firm_name, practice_areas, geo_config, branding, ghl_webhook_url, clio_config, scoring_weights, custom_domain")
+      .select("id, name, practice_areas, geo_config, branding, ghl_webhook_url, clio_config, scoring_weights, custom_domain")
       .order("created_at", { ascending: true }),
     supabase
       .from("intake_sessions")
@@ -64,10 +65,22 @@ async function getFirmChecklists(): Promise<FirmChecklist[]> {
     supabase
       .from("conflict_register")
       .select("law_firm_id"),
+    // Guarded: this query targets columns added by the client-list-intake
+    // migration. Before that migration is applied to a given environment,
+    // Supabase returns an error here (unknown column), and `?? []` below
+    // keeps the page rendering normally rather than blanking out.
+    supabase
+      .from("firm_onboarding_intake")
+      .select(
+        "legal_name, submitted_at, client_list_path, client_list_files, client_list_attested_at, client_list_import_verified_at, client_list_working_copy_deleted_at",
+      )
+      .eq("form_type", "profile")
+      .returns<ClientListCheckSubmission[]>(),
   ]);
 
   const firms = firmsRes.data ?? [];
   const sessions = sessionCountRes.data ?? [];
+  const profileSubs = clientListRes.data ?? [];
 
   const sessionsByFirm: Record<string, number> = {};
   for (const s of sessions) {
@@ -118,6 +131,12 @@ async function getFirmChecklists(): Promise<FirmChecklist[]> {
         required: true,
       },
       {
+        key: "client_list",
+        label: "Client list",
+        ...deriveClientListCheck(profileSubs, firm.name ?? ""),
+        required: true,
+      },
+      {
         key: "clio_connected",
         label: "Clio OAuth",
         status: (clioConfig as Record<string, unknown> | null)?.access_token ? "pass" : "warn",
@@ -161,7 +180,7 @@ async function getFirmChecklists(): Promise<FirmChecklist[]> {
 
     return {
       firm_id: firm.id,
-      firm_name: firm.firm_name ?? "Unnamed Firm",
+      firm_name: firm.name ?? "Unnamed Firm",
       ready_to_launch: required.every((c) => c.status === "pass"),
       required_passed: requiredPassed,
       required_total: required.length,

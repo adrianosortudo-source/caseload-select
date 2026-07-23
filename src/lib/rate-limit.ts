@@ -39,6 +39,12 @@
  *       request frequency; tight bucket forces an attacker to
  *       slow-roll guesses.
  *
+ *   firmOnboardingUpload  30 per hour
+ *     - /api/firm-profile/[token]/upload. Client-list intake now accepts
+ *       up to 10 files per submission (spreadsheets, PDFs, photos), so it
+ *       needs more headroom than the single-file firmOnboarding bucket
+ *       without opening the door to unbounded storage writes.
+ *
  *   extract           30 per minute
  *     - /api/extract. Public proxy in front of the Gemini extraction
  *       call (the browser widget calls it, so it must stay public).
@@ -86,6 +92,7 @@ export type RateLimitBucket =
   | "intake"
   | "screen"
   | "firmOnboarding"
+  | "firmOnboardingUpload"
   | "extract"
   | "transcribe"
   | "otpSend"
@@ -103,6 +110,7 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   intake:         { limit: 30, windowSeconds: 60 },    // 30 per minute
   screen:         { limit: 30, windowSeconds: 60 },    // 30 per minute
   firmOnboarding: { limit: 10, windowSeconds: 3600 },  // 10 per hour
+  firmOnboardingUpload: { limit: 30, windowSeconds: 3600 }, // 30 per hour
   extract:        { limit: 30, windowSeconds: 60 },    // 30 per minute
   transcribe:     { limit: 10, windowSeconds: 60 },    // 10 per minute
   otpSend:        { limit: 5,  windowSeconds: 600 },   // 5 per 10 minutes
