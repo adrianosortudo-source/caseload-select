@@ -1399,8 +1399,8 @@ function SignOffPanel({
       <div className="bg-white border border-border-brand p-4">
         <h3 className="text-sm font-bold text-navy mb-1">Sign-off</h3>
         <p className="text-xs text-black/55">
-          The firm's responsible lawyer completes the sign-off. The operator
-          cannot sign on the licensee's behalf.
+          The firm&apos;s responsible lawyer completes the sign-off. The operator
+          cannot sign on the licensee&apos;s behalf.
         </p>
       </div>
     );

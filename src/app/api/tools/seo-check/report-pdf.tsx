@@ -281,7 +281,7 @@ export function AuditReportPdf({ result }: { result: AuditPdfResult }) {
               <Text style={[s.para, { color: result.discoveryConfidence === "low" ? COLORS.danger : COLORS.stoneOnLight, marginTop: 4 }]}>
                 Discovery confidence: {result.discoveryConfidence}. This crawl found
                 {result.discoveryConfidence === "low" ? " very few navigable links and no sitemap" : " a sitemap the crawl did not fully cover within budget"},
-                so "not found" findings below may reflect a discovery gap rather than a genuine absence. Verify manually before citing them.
+                so &quot;not found&quot; findings below may reflect a discovery gap rather than a genuine absence. Verify manually before citing them.
               </Text>
             )}
             <Text style={[s.para, { color: COLORS.textMuted, marginTop: 4 }]}>

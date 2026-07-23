@@ -664,7 +664,7 @@ export default function SequenceEditor({ sequence: initial }: { sequence: Sequen
 
         {steps.length === 0 && (
           <div className="card p-10 text-center text-black/40">
-            No steps yet. Click "+ Add step" to create one.
+            No steps yet. Click &quot;+ Add step&quot; to create one.
           </div>
         )}
       </div>

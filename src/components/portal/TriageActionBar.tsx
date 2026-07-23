@@ -357,7 +357,7 @@ function ReferModal({ onCancel, onConfirm }: ReferModalProps) {
         <div className="px-6 py-4 border-b border-black/8">
           <h2 className="text-lg font-bold text-navy">Refer this lead</h2>
           <p className="mt-1 text-sm text-black/60">
-            The lead lands in your history as referred. The firm's GHL workflow decides what cadence (if any) runs for the contact.
+            The lead lands in your history as referred. The firm&apos;s GHL workflow decides what cadence (if any) runs for the contact.
           </p>
         </div>
         <div className="px-6 py-4 space-y-3">
