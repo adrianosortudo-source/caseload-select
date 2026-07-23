@@ -5,7 +5,7 @@ export default function OperatorWorkspaceBanner({ firmName, firmId }: { firmName
         <strong className="uppercase tracking-wider">OPERATOR WORKSPACE</strong>
         <span className="text-navy/80">You are working in {firmName} as CaseLoad Select operator.</span>
         <span className="flex items-center gap-4 whitespace-nowrap">
-          <a href={`/api/portal/${firmId}/preview/enter?target=lawyer`} className="font-semibold underline underline-offset-2 hover:text-navy">View as the firm (read-only)</a>
+          <a href={`/admin/firms/${firmId}/support-preview`} className="font-semibold underline underline-offset-2 hover:text-navy">Open support preview</a>
           <a href={`/api/portal/${firmId}/workspace/exit`} className="font-semibold underline underline-offset-2 hover:text-navy">Exit workspace</a>
         </span>
       </div>

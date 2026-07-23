@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DECISION_REASON_CODES, DECISION_REASON_CODE_LABELS } from "@/lib/screened-leads-labels";
+import { SUPPORT_PREVIEW_READ_ONLY_MESSAGE } from "@/lib/support-preview-copy";
 
 interface Props {
   firmId: string;
   leadId: string;
   band: "A" | "B" | "C" | "D" | null;
   initialStatus: "triaging" | "taken" | "passed" | "declined" | "referred";
+  supportPreview?: boolean;
 }
 
 type Mode = "idle" | "submitting" | "pass-modal" | "refer-modal" | "error";
@@ -20,7 +22,13 @@ const TAKE_LABEL: Record<string, string> = {
   D: "Take anyway",
 };
 
-export default function TriageActionBar({ firmId, leadId, band, initialStatus }: Props) {
+export default function TriageActionBar({
+  firmId,
+  leadId,
+  band,
+  initialStatus,
+  supportPreview = false,
+}: Props) {
   const [status, setStatus] = useState(initialStatus);
   const [mode, setMode] = useState<Mode>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -161,7 +169,7 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
             <button
               type="button"
               onClick={() => setMode("pass-modal")}
-              disabled={mode === "submitting"}
+              disabled={supportPreview || mode === "submitting"}
               className="px-4 py-2.5 sm:py-2 text-sm font-semibold uppercase disabled:opacity-50 min-h-[44px] sm:min-h-0"
               style={{
                 backgroundColor: "#FFFFFF",
@@ -180,7 +188,7 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
             <button
               type="button"
               onClick={onTake}
-              disabled={mode === "submitting"}
+              disabled={supportPreview || mode === "submitting"}
               className="px-5 py-2.5 sm:py-2 text-sm font-semibold uppercase disabled:opacity-50 min-h-[44px] sm:min-h-0"
               style={
                 isBandD
@@ -217,7 +225,7 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
               <button
                 type="button"
                 onClick={() => setMode("refer-modal")}
-                disabled={mode === "submitting"}
+                disabled={supportPreview || mode === "submitting"}
                 className="px-5 py-2.5 sm:py-2 text-sm font-semibold uppercase disabled:opacity-50 min-h-[44px] sm:min-h-0"
                 style={{
                   backgroundColor: "#C4B49A",
@@ -233,6 +241,9 @@ export default function TriageActionBar({ firmId, leadId, band, initialStatus }:
             )}
           </div>
         </div>
+        {supportPreview && (
+          <p className="mt-2 text-xs text-black/55">{SUPPORT_PREVIEW_READ_ONLY_MESSAGE}</p>
+        )}
       </div>
 
       {mode === "pass-modal" && (

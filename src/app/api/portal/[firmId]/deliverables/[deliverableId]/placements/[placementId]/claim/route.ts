@@ -20,6 +20,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { getDeliverableDetail } from "@/lib/deliverables";
 import { listPlacementsForDeliverable } from "@/lib/content-placements";
 import { claimPlacementForPublish } from "@/lib/publication-placement-claims";
@@ -35,6 +36,9 @@ export async function POST(
   }
 
   const { firmId, deliverableId, placementId } = await params;
+
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
 
   const detail = await getDeliverableDetail(deliverableId);
   if (!detail || detail.deliverable.firm_id !== firmId) {

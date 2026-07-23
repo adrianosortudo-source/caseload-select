@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getPortalSession } from '@/lib/portal-auth';
+import { denyWriteIfPreview } from '@/lib/preview-guard';
 import { computeAllBoardsForFirm, listDashboardViews, saveDashboardView } from '@/lib/dashboard-boards';
 
 function isAuthorized(session: { firm_id: string; role: string } | null, firmId: string): boolean {
@@ -46,6 +47,9 @@ export async function POST(
   if (!isAuthorized(session, firmId)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
 
   const body = (await req.json()) as { board_key?: string; name?: string; filters?: Record<string, unknown> };
   const boardKey = body.board_key;
