@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { updatePeriod, deletePeriod } from "@/lib/deliverables";
 import type { ContentPeriod } from "@/lib/types";
 
@@ -28,6 +29,9 @@ export async function PATCH(
   if (resolved.actor.role !== "operator") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
 
   let body: Record<string, unknown>;
   try {
@@ -73,6 +77,10 @@ export async function DELETE(
   if (resolved.actor.role !== "operator") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
+
   const result = await deletePeriod({ periodId, firmId });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
   return NextResponse.json({ ok: true });

@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { activatePeriodReadiness } from "@/lib/deliverables";
 
 export async function POST(
@@ -23,6 +24,9 @@ export async function POST(
   if (resolved.actor.role !== "operator") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
 
   const result = await activatePeriodReadiness({ periodId, firmId });
   if (!result.ok) {

@@ -16,6 +16,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
+import { getPreviewIntent } from "@/lib/preview-mode";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { getScoringPortForRead } from "@/lib/scoring-port-read";
 import { matterLabel, subtrackLabel } from "@/lib/screened-leads-labels";
@@ -77,6 +78,14 @@ export default async function TriageLeadPage({
   if (session?.role === "client") {
     redirect("/portal/login");
   }
+
+  // Support preview: an operator in Lawyer decision-maker preview for this
+  // firm cannot Take/Pass/Refer on the firm's behalf. The server route
+  // already refuses the write; this disables the control so the operator
+  // sees why before clicking.
+  const preview = await getPreviewIntent();
+  const inSupportPreview =
+    session?.role === "operator" && !!preview && preview.firm_id === firmId;
 
   const { data, error } = await supabase
     .from("screened_leads")
@@ -188,6 +197,7 @@ export default async function TriageLeadPage({
         leadId={row.lead_id}
         band={row.band}
         initialStatus={row.status}
+        supportPreview={inSupportPreview}
       />
       {briefBottomHtml.length > 0 && <BriefFrame html={briefBottomHtml} />}
       <BriefLiveTimers />

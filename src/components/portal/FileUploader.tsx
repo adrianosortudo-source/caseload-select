@@ -19,12 +19,19 @@ import {
   type FileSection,
   type FileKind,
 } from "@/lib/firm-files-pure";
+import { SUPPORT_PREVIEW_READ_ONLY_MESSAGE } from "@/lib/support-preview-copy";
 
 type Mode = "idle" | "uploading" | "success" | "error";
 
 const DEFAULT_SECTION: FileSection = "reports";
 
-export default function FileUploader({ firmId }: { firmId: string }) {
+export default function FileUploader({
+  firmId,
+  supportPreview = false,
+}: {
+  firmId: string;
+  supportPreview?: boolean;
+}) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [kind, setKind] = useState<FileKind>("file");
@@ -120,6 +127,10 @@ export default function FileUploader({ firmId }: { firmId: string }) {
         )}
       </div>
 
+      {supportPreview && (
+        <p className="text-xs text-black/55">{SUPPORT_PREVIEW_READ_ONLY_MESSAGE}</p>
+      )}
+
       <div className="inline-flex border border-border-brand">
         {(["file", "link"] as FileKind[]).map((k) => (
           <button
@@ -130,7 +141,7 @@ export default function FileUploader({ firmId }: { firmId: string }) {
               setMode("idle");
               setError(null);
             }}
-            disabled={mode === "uploading"}
+            disabled={supportPreview || mode === "uploading"}
             className={`px-4 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
               kind === k ? "bg-navy text-white" : "bg-white text-black/60 hover:text-navy"
             }`}
@@ -154,7 +165,7 @@ export default function FileUploader({ firmId }: { firmId: string }) {
                 setFile(f);
                 if (f) setMode("idle");
               }}
-              disabled={mode === "uploading"}
+              disabled={supportPreview || mode === "uploading"}
               className="block w-full text-sm text-black/80 file:mr-3 file:py-2 file:px-3 file:border file:border-border-brand file:bg-parchment file:text-xs file:uppercase file:tracking-wider file:font-semibold file:text-navy hover:file:bg-navy hover:file:text-white transition-colors"
             />
             {file && (
@@ -175,7 +186,7 @@ export default function FileUploader({ firmId }: { firmId: string }) {
                 setLinkUrl(e.target.value);
                 setMode("idle");
               }}
-              disabled={mode === "uploading"}
+              disabled={supportPreview || mode === "uploading"}
               placeholder="https://..."
               className="w-full text-sm px-3 py-2 border border-border-brand bg-white focus:outline-none focus:border-navy"
             />
@@ -189,7 +200,7 @@ export default function FileUploader({ firmId }: { firmId: string }) {
           <select
             value={section}
             onChange={(e) => setSection(e.target.value as FileSection)}
-            disabled={mode === "uploading"}
+            disabled={supportPreview || mode === "uploading"}
             className="w-full text-sm px-3 py-2 border border-border-brand bg-white text-black/80 focus:outline-none focus:border-navy"
           >
             {FILE_SECTIONS.map((s) => (
@@ -210,7 +221,7 @@ export default function FileUploader({ firmId }: { firmId: string }) {
             type="text"
             value={linkTitle}
             onChange={(e) => setLinkTitle(e.target.value)}
-            disabled={mode === "uploading"}
+            disabled={supportPreview || mode === "uploading"}
             maxLength={200}
             placeholder="What the firm sees on the card."
             className="w-full text-sm px-3 py-2 border border-border-brand bg-white focus:outline-none focus:border-navy"
@@ -226,7 +237,7 @@ export default function FileUploader({ firmId }: { firmId: string }) {
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          disabled={mode === "uploading"}
+          disabled={supportPreview || mode === "uploading"}
           placeholder="One line of context. Visible to the recipient."
           maxLength={500}
           className="w-full text-sm px-3 py-2 border border-border-brand bg-white focus:outline-none focus:border-navy"
@@ -251,7 +262,7 @@ export default function FileUploader({ firmId }: { firmId: string }) {
         )}
         <button
           type="submit"
-          disabled={mode === "uploading"}
+          disabled={supportPreview || mode === "uploading"}
           className="bg-navy text-white px-5 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-navy-deep disabled:opacity-40"
         >
           {mode === "uploading"

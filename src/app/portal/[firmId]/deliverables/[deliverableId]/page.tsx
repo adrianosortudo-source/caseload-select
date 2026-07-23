@@ -80,6 +80,7 @@ export default async function DeliverableReviewPage({
         approvalAttestation={APPROVAL_ATTESTATION}
         changesAttestation={CHANGES_ATTESTATION}
         initialDetail={detail}
+        supportPreview={isLawyerPreview}
       />
     </div>
   );

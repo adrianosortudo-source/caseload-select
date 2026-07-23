@@ -32,6 +32,7 @@ import {
 import { stackCards, stackBottom } from "@/lib/margin-stack";
 import type { HighlightItem } from "@/lib/highlight-dom";
 import { formatTimestamp } from "@/lib/firm-timezone";
+import { SUPPORT_PREVIEW_READ_ONLY_MESSAGE } from "@/lib/support-preview-copy";
 import PlacementsTrackingPanel from "./PlacementsTrackingPanel";
 import HeroImageControl from "./HeroImageControl";
 import { shouldShowHeroImageControl } from "./hero-image-control-pure";
@@ -73,6 +74,7 @@ export default function DeliverableReview({
   approvalAttestation,
   changesAttestation,
   initialDetail,
+  supportPreview = false,
 }: {
   firmId: string;
   viewerRole: "operator" | "lawyer";
@@ -81,6 +83,7 @@ export default function DeliverableReview({
   approvalAttestation: string;
   changesAttestation: string;
   initialDetail: Detail;
+  supportPreview?: boolean;
 }) {
   const [detail, setDetail] = useState<Detail>(initialDetail);
   const { deliverable, versions, comments, approvals } = detail;
@@ -283,13 +286,18 @@ export default function DeliverableReview({
           />
           <button
             onClick={() => setShowVersionComposer((s) => !s)}
-            className="text-xs font-semibold uppercase tracking-wider px-3 py-1.5 border border-navy text-navy hover:bg-navy hover:text-white transition-colors"
+            disabled={supportPreview}
+            className="text-xs font-semibold uppercase tracking-wider px-3 py-1.5 border border-navy text-navy hover:bg-navy hover:text-white transition-colors disabled:opacity-50"
           >
             {showVersionComposer ? "Close" : "Post new version"}
           </button>
         </div>
 
-        {showVersionComposer && (
+        {supportPreview && (
+          <p className="text-xs text-black/55">{SUPPORT_PREVIEW_READ_ONLY_MESSAGE}</p>
+        )}
+
+        {showVersionComposer && !supportPreview && (
           <VersionComposer
             firmId={firmId}
             deliverableId={deliverableId}
@@ -319,6 +327,7 @@ export default function DeliverableReview({
             currentVersionMissing={currentVersionMissing}
             status={deliverable.status}
             onSigned={refetch}
+            supportPreview={supportPreview}
           />
           <div className="space-y-3">
             <ApprovalHistory
@@ -336,6 +345,7 @@ export default function DeliverableReview({
                 setActiveId(null);
               }}
               onChanged={refetch}
+              supportPreview={supportPreview}
             />
             <ArchiveControl
               firmId={firmId}
@@ -399,6 +409,7 @@ export default function DeliverableReview({
               }}
               viewerRole={viewerRole}
               onPosted={refetch}
+              supportPreview={supportPreview}
             />
           )}
 
@@ -410,6 +421,7 @@ export default function DeliverableReview({
               deliverableId={deliverableId}
               versionId={selectedVersion.id}
               viewerRole={viewerRole}
+              supportPreview={supportPreview}
               onDismiss={() => {
                 setPendingAnnotation(null);
                 setPendingPosition(null);
@@ -434,6 +446,7 @@ export default function DeliverableReview({
             activeId={activeId}
             onActivate={focusFromCard}
             onChanged={refetch}
+            supportPreview={supportPreview}
           />
         )}
       </div>
@@ -827,6 +840,7 @@ function FloatingAnnotationPopover({
   viewerRole,
   onDismiss,
   onPosted,
+  supportPreview = false,
 }: {
   annotation: DeliverableAnnotation;
   position: AnnotationPosition;
@@ -836,6 +850,7 @@ function FloatingAnnotationPopover({
   viewerRole: "operator" | "lawyer";
   onDismiss: () => void;
   onPosted: () => Promise<void>;
+  supportPreview?: boolean;
 }) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
@@ -957,7 +972,7 @@ function FloatingAnnotationPopover({
         <div className="flex items-center gap-2">
           <button
             type="submit"
-            disabled={sending || !body.trim()}
+            disabled={supportPreview || sending || !body.trim()}
             className="px-3 py-1.5 text-xs font-semibold bg-navy text-white disabled:opacity-50 whitespace-nowrap"
           >
             {sending ? "Posting..." : "Comment"}
@@ -1007,6 +1022,7 @@ function CommentComposer({
   onClearAnnotation,
   viewerRole,
   onPosted,
+  supportPreview = false,
 }: {
   firmId: string;
   deliverableId: string;
@@ -1015,6 +1031,7 @@ function CommentComposer({
   onClearAnnotation: () => void;
   viewerRole: "operator" | "lawyer";
   onPosted: () => Promise<void> | void;
+  supportPreview?: boolean;
 }) {
   const [body, setBody] = useState("");
   const [notify, setNotify] = useState(false);
@@ -1104,9 +1121,12 @@ function CommentComposer({
       )}
       {error && <p className="text-xs text-red-fail">{error}</p>}
       {notifyWarning && <p className="text-xs text-amber-800">{notifyWarning}</p>}
+      {supportPreview && (
+        <p className="text-xs text-black/55">{SUPPORT_PREVIEW_READ_ONLY_MESSAGE}</p>
+      )}
       <button
         type="submit"
-        disabled={sending || !body.trim()}
+        disabled={supportPreview || sending || !body.trim()}
         className="px-3 py-1.5 text-sm font-semibold bg-navy text-white disabled:opacity-50"
       >
         {sending
@@ -1137,6 +1157,7 @@ function MarginComments({
   activeId,
   onActivate,
   onChanged,
+  supportPreview = false,
 }: {
   firmId: string;
   deliverableId: string;
@@ -1147,6 +1168,7 @@ function MarginComments({
   activeId: string | null;
   onActivate: (id: string) => void;
   onChanged: () => Promise<void> | void;
+  supportPreview?: boolean;
 }) {
   const [isWide, setIsWide] = useState(false);
   const [tops, setTops] = useState<Map<string, number>>(new Map());
@@ -1245,6 +1267,7 @@ function MarginComments({
           num={numberByCommentId.get(c.id)}
           viewerRole={viewerRole}
           onChanged={onChanged}
+          supportPreview={supportPreview}
         />
         {replies.map((r) => (
           <div key={r.id} className="ml-3 mt-2 pl-2 border-l-2 border-border-brand">
@@ -1255,6 +1278,7 @@ function MarginComments({
               num={numberByCommentId.get(r.id)}
               viewerRole={viewerRole}
               onChanged={onChanged}
+              supportPreview={supportPreview}
             />
           </div>
         ))}
@@ -1292,6 +1316,7 @@ function CommentCard({
   num,
   viewerRole,
   onChanged,
+  supportPreview = false,
 }: {
   firmId: string;
   deliverableId: string;
@@ -1299,6 +1324,7 @@ function CommentCard({
   num: number | undefined;
   viewerRole: "operator" | "lawyer";
   onChanged: () => Promise<void> | void;
+  supportPreview?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -1349,7 +1375,7 @@ function CommentCard({
       <p className="text-sm text-black/85 mt-1 whitespace-pre-wrap">{comment.body}</p>
       <button
         onClick={toggleResolved}
-        disabled={busy}
+        disabled={supportPreview || busy}
         className="text-[11px] font-semibold text-navy/70 hover:text-navy mt-1 disabled:opacity-50"
       >
         {comment.resolved ? "Reopen" : "Resolve"}
@@ -1373,6 +1399,7 @@ function SignOffPanel({
   currentVersionMissing,
   status,
   onSigned,
+  supportPreview = false,
 }: {
   firmId: string;
   deliverableId: string;
@@ -1386,6 +1413,7 @@ function SignOffPanel({
   currentVersionMissing: boolean;
   status: ContentDeliverable["status"];
   onSigned: () => Promise<void> | void;
+  supportPreview?: boolean;
 }) {
   const [decision, setDecision] = useState<"approved" | "changes_requested">("approved");
   const [agreed, setAgreed] = useState(false);
@@ -1516,6 +1544,7 @@ function SignOffPanel({
                 deliverableId={deliverableId}
                 attachments={attachments}
                 onChange={setAttachments}
+                supportPreview={supportPreview}
               />
             </div>
           )}
@@ -1539,10 +1568,14 @@ function SignOffPanel({
 
           {error && <p className="text-xs text-red-fail">{error}</p>}
 
+          {supportPreview && (
+            <p className="text-xs text-black/55">{SUPPORT_PREVIEW_READ_ONLY_MESSAGE}</p>
+          )}
+
           <button
             type="button"
             onClick={submit}
-            disabled={!agreed || submitting}
+            disabled={supportPreview || !agreed || submitting}
             className={`w-full px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 ${
               decision === "approved" ? "bg-green-pass" : "bg-amber-700"
             }`}
@@ -1587,11 +1620,13 @@ function AttachmentPicker({
   deliverableId,
   attachments,
   onChange,
+  supportPreview = false,
 }: {
   firmId: string;
   deliverableId: string;
   attachments: DeliverableAttachment[];
   onChange: (next: DeliverableAttachment[]) => void;
+  supportPreview?: boolean;
 }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1649,7 +1684,7 @@ function AttachmentPicker({
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
-        disabled={uploading}
+        disabled={supportPreview || uploading}
         className="text-[11px] font-semibold uppercase tracking-wider px-2 py-1 border border-border-brand text-black/60 hover:bg-parchment-2 disabled:opacity-50"
       >
         {uploading ? "Uploading..." : "Attach screenshot or PDF"}
@@ -1676,6 +1711,7 @@ function ReplyComposer({
   viewerRole,
   onPosted,
   onCancel,
+  supportPreview = false,
 }: {
   firmId: string;
   deliverableId: string;
@@ -1684,6 +1720,7 @@ function ReplyComposer({
   viewerRole: "operator" | "lawyer";
   onPosted: () => Promise<void> | void;
   onCancel: () => void;
+  supportPreview?: boolean;
 }) {
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<DeliverableAttachment[]>([]);
@@ -1745,6 +1782,7 @@ function ReplyComposer({
         deliverableId={deliverableId}
         attachments={attachments}
         onChange={setAttachments}
+        supportPreview={supportPreview}
       />
       {isOperator && (
         <label className="flex items-center gap-2 text-xs text-black/70">
@@ -1765,10 +1803,13 @@ function ReplyComposer({
       )}
       {error && <p className="text-xs text-red-fail">{error}</p>}
       {notifyWarning && <p className="text-xs text-amber-800">{notifyWarning}</p>}
+      {supportPreview && (
+        <p className="text-xs text-black/55">{SUPPORT_PREVIEW_READ_ONLY_MESSAGE}</p>
+      )}
       <div className="flex gap-2">
         <button
           type="submit"
-          disabled={sending || (!body.trim() && attachments.length === 0)}
+          disabled={supportPreview || sending || (!body.trim() && attachments.length === 0)}
           className="px-3 py-1.5 text-xs font-semibold bg-navy text-white disabled:opacity-50"
         >
           {sending ? "Posting..." : isOperator && notify ? "Post reply and notify" : "Post reply"}
@@ -1831,6 +1872,7 @@ function ApprovalHistory({
   deliverable,
   onSwitchVersion,
   onChanged,
+  supportPreview = false,
 }: {
   firmId: string;
   deliverableId: string;
@@ -1841,6 +1883,7 @@ function ApprovalHistory({
   deliverable: ContentDeliverable;
   onSwitchVersion: (versionId: string) => void;
   onChanged: () => Promise<void> | void;
+  supportPreview?: boolean;
 }) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
 
@@ -1915,6 +1958,7 @@ function ApprovalHistory({
                       approvalRecordId={a.id}
                       versionId={a.version_id}
                       viewerRole={viewerRole}
+                      supportPreview={supportPreview}
                       onCancel={() => setReplyingTo(null)}
                       onPosted={async () => {
                         setReplyingTo(null);

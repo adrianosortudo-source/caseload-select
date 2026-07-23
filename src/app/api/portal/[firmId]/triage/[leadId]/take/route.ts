@@ -18,6 +18,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/portal-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { buildTakenPayload, fireGhlWebhook, type LeadFacts } from "@/lib/ghl-webhook";
 import { createMatterFromBandATake } from "@/lib/matter-stage";
@@ -56,6 +57,9 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const actor = session.role === "operator" ? "operator" : "lawyer";
+
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
 
   // Load the lead. 404 covers cross-firm; 409 covers already-non-triaging.
   const { data: existing, error: fetchErr } = await supabase
