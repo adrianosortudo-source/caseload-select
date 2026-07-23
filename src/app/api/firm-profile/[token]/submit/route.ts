@@ -81,6 +81,9 @@ export async function POST(
   if (!body.legal_name?.trim()) {
     return NextResponse.json({ ok: false, error: "legal_name is required" }, { status: 400 });
   }
+  if (!body.authorized_rep_email?.trim()) {
+    return NextResponse.json({ ok: false, error: "authorized_rep_email is required" }, { status: 400 });
+  }
   if (!body.signed_name?.trim()) {
     return NextResponse.json(
       { ok: false, error: "signature is required (type your full name at the bottom of the form)" },

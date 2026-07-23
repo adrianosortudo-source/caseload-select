@@ -170,6 +170,10 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
       setError("Please enter your firm's legal name.");
       return;
     }
+    if (!form.authorized_rep_email.trim()) {
+      setError("Please enter your email so we can reach you about this profile.");
+      return;
+    }
     if (!form.signed_name.trim()) {
       setError("Please sign the form at the bottom (type your full name).");
       return;
@@ -233,8 +237,8 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
         <Field label="Legal business name" hint="The same name you gave on the registration form.">
           <input type="text" required value={form.legal_name} onChange={(e) => update("legal_name", e.target.value)} style={inputStyle} placeholder="e.g. Smith Law Professional Corporation" />
         </Field>
-        <Field label="Your email (optional)" hint="Where we reach you about this profile.">
-          <input type="email" value={form.authorized_rep_email} onChange={(e) => update("authorized_rep_email", e.target.value)} style={inputStyle} placeholder="you@yourfirm.ca" />
+        <Field label="Your email" hint="Where we reach you about this profile.">
+          <input type="email" required value={form.authorized_rep_email} onChange={(e) => update("authorized_rep_email", e.target.value)} style={inputStyle} placeholder="you@yourfirm.ca" />
         </Field>
       </Section>
 

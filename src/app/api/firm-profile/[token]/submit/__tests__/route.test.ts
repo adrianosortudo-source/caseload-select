@@ -69,6 +69,7 @@ const params = () => ({ params: Promise.resolve({ token: TOKEN }) }) as never;
 function baseBody(overrides: Record<string, unknown> = {}) {
   return {
     legal_name: "DRG Law",
+    authorized_rep_email: "damaris@drglaw.ca",
     signed_name: "Damaris",
     ...overrides,
   };
@@ -80,6 +81,13 @@ beforeEach(() => {
 });
 
 describe("POST firm-profile submit, client-list validation", () => {
+  it("400s when authorized_rep_email is missing", async () => {
+    const res = await POST(jsonReq(baseBody({ authorized_rep_email: undefined })), params());
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toBe("authorized_rep_email is required");
+  });
+
   it("400s when client_list_path is missing", async () => {
     const res = await POST(jsonReq(baseBody()), params());
     expect(res.status).toBe(400);
