@@ -579,6 +579,14 @@ function PeriodCard({
           <div className="h-1.5 rounded-full bg-parchment-2 overflow-hidden">
             <div className="h-full bg-green-pass rounded-full" style={{ width: `${pct}%` }} />
           </div>
+          <div className="flex justify-end mt-2">
+            <Link
+              href={`/portal/${firmId}/deliverables/periods/${period.id}`}
+              className="text-[11px] font-semibold text-navy/70 hover:text-navy"
+            >
+              Open Package Control Room
+            </Link>
+          </div>
           {isOperator && (
             <div className="flex justify-end gap-3 mt-2">
               <button
