@@ -1424,7 +1424,7 @@ function computeTopFixes(pages: PageResult[], limit: number): TopFix[] {
     .slice(0, limit);
 }
 
-function aggregateCategories(pages: PageResult[]): CategoryResult[] {
+export function aggregateCategories(pages: PageResult[]): CategoryResult[] {
   const catNames = pages[0].categories.map((c) => c.name);
   return catNames.map((name) => {
     const pageCats = pages.map((p) => p.categories.find((c) => c.name === name)).filter((c): c is CategoryResult => !!c);
@@ -1444,9 +1444,22 @@ function aggregateCategories(pages: PageResult[]): CategoryResult[] {
         if (affected > 0 && affected < pages.length) detail += ` (${affected} of ${pages.length} pages)`;
         else if (affected === pages.length) detail += ` (all ${pages.length} pages)`;
       }
-      return { label, status, detail, fix: representative.fix };
+      // Carry the trust-fix `scored` flag through the merge, or the aggregated
+      // report loses every "excluded from the SEO score" treatment the per-page
+      // checks set (security headers, llms.txt, FAQPage / Review schema). An
+      // item counts as unscored only when it is unscored on every page it
+      // appears on, so a label that is scored anywhere still grades.
+      const unscored = instances.every((i) => i.scored === false);
+      return { label, status, detail, fix: representative.fix, ...(unscored ? { scored: false } : {}) };
     });
-    const maxScore = items.length * 10;
+    // maxScore comes from scoreItems so unscored items stay out of the
+    // denominator, and an all-unscored category reports 0/0 rather than 0/N
+    // (which would defeat computeWeightedScore's `maxScore <= 0` skip and get
+    // counted as 0% at full weight plus the low-pct penalty). The score itself
+    // stays the per-page average ratio rather than scoreItems' own tally, so
+    // multi-page grading is unchanged: a label failing on 1 of 10 pages still
+    // costs a tenth of the category rather than the whole item.
+    const { maxScore } = scoreItems(items);
     const score = Math.round(avgPct * maxScore);
     return { name, score, maxScore, items };
   });
