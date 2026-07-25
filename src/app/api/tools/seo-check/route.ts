@@ -44,6 +44,8 @@ import {
   aiScoresFromItems,
   CATEGORY_WEIGHTS,
   applyPageTypeApplicability,
+  applyEligibilityCaps,
+  deriveEligibilityGates,
 } from "./engine-core";
 import {
   summarizeImageAlt,
@@ -519,8 +521,87 @@ function extractLawFirmSignals(html: string, schema: SchemaSummary): LawFirmSign
    Category analyzers
    ════════════════════════════════════════════════════════ */
 
+/**
+ * hreflang annotations.
+ *
+ * Only multi-language sites need them, so absence is unscored rather than a
+ * defect: a single-language firm site is not missing anything. When
+ * annotations do exist they are validated, because a malformed or
+ * one-directional cluster silently suppresses the alternate-language tree
+ * without any other symptom. Field gap: drglaw.ca publishes en-CA, pt-BR and
+ * x-default and this audit was blind to all three.
+ */
+export function checkHreflang(html: string, pageUrl: string): CheckItem {
+  const tags = html.match(/<link\b[^>]*\bhreflang\s*=\s*["'][^"']*["'][^>]*>/gi) || [];
+  if (tags.length === 0) {
+    return {
+      label: "Hreflang annotations",
+      status: "pass",
+      scored: false,
+      detail: "No hreflang annotations found. Only multi-language sites need them, so this is shown for completeness and not scored.",
+    };
+  }
+
+  const entries = tags.map((t) => ({
+    lang: (t.match(/\bhreflang\s*=\s*["']([^"']*)["']/i)?.[1] || "").trim(),
+    href: (t.match(/\bhref\s*=\s*["']([^"']*)["']/i)?.[1] || "").trim(),
+  }));
+
+  const LANG_RE = /^([a-z]{2,3}(-[a-z]{2,4})?|x-default)$/i;
+  const badLang = entries.filter((e) => !LANG_RE.test(e.lang)).map((e) => e.lang || "(empty)");
+  const missingHref = entries.filter((e) => !e.href).length;
+  const relative = entries.filter((e) => e.href && !/^https?:\/\//i.test(e.href)).length;
+
+  let selfReferenced = false;
+  try {
+    const self = new URL(pageUrl);
+    selfReferenced = entries.some((e) => {
+      if (!e.href) return false;
+      try {
+        const u = new URL(e.href, pageUrl);
+        return u.hostname.replace(/^www\./, "") === self.hostname.replace(/^www\./, "")
+          && (u.pathname.replace(/\/$/, "") || "/") === (self.pathname.replace(/\/$/, "") || "/");
+      } catch { return false; }
+    });
+  } catch { selfReferenced = false; }
+
+  const hasXDefault = entries.some((e) => e.lang.toLowerCase() === "x-default");
+  const count = entries.length;
+
+  if (badLang.length > 0 || missingHref > 0) {
+    const problems: string[] = [];
+    if (badLang.length > 0) problems.push(`invalid language code${badLang.length > 1 ? "s" : ""}: ${[...new Set(badLang)].join(", ")}`);
+    if (missingHref > 0) problems.push(`${missingHref} annotation${missingHref > 1 ? "s" : ""} with no href`);
+    return {
+      label: "Hreflang annotations",
+      status: "fail",
+      detail: `${count} hreflang annotation${count > 1 ? "s" : ""} found, but ${problems.join(" and ")}. Search engines discard a cluster they cannot parse.`,
+      fix: "Use valid ISO codes (for example en-CA, pt-BR) or x-default, and give every annotation an href.",
+    };
+  }
+
+  if (!selfReferenced || relative > 0) {
+    const problems: string[] = [];
+    if (!selfReferenced) problems.push("no self-referencing annotation");
+    if (relative > 0) problems.push(`${relative} relative URL${relative > 1 ? "s" : ""}`);
+    return {
+      label: "Hreflang annotations",
+      status: "warn",
+      detail: `${count} hreflang annotation${count > 1 ? "s" : ""} found, but ${problems.join(" and ")}. Google requires each page in a cluster to point at itself using absolute URLs.`,
+      fix: "Add a self-referencing hreflang for this page and make every href an absolute https URL.",
+    };
+  }
+
+  const xDefaultNote = hasXDefault ? " x-default is set." : " No x-default is set, which is optional but recommended for a language selector fallback.";
+  return {
+    label: "Hreflang annotations",
+    status: "pass",
+    detail: `${count} valid hreflang annotations with a self-reference.${xDefaultNote}`,
+  };
+}
+
 /* 1. On-Page SEO */
-function checkOnPageSeo(html: string): CategoryResult {
+function checkOnPageSeo(html: string, pageUrl: string): CategoryResult {
   const items: CheckItem[] = [];
 
   const rawTitle = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim();
@@ -603,6 +684,8 @@ function checkOnPageSeo(html: string): CategoryResult {
   } else {
     items.push({ label: "HTML lang attribute", status: "warn", detail: "Missing. Tells browsers and search engines the page's primary language.", fix: "Add lang=\"en\" (or your language code) to the <html> tag." });
   }
+
+  items.push(checkHreflang(html, pageUrl));
 
   const { score, maxScore } = scoreItems(items);
   return { name: "On-Page SEO", score, maxScore, items };
@@ -691,7 +774,9 @@ export function checkSchemaMarkup(schema: SchemaSummary, serviceAreaLikely: bool
   }
 
   if (schema.blocks === 0) {
-    items.push({ label: "JSON-LD validity", status: "fail", detail: "No blocks to validate.", fix: "Add valid JSON-LD structured data to your page." });
+    // Unscored: "no blocks to validate" restates the JSON-LD structured data
+    // failure. One missing feature, one charge.
+    items.push({ label: "JSON-LD validity", status: "fail", scored: false, detail: "No blocks to validate.", fix: "Add valid JSON-LD structured data to your page." });
   } else if (schema.invalidBlocks > 0) {
     items.push({ label: "JSON-LD validity", status: "fail", detail: `${schema.invalidBlocks} of ${schema.blocks} blocks have JSON parse errors.`, fix: "Fix the malformed JSON in your structured data blocks. Validate with Google's Rich Results Test." });
   } else {
@@ -724,7 +809,11 @@ export function checkSchemaMarkup(schema: SchemaSummary, serviceAreaLikely: bool
       items.push({ label: "Business schema fields", status: "fail", detail: `Several core fields missing: ${missing.join(", ")}.`, fix: `Complete the business schema with: ${missing.join(", ")}.` });
     }
   } else {
-    items.push({ label: "Business schema fields", status: "fail", detail: "No business entity to evaluate fields on.", fix: "Add a LegalService or LocalBusiness block first, then populate name, address, telephone, and areaServed." });
+    // Unscored, not failed: "no business entity to evaluate fields on" is a
+    // restatement of the Business / LegalService schema failure directly
+    // above, and charging both bills one defect twice. The finding stays
+    // visible so the fix path is obvious.
+    items.push({ label: "Business schema fields", status: "fail", scored: false, detail: "No business entity to evaluate fields on.", fix: "Add a LegalService or LocalBusiness block first, then populate name, address, telephone, and areaServed." });
   }
 
   // Unscored both directions (trust-fix pass WI-3): Google limited FAQ rich
@@ -758,6 +847,12 @@ export function checkSchemaMarkup(schema: SchemaSummary, serviceAreaLikely: bool
 
   if (schema.conflictingEntity) {
     items.push({ label: "Schema conflicts", status: "warn", detail: "Business entity types are declared in separate, unlinked blocks, which can read as competing entities.", fix: "Connect them in one @graph, or link them with @id references, so parsers read a single business entity." });
+  } else if (schema.blocks === 0) {
+    // Vacuous pass: a site with no JSON-LD has no declarations that could
+    // conflict. Crediting it for the absence of a defect inside a feature it
+    // does not have is how a site with zero structured data used to score 34%
+    // in this category. Shown for completeness, scored zero either way.
+    items.push({ label: "Schema conflicts", status: "pass", scored: false, detail: "Not applicable: no structured data blocks on the page, so there is nothing that could conflict." });
   } else {
     items.push({ label: "Schema conflicts", status: "pass", detail: "No conflicting business entity declarations." });
   }
@@ -1290,7 +1385,7 @@ function buildPageResult(
   const robotsAllowed = robotsAllowedFor(parsedRobots, path);
 
   const rawCategories: CategoryResult[] = [
-    checkOnPageSeo(html),
+    checkOnPageSeo(html, finalUrl),
     checkIndexability(idx, robotsAllowed),
     checkSchemaMarkup(schema, lawFirm.serviceAreaLikely),
     checkAiVisibility(html, parsedRobots, llmsTxt, schema),
@@ -1740,7 +1835,14 @@ export async function POST(req: NextRequest) {
 
     // Backward-compatible aggregation.
     const aggregatedCategories = aggregateCategories(forFindings);
-    const overallScore = computeWeightedScore(aggregatedCategories);
+    // Declared here rather than further down because the eligibility gates
+    // below need the rendering risk before the headline score is settled.
+    const renderingSummary = aggregateRenderingSummary(forFindings);
+    const eligibilityGates = deriveEligibilityGates(aggregatedCategories, renderingSummary?.risk);
+    const overallScore = applyEligibilityCaps(
+      computeWeightedScore(aggregatedCategories),
+      eligibilityGates
+    );
     const grade = computeGrade(overallScore);
 
     const perPageAi = forFindings.map((p) => {
@@ -1755,7 +1857,6 @@ export async function POST(req: NextRequest) {
       ...AI_TRAINING_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : false, category: "training" as const })),
     ];
     const intentAlignment = aggregateIntentAlignment(forFindings);
-    const renderingSummary = aggregateRenderingSummary(forFindings);
 
     const topFixes = computeTopFixes(forFindings, 5);
 

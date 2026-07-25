@@ -152,17 +152,26 @@ export const GENERIC_ANCHORS = new Set([
   "this", "go", "see more", "continue", "details", "info",
 ]);
 
+// Weights are set from measured discriminating power across a 21-site sample
+// of real Ontario firm sites, not from intuition. The three categories that
+// used to hold 30% of the grade (Indexability, Technical & Security,
+// Rendering) returned a mean of 96% with almost no variance: they are
+// eligibility questions, not quality signals, and they are now handled by
+// applyEligibilityCaps instead of by weight. Weight moved to the categories
+// that actually separate a marketed firm from an unmarketed one: Schema
+// (measured spread 58), On-Page SEO (50), Local SEO (40), Legal Marketing
+// (36) and Performance (38).
 export const CATEGORY_WEIGHTS: Record<string, number> = {
-  "On-Page SEO": 22,
-  "Indexability": 18,
-  "Schema & Structured Data": 10,
+  "On-Page SEO": 20,
+  "Indexability": 8,
+  "Schema & Structured Data": 16,
   "AI Visibility": 14,
-  "Legal Marketing": 12,
-  "Local SEO": 8,
-  "Technical & Security": 8,
-  "Rendering & Crawlability": 6,
-  "Performance": 4,
-  "Links & Content": 4,
+  "Legal Marketing": 16,
+  "Local SEO": 12,
+  "Technical & Security": 4,
+  "Rendering & Crawlability": 2,
+  "Performance": 6,
+  "Links & Content": 6,
   "Intent Alignment": 8,
 };
 
@@ -578,6 +587,13 @@ export function applyPageTypeApplicability(
         return {
           label: item.label,
           status: "pass" as const,
+          // A check that does not apply to this page type must not pay full
+          // marks. Before this flag the exemption awarded 10 points per item,
+          // so a homepage banked a free pass for Breadcrumb schema and any
+          // non-article page banked five free passes for the AEO content
+          // checks. Not applicable means it contributes nothing in either
+          // direction: scoreItems skips it entirely.
+          scored: false,
           detail: exemptBreadcrumb
             ? `Not required on the homepage or a language root. ${item.detail}`
             : `Not required for a ${pageTypeLabel(pageType).toLowerCase()} page. ${item.detail}`,
@@ -641,6 +657,65 @@ export function computeWeightedScore(categories: CategoryResult[]): number {
     totalWeight += weight;
   }
   return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+}
+
+/**
+ * Eligibility caps.
+ *
+ * HTTPS, indexability and server-rendered content are not quality signals a
+ * site earns points for: they are preconditions for being in search at all.
+ * Measured across 21 real firm sites they returned a mean of 96% with almost
+ * no variance, so as weighted categories they were 30% of the grade and told
+ * us nothing. They now work the other way round. Passing them earns little
+ * (their weights are small). Failing one caps the headline score, because no
+ * amount of on-page polish matters on a page search engines cannot index.
+ *
+ * Caps apply on the failure side only, as a minimum: the worst applicable cap
+ * wins, and a cap never raises a score.
+ */
+export interface EligibilityGates {
+  httpsOk: boolean;
+  indexableOk: boolean;
+  renderingOk: boolean;
+}
+
+export const ELIGIBILITY_CAPS = {
+  notIndexable: 35,
+  notHttps: 50,
+  renderingHighRisk: 60,
+} as const;
+
+export function applyEligibilityCaps(score: number, gates: EligibilityGates): number {
+  let capped = score;
+  if (!gates.indexableOk) capped = Math.min(capped, ELIGIBILITY_CAPS.notIndexable);
+  if (!gates.httpsOk) capped = Math.min(capped, ELIGIBILITY_CAPS.notHttps);
+  if (!gates.renderingOk) capped = Math.min(capped, ELIGIBILITY_CAPS.renderingHighRisk);
+  return capped;
+}
+
+/**
+ * Derive the gates from an already-built category set plus the site's
+ * rendering summary. Reads the same check items the report shows, so the cap
+ * can always be explained by pointing at a visible failing check.
+ */
+export function deriveEligibilityGates(
+  categories: CategoryResult[],
+  renderingRisk: string | undefined
+): EligibilityGates {
+  const find = (catName: string, label: string) =>
+    categories.find((c) => c.name === catName)?.items.find((i) => i.label === label) ?? null;
+
+  const https = find("Technical & Security", "HTTPS");
+  const indexable = find("Indexability", "Indexable");
+  const robots = find("Indexability", "robots.txt crawl access");
+
+  return {
+    httpsOk: https ? https.status === "pass" : true,
+    indexableOk:
+      (indexable ? indexable.status === "pass" : true) &&
+      (robots ? robots.status !== "fail" : true),
+    renderingOk: (renderingRisk ?? "low") !== "high",
+  };
 }
 
 /**
