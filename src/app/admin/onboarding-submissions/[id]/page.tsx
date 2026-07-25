@@ -55,6 +55,7 @@ interface Submission {
   has_facebook_account: boolean | null;
   has_meta_business_manager: boolean | null;
   meta_business_manager_url: string | null;
+  meta_business_verified: boolean | null;
   will_add_operator_as_admin: boolean | null;
   meta_admin_status: string | null;
   meta_admin_blocker_note: string | null;
@@ -373,16 +374,32 @@ export default async function SubmissionDetailPage({
             }
           />
           <Field label="Display name" value={row.whatsapp_display_name} />
-          <Field label="Doc type selected" value={prettifyDocType(row.whatsapp_business_verification_doc_note)} />
+        </Fields>
+      </Section>
+
+      <Section title="6. Meta Business Manager">
+        <Fields>
+          <Field label="Has Facebook account" value={yesNo(row.has_facebook_account)} />
+          <Field label="Has Meta Business Manager" value={yesNo(row.has_meta_business_manager)} />
+          <Field label="MBM URL / ID" value={row.meta_business_manager_url} link />
+          <Field label="Already verified with Meta" value={yesNo(row.meta_business_verified)} />
+          <Field label="Will add operator as admin" value={yesNo(row.will_add_operator_as_admin)} />
         </Fields>
 
+        {/* Business verification. The document question is conditional on the
+            form (a firm with an already-verified Business Manager is never
+            asked), so "no document" is ambiguous on its own — it can mean
+            "nothing needed" or "chase this". This block resolves that rather
+            than leaving the operator to infer it from two other fields. */}
         <div className="mt-4 bg-parchment border border-gold/40 px-5 py-4">
           <p className="text-[11px] uppercase tracking-wider font-semibold text-gold mb-2">
-            Verification document
+            Business verification
           </p>
+
           {row.verification_doc_storage_path ? (
             <div className="space-y-2">
               <p className="text-sm text-black/80">
+                <span className="font-semibold text-green-800">Provided.</span>{" "}
                 <span className="font-semibold">{row.verification_doc_original_name ?? "(file)"}</span>
                 {row.verification_doc_size_bytes ? (
                   <span className="text-black/50 ml-2 text-xs">
@@ -393,6 +410,11 @@ export default async function SubmissionDetailPage({
                   <span className="text-black/50 ml-2 text-xs">{row.verification_doc_mime_type}</span>
                 ) : null}
               </p>
+              {row.whatsapp_business_verification_doc_note ? (
+                <p className="text-xs text-black/60">
+                  Document type: {prettifyDocType(row.whatsapp_business_verification_doc_note)}
+                </p>
+              ) : null}
               {docSignedUrl ? (
                 <a
                   href={docSignedUrl}
@@ -413,21 +435,38 @@ export default async function SubmissionDetailPage({
                 {row.verification_doc_storage_path}
               </p>
             </div>
-          ) : (
-            <p className="text-sm text-black/50">
-              No document uploaded. Rep indicated they would send it later.
+          ) : row.has_meta_business_manager === true && row.meta_business_verified === true ? (
+            <p className="text-sm text-black/70">
+              <span className="font-semibold text-green-800">Not required.</span> The firm&apos;s
+              Meta Business Manager is already verified, so no document was requested.
             </p>
+          ) : (
+            <div className="space-y-1">
+              <p className="text-sm text-black/80">
+                <span className="font-semibold text-red-700">Required — not provided.</span>{" "}
+                {row.has_meta_business_manager === true
+                  ? "Verification is still outstanding on the firm's Business Manager."
+                  : "The firm has no Business Manager yet, so verification will be required when we create one."}
+              </p>
+              {row.whatsapp_business_verification_doc_note ? (
+                <p className="text-xs text-black/60">
+                  Firm said they will provide:{" "}
+                  <span className="font-semibold">
+                    {prettifyDocType(row.whatsapp_business_verification_doc_note)}
+                  </span>
+                </p>
+              ) : (
+                <p className="text-xs text-black/60">No document type selected.</p>
+              )}
+              {row.meta_business_verified === null && row.has_meta_business_manager === true ? (
+                <p className="text-[10px] text-black/40">
+                  Verification status was not recorded on this submission. Submissions made before
+                  2026-07-25 predate that question and default to &ldquo;required&rdquo;.
+                </p>
+              ) : null}
+            </div>
           )}
         </div>
-      </Section>
-
-      <Section title="6. Meta Business Manager">
-        <Fields>
-          <Field label="Has Facebook account" value={yesNo(row.has_facebook_account)} />
-          <Field label="Has Meta Business Manager" value={yesNo(row.has_meta_business_manager)} />
-          <Field label="MBM URL / ID" value={row.meta_business_manager_url} link />
-          <Field label="Will add operator as admin" value={yesNo(row.will_add_operator_as_admin)} />
-        </Fields>
         <AccessStatusRow
           label="Meta admin access"
           status={row.meta_admin_status}

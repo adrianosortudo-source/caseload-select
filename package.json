@@ -19,7 +19,9 @@
     "check:engine-manifest": "bash scripts/check-engine-manifest.sh",
     "gen:engine-manifest": "bash scripts/gen-engine-manifest.sh",
     "publishing:bind-heroes": "node scripts/publishing-bind-heroes.mjs",
-    "publishing:export-packets": "node scripts/publishing-export-packets.mjs"
+    "publishing:export-packets": "node scripts/publishing-export-packets.mjs",
+    "check:seo-calibration": "node scripts/seo-check-calibration-acceptance.mjs",
+    "record:seo-calibration": "node scripts/seo-check-record-calibration-fixture.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

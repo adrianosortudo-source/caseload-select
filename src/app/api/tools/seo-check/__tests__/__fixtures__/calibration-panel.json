@@ -1,0 +1,1706 @@
+{
+  "recordedCount": 27,
+  "entries": [
+    {
+      "domain": "6ixestatesllp.com",
+      "overallScore": 83,
+      "grade": "A-",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 70,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 75,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 40,
+          "maxScore": 50
+        },
+        {
+          "name": "AI Visibility",
+          "score": 40,
+          "maxScore": 60
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 65,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 25,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 30,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 50,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "amslegal.ca",
+      "overallScore": 81,
+      "grade": "A-",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 60,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 50,
+          "maxScore": 70
+        },
+        {
+          "name": "AI Visibility",
+          "score": 70,
+          "maxScore": 80
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 65,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 20,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 45,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "barristerslinks.com",
+      "overallScore": 74,
+      "grade": "B+",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 40,
+          "maxScore": 60
+        },
+        {
+          "name": "AI Visibility",
+          "score": 40,
+          "maxScore": 60
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 20,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 45,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "btorreslaw.com",
+      "overallScore": 57,
+      "grade": "C+",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 40,
+          "maxScore": 80
+        },
+        {
+          "name": "Indexability",
+          "score": 70,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 0,
+          "maxScore": 20
+        },
+        {
+          "name": "AI Visibility",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 20,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 55,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "concordelaw.ca",
+      "overallScore": 82,
+      "grade": "A-",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 65,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 75,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 50,
+          "maxScore": 70
+        },
+        {
+          "name": "AI Visibility",
+          "score": 40,
+          "maxScore": 50
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 30,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 60,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "dosslaw.ca",
+      "overallScore": 78,
+      "grade": "B+",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 45,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 75,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "AI Visibility",
+          "score": 35,
+          "maxScore": 50
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 60,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 40,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 25,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 50,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "downandco.com",
+      "overallScore": 55,
+      "grade": "C+",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 45,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 0,
+          "maxScore": 20
+        },
+        {
+          "name": "AI Visibility",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 40,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 20,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 25,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 30,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 35,
+          "maxScore": 50
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "medium"
+      }
+    },
+    {
+      "domain": "ferrarijaeger.com",
+      "overallScore": 59,
+      "grade": "C+",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 35,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 70,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 0,
+          "maxScore": 20
+        },
+        {
+          "name": "AI Visibility",
+          "score": 45,
+          "maxScore": 70
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 50,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 35,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 35,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 40,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "glaholt.com",
+      "overallScore": 80,
+      "grade": "A-",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 70,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 40,
+          "maxScore": 50
+        },
+        {
+          "name": "AI Visibility",
+          "score": 60,
+          "maxScore": 80
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 65,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 35,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 30,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 50,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "gmalaw.ca",
+      "overallScore": 81,
+      "grade": "A-",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 65,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 75,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 50,
+          "maxScore": 70
+        },
+        {
+          "name": "AI Visibility",
+          "score": 50,
+          "maxScore": 60
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 30,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 50,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "homelifelandmark.com",
+      "overallScore": 80,
+      "grade": "A-",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 60,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 75,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 50,
+          "maxScore": 70
+        },
+        {
+          "name": "AI Visibility",
+          "score": 50,
+          "maxScore": 60
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 60,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 25,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 45,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "jrmlaw.ca",
+      "overallScore": 84,
+      "grade": "A-",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 65,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 70,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "AI Visibility",
+          "score": 40,
+          "maxScore": 50
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 60,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 40,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 25,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 45,
+          "maxScore": 50
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "jsmandlaw.com",
+      "overallScore": 58,
+      "grade": "C+",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 30,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 70,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 0,
+          "maxScore": 20
+        },
+        {
+          "name": "AI Visibility",
+          "score": 50,
+          "maxScore": 70
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 30,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 40,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "lawforyou.ca",
+      "overallScore": 55,
+      "grade": "C+",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 35,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 75,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 0,
+          "maxScore": 20
+        },
+        {
+          "name": "AI Visibility",
+          "score": 20,
+          "maxScore": 50
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 50,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 25,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 60,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "lvmslaw.com",
+      "overallScore": 69,
+      "grade": "B",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 40,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 75,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 30,
+          "maxScore": 40
+        },
+        {
+          "name": "AI Visibility",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 50,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 25,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 40,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "lwlaw.com",
+      "overallScore": 79,
+      "grade": "B+",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 70,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 50,
+          "maxScore": 70
+        },
+        {
+          "name": "AI Visibility",
+          "score": 35,
+          "maxScore": 50
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 65,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 30,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 60,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "mehtalawyer.ca",
+      "overallScore": 80,
+      "grade": "A-",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 50,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "AI Visibility",
+          "score": 45,
+          "maxScore": 60
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 45,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 25,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 40,
+          "maxScore": 50
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "negilawoffice.com",
+      "overallScore": 60,
+      "grade": "B",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 35,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 0,
+          "maxScore": 20
+        },
+        {
+          "name": "AI Visibility",
+          "score": 35,
+          "maxScore": 60
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 60,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 30,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 50,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "negotiables.ca",
+      "overallScore": 56,
+      "grade": "C+",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 45,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 65,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 0,
+          "maxScore": 20
+        },
+        {
+          "name": "AI Visibility",
+          "score": 25,
+          "maxScore": 50
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 45,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 20,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 35,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 45,
+          "maxScore": 50
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "peddlepollard.ca",
+      "overallScore": 58,
+      "grade": "C+",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 45,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 0,
+          "maxScore": 20
+        },
+        {
+          "name": "AI Visibility",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 40,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 25,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 30,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 50,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "pefferslaw.ca",
+      "overallScore": 82,
+      "grade": "A-",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 40,
+          "maxScore": 60
+        },
+        {
+          "name": "AI Visibility",
+          "score": 55,
+          "maxScore": 60
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 65,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 40,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 30,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 30,
+          "maxScore": 50
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "reanolaw.com",
+      "overallScore": 63,
+      "grade": "B",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 60,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 75,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 0,
+          "maxScore": 20
+        },
+        {
+          "name": "AI Visibility",
+          "score": 25,
+          "maxScore": 50
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 45,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 30,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 45,
+          "maxScore": 50
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "sorbaralaw.com",
+      "overallScore": 68,
+      "grade": "B",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 75,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 0,
+          "maxScore": 20
+        },
+        {
+          "name": "AI Visibility",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 65,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 30,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 25,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 45,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "victoriaxulaw.com",
+      "overallScore": 80,
+      "grade": "A-",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 70,
+          "maxScore": 80
+        },
+        {
+          "name": "Indexability",
+          "score": 75,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 45,
+          "maxScore": 60
+        },
+        {
+          "name": "AI Visibility",
+          "score": 50,
+          "maxScore": 60
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 50,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 40,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 25,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 30,
+          "maxScore": 50
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "vikramlaw.ca",
+      "overallScore": 80,
+      "grade": "A-",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 55,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 50,
+          "maxScore": 70
+        },
+        {
+          "name": "AI Visibility",
+          "score": 50,
+          "maxScore": 60
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 60,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 35,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 25,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 50,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "whiteolivelegal.com",
+      "overallScore": 62,
+      "grade": "B",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 45,
+          "maxScore": 70
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 0,
+          "maxScore": 20
+        },
+        {
+          "name": "AI Visibility",
+          "score": 35,
+          "maxScore": 60
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 60,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 25,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 30,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 55,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    },
+    {
+      "domain": "drglaw.ca",
+      "overallScore": 95,
+      "grade": "A",
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 80,
+          "maxScore": 80
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 50,
+          "maxScore": 60
+        },
+        {
+          "name": "AI Visibility",
+          "score": 75,
+          "maxScore": 80
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 70,
+          "maxScore": 70
+        },
+        {
+          "name": "Local SEO",
+          "score": 50,
+          "maxScore": 50
+        },
+        {
+          "name": "Technical & Security",
+          "score": 40,
+          "maxScore": 40
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30
+        },
+        {
+          "name": "Performance",
+          "score": 35,
+          "maxScore": 40
+        },
+        {
+          "name": "Links & Content",
+          "score": 55,
+          "maxScore": 60
+        }
+      ],
+      "gates": {
+        "httpsStatus": "pass",
+        "indexableStatus": "pass",
+        "robotsStatus": "pass",
+        "renderingRisk": "low"
+      }
+    }
+  ]
+}

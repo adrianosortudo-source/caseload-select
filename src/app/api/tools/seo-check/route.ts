@@ -44,6 +44,11 @@ import {
   aiScoresFromItems,
   CATEGORY_WEIGHTS,
   applyPageTypeApplicability,
+  applyEligibilityCaps,
+  deriveEligibilityGates,
+  describeEligibilityCaps,
+  type EligibilityCapApplied,
+  type PageType,
 } from "./engine-core";
 import {
   summarizeImageAlt,
@@ -64,6 +69,7 @@ import {
   type LawFirmSignals,
   type TopFix,
   type SeoCheckResult,
+  type Issue,
   buildIssues,
   buildSiteStructureIssues,
   buildInternalSummary,
@@ -390,6 +396,29 @@ function hasKeyDeep(root: unknown, keys: string[]): boolean {
   return false;
 }
 
+/**
+ * Collect every URL in any sameAs array anywhere in the parsed JSON-LD, at any
+ * nesting depth, deduplicated. sameAs is where directory and profile URLs
+ * reach the entity graph, and per the Directory Submission playbook a captured
+ * listing URL that never lands here is half-finished work.
+ */
+function collectSameAsUrls(node: unknown, out: Set<string>): void {
+  if (Array.isArray(node)) {
+    for (const n of node) collectSameAsUrls(n, out);
+    return;
+  }
+  if (!node || typeof node !== "object") return;
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    if (key.toLowerCase() === "sameas") {
+      const vals = Array.isArray(value) ? value : [value];
+      for (const v of vals) {
+        if (typeof v === "string" && /^https?:\/\//i.test(v.trim())) out.add(v.trim());
+      }
+    }
+    collectSameAsUrls(value, out);
+  }
+}
+
 export function extractSchemaSummary(html: string): SchemaSummary {
   const scriptTags = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
   const types = new Set<string>();
@@ -443,6 +472,7 @@ export function extractSchemaSummary(html: string): SchemaSummary {
     // fires. Field case: preszlerlaw.com declares Organization + LegalService +
     // 22 LocalBusiness locations in one @graph, which is best practice.
     conflictingEntity: businessTypeBlockCount >= 2 && !hasGraph,
+    sameAsUrls: (() => { const s = new Set<string>(); collectSameAsUrls(parsed, s); return [...s]; })(),
   };
 }
 
@@ -519,8 +549,87 @@ function extractLawFirmSignals(html: string, schema: SchemaSummary): LawFirmSign
    Category analyzers
    ════════════════════════════════════════════════════════ */
 
+/**
+ * hreflang annotations.
+ *
+ * Only multi-language sites need them, so absence is unscored rather than a
+ * defect: a single-language firm site is not missing anything. When
+ * annotations do exist they are validated, because a malformed or
+ * one-directional cluster silently suppresses the alternate-language tree
+ * without any other symptom. Field gap: drglaw.ca publishes en-CA, pt-BR and
+ * x-default and this audit was blind to all three.
+ */
+export function checkHreflang(html: string, pageUrl: string): CheckItem {
+  const tags = html.match(/<link\b[^>]*\bhreflang\s*=\s*["'][^"']*["'][^>]*>/gi) || [];
+  if (tags.length === 0) {
+    return {
+      label: "Hreflang annotations",
+      status: "pass",
+      scored: false,
+      detail: "No hreflang annotations found. Only multi-language sites need them, so this is shown for completeness and not scored.",
+    };
+  }
+
+  const entries = tags.map((t) => ({
+    lang: (t.match(/\bhreflang\s*=\s*["']([^"']*)["']/i)?.[1] || "").trim(),
+    href: (t.match(/\bhref\s*=\s*["']([^"']*)["']/i)?.[1] || "").trim(),
+  }));
+
+  const LANG_RE = /^([a-z]{2,3}(-[a-z]{2,4})?|x-default)$/i;
+  const badLang = entries.filter((e) => !LANG_RE.test(e.lang)).map((e) => e.lang || "(empty)");
+  const missingHref = entries.filter((e) => !e.href).length;
+  const relative = entries.filter((e) => e.href && !/^https?:\/\//i.test(e.href)).length;
+
+  let selfReferenced = false;
+  try {
+    const self = new URL(pageUrl);
+    selfReferenced = entries.some((e) => {
+      if (!e.href) return false;
+      try {
+        const u = new URL(e.href, pageUrl);
+        return u.hostname.replace(/^www\./, "") === self.hostname.replace(/^www\./, "")
+          && (u.pathname.replace(/\/$/, "") || "/") === (self.pathname.replace(/\/$/, "") || "/");
+      } catch { return false; }
+    });
+  } catch { selfReferenced = false; }
+
+  const hasXDefault = entries.some((e) => e.lang.toLowerCase() === "x-default");
+  const count = entries.length;
+
+  if (badLang.length > 0 || missingHref > 0) {
+    const problems: string[] = [];
+    if (badLang.length > 0) problems.push(`invalid language code${badLang.length > 1 ? "s" : ""}: ${[...new Set(badLang)].join(", ")}`);
+    if (missingHref > 0) problems.push(`${missingHref} annotation${missingHref > 1 ? "s" : ""} with no href`);
+    return {
+      label: "Hreflang annotations",
+      status: "fail",
+      detail: `${count} hreflang annotation${count > 1 ? "s" : ""} found, but ${problems.join(" and ")}. Search engines discard a cluster they cannot parse.`,
+      fix: "Use valid ISO codes (for example en-CA, pt-BR) or x-default, and give every annotation an href.",
+    };
+  }
+
+  if (!selfReferenced || relative > 0) {
+    const problems: string[] = [];
+    if (!selfReferenced) problems.push("no self-referencing annotation");
+    if (relative > 0) problems.push(`${relative} relative URL${relative > 1 ? "s" : ""}`);
+    return {
+      label: "Hreflang annotations",
+      status: "warn",
+      detail: `${count} hreflang annotation${count > 1 ? "s" : ""} found, but ${problems.join(" and ")}. Google requires each page in a cluster to point at itself using absolute URLs.`,
+      fix: "Add a self-referencing hreflang for this page and make every href an absolute https URL.",
+    };
+  }
+
+  const xDefaultNote = hasXDefault ? " x-default is set." : " No x-default is set, which is optional but recommended for a language selector fallback.";
+  return {
+    label: "Hreflang annotations",
+    status: "pass",
+    detail: `${count} valid hreflang annotations with a self-reference.${xDefaultNote}`,
+  };
+}
+
 /* 1. On-Page SEO */
-function checkOnPageSeo(html: string): CategoryResult {
+function checkOnPageSeo(html: string, pageUrl: string): CategoryResult {
   const items: CheckItem[] = [];
 
   const rawTitle = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim();
@@ -604,6 +713,8 @@ function checkOnPageSeo(html: string): CategoryResult {
     items.push({ label: "HTML lang attribute", status: "warn", detail: "Missing. Tells browsers and search engines the page's primary language.", fix: "Add lang=\"en\" (or your language code) to the <html> tag." });
   }
 
+  items.push(checkHreflang(html, pageUrl));
+
   const { score, maxScore } = scoreItems(items);
   return { name: "On-Page SEO", score, maxScore, items };
 }
@@ -678,6 +789,101 @@ function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean;
 }
 
 /* 3. Schema & Structured Data */
+
+/**
+ * Known entity surfaces, keyed by a hostname fragment. Wave 1-R and Wave 1-P
+ * from PB_Capture_DirectorySubmission_v5.html, plus the social profiles firms
+ * commonly publish. Social profiles count as sameAs hygiene but NOT as
+ * directory coverage: they are not citation surfaces.
+ */
+const ENTITY_SURFACES: Array<{ match: RegExp; name: string; directory: boolean }> = [
+  { match: /(^|\.)google\.[a-z.]+\/maps|maps\.google\.|(^|\.)g\.page/i, name: "Google Business Profile", directory: true },
+  { match: /(^|\.)bing\.com\/(maps|forbusiness)|bingplaces\.com/i, name: "Bing Places", directory: true },
+  { match: /maps\.apple\.com/i, name: "Apple Business Connect", directory: true },
+  { match: /lso\.ca/i, name: "Law Society of Ontario", directory: true },
+  { match: /yellowpages\.ca|(^|\.)yp\.ca/i, name: "Yellow Pages Canada", directory: true },
+  { match: /canada411\.ca/i, name: "Canada411", directory: true },
+  { match: /canadianlawlist\.com/i, name: "Canadian Law List", directory: true },
+  { match: /bbb\.org/i, name: "Better Business Bureau", directory: true },
+  { match: /linkedin\.com/i, name: "LinkedIn", directory: false },
+  { match: /instagram\.com/i, name: "Instagram", directory: false },
+  { match: /facebook\.com/i, name: "Facebook", directory: false },
+  { match: /(^|\.)x\.com|twitter\.com/i, name: "X", directory: false },
+  { match: /youtube\.com/i, name: "YouTube", directory: false },
+];
+
+/**
+ * Entity sameAs coverage.
+ *
+ * Directory work has an on-page shadow. Per PB_Capture_DirectorySubmission_v5
+ * section 12, every captured listing URL must be pushed into the entity graph's
+ * sameAs array, because those URLs are what let search and answer engines
+ * reconcile the firm as a single entity across the web. A firm can hold eight
+ * live listings and still publish none of them here, and the audit could not
+ * see the difference: sameAs was a boolean folded into a six-field composite.
+ *
+ * Deliberately NOT checked: whether the values match what those surfaces
+ * publish. The playbook's purpose-class rule says an approved difference is not
+ * a defect, and this engine cannot see the client's exception register, so a
+ * cross-surface consistency finding would be a coin flip presented as fact.
+ */
+export function checkEntitySameAs(schema: SchemaSummary, hasBusiness: boolean): CheckItem {
+  if (!hasBusiness) {
+    return {
+      label: "Entity sameAs coverage",
+      status: "fail",
+      scored: false,
+      detail: "Not applicable: no business entity in the structured data to attach profile or listing URLs to.",
+      fix: "Add a LegalService or LocalBusiness block first, then add its directory and profile URLs as sameAs.",
+    };
+  }
+
+  const urls = schema.sameAsUrls;
+  if (urls.length === 0) {
+    return {
+      label: "Entity sameAs coverage",
+      status: "fail",
+      detail: "No sameAs URLs in the business entity. Directory and profile listings are not connected to the entity, so search and AI systems cannot reconcile them as the same firm.",
+      fix: "Add a sameAs array to the business entity listing your Google Business Profile, law society directory, and other claimed listing URLs.",
+    };
+  }
+
+  const matched = ENTITY_SURFACES.filter((s) => urls.some((u) => s.match.test(u)));
+  const directories = matched.filter((s) => s.directory).map((s) => s.name);
+  const socials = matched.filter((s) => !s.directory).map((s) => s.name);
+  const unrecognised = urls.length - matched.length;
+
+  const found = [
+    directories.length > 0 ? `directories: ${directories.join(", ")}` : null,
+    socials.length > 0 ? `profiles: ${socials.join(", ")}` : null,
+    unrecognised > 0 ? `${unrecognised} other URL${unrecognised > 1 ? "s" : ""}` : null,
+  ].filter(Boolean).join("; ");
+
+  if (directories.length >= 3) {
+    return {
+      label: "Entity sameAs coverage",
+      status: "pass",
+      detail: `${urls.length} sameAs URLs covering ${directories.length} directory surfaces (${found}).`,
+    };
+  }
+
+  if (directories.length === 0) {
+    return {
+      label: "Entity sameAs coverage",
+      status: "fail",
+      detail: `${urls.length} sameAs URLs, but none point at a directory or map surface (${found}). Social profiles alone do not establish the firm as a local entity.`,
+      fix: "Add your Google Business Profile URL and your law society directory URL to the sameAs array.",
+    };
+  }
+
+  return {
+    label: "Entity sameAs coverage",
+    status: "warn",
+    detail: `${urls.length} sameAs URLs covering only ${directories.length} directory surface${directories.length > 1 ? "s" : ""} (${found}). Claimed listings that never reach the entity graph do not help search or AI systems connect them to this firm.`,
+    fix: "Add the remaining claimed listing URLs to sameAs: Google Business Profile, law society directory, Bing Places, Apple Business Connect.",
+  };
+}
+
 // serviceAreaLikely defaults to false so the direct-call tests (e.g.
 // acceptance-trust-pass.test.ts, schema-recs.test.ts) that predate the
 // service-area detection keep working without threading it through.
@@ -691,7 +897,9 @@ export function checkSchemaMarkup(schema: SchemaSummary, serviceAreaLikely: bool
   }
 
   if (schema.blocks === 0) {
-    items.push({ label: "JSON-LD validity", status: "fail", detail: "No blocks to validate.", fix: "Add valid JSON-LD structured data to your page." });
+    // Unscored: "no blocks to validate" restates the JSON-LD structured data
+    // failure. One missing feature, one charge.
+    items.push({ label: "JSON-LD validity", status: "fail", scored: false, detail: "No blocks to validate.", fix: "Add valid JSON-LD structured data to your page." });
   } else if (schema.invalidBlocks > 0) {
     items.push({ label: "JSON-LD validity", status: "fail", detail: `${schema.invalidBlocks} of ${schema.blocks} blocks have JSON parse errors.`, fix: "Fix the malformed JSON in your structured data blocks. Validate with Google's Rich Results Test." });
   } else {
@@ -724,7 +932,11 @@ export function checkSchemaMarkup(schema: SchemaSummary, serviceAreaLikely: bool
       items.push({ label: "Business schema fields", status: "fail", detail: `Several core fields missing: ${missing.join(", ")}.`, fix: `Complete the business schema with: ${missing.join(", ")}.` });
     }
   } else {
-    items.push({ label: "Business schema fields", status: "fail", detail: "No business entity to evaluate fields on.", fix: "Add a LegalService or LocalBusiness block first, then populate name, address, telephone, and areaServed." });
+    // Unscored, not failed: "no business entity to evaluate fields on" is a
+    // restatement of the Business / LegalService schema failure directly
+    // above, and charging both bills one defect twice. The finding stays
+    // visible so the fix path is obvious.
+    items.push({ label: "Business schema fields", status: "fail", scored: false, detail: "No business entity to evaluate fields on.", fix: "Add a LegalService or LocalBusiness block first, then populate name, address, telephone, and areaServed." });
   }
 
   // Unscored both directions (trust-fix pass WI-3): Google limited FAQ rich
@@ -758,9 +970,17 @@ export function checkSchemaMarkup(schema: SchemaSummary, serviceAreaLikely: bool
 
   if (schema.conflictingEntity) {
     items.push({ label: "Schema conflicts", status: "warn", detail: "Business entity types are declared in separate, unlinked blocks, which can read as competing entities.", fix: "Connect them in one @graph, or link them with @id references, so parsers read a single business entity." });
+  } else if (schema.blocks === 0) {
+    // Vacuous pass: a site with no JSON-LD has no declarations that could
+    // conflict. Crediting it for the absence of a defect inside a feature it
+    // does not have is how a site with zero structured data used to score 34%
+    // in this category. Shown for completeness, scored zero either way.
+    items.push({ label: "Schema conflicts", status: "pass", scored: false, detail: "Not applicable: no structured data blocks on the page, so there is nothing that could conflict." });
   } else {
     items.push({ label: "Schema conflicts", status: "pass", detail: "No conflicting business entity declarations." });
   }
+
+  items.push(checkEntitySameAs(schema, hasBusiness));
 
   const { score, maxScore } = scoreItems(items);
   return { name: "Schema & Structured Data", score, maxScore, items };
@@ -1290,7 +1510,7 @@ function buildPageResult(
   const robotsAllowed = robotsAllowedFor(parsedRobots, path);
 
   const rawCategories: CategoryResult[] = [
-    checkOnPageSeo(html),
+    checkOnPageSeo(html, finalUrl),
     checkIndexability(idx, robotsAllowed),
     checkSchemaMarkup(schema, lawFirm.serviceAreaLikely),
     checkAiVisibility(html, parsedRobots, llmsTxt, schema),
@@ -1424,7 +1644,7 @@ function computeTopFixes(pages: PageResult[], limit: number): TopFix[] {
     .slice(0, limit);
 }
 
-function aggregateCategories(pages: PageResult[]): CategoryResult[] {
+export function aggregateCategories(pages: PageResult[]): CategoryResult[] {
   const catNames = pages[0].categories.map((c) => c.name);
   return catNames.map((name) => {
     const pageCats = pages.map((p) => p.categories.find((c) => c.name === name)).filter((c): c is CategoryResult => !!c);
@@ -1444,9 +1664,22 @@ function aggregateCategories(pages: PageResult[]): CategoryResult[] {
         if (affected > 0 && affected < pages.length) detail += ` (${affected} of ${pages.length} pages)`;
         else if (affected === pages.length) detail += ` (all ${pages.length} pages)`;
       }
-      return { label, status, detail, fix: representative.fix };
+      // Carry the trust-fix `scored` flag through the merge, or the aggregated
+      // report loses every "excluded from the SEO score" treatment the per-page
+      // checks set (security headers, llms.txt, FAQPage / Review schema). An
+      // item counts as unscored only when it is unscored on every page it
+      // appears on, so a label that is scored anywhere still grades.
+      const unscored = instances.every((i) => i.scored === false);
+      return { label, status, detail, fix: representative.fix, ...(unscored ? { scored: false } : {}) };
     });
-    const maxScore = items.length * 10;
+    // maxScore comes from scoreItems so unscored items stay out of the
+    // denominator, and an all-unscored category reports 0/0 rather than 0/N
+    // (which would defeat computeWeightedScore's `maxScore <= 0` skip and get
+    // counted as 0% at full weight plus the low-pct penalty). The score itself
+    // stays the per-page average ratio rather than scoreItems' own tally, so
+    // multi-page grading is unchanged: a label failing on 1 of 10 pages still
+    // costs a tenth of the category rather than the whole item.
+    const { maxScore } = scoreItems(items);
     const score = Math.round(avgPct * maxScore);
     return { name, score, maxScore, items };
   });
@@ -1463,6 +1696,35 @@ const FRONTIER_CAP = 600;
 // Dedupe / membership key. URL already lowercases scheme + host; we strip the
 // fragment and a trailing slash but PRESERVE path and query case, because URL
 // paths can be case-sensitive and this key is also reused as a fetch URL.
+/**
+ * Turn an applied eligibility cap into a top-priority finding, so the reason a
+ * headline score is capped appears in the same issues list as everything else
+ * rather than only in a response field the report does not render.
+ */
+function eligibilityIssues(
+  capsApplied: EligibilityCapApplied[],
+  uncapped: number,
+  homeUrl: string,
+  totalPages: number
+): Issue[] {
+  return capsApplied.map((c) => ({
+    id: `eligibility-${c.gate}`,
+    category: "Indexability",
+    severity: "critical" as const,
+    status: "fail" as const,
+    title: `Score capped at ${c.cap}: ${c.headline}`,
+    detail: `${c.reason} The rest of the audit scored ${uncapped}, but that is not reachable while this holds, so the headline score is capped at ${c.cap}.`,
+    fix: c.fix,
+    affectedUrls: [homeUrl],
+    affectedCount: 1,
+    totalPages,
+    pageTypeImpact: ["homepage" as PageType],
+    confidence: "high" as const,
+    effort: "medium" as const,
+    priority: 100,
+  }));
+}
+
 /* ────────────────────────────────────────────────────────
    POST handler
    ──────────────────────────────────────────────────────── */
@@ -1536,11 +1798,24 @@ export async function POST(req: NextRequest) {
     // 401 site-wide password page on both apex and www) is reported honestly
     // instead of as a dead domain.
     let lastHttpStatus = 0;
-    for (const h of [domain, `www.${domain}`]) {
+    // https first for both hosts, then http. A site that answers on https is
+    // never downgraded: the http entries are only reached when both https
+    // attempts fail. Field case: sanjlaw.ca and thecastlelawyers.com are live
+    // Ontario firm sites whose TLS handshake fails, and which this scanner
+    // used to report as "could not connect" rather than as sites with no SSL.
+    // Reaching them over http also makes the notHttps eligibility cap
+    // reachable, which it never was while every fetch was https.
+    for (const candidate of [
+      `https://${domain}`,
+      `https://www.${domain}`,
+      `http://${domain}`,
+      `http://www.${domain}`,
+    ]) {
+      const h = candidate.replace(/^https?:\/\//, "");
       let handle: SafeFetchResult | null = null;
       try {
         const t0 = Date.now();
-        handle = await safeFetch(`https://${h}`, 15000);
+        handle = await safeFetch(candidate, 15000);
         const { res, finalUrl, redirectHops } = handle;
         if (!res.ok) { lastHttpStatus = res.status; continue; }
         const ct = res.headers.get("content-type") || "";
@@ -1727,7 +2002,13 @@ export async function POST(req: NextRequest) {
 
     // Backward-compatible aggregation.
     const aggregatedCategories = aggregateCategories(forFindings);
-    const overallScore = computeWeightedScore(aggregatedCategories);
+    // Declared here rather than further down because the eligibility gates
+    // below need the rendering risk before the headline score is settled.
+    const renderingSummary = aggregateRenderingSummary(forFindings);
+    const eligibilityGates = deriveEligibilityGates(aggregatedCategories, renderingSummary?.risk);
+    const uncappedScore = computeWeightedScore(aggregatedCategories);
+    const overallScore = applyEligibilityCaps(uncappedScore, eligibilityGates);
+    const capsApplied = describeEligibilityCaps(eligibilityGates);
     const grade = computeGrade(overallScore);
 
     const perPageAi = forFindings.map((p) => {
@@ -1742,7 +2023,6 @@ export async function POST(req: NextRequest) {
       ...AI_TRAINING_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : false, category: "training" as const })),
     ];
     const intentAlignment = aggregateIntentAlignment(forFindings);
-    const renderingSummary = aggregateRenderingSummary(forFindings);
 
     const topFixes = computeTopFixes(forFindings, 5);
 
@@ -1750,7 +2030,13 @@ export async function POST(req: NextRequest) {
     const discoveryConfidence = computeDiscoveryConfidence(pages.length, sitemapSet?.size ?? 0, homeInternalLinkCount, maxPages);
     const pageIssues = buildIssues(forFindings, effectiveContentPages);
     const structureIssues = buildSiteStructureIssues(pages, !!sitemapSet, parsedRobots, discoveryConfidence, uncrawledUrls, wpStarterUrls);
-    const issues = [...pageIssues, ...structureIssues].sort(compareIssuesByPriority);
+    const capIssues = eligibilityIssues(
+      capsApplied,
+      uncappedScore,
+      pages[0]?.url ?? `https://${domain}`,
+      pages.length
+    );
+    const issues = [...pageIssues, ...structureIssues, ...capIssues].sort(compareIssuesByPriority);
     const internalSummary = buildInternalSummary(pages, issues, overallScore, aiSearchScore);
     const breakdown = severityBreakdown(issues);
 
@@ -1783,6 +2069,7 @@ export async function POST(req: NextRequest) {
       severityBreakdown: breakdown,
       partial,
       discoveryConfidence,
+      ...(capsApplied.length > 0 ? { eligibility: { uncappedScore, capsApplied } } : {}),
       buildSha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
       checkedAt: new Date().toISOString(),
       // Trust-fix pass WI-8 (acceptance criterion): expose exactly which
