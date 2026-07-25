@@ -6,6 +6,7 @@ import {
   displayStatusLabel,
   filterAwaitingSignoff,
   PRE_APPROVED_LABEL,
+  PUBLISHED_LABEL,
   STATUS_LABELS,
   type PlanDeliverable,
 } from "../deliverables-pure";
@@ -20,6 +21,7 @@ function item(p: Partial<PlanDeliverable>): PlanDeliverable {
     format: p.format ?? null,
     period_id: p.period_id ?? null,
     publish_date: p.publish_date ?? null,
+    published_at: p.published_at ?? null,
     requires_individual_review: p.requires_individual_review ?? false,
   };
 }
@@ -100,11 +102,11 @@ describe("planProgress", () => {
         { status: "approved" },
         { status: "changes_requested" },
       ]),
-    ).toEqual({ approved: 2, total: 4 });
+    ).toEqual({ approved: 2, published: 0, total: 4 });
   });
 
   it("is zero over zero for an empty set", () => {
-    expect(planProgress([])).toEqual({ approved: 0, total: 0 });
+    expect(planProgress([])).toEqual({ approved: 0, published: 0, total: 0 });
   });
 });
 
@@ -190,6 +192,68 @@ describe("displayStatusLabel (DR-107)", () => {
     for (const status of ["draft", "changes_requested", "approved", "archived"] as const) {
       expect(displayStatusLabel(status, { standingAuthActive: true })).toBe(STATUS_LABELS[status]);
     }
+  });
+});
+
+describe("displayStatusLabel (published)", () => {
+  it("outranks Pre-approved: the renewal-week shape (in_review + standing auth + published)", () => {
+    expect(
+      displayStatusLabel("in_review", {
+        standingAuthActive: true,
+        requiresIndividualReview: false,
+        publishedAt: "2026-07-22",
+      }),
+    ).toBe(PUBLISHED_LABEL);
+  });
+
+  it("outranks every non-archived status", () => {
+    for (const status of ["draft", "in_review", "changes_requested", "approved"] as const) {
+      expect(displayStatusLabel(status, { publishedAt: "2026-07-22" })).toBe(PUBLISHED_LABEL);
+    }
+  });
+
+  it("does not override archived: withdrawal from the plan stays visible", () => {
+    expect(displayStatusLabel("archived", { publishedAt: "2026-07-22" })).toBe(
+      STATUS_LABELS.archived,
+    );
+  });
+
+  it("treats null, undefined, and blank published_at as not published", () => {
+    for (const publishedAt of [null, undefined, "", "   "]) {
+      expect(
+        displayStatusLabel("in_review", { standingAuthActive: true, publishedAt }),
+      ).toBe(PRE_APPROVED_LABEL);
+    }
+  });
+});
+
+describe("planProgress + computeOverview (published)", () => {
+  it("counts published pieces without disturbing the status tallies", () => {
+    const items = [
+      item({ id: "a", status: "in_review", published_at: "2026-07-22" }),
+      item({ id: "b", status: "in_review" }),
+      item({ id: "c", status: "approved", published_at: "2026-07-22" }),
+      item({ id: "d", status: "archived", published_at: "2026-07-22" }),
+    ];
+    const p = planProgress(items);
+    expect(p.published).toBe(2);
+    expect(p.approved).toBe(1);
+    expect(p.total).toBe(4);
+
+    const o = computeOverview(items, { standingAuthActive: true });
+    expect(o.published).toBe(2);
+    // Unchanged by the new axis: b and the published a are both still
+    // pre-approved in_review rows.
+    expect(o.preapproved).toBe(2);
+    expect(o.approved).toBe(1);
+  });
+
+  it("excludes published pieces from nextPublish: shipped is not a deadline", () => {
+    const o = computeOverview([
+      item({ id: "shipped", status: "in_review", publish_date: "2026-07-01", published_at: "2026-07-01" }),
+      item({ id: "due", status: "in_review", publish_date: "2026-08-01" }),
+    ]);
+    expect(o.nextPublish).toEqual({ date: "2026-08-01", title: "t" });
   });
 });
 

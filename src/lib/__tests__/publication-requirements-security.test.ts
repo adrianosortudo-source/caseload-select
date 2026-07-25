@@ -45,6 +45,7 @@ function makeDeliverable(overrides: Partial<ContentDeliverable> = {}): ContentDe
     topic: null,
     byline: null,
     publish_date: "2026-07-14",
+    published_at: null,
     read_time: null,
     hero_image_url: null,
     kicker: null,

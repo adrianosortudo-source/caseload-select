@@ -24,6 +24,7 @@ import type {
 import { DRGArticleFrame, type AnnotationPosition } from "./DRGArticleFrame";
 import {
   displayStatusLabel,
+  isPublished,
   CONTENT_KIND_LABELS,
   annotationLabel,
   versionOptionLabel,
@@ -234,7 +235,11 @@ export default function DeliverableReview({
               <p className="text-sm text-black/55 mt-1">{deliverable.description}</p>
             )}
           </div>
-          <StatusPill status={deliverable.status} standingAuthEligible={standingAuthEligible} />
+          <StatusPill
+            status={deliverable.status}
+            standingAuthEligible={standingAuthEligible}
+            publishedAt={deliverable.published_at ?? null}
+          />
         </div>
       </div>
 
@@ -472,9 +477,11 @@ export default function DeliverableReview({
 function StatusPill({
   status,
   standingAuthEligible = false,
+  publishedAt = null,
 }: {
   status: ContentDeliverable["status"];
   standingAuthEligible?: boolean;
+  publishedAt?: string | null;
 }) {
   const styles: Record<string, string> = {
     draft: "bg-parchment-2 text-muted border-border-brand",
@@ -483,16 +490,26 @@ function StatusPill({
     approved: "bg-green-pass/10 text-green-pass border-green-pass/30",
     archived: "bg-parchment-2 text-muted border-border-brand",
   };
-  // DR-107: an in_review deliverable that is pre-approved for release under
-  // standing authorization gets the green Pre-approved treatment instead of
-  // the plain in_review styling.
-  const isPreApproved = status === "in_review" && standingAuthEligible;
-  const cls = isPreApproved ? "bg-green-pass/10 text-green-pass border-green-pass/30" : styles[status];
+  // A published piece reads as published regardless of where it sits in the
+  // review machine. Below that, DR-107: an in_review deliverable that is
+  // pre-approved for release under standing authorization gets the green
+  // Pre-approved treatment instead of the plain in_review styling.
+  const published = status !== "archived" && isPublished(publishedAt);
+  const isPreApproved = !published && status === "in_review" && standingAuthEligible;
+  const cls = published
+    ? "bg-blue-published/10 text-blue-published border-blue-published/30"
+    : isPreApproved
+      ? "bg-green-pass/10 text-green-pass border-green-pass/30"
+      : styles[status];
   return (
     <span
       className={`text-[11px] uppercase tracking-wider font-semibold px-2.5 py-1 border whitespace-nowrap ${cls}`}
     >
-      {displayStatusLabel(status, { standingAuthActive: standingAuthEligible, requiresIndividualReview: false })}
+      {displayStatusLabel(status, {
+        standingAuthActive: standingAuthEligible,
+        requiresIndividualReview: false,
+        publishedAt,
+      })}
     </span>
   );
 }

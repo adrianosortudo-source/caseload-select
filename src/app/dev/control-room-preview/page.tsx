@@ -127,8 +127,8 @@ export default async function ControlRoomFixturePreviewPage({
       <OverviewTabView
         firmId={DRG_FIRM_ID}
         periodId={DRG_RENEWAL_PERIOD_ID}
-        periodTitle="Renewal Clause week"
-        periodDates="Jul 21 – Jul 27, 2026"
+        periodTitle="The renewal clause"
+        periodDates="Week 2 · Jun 29, 2026 – Jul 3, 2026"
         viewModel={overview}
       />
     );

@@ -36,6 +36,12 @@ export interface PublicationManifest {
   period: {
     starts_on: string;
     ends_on: string;
+    /**
+     * Operator-facing week label ("Week 3"); null when the period is not a
+     * numbered publishing week. Additive to starts_on/ends_on, which stay
+     * as the machine-readable schedule a publishing agent acts on.
+     */
+    week_number: number | null;
     theme: string | null;
     /**
      * DR-097. Explicit lifecycle classification, mirroring
@@ -159,7 +165,7 @@ export async function buildPublicationManifest(
 ): Promise<{ ok: true; manifest: PublicationManifest } | { ok: false; error: string }> {
   const { data: period, error: periodErr } = await supabase
     .from("content_periods")
-    .select("id, firm_id, starts_on, ends_on, theme, readiness_lifecycle")
+    .select("id, firm_id, starts_on, ends_on, week_number, theme, readiness_lifecycle")
     .eq("id", periodId)
     .maybeSingle();
   if (periodErr) return { ok: false, error: periodErr.message };
@@ -227,6 +233,7 @@ export async function buildPublicationManifest(
     period: {
       starts_on: period.starts_on,
       ends_on: period.ends_on,
+      week_number: period.week_number ?? null,
       theme: period.theme,
       lifecycle: periodLifecycle,
     },
@@ -257,9 +264,15 @@ export async function buildPublicationManifest(
 /** Markdown rendering of the same manifest object. Never a second source of truth. */
 export function renderManifestMarkdown(manifest: PublicationManifest): string {
   const lines: string[] = [];
-  lines.push(`# Publication manifest — ${manifest.period.theme ?? manifest.period_id}`);
+  const weekLabel =
+    manifest.period.week_number != null ? `Week ${manifest.period.week_number}` : null;
+  lines.push(
+    `# Publication manifest — ${weekLabel ? `${weekLabel}: ` : ""}${manifest.period.theme ?? manifest.period_id}`,
+  );
   lines.push("");
-  lines.push(`Period: ${manifest.period.starts_on} to ${manifest.period.ends_on}`);
+  lines.push(
+    `Period: ${weekLabel ? `${weekLabel} (` : ""}${manifest.period.starts_on} to ${manifest.period.ends_on}${weekLabel ? ")" : ""}`,
+  );
   lines.push(`Generated: ${manifest.generated_at}`);
   lines.push("");
   lines.push("## AI operator instructions");
