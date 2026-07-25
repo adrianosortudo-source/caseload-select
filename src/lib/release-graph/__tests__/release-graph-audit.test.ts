@@ -47,6 +47,7 @@ function makeDeliverable(overrides: Partial<ContentDeliverable> = {}): ContentDe
     topic: "Commercial leases",
     byline: "Damaris Guimaraes",
     publish_date: "2026-07-20",
+    published_at: null,
     read_time: "6 min read",
     hero_image_url: null,
     kicker: null,

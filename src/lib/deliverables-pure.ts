@@ -57,6 +57,28 @@ export const STATUS_LABELS: Record<DeliverableStatus, string> = {
 };
 
 export const PRE_APPROVED_LABEL = "Pre-approved";
+export const PUBLISHED_LABEL = "Published";
+
+/**
+ * Whether a plan row should read as published. Keyed on
+ * content_deliverables.published_at, the operator's record of the date a
+ * piece actually went out.
+ *
+ * Published is deliberately NOT a content_deliverables.status value. The
+ * status machine describes where a piece sits in lawyer review; publication
+ * is a different axis and a piece can be published while still in_review
+ * (the standing-authorization path, DR-107). Adding it to the enum would
+ * also collide with the suggestion invariants, which require in_review or
+ * changes_requested. Derived at render time, exactly like Pre-approved.
+ *
+ * This is a weaker claim than publication_receipts, which is the durable
+ * per-destination proof that a specific approved version reached a specific
+ * destination. A published_at date says the operator recorded the piece as
+ * out; it is not receipt evidence and must never be presented as such.
+ */
+export function isPublished(publishedAt: string | null | undefined): boolean {
+  return typeof publishedAt === "string" && publishedAt.trim().length > 0;
+}
 
 /**
  * DR-107: with the firm's standing publishing authorization enabled, an
@@ -66,11 +88,23 @@ export const PRE_APPROVED_LABEL = "Pre-approved";
  * status machine is unchanged and toggling authorization off instantly
  * restores the plain labels. All other statuses always keep their
  * STATUS_LABELS entry.
+ *
+ * Published outranks every other label. Once a piece is out the door, what
+ * the reader needs to know is that it shipped, not that it was cleared to
+ * ship. An archived piece is the one exception: archiving is a deliberate
+ * withdrawal from the plan and stays visible as such.
  */
 export function displayStatusLabel(
   status: DeliverableStatus,
-  opts?: { standingAuthActive?: boolean; requiresIndividualReview?: boolean },
+  opts?: {
+    standingAuthActive?: boolean;
+    requiresIndividualReview?: boolean;
+    publishedAt?: string | null;
+  },
 ): string {
+  if (status !== "archived" && isPublished(opts?.publishedAt)) {
+    return PUBLISHED_LABEL;
+  }
   if (status === "in_review" && opts?.standingAuthActive && !opts?.requiresIndividualReview) {
     return PRE_APPROVED_LABEL;
   }
@@ -196,6 +230,26 @@ export function cleanTitle(raw: unknown): string {
 export function cleanDescription(raw: unknown): string | null {
   const v = String(raw ?? "").trim().slice(0, DESCRIPTION_MAX);
   return v.length > 0 ? v : null;
+}
+
+/**
+ * Normalise a content period's week number from an untrusted request body.
+ *
+ * Three-way result, because null and "not supplied" mean different things on
+ * a PATCH: `{ ok: true, value: 3 }` sets Week 3, `{ ok: true, value: null }`
+ * explicitly clears the number (the period is not a numbered publishing
+ * week), and `{ ok: false }` rejects the request. Callers decide what an
+ * absent key means; this never guesses one.
+ *
+ * Rejects rather than coerces anything that is not a whole number >= 1, so a
+ * typo cannot quietly land as Week 0 or Week 3.7 and collide with the
+ * database CHECK constraint at insert time.
+ */
+export function parseWeekNumber(raw: unknown): { ok: true; value: number | null } | { ok: false } {
+  if (raw === null || raw === "") return { ok: true, value: null };
+  const n = typeof raw === "string" ? Number(raw.trim()) : raw;
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 1) return { ok: false };
+  return { ok: true, value: n };
 }
 
 export function cleanNote(raw: unknown): string | null {
@@ -399,6 +453,8 @@ export interface PlanDeliverable {
   format: string | null;
   period_id: string | null;
   publish_date: string | null;
+  /** Date the operator recorded the piece as actually published. */
+  published_at: string | null;
   requires_individual_review: boolean;
 }
 
@@ -474,13 +530,24 @@ export function groupByFormat(items: PlanDeliverable[]): FormatGroup[] {
   return order.map((f) => ({ format: f, items: byFormat.get(f)! }));
 }
 
-/** Approval progress for a set of deliverables. */
+/**
+ * Approval and publication progress for a set of deliverables.
+ *
+ * Both are reported because they can diverge completely: a week released
+ * under standing authorization ships every piece without a single
+ * individual approval, so approval progress alone would sit at zero for a
+ * week that is entirely out the door.
+ */
 export function planProgress(
-  items: { status: DeliverableStatus }[],
-): { approved: number; total: number } {
+  items: { status: DeliverableStatus; published_at?: string | null }[],
+): { approved: number; published: number; total: number } {
   let approved = 0;
-  for (const it of items) if (it.status === "approved") approved++;
-  return { approved, total: items.length };
+  let published = 0;
+  for (const it of items) {
+    if (it.status === "approved") approved++;
+    if (it.status !== "archived" && isPublished(it.published_at)) published++;
+  }
+  return { approved, published, total: items.length };
 }
 
 export interface PlanOverview {
@@ -488,6 +555,7 @@ export interface PlanOverview {
   approved: number;
   pending: number; // in_review still awaiting the firm (DR-107: pre-approved items counted separately)
   preapproved: number; // in_review, DR-107 pre-approved under standing authorization
+  published: number; // published_at recorded; counted in addition to the status tallies
   changes: number; // changes_requested, back with the operator
   draft: number;
   weeks: number; // distinct weeks that hold content
@@ -503,6 +571,12 @@ export interface PlanOverview {
  * requires_individual_review counts as preapproved instead of pending. With
  * standingAuthActive false or omitted, behavior is byte-identical to before
  * DR-107 (preapproved stays 0).
+ *
+ * `published` is a second axis, not a fourth bucket: a published piece is
+ * still counted under whichever status bucket it belongs to, so the existing
+ * tallies are unchanged. It is excluded from nextPublish, which exists to
+ * surface the next working deadline -- something already out the door is not
+ * one.
  */
 export function computeOverview(
   items: PlanDeliverable[],
@@ -511,6 +585,7 @@ export function computeOverview(
   let approved = 0;
   let pending = 0;
   let preapproved = 0;
+  let published = 0;
   let changes = 0;
   let draft = 0;
   const weeks = new Set<string>();
@@ -522,8 +597,10 @@ export function computeOverview(
       else pending++;
     } else if (it.status === "changes_requested") changes++;
     else if (it.status === "draft") draft++;
+    const itemPublished = it.status !== "archived" && isPublished(it.published_at);
+    if (itemPublished) published++;
     if (it.period_id) weeks.add(it.period_id);
-    if (it.status !== "approved" && it.publish_date) {
+    if (it.status !== "approved" && !itemPublished && it.publish_date) {
       if (!next || it.publish_date < next.date) {
         next = { date: it.publish_date, title: it.title };
       }
@@ -538,6 +615,7 @@ export function computeOverview(
     approved,
     pending,
     preapproved,
+    published,
     changes,
     draft,
     weeks: weeks.size,

@@ -16,6 +16,7 @@ import {
   validateDeliverableAttachments,
   versionOptionLabel,
   normalizeClientNotificationChoice,
+  parseWeekNumber,
 } from "@/lib/deliverables-pure";
 
 describe("normalizeClientNotificationChoice", () => {
@@ -301,5 +302,34 @@ describe("versionOptionLabel", () => {
       [],
     );
     expect(state).toEqual({ isCurrent: false, tag: null, approvalCreatedAt: null });
+  });
+});
+
+describe("parseWeekNumber", () => {
+  it("accepts a whole number of 1 or more", () => {
+    expect(parseWeekNumber(1)).toEqual({ ok: true, value: 1 });
+    expect(parseWeekNumber(12)).toEqual({ ok: true, value: 12 });
+  });
+
+  it("accepts the numeric string a form input produces", () => {
+    expect(parseWeekNumber("3")).toEqual({ ok: true, value: 3 });
+    expect(parseWeekNumber("  4 ")).toEqual({ ok: true, value: 4 });
+  });
+
+  it("treats null and empty string as an explicit clear, not an error", () => {
+    expect(parseWeekNumber(null)).toEqual({ ok: true, value: null });
+    expect(parseWeekNumber("")).toEqual({ ok: true, value: null });
+  });
+
+  it("rejects rather than coerces anything that is not a whole week number", () => {
+    for (const bad of [0, -1, 3.7, "3.7", "week 3", "abc", NaN, Infinity, true, {}, []]) {
+      expect(parseWeekNumber(bad), `expected ${JSON.stringify(bad)} to be rejected`).toEqual({
+        ok: false,
+      });
+    }
+  });
+
+  it("rejects undefined: an absent key is the caller's decision to interpret", () => {
+    expect(parseWeekNumber(undefined)).toEqual({ ok: false });
   });
 });

@@ -266,6 +266,17 @@ export interface ContentDeliverable {
   topic: string | null;
   byline: string | null;
   publish_date: string | null;  // YYYY-MM-DD; null means "draft, not scheduled"
+  /**
+   * YYYY-MM-DD the operator recorded this piece as actually published; null
+   * means not published. Distinct from publish_date, which is the intended
+   * schedule and can be set on something that never shipped.
+   *
+   * This is the operator's record, not receipt evidence. publication_receipts
+   * remains the durable per-destination proof that a specific approved
+   * version reached a specific destination and was verified live; a date here
+   * must never be presented as that proof.
+   */
+  published_at: string | null;
   read_time: string | null;     // "8 min read"
   hero_image_url: string | null;
   /**
@@ -320,6 +331,22 @@ export interface ContentPeriod {
   firm_id: string;
   starts_on: string;   // YYYY-MM-DD
   ends_on: string;     // YYYY-MM-DD
+  /**
+   * Operator-facing week label: 3 renders as "Week 3". This is the period's
+   * identity in the plan, replacing the date range that used to head each
+   * card.
+   *
+   * NULL is meaningful, not missing data: it marks a period that is not a
+   * numbered publishing week (standing assets not tied to one week,
+   * retroactive backfill-review passes). Those keep their theme as their
+   * only label and sort after the numbered weeks.
+   *
+   * Never derived from starts_on ordering. The numbering is already
+   * asserted in live PT content ("Semana 1", "Semana 2"), so it must stay
+   * pinned rather than shift when a period is added or removed. See
+   * migration 20260725000000_content_periods_week_number.sql.
+   */
+  week_number: number | null;
   theme: string | null;
   details: string | null;
   rationale: string | null;   // the "why": brand relevance + search intent

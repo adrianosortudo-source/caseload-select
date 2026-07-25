@@ -133,7 +133,7 @@ export async function getContentPlan(
   let dq = supabase
     .from("content_deliverables")
     .select(
-      "id, title, kicker, status, content_kind, format, period_id, publish_date, current_version_id",
+      "id, title, kicker, status, content_kind, format, period_id, publish_date, published_at, current_version_id",
     )
     .eq("firm_id", firmId);
   if (!options.includeArchived) dq = dq.neq("status", "archived");
@@ -143,6 +143,12 @@ export async function getContentPlan(
       .from("content_periods")
       .select("*")
       .eq("firm_id", firmId)
+      // Numbered publishing weeks lead, most recent first. Unnumbered
+      // periods (standing assets, retroactive review passes) carry no week
+      // number and sort after them by date. nullsFirst: false is required --
+      // Postgres puts NULLs first on a DESC sort by default, which would
+      // float the unnumbered periods to the top of the plan.
+      .order("week_number", { ascending: false, nullsFirst: false })
       .order("starts_on", { ascending: false })
       .order("sort_index", { ascending: false }),
     dq,
@@ -185,6 +191,7 @@ export async function getContentPlan(
     format: d.format,
     period_id: d.period_id,
     publish_date: d.publish_date,
+    published_at: d.published_at,
     requires_individual_review: d.current_version_id
       ? (flagByVersionId.get(d.current_version_id) ?? false)
       : false,
@@ -223,6 +230,8 @@ export async function createPeriod(input: {
   firmId: string;
   startsOn: string;
   endsOn: string;
+  /** null = not a numbered publishing week. */
+  weekNumber?: number | null;
   theme: string | null;
   details: string | null;
   rationale: string | null;
@@ -234,6 +243,7 @@ export async function createPeriod(input: {
       firm_id: input.firmId,
       starts_on: input.startsOn,
       ends_on: input.endsOn,
+      week_number: input.weekNumber ?? null,
       theme: input.theme,
       details: input.details,
       rationale: input.rationale,
@@ -250,7 +260,16 @@ export async function updatePeriod(input: {
   periodId: string;
   firmId: string;
   patch: Partial<
-    Pick<ContentPeriod, "starts_on" | "ends_on" | "theme" | "details" | "rationale" | "sort_index">
+    Pick<
+      ContentPeriod,
+      | "starts_on"
+      | "ends_on"
+      | "week_number"
+      | "theme"
+      | "details"
+      | "rationale"
+      | "sort_index"
+    >
   >;
 }): Promise<{ ok: true; period: ContentPeriod } | { ok: false; error: string }> {
   const { data, error } = await supabase
@@ -260,7 +279,18 @@ export async function updatePeriod(input: {
     .eq("firm_id", input.firmId)
     .select("*")
     .maybeSingle();
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    // The partial unique index on (firm_id, week_number) is the only
+    // constraint a well-formed patch can realistically trip. Say which week
+    // is taken rather than surfacing a raw Postgres 23505.
+    if (error.code === "23505" && input.patch.week_number != null) {
+      return {
+        ok: false,
+        error: `Week ${input.patch.week_number} is already assigned to another period for this firm.`,
+      };
+    }
+    return { ok: false, error: error.message };
+  }
   if (!data) return { ok: false, error: "period not found for this firm" };
   return { ok: true, period: data as ContentPeriod };
 }

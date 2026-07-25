@@ -16,6 +16,22 @@ function formatPeriodDates(startsOn: string, endsOn: string): string {
   return `${fmt(startsOn)} – ${fmt(endsOn)}`;
 }
 
+/**
+ * Subheading under the period theme. A numbered publishing week leads with
+ * its week label; the underlying dates stay alongside it because the Control
+ * Room is the operator's scheduling surface, where the real calendar still
+ * matters. An unnumbered period (standing assets, retroactive review) has
+ * only its dates to show.
+ */
+function formatPeriodLabel(period: {
+  week_number: number | null;
+  starts_on: string;
+  ends_on: string;
+}): string {
+  const dates = formatPeriodDates(period.starts_on, period.ends_on);
+  return period.week_number != null ? `Week ${period.week_number} · ${dates}` : dates;
+}
+
 export default async function ControlRoomOverviewPage({
   params,
 }: {
@@ -50,7 +66,7 @@ export default async function ControlRoomOverviewPage({
       firmId={firmId}
       periodId={periodId}
       periodTitle={result.period.theme ?? "Weekly package"}
-      periodDates={formatPeriodDates(result.period.starts_on, result.period.ends_on)}
+      periodDates={formatPeriodLabel(result.period)}
       viewModel={viewModel}
     />
   );
