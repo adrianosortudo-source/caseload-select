@@ -74,11 +74,16 @@
 .ccp-divider{height:1px;background:var(--ccp-line)}
 .ccp-stack > * + *{margin-top:32px}
 
-.ccp-pieces{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+/* auto-fit rather than a fixed 3, so a fourth format card fills the row
+   instead of stranding itself beside two empty cells */
+.ccp-pieces{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:14px}
 @media(max-width:640px){.ccp-pieces{grid-template-columns:1fr}}
 .ccp-piece{border:1px solid var(--ccp-line);border-radius:4px;padding:18px;background:var(--ccp-parchment);border-top:4px solid var(--ccp-navy)}
 .ccp-piece.ccp-p2{border-top-color:var(--ccp-gold)}
 .ccp-piece.ccp-p3{border-top-color:var(--ccp-gbp)}
+/* Fourth format card (native LinkedIn Articles). Reuses the Minute accent's
+   warmth without claiming the Minute's own slot, which stays separate. */
+.ccp-piece.ccp-p4{border-top-color:var(--ccp-minute)}
 .ccp-piece-ic{width:34px;height:34px;color:var(--ccp-navy);margin-bottom:12px}
 .ccp-piece-kind{font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ccp-ink-soft);margin-bottom:5px}
 .ccp-piece-nm{font-family:var(--font-manrope),system-ui,sans-serif;font-weight:800;font-size:16px;color:var(--ccp-navy);margin-bottom:7px}
