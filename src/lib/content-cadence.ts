@@ -6,19 +6,17 @@
  * is structured data, not operator free HTML, so it renders as a real component
  * instead of going through the firm_about sanitizer allowlist.
  *
- * DRG's entry deliberately keeps TWO explicit, separated states rather than
- * one blended one: what the current week actually contains and what is still
- * pending. As of the renewal-clause week the package is 16 deliverables, of
- * which 15 are published across three channels (website, LinkedIn, Google
- * Business Profile). The sixteenth is The DRG Law Minute: built, counted, and
- * NOT sent. Email becomes a fourth channel only on the first week the Minute
- * clears every gate.
+ * THIS PANEL EXPLAINS THE METHOD, NEVER THE CURRENT STATE. It answers "what
+ * does the firm get each week, and how does it get published?" It must never
+ * carry approval counts, publication counts, per-week progress, or anything
+ * else that changes week to week. That belongs to the deliverables list
+ * rendered below it, and duplicating it here turns a standing explainer into
+ * a second, competing status dashboard.
  *
- * Two invariants this copy must never break. A reader must not come away
- * believing the earlier 13-deliverable week (the relocation clause) is
- * incomplete: it was produced at that size and is complete at it. And the
- * Minute must never be described as having reached anyone, because it has
- * not.
+ * The model: 16 deliverables a week, in two languages, across four channels
+ * (website, LinkedIn, Google Business Profile, email). Whether any given
+ * week's pieces are drafted, approved, or already out is not this panel's
+ * subject.
  *
  * A firm with no entry here falls back to the plain AboutPanel on the
  * deliverables page. Adding a firm is a data entry, not a rebuild.
@@ -101,18 +99,26 @@ export interface ContentCadence {
   eyebrow: string;
   headline: string;
   intro: string;
-  /** Explicit callout so the earlier 13-deliverable week never reads as incomplete. */
-  historicalNote: CadenceHistoricalNote;
-  /** The two-column "published now" vs "once the Minute sends" summary. Never blended into one set of numbers. */
+  /**
+   * Optional standing caveat about the model itself. Never a status report on
+   * a particular week: omit it rather than use it to explain what is or is not
+   * published right now.
+   */
+  historicalNote?: CadenceHistoricalNote;
+  /**
+   * The weekly package at a glance. `next` exists only for a firm whose model
+   * is genuinely mid-transition between two shapes; a settled model omits it
+   * and renders one column.
+   */
   approve: {
     current: CadenceMetricGroup;
-    next: CadenceMetricGroup;
+    next?: CadenceMetricGroup;
     capacityNote: string;
   };
-  /** The dark flow band: two lines, published then pending, never merged into one. */
+  /** The dark flow band. Second line optional, same reasoning as `approve.next`. */
   promise: {
     current: { label: string; metrics: CadenceMetric[] };
-    next: { label: string; metrics: CadenceMetric[]; note: string };
+    next?: { label: string; metrics: CadenceMetric[]; note: string };
   };
   sectionLabels: { pieces: string; schedule: string; magnet: string; minute: string };
   summaryCta: string;
@@ -133,25 +139,12 @@ export interface ContentCadence {
 
 const DRG_CADENCE: ContentCadence = {
   eyebrow: "Content publication model",
-  headline: "Sixteen assets a week. Fifteen published, one still to send",
+  headline: "Sixteen assets every week, four channels",
   intro:
-    "The current weekly package for DRG is 16 deliverables in two languages. Fifteen are published across the website, LinkedIn, and Google Business Profile. The sixteenth is the DRG Law Minute: written and counted, but not yet sent. Email becomes a fourth channel on the first week it clears every gate.",
-  historicalNote: {
-    heading: "The earlier 13-deliverable week is complete at that size",
-    body:
-      "The relocation-clause week was produced as a 13-deliverable batch and is finished at that size, not missing three pieces. The renewal-clause week is the first at 16, adding two native LinkedIn Articles and the DRG Law Minute.",
-  },
+    "One legal theme becomes sixteen deliverables in two languages, published across the firm's website, LinkedIn, Google Business Profile, and email. Every piece is written for DRG, reviewed by Damaris, and released only once it clears the firm's quality, legal-safety, consent, and routing requirements.",
   approve: {
     current: {
-      label: "Published now",
-      metrics: [
-        { value: "15", label: "published" },
-        { value: "2", label: "languages" },
-        { value: "3", label: "channels" },
-      ],
-    },
-    next: {
-      label: "Once the Minute sends",
+      label: "Every week",
       metrics: [
         { value: "16", label: "deliverables" },
         { value: "2", label: "languages" },
@@ -159,34 +152,25 @@ const DRG_CADENCE: ContentCadence = {
       ],
     },
     capacityNote:
-      "The sixteenth artifact is not a quota. It depends on Damaris's available legal-review capacity and every applicable quality, legal-safety, consent, route, asset, and release requirement.",
+      "The weekly package is a shape, not a quota. What ships depends on Damaris's available legal-review capacity and every applicable quality, legal-safety, consent, route, asset, and release requirement.",
   },
   promise: {
     current: {
-      label: "Published now:",
+      label: "Every week:",
       metrics: [
-        { value: "1", label: "weekly theme", underline: true },
-        { value: "15", label: "published" },
-        { value: "3", label: "channels", underline: true },
-      ],
-    },
-    next: {
-      label: "Once the Minute sends:",
-      metrics: [
-        { value: "1", label: "weekly theme", underline: true },
+        { value: "1", label: "legal theme", underline: true },
         { value: "16", label: "deliverables" },
         { value: "4", label: "channels", underline: true },
       ],
-      note: "When capacity and release requirements are met.",
     },
   },
   sectionLabels: {
-    pieces: "The 16-deliverable week, format by format",
-    schedule: "Where the week publishes",
+    pieces: "The weekly package, format by format",
+    schedule: "Where each format publishes",
     magnet: "The Preparation Artifact also captures consented interest",
-    minute: "Still to send: the DRG Law Minute",
+    minute: "The email channel: the DRG Law Minute",
   },
-  summaryCta: "See the full sixteen",
+  summaryCta: "See how the week is built",
   pieces: [
     {
       kind: "Counsel Note · EN + PT",
@@ -226,11 +210,11 @@ const DRG_CADENCE: ContentCadence = {
     { n: "16", l: "deliverables" },
   ],
   futureFormat: {
-    eyebrow: "Written, not yet sent",
+    eyebrow: "Relationship format",
     name: "The DRG Law Minute",
     tag: "1 English client newsletter",
     desc: "Maintains DRG's judgment between matters through one useful weekly idea and a reply-or-forward relationship close.",
-    availabilityLabel: "Counted in the sixteen. It has not sent, and email is not a live channel until it does.",
+    availabilityLabel: "Goes only to clients who have already consented to hear from the firm.",
   },
   days: [{ label: "Tuesday" }, { label: "Wednesday" }, { label: "Thursday" }],
   rows: [
@@ -328,6 +312,22 @@ const DRG_CADENCE: ContentCadence = {
         ],
       ],
     },
+    {
+      channel: "email",
+      label: "Email",
+      cells: [
+        null,
+        [
+          {
+            slot: "Client note · EN",
+            piece: "The DRG Law Minute",
+            detail: "sent Wednesday, once Tuesday's linked pages are verified live",
+            count: 1,
+          },
+        ],
+        null,
+      ],
+    },
   ],
   magnet: {
     heading: "The EN/PT Preparation Artifact is also the week's lead magnet",
@@ -346,9 +346,9 @@ const DRG_CADENCE: ContentCadence = {
     ],
   },
   minute: {
-    heading: "The DRG Law Minute is written but has not sent",
+    heading: "How the DRG Law Minute reaches clients",
     intro:
-      "It is the sixteenth deliverable of the current week and it has reached no one yet. It is a short, English-only weekly note to clients who have already said yes to hearing from the firm: relationship correspondence, not a lead-generation push, with no promotional or intake call to action. Until it sends, email is not a live channel for DRG.",
+      "The sixteenth deliverable is a short, English-only weekly note to clients who have already said yes to hearing from the firm: relationship correspondence, not a lead-generation push, with no promotional or intake call to action. It is the only piece of the week that arrives in an inbox rather than waiting to be found, so it carries the strictest conditions.",
     rules: [
       "Sent Wednesday only, after Tuesday's linked pages are verified live.",
       "Goes only to recipients with a documented active consent basis, no recorded unsubscribe, and a valid applicable sending basis, checked in a consent audit before every send.",
@@ -356,7 +356,7 @@ const DRG_CADENCE: ContentCadence = {
       "Every linked page is verified live before the note goes out.",
     ],
     readinessNote:
-      "It counts as a deliverable because it is written and held, never because it was delivered. If any requirement is unmet on its eligible week, the edition does not send that week, full stop.",
+      "If any requirement is unmet in a given week, that edition does not send that week, full stop. It waits rather than going out incomplete.",
   },
   transition: {
     heading: "Capacity discipline, not incomplete shipping",

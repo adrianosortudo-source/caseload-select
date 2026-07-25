@@ -9,6 +9,41 @@ function requireCadence(): ContentCadence {
   return cadence;
 }
 
+/** Every piece of prose the panel renders, for the whole-panel guards below. */
+function allProse(cadence: ContentCadence): string {
+  return [
+    cadence.eyebrow,
+    cadence.headline,
+    cadence.intro,
+    cadence.historicalNote?.heading ?? "",
+    cadence.historicalNote?.body ?? "",
+    cadence.approve.current.label,
+    cadence.approve.next?.label ?? "",
+    cadence.approve.capacityNote,
+    cadence.promise.current.label,
+    cadence.promise.next?.label ?? "",
+    cadence.promise.next?.note ?? "",
+    ...Object.values(cadence.sectionLabels),
+    cadence.summaryCta,
+    ...cadence.pieces.flatMap((p) => [p.kind, p.name, p.desc, p.tag]),
+    ...cadence.counts.map((c) => c.l),
+    cadence.futureFormat.eyebrow,
+    cadence.futureFormat.name,
+    cadence.futureFormat.desc,
+    cadence.futureFormat.availabilityLabel,
+    ...cadence.rows.flatMap((r) => r.cells.flatMap((c) => (c ?? []).flatMap((k) => [k.slot, k.piece, k.detail]))),
+    cadence.magnet.heading,
+    cadence.magnet.body,
+    ...cadence.magnet.steps.flatMap((s) => [s.title, s.desc]),
+    cadence.minute.heading,
+    cadence.minute.intro,
+    ...cadence.minute.rules,
+    cadence.minute.readinessNote,
+    cadence.transition.heading,
+    cadence.transition.body,
+  ].join("\n");
+}
+
 describe("getContentCadence", () => {
   it("returns null for a firm with no configured cadence", () => {
     expect(getContentCadence("00000000-0000-0000-0000-000000000000")).toBeNull();
@@ -19,94 +54,107 @@ describe("getContentCadence", () => {
   });
 });
 
-describe("DRG cadence: headline and intro state both states, never blended", () => {
-  it("headline states what is published and what is still pending, no trailing punctuation (the .ccp-sq square is the period)", () => {
+describe("DRG cadence: the panel explains the method, never the current state", () => {
+  it("carries no publication or approval status anywhere in its prose", () => {
+    const prose = allProse(requireCadence());
+    // Status belongs to the deliverables list rendered below this panel.
+    // The bare verbs "published" and "approved" are legitimate when they
+    // describe the method ("published across the website", "the approved
+    // follow-up path"); what is banned is language that reports where a
+    // particular week has got to.
+    for (const banned of [
+      /\b\d+\s+(published|approved|remaining|outstanding)\b/i,
+      /\b(published|approved)\s+(now|so far|to date|already)\b/i,
+      /\bnot yet (sent|published|approved)\b/i,
+      /\b(has|have) not (sent|published|shipped)\b/i,
+      /\bstill to (send|publish|approve)\b/i,
+      /\bawaiting\b/i,
+      /\bbacklog\b/i,
+      /\bcurrently\b/i,
+      /\bright now\b/i,
+      /\bthis week's progress\b/i,
+    ]) {
+      expect(prose, `banned status language ${banned} appears in the explainer`).not.toMatch(banned);
+    }
+  });
+
+  it("states no count of completed or outstanding work", () => {
+    const prose = allProse(requireCadence());
+    expect(prose).not.toMatch(/\b\d+\s+of\s+\d+\b/i);
+    expect(prose).not.toMatch(/\bfifteen\b/i);
+  });
+
+  it("describes the settled weekly model, so it renders one state and not two", () => {
     const cadence = requireCadence();
-    expect(cadence.headline).toBe("Sixteen assets a week. Fifteen published, one still to send");
+    expect(cadence.approve.next).toBeUndefined();
+    expect(cadence.promise.next).toBeUndefined();
+    expect(cadence.historicalNote).toBeUndefined();
+  });
+});
+
+describe("DRG cadence: headline and intro describe the weekly package", () => {
+  it("headline states the weekly shape, with no trailing punctuation (the .ccp-sq square is the period)", () => {
+    const cadence = requireCadence();
+    expect(cadence.headline).toBe("Sixteen assets every week, four channels");
     expect(cadence.headline.endsWith(".")).toBe(false);
     expect(cadence.headline.endsWith("!")).toBe(false);
     expect(cadence.headline.endsWith("?")).toBe(false);
   });
 
-  it("intro separates the 15 published across 3 channels from the pending Minute and its 4th channel", () => {
+  it("intro names the sixteen deliverables, two languages, and all four channels", () => {
     const cadence = requireCadence();
-    expect(cadence.intro).toMatch(/16 deliverables/i);
-    expect(cadence.intro).toMatch(/fifteen are published/i);
-    expect(cadence.intro).toMatch(/not yet sent/i);
-    expect(cadence.intro).toMatch(/fourth channel/i);
-  });
-
-  it("never claims the Minute reached anyone", () => {
-    const cadence = requireCadence();
-    const prose = [
-      cadence.headline,
-      cadence.intro,
-      cadence.minute.intro,
-      cadence.futureFormat.availabilityLabel,
-    ].join(" ");
-    expect(prose).not.toMatch(/minute (was|has been) (sent|delivered)/i);
-    expect(prose).not.toMatch(/subscribers received/i);
+    expect(cadence.intro).toMatch(/sixteen deliverables/i);
+    expect(cadence.intro).toMatch(/two languages/i);
+    for (const channel of [/website/i, /linkedin/i, /google business profile/i, /email/i]) {
+      expect(cadence.intro).toMatch(channel);
+    }
   });
 });
 
-describe("DRG cadence: the earlier 13-deliverable week must never read as incomplete", () => {
-  it("historical note states the 13-piece week is finished at that size, not missing pieces", () => {
+describe("DRG cadence: no orphan words", () => {
+  // A lone final word is banned. CSS text-wrap balance/pretty is the runtime
+  // guard; this catches copy that would orphan even without that support, by
+  // rejecting a very short last word after a long run of text.
+  function lastWordIsStranded(text: string): boolean {
+    const words = text.trim().split(/\s+/);
+    return words.length > 6 && words[words.length - 1].replace(/[^\p{L}\p{N}]/gu, "").length <= 3;
+  }
+
+  it("headline does not end on a stray short word", () => {
+    expect(lastWordIsStranded(requireCadence().headline)).toBe(false);
+  });
+
+  it("no piece name or section label ends on a stray short word", () => {
     const cadence = requireCadence();
-    expect(cadence.historicalNote.body).toMatch(/13-deliverable batch/i);
-    expect(cadence.historicalNote.body).toMatch(/finished at that size/i);
-    expect(cadence.historicalNote.body).toMatch(/not missing/i);
-    expect(cadence.historicalNote.heading.length).toBeGreaterThan(0);
+    for (const text of [...cadence.pieces.map((p) => p.name), ...Object.values(cadence.sectionLabels)]) {
+      expect(lastWordIsStranded(text), `stranded last word in: ${text}`).toBe(false);
+    }
   });
 });
 
-describe("DRG cadence: two-column published/pending summary (never merged into one set of numbers)", () => {
-  it("published column is exactly 15 published / 2 languages / 3 channels", () => {
+describe("DRG cadence: the weekly package at a glance", () => {
+  it("is exactly 16 deliverables / 2 languages / 4 channels", () => {
     const cadence = requireCadence();
     const values = cadence.approve.current.metrics.map((m) => `${m.value} ${m.label}`);
-    expect(values).toContain("15 published");
-    expect(values).toContain("2 languages");
-    expect(values).toContain("3 channels");
-    expect(cadence.approve.current.metrics).toHaveLength(3);
-  });
-
-  it("pending column is exactly 16 deliverables / 2 languages / 4 channels", () => {
-    const cadence = requireCadence();
-    const values = cadence.approve.next.metrics.map((m) => `${m.value} ${m.label}`);
     expect(values).toContain("16 deliverables");
     expect(values).toContain("2 languages");
     expect(values).toContain("4 channels");
-    expect(cadence.approve.next.metrics).toHaveLength(3);
+    expect(cadence.approve.current.metrics).toHaveLength(3);
   });
 
-  it("the fourth channel is conditional on the Minute sending, never stated as already live", () => {
+  it("the flow band reads 1 legal theme, 16 deliverables, 4 channels", () => {
     const cadence = requireCadence();
-    expect(cadence.approve.next.label).toMatch(/once the minute sends/i);
-    expect(cadence.approve.current.metrics.find((m) => m.label === "channels")?.value).toBe("3");
+    expect(cadence.promise.current.metrics.map((m) => m.value)).toEqual(["1", "16", "4"]);
   });
 
-  it("carries the capacity-condition line: the sixteenth artifact is not a quota", () => {
+  it("frames the package as a shape rather than a guaranteed quota", () => {
     const cadence = requireCadence();
     expect(cadence.approve.capacityNote).toMatch(/not a quota/i);
     expect(cadence.approve.capacityNote).toMatch(/legal-review capacity/i);
   });
 });
 
-describe("DRG cadence: flow band is two lines, published then pending, never one blended line", () => {
-  it("published line reads 1 weekly theme, 15 published, 3 channels", () => {
-    const cadence = requireCadence();
-    expect(cadence.promise.current.metrics.map((m) => m.value)).toEqual(["1", "15", "3"]);
-    expect(cadence.promise.current.label).toMatch(/published now/i);
-  });
-
-  it("pending line reads 1 weekly theme, 16 deliverables, 4 channels, with the capacity-met note", () => {
-    const cadence = requireCadence();
-    expect(cadence.promise.next.metrics.map((m) => m.value)).toEqual(["1", "16", "4"]);
-    expect(cadence.promise.next.label).toMatch(/once the minute sends/i);
-    expect(cadence.promise.next.note).toMatch(/capacity and release requirements are met/i);
-  });
-});
-
-describe("DRG cadence: format breakdown covers the published 15, the Minute is never folded in", () => {
+describe("DRG cadence: format breakdown", () => {
   it("has exactly 4 published formats, including the native LinkedIn Articles", () => {
     const cadence = requireCadence();
     expect(cadence.pieces).toHaveLength(4);
@@ -118,16 +166,10 @@ describe("DRG cadence: format breakdown covers the published 15, the Minute is n
     ]);
   });
 
-  it("no piece represents the Minute: it has not sent, so it is not a published format", () => {
+  it("keeps the Minute out of the piece cards: it has its own card and section", () => {
     const cadence = requireCadence();
     expect(cadence.pieces.some((p) => p.icon === "minute")).toBe(false);
     expect(cadence.pieces.some((p) => /minute/i.test(p.name) || /minute/i.test(p.kind))).toBe(false);
-  });
-
-  it("the four piece tags sum to the 10 owned and social assets (the other 5 are GBP ads and the Minute)", () => {
-    const cadence = requireCadence();
-    const sum = cadence.pieces.reduce((n, p) => n + Number(p.tag.match(/^(\d+)/)?.[1] ?? 0), 0);
-    expect(sum).toBe(10);
   });
 
   it("counts total exactly 8 + 2 + 2 + 3 + 1 = 16, matching the total line", () => {
@@ -145,34 +187,15 @@ describe("DRG cadence: format breakdown covers the published 15, the Minute is n
   });
 });
 
-describe("DRG cadence: the Minute card stays structurally separate from the pieces list", () => {
-  it("carries the required format copy", () => {
-    const cadence = requireCadence();
-    expect(cadence.futureFormat.name).toBe("The DRG Law Minute");
-    expect(cadence.futureFormat.tag).toBe("1 English client newsletter");
-    expect(cadence.futureFormat.desc).toBe(
-      "Maintains DRG's judgment between matters through one useful weekly idea and a reply-or-forward relationship close.",
-    );
-  });
-
-  it("is explicitly labelled as counted but not sent, with email not yet live", () => {
-    const cadence = requireCadence();
-    expect(cadence.futureFormat.eyebrow).toMatch(/not yet sent/i);
-    expect(cadence.futureFormat.availabilityLabel).toMatch(/has not sent/i);
-    expect(cadence.futureFormat.availabilityLabel).toMatch(/email is not a live channel/i);
-  });
-});
-
-describe("DRG cadence: schedule shows only what actually publishes (3 days, 3 channels, no Minute)", () => {
+describe("DRG cadence: schedule covers all four channels of the model", () => {
   it("has exactly 3 days: Tuesday, Wednesday, Thursday", () => {
     const cadence = requireCadence();
     expect(cadence.days.map((d) => d.label)).toEqual(["Tuesday", "Wednesday", "Thursday"]);
   });
 
-  it("has exactly 3 channel rows: website, linkedin, gbp, and no email row because email is not live", () => {
+  it("has all four channel rows, email included", () => {
     const cadence = requireCadence();
-    expect(cadence.rows.map((r) => r.channel)).toEqual(["website", "linkedin", "gbp"]);
-    expect(cadence.rows.some((r) => r.channel === "email")).toBe(false);
+    expect(cadence.rows.map((r) => r.channel)).toEqual(["website", "linkedin", "gbp", "email"]);
   });
 
   it("every row's cells array is aligned 1:1 with days (length 3)", () => {
@@ -194,29 +217,32 @@ describe("DRG cadence: schedule shows only what actually publishes (3 days, 3 ch
     expect(allCards.filter((c) => /native article/i.test(c.slot))).toHaveLength(2);
   });
 
-  it("no card anywhere in the schedule mentions the Minute, because it has not sent", () => {
+  it("the email row places the Minute on Wednesday only", () => {
     const cadence = requireCadence();
-    const allCards = cadence.rows.flatMap((r) => r.cells.flatMap((c) => c ?? []));
-    expect(allCards.some((c) => /minute/i.test(c.piece) || /minute/i.test(c.slot))).toBe(false);
+    const row = cadence.rows.find((r) => r.channel === "email");
+    expect(row).toBeDefined();
+    expect(row!.cells[0]).toBeNull();
+    expect(row!.cells[2]).toBeNull();
+    expect(row!.cells[1]).toHaveLength(1);
+    expect(row!.cells[1]![0].piece).toMatch(/DRG Law Minute/);
   });
 
-  it("the schedule card counts sum to the 15 published assets", () => {
+  it("the schedule card counts sum to all 16 deliverables", () => {
     const cadence = requireCadence();
     const allCards = cadence.rows.flatMap((r) => r.cells.flatMap((c) => c ?? []));
-    expect(allCards.reduce((n, c) => n + c.count, 0)).toBe(15);
+    expect(allCards.reduce((n, c) => n + c.count, 0)).toBe(16);
   });
 });
 
-describe("DRG cadence: Minute operating-rules section restates that it has not sent", () => {
+describe("DRG cadence: the Minute's operating rules are part of the method", () => {
   it("has a section label wired for the numbered section title", () => {
     const cadence = requireCadence();
     expect(cadence.sectionLabels.minute.length).toBeGreaterThan(0);
   });
 
-  it("intro states the Minute has reached no one and that email is not live until it does", () => {
+  it("intro describes what the Minute is and who it goes to", () => {
     const cadence = requireCadence();
-    expect(cadence.minute.intro).toMatch(/reached no one/i);
-    expect(cadence.minute.intro).toMatch(/email is not a live channel/i);
+    expect(cadence.minute.intro).toMatch(/already said yes/i);
     expect(cadence.minute.intro).toMatch(/no promotional or intake call to action/i);
   });
 
@@ -252,11 +278,8 @@ describe("DRG cadence: Minute operating-rules section restates that it has not s
     );
   });
 
-  it("readinessNote ties the count to being written and held, never to delivery, and keeps the full-stop gate", () => {
+  it("readinessNote keeps the full-stop send gate as a standing rule", () => {
     const cadence = requireCadence();
-    expect(cadence.minute.readinessNote).toMatch(
-      /written and held, never because it was delivered/i,
-    );
     expect(cadence.minute.readinessNote).toMatch(/does not send that week, full stop/i);
   });
 });
