@@ -55,6 +55,10 @@ interface FormState {
   has_facebook_account: string;
   has_meta_business_manager: string;
   meta_business_manager_url: string;
+  // Gate for the business verification document. Meta only requires the
+  // document when the Business Manager is not already verified, so asking
+  // unconditionally requests sensitive documents that are often not needed.
+  meta_business_verified: string;
   will_add_operator_as_admin: string;
   meta_admin_status: string;
   meta_admin_blocker_note: string;
@@ -175,6 +179,7 @@ const INITIAL: FormState = {
   has_facebook_account: "",
   has_meta_business_manager: "",
   meta_business_manager_url: "",
+  meta_business_verified: "",
   will_add_operator_as_admin: "",
   meta_admin_status: "",
   meta_admin_blocker_note: "",
@@ -933,28 +938,6 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
           />
         </Field>
 
-        <Field
-          label="Business verification document"
-          hint="Meta will ask for one of: Articles of Incorporation, a recent utility bill at the registered address, OR a recent tax document. Tell us which document you will provide and (optionally) upload it now — PDF, JPG, or PNG up to 10 MB. If you would rather send it later, leave the upload blank; we will email you a secure link."
-        >
-          <select
-            value={form.whatsapp_business_verification_doc_note}
-            onChange={(e) => update("whatsapp_business_verification_doc_note", e.target.value)}
-            style={inputStyle}
-          >
-            <option value="">— Select the document type —</option>
-            <option value="articles_of_incorporation">Articles of Incorporation</option>
-            <option value="utility_bill">Recent utility bill (registered address)</option>
-            <option value="tax_document">Recent tax document</option>
-            <option value="not_sure">Not sure yet — let&apos;s discuss</option>
-          </select>
-
-          <FileUploadBlock
-            upload={upload}
-            onPick={handleFileUpload}
-            onClear={clearUpload}
-          />
-        </Field>
       </Section>
 
       {/* Section 4: Meta Business Manager */}
@@ -1004,6 +987,61 @@ export default function FirmOnboardingForm({ token, firmLabel }: Props) {
               onChange={(e) => update("meta_business_manager_url", e.target.value)}
               style={inputStyle}
               placeholder="https://business.facebook.com/settings/info?business_id=..."
+            />
+          </Field>
+        ) : null}
+
+        {/* Verification gate. Meta only requires the business verification
+            document when the Business Manager has not already been verified.
+            Asking unconditionally (as this form did until 2026-07-25, in the
+            WhatsApp section) requested Articles of Incorporation, utility
+            bills and tax documents from firms that did not need to provide
+            them. Firms without a Business Manager yet will need verification
+            when we create one together, so they skip the gate and go straight
+            to the document question. */}
+        {form.has_meta_business_manager === "yes" ? (
+          <Field
+            label="Is your Meta Business Manager already verified with Meta?"
+            hint="Meta reviews each business once before a WhatsApp account can go live. If you have already been through that review, there is nothing further to provide. Not sure? Pick that and we will check it together."
+          >
+            <RadioGroup
+              name="meta_business_verified"
+              options={[
+                { value: "yes", label: "Yes: already verified" },
+                { value: "no", label: "No: not yet" },
+                { value: "not_sure", label: "Not sure" },
+              ]}
+              value={form.meta_business_verified}
+              onChange={(v) => update("meta_business_verified", v)}
+            />
+          </Field>
+        ) : null}
+
+        {form.has_meta_business_manager === "no" ||
+        form.has_meta_business_manager === "not_sure" ||
+        (form.has_meta_business_manager === "yes" &&
+          (form.meta_business_verified === "no" ||
+            form.meta_business_verified === "not_sure")) ? (
+          <Field
+            label="Business verification document"
+            hint="Meta reviews each business once before a WhatsApp account can go live, and asks for one of: Articles of Incorporation, a recent utility bill at the registered address, or a recent tax document. Tell us which one you will use. Upload it here if you have it handy — PDF, JPG or PNG, up to 10 MB — or leave the upload blank and we will follow up with you."
+          >
+            <select
+              value={form.whatsapp_business_verification_doc_note}
+              onChange={(e) => update("whatsapp_business_verification_doc_note", e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">— Select the document type —</option>
+              <option value="articles_of_incorporation">Articles of Incorporation</option>
+              <option value="utility_bill">Recent utility bill (registered address)</option>
+              <option value="tax_document">Recent tax document</option>
+              <option value="not_sure">Not sure yet — let&apos;s discuss</option>
+            </select>
+
+            <FileUploadBlock
+              upload={upload}
+              onPick={handleFileUpload}
+              onClear={clearUpload}
             />
           </Field>
         ) : null}
