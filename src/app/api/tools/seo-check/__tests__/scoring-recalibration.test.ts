@@ -20,6 +20,7 @@ vi.mock("@/lib/portal-auth", () => ({ getOperatorSession: async () => null }));
 import {
   applyPageTypeApplicability,
   applyEligibilityCaps,
+  describeEligibilityCaps,
   scoreItems,
   type CategoryResult,
 } from "../engine-core";
@@ -63,6 +64,34 @@ describe("applyEligibilityCaps: HTTPS, indexability and rendering cap on failure
 
   it("a score already below every cap is left unchanged", () => {
     expect(applyEligibilityCaps(30, { httpsOk: true, indexableOk: true, renderingOk: true })).toBe(30);
+  });
+});
+
+describe("describeEligibilityCaps: explains which caps applied and why (C2)", () => {
+  it("returns an empty array when every gate passes", () => {
+    expect(describeEligibilityCaps({ httpsOk: true, indexableOk: true, renderingOk: true })).toEqual([]);
+  });
+
+  it("returns one entry for a single failing gate", () => {
+    const result = describeEligibilityCaps({ httpsOk: true, indexableOk: false, renderingOk: true });
+    expect(result).toHaveLength(1);
+    expect(result[0].gate).toBe("indexable");
+    expect(result[0].cap).toBe(35);
+  });
+
+  it("returns three entries in indexable, https, rendering order when every gate fails", () => {
+    const result = describeEligibilityCaps({ httpsOk: false, indexableOk: false, renderingOk: false });
+    expect(result).toHaveLength(3);
+    expect(result.map((r) => r.cap)).toEqual([35, 50, 60]);
+  });
+
+  it("every entry for a fully failing gate set has non-empty headline, reason and fix", () => {
+    const result = describeEligibilityCaps({ httpsOk: false, indexableOk: false, renderingOk: false });
+    for (const entry of result) {
+      expect(entry.headline.length).toBeGreaterThan(0);
+      expect(entry.reason.length).toBeGreaterThan(0);
+      expect(entry.fix.length).toBeGreaterThan(0);
+    }
   });
 });
 

@@ -694,6 +694,54 @@ export function applyEligibilityCaps(score: number, gates: EligibilityGates): nu
 }
 
 /**
+ * Which eligibility caps applied, and why, in plain language.
+ *
+ * applyEligibilityCaps returns only a number, so a capped report used to show a
+ * headline score with no explanation anywhere: a firm would see 35 above a
+ * category breakdown of mostly passing checks and have no way to connect the
+ * two. This returns the reason so the report can say it out loud.
+ */
+export interface EligibilityCapApplied {
+  gate: "indexable" | "https" | "rendering";
+  cap: number;
+  headline: string;
+  reason: string;
+  fix: string;
+}
+
+export function describeEligibilityCaps(gates: EligibilityGates): EligibilityCapApplied[] {
+  const applied: EligibilityCapApplied[] = [];
+  if (!gates.indexableOk) {
+    applied.push({
+      gate: "indexable",
+      cap: ELIGIBILITY_CAPS.notIndexable,
+      headline: "this page cannot be indexed",
+      reason: "The page carries a noindex directive, or robots.txt blocks search engines from crawling it. It cannot appear in search results at all, so no amount of on-page quality changes the outcome.",
+      fix: "Remove the noindex directive, and allow Googlebot and Bingbot to crawl this path in robots.txt.",
+    });
+  }
+  if (!gates.httpsOk) {
+    applied.push({
+      gate: "https",
+      cap: ELIGIBILITY_CAPS.notHttps,
+      headline: "the site is not served over HTTPS",
+      reason: "The site loads over plain HTTP. Browsers warn visitors before they reach the page, and search engines demote it against equivalent secure pages.",
+      fix: "Install an SSL certificate and redirect all HTTP traffic to HTTPS.",
+    });
+  }
+  if (!gates.renderingOk) {
+    applied.push({
+      gate: "rendering",
+      cap: ELIGIBILITY_CAPS.renderingHighRisk,
+      headline: "the content is not in the server HTML",
+      reason: "Most of the page content is added by JavaScript after load, so a crawler reading the server response may see an near-empty shell where the visitor sees a full page.",
+      fix: "Server-render the main content, or include it in the initial HTML response.",
+    });
+  }
+  return applied;
+}
+
+/**
  * Derive the gates from an already-built category set plus the site's
  * rendering summary. Reads the same check items the report shows, so the cap
  * can always be explained by pointing at a visible failing check.

@@ -46,6 +46,9 @@ import {
   applyPageTypeApplicability,
   applyEligibilityCaps,
   deriveEligibilityGates,
+  describeEligibilityCaps,
+  type EligibilityCapApplied,
+  type PageType,
 } from "./engine-core";
 import {
   summarizeImageAlt,
@@ -66,6 +69,7 @@ import {
   type LawFirmSignals,
   type TopFix,
   type SeoCheckResult,
+  type Issue,
   buildIssues,
   buildSiteStructureIssues,
   buildInternalSummary,
@@ -1692,6 +1696,35 @@ const FRONTIER_CAP = 600;
 // Dedupe / membership key. URL already lowercases scheme + host; we strip the
 // fragment and a trailing slash but PRESERVE path and query case, because URL
 // paths can be case-sensitive and this key is also reused as a fetch URL.
+/**
+ * Turn an applied eligibility cap into a top-priority finding, so the reason a
+ * headline score is capped appears in the same issues list as everything else
+ * rather than only in a response field the report does not render.
+ */
+function eligibilityIssues(
+  capsApplied: EligibilityCapApplied[],
+  uncapped: number,
+  homeUrl: string,
+  totalPages: number
+): Issue[] {
+  return capsApplied.map((c) => ({
+    id: `eligibility-${c.gate}`,
+    category: "Indexability",
+    severity: "critical" as const,
+    status: "fail" as const,
+    title: `Score capped at ${c.cap}: ${c.headline}`,
+    detail: `${c.reason} The rest of the audit scored ${uncapped}, but that is not reachable while this holds, so the headline score is capped at ${c.cap}.`,
+    fix: c.fix,
+    affectedUrls: [homeUrl],
+    affectedCount: 1,
+    totalPages,
+    pageTypeImpact: ["homepage" as PageType],
+    confidence: "high" as const,
+    effort: "medium" as const,
+    priority: 100,
+  }));
+}
+
 /* ────────────────────────────────────────────────────────
    POST handler
    ──────────────────────────────────────────────────────── */
@@ -1960,10 +1993,9 @@ export async function POST(req: NextRequest) {
     // below need the rendering risk before the headline score is settled.
     const renderingSummary = aggregateRenderingSummary(forFindings);
     const eligibilityGates = deriveEligibilityGates(aggregatedCategories, renderingSummary?.risk);
-    const overallScore = applyEligibilityCaps(
-      computeWeightedScore(aggregatedCategories),
-      eligibilityGates
-    );
+    const uncappedScore = computeWeightedScore(aggregatedCategories);
+    const overallScore = applyEligibilityCaps(uncappedScore, eligibilityGates);
+    const capsApplied = describeEligibilityCaps(eligibilityGates);
     const grade = computeGrade(overallScore);
 
     const perPageAi = forFindings.map((p) => {
@@ -1985,7 +2017,13 @@ export async function POST(req: NextRequest) {
     const discoveryConfidence = computeDiscoveryConfidence(pages.length, sitemapSet?.size ?? 0, homeInternalLinkCount, maxPages);
     const pageIssues = buildIssues(forFindings, effectiveContentPages);
     const structureIssues = buildSiteStructureIssues(pages, !!sitemapSet, parsedRobots, discoveryConfidence, uncrawledUrls, wpStarterUrls);
-    const issues = [...pageIssues, ...structureIssues].sort(compareIssuesByPriority);
+    const capIssues = eligibilityIssues(
+      capsApplied,
+      uncappedScore,
+      pages[0]?.url ?? `https://${domain}`,
+      pages.length
+    );
+    const issues = [...pageIssues, ...structureIssues, ...capIssues].sort(compareIssuesByPriority);
     const internalSummary = buildInternalSummary(pages, issues, overallScore, aiSearchScore);
     const breakdown = severityBreakdown(issues);
 
@@ -2018,6 +2056,7 @@ export async function POST(req: NextRequest) {
       severityBreakdown: breakdown,
       partial,
       discoveryConfidence,
+      ...(capsApplied.length > 0 ? { eligibility: { uncappedScore, capsApplied } } : {}),
       buildSha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
       checkedAt: new Date().toISOString(),
       // Trust-fix pass WI-8 (acceptance criterion): expose exactly which
