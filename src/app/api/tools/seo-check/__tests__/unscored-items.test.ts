@@ -133,6 +133,7 @@ describe("aggregateCategories: the scored flag and maxScore survive the per-page
     hasBreadcrumb: false, hasFaq: false, hasWebsite: false, hasReview: false,
     fields: { name: false, url: false, telephone: false, address: false, areaServed: false, sameAs: false, priceRange: false, openingHours: false },
     conflictingEntity: false,
+    sameAsUrls: [],
   };
   const lawFirm: LawFirmSignals = {
     phoneVisible: true, contactFormPresent: true, addressVisible: true, consultationCta: true,

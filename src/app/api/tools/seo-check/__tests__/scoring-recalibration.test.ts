@@ -23,7 +23,8 @@ import {
   scoreItems,
   type CategoryResult,
 } from "../engine-core";
-import { checkHreflang, checkSchemaMarkup, extractSchemaSummary } from "../route";
+import { checkHreflang, checkSchemaMarkup, extractSchemaSummary, checkEntitySameAs } from "../route";
+import type { SchemaSummary } from "../analysis";
 
 describe("applyPageTypeApplicability: exempted items are scored:false, not free passes (A1)", () => {
   it("marks an exempted item scored:false, and scoreItems on the result excludes it from maxScore", () => {
@@ -119,12 +120,117 @@ describe("checkSchemaMarkup: vacuous and duplicated passes on zero JSON-LD are u
 
     // Measured actual result on this input: the real scored defects are
     // "JSON-LD structured data" (fail), "Business / LegalService schema"
-    // (fail), and "Breadcrumb schema" (warn, unaffected by this plan) — three
+    // (fail), and "Breadcrumb schema" (warn, unaffected by this plan): three
     // scored items at weight 10 each, none of them full-credit passes.
     // maxScore therefore does not reach the 8-item x 10 = 80 an unfixed
     // vacuous-pass engine would have produced.
     expect(result.maxScore).toBe(30);
     expect(result.maxScore).toBeLessThan(result.items.length * 10);
     expect(result.score).toBeLessThanOrEqual(result.maxScore);
+  });
+});
+
+const ldjson = (obj: unknown) =>
+  `<script type="application/ld+json">${JSON.stringify(obj)}</script>`;
+
+describe("collectSameAsUrls (via extractSchemaSummary): sameAs is captured, not just detected (B1)", () => {
+  // collectSameAsUrls is not exported (see route.ts), so it is exercised here
+  // through the public extractSchemaSummary(html).sameAsUrls surface, which is
+  // the only way any caller reaches it.
+  it("finds URLs nested inside an @graph array", () => {
+    const html = ldjson({
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "LegalService",
+          name: "Firm",
+          sameAs: ["https://www.google.com/maps/place/firm", "https://www.linkedin.com/company/firm"],
+        },
+        { "@type": "Person", name: "Lawyer", sameAs: "https://www.instagram.com/lawyer" },
+      ],
+    });
+    const { sameAsUrls } = extractSchemaSummary(html);
+    expect(sameAsUrls).toEqual(
+      expect.arrayContaining([
+        "https://www.google.com/maps/place/firm",
+        "https://www.linkedin.com/company/firm",
+        "https://www.instagram.com/lawyer",
+      ])
+    );
+    expect(sameAsUrls).toHaveLength(3);
+  });
+
+  it("deduplicates repeated URLs and ignores non-http values", () => {
+    const html = ldjson({
+      "@context": "https://schema.org",
+      "@type": "LegalService",
+      name: "Firm",
+      sameAs: [
+        "https://www.linkedin.com/company/firm",
+        "https://www.linkedin.com/company/firm",
+        "not-a-url",
+        "tel:+14165551234",
+      ],
+    });
+    const { sameAsUrls } = extractSchemaSummary(html);
+    expect(sameAsUrls).toEqual(["https://www.linkedin.com/company/firm"]);
+  });
+});
+
+describe("checkEntitySameAs (B2)", () => {
+  function schemaWith(sameAsUrls: string[]): SchemaSummary {
+    return {
+      blocks: 1, invalidBlocks: 0, types: ["LegalService"],
+      hasOrganization: false, hasLocalBusiness: false, hasLegalService: true,
+      hasAttorney: false, hasPerson: false, hasBreadcrumb: false,
+      hasFaq: false, hasWebsite: false, hasReview: false,
+      fields: { name: true, url: true, telephone: true, address: true, areaServed: true, sameAs: sameAsUrls.length > 0, priceRange: false, openingHours: false },
+      conflictingEntity: false,
+      sameAsUrls,
+    };
+  }
+
+  it("hasBusiness: false returns scored: false", () => {
+    const item = checkEntitySameAs(schemaWith([]), false);
+    expect(item.scored).toBe(false);
+  });
+
+  it("a business entity with an empty sameAsUrls returns status: fail and is scored", () => {
+    const item = checkEntitySameAs(schemaWith([]), true);
+    expect(item.status).toBe("fail");
+    expect(item.scored).not.toBe(false);
+  });
+
+  it("only LinkedIn and Instagram returns status: fail (no directory surfaces)", () => {
+    const item = checkEntitySameAs(
+      schemaWith(["https://www.linkedin.com/company/firm", "https://www.instagram.com/firm"]),
+      true
+    );
+    expect(item.status).toBe("fail");
+  });
+
+  it("Google Maps, Bing Places and an LSO URL returns status: pass", () => {
+    const item = checkEntitySameAs(
+      schemaWith([
+        "https://www.google.com/maps/place/firm",
+        "https://www.bingplaces.com/bizprofile/firm",
+        "https://lso.ca/lawyers/firm",
+      ]),
+      true
+    );
+    expect(item.status).toBe("pass");
+  });
+
+  it("regression: the real drglaw.ca shape (Google Maps + Instagram + LinkedIn) is warn with directories.length === 1", () => {
+    const schema = schemaWith([
+      "https://www.google.com/maps/place/drglaw",
+      "https://www.instagram.com/drglaw",
+      "https://www.linkedin.com/company/drglaw",
+    ]);
+    const item = checkEntitySameAs(schema, true);
+    expect(item.status).toBe("warn");
+    // Exactly one directory surface (Google Maps) among the three URLs;
+    // Instagram and LinkedIn count as hygiene, not directory coverage.
+    expect(item.detail).toContain("1 directory surface");
   });
 });

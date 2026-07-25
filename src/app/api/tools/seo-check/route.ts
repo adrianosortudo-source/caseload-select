@@ -392,6 +392,29 @@ function hasKeyDeep(root: unknown, keys: string[]): boolean {
   return false;
 }
 
+/**
+ * Collect every URL in any sameAs array anywhere in the parsed JSON-LD, at any
+ * nesting depth, deduplicated. sameAs is where directory and profile URLs
+ * reach the entity graph, and per the Directory Submission playbook a captured
+ * listing URL that never lands here is half-finished work.
+ */
+function collectSameAsUrls(node: unknown, out: Set<string>): void {
+  if (Array.isArray(node)) {
+    for (const n of node) collectSameAsUrls(n, out);
+    return;
+  }
+  if (!node || typeof node !== "object") return;
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    if (key.toLowerCase() === "sameas") {
+      const vals = Array.isArray(value) ? value : [value];
+      for (const v of vals) {
+        if (typeof v === "string" && /^https?:\/\//i.test(v.trim())) out.add(v.trim());
+      }
+    }
+    collectSameAsUrls(value, out);
+  }
+}
+
 export function extractSchemaSummary(html: string): SchemaSummary {
   const scriptTags = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
   const types = new Set<string>();
@@ -445,6 +468,7 @@ export function extractSchemaSummary(html: string): SchemaSummary {
     // fires. Field case: preszlerlaw.com declares Organization + LegalService +
     // 22 LocalBusiness locations in one @graph, which is best practice.
     conflictingEntity: businessTypeBlockCount >= 2 && !hasGraph,
+    sameAsUrls: (() => { const s = new Set<string>(); collectSameAsUrls(parsed, s); return [...s]; })(),
   };
 }
 
@@ -761,6 +785,101 @@ function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean;
 }
 
 /* 3. Schema & Structured Data */
+
+/**
+ * Known entity surfaces, keyed by a hostname fragment. Wave 1-R and Wave 1-P
+ * from PB_Capture_DirectorySubmission_v5.html, plus the social profiles firms
+ * commonly publish. Social profiles count as sameAs hygiene but NOT as
+ * directory coverage: they are not citation surfaces.
+ */
+const ENTITY_SURFACES: Array<{ match: RegExp; name: string; directory: boolean }> = [
+  { match: /(^|\.)google\.[a-z.]+\/maps|maps\.google\.|(^|\.)g\.page/i, name: "Google Business Profile", directory: true },
+  { match: /(^|\.)bing\.com\/(maps|forbusiness)|bingplaces\.com/i, name: "Bing Places", directory: true },
+  { match: /maps\.apple\.com/i, name: "Apple Business Connect", directory: true },
+  { match: /lso\.ca/i, name: "Law Society of Ontario", directory: true },
+  { match: /yellowpages\.ca|(^|\.)yp\.ca/i, name: "Yellow Pages Canada", directory: true },
+  { match: /canada411\.ca/i, name: "Canada411", directory: true },
+  { match: /canadianlawlist\.com/i, name: "Canadian Law List", directory: true },
+  { match: /bbb\.org/i, name: "Better Business Bureau", directory: true },
+  { match: /linkedin\.com/i, name: "LinkedIn", directory: false },
+  { match: /instagram\.com/i, name: "Instagram", directory: false },
+  { match: /facebook\.com/i, name: "Facebook", directory: false },
+  { match: /(^|\.)x\.com|twitter\.com/i, name: "X", directory: false },
+  { match: /youtube\.com/i, name: "YouTube", directory: false },
+];
+
+/**
+ * Entity sameAs coverage.
+ *
+ * Directory work has an on-page shadow. Per PB_Capture_DirectorySubmission_v5
+ * section 12, every captured listing URL must be pushed into the entity graph's
+ * sameAs array, because those URLs are what let search and answer engines
+ * reconcile the firm as a single entity across the web. A firm can hold eight
+ * live listings and still publish none of them here, and the audit could not
+ * see the difference: sameAs was a boolean folded into a six-field composite.
+ *
+ * Deliberately NOT checked: whether the values match what those surfaces
+ * publish. The playbook's purpose-class rule says an approved difference is not
+ * a defect, and this engine cannot see the client's exception register, so a
+ * cross-surface consistency finding would be a coin flip presented as fact.
+ */
+export function checkEntitySameAs(schema: SchemaSummary, hasBusiness: boolean): CheckItem {
+  if (!hasBusiness) {
+    return {
+      label: "Entity sameAs coverage",
+      status: "fail",
+      scored: false,
+      detail: "Not applicable: no business entity in the structured data to attach profile or listing URLs to.",
+      fix: "Add a LegalService or LocalBusiness block first, then add its directory and profile URLs as sameAs.",
+    };
+  }
+
+  const urls = schema.sameAsUrls;
+  if (urls.length === 0) {
+    return {
+      label: "Entity sameAs coverage",
+      status: "fail",
+      detail: "No sameAs URLs in the business entity. Directory and profile listings are not connected to the entity, so search and AI systems cannot reconcile them as the same firm.",
+      fix: "Add a sameAs array to the business entity listing your Google Business Profile, law society directory, and other claimed listing URLs.",
+    };
+  }
+
+  const matched = ENTITY_SURFACES.filter((s) => urls.some((u) => s.match.test(u)));
+  const directories = matched.filter((s) => s.directory).map((s) => s.name);
+  const socials = matched.filter((s) => !s.directory).map((s) => s.name);
+  const unrecognised = urls.length - matched.length;
+
+  const found = [
+    directories.length > 0 ? `directories: ${directories.join(", ")}` : null,
+    socials.length > 0 ? `profiles: ${socials.join(", ")}` : null,
+    unrecognised > 0 ? `${unrecognised} other URL${unrecognised > 1 ? "s" : ""}` : null,
+  ].filter(Boolean).join("; ");
+
+  if (directories.length >= 3) {
+    return {
+      label: "Entity sameAs coverage",
+      status: "pass",
+      detail: `${urls.length} sameAs URLs covering ${directories.length} directory surfaces (${found}).`,
+    };
+  }
+
+  if (directories.length === 0) {
+    return {
+      label: "Entity sameAs coverage",
+      status: "fail",
+      detail: `${urls.length} sameAs URLs, but none point at a directory or map surface (${found}). Social profiles alone do not establish the firm as a local entity.`,
+      fix: "Add your Google Business Profile URL and your law society directory URL to the sameAs array.",
+    };
+  }
+
+  return {
+    label: "Entity sameAs coverage",
+    status: "warn",
+    detail: `${urls.length} sameAs URLs covering only ${directories.length} directory surface${directories.length > 1 ? "s" : ""} (${found}). Claimed listings that never reach the entity graph do not help search or AI systems connect them to this firm.`,
+    fix: "Add the remaining claimed listing URLs to sameAs: Google Business Profile, law society directory, Bing Places, Apple Business Connect.",
+  };
+}
+
 // serviceAreaLikely defaults to false so the direct-call tests (e.g.
 // acceptance-trust-pass.test.ts, schema-recs.test.ts) that predate the
 // service-area detection keep working without threading it through.
@@ -856,6 +975,8 @@ export function checkSchemaMarkup(schema: SchemaSummary, serviceAreaLikely: bool
   } else {
     items.push({ label: "Schema conflicts", status: "pass", detail: "No conflicting business entity declarations." });
   }
+
+  items.push(checkEntitySameAs(schema, hasBusiness));
 
   const { score, maxScore } = scoreItems(items);
   return { name: "Schema & Structured Data", score, maxScore, items };
