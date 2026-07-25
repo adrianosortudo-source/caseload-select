@@ -21,6 +21,7 @@ import {
   applyPageTypeApplicability,
   applyEligibilityCaps,
   describeEligibilityCaps,
+  deriveEligibilityGates,
   scoreItems,
   type CategoryResult,
 } from "../engine-core";
@@ -261,5 +262,26 @@ describe("checkEntitySameAs (B2)", () => {
     // Exactly one directory surface (Google Maps) among the three URLs;
     // Instagram and LinkedIn count as hygiene, not directory coverage.
     expect(item.detail).toContain("1 directory surface");
+  });
+});
+
+describe("deriveEligibilityGates + applyEligibilityCaps: the http-fallback path end to end (D1)", () => {
+  const categoriesWithFailingHttps: CategoryResult[] = [
+    {
+      name: "Technical & Security",
+      score: 0,
+      maxScore: 10,
+      items: [{ label: "HTTPS", status: "fail", detail: "Site loads over HTTP. Google penalises non-HTTPS sites." }],
+    },
+  ];
+
+  it("deriveEligibilityGates returns httpsOk: false when Technical & Security's HTTPS item has status: fail", () => {
+    const gates = deriveEligibilityGates(categoriesWithFailingHttps, "low");
+    expect(gates.httpsOk).toBe(false);
+  });
+
+  it("applyEligibilityCaps caps a score of 88 to 50 using gates derived from a failing HTTPS item", () => {
+    const gates = deriveEligibilityGates(categoriesWithFailingHttps, "low");
+    expect(applyEligibilityCaps(88, gates)).toBe(50);
   });
 });

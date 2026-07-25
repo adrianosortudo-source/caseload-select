@@ -1798,11 +1798,24 @@ export async function POST(req: NextRequest) {
     // 401 site-wide password page on both apex and www) is reported honestly
     // instead of as a dead domain.
     let lastHttpStatus = 0;
-    for (const h of [domain, `www.${domain}`]) {
+    // https first for both hosts, then http. A site that answers on https is
+    // never downgraded: the http entries are only reached when both https
+    // attempts fail. Field case: sanjlaw.ca and thecastlelawyers.com are live
+    // Ontario firm sites whose TLS handshake fails, and which this scanner
+    // used to report as "could not connect" rather than as sites with no SSL.
+    // Reaching them over http also makes the notHttps eligibility cap
+    // reachable, which it never was while every fetch was https.
+    for (const candidate of [
+      `https://${domain}`,
+      `https://www.${domain}`,
+      `http://${domain}`,
+      `http://www.${domain}`,
+    ]) {
+      const h = candidate.replace(/^https?:\/\//, "");
       let handle: SafeFetchResult | null = null;
       try {
         const t0 = Date.now();
-        handle = await safeFetch(`https://${h}`, 15000);
+        handle = await safeFetch(candidate, 15000);
         const { res, finalUrl, redirectHops } = handle;
         if (!res.ok) { lastHttpStatus = res.status; continue; }
         const ct = res.headers.get("content-type") || "";
