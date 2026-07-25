@@ -16,6 +16,34 @@ import type {
  * variant="full": the whole thing (pieces, weekly schedule, lead magnet). Lives
  *   at /portal/[firmId]/how-your-content-works.
  */
+
+/**
+ * Orphan words are banned. Every run of prose here goes through this before
+ * rendering: it ties the last two words with a non-breaking space so a lone
+ * word can never be left on the final line.
+ *
+ * CSS is not sufficient on its own. `text-wrap: pretty` is set on this
+ * panel's copy and is honoured by current Chromium, but it stops avoiding
+ * orphans once the column gets narrow enough that fixing one would make the
+ * rag worse, which is exactly the case in the piece cards. This guarantees
+ * the rule at any width instead of hoping the layout stays wide.
+ */
+const NBSP = " ";
+/** Non-breaking hyphen: keeps a compound like "close-reads" from splitting. */
+const NB_HYPHEN = "‑";
+
+function noOrphan(text: string): string {
+  const trimmed = text.trimEnd();
+  const lastSpace = trimmed.lastIndexOf(" ");
+  if (lastSpace < 0) return text;
+  // Only bind a genuinely short tail; joining two long words could force an
+  // overflow in a narrow card, which is a worse defect than the orphan.
+  const tail = trimmed.slice(lastSpace + 1);
+  if (tail.length > 14) return text;
+  // A hyphenated compound can still break at its own hyphen, stranding the
+  // fragment after it. Bind those too so the whole tail moves as one unit.
+  return trimmed.slice(0, lastSpace) + NBSP + tail.split("-").join(NB_HYPHEN);
+}
 export default function ContentCadencePanel({
   cadence,
   variant,
@@ -37,16 +65,18 @@ export default function ContentCadencePanel({
       <div className="ccp-pad">
         <div className="ccp-intro">
           <div>
-            <p className="ccp-eyebrow">{cadence.eyebrow}</p>
+            <p className="ccp-eyebrow">{noOrphan(cadence.eyebrow)}</p>
             <h2 className="ccp-head">
-              {cadence.headline}
+              {noOrphan(cadence.headline)}
               <span className="ccp-sq" aria-hidden />
             </h2>
-            <p className="ccp-lede">{cadence.intro}</p>
-            <div className="ccp-historical-note">
-              <b>{cadence.historicalNote.heading}</b>
-              {cadence.historicalNote.body}
-            </div>
+            <p className="ccp-lede">{noOrphan(cadence.intro)}</p>
+            {cadence.historicalNote ? (
+              <div className="ccp-historical-note">
+                <b>{noOrphan(cadence.historicalNote.heading)}</b>
+                {noOrphan(cadence.historicalNote.body)}
+              </div>
+            ) : null}
           </div>
 
           <aside className="ccp-approve">
@@ -65,22 +95,26 @@ export default function ContentCadencePanel({
                   ))}
                 </div>
               </div>
-              <div className="ccp-approve-divider" aria-hidden />
-              <div className="ccp-approve-col ccp-approve-col-next">
-                <p className="ccp-approve-at ccp-approve-at-next">
-                  {cadence.approve.next.label}
-                </p>
-                <div className="ccp-metrics">
-                  {cadence.approve.next.metrics.map((metric) => (
-                    <div className="ccp-metric" key={metric.label}>
-                      <strong>{metric.value}</strong>
-                      <span>{metric.label}</span>
+              {cadence.approve.next ? (
+                <>
+                  <div className="ccp-approve-divider" aria-hidden />
+                  <div className="ccp-approve-col ccp-approve-col-next">
+                    <p className="ccp-approve-at ccp-approve-at-next">
+                      {cadence.approve.next.label}
+                    </p>
+                    <div className="ccp-metrics">
+                      {cadence.approve.next.metrics.map((metric) => (
+                        <div className="ccp-metric" key={metric.label}>
+                          <strong>{metric.value}</strong>
+                          <span>{metric.label}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                </>
+              ) : null}
             </div>
-            <p className="ccp-approve-note">{cadence.approve.capacityNote}</p>
+            <p className="ccp-approve-note">{noOrphan(cadence.approve.capacityNote)}</p>
           </aside>
         </div>
       </div>
@@ -88,7 +122,7 @@ export default function ContentCadencePanel({
       {/* Promise band: current backlog, then the smaller next-model line beneath it */}
       <div className="ccp-promise">
         <div className="ccp-promise-line">
-          <span className="ccp-promise-line-lbl">{cadence.promise.current.label}</span>
+          <span className="ccp-promise-line-lbl">{noOrphan(cadence.promise.current.label)}</span>
           {cadence.promise.current.metrics.map((metric, index) => (
             <div className="ccp-promise-stage" key={metric.label}>
               {index > 0 ? (
@@ -97,29 +131,31 @@ export default function ContentCadencePanel({
                 </span>
               ) : null}
               <div className="ccp-big">
-                <span className={metric.underline ? "ccp-u" : undefined}>{metric.value}</span>{" "}
-                {metric.label}
+                <span className={metric.underline ? "ccp-u" : undefined}>{metric.value}</span>{NBSP}
+                {noOrphan(metric.label)}
               </div>
             </div>
           ))}
         </div>
-        <div className="ccp-promise-line ccp-promise-line-next">
-          <span className="ccp-promise-line-lbl">{cadence.promise.next.label}</span>
-          {cadence.promise.next.metrics.map((metric, index) => (
-            <div className="ccp-promise-stage" key={metric.label}>
-              {index > 0 ? (
-                <span className="ccp-arrow" aria-hidden>
-                  &rarr;
-                </span>
-              ) : null}
-              <div className="ccp-big ccp-big-sm">
-                <span className={metric.underline ? "ccp-u" : undefined}>{metric.value}</span>{" "}
-                {metric.label}
+        {cadence.promise.next ? (
+          <div className="ccp-promise-line ccp-promise-line-next">
+            <span className="ccp-promise-line-lbl">{noOrphan(cadence.promise.next.label)}</span>
+            {cadence.promise.next.metrics.map((metric, index) => (
+              <div className="ccp-promise-stage" key={metric.label}>
+                {index > 0 ? (
+                  <span className="ccp-arrow" aria-hidden>
+                    &rarr;
+                  </span>
+                ) : null}
+                <div className="ccp-big ccp-big-sm">
+                  <span className={metric.underline ? "ccp-u" : undefined}>{metric.value}</span>{NBSP}
+                  {noOrphan(metric.label)}
+                </div>
               </div>
-            </div>
-          ))}
-          <span className="ccp-promise-line-note">{cadence.promise.next.note}</span>
-        </div>
+            ))}
+            <span className="ccp-promise-line-note">{cadence.promise.next.note}</span>
+          </div>
+        ) : null}
       </div>
 
       {variant === "summary" ? (
@@ -137,15 +173,15 @@ export default function ContentCadencePanel({
           <div>
             <div className="ccp-sec-label">
               <span className="ccp-sec-num">1</span>
-              <span className="ccp-sec-title">{cadence.sectionLabels.pieces}</span>
+              <span className="ccp-sec-title">{noOrphan(cadence.sectionLabels.pieces)}</span>
             </div>
             <div className="ccp-pieces">
               {cadence.pieces.map((p, i) => (
                 <div key={p.kind} className={`ccp-piece ccp-p${i + 1}`}>
                   <PieceIconGlyph icon={p.icon} />
-                  <p className="ccp-piece-kind">{p.kind}</p>
-                  <p className="ccp-piece-nm">{p.name}</p>
-                  <p className="ccp-piece-ds">{p.desc}</p>
+                  <p className="ccp-piece-kind">{noOrphan(p.kind)}</p>
+                  <p className="ccp-piece-nm">{noOrphan(p.name)}</p>
+                  <p className="ccp-piece-ds">{noOrphan(p.desc)}</p>
                   <span className="ccp-piece-tag">{p.tag}</span>
                 </div>
               ))}
@@ -154,18 +190,18 @@ export default function ContentCadencePanel({
               {cadence.counts.map((c) => (
                 <div className="ccp-count" key={c.l}>
                   <div className="ccp-count-n">{c.n}</div>
-                  <div className="ccp-count-l">{c.l}</div>
+                  <div className="ccp-count-l">{noOrphan(c.l)}</div>
                 </div>
               ))}
             </div>
             <div className="ccp-future-format" aria-label="Future-only format, not part of the current backlog">
-              <p className="ccp-future-format-eyebrow">{cadence.futureFormat.eyebrow}</p>
+              <p className="ccp-future-format-eyebrow">{noOrphan(cadence.futureFormat.eyebrow)}</p>
               <p className="ccp-future-format-nm">
                 {cadence.futureFormat.name}
-                <span className="ccp-future-format-tag">{cadence.futureFormat.tag}</span>
+                <span className="ccp-future-format-tag">{noOrphan(cadence.futureFormat.tag)}</span>
               </p>
-              <p className="ccp-future-format-ds">{cadence.futureFormat.desc}</p>
-              <p className="ccp-future-format-avail">{cadence.futureFormat.availabilityLabel}</p>
+              <p className="ccp-future-format-ds">{noOrphan(cadence.futureFormat.desc)}</p>
+              <p className="ccp-future-format-avail">{noOrphan(cadence.futureFormat.availabilityLabel)}</p>
             </div>
           </div>
 
@@ -175,7 +211,7 @@ export default function ContentCadencePanel({
           <div>
             <div className="ccp-sec-label">
               <span className="ccp-sec-num">2</span>
-              <span className="ccp-sec-title">{cadence.sectionLabels.schedule}</span>
+              <span className="ccp-sec-title">{noOrphan(cadence.sectionLabels.schedule)}</span>
             </div>
             <div className="ccp-legend">
               <span>
@@ -186,6 +222,9 @@ export default function ContentCadencePanel({
               </span>
               <span>
                 <i className="ccp-dot ccp-d-gbp" /> Google Business Profile
+              </span>
+              <span>
+                <i className="ccp-dot ccp-d-email" /> Email (consented clients)
               </span>
             </div>
 
@@ -221,8 +260,8 @@ export default function ContentCadencePanel({
                               }`}
                               key={k}
                             >
-                              <span className="ccp-t">{c.slot}</span>
-                              <b>{c.piece}</b>
+                              <span className="ccp-t">{noOrphan(c.slot)}</span>
+                              <b>{noOrphan(c.piece)}</b>
                               {c.detail} · {c.count} {c.count === 1 ? "deliverable" : "deliverables"}
                             </div>
                           ))
@@ -243,7 +282,7 @@ export default function ContentCadencePanel({
           <div>
             <div className="ccp-sec-label">
               <span className="ccp-sec-num">3</span>
-              <span className="ccp-sec-title">{cadence.sectionLabels.magnet}</span>
+              <span className="ccp-sec-title">{noOrphan(cadence.sectionLabels.magnet)}</span>
             </div>
             <div className="ccp-magnet">
               <div className="ccp-magnet-vis" aria-hidden>
@@ -264,14 +303,14 @@ export default function ContentCadencePanel({
                 </div>
               </div>
               <div className="ccp-magnet-copy">
-                <h3>{cadence.magnet.heading}</h3>
-                <p>{cadence.magnet.body}</p>
+                <h3>{noOrphan(cadence.magnet.heading)}</h3>
+                <p>{noOrphan(cadence.magnet.body)}</p>
                 <div className="ccp-steps">
                   {cadence.magnet.steps.map((s, i) => (
                     <div className="ccp-step" key={s.title}>
                       <div className="ccp-step-sn">{i + 1}</div>
-                      <b>{s.title}</b>
-                      <span>{s.desc}</span>
+                      <b>{noOrphan(s.title)}</b>
+                      <span>{noOrphan(s.desc)}</span>
                     </div>
                   ))}
                 </div>
@@ -285,21 +324,21 @@ export default function ContentCadencePanel({
           <div>
             <div className="ccp-sec-label">
               <span className="ccp-sec-num">4</span>
-              <span className="ccp-sec-title">{cadence.sectionLabels.minute}</span>
+              <span className="ccp-sec-title">{noOrphan(cadence.sectionLabels.minute)}</span>
             </div>
-            <h3 className="ccp-minute-h">{cadence.minute.heading}</h3>
-            <p className="ccp-minute-intro">{cadence.minute.intro}</p>
+            <h3 className="ccp-minute-h">{noOrphan(cadence.minute.heading)}</h3>
+            <p className="ccp-minute-intro">{noOrphan(cadence.minute.intro)}</p>
             <ul className="ccp-minute-rules">
               {cadence.minute.rules.map((rule) => (
-                <li key={rule}>{rule}</li>
+                <li key={rule}>{noOrphan(rule)}</li>
               ))}
             </ul>
-            <p className="ccp-minute-readiness">{cadence.minute.readinessNote}</p>
+            <p className="ccp-minute-readiness">{noOrphan(cadence.minute.readinessNote)}</p>
           </div>
 
           <div className="ccp-adhoc">
             <b>{cadence.transition.heading}</b>{" "}
-            {cadence.transition.body}
+            {noOrphan(cadence.transition.body)}
           </div>
 
           {links.length > 0 ? (
