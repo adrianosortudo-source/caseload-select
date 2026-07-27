@@ -26,9 +26,17 @@
  * byte-compares content tied to a specific content_pieces row. This bundle
  * is about content_deliverables directly (the portal-facing approval
  * system every deliverable goes through, whether or not it originated in
- * Content Studio), and "may_publish" here is computed directly from
- * content_deliverables.status/approved_version_id/current_version_id --
- * nothing is re-rendered, hashed, or compared.
+ * Content Studio). Nothing is re-rendered, hashed, or compared.
+ *
+ * "may_publish" is NOT computed from the deliverable row alone. It is
+ * delegated to isVersionReleaseAuthorized (release-authorization.ts), the
+ * canonical two-path bar: individual approval of the exact current version,
+ * OR the firm's active standing publishing authorization when that version
+ * is not flagged requires_individual_review. The second path is firm-level
+ * state that lives nowhere on content_deliverables, which is why an earlier
+ * version of this module -- which did compute may_publish from
+ * status/approved_version_id/current_version_id alone -- reported every
+ * standing-authorized piece as unpublishable.
  *
  * Every function here is read-only. Nothing in this module ever writes to
  * Supabase.
@@ -37,6 +45,8 @@
 import "server-only";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { shouldWithholdArtifactLinks } from "@/lib/artifact-links";
+import { isVersionReleaseAuthorized } from "@/lib/release-authorization";
+import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
 import type {
   ContentDeliverable,
   DeliverableVersion,
@@ -230,23 +240,17 @@ function evaluateMayPublish(
   deliverable: ContentDeliverable,
   currentVersionExists: boolean,
   approvedVersionExists: boolean,
+  currentVersionRequiresIndividualReview: boolean,
+  standingAuthorizationActive: boolean,
 ): { may_publish: boolean; reason: string | null } {
-  // Rule: may_publish is true only when the current version IS the
-  // formally approved version, that version actually exists as a row
-  // owned by this deliverable, and no unresolved change-request state
-  // invalidates that approval. Never inferred from status alone, and
-  // never from an approval bound to an older version: both the status
-  // AND the exact version-id match are required, and the deliverable's
-  // own status/approved_version_id pair is the single source of truth
-  // (content_deliverables never carries a display-only status separate
-  // from this pair -- there is nothing else to infer from). ID equality
-  // on the deliverable row alone is not sufficient: current_version_id /
-  // approved_version_id are pointers, and a pointer can go stale (the
-  // row was deleted) or, if data integrity is ever compromised, point at
-  // a version that belongs to a DIFFERENT deliverable. currentVersionExists
-  // / approvedVersionExists already encode "the row exists AND its own
-  // deliverable_id matches this deliverable's id" (see resolveOwnedVersion),
-  // so a corrupted or foreign pointer is never treated as publishable.
+  // The pointer-integrity checks below are this module's own and stay here:
+  // current_version_id / approved_version_id are pointers, and a pointer can
+  // go stale (the row was deleted) or, if data integrity is ever compromised,
+  // point at a version belonging to a DIFFERENT deliverable.
+  // currentVersionExists / approvedVersionExists already encode "the row
+  // exists AND its own deliverable_id matches this deliverable's id" (see
+  // resolveOwnedVersion), so a corrupted or foreign pointer is never treated
+  // as publishable, whichever authorization path is later consulted.
   if (!deliverable.current_version_id) {
     return { may_publish: false, reason: "No current version exists for this deliverable." };
   }
@@ -257,30 +261,46 @@ function evaluateMayPublish(
         "current_version_id does not resolve to an existing version row owned by this deliverable.",
     };
   }
-  if (deliverable.status !== "approved") {
-    return {
-      may_publish: false,
-      reason: `Deliverable status is "${deliverable.status}", not "approved".`,
-    };
-  }
-  if (!deliverable.approved_version_id) {
-    return { may_publish: false, reason: "No approved_version_id is recorded on this deliverable." };
-  }
-  if (!approvedVersionExists) {
+  if (deliverable.approved_version_id && !approvedVersionExists) {
     return {
       may_publish: false,
       reason:
         "approved_version_id does not resolve to an existing version row owned by this deliverable.",
     };
   }
-  if (deliverable.approved_version_id !== deliverable.current_version_id) {
-    return {
-      may_publish: false,
-      reason:
-        "The approved version is not the current version (a newer version was posted after approval and has not been re-approved).",
-    };
-  }
-  return { may_publish: true, reason: null };
+
+  // The AUTHORIZATION decision is not made here. isVersionReleaseAuthorized is
+  // the canonical two-path bar -- a faithful read-only port of
+  // claim_placement_for_publish(), the RPC that actually enforces this rule --
+  // and its own doc requires every caller to use its result as-is rather than
+  // reconstruct any part of it. This function used to reconstruct it, and
+  // implemented only Path A (individual approval). That silently withheld
+  // every piece cleared through Path B: a firm with standing publishing
+  // authorization active whose version is not flagged
+  // requires_individual_review. For a firm running on standing authorization
+  // that is the NORMAL path, not an edge case, so the export locked the whole
+  // week -- copy withheld, downloads locked -- for content the firm had in
+  // fact authorized. The old comment here asserted that the deliverable's
+  // status/approved_version_id pair was "the single source of truth ... there
+  // is nothing else to infer from", which was simply untrue: standing
+  // authorization is firm-level state that lives nowhere on the deliverable
+  // row, which is exactly why reconstructing the decision from that row could
+  // never have been right.
+  const authorization = isVersionReleaseAuthorized({
+    deliverableStatus: deliverable.status,
+    approvedVersionId: deliverable.approved_version_id,
+    targetVersionId: deliverable.current_version_id,
+    versionRequiresIndividualReview: currentVersionRequiresIndividualReview,
+    standingAuthorizationActive,
+  });
+
+  return {
+    may_publish: authorization.authorized,
+    // Carried through verbatim: the canonical bar already names the actual
+    // path taken or the actual reason it was denied, and re-wording it here
+    // would be a second description of a decision this module does not make.
+    reason: authorization.authorized ? null : authorization.reason,
+  };
 }
 
 /**
@@ -397,6 +417,13 @@ export async function buildContentExportBundle(
     .select("id, name")
     .eq("id", period.firm_id)
     .maybeSingle();
+
+  // Firm-level, so it is read ONCE for the whole bundle rather than per
+  // deliverable. This is the second half of the release-authorization bar
+  // (see evaluateMayPublish): without it every piece cleared through standing
+  // authorization rather than individual approval reads as unpublishable.
+  const standingAuthorizationActive =
+    (await getStandingAuthorizationState(period.firm_id))?.active ?? false;
 
   // Double-keyed by period_id AND firm_id (defense in depth, matching this
   // codebase's existing convention elsewhere): a deliverable only belongs
@@ -633,6 +660,12 @@ export async function buildContentExportBundle(
       d,
       Boolean(currentResolved.version),
       Boolean(approvedResolved.version),
+      // Read off the RESOLVED current version, not the raw pointer: a foreign
+      // or dangling current_version_id resolves to null, and defaulting the
+      // flag to true there keeps the standing-authorization path closed for a
+      // version this deliverable does not actually own.
+      currentResolved.version?.requires_individual_review ?? true,
+      standingAuthorizationActive,
     );
 
     exportDeliverables.push({
