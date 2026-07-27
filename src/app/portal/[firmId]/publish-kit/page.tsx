@@ -48,6 +48,14 @@ export default async function PublishKitIndexPage({
   return (
     <div className="space-y-6">
       <div>
+        <Link
+          href={`/portal/${firmId}/deliverables`}
+          className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1.5 border border-border-brand text-navy hover:bg-parchment-2 mb-4"
+        >
+          {/* aria-hidden: the arrow is decoration, the label already says where this goes. */}
+          <span aria-hidden="true">&larr;</span>
+          Back to deliverables
+        </Link>
         <p className="text-[10px] uppercase tracking-wider font-semibold text-black/40">
           Operator only
         </p>

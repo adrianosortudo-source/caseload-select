@@ -640,20 +640,27 @@ function PeriodCard({
             </Link>
           </div>
           {isOperator && (
-            <div className="flex justify-end gap-3 mt-2">
+            <div className="flex items-center justify-end gap-3 mt-2">
               <button
                 onClick={() => setEditing((s) => !s)}
                 className="text-[11px] font-semibold text-navy/70 hover:text-navy"
               >
                 {editing ? "Close" : "Edit week"}
               </button>
+              <DownloadBundleButton periodId={period.id} />
+              {/*
+                Filled, not a text link, and last in the row: this is the
+                primary action on a week card -- the place an operator goes to
+                actually collect the week's copy and assets. Sitting in plain
+                navy/70 beside "Edit week" made it read as a tertiary utility,
+                and operators could not find it.
+              */}
               <Link
                 href={`/portal/${firmId}/publish-kit/${period.id}`}
-                className="text-[11px] font-semibold text-navy/70 hover:text-navy"
+                className="text-[11px] font-semibold uppercase tracking-wider px-3 py-1.5 border border-navy bg-navy text-white hover:bg-navy/90"
               >
                 Publish Kit
               </Link>
-              <DownloadBundleButton periodId={period.id} />
             </div>
           )}
         </div>

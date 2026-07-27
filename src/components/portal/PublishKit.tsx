@@ -184,6 +184,14 @@ export default function PublishKit({ view, firmId }: Props) {
   return (
     <div className="space-y-6 pb-16">
       <header className="bg-white border border-border-brand p-5 sm:p-6">
+        <Link
+          href={`/portal/${firmId}/deliverables`}
+          className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1.5 border border-border-brand text-navy hover:bg-parchment-2 mb-4"
+        >
+          {/* aria-hidden: the arrow is decoration, the label already says where this goes. */}
+          <span aria-hidden="true">&larr;</span>
+          Back to deliverables
+        </Link>
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <p className="text-[10px] uppercase tracking-wider font-semibold text-black/40">
