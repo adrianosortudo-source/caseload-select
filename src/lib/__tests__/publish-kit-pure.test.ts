@@ -292,9 +292,11 @@ describe("publisherLane", () => {
     expect(publisherLane("firm_website")).toBe("pipeline");
   });
 
-  it("linkedin and google_business_profile map to manual", () => {
+  it("linkedin, linkedin_article, google_business_profile, and email all map to manual", () => {
     expect(publisherLane("linkedin")).toBe("manual");
+    expect(publisherLane("linkedin_article")).toBe("manual");
     expect(publisherLane("google_business_profile")).toBe("manual");
+    expect(publisherLane("email")).toBe("manual");
   });
 
   it("null maps to unknown", () => {

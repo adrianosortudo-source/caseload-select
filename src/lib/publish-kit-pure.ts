@@ -46,6 +46,7 @@ const ROLE_PRESENCE: Record<DeliverableRole, true> = {
   gbp_post: true,
   lead_magnet_pdf: true,
   landing_page: true,
+  email_newsletter: true,
 };
 const KNOWN_DELIVERABLE_ROLES = Object.keys(ROLE_PRESENCE) as DeliverableRole[];
 
@@ -242,14 +243,26 @@ export function readConstraints(
  * Which surface publishes this deliverable, for the publisher filter.
  * "pipeline" -> firm_website destinations (articles, landing pages, PDFs),
  * deployed by the existing publishing pipeline.
- * "manual"   -> linkedin and google_business_profile, posted by hand today.
+ * "manual"   -> linkedin, linkedin_article, google_business_profile, and
+ * email, all posted or sent by hand today. email joins this lane rather than
+ * getting its own: there is no automated send pipeline in this codebase (see
+ * the Content Studio automation plan), so "manual" -- not the site's own
+ * pipeline -- is the accurate claim, the same reason LinkedIn and GBP are
+ * here.
  * "unknown"  -> destination not recorded.
  */
 export type PublisherLane = "pipeline" | "manual" | "unknown";
 
 export function publisherLane(destination: string | null): PublisherLane {
   if (destination === "firm_website") return "pipeline";
-  if (destination === "linkedin" || destination === "google_business_profile") return "manual";
+  if (
+    destination === "linkedin" ||
+    destination === "linkedin_article" ||
+    destination === "google_business_profile" ||
+    destination === "email"
+  ) {
+    return "manual";
+  }
   return "unknown";
 }
 
