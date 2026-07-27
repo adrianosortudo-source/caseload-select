@@ -278,6 +278,16 @@ export interface PublishKitPiece {
   mayPublishReason: string | null;
   bodyHtml: string | null; // approved/current version body
   plainText: string; // htmlToPlainText(bodyHtml)
+  /**
+   * The current version's text, populated ONLY when plainText is empty because
+   * nothing is cleared to publish. Never publishable copy: it is a draft the
+   * operator can read and paste (e.g. into the GHL email template) on an
+   * operator-only surface where the same text is already one click away on the
+   * review page. Any UI rendering it MUST label it as an unapproved draft.
+   * Deliberately excluded from toAgentRecord's withheld branch -- an agent
+   * that might act automatically still receives nothing.
+   */
+  unapprovedDraftText: string | null;
   constraints: ConstraintReading[];
   versionNumber: number | null;
   versionAsset: {
@@ -925,6 +935,26 @@ function toPiece(deliverable: ContentExportDeliverable): PublishKitPiece {
     warnings: versionWarnings,
   } = selectVersion(deliverable);
   const plainText = htmlToPlainText(bodyHtml);
+
+  // The current version's text, present ONLY when nothing publishable is being
+  // shown -- i.e. when selectVersion rendered no body because no version is
+  // cleared. It is explicitly NOT publishable copy and the UI must label it as
+  // a draft.
+  //
+  // Why this exists at all: the Publish Kit is operator-only (the page calls
+  // notFound() for any non-operator), the same bundle's Markdown export
+  // already prints unapproved body_html for exactly this audience, and the UI
+  // was already telling the operator "open the review page to read the current
+  // draft" -- the content was always one click away. Withholding it here was
+  // friction, not protection, and it broke a real workflow: producing the DRG
+  // Law Minute email means pasting the written content into the GHL template,
+  // which is impossible if the kit refuses to show text it can see.
+  //
+  // ACCESS is still withheld from blocked pieces (links, downloads); CONTENT
+  // is not. That is the same line the content-export route header draws, and
+  // the two surfaces now agree instead of contradicting each other.
+  const unapprovedDraftText =
+    plainText.length === 0 ? htmlToPlainText(deliverable.current_version?.body_html ?? null) || null : null;
   const constraints = readConstraints(plainText, role ? ROLE_COPY_CONSTRAINTS[role] : undefined);
 
   const allArtifacts = deliverable.artifacts.map(toArtifact);
@@ -1008,6 +1038,7 @@ function toPiece(deliverable: ContentExportDeliverable): PublishKitPiece {
     mayPublishReason: deliverable.may_publish_reason,
     bodyHtml,
     plainText,
+    unapprovedDraftText,
     constraints,
     versionNumber,
     versionAsset: strippedVersionAsset,
