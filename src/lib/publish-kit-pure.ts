@@ -63,23 +63,67 @@ function asDeliverableRole(value: string | null): DeliverableRole | null {
 
 // ─── HTML to plain text ──────────────────────────────────────────────────────
 
+/**
+ * Elements whose CONTENT is not text: stripping only their tags would leave
+ * the stylesheet or script body behind as prose. A full HTML email -- the DRG
+ * Law Minute is one -- carries a <style> block of several hundred lines, and
+ * without this the copy box hands the operator CSS to paste into the email
+ * template. <head> and <title> go the same way: document metadata, never copy.
+ */
+const NON_TEXT_ELEMENTS = /<(script|style|head|title)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+const HTML_COMMENT = /<!--[\s\S]*?-->/g;
 const BR_TAG = /<br\s*\/?>/gi;
 const BLOCK_CLOSE_DOUBLE = /<\/(p|div|h[1-6]|blockquote|section|article)\s*>/gi;
 const BLOCK_CLOSE_SINGLE = /<\/(li|tr)\s*>/gi;
 const ANY_TAG = /<[^>]+>/g;
 
 const ENTITY_MAP: Record<string, string> = {
-  "&amp;": "&",
-  "&quot;": '"',
-  "&#39;": "'",
-  "&apos;": "'",
-  "&nbsp;": " ",
-  "&lt;": "<",
-  "&gt;": ">",
+  amp: "&",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  lt: "<",
+  gt: ">",
+  middot: "·",
+  bull: "•",
+  mdash: "—",
+  ndash: "–",
+  hellip: "…",
+  lsquo: "‘",
+  rsquo: "’",
+  ldquo: "“",
+  rdquo: "”",
+  laquo: "«",
+  raquo: "»",
+  copy: "©",
+  reg: "®",
+  trade: "™",
+  deg: "°",
+  times: "×",
 };
 
+/**
+ * Single pass over every entity, named or numeric. One pass matters: decoding
+ * named entities and then numeric ones (or vice versa) would double-decode, so
+ * `&amp;lt;` -- a literal "&lt;" the author escaped on purpose -- would come
+ * out as "<". Numeric forms are decoded generically because real editor output
+ * uses them freely (&#8217; for a curly apostrophe), and an entity this map
+ * does not know is left exactly as written rather than mangled.
+ */
 function decodeEntities(text: string): string {
-  return text.replace(/&(amp|quot|#39|apos|nbsp|lt|gt);/g, (match) => ENTITY_MAP[match] ?? match);
+  return text.replace(/&(#\d+|#[xX][0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g, (match, entity: string) => {
+    if (entity.startsWith("#")) {
+      const isHex = entity[1] === "x" || entity[1] === "X";
+      const code = parseInt(isHex ? entity.slice(2) : entity.slice(1), isHex ? 16 : 10);
+      if (!Number.isFinite(code) || code <= 0 || code > 0x10ffff) return match;
+      try {
+        return String.fromCodePoint(code);
+      } catch {
+        return match;
+      }
+    }
+    return ENTITY_MAP[entity] ?? match;
+  });
 }
 
 /**
@@ -98,6 +142,10 @@ export function htmlToPlainText(html: string | null): string {
   if (!html) return "";
 
   let text = html;
+  // Content-bearing removals FIRST: once ANY_TAG has run there is no <style>
+  // left to anchor on, and the stylesheet body is indistinguishable from prose.
+  text = text.replace(NON_TEXT_ELEMENTS, "");
+  text = text.replace(HTML_COMMENT, "");
   text = text.replace(BR_TAG, "\n");
   text = text.replace(BLOCK_CLOSE_DOUBLE, "\n\n");
   text = text.replace(BLOCK_CLOSE_SINGLE, "\n");
