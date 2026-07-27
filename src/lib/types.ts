@@ -314,12 +314,15 @@ export type DeliverableRole =
   | "social_post"
   | "gbp_post"
   | "lead_magnet_pdf"
-  | "landing_page";
+  | "landing_page"
+  | "email_newsletter";
 
 export type PublicationDestination =
   | "firm_website"
   | "linkedin"
-  | "google_business_profile";
+  | "linkedin_article"
+  | "google_business_profile"
+  | "email";
 
 /**
  * A weekly content period: the editorial frame the firm sees above a batch of
