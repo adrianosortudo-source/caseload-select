@@ -167,6 +167,7 @@ function makePiece(overrides: Partial<PublishKitPiece> = {}): PublishKitPiece {
     mayPublishReason: null,
     bodyHtml: null,
     plainText: "",
+    unapprovedDraftText: null,
     constraints: [],
     versionNumber: null,
     versionAsset: null,
@@ -2004,5 +2005,94 @@ describe("blockedPiecesAreFullyWithheld", () => {
       ]),
     );
     expect(blockedPiecesAreFullyWithheld(piecesOfView(view))).toBe(true);
+  });
+});
+
+// ─── unapprovedDraftText: the operator can still read and paste the draft ────
+//
+// The Publish Kit is operator-only, and the same bundle's Markdown export
+// already prints unapproved body_html for that audience. Withholding the text
+// here was friction, not protection -- the UI even told the operator to go
+// read it on the review page -- and it broke producing the DRG Law Minute
+// email, where the workflow is pasting the copy into the GHL template.
+// ACCESS stays withheld for blocked pieces; CONTENT does not.
+
+describe("unapprovedDraftText", () => {
+  function unapprovedPiece(bodyHtml: string | null) {
+    return piecesOf(
+      toPublishKitView(
+        makeBundle([
+          makeDeliverable({
+            id: "d1",
+            may_publish: false,
+            may_publish_reason: "Not release-authorized.",
+            current_version_id: "v1",
+            current_version: makeVersionBody({ id: "v1", body_html: bodyHtml }),
+            approved_version_id: null,
+            approved_version: null,
+          }),
+        ]),
+      ),
+    ).find((p) => p.id === "d1");
+  }
+
+  it("carries the current version's text when nothing is cleared to publish", () => {
+    const piece = unapprovedPiece("<p>The renewal clause that shapes your next rent.</p>");
+    expect(piece?.plainText).toBe("");
+    expect(piece?.unapprovedDraftText).toBe("The renewal clause that shapes your next rent.");
+  });
+
+  it("is null when the piece has publishable copy -- the real copy is in plainText", () => {
+    const piece = piecesOf(
+      toPublishKitView(
+        makeBundle([
+          makeDeliverable({
+            id: "d1",
+            may_publish: true,
+            current_version_id: "v1",
+            current_version: makeVersionBody({ id: "v1", body_html: "<p>Approved copy.</p>" }),
+          }),
+        ]),
+      ),
+    ).find((p) => p.id === "d1");
+    expect(piece?.plainText).toBe("Approved copy.");
+    expect(piece?.unapprovedDraftText).toBeNull();
+  });
+
+  it("is null, not an empty string, when the draft renders to no text at all", () => {
+    expect(unapprovedPiece("<p></p>")?.unapprovedDraftText).toBeNull();
+    expect(unapprovedPiece(null)?.unapprovedDraftText).toBeNull();
+  });
+
+  it("never reaches the agent record: a withheld record still carries no copy", () => {
+    const piece = unapprovedPiece("<p>Draft only.</p>")!;
+    // Via unknown: AgentRecord is a discriminated union with no index
+    // signature, and the point of this test is to assert that certain keys are
+    // ABSENT -- which requires looking at the object as a bag of keys.
+    const record = toAgentRecord(piece) as unknown as Record<string, unknown>;
+    expect(record.withheld).toBe(true);
+    expect(record.plain_text).toBeUndefined();
+    expect(record.body).toBeUndefined();
+    expect(JSON.stringify(record)).not.toContain("Draft only");
+  });
+
+  it("blocked pieces still carry no working links -- content is shown, access is not", () => {
+    const view = toPublishKitView(
+      makeBundle([
+        makeDeliverable({
+          id: "d1",
+          may_publish: false,
+          may_publish_reason: "Not release-authorized.",
+          current_version_id: "v1",
+          current_version: makeVersionBody({ id: "v1", body_html: "<p>Draft.</p>" }),
+          approved_version_id: null,
+          approved_version: null,
+          artifacts: [makeArtifact({ id: "a1", version_id: "v1" })],
+        }),
+      ]),
+    );
+    const pieces = view.groups.flatMap((g) => g.pieces);
+    expect(pieces[0].unapprovedDraftText).toBe("Draft.");
+    expect(blockedPiecesAreFullyWithheld(pieces)).toBe(true);
   });
 });

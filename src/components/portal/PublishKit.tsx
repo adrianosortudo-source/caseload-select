@@ -506,6 +506,37 @@ function PieceCard({
                 </div>
               )}
             </>
+          ) : piece.unapprovedDraftText ? (
+            <>
+              {/*
+                Shown, not withheld: this surface is operator-only and the same
+                text is already one click away on the review page, so hiding it
+                was friction rather than protection -- and it blocked a real
+                workflow, since producing the email means pasting this copy
+                into the GHL template. The draft is labelled on the header, on
+                the button, and in the sentence below it, so it can never be
+                mistaken for cleared copy.
+              */}
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+                <span className="text-[10px] uppercase tracking-wider font-semibold text-amber-700">
+                  Draft copy, not approved
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onCopy(piece.unapprovedDraftText as string, "Draft text")}
+                  className="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1.5 border border-border-brand text-navy hover:bg-parchment-2"
+                >
+                  Copy draft text
+                </button>
+              </div>
+              <div className="bg-off-white border border-border-brand p-3.5 text-[13px] leading-relaxed text-black/80 whitespace-pre-wrap select-text max-h-72 overflow-y-auto">
+                {piece.unapprovedDraftText}
+              </div>
+              <p className="mt-2 text-[11px] text-black/50">
+                No version of this piece is approved yet, so this text is not cleared to publish.
+                Open the review page to approve it.
+              </p>
+            </>
           ) : (
             <p className="text-sm text-black/45">
               {
