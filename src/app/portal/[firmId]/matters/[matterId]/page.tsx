@@ -443,7 +443,7 @@ function EmbedPanel({
             /api/portal/{firmId}/matters/{matterId}/embed
           </code>{' '}
           with{' '}
-          <code style={{ fontSize: '0.82rem' }}>{`{ embed_url: "https://…" }`}</code> (origin must be in the firm's embed_origins allow-list).
+          <code style={{ fontSize: '0.82rem' }}>{`{ embed_url: "https://…" }`}</code> (origin must be in the firm&apos;s embed_origins allow-list).
         </p>
       )}
     </section>

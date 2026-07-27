@@ -38,6 +38,7 @@ import {
   getRewriteMode,
 } from "@/lib/llm-rewrite";
 import type { Question } from "@/lib/screen-prompt";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -81,6 +82,14 @@ function buildConfirmedContext(confirmed: Record<string, unknown>): string {
 
 export async function POST(req: Request) {
   try {
+    const rl = await checkRateLimit("screen", ipFromRequest(req));
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: "rate limited" },
+        { status: 429, headers: rateLimitHeaders(rl) },
+      );
+    }
+
     const body = await req.json() as { session_id?: string };
     if (!body.session_id) return NextResponse.json({ ok: true, questions: [] });
     const session_id = body.session_id;

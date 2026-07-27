@@ -62,9 +62,10 @@ const NAV_LINKS = [
 // operator had to route through Portal access to reach the firm's triage
 // queue; the day-to-day engagement surface should be one click from here.
 const FIRM_PORTAL_LINKS = [
-  { label: "New leads", href: (id: string) => `/portal/${id}/triage` },
+  { label: "Open Operator Workspace", href: (id: string) => `/api/portal/${id}/workspace/enter?next=/portal/${id}/triage` },
   { label: "Messages", href: (id: string) => `/portal/${id}/inbox` },
   { label: "Clients", href: (id: string) => `/portal/${id}/clients` },
+  { label: "Files", href: (id: string) => `/portal/${id}/files` },
   { label: "Deliverables", href: (id: string) => `/portal/${id}/deliverables` },
   { label: "Dashboards", href: (id: string) => `/portal/${id}/boards` },
 ];

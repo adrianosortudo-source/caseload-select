@@ -16,6 +16,24 @@ import type {
 
 export const CONTENT_KINDS: ContentKind[] = ["text", "image", "pdf"];
 
+/**
+ * Whether a deliverable-version or deliverable-comment action should also
+ * email the firm's lawyers (the "client" from the operator's side of this
+ * surface). Silent is the only safe default: missing, malformed, stale, or
+ * legacy values must never be interpreted as consent to send.
+ */
+export type ClientNotificationChoice = "silent" | "notify_now";
+
+/**
+ * Fail-safe normaliser: anything other than the literal string "notify_now"
+ * resolves to "silent", including undefined, null, "", "true", a stale enum
+ * value from an older client build, or a client bug that omits the field
+ * entirely. There is no other way to opt in to a client-facing email.
+ */
+export function normalizeClientNotificationChoice(value: unknown): ClientNotificationChoice {
+  return value === "notify_now" ? "notify_now" : "silent";
+}
+
 export const DELIVERABLE_STATUSES: DeliverableStatus[] = [
   "draft",
   "in_review",
@@ -37,6 +55,61 @@ export const STATUS_LABELS: Record<DeliverableStatus, string> = {
   approved: "Approved",
   archived: "Archived",
 };
+
+export const PRE_APPROVED_LABEL = "Pre-approved";
+export const PUBLISHED_LABEL = "Published";
+
+/**
+ * Whether a plan row should read as published. Keyed on
+ * content_deliverables.published_at, the operator's record of the date a
+ * piece actually went out.
+ *
+ * Published is deliberately NOT a content_deliverables.status value. The
+ * status machine describes where a piece sits in lawyer review; publication
+ * is a different axis and a piece can be published while still in_review
+ * (the standing-authorization path, DR-107). Adding it to the enum would
+ * also collide with the suggestion invariants, which require in_review or
+ * changes_requested. Derived at render time, exactly like Pre-approved.
+ *
+ * This is a weaker claim than publication_receipts, which is the durable
+ * per-destination proof that a specific approved version reached a specific
+ * destination. A published_at date says the operator recorded the piece as
+ * out; it is not receipt evidence and must never be presented as such.
+ */
+export function isPublished(publishedAt: string | null | undefined): boolean {
+  return typeof publishedAt === "string" && publishedAt.trim().length > 0;
+}
+
+/**
+ * DR-107: with the firm's standing publishing authorization enabled, an
+ * in_review deliverable whose current version is not flagged
+ * requires_individual_review displays as "Pre-approved" (ready to publish
+ * per the operator schedule). Derived at render time, never stored: the
+ * status machine is unchanged and toggling authorization off instantly
+ * restores the plain labels. All other statuses always keep their
+ * STATUS_LABELS entry.
+ *
+ * Published outranks every other label. Once a piece is out the door, what
+ * the reader needs to know is that it shipped, not that it was cleared to
+ * ship. An archived piece is the one exception: archiving is a deliberate
+ * withdrawal from the plan and stays visible as such.
+ */
+export function displayStatusLabel(
+  status: DeliverableStatus,
+  opts?: {
+    standingAuthActive?: boolean;
+    requiresIndividualReview?: boolean;
+    publishedAt?: string | null;
+  },
+): string {
+  if (status !== "archived" && isPublished(opts?.publishedAt)) {
+    return PUBLISHED_LABEL;
+  }
+  if (status === "in_review" && opts?.standingAuthActive && !opts?.requiresIndividualReview) {
+    return PRE_APPROVED_LABEL;
+  }
+  return STATUS_LABELS[status];
+}
 
 /**
  * The statement a lawyer agrees to when approving. Frozen at sign-off time
@@ -157,6 +230,26 @@ export function cleanTitle(raw: unknown): string {
 export function cleanDescription(raw: unknown): string | null {
   const v = String(raw ?? "").trim().slice(0, DESCRIPTION_MAX);
   return v.length > 0 ? v : null;
+}
+
+/**
+ * Normalise a content period's week number from an untrusted request body.
+ *
+ * Three-way result, because null and "not supplied" mean different things on
+ * a PATCH: `{ ok: true, value: 3 }` sets Week 3, `{ ok: true, value: null }`
+ * explicitly clears the number (the period is not a numbered publishing
+ * week), and `{ ok: false }` rejects the request. Callers decide what an
+ * absent key means; this never guesses one.
+ *
+ * Rejects rather than coerces anything that is not a whole number >= 1, so a
+ * typo cannot quietly land as Week 0 or Week 3.7 and collide with the
+ * database CHECK constraint at insert time.
+ */
+export function parseWeekNumber(raw: unknown): { ok: true; value: number | null } | { ok: false } {
+  if (raw === null || raw === "") return { ok: true, value: null };
+  const n = typeof raw === "string" ? Number(raw.trim()) : raw;
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 1) return { ok: false };
+  return { ok: true, value: n };
 }
 
 export function cleanNote(raw: unknown): string | null {
@@ -360,6 +453,9 @@ export interface PlanDeliverable {
   format: string | null;
   period_id: string | null;
   publish_date: string | null;
+  /** Date the operator recorded the piece as actually published. */
+  published_at: string | null;
+  requires_individual_review: boolean;
 }
 
 export interface FormatGroup {
@@ -434,19 +530,32 @@ export function groupByFormat(items: PlanDeliverable[]): FormatGroup[] {
   return order.map((f) => ({ format: f, items: byFormat.get(f)! }));
 }
 
-/** Approval progress for a set of deliverables. */
+/**
+ * Approval and publication progress for a set of deliverables.
+ *
+ * Both are reported because they can diverge completely: a week released
+ * under standing authorization ships every piece without a single
+ * individual approval, so approval progress alone would sit at zero for a
+ * week that is entirely out the door.
+ */
 export function planProgress(
-  items: { status: DeliverableStatus }[],
-): { approved: number; total: number } {
+  items: { status: DeliverableStatus; published_at?: string | null }[],
+): { approved: number; published: number; total: number } {
   let approved = 0;
-  for (const it of items) if (it.status === "approved") approved++;
-  return { approved, total: items.length };
+  let published = 0;
+  for (const it of items) {
+    if (it.status === "approved") approved++;
+    if (it.status !== "archived" && isPublished(it.published_at)) published++;
+  }
+  return { approved, published, total: items.length };
 }
 
 export interface PlanOverview {
   total: number;
   approved: number;
-  pending: number; // in_review, waiting on the firm
+  pending: number; // in_review still awaiting the firm (DR-107: pre-approved items counted separately)
+  preapproved: number; // in_review, DR-107 pre-approved under standing authorization
+  published: number; // published_at recorded; counted in addition to the status tallies
   changes: number; // changes_requested, back with the operator
   draft: number;
   weeks: number; // distinct weeks that hold content
@@ -457,22 +566,41 @@ export interface PlanOverview {
 /**
  * Whole-plan summary for the review-overview panel. Live counts, a format
  * tally, and the soonest publish date among pieces not yet approved (the
- * working deadline: review before it goes out).
+ * working deadline: review before it goes out). DR-107: when the firm's
+ * standing authorization is active, an in_review item not flagged
+ * requires_individual_review counts as preapproved instead of pending. With
+ * standingAuthActive false or omitted, behavior is byte-identical to before
+ * DR-107 (preapproved stays 0).
+ *
+ * `published` is a second axis, not a fourth bucket: a published piece is
+ * still counted under whichever status bucket it belongs to, so the existing
+ * tallies are unchanged. It is excluded from nextPublish, which exists to
+ * surface the next working deadline -- something already out the door is not
+ * one.
  */
-export function computeOverview(items: PlanDeliverable[]): PlanOverview {
+export function computeOverview(
+  items: PlanDeliverable[],
+  opts?: { standingAuthActive?: boolean },
+): PlanOverview {
   let approved = 0;
   let pending = 0;
+  let preapproved = 0;
+  let published = 0;
   let changes = 0;
   let draft = 0;
   const weeks = new Set<string>();
   let next: { date: string; title: string } | null = null;
   for (const it of items) {
     if (it.status === "approved") approved++;
-    else if (it.status === "in_review") pending++;
-    else if (it.status === "changes_requested") changes++;
+    else if (it.status === "in_review") {
+      if (opts?.standingAuthActive && !it.requires_individual_review) preapproved++;
+      else pending++;
+    } else if (it.status === "changes_requested") changes++;
     else if (it.status === "draft") draft++;
+    const itemPublished = it.status !== "archived" && isPublished(it.published_at);
+    if (itemPublished) published++;
     if (it.period_id) weeks.add(it.period_id);
-    if (it.status !== "approved" && it.publish_date) {
+    if (it.status !== "approved" && !itemPublished && it.publish_date) {
       if (!next || it.publish_date < next.date) {
         next = { date: it.publish_date, title: it.title };
       }
@@ -486,10 +614,34 @@ export function computeOverview(items: PlanDeliverable[]): PlanOverview {
     total: items.length,
     approved,
     pending,
+    preapproved,
+    published,
     changes,
     draft,
     weeks: weeks.size,
     byFormat,
     nextPublish: next,
   };
+}
+
+/**
+ * DR-107 console rule: "awaiting sign-off" counts only what genuinely
+ * awaits a human. changes_requested always counts. in_review counts only
+ * when the firm's standing authorization is off or the current version is
+ * flagged requires_individual_review. A row with no current version and
+ * authorization on does not count (nothing exists to sign).
+ */
+export function filterAwaitingSignoff<
+  T extends { status: DeliverableStatus; firm_id: string; current_version_id: string | null },
+>(
+  rows: T[],
+  authActiveByFirm: Record<string, boolean>,
+  reviewRequiredByVersion: Record<string, boolean>,
+): T[] {
+  return rows.filter((r) => {
+    if (r.status === "changes_requested") return true;
+    if (r.status !== "in_review") return false;
+    if (!authActiveByFirm[r.firm_id]) return true;
+    return r.current_version_id ? !!reviewRequiredByVersion[r.current_version_id] : false;
+  });
 }

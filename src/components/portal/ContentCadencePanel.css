@@ -28,9 +28,12 @@
 .ccp-intro{display:grid;grid-template-columns:1.25fr .75fr;gap:28px;align-items:start}
 @media(max-width:720px){.ccp-intro{grid-template-columns:1fr;gap:22px}}
 .ccp-eyebrow{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--ccp-ink-soft);margin-bottom:10px}
-.ccp-head{font-family:var(--font-manrope),system-ui,sans-serif;font-weight:800;font-size:25px;line-height:1.18;color:var(--ccp-navy);letter-spacing:-.01em;max-width:20ch}
+/* Orphan words are banned. `balance` evens out short headings, `pretty` keeps
+   a lone word off the last line of running copy. Both degrade to normal
+   wrapping, so the copy itself must also not orphan at these max-widths. */
+.ccp-head{font-family:var(--font-manrope),system-ui,sans-serif;font-weight:800;font-size:25px;line-height:1.18;color:var(--ccp-navy);letter-spacing:-.01em;max-width:22ch;text-wrap:balance}
 .ccp-sq{display:inline-block;width:.5em;height:.5em;background:var(--ccp-gold);margin-left:.12em;vertical-align:baseline;transform:translateY(-.02em)}
-.ccp-lede{margin-top:14px;font-size:15px;max-width:52ch;color:var(--ccp-ink)}
+.ccp-lede{margin-top:14px;font-size:15px;max-width:52ch;color:var(--ccp-ink);text-wrap:pretty}
 
 .ccp-approve{border:1px solid var(--ccp-line-navy);border-radius:4px;background:var(--ccp-parchment);padding:18px 18px 20px}
 .ccp-approve-cols{display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:start}
@@ -45,9 +48,9 @@
 .ccp-metric{background:var(--ccp-white);border:1px solid var(--ccp-line);border-radius:4px;padding:11px 10px;text-align:center}
 .ccp-metric strong{display:block;font-family:var(--font-manrope),system-ui,sans-serif;font-weight:800;font-size:22px;color:var(--ccp-navy);line-height:1}
 .ccp-metric span{display:block;margin-top:6px;font-size:11px;color:var(--ccp-ink-soft);line-height:1.25}
-.ccp-approve-note{margin-top:13px;font-size:12.5px;color:var(--ccp-ink);line-height:1.5}
+.ccp-approve-note{margin-top:13px;font-size:12.5px;color:var(--ccp-ink);line-height:1.5;text-wrap:pretty}
 
-.ccp-historical-note{margin-top:16px;font-size:12.5px;color:var(--ccp-ink);line-height:1.5;background:var(--ccp-parchment);border-radius:4px;padding:12px 14px;border-left:3px solid var(--ccp-navy)}
+.ccp-historical-note{margin-top:16px;font-size:12.5px;color:var(--ccp-ink);line-height:1.5;background:var(--ccp-parchment);border:1px solid var(--ccp-line);border-radius:4px;padding:12px 14px}
 .ccp-historical-note b{display:block;color:var(--ccp-navy);font-weight:700;font-size:13px;margin-bottom:3px}
 
 .ccp-promise{background:var(--ccp-black);color:var(--ccp-white);display:flex;flex-direction:column;gap:14px;padding:20px 34px}
@@ -74,22 +77,27 @@
 .ccp-divider{height:1px;background:var(--ccp-line)}
 .ccp-stack > * + *{margin-top:32px}
 
-.ccp-pieces{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+/* auto-fit rather than a fixed 3, so a fourth format card fills the row
+   instead of stranding itself beside two empty cells */
+.ccp-pieces{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:14px}
 @media(max-width:640px){.ccp-pieces{grid-template-columns:1fr}}
 .ccp-piece{border:1px solid var(--ccp-line);border-radius:4px;padding:18px;background:var(--ccp-parchment);border-top:4px solid var(--ccp-navy)}
 .ccp-piece.ccp-p2{border-top-color:var(--ccp-gold)}
 .ccp-piece.ccp-p3{border-top-color:var(--ccp-gbp)}
+/* Fourth format card (native LinkedIn Articles). Reuses the Minute accent's
+   warmth without claiming the Minute's own slot, which stays separate. */
+.ccp-piece.ccp-p4{border-top-color:var(--ccp-minute)}
 .ccp-piece-ic{width:34px;height:34px;color:var(--ccp-navy);margin-bottom:12px}
 .ccp-piece-kind{font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ccp-ink-soft);margin-bottom:5px}
 .ccp-piece-nm{font-family:var(--font-manrope),system-ui,sans-serif;font-weight:800;font-size:16px;color:var(--ccp-navy);margin-bottom:7px}
-.ccp-piece-ds{font-size:13px;color:var(--ccp-ink);line-height:1.5}
+.ccp-piece-ds{font-size:13px;color:var(--ccp-ink);line-height:1.5;text-wrap:pretty}
 .ccp-piece-tag{display:inline-block;margin-top:14px;font-size:11px;font-weight:700;color:var(--ccp-navy);background:var(--ccp-white);border:1px solid var(--ccp-line);border-radius:20px;padding:4px 11px}
 
 .ccp-future-format{margin-top:16px;border:1px dashed var(--ccp-minute);border-radius:4px;padding:16px 18px;background:linear-gradient(135deg,rgba(176,114,74,.07),transparent)}
 .ccp-future-format-eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ccp-minute);margin-bottom:6px}
 .ccp-future-format-nm{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-family:var(--font-manrope),system-ui,sans-serif;font-weight:800;font-size:16px;color:var(--ccp-navy);margin-bottom:6px}
 .ccp-future-format-tag{font-size:11px;font-weight:700;color:var(--ccp-minute);background:var(--ccp-white);border:1px solid var(--ccp-line);border-radius:20px;padding:3px 10px}
-.ccp-future-format-ds{font-size:13px;color:var(--ccp-ink);line-height:1.5;margin-bottom:8px}
+.ccp-future-format-ds{font-size:13px;color:var(--ccp-ink);line-height:1.5;margin-bottom:8px;text-wrap:pretty}
 .ccp-future-format-avail{font-size:12px;font-weight:700;color:var(--ccp-minute)}
 
 .ccp-legend{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px}
@@ -108,10 +116,10 @@
 .ccp-cell{padding:12px;border-right:1px solid var(--ccp-line);min-height:66px;display:flex;flex-direction:column;justify-content:center;gap:8px}
 .ccp-cell:last-child{border-right:none}
 .ccp-cell.ccp-q{background:repeating-linear-gradient(135deg,transparent,transparent 7px,rgba(30,47,88,.03) 7px,rgba(30,47,88,.03) 14px)}
-.ccp-card{width:100%;border-radius:3px;padding:8px 10px;font-size:12px;line-height:1.35;border:1px solid var(--ccp-line);border-left:3px solid;background:var(--ccp-white)}
+.ccp-card{width:100%;border-radius:3px;padding:8px 10px;font-size:12px;line-height:1.35;border:1px solid var(--ccp-line);border-top:3px solid;background:var(--ccp-white)}
 .ccp-card b{display:block;font-weight:700;color:var(--ccp-navy);font-size:12px;margin-bottom:1px}
 .ccp-card .ccp-t{color:var(--ccp-ink-soft);font-size:10.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase}
-.ccp-c-site{border-left-color:var(--ccp-navy)}.ccp-c-li{border-left-color:var(--ccp-gold)}.ccp-c-gbp{border-left-color:var(--ccp-gbp)}.ccp-c-email{border-left-color:var(--ccp-minute)}
+.ccp-c-site{border-top-color:var(--ccp-navy)}.ccp-c-li{border-top-color:var(--ccp-gold)}.ccp-c-gbp{border-top-color:var(--ccp-gbp)}.ccp-c-email{border-top-color:var(--ccp-minute)}
 .ccp-empty{color:var(--ccp-ink-soft);font-size:11px;text-align:center}
 @media(max-width:720px){
   .ccp-week-head,.ccp-row{grid-template-columns:84px 1fr 1fr 1fr}
@@ -150,9 +158,9 @@
 .ccp-minute-rules{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:8px}
 .ccp-minute-rules li{position:relative;padding-left:18px;font-size:13px;color:var(--ccp-ink);line-height:1.5}
 .ccp-minute-rules li::before{content:"";position:absolute;left:0;top:.55em;width:6px;height:6px;border-radius:50%;background:var(--ccp-minute)}
-.ccp-minute-readiness{margin-top:14px;font-size:13px;font-weight:700;color:var(--ccp-navy);background:var(--ccp-parchment);border-radius:4px;padding:10px 12px;border-left:3px solid var(--ccp-minute)}
+.ccp-minute-readiness{margin-top:14px;font-size:13px;font-weight:700;color:var(--ccp-navy);background:var(--ccp-parchment);border:1px solid var(--ccp-line);border-radius:4px;padding:10px 12px}
 
-.ccp-adhoc{font-size:13px;color:var(--ccp-ink);background:var(--ccp-parchment);border-radius:4px;padding:14px 16px;border-left:3px solid var(--ccp-gold)}
+.ccp-adhoc{font-size:13px;color:var(--ccp-ink);background:var(--ccp-parchment);border:1px solid var(--ccp-line);border-radius:4px;padding:14px 16px}
 .ccp-adhoc b{color:var(--ccp-navy)}
 .ccp-ref{padding-top:16px;border-top:1px solid var(--ccp-line)}
 .ccp-ref-rl{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ccp-ink-soft);margin-bottom:8px}

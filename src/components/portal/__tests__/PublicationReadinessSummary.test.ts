@@ -34,6 +34,7 @@ function makeMetadataCompleteDeliverable(): ContentDeliverable {
     content_kind: "text", status: "in_review", current_version_id: "v1", approved_version_id: null,
     approved_at: null, created_by_role: "operator", created_by_id: null, created_at: "2026-07-14T00:00:00Z",
     updated_at: "2026-07-14T00:00:00Z", excerpt: null, topic: null, byline: null, publish_date: "2026-07-14",
+    published_at: null,
     read_time: null, hero_image_url: null, kicker: null, period_id: REAL_FOUNDER_VESTING_PERIOD_ID, format: null,
     locale: "en-CA", deliverable_role: "article", publication_destination: "firm_website", publication_path: "/journal/founder-vesting-ontario",
     cta_target_path: null,

@@ -68,7 +68,15 @@ export default async function DeliverableReviewPage({
     signerEmail = branding?.lawyer_email ?? null;
   }
 
-  const statusRows = await buildPlacementStatusRows(firmId, detail);
+  const authState = await getStandingAuthorizationState(firmId);
+  const currentVersion =
+    detail.versions.find((v) => v.id === detail.deliverable.current_version_id) ?? null;
+  // DR-107: folds both eligibility conditions (auth on, version not flagged)
+  // into one boolean so DeliverableReview/StatusPill need no auth knowledge
+  // of their own.
+  const standingAuthEligible = !!authState?.active && !currentVersion?.requires_individual_review;
+
+  const statusRows = await buildPlacementStatusRows(detail, authState);
 
   return (
     <div className="space-y-4">
@@ -89,6 +97,8 @@ export default async function DeliverableReviewPage({
         approvalAttestation={APPROVAL_ATTESTATION}
         changesAttestation={CHANGES_ATTESTATION}
         initialDetail={detail}
+        supportPreview={isLawyerPreview}
+        standingAuthEligible={standingAuthEligible}
       />
     </div>
   );
@@ -102,17 +112,14 @@ export default async function DeliverableReviewPage({
  * status, and is treated the same as "no claim yet".
  */
 async function buildPlacementStatusRows(
-  firmId: string,
   detail: NonNullable<Awaited<ReturnType<typeof getDeliverableDetail>>>,
+  authState: Awaited<ReturnType<typeof getStandingAuthorizationState>>,
 ): Promise<PlacementStatusRow[]> {
   const { deliverable } = detail;
   const currentVersionId = deliverable.current_version_id;
   const currentVersion = detail.versions.find((v) => v.id === currentVersionId) ?? null;
 
-  const [placements, authState] = await Promise.all([
-    listPlacementsForDeliverable(deliverable.id),
-    getStandingAuthorizationState(firmId),
-  ]);
+  const placements = await listPlacementsForDeliverable(deliverable.id);
   if (placements.length === 0) return [];
 
   const rows: PlacementStatusRow[] = [];

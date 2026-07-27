@@ -4,6 +4,7 @@ import {
   clearPreviewCookieValue,
   verifyPreviewValue,
   previewBlocksWrite,
+  resolvePreviewForFirm,
   PREVIEW_COOKIE,
   type PreviewIntent,
 } from "../preview-mode";
@@ -111,5 +112,18 @@ describe("previewBlocksWrite", () => {
   });
   it("does not block a write on a different firm", () => {
     expect(previewBlocksWrite(intent, OTHER_FIRM)).toBe(false);
+  });
+});
+
+describe("resolvePreviewForFirm", () => {
+  const intent: PreviewIntent = { operator_id: "op-1", firm_id: FIRM, target: "lawyer", exp: Date.now() + 1000 };
+  it("returns 'none' when there is no preview intent", () => {
+    expect(resolvePreviewForFirm(null, FIRM)).toBe("none");
+  });
+  it("returns 'match' when the intent's firm matches the requested firm", () => {
+    expect(resolvePreviewForFirm(intent, FIRM)).toBe("match");
+  });
+  it("returns 'mismatch' when the intent is bound to a different firm", () => {
+    expect(resolvePreviewForFirm(intent, OTHER_FIRM)).toBe("mismatch");
   });
 });

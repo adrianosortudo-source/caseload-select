@@ -195,7 +195,14 @@ export interface ContentExportBundle {
   schema_version: string;
   generated_at: string;
   firm: { id: string; name: string | null };
-  period: { id: string; title: string | null; starts_on: string; ends_on: string };
+  period: {
+    id: string;
+    title: string | null;
+    /** "Week 3" label; null when the period is not a numbered publishing week. */
+    week_number: number | null;
+    starts_on: string;
+    ends_on: string;
+  };
   active_deliverable_count: number;
   archived_deliverable_count: number;
   warnings: string[];
@@ -374,7 +381,7 @@ export async function buildContentExportBundle(
 ): Promise<{ ok: true; bundle: ContentExportBundle } | { ok: false; error: string }> {
   const { data: period, error: periodErr } = await supabase
     .from("content_periods")
-    .select("id, firm_id, starts_on, ends_on, theme")
+    .select("id, firm_id, starts_on, ends_on, week_number, theme")
     .eq("id", periodId)
     .maybeSingle();
   if (periodErr) return { ok: false, error: periodErr.message };
@@ -672,7 +679,13 @@ export async function buildContentExportBundle(
     schema_version: CONTENT_EXPORT_SCHEMA_VERSION,
     generated_at: new Date().toISOString(),
     firm: { id: period.firm_id, name: (firm?.name as string | undefined) ?? null },
-    period: { id: period.id, title: period.theme, starts_on: period.starts_on, ends_on: period.ends_on },
+    period: {
+      id: period.id,
+      title: period.theme,
+      week_number: period.week_number ?? null,
+      starts_on: period.starts_on,
+      ends_on: period.ends_on,
+    },
     active_deliverable_count: exportDeliverables.length,
     archived_deliverable_count: archived.length,
     warnings: bundleWarnings,
@@ -958,7 +971,7 @@ export function renderContentExportMarkdown(bundle: ContentExportBundle): string
   lines.push(`- Generated at: ${bundle.generated_at}`);
   lines.push(`- Firm: ${bundle.firm.name ?? "unnamed"} (\`${bundle.firm.id}\`)`);
   lines.push(
-    `- Period: ${bundle.period.title ?? "untitled"} (\`${bundle.period.id}\`), ${bundle.period.starts_on} to ${bundle.period.ends_on}`,
+    `- Period: ${bundle.period.week_number != null ? `Week ${bundle.period.week_number} · ` : ""}${bundle.period.title ?? "untitled"} (\`${bundle.period.id}\`), ${bundle.period.starts_on} to ${bundle.period.ends_on}`,
   );
   lines.push(`- Active deliverables: ${bundle.active_deliverable_count}`);
   lines.push(`- Archived deliverables (reported separately, not counted active): ${bundle.archived_deliverable_count}`);

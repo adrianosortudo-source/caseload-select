@@ -31,6 +31,14 @@
 # repo admin access must add "Publication concurrency integration tests" to
 # the required-checks list once this job is confirmed green on main.
 #
+# lint (below) is also NEW and intentionally not in the list above, for the
+# same reason: a human with repo admin access must add "ESLint" to the
+# required-checks list once this job is confirmed green on main. next lint
+# was removed by the Next.js 16 upgrade and this repo had no standalone
+# ESLint config until now (see eslint.config.mjs) -- the job only fails on
+# errors, not warnings, so the pre-existing React Compiler-readiness
+# react-hooks warnings backlog does not block it.
+#
 # RESOLVED (Supabase baseline workstream, 2026-07-17): the KNOWN BLOCKER
 # formerly documented here is fixed. `supabase start` now applies all 178
 # files in supabase/migrations/ to a genuinely fresh, empty Postgres with
@@ -102,6 +110,27 @@ jobs:
         run: npm ci
       - name: Run tsc --noEmit
         run: npx tsc --noEmit
+
+  lint:
+    name: ESLint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run eslint
+        # Errors fail this job; warnings do not. `npm run lint` (eslint .)
+        # exits non-zero only when at least one finding is severity "error" --
+        # the 5 React Compiler-readiness react-hooks rules are downgraded to
+        # warn in eslint.config.mjs pending a dedicated follow-up pass, so
+        # this job stays green while that backlog is worked down separately.
+        run: npm run lint
 
   test:
     name: Full vitest suite

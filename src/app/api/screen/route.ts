@@ -16,6 +16,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { openrouter, googleai, getIntakeModel, MODELS } from "@/lib/openrouter";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { buildSystemPrompt, SCREEN_PROMPT_VERSION, type FirmConfig, type Question } from "@/lib/screen-prompt";
@@ -332,7 +333,6 @@ export async function POST(req: Request) {
       const ua = (req.headers.get("user-agent") ?? "").slice(0, 120);
       const ref = (req.headers.get("referer") ?? "").slice(0, 200);
       const origin = req.headers.get("origin") ?? "";
-      // eslint-disable-next-line no-console
       console.log(
         `[legacy-screen] caller firm_id=${firm_id ?? "none"} channel=${channel ?? "none"} session=${session_id ? "resume" : "new"} origin=${origin} ref=${ref} ua=${ua}`,
       );
@@ -1347,7 +1347,7 @@ export async function POST(req: Request) {
     // _slot_answered: accumulated map of slot ID → answer value(s) across all turns.
     const slotRound = (sessionScoringRaw._slot_round as 1 | 2 | 3 | null) ?? null;
     const slotAnswered = (sessionScoringRaw._slot_answered as Record<string, string | string[]>) ?? {};
-    let updatedSlotAnswered: Record<string, string | string[]> = { ...slotAnswered };
+    const updatedSlotAnswered: Record<string, string | string[]> = { ...slotAnswered };
     let slotRoundUpdated: 1 | 2 | 3 = slotRound ?? 1;
 
     // Route slot-keyed widget answers (containing "__") into updatedSlotAnswered.
@@ -2004,10 +2004,9 @@ export async function POST(req: Request) {
         // Log conflict to Supabase for monitoring (fire-and-forget, don't block response).
         // Uses the service-role key path  -  inserts from the anon client will be rejected by
         // RLS but the error is swallowed intentionally: telemetry must never block the session.
-        const situationHash = require("crypto")
-          .createHash("sha256")
+        const situationHash = createHash("sha256")
           .update(situationText.substring(0, 500))
-          .digest("hex") as string;
+          .digest("hex");
         void supabase
           .from("sub_type_conflicts")
           .insert({

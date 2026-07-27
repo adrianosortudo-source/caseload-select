@@ -23,9 +23,18 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { qualifiesForRound3 } from "@/lib/round3";
 import { generateMemo } from "@/lib/memo";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
   try {
+    const rl = await checkRateLimit("screen", ipFromRequest(req));
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: "rate limited" },
+        { status: 429, headers: rateLimitHeaders(rl) },
+      );
+    }
+
     const body = await req.json() as { session_id?: string; answers?: Record<string, unknown> };
     const { session_id, answers } = body;
 

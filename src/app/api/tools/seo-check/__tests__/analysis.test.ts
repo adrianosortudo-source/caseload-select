@@ -72,6 +72,7 @@ function mkPage(opts: {
       hasBreadcrumb: false, hasFaq: false, hasWebsite: false, hasReview: false,
       fields: { name: false, url: false, telephone: false, address: false, areaServed: false, sameAs: false, priceRange: false, openingHours: false },
       conflictingEntity: false,
+      sameAsUrls: [],
     },
     lawFirm: {
       phoneVisible: opts.phone ?? true, contactFormPresent: opts.contactForm ?? true,

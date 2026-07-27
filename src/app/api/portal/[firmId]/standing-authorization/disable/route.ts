@@ -15,6 +15,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getFirmSession } from "@/lib/portal-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { disableStandingAuthorization, resolveFirmLawyerIdentity } from "@/lib/standing-publishing-authorization";
 
 const MAX_REASON_LENGTH = 2000;
@@ -24,6 +25,17 @@ export async function POST(
   { params }: { params: Promise<{ firmId: string }> },
 ) {
   const { firmId } = await params;
+
+  // Guard-first, ahead of getFirmSession: an operator session never passes
+  // getFirmSession (LAWYER ONLY, see enable/route.ts), so this route is
+  // already structurally unreachable in support preview. The guard call
+  // still runs first so the response carries the uniform support-preview
+  // contract (403 + support_preview_read_only) in the one hypothetical
+  // where a future change ever widens session admission here, rather than
+  // silently depending on an unrelated 401 to keep the boundary honest.
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
+
   const session = await getFirmSession(firmId);
   if (!session) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });

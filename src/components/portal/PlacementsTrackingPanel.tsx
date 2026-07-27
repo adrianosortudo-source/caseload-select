@@ -106,13 +106,13 @@ export default function PlacementsTrackingPanel({ firmId, deliverableId }: Props
               </span>
             </div>
 
-            <div className="mt-2 text-xs text-black/50">Tracking parameters (utm_content is this placement's id):</div>
+            <div className="mt-2 text-xs text-black/50">Tracking parameters (utm_content is this placement&apos;s id):</div>
             <code className="block mt-1 text-[11px] bg-black/[0.03] rounded px-2 py-1 break-all">{query}</code>
 
             {placement.destination === "firm_website" && !hasReceipt && (
               <div className="mt-2">
                 <label className="block text-[11px] text-black/50 mb-1">
-                  Paste the page's real URL to get the exact link to use:
+                  Paste the page&apos;s real URL to get the exact link to use:
                 </label>
                 <input
                   type="text"

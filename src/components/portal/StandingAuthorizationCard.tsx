@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { NotificationPreference, StandingAuthorizationEvent } from "@/lib/standing-publishing-authorization";
+import { SUPPORT_PREVIEW_DECISION_MAKER_SENTENCE } from "@/lib/support-preview-copy";
 
 /**
  * "How your content works" primary control: turn standing publishing
@@ -122,8 +123,7 @@ export default function StandingAuthorizationCard({
           {active ? "Turn off authorization" : "Turn on standing publishing authorization"}
         </button>
         <p className="mt-3 text-xs text-black/55">
-          This is a read-only operator preview. Only the firm&apos;s authorized lawyer/client
-          decision-maker can use this control from their own portal session.
+          This is a read-only operator preview. {SUPPORT_PREVIEW_DECISION_MAKER_SENTENCE}
         </p>
       </section>
     );

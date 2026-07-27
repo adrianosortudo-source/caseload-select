@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOperator } from "@/lib/admin-auth";
 import { getOperatorSession } from "@/lib/portal-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { getDeliverableDetail } from "@/lib/deliverables";
 import { createPlacement, listPlacementsForDeliverable } from "@/lib/content-placements";
 import type { PlacementDestination, PublicationArtifactType } from "@/lib/types";
@@ -68,6 +69,9 @@ export async function POST(
   if (!detail || detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
+
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
 
   let body: {
     destination?: unknown;

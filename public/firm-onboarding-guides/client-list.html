@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CaseLoad Select &middot; Your client list: what to send and how consent works</title>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700&family=Manrope:wght@700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --c-deep-black: #0D1520;
+    --c-navy: #1E2F58;
+    --c-gold: #C4B49A;
+    --c-parchment: #F4F3EF;
+    --c-white: #FFFFFF;
+    --c-body: #4A5A72;
+    --c-muted: #8090A8;
+    --c-muted-readable: #5E6D82;
+    --c-gold-on-light: #8B7A5E;
+    --c-border: #E0DDD6;
+    --c-success: #27834A;
+    --c-flag: #B53A2D;
+    --font-display: 'Oxanium','Rajdhani',sans-serif;
+    --font-heading: 'Manrope','Inter',sans-serif;
+    --font-body: 'DM Sans','Inter',sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { font-family:var(--font-body); background:#F4F3EF; color:var(--c-body); line-height:1.6; }
+  .wrap { max-width:760px; margin:0 auto; padding:32px 24px 80px; }
+
+  .header-bar { background:var(--c-deep-black); padding:16px 24px; display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--c-gold); margin:-32px -24px 28px; border-radius:0; }
+  .hb-logo { height:20px; width:auto; display:block; }
+  .hb-title { font-family:var(--font-display); font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:rgba(255,255,255,0.7); }
+
+  .eyebrow { font-family:var(--font-display); font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold-on-light); margin-bottom:8px; }
+  h1 { font-family:var(--font-heading); font-size:30px; font-weight:800; line-height:1.15; letter-spacing:-0.02em; color:var(--c-navy); margin-bottom:14px; }
+  .lead { font-family:var(--font-body); font-size:15px; line-height:1.6; color:var(--c-body); margin-bottom:24px; max-width:620px; }
+  .lead strong { color:var(--c-navy); font-weight:600; }
+
+  .why { background:var(--c-white); border-top:3px solid var(--c-navy); padding:18px 22px; margin-bottom:28px; }
+  .why h2 { font-family:var(--font-heading); font-size:16px; font-weight:700; color:var(--c-navy); margin-bottom:8px; }
+  .why p { font-family:var(--font-body); font-size:12.5px; line-height:1.6; color:var(--c-body); }
+  .why p strong { color:var(--c-navy); font-weight:600; }
+
+  .steps-h { font-family:var(--font-heading); font-size:18px; font-weight:700; color:var(--c-navy); margin:6px 0 16px; }
+
+  .table-block { background:var(--c-white); border:1px solid var(--c-border); margin-bottom:28px; overflow:hidden; }
+  table.fields { width:100%; border-collapse:collapse; }
+  table.fields th { font-family:var(--font-display); font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--c-white); background:var(--c-navy); padding:10px 16px; text-align:left; }
+  table.fields td { font-family:var(--font-body); font-size:13px; padding:10px 16px; border-bottom:1px solid var(--c-border); color:var(--c-body); }
+  table.fields tr:last-child td { border-bottom:none; }
+  .need-mandatory { font-family:var(--font-display); font-size:10.5px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--c-navy); }
+  .need-helpful { font-family:var(--font-display); font-size:10.5px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--c-gold-on-light); }
+  .table-note { font-family:var(--font-body); font-size:12px; line-height:1.6; color:var(--c-muted-readable); padding:14px 16px; background:var(--c-parchment); border-top:1px solid var(--c-border); }
+
+  .status-band { background:var(--c-deep-black); color:var(--c-white); padding:24px; margin:0 0 28px; }
+  .status-band .label { font-family:var(--font-display); font-size:10px; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-gold); margin-bottom:10px; }
+  .status-band h3 { font-family:var(--font-heading); font-size:15px; font-weight:700; color:var(--c-white); margin-bottom:10px; }
+  .status-band p { font-family:var(--font-body); font-size:12.5px; line-height:1.6; color:rgba(255,255,255,0.88); margin-bottom:10px; }
+  .status-band p:last-child { margin-bottom:0; }
+  .status-band a { color:var(--c-gold); text-decoration:underline; }
+
+  .template-block { background:var(--c-white); border:1px solid var(--c-gold); padding:20px 22px; margin-bottom:28px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .template-block p { font-family:var(--font-body); font-size:13px; color:var(--c-navy); }
+  .template-btn { font-family:var(--font-heading); font-weight:700; font-size:13px; color:var(--c-white); background:var(--c-navy); padding:12px 22px; text-decoration:none; white-space:nowrap; }
+
+  .footer { margin-top:36px; padding-top:18px; border-top:1px solid var(--c-border); font-family:var(--font-display); font-size:10px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:var(--c-muted); display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header-bar">
+    <img class="hb-logo" src="https://caseload-select.vercel.app/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select &middot; Sign Better Cases">
+    <a id="back-to-onboarding" class="hb-title" href="/" style="text-decoration:none;color:rgba(255,255,255,0.7);">&larr; Back to the firm profile form</a>
+  </div>
+
+  <div class="eyebrow">Client list guide</div>
+  <h1>Your client list: what to send and how consent works</h1>
+  <p class="lead">One list starts three systems: conflict protection on new inquiries, the Google review engine, and the reactivation cadence for clients who already trust you. This page covers what to include and how Canada's anti-spam law applies.</p>
+
+  <div class="table-block">
+    <table class="fields">
+      <thead>
+        <tr><th>Field</th><th>Need</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>First Name</td><td class="need-mandatory">Mandatory</td></tr>
+        <tr><td>Last Name</td><td class="need-mandatory">Mandatory</td></tr>
+        <tr><td>Email</td><td class="need-mandatory">Mandatory</td></tr>
+        <tr><td>Phone</td><td class="need-helpful">Helpful</td></tr>
+        <tr><td>Practice Area</td><td class="need-mandatory">Mandatory</td></tr>
+        <tr><td>Year Matter Closed</td><td class="need-mandatory">Mandatory</td></tr>
+        <tr><td>Year Matter Opened</td><td class="need-helpful">Helpful</td></tr>
+        <tr><td>City</td><td class="need-helpful">Helpful</td></tr>
+        <tr><td>Language</td><td class="need-helpful">Helpful</td></tr>
+        <tr><td>How They Found Us</td><td class="need-helpful">Helpful</td></tr>
+        <tr><td>Marketing Consent</td><td class="need-mandatory">Mandatory: Express, Implied, or Unknown</td></tr>
+      </tbody>
+    </table>
+    <p class="table-note">Sharing the raw files with us instead? Send whatever you have and skip the formatting; we build this sheet for you.</p>
+  </div>
+
+  <div class="why">
+    <h2>Leave out</h2>
+    <p>No matter details, no documents, no privileged content. Contact details and relationship facts only; the work product stays at the firm.</p>
+  </div>
+
+  <div class="status-band">
+    <div class="label">About consent (CASL)</div>
+    <p>Canada's anti-spam law (CASL) sets who a firm may email. For each client, the Marketing Consent column records the basis for emailing them.</p>
+    <p>Express consent means the client clearly agreed to receive marketing or newsletters from the firm. A checkbox, a signed line in the retainer, or a clear verbal yes all count. Express consent does not expire.</p>
+    <p>Implied consent means the client never said yes to marketing, but there is a business relationship because the firm did work for them. Implied consent expires two years after the matter closed.</p>
+    <p>Unknown means you are not sure. Mark it Unknown and the client stays out of every send until the basis is confirmed.</p>
+    <p>The safe first send is everyone marked Express, plus Implied clients whose matter closed within the last two years. Anyone past that window with no express consent does not receive marketing email.</p>
+  </div>
+
+  <div class="template-block">
+    <p>Filling in the sheet yourself? Start from the template.</p>
+    <a class="template-btn" href="client-list-template.xlsx">Download the template (Excel)</a>
+  </div>
+
+  <div class="footer">
+    <div>CaseLoad Select &middot; Sign Better Cases</div>
+    <div>Client list guide &middot; v1</div>
+  </div>
+
+</div>
+
+<script>
+  // Token-aware back link. The Firm Profile form links here with ?token=...;
+  // wire the "Back to the firm profile form" anchor to return to
+  // /firm-profile/[token]. Falls back to root if no token. Mirrors the
+  // gbp.html / bing.html / meta.html hook.
+  (function () {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get('token');
+      var link = document.getElementById('back-to-onboarding');
+      if (link) {
+        link.href = token ? '/firm-profile/' + encodeURIComponent(token) : '/';
+      }
+    } catch (e) { /* no-op: link defaults to / */ }
+  })();
+</script>
+</body>
+</html>

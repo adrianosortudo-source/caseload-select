@@ -13,6 +13,9 @@ import {
   groupByFormat,
   planProgress,
   computeOverview,
+  isPublished,
+  PRE_APPROVED_LABEL,
+  PUBLISHED_LABEL,
   type PlanDeliverable,
   type PlanOverview,
 } from "@/lib/deliverables-pure";
@@ -54,6 +57,18 @@ function fmtRange(s: string, e: string): string {
   return `${ds.getDate()} ${mS} ${yS} to ${de.getDate()} ${mE} ${yE}`;
 }
 
+/**
+ * A period's identity in the plan. Numbered publishing weeks read "Week 3";
+ * periods with no week number are not weeks at all (standing assets,
+ * retroactive review passes) and fall back to their date range, which is
+ * still the only honest thing to say about them.
+ */
+function periodLabel(period: ContentPeriod): string {
+  return period.week_number != null
+    ? `Week ${period.week_number}`
+    : fmtRange(period.starts_on, period.ends_on);
+}
+
 export interface PlanReadinessProp {
   summary: { active: number; ready: number; blocked: number; excluded: number };
   items: DeliverableReadiness[];
@@ -72,6 +87,7 @@ export default function ContentPlan({
   deliverables,
   settings,
   planReadiness,
+  standingAuthActive = false,
 }: {
   firmId: string;
   viewerRole: "operator" | "lawyer";
@@ -80,6 +96,7 @@ export default function ContentPlan({
   deliverables: PlanDeliverable[];
   settings: ContentPlanSettings | null;
   planReadiness?: PlanReadinessProp;
+  standingAuthActive?: boolean;
 }) {
   const router = useRouter();
   const [showNewWeek, setShowNewWeek] = useState(false);
@@ -89,7 +106,7 @@ export default function ContentPlan({
   const live = deliverables.filter((d) => d.status !== "archived");
   const unscheduled = live.filter((d) => !d.period_id);
   const archived = includeArchived ? deliverables.filter((d) => d.status === "archived") : [];
-  const overview = computeOverview(live);
+  const overview = computeOverview(live, { standingAuthActive });
 
   const refresh = () => router.refresh();
 
@@ -177,7 +194,7 @@ export default function ContentPlan({
 
       {periods.map((period) => {
         const items = live.filter((d) => d.period_id === period.id);
-        const { approved, total } = planProgress(items);
+        const { approved, published, total } = planProgress(items);
         const groups = groupByFormat(items);
         // Slice the whole-plan readiness set down to this period's own
         // deliverables. Reuses the ids already computed above rather than
@@ -210,11 +227,13 @@ export default function ContentPlan({
             isOperator={isOperator}
             period={period}
             approved={approved}
+            published={published}
             total={total}
             groups={groups}
             periods={periods}
             onChanged={refresh}
             periodReadiness={periodReadiness}
+            standingAuthActive={standingAuthActive}
           />
         );
       })}
@@ -235,6 +254,7 @@ export default function ContentPlan({
                 isOperator={isOperator}
                 group={g}
                 periods={periods}
+                standingAuthActive={standingAuthActive}
                 onChanged={refresh}
               />
             ))}
@@ -256,6 +276,7 @@ export default function ContentPlan({
                 item={d}
                 periods={periods}
                 onChanged={refresh}
+                standingAuthActive={standingAuthActive}
               />
             ))}
           </div>
@@ -302,7 +323,18 @@ export function ReviewOverview({
   planReadiness?: PlanReadinessProp;
 }) {
   const [editing, setEditing] = useState(false);
-  const { total, approved, pending, changes, draft, weeks, byFormat, nextPublish } = overview;
+  const {
+    total,
+    approved,
+    pending,
+    preapproved,
+    published,
+    changes,
+    draft,
+    weeks,
+    byFormat,
+    nextPublish,
+  } = overview;
   // A genuinely empty plan (total === 0) normally means "nothing to show
   // here yet" and the whole card returns null. But total comes from a
   // SEPARATE content_deliverables query than planReadiness -- a brand new
@@ -388,8 +420,14 @@ export function ReviewOverview({
           <div className="h-full bg-green-pass rounded-full" style={{ width: `${pct}%` }} />
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12px]">
+          {published > 0 && (
+            <OverviewCount n={published} label="published" cls="text-blue-published" />
+          )}
           <OverviewCount n={approved} label="approved" cls="text-green-pass" />
           <OverviewCount n={pending} label="pending" cls="text-amber-800" />
+          {preapproved > 0 && (
+            <OverviewCount n={preapproved} label="pre-approved" cls="text-green-pass" />
+          )}
           {changes > 0 && (
             <OverviewCount n={changes} label="changes requested" cls="text-amber-800" />
           )}
@@ -542,31 +580,41 @@ function PeriodCard({
   isOperator,
   period,
   approved,
+  published,
   total,
   groups,
   periods,
   onChanged,
   periodReadiness,
+  standingAuthActive,
 }: {
   firmId: string;
   isOperator: boolean;
   period: ContentPeriod;
   approved: number;
+  published: number;
   total: number;
   groups: ReturnType<typeof groupByFormat>;
   periods: ContentPeriod[];
   onChanged: () => void;
   periodReadiness?: PlanReadinessProp;
+  standingAuthActive: boolean;
 }) {
   const [editing, setEditing] = useState(false);
-  const pct = total > 0 ? Math.round((approved / total) * 100) : 0;
+  // Once anything in the week has shipped, publication is the honest
+  // headline. A week released under standing authorization never accrues
+  // individual approvals, so an approval-only bar would sit at 0% forever
+  // for a week that is fully published.
+  const showPublished = published > 0;
+  const done = showPublished ? published : approved;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
   return (
     <section className="bg-white border border-border-brand">
       <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-border-brand/60 flex-wrap">
         <div>
           <p className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[color:var(--portal-accent)]">
-            {fmtRange(period.starts_on, period.ends_on)}
+            {periodLabel(period)}
           </p>
           {period.theme && (
             <h2 className="text-lg font-bold text-navy mt-1 leading-snug">{period.theme}</h2>
@@ -574,10 +622,22 @@ function PeriodCard({
         </div>
         <div className="min-w-[170px]">
           <p className="text-xs text-black/55 text-right mb-1.5">
-            <span className="font-semibold text-navy">{approved}</span> of {total} approved
+            <span className="font-semibold text-navy">{done}</span> of {total}{" "}
+            {showPublished ? "published" : "approved"}
           </p>
           <div className="h-1.5 rounded-full bg-parchment-2 overflow-hidden">
-            <div className="h-full bg-green-pass rounded-full" style={{ width: `${pct}%` }} />
+            <div
+              className={`h-full rounded-full ${showPublished ? "bg-blue-published" : "bg-green-pass"}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <div className="flex justify-end mt-2">
+            <Link
+              href={`/portal/${firmId}/deliverables/periods/${period.id}`}
+              className="text-[11px] font-semibold text-navy/70 hover:text-navy"
+            >
+              Open Package Control Room
+            </Link>
           </div>
           {isOperator && (
             <div className="flex justify-end gap-3 mt-2">
@@ -647,6 +707,7 @@ function PeriodCard({
               group={g}
               periods={periods}
               onChanged={onChanged}
+              standingAuthActive={standingAuthActive}
             />
           ))
         )}
@@ -773,12 +834,14 @@ function FormatGroupBlock({
   group,
   periods,
   onChanged,
+  standingAuthActive,
 }: {
   firmId: string;
   isOperator: boolean;
   group: ReturnType<typeof groupByFormat>[number];
   periods: ContentPeriod[];
   onChanged: () => void;
+  standingAuthActive: boolean;
 }) {
   return (
     <div className="mb-1.5">
@@ -798,6 +861,7 @@ function FormatGroupBlock({
           isOperator={isOperator}
           item={item}
           periods={periods}
+          standingAuthActive={standingAuthActive}
           onChanged={onChanged}
         />
       ))}
@@ -811,18 +875,39 @@ function DeliverableRow({
   item,
   periods,
   onChanged,
+  standingAuthActive,
 }: {
   firmId: string;
   isOperator: boolean;
   item: PlanDeliverable;
   periods: ContentPeriod[];
   onChanged: () => void;
+  standingAuthActive: boolean;
 }) {
   const [placing, setPlacing] = useState(false);
-  const st = PLAN_STATUS[item.status];
-  const dated = item.publish_date
-    ? `${item.status === "approved" ? "Published" : "Publishes"} ${fmtDate(item.publish_date)}`
-    : "No publish date set";
+  // A recorded published_at outranks every other label: once a piece is out,
+  // that is the fact the row needs to carry. Below it, DR-107: an in_review
+  // item pre-approved under standing authorization (not flagged
+  // requires_individual_review) shows Pre-approved instead of Pending. Every
+  // other status keeps its plain PLAN_STATUS entry.
+  const published = isPublished(item.published_at) && item.status !== "archived";
+  const st = published
+    ? {
+        label: PUBLISHED_LABEL,
+        cls: "bg-blue-published/10 text-blue-published border-blue-published/30",
+      }
+    : item.status === "in_review" && standingAuthActive && !item.requires_individual_review
+      ? { label: PRE_APPROVED_LABEL, cls: "bg-green-pass/10 text-green-pass border-green-pass/30" }
+      : PLAN_STATUS[item.status];
+  // Report the date the piece actually went out when we have one. The old
+  // rule keyed "Published" off status === "approved", which conflated lawyer
+  // sign-off with publication -- a piece can be approved and unpublished, or
+  // published under standing authorization while still in_review.
+  const dated = published
+    ? `Published ${fmtDate(item.published_at)}`
+    : item.publish_date
+      ? `Publishes ${fmtDate(item.publish_date)}`
+      : "No publish date set";
 
   return (
     <div>
@@ -855,7 +940,7 @@ function DeliverableRow({
           href={`/portal/${firmId}/deliverables/${item.id}`}
           className="flex-none text-[13px] font-semibold text-navy hover:underline whitespace-nowrap"
         >
-          {item.status === "approved" ? "Open" : "Review"} &rarr;
+          {item.status === "approved" || published ? "Open" : "Review"} &rarr;
         </Link>
       </div>
       {isOperator && placing && (
@@ -931,7 +1016,7 @@ function PlacementControl({
           <option value="">Unscheduled</option>
           {periods.map((p) => (
             <option key={p.id} value={p.id}>
-              {fmtRange(p.starts_on, p.ends_on)}
+              {periodLabel(p)}
               {p.theme ? ` · ${p.theme.slice(0, 30)}` : ""}
             </option>
           ))}
@@ -973,6 +1058,9 @@ function PeriodForm({
 }) {
   const [startsOn, setStartsOn] = useState(period?.starts_on ?? "");
   const [endsOn, setEndsOn] = useState(period?.ends_on ?? "");
+  const [weekNumber, setWeekNumber] = useState(
+    period?.week_number != null ? String(period.week_number) : "",
+  );
   const [theme, setTheme] = useState(period?.theme ?? "");
   const [details, setDetails] = useState(period?.details ?? "");
   const [rationale, setRationale] = useState(period?.rationale ?? "");
@@ -985,11 +1073,18 @@ function PeriodForm({
       setError("Set the start and end dates.");
       return;
     }
+    const trimmedWeek = weekNumber.trim();
+    if (trimmedWeek && !/^\d+$/.test(trimmedWeek)) {
+      setError("Week number must be a whole number, or left blank.");
+      return;
+    }
     setSaving(true);
     setError(null);
     const payload = {
       starts_on: startsOn,
       ends_on: endsOn,
+      // Blank clears the number: the period is not a numbered publishing week.
+      week_number: trimmedWeek ? Number(trimmedWeek) : null,
       theme: theme.trim() || null,
       details: details.trim() || null,
       rationale: rationale.trim() || null,
@@ -1031,6 +1126,29 @@ function PeriodForm({
   return (
     <form onSubmit={submit} className="bg-white border border-border-brand p-4 space-y-3">
       <div className="flex gap-3 flex-wrap">
+        <div>
+          <label
+            htmlFor="period-week-number"
+            className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1"
+          >
+            Week number
+          </label>
+          <input
+            id="period-week-number"
+            type="number"
+            min={1}
+            step={1}
+            inputMode="numeric"
+            value={weekNumber}
+            onChange={(e) => setWeekNumber(e.target.value)}
+            placeholder="3"
+            className="text-sm border border-border-brand px-2 py-1.5 bg-white w-[110px]"
+          />
+          <p className="text-[11px] text-muted mt-1 max-w-[240px]">
+            Leave blank for standing assets or a review pass: those are not
+            numbered weeks.
+          </p>
+        </div>
         <div>
           <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
             Week starts

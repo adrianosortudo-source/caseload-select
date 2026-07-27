@@ -131,6 +131,8 @@ export interface SchemaSummary {
     openingHours: boolean;
   };
   conflictingEntity: boolean;
+  /** Every URL found in any sameAs array, deduplicated. Empty when absent. */
+  sameAsUrls: string[];
 }
 
 export interface LawFirmSignals {

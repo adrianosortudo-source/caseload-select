@@ -17,6 +17,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { getDeliverableDetail } from "@/lib/deliverables";
 import { listPlacementsForDeliverable } from "@/lib/content-placements";
 import { getReceiptById, verifyReceipt } from "@/lib/publication-receipts";
@@ -44,6 +45,9 @@ export async function POST(
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const verifier = { role: resolved.actor.role, id: resolved.actor.id, name: resolved.actor.name };
+
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
 
   const detail = await getDeliverableDetail(deliverableId);
   if (!detail || detail.deliverable.firm_id !== firmId) {

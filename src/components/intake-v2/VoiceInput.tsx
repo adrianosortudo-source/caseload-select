@@ -72,7 +72,6 @@ export function VoiceInput({ onTranscript, onError, onAvailabilityChange }: Prop
       stopRecorder();
       releaseStream();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function stopTicker() {

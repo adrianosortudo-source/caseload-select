@@ -12,6 +12,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOperatorSession } from "@/lib/portal-auth";
 import { makePreviewCookieValue, type PreviewTarget } from "@/lib/preview-mode";
 import { logPreviewOpen } from "@/lib/preview-audit";
+import { clearOperatorWorkspaceCookie } from "@/lib/operator-workspace";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
 export async function GET(
   req: NextRequest,
@@ -25,9 +27,28 @@ export async function GET(
 
   const targetParam = req.nextUrl.searchParams.get("target");
   const matterId = req.nextUrl.searchParams.get("matterId") ?? undefined;
-  const target: PreviewTarget = targetParam === "client" ? "client" : "lawyer";
+  if (targetParam !== "lawyer" && targetParam !== "client") {
+    return NextResponse.json({ error: "target must be 'lawyer' or 'client'" }, { status: 400 });
+  }
+  const target: PreviewTarget = targetParam;
   if (target === "client" && !matterId) {
     return NextResponse.json({ error: "matterId is required for a client preview" }, { status: 400 });
+  }
+
+  // Server-bind the client preview to this firm: the matter named in the
+  // query must belong to the firm in the path, checked here before any
+  // cookie is minted, so a tampered matterId can never produce a preview
+  // context pointing at another firm's matter.
+  if (target === "client") {
+    const { data: matter } = await supabase
+      .from("client_matters")
+      .select("id")
+      .eq("id", matterId as string)
+      .eq("firm_id", firmId)
+      .maybeSingle();
+    if (!matter) {
+      return NextResponse.json({ error: "matter not found for this firm" }, { status: 404 });
+    }
   }
 
   const dest =
@@ -36,6 +57,7 @@ export async function GET(
       : new URL(`/portal/${firmId}/triage`, req.url);
 
   const res = NextResponse.redirect(dest);
+  res.cookies.set(clearOperatorWorkspaceCookie());
   const cookie = makePreviewCookieValue({
     operator_id: session.lawyer_id ?? "operator",
     firm_id: firmId,

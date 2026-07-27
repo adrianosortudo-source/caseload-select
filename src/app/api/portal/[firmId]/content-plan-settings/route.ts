@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { upsertContentPlanSettings } from "@/lib/deliverables";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -21,6 +22,9 @@ export async function PATCH(
   if (resolved.actor.role !== "operator") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
 
   let body: { ask?: unknown; review_by?: unknown };
   try {

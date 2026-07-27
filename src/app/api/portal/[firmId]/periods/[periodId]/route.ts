@@ -8,7 +8,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { updatePeriod, deletePeriod } from "@/lib/deliverables";
+import { parseWeekNumber } from "@/lib/deliverables-pure";
 import type { ContentPeriod } from "@/lib/types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -29,6 +31,9 @@ export async function PATCH(
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -37,8 +42,23 @@ export async function PATCH(
   }
 
   const patch: Partial<
-    Pick<ContentPeriod, "starts_on" | "ends_on" | "theme" | "details" | "rationale">
+    Pick<
+      ContentPeriod,
+      "starts_on" | "ends_on" | "week_number" | "theme" | "details" | "rationale"
+    >
   > = {};
+  // Only touched when the key is present: an omitted week_number leaves the
+  // existing number alone, an explicit null clears it.
+  if ("week_number" in body) {
+    const parsed = parseWeekNumber(body.week_number);
+    if (!parsed.ok) {
+      return NextResponse.json(
+        { error: "week_number must be a whole number of 1 or more, or null" },
+        { status: 400 },
+      );
+    }
+    patch.week_number = parsed.value;
+  }
   if (typeof body.starts_on === "string") {
     if (!DATE_RE.test(body.starts_on)) {
       return NextResponse.json({ error: "starts_on must be YYYY-MM-DD" }, { status: 400 });
@@ -73,6 +93,10 @@ export async function DELETE(
   if (resolved.actor.role !== "operator") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
+
   const result = await deletePeriod({ periodId, firmId });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
   return NextResponse.json({ ok: true });
