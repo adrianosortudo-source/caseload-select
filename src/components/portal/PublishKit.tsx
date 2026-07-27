@@ -68,13 +68,21 @@ function laneLabel(lane: PublishKitPiece["lane"]): string {
 // signing failure mislabel as a permission decision between rounds 2 and 3.
 // "download" is excluded: that state renders a working anchor, not a
 // disabled button with a label.
-const ARTIFACT_CONTROL_LABEL: Record<Exclude<ArtifactControlState, "download">, string> = {
+const ARTIFACT_CONTROL_LABEL: Record<ArtifactControlState, string> = {
   no_file: "No stored file for this artifact.",
   other_version: "Different version",
   retracted: "Retracted",
   unapproved: "Not approved",
   locked: "Download locked",
   unsigned: "Link unavailable, refresh",
+  // Defensive only, and deliberately not Exclude<..., "download">.
+  // artifactControlState returns "unsigned" whenever signedUrl is falsy, so
+  // "download" cannot reach the disabled branch today. Keeping the key makes
+  // the lookup total and removes the cast that was the one hole in this
+  // Record's whole purpose: without it, a change dropping the `&& signedUrl`
+  // conjunct below would render a button labelled `undefined` -- no build
+  // error, in a file vitest never collects.
+  download: "Link unavailable, refresh",
 };
 
 function artifactTypeLabel(artifactType: string): string {
@@ -160,6 +168,11 @@ export default function PublishKit({ view, firmId }: Props) {
 
   const nothingMatches = visibleGroups.length === 0 && view.groups.length > 0;
 
+  // The pieces actually rendered below, which is the set the banner's claim
+  // must be about -- evaluating it over the whole period would describe
+  // material the filter is hiding.
+  const visiblePieces = visibleGroups.flatMap((group) => group.pieces);
+
   // The header chips and the blocked banner must describe what is actually
   // visible below, not the whole period's totals -- otherwise, with a filter
   // active, the header can read "14 total / 2 blocked" while the list shows
@@ -223,7 +236,7 @@ export default function PublishKit({ view, firmId }: Props) {
               reason). Stating the withholding without promising when it ends
               is true for both.
             */}
-            {blockedPiecesAreFullyWithheld(view)
+            {blockedPiecesAreFullyWithheld(visiblePieces)
               ? "Their downloads are withheld and their copy controls are locked. The reason is shown on each piece below."
               : "The reason is shown on each piece below."}
           </p>
@@ -794,7 +807,7 @@ function ArtifactBlock({
             aria-disabled="true"
             className="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1.5 border border-black/20 bg-black/10 text-black/40 cursor-not-allowed"
           >
-            {ARTIFACT_CONTROL_LABEL[controlState as Exclude<ArtifactControlState, "download">]}
+            {ARTIFACT_CONTROL_LABEL[controlState]}
           </button>
         )}
         {canDownload && signedUrlExpiresAt && mounted && (

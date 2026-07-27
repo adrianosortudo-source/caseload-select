@@ -86,9 +86,13 @@ function decodeEntities(text: string): string {
  * Strips HTML tags and decodes the handful of entities body_html carries,
  * returning plain text suitable for pasting into LinkedIn or Google
  * Business. Block-level closing tags become newlines so paragraphs and list
- * items survive as separate lines; a stripped inline tag never merges the
- * words on either side of it because the surrounding whitespace in the
- * source markup is preserved untouched.
+ * items survive as separate lines. Whitespace in the source markup is
+ * preserved untouched, so a stripped inline tag does not merge words that
+ * were already separated by a space -- but it does NOT insert one that was
+ * never there: `<em>Smith</em><em>Jones</em>` yields `SmithJones`. That is
+ * correct for the markup the editor produces (adjacent inline tags with no
+ * separating whitespace mean no separating whitespace) and is recorded here
+ * only because the earlier wording claimed an unconditional guarantee.
  */
 export function htmlToPlainText(html: string | null): string {
   if (!html) return "";
@@ -483,38 +487,62 @@ export function pieceMatchesFilter(piece: PublishKitPiece, filter: PublishKitFil
 export function filteredTotals(
   view: PublishKitView,
   filter: PublishKitFilter,
-): { total: number; publishable: number; blocked: number; isFiltered: boolean } {
+): PublishKitView["totals"] & { isFiltered: boolean } {
   const isFiltered = filter.channel !== null || filter.lane !== null;
   if (!isFiltered) {
     return { ...view.totals, isFiltered: false };
   }
+  // Every field of view.totals is recomputed, not a subset: the unfiltered
+  // branch spreads all of them, so returning fewer here would make the shape
+  // depend on filter state. A caller adding a "manual" chip would then find it
+  // works unfiltered and reads undefined the moment a filter is set -- and the
+  // return type, which names only the fields it happens to list, cannot catch
+  // that, because TypeScript's excess-property check does not apply to spreads.
   const visible = view.groups.flatMap((g) => g.pieces).filter((p) => pieceMatchesFilter(p, filter));
   return {
     total: visible.length,
     publishable: visible.filter((p) => p.mayPublish).length,
     blocked: visible.filter((p) => !p.mayPublish).length,
+    manual: visible.filter((p) => p.lane === "manual").length,
+    pipeline: visible.filter((p) => p.lane === "pipeline").length,
     isFiltered: true,
   };
 }
 
 /**
- * True when every blocked piece in the view genuinely has both its links
- * stripped and no publishable copy -- the two claims the blocked banner
- * makes ("downloads are withheld and copy controls are locked"). Rendering
- * that sentence when this is false would tell the operator something untrue
- * about material they can see. In practice this is always true -- toPiece's
- * strip already guarantees it -- but the point is that the sentence is now
- * pinned to the fact rather than asserted unconditionally: if a future
- * change ever leaks a link into a blocked piece, the banner stops making
- * the claim instead of lying.
+ * True when every blocked piece in `pieces` genuinely has no working link
+ * anywhere on it -- the claim the blocked banner makes ("their downloads are
+ * withheld"). Rendering that sentence when this is false would tell the
+ * operator something untrue about material they can see.
+ *
+ * Takes the pieces to check rather than the whole view, because the banner
+ * sits above a possibly-filtered list: a claim about pieces the operator
+ * cannot see is not the claim the sentence appears to make. The caller passes
+ * exactly what is rendered below it.
+ *
+ * All FOUR link channels are checked, not just the obvious one. stripAccess
+ * nulls signedUrl AND publicUrl, on bound artifacts AND other-version
+ * artifacts, and its doc records why: keeping publicUrl on a blocked piece's
+ * bound artifacts was shipped once and reverted, because that artifact is the
+ * current, unapproved one, so a live link to just-rejected material would sit
+ * in the RSC payload beside a "Not approved" label. A tripwire that watched
+ * only signedUrl would not have caught the bug this codebase actually shipped.
+ *
+ * In practice this is always true -- toPiece's strip guarantees it -- and that
+ * is the point: the sentence is pinned to the fact rather than asserted, so if
+ * a future change leaks a link the banner stops making the claim instead of
+ * lying. Copy controls are not checked because they need no check: they are
+ * `disabled={!piece.mayPublish}`, and every piece here is one with
+ * mayPublish false.
  */
-export function blockedPiecesAreFullyWithheld(view: PublishKitView): boolean {
-  return view.groups
-    .flatMap((g) => g.pieces)
+export function blockedPiecesAreFullyWithheld(pieces: PublishKitPiece[]): boolean {
+  const noWorkingLink = (a: PublishKitArtifact) => a.signedUrl === null && a.publicUrl === null;
+  return pieces
     .filter((p) => !p.mayPublish)
     .every(
       (p) =>
-        p.artifacts.every((a) => a.signedUrl === null) &&
+        p.artifacts.every(noWorkingLink) &&
+        p.otherVersionArtifacts.every(noWorkingLink) &&
         (p.versionAsset === null || p.versionAsset.signedUrl === null),
     );
 }

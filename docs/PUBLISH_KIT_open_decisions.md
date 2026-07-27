@@ -1,16 +1,45 @@
-# Publish Kit — open decisions and deferred findings
+# Publish Kit — decisions and deferred findings
 
-**Status:** the Publish Kit UI is built, tested, and shipped. This document records
-what was deliberately *not* settled, so none of it is rediscovered from scratch by
-the next person or the next audit.
+**Status:** built, tested, shipped. Decisions 1 and 2, open since round 4, are now
+**RESOLVED** — see below. This document records how, and what remains deferred, so
+none of it is rediscovered from scratch by the next person or the next audit.
 
 Nine review rounds ran over this feature. The access-control layer is closed: ten
 core guarantees were each reverted individually and all ten were caught by failing
-tests. What remains below is not that layer.
+tests.
 
 ---
 
-## 1. OWNER DECISION — the JSON export applies no withholding (open since round 4)
+## 1. RESOLVED — the JSON export now applies the same withholding as the Markdown
+
+**Was:** `format` defaults to `json`, and the JSON branch returned the bundle
+verbatim. Signing runs in `buildContentExportBundle` *before* `may_publish` is
+computed, so the default URL returned working signed URLs to retracted and
+unapproved artifacts — exactly what the Markdown path withholds.
+
+**Now:** `withholdBundleLinks(bundle)` (`content-period-export.ts`) applies the
+withholding to the bundle itself, routed through the same
+`shouldWithholdArtifactLinks` predicate both Markdown sections use, and the route
+serialises its output. Withholding lives in the data, not the renderer — the same
+lesson the Publish Kit learned when `stripAccess` moved into `publish-kit-pure.ts`.
+
+Four tests pin it, including an **over-strip guard** (an active artifact on a
+publishable, current deliverable keeps its links, so "null everything" does not
+pass) and an agreement test asserting the withheld JSON contains no URL the
+Markdown refuses to print. Reverting the withholding fails three of them; that
+was run and observed, not assumed.
+
+`renderContentExportMarkdown` deliberately still receives the **raw** bundle: its
+withheld-reason lines are gated on `signed_url` being present, so a pre-withheld
+bundle would silently delete the "Signed URL withheld: …" explanations instead of
+printing them. A route test pins that asymmetry in both directions.
+
+**Rationale for the original decision being reopened:** it was correctly classified
+as operator-only and therefore not a client-facing leak. But the ungated path was
+the *default* one, so any agent pointed at the endpoint hit it first. That made it
+a coherence failure worth closing rather than documenting.
+
+### Historical detail, for anyone re-auditing
 
 **Route:** `GET /api/admin/content-periods/[periodId]/content-export`
 **Auth:** `requireOperator()`, no cron-bearer bypass. Operator-only.
@@ -39,14 +68,9 @@ endpoint receives working links to precisely the retracted and unapproved materi
 that four rounds of work taught the Markdown path to withhold. The safety guarantee
 does not cover the route an agent will hit by default.
 
-**The choice:** either gate the JSON branch the way Markdown is gated, or state
-explicitly in the route's header that JSON is deliberately ungated operator-only
-raw data and that agents must request `?format=markdown`. Either is defensible.
-Silence is not, because it currently reads as an oversight.
-
 ---
 
-## 2. OWNER DECISION — the Markdown export prints unapproved bodies
+## 2. RESOLVED — unapproved bodies are exported, and the rule is now written down
 
 `renderVersionSection` (`content-period-export.ts:716-721`) pushes
 `version.body_html` ungated. `withholdReason` suppresses only the signed-URL
@@ -59,14 +83,22 @@ Both sibling consumers of the same data withhold it: `selectVersion` ("unapprove
 copy is never rendered here") and `toAgentRecord` (omits `body` and `plain_text`
 as keys entirely).
 
-**The tension:** withholding the *asset* of an unapproved version while printing
-that same version's *body* is either a principled distinction or an inconsistency.
-There is a real argument for the distinction — a signed URL mints a time-limited
-credential against storage, whereas body text is data already inside a response the
-caller is authorised to receive. But **no comment in the file states that rule**,
-so a reader cannot tell which it is.
+**Resolved as: keep the behaviour, state the rule.** The distinction is principled,
+and it is now written as policy in the route header —
 
-**The choice:** write the rule down, or gate the body. Do not leave it implicit.
+> ACCESS is withheld; IDENTITY and CONTENT are not. A signed URL mints a
+> time-limited capability against storage, whereas a body is data already inside a
+> response this operator-only route is authorised to return. An operator can read
+> the same draft in the review UI.
+
+`storage_path`, `storage_bucket`, `sha256`, `mime` and `size` survive withholding
+for the same reason: an operator who cannot be handed a URL still needs to find the
+file by hand, which is the whole point of withholding the link rather than the
+record.
+
+The defect was never the behaviour — it was that no rule distinguished it from an
+oversight. If the rule is revisited, revisit it in the route header, where it now
+lives.
 
 ---
 
@@ -78,21 +110,21 @@ piece simply reading as unavailable. Product call, never a defect.
 
 ---
 
-## 4. Deferred findings — real, none live, fold into the next touch
+## 4. Round-9 findings — all fixed except one, which is a design tension
 
-None of these can leak data. All are latent traps or test-quality gaps. They are
-recorded so the next audit does not spend a round rediscovering them.
+None of these could leak data; all were latent traps or test-quality gaps. Recorded
+with their resolutions so a future audit does not spend a round rediscovering them.
 
-| # | Location | Finding |
-|---|---|---|
-| 4.1 | `publish-kit-pure.ts` `blockedPiecesAreFullyWithheld` | Checks `signedUrl` on `artifacts` and `versionAsset` only. Does not check `publicUrl` (which `stripAccess` withholds deliberately — see FU5-5, where keeping it was shipped and reverted), nor `otherVersionArtifacts`, nor anything about copy. Its doc comment claims it verifies "links stripped **and no publishable copy**". Three of the four leak channels are unguarded, and the comment overstates all of it. The predicate exists to be a tripwire; it is blind in three directions. |
-| 4.2 | `publish-kit-pure.test.ts` — `blockedPiecesAreFullyWithheld` "true" case | Vacuous. The fixture's blocked piece has `artifacts: []` and `versionAsset: null`, so `.every()` is trivially true and the second disjunct short-circuits. Proven by mutant: deleting the entire `artifacts` clause from the predicate leaves both shipped tests green. |
-| 4.3 | `publish-kit-pure.test.ts` — `anchorVersionId` cases | All three fixtures have `anchorVersionId === currentVersionId`, so an implementation of `anchorVersionId = currentVersionId` passes every one. Only the `displayedVersionId !== currentVersionId` shape separates them, and the test file itself documents that shape as unreachable in production. The `?? currentVersionId` fallback *is* pinned; the `displayedVersionId` preference is not. |
-| 4.4 | `PublishKit.tsx` blocked banner | Scope mismatch: the count comes from `filteredTotals(view, pieceFilter)`; the guard on the next line reads `view.groups` unfiltered. Fails safe today — it can suppress a true sentence, never assert a false one — but the same shape with the guard inverted would lie. |
-| 4.5 | `PublishKit.tsx` header chips + banner | `(filtered)` is attached only to the "total" chip. The banner's headline — "N pieces cannot go out yet." — is an unhedged sentence carrying a filtered count. `filteredTotals`' own doc anticipates this; the caller applies the marker to one of three numbers. |
-| 4.6 | `publish-kit-pure.ts` `filteredTotals` | Two branches, two runtime shapes: the unfiltered branch spreads `view.totals` and returns 6 keys (including `manual`/`pipeline`); the filtered branch returns 4. The declared return type names 4, and TypeScript's excess-property check does not apply to spreads, so it is silently wrong for one branch. Add a `manual`/`pipeline` chip later and it works unfiltered, breaks filtered. |
-| 4.7 | `PublishKit.tsx` `ARTIFACT_CONTROL_LABEL` lookup | `controlState as Exclude<ArtifactControlState, "download">` is the one hole in the compile-time exhaustiveness the Record was introduced to provide. Unreachable today only because `artifactControlState` returns `"unsigned"` whenever `signedUrl` is falsy. If the `&& signedUrl` conjunct is ever dropped, the button renders `undefined` as its label — no build error, in a file vitest never collects. |
-| 4.8 | `publish-kit-pure.ts` `htmlToPlainText` doc | Claims "a stripped inline tag never merges the words on either side of it". `<em>Smith</em><em>Jones</em>` yields `SmithJones`. True only under the unstated precondition that source whitespace exists; the shipped test has whitespace on both sides, so it does not exercise the claim. |
+| # | Location | Finding | Status |
+|---|---|---|---|
+| 4.1 | `blockedPiecesAreFullyWithheld` | Checked `signedUrl` on `artifacts` and `versionAsset` only — not `publicUrl` (which `stripAccess` withholds deliberately; see FU5-5, where keeping it was shipped and reverted), not `otherVersionArtifacts`. Its doc also claimed it verified copy, which it never did. A tripwire blind in three of four directions. | **FIXED.** All four channels checked; doc corrected. Copy is explicitly *not* checked, with the reason stated: the controls are `disabled={!piece.mayPublish}` and every piece examined has `mayPublish` false. Five leak-channel tests; narrowing the predicate fails three, observed. |
+| 4.2 | `blockedPiecesAreFullyWithheld` "true" test | Vacuous — fixture had `artifacts: []` and `versionAsset: null`, so `.every()` was trivially true. A mutant deleting the whole artifacts clause left it green. | **FIXED.** Fixture now carries a bound artifact, an other-version artifact and a stored version asset, and the test asserts the fixture is non-empty before asserting the predicate. |
+| 4.3 | `anchorVersionId` tests | All three fixtures had `anchorVersionId === currentVersionId`, so a plain alias of `currentVersionId` passed every one. | **FIXED.** Added the approved-differs-from-current shape, where `displayedVersionId` is `v2` and `currentVersionId` is `v3`; the anchor must follow the displayed version. |
+| 4.4 | Blocked banner scope | Count came from the filtered set, guard read the whole view. | **FIXED.** `blockedPiecesAreFullyWithheld` now takes the pieces to check, and the component passes exactly what it renders. |
+| 4.6 | `filteredTotals` | Two branches, two runtime shapes — unfiltered spread 6 keys, filtered returned 4, and the declared type named 4. Excess-property checks do not apply to spreads, so TS could not see it. | **FIXED.** Filtered branch recomputes every field; return type is now `PublishKitView["totals"] & { isFiltered: boolean }`, so the two can no longer diverge. |
+| 4.7 | `ARTIFACT_CONTROL_LABEL` cast | `controlState as Exclude<…, "download">` was the one hole in the Record's exhaustiveness guarantee. | **FIXED.** Record covers the full union; cast removed. The `download` entry is documented as defensive-only. |
+| 4.8 | `htmlToPlainText` doc | Claimed inline tags "never merge the words on either side"; `<em>Smith</em><em>Jones</em>` yields `SmithJones`. | **FIXED.** Doc now states the actual guarantee and its precondition. |
+| 4.5 | Header chips + banner | `(filtered)` marks only the "total" chip; the banner headline "N pieces cannot go out yet." carries a filtered count unhedged. | **OPEN — design tension, not a coding error.** The alternative (period totals above a filtered list) is worse. Revisit if operators misread it. |
 
 ---
 

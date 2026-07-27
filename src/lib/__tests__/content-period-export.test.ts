@@ -122,7 +122,11 @@ vi.mock("@/lib/supabase-admin", () => ({
   },
 }));
 
-import { buildContentExportBundle, renderContentExportMarkdown } from "@/lib/content-period-export";
+import {
+  buildContentExportBundle,
+  renderContentExportMarkdown,
+  withholdBundleLinks,
+} from "@/lib/content-period-export";
 
 function makeDeliverable(overrides: Row = {}): Row {
   return {
@@ -1242,5 +1246,157 @@ describe("renderContentExportMarkdown: renders the same bundle, not a separate a
       if (d.may_publish_reason) expect(md).toContain(d.may_publish_reason);
     }
     expect(md).toContain(`Active deliverables: ${result.bundle.active_deliverable_count}`);
+  });
+});
+
+// ─── withholdBundleLinks: the JSON branch gets the same gate as the Markdown ──
+//
+// buildContentExportBundle signs every asset unconditionally -- signing runs
+// before may_publish is computed -- so the raw bundle is NOT safe to serialise.
+// The route applies withholdBundleLinks to the json response. These tests pin
+// both directions: that access really is removed where the Markdown withholds
+// it, and that it is NOT removed anywhere else (a strip-everything
+// implementation would satisfy the first half alone).
+
+describe("withholdBundleLinks", () => {
+  it("withholds the version signed URL for a blocked deliverable, keeping durable identity and body", async () => {
+    state.deliverables = [
+      makeDeliverable({
+        id: "d1",
+        status: "in_review",
+        current_version_id: "v1",
+        approved_version_id: null,
+        deliverable_role: "lead_magnet_pdf",
+      }),
+    ];
+    state.versions = [
+      makeVersion({
+        id: "v1",
+        deliverable_id: "d1",
+        storage_path: "deliverables/f1/d1/checklist.pdf",
+        asset_name: "checklist.pdf",
+      }),
+    ];
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+
+    // The RAW bundle carries a working URL: this is exactly why the route
+    // must not serialise it directly.
+    expect(result.bundle.deliverables[0].current_version?.signed_url).toBeTruthy();
+
+    const safe = withholdBundleLinks(result.bundle);
+    const v = safe.deliverables[0].current_version;
+    expect(v?.signed_url).toBeNull();
+    expect(v?.signed_url_expires_at).toBeNull();
+    // Identity and content survive -- an operator still has to be able to find
+    // the file by hand and read the draft.
+    expect(v?.storage_path).toBe("deliverables/f1/d1/checklist.pdf");
+    expect(v?.asset_name).toBe("checklist.pdf");
+    expect(v?.body_html).toBeTruthy();
+  });
+
+  it("withholds both signed_url and public_url for a retracted artifact on an approved, current deliverable", async () => {
+    state.deliverables = [
+      makeDeliverable({ id: "d1", current_version_id: "v1", approved_version_id: "v1" }),
+    ];
+    state.versions = [makeVersion({ id: "v1", deliverable_id: "d1" })];
+    state.artifacts = [
+      {
+        id: "a-retracted",
+        firm_id: FIRM_ID,
+        deliverable_id: "d1",
+        version_id: "v1",
+        artifact_type: "social_image",
+        locale: "en-CA",
+        destination: "linkedin",
+        storage_bucket: "firm-files",
+        storage_path: "publication-artifacts/d1/a-retracted.png",
+        public_url: "https://drglaw.ca/retracted.png",
+        sha256: "abc123",
+        size_bytes: 1024,
+        created_at: "2026-07-03T00:00:00Z",
+        superseded_at: "2026-07-04T00:00:00Z",
+      },
+    ];
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.bundle.deliverables[0].may_publish).toBe(true);
+
+    const a = withholdBundleLinks(result.bundle).deliverables[0].artifacts[0];
+    expect(a.signed_url).toBeNull();
+    expect(a.signed_url_expires_at).toBeNull();
+    expect(a.public_url).toBeNull();
+    expect(a.storage_path).toBe("publication-artifacts/d1/a-retracted.png");
+    expect(a.sha256).toBe("abc123");
+  });
+
+  it("does NOT withhold an active artifact bound to the current version of a publishable deliverable", async () => {
+    state.deliverables = [
+      makeDeliverable({ id: "d1", current_version_id: "v1", approved_version_id: "v1" }),
+    ];
+    // storage_path is required for the version to be signed at all -- without
+    // it the version's signed_url is null for want of an asset, not because
+    // anything withheld it, and the assertion below would prove nothing.
+    state.versions = [
+      makeVersion({ id: "v1", deliverable_id: "d1", storage_path: "deliverables/f1/d1/asset.pdf" }),
+    ];
+    state.artifacts = [
+      {
+        id: "a-live",
+        firm_id: FIRM_ID,
+        deliverable_id: "d1",
+        version_id: "v1",
+        artifact_type: "social_image",
+        locale: "en-CA",
+        destination: "linkedin",
+        storage_bucket: "firm-files",
+        storage_path: "publication-artifacts/d1/a-live.png",
+        public_url: "https://drglaw.ca/live.png",
+        sha256: "abc123",
+        size_bytes: 1024,
+        created_at: "2026-07-03T00:00:00Z",
+        superseded_at: null,
+      },
+    ];
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+
+    const safe = withholdBundleLinks(result.bundle);
+    const a = safe.deliverables[0].artifacts[0];
+    expect(a.signed_url).toBeTruthy();
+    expect(a.public_url).toBe("https://drglaw.ca/live.png");
+    expect(safe.deliverables[0].current_version?.signed_url).toBeTruthy();
+  });
+
+  it("agrees with the Markdown: whatever the Markdown refuses to print is absent from the withheld bundle", async () => {
+    state.deliverables = [
+      makeDeliverable({
+        id: "d1",
+        status: "in_review",
+        current_version_id: "v1",
+        approved_version_id: null,
+        deliverable_role: "lead_magnet_pdf",
+      }),
+    ];
+    state.versions = [
+      makeVersion({
+        id: "v1",
+        deliverable_id: "d1",
+        storage_path: "deliverables/f1/d1/checklist.pdf",
+        asset_name: "checklist.pdf",
+      }),
+    ];
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+
+    // The Markdown renderer keeps the RAW bundle on purpose: its withheld
+    // line is gated on signed_url being present, so it needs to see the URL
+    // in order to refuse it.
+    const md = renderContentExportMarkdown(result.bundle);
+    expect(md).toContain("Signed URL withheld");
+    expect(md).not.toContain("https://signed.example/deliverables/f1/d1/checklist.pdf");
+
+    const json = JSON.stringify(withholdBundleLinks(result.bundle));
+    expect(json).not.toContain("https://signed.example/deliverables/f1/d1/checklist.pdf");
   });
 });

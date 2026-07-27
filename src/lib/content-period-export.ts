@@ -882,6 +882,74 @@ function renderDeliverable(d: ContentExportDeliverable): string {
   return lines.join("\n");
 }
 
+function withholdVersionLinks(
+  version: ContentExportVersionBody | null,
+  matchesCurrentVersion: boolean,
+  deliverableMayPublish: boolean,
+): ContentExportVersionBody | null {
+  if (!version) return null;
+  const withhold = shouldWithholdArtifactLinks({
+    matchesCurrentVersion,
+    deliverableMayPublish,
+    supersededAt: null, // versions are not publication_artifacts rows
+  });
+  return withhold ? { ...version, signed_url: null, signed_url_expires_at: null } : version;
+}
+
+/**
+ * Applies the export's withholding rules to the BUNDLE, so a consumer reading
+ * the JSON gets the same answer as one reading the Markdown.
+ *
+ * Until this existed, withholding lived only inside
+ * renderContentExportMarkdown -- that is, in the RENDERER -- while
+ * buildContentExportBundle signed every asset unconditionally (signing runs
+ * before may_publish is even computed). Since `format` defaults to json, the
+ * DEFAULT response carried working signed URLs to exactly the retracted and
+ * unapproved material the Markdown path refuses to print, and an agent
+ * switching format -- the natural thing to do -- silently lost every gate.
+ * Withholding belongs in the data, not the renderer: that is the same lesson
+ * the Publish Kit learned when it moved stripAccess into publish-kit-pure.ts.
+ *
+ * The decision routes through the one shared predicate both Markdown sections
+ * already use, so the three consumers cannot drift apart.
+ *
+ * Only ACCESS is removed. storage_path, storage_bucket, sha256, mime and size
+ * all stay: they are the durable identity of the object and carry no
+ * capability to fetch it -- an operator needs them to find the file by hand,
+ * which is the whole point of withholding the URL rather than the record.
+ * body_html stays too, and that is deliberate: a signed URL mints a
+ * time-limited capability against storage, whereas a body is data already
+ * inside a response this operator-only route is authorised to return. See the
+ * route header for that rule stated as policy.
+ *
+ * NOTE: renderContentExportMarkdown must keep receiving the RAW bundle. Its
+ * withheld-reason lines are gated on `signed_url` being present (see
+ * renderArtifact / renderVersionSection), so handing it an already-withheld
+ * bundle would silently delete the "Signed URL withheld: ..." explanations
+ * rather than print them.
+ */
+export function withholdBundleLinks(bundle: ContentExportBundle): ContentExportBundle {
+  return {
+    ...bundle,
+    deliverables: bundle.deliverables.map((d) => ({
+      ...d,
+      current_version: withholdVersionLinks(d.current_version, true, d.may_publish),
+      // The approved version is by definition not the current one, so this is
+      // always withheld -- same as the Markdown call site.
+      approved_version: withholdVersionLinks(d.approved_version, false, d.may_publish),
+      artifacts: d.artifacts.map((a) =>
+        shouldWithholdArtifactLinks({
+          matchesCurrentVersion: a.matches_current_version,
+          deliverableMayPublish: d.may_publish,
+          supersededAt: a.superseded_at,
+        })
+          ? { ...a, signed_url: null, signed_url_expires_at: null, public_url: null }
+          : a,
+      ),
+    })),
+  };
+}
+
 export function renderContentExportMarkdown(bundle: ContentExportBundle): string {
   const lines: string[] = [];
   lines.push("# Content Studio publishing bundle");

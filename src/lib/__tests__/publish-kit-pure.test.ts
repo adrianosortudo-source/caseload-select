@@ -1489,6 +1489,29 @@ describe("blocked piece with no approved version (the reachable blocked shape)",
 // ─── anchorVersionId: displayedVersionId ?? currentVersionId, precomputed ────
 
 describe("anchorVersionId", () => {
+  // The three shapes below all have anchorVersionId === currentVersionId, so
+  // none of them can tell this field apart from a plain alias of
+  // currentVersionId. This one can: displayedVersionId and currentVersionId
+  // genuinely differ, and the anchor must follow the DISPLAYED version,
+  // because that is the version whose artifacts are on screen.
+  it("follows displayedVersionId, not currentVersionId, when the two differ", () => {
+    const bundle = makeBundle([
+      makeDeliverable({
+        id: "d1",
+        may_publish: false,
+        may_publish_reason: "The approved version is not the current version.",
+        current_version_id: "v3",
+        current_version: makeVersionBody({ id: "v3" }),
+        approved_version_id: "v2",
+        approved_version: makeVersionBody({ id: "v2", version_number: 2 }),
+      }),
+    ]);
+    const piece = piecesOf(toPublishKitView(bundle)).find((p) => p.id === "d1");
+    expect(piece?.currentVersionId).toBe("v3");
+    expect(piece?.displayedVersionId).toBe("v2");
+    expect(piece?.anchorVersionId).toBe("v2");
+  });
+
   it("equals displayedVersionId when a version is displayed", () => {
     const bundle = makeBundle([
       makeDeliverable({
@@ -1831,7 +1854,17 @@ describe("filteredTotals", () => {
   it("a channel filter counts only the matching pieces, marked isFiltered: true", () => {
     const view = threeDeliverableView();
     const result = filteredTotals(view, { channel: "linkedin", lane: null });
-    expect(result).toEqual({ total: 2, publishable: 2, blocked: 0, isFiltered: true });
+    // Every field of view.totals, not a subset: the unfiltered branch spreads
+    // all of them, so a filtered result missing manual/pipeline would make the
+    // returned shape depend on filter state.
+    expect(result).toEqual({
+      total: 2,
+      publishable: 2,
+      blocked: 0,
+      manual: 2,
+      pipeline: 0,
+      isFiltered: true,
+    });
   });
 
   it("publishable + blocked equals total under every filter", () => {
@@ -1850,7 +1883,14 @@ describe("filteredTotals", () => {
   it("a filter matching nothing returns all zeros, still marked isFiltered: true", () => {
     const view = threeDeliverableView();
     const result = filteredTotals(view, { channel: "google_business_profile", lane: null });
-    expect(result).toEqual({ total: 0, publishable: 0, blocked: 0, isFiltered: true });
+    expect(result).toEqual({
+      total: 0,
+      publishable: 0,
+      blocked: 0,
+      manual: 0,
+      pipeline: 0,
+      isFiltered: true,
+    });
   });
 });
 
@@ -1864,37 +1904,99 @@ describe("filteredTotals", () => {
 // than repeat something false.
 
 describe("blockedPiecesAreFullyWithheld", () => {
-  it("true for a view whose blocked piece has no working links", () => {
-    const bundle = makeBundle([makeDeliverable({ id: "d1", may_publish: false, may_publish_reason: "blocked" })]);
-    const view = toPublishKitView(bundle);
-    expect(blockedPiecesAreFullyWithheld(view)).toBe(true);
+  // The blocked piece must carry BOTH a bound artifact and an other-version
+  // artifact, and a stored version asset. An earlier version of this test used
+  // a bare deliverable with `artifacts: []` and no storage_path, which made
+  // `.every()` trivially true over an empty array and the versionAsset
+  // disjunct short-circuit: deleting the entire artifacts clause from the
+  // predicate left it green. A fixture with nothing in it proves nothing.
+  function blockedView(): PublishKitView {
+    return toPublishKitView(
+      makeBundle([
+        makeDeliverable({
+          id: "d1",
+          may_publish: false,
+          may_publish_reason: "blocked",
+          current_version_id: "v1",
+          current_version: makeVersionBody({ id: "v1", storage_path: "deliverables/d1/asset.pdf" }),
+          approved_version_id: null,
+          approved_version: null,
+          artifacts: [
+            makeArtifact({
+              id: "a-bound",
+              version_id: "v1",
+              signed_url: "https://signed.example/bound.png",
+              public_url: "https://drglaw.ca/bound.png",
+            }),
+            makeArtifact({
+              id: "a-other",
+              version_id: "v-older",
+              artifact_type: "hero_image",
+              signed_url: "https://signed.example/other.png",
+              public_url: "https://drglaw.ca/other.png",
+            }),
+          ],
+        }),
+      ]),
+    );
+  }
+
+  function piecesOfView(view: PublishKitView) {
+    return view.groups.flatMap((g) => g.pieces);
+  }
+
+  it("true for a blocked piece whose artifacts, other-version artifacts and version asset are all stripped", () => {
+    const pieces = piecesOfView(blockedView());
+    const blocked = pieces.find((p) => p.id === "d1");
+    // Guard the guard: the fixture must actually carry the things being checked.
+    expect(blocked?.artifacts.length).toBeGreaterThan(0);
+    expect(blocked?.otherVersionArtifacts.length).toBeGreaterThan(0);
+    expect(blocked?.versionAsset).not.toBeNull();
+    expect(blockedPiecesAreFullyWithheld(pieces)).toBe(true);
   });
 
-  it("false when a blocked piece's view model still carries a signed URL", () => {
-    const bundle = makeBundle([makeDeliverable({ id: "d1", may_publish: false, may_publish_reason: "blocked" })]);
-    const view = toPublishKitView(bundle);
-    const leakedView: PublishKitView = {
-      ...view,
-      groups: view.groups.map((g) => ({
-        ...g,
-        pieces: g.pieces.map((p) =>
-          p.mayPublish
-            ? p
-            : {
-                ...p,
-                versionAsset: {
-                  name: "leaked.pdf",
-                  mime: "application/pdf",
-                  sizeBytes: 10,
-                  sha256: "deadbeef",
-                  storagePath: "publication-artifacts/d1/leaked.pdf",
-                  signedUrl: "https://leaked.example/x",
-                  signedUrlExpiresAt: "2026-07-01T01:00:00Z",
-                },
-              },
-        ),
-      })),
-    };
-    expect(blockedPiecesAreFullyWithheld(leakedView)).toBe(false);
+  it.each([
+    ["a bound artifact's signedUrl", (p: PublishKitPiece) => ({
+      ...p,
+      artifacts: p.artifacts.map((a, i) => (i === 0 ? { ...a, signedUrl: "https://leaked.example/x" } : a)),
+    })],
+    ["a bound artifact's publicUrl", (p: PublishKitPiece) => ({
+      ...p,
+      artifacts: p.artifacts.map((a, i) => (i === 0 ? { ...a, publicUrl: "https://drglaw.ca/leak.png" } : a)),
+    })],
+    ["an other-version artifact's signedUrl", (p: PublishKitPiece) => ({
+      ...p,
+      otherVersionArtifacts: p.otherVersionArtifacts.map((a, i) =>
+        i === 0 ? { ...a, signedUrl: "https://leaked.example/x" } : a,
+      ),
+    })],
+    ["an other-version artifact's publicUrl", (p: PublishKitPiece) => ({
+      ...p,
+      otherVersionArtifacts: p.otherVersionArtifacts.map((a, i) =>
+        i === 0 ? { ...a, publicUrl: "https://drglaw.ca/leak.png" } : a,
+      ),
+    })],
+    ["the version asset's signedUrl", (p: PublishKitPiece) => ({
+      ...p,
+      versionAsset: p.versionAsset ? { ...p.versionAsset, signedUrl: "https://leaked.example/x" } : null,
+    })],
+  ] as const)("false when %s leaks into a blocked piece", (_label, leak) => {
+    const pieces = piecesOfView(blockedView()).map((p) => (p.mayPublish ? p : leak(p)));
+    expect(blockedPiecesAreFullyWithheld(pieces)).toBe(false);
+  });
+
+  it("ignores publishable pieces entirely -- their links are supposed to work", () => {
+    const view = toPublishKitView(
+      makeBundle([
+        makeDeliverable({
+          id: "d1",
+          may_publish: true,
+          current_version_id: "v1",
+          current_version: makeVersionBody({ id: "v1" }),
+          artifacts: [makeArtifact({ id: "a1", version_id: "v1", signed_url: "https://signed.example/a1.png" })],
+        }),
+      ]),
+    );
+    expect(blockedPiecesAreFullyWithheld(piecesOfView(view))).toBe(true);
   });
 });
