@@ -145,6 +145,25 @@ export interface ContentExportArtifact {
   latest_validation: ContentExportArtifactValidation | null;
 }
 
+/**
+ * Why a specific version was held back for individual sign-off, populated only
+ * when the current version carries requires_individual_review = true.
+ *
+ * This is a DELIBERATE act by a named role, not a system state, and it is the
+ * one thing that overrides an active standing publishing authorization
+ * unconditionally (see release-authorization.ts). Exported so a consumer can
+ * show the operator *why a colleague held this piece* rather than only the
+ * mechanical fact that a flag is set -- without it the Publish Kit rendered a
+ * version UUID and the word "flagged", which reads as a system fault rather
+ * than as a decision someone made on purpose.
+ */
+export interface ContentExportIndividualReviewHold {
+  reason: string | null;
+  set_by_role: string | null;
+  set_by_name: string | null;
+  set_at: string | null;
+}
+
 export interface ContentExportChangeRequest {
   approval_record_id: string;
   requested_at: string;
@@ -180,6 +199,8 @@ export interface ContentExportDeliverable {
   current_version: ContentExportVersionBody | null;
   /** Populated only when the approved version differs from the current version. */
   approved_version: ContentExportVersionBody | null;
+  /** Non-null only when the CURRENT version is flagged requires_individual_review. */
+  individual_review_hold: ContentExportIndividualReviewHold | null;
   publication_destination: string | null;
   publication_path: string | null;
   /**
@@ -685,6 +706,17 @@ export async function buildContentExportBundle(
       may_publish_reason: reason,
       current_version: currentVersion,
       approved_version: approvedVersion,
+      // Read off the RESOLVED current version, the same row evaluateMayPublish
+      // took the flag from, so the explanation can never describe a different
+      // version than the decision did.
+      individual_review_hold: currentResolved.version?.requires_individual_review
+        ? {
+            reason: currentResolved.version.requires_individual_review_reason,
+            set_by_role: currentResolved.version.requires_individual_review_set_by_role,
+            set_by_name: currentResolved.version.requires_individual_review_set_by_name,
+            set_at: currentResolved.version.requires_individual_review_set_at,
+          }
+        : null,
       publication_destination: d.publication_destination,
       publication_path: d.publication_path,
       cta_target_path: d.cta_target_path,

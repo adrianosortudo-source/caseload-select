@@ -462,8 +462,36 @@ function PieceCard({
           ) : (
             <>
               <p className="text-xs font-semibold text-amber-700">Cannot publish</p>
-              {piece.mayPublishReason && (
-                <p className="text-[11px] text-black/50 mt-0.5">{piece.mayPublishReason}</p>
+              {/*
+                A deliberate hold outranks the mechanical reason. mayPublishReason
+                is accurate but reads as a system fault -- it names a version UUID
+                and the word "flagged" -- when what actually happened is that a
+                colleague held this piece back on purpose. Show their reason and
+                who they were; the mechanical text stays available in the publish
+                record for anyone who needs the exact predicate output.
+              */}
+              {piece.individualReviewHold ? (
+                <div className="mt-1 text-left border border-border-brand bg-parchment-2 p-2.5">
+                  <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-700">
+                    Held for individual review
+                    {piece.individualReviewHold.setByName
+                      ? ` by ${piece.individualReviewHold.setByName}`
+                      : piece.individualReviewHold.setByRole
+                        ? ` by the ${piece.individualReviewHold.setByRole}`
+                        : ""}
+                  </p>
+                  <p className="text-[11px] text-black/70 mt-1">
+                    {piece.individualReviewHold.reason ?? "No reason was recorded."}
+                  </p>
+                  <p className="text-[11px] text-black/45 mt-1.5">
+                    A hold overrides standing publishing authorization. Clear the hold, or approve
+                    this version individually, to release it.
+                  </p>
+                </div>
+              ) : (
+                piece.mayPublishReason && (
+                  <p className="text-[11px] text-black/50 mt-0.5">{piece.mayPublishReason}</p>
+                )
               )}
             </>
           )}

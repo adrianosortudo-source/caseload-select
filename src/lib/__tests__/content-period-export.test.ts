@@ -1607,3 +1607,52 @@ describe("buildContentExportBundle: standing publishing authorization (DR-107)",
     expect(md).not.toContain("Signed URL withheld");
   });
 });
+
+// ─── individual_review_hold: exported so the reason can be attributed ────────
+
+describe("buildContentExportBundle: individual_review_hold", () => {
+  it("exports the reason and its author when the current version is held", async () => {
+    state.deliverables = [
+      makeDeliverable({ id: "d1", status: "in_review", current_version_id: "v1", approved_version_id: null }),
+    ];
+    state.versions = [
+      makeVersion({
+        id: "v1",
+        deliverable_id: "d1",
+        requires_individual_review: true,
+        requires_individual_review_reason: "Unsubscribe link is a placeholder pending GHL sending setup.",
+        requires_individual_review_set_by_role: "operator",
+        requires_individual_review_set_by_name: null,
+        requires_individual_review_set_at: "2026-07-22T00:00:00Z",
+      }),
+    ];
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    const hold = result.bundle.deliverables[0].individual_review_hold;
+    expect(hold?.reason).toBe("Unsubscribe link is a placeholder pending GHL sending setup.");
+    expect(hold?.set_by_role).toBe("operator");
+    expect(hold?.set_at).toBe("2026-07-22T00:00:00Z");
+  });
+
+  it("is null when the current version is not held", async () => {
+    state.deliverables = [makeDeliverable({ id: "d1", current_version_id: "v1", approved_version_id: "v1" })];
+    state.versions = [makeVersion({ id: "v1", deliverable_id: "d1" })];
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.bundle.deliverables[0].individual_review_hold).toBeNull();
+  });
+
+  it("reads the flag off the RESOLVED version: a foreign pointer yields no hold", async () => {
+    state.deliverables = [
+      makeDeliverable({ id: "d1", status: "in_review", current_version_id: "v-foreign", approved_version_id: null }),
+    ];
+    state.versions = [
+      makeVersion({ id: "v-foreign", deliverable_id: "d-other", requires_individual_review: true }),
+    ];
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    // The version is not owned by this deliverable, so neither the decision nor
+    // its explanation may be taken from it.
+    expect(result.bundle.deliverables[0].individual_review_hold).toBeNull();
+  });
+});
