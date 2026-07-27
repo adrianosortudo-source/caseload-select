@@ -72,6 +72,7 @@ function makeDeliverable(overrides: Partial<ContentExportDeliverable> = {}): Con
     may_publish_reason: null,
     current_version: makeVersionBody(),
     approved_version: null,
+    individual_review_hold: null,
     publication_destination: "linkedin",
     publication_path: null,
     cta_target_path: null,
@@ -165,6 +166,7 @@ function makePiece(overrides: Partial<PublishKitPiece> = {}): PublishKitPiece {
     lane: "unknown",
     mayPublish: true,
     mayPublishReason: null,
+    individualReviewHold: null,
     bodyHtml: null,
     plainText: "",
     unapprovedDraftText: null,
@@ -2147,5 +2149,81 @@ describe("htmlToPlainText: non-text elements and entities", () => {
   it("still handles the simple fragments it always did", () => {
     expect(htmlToPlainText("<p>One</p><p>Two</p>")).toBe("One\n\nTwo");
     expect(htmlToPlainText("<p>a &amp; b</p>")).toBe("a & b");
+  });
+});
+
+// ─── individualReviewHold: a person held this, and the card should say so ────
+//
+// requires_individual_review is the one thing that overrides an active
+// standing publishing authorization, and it is always a deliberate act. The
+// kit previously rendered only the predicate's mechanical output -- a version
+// UUID and the word "flagged" -- which reads as a system fault rather than as
+// a colleague's decision. Carrying the reason and its author lets the card
+// attribute it.
+
+describe("individualReviewHold", () => {
+  function heldPiece(hold: {
+    reason?: string | null;
+    set_by_role?: string | null;
+    set_by_name?: string | null;
+    set_at?: string | null;
+  }) {
+    const bundle = makeBundle([
+      makeDeliverable({
+        id: "d1",
+        may_publish: false,
+        may_publish_reason: "Not release-authorized: flagged requires_individual_review=true.",
+        current_version_id: "v1",
+        current_version: makeVersionBody({ id: "v1" }),
+        approved_version_id: null,
+        approved_version: null,
+        individual_review_hold: {
+          reason: hold.reason ?? null,
+          set_by_role: hold.set_by_role ?? null,
+          set_by_name: hold.set_by_name ?? null,
+          set_at: hold.set_at ?? null,
+        },
+      }),
+    ]);
+    return piecesOf(toPublishKitView(bundle)).find((p) => p.id === "d1");
+  }
+
+  it("carries the recorded reason and who set it", () => {
+    const piece = heldPiece({
+      reason: "Unsubscribe link is a placeholder pending GHL sending setup.",
+      set_by_role: "operator",
+    });
+    expect(piece?.individualReviewHold?.reason).toBe(
+      "Unsubscribe link is a placeholder pending GHL sending setup.",
+    );
+    expect(piece?.individualReviewHold?.setByRole).toBe("operator");
+  });
+
+  it("survives a hold with no recorded reason -- the hold itself is still the fact", () => {
+    const piece = heldPiece({ reason: null, set_by_role: "operator" });
+    expect(piece?.individualReviewHold).not.toBeNull();
+    expect(piece?.individualReviewHold?.reason).toBeNull();
+  });
+
+  it("is null for a piece nobody held, even when it is blocked for another reason", () => {
+    const bundle = makeBundle([
+      makeDeliverable({
+        id: "d1",
+        may_publish: false,
+        may_publish_reason: "No approved_version_id is recorded.",
+        current_version_id: "v1",
+        current_version: makeVersionBody({ id: "v1" }),
+        approved_version_id: null,
+        approved_version: null,
+      }),
+    ]);
+    const piece = piecesOf(toPublishKitView(bundle)).find((p) => p.id === "d1");
+    expect(piece?.mayPublish).toBe(false);
+    expect(piece?.individualReviewHold).toBeNull();
+  });
+
+  it("does not make the piece publishable -- it only explains why it is not", () => {
+    const piece = heldPiece({ reason: "Held.", set_by_role: "operator" });
+    expect(piece?.mayPublish).toBe(false);
   });
 });

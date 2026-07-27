@@ -324,6 +324,19 @@ export interface PublishKitPiece {
   lane: PublisherLane;
   mayPublish: boolean;
   mayPublishReason: string | null;
+  /**
+   * Present only when a person deliberately held this version back for
+   * individual sign-off. Distinct from mayPublishReason, which states the
+   * mechanical outcome (a flag is set on a version id); this states WHO
+   * decided and WHY, which is what an operator actually needs in order to act.
+   * Rendered as an attributed note, never as a system error.
+   */
+  individualReviewHold: {
+    reason: string | null;
+    setByRole: string | null;
+    setByName: string | null;
+    setAt: string | null;
+  } | null;
   bodyHtml: string | null; // approved/current version body
   plainText: string; // htmlToPlainText(bodyHtml)
   /**
@@ -1084,6 +1097,14 @@ function toPiece(deliverable: ContentExportDeliverable): PublishKitPiece {
     lane: publisherLane(deliverable.publication_destination),
     mayPublish: deliverable.may_publish,
     mayPublishReason: deliverable.may_publish_reason,
+    individualReviewHold: deliverable.individual_review_hold
+      ? {
+          reason: deliverable.individual_review_hold.reason,
+          setByRole: deliverable.individual_review_hold.set_by_role,
+          setByName: deliverable.individual_review_hold.set_by_name,
+          setAt: deliverable.individual_review_hold.set_at,
+        }
+      : null,
     bodyHtml,
     plainText,
     unapprovedDraftText,
