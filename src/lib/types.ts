@@ -476,7 +476,16 @@ export interface PublicationArtifact {
   created_by_role: "operator" | "lawyer" | "system";
   created_by_id: string | null;
   created_at: string;
-  superseded_at: string | null; // insert-time-only note; never read for staleness
+  /**
+   * When this artifact was retracted, or null when it is active. A unique
+   * partial index enforces at most one active row per (deliverable_id,
+   * version_id, artifact_type, locale, destination) slot -- superseding an
+   * artifact stamps this column on the prior row rather than deleting it.
+   * A publication receipt referencing a superseded artifact is rejected at
+   * the database level. See content-period-export.ts and publish-kit-pure.ts,
+   * which both now read this for exactly that staleness check.
+   */
+  superseded_at: string | null;
 }
 
 export type PublicationArtifactValidator =
