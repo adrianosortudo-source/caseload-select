@@ -30,6 +30,7 @@ const state: {
   approvals: Row[];
   artifacts: Row[];
   validations: Row[];
+  standingAuth: Row[];
   writeAttempted: boolean;
   signedUrlCalls: { bucket: string; path: string; download?: string | boolean }[];
   signedUrlFailFor: Set<string>;
@@ -42,6 +43,7 @@ const state: {
   approvals: [],
   artifacts: [],
   validations: [],
+  standingAuth: [],
   signedUrlFailFor: new Set(),
   writeAttempted: false,
   signedUrlCalls: [],
@@ -71,6 +73,10 @@ function chainable(rows: Row[]) {
     },
     order: (col: string, opts?: { ascending?: boolean }) => {
       current = sortRows(current, col, opts?.ascending !== false);
+      return builder;
+    },
+    limit: (n: number) => {
+      current = current.slice(0, n);
       return builder;
     },
     maybeSingle: () => Promise.resolve({ data: current[0] ?? null, error: null }),
@@ -106,6 +112,12 @@ vi.mock("@/lib/supabase-admin", () => ({
       if (table === "approval_records") return chainable(state.approvals);
       if (table === "publication_artifacts") return chainable(state.artifacts);
       if (table === "publication_artifact_validations") return chainable(state.validations);
+      // Empty by default, so getStandingAuthorizationState returns null and
+      // standingAuthorizationActive is false. Every test written before the
+      // two-path release-authorization bar therefore keeps asserting the
+      // individual-approval path exactly as it did; the standing-authorization
+      // tests populate this explicitly.
+      if (table === "standing_publishing_authorizations") return chainable(state.standingAuth);
       throw new Error(`unexpected table in mock: ${table}`);
     },
     storage: {
@@ -180,6 +192,9 @@ function makeVersion(overrides: Row = {}): Row {
     responds_to_approval_id: null,
     asset_sha256: null,
     asset_validation: null,
+    // Mirrors the column default: a version is eligible for the standing-
+    // authorization path unless an operator explicitly flags it.
+    requires_individual_review: false,
     created_by_role: "operator",
     created_by_id: null,
     created_at: "2026-07-01T00:00:00Z",
@@ -198,6 +213,7 @@ beforeEach(() => {
   state.approvals = [];
   state.artifacts = [];
   state.validations = [];
+  state.standingAuth = [];
   state.writeAttempted = false;
   state.signedUrlCalls = [];
   state.signedUrlFailFor = new Set();
@@ -235,7 +251,16 @@ describe("buildContentExportBundle: may_publish", () => {
     if (!result.ok) throw new Error("expected ok");
     const d1 = result.bundle.deliverables[0];
     expect(d1.may_publish).toBe(false);
-    expect(d1.may_publish_reason).toBe('Deliverable status is "in_review", not "approved".');
+    // The reason now comes verbatim from isVersionReleaseAuthorized, the
+    // canonical two-path bar, rather than being re-worded here. With no
+    // standing authorization on record this is the standing_authorization_inactive
+    // outcome, and it names BOTH closed paths -- which the old local wording
+    // ("status is in_review, not approved") did not, because it did not know
+    // the second path existed.
+    expect(d1.may_publish_reason).toContain("has never been individually approved");
+    expect(d1.may_publish_reason).toContain(
+      "standing publishing authorization is not currently active",
+    );
   });
 
   it("an approved deliverable whose current version is the approved version has may_publish true", async () => {
@@ -262,7 +287,10 @@ describe("buildContentExportBundle: may_publish", () => {
     if (!result.ok) throw new Error("expected ok");
     const d1 = result.bundle.deliverables[0];
     expect(d1.may_publish).toBe(false);
-    expect(d1.may_publish_reason).toMatch(/not the current version/);
+    // Canonical wording for approved_version_mismatch: it names the stale
+    // approval by id rather than saying "not the current version", which is
+    // strictly more evidence for the same fact.
+    expect(d1.may_publish_reason).toMatch(/does not match the evaluated version/);
     expect(d1.is_current_version_approved).toBe(false);
     // The stale approved version is still reported, distinct from current, never substituted for it.
     expect(d1.current_version?.id).toBe("v2");
@@ -1398,5 +1426,184 @@ describe("withholdBundleLinks", () => {
 
     const json = JSON.stringify(withholdBundleLinks(result.bundle));
     expect(json).not.toContain("https://signed.example/deliverables/f1/d1/checklist.pdf");
+  });
+});
+
+// ─── the standing-authorization path (DR-107) ────────────────────────────────
+//
+// The bug these pin: evaluateMayPublish used to reconstruct the release bar
+// locally and implemented only individual approval, so a firm running on
+// standing publishing authorization -- for whom Path B is the NORMAL path, not
+// an edge case -- had its entire week reported as unpublishable. DRG Law's
+// week of 2026-06-29 was 15 pieces cleared through Path B, every one of them
+// locked, copy withheld and downloads disabled, in an export whose whole
+// purpose is to hand over exactly that material.
+
+function enableStandingAuth() {
+  state.standingAuth = [
+    {
+      id: "sa-1",
+      firm_id: FIRM_ID,
+      event_seq: 1,
+      event: "enabled",
+      actor_role: "lawyer",
+      actor_name: "Test Lawyer",
+      scope: "all_future_content",
+      effective_at: "2026-07-01T00:00:00Z",
+      created_at: "2026-07-01T00:00:00Z",
+    },
+  ];
+}
+
+describe("buildContentExportBundle: standing publishing authorization (DR-107)", () => {
+  it("an in_review deliverable with NO individual approval is publishable when standing authorization is active", async () => {
+    enableStandingAuth();
+    state.deliverables = [
+      makeDeliverable({
+        id: "d1",
+        status: "in_review",
+        current_version_id: "v1",
+        approved_version_id: null,
+      }),
+    ];
+    state.versions = [makeVersion({ id: "v1", deliverable_id: "d1", requires_individual_review: false })];
+
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    const d1 = result.bundle.deliverables.find((d) => d.id === "d1")!;
+    expect(d1.may_publish).toBe(true);
+    expect(d1.may_publish_reason).toBeNull();
+  });
+
+  it("requires_individual_review overrides standing authorization unconditionally", async () => {
+    enableStandingAuth();
+    state.deliverables = [
+      makeDeliverable({
+        id: "d1",
+        status: "in_review",
+        current_version_id: "v1",
+        approved_version_id: null,
+      }),
+    ];
+    state.versions = [makeVersion({ id: "v1", deliverable_id: "d1", requires_individual_review: true })];
+
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    const d1 = result.bundle.deliverables.find((d) => d.id === "d1")!;
+    expect(d1.may_publish).toBe(false);
+    expect(d1.may_publish_reason).toContain("requires_individual_review");
+  });
+
+  it("the same deliverable is NOT publishable once standing authorization is absent", async () => {
+    state.standingAuth = [];
+    state.deliverables = [
+      makeDeliverable({
+        id: "d1",
+        status: "in_review",
+        current_version_id: "v1",
+        approved_version_id: null,
+      }),
+    ];
+    state.versions = [makeVersion({ id: "v1", deliverable_id: "d1", requires_individual_review: false })];
+
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.bundle.deliverables.find((d) => d.id === "d1")!.may_publish).toBe(false);
+  });
+
+  it("a revoked authorization does not authorize: only the latest event counts", async () => {
+    state.standingAuth = [
+      { id: "sa-1", firm_id: FIRM_ID, event_seq: 1, event: "enabled", created_at: "2026-07-01T00:00:00Z" },
+      { id: "sa-2", firm_id: FIRM_ID, event_seq: 2, event: "revoked", created_at: "2026-07-02T00:00:00Z" },
+    ];
+    state.deliverables = [
+      makeDeliverable({
+        id: "d1",
+        status: "in_review",
+        current_version_id: "v1",
+        approved_version_id: null,
+      }),
+    ];
+    state.versions = [makeVersion({ id: "v1", deliverable_id: "d1", requires_individual_review: false })];
+
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.bundle.deliverables.find((d) => d.id === "d1")!.may_publish).toBe(false);
+  });
+
+  it("another firm's standing authorization never authorizes this firm's content", async () => {
+    state.standingAuth = [
+      {
+        id: "sa-other",
+        firm_id: OTHER_FIRM_ID,
+        event_seq: 1,
+        event: "enabled",
+        created_at: "2026-07-01T00:00:00Z",
+      },
+    ];
+    state.deliverables = [
+      makeDeliverable({
+        id: "d1",
+        status: "in_review",
+        current_version_id: "v1",
+        approved_version_id: null,
+      }),
+    ];
+    state.versions = [makeVersion({ id: "v1", deliverable_id: "d1", requires_individual_review: false })];
+
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.bundle.deliverables.find((d) => d.id === "d1")!.may_publish).toBe(false);
+  });
+
+  it("standing authorization does not rescue a foreign or dangling current_version_id", async () => {
+    enableStandingAuth();
+    state.deliverables = [
+      makeDeliverable({
+        id: "d1",
+        status: "in_review",
+        current_version_id: "v-foreign",
+        approved_version_id: null,
+      }),
+    ];
+    // v-foreign belongs to a different deliverable, so resolveOwnedVersion
+    // rejects it and the pointer-integrity guard fires before any
+    // authorization path is consulted.
+    state.versions = [makeVersion({ id: "v-foreign", deliverable_id: "d-other", requires_individual_review: false })];
+
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    const d1 = result.bundle.deliverables.find((d) => d.id === "d1")!;
+    expect(d1.may_publish).toBe(false);
+    expect(d1.may_publish_reason).toContain("does not resolve to an existing version row");
+  });
+
+  it("a standing-authorized piece really does get its links, not just may_publish true", async () => {
+    enableStandingAuth();
+    state.deliverables = [
+      makeDeliverable({
+        id: "d1",
+        status: "in_review",
+        current_version_id: "v1",
+        approved_version_id: null,
+      }),
+    ];
+    state.versions = [
+      makeVersion({
+        id: "v1",
+        deliverable_id: "d1",
+        requires_individual_review: false,
+        storage_path: "deliverables/f1/d1/asset.pdf",
+        asset_name: "asset.pdf",
+      }),
+    ];
+
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    // The whole point: the operator can actually collect the file.
+    const safe = withholdBundleLinks(result.bundle);
+    expect(safe.deliverables[0].current_version?.signed_url).toBeTruthy();
+    const md = renderContentExportMarkdown(result.bundle);
+    expect(md).not.toContain("Signed URL withheld");
   });
 });
