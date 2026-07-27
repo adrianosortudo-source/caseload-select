@@ -587,6 +587,12 @@ function PeriodCard({
               >
                 {editing ? "Close" : "Edit week"}
               </button>
+              <Link
+                href={`/portal/${firmId}/publish-kit/${period.id}`}
+                className="text-[11px] font-semibold text-navy/70 hover:text-navy"
+              >
+                Publish Kit
+              </Link>
               <DownloadBundleButton periodId={period.id} />
             </div>
           )}

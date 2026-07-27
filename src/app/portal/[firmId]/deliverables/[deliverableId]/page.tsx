@@ -8,6 +8,7 @@
  * Auth: operator OR matching firm-lawyer session. Client sessions excluded.
  */
 
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
 import { getPreviewIntent } from "@/lib/preview-mode";
@@ -71,6 +72,14 @@ export default async function DeliverableReviewPage({
 
   return (
     <div className="space-y-4">
+      {session.role === "operator" && !isLawyerPreview && detail.deliverable.period_id && (
+        <Link
+          href={`/portal/${firmId}/publish-kit/${detail.deliverable.period_id}#dlv-${deliverableId}`}
+          className="inline-block text-xs font-semibold uppercase tracking-wider text-navy/70 hover:text-navy"
+        >
+          Open in Publish Kit
+        </Link>
+      )}
       <PublicationStatusSummary rows={statusRows} />
       <DeliverableReview
         firmId={firmId}
