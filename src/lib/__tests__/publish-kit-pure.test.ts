@@ -2096,3 +2096,56 @@ describe("unapprovedDraftText", () => {
     expect(blockedPiecesAreFullyWithheld(pieces)).toBe(true);
   });
 });
+
+// ─── htmlToPlainText: full HTML emails, not just simple fragments ────────────
+//
+// Surfaced by showing the DRG Law Minute's draft in the kit: it is a complete
+// HTML email with a several-hundred-line <style> block, and stripping only
+// TAGS left the whole stylesheet behind as prose. The operator was handed CSS
+// to paste into the GHL template. Entities beyond the original seven
+// (&middot;, curly quotes, numeric forms) came through raw for the same reason.
+
+describe("htmlToPlainText: non-text elements and entities", () => {
+  it("removes the CONTENT of a style block, not just its tags", () => {
+    const html = "<style>.foot p{font-size:12px;color:var(--mid);}</style><p>Real copy.</p>";
+    const out = htmlToPlainText(html);
+    expect(out).toBe("Real copy.");
+    expect(out).not.toContain("font-size");
+  });
+
+  it("removes script and head content too", () => {
+    expect(htmlToPlainText("<script>var a = 1;</script><p>Body.</p>")).toBe("Body.");
+    expect(htmlToPlainText("<head><title>Ignored</title></head><p>Body.</p>")).toBe("Body.");
+  });
+
+  it("removes HTML comments", () => {
+    expect(htmlToPlainText("<p>Visible.</p><!-- hidden note -->")).toBe("Visible.");
+  });
+
+  it("decodes the entities a real editor emits, not just the original seven", () => {
+    expect(htmlToPlainText("<p>DRG&middot;LAW&middot;MINUTE</p>")).toBe("DRG·LAW·MINUTE");
+    expect(htmlToPlainText("<p>Commercial Lease &middot; Ontario</p>")).toBe("Commercial Lease · Ontario");
+    expect(htmlToPlainText("<p>it&rsquo;s</p>")).toBe("it’s");
+    expect(htmlToPlainText("<p>a &mdash; b</p>")).toBe("a — b");
+  });
+
+  it("decodes numeric entities, decimal and hex", () => {
+    expect(htmlToPlainText("<p>it&#8217;s</p>")).toBe("it’s");
+    expect(htmlToPlainText("<p>it&#x2019;s</p>")).toBe("it’s");
+  });
+
+  it("leaves an entity it does not know exactly as written", () => {
+    expect(htmlToPlainText("<p>&zzz; stays</p>")).toBe("&zzz; stays");
+  });
+
+  it("does not double-decode: an escaped entity survives as literal text", () => {
+    // The author wrote &amp;lt; to display "&lt;". Decoding in two passes
+    // would turn it into "<".
+    expect(htmlToPlainText("<p>&amp;lt;</p>")).toBe("&lt;");
+  });
+
+  it("still handles the simple fragments it always did", () => {
+    expect(htmlToPlainText("<p>One</p><p>Two</p>")).toBe("One\n\nTwo");
+    expect(htmlToPlainText("<p>a &amp; b</p>")).toBe("a & b");
+  });
+});
