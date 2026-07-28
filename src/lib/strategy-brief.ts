@@ -9,6 +9,25 @@ export const STRATEGY_BRIEF_FIELDS = [
   ["websiteAndConversionRole", "Website and conversion role"],
 ] as const satisfies ReadonlyArray<readonly [keyof StrategyBrief, string]>;
 
+export const STRATEGY_BRIEF_GUIDANCE: Record<keyof StrategyBrief, string> = {
+  readerAndSituation: "Who the content is for and the real decision, pressure, or situation they are facing.",
+  workSupported: "The DRG service, practice area, content cluster, or client journey this package advances.",
+  whyThisWeek: "Why the subject matters now, including its business consequence and place in the editorial sequence.",
+  practicalAngle: "The legal or commercial mechanisms DRG will help the reader understand and how they interact.",
+  authorityAndEvidence: "The source material, legal authority, approved DRG content, and available performance evidence supporting the package.",
+  websiteAndConversionRole: "Where the package strengthens the website and the next action it should encourage.",
+};
+
+export function strategyBriefFieldValue(
+  brief: StrategyBrief | null | undefined,
+  key: keyof StrategyBrief,
+): { value: string; complete: boolean } {
+  const value = brief?.[key]?.trim() ?? "";
+  return value
+    ? { value, complete: true }
+    : { value: STRATEGY_BRIEF_GUIDANCE[key], complete: false };
+}
+
 export function isCompleteStrategyBrief(value: unknown): value is StrategyBrief {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const brief = value as Record<string, unknown>;
