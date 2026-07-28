@@ -8,6 +8,7 @@ import {
   setActiveHighlight,
   type HighlightItem,
 } from "@/lib/highlight-dom";
+import type { HeroOverlay } from "./hero-overlay-pure";
 import "./drg-article-frame.css";
 
 /**
@@ -54,6 +55,7 @@ export function DRGArticleFrame({
   publishDate,
   readTime,
   heroImageUrl,
+  heroOverlay = null,
   bodyHtml,
   onAnnotate,
   highlights,
@@ -70,6 +72,13 @@ export function DRGArticleFrame({
   publishDate: string | null;
   readTime: string | null;
   heroImageUrl: string | null;
+  /**
+   * When set (and a hero image exists), the eyebrow and headline are drawn
+   * over the photograph the way the live site draws them, instead of the
+   * title sitting above a bare image. See hero-overlay-pure.ts for which
+   * deliverables get one and why. Null keeps the previous layout.
+   */
+  heroOverlay?: HeroOverlay | null;
   bodyHtml: string;
   onAnnotate: (annotation: DeliverableAnnotation, position: AnnotationPosition) => void;
   /** Stored text-comment ranges to keep highlighted in the body. */
@@ -103,6 +112,9 @@ export function DRGArticleFrame({
   const commentedKinds = new Set((elementAnchors ?? []).map((e) => e.kind));
   const renderedBodyHtml = getArticlePreviewBodyHtml(bodyHtml);
   const renderedTitle = getArticlePreviewTitle(title);
+  // The overlay needs a photograph to sit on; without one the headline stays
+  // in the header where it has a cream ground to be legible against.
+  const showHeroOverlay = Boolean(heroImageUrl && heroOverlay);
 
   const measureAndReport = useCallback(() => {
     const body = bodyRef.current;
@@ -281,14 +293,18 @@ export function DRGArticleFrame({
               </>
             )}
           </div>
-          <h1
-            ref={titleRef}
-            className={`drg-display${commentedKinds.has("title") ? " is-commented" : ""}`}
-            onMouseUp={(e) => onFieldMouseUp("title", e)}
-            title="Select or click to comment on the title"
-          >
-            {renderedTitle}
-          </h1>
+          {/* When the hero carries the overlay, the headline renders there
+              instead, so the article never shows its title twice. */}
+          {!showHeroOverlay && (
+            <h1
+              ref={titleRef}
+              className={`drg-display${commentedKinds.has("title") ? " is-commented" : ""}`}
+              onMouseUp={(e) => onFieldMouseUp("title", e)}
+              title="Select or click to comment on the title"
+            >
+              {renderedTitle}
+            </h1>
+          )}
           {excerpt && (
             <p
               ref={leadRef}
@@ -308,15 +324,41 @@ export function DRGArticleFrame({
         }`}
       >
         {heroImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            ref={heroImgRef}
-            src={heroImageUrl}
-            alt={renderedTitle}
-            onClick={onHeroClick}
-            style={{ cursor: "pointer" }}
-            title="Click to comment on this image"
-          />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              ref={heroImgRef}
+              src={heroImageUrl}
+              alt={renderedTitle}
+              onClick={onHeroClick}
+              style={{ cursor: "pointer" }}
+              title="Click to comment on this image"
+            />
+            {showHeroOverlay && heroOverlay && (
+              // The scrim is inert so a click still reaches the photograph and
+              // opens an image comment; only the headline captures its own
+              // clicks, for a title comment.
+              <div
+                className={`drg-hero-overlay is-${heroOverlay.anchor}`}
+                aria-hidden={false}
+              >
+                <span className="drg-hero-scrim" aria-hidden="true" />
+                <div className="drg-hero-text">
+                  <p className="drg-hero-eyebrow">{heroOverlay.eyebrow}</p>
+                  <h1
+                    ref={titleRef}
+                    className={`drg-display on-hero${
+                      commentedKinds.has("title") ? " is-commented" : ""
+                    }`}
+                    onMouseUp={(e) => onFieldMouseUp("title", e)}
+                    title="Select or click to comment on the title"
+                  >
+                    {renderedTitle}
+                  </h1>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <span>Hero image not yet generated</span>
         )}

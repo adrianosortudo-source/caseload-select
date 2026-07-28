@@ -37,6 +37,7 @@ import { SUPPORT_PREVIEW_READ_ONLY_MESSAGE } from "@/lib/support-preview-copy";
 import PlacementsTrackingPanel from "./PlacementsTrackingPanel";
 import HeroImageControl from "./HeroImageControl";
 import { shouldShowHeroImageControl } from "./hero-image-control-pure";
+import { heroOverlayFor } from "./hero-overlay-pure";
 
 interface Detail {
   deliverable: ContentDeliverable;
@@ -616,6 +617,7 @@ function ContentViewer({
             publishDate={deliverable.publish_date}
             readTime={deliverable.read_time}
             heroImageUrl={deliverable.hero_image_url}
+            heroOverlay={heroOverlayFor(deliverable)}
             bodyHtml={version.body_html ?? ""}
             onAnnotate={onAnnotate}
             highlights={highlights}
