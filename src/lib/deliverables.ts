@@ -144,7 +144,7 @@ export async function getContentPlan(
   let dq = supabase
     .from("content_deliverables")
     .select(
-      "id, title, kicker, status, content_kind, format, period_id, publish_date, published_at, current_version_id",
+      "id, title, kicker, status, content_kind, format, locale, deliverable_role, publication_destination, period_id, publish_date, published_at, current_version_id",
     )
     .eq("firm_id", firmId);
   if (!options.includeArchived) dq = dq.neq("status", "archived");
@@ -200,6 +200,9 @@ export async function getContentPlan(
     status: d.status,
     content_kind: d.content_kind,
     format: d.format,
+    locale: d.locale,
+    deliverable_role: d.deliverable_role,
+    publication_destination: d.publication_destination,
     period_id: d.period_id,
     publish_date: d.publish_date,
     published_at: d.published_at,
@@ -244,8 +247,8 @@ export async function createPeriod(input: {
   /** null = not a numbered publishing week. */
   weekNumber?: number | null;
   theme: string | null;
-  details: string | null;
-  rationale: string | null;
+  details?: string | null;
+  rationale?: string | null;
   strategyBrief: StrategyBrief;
   actor: DeliverableActor;
 }): Promise<{ ok: true; period: ContentPeriod } | { ok: false; error: string }> {
@@ -257,8 +260,8 @@ export async function createPeriod(input: {
       ends_on: input.endsOn,
       week_number: input.weekNumber ?? null,
       theme: input.theme,
-      details: input.details,
-      rationale: input.rationale,
+      details: input.details ?? null,
+      rationale: input.rationale ?? null,
       strategy_brief: input.strategyBrief,
       created_by_role: input.actor.role,
       created_by_id: input.actor.id ?? null,
