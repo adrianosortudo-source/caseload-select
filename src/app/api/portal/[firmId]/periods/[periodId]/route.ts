@@ -11,6 +11,7 @@ import { resolveDeliverableActor } from "@/lib/deliverables-auth";
 import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { updatePeriod, deletePeriod } from "@/lib/deliverables";
 import { parseWeekNumber } from "@/lib/deliverables-pure";
+import { isCompleteStrategyBrief, parseStrategyBrief } from "@/lib/strategy-brief";
 import type { ContentPeriod } from "@/lib/types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -44,7 +45,13 @@ export async function PATCH(
   const patch: Partial<
     Pick<
       ContentPeriod,
-      "starts_on" | "ends_on" | "week_number" | "theme" | "details" | "rationale"
+      | "starts_on"
+      | "ends_on"
+      | "week_number"
+      | "theme"
+      | "details"
+      | "rationale"
+      | "strategyBrief"
     >
   > = {};
   // Only touched when the key is present: an omitted week_number leaves the
@@ -77,6 +84,16 @@ export async function PATCH(
   if ("theme" in body) patch.theme = cleanText(body.theme, 200);
   if ("details" in body) patch.details = cleanText(body.details, 2000);
   if ("rationale" in body) patch.rationale = cleanText(body.rationale, 2000);
+  if ("strategy_brief" in body) {
+    const strategyBrief = parseStrategyBrief(body.strategy_brief);
+    if (!isCompleteStrategyBrief(strategyBrief)) {
+      return NextResponse.json(
+        { error: "strategy_brief must contain all six non-empty fields" },
+        { status: 400 },
+      );
+    }
+    patch.strategyBrief = strategyBrief;
+  }
 
   const result = await updatePeriod({ periodId, firmId, patch });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });

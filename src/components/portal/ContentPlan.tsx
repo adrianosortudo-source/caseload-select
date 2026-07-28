@@ -8,7 +8,9 @@ import type {
   ContentPlanSettings,
   ContentKind,
   DeliverableStatus,
+  StrategyBrief,
 } from "@/lib/types";
+import { isCompleteStrategyBrief, STRATEGY_BRIEF_FIELDS } from "@/lib/strategy-brief";
 import {
   groupByFormat,
   planProgress,
@@ -666,6 +668,8 @@ function PeriodCard({
         </div>
       </div>
 
+      <StrategyBriefSection brief={period.strategyBrief} approved={showPublished || approved > 0} />
+
       {periodReadiness && (
         <div className="px-6 py-3 border-b border-border-brand/60 space-y-2">
           <PublicationReadinessSummary
@@ -719,6 +723,44 @@ function PeriodCard({
           ))
         )}
       </div>
+    </section>
+  );
+}
+
+function StrategyBriefSection({
+  brief,
+  approved,
+}: {
+  brief: StrategyBrief | null | undefined;
+  approved: boolean;
+}) {
+  const complete = isCompleteStrategyBrief(brief);
+  return (
+    <section className="px-6 py-5 border-b border-border-brand/60 bg-parchment-2/20">
+      <h3 className="text-sm font-bold text-navy">Weekly strategic brief</h3>
+      <p className="text-sm text-black/65 leading-relaxed mt-1.5 max-w-3xl">
+        This brief records the strategic decision behind this week&rsquo;s {approved ? "approved" : "proposed"} content package. Every listed deliverable must support this approved reader, matter, and practical question.
+      </p>
+      {!complete && (
+        <p className="text-sm text-amber-800 leading-relaxed mt-3">
+          The strategy record is incomplete. The content remains available; complete all six fields in Edit week before marking this package ready for client release.
+        </p>
+      )}
+      <dl className="mt-4 border-t border-border-brand/60">
+        {STRATEGY_BRIEF_FIELDS.map(([key, label]) => (
+          <div
+            key={key}
+            className="grid grid-cols-[minmax(11rem,0.35fr)_1fr] items-start gap-x-6 gap-y-1 py-4 border-b border-border-brand/40 last:border-b-0 max-[640px]:grid-cols-1"
+          >
+            <dt className="text-[10px] uppercase tracking-[0.1em] font-semibold text-navy pt-0.5">
+              {label}
+            </dt>
+            <dd className="text-sm text-black/75 leading-relaxed">
+              {brief?.[key] ?? "Strategy not recorded yet."}
+            </dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }
@@ -1071,6 +1113,16 @@ function PeriodForm({
   const [theme, setTheme] = useState(period?.theme ?? "");
   const [details, setDetails] = useState(period?.details ?? "");
   const [rationale, setRationale] = useState(period?.rationale ?? "");
+  const [strategyBrief, setStrategyBrief] = useState<StrategyBrief>(
+    period?.strategyBrief ?? {
+      readerAndSituation: "",
+      workSupported: "",
+      whyThisWeek: "",
+      practicalAngle: "",
+      authorityAndEvidence: "",
+      websiteAndConversionRole: "",
+    },
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1085,6 +1137,10 @@ function PeriodForm({
       setError("Week number must be a whole number, or left blank.");
       return;
     }
+    if (!isCompleteStrategyBrief(strategyBrief)) {
+      setError("Complete all six Weekly strategic brief fields before saving this week.");
+      return;
+    }
     setSaving(true);
     setError(null);
     const payload = {
@@ -1095,6 +1151,7 @@ function PeriodForm({
       theme: theme.trim() || null,
       details: details.trim() || null,
       rationale: rationale.trim() || null,
+      strategy_brief: strategyBrief,
     };
     const url = period
       ? `/api/portal/${firmId}/periods/${period.id}`
@@ -1217,6 +1274,36 @@ function PeriodForm({
           className="w-full text-sm border border-border-brand px-3 py-2 bg-white resize-y"
         />
       </div>
+      <fieldset className="border-t border-border-brand/60 pt-3 space-y-3">
+        <legend className="text-[10px] uppercase tracking-wider font-semibold text-navy">
+          Weekly strategic brief
+        </legend>
+        <p className="text-xs text-black/55">
+          Complete all six fields. The content remains accessible while this strategy record is being completed.
+        </p>
+        {STRATEGY_BRIEF_FIELDS.map(([key, label]) => {
+          const inputId = `period-${period?.id ?? "new"}-strategy-${key}`;
+          return (
+            <div key={key}>
+              <label
+                htmlFor={inputId}
+                className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1"
+              >
+                {label}
+              </label>
+              <textarea
+                id={inputId}
+                value={strategyBrief[key]}
+                onChange={(e) =>
+                  setStrategyBrief((current) => ({ ...current, [key]: e.target.value }))
+                }
+                rows={3}
+                className="w-full text-sm border border-border-brand px-3 py-2 bg-white resize-y"
+              />
+            </div>
+          );
+        })}
+      </fieldset>
       {error && <p className="text-xs text-red-fail">{error}</p>}
       <div className="flex items-center gap-3">
         <button
