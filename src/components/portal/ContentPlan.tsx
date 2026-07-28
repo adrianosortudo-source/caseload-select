@@ -8,7 +8,9 @@ import type {
   ContentPlanSettings,
   ContentKind,
   DeliverableStatus,
+  StrategyBrief,
 } from "@/lib/types";
+import { isCompleteStrategyBrief, STRATEGY_BRIEF_FIELDS } from "@/lib/strategy-brief";
 import {
   groupByFormat,
   planProgress,
@@ -41,17 +43,8 @@ function fmtDate(iso: string | null): string {
   return `${d.getDate()} ${d.toLocaleString("en-CA", { month: "short" })} ${d.getFullYear()}`;
 }
 
-function fmtRange(s: string, e: string): string {
-  const ds = new Date(`${s}T00:00:00`);
-  const de = new Date(`${e}T00:00:00`);
-  if (Number.isNaN(ds.getTime()) || Number.isNaN(de.getTime())) return `${s} to ${e}`;
-  const mS = ds.toLocaleString("en-CA", { month: "long" });
-  const mE = de.toLocaleString("en-CA", { month: "long" });
-  const yS = ds.getFullYear();
-  const yE = de.getFullYear();
-  if (yS === yE && mS === mE) return `${ds.getDate()} to ${de.getDate()} ${mE} ${yE}`;
-  if (yS === yE) return `${ds.getDate()} ${mS} to ${de.getDate()} ${mE} ${yE}`;
-  return `${ds.getDate()} ${mS} ${yS} to ${de.getDate()} ${mE} ${yE}`;
+function fmtWeek(weekNumber: number | null): string {
+  return weekNumber ? `Week ${weekNumber}` : "Content package";
 }
 
 export interface PlanReadinessProp {
@@ -566,7 +559,7 @@ function PeriodCard({
       <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-border-brand/60 flex-wrap">
         <div>
           <p className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[color:var(--portal-accent)]">
-            {fmtRange(period.starts_on, period.ends_on)}
+            {fmtWeek(period.week_number)}
           </p>
           {period.theme && (
             <h2 className="text-lg font-bold text-navy mt-1 leading-snug">{period.theme}</h2>
@@ -592,6 +585,8 @@ function PeriodCard({
           )}
         </div>
       </div>
+
+      <StrategyBriefSection brief={period.strategyBrief} />
 
       {periodReadiness && (
         <div className="px-6 py-3 border-b border-border-brand/60 space-y-2">
@@ -645,6 +640,29 @@ function PeriodCard({
           ))
         )}
       </div>
+    </section>
+  );
+}
+
+function StrategyBriefSection({ brief }: { brief: StrategyBrief | null }) {
+  if (!isCompleteStrategyBrief(brief)) return null;
+
+  return (
+    <section className="px-6 py-5 border-b border-border-brand/60 bg-parchment-2/30" aria-label="Weekly strategic brief">
+      <h3 className="text-sm font-bold text-navy">
+        Weekly strategic brief
+      </h3>
+      <p className="mt-1 text-sm text-black/65 max-w-3xl">
+        This brief records the approved strategic decision behind this week&apos;s content package.
+      </p>
+      <dl className="mt-4 border-t border-border-brand/60">
+        {STRATEGY_BRIEF_FIELDS.map(([key, label]) => (
+          <div key={key} className="grid gap-1 py-4 border-b border-border-brand/60 sm:grid-cols-[13rem_minmax(0,1fr)] sm:gap-5 items-start">
+            <dt className="text-[10px] uppercase tracking-wider font-semibold text-navy">{label}</dt>
+            <dd className="text-sm leading-6 text-black/75">{brief[key]}</dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }
@@ -925,7 +943,7 @@ function PlacementControl({
           <option value="">Unscheduled</option>
           {periods.map((p) => (
             <option key={p.id} value={p.id}>
-              {fmtRange(p.starts_on, p.ends_on)}
+              {fmtWeek(p.week_number)}
               {p.theme ? ` · ${p.theme.slice(0, 30)}` : ""}
             </option>
           ))}
@@ -965,28 +983,39 @@ function PeriodForm({
   period?: ContentPeriod;
   onDone: () => void;
 }) {
-  const [startsOn, setStartsOn] = useState(period?.starts_on ?? "");
-  const [endsOn, setEndsOn] = useState(period?.ends_on ?? "");
+  const [weekNumber, setWeekNumber] = useState(period?.week_number?.toString() ?? "");
   const [theme, setTheme] = useState(period?.theme ?? "");
   const [details, setDetails] = useState(period?.details ?? "");
   const [rationale, setRationale] = useState(period?.rationale ?? "");
+  const [strategyBrief, setStrategyBrief] = useState<Partial<StrategyBrief>>(
+    period?.strategyBrief ?? {},
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!startsOn || !endsOn) {
-      setError("Set the start and end dates.");
+    const parsedWeekNumber = Number(weekNumber);
+    if (!Number.isInteger(parsedWeekNumber) || parsedWeekNumber < 1) {
+      setError("Set a positive week number.");
+      return;
+    }
+    const brief = buildStrategyBrief(strategyBrief);
+    const hasAnyBriefValue = STRATEGY_BRIEF_FIELDS.some(
+      ([key]) => (strategyBrief[key] ?? "").trim().length > 0,
+    );
+    if (hasAnyBriefValue && !brief) {
+      setError("Complete all six Weekly strategic brief fields, or leave them all blank.");
       return;
     }
     setSaving(true);
     setError(null);
     const payload = {
-      starts_on: startsOn,
-      ends_on: endsOn,
+      week_number: parsedWeekNumber,
       theme: theme.trim() || null,
       details: details.trim() || null,
       rationale: rationale.trim() || null,
+      strategyBrief: brief,
     };
     const url = period
       ? `/api/portal/${firmId}/periods/${period.id}`
@@ -1024,29 +1053,19 @@ function PeriodForm({
 
   return (
     <form onSubmit={submit} className="bg-white border border-border-brand p-4 space-y-3">
-      <div className="flex gap-3 flex-wrap">
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
-            Week starts
-          </label>
-          <input
-            type="date"
-            value={startsOn}
-            onChange={(e) => setStartsOn(e.target.value)}
-            className="text-sm border border-border-brand px-2 py-1.5 bg-white"
-          />
-        </div>
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
-            Week ends
-          </label>
-          <input
-            type="date"
-            value={endsOn}
-            onChange={(e) => setEndsOn(e.target.value)}
-            className="text-sm border border-border-brand px-2 py-1.5 bg-white"
-          />
-        </div>
+      <div className="max-w-[10rem]">
+        <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
+          Week number
+        </label>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          value={weekNumber}
+          onChange={(e) => setWeekNumber(e.target.value)}
+          placeholder="e.g. 3"
+          className="w-full text-sm border border-border-brand px-3 py-2 bg-white"
+        />
       </div>
       <div>
         <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
@@ -1086,6 +1105,23 @@ function PeriodForm({
           className="w-full text-sm border border-border-brand px-3 py-2 bg-white resize-y"
         />
       </div>
+      <fieldset className="border-t border-border-brand/60 pt-4 space-y-3">
+        <legend className="text-sm font-bold text-navy pr-2">Weekly strategic brief</legend>
+        <p className="text-xs text-black/55 -mt-1">
+          Optional. Leave every field blank to omit the brief; otherwise complete all six approved fields.
+        </p>
+        {STRATEGY_BRIEF_FIELDS.map(([key, label]) => (
+          <label key={key} className="block">
+            <span className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">{label}</span>
+            <textarea
+              value={strategyBrief[key] ?? ""}
+              onChange={(e) => setStrategyBrief((current) => ({ ...current, [key]: e.target.value }))}
+              rows={3}
+              className="w-full text-sm border border-border-brand px-3 py-2 bg-white resize-y"
+            />
+          </label>
+        ))}
+      </fieldset>
       {error && <p className="text-xs text-red-fail">{error}</p>}
       <div className="flex items-center gap-3">
         <button
@@ -1111,6 +1147,19 @@ function PeriodForm({
 }
 
 // ─── Operator: new deliverable ───────────────────────────────────────────────
+
+function buildStrategyBrief(draft: Partial<StrategyBrief>): StrategyBrief | null {
+  const values = STRATEGY_BRIEF_FIELDS.map(([key]) => draft[key]?.trim() ?? "");
+  if (values.every((value) => !value) || values.some((value) => !value)) return null;
+  return {
+    readerAndSituation: draft.readerAndSituation!.trim(),
+    workSupported: draft.workSupported!.trim(),
+    whyThisWeek: draft.whyThisWeek!.trim(),
+    practicalAngle: draft.practicalAngle!.trim(),
+    authorityAndEvidence: draft.authorityAndEvidence!.trim(),
+    websiteAndConversionRole: draft.websiteAndConversionRole!.trim(),
+  };
+}
 
 function NewDeliverableForm({
   firmId,

@@ -1,15 +1,14 @@
 /**
  * POST /api/portal/[firmId]/periods
  *
- * Operator-only. Create a content-plan week (date range + theme + details +
+ * Operator-only. Create a content-plan week (week number + theme + details +
  * rationale). The firm reads these; only the operator authors them.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
 import { createPeriod } from "@/lib/deliverables";
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+import { parseStrategyBrief } from "@/lib/strategy-brief";
 
 function cleanText(v: unknown, max: number): string | null {
   const s = typeof v === "string" ? v.trim().slice(0, max) : "";
@@ -28,11 +27,11 @@ export async function POST(
   }
 
   let body: {
-    starts_on?: unknown;
-    ends_on?: unknown;
+    week_number?: unknown;
     theme?: unknown;
     details?: unknown;
     rationale?: unknown;
+    strategyBrief?: unknown;
   };
   try {
     body = await req.json();
@@ -40,27 +39,22 @@ export async function POST(
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
-  const startsOn =
-    typeof body.starts_on === "string" && DATE_RE.test(body.starts_on) ? body.starts_on : null;
-  const endsOn =
-    typeof body.ends_on === "string" && DATE_RE.test(body.ends_on) ? body.ends_on : null;
-  if (!startsOn || !endsOn) {
-    return NextResponse.json(
-      { error: "starts_on and ends_on (YYYY-MM-DD) are required" },
-      { status: 400 },
-    );
+  const weekNumber = typeof body.week_number === "number" ? body.week_number : NaN;
+  if (!Number.isInteger(weekNumber) || weekNumber < 1) {
+    return NextResponse.json({ error: "week_number must be a positive whole number" }, { status: 400 });
   }
-  if (endsOn < startsOn) {
-    return NextResponse.json({ error: "ends_on must be on or after starts_on" }, { status: 400 });
+  const strategyBrief = parseStrategyBrief(body.strategyBrief);
+  if (strategyBrief === "invalid") {
+    return NextResponse.json({ error: "Complete all six Weekly strategic brief fields, or leave them all blank." }, { status: 400 });
   }
 
   const result = await createPeriod({
     firmId,
-    startsOn,
-    endsOn,
+    weekNumber,
     theme: cleanText(body.theme, 200),
     details: cleanText(body.details, 2000),
     rationale: cleanText(body.rationale, 2000),
+    strategyBrief,
     actor: resolved.actor,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
