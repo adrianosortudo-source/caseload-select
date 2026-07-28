@@ -318,11 +318,15 @@ export type PublicationDestination =
 export interface ContentPeriod {
   id: string;
   firm_id: string;
-  starts_on: string;   // YYYY-MM-DD
-  ends_on: string;     // YYYY-MM-DD
+  /** Legacy scheduling dates; new weeks are identified by week_number. */
+  starts_on: string | null;
+  ends_on: string | null;
+  week_number: number | null;
   theme: string | null;
   details: string | null;
   rationale: string | null;   // the "why": brand relevance + search intent
+  /** Optional, approved strategic rationale displayed above the deliverables. */
+  strategyBrief: StrategyBrief | null;
   sort_index: number;
   created_by_role: string | null;
   created_by_id: string | null;
@@ -343,6 +347,16 @@ export interface ContentPeriod {
   // activatePeriodReadiness (lib/deliverables.ts) after
   // evaluateActivationPreflight passes and the database trigger confirms it.
   readiness_enforced_at: string | null;
+}
+
+/** The client-visible rationale for one weekly content package. */
+export interface StrategyBrief {
+  readerAndSituation: string;
+  workSupported: string;
+  whyThisWeek: string;
+  practicalAngle: string;
+  authorityAndEvidence: string;
+  websiteAndConversionRole: string;
 }
 
 /**
