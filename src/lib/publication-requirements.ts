@@ -128,7 +128,7 @@ export function resolveRequirements(
     | "requires_localized_route"
   >,
 ): RequirementSpec[] {
-  if (!deliverable.deliverable_role) {
+  if (!deliverable.deliverable_role || !(deliverable.deliverable_role in PROFILE_BY_ROLE)) {
     return [ALWAYS_FIRST[0]];
   }
 

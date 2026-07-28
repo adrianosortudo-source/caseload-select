@@ -17,7 +17,10 @@
     "check:engine-sync": "bash scripts/check-engine-sync.sh",
     "check:engine-sync:win": "powershell -ExecutionPolicy Bypass -File scripts/check-engine-sync.ps1",
     "check:engine-manifest": "bash scripts/check-engine-manifest.sh",
-    "gen:engine-manifest": "bash scripts/gen-engine-manifest.sh"
+    "gen:engine-manifest": "bash scripts/gen-engine-manifest.sh",
+    "release:portal:preflight": "powershell -ExecutionPolicy Bypass -File scripts/portal-release.ps1 -Mode preflight",
+    "release:portal:preview": "powershell -ExecutionPolicy Bypass -File scripts/portal-release.ps1 -Mode preview",
+    "release:portal:promote": "powershell -ExecutionPolicy Bypass -File scripts/portal-release.ps1 -Mode promote"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
