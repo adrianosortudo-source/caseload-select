@@ -813,9 +813,9 @@ function StrategyBriefSection({
 }) {
   const complete = isCompleteStrategyBrief(brief);
   return (
-    <section className="px-6 py-5 border-b border-border-brand/60 bg-parchment-2/20">
-      <h3 className="text-sm font-bold text-navy">Weekly strategic record</h3>
-      <p className="text-sm text-black/65 leading-relaxed mt-1.5 max-w-3xl">
+    <section className="px-6 py-4 border-b border-border-brand/60 bg-parchment-2/20">
+      <h3 className="text-[13px] font-bold text-navy">Weekly strategic record</h3>
+      <p className="text-[13px] text-black/65 leading-[1.5] mt-1 max-w-3xl">
         This brief records the strategic decision behind this week&rsquo;s {approved ? "approved" : "proposed"} content package. Every listed deliverable must support this approved reader, matter, and practical question.
       </p>
       {!complete && (
@@ -823,16 +823,16 @@ function StrategyBriefSection({
           The strategy record is incomplete. The content remains available; complete all six fields in Edit package overview before marking this package ready for client release.
         </p>
       )}
-      <dl className="mt-4 grid grid-cols-2 border-t border-border-brand/60 max-[900px]:grid-cols-1">
+      <dl className="mt-3 grid grid-cols-2 border-t border-border-brand/60 max-[900px]:grid-cols-1">
         {STRATEGY_BRIEF_FIELDS.map(([key, label]) => (
           <div
             key={key}
-            className="grid grid-cols-[minmax(9rem,0.42fr)_1fr] items-start gap-x-4 gap-y-1 px-3 py-2.5 border-b border-border-brand/40 min-[901px]:odd:border-r max-[640px]:grid-cols-1"
+            className="grid grid-cols-[minmax(8rem,0.38fr)_1fr] items-start gap-x-3 gap-y-1 px-3 py-2 border-b border-border-brand/40 min-[901px]:odd:border-r max-[640px]:grid-cols-1"
           >
-            <dt className="text-[10px] uppercase tracking-[0.1em] font-semibold text-navy pt-0.5">
+            <dt className="text-[9px] uppercase tracking-[0.09em] font-semibold text-navy pt-0.5">
               {label}
             </dt>
-            <dd className={strategyBriefFieldValue(brief, key).complete ? "text-sm text-black/75 leading-relaxed" : "text-xs text-muted italic leading-relaxed"}>
+            <dd className={strategyBriefFieldValue(brief, key).complete ? "text-[13px] text-black/75 leading-[1.48]" : "text-[11px] text-muted italic leading-[1.45]"}>
               {strategyBriefFieldValue(brief, key).complete ? strategyBriefFieldValue(brief, key).value : <><span className="not-italic text-navy/70">What belongs here: </span>{strategyBriefFieldValue(brief, key).value}</>}
             </dd>
           </div>
