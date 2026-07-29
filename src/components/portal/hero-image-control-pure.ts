@@ -1,6 +1,10 @@
 export const HERO_UPLOAD_ACCEPT = ".png,.jpg,.jpeg,.webp";
 export const HERO_UPLOAD_HELPER_TEXT = "PNG, JPG, JPEG, or WebP \u00b7 max 10 MB";
 
+export type WebsiteImageAssetRole =
+  | "website_article_hero_overlay"
+  | "website_homepage_cta_textless";
+
 export type HeroImageViewerRole = "operator" | "lawyer" | "client";
 
 export function shouldShowHeroImageControl(
@@ -24,6 +28,16 @@ export function isAllowedHeroFile(file: Pick<File, "name" | "type">): boolean {
 
 export function heroUploadPath(firmId: string, deliverableId: string): string {
   return `/api/portal/${encodeURIComponent(firmId)}/deliverables/${encodeURIComponent(deliverableId)}/hero`;
+}
+
+export function websiteImageRoleLabel(role: WebsiteImageAssetRole): string {
+  return role === "website_article_hero_overlay" ? "Article hero" : "Homepage CTA";
+}
+
+export function websiteImageRoleHelper(role: WebsiteImageAssetRole): string {
+  return role === "website_article_hero_overlay"
+    ? "Used inside the article · approved overlay text"
+    : "Used in the homepage CTA · no overlay text";
 }
 
 export async function readHeroUploadError(response: Response): Promise<string> {

@@ -395,13 +395,34 @@ export default function DeliverableReview({
           )}
 
           {shouldShowHeroImageControl(selectedVersion?.id ?? null, viewerRole) && (
-            <HeroImageControl
-              firmId={firmId}
-              deliverableId={deliverableId}
-              deliverableTitle={deliverable.title}
-              hasHero={Boolean(deliverable.hero_image_url)}
-              onSaved={refetch}
-            />
+            deliverable.deliverable_role === "article" ? (
+              <div className="grid gap-3 md:grid-cols-2" aria-label="Website image controls">
+                <HeroImageControl
+                  firmId={firmId}
+                  deliverableId={deliverableId}
+                  deliverableTitle={deliverable.title}
+                  hasHero={Boolean(deliverable.hero_image_url)}
+                  onSaved={refetch}
+                  assetRole="website_article_hero_overlay"
+                />
+                <HeroImageControl
+                  firmId={firmId}
+                  deliverableId={deliverableId}
+                  deliverableTitle={deliverable.title}
+                  hasHero={false}
+                  onSaved={refetch}
+                  assetRole="website_homepage_cta_textless"
+                />
+              </div>
+            ) : (
+              <HeroImageControl
+                firmId={firmId}
+                deliverableId={deliverableId}
+                deliverableTitle={deliverable.title}
+                hasHero={Boolean(deliverable.hero_image_url)}
+                onSaved={refetch}
+              />
+            )
           )}
 
           {selectedVersion && (

@@ -299,6 +299,7 @@ export interface PublishKitArtifact {
    */
   versionId: string;
   artifactType: string;
+  assetRole?: string | null;
   locale: string | null;
   destination: string | null;
   filename: string | null; // basename of storagePath, or null
@@ -901,6 +902,7 @@ function toArtifact(artifact: ContentExportArtifact): PublishKitArtifact {
     id: artifact.id,
     versionId: artifact.version_id,
     artifactType: artifact.artifact_type,
+    assetRole: artifact.asset_role ?? null,
     locale: artifact.locale,
     destination: artifact.destination,
     filename: basename(artifact.storage_path),
@@ -984,7 +986,7 @@ function partitionArtifacts(
  * as a false "duplicate".
  */
 function slotKey(a: PublishKitArtifact): string {
-  return `${a.artifactType}::${a.locale ?? ""}::${a.destination ?? ""}`;
+  return `${a.artifactType}::${a.assetRole ?? ""}::${a.locale ?? ""}::${a.destination ?? ""}`;
 }
 
 /**
@@ -1033,6 +1035,9 @@ function dedupeArtifacts(
   // plain string present on every artifact, so this is total and stable.
   const kept = [...winnerByKey.values()].sort((a, b) => {
     if (a.artifactType !== b.artifactType) return a.artifactType.localeCompare(b.artifactType);
+    const aRole = a.assetRole ?? "";
+    const bRole = b.assetRole ?? "";
+    if (aRole !== bRole) return aRole.localeCompare(bRole);
     const aLocale = a.locale ?? "";
     const bLocale = b.locale ?? "";
     if (aLocale !== bLocale) return aLocale.localeCompare(bLocale);
