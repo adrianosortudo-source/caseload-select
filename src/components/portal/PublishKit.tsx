@@ -298,9 +298,9 @@ export default function PublishKit({ view, firmId }: Props) {
       {nothingMatches && <p className="text-sm text-black/50">Nothing matches the current filters.</p>}
 
       {visibleGroups.map((group) => (
-        <section key={group.date || "undated"} className="space-y-4">
+        <section key={group.key ?? group.date ?? "undated"} className="space-y-4">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-black/50 border-b border-border-brand pb-2">
-            {group.date ? formatDate(group.date) : "No publication date recorded"}
+            {group.label ?? (group.date ? formatDate(group.date) : "No publication date recorded")}
           </h2>
           <div className="space-y-4">
             {group.pieces.map((piece) => (
@@ -825,6 +825,22 @@ function ArtifactBlock({
         )}
       </div>
       {filename && <p className="text-[11px] font-mono text-black/60 mt-1 break-all">{filename}</p>}
+
+      {mime?.startsWith("image/") && canDownload && signedUrl && (
+        <a
+          href={signedUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="block mt-3 border border-border-brand bg-black/[0.025] focus:outline-none focus:ring-2 focus:ring-navy/40"
+        >
+          <img
+            src={signedUrl}
+            alt={filename ? `${label}: ${filename}` : label}
+            className="block w-full max-h-56 object-contain"
+          />
+          <span className="sr-only">Open full-size image preview</span>
+        </a>
+      )}
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 mt-2 text-[11px]">
         {mime && (
