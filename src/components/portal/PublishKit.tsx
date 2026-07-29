@@ -506,7 +506,13 @@ function PieceCard({
         </div>
       </div>
 
-      <div className="grid md:grid-cols-[1fr_320px]">
+      <div
+        className={
+          piece.role === "article"
+            ? "grid md:grid-cols-[minmax(0,11fr)_minmax(0,7fr)_minmax(0,7fr)]"
+            : "grid md:grid-cols-[1fr_320px]"
+        }
+      >
         <div className="p-5 border-b md:border-b-0 md:border-r border-border-brand min-w-0">
           {piece.plainText ? (
             <>
@@ -608,10 +614,18 @@ function PieceCard({
           )}
         </div>
 
-        <div className="p-5 bg-parchment/40 min-w-0 space-y-4">
-          <span className="text-[10px] uppercase tracking-wider font-semibold text-black/40 block">
-            Artifacts
-          </span>
+        <div
+          className={
+            piece.role === "article"
+              ? "min-w-0 bg-white p-5 space-y-4 md:col-span-2"
+              : "p-5 bg-parchment/40 min-w-0 space-y-4"
+          }
+        >
+          {piece.role !== "article" && (
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-black/40 block">
+              Artifacts
+            </span>
+          )}
           {piece.versionAsset && (
             <ArtifactBlock
               label="Version asset"
@@ -655,14 +669,6 @@ function PieceCard({
                 piece={piece}
               />
             </div>
-          )}
-          {piece.role === "article" && piece.artifacts.some((a) => a.artifactType === "hero_image" && !a.assetRole) && (
-            <LegacyWebsiteImageNotice
-              piece={piece}
-              firmId={firmId}
-              artifacts={piece.artifacts.filter((a) => a.artifactType === "hero_image" && !a.assetRole)}
-              onRefresh={onRefresh}
-            />
           )}
           {(piece.role !== "article" ? piece.artifacts : piece.artifacts.filter((a) => a.artifactType !== "hero_image")).map((artifact) => (
             <ArtifactBlock
@@ -724,6 +730,15 @@ function PieceCard({
           )}
         </div>
       </div>
+
+      {piece.role === "article" && piece.artifacts.some((a) => a.artifactType === "hero_image" && !a.assetRole) && (
+        <LegacyWebsiteImageNotice
+          piece={piece}
+          firmId={firmId}
+          artifacts={piece.artifacts.filter((a) => a.artifactType === "hero_image" && !a.assetRole)}
+          onRefresh={onRefresh}
+        />
+      )}
 
       <div className="px-5 py-3 border-t border-border-brand bg-parchment flex items-center justify-between gap-3 flex-wrap text-[11px] text-black/50">
         <div className="space-y-0.5">
@@ -1005,7 +1020,16 @@ function ArtifactBlock({
           </span>
         )}
       </div>
-      {filename && <p className="text-[11px] font-mono text-black/60 mt-1 break-all">{filename}</p>}
+      {filename && (
+        <p
+          className={`text-[11px] font-mono text-black/60 mt-1 ${
+            assetRole ? "truncate whitespace-nowrap" : "break-all"
+          }`}
+          title={filename}
+        >
+          {filename}
+        </p>
+      )}
 
       {mime?.startsWith("image/") && canDownload && signedUrl && (
         <a
@@ -1036,7 +1060,7 @@ function ArtifactBlock({
             <dd className="text-black/60">{formatByteCount(sizeBytes)}</dd>
           </>
         )}
-        {sha256 && (
+        {sha256 && !assetRole && (
           <>
             <dt className="text-black/40 uppercase tracking-wider">SHA-256</dt>
             <dd className="text-black/60 font-mono break-all">{sha256}</dd>
@@ -1074,7 +1098,7 @@ function ArtifactBlock({
             {ARTIFACT_CONTROL_LABEL[controlState]}
           </button>
         )}
-        {canDownload && signedUrlExpiresAt && mounted && (
+        {canDownload && signedUrlExpiresAt && mounted && !assetRole && (
           <p className="text-[10px] text-black/40 mt-1">
             Link expires {new Date(signedUrlExpiresAt).toLocaleString("en-CA")}.
           </p>
