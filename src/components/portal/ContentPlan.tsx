@@ -814,8 +814,8 @@ function StrategyBriefSection({
   const complete = isCompleteStrategyBrief(brief);
   return (
     <section className="px-6 py-4 border-b border-border-brand/60 bg-parchment-2/20">
-      <h3 className="text-[13px] font-bold text-navy">Weekly strategic record</h3>
-      <p className="text-[13px] text-black/65 leading-[1.5] mt-1 max-w-3xl">
+      <h3 className="text-sm font-bold text-navy">Weekly strategic record</h3>
+      <p className="text-[12px] text-black/65 leading-[1.45] mt-1 max-w-3xl">
         This brief records the strategic decision behind this week&rsquo;s {approved ? "approved" : "proposed"} content package. Every listed deliverable must support this approved reader, matter, and practical question.
       </p>
       {!complete && (
@@ -829,10 +829,10 @@ function StrategyBriefSection({
             key={key}
             className="grid grid-cols-[minmax(8rem,0.38fr)_1fr] items-start gap-x-3 gap-y-1 px-3 py-2 border-b border-border-brand/40 min-[901px]:odd:border-r max-[640px]:grid-cols-1"
           >
-            <dt className="text-[9px] uppercase tracking-[0.09em] font-semibold text-navy pt-0.5">
+            <dt className="text-[10px] uppercase tracking-[0.08em] font-bold text-navy pt-0.5">
               {label}
             </dt>
-            <dd className={strategyBriefFieldValue(brief, key).complete ? "text-[13px] text-black/75 leading-[1.48]" : "text-[11px] text-muted italic leading-[1.45]"}>
+            <dd className={strategyBriefFieldValue(brief, key).complete ? "text-[12px] text-black/75 leading-[1.45]" : "text-[11px] text-muted italic leading-[1.4]"}>
               {strategyBriefFieldValue(brief, key).complete ? strategyBriefFieldValue(brief, key).value : <><span className="not-italic text-navy/70">What belongs here: </span>{strategyBriefFieldValue(brief, key).value}</>}
             </dd>
           </div>
