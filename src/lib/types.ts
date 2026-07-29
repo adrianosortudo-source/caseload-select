@@ -506,6 +506,19 @@ export interface PublicationArtifact {
   superseded_at: string | null;
 }
 
+export interface PublicationArtifactRoleAssignment {
+  id: string;
+  firm_id: string;
+  artifact_id: string;
+  deliverable_id: string;
+  version_id: string;
+  asset_role: PublicationArtifactAssetRole;
+  assigned_by_role: "operator";
+  assigned_by_id: string | null;
+  created_at: string;
+  superseded_at: string | null;
+}
+
 export type PublicationArtifactValidator =
   | "storage_object_check"
   | "sha256_check"

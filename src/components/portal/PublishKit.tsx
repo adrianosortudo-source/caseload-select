@@ -304,7 +304,13 @@ export default function PublishKit({ view, firmId }: Props) {
           </h2>
           <div className="space-y-4">
             {group.pieces.map((piece) => (
-              <PieceCard key={piece.id} piece={piece} firmId={firmId} onCopy={handleCopy} />
+              <PieceCard
+                key={piece.id}
+                piece={piece}
+                firmId={firmId}
+                onCopy={handleCopy}
+                onRefresh={() => router.refresh()}
+              />
             ))}
           </div>
         </section>
@@ -405,10 +411,12 @@ function PieceCard({
   piece,
   firmId,
   onCopy,
+  onRefresh,
 }: {
   piece: PublishKitPiece;
   firmId: string;
   onCopy: (text: string, label: string) => void;
+  onRefresh: () => void;
 }) {
   function handleCopyRecord() {
     const record = toAgentRecord(piece);
@@ -648,7 +656,15 @@ function PieceCard({
               />
             </div>
           )}
-          {(piece.role !== "article" ? piece.artifacts : piece.artifacts.filter((a) => !a.assetRole)).map((artifact) => (
+          {piece.role === "article" && piece.artifacts.some((a) => a.artifactType === "hero_image" && !a.assetRole) && (
+            <LegacyWebsiteImageNotice
+              piece={piece}
+              firmId={firmId}
+              artifacts={piece.artifacts.filter((a) => a.artifactType === "hero_image" && !a.assetRole)}
+              onRefresh={onRefresh}
+            />
+          )}
+          {(piece.role !== "article" ? piece.artifacts : piece.artifacts.filter((a) => a.artifactType !== "hero_image")).map((artifact) => (
             <ArtifactBlock
               key={artifact.id}
               label={artifactTypeLabel(artifact.artifactType)}
@@ -791,6 +807,103 @@ function WebsiteArtifactSlot({
         </p>
       )}
     </section>
+  );
+}
+
+function LegacyWebsiteImageNotice({
+  piece,
+  firmId,
+  artifacts,
+  onRefresh,
+}: {
+  piece: PublishKitPiece;
+  firmId: string;
+  artifacts: PublishKitPiece["artifacts"];
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="border border-gold-on-light/40 bg-gold-on-light/5 px-3 py-2.5 space-y-2">
+      <div>
+        <p className="text-[11px] font-semibold text-navy">Existing image needs placement</p>
+        <p className="text-[11px] text-black/55 mt-0.5">
+          This image predates the two website image roles. Assign it explicitly to one placement; the existing artifact record will not be changed.
+        </p>
+      </div>
+      {artifacts.map((artifact) => (
+        <LegacyWebsiteImageRow
+          key={artifact.id}
+          piece={piece}
+          firmId={firmId}
+          artifact={artifact}
+          onRefresh={onRefresh}
+        />
+      ))}
+    </div>
+  );
+}
+
+function LegacyWebsiteImageRow({
+  piece,
+  firmId,
+  artifact,
+  onRefresh,
+}: {
+  piece: PublishKitPiece;
+  firmId: string;
+  artifact: PublishKitPiece["artifacts"][number];
+  onRefresh: () => void;
+}) {
+  const [busy, setBusy] = useState<"website_article_hero_overlay" | "website_homepage_cta_textless" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function assign(assetRole: "website_article_hero_overlay" | "website_homepage_cta_textless") {
+    setBusy(assetRole);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/portal/${firmId}/deliverables/${piece.id}/artifacts/${artifact.id}/assign-role`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assetRole }),
+        },
+      );
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        setError(body?.error ?? "Could not assign image placement.");
+        return;
+      }
+      onRefresh();
+    } catch {
+      setError("Could not assign image placement.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 flex-wrap border-t border-gold-on-light/20 pt-2">
+      <p className="text-[11px] font-mono text-black/65 break-all">{artifact.filename ?? "Unnamed image"}</p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => assign("website_article_hero_overlay")}
+          className="text-[10px] font-semibold uppercase tracking-wider border border-navy px-2 py-1 text-navy hover:bg-navy hover:text-white disabled:opacity-40"
+        >
+          {busy === "website_article_hero_overlay" ? "Assigning…" : "Use as Article hero"}
+        </button>
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => assign("website_homepage_cta_textless")}
+          className="text-[10px] font-semibold uppercase tracking-wider border border-navy px-2 py-1 text-navy hover:bg-navy hover:text-white disabled:opacity-40"
+        >
+          {busy === "website_homepage_cta_textless" ? "Assigning…" : "Use as Homepage CTA"}
+        </button>
+        {error && <span className="text-[11px] text-red-fail">{error}</span>}
+      </div>
+    </div>
   );
 }
 
