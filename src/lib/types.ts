@@ -467,12 +467,17 @@ export type PublicationArtifactType =
   | "form"
   | "external_post";
 
+export type PublicationArtifactAssetRole =
+  | "website_article_hero_overlay"
+  | "website_homepage_cta_textless";
+
 export interface PublicationArtifact {
   id: string;
   firm_id: string;
   deliverable_id: string;
   version_id: string;
   artifact_type: PublicationArtifactType;
+  asset_role?: PublicationArtifactAssetRole | null;
   locale: string | null;
   destination: PublicationDestination | null;
   storage_bucket: string | null;
@@ -492,7 +497,7 @@ export interface PublicationArtifact {
   /**
    * When this artifact was retracted, or null when it is active. A unique
    * partial index enforces at most one active row per (deliverable_id,
-   * version_id, artifact_type, locale, destination) slot -- superseding an
+   * version_id, artifact_type, asset_role, locale, destination) slot -- superseding an
    * artifact stamps this column on the prior row rather than deleting it.
    * A publication receipt referencing a superseded artifact is rejected at
    * the database level. See content-period-export.ts and publish-kit-pure.ts,

@@ -630,7 +630,25 @@ function PieceCard({
               here.
             </p>
           )}
-          {piece.artifacts.map((artifact) => (
+          {piece.role === "article" && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <WebsiteArtifactSlot
+                role="website_article_hero_overlay"
+                label="Article hero"
+                helper="Overlay text · article placement"
+                artifact={piece.artifacts.find((a) => a.assetRole === "website_article_hero_overlay") ?? null}
+                piece={piece}
+              />
+              <WebsiteArtifactSlot
+                role="website_homepage_cta_textless"
+                label="Homepage CTA"
+                helper="No overlay text · homepage placement"
+                artifact={piece.artifacts.find((a) => a.assetRole === "website_homepage_cta_textless") ?? null}
+                piece={piece}
+              />
+            </div>
+          )}
+          {(piece.role !== "article" ? piece.artifacts : piece.artifacts.filter((a) => !a.assetRole)).map((artifact) => (
             <ArtifactBlock
               key={artifact.id}
               label={artifactTypeLabel(artifact.artifactType)}
@@ -728,6 +746,54 @@ function PieceCard({
   );
 }
 
+function WebsiteArtifactSlot({
+  role,
+  label,
+  helper,
+  artifact,
+  piece,
+}: {
+  role: "website_article_hero_overlay" | "website_homepage_cta_textless";
+  label: string;
+  helper: string;
+  artifact: PublishKitPiece["artifacts"][number] | null;
+  piece: PublishKitPiece;
+}) {
+  return (
+    <section className="border border-border-brand bg-white p-3 min-w-0" aria-label={label}>
+      <p className="text-[11px] font-bold text-navy">{label}</p>
+      <p className="text-[10px] text-black/45 mt-0.5">{helper}</p>
+      {artifact ? (
+        <div className="mt-2">
+          <ArtifactBlock
+            label={label}
+            filename={artifact.filename}
+            mime={artifact.mime}
+            sizeBytes={artifact.sizeBytes}
+            sha256={artifact.sha256}
+            signedUrl={artifact.signedUrl}
+            signedUrlExpiresAt={artifact.signedUrlExpiresAt}
+            storagePath={artifact.storagePath}
+            publicUrl={artifact.publicUrl}
+            validation={artifact.validation}
+            mayPublish={piece.mayPublish}
+            versionId={artifact.versionId}
+            locale={artifact.locale}
+            destination={artifact.destination}
+            unapproved={piece.boundArtifactsAreUnapproved}
+            supersededAt={artifact.supersededAt}
+            assetRole={role}
+          />
+        </div>
+      ) : (
+        <p className="border border-dashed border-border-brand bg-parchment/30 px-3 py-5 mt-2 text-[11px] text-black/45">
+          No image registered for this placement.
+        </p>
+      )}
+    </section>
+  );
+}
+
 // ─── Artifact block ───────────────────────────────────────────────────────────
 
 function ArtifactBlock({
@@ -748,6 +814,7 @@ function ArtifactBlock({
   versionId,
   locale,
   destination,
+  assetRole,
 }: {
   label: string;
   filename: string | null;
@@ -787,6 +854,7 @@ function ArtifactBlock({
   versionId?: string | null;
   locale?: string | null;
   destination?: string | null;
+  assetRole?: string | null;
 }) {
   const controlState = artifactControlState({
     storagePath,

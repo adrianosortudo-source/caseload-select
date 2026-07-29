@@ -59,7 +59,7 @@ import type {
 const ASSET_BUCKET = "firm-files";
 const SIGNED_URL_TTL = 3600; // 1 hour, matching deliverables.ts's existing convention
 
-export const CONTENT_EXPORT_SCHEMA_VERSION = "1.0";
+export const CONTENT_EXPORT_SCHEMA_VERSION = "1.1";
 
 export interface ContentExportVersionBody {
   id: string;
@@ -103,6 +103,7 @@ export interface ContentExportArtifact {
    */
   version_id: string;
   artifact_type: string;
+  asset_role?: string | null;
   locale: string | null;
   destination: string | null;
   storage_bucket: string | null;
@@ -601,6 +602,7 @@ export async function buildContentExportBundle(
           id: a.id,
           version_id: a.version_id,
           artifact_type: a.artifact_type,
+          asset_role: a.asset_role,
           locale: a.locale,
           destination: a.destination,
           storage_bucket: a.storage_bucket,
