@@ -12,6 +12,7 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import ChecklistPdfArtifactPanel from "@/components/portal/ChecklistPdfArtifactPanel";
 import {
   toAgentRecord,
   toAgentManifest,
@@ -448,6 +449,7 @@ function PieceCard({
         year: "numeric",
       })
     : null;
+  const isChecklistPdf = piece.role === "lead_magnet_pdf";
 
   return (
     <article id={`dlv-${piece.id}`} className="bg-white border border-border-brand scroll-mt-4">
@@ -646,6 +648,7 @@ function PieceCard({
               unapproved={piece.boundArtifactsAreUnapproved}
             />
           )}
+          {isChecklistPdf && <ChecklistPdfArtifactPanel piece={piece} firmId={firmId} onRefresh={onRefresh} />}
           {piece.boundArtifactsAreUnapproved && piece.artifacts.length > 0 && (
             <p className="text-[11px] text-black/50">
               These belong to the current version, which is not approved. They cannot be downloaded
@@ -670,7 +673,10 @@ function PieceCard({
               />
             </div>
           )}
-          {(piece.role !== "article" ? piece.artifacts : piece.artifacts.filter((a) => a.artifactType !== "hero_image")).map((artifact) => (
+          {(piece.role !== "article"
+            ? piece.artifacts.filter((artifact) => !(isChecklistPdf && artifact.artifactType === "pdf"))
+            : piece.artifacts.filter((a) => a.artifactType !== "hero_image")
+          ).map((artifact) => (
             <ArtifactBlock
               key={artifact.id}
               label={artifactTypeLabel(artifact.artifactType)}
@@ -691,7 +697,7 @@ function PieceCard({
               supersededAt={artifact.supersededAt}
             />
           ))}
-          {!piece.hasAnyArtifactToShow && (
+          {!piece.hasAnyArtifactToShow && !isChecklistPdf && (
             <p className="text-xs text-black/45">No artifacts registered for this piece yet.</p>
           )}
           {piece.otherVersionArtifacts.length > 0 && (
