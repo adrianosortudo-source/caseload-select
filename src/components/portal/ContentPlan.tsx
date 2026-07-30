@@ -667,6 +667,8 @@ function PeriodCard({
         </div>
       </div>
 
+      <StrategyBriefSection brief={period.strategyBrief} approved={approved} />
+
       {periodReadiness && (
         <div className="px-6 py-3 border-b border-border-brand/60 space-y-2">
           <PublicationReadinessSummary
@@ -682,8 +684,6 @@ function PeriodCard({
           )}
         </div>
       )}
-
-      <StrategyBriefSection brief={period.strategyBrief} approved={approved} />
 
       {isOperator && editing ? (
         <div className="px-6 py-4 border-b border-border-brand/60 bg-parchment-2/30">
