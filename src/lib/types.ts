@@ -329,9 +329,19 @@ export type PublicationDestination =
  * deliverables (theme + what's covered + the strategic rationale). Operator
  * authored; the firm reads it. See migration 20260624_content_periods.sql.
  */
+export interface StrategyBrief {
+  readerAndSituation: string;
+  workSupported: string;
+  whyThisWeek: string;
+  practicalAngle: string;
+  authorityAndEvidence: string;
+  websiteAndConversionRole: string;
+}
+
 export interface ContentPeriod {
   id: string;
   firm_id: string;
+  week_number: number | null;
   starts_on: string;   // YYYY-MM-DD
   ends_on: string;     // YYYY-MM-DD
   /**
@@ -353,6 +363,7 @@ export interface ContentPeriod {
   theme: string | null;
   details: string | null;
   rationale: string | null;   // the "why": brand relevance + search intent
+  strategyBrief?: StrategyBrief | null;
   sort_index: number;
   created_by_role: string | null;
   created_by_id: string | null;

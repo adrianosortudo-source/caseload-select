@@ -8,6 +8,7 @@ import type {
   ContentPlanSettings,
   ContentKind,
   DeliverableStatus,
+  StrategyBrief,
 } from "@/lib/types";
 import {
   groupByFormat,
@@ -682,6 +683,8 @@ function PeriodCard({
         </div>
       )}
 
+      <StrategyBriefSection brief={period.strategyBrief} approved={approved} />
+
       {isOperator && editing ? (
         <div className="px-6 py-4 border-b border-border-brand/60 bg-parchment-2/30">
           <PeriodForm
@@ -834,6 +837,53 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 }
 
 // ─── Format group + rows ─────────────────────────────────────────────────────
+
+const STRATEGY_BRIEF_FIELDS: Array<{ label: string; key: Extract<keyof StrategyBrief, string> }> = [
+  { label: "Reader and real situation", key: "readerAndSituation" },
+  { label: "Work this supports", key: "workSupported" },
+  { label: "Why this topic this week", key: "whyThisWeek" },
+  { label: "DRG’s practical angle", key: "practicalAngle" },
+  { label: "Authority and evidence", key: "authorityAndEvidence" },
+  { label: "Website and conversion role", key: "websiteAndConversionRole" },
+];
+
+function hasCompleteStrategyBrief(
+  brief: ContentPeriod["strategyBrief"],
+): brief is StrategyBrief {
+  return Boolean(
+    brief &&
+      STRATEGY_BRIEF_FIELDS.every(
+        ({ key }) => typeof brief[key] === "string" && brief[key].trim().length > 0,
+      ),
+  );
+}
+
+function StrategyBriefSection({
+  brief,
+  approved,
+}: {
+  brief: ContentPeriod["strategyBrief"];
+  approved: number;
+}) {
+  if (!hasCompleteStrategyBrief(brief)) return null;
+
+  return (
+    <section className="px-6 py-5 border-b border-border-brand/60 bg-parchment-2/20">
+      <h3 className="text-sm font-bold text-navy">Weekly strategic brief</h3>
+      <p className="text-sm text-black/65 leading-relaxed mt-1.5 max-w-3xl">
+        This brief records the strategic decision behind this week&rsquo;s {approved > 0 ? "approved" : "proposed"} content package. Every listed deliverable must support this approved reader, matter, and practical question.
+      </p>
+      <dl className="mt-4 border-t border-border-brand/60">
+        {STRATEGY_BRIEF_FIELDS.map(({ label, key }) => (
+          <div key={key} className="grid grid-cols-[minmax(11rem,0.35fr)_1fr] items-start gap-x-6 gap-y-1 py-4 border-b border-border-brand/40 last:border-b-0 max-[640px]:grid-cols-1">
+            <dt className="text-[10px] uppercase tracking-[0.1em] font-semibold text-navy pt-0.5">{label}</dt>
+            <dd className="text-sm text-black/75 leading-relaxed">{brief[key]}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
 
 function FormatGroupBlock({
   firmId,
@@ -1071,15 +1121,21 @@ function PeriodForm({
   const [theme, setTheme] = useState(period?.theme ?? "");
   const [details, setDetails] = useState(period?.details ?? "");
   const [rationale, setRationale] = useState(period?.rationale ?? "");
+  const [strategyBrief, setStrategyBrief] = useState<StrategyBrief>(
+    period?.strategyBrief ?? {
+      readerAndSituation: "",
+      workSupported: "",
+      whyThisWeek: "",
+      practicalAngle: "",
+      authorityAndEvidence: "",
+      websiteAndConversionRole: "",
+    },
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!startsOn || !endsOn) {
-      setError("Set the start and end dates.");
-      return;
-    }
     const trimmedWeek = weekNumber.trim();
     if (trimmedWeek && !/^\d+$/.test(trimmedWeek)) {
       setError("Week number must be a whole number, or left blank.");
@@ -1095,6 +1151,7 @@ function PeriodForm({
       theme: theme.trim() || null,
       details: details.trim() || null,
       rationale: rationale.trim() || null,
+      strategyBrief: hasCompleteStrategyBrief(strategyBrief) ? strategyBrief : null,
     };
     const url = period
       ? `/api/portal/${firmId}/periods/${period.id}`
@@ -1189,6 +1246,22 @@ function PeriodForm({
           placeholder="e.g. Commercial leases, before the signature"
           className="w-full text-sm border border-border-brand px-3 py-2 bg-white"
         />
+      </div>
+      <div className="border-t border-border-brand/60 pt-3 space-y-2">
+        <p className="text-[10px] uppercase tracking-wider font-semibold text-navy">
+          Weekly strategic brief <span className="text-black/40 normal-case font-normal">(optional until approved)</span>
+        </p>
+        {STRATEGY_BRIEF_FIELDS.map(({ label, key }) => (
+          <div key={key}>
+            <label className="block text-[10px] font-semibold text-navy mb-1">{label}</label>
+            <textarea
+              value={strategyBrief[key]}
+              onChange={(e) => setStrategyBrief((current) => ({ ...current, [key]: e.target.value }))}
+              rows={2}
+              className="w-full text-sm border border-border-brand px-3 py-2 bg-white resize-y"
+            />
+          </div>
+        ))}
       </div>
       <div>
         <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
