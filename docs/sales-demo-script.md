@@ -127,7 +127,7 @@ Three points, in this order:
 > "We have question banks for 35 practice areas across 13 umbrellas. If you do anything in personal injury, employment, family, immigration, or civil litigation, it's already authored. For niche areas, I author a custom bank during onboarding — usually 2-3 hours of your time over a week."
 
 **"How long does setup take?"**
-> "Two weeks from contract signature to live on your website. Most of that is waiting for your DNS provider — actual configuration is one day. Onboarding includes Clio OAuth, conflict register import, branding, practice area config, and a Discovery call to tune the question weights."
+> "Implementation timing is scoped after access, priorities, and client dependencies are confirmed. Before kickoff, we document the sequence and expected first-live date for the agreed work."
 
 **"What if a lead's answer is 'other' — does the system break?"**
 > "Every question has an Other → free-text option. If the lead's situation doesn't match the structured options, they explain in their own words. The lawyer sees that text in the memo. The system doesn't dead-end on edge cases."

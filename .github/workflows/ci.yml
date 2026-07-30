@@ -121,3 +121,23 @@ jobs:
             exit 1
           fi
           bash scripts/check-engine-manifest.sh
+
+  portal-release-gate:
+    name: Portal release gate present
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate release-gate PowerShell syntax
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'scripts/portal-release.ps1') -or -not (Test-Path 'scripts/portal-release.config.json')) {
+            throw 'Portal release gate files are missing.'
+          }
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'scripts/portal-release.ps1'),
+            [ref]$null,
+            [ref]$errors
+          )
+          if ($errors.Count) { $errors | ForEach-Object Message; exit 1 }

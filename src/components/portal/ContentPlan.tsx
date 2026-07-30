@@ -8,6 +8,7 @@ import type {
   ContentPlanSettings,
   ContentKind,
   DeliverableStatus,
+  StrategyBrief,
 } from "@/lib/types";
 import {
   groupByFormat,
@@ -46,6 +47,17 @@ function fmtRange(s: string, e: string): string {
   if (yS === yE && mS === mE) return `${ds.getDate()} to ${de.getDate()} ${mE} ${yE}`;
   if (yS === yE) return `${ds.getDate()} ${mS} to ${de.getDate()} ${mE} ${yE}`;
   return `${ds.getDate()} ${mS} ${yS} to ${de.getDate()} ${mE} ${yE}`;
+}
+
+function currentWeekRange(): { startsOn: string; endsOn: string } {
+  const today = new Date();
+  const day = today.getDay();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  const iso = (date: Date) => date.toISOString().slice(0, 10);
+  return { startsOn: iso(monday), endsOn: iso(friday) };
 }
 
 export default function ContentPlan({
@@ -481,7 +493,9 @@ function PeriodCard({
       <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-border-brand/60 flex-wrap">
         <div>
           <p className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[color:var(--portal-accent)]">
-            {fmtRange(period.starts_on, period.ends_on)}
+            {period.week_number
+              ? `Week ${period.week_number}`
+              : fmtRange(period.starts_on, period.ends_on)}
           </p>
           {period.theme && (
             <h2 className="text-lg font-bold text-navy mt-1 leading-snug">{period.theme}</h2>
@@ -506,6 +520,8 @@ function PeriodCard({
           )}
         </div>
       </div>
+
+      <StrategyBriefSection brief={period.strategyBrief} approved={approved} />
 
       {isOperator && editing ? (
         <div className="px-6 py-4 border-b border-border-brand/60 bg-parchment-2/30">
@@ -559,6 +575,53 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 }
 
 // ─── Format group + rows ─────────────────────────────────────────────────────
+
+const STRATEGY_BRIEF_FIELDS: Array<{ label: string; key: Extract<keyof StrategyBrief, string> }> = [
+  { label: "Reader and real situation", key: "readerAndSituation" },
+  { label: "Work this supports", key: "workSupported" },
+  { label: "Why this topic this week", key: "whyThisWeek" },
+  { label: "DRG’s practical angle", key: "practicalAngle" },
+  { label: "Authority and evidence", key: "authorityAndEvidence" },
+  { label: "Website and conversion role", key: "websiteAndConversionRole" },
+];
+
+function hasCompleteStrategyBrief(
+  brief: ContentPeriod["strategyBrief"],
+): brief is StrategyBrief {
+  return Boolean(
+    brief &&
+      STRATEGY_BRIEF_FIELDS.every(
+        ({ key }) => typeof brief[key] === "string" && brief[key].trim().length > 0,
+      ),
+  );
+}
+
+function StrategyBriefSection({
+  brief,
+  approved,
+}: {
+  brief: ContentPeriod["strategyBrief"];
+  approved: number;
+}) {
+  if (!hasCompleteStrategyBrief(brief)) return null;
+
+  return (
+    <section className="px-6 py-5 border-b border-border-brand/60 bg-parchment-2/20">
+      <h3 className="text-sm font-bold text-navy">Weekly strategic brief</h3>
+      <p className="text-sm text-black/65 leading-relaxed mt-1.5 max-w-3xl">
+        This brief records the strategic decision behind this week&rsquo;s {approved > 0 ? "approved" : "proposed"} content package. Every listed deliverable must support this approved reader, matter, and practical question.
+      </p>
+      <dl className="mt-4 border-t border-border-brand/60">
+        {STRATEGY_BRIEF_FIELDS.map(({ label, key }) => (
+          <div key={key} className="grid grid-cols-[minmax(11rem,0.35fr)_1fr] items-start gap-x-6 gap-y-1 py-4 border-b border-border-brand/40 last:border-b-0 max-[640px]:grid-cols-1">
+            <dt className="text-[10px] uppercase tracking-[0.1em] font-semibold text-navy pt-0.5">{label}</dt>
+            <dd className="text-sm text-black/75 leading-relaxed">{brief[key]}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
 
 function FormatGroupBlock({
   firmId,
@@ -764,28 +827,44 @@ function PeriodForm({
   period?: ContentPeriod;
   onDone: () => void;
 }) {
-  const [startsOn, setStartsOn] = useState(period?.starts_on ?? "");
-  const [endsOn, setEndsOn] = useState(period?.ends_on ?? "");
+  const fallbackRange = currentWeekRange();
+  const [weekNumber, setWeekNumber] = useState(
+    period?.week_number ? String(period.week_number) : "",
+  );
   const [theme, setTheme] = useState(period?.theme ?? "");
   const [details, setDetails] = useState(period?.details ?? "");
   const [rationale, setRationale] = useState(period?.rationale ?? "");
+  const [strategyBrief, setStrategyBrief] = useState<StrategyBrief>(
+    period?.strategyBrief ?? {
+      readerAndSituation: "",
+      workSupported: "",
+      whyThisWeek: "",
+      practicalAngle: "",
+      authorityAndEvidence: "",
+      websiteAndConversionRole: "",
+    },
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!startsOn || !endsOn) {
-      setError("Set the start and end dates.");
+    const parsedWeekNumber = Number.parseInt(weekNumber, 10);
+    if (!Number.isInteger(parsedWeekNumber) || parsedWeekNumber < 1) {
+      setError("Set a positive week number.");
       return;
     }
     setSaving(true);
     setError(null);
     const payload = {
-      starts_on: startsOn,
-      ends_on: endsOn,
+      week_number: parsedWeekNumber,
+      // Legacy storage still keeps an internal Monday-Friday range; it is no longer user-facing.
+      starts_on: period?.starts_on ?? fallbackRange.startsOn,
+      ends_on: period?.ends_on ?? fallbackRange.endsOn,
       theme: theme.trim() || null,
       details: details.trim() || null,
       rationale: rationale.trim() || null,
+      strategyBrief: hasCompleteStrategyBrief(strategyBrief) ? strategyBrief : null,
     };
     const url = period
       ? `/api/portal/${firmId}/periods/${period.id}`
@@ -823,29 +902,18 @@ function PeriodForm({
 
   return (
     <form onSubmit={submit} className="bg-white border border-border-brand p-4 space-y-3">
-      <div className="flex gap-3 flex-wrap">
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
-            Week starts
-          </label>
-          <input
-            type="date"
-            value={startsOn}
-            onChange={(e) => setStartsOn(e.target.value)}
-            className="text-sm border border-border-brand px-2 py-1.5 bg-white"
-          />
-        </div>
-        <div>
-          <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
-            Week ends
-          </label>
-          <input
-            type="date"
-            value={endsOn}
-            onChange={(e) => setEndsOn(e.target.value)}
-            className="text-sm border border-border-brand px-2 py-1.5 bg-white"
-          />
-        </div>
+      <div>
+        <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
+          Week number
+        </label>
+        <input
+          type="number"
+          min="1"
+          value={weekNumber}
+          onChange={(e) => setWeekNumber(e.target.value)}
+          placeholder="e.g. 4"
+          className="w-28 text-sm border border-border-brand px-2 py-1.5 bg-white"
+        />
       </div>
       <div>
         <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
@@ -857,6 +925,22 @@ function PeriodForm({
           placeholder="e.g. Commercial leases, before the signature"
           className="w-full text-sm border border-border-brand px-3 py-2 bg-white"
         />
+      </div>
+      <div className="border-t border-border-brand/60 pt-3 space-y-2">
+        <p className="text-[10px] uppercase tracking-wider font-semibold text-navy">
+          Weekly strategic brief <span className="text-black/40 normal-case font-normal">(optional until approved)</span>
+        </p>
+        {STRATEGY_BRIEF_FIELDS.map(({ label, key }) => (
+          <div key={key}>
+            <label className="block text-[10px] font-semibold text-navy mb-1">{label}</label>
+            <textarea
+              value={strategyBrief[key]}
+              onChange={(e) => setStrategyBrief((current) => ({ ...current, [key]: e.target.value }))}
+              rows={2}
+              className="w-full text-sm border border-border-brand px-3 py-2 bg-white resize-y"
+            />
+          </div>
+        ))}
       </div>
       <div>
         <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">

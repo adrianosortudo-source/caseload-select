@@ -25,6 +25,7 @@ import type {
   DeliverableActorRole,
   DeliverableAnnotation,
   ApprovalDecision,
+  StrategyBrief,
 } from "@/lib/types";
 import {
   statusAfterNewVersion,
@@ -37,6 +38,18 @@ const SIGNED_URL_TTL = 3600; // 1 hour; review pages stay open a while
 const APP_BASE = "https://app.caseloadselect.ca";
 const OPERATOR_EMAIL =
   process.env.OPERATOR_NOTIFICATION_EMAIL || "adriano@caseloadselect.ca";
+
+function toContentPeriod(row: Record<string, unknown>): ContentPeriod {
+  const rawBrief = row.strategy_brief;
+  return {
+    ...row,
+    week_number: typeof row.week_number === "number" ? row.week_number : null,
+    strategyBrief:
+      rawBrief && typeof rawBrief === "object" && !Array.isArray(rawBrief)
+        ? (rawBrief as StrategyBrief)
+        : undefined,
+  } as ContentPeriod;
+}
 
 export interface DeliverableActor {
   role: DeliverableActorRole;
@@ -127,7 +140,9 @@ export async function getContentPlan(
   if (delivRes.error) throw new Error(`plan deliverables load failed: ${delivRes.error.message}`);
 
   return {
-    periods: (periodsRes.data ?? []) as ContentPeriod[],
+    periods: (periodsRes.data ?? []).map((row) =>
+      toContentPeriod(row as Record<string, unknown>),
+    ),
     deliverables: (delivRes.data ?? []) as PlanDeliverable[],
     settings: (settingsRes.data ?? null) as ContentPlanSettings | null,
   };
@@ -157,48 +172,59 @@ export async function upsertContentPlanSettings(input: {
 
 export async function createPeriod(input: {
   firmId: string;
+  weekNumber: number | null;
   startsOn: string;
   endsOn: string;
   theme: string | null;
   details: string | null;
   rationale: string | null;
+  strategyBrief: StrategyBrief | null;
   actor: DeliverableActor;
 }): Promise<{ ok: true; period: ContentPeriod } | { ok: false; error: string }> {
   const { data, error } = await supabase
     .from("content_periods")
     .insert({
       firm_id: input.firmId,
+      week_number: input.weekNumber,
       starts_on: input.startsOn,
       ends_on: input.endsOn,
       theme: input.theme,
       details: input.details,
       rationale: input.rationale,
+      strategy_brief: input.strategyBrief,
       created_by_role: input.actor.role,
       created_by_id: input.actor.id ?? null,
     })
     .select("*")
     .single();
   if (error) return { ok: false, error: `create period failed: ${error.message}` };
-  return { ok: true, period: data as ContentPeriod };
+  return { ok: true, period: toContentPeriod(data as Record<string, unknown>) };
 }
 
 export async function updatePeriod(input: {
   periodId: string;
   firmId: string;
   patch: Partial<
-    Pick<ContentPeriod, "starts_on" | "ends_on" | "theme" | "details" | "rationale" | "sort_index">
+    Pick<ContentPeriod, "week_number" | "starts_on" | "ends_on" | "theme" | "details" | "rationale" | "strategyBrief" | "sort_index">
   >;
 }): Promise<{ ok: true; period: ContentPeriod } | { ok: false; error: string }> {
+  const { strategyBrief, ...databasePatch } = input.patch;
   const { data, error } = await supabase
     .from("content_periods")
-    .update({ ...input.patch, updated_at: new Date().toISOString() })
+    .update({
+      ...databasePatch,
+      ...(strategyBrief !== undefined
+        ? { strategy_brief: strategyBrief }
+        : {}),
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", input.periodId)
     .eq("firm_id", input.firmId)
     .select("*")
     .maybeSingle();
   if (error) return { ok: false, error: error.message };
   if (!data) return { ok: false, error: "period not found for this firm" };
-  return { ok: true, period: data as ContentPeriod };
+  return { ok: true, period: toContentPeriod(data as Record<string, unknown>) };
 }
 
 export async function deletePeriod(input: {

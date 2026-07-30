@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CaseLoad Select ACTS Icon Prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Oxanium:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy: #1E2F58;
+      --navy-deep: #0D1520;
+      --navy-deeper: #080F1C;
+      --stone: #C4B49A;
+      --stone-light: #D8CAAE;
+      --stone-soft: #DCD0BB;
+      --stone-on-light: #9E9070;
+      --parchment: #F4F3EF;
+      --off-white: #F9F8F5;
+      --white: #FFFFFF;
+      --text: #1C2B3A;
+      --muted: #6B7A8D;
+      --border: #E8E4DA;
+      --font-display: "Oxanium", system-ui, sans-serif;
+      --font-body: "Manrope", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: var(--font-body);
+      background:
+        linear-gradient(90deg, rgba(30,47,88,0.035) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(30,47,88,0.03) 1px, transparent 1px),
+        var(--off-white);
+      background-size: 42px 42px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .shell {
+      width: min(1180px, calc(100vw - 48px));
+      margin: 0 auto;
+      padding: 42px 0 72px;
+    }
+
+    .brand-note {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 26px;
+      color: var(--navy);
+    }
+
+    .brand {
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 2.4px;
+      text-transform: uppercase;
+    }
+
+    .brand span { color: var(--stone-on-light); }
+
+    .spec {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--muted);
+      max-width: 460px;
+      text-align: right;
+    }
+
+    .hero-board {
+      position: relative;
+      overflow: hidden;
+      min-height: 390px;
+      padding: 56px 48px 46px;
+      background:
+        radial-gradient(ellipse 55% 80% at 50% 42%, rgba(30, 47, 88, 0.72), transparent 67%),
+        radial-gradient(ellipse 42% 56% at 8% 22%, rgba(35, 58, 108, 0.42), transparent 55%),
+        linear-gradient(180deg, var(--navy-deep), var(--navy-deeper));
+      border: 1px solid rgba(196,180,154,0.22);
+      box-shadow: 0 28px 80px rgba(8, 15, 28, 0.28);
+    }
+
+    .hero-board::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      pointer-events: none;
+    }
+
+    .hero-title {
+      position: relative;
+      max-width: 760px;
+      margin: 0 auto 42px;
+      text-align: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      color: var(--stone);
+      font-family: var(--font-display);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 32px;
+      height: 1px;
+      background: currentColor;
+      opacity: 0.72;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      color: var(--white);
+      font-family: var(--font-display);
+      font-size: clamp(34px, 5vw, 58px);
+      font-weight: 800;
+      line-height: 1.06;
+    }
+
+    .ts {
+      display: inline-block;
+      width: 0.22em;
+      height: 0.22em;
+      margin-left: 0.12em;
+      position: relative;
+      top: 0.08em;
+      background: var(--stone);
+      vertical-align: top;
+    }
+
+    .hero-sub {
+      max-width: 620px;
+      margin: 16px auto 0;
+      color: rgba(237,234,217,0.68);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .acts-strip {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .acts-strip::before {
+      content: "";
+      position: absolute;
+      left: 12.5%;
+      right: 12.5%;
+      top: 78px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(196,180,154,0.45), transparent);
+    }
+
+    .pillar-preview {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      justify-items: center;
+      gap: 12px;
+      padding: 0 12px;
+    }
+
+    .hero-icon {
+      width: 72px;
+      height: 72px;
+      display: grid;
+      place-items: center;
+      color: var(--stone);
+    }
+
+    .hero-icon svg {
+      width: 64px;
+      height: 64px;
+      overflow: visible;
+      filter: drop-shadow(0 0 14px rgba(196,180,154,0.18));
+    }
+
+    .dot {
+      width: 5px;
+      height: 5px;
+      background: var(--stone);
+      transform: translateY(-2px);
+    }
+
+    .pillar-name {
+      color: var(--white);
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+
+    .pillar-letter {
+      color: rgba(216,202,174,0.76);
+      font-family: var(--font-display);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(320px, 0.55fr);
+      gap: 44px;
+      align-items: end;
+      margin: 62px 0 24px;
+    }
+
+    h2 {
+      color: var(--navy);
+      font-family: var(--font-display);
+      font-size: clamp(28px, 3.4vw, 44px);
+      line-height: 1.08;
+      font-weight: 800;
+    }
+
+    .rationale {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.75;
+    }
+
+    .phase-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .phase {
+      display: grid;
+      gap: 18px;
+    }
+
+    .phase-head {
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(196,180,154,0.55);
+    }
+
+    .phase-kicker {
+      color: var(--stone-on-light);
+      font-family: var(--font-display);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 2.2px;
+      text-transform: uppercase;
+    }
+
+    .phase-title {
+      margin-top: 6px;
+      color: var(--navy);
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .icon-card {
+      min-height: 260px;
+      padding: 22px 20px;
+      background: rgba(255,255,255,0.86);
+      border: 1px solid var(--border);
+      box-shadow: 0 12px 34px rgba(30,47,88,0.07);
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+    }
+
+    .icon-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(196,180,154,0.9);
+      box-shadow: 0 18px 48px rgba(30,47,88,0.12);
+    }
+
+    .icon-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 22px;
+    }
+
+    .option-label {
+      color: var(--stone-on-light);
+      font-family: var(--font-display);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .mini-letter {
+      display: grid;
+      width: 26px;
+      height: 26px;
+      place-items: center;
+      color: var(--navy);
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 800;
+      border: 1px solid rgba(196,180,154,0.7);
+      background: var(--parchment);
+    }
+
+    .icon-mark {
+      width: 82px;
+      height: 82px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 22px;
+      color: var(--navy);
+      background:
+        linear-gradient(135deg, rgba(196,180,154,0.12), transparent 54%),
+        var(--white);
+      border: 1px solid rgba(196,180,154,0.45);
+    }
+
+    .icon-mark svg {
+      width: 66px;
+      height: 66px;
+      overflow: visible;
+    }
+
+    .icon-card h3 {
+      color: var(--navy);
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1.3;
+      margin-bottom: 8px;
+    }
+
+    .icon-card p {
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.65;
+    }
+
+    .recommended,
+    .selected {
+      border-top: 3px solid var(--navy);
+    }
+
+    .recommended .option-label::after,
+    .selected .option-label::after {
+      content: " / selected";
+      color: var(--navy);
+    }
+
+    .usage-board {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 18px;
+      margin-top: 28px;
+    }
+
+    .usage-card {
+      padding: 28px;
+      background: var(--navy-deep);
+      color: var(--white);
+      border: 1px solid rgba(196,180,154,0.24);
+      box-shadow: 0 18px 54px rgba(8,15,28,0.18);
+    }
+
+    .usage-card.light {
+      background: var(--parchment);
+      color: var(--navy);
+      border-color: rgba(196,180,154,0.62);
+    }
+
+    .usage-title {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 14px;
+    }
+
+    .usage-icons {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .usage-icon {
+      display: grid;
+      width: 64px;
+      height: 64px;
+      place-items: center;
+      color: var(--stone);
+      border: 1px solid rgba(196,180,154,0.34);
+      background: rgba(255,255,255,0.03);
+    }
+
+    .light .usage-icon {
+      color: var(--navy);
+      background: rgba(255,255,255,0.55);
+      border-color: rgba(196,180,154,0.65);
+    }
+
+    .usage-icon svg {
+      width: 50px;
+      height: 50px;
+      overflow: visible;
+    }
+
+    svg {
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .gold { stroke: var(--stone); }
+    .gold-fill { fill: var(--stone); stroke: none; }
+    .ink-fill { fill: currentColor; stroke: none; }
+    .thin { stroke-width: 1.25; }
+    .med { stroke-width: 1.65; }
+    .bold { stroke-width: 2.15; }
+    .soft { opacity: 0.38; }
+    .mid { opacity: 0.62; }
+    .dash { stroke-dasharray: 2.4 5; }
+
+    @media (max-width: 980px) {
+      .section-head,
+      .usage-board {
+        grid-template-columns: 1fr;
+      }
+
+      .phase-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 640px) {
+      .shell { width: min(100% - 28px, 1180px); padding-top: 24px; }
+      .brand-note { align-items: flex-start; flex-direction: column; }
+      .spec { text-align: left; }
+      .hero-board { padding: 38px 18px; }
+      .acts-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 28px; }
+      .acts-strip::before { display: none; }
+      .phase-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="brand-note">
+      <div class="brand">CaseLoad <span>Select</span> / ACTS Icon Prototype</div>
+      <p class="spec">Premium monoline SVG options using the current brand book grammar: navy, stone, parchment, Oxanium, Manrope, tight geometry, evidence-led restraint.</p>
+    </div>
+
+    <section class="hero-board" aria-label="Recommended hero preview">
+      <div class="hero-title">
+        <div class="eyebrow">Selected set shown in hero scale</div>
+        <h1>Sign Better Cases<span class="ts"></span></h1>
+        <p class="hero-sub">A3, C3, T3, and Screen A make the family feel more owned: institutional, routed, precise, and decisional.</p>
+      </div>
+
+      <div class="acts-strip">
+        <div class="pillar-preview">
+          <div class="hero-icon"><svg viewBox="0 0 100 100"><use href="#authority-column"/></svg></div>
+          <span class="dot"></span>
+          <div class="pillar-name">Authority</div>
+          <div class="pillar-letter">A</div>
+        </div>
+        <div class="pillar-preview">
+          <div class="hero-icon"><svg viewBox="0 0 100 100"><use href="#capture-channel"/></svg></div>
+          <span class="dot"></span>
+          <div class="pillar-name">Capture</div>
+          <div class="pillar-letter">C</div>
+        </div>
+        <div class="pillar-preview">
+          <div class="hero-icon"><svg viewBox="0 0 100 100"><use href="#target-focus"/></svg></div>
+          <span class="dot"></span>
+          <div class="pillar-name">Target</div>
+          <div class="pillar-letter">T</div>
+        </div>
+        <div class="pillar-preview">
+          <div class="hero-icon"><svg viewBox="0 0 100 100"><use href="#screen-seal"/></svg></div>
+          <span class="dot"></span>
+          <div class="pillar-name">Screen</div>
+          <div class="pillar-letter">S</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-head">
+      <h2>Three options for each ACTS phase<span class="ts"></span></h2>
+      <p class="rationale">Selected family: A3 Authority Column, C3 Channel Intake, T3 Focus Frame, and Screen A Ranked Intake Gate. This route is more distinctive than the sealed set while staying premium and legible at hero size.</p>
+    </section>
+
+    <section class="phase-grid" aria-label="ACTS icon options">
+      <div class="phase">
+        <div class="phase-head">
+          <div class="phase-kicker">Phase A</div>
+          <div class="phase-title">Authority</div>
+        </div>
+        <article class="icon-card">
+          <div class="icon-top"><span class="option-label">Option 1</span><span class="mini-letter">A</span></div>
+          <div class="icon-mark"><svg viewBox="0 0 100 100"><use href="#authority-seal"/></svg></div>
+          <h3>Verified Counsel Seal</h3>
+          <p>Shield, citation bars, and a terminal square. Reads as trust, proof, and professional authority without feeling like a stock security icon.</p>
+        </article>
+        <article class="icon-card">
+          <div class="icon-top"><span class="option-label">Option 2</span><span class="mini-letter">A</span></div>
+          <div class="icon-mark"><svg viewBox="0 0 100 100"><use href="#authority-ledger"/></svg></div>
+          <h3>Evidence Ledger</h3>
+          <p>Publication and review signals arranged like a legal record. Strong for the "content, reviews, brand trust" meaning of Authority.</p>
+        </article>
+        <article class="icon-card selected">
+          <div class="icon-top"><span class="option-label">Option 3</span><span class="mini-letter">A</span></div>
+          <div class="icon-mark"><svg viewBox="0 0 100 100"><use href="#authority-column"/></svg></div>
+          <h3>Authority Column</h3>
+          <p>Architectural, calm, and institutional. The least literal option, useful if the brand wants a more editorial signal.</p>
+        </article>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head">
+          <div class="phase-kicker">Phase C</div>
+          <div class="phase-title">Capture</div>
+        </div>
+        <article class="icon-card">
+          <div class="icon-top"><span class="option-label">Option 1</span><span class="mini-letter">C</span></div>
+          <div class="icon-mark"><svg viewBox="0 0 100 100"><use href="#capture-seal"/></svg></div>
+          <h3>Local Signal Field</h3>
+          <p>Search radius plus a captured inbound path. It suggests visibility infrastructure rather than generic lead generation.</p>
+        </article>
+        <article class="icon-card">
+          <div class="icon-top"><span class="option-label">Option 2</span><span class="mini-letter">C</span></div>
+          <div class="icon-mark"><svg viewBox="0 0 100 100"><use href="#capture-index"/></svg></div>
+          <h3>Index Aperture</h3>
+          <p>Pages, map grid, and entry point. A more SEO-native icon for organic visibility and local findability.</p>
+        </article>
+        <article class="icon-card selected">
+          <div class="icon-top"><span class="option-label">Option 3</span><span class="mini-letter">C</span></div>
+          <div class="icon-mark"><svg viewBox="0 0 100 100"><use href="#capture-channel"/></svg></div>
+          <h3>Channel Intake</h3>
+          <p>Signals flowing into one contact point. A direct metaphor for capturing demand across search, GBP, and local channels.</p>
+        </article>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head">
+          <div class="phase-kicker">Phase T</div>
+          <div class="phase-title">Target</div>
+        </div>
+        <article class="icon-card">
+          <div class="icon-top"><span class="option-label">Option 1</span><span class="mini-letter">T</span></div>
+          <div class="icon-mark"><svg viewBox="0 0 100 100"><use href="#target-seal"/></svg></div>
+          <h3>Matter Precision</h3>
+          <p>A target that feels calibrated, not militarized. The selected quadrant makes the ad-spend decision visible.</p>
+        </article>
+        <article class="icon-card">
+          <div class="icon-top"><span class="option-label">Option 2</span><span class="mini-letter">T</span></div>
+          <div class="icon-mark"><svg viewBox="0 0 100 100"><use href="#target-bid"/></svg></div>
+          <h3>Bid Path</h3>
+          <p>Spend narrows toward the matter type worth buying. Useful if Target should read more like paid media operations.</p>
+        </article>
+        <article class="icon-card selected">
+          <div class="icon-top"><span class="option-label">Option 3</span><span class="mini-letter">T</span></div>
+          <div class="icon-mark"><svg viewBox="0 0 100 100"><use href="#target-focus"/></svg></div>
+          <h3>Focus Frame</h3>
+          <p>Minimal corner brackets and a center proof point. Premium, quiet, and very legible at small sizes.</p>
+        </article>
+      </div>
+
+      <div class="phase">
+        <div class="phase-head">
+          <div class="phase-kicker">Phase S</div>
+          <div class="phase-title">Screen</div>
+        </div>
+        <article class="icon-card selected">
+          <div class="icon-top"><span class="option-label">Option 1</span><span class="mini-letter">S</span></div>
+          <div class="icon-mark"><svg viewBox="0 0 100 100"><use href="#screen-seal"/></svg></div>
+          <h3>Ranked Intake Gate</h3>
+          <p>Questions flow through a gate and exit as a ranked case. Strongest tie to CaseLoad Screen without the old funnel look.</p>
+        </article>
+        <article class="icon-card">
+          <div class="icon-top"><span class="option-label">Option 2</span><span class="mini-letter">S</span></div>
+          <div class="icon-mark"><svg viewBox="0 0 100 100"><use href="#screen-queue"/></svg></div>
+          <h3>Priority Queue</h3>
+          <p>Three inquiries resolve into one priority decision. Best if the icon must communicate routing and banding clearly.</p>
+        </article>
+        <article class="icon-card">
+          <div class="icon-top"><span class="option-label">Option 3</span><span class="mini-letter">S</span></div>
+          <div class="icon-mark"><svg viewBox="0 0 100 100"><use href="#screen-score"/></svg></div>
+          <h3>Scored Brief</h3>
+          <p>A document, score bar, and terminal square. More product-specific, good for Screen demo surfaces and reports.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="usage-board" aria-label="Recommended set on dark and light backgrounds">
+      <div class="usage-card">
+        <div class="usage-title">Selected set on navy<span class="ts"></span></div>
+        <div class="usage-icons">
+          <div class="usage-icon"><svg viewBox="0 0 100 100"><use href="#authority-column"/></svg></div>
+          <div class="usage-icon"><svg viewBox="0 0 100 100"><use href="#capture-channel"/></svg></div>
+          <div class="usage-icon"><svg viewBox="0 0 100 100"><use href="#target-focus"/></svg></div>
+          <div class="usage-icon"><svg viewBox="0 0 100 100"><use href="#screen-seal"/></svg></div>
+        </div>
+      </div>
+      <div class="usage-card light">
+        <div class="usage-title">Selected set on parchment<span class="ts"></span></div>
+        <div class="usage-icons">
+          <div class="usage-icon"><svg viewBox="0 0 100 100"><use href="#authority-column"/></svg></div>
+          <div class="usage-icon"><svg viewBox="0 0 100 100"><use href="#capture-channel"/></svg></div>
+          <div class="usage-icon"><svg viewBox="0 0 100 100"><use href="#target-focus"/></svg></div>
+          <div class="usage-icon"><svg viewBox="0 0 100 100"><use href="#screen-seal"/></svg></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <g id="authority-seal">
+        <path class="thin dash soft" d="M50 10a40 40 0 1 1 0 80a40 40 0 1 1 0-80Z"/>
+        <path class="med" d="M50 20L29 28v16c0 13 10 22 21 26c11-4 21-13 21-26V28L50 20Z"/>
+        <path class="thin mid" d="M50 30L39 34v10c0 7 5 12 11 15c6-3 11-8 11-15V34L50 30Z"/>
+        <path class="bold gold" d="M42 46l6 6l12-14"/>
+        <path class="thin mid" d="M28 76h44M36 82h28"/>
+        <rect class="gold-fill" x="47" y="7" width="6" height="6"/>
+      </g>
+
+      <g id="authority-ledger">
+        <path class="med" d="M28 20h36l8 8v50H28V20Z"/>
+        <path class="thin mid" d="M64 20v10h8M38 35h22M38 45h24M38 55h16"/>
+        <path class="bold gold" d="M37 70l5 5l10-13"/>
+        <path class="thin soft" d="M24 28h-6v58h46v-6"/>
+        <rect class="gold-fill" x="68" y="14" width="6" height="6"/>
+      </g>
+
+      <g id="authority-column">
+        <path class="med" d="M24 76h52M30 68h40M35 32h30M40 32v36M50 32v36M60 32v36"/>
+        <path class="med" d="M26 28l24-12l24 12H26Z"/>
+        <path class="thin mid" d="M32 82h36"/>
+        <rect class="gold-fill" x="47" y="23" width="6" height="6"/>
+        <path class="thin dash soft" d="M50 8v8M50 84v8"/>
+      </g>
+
+      <g id="capture-seal">
+        <path class="thin dash soft" d="M50 10a40 40 0 1 1 0 80a40 40 0 1 1 0-80Z"/>
+        <path class="thin mid" d="M27 62c9-10 37-10 46 0M33 52c8-7 26-7 34 0M39 42c6-4 16-4 22 0"/>
+        <path class="med" d="M50 28v43"/>
+        <path class="bold gold" d="M31 72h38"/>
+        <path class="med" d="M38 80h24"/>
+        <circle class="gold" cx="50" cy="28" r="5"/>
+        <rect class="gold-fill" x="72" y="69" width="6" height="6"/>
+      </g>
+
+      <g id="capture-index">
+        <path class="thin mid" d="M24 24h21v18H24V24ZM55 24h21v18H55V24ZM24 52h21v18H24V52ZM55 52h21v18H55V52Z"/>
+        <path class="bold gold" d="M55 52h21v18H55V52Z"/>
+        <path class="med" d="M32 80h36M50 14v8M50 72v8"/>
+        <rect class="gold-fill" x="47" y="49" width="6" height="6"/>
+      </g>
+
+      <g id="capture-channel">
+        <path class="thin mid" d="M20 30h18M20 50h18M20 70h18"/>
+        <path class="med" d="M38 30c15 0 15 20 30 20M38 50h30M38 70c15 0 15-20 30-20"/>
+        <path class="bold gold" d="M68 38h12v24H68V38Z"/>
+        <circle class="ink-fill" cx="26" cy="30" r="2.4"/>
+        <circle class="ink-fill" cx="26" cy="50" r="2.4"/>
+        <circle class="ink-fill" cx="26" cy="70" r="2.4"/>
+        <rect class="gold-fill" x="74" y="47" width="5" height="5"/>
+      </g>
+
+      <g id="target-seal">
+        <path class="thin dash soft" d="M50 10a40 40 0 1 1 0 80a40 40 0 1 1 0-80Z"/>
+        <path class="thin mid" d="M50 23v54M23 50h54"/>
+        <circle class="thin mid" cx="50" cy="50" r="23"/>
+        <circle class="med" cx="50" cy="50" r="12"/>
+        <path class="bold gold" d="M50 50l18-18"/>
+        <rect class="gold-fill" x="64" y="28" width="7" height="7"/>
+        <circle class="ink-fill" cx="50" cy="50" r="2.7"/>
+      </g>
+
+      <g id="target-bid">
+        <path class="thin mid" d="M24 76h52M28 66h28M32 56h20M36 46h16"/>
+        <path class="med" d="M26 24c20 0 31 14 44 36"/>
+        <path class="bold gold" d="M62 58l10 6l-10 6"/>
+        <circle class="med" cx="72" cy="64" r="8"/>
+        <rect class="gold-fill" x="69" y="61" width="6" height="6"/>
+      </g>
+
+      <g id="target-focus">
+        <path class="med" d="M24 38V24h14M62 24h14v14M76 62v14H62M38 76H24V62"/>
+        <path class="thin mid" d="M50 28v12M50 60v12M28 50h12M60 50h12"/>
+        <circle class="med" cx="50" cy="50" r="11"/>
+        <rect class="gold-fill" x="47" y="47" width="6" height="6"/>
+      </g>
+
+      <g id="screen-seal">
+        <path class="thin dash soft" d="M50 10a40 40 0 1 1 0 80a40 40 0 1 1 0-80Z"/>
+        <path class="med" d="M26 26h48v18L58 59v15L42 80V59L26 44V26Z"/>
+        <path class="thin mid" d="M34 36h32M38 44h24"/>
+        <path class="bold gold" d="M36 70h10M54 70h10"/>
+        <rect class="gold-fill" x="47" y="61" width="6" height="6"/>
+      </g>
+
+      <g id="screen-queue">
+        <path class="thin mid" d="M24 28h26M24 50h26M24 72h26"/>
+        <circle class="med" cx="24" cy="28" r="5"/>
+        <circle class="med" cx="24" cy="50" r="5"/>
+        <circle class="med" cx="24" cy="72" r="5"/>
+        <path class="med" d="M50 28c12 0 12 22 25 22M50 50h25M50 72c12 0 12-22 25-22"/>
+        <path class="bold gold" d="M70 38h12v24H70V38Z"/>
+        <rect class="gold-fill" x="74" y="47" width="5" height="5"/>
+      </g>
+
+      <g id="screen-score">
+        <path class="med" d="M30 18h32l8 8v56H30V18Z"/>
+        <path class="thin mid" d="M62 18v10h8M40 38h20M40 48h16M40 58h24"/>
+        <path class="bold gold" d="M40 72h8l4-10l5 16l5-12h8"/>
+        <rect class="gold-fill" x="66" y="76" width="6" height="6"/>
+      </g>
+    </defs>
+  </svg>
+</body>
+</html>

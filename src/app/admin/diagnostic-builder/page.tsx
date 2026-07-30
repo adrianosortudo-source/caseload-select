@@ -20,10 +20,12 @@ type Status = "detecting" | "running" | "not-running";
 export default function DiagnosticBuilderPage() {
   const [status, setStatus] = useState<Status>("detecting");
   const [probeError, setProbeError] = useState<string>("");
+  const [embedFailed, setEmbedFailed] = useState(false);
 
   async function probe() {
     setStatus("detecting");
     setProbeError("");
+    setEmbedFailed(false);
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), 2500);
     try {
@@ -61,26 +63,13 @@ export default function DiagnosticBuilderPage() {
         }
       />
 
-      <section className="bg-white border border-black/8 p-6 space-y-4">
-        {/* Primary affordance: always visible. Click goes to localhost:8765
-            in a new tab regardless of probe state. The probe is informational
-            because cross-origin HTTPS-to-localhost detection is unreliable
-            even when the server is up and answering correctly. */}
-        <a
-          href={LOCAL_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block bg-gold text-[#0D1520] font-mono text-xs uppercase tracking-wider px-6 py-3 hover:opacity-90 transition"
-        >
-          Open builder in a new tab
-        </a>
-
-        <div className="flex items-center gap-3 pt-2 border-t border-black/8">
+      <section className="bg-white border border-black/8 p-4 space-y-4">
+        <div className="flex items-center gap-3">
           <StatusDot status={status} />
           <div className="text-sm">
             <div className="font-semibold text-navy">
               {status === "detecting" && "Probing local builder..."}
-              {status === "running" && "Local builder responded to probe."}
+              {status === "running" && "Local builder is available."}
               {status === "not-running" && "Probe did not reach the local builder."}
             </div>
             <div className="text-xs text-black/55 font-mono">{LOCAL_URL}</div>
@@ -97,16 +86,34 @@ export default function DiagnosticBuilderPage() {
           >
             Re-probe
           </button>
+          <a
+            href={LOCAL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-gold text-[#0D1520] font-mono text-xs uppercase tracking-wider px-4 py-2 hover:opacity-90 transition"
+          >
+            Open new tab
+          </a>
         </div>
 
-        <p className="text-xs text-black/45 leading-relaxed">
-          The probe can fail (red dot) even when the server is up: Chrome blocks
-          cross-port localhost requests in some configurations regardless of CORS
-          headers. <strong>Try the gold button first.</strong> If a new tab opens
-          to a working CaseLoad Select Diagnostic Builder page, the server is
-          fine. Only if that new tab fails do you need to restart the server
-          (see below).
-        </p>
+        {status === "running" && !embedFailed && (
+          <div className="border border-black/10 bg-[#0D1520]">
+            <iframe
+              title="CaseLoad Select Diagnostic Builder"
+              src={LOCAL_URL}
+              className="block w-full h-[calc(100vh-230px)] min-h-[720px] bg-white"
+              onError={() => setEmbedFailed(true)}
+            />
+          </div>
+        )}
+
+        {status === "running" && embedFailed && (
+          <div className="border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+            The local builder answered the probe, but the browser blocked the
+            embedded view. Use the new-tab button above; your local server is
+            running.
+          </div>
+        )}
 
         {status === "not-running" && (
           <div className="space-y-3 pt-3 border-t border-black/8">
@@ -143,26 +150,12 @@ export default function DiagnosticBuilderPage() {
           </div>
         )}
 
-        <div className="pt-2 border-t border-black/8 space-y-2">
-          <div>
-            <a
-              href={LOCAL_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs uppercase tracking-wider text-black/55 hover:text-navy underline underline-offset-4"
-            >
-              Open {LOCAL_URL} directly
-            </a>
-            <span className="text-xs text-black/40 ml-2">
-              (fallback if the probe stays red but you just started the server)
-            </span>
-          </div>
-          <p className="text-[11px] text-black/40 leading-relaxed">
-            The probe is a best-effort indicator. It tells your browser whether a
-            local service answers on port 8765 from the operator console origin.
-            It can show red on a working server when a browser blocks the
-            cross-port preflight, and green on any other service that happens to
-            listen on that port. Trust the new-tab open more than the dot.
+        <div className="pt-2 border-t border-black/8">
+          <p className="text-[11px] text-black/45 leading-relaxed">
+            This page embeds a local-only service from {LOCAL_URL}. If the
+            browser, network policy, or CSP blocks the embedded frame, the
+            new-tab button uses the same running tool without the cross-origin
+            frame.
           </p>
         </div>
       </section>
