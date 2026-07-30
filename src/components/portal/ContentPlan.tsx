@@ -1136,6 +1136,10 @@ function PeriodForm({
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (!startsOn || !endsOn) {
+      setError("Set the start and end dates.");
+      return;
+    }
     const trimmedWeek = weekNumber.trim();
     if (trimmedWeek && !/^\d+$/.test(trimmedWeek)) {
       setError("Week number must be a whole number, or left blank.");

@@ -58,7 +58,6 @@ export async function POST(
   if (previewDenied) return previewDenied;
 
   let body: {
-    week_number?: unknown;
     starts_on?: unknown;
     ends_on?: unknown;
     week_number?: unknown;

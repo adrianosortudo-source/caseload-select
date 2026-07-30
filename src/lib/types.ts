@@ -341,7 +341,6 @@ export interface StrategyBrief {
 export interface ContentPeriod {
   id: string;
   firm_id: string;
-  week_number: number | null;
   starts_on: string;   // YYYY-MM-DD
   ends_on: string;     // YYYY-MM-DD
   /**

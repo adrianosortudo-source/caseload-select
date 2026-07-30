@@ -243,11 +243,10 @@ export async function upsertContentPlanSettings(input: {
 
 export async function createPeriod(input: {
   firmId: string;
+  /** null = not a numbered publishing week. */
   weekNumber: number | null;
   startsOn: string;
   endsOn: string;
-  /** null = not a numbered publishing week. */
-  weekNumber?: number | null;
   theme: string | null;
   details: string | null;
   rationale: string | null;
@@ -261,7 +260,6 @@ export async function createPeriod(input: {
       week_number: input.weekNumber,
       starts_on: input.startsOn,
       ends_on: input.endsOn,
-      week_number: input.weekNumber ?? null,
       theme: input.theme,
       details: input.details,
       rationale: input.rationale,

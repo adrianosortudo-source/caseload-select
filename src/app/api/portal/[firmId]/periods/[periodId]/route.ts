@@ -11,8 +11,7 @@ import { resolveDeliverableActor } from "@/lib/deliverables-auth";
 import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { updatePeriod, deletePeriod } from "@/lib/deliverables";
 import { parseWeekNumber } from "@/lib/deliverables-pure";
-import type { ContentPeriod } from "@/lib/types";
-import type { StrategyBrief } from "@/lib/types";
+import type { ContentPeriod, StrategyBrief } from "@/lib/types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -95,16 +94,6 @@ export async function PATCH(
       return NextResponse.json({ error: "ends_on must be YYYY-MM-DD" }, { status: 400 });
     }
     patch.ends_on = body.ends_on;
-  }
-  if ("week_number" in body) {
-    if (
-      typeof body.week_number !== "number" ||
-      !Number.isInteger(body.week_number) ||
-      body.week_number < 1
-    ) {
-      return NextResponse.json({ error: "week_number must be a positive integer" }, { status: 400 });
-    }
-    patch.week_number = body.week_number;
   }
   if (patch.starts_on && patch.ends_on && patch.ends_on < patch.starts_on) {
     return NextResponse.json({ error: "ends_on must be on or after starts_on" }, { status: 400 });
