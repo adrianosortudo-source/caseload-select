@@ -741,6 +741,13 @@ function PeriodCard({
         </div>
       </div>
 
+      {/* Placement (operator decision): the weekly strategic record leads the
+          card, immediately after the header block and above Publication
+          Readiness / Details / Why. Luna's own "Clarify strategic record
+          hierarchy" commit refined this section's typography but did not
+          move it here; this ordering is the deliberate final placement. */}
+      <StrategyBriefSection brief={period.strategyBrief} approved={showPublished || approved > 0} />
+
       {periodReadiness && (
         <div className="px-6 py-3 border-b border-border-brand/60 space-y-2">
           <PublicationReadinessSummary
@@ -756,8 +763,6 @@ function PeriodCard({
           )}
         </div>
       )}
-
-      <StrategyBriefSection brief={period.strategyBrief} approved={showPublished || approved > 0} />
 
       {isOperator && editing ? (
         <div className="px-6 py-4 border-b border-border-brand/60 bg-parchment-2/30">
