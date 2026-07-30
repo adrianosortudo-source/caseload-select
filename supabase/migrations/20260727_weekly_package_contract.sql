@@ -10,12 +10,30 @@ ALTER TABLE content_periods
 ALTER TABLE content_periods
   DROP CONSTRAINT IF EXISTS content_periods_strategy_brief_shape;
 
+-- Exactly the six keys, no extras.
+--
+-- The original draft expressed the count as jsonb_object_length(strategy_brief) = 6,
+-- which is not a PostgreSQL function -- there is jsonb_array_length for arrays,
+-- but nothing for counting object keys. A CHECK constraint cannot contain a
+-- subquery either, so (SELECT count(*) FROM jsonb_object_keys(...)) is out.
+--
+-- Two plain operators express the same rule: ?& asserts all six keys are
+-- present, and subtracting that key set must leave an empty object, which is
+-- true only when no seventh key exists. Both are immutable, so both are legal
+-- in a CHECK.
 ALTER TABLE content_periods
   ADD CONSTRAINT content_periods_strategy_brief_shape CHECK (
     strategy_brief IS NULL
     OR (
       jsonb_typeof(strategy_brief) = 'object'
-      AND jsonb_object_length(strategy_brief) = 6
+      AND (strategy_brief - ARRAY[
+        'readerAndSituation',
+        'workSupported',
+        'whyThisWeek',
+        'practicalAngle',
+        'authorityAndEvidence',
+        'websiteAndConversionRole'
+      ]::text[]) = '{}'::jsonb
       AND strategy_brief ?& ARRAY[
         'readerAndSituation',
         'workSupported',
