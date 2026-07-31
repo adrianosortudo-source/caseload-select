@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOperatorSession } from "@/lib/portal-auth";
 import { makePreviewCookieValue, type PreviewTarget } from "@/lib/preview-mode";
 import { logPreviewOpen } from "@/lib/preview-audit";
+import { clearOperatorWorkspaceCookie } from "@/lib/operator-workspace";
 
 export async function GET(
   req: NextRequest,
@@ -36,6 +37,7 @@ export async function GET(
       : new URL(`/portal/${firmId}/triage`, req.url);
 
   const res = NextResponse.redirect(dest);
+  res.cookies.set(clearOperatorWorkspaceCookie());
   const cookie = makePreviewCookieValue({
     operator_id: session.lawyer_id ?? "operator",
     firm_id: firmId,

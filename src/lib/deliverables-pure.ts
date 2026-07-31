@@ -360,6 +360,7 @@ export interface PlanDeliverable {
   format: string | null;
   period_id: string | null;
   publish_date: string | null;
+  published_at: string | null;
 }
 
 export interface FormatGroup {

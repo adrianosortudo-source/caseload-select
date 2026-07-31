@@ -814,7 +814,13 @@ function DeliverableRow({
 }) {
   const [placing, setPlacing] = useState(false);
   const st = PLAN_STATUS[item.status];
-  const dated = item.publish_date
+  const isPublished = item.published_at !== null;
+  const publicationStatus = isPublished
+    ? { label: "Published", cls: "bg-green-pass/10 text-green-pass border-green-pass/30" }
+    : st;
+  const dated = isPublished
+    ? `Published ${fmtDate(item.published_at)}`
+    : item.publish_date
     ? `${item.status === "approved" ? "Published" : "Publishes"} ${fmtDate(item.publish_date)}`
     : "No publish date set";
 
@@ -832,9 +838,9 @@ function DeliverableRow({
           </p>
         </Link>
         <span
-          className={`flex-none text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 border rounded-full whitespace-nowrap ${st.cls}`}
+          className={`flex-none text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 border rounded-full whitespace-nowrap ${publicationStatus.cls}`}
         >
-          {st.label}
+          {publicationStatus.label}
         </span>
         {isOperator && (
           <button

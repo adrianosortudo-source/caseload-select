@@ -115,7 +115,7 @@ export async function getContentPlan(
 ): Promise<ContentPlanData> {
   let dq = supabase
     .from("content_deliverables")
-    .select("id, title, kicker, status, content_kind, format, period_id, publish_date")
+    .select("id, title, kicker, status, content_kind, format, period_id, publish_date, published_at")
     .eq("firm_id", firmId);
   if (!options.includeArchived) dq = dq.neq("status", "archived");
 

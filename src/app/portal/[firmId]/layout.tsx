@@ -9,11 +9,13 @@
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
 import { getPreviewIntent } from "@/lib/preview-mode";
+import { getOperatorWorkspace } from "@/lib/operator-workspace";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { getFirmUnreadCount } from "@/lib/operator-firm-messaging";
 import PortalTabNav from "@/components/portal/PortalTabNav";
 import PreviewStrip from "@/components/portal/PreviewStrip";
 import AdminSidebar from "@/components/admin/AdminSidebar";
+import OperatorWorkspaceBanner from "@/components/portal/OperatorWorkspaceBanner";
 
 interface Branding {
   firm_name?: string;
@@ -50,6 +52,7 @@ export default async function PortalLayout({
   // plus the PreviewStrip. Lawyer preview keeps the lawyer tab nav; client
   // preview hides it, matching what a real client sees under this layout.
   const preview = isOperator ? await getPreviewIntent() : null;
+  const workspace = isOperator ? await getOperatorWorkspace(firmId) : null;
   const isLawyerPreview = !!preview && preview.target === "lawyer" && preview.firm_id === firmId;
   const isClientPreview = !!preview && preview.target === "client" && preview.firm_id === firmId;
   const inPreview = isLawyerPreview || isClientPreview;
@@ -110,7 +113,8 @@ export default async function PortalLayout({
         </form>
       </header>
 
-      {isOperator && !inPreview && <OperatorViewingBanner firmName={firmName} firmId={firmId} />}
+      {isOperator && !inPreview && workspace && <OperatorWorkspaceBanner firmName={firmName} firmId={firmId} />}
+      {isOperator && !inPreview && !workspace && <OperatorViewingBanner firmName={firmName} firmId={firmId} />}
       {inPreview && (
         <PreviewStrip
           firmId={firmId}
