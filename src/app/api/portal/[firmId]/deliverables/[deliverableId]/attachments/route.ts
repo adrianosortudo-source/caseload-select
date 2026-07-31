@@ -54,8 +54,14 @@ export async function POST(
   const previewDenied = await denyWriteIfPreview(firmId);
   if (previewDenied) return previewDenied;
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) {
+  const result = await getDeliverableDetail(deliverableId);
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (!result.found || result.detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
