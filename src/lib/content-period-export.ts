@@ -257,6 +257,7 @@ function toVersionBody(v: DeliverableVersion, signedUrlExpiresAt: string | null)
     version_number: v.version_number,
     body_html: v.body_html,
     storage_bucket: v.storage_path ? ASSET_BUCKET : null,
+    storage_bucket: v.storage_path ? ASSET_BUCKET : null,
     storage_path: v.storage_path,
     signed_url: v.signed_url ?? null,
     signed_url_expires_at: v.signed_url ? signedUrlExpiresAt : null,
@@ -551,6 +552,173 @@ export async function buildContentExportBundle(
   };
 
   return { ok: true, bundle };
+}
+
+/**
+ * Renders the same bundle object as Markdown. This is a pure formatting
+ * pass over an already-built ContentExportBundle: it reads no database,
+ * infers nothing, and adds no fields beyond what buildContentExportBundle
+ * already computed. JSON and Markdown are two views of one source.
+ */
+
+function renderVersionSection(label: string, version: ContentExportVersionBody | null): string {
+  if (!version) return `**${label}:** none on record.\n`;
+  const lines: string[] = [];
+  lines.push(`**${label}** (v${version.version_number}, id \`${version.id}\`, created ${version.created_at}):`);
+  if (version.body_html) {
+    lines.push("");
+    lines.push("```html");
+    lines.push(version.body_html);
+    lines.push("```");
+  }
+  if (version.storage_path) {
+    lines.push(`- Storage path: \`${version.storage_path}\``);
+    if (version.signed_url) {
+      lines.push(
+        `- Signed URL (temporary access only, not durable evidence): ${version.signed_url}`,
+      );
+      lines.push(
+        `- Signed URL expires: ${version.signed_url_expires_at ?? "unknown"}. To refresh, re-request this export; storage_path/asset_sha256 below are the durable identity.`,
+      );
+    }
+    if (version.asset_name) lines.push(`- Asset name: ${version.asset_name}`);
+    if (version.asset_mime) lines.push(`- Asset MIME: ${version.asset_mime}`);
+    if (version.asset_size_bytes !== null) lines.push(`- Asset size: ${version.asset_size_bytes} bytes`);
+    if (version.asset_sha256) lines.push(`- Asset SHA-256: \`${version.asset_sha256}\``);
+  }
+  if (version.note) lines.push(`- Note: ${version.note}`);
+  if (version.responds_to_approval_id) {
+    lines.push(`- Responds to approval record: \`${version.responds_to_approval_id}\``);
+  }
+  return lines.join("\n") + "\n";
+}
+
+function renderArtifact(a: ContentExportArtifact): string {
+  const lines: string[] = [];
+  const destinationSuffix = a.destination ? `, destination ${a.destination}` : "";
+  const localeSuffix = a.locale ? ` (${a.locale})` : "";
+  lines.push(`- **${a.artifact_type}**${localeSuffix}${destinationSuffix}`);
+  if (a.storage_path) lines.push(`  - Storage: \`${a.storage_bucket ?? "unknown bucket"}/${a.storage_path}\``);
+  if (a.public_url) lines.push(`  - Public URL: ${a.public_url}`);
+  if (a.sha256) lines.push(`  - SHA-256: \`${a.sha256}\``);
+  if (a.size_bytes !== null) lines.push(`  - Size: ${a.size_bytes} bytes`);
+  if (a.latest_validation) {
+    lines.push(
+      `  - Latest validation: ${a.latest_validation.validator} = ${a.latest_validation.result} (${a.latest_validation.created_at})`,
+    );
+  }
+  return lines.join("\n");
+}
+
+function renderDeliverable(d: ContentExportDeliverable): string {
+  const lines: string[] = [];
+  lines.push(`## ${d.title}`);
+  lines.push("");
+  lines.push(`- ID: \`${d.id}\``);
+  lines.push(`- Format: ${d.format ?? "not recorded"}`);
+  lines.push(`- Channel: ${d.channel ?? "not recorded"}`);
+  lines.push(`- Locale: ${d.locale ?? "not recorded"}`);
+  lines.push(`- Content kind: ${d.content_kind}`);
+  lines.push(`- Status: ${d.status}`);
+  lines.push(`- Publish date: ${d.publish_date ?? "not set"}`);
+  lines.push(`- Publication destination: ${d.publication_destination ?? "not recorded"}`);
+  lines.push(`- Publication path: ${d.publication_path ?? "not recorded"}`);
+  lines.push(
+    `- **May publish: ${d.may_publish ? "yes" : "no"}**${d.may_publish_reason ? `, reason: ${d.may_publish_reason}` : ""}`,
+  );
+  lines.push("");
+
+  lines.push(renderVersionSection("Current version", d.current_version));
+  if (d.approved_version) {
+    lines.push(renderVersionSection("Approved version, differs from current", d.approved_version));
+  }
+
+  if (d.artifacts.length > 0) {
+    lines.push("**Artifacts:**");
+    lines.push(d.artifacts.map(renderArtifact).join("\n"));
+    lines.push("");
+  } else {
+    lines.push("**Artifacts:** none registered yet.");
+    lines.push("");
+  }
+
+  if (d.unresolved_change_request) {
+    const cr = d.unresolved_change_request;
+    lines.push(
+      `**Unresolved change request** (approval record \`${cr.approval_record_id}\`, requested ${cr.requested_at} by ${cr.signer_name}):`,
+    );
+    if (cr.note) lines.push(`> ${cr.note}`);
+    lines.push("");
+  }
+
+  if (d.unresolved_comments.length > 0) {
+    lines.push("**Unresolved comments:**");
+    for (const c of d.unresolved_comments) {
+      const author = c.author_name ? `${c.author_role} ${c.author_name}` : c.author_role;
+      lines.push(`- [${author}, ${c.created_at}]: ${c.body}`);
+    }
+    lines.push("");
+  }
+
+  if (d.warnings.length > 0) {
+    lines.push("**Warnings:**");
+    for (const w of d.warnings) lines.push(`- ${w}`);
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+export function renderContentExportMarkdown(bundle: ContentExportBundle): string {
+  const lines: string[] = [];
+  lines.push("# Content Studio publishing bundle");
+  lines.push("");
+  lines.push(`- Schema version: ${bundle.schema_version}`);
+  lines.push(`- Generated at: ${bundle.generated_at}`);
+  lines.push(`- Firm: ${bundle.firm.name ?? "unnamed"} (\`${bundle.firm.id}\`)`);
+  lines.push(
+    `- Period: ${bundle.period.title ?? "untitled"} (\`${bundle.period.id}\`), ${bundle.period.starts_on} to ${bundle.period.ends_on}`,
+  );
+  lines.push(`- Active deliverables: ${bundle.active_deliverable_count}`);
+  lines.push(`- Archived deliverables (reported separately, not counted active): ${bundle.archived_deliverable_count}`);
+  lines.push("");
+  lines.push(
+    "**Generation policy:** may_generate false, may_rewrite false, may_translate false, use_portal_source_only true. A publishing agent reading this bundle must never author, rewrite, or translate a missing piece; a gap here stays a gap until it is authored in the portal.",
+  );
+  lines.push("");
+
+  if (bundle.warnings.length > 0) {
+    lines.push("## Bundle-level warnings");
+    lines.push("");
+    for (const w of bundle.warnings) lines.push(`- ${w}`);
+    lines.push("");
+  }
+
+  lines.push("# Deliverables");
+  lines.push("");
+  if (bundle.deliverables.length === 0) {
+    lines.push("No active deliverables in this period.");
+    lines.push("");
+  } else {
+    for (const d of bundle.deliverables) {
+      lines.push(renderDeliverable(d));
+      lines.push("---");
+      lines.push("");
+    }
+  }
+
+  if (bundle.archived_deliverables.length > 0) {
+    lines.push("# Archived deliverables");
+    lines.push("");
+    lines.push("Reported separately. Not part of the active count above, not publishable.");
+    lines.push("");
+    for (const a of bundle.archived_deliverables) {
+      lines.push(`- ${a.title} (\`${a.id}\`), status: ${a.status}`);
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
 }
 
 /**
