@@ -12,6 +12,7 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import ChecklistPdfArtifactPanel from "@/components/portal/ChecklistPdfArtifactPanel";
 import {
   toAgentRecord,
   toAgentManifest,
@@ -298,13 +299,19 @@ export default function PublishKit({ view, firmId }: Props) {
       {nothingMatches && <p className="text-sm text-black/50">Nothing matches the current filters.</p>}
 
       {visibleGroups.map((group) => (
-        <section key={group.date || "undated"} className="space-y-4">
+        <section key={group.key ?? group.date ?? "undated"} className="space-y-4">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-black/50 border-b border-border-brand pb-2">
-            {group.date ? formatDate(group.date) : "No publication date recorded"}
+            {group.label ?? (group.date ? formatDate(group.date) : "No publication date recorded")}
           </h2>
           <div className="space-y-4">
             {group.pieces.map((piece) => (
-              <PieceCard key={piece.id} piece={piece} firmId={firmId} onCopy={handleCopy} />
+              <PieceCard
+                key={piece.id}
+                piece={piece}
+                firmId={firmId}
+                onCopy={handleCopy}
+                onRefresh={() => router.refresh()}
+              />
             ))}
           </div>
         </section>
@@ -405,10 +412,12 @@ function PieceCard({
   piece,
   firmId,
   onCopy,
+  onRefresh,
 }: {
   piece: PublishKitPiece;
   firmId: string;
   onCopy: (text: string, label: string) => void;
+  onRefresh: () => void;
 }) {
   function handleCopyRecord() {
     const record = toAgentRecord(piece);
@@ -440,6 +449,7 @@ function PieceCard({
         year: "numeric",
       })
     : null;
+  const isChecklistPdf = piece.role === "lead_magnet_pdf";
 
   return (
     <article id={`dlv-${piece.id}`} className="bg-white border border-border-brand scroll-mt-4">
@@ -498,7 +508,13 @@ function PieceCard({
         </div>
       </div>
 
-      <div className="grid md:grid-cols-[1fr_320px]">
+      <div
+        className={
+          piece.role === "article"
+            ? "grid md:grid-cols-[minmax(0,11fr)_minmax(0,7fr)_minmax(0,7fr)]"
+            : "grid md:grid-cols-[1fr_320px]"
+        }
+      >
         <div className="p-5 border-b md:border-b-0 md:border-r border-border-brand min-w-0">
           {piece.plainText ? (
             <>
@@ -600,10 +616,18 @@ function PieceCard({
           )}
         </div>
 
-        <div className="p-5 bg-parchment/40 min-w-0 space-y-4">
-          <span className="text-[10px] uppercase tracking-wider font-semibold text-black/40 block">
-            Artifacts
-          </span>
+        <div
+          className={
+            piece.role === "article"
+              ? "min-w-0 bg-white p-5 space-y-4 md:col-span-2"
+              : "p-5 bg-parchment/40 min-w-0 space-y-4"
+          }
+        >
+          {piece.role !== "article" && (
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-black/40 block">
+              Artifacts
+            </span>
+          )}
           {piece.versionAsset && (
             <ArtifactBlock
               label="Version asset"
@@ -624,13 +648,35 @@ function PieceCard({
               unapproved={piece.boundArtifactsAreUnapproved}
             />
           )}
+          {isChecklistPdf && <ChecklistPdfArtifactPanel piece={piece} firmId={firmId} onRefresh={onRefresh} />}
           {piece.boundArtifactsAreUnapproved && piece.artifacts.length > 0 && (
             <p className="text-[11px] text-black/50">
               These belong to the current version, which is not approved. They cannot be downloaded
               here.
             </p>
           )}
-          {piece.artifacts.map((artifact) => (
+          {piece.role === "article" && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <WebsiteArtifactSlot
+                role="website_article_hero_overlay"
+                label="Article hero"
+                helper="Overlay text · article placement"
+                artifact={piece.artifacts.find((a) => a.assetRole === "website_article_hero_overlay") ?? null}
+                piece={piece}
+              />
+              <WebsiteArtifactSlot
+                role="website_homepage_cta_textless"
+                label="Homepage CTA"
+                helper="No overlay text · homepage placement"
+                artifact={piece.artifacts.find((a) => a.assetRole === "website_homepage_cta_textless") ?? null}
+                piece={piece}
+              />
+            </div>
+          )}
+          {(piece.role !== "article"
+            ? piece.artifacts.filter((artifact) => !(isChecklistPdf && artifact.artifactType === "pdf"))
+            : piece.artifacts.filter((a) => a.artifactType !== "hero_image")
+          ).map((artifact) => (
             <ArtifactBlock
               key={artifact.id}
               label={artifactTypeLabel(artifact.artifactType)}
@@ -651,7 +697,7 @@ function PieceCard({
               supersededAt={artifact.supersededAt}
             />
           ))}
-          {!piece.hasAnyArtifactToShow && (
+          {!piece.hasAnyArtifactToShow && !isChecklistPdf && (
             <p className="text-xs text-black/45">No artifacts registered for this piece yet.</p>
           )}
           {piece.otherVersionArtifacts.length > 0 && (
@@ -691,6 +737,15 @@ function PieceCard({
         </div>
       </div>
 
+      {piece.role === "article" && piece.artifacts.some((a) => a.artifactType === "hero_image" && !a.assetRole) && (
+        <LegacyWebsiteImageNotice
+          piece={piece}
+          firmId={firmId}
+          artifacts={piece.artifacts.filter((a) => a.artifactType === "hero_image" && !a.assetRole)}
+          onRefresh={onRefresh}
+        />
+      )}
+
       <div className="px-5 py-3 border-t border-border-brand bg-parchment flex items-center justify-between gap-3 flex-wrap text-[11px] text-black/50">
         <div className="space-y-0.5">
           {piece.unresolvedCommentCount > 0 && (
@@ -728,6 +783,151 @@ function PieceCard({
   );
 }
 
+function WebsiteArtifactSlot({
+  role,
+  label,
+  helper,
+  artifact,
+  piece,
+}: {
+  role: "website_article_hero_overlay" | "website_homepage_cta_textless";
+  label: string;
+  helper: string;
+  artifact: PublishKitPiece["artifacts"][number] | null;
+  piece: PublishKitPiece;
+}) {
+  return (
+    <section className="border border-border-brand bg-white p-3 min-w-0" aria-label={label}>
+      <p className="text-[11px] font-bold text-navy">{label}</p>
+      <p className="text-[10px] text-black/45 mt-0.5">{helper}</p>
+      {artifact ? (
+        <div className="mt-2">
+          <ArtifactBlock
+            label={label}
+            filename={artifact.filename}
+            mime={artifact.mime}
+            sizeBytes={artifact.sizeBytes}
+            sha256={artifact.sha256}
+            signedUrl={artifact.signedUrl}
+            signedUrlExpiresAt={artifact.signedUrlExpiresAt}
+            storagePath={artifact.storagePath}
+            publicUrl={artifact.publicUrl}
+            validation={artifact.validation}
+            mayPublish={piece.mayPublish}
+            versionId={artifact.versionId}
+            locale={artifact.locale}
+            destination={artifact.destination}
+            unapproved={piece.boundArtifactsAreUnapproved}
+            supersededAt={artifact.supersededAt}
+            assetRole={role}
+          />
+        </div>
+      ) : (
+        <p className="border border-dashed border-border-brand bg-parchment/30 px-3 py-5 mt-2 text-[11px] text-black/45">
+          No image registered for this placement.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function LegacyWebsiteImageNotice({
+  piece,
+  firmId,
+  artifacts,
+  onRefresh,
+}: {
+  piece: PublishKitPiece;
+  firmId: string;
+  artifacts: PublishKitPiece["artifacts"];
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="border border-gold-on-light/40 bg-gold-on-light/5 px-3 py-2.5 space-y-2">
+      <div>
+        <p className="text-[11px] font-semibold text-navy">Existing image needs placement</p>
+        <p className="text-[11px] text-black/55 mt-0.5">
+          This image predates the two website image roles. Assign it explicitly to one placement; the existing artifact record will not be changed.
+        </p>
+      </div>
+      {artifacts.map((artifact) => (
+        <LegacyWebsiteImageRow
+          key={artifact.id}
+          piece={piece}
+          firmId={firmId}
+          artifact={artifact}
+          onRefresh={onRefresh}
+        />
+      ))}
+    </div>
+  );
+}
+
+function LegacyWebsiteImageRow({
+  piece,
+  firmId,
+  artifact,
+  onRefresh,
+}: {
+  piece: PublishKitPiece;
+  firmId: string;
+  artifact: PublishKitPiece["artifacts"][number];
+  onRefresh: () => void;
+}) {
+  const [busy, setBusy] = useState<"website_article_hero_overlay" | "website_homepage_cta_textless" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function assign(assetRole: "website_article_hero_overlay" | "website_homepage_cta_textless") {
+    setBusy(assetRole);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/portal/${firmId}/deliverables/${piece.id}/artifacts/${artifact.id}/assign-role`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assetRole }),
+        },
+      );
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        setError(body?.error ?? "Could not assign image placement.");
+        return;
+      }
+      onRefresh();
+    } catch {
+      setError("Could not assign image placement.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 flex-wrap border-t border-gold-on-light/20 pt-2">
+      <p className="text-[11px] font-mono text-black/65 break-all">{artifact.filename ?? "Unnamed image"}</p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => assign("website_article_hero_overlay")}
+          className="text-[10px] font-semibold uppercase tracking-wider border border-navy px-2 py-1 text-navy hover:bg-navy hover:text-white disabled:opacity-40"
+        >
+          {busy === "website_article_hero_overlay" ? "Assigning…" : "Use as Article hero"}
+        </button>
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => assign("website_homepage_cta_textless")}
+          className="text-[10px] font-semibold uppercase tracking-wider border border-navy px-2 py-1 text-navy hover:bg-navy hover:text-white disabled:opacity-40"
+        >
+          {busy === "website_homepage_cta_textless" ? "Assigning…" : "Use as Homepage CTA"}
+        </button>
+        {error && <span className="text-[11px] text-red-fail">{error}</span>}
+      </div>
+    </div>
+  );
+}
+
 // ─── Artifact block ───────────────────────────────────────────────────────────
 
 function ArtifactBlock({
@@ -748,6 +948,7 @@ function ArtifactBlock({
   versionId,
   locale,
   destination,
+  assetRole,
 }: {
   label: string;
   filename: string | null;
@@ -787,6 +988,7 @@ function ArtifactBlock({
   versionId?: string | null;
   locale?: string | null;
   destination?: string | null;
+  assetRole?: string | null;
 }) {
   const controlState = artifactControlState({
     storagePath,
@@ -824,7 +1026,32 @@ function ArtifactBlock({
           </span>
         )}
       </div>
-      {filename && <p className="text-[11px] font-mono text-black/60 mt-1 break-all">{filename}</p>}
+      {filename && (
+        <p
+          className={`text-[11px] font-mono text-black/60 mt-1 ${
+            assetRole ? "truncate whitespace-nowrap" : "break-all"
+          }`}
+          title={filename}
+        >
+          {filename}
+        </p>
+      )}
+
+      {mime?.startsWith("image/") && canDownload && signedUrl && (
+        <a
+          href={signedUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="block mt-3 border border-border-brand bg-black/[0.025] focus:outline-none focus:ring-2 focus:ring-navy/40"
+        >
+          <img
+            src={signedUrl}
+            alt={filename ? `${label}: ${filename}` : label}
+            className="block w-full max-h-56 object-contain"
+          />
+          <span className="sr-only">Open full-size image preview</span>
+        </a>
+      )}
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 mt-2 text-[11px]">
         {mime && (
@@ -839,7 +1066,7 @@ function ArtifactBlock({
             <dd className="text-black/60">{formatByteCount(sizeBytes)}</dd>
           </>
         )}
-        {sha256 && (
+        {sha256 && !assetRole && (
           <>
             <dt className="text-black/40 uppercase tracking-wider">SHA-256</dt>
             <dd className="text-black/60 font-mono break-all">{sha256}</dd>
@@ -877,7 +1104,7 @@ function ArtifactBlock({
             {ARTIFACT_CONTROL_LABEL[controlState]}
           </button>
         )}
-        {canDownload && signedUrlExpiresAt && mounted && (
+        {canDownload && signedUrlExpiresAt && mounted && !assetRole && (
           <p className="text-[10px] text-black/40 mt-1">
             Link expires {new Date(signedUrlExpiresAt).toLocaleString("en-CA")}.
           </p>

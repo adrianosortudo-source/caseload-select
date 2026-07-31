@@ -8,9 +8,18 @@ import type {
   ContentPlanSettings,
   ContentKind,
   DeliverableStatus,
+  StrategyBrief,
 } from "@/lib/types";
 import {
-  groupByFormat,
+  isCompleteStrategyBrief,
+  STRATEGY_BRIEF_FIELDS,
+  strategyBriefFieldValue,
+} from "@/lib/strategy-brief";
+import {
+  groupByCanonicalFormat,
+  CANONICAL_FORMATS,
+  languageLabel,
+  periodFormatAnchorId,
   planProgress,
   computeOverview,
   isPublished,
@@ -19,6 +28,11 @@ import {
   type PlanDeliverable,
   type PlanOverview,
 } from "@/lib/deliverables-pure";
+import {
+  buildContentArchiveIndex,
+  searchContentArchive,
+  type ContentArchiveEntry,
+} from "@/lib/content-archive-pure";
 import PublicationReadinessSummary from "@/components/portal/PublicationReadinessSummary";
 import {
   sliceReadinessForPeriod,
@@ -167,6 +181,14 @@ export default function ContentPlan({
         planReadiness={planReadiness}
       />
 
+      <ContentArchive
+        firmId={firmId}
+        periods={periods}
+        deliverables={deliverables}
+        includeArchived={includeArchived}
+        standingAuthActive={standingAuthActive}
+      />
+
       {isOperator && showNewWeek && (
         <PeriodForm
           firmId={firmId}
@@ -195,7 +217,7 @@ export default function ContentPlan({
       {periods.map((period) => {
         const items = live.filter((d) => d.period_id === period.id);
         const { approved, published, total } = planProgress(items);
-        const groups = groupByFormat(items);
+        const groups = groupByCanonicalFormat(items);
         // Slice the whole-plan readiness set down to this period's own
         // deliverables. Reuses the ids already computed above rather than
         // adding a second period-scoped data load; sliceReadinessForPeriod
@@ -247,7 +269,7 @@ export default function ContentPlan({
             <p className="text-base font-bold text-navy mt-0.5">Unscheduled</p>
           </div>
           <div className="px-3 py-3">
-            {groupByFormat(unscheduled).map((g) => (
+            {groupByCanonicalFormat(unscheduled).map((g) => (
               <FormatGroupBlock
                 key={g.format ?? "_unfiled"}
                 firmId={firmId}
@@ -256,6 +278,8 @@ export default function ContentPlan({
                 periods={periods}
                 standingAuthActive={standingAuthActive}
                 onChanged={refresh}
+                anchorId={periodFormatAnchorId("unscheduled", g.format)}
+                highlighted={false}
               />
             ))}
           </div>
@@ -293,6 +317,65 @@ export default function ContentPlan({
 }
 
 // ─── Review overview (whole-plan summary) ────────────────────────────────────
+
+function ContentArchive({
+  firmId,
+  periods,
+  deliverables,
+  includeArchived,
+  standingAuthActive,
+}: {
+  firmId: string;
+  periods: ContentPeriod[];
+  deliverables: PlanDeliverable[];
+  includeArchived: boolean;
+  standingAuthActive: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const [format, setFormat] = useState<(typeof CANONICAL_FORMATS)[number] | "all">("all");
+  const [language, setLanguage] = useState("all");
+  const [status, setStatus] = useState("all");
+  const [periodId, setPeriodId] = useState("all");
+  const entries = buildContentArchiveIndex(firmId, periods, deliverables, standingAuthActive);
+  const results = searchContentArchive(entries, firmId, { query, format, language, status, periodId });
+  const active = Boolean(query.trim()) || format !== "all" || language !== "all" || status !== "all" || periodId !== "all";
+  const statusOptions = [...new Set(entries.map((entry) => entry.status))].sort();
+
+  return (
+    <section className="bg-white border border-border-brand px-5 py-4" aria-labelledby="content-archive-title">
+      <div className="flex items-baseline justify-between gap-4 flex-wrap mb-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[color:var(--portal-accent)]">Content archive</p>
+          <h2 id="content-archive-title" className="text-base font-bold text-navy mt-0.5">Find this client&rsquo;s content</h2>
+        </div>
+        <p className="text-[11px] text-muted">Current and historical weekly packages{includeArchived ? ", including archived pieces" : ""}</p>
+      </div>
+      <form className="flex flex-wrap gap-2" role="search" onSubmit={(event) => event.preventDefault()}>
+        <label className="sr-only" htmlFor="content-archive-search">Search this client&rsquo;s content archive</label>
+        <input id="content-archive-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this client&rsquo;s complete content archive" className="flex-1 min-w-[220px] border border-border-brand px-3 py-2 text-sm bg-white" />
+        <label className="sr-only" htmlFor="content-archive-format">Filter by format</label>
+        <select id="content-archive-format" value={format} onChange={(event) => setFormat(event.target.value as typeof format)} className="border border-border-brand px-2 py-2 text-xs bg-white text-navy"><option value="all">All formats</option>{CANONICAL_FORMATS.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+        <label className="sr-only" htmlFor="content-archive-language">Filter by language</label>
+        <select id="content-archive-language" value={language} onChange={(event) => setLanguage(event.target.value)} className="border border-border-brand px-2 py-2 text-xs bg-white text-navy"><option value="all">All languages</option><option value="EN">English</option><option value="PT">Portuguese</option></select>
+        <label className="sr-only" htmlFor="content-archive-status">Filter by status</label>
+        <select id="content-archive-status" value={status} onChange={(event) => setStatus(event.target.value)} className="border border-border-brand px-2 py-2 text-xs bg-white text-navy"><option value="all">All statuses</option>{statusOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+        <label className="sr-only" htmlFor="content-archive-week">Filter by week</label>
+        <select id="content-archive-week" value={periodId} onChange={(event) => setPeriodId(event.target.value)} className="border border-border-brand px-2 py-2 text-xs bg-white text-navy"><option value="all">All weeks</option>{periods.map((period) => <option key={period.id} value={period.id}>{periodLabel(period)}{period.theme ? ` · ${period.theme}` : ""}</option>)}</select>
+      </form>
+      {!active ? <p className="text-[11px] text-muted mt-2">Search by title, week, format, language, or status. Results appear here without duplicating the full archive.</p> : <div className="mt-3 border-t border-border-brand/60" aria-live="polite"><p className="text-[11px] text-muted py-2">{results.length} result{results.length === 1 ? "" : "s"} in this client&rsquo;s archive</p>{results.length === 0 ? <p className="text-sm text-black/55 py-3">No content matches these filters.</p> : results.map((entry) => <ArchiveResult key={entry.deliverable.id} firmId={firmId} entry={entry} />)}</div>}
+    </section>
+  );
+}
+
+function ArchiveResult({ firmId, entry }: { firmId: string; entry: ContentArchiveEntry }) {
+  const published = isPublished(entry.deliverable.published_at) && entry.deliverable.status !== "archived";
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border-brand/40 last:border-b-0">
+      <div className="min-w-0"><Link href={`/portal/${firmId}/deliverables/${entry.deliverable.id}`} className="text-sm font-semibold text-navy hover:underline">{entry.deliverable.title}</Link><p className="text-[11px] text-muted mt-0.5">{entry.period ? `${periodLabel(entry.period)} · ${entry.period.theme ?? ""}` : "Unscheduled"} · {entry.format} · {entry.language} · {entry.status}</p></div>
+      <Link href={`/portal/${firmId}/deliverables/${entry.deliverable.id}`} className="flex-none text-xs font-semibold text-navy hover:underline">{entry.deliverable.status === "approved" || published ? "Open" : "Review"} →</Link>
+    </div>
+  );
+}
 
 function daysUntil(iso: string): number {
   const d = new Date(`${iso}T00:00:00`);
@@ -594,13 +677,14 @@ function PeriodCard({
   approved: number;
   published: number;
   total: number;
-  groups: ReturnType<typeof groupByFormat>;
+  groups: ReturnType<typeof groupByCanonicalFormat>;
   periods: ContentPeriod[];
   onChanged: () => void;
   periodReadiness?: PlanReadinessProp;
   standingAuthActive: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const [highlightedAnchor, setHighlightedAnchor] = useState<string | null>(null);
   // Once anything in the week has shipped, publication is the honest
   // headline. A week released under standing authorization never accrues
   // individual approvals, so an approval-only bar would sit at 0% forever
@@ -631,40 +715,38 @@ function PeriodCard({
               style={{ width: `${pct}%` }}
             />
           </div>
-          <div className="flex justify-end mt-2">
-            <Link
-              href={`/portal/${firmId}/deliverables/periods/${period.id}`}
-              className="text-[11px] font-semibold text-navy/70 hover:text-navy"
-            >
-              Open Package Control Room
-            </Link>
-          </div>
           {isOperator && (
-            <div className="flex items-center justify-end gap-3 mt-2">
+            <div className="flex items-center justify-end gap-2 mt-2 flex-wrap">
+              <Link
+                href={`/portal/${firmId}/deliverables/periods/${period.id}`}
+                className="inline-flex items-center px-2.5 py-1.5 text-[11px] font-semibold border border-border-brand bg-white text-navy hover:border-navy"
+              >
+                Package workspace
+              </Link>
               <button
                 onClick={() => setEditing((s) => !s)}
-                className="text-[11px] font-semibold text-navy/70 hover:text-navy"
+                className="inline-flex items-center px-2.5 py-1.5 text-[11px] font-semibold border border-border-brand bg-white text-navy hover:border-navy"
               >
-                {editing ? "Close" : "Edit week"}
+                {editing ? "Close editor" : "Edit package overview"}
               </button>
-              <DownloadBundleButton periodId={period.id} />
-              {/*
-                Filled, not a text link, and last in the row: this is the
-                primary action on a week card -- the place an operator goes to
-                actually collect the week's copy and assets. Sitting in plain
-                navy/70 beside "Edit week" made it read as a tertiary utility,
-                and operators could not find it.
-              */}
+              <PackageToolsButton periodId={period.id} />
               <Link
                 href={`/portal/${firmId}/publish-kit/${period.id}`}
                 className="text-[11px] font-semibold uppercase tracking-wider px-3 py-1.5 border border-navy bg-navy text-white hover:bg-navy/90"
               >
-                Publish Kit
+                Open Publish Kit
               </Link>
             </div>
           )}
         </div>
       </div>
+
+      {/* Placement (operator decision): the weekly strategic record leads the
+          card, immediately after the header block and above Publication
+          Readiness / Details / Why. Luna's own "Clarify strategic record
+          hierarchy" commit refined this section's typography but did not
+          move it here; this ordering is the deliberate final placement. */}
+      <StrategyBriefSection brief={period.strategyBrief} approved={showPublished || approved > 0} />
 
       {periodReadiness && (
         <div className="px-6 py-3 border-b border-border-brand/60 space-y-2">
@@ -693,28 +775,32 @@ function PeriodCard({
             }}
           />
         </div>
-      ) : (
-        (period.details || period.rationale) && (
-          <div className="px-6 py-4 border-b border-border-brand/60 space-y-2.5">
-            {period.details && <MetaRow label="Details" value={period.details} />}
-            {period.rationale && <MetaRow label="Why" value={period.rationale} />}
-          </div>
-        )
-      )}
+      ) : null}
 
       <div className="px-3 py-3">
+        <FormatJumpNav periodId={period.id} groups={groups} onJump={(anchorId) => {
+          const target = document.getElementById(anchorId);
+          if (!target) return;
+          const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          target.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+          window.setTimeout(() => target.focus({ preventScroll: true }), reduced ? 0 : 200);
+          setHighlightedAnchor(anchorId);
+          window.setTimeout(() => setHighlightedAnchor((current) => current === anchorId ? null : current), 1400);
+        }} />
         {total === 0 ? (
           <p className="px-3 py-4 text-sm text-black/45">No pieces in this week yet.</p>
         ) : (
           groups.map((g) => (
             <FormatGroupBlock
-              key={g.format ?? "_unfiled"}
+              key={g.format}
               firmId={firmId}
               isOperator={isOperator}
               group={g}
               periods={periods}
               onChanged={onChanged}
               standingAuthActive={standingAuthActive}
+              anchorId={periodFormatAnchorId(period.id, g.format)}
+              highlighted={highlightedAnchor === periodFormatAnchorId(period.id, g.format)}
             />
           ))
         )}
@@ -723,37 +809,79 @@ function PeriodCard({
   );
 }
 
+function StrategyBriefSection({
+  brief,
+  approved,
+}: {
+  brief: StrategyBrief | null | undefined;
+  approved: boolean;
+}) {
+  const complete = isCompleteStrategyBrief(brief);
+  return (
+    <section className="px-6 py-4 border-b border-border-brand/60 bg-parchment-2/20">
+      <h3 className="text-sm font-bold text-navy">Weekly strategic record</h3>
+      <p className="text-[12px] text-black/65 leading-[1.45] mt-1 max-w-3xl">
+        This brief records the strategic decision behind this week&rsquo;s {approved ? "approved" : "proposed"} content package. Every listed deliverable must support this approved reader, matter, and practical question.
+      </p>
+      {!complete && (
+        <p className="text-sm text-amber-800 leading-relaxed mt-3">
+          The strategy record is incomplete. The content remains available; complete all six fields in Edit package overview before marking this package ready for client release.
+        </p>
+      )}
+      <dl className="mt-3 grid grid-cols-2 border-t border-border-brand/60 max-[900px]:grid-cols-1">
+        {STRATEGY_BRIEF_FIELDS.map(([key, label]) => (
+          <div
+            key={key}
+            className="grid grid-cols-[minmax(8rem,0.38fr)_1fr] items-start gap-x-3 gap-y-1 px-3 py-2 border-b border-border-brand/40 min-[901px]:odd:border-r max-[640px]:grid-cols-1"
+          >
+            <dt className="text-[10px] uppercase tracking-[0.08em] font-bold text-navy pt-0.5">
+              {label}
+            </dt>
+            <dd className={strategyBriefFieldValue(brief, key).complete ? "text-[12px] text-black/75 leading-[1.45]" : "text-[11px] text-muted italic leading-[1.4]"}>
+              {strategyBriefFieldValue(brief, key).complete ? strategyBriefFieldValue(brief, key).value : <><span className="not-italic text-navy/70">What belongs here: </span>{strategyBriefFieldValue(brief, key).value}</>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 // Independent of Publication Readiness (rendered outside that panel above):
 // pulls the exact, already-stored deliverable content for this period via
 // GET /api/admin/content-periods/[periodId]/content-export, operator-only,
 // no readiness activation required. See content-period-export.ts.
-function DownloadBundleButton({ periodId }: { periodId: string }) {
+function PackageToolsButton({ periodId }: { periodId: string }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative inline-block">
       <button
         onClick={() => setOpen((s) => !s)}
-        className="text-[11px] font-semibold text-navy/70 hover:text-navy"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className="inline-flex items-center px-2.5 py-1.5 text-[11px] font-semibold border border-border-brand bg-white text-navy hover:border-navy"
       >
-        {open ? "Close" : "Download publishing bundle"}
+        {open ? "Close tools" : "Package tools"}
       </button>
       {open && (
-        <div className="absolute right-0 mt-1 z-10 bg-white border border-border-brand shadow-sm flex flex-col min-w-[130px]">
+        <div role="menu" className="absolute right-0 mt-1 z-10 bg-white border border-border-brand shadow-sm flex flex-col min-w-[150px]">
           <a
             href={`/api/admin/content-periods/${periodId}/content-export?format=json`}
             target="_blank"
             rel="noreferrer"
+            role="menuitem"
             className="px-3 py-2 text-xs font-semibold text-black/70 hover:bg-parchment-2 hover:text-navy whitespace-nowrap"
           >
-            JSON
+            Export JSON
           </a>
           <a
             href={`/api/admin/content-periods/${periodId}/content-export?format=markdown`}
             target="_blank"
             rel="noreferrer"
+            role="menuitem"
             className="px-3 py-2 text-xs font-semibold text-black/70 hover:bg-parchment-2 hover:text-navy border-t border-border-brand/60 whitespace-nowrap"
           >
-            Markdown
+            Export Markdown
           </a>
         </div>
       )}
@@ -822,18 +950,42 @@ function ActivateReadinessButton({
   );
 }
 
-function MetaRow({ label, value }: { label: string; value: string }) {
+// ─── Format group + rows ─────────────────────────────────────────────────────
+
+function FormatJumpNav({
+  periodId,
+  groups,
+  onJump,
+}: {
+  periodId: string;
+  groups: ReturnType<typeof groupByCanonicalFormat>;
+  onJump: (anchorId: string) => void;
+}) {
+  if (groups.length === 0) return null;
   return (
-    <div className="flex gap-3">
-      <span className="flex-none w-14 text-[10px] uppercase tracking-[0.1em] font-semibold text-navy pt-0.5">
-        {label}
+    <nav aria-label="This week's formats" className="flex flex-wrap items-center gap-2 border-b border-border-brand/60 pb-2">
+      <span className="mr-1 text-[10px] uppercase tracking-[0.1em] font-semibold text-navy">
+        This week&apos;s formats
       </span>
-      <span className="flex-1 text-sm text-black/75 leading-relaxed">{value}</span>
-    </div>
+      {groups.map((group) => {
+        const anchorId = periodFormatAnchorId(periodId, group.format);
+        return (
+          <a
+            key={anchorId}
+            href={`#${anchorId}`}
+            onClick={(event) => {
+              event.preventDefault();
+              onJump(anchorId);
+            }}
+            className="border border-border-brand px-2 py-1 text-[11px] font-semibold text-navy hover:border-navy hover:bg-parchment-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
+          >
+            {group.format === "Checklists & downloadable resources" ? "Checklists & resources" : group.format} · {group.items.length}
+          </a>
+        );
+      })}
+    </nav>
   );
 }
-
-// ─── Format group + rows ─────────────────────────────────────────────────────
 
 function FormatGroupBlock({
   firmId,
@@ -842,19 +994,27 @@ function FormatGroupBlock({
   periods,
   onChanged,
   standingAuthActive,
+  anchorId,
+  highlighted,
 }: {
   firmId: string;
   isOperator: boolean;
-  group: ReturnType<typeof groupByFormat>[number];
+  group: ReturnType<typeof groupByCanonicalFormat>[number];
   periods: ContentPeriod[];
   onChanged: () => void;
   standingAuthActive: boolean;
+  anchorId: string;
+  highlighted: boolean;
 }) {
   return (
     <div className="mb-1.5">
-      <div className="flex items-center gap-2.5 px-3 pt-3 pb-1.5">
+      <div
+        id={anchorId}
+        tabIndex={-1}
+        className={`scroll-mt-4 flex items-center gap-2.5 px-3 pt-3 pb-1.5 transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-navy ${highlighted ? "bg-parchment-2/70" : ""}`}
+      >
         <span className="text-[12px] font-bold uppercase tracking-[0.05em] text-navy">
-          {group.format ?? "No format set"}
+          {group.format}
         </span>
         <span className="text-[11px] font-semibold text-muted bg-parchment-2 border border-border-brand rounded-full px-2 leading-5">
           {group.items.length}
@@ -919,6 +1079,9 @@ function DeliverableRow({
   return (
     <div>
       <div className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-parchment-2/50 transition-colors">
+        <span className="flex-none w-8 text-center text-[10px] uppercase tracking-[0.08em] font-semibold text-muted" aria-label={`Language: ${languageLabel(item.locale)}`}>
+          {languageLabel(item.locale)}
+        </span>
         <Link href={`/portal/${firmId}/deliverables/${item.id}`} className="flex-1 min-w-0 group">
           <p className="text-[15px] font-medium text-black/85 leading-snug group-hover:text-navy">
             {item.kicker ? `${item.kicker} · ` : ""}
@@ -1069,8 +1232,16 @@ function PeriodForm({
     period?.week_number != null ? String(period.week_number) : "",
   );
   const [theme, setTheme] = useState(period?.theme ?? "");
-  const [details, setDetails] = useState(period?.details ?? "");
-  const [rationale, setRationale] = useState(period?.rationale ?? "");
+  const [strategyBrief, setStrategyBrief] = useState<StrategyBrief>(
+    period?.strategyBrief ?? {
+      readerAndSituation: "",
+      workSupported: "",
+      whyThisWeek: "",
+      practicalAngle: "",
+      authorityAndEvidence: "",
+      websiteAndConversionRole: "",
+    },
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1085,6 +1256,10 @@ function PeriodForm({
       setError("Week number must be a whole number, or left blank.");
       return;
     }
+    if (!isCompleteStrategyBrief(strategyBrief)) {
+      setError("Complete all six Weekly strategic record fields before saving this week.");
+      return;
+    }
     setSaving(true);
     setError(null);
     const payload = {
@@ -1093,8 +1268,7 @@ function PeriodForm({
       // Blank clears the number: the period is not a numbered publishing week.
       week_number: trimmedWeek ? Number(trimmedWeek) : null,
       theme: theme.trim() || null,
-      details: details.trim() || null,
-      rationale: rationale.trim() || null,
+      strategy_brief: strategyBrief,
     };
     const url = period
       ? `/api/portal/${firmId}/periods/${period.id}`
@@ -1190,33 +1364,36 @@ function PeriodForm({
           className="w-full text-sm border border-border-brand px-3 py-2 bg-white"
         />
       </div>
-      <div>
-        <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
-          Details
-        </label>
-        <textarea
-          value={details}
-          onChange={(e) => setDetails(e.target.value)}
-          rows={3}
-          placeholder="The topics and angles this week covers."
-          className="w-full text-sm border border-border-brand px-3 py-2 bg-white resize-y"
-        />
-      </div>
-      <div>
-        <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
-          Why{" "}
-          <span className="text-black/40 normal-case font-normal">
-            (brand relevance + search intent)
-          </span>
-        </label>
-        <textarea
-          value={rationale}
-          onChange={(e) => setRationale(e.target.value)}
-          rows={3}
-          placeholder="The strategic reason these pieces were chosen this week."
-          className="w-full text-sm border border-border-brand px-3 py-2 bg-white resize-y"
-        />
-      </div>
+      <fieldset className="border-t border-border-brand/60 pt-3 space-y-3">
+        <legend className="text-[10px] uppercase tracking-wider font-semibold text-navy">
+          Weekly strategic record
+        </legend>
+        <p className="text-xs text-black/55">
+          Complete all six fields. The content remains accessible while this strategy record is being completed.
+        </p>
+        {STRATEGY_BRIEF_FIELDS.map(([key, label]) => {
+          const inputId = `period-${period?.id ?? "new"}-strategy-${key}`;
+          return (
+            <div key={key}>
+              <label
+                htmlFor={inputId}
+                className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1"
+              >
+                {label}
+              </label>
+              <textarea
+                id={inputId}
+                value={strategyBrief[key]}
+                onChange={(e) =>
+                  setStrategyBrief((current) => ({ ...current, [key]: e.target.value }))
+                }
+                rows={3}
+                className="w-full text-sm border border-border-brand px-3 py-2 bg-white resize-y"
+              />
+            </div>
+          );
+        })}
+      </fieldset>
       {error && <p className="text-xs text-red-fail">{error}</p>}
       <div className="flex items-center gap-3">
         <button

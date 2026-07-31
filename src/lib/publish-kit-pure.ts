@@ -17,6 +17,7 @@ import type {
   ContentExportArtifact,
 } from "@/lib/content-period-export";
 import type { DeliverableRole } from "@/lib/types";
+import { CANONICAL_FORMATS, canonicalFormat, type CanonicalFormat } from "@/lib/deliverables-pure";
 
 // ─── Copy constraints ────────────────────────────────────────────────────────
 
@@ -298,6 +299,7 @@ export interface PublishKitArtifact {
    */
   versionId: string;
   artifactType: string;
+  assetRole?: string | null;
   locale: string | null;
   destination: string | null;
   filename: string | null; // basename of storagePath, or null
@@ -448,6 +450,21 @@ export interface PublishKitDateGroup {
   pieces: PublishKitPiece[];
 }
 
+/** A format cluster in the same order used by the weekly Deliverables page. */
+export interface PublishKitFormatGroup {
+  key: string;
+  label: CanonicalFormat;
+  pieces: PublishKitPiece[];
+}
+
+/** Shared compatibility shape for older date-group fixtures and the live format groups. */
+export interface PublishKitGroup {
+  key?: string;
+  label?: CanonicalFormat;
+  date?: string;
+  pieces: PublishKitPiece[];
+}
+
 export interface PublishKitView {
   periodId: string;
   periodTitle: string | null;
@@ -463,7 +480,7 @@ export interface PublishKitView {
     manual: number;
     pipeline: number;
   };
-  groups: PublishKitDateGroup[];
+  groups: PublishKitGroup[];
   bundleWarnings: string[];
 }
 
@@ -516,6 +533,35 @@ export function groupByPublishDate(pieces: PublishKitPiece[]): PublishKitDateGro
   if (undated) groups.push({ date: "", pieces: undated });
 
   return groups;
+}
+
+/**
+ * Groups the Publish Kit by the operator's canonical format order. This keeps
+ * the kit aligned with the Deliverables page: a publisher can open one format
+ * lane and find all of that lane's pieces together, regardless of publish date.
+ * Metadata is authoritative; titles are never inspected to determine a lane.
+ */
+export function groupByCanonicalFormat(pieces: PublishKitPiece[]): PublishKitFormatGroup[] {
+  const groups = new Map<CanonicalFormat, PublishKitPiece[]>();
+  for (const piece of pieces) {
+    const format = canonicalFormat({
+      format: piece.format,
+      locale: piece.locale,
+      deliverable_role: piece.role,
+      publication_destination: piece.destination,
+    });
+    const existing = groups.get(format);
+    if (existing) existing.push(piece);
+    else groups.set(format, [piece]);
+  }
+
+  return CANONICAL_FORMATS
+    .filter((format) => groups.has(format))
+    .map((format) => ({
+      key: format.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      label: format,
+      pieces: groups.get(format)!.sort(comparePieces),
+    }));
 }
 
 // ─── Copy column presentation ────────────────────────────────────────────────
@@ -856,6 +902,7 @@ function toArtifact(artifact: ContentExportArtifact): PublishKitArtifact {
     id: artifact.id,
     versionId: artifact.version_id,
     artifactType: artifact.artifact_type,
+    assetRole: artifact.asset_role ?? null,
     locale: artifact.locale,
     destination: artifact.destination,
     filename: basename(artifact.storage_path),
@@ -939,7 +986,7 @@ function partitionArtifacts(
  * as a false "duplicate".
  */
 function slotKey(a: PublishKitArtifact): string {
-  return `${a.artifactType}::${a.locale ?? ""}::${a.destination ?? ""}`;
+  return `${a.artifactType}::${a.assetRole ?? ""}::${a.locale ?? ""}::${a.destination ?? ""}`;
 }
 
 /**
@@ -988,6 +1035,9 @@ function dedupeArtifacts(
   // plain string present on every artifact, so this is total and stable.
   const kept = [...winnerByKey.values()].sort((a, b) => {
     if (a.artifactType !== b.artifactType) return a.artifactType.localeCompare(b.artifactType);
+    const aRole = a.assetRole ?? "";
+    const bRole = b.assetRole ?? "";
+    if (aRole !== bRole) return aRole.localeCompare(bRole);
     const aLocale = a.locale ?? "";
     const bLocale = b.locale ?? "";
     if (aLocale !== bLocale) return aLocale.localeCompare(bLocale);
@@ -1142,7 +1192,7 @@ function toPiece(deliverable: ContentExportDeliverable): PublishKitPiece {
 /** Maps a raw bundle into the view model the Publish Kit UI renders. */
 export function toPublishKitView(bundle: ContentExportBundle): PublishKitView {
   const pieces = bundle.deliverables.map(toPiece);
-  const groups = groupByPublishDate(pieces);
+  const groups = groupByCanonicalFormat(pieces);
 
   const publishableCount = pieces.filter((p) => p.mayPublish).length;
   const manualCount = pieces.filter((p) => p.lane === "manual").length;
