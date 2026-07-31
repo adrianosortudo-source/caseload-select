@@ -16,9 +16,15 @@ const COMMENT = "55555555-5555-5555-5555-555555555555";
 
 type Actor = { role: string; id: string | null; name: string | null; email: string | null } | null;
 
-const state: { actor: Actor; detail: unknown; resolveArgs: Record<string, unknown> | null } = {
+const state: {
+  actor: Actor;
+  detail: unknown;
+  detailReadError: boolean;
+  resolveArgs: Record<string, unknown> | null;
+} = {
   actor: null,
   detail: null,
+  detailReadError: false,
   resolveArgs: null,
 };
 
@@ -28,7 +34,14 @@ vi.mock("@/lib/deliverables-auth", () => ({
 }));
 
 vi.mock("@/lib/deliverables", () => ({
-  getDeliverableDetail: () => Promise.resolve(state.detail),
+  getDeliverableDetail: () =>
+    Promise.resolve(
+      state.detailReadError
+        ? { ok: false, error: "mock read error" }
+        : state.detail === null
+          ? { ok: true, found: false }
+          : { ok: true, found: true, detail: state.detail },
+    ),
   setCommentResolved: (args: Record<string, unknown>) => {
     state.resolveArgs = args;
     return Promise.resolve({ ok: true });
@@ -39,12 +52,17 @@ import { PATCH } from "../route";
 
 const LAWYER: Actor = { role: "lawyer", id: "law1", name: "Damaris", email: "d@firm.ca" };
 
-function makeDetail(firmId = FIRM, comments = [{ id: COMMENT }]) {
+function makeDetail(
+  firmId = FIRM,
+  comments = [{ id: COMMENT }],
+  over: { commentsError?: boolean } = {},
+) {
   return {
     deliverable: { id: DELIV, firm_id: firmId, title: "T" },
     versions: [],
     comments,
     approvals: [],
+    commentsError: over.commentsError ?? false,
   };
 }
 
@@ -62,6 +80,7 @@ const params = () =>
 beforeEach(() => {
   state.actor = LAWYER;
   state.detail = makeDetail();
+  state.detailReadError = false;
   state.resolveArgs = null;
 });
 
@@ -75,6 +94,13 @@ describe("PATCH comments/[commentId]", () => {
   it("400 when resolved is not a boolean", async () => {
     const res = await PATCH(req({ resolved: "yes" }), params());
     expect(res.status).toBe(400);
+  });
+
+  it("503 when the comments read failed; setCommentResolved is never called", async () => {
+    state.detail = makeDetail(FIRM, [{ id: COMMENT }], { commentsError: true });
+    const res = await PATCH(req({ resolved: true }), params());
+    expect(res.status).toBe(503);
+    expect(state.resolveArgs).toBeNull();
   });
 
   it("404 when the comment is not part of this deliverable", async () => {

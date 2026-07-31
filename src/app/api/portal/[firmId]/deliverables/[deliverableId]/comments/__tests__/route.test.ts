@@ -28,8 +28,9 @@ type Actor = { role: string; id: string | null; name: string | null; email: stri
 const state: {
   actor: Actor;
   detail: unknown;
+  detailReadError: boolean;
   addArgs: Record<string, unknown> | null;
-} = { actor: null, detail: null, addArgs: null };
+} = { actor: null, detail: null, detailReadError: false, addArgs: null };
 
 vi.mock("@/lib/deliverables-auth", () => ({
   resolveDeliverableActor: () =>
@@ -37,7 +38,14 @@ vi.mock("@/lib/deliverables-auth", () => ({
 }));
 
 vi.mock("@/lib/deliverables", () => ({
-  getDeliverableDetail: () => Promise.resolve(state.detail),
+  getDeliverableDetail: () =>
+    Promise.resolve(
+      state.detailReadError
+        ? { ok: false, error: "mock read error" }
+        : state.detail === null
+          ? { ok: true, found: false }
+          : { ok: true, found: true, detail: state.detail },
+    ),
   addComment: (args: Record<string, unknown>) => {
     state.addArgs = args;
     return Promise.resolve({ ok: true, comment: { id: "c1" } });
@@ -51,7 +59,10 @@ const LAWYER: Actor = { role: "lawyer", id: "law1", name: "Damaris", email: "d@f
 const APPROVAL_1 = "55555555-5555-5555-5555-555555555555";
 const V_OTHER = "66666666-6666-6666-6666-666666666666";
 
-function makeDetail(firmId = FIRM) {
+function makeDetail(
+  firmId = FIRM,
+  over: { versionsError?: boolean; commentsError?: boolean; approvalsError?: boolean } = {},
+) {
   return {
     deliverable: { id: DELIV, firm_id: firmId, title: "T" },
     versions: [
@@ -66,6 +77,9 @@ function makeDetail(firmId = FIRM) {
         decision: "changes_requested",
       },
     ],
+    versionsError: over.versionsError ?? false,
+    commentsError: over.commentsError ?? false,
+    approvalsError: over.approvalsError ?? false,
   };
 }
 
@@ -82,6 +96,7 @@ const params = () => ({ params: Promise.resolve({ firmId: FIRM, deliverableId: D
 beforeEach(() => {
   state.actor = LAWYER;
   state.detail = makeDetail();
+  state.detailReadError = false;
   state.addArgs = null;
 });
 
@@ -101,6 +116,27 @@ describe("POST comments", () => {
   it("400 when the version_id is not part of this deliverable", async () => {
     const res = await POST(req({ version_id: "ffffffff-ffff-ffff-ffff-ffffffffffff", body: "hi" }), params());
     expect(res.status).toBe(400);
+  });
+
+  it("503 when the versions read failed; addComment is never called", async () => {
+    state.detail = makeDetail(FIRM, { versionsError: true });
+    const res = await POST(req({ version_id: V_CUR, body: "hi" }), params());
+    expect(res.status).toBe(503);
+    expect(state.addArgs).toBeNull();
+  });
+
+  it("503 when the comments read failed; addComment is never called", async () => {
+    state.detail = makeDetail(FIRM, { commentsError: true });
+    const res = await POST(req({ version_id: V_CUR, body: "hi" }), params());
+    expect(res.status).toBe(503);
+    expect(state.addArgs).toBeNull();
+  });
+
+  it("503 when the approvals read failed; addComment is never called", async () => {
+    state.detail = makeDetail(FIRM, { approvalsError: true });
+    const res = await POST(req({ version_id: V_CUR, body: "hi" }), params());
+    expect(res.status).toBe(503);
+    expect(state.addArgs).toBeNull();
   });
 
   it("400 when the body is empty", async () => {

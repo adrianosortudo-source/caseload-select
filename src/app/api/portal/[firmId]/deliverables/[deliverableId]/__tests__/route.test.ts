@@ -15,9 +15,10 @@ const DELIV = "22222222-2222-2222-2222-222222222222";
 
 type Actor = { role: string; id: string | null; name: string | null; email: string | null } | null;
 
-const state: { actor: Actor; detail: unknown; archived: boolean } = {
+const state: { actor: Actor; detail: unknown; detailReadError: boolean; archived: boolean } = {
   actor: null,
   detail: null,
+  detailReadError: false,
   archived: false,
 };
 
@@ -27,7 +28,14 @@ vi.mock("@/lib/deliverables-auth", () => ({
 }));
 
 vi.mock("@/lib/deliverables", () => ({
-  getDeliverableDetail: () => Promise.resolve(state.detail),
+  getDeliverableDetail: () =>
+    Promise.resolve(
+      state.detailReadError
+        ? { ok: false, error: "mock read error" }
+        : state.detail === null
+          ? { ok: true, found: false }
+          : { ok: true, found: true, detail: state.detail },
+    ),
   archiveDeliverable: () => {
     state.archived = true;
     return Promise.resolve({ ok: true });
@@ -60,6 +68,7 @@ const params = () => ({ params: Promise.resolve({ firmId: FIRM, deliverableId: D
 beforeEach(() => {
   state.actor = LAWYER;
   state.detail = makeDetail();
+  state.detailReadError = false;
   state.archived = false;
 });
 

@@ -253,19 +253,43 @@ export interface DeliverableDetail {
   versions: DeliverableVersion[]; // newest first, assets signed
   comments: DeliverableComment[]; // chronological
   approvals: ApprovalRecord[]; // newest first
+  // Release-integrity item 1 (2026-07-12): true when the corresponding table
+  // read errored rather than genuinely returning zero rows. A caller that
+  // trusts an empty array without checking these flags cannot tell "nothing
+  // here" from "the read failed" -- the exact silent-failure class the Codex
+  // audit found breaking the DR-085 version-to-change-request link.
+  versionsError: boolean;
+  commentsError: boolean;
+  approvalsError: boolean;
 }
+
+// Release-integrity item 1: getDeliverableDetail now returns a 3-state
+// discriminated union instead of DeliverableDetail | null, so a Supabase
+// query error can no longer collapse into the same falsy shape as a
+// genuinely nonexistent deliverable. Callers MUST distinguish ok:false (a
+// read errored, fail closed, do not treat as not-found) from found:false
+// (the row genuinely does not exist, safe to 404).
+export type DeliverableDetailResult =
+  | { ok: true; found: true; detail: DeliverableDetail }
+  | { ok: true; found: false }
+  | { ok: false; error: string };
 
 export async function getDeliverableDetail(
   deliverableId: string,
-): Promise<DeliverableDetail | null> {
-  const { data: deliverable } = await supabase
+): Promise<DeliverableDetailResult> {
+  const { data: deliverable, error: deliverableErr } = await supabase
     .from("content_deliverables")
     .select("*")
     .eq("id", deliverableId)
     .maybeSingle();
-  if (!deliverable) return null;
+  if (deliverableErr) return { ok: false, error: deliverableErr.message };
+  if (!deliverable) return { ok: true, found: false };
 
-  const [{ data: versions }, { data: comments }, { data: approvals }] = await Promise.all([
+  const [
+    { data: versions, error: versionsErr },
+    { data: comments, error: commentsErr },
+    { data: approvals, error: approvalsErr },
+  ] = await Promise.all([
     supabase
       .from("deliverable_versions")
       .select("*")
@@ -288,10 +312,17 @@ export async function getDeliverableDetail(
   const signedApprovals = await signApprovalAttachments((approvals ?? []) as ApprovalRecord[]);
 
   return {
-    deliverable: deliverable as ContentDeliverable,
-    versions: signedVersions,
-    comments: signedComments,
-    approvals: signedApprovals,
+    ok: true,
+    found: true,
+    detail: {
+      deliverable: deliverable as ContentDeliverable,
+      versions: signedVersions,
+      comments: signedComments,
+      approvals: signedApprovals,
+      versionsError: !!versionsErr,
+      commentsError: !!commentsErr,
+      approvalsError: !!approvalsErr,
+    },
   };
 }
 

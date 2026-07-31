@@ -35,8 +35,15 @@ export default async function DeliverableReviewPage({
   const resolved = await resolveDeliverableActor(firmId);
   if (!resolved) redirect("/portal/login");
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) notFound();
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    // A read error, not a genuine 404: throw so Next.js renders the
+    // route-level error boundary (retry-able), instead of the permanent
+    // "not found" page a transient database blip does not deserve.
+    throw new Error("Could not load this deliverable. Please try again.");
+  }
+  if (!detailResult.found || detailResult.detail.deliverable.firm_id !== firmId) notFound();
+  const detail = detailResult.detail;
 
   // DR-084: in a lawyer preview the operator sees the lawyer's sign-off panel
   // present-but-inert, not the operator "cannot sign" message. Render as the
