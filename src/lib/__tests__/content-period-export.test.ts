@@ -73,6 +73,13 @@ function chainable(rows: Row[]) {
       current = current.filter((r) => vals.includes(r[col]));
       return builder;
     },
+    // PostgREST `.is(col, null)`, used by the role-assignment read to take only
+    // live rows (superseded_at IS NULL). Treats an absent key as null, since
+    // fixture rows omit columns they do not exercise.
+    is: (col: string, val: unknown) => {
+      current = current.filter((r) => (r[col] ?? null) === val);
+      return builder;
+    },
     order: (col: string, opts?: { ascending?: boolean }) => {
       current = sortRows(current, col, opts?.ascending !== false);
       return builder;
