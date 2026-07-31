@@ -118,7 +118,10 @@ describe("checklist PDF artifact route", () => {
 
   it("returns stored PDF candidates for the operator replacement flow", async () => {
     state.candidates = [{ sourceKind: "approval", sourceId: "approval-1", name: "correct.pdf" }];
-    const response = await GET(new Request("http://localhost"), params());
+    // GET ignores the request entirely (`_req: NextRequest`), so a plain
+    // Request is enough at runtime. Cast to match this file's existing
+    // convention for the request() and params() helpers.
+    const response = await GET(new Request("http://localhost") as never, params());
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ candidates: state.candidates });
   });
