@@ -111,7 +111,16 @@ describe("weekly deliverables primary slice", () => {
       ],
     );
     expect(searchContentArchive(entries, "firm-a", { query: "renewal" }).map((entry) => entry.deliverable.id)).toEqual(["b"]);
-    expect(searchContentArchive([...entries, { ...entries[0], firmId: "firm-b", deliverable: { ...entries[0].deliverable, id: "other-firm" } }], "firm-a", { query: "business" }).map((entry) => entry.deliverable.id)).toEqual(["a"]);
+    // Query is "checklist", not "business": deliverable b's own
+    // publication_destination ("Google Business Profile") genuinely contains
+    // the substring "business", so that query would legitimately match b too
+    // via searchContentArchive's plain substring search — a true positive,
+    // not a bug, but it would defeat this assertion's actual purpose, which
+    // is isolating whether the injected cross-firm clone of `a` (same title,
+    // "Business sale checklist", so it also matches "checklist") is excluded
+    // by firm id alone. "checklist" appears only in a's title and nowhere in
+    // b's fields, so it isolates exactly that.
+    expect(searchContentArchive([...entries, { ...entries[0], firmId: "firm-b", deliverable: { ...entries[0].deliverable, id: "other-firm" } }], "firm-a", { query: "checklist" }).map((entry) => entry.deliverable.id)).toEqual(["a"]);
   });
 
   it("preserves row identity and existing delivery metadata through grouping", () => {
