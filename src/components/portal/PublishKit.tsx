@@ -18,6 +18,7 @@ import {
   toAgentManifest,
   artifactControlState,
   copyColumnMessage,
+  linkedInArticlePasteEligibility,
   pieceMatchesFilter,
   filteredTotals,
   blockedPiecesAreFullyWithheld,
@@ -27,6 +28,7 @@ import {
   type ArtifactControlState,
   type PublisherLane,
 } from "@/lib/publish-kit-pure";
+import { toLinkedInArticlePasteHtmlEnglishOnly } from "@/lib/linkedin-article-paste-pure";
 
 interface Props {
   view: PublishKitView;
@@ -116,6 +118,40 @@ async function copyToClipboard(text: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Writes BOTH text/html and text/plain to the clipboard via the modern
+ * ClipboardItem API, so a rich-text target (LinkedIn's Article editor) reads
+ * the formatted version while anything else pasted into still gets clean
+ * text. Additive to copyToClipboard, which stays exactly as it was and keeps
+ * serving every existing plain-text-only copy control (GBP posts, promoter
+ * posts, the Minute): this function calls it as its OWN fallback when
+ * ClipboardItem or navigator.clipboard.write is unavailable (an older
+ * browser, or a non-secure context), rather than duplicating that fallback
+ * logic.
+ */
+async function copyRichToClipboard(html: string, plainText: string): Promise<boolean> {
+  if (
+    typeof navigator !== "undefined" &&
+    navigator.clipboard &&
+    typeof navigator.clipboard.write === "function" &&
+    typeof window !== "undefined" &&
+    window.ClipboardItem
+  ) {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([plainText], { type: "text/plain" }),
+        }),
+      ]);
+      return true;
+    } catch {
+      // fall through to the plain-text fallback below
+    }
+  }
+  return copyToClipboard(plainText);
 }
 
 export default function PublishKit({ view, firmId }: Props) {
@@ -310,6 +346,7 @@ export default function PublishKit({ view, firmId }: Props) {
                 piece={piece}
                 firmId={firmId}
                 onCopy={handleCopy}
+                onToast={showToast}
                 onRefresh={() => router.refresh()}
               />
             ))}
@@ -412,11 +449,13 @@ function PieceCard({
   piece,
   firmId,
   onCopy,
+  onToast,
   onRefresh,
 }: {
   piece: PublishKitPiece;
   firmId: string;
   onCopy: (text: string, label: string) => void;
+  onToast: (message: string) => void;
   onRefresh: () => void;
 }) {
   function handleCopyRecord() {
@@ -549,6 +588,7 @@ function PieceCard({
                   ))}
                 </div>
               )}
+              <LinkedInArticlePasteControl piece={piece} onToast={onToast} />
             </>
           ) : piece.unapprovedDraftText ? (
             <>
@@ -780,6 +820,99 @@ function PieceCard({
         </div>
       </div>
     </article>
+  );
+}
+
+// ─── LinkedIn Article formatted copy ───────────────────────────────────────────
+
+/**
+ * The formatted-copy control for a genuine LinkedIn Article piece (never a
+ * LinkedIn feed/promoter post -- see isLinkedInArticlePiece in
+ * publish-kit-pure.ts). Renders nothing when the piece is not a LinkedIn
+ * Article at all. Renders disabled and clearly labelled when the piece's
+ * locale is not confirmed English (linkedin-article-paste-pure.ts is
+ * English-only), rather than disappearing silently -- an operator who
+ * cannot see why a control is missing cannot act on it. Additive: this sits
+ * below the existing plain-text Copy row and does not touch it.
+ */
+function LinkedInArticlePasteControl({
+  piece,
+  onToast,
+}: {
+  piece: PublishKitPiece;
+  onToast: (message: string) => void;
+}) {
+  const eligibility = linkedInArticlePasteEligibility(piece);
+  if (eligibility === "not_applicable") return null;
+
+  // Only ever attempt the transform when eligibility is "eligible". This
+  // matters beyond efficiency: toLinkedInArticlePasteHtmlEnglishOnly treats
+  // an omitted/null locale as permissive (see that function's own doc
+  // comment), which would otherwise return ok:true for a piece whose locale
+  // is simply unset -- exactly the case linkedInArticlePasteEligibility
+  // deliberately buckets under "unsupported_locale". Gating result on
+  // eligibility keeps the disabled button, the warning text, and the
+  // preview's presence all agreeing with each other.
+  const result =
+    eligibility === "eligible"
+      ? toLinkedInArticlePasteHtmlEnglishOnly(piece.bodyHtml ?? "", { locale: piece.locale })
+      : null;
+  const enabled = eligibility === "eligible" && piece.mayPublish && result !== null && result.ok;
+
+  async function handleCopyFormatted() {
+    if (!result || !result.ok) {
+      onToast("This piece's locale is not English. Formatted LinkedIn copy is unavailable.");
+      return;
+    }
+    // The plain-text fallback is piece.plainText -- exactly what the "Copy
+    // text" button above already copies. That is a deliberate choice, not a
+    // shortcut: it is already the honest plain-text rendition of this whole
+    // piece, already computed, and already what an operator gets today when
+    // the rich clipboard path is unavailable, so the fallback degrades to
+    // already-tested, already-familiar behaviour instead of a new one.
+    const ok = await copyRichToClipboard(result.html, piece.plainText);
+    onToast(ok ? "Formatted copy copied" : "Clipboard blocked. Use the preview below to select and copy manually.");
+  }
+
+  const buttonLabel =
+    eligibility === "unsupported_locale"
+      ? "Formatted copy: English only"
+      : piece.mayPublish
+        ? "Copy formatted (for LinkedIn)"
+        : "Copy locked";
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border-brand">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+        <span className="text-[10px] uppercase tracking-wider font-semibold text-black/40">LinkedIn Article</span>
+        <button
+          type="button"
+          disabled={!enabled}
+          onClick={handleCopyFormatted}
+          className="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1.5 border border-navy bg-navy text-white hover:bg-navy/90 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-black/20 disabled:border-black/20"
+        >
+          {buttonLabel}
+        </button>
+      </div>
+      {eligibility === "unsupported_locale" && (
+        <p className="text-[11px] text-black/50">
+          This piece&apos;s locale ({piece.locale ?? "not set"}) is not confirmed English. The LinkedIn Article
+          formatter only supports English content, so formatted copy is unavailable here. Use Copy text above
+          instead.
+        </p>
+      )}
+      {result?.ok && (
+        <details className="mt-2">
+          <summary className="text-[10px] uppercase tracking-wider font-semibold text-navy/70 cursor-pointer">
+            Preview formatted HTML
+          </summary>
+          <div
+            className="mt-2 bg-white border border-border-brand p-3 text-[13px] leading-relaxed text-black/80 max-h-72 overflow-y-auto [&_h2]:font-bold [&_h2]:text-navy [&_h2]:text-sm [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:font-bold [&_h3]:text-navy [&_h3]:text-[13px] [&_h3]:mt-3 [&_h3]:mb-1 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_a]:text-navy [&_a]:underline [&_em]:italic [&_blockquote]:bg-parchment-2 [&_blockquote]:px-3 [&_blockquote]:py-2 [&_blockquote]:my-2 [&_hr]:border-border-brand [&_hr]:my-3"
+            dangerouslySetInnerHTML={{ __html: result.html }}
+          />
+        </details>
+      )}
+    </div>
   );
 }
 
