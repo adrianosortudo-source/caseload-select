@@ -43,10 +43,21 @@ export async function POST(
     return NextResponse.json({ error: "invalid website image role" }, { status: 400 });
   }
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId || detail.deliverable.deliverable_role !== "article") {
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (
+    !detailResult.found ||
+    detailResult.detail.deliverable.firm_id !== firmId ||
+    detailResult.detail.deliverable.deliverable_role !== "article"
+  ) {
     return NextResponse.json({ error: "website article not found" }, { status: 404 });
   }
+  const detail = detailResult.detail;
   const currentVersionId = detail.deliverable.current_version_id;
   if (!currentVersionId) return NextResponse.json({ error: "article has no current version" }, { status: 409 });
 

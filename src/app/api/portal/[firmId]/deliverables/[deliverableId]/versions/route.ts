@@ -48,6 +48,26 @@ function resolveRespondsToApprovalId(
 }
 
 /**
+ * Release-integrity item 1: the auto-link branch above (no explicit id, and
+ * the deliverable is changes_requested) is the exact path the Codex audit
+ * found silently linking null when approval_records failed to load. Block
+ * ONLY that path on approvalsError, not every version post -- a version
+ * posted with an explicit id, or to a deliverable that isn't
+ * changes_requested, never reads detail.approvals and should not be blocked
+ * by an unrelated read hiccup.
+ */
+function approvalHistoryRequiredForAutoLink(
+  detail: DeliverableDetail,
+  explicit: unknown,
+): boolean {
+  return (
+    typeof explicit !== "string" &&
+    detail.deliverable.status === "changes_requested" &&
+    detail.approvalsError
+  );
+}
+
+/**
  * Posts a system line into the internal CaseLoad Connect channel (operator
  * and firm-lawyer collaboration thread, not a client-facing email). Always
  * fires regardless of the client-notification choice: it sets
@@ -110,10 +130,17 @@ export async function POST(
   const previewDenied = await denyWriteIfPreview(firmId);
   if (previewDenied) return previewDenied;
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) {
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (!detailResult.found || detailResult.detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
+  const detail = detailResult.detail;
   const kind = detail.deliverable.content_kind;
   const contentType = req.headers.get("content-type") ?? "";
 
@@ -171,7 +198,14 @@ export async function POST(
     const clientNotificationChoice = normalizeClientNotificationChoice(
       form.get("client_notification_choice"),
     );
-    const responds = resolveRespondsToApprovalId(detail, form.get("responds_to_approval_id"));
+    const respondsToId = form.get("responds_to_approval_id");
+    if (approvalHistoryRequiredForAutoLink(detail, respondsToId)) {
+      return NextResponse.json(
+        { error: "could not verify the open change request on this deliverable, try again" },
+        { status: 503 },
+      );
+    }
+    const responds = resolveRespondsToApprovalId(detail, respondsToId);
     if (!responds.ok) {
       return NextResponse.json(
         { error: "responds_to_approval_id not found in this deliverable" },
@@ -221,6 +255,12 @@ export async function POST(
     return NextResponse.json({ error: "body_html is required" }, { status: 400 });
   }
   const clientNotificationChoice = normalizeClientNotificationChoice(body.client_notification_choice);
+  if (approvalHistoryRequiredForAutoLink(detail, body.responds_to_approval_id)) {
+    return NextResponse.json(
+      { error: "could not verify the open change request on this deliverable, try again" },
+      { status: 503 },
+    );
+  }
   const responds = resolveRespondsToApprovalId(detail, body.responds_to_approval_id);
   if (!responds.ok) {
     return NextResponse.json(

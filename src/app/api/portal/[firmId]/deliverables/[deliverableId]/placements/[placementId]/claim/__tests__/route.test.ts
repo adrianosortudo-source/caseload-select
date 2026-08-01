@@ -19,6 +19,7 @@ const VERSION = "v1111111-1111-1111-1111-111111111111";
 
 const state = {
   detail: null as { deliverable: { firm_id: string } } | null,
+  detailReadError: false,
   placements: [] as Array<{ id: string; destination: string }>,
   resolvedActor: { role: "operator", id: "op-1", name: "Adriano", email: null } as {
     role: string;
@@ -43,7 +44,14 @@ vi.mock("@/lib/deliverables-auth", () => ({
 }));
 
 vi.mock("@/lib/deliverables", () => ({
-  getDeliverableDetail: () => Promise.resolve(state.detail),
+  getDeliverableDetail: () =>
+    Promise.resolve(
+      state.detailReadError
+        ? { ok: false, error: "mock read error" }
+        : state.detail === null
+          ? { ok: true, found: false }
+          : { ok: true, found: true, detail: state.detail },
+    ),
 }));
 
 vi.mock("@/lib/content-placements", () => ({
@@ -71,10 +79,20 @@ function params() {
 
 beforeEach(() => {
   state.detail = { deliverable: { firm_id: FIRM } };
+  state.detailReadError = false;
   state.placements = [{ id: PLACEMENT, destination: "linkedin_post" }];
   state.resolvedActor = { role: "operator", id: "op-1", name: "Adriano", email: null };
   state.claimResult = { ok: true, claimId: "claim-1", idempotentReplay: false, status: "active" };
   state.claimCallArgs = null;
+});
+
+describe("POST claim: fail-closed detail read", () => {
+  it("503s (never 404) when the deliverable-detail read itself errors", async () => {
+    state.detailReadError = true;
+    const res = await POST(makeReq({ approved_version_id: VERSION, idempotency_key: "k1" }), params());
+    expect(res.status).toBe(503);
+    expect(state.claimCallArgs).toBeNull();
+  });
 });
 
 describe("POST claim: auth gate", () => {

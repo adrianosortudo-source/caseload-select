@@ -35,6 +35,10 @@ type Actor = { role: string; id: string | null; name: string | null; email: stri
 interface State {
   actor: Actor;
   detail: unknown;
+  // Release-integrity item 1: simulates a Supabase read error at
+  // getDeliverableDetail, distinct from state.detail === null (genuinely
+  // not found) and a populated state.detail (found).
+  detailReadError: boolean;
   addVersionArgs: Record<string, unknown> | null;
   notification: { requested: boolean; status: string; error?: string };
 }
@@ -42,6 +46,7 @@ interface State {
 const state: State = {
   actor: null,
   detail: null,
+  detailReadError: false,
   addVersionArgs: null,
   notification: { requested: false, status: "not_requested" },
 };
@@ -52,7 +57,14 @@ vi.mock("@/lib/deliverables-auth", () => ({
 }));
 
 vi.mock("@/lib/deliverables", () => ({
-  getDeliverableDetail: () => Promise.resolve(state.detail),
+  getDeliverableDetail: () =>
+    Promise.resolve(
+      state.detailReadError
+        ? { ok: false, error: "mock read error" }
+        : state.detail === null
+          ? { ok: true, found: false }
+          : { ok: true, found: true, detail: state.detail },
+    ),
   uploadDeliverableAsset: () => Promise.resolve({ ok: true, storagePath: "deliverables/x/y/z.png" }),
   addVersion: (args: Record<string, unknown>) => {
     state.addVersionArgs = args;
@@ -74,13 +86,18 @@ const APPROVAL_OLD = "88888888-8888-8888-8888-888888888888";
 function makeDetail(
   kind: "text" | "image" | "pdf",
   firmId = FIRM,
-  over: { status?: string; approvals?: Array<{ id: string; decision: string; created_at?: string }> } = {},
+  over: {
+    status?: string;
+    approvals?: Array<{ id: string; decision: string; created_at?: string }>;
+    approvalsError?: boolean;
+  } = {},
 ) {
   return {
     deliverable: { id: DELIV, firm_id: firmId, title: "T", content_kind: kind, status: over.status ?? "in_review" },
     versions: [],
     comments: [],
     approvals: over.approvals ?? [],
+    approvalsError: over.approvalsError ?? false,
   };
 }
 
@@ -114,6 +131,7 @@ const params = () => ({ params: Promise.resolve({ firmId: FIRM, deliverableId: D
 beforeEach(() => {
   state.actor = OPERATOR;
   state.detail = makeDetail("text");
+  state.detailReadError = false;
   state.addVersionArgs = null;
   state.notification = { requested: false, status: "not_requested" };
   channelPostMock.postDeliverableLifecycleToChannel.mockClear();
@@ -215,6 +233,39 @@ describe("POST versions", () => {
     const res = await POST(jsonReq({ body_html: "<p>routine update</p>" }), params());
     expect(res.status).toBe(200);
     expect(state.addVersionArgs!.respondsToApprovalId).toBeNull();
+  });
+
+  it("503 when the detail read itself errors; addVersion is never called", async () => {
+    state.detailReadError = true;
+    const res = await POST(jsonReq({ body_html: "<p>hi</p>" }), params());
+    expect(res.status).toBe(503);
+    expect(state.addVersionArgs).toBeNull();
+  });
+
+  it("503 when the approvals read failed and the deliverable is changes_requested with no explicit id (the audit's exact scenario); addVersion is never called", async () => {
+    state.detail = makeDetail("text", FIRM, { status: "changes_requested", approvals: [], approvalsError: true });
+    const res = await POST(jsonReq({ body_html: "<p>fixed</p>" }), params());
+    expect(res.status).toBe(503);
+    expect(state.addVersionArgs).toBeNull();
+  });
+
+  it("does not block on an approvals read failure when an explicit responds_to_approval_id is supplied", async () => {
+    state.detail = makeDetail("text", FIRM, {
+      status: "changes_requested",
+      approvals: [{ id: APPROVAL_1, decision: "changes_requested" }],
+      approvalsError: true,
+    });
+    const res = await POST(
+      jsonReq({ body_html: "<p>fixed</p>", responds_to_approval_id: APPROVAL_1 }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("does not block on an approvals read failure when the deliverable is not changes_requested", async () => {
+    state.detail = makeDetail("text", FIRM, { status: "in_review", approvalsError: true });
+    const res = await POST(jsonReq({ body_html: "<p>routine update</p>" }), params());
+    expect(res.status).toBe(200);
   });
 
   it("400 when responds_to_approval_id does not belong to this deliverable", async () => {

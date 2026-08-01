@@ -5,6 +5,7 @@ vi.mock("server-only", () => ({}));
 const state = vi.hoisted(() => ({
   actor: null as { role: string; id: string | null } | null,
   detail: null as Record<string, unknown> | null,
+  detailReadError: false,
   existing: null as { id: string } | null,
   rpcError: null as { message: string } | null,
   rpcArgs: null as Record<string, unknown> | null,
@@ -18,7 +19,14 @@ vi.mock("@/lib/deliverables-auth", () => ({
 }));
 vi.mock("@/lib/preview-guard", () => ({ denyWriteIfPreview: () => Promise.resolve(null) }));
 vi.mock("@/lib/deliverables", () => ({
-  getDeliverableDetail: () => Promise.resolve(state.detail),
+  getDeliverableDetail: () =>
+    Promise.resolve(
+      state.detailReadError
+        ? { ok: false, error: "mock read error" }
+        : state.detail === null
+          ? { ok: true, found: false }
+          : { ok: true, found: true, detail: state.detail },
+    ),
   uploadDeliverableAsset: () => Promise.resolve({ ok: true, storagePath: "deliverables/pdf/new.pdf" }),
 }));
 vi.mock("@/lib/checklist-pdf-candidates", () => ({
@@ -71,7 +79,8 @@ const params = () => ({ params: Promise.resolve({ firmId: FIRM, deliverableId: D
 
 beforeEach(() => {
   state.actor = { role: "operator", id: null };
-  state.detail = makeDetail(); state.existing = null; state.rpcError = null; state.rpcArgs = null;
+  state.detail = makeDetail(); state.detailReadError = false;
+  state.existing = null; state.rpcError = null; state.rpcArgs = null;
   state.removedPaths = []; state.candidates = []; state.resolvedCandidate = null;
 });
 
@@ -79,6 +88,21 @@ describe("checklist PDF artifact route", () => {
   it("requires authentication and operator access", async () => {
     state.actor = null; expect((await POST(request(), params())).status).toBe(401);
     state.actor = { role: "lawyer", id: null }; expect((await POST(request(), params())).status).toBe(403);
+  });
+
+  it("503 (not 404) when the detail read itself errors; the RPC is never called", async () => {
+    state.detailReadError = true;
+    expect((await GET({} as never, params())).status).toBe(503);
+    const file = new File(["%PDF-1.7 approved bytes"], "checklist-en.pdf", { type: "application/pdf" });
+    expect((await POST(request({}, file), params())).status).toBe(503);
+    expect(state.rpcArgs).toBeNull();
+  });
+
+  it("503 when the versions read failed, so the current version cannot be verified; the RPC is never called", async () => {
+    state.detail = { ...makeDetail(), versionsError: true };
+    const file = new File(["%PDF-1.7 approved bytes"], "checklist-en.pdf", { type: "application/pdf" });
+    expect((await POST(request({}, file), params())).status).toBe(503);
+    expect(state.rpcArgs).toBeNull();
   });
 
   it("rejects wrong MIME type and fake PDF bytes", async () => {
