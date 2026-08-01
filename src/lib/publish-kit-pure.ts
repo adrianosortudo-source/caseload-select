@@ -18,6 +18,7 @@ import type {
 } from "@/lib/content-period-export";
 import type { DeliverableRole } from "@/lib/types";
 import { CANONICAL_FORMATS, canonicalFormat, type CanonicalFormat } from "@/lib/deliverables-pure";
+import { isEnglishLocale } from "@/lib/linkedin-article-paste-pure";
 
 // ─── Copy constraints ────────────────────────────────────────────────────────
 
@@ -590,6 +591,56 @@ export function copyColumnMessage(piece: PublishKitPiece): CopyColumnMessage {
   }
   if (!piece.mayPublish && piece.currentVersionHasBody) return "has_unapproved_copy";
   return "no_copy";
+}
+
+// ─── LinkedIn Article paste eligibility ──────────────────────────────────────
+
+/**
+ * Whether this piece is a genuine LinkedIn Article -- as opposed to a
+ * LinkedIn feed/promoter post, which shares the same "LinkedIn" canonical
+ * format bucket (see groupByCanonicalFormat/canonicalFormat in
+ * deliverables-pure.ts) but is plain-text-only on LinkedIn's feed composer.
+ * Keyed on publication_destination, the one column that actually carries
+ * this distinction: "linkedin_article" vs "linkedin" (see
+ * PublicationDestination in @/lib/types). deliverable_role stays "article"
+ * for both a website Counsel Note and its LinkedIn Article adaptation, and
+ * content_kind is "text" for both a LinkedIn Article and a LinkedIn feed
+ * post, so neither of those columns can tell them apart. A title-text
+ * pattern (e.g. a "[LINKEDIN POST]" prefix some titles carry) is
+ * deliberately never checked here: it is incidental copy, not schema, and
+ * pasting rich HTML into LinkedIn's plain-text-only feed composer would be
+ * wrong, possibly visibly broken.
+ */
+export function isLinkedInArticlePiece(piece: Pick<PublishKitPiece, "destination">): boolean {
+  return piece.destination === "linkedin_article";
+}
+
+/**
+ * Whether the Publish Kit's LinkedIn-formatted copy control should render
+ * for this piece, and if not, why:
+ *  - "not_applicable": not a LinkedIn Article at all (see
+ *    isLinkedInArticlePiece) -- the control must not render for this piece.
+ *  - "unsupported_locale": IS a LinkedIn Article, but its locale is not
+ *    confirmed English. linkedin-article-paste-pure.ts is English-only (see
+ *    that module's header). A null/unset locale is treated the same as a
+ *    confirmed non-English one here -- deliberately more conservative than
+ *    toLinkedInArticlePasteHtmlEnglishOnly's own default, which proceeds on
+ *    an omitted/null locale (that default exists for a generic caller with
+ *    nothing to pass, e.g. a unit test; this function instead decides what
+ *    a real operator sees for real piece data, where "we do not actually
+ *    know it is English" must read the same as "known not English", never
+ *    as "assume yes"). The control should still render, disabled and
+ *    clearly labelled English-only, rather than silently disappear -- an
+ *    operator who cannot see why a control is missing cannot act on it.
+ *  - "eligible": render the control, enabled.
+ */
+export type LinkedInArticlePasteEligibility = "not_applicable" | "unsupported_locale" | "eligible";
+
+export function linkedInArticlePasteEligibility(
+  piece: Pick<PublishKitPiece, "destination" | "locale">,
+): LinkedInArticlePasteEligibility {
+  if (!isLinkedInArticlePiece(piece)) return "not_applicable";
+  return isEnglishLocale(piece.locale) ? "eligible" : "unsupported_locale";
 }
 
 // ─── Filtering and filtered totals ───────────────────────────────────────────
