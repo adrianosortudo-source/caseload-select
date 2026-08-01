@@ -34,8 +34,18 @@ export async function GET(
   const { firmId, deliverableId } = await params;
   const auth = await operatorFor(firmId);
   if (auth.response) return auth.response;
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId || detail.deliverable.deliverable_role !== "lead_magnet_pdf") {
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (
+    !detailResult.found ||
+    detailResult.detail.deliverable.firm_id !== firmId ||
+    detailResult.detail.deliverable.deliverable_role !== "lead_magnet_pdf"
+  ) {
     return NextResponse.json({ error: "checklist PDF not found" }, { status: 404 });
   }
   try {
@@ -56,10 +66,27 @@ export async function POST(
   const previewDenied = await denyWriteIfPreview(firmId);
   if (previewDenied) return previewDenied;
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (!detailResult.found || detailResult.detail.deliverable.firm_id !== firmId) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+  const detail = detailResult.detail;
   if (detail.deliverable.deliverable_role !== "lead_magnet_pdf") {
     return NextResponse.json({ error: "PDF attachment is only available for checklist PDF deliverables" }, { status: 400 });
+  }
+  if (detail.versionsError) {
+    // The current-version membership check below reads detail.versions; a
+    // failed versions read must not masquerade as "no current version".
+    return NextResponse.json(
+      { error: "could not verify the current version, try again" },
+      { status: 503 },
+    );
   }
   const currentVersionId = detail.deliverable.current_version_id;
   if (!currentVersionId || !detail.versions.some((version) => version.id === currentVersionId)) {

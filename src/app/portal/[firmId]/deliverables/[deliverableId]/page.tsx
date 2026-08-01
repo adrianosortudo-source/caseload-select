@@ -13,7 +13,7 @@ import { notFound, redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
 import { getPreviewIntent } from "@/lib/preview-mode";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
-import { getDeliverableDetail } from "@/lib/deliverables";
+import { getDeliverableDetail, type DeliverableDetail } from "@/lib/deliverables";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { APPROVAL_ATTESTATION, CHANGES_ATTESTATION } from "@/lib/deliverables-pure";
 import DeliverableReview from "@/components/portal/DeliverableReview";
@@ -42,8 +42,15 @@ export default async function DeliverableReviewPage({
   const resolved = await resolveDeliverableActor(firmId);
   if (!resolved) redirect("/portal/login");
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) notFound();
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    // A read error, not a genuine 404: throw so Next.js renders the
+    // route-level error boundary (retry-able), instead of the permanent
+    // "not found" page a transient database blip does not deserve.
+    throw new Error("Could not load this deliverable. Please try again.");
+  }
+  if (!detailResult.found || detailResult.detail.deliverable.firm_id !== firmId) notFound();
+  const detail = detailResult.detail;
 
   // DR-084: in a lawyer preview the operator sees the lawyer's sign-off panel
   // present-but-inert, not the operator "cannot sign" message. Render as the
@@ -112,7 +119,7 @@ export default async function DeliverableReviewPage({
  * status, and is treated the same as "no claim yet".
  */
 async function buildPlacementStatusRows(
-  detail: NonNullable<Awaited<ReturnType<typeof getDeliverableDetail>>>,
+  detail: DeliverableDetail,
   authState: Awaited<ReturnType<typeof getStandingAuthorizationState>>,
 ): Promise<PlacementStatusRow[]> {
   const { deliverable } = detail;

@@ -17,7 +17,12 @@ const state = {
   resolvedActor: { role: "operator", id: "op-1", name: "Adriano", email: null } as
     | { role: string; id: string | null; name: string | null; email: string | null }
     | null,
-  detail: null as { deliverable: { firm_id: string }; versions: Array<{ id: string }> } | null,
+  detail: null as {
+    deliverable: { firm_id: string };
+    versions: Array<{ id: string }>;
+    versionsError?: boolean;
+  } | null,
+  detailReadError: false,
   setResult: { ok: true, versionId: VERSION, requiresIndividualReview: true } as
     | { ok: true; versionId: string; requiresIndividualReview: boolean }
     | { ok: false; error: string },
@@ -29,7 +34,14 @@ vi.mock("@/lib/deliverables-auth", () => ({
 }));
 
 vi.mock("@/lib/deliverables", () => ({
-  getDeliverableDetail: () => Promise.resolve(state.detail),
+  getDeliverableDetail: () =>
+    Promise.resolve(
+      state.detailReadError
+        ? { ok: false, error: "mock read error" }
+        : state.detail === null
+          ? { ok: true, found: false }
+          : { ok: true, found: true, detail: state.detail },
+    ),
 }));
 
 vi.mock("@/lib/standing-publishing-authorization", () => ({
@@ -52,6 +64,7 @@ function params() {
 beforeEach(() => {
   state.resolvedActor = { role: "operator", id: "op-1", name: "Adriano", email: null };
   state.detail = { deliverable: { firm_id: FIRM }, versions: [{ id: VERSION }] };
+  state.detailReadError = false;
   state.setResult = { ok: true, versionId: VERSION, requiresIndividualReview: true };
   state.setCallArgs = null;
 });
@@ -88,6 +101,20 @@ describe("POST individual-review: entity checks", () => {
     state.detail = { deliverable: { firm_id: FIRM }, versions: [] };
     const res = await POST(makeReq({ required: true, reason: "unusual" }), params());
     expect(res.status).toBe(404);
+  });
+
+  it("503s (never 404) when the deliverable-detail read itself errors", async () => {
+    state.detailReadError = true;
+    const res = await POST(makeReq({ required: true, reason: "unusual" }), params());
+    expect(res.status).toBe(503);
+    expect(state.setCallArgs).toBeNull();
+  });
+
+  it("503s when the versions read failed, so version membership cannot be verified", async () => {
+    state.detail = { deliverable: { firm_id: FIRM }, versions: [], versionsError: true };
+    const res = await POST(makeReq({ required: true, reason: "unusual" }), params());
+    expect(res.status).toBe(503);
+    expect(state.setCallArgs).toBeNull();
   });
 });
 
