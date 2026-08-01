@@ -37,6 +37,7 @@ type Actor = { role: string; id: string | null; name: string | null; email: stri
 interface State {
   actor: Actor;
   detail: unknown;
+  detailReadError: boolean;
   recordResult: { ok: true; record: unknown } | { ok: false; error: string; stale?: boolean };
   recordArgs: Record<string, unknown> | null;
 }
@@ -44,6 +45,7 @@ interface State {
 const state: State = {
   actor: null,
   detail: null,
+  detailReadError: false,
   recordResult: { ok: true, record: { id: "rec1" } },
   recordArgs: null,
 };
@@ -54,7 +56,14 @@ vi.mock("@/lib/deliverables-auth", () => ({
 }));
 
 vi.mock("@/lib/deliverables", () => ({
-  getDeliverableDetail: () => Promise.resolve(state.detail),
+  getDeliverableDetail: () =>
+    Promise.resolve(
+      state.detailReadError
+        ? { ok: false, error: "mock read error" }
+        : state.detail === null
+          ? { ok: true, found: false }
+          : { ok: true, found: true, detail: state.detail },
+    ),
   recordApproval: (args: Record<string, unknown>) => {
     state.recordArgs = args;
     return Promise.resolve(state.recordResult);
@@ -66,7 +75,9 @@ import { POST } from "../route";
 const LAWYER: Actor = { role: "lawyer", id: "law1", name: "Damaris", email: "damaris@firm.ca" };
 const OPERATOR: Actor = { role: "operator", id: null, name: "Operator", email: null };
 
-function makeDetail(over: { firm_id?: string; current_version_id?: string | null } = {}) {
+function makeDetail(
+  over: { firm_id?: string; current_version_id?: string | null; versionsError?: boolean } = {},
+) {
   return {
     deliverable: {
       id: DELIV,
@@ -80,6 +91,7 @@ function makeDetail(over: { firm_id?: string; current_version_id?: string | null
     ],
     comments: [],
     approvals: [],
+    versionsError: over.versionsError ?? false,
   };
 }
 
@@ -98,6 +110,7 @@ const params = () => ({ params: Promise.resolve({ firmId: FIRM, deliverableId: D
 beforeEach(() => {
   state.actor = LAWYER;
   state.detail = makeDetail();
+  state.detailReadError = false;
   state.recordResult = { ok: true, record: { id: "rec1" } };
   state.recordArgs = null;
 });
@@ -138,6 +151,20 @@ describe("POST approve", () => {
     state.detail = makeDetail({ firm_id: "99999999-9999-9999-9999-999999999999" });
     const res = await POST(makeReq({ version_id: V_CUR, decision: "approved", agreed: true }), params());
     expect(res.status).toBe(404);
+  });
+
+  it("503 when the deliverable-detail read itself errors; recordApproval is never called", async () => {
+    state.detailReadError = true;
+    const res = await POST(makeReq({ version_id: V_CUR, decision: "approved", agreed: true }), params());
+    expect(res.status).toBe(503);
+    expect(state.recordArgs).toBeNull();
+  });
+
+  it("503 when the versions read failed, since current_version_id can no longer be reliably resolved; recordApproval is never called", async () => {
+    state.detail = makeDetail({ versionsError: true });
+    const res = await POST(makeReq({ version_id: V_CUR, decision: "approved", agreed: true }), params());
+    expect(res.status).toBe(503);
+    expect(state.recordArgs).toBeNull();
   });
 
   it("409 when signing a stale (non-current) version", async () => {

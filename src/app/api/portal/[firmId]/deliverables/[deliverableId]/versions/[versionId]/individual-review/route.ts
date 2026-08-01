@@ -35,11 +35,25 @@ export async function POST(
   const previewDenied = await denyWriteIfPreview(firmId);
   if (previewDenied) return previewDenied;
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) {
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (!detailResult.found || detailResult.detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
-  if (!detail.versions.some((v) => v.id === versionId)) {
+  if (detailResult.detail.versionsError) {
+    // The version-membership check below reads detail.versions; a failed
+    // versions read must not masquerade as "version not found".
+    return NextResponse.json(
+      { error: "could not verify this version, try again" },
+      { status: 503 },
+    );
+  }
+  if (!detailResult.detail.versions.some((v) => v.id === versionId)) {
     return NextResponse.json({ error: "version not found on this deliverable" }, { status: 404 });
   }
 
