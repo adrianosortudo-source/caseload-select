@@ -84,7 +84,8 @@ const SELL_LINKS = [
 // here from the per-firm group: both link to global routes (the cross-firm
 // triage queue narrows by ?firm_id), so they were never firm-scoped (finding 06).
 const SYSTEM_LINKS = [
-  { label: "All leads (every firm)", href: "/admin/triage" },
+  { label: "Screened leads (every firm)", href: "/admin/triage" },
+  { label: "Marketing leads (every firm)", href: "/admin/marketing-leads" },
   { label: "Screening stats", href: "/admin/screen-metrics" },
   { label: "Webhook log", href: "/admin/webhook-outbox" },
   { label: "Cadence preview", href: "/admin/cadence-shadow" },
