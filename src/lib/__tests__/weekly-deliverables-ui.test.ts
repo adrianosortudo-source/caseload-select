@@ -62,6 +62,10 @@ describe("weekly deliverables primary slice", () => {
     expect(canonicalFormat({ format: "Preparation Artifact", locale: "en-CA", deliverable_role: null, publication_destination: null })).toBe("Checklists & downloadable resources");
     expect(canonicalFormat({ format: "DRG Law Minute", locale: "en-CA", deliverable_role: null, publication_destination: null })).toBe("Email");
     expect(canonicalFormat({ format: "LinkedIn", locale: "en-CA", deliverable_role: "article", publication_destination: "website" })).toBe("Website articles");
+    // A native LinkedIn Article groups under LinkedIn like any other LinkedIn
+    // piece. Before 2026-07-31 this destination existed in the enum but no row
+    // carried it, so the omission here was invisible.
+    expect(canonicalFormat({ format: "LinkedIn Article", locale: "en-CA", deliverable_role: null, publication_destination: "linkedin_article" })).toBe("LinkedIn");
   });
 
   it("keeps unknown formats visible in Other", () => {
