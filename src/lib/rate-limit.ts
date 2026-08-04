@@ -74,6 +74,14 @@
  *       run up the bill against a single firm while staying under a
  *       global-IP ceiling.
  *
+ *   firmVoiceBuilder   20 per minute
+ *     - POST /api/tools/firm-voice-builder/turn. Public, same-origin, no
+ *       auth, no firmId scoping (standalone tool, not per-client-firm).
+ *       Each call is one Gemini generation. A real interview runs roughly
+ *       25+ turns over about 25 minutes, so 20/min/IP is generous for a
+ *       genuine session while still bounding a scripted loop's Gemini
+ *       spend. Identity is the IP alone.
+ *
  *   memo              60 per minute
  *     - /api/memo/[sessionId]. Read-only lookup by session UUID, no
  *       write cost. Two callers share this route: the widget polls it
@@ -125,6 +133,7 @@ export type RateLimitBucket =
   | "otpVerify"
   | "seoCheck"
   | "assist"
+  | "firmVoiceBuilder"
   | "memo"
   | "screenDemoReport"
   | "discoveryReport";
@@ -146,6 +155,7 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   otpVerify:      { limit: 10, windowSeconds: 600 },   // 10 per 10 minutes
   seoCheck:       { limit: 8,  windowSeconds: 600 },   // 8 per 10 minutes (public, unauth only)
   assist:         { limit: 8,  windowSeconds: 60 },    // 8 per minute (public, unauth, per firmId:ip)
+  firmVoiceBuilder: { limit: 20, windowSeconds: 60 },  // 20 per minute (public, unauth, per ip)
   memo:              { limit: 60, windowSeconds: 60 },   // 60 per minute (read-only, widget + portal)
   screenDemoReport:  { limit: 10, windowSeconds: 3600 }, // 10 per hour (public marketing form)
   discoveryReport:   { limit: 20, windowSeconds: 3600 }, // 20 per hour (ChatGPT Action caller)
