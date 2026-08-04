@@ -15,7 +15,6 @@
  *   5. clio_connected       -  Clio OAuth tokens saved (matter creation)
  *   6. first_session        -  At least one intake session received (widget live)
  *   7. custom_domain        -  Custom domain configured (optional  -  shows warning, not error)
- *   8. scoring_weights      -  Custom scoring weights configured (optional)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -47,7 +46,7 @@ export async function GET(
   const [firmRes, sessionRes, conflictRes] = await Promise.all([
     supabase
       .from("intake_firms")
-      .select("id, firm_name, practice_areas, geo_config, branding, ghl_webhook_url, clio_config, scoring_weights, custom_domain")
+      .select("id, name, practice_areas, geographic_config, branding, ghl_webhook_url, clio_config, custom_domain")
       .eq("id", firmId)
       .single(),
     supabase
@@ -73,9 +72,8 @@ export async function GET(
 
   const practiceAreas = firm.practice_areas as string[] | null;
   const branding = firm.branding as Record<string, unknown> | null;
-  const geoConfig = firm.geo_config as Record<string, unknown> | null;
+  const geoConfig = firm.geographic_config as Record<string, unknown> | null;
   const clioConfig = firm.clio_config as Record<string, unknown> | null;
-  const scoringWeights = firm.scoring_weights as Record<string, unknown> | null;
 
   const checklist: ChecklistItem[] = [
     {
@@ -143,15 +141,6 @@ export async function GET(
       required: false,
     },
     {
-      key: "scoring_weights",
-      label: "Custom scoring weights configured",
-      status: scoringWeights && Object.keys(scoringWeights).length > 0 ? "pass" : "warn",
-      detail: scoringWeights
-        ? "Custom weights active"
-        : "Using default CPI weights: acceptable for most firms",
-      required: false,
-    },
-    {
       key: "conflict_register",
       label: "Conflict register loaded",
       status: hasConflictRegister ? "pass" : "warn",
@@ -168,7 +157,7 @@ export async function GET(
 
   return NextResponse.json({
     firm_id: firmId,
-    firm_name: firm.firm_name,
+    firm_name: firm.name,
     ready_to_launch: readyToLaunch,
     required_passed: passCount,
     required_total: required.length,

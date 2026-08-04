@@ -14,6 +14,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OnboardingNotificationPanel } from "@/components/admin/OnboardingNotificationPanel";
+import { ClientListOpsPanel } from "@/components/admin/ClientListOpsPanel";
 
 interface Submission {
   id: string;
@@ -54,6 +55,7 @@ interface Submission {
   has_facebook_account: boolean | null;
   has_meta_business_manager: boolean | null;
   meta_business_manager_url: string | null;
+  meta_business_verified: boolean | null;
   will_add_operator_as_admin: boolean | null;
   meta_admin_status: string | null;
   meta_admin_blocker_note: string | null;
@@ -139,6 +141,18 @@ interface Submission {
   customer_base_original_name: string | null;
   customer_base_size_bytes: number | null;
   customer_base_mime_type: string | null;
+  client_list_path: string | null;
+  client_list_files: Array<{
+    storage_path?: string;
+    original_name?: string;
+    size_bytes?: number;
+    mime_type?: string | null;
+  }> | null;
+  client_list_attested_at: string | null;
+  client_list_self_upload_confirmed: boolean | null;
+  client_list_import_verified_at: string | null;
+  client_list_import_verified_note: string | null;
+  client_list_working_copy_deleted_at: string | null;
 }
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
@@ -196,6 +210,29 @@ export default async function SubmissionDetailPage({
         download: row.customer_base_original_name ?? true,
       });
     customerBaseSignedUrl = signed?.signedUrl ?? null;
+  }
+
+  // Fresh signed URLs for each client-list file, if present and the working
+  // copy has not been deleted. Skipped for a deleted working copy so the
+  // detail page never offers a download link to a file that no longer
+  // exists in storage.
+  let clientListFileUrls: Array<{ original_name: string; url: string | null }> = [];
+  if (
+    row.client_list_path === "share_with_us" &&
+    !row.client_list_working_copy_deleted_at &&
+    Array.isArray(row.client_list_files)
+  ) {
+    clientListFileUrls = await Promise.all(
+      row.client_list_files.map(async (f) => {
+        const path = typeof f?.storage_path === "string" ? f.storage_path : null;
+        const name = f?.original_name ?? "(file)";
+        if (!path) return { original_name: name, url: null };
+        const { data: signed } = await supabase.storage
+          .from(BUCKET)
+          .createSignedUrl(path, SIGNED_URL_TTL_SECONDS, { download: name });
+        return { original_name: name, url: signed?.signedUrl ?? null };
+      }),
+    );
   }
 
   // Fresh signed URL for the fees schedule upload, if present.
@@ -337,16 +374,32 @@ export default async function SubmissionDetailPage({
             }
           />
           <Field label="Display name" value={row.whatsapp_display_name} />
-          <Field label="Doc type selected" value={prettifyDocType(row.whatsapp_business_verification_doc_note)} />
+        </Fields>
+      </Section>
+
+      <Section title="6. Meta Business Manager">
+        <Fields>
+          <Field label="Has Facebook account" value={yesNo(row.has_facebook_account)} />
+          <Field label="Has Meta Business Manager" value={yesNo(row.has_meta_business_manager)} />
+          <Field label="MBM URL / ID" value={row.meta_business_manager_url} link />
+          <Field label="Already verified with Meta" value={yesNo(row.meta_business_verified)} />
+          <Field label="Will add operator as admin" value={yesNo(row.will_add_operator_as_admin)} />
         </Fields>
 
+        {/* Business verification. The document question is conditional on the
+            form (a firm with an already-verified Business Manager is never
+            asked), so "no document" is ambiguous on its own — it can mean
+            "nothing needed" or "chase this". This block resolves that rather
+            than leaving the operator to infer it from two other fields. */}
         <div className="mt-4 bg-parchment border border-gold/40 px-5 py-4">
           <p className="text-[11px] uppercase tracking-wider font-semibold text-gold mb-2">
-            Verification document
+            Business verification
           </p>
+
           {row.verification_doc_storage_path ? (
             <div className="space-y-2">
               <p className="text-sm text-black/80">
+                <span className="font-semibold text-green-800">Provided.</span>{" "}
                 <span className="font-semibold">{row.verification_doc_original_name ?? "(file)"}</span>
                 {row.verification_doc_size_bytes ? (
                   <span className="text-black/50 ml-2 text-xs">
@@ -357,6 +410,11 @@ export default async function SubmissionDetailPage({
                   <span className="text-black/50 ml-2 text-xs">{row.verification_doc_mime_type}</span>
                 ) : null}
               </p>
+              {row.whatsapp_business_verification_doc_note ? (
+                <p className="text-xs text-black/60">
+                  Document type: {prettifyDocType(row.whatsapp_business_verification_doc_note)}
+                </p>
+              ) : null}
               {docSignedUrl ? (
                 <a
                   href={docSignedUrl}
@@ -377,21 +435,38 @@ export default async function SubmissionDetailPage({
                 {row.verification_doc_storage_path}
               </p>
             </div>
-          ) : (
-            <p className="text-sm text-black/50">
-              No document uploaded. Rep indicated they would send it later.
+          ) : row.has_meta_business_manager === true && row.meta_business_verified === true ? (
+            <p className="text-sm text-black/70">
+              <span className="font-semibold text-green-800">Not required.</span> The firm&apos;s
+              Meta Business Manager is already verified, so no document was requested.
             </p>
+          ) : (
+            <div className="space-y-1">
+              <p className="text-sm text-black/80">
+                <span className="font-semibold text-red-700">Required — not provided.</span>{" "}
+                {row.has_meta_business_manager === true
+                  ? "Verification is still outstanding on the firm's Business Manager."
+                  : "The firm has no Business Manager yet, so verification will be required when we create one."}
+              </p>
+              {row.whatsapp_business_verification_doc_note ? (
+                <p className="text-xs text-black/60">
+                  Firm said they will provide:{" "}
+                  <span className="font-semibold">
+                    {prettifyDocType(row.whatsapp_business_verification_doc_note)}
+                  </span>
+                </p>
+              ) : (
+                <p className="text-xs text-black/60">No document type selected.</p>
+              )}
+              {row.meta_business_verified === null && row.has_meta_business_manager === true ? (
+                <p className="text-[10px] text-black/40">
+                  Verification status was not recorded on this submission. Submissions made before
+                  2026-07-25 predate that question and default to &ldquo;required&rdquo;.
+                </p>
+              ) : null}
+            </div>
           )}
         </div>
-      </Section>
-
-      <Section title="6. Meta Business Manager">
-        <Fields>
-          <Field label="Has Facebook account" value={yesNo(row.has_facebook_account)} />
-          <Field label="Has Meta Business Manager" value={yesNo(row.has_meta_business_manager)} />
-          <Field label="MBM URL / ID" value={row.meta_business_manager_url} link />
-          <Field label="Will add operator as admin" value={yesNo(row.will_add_operator_as_admin)} />
-        </Fields>
         <AccessStatusRow
           label="Meta admin access"
           status={row.meta_admin_status}
@@ -484,7 +559,9 @@ export default async function SubmissionDetailPage({
         </>
       )}
 
-      {row.form_type === "profile" ? <ProfileSections row={row} customerBaseUrl={customerBaseSignedUrl} /> : null}
+      {row.form_type === "profile" ? (
+        <ProfileSections row={row} customerBaseUrl={customerBaseSignedUrl} clientListFileUrls={clientListFileUrls} />
+      ) : null}
 
       <Section title="Authorisation">
         <Fields>
@@ -774,7 +851,15 @@ function prettifyPayments(v: string[] | null): string | null {
   return v.map((k) => m[k] ?? k).join(", ");
 }
 
-function ProfileSections({ row, customerBaseUrl }: { row: Submission; customerBaseUrl: string | null }) {
+function ProfileSections({
+  row,
+  customerBaseUrl,
+  clientListFileUrls,
+}: {
+  row: Submission;
+  customerBaseUrl: string | null;
+  clientListFileUrls: Array<{ original_name: string; url: string | null }>;
+}) {
   return (
     <>
       <Section title="A. Firm shape">
@@ -796,8 +881,86 @@ function ProfileSections({ row, customerBaseUrl }: { row: Submission; customerBa
         </Fields>
         <div className="mt-4 bg-parchment border border-gold/40 px-5 py-4">
           <p className="text-[11px] uppercase tracking-wider font-semibold text-gold mb-2">Client list</p>
+
+          <p className="text-sm text-black/80 mb-1">
+            Path:{" "}
+            {row.client_list_path === "share_with_us"
+              ? "Share with CaseLoad Select"
+              : row.client_list_path === "self_upload"
+                ? "Firm uploads it themselves"
+                : "Not provided"}
+          </p>
+          <p className="text-sm text-black/80 mb-3">
+            Attested at: {row.client_list_attested_at ? formatTime(row.client_list_attested_at) : "Missing"}
+          </p>
+
+          {row.client_list_path === "share_with_us" ? (
+            <>
+              {row.client_list_working_copy_deleted_at ? (
+                <div className="space-y-1 mb-3">
+                  <p className="text-xs text-black/50">Working copy deleted.</p>
+                  {(Array.isArray(row.client_list_files) ? row.client_list_files : []).map((f, i) => (
+                    <p key={i} className="text-sm text-black/50">
+                      {f?.original_name ?? "(file)"}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2 mb-3">
+                  {clientListFileUrls.length === 0 ? (
+                    <p className="text-sm text-black/50">No files uploaded.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {clientListFileUrls.map((f, i) =>
+                        f.url ? (
+                          <a
+                            key={i}
+                            href={f.url}
+                            className="inline-flex items-center gap-2 bg-navy text-white text-xs font-semibold uppercase tracking-wider px-4 py-2 hover:bg-navy/90 transition-colors"
+                          >
+                            {f.original_name} <span aria-hidden>↓</span>
+                          </a>
+                        ) : (
+                          <p key={i} className="text-xs text-red-700">
+                            {f.original_name}: signed URL unavailable
+                          </p>
+                        ),
+                      )}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-black/40">
+                    Signed URLs expire in 1 hour. Refresh this page to generate new ones.
+                  </p>
+                </div>
+              )}
+
+              <p className="text-sm text-black/80">
+                Import verified:{" "}
+                {row.client_list_import_verified_at ? formatTime(row.client_list_import_verified_at) : "Not yet"}
+                {row.client_list_import_verified_note ? (
+                  <span className="text-black/50 ml-2">({row.client_list_import_verified_note})</span>
+                ) : null}
+              </p>
+              <p className="text-sm text-black/80">
+                Working copy deleted:{" "}
+                {row.client_list_working_copy_deleted_at
+                  ? formatTime(row.client_list_working_copy_deleted_at)
+                  : "Not yet"}
+              </p>
+
+              <ClientListOpsPanel
+                submissionId={row.id}
+                importVerifiedAt={row.client_list_import_verified_at}
+                workingCopyDeletedAt={row.client_list_working_copy_deleted_at}
+              />
+            </>
+          ) : null}
+
           {row.customer_base_storage_path ? (
-            <div className="space-y-2">
+            <div className="mt-3 pt-3 border-t border-gold/20">
+              <p className="text-[10px] uppercase tracking-wider text-black/40 font-semibold mb-1">
+                Legacy single-file upload
+              </p>
               <p className="text-sm text-black/80">
                 <span className="font-semibold">{row.customer_base_original_name ?? "(file)"}</span>
                 {row.customer_base_size_bytes ? (
@@ -807,20 +970,19 @@ function ProfileSections({ row, customerBaseUrl }: { row: Submission; customerBa
               {customerBaseUrl ? (
                 <a
                   href={customerBaseUrl}
-                  className="inline-flex items-center gap-2 bg-navy text-white text-xs font-semibold uppercase tracking-wider px-4 py-2 hover:bg-navy/90 transition-colors"
+                  className="inline-flex items-center gap-2 bg-navy text-white text-xs font-semibold uppercase tracking-wider px-4 py-2 hover:bg-navy/90 transition-colors mt-2"
                 >
                   Download <span aria-hidden>↓</span>
                 </a>
               ) : (
                 <p className="text-xs text-red-700">Signed URL unavailable. Refresh the page to retry.</p>
               )}
-              <p className="text-[10px] text-black/40">
-                Signed URL expires in 1 hour. Refresh this page to generate a new one.
-              </p>
             </div>
-          ) : (
+          ) : null}
+
+          {!row.client_list_path && !row.customer_base_storage_path ? (
             <p className="text-sm text-black/50">No client list uploaded.</p>
-          )}
+          ) : null}
         </div>
       </Section>
 

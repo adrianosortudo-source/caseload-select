@@ -6,9 +6,19 @@
  * `firm-onboarding-docs` Supabase Storage bucket and returns the storage
  * path plus metadata so the form can persist them on the eventual row.
  *
- * The token is the credential; anyone with the URL can upload. The
- * Supabase storage policy enforces file size (10 MB) and MIME type
- * (PDF / JPEG / PNG) — we also validate here for fast feedback.
+ * The token is the credential; anyone with the URL can upload.
+ *
+ * Enforcement, corrected 2026-07-25: this route is the ONLY place MIME type
+ * is checked. The bucket carries a 50 MB ceiling (the highest any route
+ * legitimately allows) as defence in depth, but no MIME allowlist — see
+ * below. The per-kind caps here are what actually apply.
+ *
+ * A bucket-level allowed_mime_types list is not currently viable: this route
+ * passes `contentType: file.type` straight through, which is an empty string
+ * when the browser omits it, and the sibling firm-profile upload route falls
+ * back to "application/octet-stream" for the same reason. An allowlist would
+ * reject those, and adding octet-stream to it would defeat the point.
+ * Normalising contentType in both routes is the prerequisite.
  */
 
 import { NextRequest, NextResponse } from "next/server";

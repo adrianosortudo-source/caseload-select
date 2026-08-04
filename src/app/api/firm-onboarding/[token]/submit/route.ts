@@ -63,6 +63,7 @@ interface SubmitBody {
   has_facebook_account?: string;
   has_meta_business_manager?: string;
   meta_business_manager_url?: string;
+  meta_business_verified?: string;
   will_add_operator_as_admin?: string;
   // Access-grant status tracking (one of: not_started, in_progress, granted, blocked)
   meta_admin_status?: string;
@@ -310,6 +311,14 @@ export async function POST(
             ? false
             : null,
       meta_business_manager_url: body.meta_business_manager_url ?? null,
+      // Gates the business verification document. null covers both "not sure"
+      // and firms with no Business Manager yet, who never see the question.
+      meta_business_verified:
+        body.meta_business_verified === "yes"
+          ? true
+          : body.meta_business_verified === "no"
+            ? false
+            : null,
       will_add_operator_as_admin:
         body.will_add_operator_as_admin === "yes" ? true : null,
       meta_admin_status: body.meta_admin_status || null,

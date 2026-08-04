@@ -92,12 +92,24 @@ const GBP_POST: RequirementSpec[] = [
   { key: "publish_schedule_set", label: "Publish date or schedule is set", blocking: true },
 ];
 
+// email_newsletter gets the universal baseline only (content + legal
+// approval + role/locale known), deliberately. The real send-readiness gates
+// for an email -- consent audit passed, sender identity configured,
+// unsubscribe mechanism live, mailing address resolved, all named in The DRG
+// Law Minute's own draft-version note -- have no RequirementKey yet, and
+// inventing one here (in a migration-vocabulary change) would be deciding
+// Publication Readiness's compliance model as a side effect, not this
+// change's job. Widen this profile deliberately, in its own change, when
+// those gates are designed.
+const EMAIL_NEWSLETTER: RequirementSpec[] = [...ALWAYS_FIRST];
+
 const PROFILE_BY_ROLE: Record<DeliverableRole, RequirementSpec[]> = {
   article: ARTICLE,
   lead_magnet_pdf: LEAD_MAGNET_PDF,
   landing_page: LANDING_PAGE,
   social_post: SOCIAL_OR_GBP_BASE,
   gbp_post: GBP_POST,
+  email_newsletter: EMAIL_NEWSLETTER,
 };
 
 /**

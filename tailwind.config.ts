@@ -28,6 +28,11 @@ const config: Config = {
         // Semantic status
         "green-pass": "#27834A",
         "red-fail": "#C0564E",
+        // Publication outcome. Deliberately distinct from `navy` (the brand
+        // primary, which already reads as neutral page chrome) so a published
+        // piece is legible as its own state rather than as another chrome
+        // element.
+        "blue-published": "#2F6FB5",
       },
       fontFamily: {
         display: ["var(--font-oxanium)", "sans-serif"],

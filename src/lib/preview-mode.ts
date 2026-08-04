@@ -148,3 +148,18 @@ export function previewBlocksWrite(intent: PreviewIntent | null, firmId: string)
   if (!intent) return false;
   return intent.firm_id === firmId;
 }
+
+/**
+ * Resolve what a portal layout should do with a preview intent for the
+ * firm in the URL. "mismatch" means the operator carries a live preview
+ * bound to a DIFFERENT firm: the layout must terminate the preview
+ * (redirect to the exit route) instead of silently rendering the other
+ * firm's operator view. Pure and unit-testable.
+ */
+export function resolvePreviewForFirm(
+  intent: PreviewIntent | null,
+  firmId: string,
+): "none" | "match" | "mismatch" {
+  if (!intent) return "none";
+  return intent.firm_id === firmId ? "match" : "mismatch";
+}

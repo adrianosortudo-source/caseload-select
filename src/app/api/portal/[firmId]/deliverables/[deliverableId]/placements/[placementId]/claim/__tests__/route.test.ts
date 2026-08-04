@@ -7,6 +7,8 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { NextRequest } from "next/server";
+import fs from "fs";
+import path from "path";
 
 vi.mock("server-only", () => ({}));
 
@@ -17,6 +19,7 @@ const VERSION = "v1111111-1111-1111-1111-111111111111";
 
 const state = {
   detail: null as { deliverable: { firm_id: string } } | null,
+  detailReadError: false,
   placements: [] as Array<{ id: string; destination: string }>,
   resolvedActor: { role: "operator", id: "op-1", name: "Adriano", email: null } as {
     role: string;
@@ -41,7 +44,14 @@ vi.mock("@/lib/deliverables-auth", () => ({
 }));
 
 vi.mock("@/lib/deliverables", () => ({
-  getDeliverableDetail: () => Promise.resolve(state.detail),
+  getDeliverableDetail: () =>
+    Promise.resolve(
+      state.detailReadError
+        ? { ok: false, error: "mock read error" }
+        : state.detail === null
+          ? { ok: true, found: false }
+          : { ok: true, found: true, detail: state.detail },
+    ),
 }));
 
 vi.mock("@/lib/content-placements", () => ({
@@ -69,10 +79,20 @@ function params() {
 
 beforeEach(() => {
   state.detail = { deliverable: { firm_id: FIRM } };
+  state.detailReadError = false;
   state.placements = [{ id: PLACEMENT, destination: "linkedin_post" }];
   state.resolvedActor = { role: "operator", id: "op-1", name: "Adriano", email: null };
   state.claimResult = { ok: true, claimId: "claim-1", idempotentReplay: false, status: "active" };
   state.claimCallArgs = null;
+});
+
+describe("POST claim: fail-closed detail read", () => {
+  it("503s (never 404) when the deliverable-detail read itself errors", async () => {
+    state.detailReadError = true;
+    const res = await POST(makeReq({ approved_version_id: VERSION, idempotency_key: "k1" }), params());
+    expect(res.status).toBe(503);
+    expect(state.claimCallArgs).toBeNull();
+  });
 });
 
 describe("POST claim: auth gate", () => {
@@ -195,6 +215,48 @@ describe("POST claim: no external publisher is ever invoked", () => {
   it("the successful response contains only claim metadata, never a publish/post result", async () => {
     const res = await POST(makeReq({ approved_version_id: VERSION, idempotency_key: "k7" }), params());
     const body = await res.json();
+    // releasePath is omitted here because the mocked claimResult doesn't set
+    // it (undefined values are dropped by JSON serialization) -- see the
+    // next describe block for the case where it's present.
     expect(Object.keys(body).sort()).toEqual(["claimId", "idempotentReplay", "ok", "status"].sort());
+  });
+});
+
+describe("POST claim: standing publishing authorization release path", () => {
+  it("surfaces releasePath when the RPC reports the claim went through standing authorization", async () => {
+    state.claimResult = {
+      ok: true,
+      claimId: "claim-1",
+      idempotentReplay: false,
+      status: "active",
+      releasePath: "standing_authorization",
+    } as typeof state.claimResult & { releasePath: string };
+    const res = await POST(makeReq({ approved_version_id: VERSION, idempotency_key: "k8" }), params());
+    const body = await res.json();
+    expect(body.releasePath).toBe("standing_authorization");
+  });
+});
+
+describe("POST claim is unaffected by publication-preflight.ts's fallback (static source check)", () => {
+  // Regression for the exact-destination-identity calibration (2026-07-21):
+  // an earlier pass of this codebase's own comments/docs incorrectly
+  // implied /claim was also affected by buildPreflightReport's optional-
+  // parameter fallback (corrected in publishing-agent-release-resolution-
+  // requirements-2026-07-20.md §13.2g). It never was: this route enforces
+  // authorization solely via claim_placement_for_publish() (the RPC),
+  // through publication-placement-claims.ts, which does not import
+  // buildPreflightReport or publication-preflight.ts at all. Scanning the
+  // actual source (no mocking) makes this a hard regression, not a comment
+  // a future edit could silently invalidate.
+  it("publication-placement-claims.ts (the module backing /claim) never imports buildPreflightReport -- a plain prose mention in its own header comment (explaining the relationship) is fine, an import is what would matter", () => {
+    const source = fs.readFileSync(path.join(process.cwd(), "src", "lib", "publication-placement-claims.ts"), "utf8");
+    // Import is the only way this file could actually CALL
+    // buildPreflightReport -- there is none. Its header comment does name
+    // buildPreflightReport() in prose to explain the relationship (a
+    // read-only preview, never itself sufficient permission to publish),
+    // which is expected and fine; only a real import would mean this file
+    // is affected by publication-preflight.ts's fallback.
+    expect(source).not.toMatch(/^import[\s\S]*?from ["']@\/lib\/publication-preflight["'];?$/m);
+    expect(source).toContain("claim_placement_for_publish");
   });
 });

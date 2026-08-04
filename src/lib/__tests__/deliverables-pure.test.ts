@@ -15,7 +15,46 @@ import {
   APPROVAL_ATTESTATION,
   validateDeliverableAttachments,
   versionOptionLabel,
+  normalizeClientNotificationChoice,
+  parseWeekNumber,
 } from "@/lib/deliverables-pure";
+
+describe("normalizeClientNotificationChoice", () => {
+  it("accepts the literal 'notify_now'", () => {
+    expect(normalizeClientNotificationChoice("notify_now")).toBe("notify_now");
+  });
+
+  it("resolves 'silent' unchanged", () => {
+    expect(normalizeClientNotificationChoice("silent")).toBe("silent");
+  });
+
+  it("resolves undefined/omitted to silent (missing choice is silent)", () => {
+    expect(normalizeClientNotificationChoice(undefined)).toBe("silent");
+  });
+
+  it("resolves null to silent", () => {
+    expect(normalizeClientNotificationChoice(null)).toBe("silent");
+  });
+
+  it("resolves an empty string to silent", () => {
+    expect(normalizeClientNotificationChoice("")).toBe("silent");
+  });
+
+  it("resolves a boolean true to silent (invalid choice cannot trigger email)", () => {
+    expect(normalizeClientNotificationChoice(true)).toBe("silent");
+  });
+
+  it("resolves a stale/legacy value to silent", () => {
+    expect(normalizeClientNotificationChoice("send")).toBe("silent");
+    expect(normalizeClientNotificationChoice("email")).toBe("silent");
+    expect(normalizeClientNotificationChoice("yes")).toBe("silent");
+  });
+
+  it("resolves an object/array to silent", () => {
+    expect(normalizeClientNotificationChoice({ notify_now: true })).toBe("silent");
+    expect(normalizeClientNotificationChoice(["notify_now"])).toBe("silent");
+  });
+});
 
 describe("validateAnnotation", () => {
   it("accepts a valid text annotation", () => {
@@ -263,5 +302,34 @@ describe("versionOptionLabel", () => {
       [],
     );
     expect(state).toEqual({ isCurrent: false, tag: null, approvalCreatedAt: null });
+  });
+});
+
+describe("parseWeekNumber", () => {
+  it("accepts a whole number of 1 or more", () => {
+    expect(parseWeekNumber(1)).toEqual({ ok: true, value: 1 });
+    expect(parseWeekNumber(12)).toEqual({ ok: true, value: 12 });
+  });
+
+  it("accepts the numeric string a form input produces", () => {
+    expect(parseWeekNumber("3")).toEqual({ ok: true, value: 3 });
+    expect(parseWeekNumber("  4 ")).toEqual({ ok: true, value: 4 });
+  });
+
+  it("treats null and empty string as an explicit clear, not an error", () => {
+    expect(parseWeekNumber(null)).toEqual({ ok: true, value: null });
+    expect(parseWeekNumber("")).toEqual({ ok: true, value: null });
+  });
+
+  it("rejects rather than coerces anything that is not a whole week number", () => {
+    for (const bad of [0, -1, 3.7, "3.7", "week 3", "abc", NaN, Infinity, true, {}, []]) {
+      expect(parseWeekNumber(bad), `expected ${JSON.stringify(bad)} to be rejected`).toEqual({
+        ok: false,
+      });
+    }
+  });
+
+  it("rejects undefined: an absent key is the caller's decision to interpret", () => {
+    expect(parseWeekNumber(undefined)).toEqual({ ok: false });
   });
 });

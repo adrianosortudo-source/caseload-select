@@ -1,11 +1,15 @@
 /**
  * POST /api/firm-profile/[token]/upload
  *
- * Receives the client-list file from the Firm Profile form. Stores it in the
- * private firm-onboarding-docs bucket and returns the storage path + metadata
- * so the form can persist them on the submission row. The token is the
- * credential. Accepts spreadsheets (CSV / Excel) and PDF; some browsers send
- * an empty or odd MIME type for CSV, so we fall back to the file extension.
+ * Receives one client-list file from the Firm Profile form's two-path client
+ * list intake (Section B). Stores it in the private firm-onboarding-docs
+ * bucket and returns the storage path plus metadata so the form can append it
+ * to client_list_files on the submission row. The token is the credential.
+ *
+ * The firm rarely has a clean spreadsheet, so this accepts whatever it
+ * already has: spreadsheets, PDFs, Word documents, contact exports, and
+ * photos or scans of a printed list. Some browsers send an empty or odd MIME
+ * type for CSV and similar formats, so we fall back to the file extension.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -13,16 +17,32 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 const BUCKET = "firm-onboarding-docs";
-const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_BYTES = 50 * 1024 * 1024; // 50 MB
 const ALLOWED_MIME = new Set([
   "text/csv",
   "application/csv",
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.oasis.opendocument.spreadsheet",
+  "application/vnd.apple.numbers",
   "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/rtf",
   "text/plain",
+  "text/vcard",
+  "text/x-vcard",
+  "image/png",
+  "image/jpeg",
+  "image/heic",
+  "image/heif",
+  "image/webp",
 ]);
-const ALLOWED_EXT = new Set(["csv", "xlsx", "xls", "pdf"]);
+const ALLOWED_EXT = new Set([
+  "csv", "xlsx", "xls", "ods", "numbers",
+  "pdf", "doc", "docx", "rtf", "txt", "vcf",
+  "png", "jpg", "jpeg", "heic", "heif", "webp",
+]);
 
 function sanitizeFilename(name: string): string {
   const trimmed = name.slice(0, 120);
@@ -45,7 +65,7 @@ export async function POST(
 
   // Token is a shared-secret slug; rate-limit per IP to cap junk/cost writes
   // to the private bucket from anyone fuzzing token prefixes.
-  const rl = await checkRateLimit("firmOnboarding", ipFromRequest(req));
+  const rl = await checkRateLimit("firmOnboardingUpload", ipFromRequest(req));
   if (!rl.ok) {
     return NextResponse.json(
       { ok: false, error: "Too many uploads from this network. Try again later." },
@@ -79,7 +99,7 @@ export async function POST(
   const extOk = ALLOWED_EXT.has(ext);
   if (!mimeOk && !extOk) {
     return NextResponse.json(
-      { ok: false, error: "unsupported file type. Allowed: CSV, Excel, or PDF." },
+      { ok: false, error: "unsupported file type. Send a spreadsheet, PDF, document, contact export, or photo of the list." },
       { status: 400 },
     );
   }

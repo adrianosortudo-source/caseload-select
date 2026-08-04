@@ -212,8 +212,8 @@ export function buildClientQuestionSets(
   const sets: Record<string, unknown> = {};
   for (const pa of practiceAreas) {
     if (pa.classification === "out_of_scope") continue;
-    const module = DEFAULT_QUESTION_MODULES[pa.id];
-    if (module) sets[pa.id] = module;
+    const questionModule = DEFAULT_QUESTION_MODULES[pa.id];
+    if (questionModule) sets[pa.id] = questionModule;
   }
   return sets;
 }

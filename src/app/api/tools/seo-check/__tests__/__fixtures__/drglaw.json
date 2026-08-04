@@ -1,0 +1,5358 @@
+{
+  "domain": "drglaw.ca",
+  "pagesScanned": 10,
+  "pages": [
+    {
+      "url": "https://drglaw.ca",
+      "title": "DRG Law · Decisions framed in legal clarity",
+      "metaDescription": "DRG Law makes the legal side fit your business plan. Company, real estate, and succession help for Ontario business owners, in English or Portuguese.",
+      "pageType": "homepage",
+      "pageScore": 96,
+      "pageGrade": "A",
+      "aiVisibilityScore": 95,
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 70,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Page title",
+              "status": "pass",
+              "detail": "Good length (43 chars)."
+            },
+            {
+              "label": "Meta description",
+              "status": "pass",
+              "detail": "Good length (149 chars)."
+            },
+            {
+              "label": "H1 heading",
+              "status": "pass",
+              "detail": "Single H1 present."
+            },
+            {
+              "label": "H2 subheadings",
+              "status": "pass",
+              "detail": "9 H2 tags found."
+            },
+            {
+              "label": "Open Graph tags",
+              "status": "pass",
+              "detail": "Title, description, and image all present."
+            },
+            {
+              "label": "Image alt text",
+              "status": "pass",
+              "detail": "All 8 images have alt text or a valid empty alt (1 correctly decorative with alt=\"\")."
+            },
+            {
+              "label": "HTML lang attribute",
+              "status": "pass",
+              "detail": "Set to \"en\". Helps search engines serve the right audience."
+            }
+          ]
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "HTTP status",
+              "status": "pass",
+              "detail": "Returned HTTP 200."
+            },
+            {
+              "label": "Redirect chain",
+              "status": "pass",
+              "detail": "Served directly with no redirect."
+            },
+            {
+              "label": "Indexable",
+              "status": "pass",
+              "detail": "No noindex directive. Page is eligible to be indexed."
+            },
+            {
+              "label": "Followable links",
+              "status": "pass",
+              "detail": "Links on this page are followable."
+            },
+            {
+              "label": "Canonical tag",
+              "status": "pass",
+              "detail": "Self-referencing canonical present."
+            },
+            {
+              "label": "Mixed indexability signals",
+              "status": "pass",
+              "detail": "Indexability signals are consistent."
+            },
+            {
+              "label": "robots.txt crawl access",
+              "status": "pass",
+              "detail": "Googlebot and Bingbot are allowed to crawl this path."
+            },
+            {
+              "label": "Sitemap membership",
+              "status": "pass",
+              "detail": "Page is listed in the XML sitemap."
+            }
+          ]
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 70,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "JSON-LD structured data",
+              "status": "pass",
+              "detail": "3 JSON-LD blocks found."
+            },
+            {
+              "label": "JSON-LD validity",
+              "status": "pass",
+              "detail": "All 3 blocks parse correctly."
+            },
+            {
+              "label": "Business / LegalService schema",
+              "status": "pass",
+              "detail": "Business entity structured data found."
+            },
+            {
+              "label": "Business schema fields",
+              "status": "warn",
+              "detail": "Missing field: address.",
+              "fix": "Add the missing JSON-LD field: address."
+            },
+            {
+              "label": "FAQPage schema",
+              "status": "pass",
+              "detail": "Present. Supports FAQ readiness for search and AI answers."
+            },
+            {
+              "label": "Review / Rating schema",
+              "status": "warn",
+              "detail": "Not found. Review schema can support star ratings in search results.",
+              "fix": "Add AggregateRating or Review schema for your client testimonials."
+            },
+            {
+              "label": "Breadcrumb schema",
+              "status": "pass",
+              "detail": "Not required on the homepage or a language root. Not found. Breadcrumb markup improves site hierarchy signals."
+            },
+            {
+              "label": "Schema conflicts",
+              "status": "pass",
+              "detail": "No conflicting business entity declarations."
+            }
+          ]
+        },
+        {
+          "name": "AI Visibility",
+          "score": 95,
+          "maxScore": 100,
+          "items": [
+            {
+              "label": "AI search bot access",
+              "status": "pass",
+              "detail": "All major AI search crawlers can access your site."
+            },
+            {
+              "label": "AI training bot control",
+              "status": "warn",
+              "detail": "No training-only crawlers blocked. Your content may be used to train AI models.",
+              "fix": "Add Disallow rules for GPTBot, CCBot, and Bytespider in robots.txt if you want to control AI training use."
+            },
+            {
+              "label": "Entity description",
+              "status": "pass",
+              "detail": "A named business entity is described in structured data for AI to read."
+            },
+            {
+              "label": "Attorney / person schema",
+              "status": "pass",
+              "detail": "Attorney or Person schema present. Supports authorship and expertise signals."
+            },
+            {
+              "label": "Question-format headings",
+              "status": "pass",
+              "detail": "4 question headings found. Question-shaped headings may help AI systems extract answers; this does not guarantee citation."
+            },
+            {
+              "label": "Direct-answer sentences",
+              "status": "pass",
+              "detail": "Content includes clear definitional sentences that may be easier for AI systems to extract as answers."
+            },
+            {
+              "label": "Authoritative citations",
+              "status": "pass",
+              "detail": "Not required for a homepage page. No outbound links to authoritative legal sources."
+            },
+            {
+              "label": "Author / reviewer signals",
+              "status": "pass",
+              "detail": "Author or reviewer attribution found. Supports source credibility for AI."
+            },
+            {
+              "label": "llms.txt file",
+              "status": "pass",
+              "detail": "Present. Provides AI-friendly content guidance, a small positive signal."
+            },
+            {
+              "label": "Semantic HTML structure",
+              "status": "pass",
+              "detail": "5 semantic elements found. Helps AI parse page structure."
+            }
+          ]
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 70,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Phone number visible",
+              "status": "pass",
+              "detail": "A phone number is visible on the page."
+            },
+            {
+              "label": "Contact form / direct contact",
+              "status": "pass",
+              "detail": "A contact form or direct email path is present."
+            },
+            {
+              "label": "Consultation call to action",
+              "status": "pass",
+              "detail": "A consultation or contact call to action is present."
+            },
+            {
+              "label": "Address / NAP",
+              "status": "pass",
+              "detail": "A street address is visible."
+            },
+            {
+              "label": "Trust signals",
+              "status": "pass",
+              "detail": "3 of 5 trust signal types present (testimonials, reviews, results, awards, credentials)."
+            },
+            {
+              "label": "Practice-area intent",
+              "status": "pass",
+              "detail": "Content clearly signals legal practice areas."
+            },
+            {
+              "label": "Policy / disclaimer pages",
+              "status": "pass",
+              "detail": "Privacy, terms, or disclaimer links are present."
+            }
+          ]
+        },
+        {
+          "name": "Local SEO",
+          "score": 50,
+          "maxScore": 50,
+          "items": [
+            {
+              "label": "Phone number (NAP)",
+              "status": "pass",
+              "detail": "Phone number found on page."
+            },
+            {
+              "label": "Street address (NAP)",
+              "status": "pass",
+              "detail": "Physical address found on page."
+            },
+            {
+              "label": "Google Maps embed",
+              "status": "pass",
+              "detail": "Maps integration found."
+            },
+            {
+              "label": "NAP in structured data",
+              "status": "pass",
+              "detail": "Contact info found in JSON-LD."
+            },
+            {
+              "label": "Google Business Profile link",
+              "status": "pass",
+              "detail": "GBP link found. Cross-linking strengthens local authority."
+            }
+          ]
+        },
+        {
+          "name": "Technical & Security",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "HTTPS",
+              "status": "pass",
+              "detail": "Site loads over HTTPS."
+            },
+            {
+              "label": "Mixed content",
+              "status": "pass",
+              "detail": "No insecure HTTP resources detected."
+            },
+            {
+              "label": "HSTS header",
+              "status": "pass",
+              "detail": "Present with max-age of at least one year."
+            },
+            {
+              "label": "X-Content-Type-Options",
+              "status": "pass",
+              "detail": "Set to nosniff."
+            },
+            {
+              "label": "Content-Security-Policy",
+              "status": "warn",
+              "detail": "Content-Security-Policy-Report-Only is present (report-only mode): violations are logged but nothing is blocked yet. This is implementation in progress, not a missing control.",
+              "fix": "Review the report-only violation reports, then promote the policy to an enforced Content-Security-Policy header once it is clean."
+            },
+            {
+              "label": "Viewport meta tag",
+              "status": "pass",
+              "detail": "Present. Required for mobile rendering."
+            },
+            {
+              "label": "Compression",
+              "status": "pass",
+              "detail": "BR compression active."
+            }
+          ]
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30,
+          "items": [
+            {
+              "label": "Server-rendered content",
+              "status": "pass",
+              "detail": "Server HTML contains enough visible content for crawler analysis (1539 words)."
+            },
+            {
+              "label": "JavaScript app-shell dependency",
+              "status": "pass",
+              "detail": "No thin app-shell pattern detected."
+            },
+            {
+              "label": "Noscript fallback",
+              "status": "pass",
+              "detail": "No noscript fallback needed for the detected server-rendered content level."
+            }
+          ]
+        },
+        {
+          "name": "Performance",
+          "score": 25,
+          "maxScore": 40,
+          "items": [
+            {
+              "label": "Time to first byte",
+              "status": "fail",
+              "detail": "Slow (median 1083ms; range 135-3322ms, 3 samples).",
+              "fix": "Investigate server response time: caching, CDN, hosting upgrade."
+            },
+            {
+              "label": "HTML document size",
+              "status": "pass",
+              "detail": "93 KB."
+            },
+            {
+              "label": "Render-blocking resources",
+              "status": "warn",
+              "detail": "3 render-blocking resources in <head>.",
+              "fix": "Add async or defer to scripts. Use media=\"print\" for non-critical stylesheets."
+            },
+            {
+              "label": "Third-party scripts",
+              "status": "pass",
+              "detail": "0 external script domains."
+            }
+          ]
+        },
+        {
+          "name": "Links & Content",
+          "score": 55,
+          "maxScore": 60,
+          "items": [
+            {
+              "label": "Word count",
+              "status": "pass",
+              "detail": "1,539 words."
+            },
+            {
+              "label": "Heading hierarchy",
+              "status": "warn",
+              "detail": "Heading levels are skipped (for example H1 then H3).",
+              "fix": "Use sequential heading levels without skipping."
+            },
+            {
+              "label": "Internal links",
+              "status": "pass",
+              "detail": "43 internal links found."
+            },
+            {
+              "label": "Content-to-HTML ratio",
+              "status": "pass",
+              "detail": "10% text content, but the page already has 1,539 words of substantive copy; a low ratio here reflects markup weight, not thin content."
+            },
+            {
+              "label": "Anchor text quality",
+              "status": "pass",
+              "detail": "Links use descriptive text."
+            },
+            {
+              "label": "External links",
+              "status": "pass",
+              "detail": "6 outbound links found."
+            }
+          ]
+        }
+      ],
+      "failCount": 1,
+      "warnCount": 6,
+      "httpStatus": 200,
+      "indexable": true,
+      "indexability": {
+        "httpStatus": 200,
+        "redirected": false,
+        "redirectHops": 0,
+        "canonical": "https://drglaw.ca",
+        "canonicalSelf": true,
+        "canonicalSameOrigin": true,
+        "metaNoindex": false,
+        "metaNofollow": false,
+        "headerNoindex": false,
+        "headerNofollow": false,
+        "indexable": true,
+        "inSitemap": true,
+        "mixedSignals": false
+      },
+      "schema": {
+        "blocks": 3,
+        "invalidBlocks": 0,
+        "types": [
+          "legalservice",
+          "openinghoursspecification",
+          "contactpoint",
+          "educationaloccupationalcredential",
+          "administrativearea",
+          "person",
+          "educationalorganization",
+          "faqpage",
+          "question",
+          "answer"
+        ],
+        "hasOrganization": false,
+        "hasLocalBusiness": false,
+        "hasLegalService": true,
+        "hasAttorney": false,
+        "hasPerson": true,
+        "hasBreadcrumb": false,
+        "hasFaq": true,
+        "hasWebsite": false,
+        "hasReview": false,
+        "fields": {
+          "name": true,
+          "url": true,
+          "telephone": true,
+          "address": false,
+          "areaServed": true,
+          "sameAs": true,
+          "priceRange": false,
+          "openingHours": true
+        },
+        "conflictingEntity": false
+      },
+      "lawFirm": {
+        "phoneVisible": true,
+        "contactFormPresent": true,
+        "addressVisible": true,
+        "consultationCta": true,
+        "policyPagePresent": true,
+        "practiceAreaIntent": true,
+        "serviceAreaLikely": false,
+        "trust": {
+          "testimonials": true,
+          "reviews": true,
+          "caseResults": false,
+          "awards": false,
+          "credentials": true
+        }
+      },
+      "wordCount": 1539,
+      "rendering": {
+        "risk": "low",
+        "wordCount": 1539,
+        "scriptCount": 35,
+        "externalScriptCount": 11,
+        "appShellLikely": false,
+        "emptyAppRoot": false,
+        "hasNoscriptFallback": false,
+        "evidence": [
+          "1539 words in server HTML",
+          "11 external scripts"
+        ]
+      },
+      "pageAudit": {
+        "metaDescription": "DRG Law makes the legal side fit your business plan. Company, real estate, and succession help for Ontario business owners, in English or Portuguese.",
+        "h1s": [
+          "Legal clarity before your next move."
+        ],
+        "h2s": [
+          "What is the legal problem you need help with?",
+          "Owners deserve legal work that does not leave them guessing.",
+          "The legal work you need, listed by what you are deciding.",
+          "Who reads your first message?",
+          "Clarity is what clients remember.",
+          "One legal decision. Three ways to understand it before you sign.",
+          "Every matter closes with a clear written next step for the client.",
+          "What Ontario business owners ask before sending a matter",
+          "Send the question before the signature moves."
+        ],
+        "imageCount": 8,
+        "imagesMissingAlt": 1,
+        "internalLinksOut": 46,
+        "ctaEvidence": [],
+        "phoneEvidence": [
+          "647-584-0998",
+          "647-584-0998",
+          "647-584-0998"
+        ]
+      },
+      "keyWarnings": [
+        "Time to first byte"
+      ],
+      "wpDefault": false
+    },
+    {
+      "url": "https://drglaw.ca/contact",
+      "title": "Contact DRG Law, Ontario Business and Real Estate Lawyer | DRG Law",
+      "metaDescription": "Send a matter to Damaris Regina Guimaraes at DRG Law Professional Corporation. Damaris reviews every intake herself and replies with the next step when the matter fits the firm.",
+      "pageType": "contact",
+      "pageScore": 93,
+      "pageGrade": "A",
+      "aiVisibilityScore": 95,
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 60,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Page title",
+              "status": "warn",
+              "detail": "Too long (66 chars). As a guideline, titles past roughly 60 characters are more likely to be truncated or rewritten in search results; the actual cutoff is pixel-width based, not a fixed character count.",
+              "fix": "Consider trimming to under 60 characters, with the most important keyword first."
+            },
+            {
+              "label": "Meta description",
+              "status": "warn",
+              "detail": "Long (177 chars). May be truncated in search results, since Google's snippet length is pixel-width based rather than a fixed character count; this is a recommendation, not a hard limit.",
+              "fix": "Consider trimming to under 160 characters so more of the description shows in search results."
+            },
+            {
+              "label": "H1 heading",
+              "status": "pass",
+              "detail": "Single H1 present."
+            },
+            {
+              "label": "H2 subheadings",
+              "status": "pass",
+              "detail": "3 H2 tags found."
+            },
+            {
+              "label": "Open Graph tags",
+              "status": "pass",
+              "detail": "Title, description, and image all present."
+            },
+            {
+              "label": "Image alt text",
+              "status": "pass",
+              "detail": "No images found to check."
+            },
+            {
+              "label": "HTML lang attribute",
+              "status": "pass",
+              "detail": "Set to \"en\". Helps search engines serve the right audience."
+            }
+          ]
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "HTTP status",
+              "status": "pass",
+              "detail": "Returned HTTP 200."
+            },
+            {
+              "label": "Redirect chain",
+              "status": "pass",
+              "detail": "Served directly with no redirect."
+            },
+            {
+              "label": "Indexable",
+              "status": "pass",
+              "detail": "No noindex directive. Page is eligible to be indexed."
+            },
+            {
+              "label": "Followable links",
+              "status": "pass",
+              "detail": "Links on this page are followable."
+            },
+            {
+              "label": "Canonical tag",
+              "status": "pass",
+              "detail": "Self-referencing canonical present."
+            },
+            {
+              "label": "Mixed indexability signals",
+              "status": "pass",
+              "detail": "Indexability signals are consistent."
+            },
+            {
+              "label": "robots.txt crawl access",
+              "status": "pass",
+              "detail": "Googlebot and Bingbot are allowed to crawl this path."
+            },
+            {
+              "label": "Sitemap membership",
+              "status": "pass",
+              "detail": "Page is listed in the XML sitemap."
+            }
+          ]
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 65,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "JSON-LD structured data",
+              "status": "pass",
+              "detail": "3 JSON-LD blocks found."
+            },
+            {
+              "label": "JSON-LD validity",
+              "status": "pass",
+              "detail": "All 3 blocks parse correctly."
+            },
+            {
+              "label": "Business / LegalService schema",
+              "status": "pass",
+              "detail": "Business entity structured data found."
+            },
+            {
+              "label": "Business schema fields",
+              "status": "warn",
+              "detail": "Missing field: address.",
+              "fix": "Add the missing JSON-LD field: address."
+            },
+            {
+              "label": "FAQPage schema",
+              "status": "warn",
+              "detail": "Not found. FAQ schema packages common questions for search and AI answer engines.",
+              "fix": "Add FAQPage structured data wrapping your most common client questions and answers."
+            },
+            {
+              "label": "Review / Rating schema",
+              "status": "warn",
+              "detail": "Not found. Review schema can support star ratings in search results.",
+              "fix": "Add AggregateRating or Review schema for your client testimonials."
+            },
+            {
+              "label": "Breadcrumb schema",
+              "status": "pass",
+              "detail": "Present. Helps search engines read site hierarchy."
+            },
+            {
+              "label": "Schema conflicts",
+              "status": "pass",
+              "detail": "No conflicting business entity declarations."
+            }
+          ]
+        },
+        {
+          "name": "AI Visibility",
+          "score": 95,
+          "maxScore": 100,
+          "items": [
+            {
+              "label": "AI search bot access",
+              "status": "pass",
+              "detail": "All major AI search crawlers can access your site."
+            },
+            {
+              "label": "AI training bot control",
+              "status": "warn",
+              "detail": "No training-only crawlers blocked. Your content may be used to train AI models.",
+              "fix": "Add Disallow rules for GPTBot, CCBot, and Bytespider in robots.txt if you want to control AI training use."
+            },
+            {
+              "label": "Entity description",
+              "status": "pass",
+              "detail": "A named business entity is described in structured data for AI to read."
+            },
+            {
+              "label": "Attorney / person schema",
+              "status": "pass",
+              "detail": "Attorney or Person schema present. Supports authorship and expertise signals."
+            },
+            {
+              "label": "Question-format headings",
+              "status": "pass",
+              "detail": "Not required for a contact page. Only 2 question headings. More may help AI systems pull answers from the page, though this is an optimization, not a guarantee."
+            },
+            {
+              "label": "Direct-answer sentences",
+              "status": "pass",
+              "detail": "Content includes clear definitional sentences that may be easier for AI systems to extract as answers."
+            },
+            {
+              "label": "Authoritative citations",
+              "status": "pass",
+              "detail": "Not required for a contact page. No outbound links to authoritative legal sources."
+            },
+            {
+              "label": "Author / reviewer signals",
+              "status": "pass",
+              "detail": "Author or reviewer attribution found. Supports source credibility for AI."
+            },
+            {
+              "label": "llms.txt file",
+              "status": "pass",
+              "detail": "Present. Provides AI-friendly content guidance, a small positive signal."
+            },
+            {
+              "label": "Semantic HTML structure",
+              "status": "pass",
+              "detail": "6 semantic elements found. Helps AI parse page structure."
+            }
+          ]
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Phone number visible",
+              "status": "pass",
+              "detail": "A phone number is visible on the page."
+            },
+            {
+              "label": "Contact form / direct contact",
+              "status": "pass",
+              "detail": "A contact form or direct email path is present."
+            },
+            {
+              "label": "Consultation call to action",
+              "status": "pass",
+              "detail": "A consultation or contact call to action is present."
+            },
+            {
+              "label": "Address / NAP",
+              "status": "pass",
+              "detail": "A street address is visible."
+            },
+            {
+              "label": "Trust signals",
+              "status": "warn",
+              "detail": "Only 1 of 5 trust signal types found. Trust cues lift intake conversion.",
+              "fix": "Surface testimonials, reviews, notable results, awards, and bar credentials where visitors can see them."
+            },
+            {
+              "label": "Practice-area intent",
+              "status": "pass",
+              "detail": "Content clearly signals legal practice areas."
+            },
+            {
+              "label": "Policy / disclaimer pages",
+              "status": "pass",
+              "detail": "Privacy, terms, or disclaimer links are present."
+            }
+          ]
+        },
+        {
+          "name": "Local SEO",
+          "score": 50,
+          "maxScore": 50,
+          "items": [
+            {
+              "label": "Phone number (NAP)",
+              "status": "pass",
+              "detail": "Phone number found on page."
+            },
+            {
+              "label": "Street address (NAP)",
+              "status": "pass",
+              "detail": "Physical address found on page."
+            },
+            {
+              "label": "Google Maps embed",
+              "status": "pass",
+              "detail": "Maps integration found."
+            },
+            {
+              "label": "NAP in structured data",
+              "status": "pass",
+              "detail": "Contact info found in JSON-LD."
+            },
+            {
+              "label": "Google Business Profile link",
+              "status": "pass",
+              "detail": "GBP link found. Cross-linking strengthens local authority."
+            }
+          ]
+        },
+        {
+          "name": "Technical & Security",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "HTTPS",
+              "status": "pass",
+              "detail": "Site loads over HTTPS."
+            },
+            {
+              "label": "Mixed content",
+              "status": "pass",
+              "detail": "No insecure HTTP resources detected."
+            },
+            {
+              "label": "HSTS header",
+              "status": "pass",
+              "detail": "Present with max-age of at least one year."
+            },
+            {
+              "label": "X-Content-Type-Options",
+              "status": "pass",
+              "detail": "Set to nosniff."
+            },
+            {
+              "label": "Content-Security-Policy",
+              "status": "warn",
+              "detail": "Content-Security-Policy-Report-Only is present (report-only mode): violations are logged but nothing is blocked yet. This is implementation in progress, not a missing control.",
+              "fix": "Review the report-only violation reports, then promote the policy to an enforced Content-Security-Policy header once it is clean."
+            },
+            {
+              "label": "Viewport meta tag",
+              "status": "pass",
+              "detail": "Present. Required for mobile rendering."
+            },
+            {
+              "label": "Compression",
+              "status": "pass",
+              "detail": "BR compression active."
+            }
+          ]
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30,
+          "items": [
+            {
+              "label": "Server-rendered content",
+              "status": "pass",
+              "detail": "Server HTML contains enough visible content for crawler analysis (483 words)."
+            },
+            {
+              "label": "JavaScript app-shell dependency",
+              "status": "pass",
+              "detail": "No thin app-shell pattern detected."
+            },
+            {
+              "label": "Noscript fallback",
+              "status": "pass",
+              "detail": "No noscript fallback needed for the detected server-rendered content level."
+            }
+          ]
+        },
+        {
+          "name": "Performance",
+          "score": 35,
+          "maxScore": 40,
+          "items": [
+            {
+              "label": "Time to first byte",
+              "status": "pass",
+              "detail": "Fast (265ms, single-sample measurement)."
+            },
+            {
+              "label": "HTML document size",
+              "status": "pass",
+              "detail": "44 KB."
+            },
+            {
+              "label": "Render-blocking resources",
+              "status": "warn",
+              "detail": "3 render-blocking resources in <head>.",
+              "fix": "Add async or defer to scripts. Use media=\"print\" for non-critical stylesheets."
+            },
+            {
+              "label": "Third-party scripts",
+              "status": "pass",
+              "detail": "0 external script domains."
+            }
+          ]
+        },
+        {
+          "name": "Links & Content",
+          "score": 60,
+          "maxScore": 60,
+          "items": [
+            {
+              "label": "Word count",
+              "status": "pass",
+              "detail": "483 words."
+            },
+            {
+              "label": "Heading hierarchy",
+              "status": "pass",
+              "detail": "Heading levels follow a proper sequence."
+            },
+            {
+              "label": "Internal links",
+              "status": "pass",
+              "detail": "21 internal links found."
+            },
+            {
+              "label": "Content-to-HTML ratio",
+              "status": "pass",
+              "detail": "7% text content, but the page already has 483 words of substantive copy; a low ratio here reflects markup weight, not thin content."
+            },
+            {
+              "label": "Anchor text quality",
+              "status": "pass",
+              "detail": "Links use descriptive text."
+            },
+            {
+              "label": "External links",
+              "status": "pass",
+              "detail": "6 outbound links found."
+            }
+          ]
+        }
+      ],
+      "failCount": 0,
+      "warnCount": 9,
+      "httpStatus": 200,
+      "indexable": true,
+      "indexability": {
+        "httpStatus": 200,
+        "redirected": false,
+        "redirectHops": 0,
+        "canonical": "https://drglaw.ca/contact",
+        "canonicalSelf": true,
+        "canonicalSameOrigin": true,
+        "metaNoindex": false,
+        "metaNofollow": false,
+        "headerNoindex": false,
+        "headerNofollow": false,
+        "indexable": true,
+        "inSitemap": true,
+        "mixedSignals": false
+      },
+      "schema": {
+        "blocks": 3,
+        "invalidBlocks": 0,
+        "types": [
+          "legalservice",
+          "openinghoursspecification",
+          "contactpoint",
+          "educationaloccupationalcredential",
+          "administrativearea",
+          "person",
+          "educationalorganization",
+          "breadcrumblist",
+          "listitem"
+        ],
+        "hasOrganization": false,
+        "hasLocalBusiness": false,
+        "hasLegalService": true,
+        "hasAttorney": false,
+        "hasPerson": true,
+        "hasBreadcrumb": true,
+        "hasFaq": false,
+        "hasWebsite": false,
+        "hasReview": false,
+        "fields": {
+          "name": true,
+          "url": true,
+          "telephone": true,
+          "address": false,
+          "areaServed": true,
+          "sameAs": true,
+          "priceRange": false,
+          "openingHours": true
+        },
+        "conflictingEntity": false
+      },
+      "lawFirm": {
+        "phoneVisible": true,
+        "contactFormPresent": true,
+        "addressVisible": true,
+        "consultationCta": true,
+        "policyPagePresent": true,
+        "practiceAreaIntent": true,
+        "serviceAreaLikely": false,
+        "trust": {
+          "testimonials": false,
+          "reviews": false,
+          "caseResults": false,
+          "awards": false,
+          "credentials": true
+        }
+      },
+      "wordCount": 483,
+      "rendering": {
+        "risk": "low",
+        "wordCount": 483,
+        "scriptCount": 29,
+        "externalScriptCount": 12,
+        "appShellLikely": false,
+        "emptyAppRoot": false,
+        "hasNoscriptFallback": false,
+        "evidence": [
+          "483 words in server HTML",
+          "12 external scripts"
+        ]
+      },
+      "pageAudit": {
+        "metaDescription": "Send a matter to Damaris Regina Guimaraes at DRG Law Professional Corporation. Damaris reviews every intake herself and replies with the next step when the matter fits the firm.",
+        "h1s": [
+          "Send the question before the decision hardens."
+        ],
+        "h2s": [
+          "What is the legal problem you need help with?",
+          "Choose the right channel.",
+          "What happens after your message arrives."
+        ],
+        "imageCount": 0,
+        "imagesMissingAlt": 0,
+        "internalLinksOut": 23,
+        "ctaEvidence": [],
+        "phoneEvidence": [
+          "647-584-0998",
+          "647-584-0998",
+          "647-584-0998"
+        ]
+      },
+      "keyWarnings": [],
+      "wpDefault": false
+    },
+    {
+      "url": "https://drglaw.ca/pt/contact",
+      "title": "Contato | DRG Law",
+      "metaDescription": "Envie um caso para Damaris Regina Guimaraes na DRG Law Professional Corporation. Damaris revisa cada solicitação pessoalmente e responde com o próximo passo quando a questão está dentro da área de atuação da DRG Law.",
+      "pageType": "contact",
+      "pageScore": 93,
+      "pageGrade": "A",
+      "aiVisibilityScore": 95,
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 60,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Page title",
+              "status": "warn",
+              "detail": "Too short (17 chars). As a guideline, 50-60 characters gives search engines more to work with; this is not a hard limit.",
+              "fix": "Expand the title to include your main keyword and a brief value proposition."
+            },
+            {
+              "label": "Meta description",
+              "status": "warn",
+              "detail": "Long (216 chars). May be truncated in search results, since Google's snippet length is pixel-width based rather than a fixed character count; this is a recommendation, not a hard limit.",
+              "fix": "Consider trimming to under 160 characters so more of the description shows in search results."
+            },
+            {
+              "label": "H1 heading",
+              "status": "pass",
+              "detail": "Single H1 present."
+            },
+            {
+              "label": "H2 subheadings",
+              "status": "pass",
+              "detail": "3 H2 tags found."
+            },
+            {
+              "label": "Open Graph tags",
+              "status": "pass",
+              "detail": "Title, description, and image all present."
+            },
+            {
+              "label": "Image alt text",
+              "status": "pass",
+              "detail": "No images found to check."
+            },
+            {
+              "label": "HTML lang attribute",
+              "status": "pass",
+              "detail": "Set to \"pt-BR\". Helps search engines serve the right audience."
+            }
+          ]
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "HTTP status",
+              "status": "pass",
+              "detail": "Returned HTTP 200."
+            },
+            {
+              "label": "Redirect chain",
+              "status": "pass",
+              "detail": "Served directly with no redirect."
+            },
+            {
+              "label": "Indexable",
+              "status": "pass",
+              "detail": "No noindex directive. Page is eligible to be indexed."
+            },
+            {
+              "label": "Followable links",
+              "status": "pass",
+              "detail": "Links on this page are followable."
+            },
+            {
+              "label": "Canonical tag",
+              "status": "pass",
+              "detail": "Self-referencing canonical present."
+            },
+            {
+              "label": "Mixed indexability signals",
+              "status": "pass",
+              "detail": "Indexability signals are consistent."
+            },
+            {
+              "label": "robots.txt crawl access",
+              "status": "pass",
+              "detail": "Googlebot and Bingbot are allowed to crawl this path."
+            },
+            {
+              "label": "Sitemap membership",
+              "status": "pass",
+              "detail": "Page is listed in the XML sitemap."
+            }
+          ]
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 65,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "JSON-LD structured data",
+              "status": "pass",
+              "detail": "3 JSON-LD blocks found."
+            },
+            {
+              "label": "JSON-LD validity",
+              "status": "pass",
+              "detail": "All 3 blocks parse correctly."
+            },
+            {
+              "label": "Business / LegalService schema",
+              "status": "pass",
+              "detail": "Business entity structured data found."
+            },
+            {
+              "label": "Business schema fields",
+              "status": "warn",
+              "detail": "Missing field: address.",
+              "fix": "Add the missing JSON-LD field: address."
+            },
+            {
+              "label": "FAQPage schema",
+              "status": "warn",
+              "detail": "Not found. FAQ schema packages common questions for search and AI answer engines.",
+              "fix": "Add FAQPage structured data wrapping your most common client questions and answers."
+            },
+            {
+              "label": "Review / Rating schema",
+              "status": "warn",
+              "detail": "Not found. Review schema can support star ratings in search results.",
+              "fix": "Add AggregateRating or Review schema for your client testimonials."
+            },
+            {
+              "label": "Breadcrumb schema",
+              "status": "pass",
+              "detail": "Present. Helps search engines read site hierarchy."
+            },
+            {
+              "label": "Schema conflicts",
+              "status": "pass",
+              "detail": "No conflicting business entity declarations."
+            }
+          ]
+        },
+        {
+          "name": "AI Visibility",
+          "score": 95,
+          "maxScore": 100,
+          "items": [
+            {
+              "label": "AI search bot access",
+              "status": "pass",
+              "detail": "All major AI search crawlers can access your site."
+            },
+            {
+              "label": "AI training bot control",
+              "status": "warn",
+              "detail": "No training-only crawlers blocked. Your content may be used to train AI models.",
+              "fix": "Add Disallow rules for GPTBot, CCBot, and Bytespider in robots.txt if you want to control AI training use."
+            },
+            {
+              "label": "Entity description",
+              "status": "pass",
+              "detail": "A named business entity is described in structured data for AI to read."
+            },
+            {
+              "label": "Attorney / person schema",
+              "status": "pass",
+              "detail": "Attorney or Person schema present. Supports authorship and expertise signals."
+            },
+            {
+              "label": "Question-format headings",
+              "status": "pass",
+              "detail": "Not required for a contact page. Only 1 question heading. More may help AI systems pull answers from the page, though this is an optimization, not a guarantee."
+            },
+            {
+              "label": "Direct-answer sentences",
+              "status": "pass",
+              "detail": "Not required for a contact page. No direct-answer patterns detected. Explicit definitional sentences are one optional signal that may help AI systems extract answers, not a requirement."
+            },
+            {
+              "label": "Authoritative citations",
+              "status": "pass",
+              "detail": "Not required for a contact page. No outbound links to authoritative legal sources."
+            },
+            {
+              "label": "Author / reviewer signals",
+              "status": "pass",
+              "detail": "Author or reviewer attribution found. Supports source credibility for AI."
+            },
+            {
+              "label": "llms.txt file",
+              "status": "pass",
+              "detail": "Present. Provides AI-friendly content guidance, a small positive signal."
+            },
+            {
+              "label": "Semantic HTML structure",
+              "status": "pass",
+              "detail": "6 semantic elements found. Helps AI parse page structure."
+            }
+          ]
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Phone number visible",
+              "status": "pass",
+              "detail": "A phone number is visible on the page."
+            },
+            {
+              "label": "Contact form / direct contact",
+              "status": "pass",
+              "detail": "A contact form or direct email path is present."
+            },
+            {
+              "label": "Consultation call to action",
+              "status": "pass",
+              "detail": "A consultation or contact call to action is present."
+            },
+            {
+              "label": "Address / NAP",
+              "status": "pass",
+              "detail": "A street address is visible."
+            },
+            {
+              "label": "Trust signals",
+              "status": "warn",
+              "detail": "Only 1 of 5 trust signal types found. Trust cues lift intake conversion.",
+              "fix": "Surface testimonials, reviews, notable results, awards, and bar credentials where visitors can see them."
+            },
+            {
+              "label": "Practice-area intent",
+              "status": "pass",
+              "detail": "Not required for a contact page. Content does not clearly state practice areas."
+            },
+            {
+              "label": "Policy / disclaimer pages",
+              "status": "pass",
+              "detail": "Privacy, terms, or disclaimer links are present."
+            }
+          ]
+        },
+        {
+          "name": "Local SEO",
+          "score": 50,
+          "maxScore": 50,
+          "items": [
+            {
+              "label": "Phone number (NAP)",
+              "status": "pass",
+              "detail": "Phone number found on page."
+            },
+            {
+              "label": "Street address (NAP)",
+              "status": "pass",
+              "detail": "Physical address found on page."
+            },
+            {
+              "label": "Google Maps embed",
+              "status": "pass",
+              "detail": "Maps integration found."
+            },
+            {
+              "label": "NAP in structured data",
+              "status": "pass",
+              "detail": "Contact info found in JSON-LD."
+            },
+            {
+              "label": "Google Business Profile link",
+              "status": "pass",
+              "detail": "GBP link found. Cross-linking strengthens local authority."
+            }
+          ]
+        },
+        {
+          "name": "Technical & Security",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "HTTPS",
+              "status": "pass",
+              "detail": "Site loads over HTTPS."
+            },
+            {
+              "label": "Mixed content",
+              "status": "pass",
+              "detail": "No insecure HTTP resources detected."
+            },
+            {
+              "label": "HSTS header",
+              "status": "pass",
+              "detail": "Present with max-age of at least one year."
+            },
+            {
+              "label": "X-Content-Type-Options",
+              "status": "pass",
+              "detail": "Set to nosniff."
+            },
+            {
+              "label": "Content-Security-Policy",
+              "status": "warn",
+              "detail": "Content-Security-Policy-Report-Only is present (report-only mode): violations are logged but nothing is blocked yet. This is implementation in progress, not a missing control.",
+              "fix": "Review the report-only violation reports, then promote the policy to an enforced Content-Security-Policy header once it is clean."
+            },
+            {
+              "label": "Viewport meta tag",
+              "status": "pass",
+              "detail": "Present. Required for mobile rendering."
+            },
+            {
+              "label": "Compression",
+              "status": "pass",
+              "detail": "BR compression active."
+            }
+          ]
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30,
+          "items": [
+            {
+              "label": "Server-rendered content",
+              "status": "pass",
+              "detail": "Server HTML contains enough visible content for crawler analysis (514 words)."
+            },
+            {
+              "label": "JavaScript app-shell dependency",
+              "status": "pass",
+              "detail": "No thin app-shell pattern detected."
+            },
+            {
+              "label": "Noscript fallback",
+              "status": "pass",
+              "detail": "No noscript fallback needed for the detected server-rendered content level."
+            }
+          ]
+        },
+        {
+          "name": "Performance",
+          "score": 35,
+          "maxScore": 40,
+          "items": [
+            {
+              "label": "Time to first byte",
+              "status": "pass",
+              "detail": "Fast (188ms, single-sample measurement)."
+            },
+            {
+              "label": "HTML document size",
+              "status": "pass",
+              "detail": "47 KB."
+            },
+            {
+              "label": "Render-blocking resources",
+              "status": "warn",
+              "detail": "3 render-blocking resources in <head>.",
+              "fix": "Add async or defer to scripts. Use media=\"print\" for non-critical stylesheets."
+            },
+            {
+              "label": "Third-party scripts",
+              "status": "pass",
+              "detail": "0 external script domains."
+            }
+          ]
+        },
+        {
+          "name": "Links & Content",
+          "score": 60,
+          "maxScore": 60,
+          "items": [
+            {
+              "label": "Word count",
+              "status": "pass",
+              "detail": "514 words."
+            },
+            {
+              "label": "Heading hierarchy",
+              "status": "pass",
+              "detail": "Heading levels follow a proper sequence."
+            },
+            {
+              "label": "Internal links",
+              "status": "pass",
+              "detail": "21 internal links found."
+            },
+            {
+              "label": "Content-to-HTML ratio",
+              "status": "pass",
+              "detail": "7% text content, but the page already has 514 words of substantive copy; a low ratio here reflects markup weight, not thin content."
+            },
+            {
+              "label": "Anchor text quality",
+              "status": "pass",
+              "detail": "Links use descriptive text."
+            },
+            {
+              "label": "External links",
+              "status": "pass",
+              "detail": "6 outbound links found."
+            }
+          ]
+        }
+      ],
+      "failCount": 0,
+      "warnCount": 9,
+      "httpStatus": 200,
+      "indexable": true,
+      "indexability": {
+        "httpStatus": 200,
+        "redirected": false,
+        "redirectHops": 0,
+        "canonical": "https://drglaw.ca/pt/contact",
+        "canonicalSelf": true,
+        "canonicalSameOrigin": true,
+        "metaNoindex": false,
+        "metaNofollow": false,
+        "headerNoindex": false,
+        "headerNofollow": false,
+        "indexable": true,
+        "inSitemap": true,
+        "mixedSignals": false
+      },
+      "schema": {
+        "blocks": 3,
+        "invalidBlocks": 0,
+        "types": [
+          "legalservice",
+          "openinghoursspecification",
+          "contactpoint",
+          "educationaloccupationalcredential",
+          "administrativearea",
+          "person",
+          "educationalorganization",
+          "breadcrumblist",
+          "listitem"
+        ],
+        "hasOrganization": false,
+        "hasLocalBusiness": false,
+        "hasLegalService": true,
+        "hasAttorney": false,
+        "hasPerson": true,
+        "hasBreadcrumb": true,
+        "hasFaq": false,
+        "hasWebsite": false,
+        "hasReview": false,
+        "fields": {
+          "name": true,
+          "url": true,
+          "telephone": true,
+          "address": false,
+          "areaServed": true,
+          "sameAs": true,
+          "priceRange": false,
+          "openingHours": true
+        },
+        "conflictingEntity": false
+      },
+      "lawFirm": {
+        "phoneVisible": true,
+        "contactFormPresent": true,
+        "addressVisible": true,
+        "consultationCta": true,
+        "policyPagePresent": true,
+        "practiceAreaIntent": false,
+        "serviceAreaLikely": false,
+        "trust": {
+          "testimonials": false,
+          "reviews": false,
+          "caseResults": false,
+          "awards": false,
+          "credentials": true
+        }
+      },
+      "wordCount": 514,
+      "rendering": {
+        "risk": "low",
+        "wordCount": 514,
+        "scriptCount": 30,
+        "externalScriptCount": 12,
+        "appShellLikely": false,
+        "emptyAppRoot": false,
+        "hasNoscriptFallback": false,
+        "evidence": [
+          "514 words in server HTML",
+          "12 external scripts"
+        ]
+      },
+      "pageAudit": {
+        "metaDescription": "Envie um caso para Damaris Regina Guimaraes na DRG Law Professional Corporation. Damaris revisa cada solicitação pessoalmente e responde com o próximo passo quando a questão está dentro da área de atuação da DRG Law.",
+        "h1s": [
+          "Envie a questão antes de a decisão se tornar definitiva."
+        ],
+        "h2s": [
+          "Com qual problema jurídico você precisa de ajuda?",
+          "Escolha o canal certo.",
+          "O que acontece depois que sua mensagem chega."
+        ],
+        "imageCount": 0,
+        "imagesMissingAlt": 0,
+        "internalLinksOut": 23,
+        "ctaEvidence": [],
+        "phoneEvidence": [
+          "647-584-0998",
+          "647-584-0998",
+          "647-584-0998"
+        ]
+      },
+      "keyWarnings": [],
+      "wpDefault": false
+    },
+    {
+      "url": "https://drglaw.ca/corporate",
+      "title": "Business Law for Ontario Companies | DRG Law",
+      "metaDescription": "DRG Law handles incorporation, shareholders&#x27; agreements, company purchases and sales, commercial leases, and company records for Ontario business owners.",
+      "pageType": "practice",
+      "pageScore": 96,
+      "pageGrade": "A",
+      "aiVisibilityScore": 90,
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 70,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Page title",
+              "status": "pass",
+              "detail": "Good length (44 chars)."
+            },
+            {
+              "label": "Meta description",
+              "status": "pass",
+              "detail": "Good length (153 chars)."
+            },
+            {
+              "label": "H1 heading",
+              "status": "pass",
+              "detail": "Single H1 present."
+            },
+            {
+              "label": "H2 subheadings",
+              "status": "pass",
+              "detail": "8 H2 tags found."
+            },
+            {
+              "label": "Open Graph tags",
+              "status": "pass",
+              "detail": "Title, description, and image all present."
+            },
+            {
+              "label": "Image alt text",
+              "status": "pass",
+              "detail": "All 1 images have alt text or a valid empty alt."
+            },
+            {
+              "label": "HTML lang attribute",
+              "status": "pass",
+              "detail": "Set to \"en\". Helps search engines serve the right audience."
+            }
+          ]
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "HTTP status",
+              "status": "pass",
+              "detail": "Returned HTTP 200."
+            },
+            {
+              "label": "Redirect chain",
+              "status": "pass",
+              "detail": "Served directly with no redirect."
+            },
+            {
+              "label": "Indexable",
+              "status": "pass",
+              "detail": "No noindex directive. Page is eligible to be indexed."
+            },
+            {
+              "label": "Followable links",
+              "status": "pass",
+              "detail": "Links on this page are followable."
+            },
+            {
+              "label": "Canonical tag",
+              "status": "pass",
+              "detail": "Self-referencing canonical present."
+            },
+            {
+              "label": "Mixed indexability signals",
+              "status": "pass",
+              "detail": "Indexability signals are consistent."
+            },
+            {
+              "label": "robots.txt crawl access",
+              "status": "pass",
+              "detail": "Googlebot and Bingbot are allowed to crawl this path."
+            },
+            {
+              "label": "Sitemap membership",
+              "status": "pass",
+              "detail": "Page is listed in the XML sitemap."
+            }
+          ]
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 70,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "JSON-LD structured data",
+              "status": "pass",
+              "detail": "5 JSON-LD blocks found."
+            },
+            {
+              "label": "JSON-LD validity",
+              "status": "pass",
+              "detail": "All 5 blocks parse correctly."
+            },
+            {
+              "label": "Business / LegalService schema",
+              "status": "pass",
+              "detail": "Business entity structured data found."
+            },
+            {
+              "label": "Business schema fields",
+              "status": "warn",
+              "detail": "Missing field: address.",
+              "fix": "Add the missing JSON-LD field: address."
+            },
+            {
+              "label": "FAQPage schema",
+              "status": "pass",
+              "detail": "Present. Supports FAQ readiness for search and AI answers."
+            },
+            {
+              "label": "Review / Rating schema",
+              "status": "warn",
+              "detail": "Not found. Review schema can support star ratings in search results.",
+              "fix": "Add AggregateRating or Review schema for your client testimonials."
+            },
+            {
+              "label": "Breadcrumb schema",
+              "status": "pass",
+              "detail": "Present. Helps search engines read site hierarchy."
+            },
+            {
+              "label": "Schema conflicts",
+              "status": "pass",
+              "detail": "No conflicting business entity declarations."
+            }
+          ]
+        },
+        {
+          "name": "AI Visibility",
+          "score": 90,
+          "maxScore": 100,
+          "items": [
+            {
+              "label": "AI search bot access",
+              "status": "pass",
+              "detail": "All major AI search crawlers can access your site."
+            },
+            {
+              "label": "AI training bot control",
+              "status": "warn",
+              "detail": "No training-only crawlers blocked. Your content may be used to train AI models.",
+              "fix": "Add Disallow rules for GPTBot, CCBot, and Bytespider in robots.txt if you want to control AI training use."
+            },
+            {
+              "label": "Entity description",
+              "status": "pass",
+              "detail": "A named business entity is described in structured data for AI to read."
+            },
+            {
+              "label": "Attorney / person schema",
+              "status": "pass",
+              "detail": "Attorney or Person schema present. Supports authorship and expertise signals."
+            },
+            {
+              "label": "Question-format headings",
+              "status": "warn",
+              "detail": "Only 1 question heading. More may help AI systems pull answers from the page, though this is an optimization, not a guarantee.",
+              "fix": "Reframe section headings as questions people actually ask, like \"What happens if...\" or \"How long does...\""
+            },
+            {
+              "label": "Direct-answer sentences",
+              "status": "pass",
+              "detail": "Content includes clear definitional sentences that may be easier for AI systems to extract as answers."
+            },
+            {
+              "label": "Authoritative citations",
+              "status": "pass",
+              "detail": "1 link to authoritative sources. Supports credibility for AI sourcing."
+            },
+            {
+              "label": "Author / reviewer signals",
+              "status": "pass",
+              "detail": "Author or reviewer attribution found. Supports source credibility for AI."
+            },
+            {
+              "label": "llms.txt file",
+              "status": "pass",
+              "detail": "Present. Provides AI-friendly content guidance, a small positive signal."
+            },
+            {
+              "label": "Semantic HTML structure",
+              "status": "pass",
+              "detail": "6 semantic elements found. Helps AI parse page structure."
+            }
+          ]
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Phone number visible",
+              "status": "pass",
+              "detail": "A phone number is visible on the page."
+            },
+            {
+              "label": "Contact form / direct contact",
+              "status": "pass",
+              "detail": "A contact form or direct email path is present."
+            },
+            {
+              "label": "Consultation call to action",
+              "status": "pass",
+              "detail": "A consultation or contact call to action is present."
+            },
+            {
+              "label": "Address / NAP",
+              "status": "pass",
+              "detail": "A street address is visible."
+            },
+            {
+              "label": "Trust signals",
+              "status": "warn",
+              "detail": "Only 1 of 5 trust signal types found. Trust cues lift intake conversion.",
+              "fix": "Surface testimonials, reviews, notable results, awards, and bar credentials where visitors can see them."
+            },
+            {
+              "label": "Practice-area intent",
+              "status": "pass",
+              "detail": "Content clearly signals legal practice areas."
+            },
+            {
+              "label": "Policy / disclaimer pages",
+              "status": "pass",
+              "detail": "Privacy, terms, or disclaimer links are present."
+            }
+          ]
+        },
+        {
+          "name": "Local SEO",
+          "score": 50,
+          "maxScore": 50,
+          "items": [
+            {
+              "label": "Phone number (NAP)",
+              "status": "pass",
+              "detail": "Phone number found on page."
+            },
+            {
+              "label": "Street address (NAP)",
+              "status": "pass",
+              "detail": "Physical address found on page."
+            },
+            {
+              "label": "Google Maps embed",
+              "status": "pass",
+              "detail": "Maps integration found."
+            },
+            {
+              "label": "NAP in structured data",
+              "status": "pass",
+              "detail": "Contact info found in JSON-LD."
+            },
+            {
+              "label": "Google Business Profile link",
+              "status": "pass",
+              "detail": "GBP link found. Cross-linking strengthens local authority."
+            }
+          ]
+        },
+        {
+          "name": "Technical & Security",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "HTTPS",
+              "status": "pass",
+              "detail": "Site loads over HTTPS."
+            },
+            {
+              "label": "Mixed content",
+              "status": "pass",
+              "detail": "No insecure HTTP resources detected."
+            },
+            {
+              "label": "HSTS header",
+              "status": "pass",
+              "detail": "Present with max-age of at least one year."
+            },
+            {
+              "label": "X-Content-Type-Options",
+              "status": "pass",
+              "detail": "Set to nosniff."
+            },
+            {
+              "label": "Content-Security-Policy",
+              "status": "warn",
+              "detail": "Content-Security-Policy-Report-Only is present (report-only mode): violations are logged but nothing is blocked yet. This is implementation in progress, not a missing control.",
+              "fix": "Review the report-only violation reports, then promote the policy to an enforced Content-Security-Policy header once it is clean."
+            },
+            {
+              "label": "Viewport meta tag",
+              "status": "pass",
+              "detail": "Present. Required for mobile rendering."
+            },
+            {
+              "label": "Compression",
+              "status": "pass",
+              "detail": "BR compression active."
+            }
+          ]
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30,
+          "items": [
+            {
+              "label": "Server-rendered content",
+              "status": "pass",
+              "detail": "Server HTML contains enough visible content for crawler analysis (1505 words)."
+            },
+            {
+              "label": "JavaScript app-shell dependency",
+              "status": "pass",
+              "detail": "No thin app-shell pattern detected."
+            },
+            {
+              "label": "Noscript fallback",
+              "status": "pass",
+              "detail": "No noscript fallback needed for the detected server-rendered content level."
+            }
+          ]
+        },
+        {
+          "name": "Performance",
+          "score": 35,
+          "maxScore": 40,
+          "items": [
+            {
+              "label": "Time to first byte",
+              "status": "pass",
+              "detail": "Fast (339ms, single-sample measurement)."
+            },
+            {
+              "label": "HTML document size",
+              "status": "pass",
+              "detail": "82 KB."
+            },
+            {
+              "label": "Render-blocking resources",
+              "status": "warn",
+              "detail": "3 render-blocking resources in <head>.",
+              "fix": "Add async or defer to scripts. Use media=\"print\" for non-critical stylesheets."
+            },
+            {
+              "label": "Third-party scripts",
+              "status": "pass",
+              "detail": "0 external script domains."
+            }
+          ]
+        },
+        {
+          "name": "Links & Content",
+          "score": 60,
+          "maxScore": 60,
+          "items": [
+            {
+              "label": "Word count",
+              "status": "pass",
+              "detail": "1,505 words."
+            },
+            {
+              "label": "Heading hierarchy",
+              "status": "pass",
+              "detail": "Heading levels follow a proper sequence."
+            },
+            {
+              "label": "Internal links",
+              "status": "pass",
+              "detail": "26 internal links found."
+            },
+            {
+              "label": "Content-to-HTML ratio",
+              "status": "pass",
+              "detail": "11% text content, but the page already has 1,505 words of substantive copy; a low ratio here reflects markup weight, not thin content."
+            },
+            {
+              "label": "Anchor text quality",
+              "status": "pass",
+              "detail": "Links use descriptive text."
+            },
+            {
+              "label": "External links",
+              "status": "pass",
+              "detail": "8 outbound links found."
+            }
+          ]
+        }
+      ],
+      "failCount": 0,
+      "warnCount": 7,
+      "httpStatus": 200,
+      "indexable": true,
+      "indexability": {
+        "httpStatus": 200,
+        "redirected": false,
+        "redirectHops": 0,
+        "canonical": "https://drglaw.ca/corporate",
+        "canonicalSelf": true,
+        "canonicalSameOrigin": true,
+        "metaNoindex": false,
+        "metaNofollow": false,
+        "headerNoindex": false,
+        "headerNofollow": false,
+        "indexable": true,
+        "inSitemap": true,
+        "mixedSignals": false
+      },
+      "schema": {
+        "blocks": 5,
+        "invalidBlocks": 0,
+        "types": [
+          "legalservice",
+          "openinghoursspecification",
+          "contactpoint",
+          "educationaloccupationalcredential",
+          "administrativearea",
+          "person",
+          "educationalorganization",
+          "breadcrumblist",
+          "listitem",
+          "faqpage",
+          "question",
+          "answer",
+          "service"
+        ],
+        "hasOrganization": false,
+        "hasLocalBusiness": false,
+        "hasLegalService": true,
+        "hasAttorney": false,
+        "hasPerson": true,
+        "hasBreadcrumb": true,
+        "hasFaq": true,
+        "hasWebsite": false,
+        "hasReview": false,
+        "fields": {
+          "name": true,
+          "url": true,
+          "telephone": true,
+          "address": false,
+          "areaServed": true,
+          "sameAs": true,
+          "priceRange": false,
+          "openingHours": true
+        },
+        "conflictingEntity": false
+      },
+      "lawFirm": {
+        "phoneVisible": true,
+        "contactFormPresent": true,
+        "addressVisible": true,
+        "consultationCta": true,
+        "policyPagePresent": true,
+        "practiceAreaIntent": true,
+        "serviceAreaLikely": false,
+        "trust": {
+          "testimonials": false,
+          "reviews": false,
+          "caseResults": false,
+          "awards": false,
+          "credentials": true
+        }
+      },
+      "wordCount": 1505,
+      "rendering": {
+        "risk": "low",
+        "wordCount": 1505,
+        "scriptCount": 40,
+        "externalScriptCount": 12,
+        "appShellLikely": false,
+        "emptyAppRoot": false,
+        "hasNoscriptFallback": false,
+        "evidence": [
+          "1505 words in server HTML",
+          "12 external scripts"
+        ]
+      },
+      "pageAudit": {
+        "metaDescription": "DRG Law handles incorporation, shareholders&#x27; agreements, company purchases and sales, commercial leases, and company records for Ontario business owners.",
+        "h1s": [
+          "Set the legal structure before the business move."
+        ],
+        "h2s": [
+          "The decisions Ontario owners bring to DRG Law for business law",
+          "Business Setup Check",
+          "How DRG Law writes the business decision",
+          "Clients who agreed to be named here",
+          "Common questions about business law matters",
+          "The law behind a business law matter",
+          "Related decisions on a business law matter",
+          "Send the business law matter here."
+        ],
+        "imageCount": 1,
+        "imagesMissingAlt": 0,
+        "internalLinksOut": 27,
+        "ctaEvidence": [],
+        "phoneEvidence": [
+          "647-584-0998",
+          "647-584-0998",
+          "647-584-0998"
+        ]
+      },
+      "keyWarnings": [],
+      "wpDefault": false
+    },
+    {
+      "url": "https://drglaw.ca/real-estate",
+      "title": "Real Estate Law for Ontario Buyers and Owners | DRG Law",
+      "metaDescription": "DRG Law handles residential purchases, residential sales, refinancing, and new-home interim closings across Ontario, and reviews commercial leases before you sign for the space your business will live in.",
+      "pageType": "practice",
+      "pageScore": 93,
+      "pageGrade": "A",
+      "aiVisibilityScore": 90,
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Page title",
+              "status": "pass",
+              "detail": "Good length (55 chars)."
+            },
+            {
+              "label": "Meta description",
+              "status": "warn",
+              "detail": "Long (204 chars). May be truncated in search results, since Google's snippet length is pixel-width based rather than a fixed character count; this is a recommendation, not a hard limit.",
+              "fix": "Consider trimming to under 160 characters so more of the description shows in search results."
+            },
+            {
+              "label": "H1 heading",
+              "status": "pass",
+              "detail": "Single H1 present."
+            },
+            {
+              "label": "H2 subheadings",
+              "status": "pass",
+              "detail": "8 H2 tags found."
+            },
+            {
+              "label": "Open Graph tags",
+              "status": "pass",
+              "detail": "Title, description, and image all present."
+            },
+            {
+              "label": "Image alt text",
+              "status": "pass",
+              "detail": "All 2 images have alt text or a valid empty alt."
+            },
+            {
+              "label": "HTML lang attribute",
+              "status": "pass",
+              "detail": "Set to \"en\". Helps search engines serve the right audience."
+            }
+          ]
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "HTTP status",
+              "status": "pass",
+              "detail": "Returned HTTP 200."
+            },
+            {
+              "label": "Redirect chain",
+              "status": "pass",
+              "detail": "Served directly with no redirect."
+            },
+            {
+              "label": "Indexable",
+              "status": "pass",
+              "detail": "No noindex directive. Page is eligible to be indexed."
+            },
+            {
+              "label": "Followable links",
+              "status": "pass",
+              "detail": "Links on this page are followable."
+            },
+            {
+              "label": "Canonical tag",
+              "status": "pass",
+              "detail": "Self-referencing canonical present."
+            },
+            {
+              "label": "Mixed indexability signals",
+              "status": "pass",
+              "detail": "Indexability signals are consistent."
+            },
+            {
+              "label": "robots.txt crawl access",
+              "status": "pass",
+              "detail": "Googlebot and Bingbot are allowed to crawl this path."
+            },
+            {
+              "label": "Sitemap membership",
+              "status": "pass",
+              "detail": "Page is listed in the XML sitemap."
+            }
+          ]
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 70,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "JSON-LD structured data",
+              "status": "pass",
+              "detail": "5 JSON-LD blocks found."
+            },
+            {
+              "label": "JSON-LD validity",
+              "status": "pass",
+              "detail": "All 5 blocks parse correctly."
+            },
+            {
+              "label": "Business / LegalService schema",
+              "status": "pass",
+              "detail": "Business entity structured data found."
+            },
+            {
+              "label": "Business schema fields",
+              "status": "warn",
+              "detail": "Missing field: address.",
+              "fix": "Add the missing JSON-LD field: address."
+            },
+            {
+              "label": "FAQPage schema",
+              "status": "pass",
+              "detail": "Present. Supports FAQ readiness for search and AI answers."
+            },
+            {
+              "label": "Review / Rating schema",
+              "status": "warn",
+              "detail": "Not found. Review schema can support star ratings in search results.",
+              "fix": "Add AggregateRating or Review schema for your client testimonials."
+            },
+            {
+              "label": "Breadcrumb schema",
+              "status": "pass",
+              "detail": "Present. Helps search engines read site hierarchy."
+            },
+            {
+              "label": "Schema conflicts",
+              "status": "pass",
+              "detail": "No conflicting business entity declarations."
+            }
+          ]
+        },
+        {
+          "name": "AI Visibility",
+          "score": 90,
+          "maxScore": 100,
+          "items": [
+            {
+              "label": "AI search bot access",
+              "status": "pass",
+              "detail": "All major AI search crawlers can access your site."
+            },
+            {
+              "label": "AI training bot control",
+              "status": "warn",
+              "detail": "No training-only crawlers blocked. Your content may be used to train AI models.",
+              "fix": "Add Disallow rules for GPTBot, CCBot, and Bytespider in robots.txt if you want to control AI training use."
+            },
+            {
+              "label": "Entity description",
+              "status": "pass",
+              "detail": "A named business entity is described in structured data for AI to read."
+            },
+            {
+              "label": "Attorney / person schema",
+              "status": "pass",
+              "detail": "Attorney or Person schema present. Supports authorship and expertise signals."
+            },
+            {
+              "label": "Question-format headings",
+              "status": "warn",
+              "detail": "Only 1 question heading. More may help AI systems pull answers from the page, though this is an optimization, not a guarantee.",
+              "fix": "Reframe section headings as questions people actually ask, like \"What happens if...\" or \"How long does...\""
+            },
+            {
+              "label": "Direct-answer sentences",
+              "status": "pass",
+              "detail": "Content includes clear definitional sentences that may be easier for AI systems to extract as answers."
+            },
+            {
+              "label": "Authoritative citations",
+              "status": "pass",
+              "detail": "2 links to authoritative sources. Supports credibility for AI sourcing."
+            },
+            {
+              "label": "Author / reviewer signals",
+              "status": "pass",
+              "detail": "Author or reviewer attribution found. Supports source credibility for AI."
+            },
+            {
+              "label": "llms.txt file",
+              "status": "pass",
+              "detail": "Present. Provides AI-friendly content guidance, a small positive signal."
+            },
+            {
+              "label": "Semantic HTML structure",
+              "status": "pass",
+              "detail": "6 semantic elements found. Helps AI parse page structure."
+            }
+          ]
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 60,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Phone number visible",
+              "status": "pass",
+              "detail": "A phone number is visible on the page."
+            },
+            {
+              "label": "Contact form / direct contact",
+              "status": "pass",
+              "detail": "A contact form or direct email path is present."
+            },
+            {
+              "label": "Consultation call to action",
+              "status": "pass",
+              "detail": "A consultation or contact call to action is present."
+            },
+            {
+              "label": "Address / NAP",
+              "status": "warn",
+              "detail": "No street address detected. NAP consistency supports local trust and search.",
+              "fix": "Show the firm's full address in the footer and on the contact page."
+            },
+            {
+              "label": "Trust signals",
+              "status": "warn",
+              "detail": "Only 1 of 5 trust signal types found. Trust cues lift intake conversion.",
+              "fix": "Surface testimonials, reviews, notable results, awards, and bar credentials where visitors can see them."
+            },
+            {
+              "label": "Practice-area intent",
+              "status": "pass",
+              "detail": "Content clearly signals legal practice areas."
+            },
+            {
+              "label": "Policy / disclaimer pages",
+              "status": "pass",
+              "detail": "Privacy, terms, or disclaimer links are present."
+            }
+          ]
+        },
+        {
+          "name": "Local SEO",
+          "score": 45,
+          "maxScore": 50,
+          "items": [
+            {
+              "label": "Phone number (NAP)",
+              "status": "pass",
+              "detail": "Phone number found on page."
+            },
+            {
+              "label": "Street address (NAP)",
+              "status": "warn",
+              "detail": "No street address detected. A physical address strengthens local ranking.",
+              "fix": "Add the full street address to the footer or contact page."
+            },
+            {
+              "label": "Google Maps embed",
+              "status": "pass",
+              "detail": "Maps integration found."
+            },
+            {
+              "label": "NAP in structured data",
+              "status": "pass",
+              "detail": "Contact info found in JSON-LD."
+            },
+            {
+              "label": "Google Business Profile link",
+              "status": "pass",
+              "detail": "GBP link found. Cross-linking strengthens local authority."
+            }
+          ]
+        },
+        {
+          "name": "Technical & Security",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "HTTPS",
+              "status": "pass",
+              "detail": "Site loads over HTTPS."
+            },
+            {
+              "label": "Mixed content",
+              "status": "pass",
+              "detail": "No insecure HTTP resources detected."
+            },
+            {
+              "label": "HSTS header",
+              "status": "pass",
+              "detail": "Present with max-age of at least one year."
+            },
+            {
+              "label": "X-Content-Type-Options",
+              "status": "pass",
+              "detail": "Set to nosniff."
+            },
+            {
+              "label": "Content-Security-Policy",
+              "status": "warn",
+              "detail": "Content-Security-Policy-Report-Only is present (report-only mode): violations are logged but nothing is blocked yet. This is implementation in progress, not a missing control.",
+              "fix": "Review the report-only violation reports, then promote the policy to an enforced Content-Security-Policy header once it is clean."
+            },
+            {
+              "label": "Viewport meta tag",
+              "status": "pass",
+              "detail": "Present. Required for mobile rendering."
+            },
+            {
+              "label": "Compression",
+              "status": "pass",
+              "detail": "BR compression active."
+            }
+          ]
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30,
+          "items": [
+            {
+              "label": "Server-rendered content",
+              "status": "pass",
+              "detail": "Server HTML contains enough visible content for crawler analysis (1372 words)."
+            },
+            {
+              "label": "JavaScript app-shell dependency",
+              "status": "pass",
+              "detail": "No thin app-shell pattern detected."
+            },
+            {
+              "label": "Noscript fallback",
+              "status": "pass",
+              "detail": "No noscript fallback needed for the detected server-rendered content level."
+            }
+          ]
+        },
+        {
+          "name": "Performance",
+          "score": 35,
+          "maxScore": 40,
+          "items": [
+            {
+              "label": "Time to first byte",
+              "status": "pass",
+              "detail": "Fast (242ms, single-sample measurement)."
+            },
+            {
+              "label": "HTML document size",
+              "status": "pass",
+              "detail": "80 KB."
+            },
+            {
+              "label": "Render-blocking resources",
+              "status": "warn",
+              "detail": "3 render-blocking resources in <head>.",
+              "fix": "Add async or defer to scripts. Use media=\"print\" for non-critical stylesheets."
+            },
+            {
+              "label": "Third-party scripts",
+              "status": "pass",
+              "detail": "0 external script domains."
+            }
+          ]
+        },
+        {
+          "name": "Links & Content",
+          "score": 60,
+          "maxScore": 60,
+          "items": [
+            {
+              "label": "Word count",
+              "status": "pass",
+              "detail": "1,372 words."
+            },
+            {
+              "label": "Heading hierarchy",
+              "status": "pass",
+              "detail": "Heading levels follow a proper sequence."
+            },
+            {
+              "label": "Internal links",
+              "status": "pass",
+              "detail": "26 internal links found."
+            },
+            {
+              "label": "Content-to-HTML ratio",
+              "status": "pass",
+              "detail": "10% text content, but the page already has 1,372 words of substantive copy; a low ratio here reflects markup weight, not thin content."
+            },
+            {
+              "label": "Anchor text quality",
+              "status": "pass",
+              "detail": "Links use descriptive text."
+            },
+            {
+              "label": "External links",
+              "status": "pass",
+              "detail": "9 outbound links found."
+            }
+          ]
+        }
+      ],
+      "failCount": 0,
+      "warnCount": 10,
+      "httpStatus": 200,
+      "indexable": true,
+      "indexability": {
+        "httpStatus": 200,
+        "redirected": false,
+        "redirectHops": 0,
+        "canonical": "https://drglaw.ca/real-estate",
+        "canonicalSelf": true,
+        "canonicalSameOrigin": true,
+        "metaNoindex": false,
+        "metaNofollow": false,
+        "headerNoindex": false,
+        "headerNofollow": false,
+        "indexable": true,
+        "inSitemap": true,
+        "mixedSignals": false
+      },
+      "schema": {
+        "blocks": 5,
+        "invalidBlocks": 0,
+        "types": [
+          "legalservice",
+          "openinghoursspecification",
+          "contactpoint",
+          "educationaloccupationalcredential",
+          "administrativearea",
+          "person",
+          "educationalorganization",
+          "breadcrumblist",
+          "listitem",
+          "faqpage",
+          "question",
+          "answer",
+          "service"
+        ],
+        "hasOrganization": false,
+        "hasLocalBusiness": false,
+        "hasLegalService": true,
+        "hasAttorney": false,
+        "hasPerson": true,
+        "hasBreadcrumb": true,
+        "hasFaq": true,
+        "hasWebsite": false,
+        "hasReview": false,
+        "fields": {
+          "name": true,
+          "url": true,
+          "telephone": true,
+          "address": false,
+          "areaServed": true,
+          "sameAs": true,
+          "priceRange": false,
+          "openingHours": true
+        },
+        "conflictingEntity": false
+      },
+      "lawFirm": {
+        "phoneVisible": true,
+        "contactFormPresent": true,
+        "addressVisible": false,
+        "consultationCta": true,
+        "policyPagePresent": true,
+        "practiceAreaIntent": true,
+        "serviceAreaLikely": false,
+        "trust": {
+          "testimonials": false,
+          "reviews": false,
+          "caseResults": false,
+          "awards": false,
+          "credentials": true
+        }
+      },
+      "wordCount": 1372,
+      "rendering": {
+        "risk": "low",
+        "wordCount": 1372,
+        "scriptCount": 40,
+        "externalScriptCount": 12,
+        "appShellLikely": false,
+        "emptyAppRoot": false,
+        "hasNoscriptFallback": false,
+        "evidence": [
+          "1372 words in server HTML",
+          "12 external scripts"
+        ]
+      },
+      "pageAudit": {
+        "metaDescription": "DRG Law handles residential purchases, residential sales, refinancing, and new-home interim closings across Ontario, and reviews commercial leases before you sign for the space your business will live in.",
+        "h1s": [
+          "What will your Ontario closing actually cost?"
+        ],
+        "h2s": [
+          "Ontario Land Transfer Tax Calculator",
+          "The decisions Ontario owners bring to DRG Law for real estate",
+          "How DRG Law closes a real estate file",
+          "Clients who agreed to be named here",
+          "Common questions about real estate matters",
+          "The law behind a real estate matter",
+          "Related decisions on a real estate matter",
+          "Send the real estate matter here."
+        ],
+        "imageCount": 2,
+        "imagesMissingAlt": 0,
+        "internalLinksOut": 27,
+        "ctaEvidence": [],
+        "phoneEvidence": [
+          "647-584-0998",
+          "647-584-0998",
+          "647-584-0998"
+        ]
+      },
+      "keyWarnings": [],
+      "wpDefault": false
+    },
+    {
+      "url": "https://drglaw.ca/journal/corporate-decisions",
+      "title": "Corporate Decisions | DRG Law",
+      "metaDescription": "The decision behind incorporation, one owner or two, one share class or more, holding company or not, is what shapes the company. DRG Law writes that decision before the form is filed.",
+      "pageType": "practice",
+      "pageScore": 93,
+      "pageGrade": "A",
+      "aiVisibilityScore": 90,
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 60,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Page title",
+              "status": "warn",
+              "detail": "Too short (29 chars). As a guideline, 50-60 characters gives search engines more to work with; this is not a hard limit.",
+              "fix": "Expand the title to include your main keyword and a brief value proposition."
+            },
+            {
+              "label": "Meta description",
+              "status": "warn",
+              "detail": "Long (184 chars). May be truncated in search results, since Google's snippet length is pixel-width based rather than a fixed character count; this is a recommendation, not a hard limit.",
+              "fix": "Consider trimming to under 160 characters so more of the description shows in search results."
+            },
+            {
+              "label": "H1 heading",
+              "status": "pass",
+              "detail": "Single H1 present."
+            },
+            {
+              "label": "H2 subheadings",
+              "status": "pass",
+              "detail": "5 H2 tags found."
+            },
+            {
+              "label": "Open Graph tags",
+              "status": "pass",
+              "detail": "Title, description, and image all present."
+            },
+            {
+              "label": "Image alt text",
+              "status": "pass",
+              "detail": "All 1 images have alt text or a valid empty alt (1 correctly decorative with alt=\"\")."
+            },
+            {
+              "label": "HTML lang attribute",
+              "status": "pass",
+              "detail": "Set to \"en\". Helps search engines serve the right audience."
+            }
+          ]
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "HTTP status",
+              "status": "pass",
+              "detail": "Returned HTTP 200."
+            },
+            {
+              "label": "Redirect chain",
+              "status": "pass",
+              "detail": "Served directly with no redirect."
+            },
+            {
+              "label": "Indexable",
+              "status": "pass",
+              "detail": "No noindex directive. Page is eligible to be indexed."
+            },
+            {
+              "label": "Followable links",
+              "status": "pass",
+              "detail": "Links on this page are followable."
+            },
+            {
+              "label": "Canonical tag",
+              "status": "pass",
+              "detail": "Self-referencing canonical present."
+            },
+            {
+              "label": "Mixed indexability signals",
+              "status": "pass",
+              "detail": "Indexability signals are consistent."
+            },
+            {
+              "label": "robots.txt crawl access",
+              "status": "pass",
+              "detail": "Googlebot and Bingbot are allowed to crawl this path."
+            },
+            {
+              "label": "Sitemap membership",
+              "status": "pass",
+              "detail": "Page is listed in the XML sitemap."
+            }
+          ]
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 70,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "JSON-LD structured data",
+              "status": "pass",
+              "detail": "5 JSON-LD blocks found."
+            },
+            {
+              "label": "JSON-LD validity",
+              "status": "pass",
+              "detail": "All 5 blocks parse correctly."
+            },
+            {
+              "label": "Business / LegalService schema",
+              "status": "pass",
+              "detail": "Business entity structured data found."
+            },
+            {
+              "label": "Business schema fields",
+              "status": "warn",
+              "detail": "Missing field: address.",
+              "fix": "Add the missing JSON-LD field: address."
+            },
+            {
+              "label": "FAQPage schema",
+              "status": "pass",
+              "detail": "Present. Supports FAQ readiness for search and AI answers."
+            },
+            {
+              "label": "Review / Rating schema",
+              "status": "warn",
+              "detail": "Not found. Review schema can support star ratings in search results.",
+              "fix": "Add AggregateRating or Review schema for your client testimonials."
+            },
+            {
+              "label": "Breadcrumb schema",
+              "status": "pass",
+              "detail": "Present. Helps search engines read site hierarchy."
+            },
+            {
+              "label": "Schema conflicts",
+              "status": "pass",
+              "detail": "No conflicting business entity declarations."
+            }
+          ]
+        },
+        {
+          "name": "AI Visibility",
+          "score": 90,
+          "maxScore": 100,
+          "items": [
+            {
+              "label": "AI search bot access",
+              "status": "pass",
+              "detail": "All major AI search crawlers can access your site."
+            },
+            {
+              "label": "AI training bot control",
+              "status": "warn",
+              "detail": "No training-only crawlers blocked. Your content may be used to train AI models.",
+              "fix": "Add Disallow rules for GPTBot, CCBot, and Bytespider in robots.txt if you want to control AI training use."
+            },
+            {
+              "label": "Entity description",
+              "status": "pass",
+              "detail": "A named business entity is described in structured data for AI to read."
+            },
+            {
+              "label": "Attorney / person schema",
+              "status": "pass",
+              "detail": "Attorney or Person schema present. Supports authorship and expertise signals."
+            },
+            {
+              "label": "Question-format headings",
+              "status": "pass",
+              "detail": "3 question headings found. Question-shaped headings may help AI systems extract answers; this does not guarantee citation."
+            },
+            {
+              "label": "Direct-answer sentences",
+              "status": "pass",
+              "detail": "Content includes clear definitional sentences that may be easier for AI systems to extract as answers."
+            },
+            {
+              "label": "Authoritative citations",
+              "status": "warn",
+              "detail": "No outbound links to authoritative legal sources.",
+              "fix": "Link to government, court, or law-society resources where relevant. Corroborating links are a useful credibility signal."
+            },
+            {
+              "label": "Author / reviewer signals",
+              "status": "pass",
+              "detail": "Author or reviewer attribution found. Supports source credibility for AI."
+            },
+            {
+              "label": "llms.txt file",
+              "status": "pass",
+              "detail": "Present. Provides AI-friendly content guidance, a small positive signal."
+            },
+            {
+              "label": "Semantic HTML structure",
+              "status": "pass",
+              "detail": "6 semantic elements found. Helps AI parse page structure."
+            }
+          ]
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Phone number visible",
+              "status": "pass",
+              "detail": "A phone number is visible on the page."
+            },
+            {
+              "label": "Contact form / direct contact",
+              "status": "pass",
+              "detail": "A contact form or direct email path is present."
+            },
+            {
+              "label": "Consultation call to action",
+              "status": "pass",
+              "detail": "A consultation or contact call to action is present."
+            },
+            {
+              "label": "Address / NAP",
+              "status": "pass",
+              "detail": "A street address is visible."
+            },
+            {
+              "label": "Trust signals",
+              "status": "warn",
+              "detail": "Only 1 of 5 trust signal types found. Trust cues lift intake conversion.",
+              "fix": "Surface testimonials, reviews, notable results, awards, and bar credentials where visitors can see them."
+            },
+            {
+              "label": "Practice-area intent",
+              "status": "pass",
+              "detail": "Content clearly signals legal practice areas."
+            },
+            {
+              "label": "Policy / disclaimer pages",
+              "status": "pass",
+              "detail": "Privacy, terms, or disclaimer links are present."
+            }
+          ]
+        },
+        {
+          "name": "Local SEO",
+          "score": 50,
+          "maxScore": 50,
+          "items": [
+            {
+              "label": "Phone number (NAP)",
+              "status": "pass",
+              "detail": "Phone number found on page."
+            },
+            {
+              "label": "Street address (NAP)",
+              "status": "pass",
+              "detail": "Physical address found on page."
+            },
+            {
+              "label": "Google Maps embed",
+              "status": "pass",
+              "detail": "Maps integration found."
+            },
+            {
+              "label": "NAP in structured data",
+              "status": "pass",
+              "detail": "Contact info found in JSON-LD."
+            },
+            {
+              "label": "Google Business Profile link",
+              "status": "pass",
+              "detail": "GBP link found. Cross-linking strengthens local authority."
+            }
+          ]
+        },
+        {
+          "name": "Technical & Security",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "HTTPS",
+              "status": "pass",
+              "detail": "Site loads over HTTPS."
+            },
+            {
+              "label": "Mixed content",
+              "status": "pass",
+              "detail": "No insecure HTTP resources detected."
+            },
+            {
+              "label": "HSTS header",
+              "status": "pass",
+              "detail": "Present with max-age of at least one year."
+            },
+            {
+              "label": "X-Content-Type-Options",
+              "status": "pass",
+              "detail": "Set to nosniff."
+            },
+            {
+              "label": "Content-Security-Policy",
+              "status": "warn",
+              "detail": "Content-Security-Policy-Report-Only is present (report-only mode): violations are logged but nothing is blocked yet. This is implementation in progress, not a missing control.",
+              "fix": "Review the report-only violation reports, then promote the policy to an enforced Content-Security-Policy header once it is clean."
+            },
+            {
+              "label": "Viewport meta tag",
+              "status": "pass",
+              "detail": "Present. Required for mobile rendering."
+            },
+            {
+              "label": "Compression",
+              "status": "pass",
+              "detail": "BR compression active."
+            }
+          ]
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30,
+          "items": [
+            {
+              "label": "Server-rendered content",
+              "status": "pass",
+              "detail": "Server HTML contains enough visible content for crawler analysis (975 words)."
+            },
+            {
+              "label": "JavaScript app-shell dependency",
+              "status": "pass",
+              "detail": "No thin app-shell pattern detected."
+            },
+            {
+              "label": "Noscript fallback",
+              "status": "pass",
+              "detail": "No noscript fallback needed for the detected server-rendered content level."
+            }
+          ]
+        },
+        {
+          "name": "Performance",
+          "score": 35,
+          "maxScore": 40,
+          "items": [
+            {
+              "label": "Time to first byte",
+              "status": "pass",
+              "detail": "Fast (270ms, single-sample measurement)."
+            },
+            {
+              "label": "HTML document size",
+              "status": "pass",
+              "detail": "59 KB."
+            },
+            {
+              "label": "Render-blocking resources",
+              "status": "warn",
+              "detail": "3 render-blocking resources in <head>.",
+              "fix": "Add async or defer to scripts. Use media=\"print\" for non-critical stylesheets."
+            },
+            {
+              "label": "Third-party scripts",
+              "status": "pass",
+              "detail": "0 external script domains."
+            }
+          ]
+        },
+        {
+          "name": "Links & Content",
+          "score": 60,
+          "maxScore": 60,
+          "items": [
+            {
+              "label": "Word count",
+              "status": "pass",
+              "detail": "975 words."
+            },
+            {
+              "label": "Heading hierarchy",
+              "status": "pass",
+              "detail": "Heading levels follow a proper sequence."
+            },
+            {
+              "label": "Internal links",
+              "status": "pass",
+              "detail": "26 internal links found."
+            },
+            {
+              "label": "Content-to-HTML ratio",
+              "status": "pass",
+              "detail": "10% text content, but the page already has 975 words of substantive copy; a low ratio here reflects markup weight, not thin content."
+            },
+            {
+              "label": "Anchor text quality",
+              "status": "pass",
+              "detail": "Links use descriptive text."
+            },
+            {
+              "label": "External links",
+              "status": "pass",
+              "detail": "5 outbound links found."
+            }
+          ]
+        }
+      ],
+      "failCount": 0,
+      "warnCount": 9,
+      "httpStatus": 200,
+      "indexable": true,
+      "indexability": {
+        "httpStatus": 200,
+        "redirected": false,
+        "redirectHops": 0,
+        "canonical": "https://drglaw.ca/journal/corporate-decisions",
+        "canonicalSelf": true,
+        "canonicalSameOrigin": true,
+        "metaNoindex": false,
+        "metaNofollow": false,
+        "headerNoindex": false,
+        "headerNofollow": false,
+        "indexable": true,
+        "inSitemap": true,
+        "mixedSignals": false
+      },
+      "schema": {
+        "blocks": 5,
+        "invalidBlocks": 0,
+        "types": [
+          "legalservice",
+          "openinghoursspecification",
+          "contactpoint",
+          "educationaloccupationalcredential",
+          "administrativearea",
+          "person",
+          "educationalorganization",
+          "breadcrumblist",
+          "listitem",
+          "faqpage",
+          "question",
+          "answer",
+          "article"
+        ],
+        "hasOrganization": false,
+        "hasLocalBusiness": false,
+        "hasLegalService": true,
+        "hasAttorney": false,
+        "hasPerson": true,
+        "hasBreadcrumb": true,
+        "hasFaq": true,
+        "hasWebsite": false,
+        "hasReview": false,
+        "fields": {
+          "name": true,
+          "url": true,
+          "telephone": true,
+          "address": false,
+          "areaServed": true,
+          "sameAs": true,
+          "priceRange": false,
+          "openingHours": true
+        },
+        "conflictingEntity": false
+      },
+      "lawFirm": {
+        "phoneVisible": true,
+        "contactFormPresent": true,
+        "addressVisible": true,
+        "consultationCta": true,
+        "policyPagePresent": true,
+        "practiceAreaIntent": true,
+        "serviceAreaLikely": false,
+        "trust": {
+          "testimonials": false,
+          "reviews": false,
+          "caseResults": false,
+          "awards": false,
+          "credentials": true
+        }
+      },
+      "wordCount": 975,
+      "rendering": {
+        "risk": "low",
+        "wordCount": 975,
+        "scriptCount": 33,
+        "externalScriptCount": 11,
+        "appShellLikely": false,
+        "emptyAppRoot": false,
+        "hasNoscriptFallback": false,
+        "evidence": [
+          "975 words in server HTML",
+          "11 external scripts"
+        ]
+      },
+      "pageAudit": {
+        "metaDescription": "The decision behind incorporation, one owner or two, one share class or more, holding company or not, is what shapes the company. DRG Law writes that decision before the form is filed.",
+        "h1s": [
+          "Corporate Decisions"
+        ],
+        "h2s": [
+          "What does an Ontario owner decide before incorporating?",
+          "How DRG Law writes the corporate decision",
+          "Related decisions DRG Law writes about",
+          "What owners ask about this decision",
+          "Send the corporate question before the form is filed"
+        ],
+        "imageCount": 1,
+        "imagesMissingAlt": 1,
+        "internalLinksOut": 26,
+        "ctaEvidence": [],
+        "phoneEvidence": [
+          "647-584-0998",
+          "647-584-0998",
+          "647-584-0998"
+        ]
+      },
+      "keyWarnings": [],
+      "wpDefault": false
+    },
+    {
+      "url": "https://drglaw.ca/journal/real-estate-decisions",
+      "title": "Real Estate Decisions | DRG Law",
+      "metaDescription": "The business move behind the property close, the use, the exit horizon, the financing structure, sets the closing approach. DRG Law writes the move before the conditions waive.",
+      "pageType": "practice",
+      "pageScore": 94,
+      "pageGrade": "A",
+      "aiVisibilityScore": 90,
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Page title",
+              "status": "pass",
+              "detail": "Good length (31 chars)."
+            },
+            {
+              "label": "Meta description",
+              "status": "warn",
+              "detail": "Long (176 chars). May be truncated in search results, since Google's snippet length is pixel-width based rather than a fixed character count; this is a recommendation, not a hard limit.",
+              "fix": "Consider trimming to under 160 characters so more of the description shows in search results."
+            },
+            {
+              "label": "H1 heading",
+              "status": "pass",
+              "detail": "Single H1 present."
+            },
+            {
+              "label": "H2 subheadings",
+              "status": "pass",
+              "detail": "5 H2 tags found."
+            },
+            {
+              "label": "Open Graph tags",
+              "status": "pass",
+              "detail": "Title, description, and image all present."
+            },
+            {
+              "label": "Image alt text",
+              "status": "pass",
+              "detail": "All 1 images have alt text or a valid empty alt (1 correctly decorative with alt=\"\")."
+            },
+            {
+              "label": "HTML lang attribute",
+              "status": "pass",
+              "detail": "Set to \"en\". Helps search engines serve the right audience."
+            }
+          ]
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "HTTP status",
+              "status": "pass",
+              "detail": "Returned HTTP 200."
+            },
+            {
+              "label": "Redirect chain",
+              "status": "pass",
+              "detail": "Served directly with no redirect."
+            },
+            {
+              "label": "Indexable",
+              "status": "pass",
+              "detail": "No noindex directive. Page is eligible to be indexed."
+            },
+            {
+              "label": "Followable links",
+              "status": "pass",
+              "detail": "Links on this page are followable."
+            },
+            {
+              "label": "Canonical tag",
+              "status": "pass",
+              "detail": "Self-referencing canonical present."
+            },
+            {
+              "label": "Mixed indexability signals",
+              "status": "pass",
+              "detail": "Indexability signals are consistent."
+            },
+            {
+              "label": "robots.txt crawl access",
+              "status": "pass",
+              "detail": "Googlebot and Bingbot are allowed to crawl this path."
+            },
+            {
+              "label": "Sitemap membership",
+              "status": "pass",
+              "detail": "Page is listed in the XML sitemap."
+            }
+          ]
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 70,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "JSON-LD structured data",
+              "status": "pass",
+              "detail": "5 JSON-LD blocks found."
+            },
+            {
+              "label": "JSON-LD validity",
+              "status": "pass",
+              "detail": "All 5 blocks parse correctly."
+            },
+            {
+              "label": "Business / LegalService schema",
+              "status": "pass",
+              "detail": "Business entity structured data found."
+            },
+            {
+              "label": "Business schema fields",
+              "status": "warn",
+              "detail": "Missing field: address.",
+              "fix": "Add the missing JSON-LD field: address."
+            },
+            {
+              "label": "FAQPage schema",
+              "status": "pass",
+              "detail": "Present. Supports FAQ readiness for search and AI answers."
+            },
+            {
+              "label": "Review / Rating schema",
+              "status": "warn",
+              "detail": "Not found. Review schema can support star ratings in search results.",
+              "fix": "Add AggregateRating or Review schema for your client testimonials."
+            },
+            {
+              "label": "Breadcrumb schema",
+              "status": "pass",
+              "detail": "Present. Helps search engines read site hierarchy."
+            },
+            {
+              "label": "Schema conflicts",
+              "status": "pass",
+              "detail": "No conflicting business entity declarations."
+            }
+          ]
+        },
+        {
+          "name": "AI Visibility",
+          "score": 90,
+          "maxScore": 100,
+          "items": [
+            {
+              "label": "AI search bot access",
+              "status": "pass",
+              "detail": "All major AI search crawlers can access your site."
+            },
+            {
+              "label": "AI training bot control",
+              "status": "warn",
+              "detail": "No training-only crawlers blocked. Your content may be used to train AI models.",
+              "fix": "Add Disallow rules for GPTBot, CCBot, and Bytespider in robots.txt if you want to control AI training use."
+            },
+            {
+              "label": "Entity description",
+              "status": "pass",
+              "detail": "A named business entity is described in structured data for AI to read."
+            },
+            {
+              "label": "Attorney / person schema",
+              "status": "pass",
+              "detail": "Attorney or Person schema present. Supports authorship and expertise signals."
+            },
+            {
+              "label": "Question-format headings",
+              "status": "pass",
+              "detail": "3 question headings found. Question-shaped headings may help AI systems extract answers; this does not guarantee citation."
+            },
+            {
+              "label": "Direct-answer sentences",
+              "status": "pass",
+              "detail": "Content includes clear definitional sentences that may be easier for AI systems to extract as answers."
+            },
+            {
+              "label": "Authoritative citations",
+              "status": "warn",
+              "detail": "No outbound links to authoritative legal sources.",
+              "fix": "Link to government, court, or law-society resources where relevant. Corroborating links are a useful credibility signal."
+            },
+            {
+              "label": "Author / reviewer signals",
+              "status": "pass",
+              "detail": "Author or reviewer attribution found. Supports source credibility for AI."
+            },
+            {
+              "label": "llms.txt file",
+              "status": "pass",
+              "detail": "Present. Provides AI-friendly content guidance, a small positive signal."
+            },
+            {
+              "label": "Semantic HTML structure",
+              "status": "pass",
+              "detail": "6 semantic elements found. Helps AI parse page structure."
+            }
+          ]
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Phone number visible",
+              "status": "pass",
+              "detail": "A phone number is visible on the page."
+            },
+            {
+              "label": "Contact form / direct contact",
+              "status": "pass",
+              "detail": "A contact form or direct email path is present."
+            },
+            {
+              "label": "Consultation call to action",
+              "status": "pass",
+              "detail": "A consultation or contact call to action is present."
+            },
+            {
+              "label": "Address / NAP",
+              "status": "pass",
+              "detail": "A street address is visible."
+            },
+            {
+              "label": "Trust signals",
+              "status": "warn",
+              "detail": "Only 1 of 5 trust signal types found. Trust cues lift intake conversion.",
+              "fix": "Surface testimonials, reviews, notable results, awards, and bar credentials where visitors can see them."
+            },
+            {
+              "label": "Practice-area intent",
+              "status": "pass",
+              "detail": "Content clearly signals legal practice areas."
+            },
+            {
+              "label": "Policy / disclaimer pages",
+              "status": "pass",
+              "detail": "Privacy, terms, or disclaimer links are present."
+            }
+          ]
+        },
+        {
+          "name": "Local SEO",
+          "score": 50,
+          "maxScore": 50,
+          "items": [
+            {
+              "label": "Phone number (NAP)",
+              "status": "pass",
+              "detail": "Phone number found on page."
+            },
+            {
+              "label": "Street address (NAP)",
+              "status": "pass",
+              "detail": "Physical address found on page."
+            },
+            {
+              "label": "Google Maps embed",
+              "status": "pass",
+              "detail": "Maps integration found."
+            },
+            {
+              "label": "NAP in structured data",
+              "status": "pass",
+              "detail": "Contact info found in JSON-LD."
+            },
+            {
+              "label": "Google Business Profile link",
+              "status": "pass",
+              "detail": "GBP link found. Cross-linking strengthens local authority."
+            }
+          ]
+        },
+        {
+          "name": "Technical & Security",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "HTTPS",
+              "status": "pass",
+              "detail": "Site loads over HTTPS."
+            },
+            {
+              "label": "Mixed content",
+              "status": "pass",
+              "detail": "No insecure HTTP resources detected."
+            },
+            {
+              "label": "HSTS header",
+              "status": "pass",
+              "detail": "Present with max-age of at least one year."
+            },
+            {
+              "label": "X-Content-Type-Options",
+              "status": "pass",
+              "detail": "Set to nosniff."
+            },
+            {
+              "label": "Content-Security-Policy",
+              "status": "warn",
+              "detail": "Content-Security-Policy-Report-Only is present (report-only mode): violations are logged but nothing is blocked yet. This is implementation in progress, not a missing control.",
+              "fix": "Review the report-only violation reports, then promote the policy to an enforced Content-Security-Policy header once it is clean."
+            },
+            {
+              "label": "Viewport meta tag",
+              "status": "pass",
+              "detail": "Present. Required for mobile rendering."
+            },
+            {
+              "label": "Compression",
+              "status": "pass",
+              "detail": "BR compression active."
+            }
+          ]
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30,
+          "items": [
+            {
+              "label": "Server-rendered content",
+              "status": "pass",
+              "detail": "Server HTML contains enough visible content for crawler analysis (994 words)."
+            },
+            {
+              "label": "JavaScript app-shell dependency",
+              "status": "pass",
+              "detail": "No thin app-shell pattern detected."
+            },
+            {
+              "label": "Noscript fallback",
+              "status": "pass",
+              "detail": "No noscript fallback needed for the detected server-rendered content level."
+            }
+          ]
+        },
+        {
+          "name": "Performance",
+          "score": 35,
+          "maxScore": 40,
+          "items": [
+            {
+              "label": "Time to first byte",
+              "status": "pass",
+              "detail": "Fast (330ms, single-sample measurement)."
+            },
+            {
+              "label": "HTML document size",
+              "status": "pass",
+              "detail": "59 KB."
+            },
+            {
+              "label": "Render-blocking resources",
+              "status": "warn",
+              "detail": "3 render-blocking resources in <head>.",
+              "fix": "Add async or defer to scripts. Use media=\"print\" for non-critical stylesheets."
+            },
+            {
+              "label": "Third-party scripts",
+              "status": "pass",
+              "detail": "0 external script domains."
+            }
+          ]
+        },
+        {
+          "name": "Links & Content",
+          "score": 60,
+          "maxScore": 60,
+          "items": [
+            {
+              "label": "Word count",
+              "status": "pass",
+              "detail": "994 words."
+            },
+            {
+              "label": "Heading hierarchy",
+              "status": "pass",
+              "detail": "Heading levels follow a proper sequence."
+            },
+            {
+              "label": "Internal links",
+              "status": "pass",
+              "detail": "26 internal links found."
+            },
+            {
+              "label": "Content-to-HTML ratio",
+              "status": "pass",
+              "detail": "10% text content, but the page already has 994 words of substantive copy; a low ratio here reflects markup weight, not thin content."
+            },
+            {
+              "label": "Anchor text quality",
+              "status": "pass",
+              "detail": "Links use descriptive text."
+            },
+            {
+              "label": "External links",
+              "status": "pass",
+              "detail": "5 outbound links found."
+            }
+          ]
+        }
+      ],
+      "failCount": 0,
+      "warnCount": 8,
+      "httpStatus": 200,
+      "indexable": true,
+      "indexability": {
+        "httpStatus": 200,
+        "redirected": false,
+        "redirectHops": 0,
+        "canonical": "https://drglaw.ca/journal/real-estate-decisions",
+        "canonicalSelf": true,
+        "canonicalSameOrigin": true,
+        "metaNoindex": false,
+        "metaNofollow": false,
+        "headerNoindex": false,
+        "headerNofollow": false,
+        "indexable": true,
+        "inSitemap": true,
+        "mixedSignals": false
+      },
+      "schema": {
+        "blocks": 5,
+        "invalidBlocks": 0,
+        "types": [
+          "legalservice",
+          "openinghoursspecification",
+          "contactpoint",
+          "educationaloccupationalcredential",
+          "administrativearea",
+          "person",
+          "educationalorganization",
+          "breadcrumblist",
+          "listitem",
+          "faqpage",
+          "question",
+          "answer",
+          "article"
+        ],
+        "hasOrganization": false,
+        "hasLocalBusiness": false,
+        "hasLegalService": true,
+        "hasAttorney": false,
+        "hasPerson": true,
+        "hasBreadcrumb": true,
+        "hasFaq": true,
+        "hasWebsite": false,
+        "hasReview": false,
+        "fields": {
+          "name": true,
+          "url": true,
+          "telephone": true,
+          "address": false,
+          "areaServed": true,
+          "sameAs": true,
+          "priceRange": false,
+          "openingHours": true
+        },
+        "conflictingEntity": false
+      },
+      "lawFirm": {
+        "phoneVisible": true,
+        "contactFormPresent": true,
+        "addressVisible": true,
+        "consultationCta": true,
+        "policyPagePresent": true,
+        "practiceAreaIntent": true,
+        "serviceAreaLikely": false,
+        "trust": {
+          "testimonials": false,
+          "reviews": false,
+          "caseResults": false,
+          "awards": false,
+          "credentials": true
+        }
+      },
+      "wordCount": 994,
+      "rendering": {
+        "risk": "low",
+        "wordCount": 994,
+        "scriptCount": 33,
+        "externalScriptCount": 11,
+        "appShellLikely": false,
+        "emptyAppRoot": false,
+        "hasNoscriptFallback": false,
+        "evidence": [
+          "994 words in server HTML",
+          "11 external scripts"
+        ]
+      },
+      "pageAudit": {
+        "metaDescription": "The business move behind the property close, the use, the exit horizon, the financing structure, sets the closing approach. DRG Law writes the move before the conditions waive.",
+        "h1s": [
+          "Real Estate Decisions"
+        ],
+        "h2s": [
+          "What does an Ontario buyer or seller decide before closing?",
+          "How DRG Law closes a real estate file",
+          "Related decisions DRG Law writes about",
+          "What owners ask about this decision",
+          "Send the real estate file before the conditions waive"
+        ],
+        "imageCount": 1,
+        "imagesMissingAlt": 1,
+        "internalLinksOut": 26,
+        "ctaEvidence": [],
+        "phoneEvidence": [
+          "647-584-0998",
+          "647-584-0998",
+          "647-584-0998"
+        ]
+      },
+      "keyWarnings": [],
+      "wpDefault": false
+    },
+    {
+      "url": "https://drglaw.ca/journal/corporate-records",
+      "title": "Corporate Records Before Audit, Sale, or Lender | DRG Law",
+      "metaDescription": "An Ontario corporation&#x27;s minute book, share register, and annual filings become visible at the moment they cause a problem. DRG Law keeps the records current before the third party asks.",
+      "pageType": "practice",
+      "pageScore": 94,
+      "pageGrade": "A",
+      "aiVisibilityScore": 85,
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Page title",
+              "status": "pass",
+              "detail": "Good length (57 chars)."
+            },
+            {
+              "label": "Meta description",
+              "status": "warn",
+              "detail": "Long (186 chars). May be truncated in search results, since Google's snippet length is pixel-width based rather than a fixed character count; this is a recommendation, not a hard limit.",
+              "fix": "Consider trimming to under 160 characters so more of the description shows in search results."
+            },
+            {
+              "label": "H1 heading",
+              "status": "pass",
+              "detail": "Single H1 present."
+            },
+            {
+              "label": "H2 subheadings",
+              "status": "pass",
+              "detail": "5 H2 tags found."
+            },
+            {
+              "label": "Open Graph tags",
+              "status": "pass",
+              "detail": "Title, description, and image all present."
+            },
+            {
+              "label": "Image alt text",
+              "status": "pass",
+              "detail": "All 1 images have alt text or a valid empty alt (1 correctly decorative with alt=\"\")."
+            },
+            {
+              "label": "HTML lang attribute",
+              "status": "pass",
+              "detail": "Set to \"en\". Helps search engines serve the right audience."
+            }
+          ]
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "HTTP status",
+              "status": "pass",
+              "detail": "Returned HTTP 200."
+            },
+            {
+              "label": "Redirect chain",
+              "status": "pass",
+              "detail": "Served directly with no redirect."
+            },
+            {
+              "label": "Indexable",
+              "status": "pass",
+              "detail": "No noindex directive. Page is eligible to be indexed."
+            },
+            {
+              "label": "Followable links",
+              "status": "pass",
+              "detail": "Links on this page are followable."
+            },
+            {
+              "label": "Canonical tag",
+              "status": "pass",
+              "detail": "Self-referencing canonical present."
+            },
+            {
+              "label": "Mixed indexability signals",
+              "status": "pass",
+              "detail": "Indexability signals are consistent."
+            },
+            {
+              "label": "robots.txt crawl access",
+              "status": "pass",
+              "detail": "Googlebot and Bingbot are allowed to crawl this path."
+            },
+            {
+              "label": "Sitemap membership",
+              "status": "pass",
+              "detail": "Page is listed in the XML sitemap."
+            }
+          ]
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 70,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "JSON-LD structured data",
+              "status": "pass",
+              "detail": "5 JSON-LD blocks found."
+            },
+            {
+              "label": "JSON-LD validity",
+              "status": "pass",
+              "detail": "All 5 blocks parse correctly."
+            },
+            {
+              "label": "Business / LegalService schema",
+              "status": "pass",
+              "detail": "Business entity structured data found."
+            },
+            {
+              "label": "Business schema fields",
+              "status": "warn",
+              "detail": "Missing field: address.",
+              "fix": "Add the missing JSON-LD field: address."
+            },
+            {
+              "label": "FAQPage schema",
+              "status": "pass",
+              "detail": "Present. Supports FAQ readiness for search and AI answers."
+            },
+            {
+              "label": "Review / Rating schema",
+              "status": "warn",
+              "detail": "Not found. Review schema can support star ratings in search results.",
+              "fix": "Add AggregateRating or Review schema for your client testimonials."
+            },
+            {
+              "label": "Breadcrumb schema",
+              "status": "pass",
+              "detail": "Present. Helps search engines read site hierarchy."
+            },
+            {
+              "label": "Schema conflicts",
+              "status": "pass",
+              "detail": "No conflicting business entity declarations."
+            }
+          ]
+        },
+        {
+          "name": "AI Visibility",
+          "score": 85,
+          "maxScore": 100,
+          "items": [
+            {
+              "label": "AI search bot access",
+              "status": "pass",
+              "detail": "All major AI search crawlers can access your site."
+            },
+            {
+              "label": "AI training bot control",
+              "status": "warn",
+              "detail": "No training-only crawlers blocked. Your content may be used to train AI models.",
+              "fix": "Add Disallow rules for GPTBot, CCBot, and Bytespider in robots.txt if you want to control AI training use."
+            },
+            {
+              "label": "Entity description",
+              "status": "pass",
+              "detail": "A named business entity is described in structured data for AI to read."
+            },
+            {
+              "label": "Attorney / person schema",
+              "status": "pass",
+              "detail": "Attorney or Person schema present. Supports authorship and expertise signals."
+            },
+            {
+              "label": "Question-format headings",
+              "status": "warn",
+              "detail": "Only 2 question headings. More may help AI systems pull answers from the page, though this is an optimization, not a guarantee.",
+              "fix": "Reframe section headings as questions people actually ask, like \"What happens if...\" or \"How long does...\""
+            },
+            {
+              "label": "Direct-answer sentences",
+              "status": "pass",
+              "detail": "Content includes clear definitional sentences that may be easier for AI systems to extract as answers."
+            },
+            {
+              "label": "Authoritative citations",
+              "status": "warn",
+              "detail": "No outbound links to authoritative legal sources.",
+              "fix": "Link to government, court, or law-society resources where relevant. Corroborating links are a useful credibility signal."
+            },
+            {
+              "label": "Author / reviewer signals",
+              "status": "pass",
+              "detail": "Author or reviewer attribution found. Supports source credibility for AI."
+            },
+            {
+              "label": "llms.txt file",
+              "status": "pass",
+              "detail": "Present. Provides AI-friendly content guidance, a small positive signal."
+            },
+            {
+              "label": "Semantic HTML structure",
+              "status": "pass",
+              "detail": "6 semantic elements found. Helps AI parse page structure."
+            }
+          ]
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Phone number visible",
+              "status": "pass",
+              "detail": "A phone number is visible on the page."
+            },
+            {
+              "label": "Contact form / direct contact",
+              "status": "pass",
+              "detail": "A contact form or direct email path is present."
+            },
+            {
+              "label": "Consultation call to action",
+              "status": "pass",
+              "detail": "A consultation or contact call to action is present."
+            },
+            {
+              "label": "Address / NAP",
+              "status": "pass",
+              "detail": "A street address is visible."
+            },
+            {
+              "label": "Trust signals",
+              "status": "warn",
+              "detail": "Only 1 of 5 trust signal types found. Trust cues lift intake conversion.",
+              "fix": "Surface testimonials, reviews, notable results, awards, and bar credentials where visitors can see them."
+            },
+            {
+              "label": "Practice-area intent",
+              "status": "pass",
+              "detail": "Content clearly signals legal practice areas."
+            },
+            {
+              "label": "Policy / disclaimer pages",
+              "status": "pass",
+              "detail": "Privacy, terms, or disclaimer links are present."
+            }
+          ]
+        },
+        {
+          "name": "Local SEO",
+          "score": 50,
+          "maxScore": 50,
+          "items": [
+            {
+              "label": "Phone number (NAP)",
+              "status": "pass",
+              "detail": "Phone number found on page."
+            },
+            {
+              "label": "Street address (NAP)",
+              "status": "pass",
+              "detail": "Physical address found on page."
+            },
+            {
+              "label": "Google Maps embed",
+              "status": "pass",
+              "detail": "Maps integration found."
+            },
+            {
+              "label": "NAP in structured data",
+              "status": "pass",
+              "detail": "Contact info found in JSON-LD."
+            },
+            {
+              "label": "Google Business Profile link",
+              "status": "pass",
+              "detail": "GBP link found. Cross-linking strengthens local authority."
+            }
+          ]
+        },
+        {
+          "name": "Technical & Security",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "HTTPS",
+              "status": "pass",
+              "detail": "Site loads over HTTPS."
+            },
+            {
+              "label": "Mixed content",
+              "status": "pass",
+              "detail": "No insecure HTTP resources detected."
+            },
+            {
+              "label": "HSTS header",
+              "status": "pass",
+              "detail": "Present with max-age of at least one year."
+            },
+            {
+              "label": "X-Content-Type-Options",
+              "status": "pass",
+              "detail": "Set to nosniff."
+            },
+            {
+              "label": "Content-Security-Policy",
+              "status": "warn",
+              "detail": "Content-Security-Policy-Report-Only is present (report-only mode): violations are logged but nothing is blocked yet. This is implementation in progress, not a missing control.",
+              "fix": "Review the report-only violation reports, then promote the policy to an enforced Content-Security-Policy header once it is clean."
+            },
+            {
+              "label": "Viewport meta tag",
+              "status": "pass",
+              "detail": "Present. Required for mobile rendering."
+            },
+            {
+              "label": "Compression",
+              "status": "pass",
+              "detail": "BR compression active."
+            }
+          ]
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30,
+          "items": [
+            {
+              "label": "Server-rendered content",
+              "status": "pass",
+              "detail": "Server HTML contains enough visible content for crawler analysis (982 words)."
+            },
+            {
+              "label": "JavaScript app-shell dependency",
+              "status": "pass",
+              "detail": "No thin app-shell pattern detected."
+            },
+            {
+              "label": "Noscript fallback",
+              "status": "pass",
+              "detail": "No noscript fallback needed for the detected server-rendered content level."
+            }
+          ]
+        },
+        {
+          "name": "Performance",
+          "score": 35,
+          "maxScore": 40,
+          "items": [
+            {
+              "label": "Time to first byte",
+              "status": "pass",
+              "detail": "Fast (215ms, single-sample measurement)."
+            },
+            {
+              "label": "HTML document size",
+              "status": "pass",
+              "detail": "60 KB."
+            },
+            {
+              "label": "Render-blocking resources",
+              "status": "warn",
+              "detail": "3 render-blocking resources in <head>.",
+              "fix": "Add async or defer to scripts. Use media=\"print\" for non-critical stylesheets."
+            },
+            {
+              "label": "Third-party scripts",
+              "status": "pass",
+              "detail": "0 external script domains."
+            }
+          ]
+        },
+        {
+          "name": "Links & Content",
+          "score": 60,
+          "maxScore": 60,
+          "items": [
+            {
+              "label": "Word count",
+              "status": "pass",
+              "detail": "982 words."
+            },
+            {
+              "label": "Heading hierarchy",
+              "status": "pass",
+              "detail": "Heading levels follow a proper sequence."
+            },
+            {
+              "label": "Internal links",
+              "status": "pass",
+              "detail": "26 internal links found."
+            },
+            {
+              "label": "Content-to-HTML ratio",
+              "status": "pass",
+              "detail": "10% text content, but the page already has 982 words of substantive copy; a low ratio here reflects markup weight, not thin content."
+            },
+            {
+              "label": "Anchor text quality",
+              "status": "pass",
+              "detail": "Links use descriptive text."
+            },
+            {
+              "label": "External links",
+              "status": "pass",
+              "detail": "5 outbound links found."
+            }
+          ]
+        }
+      ],
+      "failCount": 0,
+      "warnCount": 9,
+      "httpStatus": 200,
+      "indexable": true,
+      "indexability": {
+        "httpStatus": 200,
+        "redirected": false,
+        "redirectHops": 0,
+        "canonical": "https://drglaw.ca/journal/corporate-records",
+        "canonicalSelf": true,
+        "canonicalSameOrigin": true,
+        "metaNoindex": false,
+        "metaNofollow": false,
+        "headerNoindex": false,
+        "headerNofollow": false,
+        "indexable": true,
+        "inSitemap": true,
+        "mixedSignals": false
+      },
+      "schema": {
+        "blocks": 5,
+        "invalidBlocks": 0,
+        "types": [
+          "legalservice",
+          "openinghoursspecification",
+          "contactpoint",
+          "educationaloccupationalcredential",
+          "administrativearea",
+          "person",
+          "educationalorganization",
+          "breadcrumblist",
+          "listitem",
+          "faqpage",
+          "question",
+          "answer",
+          "article"
+        ],
+        "hasOrganization": false,
+        "hasLocalBusiness": false,
+        "hasLegalService": true,
+        "hasAttorney": false,
+        "hasPerson": true,
+        "hasBreadcrumb": true,
+        "hasFaq": true,
+        "hasWebsite": false,
+        "hasReview": false,
+        "fields": {
+          "name": true,
+          "url": true,
+          "telephone": true,
+          "address": false,
+          "areaServed": true,
+          "sameAs": true,
+          "priceRange": false,
+          "openingHours": true
+        },
+        "conflictingEntity": false
+      },
+      "lawFirm": {
+        "phoneVisible": true,
+        "contactFormPresent": true,
+        "addressVisible": true,
+        "consultationCta": true,
+        "policyPagePresent": true,
+        "practiceAreaIntent": true,
+        "serviceAreaLikely": false,
+        "trust": {
+          "testimonials": false,
+          "reviews": false,
+          "caseResults": false,
+          "awards": false,
+          "credentials": true
+        }
+      },
+      "wordCount": 982,
+      "rendering": {
+        "risk": "low",
+        "wordCount": 982,
+        "scriptCount": 33,
+        "externalScriptCount": 11,
+        "appShellLikely": false,
+        "emptyAppRoot": false,
+        "hasNoscriptFallback": false,
+        "evidence": [
+          "982 words in server HTML",
+          "11 external scripts"
+        ]
+      },
+      "pageAudit": {
+        "metaDescription": "An Ontario corporation&#x27;s minute book, share register, and annual filings become visible at the moment they cause a problem. DRG Law keeps the records current before the third party asks.",
+        "h1s": [
+          "Corporate Records Before Audit, Sale, or Lender"
+        ],
+        "h2s": [
+          "Which records does a third party usually ask for?",
+          "The twelve-item readiness check",
+          "Related decisions DRG Law writes about",
+          "What owners ask about this decision",
+          "Send the records before the third party asks"
+        ],
+        "imageCount": 1,
+        "imagesMissingAlt": 1,
+        "internalLinksOut": 26,
+        "ctaEvidence": [],
+        "phoneEvidence": [
+          "647-584-0998",
+          "647-584-0998",
+          "647-584-0998"
+        ]
+      },
+      "keyWarnings": [],
+      "wpDefault": false
+    },
+    {
+      "url": "https://drglaw.ca/pt/corporate",
+      "title": "Direito Empresarial em Ontário | DRG Law",
+      "metaDescription": "Estrutura, contratos e decisões societárias antes da assinatura. Damaris atua em direito empresarial de Ontário, com aconselhamento em inglês ou português.",
+      "pageType": "practice",
+      "pageScore": 94,
+      "pageGrade": "A",
+      "aiVisibilityScore": 85,
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 70,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Page title",
+              "status": "pass",
+              "detail": "Good length (40 chars)."
+            },
+            {
+              "label": "Meta description",
+              "status": "pass",
+              "detail": "Good length (155 chars)."
+            },
+            {
+              "label": "H1 heading",
+              "status": "pass",
+              "detail": "Single H1 present."
+            },
+            {
+              "label": "H2 subheadings",
+              "status": "pass",
+              "detail": "6 H2 tags found."
+            },
+            {
+              "label": "Open Graph tags",
+              "status": "pass",
+              "detail": "Title, description, and image all present."
+            },
+            {
+              "label": "Image alt text",
+              "status": "pass",
+              "detail": "All 2 images have alt text or a valid empty alt (1 correctly decorative with alt=\"\")."
+            },
+            {
+              "label": "HTML lang attribute",
+              "status": "pass",
+              "detail": "Set to \"pt-BR\". Helps search engines serve the right audience."
+            }
+          ]
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "HTTP status",
+              "status": "pass",
+              "detail": "Returned HTTP 200."
+            },
+            {
+              "label": "Redirect chain",
+              "status": "pass",
+              "detail": "Served directly with no redirect."
+            },
+            {
+              "label": "Indexable",
+              "status": "pass",
+              "detail": "No noindex directive. Page is eligible to be indexed."
+            },
+            {
+              "label": "Followable links",
+              "status": "pass",
+              "detail": "Links on this page are followable."
+            },
+            {
+              "label": "Canonical tag",
+              "status": "pass",
+              "detail": "Self-referencing canonical present."
+            },
+            {
+              "label": "Mixed indexability signals",
+              "status": "pass",
+              "detail": "Indexability signals are consistent."
+            },
+            {
+              "label": "robots.txt crawl access",
+              "status": "pass",
+              "detail": "Googlebot and Bingbot are allowed to crawl this path."
+            },
+            {
+              "label": "Sitemap membership",
+              "status": "pass",
+              "detail": "Page is listed in the XML sitemap."
+            }
+          ]
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 65,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "JSON-LD structured data",
+              "status": "pass",
+              "detail": "3 JSON-LD blocks found."
+            },
+            {
+              "label": "JSON-LD validity",
+              "status": "pass",
+              "detail": "All 3 blocks parse correctly."
+            },
+            {
+              "label": "Business / LegalService schema",
+              "status": "pass",
+              "detail": "Business entity structured data found."
+            },
+            {
+              "label": "Business schema fields",
+              "status": "warn",
+              "detail": "Missing field: address.",
+              "fix": "Add the missing JSON-LD field: address."
+            },
+            {
+              "label": "FAQPage schema",
+              "status": "warn",
+              "detail": "Not found. FAQ schema packages common questions for search and AI answer engines.",
+              "fix": "Add FAQPage structured data wrapping your most common client questions and answers."
+            },
+            {
+              "label": "Review / Rating schema",
+              "status": "warn",
+              "detail": "Not found. Review schema can support star ratings in search results.",
+              "fix": "Add AggregateRating or Review schema for your client testimonials."
+            },
+            {
+              "label": "Breadcrumb schema",
+              "status": "pass",
+              "detail": "Present. Helps search engines read site hierarchy."
+            },
+            {
+              "label": "Schema conflicts",
+              "status": "pass",
+              "detail": "No conflicting business entity declarations."
+            }
+          ]
+        },
+        {
+          "name": "AI Visibility",
+          "score": 85,
+          "maxScore": 100,
+          "items": [
+            {
+              "label": "AI search bot access",
+              "status": "pass",
+              "detail": "All major AI search crawlers can access your site."
+            },
+            {
+              "label": "AI training bot control",
+              "status": "warn",
+              "detail": "No training-only crawlers blocked. Your content may be used to train AI models.",
+              "fix": "Add Disallow rules for GPTBot, CCBot, and Bytespider in robots.txt if you want to control AI training use."
+            },
+            {
+              "label": "Entity description",
+              "status": "pass",
+              "detail": "A named business entity is described in structured data for AI to read."
+            },
+            {
+              "label": "Attorney / person schema",
+              "status": "pass",
+              "detail": "Attorney or Person schema present. Supports authorship and expertise signals."
+            },
+            {
+              "label": "Question-format headings",
+              "status": "warn",
+              "detail": "Only 1 question heading. More may help AI systems pull answers from the page, though this is an optimization, not a guarantee.",
+              "fix": "Reframe section headings as questions people actually ask, like \"What happens if...\" or \"How long does...\""
+            },
+            {
+              "label": "Direct-answer sentences",
+              "status": "warn",
+              "detail": "Some direct-answer content found. More clear definitions may help AI systems extract answers, though this is an optimization, not a requirement.",
+              "fix": "Write more sentences that directly answer questions: \"X is...\", \"X means...\", \"X requires...\""
+            },
+            {
+              "label": "Authoritative citations",
+              "status": "pass",
+              "detail": "1 link to authoritative sources. Supports credibility for AI sourcing."
+            },
+            {
+              "label": "Author / reviewer signals",
+              "status": "pass",
+              "detail": "Author or reviewer attribution found. Supports source credibility for AI."
+            },
+            {
+              "label": "llms.txt file",
+              "status": "pass",
+              "detail": "Present. Provides AI-friendly content guidance, a small positive signal."
+            },
+            {
+              "label": "Semantic HTML structure",
+              "status": "pass",
+              "detail": "6 semantic elements found. Helps AI parse page structure."
+            }
+          ]
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Phone number visible",
+              "status": "pass",
+              "detail": "A phone number is visible on the page."
+            },
+            {
+              "label": "Contact form / direct contact",
+              "status": "pass",
+              "detail": "A contact form or direct email path is present."
+            },
+            {
+              "label": "Consultation call to action",
+              "status": "pass",
+              "detail": "A consultation or contact call to action is present."
+            },
+            {
+              "label": "Address / NAP",
+              "status": "pass",
+              "detail": "A street address is visible."
+            },
+            {
+              "label": "Trust signals",
+              "status": "warn",
+              "detail": "Only 1 of 5 trust signal types found. Trust cues lift intake conversion.",
+              "fix": "Surface testimonials, reviews, notable results, awards, and bar credentials where visitors can see them."
+            },
+            {
+              "label": "Practice-area intent",
+              "status": "pass",
+              "detail": "Content clearly signals legal practice areas."
+            },
+            {
+              "label": "Policy / disclaimer pages",
+              "status": "pass",
+              "detail": "Privacy, terms, or disclaimer links are present."
+            }
+          ]
+        },
+        {
+          "name": "Local SEO",
+          "score": 50,
+          "maxScore": 50,
+          "items": [
+            {
+              "label": "Phone number (NAP)",
+              "status": "pass",
+              "detail": "Phone number found on page."
+            },
+            {
+              "label": "Street address (NAP)",
+              "status": "pass",
+              "detail": "Physical address found on page."
+            },
+            {
+              "label": "Google Maps embed",
+              "status": "pass",
+              "detail": "Maps integration found."
+            },
+            {
+              "label": "NAP in structured data",
+              "status": "pass",
+              "detail": "Contact info found in JSON-LD."
+            },
+            {
+              "label": "Google Business Profile link",
+              "status": "pass",
+              "detail": "GBP link found. Cross-linking strengthens local authority."
+            }
+          ]
+        },
+        {
+          "name": "Technical & Security",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "HTTPS",
+              "status": "pass",
+              "detail": "Site loads over HTTPS."
+            },
+            {
+              "label": "Mixed content",
+              "status": "pass",
+              "detail": "No insecure HTTP resources detected."
+            },
+            {
+              "label": "HSTS header",
+              "status": "pass",
+              "detail": "Present with max-age of at least one year."
+            },
+            {
+              "label": "X-Content-Type-Options",
+              "status": "pass",
+              "detail": "Set to nosniff."
+            },
+            {
+              "label": "Content-Security-Policy",
+              "status": "warn",
+              "detail": "Content-Security-Policy-Report-Only is present (report-only mode): violations are logged but nothing is blocked yet. This is implementation in progress, not a missing control.",
+              "fix": "Review the report-only violation reports, then promote the policy to an enforced Content-Security-Policy header once it is clean."
+            },
+            {
+              "label": "Viewport meta tag",
+              "status": "pass",
+              "detail": "Present. Required for mobile rendering."
+            },
+            {
+              "label": "Compression",
+              "status": "pass",
+              "detail": "BR compression active."
+            }
+          ]
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30,
+          "items": [
+            {
+              "label": "Server-rendered content",
+              "status": "pass",
+              "detail": "Server HTML contains enough visible content for crawler analysis (1187 words)."
+            },
+            {
+              "label": "JavaScript app-shell dependency",
+              "status": "pass",
+              "detail": "No thin app-shell pattern detected."
+            },
+            {
+              "label": "Noscript fallback",
+              "status": "pass",
+              "detail": "No noscript fallback needed for the detected server-rendered content level."
+            }
+          ]
+        },
+        {
+          "name": "Performance",
+          "score": 35,
+          "maxScore": 40,
+          "items": [
+            {
+              "label": "Time to first byte",
+              "status": "pass",
+              "detail": "Fast (124ms, single-sample measurement)."
+            },
+            {
+              "label": "HTML document size",
+              "status": "pass",
+              "detail": "69 KB."
+            },
+            {
+              "label": "Render-blocking resources",
+              "status": "warn",
+              "detail": "3 render-blocking resources in <head>.",
+              "fix": "Add async or defer to scripts. Use media=\"print\" for non-critical stylesheets."
+            },
+            {
+              "label": "Third-party scripts",
+              "status": "pass",
+              "detail": "0 external script domains."
+            }
+          ]
+        },
+        {
+          "name": "Links & Content",
+          "score": 60,
+          "maxScore": 60,
+          "items": [
+            {
+              "label": "Word count",
+              "status": "pass",
+              "detail": "1,187 words."
+            },
+            {
+              "label": "Heading hierarchy",
+              "status": "pass",
+              "detail": "Heading levels follow a proper sequence."
+            },
+            {
+              "label": "Internal links",
+              "status": "pass",
+              "detail": "25 internal links found."
+            },
+            {
+              "label": "Content-to-HTML ratio",
+              "status": "pass",
+              "detail": "10% text content, but the page already has 1,187 words of substantive copy; a low ratio here reflects markup weight, not thin content."
+            },
+            {
+              "label": "Anchor text quality",
+              "status": "pass",
+              "detail": "Links use descriptive text."
+            },
+            {
+              "label": "External links",
+              "status": "pass",
+              "detail": "7 outbound links found."
+            }
+          ]
+        }
+      ],
+      "failCount": 0,
+      "warnCount": 9,
+      "httpStatus": 200,
+      "indexable": true,
+      "indexability": {
+        "httpStatus": 200,
+        "redirected": false,
+        "redirectHops": 0,
+        "canonical": "https://drglaw.ca/pt/corporate",
+        "canonicalSelf": true,
+        "canonicalSameOrigin": true,
+        "metaNoindex": false,
+        "metaNofollow": false,
+        "headerNoindex": false,
+        "headerNofollow": false,
+        "indexable": true,
+        "inSitemap": true,
+        "mixedSignals": false
+      },
+      "schema": {
+        "blocks": 3,
+        "invalidBlocks": 0,
+        "types": [
+          "legalservice",
+          "openinghoursspecification",
+          "contactpoint",
+          "educationaloccupationalcredential",
+          "administrativearea",
+          "person",
+          "educationalorganization",
+          "breadcrumblist",
+          "listitem"
+        ],
+        "hasOrganization": false,
+        "hasLocalBusiness": false,
+        "hasLegalService": true,
+        "hasAttorney": false,
+        "hasPerson": true,
+        "hasBreadcrumb": true,
+        "hasFaq": false,
+        "hasWebsite": false,
+        "hasReview": false,
+        "fields": {
+          "name": true,
+          "url": true,
+          "telephone": true,
+          "address": false,
+          "areaServed": true,
+          "sameAs": true,
+          "priceRange": false,
+          "openingHours": true
+        },
+        "conflictingEntity": false
+      },
+      "lawFirm": {
+        "phoneVisible": true,
+        "contactFormPresent": true,
+        "addressVisible": true,
+        "consultationCta": true,
+        "policyPagePresent": true,
+        "practiceAreaIntent": true,
+        "serviceAreaLikely": false,
+        "trust": {
+          "testimonials": false,
+          "reviews": false,
+          "caseResults": false,
+          "awards": false,
+          "credentials": true
+        }
+      },
+      "wordCount": 1187,
+      "rendering": {
+        "risk": "low",
+        "wordCount": 1187,
+        "scriptCount": 35,
+        "externalScriptCount": 12,
+        "appShellLikely": false,
+        "emptyAppRoot": false,
+        "hasNoscriptFallback": false,
+        "evidence": [
+          "1187 words in server HTML",
+          "12 external scripts"
+        ]
+      },
+      "pageAudit": {
+        "metaDescription": "Estrutura, contratos e decisões societárias antes da assinatura. Damaris atua em direito empresarial de Ontário, com aconselhamento em inglês ou português.",
+        "h1s": [
+          "Defina a estrutura jurídica antes do próximo passo do negócio."
+        ],
+        "h2s": [
+          "Para empresários diante de uma decisão concreta.",
+          "Da decisão à nota escrita.",
+          "Não tem certeza se deve abrir empresa?",
+          "O que empresários em Ontário perguntam antes de enviar um caso.",
+          "A legislação por trás de um caso de direito empresarial",
+          "Envie sua questão empresarial antes de a decisão se tornar definitiva."
+        ],
+        "imageCount": 2,
+        "imagesMissingAlt": 1,
+        "internalLinksOut": 25,
+        "ctaEvidence": [],
+        "phoneEvidence": [
+          "647-584-0998",
+          "647-584-0998",
+          "647-584-0998"
+        ]
+      },
+      "keyWarnings": [],
+      "wpDefault": false
+    },
+    {
+      "url": "https://drglaw.ca/pt/real-estate",
+      "title": "Direito Imobiliário em Ontário | DRG Law",
+      "metaDescription": "Compra, venda, refinanciamento e revisão de aluguel comercial em Ontário. Damaris conduz o caso pessoalmente, em inglês ou português, com a verificação de título e os números do fechamento por escrito antes do dia do fechamento.",
+      "pageType": "practice",
+      "pageScore": 92,
+      "pageGrade": "A",
+      "aiVisibilityScore": 75,
+      "categories": [
+        {
+          "name": "On-Page SEO",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Page title",
+              "status": "pass",
+              "detail": "Good length (40 chars)."
+            },
+            {
+              "label": "Meta description",
+              "status": "warn",
+              "detail": "Long (228 chars). May be truncated in search results, since Google's snippet length is pixel-width based rather than a fixed character count; this is a recommendation, not a hard limit.",
+              "fix": "Consider trimming to under 160 characters so more of the description shows in search results."
+            },
+            {
+              "label": "H1 heading",
+              "status": "pass",
+              "detail": "Single H1 present."
+            },
+            {
+              "label": "H2 subheadings",
+              "status": "pass",
+              "detail": "5 H2 tags found."
+            },
+            {
+              "label": "Open Graph tags",
+              "status": "pass",
+              "detail": "Title, description, and image all present."
+            },
+            {
+              "label": "Image alt text",
+              "status": "pass",
+              "detail": "All 3 images have alt text or a valid empty alt (1 correctly decorative with alt=\"\")."
+            },
+            {
+              "label": "HTML lang attribute",
+              "status": "pass",
+              "detail": "Set to \"pt-BR\". Helps search engines serve the right audience."
+            }
+          ]
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "HTTP status",
+              "status": "pass",
+              "detail": "Returned HTTP 200."
+            },
+            {
+              "label": "Redirect chain",
+              "status": "pass",
+              "detail": "Served directly with no redirect."
+            },
+            {
+              "label": "Indexable",
+              "status": "pass",
+              "detail": "No noindex directive. Page is eligible to be indexed."
+            },
+            {
+              "label": "Followable links",
+              "status": "pass",
+              "detail": "Links on this page are followable."
+            },
+            {
+              "label": "Canonical tag",
+              "status": "pass",
+              "detail": "Self-referencing canonical present."
+            },
+            {
+              "label": "Mixed indexability signals",
+              "status": "pass",
+              "detail": "Indexability signals are consistent."
+            },
+            {
+              "label": "robots.txt crawl access",
+              "status": "pass",
+              "detail": "Googlebot and Bingbot are allowed to crawl this path."
+            },
+            {
+              "label": "Sitemap membership",
+              "status": "pass",
+              "detail": "Page is listed in the XML sitemap."
+            }
+          ]
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 65,
+          "maxScore": 80,
+          "items": [
+            {
+              "label": "JSON-LD structured data",
+              "status": "pass",
+              "detail": "3 JSON-LD blocks found."
+            },
+            {
+              "label": "JSON-LD validity",
+              "status": "pass",
+              "detail": "All 3 blocks parse correctly."
+            },
+            {
+              "label": "Business / LegalService schema",
+              "status": "pass",
+              "detail": "Business entity structured data found."
+            },
+            {
+              "label": "Business schema fields",
+              "status": "warn",
+              "detail": "Missing field: address.",
+              "fix": "Add the missing JSON-LD field: address."
+            },
+            {
+              "label": "FAQPage schema",
+              "status": "warn",
+              "detail": "Not found. FAQ schema packages common questions for search and AI answer engines.",
+              "fix": "Add FAQPage structured data wrapping your most common client questions and answers."
+            },
+            {
+              "label": "Review / Rating schema",
+              "status": "warn",
+              "detail": "Not found. Review schema can support star ratings in search results.",
+              "fix": "Add AggregateRating or Review schema for your client testimonials."
+            },
+            {
+              "label": "Breadcrumb schema",
+              "status": "pass",
+              "detail": "Present. Helps search engines read site hierarchy."
+            },
+            {
+              "label": "Schema conflicts",
+              "status": "pass",
+              "detail": "No conflicting business entity declarations."
+            }
+          ]
+        },
+        {
+          "name": "AI Visibility",
+          "score": 75,
+          "maxScore": 100,
+          "items": [
+            {
+              "label": "AI search bot access",
+              "status": "pass",
+              "detail": "All major AI search crawlers can access your site."
+            },
+            {
+              "label": "AI training bot control",
+              "status": "warn",
+              "detail": "No training-only crawlers blocked. Your content may be used to train AI models.",
+              "fix": "Add Disallow rules for GPTBot, CCBot, and Bytespider in robots.txt if you want to control AI training use."
+            },
+            {
+              "label": "Entity description",
+              "status": "pass",
+              "detail": "A named business entity is described in structured data for AI to read."
+            },
+            {
+              "label": "Attorney / person schema",
+              "status": "pass",
+              "detail": "Attorney or Person schema present. Supports authorship and expertise signals."
+            },
+            {
+              "label": "Question-format headings",
+              "status": "fail",
+              "detail": "No question-format headings. Q&A-shaped headings are one optional signal AI systems may use to extract answers, not a requirement.",
+              "fix": "Add H2 or H3 headings phrased as questions that match queries people type into AI search."
+            },
+            {
+              "label": "Direct-answer sentences",
+              "status": "fail",
+              "detail": "No direct-answer patterns detected. Explicit definitional sentences are one optional signal that may help AI systems extract answers, not a requirement.",
+              "fix": "Include explicit definitional sentences. Example: \"A power of attorney is a legal document that...\""
+            },
+            {
+              "label": "Authoritative citations",
+              "status": "pass",
+              "detail": "2 links to authoritative sources. Supports credibility for AI sourcing."
+            },
+            {
+              "label": "Author / reviewer signals",
+              "status": "pass",
+              "detail": "Author or reviewer attribution found. Supports source credibility for AI."
+            },
+            {
+              "label": "llms.txt file",
+              "status": "pass",
+              "detail": "Present. Provides AI-friendly content guidance, a small positive signal."
+            },
+            {
+              "label": "Semantic HTML structure",
+              "status": "pass",
+              "detail": "5 semantic elements found. Helps AI parse page structure."
+            }
+          ]
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "Phone number visible",
+              "status": "pass",
+              "detail": "A phone number is visible on the page."
+            },
+            {
+              "label": "Contact form / direct contact",
+              "status": "pass",
+              "detail": "A contact form or direct email path is present."
+            },
+            {
+              "label": "Consultation call to action",
+              "status": "pass",
+              "detail": "A consultation or contact call to action is present."
+            },
+            {
+              "label": "Address / NAP",
+              "status": "pass",
+              "detail": "A street address is visible."
+            },
+            {
+              "label": "Trust signals",
+              "status": "warn",
+              "detail": "Only 1 of 5 trust signal types found. Trust cues lift intake conversion.",
+              "fix": "Surface testimonials, reviews, notable results, awards, and bar credentials where visitors can see them."
+            },
+            {
+              "label": "Practice-area intent",
+              "status": "pass",
+              "detail": "Content clearly signals legal practice areas."
+            },
+            {
+              "label": "Policy / disclaimer pages",
+              "status": "pass",
+              "detail": "Privacy, terms, or disclaimer links are present."
+            }
+          ]
+        },
+        {
+          "name": "Local SEO",
+          "score": 50,
+          "maxScore": 50,
+          "items": [
+            {
+              "label": "Phone number (NAP)",
+              "status": "pass",
+              "detail": "Phone number found on page."
+            },
+            {
+              "label": "Street address (NAP)",
+              "status": "pass",
+              "detail": "Physical address found on page."
+            },
+            {
+              "label": "Google Maps embed",
+              "status": "pass",
+              "detail": "Maps integration found."
+            },
+            {
+              "label": "NAP in structured data",
+              "status": "pass",
+              "detail": "Contact info found in JSON-LD."
+            },
+            {
+              "label": "Google Business Profile link",
+              "status": "pass",
+              "detail": "GBP link found. Cross-linking strengthens local authority."
+            }
+          ]
+        },
+        {
+          "name": "Technical & Security",
+          "score": 65,
+          "maxScore": 70,
+          "items": [
+            {
+              "label": "HTTPS",
+              "status": "pass",
+              "detail": "Site loads over HTTPS."
+            },
+            {
+              "label": "Mixed content",
+              "status": "pass",
+              "detail": "No insecure HTTP resources detected."
+            },
+            {
+              "label": "HSTS header",
+              "status": "pass",
+              "detail": "Present with max-age of at least one year."
+            },
+            {
+              "label": "X-Content-Type-Options",
+              "status": "pass",
+              "detail": "Set to nosniff."
+            },
+            {
+              "label": "Content-Security-Policy",
+              "status": "warn",
+              "detail": "Content-Security-Policy-Report-Only is present (report-only mode): violations are logged but nothing is blocked yet. This is implementation in progress, not a missing control.",
+              "fix": "Review the report-only violation reports, then promote the policy to an enforced Content-Security-Policy header once it is clean."
+            },
+            {
+              "label": "Viewport meta tag",
+              "status": "pass",
+              "detail": "Present. Required for mobile rendering."
+            },
+            {
+              "label": "Compression",
+              "status": "pass",
+              "detail": "BR compression active."
+            }
+          ]
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30,
+          "items": [
+            {
+              "label": "Server-rendered content",
+              "status": "pass",
+              "detail": "Server HTML contains enough visible content for crawler analysis (1053 words)."
+            },
+            {
+              "label": "JavaScript app-shell dependency",
+              "status": "pass",
+              "detail": "No thin app-shell pattern detected."
+            },
+            {
+              "label": "Noscript fallback",
+              "status": "pass",
+              "detail": "No noscript fallback needed for the detected server-rendered content level."
+            }
+          ]
+        },
+        {
+          "name": "Performance",
+          "score": 35,
+          "maxScore": 40,
+          "items": [
+            {
+              "label": "Time to first byte",
+              "status": "pass",
+              "detail": "Fast (126ms, single-sample measurement)."
+            },
+            {
+              "label": "HTML document size",
+              "status": "pass",
+              "detail": "61 KB."
+            },
+            {
+              "label": "Render-blocking resources",
+              "status": "warn",
+              "detail": "3 render-blocking resources in <head>.",
+              "fix": "Add async or defer to scripts. Use media=\"print\" for non-critical stylesheets."
+            },
+            {
+              "label": "Third-party scripts",
+              "status": "pass",
+              "detail": "0 external script domains."
+            }
+          ]
+        },
+        {
+          "name": "Links & Content",
+          "score": 60,
+          "maxScore": 60,
+          "items": [
+            {
+              "label": "Word count",
+              "status": "pass",
+              "detail": "1,053 words."
+            },
+            {
+              "label": "Heading hierarchy",
+              "status": "pass",
+              "detail": "Heading levels follow a proper sequence."
+            },
+            {
+              "label": "Internal links",
+              "status": "pass",
+              "detail": "25 internal links found."
+            },
+            {
+              "label": "Content-to-HTML ratio",
+              "status": "pass",
+              "detail": "11% text content, but the page already has 1,053 words of substantive copy; a low ratio here reflects markup weight, not thin content."
+            },
+            {
+              "label": "Anchor text quality",
+              "status": "pass",
+              "detail": "Links use descriptive text."
+            },
+            {
+              "label": "External links",
+              "status": "pass",
+              "detail": "8 outbound links found."
+            }
+          ]
+        }
+      ],
+      "failCount": 2,
+      "warnCount": 8,
+      "httpStatus": 200,
+      "indexable": true,
+      "indexability": {
+        "httpStatus": 200,
+        "redirected": false,
+        "redirectHops": 0,
+        "canonical": "https://drglaw.ca/pt/real-estate",
+        "canonicalSelf": true,
+        "canonicalSameOrigin": true,
+        "metaNoindex": false,
+        "metaNofollow": false,
+        "headerNoindex": false,
+        "headerNofollow": false,
+        "indexable": true,
+        "inSitemap": true,
+        "mixedSignals": false
+      },
+      "schema": {
+        "blocks": 3,
+        "invalidBlocks": 0,
+        "types": [
+          "legalservice",
+          "openinghoursspecification",
+          "contactpoint",
+          "educationaloccupationalcredential",
+          "administrativearea",
+          "person",
+          "educationalorganization",
+          "breadcrumblist",
+          "listitem"
+        ],
+        "hasOrganization": false,
+        "hasLocalBusiness": false,
+        "hasLegalService": true,
+        "hasAttorney": false,
+        "hasPerson": true,
+        "hasBreadcrumb": true,
+        "hasFaq": false,
+        "hasWebsite": false,
+        "hasReview": false,
+        "fields": {
+          "name": true,
+          "url": true,
+          "telephone": true,
+          "address": false,
+          "areaServed": true,
+          "sameAs": true,
+          "priceRange": false,
+          "openingHours": true
+        },
+        "conflictingEntity": false
+      },
+      "lawFirm": {
+        "phoneVisible": true,
+        "contactFormPresent": true,
+        "addressVisible": true,
+        "consultationCta": true,
+        "policyPagePresent": true,
+        "practiceAreaIntent": true,
+        "serviceAreaLikely": false,
+        "trust": {
+          "testimonials": false,
+          "reviews": false,
+          "caseResults": false,
+          "awards": false,
+          "credentials": true
+        }
+      },
+      "wordCount": 1053,
+      "rendering": {
+        "risk": "low",
+        "wordCount": 1053,
+        "scriptCount": 32,
+        "externalScriptCount": 11,
+        "appShellLikely": false,
+        "emptyAppRoot": false,
+        "hasNoscriptFallback": false,
+        "evidence": [
+          "1053 words in server HTML",
+          "11 external scripts"
+        ]
+      },
+      "pageAudit": {
+        "metaDescription": "Compra, venda, refinanciamento e revisão de aluguel comercial em Ontário. Damaris conduz o caso pessoalmente, em inglês ou português, com a verificação de título e os números do fechamento por escrito antes do dia do fechamento.",
+        "h1s": [
+          "Feche o imóvel com os riscos à vista."
+        ],
+        "h2s": [
+          "Para quem está prestes a comprar, vender, refinanciar ou alugar.",
+          "Da oferta à entrega da chave.",
+          "O que clientes em Ontário perguntam antes de enviar o caso imobiliário.",
+          "A legislação por trás de um caso de direito imobiliário",
+          "Envie a questão imobiliária antes da assinatura."
+        ],
+        "imageCount": 3,
+        "imagesMissingAlt": 1,
+        "internalLinksOut": 25,
+        "ctaEvidence": [],
+        "phoneEvidence": [
+          "647-584-0998",
+          "647-584-0998",
+          "647-584-0998"
+        ]
+      },
+      "keyWarnings": [
+        "Question-format headings",
+        "Direct-answer sentences"
+      ],
+      "wpDefault": false
+    }
+  ],
+  "issues": [
+    {
+      "title": "Trust signals",
+      "severity": "high",
+      "affectedCount": 9,
+      "totalPages": 10
+    },
+    {
+      "title": "Direct-answer sentences",
+      "severity": "high",
+      "affectedCount": 1,
+      "totalPages": 10
+    },
+    {
+      "title": "Question-format headings",
+      "severity": "high",
+      "affectedCount": 1,
+      "totalPages": 10
+    },
+    {
+      "title": "Business schema fields",
+      "severity": "medium",
+      "affectedCount": 10,
+      "totalPages": 10
+    },
+    {
+      "title": "Review / Rating schema",
+      "severity": "medium",
+      "affectedCount": 10,
+      "totalPages": 10
+    },
+    {
+      "title": "Authoritative citations",
+      "severity": "medium",
+      "affectedCount": 3,
+      "totalPages": 10
+    },
+    {
+      "title": "Address / NAP",
+      "severity": "medium",
+      "affectedCount": 1,
+      "totalPages": 10
+    },
+    {
+      "title": "Page title",
+      "severity": "low",
+      "affectedCount": 3,
+      "totalPages": 10
+    },
+    {
+      "title": "FAQPage schema",
+      "severity": "low",
+      "affectedCount": 4,
+      "totalPages": 10
+    },
+    {
+      "title": "Time to first byte",
+      "severity": "low",
+      "affectedCount": 1,
+      "totalPages": 10
+    },
+    {
+      "title": "AI training bot control",
+      "severity": "info",
+      "affectedCount": 10,
+      "totalPages": 10
+    },
+    {
+      "title": "Content-Security-Policy",
+      "severity": "info",
+      "affectedCount": 10,
+      "totalPages": 10
+    },
+    {
+      "title": "Render-blocking resources",
+      "severity": "info",
+      "affectedCount": 10,
+      "totalPages": 10
+    },
+    {
+      "title": "Meta description",
+      "severity": "info",
+      "affectedCount": 7,
+      "totalPages": 10
+    },
+    {
+      "title": "Heading hierarchy",
+      "severity": "info",
+      "affectedCount": 1,
+      "totalPages": 10
+    }
+  ]
+}

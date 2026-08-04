@@ -331,4 +331,60 @@ describe("claimPlacementForPublish", () => {
       });
     });
   });
+
+  describe("release_path (standing publishing authorization)", () => {
+    it.each(["individual_approval", "standing_authorization"] as const)(
+      "threads through the documented release_path value %s when ok:true",
+      async (releasePath) => {
+        state.rpcResponse = {
+          data: { ok: true, claim_id: CLAIM, idempotent_replay: false, status: "active", release_path: releasePath },
+          error: null,
+        };
+        const result = await claimPlacementForPublish({
+          firmId: FIRM,
+          deliverableId: DELIVERABLE,
+          placementId: PLACEMENT,
+          approvedVersionId: VERSION,
+          idempotencyKey: "key-1",
+          actor: { role: "operator", id: "op-1", name: "Adriano", email: null },
+        });
+        expect(result.ok).toBe(true);
+        expect(result.releasePath).toBe(releasePath);
+      },
+    );
+
+    it("release_path is undefined, not a failure, when the RPC response predates this field (backward compatibility)", async () => {
+      state.rpcResponse = {
+        data: { ok: true, claim_id: CLAIM, idempotent_replay: false, status: "active" },
+        error: null,
+      };
+      const result = await claimPlacementForPublish({
+        firmId: FIRM,
+        deliverableId: DELIVERABLE,
+        placementId: PLACEMENT,
+        approvedVersionId: VERSION,
+        idempotencyKey: "key-1",
+        actor: { role: "operator", id: "op-1", name: "Adriano", email: null },
+      });
+      expect(result.ok).toBe(true);
+      expect(result.releasePath).toBeUndefined();
+    });
+
+    it("fails closed when release_path is an unrecognized value", async () => {
+      state.rpcResponse = {
+        data: { ok: true, claim_id: CLAIM, idempotent_replay: false, status: "active", release_path: "bogus_path" },
+        error: null,
+      };
+      const result = await claimPlacementForPublish({
+        firmId: FIRM,
+        deliverableId: DELIVERABLE,
+        placementId: PLACEMENT,
+        approvedVersionId: VERSION,
+        idempotencyKey: "key-1",
+        actor: { role: "operator", id: "op-1", name: "Adriano", email: null },
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/unrecognized "release_path" value/);
+    });
+  });
 });

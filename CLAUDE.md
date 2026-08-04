@@ -557,6 +557,7 @@ Crons are scheduled via Supabase pg_cron (no Vercel Pro dependency):
 - `token-expiry-check-daily` (`41 6 * * *`) calls `/api/cron/token-expiry-check`. Scheduled 2026-06-09 as pg_cron job 5; the four prior jobs verified green on the same pass.
 - `deadline-reminder-hourly` (`37 * * * *`) calls `/api/cron/deadline-reminder`. Scheduled 2026-07-02 as pg_cron job 6. T-12h decision-window reminder to firm lawyers (qualification audit F1): triaging rows at least 12h old whose deadline falls within the next 12h get one reminder email before the backstop fires; stamped on `screened_leads.deadline_reminder_sent_at`.
 - `expire-web-intake-sessions-hourly` (`17 * * * *`) calls `/api/cron/expire-web-intake-sessions`. Scheduled 2026-07-02 as pg_cron job 7. Web-widget drop-off sweep (qualification audit item 5): expired `web_intake_sessions` rows finalize into a thin `screened_leads` brief (contact-complete) or `unconfirmed_inquiries` (`reason='abandoned'`).
+- `deploy-alarm-quarterly-drill` (`0 13 1 1,4,7,10 *`) POSTs the synthetic [TEST] drill body to `/api/internal/vercel-deployment-check` with the Bearer token read from Supabase Vault secret `alarm_test_secret` (mirror of the readable Vercel env var `ALARM_TEST_SECRET`). Scheduled 2026-07-23 as direct runtime `cron.schedule` SQL per the established pg_cron pattern, no migration file. Expected effect: exactly one `[DEPLOY ALARM][TEST]` email to the operator inbox on the first day of each quarter. A missing quarterly email means the alarm arm broke (dead Resend key, broken route, or drifted secret) and is itself the alert.
 
 Migration `20260506_pg_cron_pg_net_setup.sql` enables `pg_cron` and `pg_net`, stores the bearer token in Supabase Vault as `pg_cron_token`, defines `cron_internal.call_cron_route(path)` (reads token from Vault, posts to `https://app.caseloadselect.ca` via pg_net), and schedules the two jobs.
 
@@ -855,6 +856,86 @@ Operator dependency: a lawyer cannot sign off until an email is on file (`firm_l
 
 **Change-request loop (DR-085, 2026-07-09).** Three additions to the append-only compliance record, none of which weaken it. Replies: a comment with `approval_record_id` set threads under the change-request record (server forces its `version_id` and null `annotation`; excluded from the passage margin and the open-comment count). Version-as-answer: a version posted while `changes_requested` links back via `deliverable_versions.responds_to_approval_id` (explicit id validated against this deliverable, or auto-linked to the latest open record when omitted); the composer quotes the open request, the approval-history panel renders "Addressed in vN..." instead of a dead end. Attachments: the change-request note and any reply may carry image/PDF evidence (`deliverables/{firmId}/{deliverableId}/feedback/` prefix, content-sniffed), frozen into `approval_records.attachments` at INSERT via the widened `record_approval_atomic` RPC, never by UPDATE. Migration `20260709_deliverable_change_request_loop.sql`. Build plan: `docs/BUILD_PLAN_deliverables_change_request_loop_v1.md`.
 
+### Standing Publishing Authorization (DR-104, 2026-07-17; display language amended by DR-107, 2026-07-23)
+
+A client-controlled, per-firm alternative to individual per-version lawyer
+approval. Standing authorization permits release after QA; it does not
+represent individual lawyer review of a particular version. Per DR-107
+(2026-07-23), eligible in_review content displays as "Pre-approved" (ready
+to publish per the operator schedule): a display state derived at render
+time from the latest authorization event plus the current version's
+requires_individual_review flag, never a stored status and never a
+fabricated version-level approval record. Only the firm's own
+lawyer/client decision-maker can turn it on or off, from
+`/portal/[firmId]/how-your-content-works`; an operator can never enable it
+for a client (checked both at the portal route, via `getFirmSession` which
+structurally cannot admit an operator session, and independently at the
+database layer).
+
+State is append-only, migration `20260717230956_standing_publishing_authorization.sql`:
+
+```
+standing_publishing_authorizations (id, firm_id, event_seq [identity, the
+  authoritative ordering column], event[enabled|disabled], actor_role[lawyer
+  only], actor_id, actor_name, actor_email, authorization_text, policy_version,
+  scope, notification_preference[per_publication|weekly_digest], reason,
+  ip_address, user_agent, effective_at, created_at)  -- append-only, RPC-only
+```
+
+"Current state" is always derived by reading the latest row (`order by
+event_seq desc limit 1`), never a separately-maintained boolean/projection.
+Writes go exclusively through `set_standing_publishing_authorization`
+(SECURITY DEFINER, owned by `postgres`), which locks the `intake_firms` row
+so two concurrent enable/disable calls for the same firm serialize instead
+of racing, and independently rejects any `actor_role` other than `'lawyer'`
+as defense in depth against an application bug. `authorization_text` is
+never accepted from the request body -- `buildStandingAuthorizationText()`
+(`lib/standing-publishing-authorization.ts`) assembles the canonical,
+firm-name-interpolated wording server-side, so the frozen copy can never
+diverge from what the lawyer actually saw and confirmed.
+
+**Operator-only exception.** `deliverable_versions.requires_individual_review`
+(+ reason/actor audit columns) lets an operator force one specific version
+back onto the individual-approval path -- "unusual, sensitive, uncertain, or
+high-risk" content -- via `set_deliverable_version_individual_review_requirement`
+(operator-only, independently enforced at the RPC layer, mirroring the
+lawyer-only check above but inverted).
+
+**Release-gate integration.** `claim_placement_for_publish` (see the
+publishing-evidence system above) now accepts a version either because it
+was individually approved (unchanged path A) or because the firm's latest
+authorization event is `'enabled'` and the version does not carry the
+individual-review exception (new path B, `standing_authorization`). Every
+other gate the RPC already enforced -- version-must-be-current, no
+competing active claim, no already-verified receipt -- is byte-for-byte
+unchanged and applies identically on both paths; nothing upstream of this
+substitution (QA, artifact validation, placement, metadata) is bypassed.
+`publication_placement_claims.release_path` +
+`standing_authorization_event_id` record which path authorized a given
+claim; because the referenced `standing_publishing_authorizations` row is
+itself immutable, that foreign key durably preserves the authorization
+snapshot even after the firm later disables authorization --
+`derive_publication_receipt_release_path()` propagates the same two
+columns onto `publication_receipts` for any receipt that doesn't set them
+explicitly. Status language keeps "Individually approved" distinct from
+the DR-107 Pre-approved states (`components/portal/PublicationStatusSummary.tsx`);
+the two are never merged into one label.
+
+DRG Law was **not** silently activated from the WhatsApp conversation that
+prompted this feature -- it ships with authorization off, and Damaris must
+confirm through the portal herself so the system captures her authenticated
+identity, the exact wording, and a durable audit event.
+
+Key files: `lib/standing-publishing-authorization.ts` (I/O + canonical
+text), `components/portal/StandingAuthorizationCard.tsx` (the on/off
+control + inline confirmation), `components/portal/PublicationStatusSummary.tsx`
+(deliverable-detail status). Postgres verification:
+`scripts/verify-standing-publishing-authorization.sql` (rollback-wrapped,
+run via the Supabase MCP against production) and
+`src/lib/__tests__/standing-publishing-authorization-concurrency.integration.test.ts`
+(gated on `DIRECT_DATABASE_URL`, same convention as the publication-claim
+concurrency suite).
+
 ## Content Performance / Content-to-Matter Attribution (2026-07-17)
 
 Content Studio's initial, evidence-first home for tracing an enquiry back to the published content it may relate to. Full doctrine: `docs/CONTENT_PERFORMANCE_ATTRIBUTION_MODEL.md`. Operator runbook: `docs/runbooks/content-performance-attribution-runbook.md`.
@@ -879,6 +960,22 @@ Reuses, never duplicates: `screened_leads` (lead subject, `utm_*`/`referrer` alr
 Surfaces: `src/app/admin/content-studio/attribution/**` (operator: deliverable breakdown, attributed-lead list, per-lead evidence timeline + self-report/offline-referral entry form + per-lead observed-evidence sync button, date-range report) and `src/app/portal/[firmId]/content-performance/**` (client/lawyer-safe aggregate view, client sessions excluded, never exposes raw leads/contact/evidence notes -- only counts and pre-built sentences like "2 enquiries have a self-reported connection to this content"). Key files: `lib/content-attribution-pure.ts` (pure logic, deterministic matching, client-safe sentence builder), `lib/content-attribution.ts` (I/O layer).
 
 Never touches consent (`consent_log`, `screened_leads.*_consent_*`) or the live customer-facing intake widget -- self-report/offline capture is operator-console-only by design; adding a source question to the public intake funnel is a distinct, higher-risk product decision this build explicitly deferred. Never a bulk historical backfill: `syncObservedEvidenceForLead` is deterministic and idempotent but always per-lead, operator-triggered.
+
+**Placement-tagged tracking + release gate (Ses.21 follow-up).** `lib/content-placement-tracking-pure.ts` generates deterministic `utm_content=<placement id>` tracking parameters per placement, never a fabricated domain (`intake_firms` has none to guess). The receipts route (`.../placements/[placementId]/receipts`) rejects a `firm_website` receipt whose `public_url` does not carry the placement's exact tracking marker -- the one destination where this is honestly enforceable without assuming a domain. `PlacementsTrackingPanel.tsx` (operator-only, on the deliverable review page) surfaces the parameters for every destination as copy-paste help. LinkedIn/GBP/email are not hard-gated, consistent with `channel-validation.ts`'s existing unverifiable-beyond-attestation posture for those destinations.
+
+### Surface-presentation adaptations (DR-105, 2026-07-19)
+
+Republishing an already-approved version on a different destination surface (e.g. a native LinkedIn Article for a version whose source surface is the firm's website) is not automatically a new editorial version and does not by itself require the lawyer to re-approve, but it is also never something an agent drafts at publish time. This is doctrine and a documented registry only as of 2026-07-19; nothing in the app reads or enforces it yet (no `resolve_surface_presentation_adaptation` code path exists). Full policy: DR-105 in the decision registry (`00_System/01_Doctrine/DECISION_RECORDS.md`), the registry contract in `docs/publication-operator/surface-presentation-adaptation-registry.md`, and the preflight step design in `docs/publication-operator/publication-resolution-preflight-design-2026-07-19.md` §4.1a/§5. Agents:
+
+- Resolve any destination-surface-required compliance wrapper (disclaimer banners, locale notices) by `firm + locale + source_surface + destination_surface`, never by copying the source surface's own wrapper verbatim onto a different surface.
+- Use only an exact, pre-registered adaptation rule from the registry above. Never draft, paraphrase, translate, or improve compliance wording at publish time, even when the requested change looks minor.
+- Never generalize one firm/locale/surface rule to any other firm, locale, or surface.
+- Treat a missing registry rule as a preflight failure (`surface_adaptation_rule_missing`) that blocks that surface, not as license to invent the missing wording.
+- Treat any request to change substantive content, legal claims, scope, CTA, translation, or the destination itself as `substantive_adaptation_requires_approval`, routed to the normal lawyer sign-off path, never resolved by an operator instruction alone.
+- A LinkedIn post promoting an editorial piece links to that piece's matching live native LinkedIn Article when that is the configured routing rule; it must not silently fall back to the website URL just because no Article exists yet (report the gap instead).
+- A source version is eligible for a Surface-Presentation Adaptation only when it is immutable and release-authorized (`immutable_release_authorized_version`) through either an individual lawyer approval, or an active standing publishing authorization covering a version that is not flagged `requires_individual_review` -- the same two-path bar `claim_placement_for_publish()` already applies, never a separate or looser one. When `requires_individual_review = true`, standing authorization is not sufficient and individual lawyer approval remains required.
+- `platform_link_formatting`, where a matching rule allows it, may only re-render an already-approved, existing link in the destination platform's required format. It must never change the URL, the destination, the CTA target, or an anchor's meaning; add or remove a link; or substitute a website URL for a destination surface that requires the native LinkedIn Article URL specifically.
+- Passing this policy resolves the compliance-wording objection only. It does not, by itself, close the LinkedIn/GBP `channel_auth_missing` gap (no publishing credential or API integration exists in this codebase for either), implement the runtime registry lookup, add deterministic output-diff validation, or capture adaptation evidence -- see the design document's §10 for that separate, not-yet-started implementation work.
 
 ## Build Roadmap
 
@@ -936,7 +1033,7 @@ All migrations idempotent. Run in order:
 14. `20260516_unconfirmed_inquiries.sql` — contact-capture doctrine reject store (APPLIED 2026-05-15)
 15. `20260516_channel_intake_sessions.sql` — Meta-channel multi-turn intake sessions (APPLIED 2026-05-15)
 16. `20260516_intake_firms_meta_access_tokens.sql` — `facebook_page_access_token` + `whatsapp_cloud_api_access_token` columns on `intake_firms` (APPLIED 2026-05-15). Tokens must be populated manually per firm (Messenger API Settings → Page access token; WhatsApp API Setup → access token).
-17. `20260525_channel_intake_sessions_recent_finalized_index.sql` — partial index on `(firm_id, channel, sender_id, last_activity_at DESC) WHERE finalized = true`. Supports the post-finalization secretary mode (DR-104 / Ses.9 fix #105).
+17. `20260525_channel_intake_sessions_recent_finalized_index.sql` — partial index on `(firm_id, channel, sender_id, last_activity_at DESC) WHERE finalized = true`. Supports the post-finalization secretary mode (DR-110 / Ses.9 fix #105).
 18. `20260526_intake_firms_token_expiry.sql` — adds 6 columns to `intake_firms` for token-expiry monitoring (`facebook_page_token_expires_at` + `_alert_sent_at` × 3 tokens) plus a partial index for the daily cron sweep. APPLIED 2026-05-26 via Supabase MCP. See `lib/token-expiry.ts` + `GET /api/cron/token-expiry-check`.
 19. `20260602_intake_firms_gemini_disabled_alert.sql` — adds `gemini_disabled_alert_sent_at timestamptz` to `intake_firms` (per-firm suppression for the LLM-disabled operator alert, #128). APPLIED 2026-06-02 via Supabase MCP. See `lib/llm-health-alert.ts`.
 20. `20260605175457_security_lockdown_anon_authenticated.sql`: anon column-scoped host resolution + `authenticated` grant revocation (Database Access Invariant). APPLIED 2026-06-05; the migration file was recovered from the ledger 2026-06-09.
@@ -1005,7 +1102,7 @@ See master `CLAUDE.md` Build Roadmap for the formal scope-removal note (S6 retir
 
 ## Env Vars to Add in Vercel
 
-`CLIO_CLIENT_ID` · `CLIO_CLIENT_SECRET` · `CLIO_REDIRECT_URI` · `VERCEL_API_TOKEN` · `VERCEL_PROJECT_ID` · `GEMINI_API_KEY` (used by `/api/voice-intake` for LLM extraction; if missing, the endpoint falls back to regex-only and the row still persists)
+`CLIO_CLIENT_ID` · `CLIO_CLIENT_SECRET` · `CLIO_REDIRECT_URI` · `VERCEL_API_TOKEN` · `VERCEL_PROJECT_ID` · `GEMINI_API_KEY` (used by `/api/voice-intake` for LLM extraction; if missing, the endpoint falls back to regex-only and the row still persists) · `ALARM_TEST_SECRET` (used by the test-fire mode of `POST /api/internal/vercel-deployment-check`: a Bearer-authenticated synthetic alarm drill that exercises the full alarm email path with no deployment involved; deliberately a normal encrypted env var, NOT Sensitive, so operator drills can pull it; if unset, test mode returns 403 and the HMAC webhook path is unaffected)
 
 (DocuGenerate and DocuSeal env vars are retired with S6; safe to unset in Vercel.)
 

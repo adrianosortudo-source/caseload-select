@@ -20,6 +20,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/portal-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { listFirmFiles, uploadFirmFile, type ActorContext } from "@/lib/firm-files";
 import { isValidSection, type FileSection } from "@/lib/firm-files-pure";
 import { notifyOnFirmFileUpload } from "@/lib/file-notify";
@@ -79,6 +80,9 @@ export async function POST(
   if (!session || !isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
 
   let form: FormData;
   try {

@@ -44,6 +44,7 @@ const state = {
     email: string | null;
   } | null,
   detail: null as { deliverable: { firm_id: string; status: string; approved_version_id: string | null; current_version_id: string | null } } | null,
+  detailReadError: false,
   placements: [] as Array<{ id: string; destination: string; locale: string | null }>,
   createReceiptArgs: null as unknown,
   receipts: [] as unknown[],
@@ -83,7 +84,14 @@ vi.mock("@/lib/deliverables-auth", () => ({
 }));
 
 vi.mock("@/lib/deliverables", () => ({
-  getDeliverableDetail: () => Promise.resolve(state.detail),
+  getDeliverableDetail: () =>
+    Promise.resolve(
+      state.detailReadError
+        ? { ok: false, error: "mock read error" }
+        : state.detail === null
+          ? { ok: true, found: false }
+          : { ok: true, found: true, detail: state.detail },
+    ),
 }));
 
 vi.mock("@/lib/content-placements", () => ({
@@ -146,6 +154,7 @@ beforeEach(() => {
   state.detail = {
     deliverable: { firm_id: FIRM, status: "approved", approved_version_id: VERSION, current_version_id: VERSION },
   };
+  state.detailReadError = false;
   state.placements = [{ id: PLACEMENT, destination: "linkedin_post", locale: null }];
   state.createReceiptArgs = null;
   state.receipts = [];
@@ -222,6 +231,15 @@ describe("POST receipts: real operator identity is recorded (adversarial-review 
 });
 
 describe("POST receipts: entity and validation gates (regression)", () => {
+  it("503s (never 404) when the deliverable-detail read itself errors, on GET and POST", async () => {
+    state.detailReadError = true;
+    const getRes = await GET(makeGetReq(), params());
+    expect(getRes.status).toBe(503);
+    const postRes = await POST(makePostReq({ approved_version_id: VERSION, claim_id: CLAIM_ID, public_url: "https://example.test" }), params());
+    expect(postRes.status).toBe(503);
+    expect(state.createReceiptArgs).toBeNull();
+  });
+
   it("404s when the deliverable does not belong to this firm", async () => {
     state.detail = { deliverable: { firm_id: "other-firm", status: "approved", approved_version_id: VERSION, current_version_id: VERSION } };
     const res = await POST(makePostReq({ approved_version_id: VERSION, claim_id: CLAIM_ID, public_url: "https://example.test" }), params());
@@ -322,6 +340,68 @@ describe("POST receipts: claim_id contract (corrective release, workstream 1)", 
     );
     const args = state.createReceiptArgs as Record<string, unknown>;
     expect(args.artifactSha256).toBeUndefined();
+  });
+});
+
+describe("POST receipts: placement-tracking release gate (Content Performance follow-up)", () => {
+  it("400s a firm_website receipt whose public_url does not carry this placement's utm_content", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", locale: null }];
+    const res = await POST(
+      makePostReq({ approved_version_id: VERSION, claim_id: CLAIM_ID, public_url: "https://example.com/article" }),
+      params(),
+    );
+    expect(res.status).toBe(400);
+    expect(state.createReceiptArgs).toBeNull();
+    const json = await res.json();
+    expect(json.error).toContain(PLACEMENT);
+  });
+
+  it("succeeds when the firm_website public_url carries the exact utm_content=placementId", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", locale: null }];
+    const res = await POST(
+      makePostReq({
+        approved_version_id: VERSION,
+        claim_id: CLAIM_ID,
+        public_url: `https://example.com/article?utm_source=content_studio&utm_medium=organic&utm_content=${PLACEMENT}`,
+      }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects a near-miss utm_content that only partially matches the placement id", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", locale: null }];
+    const res = await POST(
+      makePostReq({
+        approved_version_id: VERSION,
+        claim_id: CLAIM_ID,
+        public_url: `https://example.com/article?utm_content=${PLACEMENT}-extra`,
+      }),
+      params(),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("does not gate non-website destinations (LinkedIn/GBP public_url is the platform post, not the content link)", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "linkedin_post", locale: null }];
+    const res = await POST(
+      makePostReq({
+        approved_version_id: VERSION,
+        claim_id: CLAIM_ID,
+        public_url: "https://www.linkedin.com/posts/some-post-id",
+      }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("does not gate a firm_website receipt recorded with only external_post_id (no public_url to check)", async () => {
+    state.placements = [{ id: PLACEMENT, destination: "firm_website", locale: null }];
+    const res = await POST(
+      makePostReq({ approved_version_id: VERSION, claim_id: CLAIM_ID, external_post_id: "some-id" }),
+      params(),
+    );
+    expect(res.status).toBe(200);
   });
 });
 

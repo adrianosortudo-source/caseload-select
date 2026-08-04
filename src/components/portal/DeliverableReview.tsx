@@ -23,20 +23,33 @@ import type {
 } from "@/lib/types";
 import { DRGArticleFrame, type AnnotationPosition } from "./DRGArticleFrame";
 import {
-  STATUS_LABELS,
+  displayStatusLabel,
+  isPublished,
   CONTENT_KIND_LABELS,
   annotationLabel,
   versionOptionLabel,
+  type ClientNotificationChoice,
 } from "@/lib/deliverables-pure";
 import { stackCards, stackBottom } from "@/lib/margin-stack";
 import type { HighlightItem } from "@/lib/highlight-dom";
 import { formatTimestamp } from "@/lib/firm-timezone";
+import { SUPPORT_PREVIEW_READ_ONLY_MESSAGE } from "@/lib/support-preview-copy";
+import PlacementsTrackingPanel from "./PlacementsTrackingPanel";
+import HeroImageControl from "./HeroImageControl";
+import { shouldShowHeroImageControl } from "./hero-image-control-pure";
 
 interface Detail {
   deliverable: ContentDeliverable;
   versions: DeliverableVersion[];
   comments: DeliverableComment[];
   approvals: ApprovalRecord[];
+  // Release-integrity item 1: true when the underlying table read errored
+  // rather than genuinely returning zero rows, so the review UI can tell a
+  // signed-off deliverable that failed to load its history apart from one
+  // that has no history yet.
+  versionsError?: boolean;
+  commentsError?: boolean;
+  approvalsError?: boolean;
 }
 
 function cssEscapeId(id: string): string {
@@ -69,6 +82,8 @@ export default function DeliverableReview({
   approvalAttestation,
   changesAttestation,
   initialDetail,
+  supportPreview = false,
+  standingAuthEligible = false,
 }: {
   firmId: string;
   viewerRole: "operator" | "lawyer";
@@ -77,6 +92,8 @@ export default function DeliverableReview({
   approvalAttestation: string;
   changesAttestation: string;
   initialDetail: Detail;
+  supportPreview?: boolean;
+  standingAuthEligible?: boolean;
 }) {
   const [detail, setDetail] = useState<Detail>(initialDetail);
   const { deliverable, versions, comments, approvals } = detail;
@@ -119,6 +136,9 @@ export default function DeliverableReview({
         versions: json.versions,
         comments: json.comments,
         approvals: json.approvals,
+        versionsError: json.versionsError ?? false,
+        commentsError: json.commentsError ?? false,
+        approvalsError: json.approvalsError ?? false,
       });
     }
   }, [firmId, deliverableId]);
@@ -225,7 +245,11 @@ export default function DeliverableReview({
               <p className="text-sm text-black/55 mt-1">{deliverable.description}</p>
             )}
           </div>
-          <StatusPill status={deliverable.status} />
+          <StatusPill
+            status={deliverable.status}
+            standingAuthEligible={standingAuthEligible}
+            publishedAt={deliverable.published_at ?? null}
+          />
         </div>
       </div>
 
@@ -279,13 +303,18 @@ export default function DeliverableReview({
           />
           <button
             onClick={() => setShowVersionComposer((s) => !s)}
-            className="text-xs font-semibold uppercase tracking-wider px-3 py-1.5 border border-navy text-navy hover:bg-navy hover:text-white transition-colors"
+            disabled={supportPreview}
+            className="text-xs font-semibold uppercase tracking-wider px-3 py-1.5 border border-navy text-navy hover:bg-navy hover:text-white transition-colors disabled:opacity-50"
           >
             {showVersionComposer ? "Close" : "Post new version"}
           </button>
         </div>
 
-        {showVersionComposer && (
+        {supportPreview && (
+          <p className="text-xs text-black/55">{SUPPORT_PREVIEW_READ_ONLY_MESSAGE}</p>
+        )}
+
+        {showVersionComposer && !supportPreview && (
           <VersionComposer
             firmId={firmId}
             deliverableId={deliverableId}
@@ -315,6 +344,7 @@ export default function DeliverableReview({
             currentVersionMissing={currentVersionMissing}
             status={deliverable.status}
             onSigned={refetch}
+            supportPreview={supportPreview}
           />
           <div className="space-y-3">
             <ApprovalHistory
@@ -322,6 +352,7 @@ export default function DeliverableReview({
               deliverableId={deliverableId}
               viewerRole={viewerRole}
               approvals={approvals}
+              approvalsError={detail.approvalsError ?? false}
               comments={comments}
               versions={versions}
               deliverable={deliverable}
@@ -332,6 +363,7 @@ export default function DeliverableReview({
                 setActiveId(null);
               }}
               onChanged={refetch}
+              supportPreview={supportPreview}
             />
             <ArchiveControl
               firmId={firmId}
@@ -373,6 +405,37 @@ export default function DeliverableReview({
             </div>
           )}
 
+          {shouldShowHeroImageControl(selectedVersion?.id ?? null, viewerRole) && (
+            deliverable.deliverable_role === "article" ? (
+              <div className="grid gap-3 md:grid-cols-2" aria-label="Website image controls">
+                <HeroImageControl
+                  firmId={firmId}
+                  deliverableId={deliverableId}
+                  deliverableTitle={deliverable.title}
+                  hasHero={Boolean(deliverable.hero_image_url)}
+                  onSaved={refetch}
+                  assetRole="website_article_hero_overlay"
+                />
+                <HeroImageControl
+                  firmId={firmId}
+                  deliverableId={deliverableId}
+                  deliverableTitle={deliverable.title}
+                  hasHero={false}
+                  onSaved={refetch}
+                  assetRole="website_homepage_cta_textless"
+                />
+              </div>
+            ) : (
+              <HeroImageControl
+                firmId={firmId}
+                deliverableId={deliverableId}
+                deliverableTitle={deliverable.title}
+                hasHero={Boolean(deliverable.hero_image_url)}
+                onSaved={refetch}
+              />
+            )
+          )}
+
           {selectedVersion && (
             <CommentComposer
               firmId={firmId}
@@ -385,6 +448,7 @@ export default function DeliverableReview({
               }}
               viewerRole={viewerRole}
               onPosted={refetch}
+              supportPreview={supportPreview}
             />
           )}
 
@@ -396,6 +460,7 @@ export default function DeliverableReview({
               deliverableId={deliverableId}
               versionId={selectedVersion.id}
               viewerRole={viewerRole}
+              supportPreview={supportPreview}
               onDismiss={() => {
                 setPendingAnnotation(null);
                 setPendingPosition(null);
@@ -420,16 +485,36 @@ export default function DeliverableReview({
             activeId={activeId}
             onActivate={focusFromCard}
             onChanged={refetch}
+            supportPreview={supportPreview}
           />
         )}
       </div>
+
+      {viewerRole === "operator" && (
+        <div className="border-t border-black/8 pt-5">
+          <h2 className="text-sm font-semibold text-navy mb-2">Placements &amp; tracked links</h2>
+          <p className="text-xs text-black/50 mb-3">
+            Use the tracking parameters below when publishing each placement, so a resulting
+            enquiry can be linked back to it in Content Performance.
+          </p>
+          <PlacementsTrackingPanel firmId={firmId} deliverableId={deliverableId} />
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Status + version chrome ─────────────────────────────────────────────────
 
-function StatusPill({ status }: { status: ContentDeliverable["status"] }) {
+function StatusPill({
+  status,
+  standingAuthEligible = false,
+  publishedAt = null,
+}: {
+  status: ContentDeliverable["status"];
+  standingAuthEligible?: boolean;
+  publishedAt?: string | null;
+}) {
   const styles: Record<string, string> = {
     draft: "bg-parchment-2 text-muted border-border-brand",
     in_review: "bg-navy/10 text-navy border-navy/20",
@@ -437,11 +522,26 @@ function StatusPill({ status }: { status: ContentDeliverable["status"] }) {
     approved: "bg-green-pass/10 text-green-pass border-green-pass/30",
     archived: "bg-parchment-2 text-muted border-border-brand",
   };
+  // A published piece reads as published regardless of where it sits in the
+  // review machine. Below that, DR-107: an in_review deliverable that is
+  // pre-approved for release under standing authorization gets the green
+  // Pre-approved treatment instead of the plain in_review styling.
+  const published = status !== "archived" && isPublished(publishedAt);
+  const isPreApproved = !published && status === "in_review" && standingAuthEligible;
+  const cls = published
+    ? "bg-blue-published/10 text-blue-published border-blue-published/30"
+    : isPreApproved
+      ? "bg-green-pass/10 text-green-pass border-green-pass/30"
+      : styles[status];
   return (
     <span
-      className={`text-[11px] uppercase tracking-wider font-semibold px-2.5 py-1 border whitespace-nowrap ${styles[status]}`}
+      className={`text-[11px] uppercase tracking-wider font-semibold px-2.5 py-1 border whitespace-nowrap ${cls}`}
     >
-      {STATUS_LABELS[status]}
+      {displayStatusLabel(status, {
+        standingAuthActive: standingAuthEligible,
+        requiresIndividualReview: false,
+        publishedAt,
+      })}
     </span>
   );
 }
@@ -802,6 +902,7 @@ function FloatingAnnotationPopover({
   viewerRole,
   onDismiss,
   onPosted,
+  supportPreview = false,
 }: {
   annotation: DeliverableAnnotation;
   position: AnnotationPosition;
@@ -811,6 +912,7 @@ function FloatingAnnotationPopover({
   viewerRole: "operator" | "lawyer";
   onDismiss: () => void;
   onPosted: () => Promise<void>;
+  supportPreview?: boolean;
 }) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
@@ -835,7 +937,6 @@ function FloatingAnnotationPopover({
   // Click outside to dismiss. Delayed 120ms so the same mouseup that opened
   // the popover does not immediately close it.
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
     function attach() {
       document.addEventListener("mousedown", handleOutside);
     }
@@ -844,7 +945,7 @@ function FloatingAnnotationPopover({
         onDismiss();
       }
     }
-    timer = setTimeout(attach, 120);
+    const timer = setTimeout(attach, 120);
     return () => {
       clearTimeout(timer);
       document.removeEventListener("mousedown", handleOutside);
@@ -933,7 +1034,7 @@ function FloatingAnnotationPopover({
         <div className="flex items-center gap-2">
           <button
             type="submit"
-            disabled={sending || !body.trim()}
+            disabled={supportPreview || sending || !body.trim()}
             className="px-3 py-1.5 text-xs font-semibold bg-navy text-white disabled:opacity-50 whitespace-nowrap"
           >
             {sending ? "Posting..." : "Comment"}
@@ -983,6 +1084,7 @@ function CommentComposer({
   onClearAnnotation,
   viewerRole,
   onPosted,
+  supportPreview = false,
 }: {
   firmId: string;
   deliverableId: string;
@@ -991,10 +1093,14 @@ function CommentComposer({
   onClearAnnotation: () => void;
   viewerRole: "operator" | "lawyer";
   onPosted: () => Promise<void> | void;
+  supportPreview?: boolean;
 }) {
   const [body, setBody] = useState("");
+  const [notify, setNotify] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notifyWarning, setNotifyWarning] = useState<string | null>(null);
+  const isOperator = viewerRole === "operator";
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -1009,6 +1115,7 @@ function CommentComposer({
           version_id: versionId,
           body: body.trim(),
           annotation: pendingAnnotation,
+          client_notification_choice: isOperator && notify ? "notify_now" : "silent",
         }),
       });
       const json = await res.json();
@@ -1016,7 +1123,13 @@ function CommentComposer({
         setError(json.error ?? "Could not post.");
       } else {
         setBody("");
+        setNotify(false);
         onClearAnnotation();
+        if (isOperator && json.notification?.status === "failed") {
+          setNotifyWarning("The comment was posted, but the notification email could not be sent.");
+        } else {
+          setNotifyWarning(null);
+        }
         await onPosted();
       }
     } catch (err) {
@@ -1051,13 +1164,38 @@ function CommentComposer({
         }
         className="w-full border border-border-brand px-2 py-1.5 text-sm resize-y"
       />
+      {isOperator && (
+        <label className="flex items-center gap-2 text-xs text-black/70">
+          <input
+            type="checkbox"
+            checked={notify}
+            onChange={(e) => setNotify(e.target.checked)}
+          />
+          Notify the client by email
+        </label>
+      )}
+      {isOperator && (
+        <p className="text-xs text-black/50">
+          {notify
+            ? "The comment will be posted and the client will receive an email."
+            : "The comment will be posted without sending an email."}
+        </p>
+      )}
       {error && <p className="text-xs text-red-fail">{error}</p>}
+      {notifyWarning && <p className="text-xs text-amber-800">{notifyWarning}</p>}
+      {supportPreview && (
+        <p className="text-xs text-black/55">{SUPPORT_PREVIEW_READ_ONLY_MESSAGE}</p>
+      )}
       <button
         type="submit"
-        disabled={sending || !body.trim()}
+        disabled={supportPreview || sending || !body.trim()}
         className="px-3 py-1.5 text-sm font-semibold bg-navy text-white disabled:opacity-50"
       >
-        {sending ? "Posting..." : pendingAnnotation ? "Comment on selection" : "Add comment"}
+        {sending
+          ? "Posting..."
+          : `${pendingAnnotation ? "Comment on selection" : "Add comment"}${
+              isOperator && notify ? " and notify" : ""
+            }`}
       </button>
     </form>
   );
@@ -1081,6 +1219,7 @@ function MarginComments({
   activeId,
   onActivate,
   onChanged,
+  supportPreview = false,
 }: {
   firmId: string;
   deliverableId: string;
@@ -1091,6 +1230,7 @@ function MarginComments({
   activeId: string | null;
   onActivate: (id: string) => void;
   onChanged: () => Promise<void> | void;
+  supportPreview?: boolean;
 }) {
   const [isWide, setIsWide] = useState(false);
   const [tops, setTops] = useState<Map<string, number>>(new Map());
@@ -1189,6 +1329,7 @@ function MarginComments({
           num={numberByCommentId.get(c.id)}
           viewerRole={viewerRole}
           onChanged={onChanged}
+          supportPreview={supportPreview}
         />
         {replies.map((r) => (
           <div key={r.id} className="ml-3 mt-2 pl-2 border-l-2 border-border-brand">
@@ -1199,6 +1340,7 @@ function MarginComments({
               num={numberByCommentId.get(r.id)}
               viewerRole={viewerRole}
               onChanged={onChanged}
+              supportPreview={supportPreview}
             />
           </div>
         ))}
@@ -1236,6 +1378,7 @@ function CommentCard({
   num,
   viewerRole,
   onChanged,
+  supportPreview = false,
 }: {
   firmId: string;
   deliverableId: string;
@@ -1243,6 +1386,7 @@ function CommentCard({
   num: number | undefined;
   viewerRole: "operator" | "lawyer";
   onChanged: () => Promise<void> | void;
+  supportPreview?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -1293,7 +1437,7 @@ function CommentCard({
       <p className="text-sm text-black/85 mt-1 whitespace-pre-wrap">{comment.body}</p>
       <button
         onClick={toggleResolved}
-        disabled={busy}
+        disabled={supportPreview || busy}
         className="text-[11px] font-semibold text-navy/70 hover:text-navy mt-1 disabled:opacity-50"
       >
         {comment.resolved ? "Reopen" : "Resolve"}
@@ -1317,6 +1461,7 @@ function SignOffPanel({
   currentVersionMissing,
   status,
   onSigned,
+  supportPreview = false,
 }: {
   firmId: string;
   deliverableId: string;
@@ -1330,6 +1475,7 @@ function SignOffPanel({
   currentVersionMissing: boolean;
   status: ContentDeliverable["status"];
   onSigned: () => Promise<void> | void;
+  supportPreview?: boolean;
 }) {
   const [decision, setDecision] = useState<"approved" | "changes_requested">("approved");
   const [agreed, setAgreed] = useState(false);
@@ -1343,8 +1489,8 @@ function SignOffPanel({
       <div className="bg-white border border-border-brand p-4">
         <h3 className="text-sm font-bold text-navy mb-1">Sign-off</h3>
         <p className="text-xs text-black/55">
-          The firm's responsible lawyer completes the sign-off. The operator
-          cannot sign on the licensee's behalf.
+          The firm&apos;s responsible lawyer completes the sign-off. The operator
+          cannot sign on the licensee&apos;s behalf.
         </p>
       </div>
     );
@@ -1460,6 +1606,7 @@ function SignOffPanel({
                 deliverableId={deliverableId}
                 attachments={attachments}
                 onChange={setAttachments}
+                supportPreview={supportPreview}
               />
             </div>
           )}
@@ -1483,10 +1630,14 @@ function SignOffPanel({
 
           {error && <p className="text-xs text-red-fail">{error}</p>}
 
+          {supportPreview && (
+            <p className="text-xs text-black/55">{SUPPORT_PREVIEW_READ_ONLY_MESSAGE}</p>
+          )}
+
           <button
             type="button"
             onClick={submit}
-            disabled={!agreed || submitting}
+            disabled={supportPreview || !agreed || submitting}
             className={`w-full px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 ${
               decision === "approved" ? "bg-green-pass" : "bg-amber-700"
             }`}
@@ -1531,11 +1682,13 @@ function AttachmentPicker({
   deliverableId,
   attachments,
   onChange,
+  supportPreview = false,
 }: {
   firmId: string;
   deliverableId: string;
   attachments: DeliverableAttachment[];
   onChange: (next: DeliverableAttachment[]) => void;
+  supportPreview?: boolean;
 }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1593,7 +1746,7 @@ function AttachmentPicker({
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
-        disabled={uploading}
+        disabled={supportPreview || uploading}
         className="text-[11px] font-semibold uppercase tracking-wider px-2 py-1 border border-border-brand text-black/60 hover:bg-parchment-2 disabled:opacity-50"
       >
         {uploading ? "Uploading..." : "Attach screenshot or PDF"}
@@ -1620,6 +1773,7 @@ function ReplyComposer({
   viewerRole,
   onPosted,
   onCancel,
+  supportPreview = false,
 }: {
   firmId: string;
   deliverableId: string;
@@ -1628,11 +1782,15 @@ function ReplyComposer({
   viewerRole: "operator" | "lawyer";
   onPosted: () => Promise<void> | void;
   onCancel: () => void;
+  supportPreview?: boolean;
 }) {
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<DeliverableAttachment[]>([]);
+  const [notify, setNotify] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notifyWarning, setNotifyWarning] = useState<string | null>(null);
+  const isOperator = viewerRole === "operator";
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -1648,6 +1806,7 @@ function ReplyComposer({
           body: body.trim() || "(attachment)",
           approval_record_id: approvalRecordId,
           attachments,
+          client_notification_choice: isOperator && notify ? "notify_now" : "silent",
         }),
       });
       const json = await res.json();
@@ -1656,6 +1815,12 @@ function ReplyComposer({
       } else {
         setBody("");
         setAttachments([]);
+        setNotify(false);
+        if (isOperator && json.notification?.status === "failed") {
+          setNotifyWarning("The reply was posted, but the notification email could not be sent.");
+        } else {
+          setNotifyWarning(null);
+        }
         await onPosted();
       }
     } catch (err) {
@@ -1679,15 +1844,37 @@ function ReplyComposer({
         deliverableId={deliverableId}
         attachments={attachments}
         onChange={setAttachments}
+        supportPreview={supportPreview}
       />
+      {isOperator && (
+        <label className="flex items-center gap-2 text-xs text-black/70">
+          <input
+            type="checkbox"
+            checked={notify}
+            onChange={(e) => setNotify(e.target.checked)}
+          />
+          Notify the client by email
+        </label>
+      )}
+      {isOperator && (
+        <p className="text-xs text-black/50">
+          {notify
+            ? "The comment will be posted and the client will receive an email."
+            : "The comment will be posted without sending an email."}
+        </p>
+      )}
       {error && <p className="text-xs text-red-fail">{error}</p>}
+      {notifyWarning && <p className="text-xs text-amber-800">{notifyWarning}</p>}
+      {supportPreview && (
+        <p className="text-xs text-black/55">{SUPPORT_PREVIEW_READ_ONLY_MESSAGE}</p>
+      )}
       <div className="flex gap-2">
         <button
           type="submit"
-          disabled={sending || (!body.trim() && attachments.length === 0)}
+          disabled={supportPreview || sending || (!body.trim() && attachments.length === 0)}
           className="px-3 py-1.5 text-xs font-semibold bg-navy text-white disabled:opacity-50"
         >
-          {sending ? "Posting..." : "Post reply"}
+          {sending ? "Posting..." : isOperator && notify ? "Post reply and notify" : "Post reply"}
         </button>
         <button
           type="button"
@@ -1742,25 +1929,42 @@ function ApprovalHistory({
   deliverableId,
   viewerRole,
   approvals,
+  approvalsError,
   comments,
   versions,
   deliverable,
   onSwitchVersion,
   onChanged,
+  supportPreview = false,
 }: {
   firmId: string;
   deliverableId: string;
   viewerRole: "operator" | "lawyer";
   approvals: ApprovalRecord[];
+  approvalsError: boolean;
   comments: DeliverableComment[];
   versions: DeliverableVersion[];
   deliverable: ContentDeliverable;
   onSwitchVersion: (versionId: string) => void;
   onChanged: () => Promise<void> | void;
+  supportPreview?: boolean;
 }) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
 
-  if (approvals.length === 0) return null;
+  // Release-integrity item 1: an empty approvals array now means either
+  // "no approval history yet" (approvalsError false) or "the history could
+  // not be loaded" (approvalsError true) -- these must not render the same
+  // way, since the latter could be hiding a real signed-off record.
+  if (approvals.length === 0) {
+    if (!approvalsError) return null;
+    return (
+      <div className="bg-white border border-border-brand p-4">
+        <p className="text-xs text-red-fail">
+          Approval history could not be loaded. Refresh to retry.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="bg-white border border-border-brand p-4">
       <h3 className="text-sm font-bold text-navy mb-3">Approval record</h3>
@@ -1831,6 +2035,7 @@ function ApprovalHistory({
                       approvalRecordId={a.id}
                       versionId={a.version_id}
                       viewerRole={viewerRole}
+                      supportPreview={supportPreview}
                       onCancel={() => setReplyingTo(null)}
                       onPosted={async () => {
                         setReplyingTo(null);
@@ -1858,6 +2063,100 @@ function ApprovalHistory({
 
 // ─── Version composer ────────────────────────────────────────────────────────
 
+/**
+ * Confirmation modal shown before a version is posted. Silent is always
+ * preselected and there is no way to carry a prior choice forward: this
+ * component is unmounted (not just hidden) whenever it is closed, so the
+ * next open always starts from a fresh "silent" default.
+ */
+function PostVersionConfirmModal({
+  posting,
+  onCancel,
+  onConfirm,
+}: {
+  posting: boolean;
+  onCancel: () => void;
+  onConfirm: (choice: ClientNotificationChoice) => void;
+}) {
+  const [choice, setChoice] = useState<ClientNotificationChoice>("silent");
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-40 flex items-end md:items-center justify-center p-4">
+      <div className="bg-white max-w-lg w-full border border-black/10 max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-black/8">
+          <h2 className="text-lg font-bold text-navy">Post this version</h2>
+          <p className="mt-1 text-sm text-black/60">
+            The updated content will become the current version. Choose whether the client
+            should receive an email about this update.
+          </p>
+        </div>
+        <div className="px-6 py-4 space-y-2">
+          <label className="flex items-start gap-3 border border-border-brand px-3 py-2.5 cursor-pointer has-[:checked]:border-navy has-[:checked]:bg-parchment-2">
+            <input
+              type="radio"
+              name="version-notify-choice"
+              checked={choice === "silent"}
+              onChange={() => setChoice("silent")}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="block text-sm font-semibold text-navy">Save without notifying</span>
+              <span className="block text-xs text-black/60 mt-0.5">
+                Create the version and make it available in the portal without sending an email.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 border border-border-brand px-3 py-2.5 cursor-pointer has-[:checked]:border-navy has-[:checked]:bg-parchment-2">
+            <input
+              type="radio"
+              name="version-notify-choice"
+              checked={choice === "notify_now"}
+              onChange={() => setChoice("notify_now")}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="block text-sm font-semibold text-navy">Save and notify the client now</span>
+              <span className="block text-xs text-black/60 mt-0.5">
+                Create the version and send one review-notification email after it is saved
+                successfully.
+              </span>
+            </span>
+          </label>
+        </div>
+        <div className="px-6 py-3 bg-parchment-2 border-t border-black/8">
+          <p className="text-xs text-black/60 mb-2">
+            {choice === "silent"
+              ? "No email will be sent."
+              : "The client will receive a notification email."}
+          </p>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={posting}
+              className="text-sm font-semibold uppercase tracking-wider text-black/60 hover:text-navy px-3 py-2 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => onConfirm(choice)}
+              disabled={posting}
+              className="bg-navy text-white px-4 py-2 text-sm font-semibold uppercase tracking-wider hover:bg-navy-deep disabled:opacity-50"
+            >
+              {posting
+                ? "Posting..."
+                : choice === "silent"
+                  ? "Post version without notifying"
+                  : "Post version and notify"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function VersionComposer({
   firmId,
   deliverableId,
@@ -1880,8 +2179,24 @@ function VersionComposer({
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [noteExpanded, setNoteExpanded] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [notifyWarning, setNotifyWarning] = useState<string | null>(null);
 
-  async function post() {
+  function openConfirm() {
+    setError(null);
+    if (contentKind !== "text" && !file) {
+      setError("Choose a file.");
+      return;
+    }
+    if (contentKind === "text" && !bodyHtml.trim()) {
+      setError("Content is required.");
+      return;
+    }
+    setNotifyWarning(null);
+    setShowConfirm(true);
+  }
+
+  async function post(choice: ClientNotificationChoice) {
     setPosting(true);
     setError(null);
     try {
@@ -1894,6 +2209,7 @@ function VersionComposer({
             body_html: bodyHtml,
             note: note.trim() || null,
             responds_to_approval_id: respondsToApproval?.id ?? null,
+            client_notification_choice: choice,
           }),
         });
       } else {
@@ -1906,6 +2222,7 @@ function VersionComposer({
         fd.append("file", file);
         if (note.trim()) fd.append("note", note.trim());
         if (respondsToApproval) fd.append("responds_to_approval_id", respondsToApproval.id);
+        fd.append("client_notification_choice", choice);
         res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/versions`, {
           method: "POST",
           body: fd,
@@ -1914,15 +2231,21 @@ function VersionComposer({
       const json = await res.json();
       if (!res.ok || !json.ok) {
         setError(json.error ?? "Could not post version.");
+        setShowConfirm(false);
       } else {
         setBodyHtml("");
         setNote("");
         setFile(null);
+        setShowConfirm(false);
+        if (json.notification?.status === "failed") {
+          setNotifyWarning("The version was posted, but the notification email could not be sent.");
+        }
         if (json.version?.id) onSelectNew(json.version.id);
         await onPosted();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error.");
+      setShowConfirm(false);
     } finally {
       setPosting(false);
     }
@@ -2006,14 +2329,22 @@ function VersionComposer({
         />
       </div>
       {error && <p className="text-xs text-red-fail">{error}</p>}
+      {notifyWarning && <p className="text-xs text-amber-800">{notifyWarning}</p>}
       <button
         type="button"
-        onClick={post}
+        onClick={openConfirm}
         disabled={posting}
         className="px-3 py-1.5 text-sm font-semibold bg-navy text-white disabled:opacity-50"
       >
-        {posting ? "Posting..." : "Post version for review"}
+        Post version for review
       </button>
+      {showConfirm && (
+        <PostVersionConfirmModal
+          posting={posting}
+          onCancel={() => setShowConfirm(false)}
+          onConfirm={post}
+        />
+      )}
     </div>
   );
 }

@@ -17,6 +17,7 @@ const RECEIPT = "r1111111-1111-1111-1111-111111111111";
 
 const state = {
   detail: null as { deliverable: { firm_id: string } } | null,
+  detailReadError: false,
   placements: [] as Array<{ id: string; destination: string; required_artifact_type: string | null }>,
   receipt: null as {
     id: string;
@@ -49,7 +50,14 @@ vi.mock("@/lib/deliverables-auth", () => ({
 }));
 
 vi.mock("@/lib/deliverables", () => ({
-  getDeliverableDetail: () => Promise.resolve(state.detail),
+  getDeliverableDetail: () =>
+    Promise.resolve(
+      state.detailReadError
+        ? { ok: false, error: "mock read error" }
+        : state.detail === null
+          ? { ok: true, found: false }
+          : { ok: true, found: true, detail: state.detail },
+    ),
 }));
 
 vi.mock("@/lib/content-placements", () => ({
@@ -116,6 +124,7 @@ function params() {
 
 beforeEach(() => {
   state.detail = { deliverable: { firm_id: FIRM } };
+  state.detailReadError = false;
   state.placements = [{ id: PLACEMENT, destination: "firm_website", required_artifact_type: "webpage" }];
   state.receipt = { id: RECEIPT, placement_id: PLACEMENT };
   state.versionRow = null;
@@ -262,6 +271,13 @@ describe("POST verify: expectedHost falls back to subdomain (Workstream 3 residu
 });
 
 describe("POST verify: entity mismatches", () => {
+  it("503s (never 404) when the deliverable-detail read itself errors", async () => {
+    state.detailReadError = true;
+    const res = await POST(makeReq(), params());
+    expect(res.status).toBe(503);
+    expect(state.verifyReceiptArgs).toBeNull();
+  });
+
   it("404s when the placement does not belong to this deliverable", async () => {
     state.placements = [];
     const res = await POST(makeReq(), params());

@@ -34,6 +34,7 @@ function baseSchema(overrides: Partial<SchemaSummary> = {}): SchemaSummary {
     hasFaq: false, hasWebsite: false, hasReview: false,
     fields: { name: true, url: true, telephone: true, address: true, areaServed: true, sameAs: true, priceRange: false, openingHours: false },
     conflictingEntity: false,
+    sameAsUrls: [],
     ...overrides,
   };
 }

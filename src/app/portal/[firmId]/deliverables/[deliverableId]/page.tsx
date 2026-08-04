@@ -8,14 +8,21 @@
  * Auth: operator OR matching firm-lawyer session. Client sessions excluded.
  */
 
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
 import { getPreviewIntent } from "@/lib/preview-mode";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
-import { getDeliverableDetail } from "@/lib/deliverables";
+import { getDeliverableDetail, type DeliverableDetail } from "@/lib/deliverables";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { APPROVAL_ATTESTATION, CHANGES_ATTESTATION } from "@/lib/deliverables-pure";
 import DeliverableReview from "@/components/portal/DeliverableReview";
+import { listPlacementsForDeliverable } from "@/lib/content-placements";
+import { getLatestClaimForPlacement } from "@/lib/publication-placement-claims";
+import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
+import PublicationStatusSummary, {
+  type PlacementStatusRow,
+} from "@/components/portal/PublicationStatusSummary";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -35,8 +42,15 @@ export default async function DeliverableReviewPage({
   const resolved = await resolveDeliverableActor(firmId);
   if (!resolved) redirect("/portal/login");
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) notFound();
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    // A read error, not a genuine 404: throw so Next.js renders the
+    // route-level error boundary (retry-able), instead of the permanent
+    // "not found" page a transient database blip does not deserve.
+    throw new Error("Could not load this deliverable. Please try again.");
+  }
+  if (!detailResult.found || detailResult.detail.deliverable.firm_id !== firmId) notFound();
+  const detail = detailResult.detail;
 
   // DR-084: in a lawyer preview the operator sees the lawyer's sign-off panel
   // present-but-inert, not the operator "cannot sign" message. Render as the
@@ -61,15 +75,127 @@ export default async function DeliverableReviewPage({
     signerEmail = branding?.lawyer_email ?? null;
   }
 
+  const authState = await getStandingAuthorizationState(firmId);
+  const currentVersion =
+    detail.versions.find((v) => v.id === detail.deliverable.current_version_id) ?? null;
+  // DR-107: folds both eligibility conditions (auth on, version not flagged)
+  // into one boolean so DeliverableReview/StatusPill need no auth knowledge
+  // of their own.
+  const standingAuthEligible = !!authState?.active && !currentVersion?.requires_individual_review;
+
+  const statusRows = await buildPlacementStatusRows(detail, authState);
+
   return (
-    <DeliverableReview
-      firmId={firmId}
-      viewerRole={viewerRole}
-      signerName={signerName}
-      signerEmail={signerEmail}
-      approvalAttestation={APPROVAL_ATTESTATION}
-      changesAttestation={CHANGES_ATTESTATION}
-      initialDetail={detail}
-    />
+    <div className="space-y-4">
+      {session.role === "operator" && !isLawyerPreview && detail.deliverable.period_id && (
+        <Link
+          href={`/portal/${firmId}/publish-kit/${detail.deliverable.period_id}#dlv-${deliverableId}`}
+          className="inline-block text-xs font-semibold uppercase tracking-wider text-navy/70 hover:text-navy"
+        >
+          Open in Publish Kit
+        </Link>
+      )}
+      <PublicationStatusSummary rows={statusRows} />
+      <DeliverableReview
+        firmId={firmId}
+        viewerRole={viewerRole}
+        signerName={signerName}
+        signerEmail={signerEmail}
+        approvalAttestation={APPROVAL_ATTESTATION}
+        changesAttestation={CHANGES_ATTESTATION}
+        initialDetail={detail}
+        supportPreview={isLawyerPreview}
+        standingAuthEligible={standingAuthEligible}
+      />
+    </div>
   );
+}
+
+/**
+ * Truthful, per-placement publication status for the detail page. Never
+ * shows "authorized for publication under standing authorization" unless
+ * an actual claim recorded that release path for the CURRENT version --
+ * a stale claim from an earlier version is historical, not current
+ * status, and is treated the same as "no claim yet".
+ */
+async function buildPlacementStatusRows(
+  detail: DeliverableDetail,
+  authState: Awaited<ReturnType<typeof getStandingAuthorizationState>>,
+): Promise<PlacementStatusRow[]> {
+  const { deliverable } = detail;
+  const currentVersionId = deliverable.current_version_id;
+  const currentVersion = detail.versions.find((v) => v.id === currentVersionId) ?? null;
+
+  const placements = await listPlacementsForDeliverable(deliverable.id);
+  if (placements.length === 0) return [];
+
+  const rows: PlacementStatusRow[] = [];
+  for (const placement of placements) {
+    const claim = await getLatestClaimForPlacement(placement.id);
+    const claimIsForCurrentVersion = claim && claim.approved_version_id === currentVersionId;
+
+    let publicationVerificationState: PlacementStatusRow["publicationVerificationState"] = null;
+    if (claimIsForCurrentVersion && claim!.status === "released") {
+      const { data: receipt } = await supabase
+        .from("publication_receipts")
+        .select("verification_state")
+        .eq("placement_id", placement.id)
+        .eq("approved_version_id", currentVersionId as string)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      publicationVerificationState =
+        (receipt?.verification_state as PlacementStatusRow["publicationVerificationState"]) ?? null;
+    }
+
+    if (
+      deliverable.status === "approved" &&
+      deliverable.approved_version_id === currentVersionId &&
+      deliverable.approved_version_id != null
+    ) {
+      rows.push({
+        placementId: placement.id,
+        destination: placement.destination,
+        kind: "individually_approved",
+        effectiveAt: claimIsForCurrentVersion ? claim!.claimed_at : null,
+        individualReviewReason: null,
+        publicationVerificationState,
+      });
+      continue;
+    }
+
+    if (currentVersion?.requires_individual_review) {
+      rows.push({
+        placementId: placement.id,
+        destination: placement.destination,
+        kind: "individual_review_required",
+        effectiveAt: null,
+        individualReviewReason: currentVersion.requires_individual_review_reason,
+        publicationVerificationState: null,
+      });
+      continue;
+    }
+
+    if (claimIsForCurrentVersion && claim!.release_path === "standing_authorization") {
+      rows.push({
+        placementId: placement.id,
+        destination: placement.destination,
+        kind: "authorized_standing",
+        effectiveAt: claim!.claimed_at,
+        individualReviewReason: null,
+        publicationVerificationState,
+      });
+      continue;
+    }
+
+    rows.push({
+      placementId: placement.id,
+      destination: placement.destination,
+      kind: authState?.active ? "eligible_standing" : "individual_review_required",
+      effectiveAt: null,
+      individualReviewReason: null,
+      publicationVerificationState: null,
+    });
+  }
+  return rows;
 }

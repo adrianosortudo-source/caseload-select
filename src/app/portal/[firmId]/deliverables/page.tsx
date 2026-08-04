@@ -10,12 +10,15 @@
  * sessions are excluded at page level.
  */
 
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
+import { getPreviewIntent } from "@/lib/preview-mode";
 import { getContentPlan } from "@/lib/deliverables";
 import { getFirmAbout } from "@/lib/firm-about";
 import { getContentCadence } from "@/lib/content-cadence";
 import { loadPlanPublicationReadiness } from "@/lib/publication-readiness-loader";
+import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
 import ContentPlan from "@/components/portal/ContentPlan";
 import AboutPanel from "@/components/portal/AboutPanel";
 import ContentCadencePanel from "@/components/portal/ContentCadencePanel";
@@ -37,7 +40,15 @@ export default async function DeliverablesPage({
   if (!session || session.role === "client") {
     redirect("/portal/login");
   }
-  const viewerRole = session.role === "operator" ? "operator" : "lawyer";
+  // DR-084: an operator in Lawyer decision-maker support preview for this
+  // firm renders the list exactly as the lawyer sees it, mirroring the
+  // individual deliverable page's existing preview-aware viewerRole. Every
+  // mutation on this list is still refused server-side (preview-guard.ts)
+  // regardless of what role this page renders as.
+  const preview = await getPreviewIntent();
+  const isLawyerPreview =
+    session.role === "operator" && preview?.target === "lawyer" && preview.firm_id === firmId;
+  const viewerRole = session.role === "operator" && !isLawyerPreview ? "operator" : "lawyer";
   const includeArchived = archived === "1";
 
   const [plan, about] = await Promise.all([
@@ -46,6 +57,7 @@ export default async function DeliverablesPage({
   ]);
 
   const cadence = getContentCadence(firmId);
+  const authState = await getStandingAuthorizationState(firmId);
 
   // Additive: Publication Readiness (Workstream 5). loadPlanPublicationReadiness
   // never throws on its own, but the .catch below is a second, independent
@@ -67,6 +79,7 @@ export default async function DeliverablesPage({
 
   return (
     <div className="space-y-6">
+      <StandingAuthorizationBanner firmId={firmId} active={authState?.active ?? false} />
       {cadence ? (
         <ContentCadencePanel
           cadence={cadence}
@@ -84,7 +97,49 @@ export default async function DeliverablesPage({
         deliverables={plan.deliverables}
         settings={plan.settings}
         planReadiness={planReadiness}
+        standingAuthActive={authState?.active ?? false}
       />
+    </div>
+  );
+}
+
+/**
+ * Status banner above the content weeks. Deliberately does not duplicate
+ * the full authorization form (that lives at how-your-content-works) --
+ * just truthful current-state language and the two links a viewer needs.
+ */
+function StandingAuthorizationBanner({ firmId, active }: { firmId: string; active: boolean }) {
+  return (
+    <div
+      className={`border rounded p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 ${
+        active ? "bg-green-pass/5 border-green-pass/25" : "bg-parchment border-border-brand"
+      }`}
+    >
+      <span
+        aria-hidden
+        className={`hidden sm:inline-block w-2.5 h-2.5 rounded-full ${active ? "bg-green-pass" : "bg-black/25"}`}
+      />
+      <p className="text-sm text-black/75 flex-1">
+        {active
+          ? "Standing publishing authorization is active. Eligible content can be published after QA without waiting for individual review."
+          : "Individual approval is required before publication."}
+      </p>
+      <div className="flex gap-4">
+        <Link
+          href={`/portal/${firmId}/how-your-content-works`}
+          className="text-xs font-semibold uppercase tracking-wider text-navy hover:underline whitespace-nowrap"
+        >
+          {active ? "How it works" : "Review how approval works"}
+        </Link>
+        {active && (
+          <Link
+            href={`/portal/${firmId}/how-your-content-works`}
+            className="text-xs font-semibold uppercase tracking-wider text-navy hover:underline whitespace-nowrap"
+          >
+            Manage authorization
+          </Link>
+        )}
+      </div>
     </div>
   );
 }

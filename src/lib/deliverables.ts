@@ -18,6 +18,7 @@ import type {
   ContentDeliverable,
   ContentPeriod,
   ContentPlanSettings,
+  StrategyBrief,
   DeliverableVersion,
   DeliverableComment,
   ApprovalRecord,
@@ -27,10 +28,13 @@ import type {
   DeliverableAnnotation,
   ApprovalDecision,
 } from "@/lib/types";
+import { parseStrategyBrief } from "@/lib/strategy-brief";
 import {
   statusAfterNewVersion,
   statusAfterDecision,
+  normalizeClientNotificationChoice,
   type PlanDeliverable,
+  type ClientNotificationChoice,
 } from "@/lib/deliverables-pure";
 import { evaluateActivationPreflight, type DeliverableReadiness } from "@/lib/publication-readiness";
 import { loadPeriodPublicationReadiness } from "@/lib/publication-readiness-loader";
@@ -46,6 +50,21 @@ export interface DeliverableActor {
   id?: string | null;
   name?: string | null;
   email?: string | null;
+}
+
+/**
+ * Outcome of a client-notification attempt, kept separate from whether the
+ * underlying version/comment was persisted. `requested` is true only when the
+ * caller's ClientNotificationChoice was "notify_now" for this action.
+ * "sent" means the notification was successfully enqueued to
+ * notification_outbox (the existing 5-minute digest cron delivers it from
+ * there, same as every other deliverable notification); "failed" means the
+ * enqueue itself threw and the version/comment was still persisted.
+ */
+export interface NotificationOutcome {
+  requested: boolean;
+  status: "not_requested" | "sent" | "failed";
+  error?: string;
 }
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
@@ -109,13 +128,24 @@ export interface ContentPlanData {
   settings: ContentPlanSettings | null; // operator batch note + custom deadline
 }
 
+function mapContentPeriod(row: Record<string, unknown>): ContentPeriod {
+  const parsed = parseStrategyBrief(row.strategy_brief);
+  const { strategy_brief: _strategyBrief, ...period } = row;
+  return {
+    ...(period as Omit<ContentPeriod, "strategyBrief">),
+    strategyBrief: parsed === "invalid" ? null : parsed,
+  };
+}
+
 export async function getContentPlan(
   firmId: string,
   options: { includeArchived?: boolean } = {},
 ): Promise<ContentPlanData> {
   let dq = supabase
     .from("content_deliverables")
-    .select("id, title, kicker, status, content_kind, format, period_id, publish_date")
+    .select(
+      "id, title, kicker, status, content_kind, format, locale, deliverable_role, publication_destination, period_id, publish_date, published_at, current_version_id",
+    )
     .eq("firm_id", firmId);
   if (!options.includeArchived) dq = dq.neq("status", "archived");
 
@@ -124,6 +154,12 @@ export async function getContentPlan(
       .from("content_periods")
       .select("*")
       .eq("firm_id", firmId)
+      // Numbered publishing weeks lead, most recent first. Unnumbered
+      // periods (standing assets, retroactive review passes) carry no week
+      // number and sort after them by date. nullsFirst: false is required --
+      // Postgres puts NULLs first on a DESC sort by default, which would
+      // float the unnumbered periods to the top of the plan.
+      .order("week_number", { ascending: false, nullsFirst: false })
       .order("starts_on", { ascending: false })
       .order("sort_index", { ascending: false }),
     dq,
@@ -132,9 +168,52 @@ export async function getContentPlan(
   if (periodsRes.error) throw new Error(`periods load failed: ${periodsRes.error.message}`);
   if (delivRes.error) throw new Error(`plan deliverables load failed: ${delivRes.error.message}`);
 
+  const rawDeliverables = (delivRes.data ?? []) as Array<
+    Omit<PlanDeliverable, "requires_individual_review"> & { current_version_id: string | null }
+  >;
+
+  // DR-107: batch-load the requires_individual_review flag for whichever
+  // versions are each deliverable's CURRENT version, so the plan can derive
+  // the Pre-approved display state without a fresh query per row. Display
+  // data only: a failed flag query defaults every row to false (unflagged)
+  // rather than failing the whole plan load.
+  const currentVersionIds = [
+    ...new Set(rawDeliverables.map((d) => d.current_version_id).filter((id): id is string => !!id)),
+  ];
+  const flagByVersionId = new Map<string, boolean>();
+  if (currentVersionIds.length > 0) {
+    const { data: versionFlags, error: flagsError } = await supabase
+      .from("deliverable_versions")
+      .select("id, requires_individual_review")
+      .in("id", currentVersionIds);
+    if (!flagsError) {
+      for (const v of versionFlags ?? []) {
+        flagByVersionId.set(v.id as string, !!v.requires_individual_review);
+      }
+    }
+  }
+
+  const deliverables: PlanDeliverable[] = rawDeliverables.map((d) => ({
+    id: d.id,
+    title: d.title,
+    kicker: d.kicker,
+    status: d.status,
+    content_kind: d.content_kind,
+    format: d.format,
+    locale: d.locale,
+    deliverable_role: d.deliverable_role,
+    publication_destination: d.publication_destination,
+    period_id: d.period_id,
+    publish_date: d.publish_date,
+    published_at: d.published_at,
+    requires_individual_review: d.current_version_id
+      ? (flagByVersionId.get(d.current_version_id) ?? false)
+      : false,
+  }));
+
   return {
-    periods: (periodsRes.data ?? []) as ContentPeriod[],
-    deliverables: (delivRes.data ?? []) as PlanDeliverable[],
+    periods: (periodsRes.data ?? []).map((row) => mapContentPeriod(row as Record<string, unknown>)),
+    deliverables,
     settings: (settingsRes.data ?? null) as ContentPlanSettings | null,
   };
 }
@@ -165,9 +244,12 @@ export async function createPeriod(input: {
   firmId: string;
   startsOn: string;
   endsOn: string;
+  /** null = not a numbered publishing week. */
+  weekNumber?: number | null;
   theme: string | null;
-  details: string | null;
-  rationale: string | null;
+  details?: string | null;
+  rationale?: string | null;
+  strategyBrief: StrategyBrief;
   actor: DeliverableActor;
 }): Promise<{ ok: true; period: ContentPeriod } | { ok: false; error: string }> {
   const { data, error } = await supabase
@@ -176,35 +258,64 @@ export async function createPeriod(input: {
       firm_id: input.firmId,
       starts_on: input.startsOn,
       ends_on: input.endsOn,
+      week_number: input.weekNumber ?? null,
       theme: input.theme,
-      details: input.details,
-      rationale: input.rationale,
+      details: input.details ?? null,
+      rationale: input.rationale ?? null,
+      strategy_brief: input.strategyBrief,
       created_by_role: input.actor.role,
       created_by_id: input.actor.id ?? null,
     })
     .select("*")
     .single();
   if (error) return { ok: false, error: `create period failed: ${error.message}` };
-  return { ok: true, period: data as ContentPeriod };
+  return { ok: true, period: mapContentPeriod(data as Record<string, unknown>) };
 }
 
 export async function updatePeriod(input: {
   periodId: string;
   firmId: string;
   patch: Partial<
-    Pick<ContentPeriod, "starts_on" | "ends_on" | "theme" | "details" | "rationale" | "sort_index">
+    Pick<
+      ContentPeriod,
+      | "starts_on"
+      | "ends_on"
+      | "week_number"
+      | "theme"
+      | "details"
+      | "rationale"
+      | "strategyBrief"
+      | "sort_index"
+    >
   >;
 }): Promise<{ ok: true; period: ContentPeriod } | { ok: false; error: string }> {
+  const { strategyBrief, ...periodPatch } = input.patch;
+  const dbPatch = {
+    ...periodPatch,
+    ...(strategyBrief !== undefined ? { strategy_brief: strategyBrief } : {}),
+    updated_at: new Date().toISOString(),
+  };
   const { data, error } = await supabase
     .from("content_periods")
-    .update({ ...input.patch, updated_at: new Date().toISOString() })
+    .update(dbPatch)
     .eq("id", input.periodId)
     .eq("firm_id", input.firmId)
     .select("*")
     .maybeSingle();
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    // The partial unique index on (firm_id, week_number) is the only
+    // constraint a well-formed patch can realistically trip. Say which week
+    // is taken rather than surfacing a raw Postgres 23505.
+    if (error.code === "23505" && input.patch.week_number != null) {
+      return {
+        ok: false,
+        error: `Week ${input.patch.week_number} is already assigned to another period for this firm.`,
+      };
+    }
+    return { ok: false, error: error.message };
+  }
   if (!data) return { ok: false, error: "period not found for this firm" };
-  return { ok: true, period: data as ContentPeriod };
+  return { ok: true, period: mapContentPeriod(data as Record<string, unknown>) };
 }
 
 export async function deletePeriod(input: {
@@ -379,19 +490,43 @@ export interface DeliverableDetail {
   versions: DeliverableVersion[]; // newest first, assets signed
   comments: DeliverableComment[]; // chronological
   approvals: ApprovalRecord[]; // newest first
+  // Release-integrity item 1 (2026-07-12): true when the corresponding table
+  // read errored rather than genuinely returning zero rows. A caller that
+  // trusts an empty array without checking these flags cannot tell "nothing
+  // here" from "the read failed" -- the exact silent-failure class the Codex
+  // audit found breaking the DR-085 version-to-change-request link.
+  versionsError: boolean;
+  commentsError: boolean;
+  approvalsError: boolean;
 }
+
+// Release-integrity item 1: getDeliverableDetail now returns a 3-state
+// discriminated union instead of DeliverableDetail | null, so a Supabase
+// query error can no longer collapse into the same falsy shape as a
+// genuinely nonexistent deliverable. Callers MUST distinguish ok:false (a
+// read errored, fail closed, do not treat as not-found) from found:false
+// (the row genuinely does not exist, safe to 404).
+export type DeliverableDetailResult =
+  | { ok: true; found: true; detail: DeliverableDetail }
+  | { ok: true; found: false }
+  | { ok: false; error: string };
 
 export async function getDeliverableDetail(
   deliverableId: string,
-): Promise<DeliverableDetail | null> {
-  const { data: deliverable } = await supabase
+): Promise<DeliverableDetailResult> {
+  const { data: deliverable, error: deliverableErr } = await supabase
     .from("content_deliverables")
     .select("*")
     .eq("id", deliverableId)
     .maybeSingle();
-  if (!deliverable) return null;
+  if (deliverableErr) return { ok: false, error: deliverableErr.message };
+  if (!deliverable) return { ok: true, found: false };
 
-  const [{ data: versions }, { data: comments }, { data: approvals }] = await Promise.all([
+  const [
+    { data: versions, error: versionsErr },
+    { data: comments, error: commentsErr },
+    { data: approvals, error: approvalsErr },
+  ] = await Promise.all([
     supabase
       .from("deliverable_versions")
       .select("*")
@@ -414,10 +549,17 @@ export async function getDeliverableDetail(
   const signedApprovals = await signApprovalAttachments((approvals ?? []) as ApprovalRecord[]);
 
   return {
-    deliverable: deliverable as ContentDeliverable,
-    versions: signedVersions,
-    comments: signedComments,
-    approvals: signedApprovals,
+    ok: true,
+    found: true,
+    detail: {
+      deliverable: deliverable as ContentDeliverable,
+      versions: signedVersions,
+      comments: signedComments,
+      approvals: signedApprovals,
+      versionsError: !!versionsErr,
+      commentsError: !!commentsErr,
+      approvalsError: !!approvalsErr,
+    },
   };
 }
 
@@ -555,19 +697,24 @@ export async function addVersion(input: {
   note: string | null;
   actor: DeliverableActor;
   /**
-   * When true, do NOT enqueue the firm-side review notification and do NOT
-   * stamp review_notified_at. Used for bulk seed flows where the operator
-   * wants to verify placement in the portal before announcing.
-   * `notifyPendingReviews` then fires one consolidated digest later.
+   * Explicit per-action choice for the firm-side review-requested email.
+   * Fail-safe default (omitted, invalid, or legacy value) is "silent": no
+   * enqueue, no review_notified_at stamp. Used for bulk seed / automated
+   * flows too, where the caller wants to verify placement in the portal
+   * before announcing. `notifyPendingReviews` fires one consolidated digest
+   * later for anything left silent.
    */
-  silent?: boolean;
+  clientNotificationChoice?: ClientNotificationChoice;
   /**
    * When this version answers a changes_requested approval_records row, that
    * record's id. Links the version back to the request it addresses so the
    * review UI can show "addressed in vN" instead of a dead-end record.
    */
   respondsToApprovalId?: string | null;
-}): Promise<{ ok: true; version: DeliverableVersion } | { ok: false; error: string }> {
+}): Promise<
+  | { ok: true; version: DeliverableVersion; notification: NotificationOutcome }
+  | { ok: false; error: string }
+> {
   // Compute the next version number and insert. Two concurrent posts can read
   // the same MAX and collide on UNIQUE(deliverable_id, version_number); the DB
   // protects integrity (the second insert is rejected with 23505), and we
@@ -631,7 +778,8 @@ export async function addVersion(input: {
     return { ok: false, error: `deliverable update failed: ${updateErr.message}` };
   }
 
-  if (input.silent !== true) {
+  let notification: NotificationOutcome = { requested: false, status: "not_requested" };
+  if (normalizeClientNotificationChoice(input.clientNotificationChoice) === "notify_now") {
     // Enqueue FIRST; stamp review_notified_at only after the outbox insert
     // succeeds. If the enqueue throws (e.g. CHECK constraint violation),
     // the stamp is skipped and notifyPendingReviews can pick up the row later.
@@ -648,12 +796,14 @@ export async function addVersion(input: {
         .from("content_deliverables")
         .update({ review_notified_at: new Date().toISOString() })
         .eq("id", input.deliverableId);
+      notification = { requested: true, status: "sent" };
     } catch (e) {
       console.warn("[deliverables] notify failed (review_notified_at NOT stamped):", e);
+      notification = { requested: true, status: "failed", error: e instanceof Error ? e.message : String(e) };
     }
   }
 
-  return { ok: true, version };
+  return { ok: true, version, notification };
 }
 
 /**
@@ -718,7 +868,18 @@ export async function addComment(input: {
    */
   approvalRecordId?: string | null;
   attachments?: DeliverableAttachment[];
-}): Promise<{ ok: true; comment: DeliverableComment } | { ok: false; error: string }> {
+  /**
+   * Explicit per-action choice for the client-facing email an OPERATOR
+   * comment can trigger. Fail-safe default (omitted, invalid, or legacy
+   * value) is "silent". Only meaningful when actor.role === "operator": a
+   * lawyer/client-authored comment always notifies the operator, unchanged,
+   * regardless of this field (that notification path is out of scope here).
+   */
+  clientNotificationChoice?: ClientNotificationChoice;
+}): Promise<
+  | { ok: true; comment: DeliverableComment; notification: NotificationOutcome }
+  | { ok: false; error: string }
+> {
   const { data, error } = await supabase
     .from("deliverable_comments")
     .insert({
@@ -738,21 +899,40 @@ export async function addComment(input: {
     .single();
   if (error) return { ok: false, error: `comment insert failed: ${error.message}` };
 
-  // A comment from the operator pings the firm; a comment from the lawyer
-  // pings the operator inbox.
+  // A comment from the operator pings the firm and is gated by the explicit
+  // per-action notification choice (fail-safe silent by default). A comment
+  // from the lawyer/client always pings the operator inbox, unchanged: that
+  // notification is out of scope for the client-notification opt-in.
   const bodyPreview = input.approvalRecordId
     ? `Reply to change request: ${input.body.slice(0, 220)}`
     : input.body.slice(0, 240);
-  await enqueueDeliverableNotification({
-    firmId: input.firmId,
-    deliverableId: input.deliverableId,
-    eventType: "deliverable_comment_added",
-    audience: input.actor.role === "operator" ? "firm" : "operator",
-    actor: input.actor,
-    bodyPreview,
-  }).catch((e) => console.warn("[deliverables] notify failed:", e));
+  const isOperatorComment = input.actor.role === "operator";
+  const shouldNotify =
+    !isOperatorComment ||
+    normalizeClientNotificationChoice(input.clientNotificationChoice) === "notify_now";
 
-  return { ok: true, comment: data as DeliverableComment };
+  let notification: NotificationOutcome = { requested: false, status: "not_requested" };
+  if (shouldNotify) {
+    notification.requested = isOperatorComment;
+    try {
+      await enqueueDeliverableNotification({
+        firmId: input.firmId,
+        deliverableId: input.deliverableId,
+        eventType: "deliverable_comment_added",
+        audience: isOperatorComment ? "firm" : "operator",
+        actor: input.actor,
+        bodyPreview,
+      });
+      if (isOperatorComment) notification.status = "sent";
+    } catch (e) {
+      console.warn("[deliverables] notify failed:", e);
+      if (isOperatorComment) {
+        notification = { requested: true, status: "failed", error: e instanceof Error ? e.message : String(e) };
+      }
+    }
+  }
+
+  return { ok: true, comment: data as DeliverableComment, notification };
 }
 
 export async function setCommentResolved(input: {

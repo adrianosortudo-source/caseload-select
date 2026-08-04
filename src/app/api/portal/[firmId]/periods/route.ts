@@ -7,7 +7,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { createPeriod } from "@/lib/deliverables";
+import { parseWeekNumber } from "@/lib/deliverables-pure";
+import { isCompleteStrategyBrief, parseStrategyBrief } from "@/lib/strategy-brief";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -27,12 +30,17 @@ export async function POST(
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
+
   let body: {
     starts_on?: unknown;
     ends_on?: unknown;
+    week_number?: unknown;
     theme?: unknown;
     details?: unknown;
     rationale?: unknown;
+    strategy_brief?: unknown;
   };
   try {
     body = await req.json();
@@ -54,13 +62,32 @@ export async function POST(
     return NextResponse.json({ error: "ends_on must be on or after starts_on" }, { status: 400 });
   }
 
+  // Absent means "not a numbered publishing week" on create.
+  const weekNumber = parseWeekNumber(body.week_number ?? null);
+  if (!weekNumber.ok) {
+    return NextResponse.json(
+      { error: "week_number must be a whole number of 1 or more, or null" },
+      { status: 400 },
+    );
+  }
+
+  const strategyBrief = parseStrategyBrief(body.strategy_brief);
+  if (!isCompleteStrategyBrief(strategyBrief)) {
+    return NextResponse.json(
+      { error: "strategy_brief must contain all six non-empty fields" },
+      { status: 400 },
+    );
+  }
+
   const result = await createPeriod({
     firmId,
     startsOn,
     endsOn,
+    weekNumber: weekNumber.value,
     theme: cleanText(body.theme, 200),
     details: cleanText(body.details, 2000),
     rationale: cleanText(body.rationale, 2000),
+    strategyBrief,
     actor: resolved.actor,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });

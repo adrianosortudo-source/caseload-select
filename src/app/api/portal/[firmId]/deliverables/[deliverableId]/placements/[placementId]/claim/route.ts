@@ -20,6 +20,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { getDeliverableDetail } from "@/lib/deliverables";
 import { listPlacementsForDeliverable } from "@/lib/content-placements";
 import { claimPlacementForPublish } from "@/lib/publication-placement-claims";
@@ -36,8 +37,17 @@ export async function POST(
 
   const { firmId, deliverableId, placementId } = await params;
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) {
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
+
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (!detailResult.found || detailResult.detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
@@ -102,5 +112,6 @@ export async function POST(
     claimId: result.claimId,
     idempotentReplay: result.idempotentReplay,
     status: result.status,
+    releasePath: result.releasePath,
   });
 }

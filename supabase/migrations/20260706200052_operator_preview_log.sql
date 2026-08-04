@@ -1,3 +1,9 @@
+-- Filename reconciled to production's actual applied ledger version
+-- (20260706200052); the original filename (20260707b_operator_preview_log.sql)
+-- did not match Supabase's required <digits>_name.sql pattern (trailing "b"),
+-- which caused supabase start to silently skip it on a fresh database.
+-- Content unchanged. See docs/BASELINE_MIGRATION_DECISION_RECORD.md.
+--
 -- Operator preview audit log (DR-084)
 --
 -- One append-only row per time an operator opens a preview of a firm's lawyer

@@ -105,7 +105,6 @@ export async function POST(req: NextRequest) {
   if (lawyerLookupError) {
     // Internal-only visibility. Never log the raw email (anti-enumeration /
     // privacy); the external response stays { ok: true } regardless.
-    // eslint-disable-next-line no-console
     console.error(
       `[request-link] firm_lawyers lookup failed: ${lawyerLookupError.message}`,
     );
@@ -125,7 +124,6 @@ export async function POST(req: NextRequest) {
       .filter("branding->>lawyer_email", "eq", email);
     if (legacyLookupError) {
       // Same no-raw-email rule as above.
-      // eslint-disable-next-line no-console
       console.error(
         `[request-link] legacy firm lookup failed: ${legacyLookupError.message}`,
       );
@@ -142,7 +140,11 @@ export async function POST(req: NextRequest) {
 
   const token = generatePortalToken(firmId, { role, lawyer_id: lawyerId });
   const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN;
+  const previewOrigin = process.env.VERCEL_ENV === "preview" && process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : null;
   const origin =
+    previewOrigin ??
     (appDomain ? `https://app.${appDomain}` : null) ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
   const magicLink = `${origin}/api/portal/login?token=${encodeURIComponent(token)}`;
@@ -159,7 +161,6 @@ export async function POST(req: NextRequest) {
     // Don't surface email failures to the caller. Operator can re-send via
     // /api/portal/generate if needed. Still log internally so a broken
     // send isn't invisible.
-    // eslint-disable-next-line no-console
     console.error(
       `[request-link] email send failed: ${err instanceof Error ? err.message : String(err)}`,
     );

@@ -57,6 +57,59 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 
 const DB_URL = process.env.DIRECT_DATABASE_URL;
 
+// Root cause of a CI-only "Error: getaddrinfo EAI_AGAIN base" failure,
+// found after five rounds of diagnosis (see PR #57 description for the
+// full trail): pg-connection-string's parse() -- what `new Client({
+// connectionString })` uses internally -- calls
+// `new URL(str, 'postgres://base')` (node_modules/pg-connection-string/
+// index.js), passing its own dummy placeholder base URL whose hostname is
+// literally "base". `postgresql:` is not in the WHATWG URL "special
+// schemes" list (http/https/ws/wss/ftp/file), and non-special-scheme URL
+// parsing has genuinely changed across Node/V8 versions. Under CI's pinned
+// Node 20 (this repo runs Node 24 locally, where it never reproduced),
+// that dummy base's own hostname leaks through into the parsed result
+// instead of being correctly ignored for what is already a fully
+// qualified absolute URL. Confirmed directly: a diagnostic round proved
+// DIRECT_DATABASE_URL itself was the correct, full connection string at
+// the exact moment `new Client()` ran, ruling out every other
+// explanation -- the bug is inside pg-connection-string's own parsing,
+// version-pinned identically between local and CI.
+//
+// Fix: parse DIRECT_DATABASE_URL ourselves with a bare `new URL(url)` --
+// no base argument at all -- and pass discrete host/port/user/password/
+// database fields to Client instead of `connectionString`. This never
+// invokes pg-connection-string's parser, sidestepping the exact
+// mechanism (a base URL's own host leaking through) regardless of which
+// Node version is spec-correct.
+function parseDirectDatabaseUrl(url: string) {
+  // Defensive normalization: a later CI run threw "Invalid URL" with the
+  // (GH-Actions-masked) input showing literal surrounding double-quote
+  // characters, e.g. "***127.0.0.1:54322/postgres" -- consistent with the
+  // `supabase status -o env` step's dotenv-style KEY="value" output line
+  // getting appended to $GITHUB_ENV, whose simple KEY=VALUE parser takes
+  // everything after the first `=` literally, quotes included, unless the
+  // multiline heredoc form is used. The Setup Supabase CLI step does not
+  // pin an exact version, so the CLI's exact -o env quoting behaviour at
+  // any given run is not something this file controls. Stripping one
+  // matching pair of leading/trailing quotes (plus incidental whitespace)
+  // before parsing is safe unconditionally: a well-formed URL never
+  // legitimately starts or ends with a quote character.
+  const trimmed = url.trim();
+  const unquoted =
+    trimmed.length >= 2 &&
+    ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'")))
+      ? trimmed.slice(1, -1)
+      : trimmed;
+  const parsed = new URL(unquoted);
+  return {
+    host: decodeURIComponent(parsed.hostname),
+    port: parsed.port ? Number(parsed.port) : undefined,
+    user: decodeURIComponent(parsed.username),
+    password: decodeURIComponent(parsed.password),
+    database: parsed.pathname.replace(/^\//, "") || undefined,
+  };
+}
+
 describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two connections)", () => {
   // Imported lazily and only inside the gated branch: `pg` is a devDependency
   // added solely for this test, and importing it unconditionally would make
@@ -95,8 +148,9 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
 
   beforeAll(async () => {
     ({ Client } = await import("pg"));
-    connA = new Client({ connectionString: DB_URL });
-    connB = new Client({ connectionString: DB_URL });
+    const connectionOptions = parseDirectDatabaseUrl(DB_URL!);
+    connA = new Client(connectionOptions);
+    connB = new Client(connectionOptions);
     await connA.connect();
     await connB.connect();
 
