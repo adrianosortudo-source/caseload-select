@@ -31,6 +31,11 @@ export interface RenderCapture {
   viewport: ViewportName;
   finalUrl: string;
   screenshotPng: Buffer;
+  /** The page's real full height when the capture had to be clipped to
+   * stay under the vision API's pixel ceiling, else null. Non-null means
+   * the judgment pass saw the top of the page, not all of it, and the
+   * report must say so rather than implying whole-page coverage. */
+  screenshotClippedFromPx: number | null;
   html: string;
   domSnapshot: DomSnapshot;
   webVitals: WebVitalsSample;
@@ -190,6 +195,19 @@ export interface WebVitalsSample {
 
 const NAV_TIMEOUT_MS = 20_000;
 const RENDER_SETTLE_MS = 1_500; // let web-vitals observers + fonts settle
+
+/**
+ * The Anthropic Messages API rejects any image whose longest edge exceeds
+ * 8000 pixels ("At least one of the image dimensions exceed max allowed
+ * size: 8000 pixels", HTTP 400). A full-page screenshot of a long
+ * marketing page passes that easily: drglaw.ca hit it and lost BOTH
+ * vision passes silently, which is how this was found. Capped just under
+ * the limit so the judgment runs at all; when a page is taller, the
+ * capture is clipped from the top and `screenshotClippedFromPx` records
+ * the real full height so the report can disclose that the judgment saw
+ * the top of the page rather than all of it.
+ */
+const MAX_SCREENSHOT_HEIGHT_PX = 7_800;
 const MAX_INTERCEPTED_REQUESTS = 300; // guard against a runaway page
 
 async function launchBrowser(): Promise<Browser> {
@@ -432,10 +450,41 @@ const DOM_SNAPSHOT_SCRIPT = /* js */ `
 
   // Firm-voiced text: headings + paragraphs + CTA text, capped, for the
   // self-designation lexicon scan.
+  //
+  // Quoted client speech is deliberately EXCLUDED. The module scans
+  // "firm-voiced body copy", and a testimonial is the client's voice, not
+  // the firm's: a client writing "one of the best decisions I've made" is
+  // not the firm claiming to be the best. Including testimonials
+  // false-flagged a real, compliant client site (drglaw.ca) for an LSO
+  // Rule 4.2-1 prohibited word and capped its grade, which is exactly the
+  // kind of accusation this tool must never make on evidence it has
+  // misattributed. Testimonials are still captured separately, and still
+  // scored, by the attribution check.
+  // Detection is primarily TEXTUAL, not structural. Class-name matching
+  // was tried first and is not reliable: drglaw.ca renders testimonials
+  // as plain <p> inside <ul class="v3-short-proof-fragments">, with no
+  // blockquote and no testimonial/review class anywhere in the ancestry.
+  // What quoted speech does carry, independent of any site's markup, is
+  // an opening quotation mark. The structural selector is kept as a
+  // secondary signal for sites that do mark quotes up semantically.
+  var QUOTED_SPEECH_SELECTOR = 'blockquote,cite,figcaption,[class*="testimonial"],[class*="review"],[class*="quote"],[class*="proof"]';
+  var OPENING_QUOTES = [
+    String.fromCharCode(0x22),   // "
+    String.fromCharCode(0x201C), // left double quotation mark
+    String.fromCharCode(0x201D), // right double quotation mark (sites misuse it as an opener)
+    String.fromCharCode(0xAB),   // guillemet
+  ];
+  function isQuotedSpeech(el, text) {
+    if (el.closest(QUOTED_SPEECH_SELECTOR)) return true;
+    return OPENING_QUOTES.indexOf(text.charAt(0)) !== -1;
+  }
+
   var firmVoicedParts = [];
   Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6,p,a,button')).slice(0, 400).forEach(function (el) {
     var t = (el.innerText || '').trim();
-    if (t.length > 0) firmVoicedParts.push(t);
+    if (t.length === 0) return;
+    if (isQuotedSpeech(el, t)) return;
+    firmVoicedParts.push(t);
   });
   var firmVoicedText = firmVoicedParts.join(' \\n ').slice(0, 20000);
 
@@ -658,8 +707,22 @@ async function captureViewport(
     await page.waitForTimeout(RENDER_SETTLE_MS);
     await page.evaluate(() => document.fonts.ready).catch(() => undefined);
 
+    // Measure the real page height first: a full-page capture taller than
+    // the vision API's hard pixel ceiling is rejected outright, so the
+    // capture is clipped rather than allowed to fail (see
+    // MAX_SCREENSHOT_HEIGHT_PX).
+    const fullPageHeightPx = (await page
+      .evaluate(() => document.documentElement.scrollHeight)
+      .catch(() => 0)) as number;
+    const needsClip = fullPageHeightPx > MAX_SCREENSHOT_HEIGHT_PX;
+
     const [screenshotPng, html, domSnapshot, webVitals] = await Promise.all([
-      page.screenshot({ fullPage: true, type: "png" }),
+      needsClip
+        ? page.screenshot({
+            type: "png",
+            clip: { x: 0, y: 0, width: VIEWPORTS[viewport].width, height: MAX_SCREENSHOT_HEIGHT_PX },
+          })
+        : page.screenshot({ fullPage: true, type: "png" }),
       page.content(),
       page.evaluate(DOM_SNAPSHOT_SCRIPT) as Promise<DomSnapshot>,
       page.evaluate("window.__designCheckVitals") as Promise<WebVitalsSample>,
@@ -669,6 +732,7 @@ async function captureViewport(
       viewport,
       finalUrl: response?.url() ?? url,
       screenshotPng: screenshotPng as Buffer,
+      screenshotClippedFromPx: needsClip ? fullPageHeightPx : null,
       html,
       domSnapshot,
       webVitals,

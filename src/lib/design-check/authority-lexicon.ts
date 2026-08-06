@@ -27,11 +27,39 @@ export interface LexiconTerm {
    * requires a certified_specialist signal; award-winning requires a named,
    * dated basis nearby, which the general proof window already covers). */
   gatable: boolean;
+  /** Phrases where this word is a legal term of art rather than a
+   * self-designation, matched against a tight window around the hit.
+   *
+   * This exists because the tool told a real family-law firm that
+   * "keeping the best interests of the family in focus" was a prohibited
+   * superiority claim. It is not: "best interests" is the standard
+   * statutory phrase. Accusing a firm of a Rule 4.2-1 breach on a term of
+   * art is worse than missing a real one, and this repo has already been
+   * bitten by exactly this once (Ses.16, where a bare `guarantee` pattern
+   * flagged the legal noun "personal guarantee" in commercial-lease
+   * content). `guarantee` carries the same exclusions here pre-emptively.
+   */
+  termOfArtPatterns?: RegExp[];
 }
+
+/** Window each side of a hit used when testing term-of-art phrases. Tight
+ * on purpose: these phrases sit immediately around the word. */
+const TERM_OF_ART_WINDOW_CHARS = 30;
 
 // Module Part 1, verbatim term list. Word-boundary matched, case-insensitive.
 export const SELF_DESIGNATION_LEXICON: LexiconTerm[] = [
-  { term: "best", pattern: /\bbest\b/i, category: "prohibited", gatable: false },
+  {
+    term: "best",
+    pattern: /\bbest\b/i,
+    category: "prohibited",
+    gatable: false,
+    termOfArtPatterns: [
+      /\bbest interests?\b/i, // "best interests of the child/family", statutory
+      /\bbest efforts?\b/i, // "best efforts", contractual standard
+      /\bbest endeavours?\b/i,
+      /\bbest practices?\b/i,
+    ],
+  },
   { term: "super", pattern: /\bsuper\b/i, category: "prohibited", gatable: false },
   { term: "#1", pattern: /#\s*1\b/, category: "prohibited", gatable: false },
   { term: "number one", pattern: /\bnumber\s+one\b/i, category: "prohibited", gatable: false },
@@ -42,7 +70,22 @@ export const SELF_DESIGNATION_LEXICON: LexiconTerm[] = [
   { term: "top-rated", pattern: /\btop[\s-]rated\b/i, category: "self_designation", gatable: false },
   { term: "premier", pattern: /\bpremier\b/i, category: "self_designation", gatable: false },
   { term: "elite", pattern: /\belite\b/i, category: "self_designation", gatable: false },
-  { term: "guarantee", pattern: /\bguarantees?d?\b/i, category: "self_designation", gatable: false },
+  {
+    term: "guarantee",
+    pattern: /\bguarantees?d?\b/i,
+    category: "self_designation",
+    gatable: false,
+    // Pre-empting the Ses.16 defect: these are ordinary legal nouns, not
+    // outcome promises. A commercial-lease or financing page uses them
+    // constantly.
+    termOfArtPatterns: [
+      /\bpersonal guarantee\b/i,
+      /\bguarantee of payment\b/i,
+      /\bindemnity\b/i,
+      /\bguaranteed investment\b/i,
+      /\blimited guarantee\b/i,
+    ],
+  },
   { term: "world-class", pattern: /\bworld[\s-]class\b/i, category: "superlative", gatable: false },
   { term: "award-winning", pattern: /\baward[\s-]winning\b/i, category: "superlative", gatable: true },
   { term: "trusted", pattern: /\btrusted\b/i, category: "superlative", gatable: false },
@@ -94,6 +137,17 @@ export function scanForLexiconHits(firmVoicedText: string): LexiconHit[] {
     const globalPattern = new RegExp(entry.pattern.source, entry.pattern.flags.includes("g") ? entry.pattern.flags : entry.pattern.flags + "g");
     let match: RegExpExecArray | null;
     while ((match = globalPattern.exec(firmVoicedText)) !== null) {
+      // Skip hits where the word is a legal term of art, not a claim.
+      if (entry.termOfArtPatterns) {
+        const toaStart = Math.max(0, match.index - TERM_OF_ART_WINDOW_CHARS);
+        const toaEnd = Math.min(firmVoicedText.length, match.index + match[0].length + TERM_OF_ART_WINDOW_CHARS);
+        const toaWindow = firmVoicedText.slice(toaStart, toaEnd);
+        if (entry.termOfArtPatterns.some((p) => p.test(toaWindow))) {
+          if (match[0].length === 0) globalPattern.lastIndex++;
+          continue;
+        }
+      }
+
       const start = Math.max(0, match.index - PROOF_WINDOW_CHARS);
       const end = Math.min(firmVoicedText.length, match.index + match[0].length + PROOF_WINDOW_CHARS);
       const window = firmVoicedText.slice(start, end);

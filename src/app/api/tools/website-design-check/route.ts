@@ -144,6 +144,18 @@ export async function POST(request: NextRequest) {
         notMeasuredDimensions: track1Report.notMeasuredDimensions,
         rankedFindings: track1Report.rankedFindings,
         redFlagPanel: track1Report.redFlagPanel,
+        // Disclosed, not implied: when the page was too tall to capture
+        // whole, the design-judgment items graded the top of the page
+        // only. Same evidence-bounded posture as the not-checkable and
+        // not-measured disclosures above.
+        judgmentCoverage:
+          desktopCapture.screenshotClippedFromPx === null
+            ? { wholePage: true }
+            : {
+                wholePage: false,
+                judgedTopPx: 7800,
+                actualPageHeightPx: desktopCapture.screenshotClippedFromPx,
+              },
       },
       { headers: rateLimitHeaders(decision) }
     );

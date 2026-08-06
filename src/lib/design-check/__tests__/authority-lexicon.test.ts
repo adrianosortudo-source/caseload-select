@@ -67,6 +67,36 @@ describe("scanForLexiconHits", () => {
     expect(scanForLexiconHits("Our expertise covers commercial leasing.")).toEqual([]);
   });
 
+  // Every case below is a legal term of art. Flagging one tells a firm it
+  // has a Rule 4.2-1 compliance problem when it is using ordinary legal
+  // vocabulary, which is worse than missing a real violation. The first
+  // case is the live false positive that prompted these: a real family-law
+  // site was flagged for "keeping the best interests of the family in focus".
+  it.each([
+    ["best interests of the child", "We act with the best interests of the child in mind."],
+    ["best interests of the family", "keeping the best interests of the family in focus"],
+    ["best efforts", "The parties shall use best efforts to close."],
+    ["best endeavours", "subject to best endeavours under the agreement"],
+    ["personal guarantee", "Review any personal guarantee before you sign the lease."],
+    ["guarantee of payment", "The landlord required a guarantee of payment."],
+  ])("does not flag %s as a self-designation claim", (_label, text) => {
+    expect(scanForLexiconHits(text)).toEqual([]);
+  });
+
+  it("still flags the same words when they are a real claim rather than a term of art", () => {
+    // The exclusion must be narrow. "We are simply the best" is not a term
+    // of art and must still be caught.
+    expect(scanForLexiconHits("We are simply the best.").map((h) => h.term)).toContain("best");
+    expect(scanForLexiconHits("We guarantee you will win.").map((h) => h.term)).toContain("guarantee");
+  });
+
+  it("flags a real claim that appears in the same copy as a term of art", () => {
+    const hits = scanForLexiconHits(
+      "We protect the best interests of the child. " + "z".repeat(120) + " We are the best firm in Toronto."
+    );
+    expect(hits.filter((h) => h.term === "best")).toHaveLength(1);
+  });
+
   it("terminates on every lexicon entry (no catastrophic or zero-width regex hang)", () => {
     const text = SELF_DESIGNATION_LEXICON.map((e) => e.term).join(" ") + " ".repeat(50);
     expect(() => scanForLexiconHits(text)).not.toThrow();
