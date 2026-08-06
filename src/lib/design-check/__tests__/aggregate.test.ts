@@ -43,6 +43,65 @@ describe("scoreToLetterGrade", () => {
   });
 });
 
+describe("buildTrack1Report handling of dimensions with nothing to score", () => {
+  /** A dimension whose every check was unscorable, which is what
+   * `scoreItems` returns for a page with no form at all. */
+  function notApplicable(name: string, weight: number): DimensionResult {
+    return { name, weight, score: 0, maxScore: 0, items: [] };
+  }
+
+  it("excludes an unscorable dimension from the weighted average instead of scoring it zero", () => {
+    // Found live: four of the six regression domains have no form on the
+    // homepage, and `(score / (maxScore || 100))` turned maxScore 0 into a
+    // division by 100, scoring the dimension 0 out of 100 at full weight.
+    // A firm that links to a contact page instead of embedding a form was
+    // losing real points for a layout the tool never examined.
+    const withForm = buildTrack1Report([dimension("Typography and Legibility", 12, 80)], authority(80), undefined, cleanDarkPatterns());
+    const withoutForm = buildTrack1Report(
+      [dimension("Typography and Legibility", 12, 80), notApplicable("Forms and Conversion Flow", 9)],
+      authority(80),
+      undefined,
+      cleanDarkPatterns()
+    );
+    expect(withoutForm.uncappedScore).toBe(withForm.uncappedScore);
+    expect(withoutForm.uncappedScore).toBe(80);
+  });
+
+  it("reports the unscorable dimension rather than hiding it", () => {
+    const report = buildTrack1Report(
+      [dimension("Typography and Legibility", 12, 80), notApplicable("Forms and Conversion Flow", 9)],
+      authority(80),
+      undefined,
+      cleanDarkPatterns()
+    );
+    expect(report.notApplicableDimensions).toContain("Forms and Conversion Flow");
+  });
+
+  it("shows a null bar score, never a zero, for a dimension it could not grade", () => {
+    const report = buildTrack1Report(
+      [dimension("Typography and Legibility", 12, 80), notApplicable("Forms and Conversion Flow", 9)],
+      authority(80),
+      undefined,
+      cleanDarkPatterns()
+    );
+    expect(report.dimensionBar.find((d) => d.name === "Forms and Conversion Flow")?.score).toBeNull();
+    expect(report.dimensionBar.find((d) => d.name === "Typography and Legibility")?.score).toBe(80);
+  });
+
+  it("still scores a dimension that has real checks, even when they all fail", () => {
+    // The exclusion is for "nothing to measure", never for "measured and
+    // scored zero". A real form that fails every check must still count.
+    const report = buildTrack1Report(
+      [dimension("Typography and Legibility", 12, 100), dimension("Forms and Conversion Flow", 9, 0)],
+      authority(100),
+      undefined,
+      cleanDarkPatterns()
+    );
+    expect(report.notApplicableDimensions).toEqual([]);
+    expect(report.uncappedScore).toBeLessThan(100);
+  });
+});
+
 describe("buildTrack1Report red-flag capping", () => {
   it("caps rather than averages, so a strong page cannot outscore its own red flag", () => {
     // The framework is explicit: "Do not average away a red flag. A dark

@@ -87,7 +87,10 @@ function judgmentToItem(label: string, judgment: JudgmentScore): CheckItem {
 export interface DimensionBarEntry {
   name: string;
   weight: number;
-  score: number; // 0-100
+  /** 0-100, or null when nothing on this page was scorable for the
+   * dimension (e.g. no form to grade). Null is excluded from the weighted
+   * average rather than counted as zero. */
+  score: number | null;
 }
 
 export interface RankedFinding {
@@ -149,6 +152,9 @@ export interface Track1Report {
   letterGrade: GradeBand["letter"];
   dimensionBar: DimensionBarEntry[];
   notMeasuredDimensions: string[];
+  /** Dimensions this page gave the tool nothing to score. Reported, never
+   * silently folded into the grade as a zero. */
+  notApplicableDimensions: string[];
   rankedFindings: RankedFinding[];
   redFlagPanel: RedFlagPanel;
 }
@@ -163,14 +169,30 @@ export function buildTrack1Report(
   const authorityAsDimension: DimensionResult = { name: authority.name, weight: authority.weight, score: authority.score, maxScore: authority.maxScore, items: authority.subScores.flatMap((s) => s.items) };
   const allDimensions = [...deterministicDimensions, authorityAsDimension, ...judgmentDimensions];
 
-  const totalWeight = allDimensions.reduce((sum, d) => sum + d.weight, 0);
-  const weightedSum = allDimensions.reduce((sum, d) => sum + (d.score / (d.maxScore || 100)) * 100 * d.weight, 0);
+  // A dimension whose every check was unscorable (maxScore 0) was NOT
+  // MEASURED on this page, which is not the same as scoring zero. Forms is
+  // the common case: a firm whose homepage links to a contact page instead
+  // of embedding a form has nothing to grade here, and grading it 0 out of
+  // 100 at full weight 9 punishes a layout choice the tool never examined.
+  // Four of the six regression domains hit exactly that. These are dropped
+  // from the weighted average (which renormalizes over the rest) and
+  // reported separately, the same posture as notMeasuredDimensions.
+  const scoredDimensions = allDimensions.filter((d) => d.maxScore > 0);
+  const notApplicableDimensions = allDimensions.filter((d) => d.maxScore === 0);
+
+  const totalWeight = scoredDimensions.reduce((sum, d) => sum + d.weight, 0);
+  const weightedSum = scoredDimensions.reduce((sum, d) => sum + (d.score / d.maxScore) * 100 * d.weight, 0);
   const uncappedScore = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
 
   const redFlagPanel = buildRedFlagPanel(darkPatterns, deterministicDimensions, authority.redFlags);
   const score = redFlagPanel.ceiling !== null ? Math.min(uncappedScore, redFlagPanel.ceiling) : uncappedScore;
 
-  const dimensionBar: DimensionBarEntry[] = allDimensions.map((d) => ({ name: d.name, weight: d.weight, score: Math.round((d.score / (d.maxScore || 100)) * 100) }));
+  const dimensionBar: DimensionBarEntry[] = allDimensions.map((d) => ({
+    name: d.name,
+    weight: d.weight,
+    // null, never 0: "nothing here to measure" must not read as a failure.
+    score: d.maxScore > 0 ? Math.round((d.score / d.maxScore) * 100) : null,
+  }));
 
   return {
     score,
@@ -178,6 +200,7 @@ export function buildTrack1Report(
     letterGrade: scoreToLetterGrade(score),
     dimensionBar,
     notMeasuredDimensions: NOT_MEASURED_DIMENSIONS,
+    notApplicableDimensions: notApplicableDimensions.map((d) => d.name),
     rankedFindings: buildRankedFindings(allDimensions),
     redFlagPanel,
   };

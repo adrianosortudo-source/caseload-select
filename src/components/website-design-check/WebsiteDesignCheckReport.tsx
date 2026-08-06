@@ -29,6 +29,7 @@ export interface DesignCheckResult {
   letterGrade: "A" | "B" | "C" | "D" | "F";
   dimensionBar: DimensionBarEntry[];
   notMeasuredDimensions: string[];
+  notApplicableDimensions: string[];
   rankedFindings: RankedFinding[];
   redFlagPanel: {
     activeFlags: RedFlag[];
@@ -94,11 +95,21 @@ export default function WebsiteDesignCheckReport({ result, onReset }: { result: 
           <div key={d.name} className="dc-dim-row">
             <span className="dc-dim-name">{d.name}</span>
             <div className="dc-dim-track">
-              <div className="dc-dim-fill" style={{ width: `${d.score}%`, background: gradeColor(d.score >= 80 ? "A" : d.score >= 70 ? "C" : "F") }} />
+              {/* An empty track, not a zero-width bar reading as a total
+                  failure: a null score means this page had nothing to
+                  grade here. */}
+              {d.score !== null && (
+                <div className="dc-dim-fill" style={{ width: `${d.score}%`, background: gradeColor(d.score >= 80 ? "A" : d.score >= 70 ? "C" : "F") }} />
+              )}
             </div>
-            <span className="dc-dim-score">{d.score}</span>
+            <span className="dc-dim-score">{d.score === null ? "Not on this page" : d.score}</span>
           </div>
         ))}
+        {result.notApplicableDimensions.length > 0 && (
+          <p className="dc-not-measured">
+            Nothing on this page to grade for: {result.notApplicableDimensions.join(", ")}. These are left out of the score rather than counted against it.
+          </p>
+        )}
         {result.notMeasuredDimensions.length > 0 && (
           <p className="dc-not-measured">Not yet measured in this version: {result.notMeasuredDimensions.join(", ")}.</p>
         )}

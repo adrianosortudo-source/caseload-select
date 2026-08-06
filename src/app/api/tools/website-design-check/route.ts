@@ -142,6 +142,7 @@ export async function POST(request: NextRequest) {
         letterGrade: track1Report.letterGrade,
         dimensionBar: track1Report.dimensionBar,
         notMeasuredDimensions: track1Report.notMeasuredDimensions,
+        notApplicableDimensions: track1Report.notApplicableDimensions,
         rankedFindings: track1Report.rankedFindings,
         redFlagPanel: track1Report.redFlagPanel,
         // Disclosed, not implied: when the page was too tall to capture
