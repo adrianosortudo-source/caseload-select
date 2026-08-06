@@ -37,12 +37,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     path === "/pricing" ||
     path.startsWith("/screen-demo") ||
     path.startsWith("/what-we-dont-do") ||
-    path.startsWith("/case-studies") ||
-    // Every /tools/* page lives under src/app/(marketing)/tools/ only (no
-    // operator-only route shares the prefix); covers the new Website
-    // Design Check tool and retroactively closes the same gap for
-    // /tools/seo-check, which was missing from this list.
-    path.startsWith("/tools/");
+    path.startsWith("/case-studies");
 
   if (
     isPortal ||

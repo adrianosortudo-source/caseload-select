@@ -117,7 +117,13 @@ function buildSystemPrompt(): string {
 function buildUserPrompt(deterministicFindings: DimensionResult[]): string {
   const digest = deterministicFindings
     .map((d) => {
-      const failsAndWarns = d.items.filter((i) => i.status !== "pass").map((i) => `${i.label}: ${i.detail}`);
+      // Defensive: a caller passing a dimension shape without a flat
+      // `items` array (the Authority dimension keeps its checks under
+      // subScores) previously threw here and cost the whole judgment
+      // pass. A malformed dimension now contributes nothing to the
+      // digest instead of taking the pass down with it.
+      const items = Array.isArray(d.items) ? d.items : [];
+      const failsAndWarns = items.filter((i) => i.status !== "pass").map((i) => `${i.label}: ${i.detail}`);
       return `${d.name} (${d.score}/${d.maxScore}): ${failsAndWarns.length > 0 ? failsAndWarns.join("; ") : "no issues found"}`;
     })
     .join("\n");

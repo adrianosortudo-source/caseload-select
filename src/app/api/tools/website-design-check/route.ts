@@ -87,10 +87,15 @@ export async function POST(request: NextRequest) {
         "Lexicon and schema signals are scored separately from measured DOM data; judge only the 6 rubric items against the screenshot."
       );
       authorityJudgments = authorityVision.judgments;
-    } catch {
+    } catch (err) {
       // Vision judgment is a quality layer, not a hard dependency: a
       // missing API key or a transient failure degrades to a
       // deterministic-only report rather than failing the whole scan.
+      // The failure is logged, never swallowed silently: a degraded
+      // report looks identical to a clean one in the response, so
+      // without this line an operator has no way to tell that the
+      // judgment layer stopped running.
+      console.error("[design-check] authority vision judgment failed, degrading to deterministic-only:", err instanceof Error ? err.message : String(err));
       authorityJudgments = undefined;
     }
 
@@ -104,11 +109,26 @@ export async function POST(request: NextRequest) {
     const mobileDimension = scoreMobile(mobileCapture.domSnapshot);
     const authorityResult = scoreAuthority(desktopCapture.domSnapshot, desktopCapture.finalUrl, authorityJudgments);
 
+    // Authority carries its checks under subScores, not a flat `items`
+    // array, so it must be flattened into DimensionResult shape before it
+    // can be fed to the judgment prompt. Passing the raw AuthorityDimensionResult
+    // made buildUserPrompt read `d.items.filter` on undefined and threw,
+    // which the catch below silently degraded: every scan lost this vision
+    // pass. aggregate.ts already does this same flattening.
+    const authorityAsDimension: DimensionResult = {
+      name: authorityResult.name,
+      weight: authorityResult.weight,
+      score: authorityResult.score,
+      maxScore: authorityResult.maxScore,
+      items: authorityResult.subScores.flatMap((s) => s.items),
+    };
+
     let generalJudgments;
     try {
-      const visionResult = await judgeScreenshot(desktopCapture.screenshotPng, [...desktopDimensions, mobileDimension, authorityResult]);
+      const visionResult = await judgeScreenshot(desktopCapture.screenshotPng, [...desktopDimensions, mobileDimension, authorityAsDimension]);
       generalJudgments = visionResult.judgments;
-    } catch {
+    } catch (err) {
+      console.error("[design-check] design-quality vision judgment failed, degrading to deterministic-only:", err instanceof Error ? err.message : String(err));
       generalJudgments = undefined;
     }
 
@@ -127,7 +147,11 @@ export async function POST(request: NextRequest) {
       },
       { headers: rateLimitHeaders(decision) }
     );
-  } catch {
+  } catch (err) {
+    // Logged, not swallowed: the visitor-facing message is deliberately
+    // vague, so without this an operator has nothing to debug a failing
+    // scan from.
+    console.error("[design-check] scan failed:", err instanceof Error ? `${err.message}\n${err.stack}` : String(err));
     return NextResponse.json({ error: "Something went wrong scanning this site. Try again." }, { status: 500 });
   }
 }
