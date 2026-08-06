@@ -70,6 +70,49 @@ export interface ImageSample {
   isLikelyLogo: boolean;
 }
 
+export interface LinkSample {
+  text: string;
+  href: string;
+}
+
+export interface BylineSample {
+  text: string;
+  hasProfileLink: boolean;
+}
+
+export interface TestimonialSample {
+  text: string;
+  hasAttribution: boolean;
+}
+
+/** Authority and Positioning module inputs (Phase 3), all extractable from
+ * this single rendered page. Cross-page checks the module specifies
+ * (message consistency across home/about/service, site-wide NAP
+ * consistency) are out of scope per the operator's 2026-07-16 v1
+ * single-URL decision; they are not approximated here. */
+export interface AuthoritySnapshot {
+  /** Best-effort JSON.parse of every <script type="application/ld+json">
+   * block. Parse failures are skipped, not thrown. */
+  jsonLd: unknown[];
+  metaTitle: string | null;
+  metaDescription: string | null;
+  /** Concatenated heading + paragraph + CTA text, capped, for the
+   * self-designation lexicon scan. This is "firm-voiced copy" per the
+   * module, not the visitor-facing rendered layout sample above. */
+  firmVoicedText: string;
+  navLinks: LinkSample[];
+  footerLinks: LinkSample[];
+  authorBylines: BylineSample[];
+  testimonials: TestimonialSample[];
+  /** Heuristic list of distinct practice-area/service labels found at
+   * equal visual weight (a nav list or card grid), for the
+   * generic-full-service signal. */
+  practiceAreaLabels: string[];
+  /** Text matching a legal-information disclaimer pattern found in the
+   * first ~2000 characters of body text. */
+  disclaimerPresent: boolean;
+}
+
 export interface DomSnapshot {
   /** Non-zero margin/padding values (px, one entry per side per element)
    * sampled from layout containers, for the spacing-scale-adherence check. */
@@ -85,6 +128,7 @@ export interface DomSnapshot {
   tapTargets: TapTargetSample[];
   hamburgerMenu: HamburgerMenuInfo;
   images: ImageSample[];
+  authority: AuthoritySnapshot;
 }
 
 export interface TextBlockSample {
@@ -349,6 +393,147 @@ const DOM_SNAPSHOT_SCRIPT = /* js */ `
     return { src: src, format: format, isLikelyLogo: isLikelyLogo };
   });
 
+  // Authority module (Phase 3) inputs. All on-site, single-page only.
+  var jsonLd = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
+    .map(function (s) { try { return JSON.parse(s.textContent || ''); } catch (e) { return null; } })
+    .filter(function (v) { return v !== null; });
+
+  var metaTitleEl = document.querySelector('title');
+  var metaDescEl = document.querySelector('meta[name="description"]');
+
+  // Firm-voiced text: headings + paragraphs + CTA text, capped, for the
+  // self-designation lexicon scan.
+  var firmVoicedParts = [];
+  Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6,p,a,button')).slice(0, 400).forEach(function (el) {
+    var t = (el.innerText || '').trim();
+    if (t.length > 0) firmVoicedParts.push(t);
+  });
+  var firmVoicedText = firmVoicedParts.join(' \\n ').slice(0, 20000);
+
+  function extractLinks(container) {
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('a[href]')).slice(0, 40).map(function (a) {
+      return { text: (a.innerText || '').trim().slice(0, 80), href: a.getAttribute('href') || '' };
+    });
+  }
+  var navLinks = extractLinks(document.querySelector('nav') || document.querySelector('header'));
+  var footerLinks = extractLinks(document.querySelector('footer'));
+
+  // Author bylines: elements naming an author via rel/class/itemprop, or a
+  // "By <Name>" text pattern. hasProfileLink checks for an adjacent anchor.
+  var bylineEls = Array.from(document.querySelectorAll('[rel="author"],[itemprop="author"],.author,.byline,[class*="author"],[class*="byline"]')).slice(0, 20);
+  var bylineTextMatches = [];
+  Array.from(document.querySelectorAll('p,span,div')).slice(0, 300).forEach(function (el) {
+    var t = (el.innerText || '').trim();
+    if (/^by\\s+[A-Z][a-z]+\\s+[A-Z][a-z]+/.test(t) && t.length < 80) bylineTextMatches.push(el);
+  });
+  var bylineCandidates = bylineEls.concat(bylineTextMatches).slice(0, 20);
+  var authorBylines = bylineCandidates.map(function (el) {
+    var text = (el.innerText || '').trim().slice(0, 120);
+    var hasProfileLink = !!el.querySelector('a[href]') || (el.tagName === 'A' && el.hasAttribute('href'));
+    return { text: text, hasProfileLink: hasProfileLink };
+  });
+
+  // Testimonials: quote-like blocks or elements classed as testimonial/
+  // review, checked for a nearby name (heuristic: a short line following
+  // the quote, capitalized, under 40 chars, not itself a sentence).
+  var testimonialEls = Array.from(document.querySelectorAll('blockquote,[class*="testimonial"],[class*="review-"],.review')).slice(0, 20);
+  var testimonials = testimonialEls.map(function (el) {
+    var text = (el.innerText || '').trim().slice(0, 300);
+    var cite = el.querySelector('cite,footer,[class*="attribution"],[class*="author"],[class*="name"]');
+    var citeText = cite ? (cite.innerText || '').trim() : '';
+    var hasAttribution = citeText.length > 0 && citeText.length < 60;
+    return { text: text, hasAttribution: hasAttribution };
+  });
+
+  // Practice-area labels: items in a list/grid under a heading mentioning
+  // "practice area" or "services", read as equal-weight labels.
+  var practiceAreaLabels = [];
+  // English-primary with Portuguese/French terms added, same rationale as
+  // the disclaimer pattern above. Confirmed live: without it, this exact
+  // heading pattern (9 practice areas at equal weight, the generic
+  // full-service signal the module names) went undetected on the
+  // Portuguese-language "Conheca Nossos Servicos" / "Como Podemos Ajudar
+  // Voce?" headings on the sakurabalaw.ca fixture.
+  // Heading tags include h5/h6 (a smaller eyebrow-style section heading is
+  // common). The card grid itself is found by structure, not by climbing
+  // a fixed number of ancestor levels: page-builder markup (Elementor,
+  // Divi, and similar, common on small-firm sites) nests a heading and
+  // its associated grid many wrapper-divs apart, so a fixed-depth climb
+  // either misses the grid or, climbed far enough, sweeps in unrelated
+  // repeated groups elsewhere on the page (team member cards, blog post
+  // cards). Confirmed live on the sakurabalaw.ca fixture: the real
+  // 9-practice-area grid sits 5 wrapper divs above its own heading.
+  // Instead, within a generously bounded ancestor scope, look for a group
+  // of 5+ elements that share one direct parent and each carry short
+  // label-like text: that sibling-repetition signature is what "items
+  // presented at equal visual weight" structurally means, independent of
+  // nesting depth, and naturally separates one grid from another sharing
+  // a distant common ancestor.
+  function findRepeatedLabelGroup(root) {
+    var byParent = [];
+    var parents = Array.from(root.querySelectorAll('*')).map(function (el) { return el.parentElement; }).filter(Boolean);
+    var seenParents = [];
+    parents.forEach(function (p) {
+      if (seenParents.indexOf(p) !== -1) return;
+      seenParents.push(p);
+    });
+    for (var pi = 0; pi < seenParents.length; pi++) {
+      var parent = seenParents[pi];
+      var children = Array.from(parent.children);
+      if (children.length < 5) continue;
+      var labels = [];
+      children.forEach(function (child) {
+        var text = (child.innerText || '').trim();
+        var firstLine = text.split('\\n')[0].trim();
+        if (firstLine.length > 0 && firstLine.length < 60) labels.push(firstLine);
+      });
+      // Majority, not unanimous: real card grids often mix in a decorative
+      // or non-text sibling (a divider, a trailing "view all" link).
+      if (labels.length >= 5 && labels.length >= Math.ceil(children.length * 0.7)) {
+        byParent.push(labels);
+      }
+    }
+    if (byParent.length === 0) return [];
+    // Prefer the largest qualifying group as the primary grid.
+    byParent.sort(function (a, b) { return b.length - a.length; });
+    return byParent[0];
+  }
+
+  Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6')).forEach(function (h) {
+    if (practiceAreaLabels.length > 0) return; // first qualifying heading wins
+    var t = (h.innerText || '').toLowerCase();
+    if (!/practice area|our services|areas of (law|practice)|what we do|nossos servi[cç]os|como podemos ajudar|[aá]reas de atua[cç][aã]o|nos services|domaines de pratique/.test(t)) return;
+    var scope = h.parentElement;
+    for (var depth = 0; depth < 6 && scope; depth++) scope = scope.parentElement || scope;
+    if (!scope) return;
+    var found = findRepeatedLabelGroup(scope);
+    found.slice(0, 30).forEach(function (label) { practiceAreaLabels.push(label); });
+  });
+
+  // English-primary with Portuguese/French terms added, same rationale as
+  // the About/team-link patterns in dimensions/authority.ts: not
+  // exhaustive multilingual coverage, but confirmed live that without it,
+  // a real disclaimer on the Portuguese sakurabalaw.ca fixture ("Este
+  // site e apenas informativo e nao constitui aconselhamento juridico")
+  // went undetected.
+  var disclaimerPresent = /legal information[,]? not legal advice|does not constitute legal advice|for informational purposes only|no attorney-client relationship|apenas informativo|n[aã]o constitui aconselhamento|(a|à) titre informatif|ne constitue pas un avis juridique/i.test(
+    (document.body.innerText || '').slice(0, 3000)
+  );
+
+  var authority = {
+    jsonLd: jsonLd,
+    metaTitle: metaTitleEl ? metaTitleEl.textContent : null,
+    metaDescription: metaDescEl ? metaDescEl.getAttribute('content') : null,
+    firmVoicedText: firmVoicedText,
+    navLinks: navLinks,
+    footerLinks: footerLinks,
+    authorBylines: authorBylines,
+    testimonials: testimonials,
+    practiceAreaLabels: practiceAreaLabels,
+    disclaimerPresent: disclaimerPresent,
+  };
+
   return {
     h1Count: h1s.length,
     h1Text: h1s[0] ? (h1s[0].innerText || '').trim().slice(0, 200) : null,
@@ -362,6 +547,7 @@ const DOM_SNAPSHOT_SCRIPT = /* js */ `
     hamburgerMenu: hamburgerMenu,
     images: images,
     spacingValuesPx: spacingValuesPx,
+    authority: authority,
   };
 })();
 `;

@@ -7,7 +7,9 @@ import { scoreForms } from "@/lib/design-check/dimensions/forms";
 import { scoreMobile } from "@/lib/design-check/dimensions/mobile";
 import { scorePerformance } from "@/lib/design-check/dimensions/performance";
 import { scoreSpacing } from "@/lib/design-check/dimensions/spacing";
+import { scoreAuthority } from "@/lib/design-check/dimensions/authority";
 import { judgeScreenshot } from "@/lib/design-check/vision-judgment";
+import { judgeAuthorityScreenshot } from "@/lib/design-check/authority-vision";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -53,6 +55,20 @@ export async function GET(request: NextRequest) {
       result.captures.map(async (c) => {
         const outPath = path.join(outDir, `design-check-spike-${domain}-${c.viewport}.png`);
         writeFileSync(outPath, c.screenshotPng);
+
+        let vision: Awaited<ReturnType<typeof judgeScreenshot>> | { error: string } | null = null;
+        let authorityVision: Awaited<ReturnType<typeof judgeAuthorityScreenshot>> | { error: string } | null = null;
+        if (runVision && c.viewport === "desktop") {
+          try {
+            authorityVision = await judgeAuthorityScreenshot(
+              c.screenshotPng,
+              `Lexicon and schema signals will be scored separately; judge only the 6 rubric items against the screenshot.`
+            );
+          } catch (visionErr) {
+            authorityVision = { error: visionErr instanceof Error ? visionErr.message : String(visionErr) };
+          }
+        }
+
         const dimensions = {
           typography: scoreTypography(c.domSnapshot),
           colorContrast: scoreColorContrast(c.domSnapshot),
@@ -60,9 +76,13 @@ export async function GET(request: NextRequest) {
           ...(c.viewport === "mobile" ? { mobile: scoreMobile(c.domSnapshot) } : {}),
           performance: scorePerformance(c.domSnapshot, c.webVitals),
           spacing: scoreSpacing(c.domSnapshot),
+          authority: scoreAuthority(
+            c.domSnapshot,
+            c.finalUrl,
+            "judgments" in (authorityVision ?? {}) ? (authorityVision as Awaited<ReturnType<typeof judgeAuthorityScreenshot>>).judgments : undefined
+          ),
         };
 
-        let vision: Awaited<ReturnType<typeof judgeScreenshot>> | { error: string } | null = null;
         if (runVision && c.viewport === "desktop") {
           try {
             vision = await judgeScreenshot(c.screenshotPng, Object.values(dimensions));
@@ -85,11 +105,13 @@ export async function GET(request: NextRequest) {
             viewportMetaContent: c.domSnapshot.viewportMetaContent,
             bodyTextSampleCount: c.domSnapshot.bodyTextSample.length,
             bodyTextSample: c.domSnapshot.bodyTextSample,
+            authority: c.domSnapshot.authority,
           },
           webVitals: c.webVitals,
           blockedRequests: c.blockedRequests,
           dimensions,
           vision,
+          authorityVision,
         };
       })
     );
