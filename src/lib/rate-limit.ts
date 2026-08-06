@@ -68,6 +68,12 @@
  *       run up the bill against a single firm while staying under a
  *       global-IP ceiling.
  *
+ *   designCheck        8 per 10 minutes
+ *     - /api/tools/website-design-check. Public. Each call launches a
+ *       real headless-browser render at two viewports plus two Anthropic
+ *       vision calls; same bucket size as seoCheck, whose own real crawl
+ *       cost this mirrors.
+ *
  * Per-route bucket selection is done by the caller. Caller passes the
  * bucket name + the IP. We never trust the request body for IP
  * resolution; the helper reads x-forwarded-for and x-real-ip in that
@@ -91,7 +97,8 @@ export type RateLimitBucket =
   | "otpSend"
   | "otpVerify"
   | "seoCheck"
-  | "assist";
+  | "assist"
+  | "designCheck";
 
 interface BucketConfig {
   limit: number;
@@ -109,6 +116,7 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   otpVerify:      { limit: 10, windowSeconds: 600 },   // 10 per 10 minutes
   seoCheck:       { limit: 8,  windowSeconds: 600 },   // 8 per 10 minutes (public, unauth only)
   assist:         { limit: 8,  windowSeconds: 60 },    // 8 per minute (public, unauth, per firmId:ip)
+  designCheck:    { limit: 8,  windowSeconds: 600 },   // 8 per 10 minutes (public, unauth only)
 };
 
 /**
