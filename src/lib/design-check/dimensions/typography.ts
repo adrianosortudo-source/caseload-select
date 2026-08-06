@@ -1,5 +1,5 @@
 import type { DomSnapshot, TextBlockSample } from "../renderer";
-import { type CheckItem, type DimensionResult, scoreItems } from "../dimension-types";
+import { type CheckItem, type DimensionResult, scoreItems, tagUntagged } from "../dimension-types";
 
 /**
  * Typography and legibility (framework weight 12). Fully deterministic:
@@ -155,14 +155,20 @@ function checkHeadingOrder(snapshot: DomSnapshot): CheckItem[] {
 }
 
 export function scoreTypography(domSnapshot: DomSnapshot): DimensionResult {
-  const items: CheckItem[] = [
-    checkLineLength(domSnapshot.bodyTextSample),
-    checkLineHeight(domSnapshot.bodyTextSample),
-    checkAllCapsBody(domSnapshot.bodyTextSample),
-    checkJustifiedNarrowColumn(domSnapshot.bodyTextSample),
-    checkHeadingContrast(domSnapshot.headingSamples),
-    ...checkHeadingOrder(domSnapshot),
-  ];
+  // Headline-to-subline contrast is a craft/hierarchy signal, not cleanly
+  // tablestakes or differentiation; left untagged deliberately, not by
+  // omission. Everything else here is a reading-baseline check.
+  const tablestakesItems = tagUntagged(
+    [
+      checkLineLength(domSnapshot.bodyTextSample),
+      checkLineHeight(domSnapshot.bodyTextSample),
+      checkAllCapsBody(domSnapshot.bodyTextSample),
+      checkJustifiedNarrowColumn(domSnapshot.bodyTextSample),
+      ...checkHeadingOrder(domSnapshot),
+    ],
+    "tablestakes"
+  );
+  const items: CheckItem[] = [...tablestakesItems, checkHeadingContrast(domSnapshot.headingSamples)];
   const { score, maxScore } = scoreItems(items);
   return { name: "Typography and Legibility", weight: 12, score, maxScore, items };
 }

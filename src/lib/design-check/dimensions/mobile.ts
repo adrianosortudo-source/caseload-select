@@ -1,5 +1,5 @@
 import type { DomSnapshot } from "../renderer";
-import { type CheckItem, type DimensionResult, scoreItems } from "../dimension-types";
+import { type CheckItem, type DimensionResult, scoreItems, tagUntagged } from "../dimension-types";
 
 /**
  * Mobile and responsive (framework weight 6). Only meaningful on the
@@ -75,12 +75,18 @@ function checkHamburgerLabel(hamburger: DomSnapshot["hamburgerMenu"]): CheckItem
 }
 
 export function scoreMobile(mobileDomSnapshot: DomSnapshot): DimensionResult {
-  const items: CheckItem[] = [
-    checkViewportMeta(mobileDomSnapshot.viewportMetaContent),
-    checkHorizontalOverflow(mobileDomSnapshot.hasHorizontalOverflow),
-    checkTapTargets(mobileDomSnapshot.tapTargets),
-    checkHamburgerLabel(mobileDomSnapshot.hamburgerMenu),
-  ];
+  // Most visitors to a law firm site arrive on mobile; a broken mobile
+  // experience is not a differentiation gap, it is the firm being
+  // effectively unreachable for most of its actual traffic. Tablestakes.
+  const items: CheckItem[] = tagUntagged(
+    [
+      checkViewportMeta(mobileDomSnapshot.viewportMetaContent),
+      checkHorizontalOverflow(mobileDomSnapshot.hasHorizontalOverflow),
+      checkTapTargets(mobileDomSnapshot.tapTargets),
+      checkHamburgerLabel(mobileDomSnapshot.hamburgerMenu),
+    ],
+    "tablestakes"
+  );
   const { score, maxScore } = scoreItems(items);
   return { name: "Mobile and Responsive", weight: 6, score, maxScore, items };
 }

@@ -1,5 +1,5 @@
 import type { DomSnapshot } from "../renderer";
-import { type CheckItem, type DimensionResult, scoreItems } from "../dimension-types";
+import { type CheckItem, type DimensionResult, scoreItems, tagUntagged } from "../dimension-types";
 
 /**
  * Forms and conversion flow (framework weight 9). "The highest-leverage
@@ -71,6 +71,9 @@ export function scoreForms(domSnapshot: DomSnapshot): DimensionResult {
     items.push(checkRequiredExplained(primaryForm));
   }
 
-  const { score, maxScore } = scoreItems(items);
-  return { name: "Forms and Conversion Flow", weight: 9, score, maxScore, items };
+  // A broken or high-friction intake form makes the firm not credible as
+  // a place to actually reach: tablestakes, not a differentiation gap.
+  const taggedItems = tagUntagged(items, "tablestakes");
+  const { score, maxScore } = scoreItems(taggedItems);
+  return { name: "Forms and Conversion Flow", weight: 9, score, maxScore, items: taggedItems };
 }

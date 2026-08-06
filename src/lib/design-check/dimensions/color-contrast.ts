@@ -1,5 +1,5 @@
 import type { DomSnapshot, TextBlockSample } from "../renderer";
-import { type CheckItem, type DimensionResult, scoreItems } from "../dimension-types";
+import { type CheckItem, type DimensionResult, scoreItems, tagUntagged } from "../dimension-types";
 import { checkTextContrast } from "../wcag-contrast";
 
 /**
@@ -83,6 +83,9 @@ export function scoreColorContrast(domSnapshot: DomSnapshot): DimensionResult {
     });
   }
 
-  const { score, maxScore } = scoreItems(items);
-  return { name: "Color and Contrast", weight: 10, score, maxScore, items };
+  // WCAG contrast is explicitly called out in the framework doc as "an
+  // accessibility floor, not a stylistic preference": tablestakes.
+  const taggedItems = tagUntagged(items, "tablestakes");
+  const { score, maxScore } = scoreItems(taggedItems);
+  return { name: "Color and Contrast", weight: 10, score, maxScore, items: taggedItems };
 }

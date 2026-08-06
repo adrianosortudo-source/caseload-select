@@ -1,5 +1,5 @@
 import type { DomSnapshot, WebVitalsSample } from "../renderer";
-import { type CheckItem, type DimensionResult, scoreItems } from "../dimension-types";
+import { type CheckItem, type DimensionResult, scoreItems, tagUntagged } from "../dimension-types";
 
 /**
  * Performance and technical health (framework weight 9). "Fully
@@ -85,12 +85,11 @@ function checkImageFormats(images: DomSnapshot["images"]): CheckItem[] {
 }
 
 export function scorePerformance(domSnapshot: DomSnapshot, webVitals: WebVitalsSample): DimensionResult {
-  const items: CheckItem[] = [
-    checkLcp(webVitals.lcpMs),
-    checkCls(webVitals.cls),
-    checkTbt(webVitals.tbtMs),
-    ...checkImageFormats(domSnapshot.images),
-  ];
+  // A slow or unstable page is a basic credibility failure, not a
+  // differentiation gap: tablestakes. Image-format choice (raster logo,
+  // legacy formats) is a craft-quality signal, deliberately left untagged.
+  const coreVitalsItems = tagUntagged([checkLcp(webVitals.lcpMs), checkCls(webVitals.cls), checkTbt(webVitals.tbtMs)], "tablestakes");
+  const items: CheckItem[] = [...coreVitalsItems, ...checkImageFormats(domSnapshot.images)];
   const { score, maxScore } = scoreItems(items);
   return { name: "Performance and Technical Health", weight: 9, score, maxScore, items };
 }
