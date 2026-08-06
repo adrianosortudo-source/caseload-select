@@ -773,11 +773,20 @@ export async function processChannelInbound(
 
     // Send succeeded. Persist state in channel_intake_sessions so the
     // NEXT inbound from this sender resumes mid-conversation.
+    //
+    // contactCaptureStarted MUST be set here (F1, 2026-08-06 field repro).
+    // Without it, control.ts:960's contact-doctrine branch never runs on
+    // the resume turn, so nameCaptureContext never lifts, so a bare-name
+    // reply like "adriano" fails the default (capitalised) bare-name regex
+    // and the gate fails again — Messenger looped 3x asking for the name
+    // it had already been given. Phase C (the discovery loop below) has
+    // set this flag correctly since it was introduced; Phase A never did.
     const newCount = priorFollowUpCount + 1;
+    const persistedState: EngineState = { ...state, contactCaptureStarted: true };
     if (sessionId) {
       await updateChannelSession({
         sessionId,
-        engineState: state,
+        engineState: persistedState,
         followUpCount: newCount,
       });
     } else {
@@ -785,7 +794,7 @@ export async function processChannelInbound(
         firmId,
         channel,
         senderId,
-        engineState: state,
+        engineState: persistedState,
         maxFollowUps: MAX_FOLLOW_UPS,
       });
     }
