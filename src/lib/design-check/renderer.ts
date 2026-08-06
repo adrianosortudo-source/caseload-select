@@ -113,6 +113,34 @@ export interface AuthoritySnapshot {
   disclaimerPresent: boolean;
 }
 
+export interface PreCheckedConsentSample {
+  labelText: string;
+}
+
+/** Master framework's dark-pattern red-flag inputs (Phase 4). Detection
+ * confidence is disclosed per signal, not uniformly claimed: some are
+ * fully deterministic from the DOM, others are best-effort text/class/
+ * script-signature heuristics because proving them for real needs
+ * interaction simulation this v1 static render pass does not do (see
+ * dimensions/red-flags.ts for which is which). Never silently reported as
+ * "clear" when a signal was not actually checkable. */
+export interface DarkPatternSnapshot {
+  preCheckedConsentBoxes: PreCheckedConsentSample[];
+  /** Text or class/id matches suggesting a countdown timer or scarcity
+   * messaging. Best-effort: a real countdown's actual behavior (does it
+   * reset on reload, is the scarcity real) needs interaction/reload
+   * simulation not run here. */
+  urgencyOrCountdownSignals: string[];
+  /** Script src or inline-script substrings matching known exit-intent
+   * pop-up library signatures. Best-effort only: cannot simulate the
+   * mouse-leave trigger itself in a static render. */
+  exitIntentScriptSignals: string[];
+  /** Raw-number claims ("10,000+ clients", "join 50,000 others") found in
+   * firm-voiced text with no adjacent citation. Reuses the Authority
+   * module's proof-window logic. */
+  bandwagonClaimsWithoutProof: string[];
+}
+
 export interface DomSnapshot {
   /** Non-zero margin/padding values (px, one entry per side per element)
    * sampled from layout containers, for the spacing-scale-adherence check. */
@@ -129,6 +157,7 @@ export interface DomSnapshot {
   hamburgerMenu: HamburgerMenuInfo;
   images: ImageSample[];
   authority: AuthoritySnapshot;
+  darkPatterns: DarkPatternSnapshot;
 }
 
 export interface TextBlockSample {
@@ -534,6 +563,51 @@ const DOM_SNAPSHOT_SCRIPT = /* js */ `
     disclaimerPresent: disclaimerPresent,
   };
 
+  // Dark-pattern signals (master framework's red-flag list, Phase 4).
+  var preCheckedConsentBoxes = [];
+  Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).slice(0, 20).forEach(function (box) {
+    var id = box.getAttribute('id');
+    var label = id ? document.querySelector('label[for="' + id + '"]') : box.closest('label');
+    var labelText = label ? (label.innerText || '').trim() : '';
+    if (/subscribe|newsletter|marketing|updates|consent|agree|offers|promotions/i.test(labelText)) {
+      preCheckedConsentBoxes.push({ labelText: labelText.slice(0, 120) });
+    }
+  });
+
+  var urgencyOrCountdownSignals = [];
+  Array.from(document.querySelectorAll('[class*="countdown"],[class*="timer"],[class*="urgency"],[id*="countdown"],[id*="timer"]')).slice(0, 10).forEach(function (el) {
+    urgencyOrCountdownSignals.push('element: ' + el.tagName.toLowerCase() + '.' + (el.className || '').toString().slice(0, 60));
+  });
+  var urgencyTextMatch = (document.body.innerText || '').match(/only \\d+ (left|remaining|spots?)|offer ends (today|soon|in)|hurry,?\\s|limited time only|\\d+ people (viewing|looking)/i);
+  if (urgencyTextMatch) urgencyOrCountdownSignals.push('text: "' + urgencyTextMatch[0] + '"');
+
+  var exitIntentScriptSignals = [];
+  var EXIT_INTENT_SIGNATURES = ['exit-intent', 'exitintent', 'optinmonster', 'sumo.com', 'privy.com', 'exitpopup'];
+  Array.from(document.querySelectorAll('script[src]')).forEach(function (s) {
+    var src = (s.getAttribute('src') || '').toLowerCase();
+    EXIT_INTENT_SIGNATURES.forEach(function (sig) {
+      if (src.indexOf(sig) !== -1) exitIntentScriptSignals.push('script src matches "' + sig + '"');
+    });
+  });
+
+  var bandwagonClaimsWithoutProof = [];
+  var bandwagonPattern = /\\b(\\d{2,3}[,.]?\\d{3}\\+?|thousands|hundreds)\\s+(of\\s+)?(clients|customers|people|users|firms|families)\\b/gi;
+  var bandwagonMatch;
+  while ((bandwagonMatch = bandwagonPattern.exec(firmVoicedText)) !== null) {
+    var bwStart = Math.max(0, bandwagonMatch.index - 150);
+    var bwEnd = Math.min(firmVoicedText.length, bandwagonMatch.index + bandwagonMatch[0].length + 150);
+    var bwWindow = firmVoicedText.slice(bwStart, bwEnd);
+    var hasProof = /\\b\\d{4}\\b|survey|study|source:|according to/i.test(bwWindow);
+    if (!hasProof) bandwagonClaimsWithoutProof.push(bandwagonMatch[0]);
+  }
+
+  var darkPatterns = {
+    preCheckedConsentBoxes: preCheckedConsentBoxes,
+    urgencyOrCountdownSignals: urgencyOrCountdownSignals,
+    exitIntentScriptSignals: exitIntentScriptSignals,
+    bandwagonClaimsWithoutProof: bandwagonClaimsWithoutProof,
+  };
+
   return {
     h1Count: h1s.length,
     h1Text: h1s[0] ? (h1s[0].innerText || '').trim().slice(0, 200) : null,
@@ -548,6 +622,7 @@ const DOM_SNAPSHOT_SCRIPT = /* js */ `
     images: images,
     spacingValuesPx: spacingValuesPx,
     authority: authority,
+    darkPatterns: darkPatterns,
   };
 })();
 `;

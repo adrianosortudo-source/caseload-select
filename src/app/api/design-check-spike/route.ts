@@ -10,6 +10,8 @@ import { scoreSpacing } from "@/lib/design-check/dimensions/spacing";
 import { scoreAuthority } from "@/lib/design-check/dimensions/authority";
 import { judgeScreenshot } from "@/lib/design-check/vision-judgment";
 import { judgeAuthorityScreenshot } from "@/lib/design-check/authority-vision";
+import { buildTrack1Report } from "@/lib/design-check/aggregate";
+import type { DimensionResult } from "@/lib/design-check/dimension-types";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -106,6 +108,7 @@ export async function GET(request: NextRequest) {
             bodyTextSampleCount: c.domSnapshot.bodyTextSample.length,
             bodyTextSample: c.domSnapshot.bodyTextSample,
             authority: c.domSnapshot.authority,
+            darkPatterns: c.domSnapshot.darkPatterns,
           },
           webVitals: c.webVitals,
           blockedRequests: c.blockedRequests,
@@ -116,6 +119,35 @@ export async function GET(request: NextRequest) {
       })
     );
 
+    // Phase 4 aggregation: combine desktop's typography/color/forms/
+    // performance/spacing/authority with mobile's mobile-only dimension
+    // into one Track 1 report, matching how a real scan would merge
+    // per-viewport signal into a single grade.
+    const desktopCapture = result.captures.find((c) => c.viewport === "desktop");
+    const mobileCapture = result.captures.find((c) => c.viewport === "mobile");
+    let track1Report: ReturnType<typeof buildTrack1Report> | null = null;
+    if (desktopCapture && mobileCapture) {
+      const desktopDimensions = {
+        typography: scoreTypography(desktopCapture.domSnapshot),
+        colorContrast: scoreColorContrast(desktopCapture.domSnapshot),
+        forms: scoreForms(desktopCapture.domSnapshot),
+        performance: scorePerformance(desktopCapture.domSnapshot, desktopCapture.webVitals),
+        spacing: scoreSpacing(desktopCapture.domSnapshot),
+      };
+      const mobileDimension: DimensionResult = scoreMobile(mobileCapture.domSnapshot);
+      const desktopSummary = summary.find((s) => s.viewport === "desktop");
+      const desktopVisionJudgments =
+        desktopSummary && desktopSummary.authorityVision && "judgments" in desktopSummary.authorityVision ? desktopSummary.authorityVision.judgments : undefined;
+      const desktopGeneralVisionJudgments = desktopSummary && desktopSummary.vision && "judgments" in desktopSummary.vision ? desktopSummary.vision.judgments : undefined;
+      const authorityResult = scoreAuthority(desktopCapture.domSnapshot, desktopCapture.finalUrl, desktopVisionJudgments);
+      track1Report = buildTrack1Report(
+        [...Object.values(desktopDimensions), mobileDimension],
+        authorityResult,
+        desktopGeneralVisionJudgments,
+        desktopCapture.domSnapshot.darkPatterns
+      );
+    }
+
     return NextResponse.json({
       ok: true,
       ssrfGuardOk,
@@ -123,6 +155,7 @@ export async function GET(request: NextRequest) {
       elapsedMs,
       totalMsReported: result.totalMs,
       captures: summary,
+      track1Report,
     });
   } catch (err) {
     return NextResponse.json(
