@@ -54,9 +54,11 @@ import {
   validateReviewRequest,
   validateReviewRequestCasl,
   runSharedTextComplianceFloor,
+  validateDirectAnswerDefinition,
   type ValidatorConfig,
 } from "../content-validators";
 import { SERVICE_PAGE_SECTION_KEYS, type ServicePageBlock } from "../content-studio-structured";
+import type { DirectAnswerMetadata } from "../content-studio-direct-answer";
 
 const PRIMARY_QUERY = "commercial lease review Ontario";
 
@@ -155,6 +157,19 @@ function goodSeoMetadata(): Record<string, unknown> {
       person: { "@type": "Person" },
       faq_page: { "@type": "FAQPage" },
       breadcrumb_list: { "@type": "BreadcrumbList" },
+    },
+    // Direct answer / quotable definition rule: matches goodBlocks()'s first
+    // section almost verbatim, so the presence-in-first-30% heuristic passes
+    // along with everything else in this "well-formed" fixture.
+    direct_answer: {
+      applicability: "required",
+      text: "A lawyer reviews the relocation, assignment, and repair clauses in your commercial lease before you sign.",
+      classification: "explanatory",
+      jurisdiction_scope: "Ontario",
+      source_status: "not_required",
+      source_refs: [],
+      source_exemption_reason: null,
+      not_applicable_reason: null,
     },
   };
 }
@@ -1337,5 +1352,168 @@ describe("runSharedTextComplianceFloor", () => {
       "A lawyer reviews your commercial lease before you sign. The review covers relocation, assignment, and repair clauses under Ontario law.";
     const results = runSharedTextComplianceFloor(text, makeConfig());
     expect(results.every((r) => r.status === "pass")).toBe(true);
+  });
+});
+
+describe("validateDirectAnswerDefinition (direct answer / quotable definition rule)", () => {
+  const REQUIRED_FORMAT = "counsel_note";
+  const EXEMPT_FORMAT = "review_request";
+
+  function goodBindingRule(): DirectAnswerMetadata {
+    return {
+      applicability: "required",
+      text: "A commercial lease is a contract that sets the terms under which a business occupies space it does not own.",
+      classification: "binding_rule",
+      jurisdiction_scope: "Ontario, standard-form commercial leases",
+      source_status: "mapped",
+      source_refs: ["Commercial Tenancies Act, R.S.O. 1990, c. L.7"],
+      source_exemption_reason: null,
+      not_applicable_reason: null,
+    };
+  }
+
+  // The presence heuristic slices the first 30% of the body BY CHARACTER
+  // COUNT. Pad well past the declared text's own length so the whole
+  // sentence lands inside that window, matching how a real piece opens with
+  // the answer and continues for several more paragraphs.
+  function bodyWithAnswerEarly(answerText: string): string {
+    return `${answerText} ${"Additional context follows in the rest of the piece body. ".repeat(10)}`;
+  }
+
+  it("fails a long-form format with no decision on file (silent omission)", () => {
+    const result = validateDirectAnswerDefinition("Some body text.", REQUIRED_FORMAT, null);
+    expect(result.status).toBe("fail");
+    expect(result.findings[0].message).toContain("No direct-answer");
+  });
+
+  it("passes silently for an exempt format with no decision on file", () => {
+    const result = validateDirectAnswerDefinition("Some body text.", EXEMPT_FORMAT, null);
+    expect(result.status).toBe("pass");
+    expect(result.findings).toHaveLength(0);
+  });
+
+  it("passes an exempt format that opts into a decision anyway, held to the same bar", () => {
+    const d = goodBindingRule();
+    const result = validateDirectAnswerDefinition(bodyWithAnswerEarly(d.text!), EXEMPT_FORMAT, d);
+    expect(result.status).toBe("pass");
+  });
+
+  it("passes not_applicable with a stated rationale", () => {
+    const result = validateDirectAnswerDefinition("Ad copy only.", REQUIRED_FORMAT, {
+      applicability: "not_applicable",
+      text: null,
+      classification: null,
+      jurisdiction_scope: null,
+      source_status: null,
+      source_refs: [],
+      source_exemption_reason: null,
+      not_applicable_reason: "single-CTA ad landing page, no reader-orientation content",
+    });
+    expect(result.status).toBe("pass");
+  });
+
+  it("warns (does not fail) on not_applicable with no rationale on an applicable format", () => {
+    const result = validateDirectAnswerDefinition("Body text.", REQUIRED_FORMAT, {
+      applicability: "not_applicable",
+      text: null,
+      classification: null,
+      jurisdiction_scope: null,
+      source_status: null,
+      source_refs: [],
+      source_exemption_reason: null,
+      not_applicable_reason: null,
+    });
+    expect(result.status).toBe("warn");
+  });
+
+  it("fails required/optional with missing text or classification", () => {
+    const noText = validateDirectAnswerDefinition(REQUIRED_FORMAT, REQUIRED_FORMAT, {
+      applicability: "required",
+      text: null,
+      classification: null,
+      jurisdiction_scope: null,
+      source_status: null,
+      source_refs: [],
+      source_exemption_reason: null,
+      not_applicable_reason: null,
+    });
+    expect(noText.status).toBe("fail");
+    expect(noText.findings.some((f) => f.message.includes("no answer/definition text"))).toBe(true);
+    expect(noText.findings.some((f) => f.message.includes("no classification"))).toBe(true);
+  });
+
+  it("fails a binding_rule with no jurisdiction/scope", () => {
+    const d = goodBindingRule();
+    d.jurisdiction_scope = null;
+    const result = validateDirectAnswerDefinition(d.text!, REQUIRED_FORMAT, d);
+    expect(result.status).toBe("fail");
+    expect(result.findings.some((f) => f.message.includes("jurisdiction or scope"))).toBe(true);
+  });
+
+  it("fails a binding_rule with no source mapping and no exemption reason", () => {
+    const d = goodBindingRule();
+    d.source_status = "not_required";
+    const result = validateDirectAnswerDefinition(d.text!, REQUIRED_FORMAT, d);
+    expect(result.status).toBe("fail");
+    expect(result.findings.some((f) => f.message.includes("primary source mapping"))).toBe(true);
+  });
+
+  it("fails a binding_rule marked mapped with zero source_refs", () => {
+    const d = goodBindingRule();
+    d.source_refs = [];
+    const result = validateDirectAnswerDefinition(d.text!, REQUIRED_FORMAT, d);
+    expect(result.status).toBe("fail");
+  });
+
+  it("passes a binding_rule that is exempted with a stated reason", () => {
+    const d = goodBindingRule();
+    d.source_status = "exempted";
+    d.source_refs = [];
+    d.source_exemption_reason = "no codified source; this is settled common-law practice on file with the firm";
+    const result = validateDirectAnswerDefinition(bodyWithAnswerEarly(d.text!), REQUIRED_FORMAT, d);
+    expect(result.status).toBe("pass");
+  });
+
+  it("warns on false-universality language in a binding_rule (does not fail)", () => {
+    const d = goodBindingRule();
+    d.text = "A landlord can always seize a tenant's goods to recover unpaid rent.";
+    const result = validateDirectAnswerDefinition(d.text, REQUIRED_FORMAT, d);
+    expect(result.status).not.toBe("fail");
+    expect(result.findings.some((f) => f.message.includes("absolute language"))).toBe(true);
+  });
+
+  it("does not require source mapping for firm_judgment / market_practice / illustration / explanatory", () => {
+    const text = "Clients most often miss the relocation clause when signing.";
+    for (const classification of ["firm_judgment", "market_practice", "illustration", "explanatory"] as const) {
+      const result = validateDirectAnswerDefinition(bodyWithAnswerEarly(text), REQUIRED_FORMAT, {
+        applicability: "optional",
+        text,
+        classification,
+        jurisdiction_scope: null,
+        source_status: "not_required",
+        source_refs: [],
+        source_exemption_reason: null,
+        not_applicable_reason: null,
+      });
+      expect(result.status).toBe("pass");
+    }
+  });
+
+  it("warns when the declared text is not detected in the first 30% of the body (heuristic, non-brittle)", () => {
+    const d = goodBindingRule();
+    const longUnrelatedOpening = "Filler text about an unrelated topic. ".repeat(40);
+    const result = validateDirectAnswerDefinition(
+      `${longUnrelatedOpening} ${d.text}`,
+      REQUIRED_FORMAT,
+      d,
+    );
+    expect(result.status).not.toBe("fail");
+    expect(result.findings.some((f) => f.message.includes("needs editorial review"))).toBe(true);
+  });
+
+  it("passes when the declared text appears early in the body", () => {
+    const d = goodBindingRule();
+    const result = validateDirectAnswerDefinition(bodyWithAnswerEarly(d.text!), REQUIRED_FORMAT, d);
+    expect(result.status).toBe("pass");
   });
 });

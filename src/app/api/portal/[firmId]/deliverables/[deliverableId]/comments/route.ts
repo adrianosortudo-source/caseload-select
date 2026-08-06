@@ -10,7 +10,13 @@
  * server-side (never trusted from the client) to the record's own version and
  * null respectively.
  *
- * Body: { version_id, body, annotation?, parent_comment_id?, approval_record_id?, attachments? }
+ * Body: { version_id, body, annotation?, parent_comment_id?, approval_record_id?, attachments?, client_notification_choice? }
+ *
+ * client_notification_choice ("silent" | "notify_now") only applies when the
+ * poster is an operator (the comment then emails the firm's lawyers).
+ * Missing, invalid, or omitted resolves to "silent" (fail-safe). A
+ * lawyer/client-authored comment always notifies the operator, unchanged,
+ * regardless of this field.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -21,6 +27,7 @@ import {
   cleanCommentBody,
   validateAnnotation,
   validateDeliverableAttachments,
+  normalizeClientNotificationChoice,
 } from "@/lib/deliverables-pure";
 import { postDeliverableCommentToChannel } from "@/lib/deliverable-channel-post";
 
@@ -41,6 +48,7 @@ export async function POST(
     parent_comment_id?: unknown;
     approval_record_id?: unknown;
     attachments?: unknown;
+    client_notification_choice?: unknown;
   };
   try {
     body = await req.json();
@@ -48,9 +56,22 @@ export async function POST(
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) {
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (!detailResult.found || detailResult.detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+  const detail = detailResult.detail;
+  if (detail.versionsError || detail.commentsError || detail.approvalsError) {
+    return NextResponse.json(
+      { error: "could not verify the review history for this deliverable, try again" },
+      { status: 503 },
+    );
   }
 
   // A reply on an approval record: resolve the record first so version_id and
@@ -97,6 +118,8 @@ export async function POST(
     return NextResponse.json({ error: "invalid attachments" }, { status: 400 });
   }
 
+  const clientNotificationChoice = normalizeClientNotificationChoice(body.client_notification_choice);
+
   const result = await addComment({
     deliverableId,
     versionId,
@@ -107,11 +130,15 @@ export async function POST(
     actor: resolved.actor,
     approvalRecordId,
     attachments,
+    clientNotificationChoice,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
 
   // Fan the comment into the CaseLoad Connect channel (best-effort, never
   // blocks the comment). Carries a deep-link context back to this comment.
+  // Always fires regardless of the client-notification choice: it sets
+  // suppressNotification internally, so it never independently emails
+  // anyone, it only makes the activity visible in the portal.
   await postDeliverableCommentToChannel({
     firmId,
     deliverableId,
@@ -120,5 +147,5 @@ export async function POST(
     actor: resolved.actor,
   }).catch((e) => console.warn("[deliverables/comments] channel post failed:", e));
 
-  return NextResponse.json({ ok: true, comment: result.comment });
+  return NextResponse.json({ ok: true, comment: result.comment, notification: result.notification });
 }

@@ -511,6 +511,20 @@ describe("buildMarkdownSeoMetadata", () => {
     expect(metadata.answer_summary).toBeNull();
     expect(metadata.jurisdiction).toBeNull();
     expect(metadata.service_area).toBeNull();
+    expect(metadata.direct_answer).toBeNull();
+  });
+
+  it("snapshots source_brief.direct_answer onto the version (direct answer / quotable definition rule)", () => {
+    const directAnswer = {
+      applicability: "not_applicable",
+      not_applicable_reason: "purely promotional CTA",
+    };
+    const metadata = buildMarkdownSeoMetadata({
+      sourceBrief: { direct_answer: directAnswer },
+      articleSchema: { "@type": "Article" },
+      generatedAt: "2026-07-05T12:00:00.000Z",
+    });
+    expect(metadata.direct_answer).toEqual(directAnswer);
   });
 });
 

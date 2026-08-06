@@ -55,17 +55,31 @@ export type PageType =
   | "faq"
   | "blog"
   | "policy"
+  | "intake"
+  | "tool"
   | "other";
 
 // Page types that carry direct commercial weight for a law firm. Issues that
-// affect these pages are scored higher in the priority model.
+// affect these pages are scored higher in the priority model. "intake" is
+// included: a matter-review/intake funnel is the direct conversion action,
+// not a supporting page.
 export const COMMERCIAL_PAGE_TYPES: PageType[] = [
   "homepage",
   "contact",
   "practice",
   "attorney",
   "location",
+  "intake",
 ];
+
+// The page types where article-shaped AEO/content checks (question headings,
+// direct-answer sentences, citations, authorship, substantive word count) are
+// treated as a requirement. Elsewhere the checks still run and their evidence
+// stays visible, but a miss is not scored as a defect: a contact form, an
+// intake funnel, a homepage, or an interactive tool is not an article and was
+// never meant to carry a 300-word definitional essay. See
+// applyPageTypeApplicability.
+export const CONTENT_REQUIRED_PAGE_TYPES: PageType[] = ["practice", "faq", "blog"];
 
 /* ────────────────────────────────────────────────────────
    Scan modes
@@ -138,17 +152,26 @@ export const GENERIC_ANCHORS = new Set([
   "this", "go", "see more", "continue", "details", "info",
 ]);
 
+// Weights are set from measured discriminating power across a 21-site sample
+// of real Ontario firm sites, not from intuition. The three categories that
+// used to hold 30% of the grade (Indexability, Technical & Security,
+// Rendering) returned a mean of 96% with almost no variance: they are
+// eligibility questions, not quality signals, and they are now handled by
+// applyEligibilityCaps instead of by weight. Weight moved to the categories
+// that actually separate a marketed firm from an unmarketed one: Schema
+// (measured spread 58), On-Page SEO (50), Local SEO (40), Legal Marketing
+// (36) and Performance (38).
 export const CATEGORY_WEIGHTS: Record<string, number> = {
-  "On-Page SEO": 22,
-  "Indexability": 18,
-  "Schema & Structured Data": 10,
+  "On-Page SEO": 20,
+  "Indexability": 8,
+  "Schema & Structured Data": 16,
   "AI Visibility": 14,
-  "Legal Marketing": 12,
-  "Local SEO": 8,
-  "Technical & Security": 8,
-  "Rendering & Crawlability": 6,
-  "Performance": 4,
-  "Links & Content": 4,
+  "Legal Marketing": 16,
+  "Local SEO": 12,
+  "Technical & Security": 4,
+  "Rendering & Crawlability": 2,
+  "Performance": 6,
+  "Links & Content": 6,
   "Intent Alignment": 8,
 };
 
@@ -406,6 +429,15 @@ export function classifyPageType(url: string): PageType {
     if (/contact/.test(q)) return "contact";
     return "other";
   }
+  // Conversion/funnel pages: matter-intake forms and interactive
+  // tools/calculators. Checked before the contact and practice-area regexes
+  // because path segments like /tools/estate-structure-check otherwise
+  // substring-match "estate" inside PRACTICE_INTENT_PATH_RE and misclassify a
+  // checklist widget as a written practice page, which then gets held to
+  // word-count/question-heading article rules it was never meant to carry
+  // (field case drglaw.ca: /tools/estate-structure-check read as "practice").
+  if (/(^|\/)intake(\/|$)/.test(p)) return "intake";
+  if (/(^|\/)tools?(\/|$)/.test(p)) return "tool";
   if (/(^|\/)(contact|contact-us|get-in-touch|book|consultation|schedule)(\/|$|-)/.test(p)) return "contact";
   if (/(^|\/)(privacy|terms|disclaimer|accessibility|cookie|legal-notice|sitemap)(\/|$|-)/.test(p)) return "policy";
   if (PRACTICE_INTENT_PATH_RE.test(p)) return "practice";
@@ -420,10 +452,12 @@ export function classifyPageType(url: string): PageType {
 const PAGE_TYPE_PRIORITY: Record<PageType, number> = {
   homepage: 100,
   contact: 90,
+  intake: 82,
   practice: 85,
   attorney: 78,
   about: 74,
   location: 72,
+  tool: 68,
   faq: 64,
   blog: 42,
   policy: 25,
@@ -476,8 +510,101 @@ export function pageTypeLabel(t: PageType): string {
     case "faq": return "FAQ";
     case "blog": return "Blog / guide";
     case "policy": return "Policy / utility";
+    case "intake": return "Intake / conversion";
+    case "tool": return "Tool / calculator";
     default: return "Other";
   }
+}
+
+/* ────────────────────────────────────────────────────────
+   Page-type applicability
+   ──────────────────────────────────────────────────────── */
+
+// AEO / authorship / depth checks intended for genuine content pages
+// (practice write-ups, FAQ answers, blog/journal articles). Firing these as a
+// requirement on a contact form, an intake funnel, a homepage, or an
+// interactive tool manufactures a requirement nobody asked for: a conversion
+// page's job is to convert, not to carry a 300-word definitional essay or a
+// citation to a law-society resource. The checks still RUN everywhere (so a
+// genuine gap on a practice page is still caught, and the evidence stays
+// available for a manual look); applyPageTypeApplicability only stops a miss
+// outside CONTENT_REQUIRED_PAGE_TYPES from being scored as a defect.
+export const CONTENT_ONLY_LABELS = new Set<string>([
+  "Question-format headings",
+  "Direct-answer sentences",
+  "Authoritative citations",
+  "Author / reviewer signals",
+  "Word count",
+  "Practice-area intent",
+]);
+
+// A conversion funnel (a form) or an interactive tool (a checklist widget)
+// is not an unstructured article either, but the article-depth structural
+// checks above are already covered by CONTENT_ONLY_LABELS. What is left is
+// the more basic "break your content into sections" expectation, which does
+// not fit a one-screen form or a question-by-question checklist. Narrower
+// than CONTENT_ONLY_LABELS on purpose: contact/about/attorney pages still
+// read as prose and keep the normal H2 expectation.
+const FUNNEL_PAGE_TYPES: PageType[] = ["intake", "tool"];
+const FUNNEL_EXEMPT_LABELS = new Set<string>(["H2 subheadings"]);
+
+const LANGUAGE_ROOT_RE = /^\/[a-z]{2}(-[a-z]{2,4})?\/?$/i;
+
+/** True for the homepage and a bare language-root path (e.g. "/pt", "/fr-ca"). */
+export function isHomepageOrLanguageRoot(pageType: PageType, url: string): boolean {
+  if (pageType === "homepage") return true;
+  try {
+    return LANGUAGE_ROOT_RE.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Downgrade checks that do not apply to this page's type from a requirement
+ * (warn/fail) to an explicit not-applicable pass. Breadcrumb schema is
+ * handled the same way for the homepage / a language root: there is nothing
+ * above it in the site hierarchy for a BreadcrumbList to describe.
+ */
+export function applyPageTypeApplicability(
+  categories: CategoryResult[],
+  pageType: PageType,
+  url: string
+): CategoryResult[] {
+  const contentPage = CONTENT_REQUIRED_PAGE_TYPES.includes(pageType);
+  const breadcrumbExempt = isHomepageOrLanguageRoot(pageType, url);
+  const funnelPage = FUNNEL_PAGE_TYPES.includes(pageType);
+  if (contentPage && !breadcrumbExempt && !funnelPage) return categories;
+
+  return categories.map((cat) => {
+    let changed = false;
+    const items = cat.items.map((item) => {
+      const exemptForType = !contentPage && CONTENT_ONLY_LABELS.has(item.label);
+      const exemptFunnel = funnelPage && FUNNEL_EXEMPT_LABELS.has(item.label);
+      const exemptBreadcrumb = item.label === "Breadcrumb schema" && breadcrumbExempt;
+      if ((exemptForType || exemptFunnel || exemptBreadcrumb) && item.status !== "pass") {
+        changed = true;
+        return {
+          label: item.label,
+          status: "pass" as const,
+          // A check that does not apply to this page type must not pay full
+          // marks. Before this flag the exemption awarded 10 points per item,
+          // so a homepage banked a free pass for Breadcrumb schema and any
+          // non-article page banked five free passes for the AEO content
+          // checks. Not applicable means it contributes nothing in either
+          // direction: scoreItems skips it entirely.
+          scored: false,
+          detail: exemptBreadcrumb
+            ? `Not required on the homepage or a language root. ${item.detail}`
+            : `Not required for a ${pageTypeLabel(pageType).toLowerCase()} page. ${item.detail}`,
+        };
+      }
+      return item;
+    });
+    if (!changed) return cat;
+    const { score, maxScore } = scoreItems(items);
+    return { ...cat, items, score, maxScore };
+  });
 }
 
 /* ────────────────────────────────────────────────────────
@@ -530,6 +657,113 @@ export function computeWeightedScore(categories: CategoryResult[]): number {
     totalWeight += weight;
   }
   return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+}
+
+/**
+ * Eligibility caps.
+ *
+ * HTTPS, indexability and server-rendered content are not quality signals a
+ * site earns points for: they are preconditions for being in search at all.
+ * Measured across 21 real firm sites they returned a mean of 96% with almost
+ * no variance, so as weighted categories they were 30% of the grade and told
+ * us nothing. They now work the other way round. Passing them earns little
+ * (their weights are small). Failing one caps the headline score, because no
+ * amount of on-page polish matters on a page search engines cannot index.
+ *
+ * Caps apply on the failure side only, as a minimum: the worst applicable cap
+ * wins, and a cap never raises a score.
+ */
+export interface EligibilityGates {
+  httpsOk: boolean;
+  indexableOk: boolean;
+  renderingOk: boolean;
+}
+
+export const ELIGIBILITY_CAPS = {
+  notIndexable: 35,
+  notHttps: 50,
+  renderingHighRisk: 60,
+} as const;
+
+export function applyEligibilityCaps(score: number, gates: EligibilityGates): number {
+  let capped = score;
+  if (!gates.indexableOk) capped = Math.min(capped, ELIGIBILITY_CAPS.notIndexable);
+  if (!gates.httpsOk) capped = Math.min(capped, ELIGIBILITY_CAPS.notHttps);
+  if (!gates.renderingOk) capped = Math.min(capped, ELIGIBILITY_CAPS.renderingHighRisk);
+  return capped;
+}
+
+/**
+ * Which eligibility caps applied, and why, in plain language.
+ *
+ * applyEligibilityCaps returns only a number, so a capped report used to show a
+ * headline score with no explanation anywhere: a firm would see 35 above a
+ * category breakdown of mostly passing checks and have no way to connect the
+ * two. This returns the reason so the report can say it out loud.
+ */
+export interface EligibilityCapApplied {
+  gate: "indexable" | "https" | "rendering";
+  cap: number;
+  headline: string;
+  reason: string;
+  fix: string;
+}
+
+export function describeEligibilityCaps(gates: EligibilityGates): EligibilityCapApplied[] {
+  const applied: EligibilityCapApplied[] = [];
+  if (!gates.indexableOk) {
+    applied.push({
+      gate: "indexable",
+      cap: ELIGIBILITY_CAPS.notIndexable,
+      headline: "this page cannot be indexed",
+      reason: "The page carries a noindex directive, or robots.txt blocks search engines from crawling it. It cannot appear in search results at all, so no amount of on-page quality changes the outcome.",
+      fix: "Remove the noindex directive, and allow Googlebot and Bingbot to crawl this path in robots.txt.",
+    });
+  }
+  if (!gates.httpsOk) {
+    applied.push({
+      gate: "https",
+      cap: ELIGIBILITY_CAPS.notHttps,
+      headline: "the site is not served over HTTPS",
+      reason: "The site loads over plain HTTP. Browsers warn visitors before they reach the page, and search engines demote it against equivalent secure pages.",
+      fix: "Install an SSL certificate and redirect all HTTP traffic to HTTPS.",
+    });
+  }
+  if (!gates.renderingOk) {
+    applied.push({
+      gate: "rendering",
+      cap: ELIGIBILITY_CAPS.renderingHighRisk,
+      headline: "the content is not in the server HTML",
+      reason: "Most of the page content is added by JavaScript after load, so a crawler reading the server response may see an near-empty shell where the visitor sees a full page.",
+      fix: "Server-render the main content, or include it in the initial HTML response.",
+    });
+  }
+  return applied;
+}
+
+/**
+ * Derive the gates from an already-built category set plus the site's
+ * rendering summary. Reads the same check items the report shows, so the cap
+ * can always be explained by pointing at a visible failing check.
+ */
+export function deriveEligibilityGates(
+  categories: CategoryResult[],
+  renderingRisk: string | undefined
+): EligibilityGates {
+  const find = (catName: string, label: string) =>
+    categories.find((c) => c.name === catName)?.items.find((i) => i.label === label) ?? null;
+
+  const https = find("Technical & Security", "HTTPS");
+  const indexable = find("Indexability", "Indexable");
+  const robots = find("Indexability", "robots.txt crawl access");
+
+  return {
+    httpsOk: https ? https.status === "pass" : true,
+    indexableOk:
+      (indexable ? indexable.status === "pass" : true) &&
+      (robots ? robots.status !== "fail" : true),
+    renderingOk: (renderingRisk ?? "low") !== "high",
+  };
 }
 
 /**

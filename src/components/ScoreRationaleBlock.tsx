@@ -97,7 +97,7 @@ export default function ScoreRationaleBlock({ rationale, compact = false }: Prop
         <div className="pt-1 border-t border-black/5">
           <div className="flex items-center gap-1.5 mb-1.5">
             <div className="text-[10px] font-bold text-black/50 uppercase tracking-wider">
-              Lawyer's angle
+              Lawyer&apos;s angle
             </div>
             <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-full px-1.5 py-0.5 leading-none">
               AI

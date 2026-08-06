@@ -23,11 +23,17 @@ export async function GET(
   const resolved = await resolveDeliverableActor(firmId);
   if (!resolved) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) {
+  const result = await getDeliverableDetail(deliverableId);
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (!result.found || result.detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
-  return NextResponse.json({ ok: true, ...detail });
+  return NextResponse.json({ ok: true, ...result.detail });
 }
 
 export async function PATCH(
@@ -47,8 +53,14 @@ export async function PATCH(
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) {
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (!detailResult.found || detailResult.detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 

@@ -142,6 +142,191 @@ proves an SEO-optimized opening can still fail compliance.
 
 ---
 
+## 4A. Direct answer / quotable definition rule
+
+**Status: implemented.** `src/lib/content-studio-direct-answer.ts` (types +
+format applicability), `validateDirectAnswerDefinition` in
+`content-validators.ts` (the gate), `renderDirectAnswerSummary` in
+`content-studio-review.ts` (the lawyer-review rendering), and the brief
+section in `src/app/admin/content-studio/components.tsx`.
+
+Rule 1 of this section (Answer-first drafting) says the opening states the
+direct answer. This section is the layer above that: it makes the DECISION
+to include a quotable definition an explicit, reviewable, classified fact
+about the piece, not just a drafting habit. A quotable definition is a
+concise, standalone, plain-language answer to the central question of a
+content piece: 1-3 sentences, understandable on its own if lifted out of the
+page and quoted elsewhere.
+
+> A shareholder agreement is a contract among a corporation's shareholders
+> that sets rules for control, decision-making, share transfers, and
+> disputes.
+
+This is not a mandate to force a definition into every asset. It applies
+only where it genuinely improves a reader's understanding, and it must never
+cause legal overstatement, false universality, generic keyword stuffing, or
+an unsupported legal claim.
+
+### Which formats need a decision
+
+| Format group | Formats | Decision requirement |
+|---|---|---|
+| Long-form, reader-orientation | `counsel_note`, `clause_in_the_margin`, `decision_tool`, `counsel_letter`, `checklist`, `landing_page`, `canonical_service_page` | The brief MUST make an intentional choice: Required, Optional, or Not applicable. A missing decision on one of these formats is a release-gate failure, the same class of failure as a missing `decision_question`. |
+| Short, promotional, reactive | `paid_traffic_landing`, `review_request`, `review_response` | Exempt by default. These formats may still carry a direct answer if the operator chooses one, but an absent decision is never flagged. This mirrors the existing `NO_DECISION_BRIEF_FORMATS` exemption `validateSourceIntegrity` already uses for the same three formats, for the same underlying reason: they are not reader-orientation assets. |
+| GBP posts, LinkedIn posts, CTAs, images | Not a Content Studio format today (downstream social repurposing, see Section 1) | Not applicable by construction. If a future format value is added for one of these, add it to the exempt set, not the required set. |
+
+"Not applicable" is a valid, intentional, reviewable choice. What is not
+valid is silence: a long-form asset that never made the decision at all.
+The validator distinguishes the two (see "Validator behavior" below).
+
+### The five fields
+
+1. **Applicability**: `required` / `optional` / `not_applicable`.
+2. **Text**: the 1-3 sentence answer/definition itself. Required when
+   applicability is `required` or `optional`.
+3. **Classification**: `binding_rule` (a legal proposition presented as
+   governing law), `market_practice` (how things are commonly done, not a
+   legal requirement), `firm_judgment` (the firm's own professional
+   position), `illustration` (a worked example, not a general statement of
+   fact), or `explanatory` (plain framing that is not itself a legal
+   proposition). This is the layer that separates binding law from market
+   practice from DRG/firm judgment from illustration, per the task
+   doctrine.
+4. **Jurisdiction / scope**: required whenever the statement is a
+   jurisdiction-specific legal rule. A binding rule with no scope qualifier
+   reads as universally true, which this rule exists to prevent.
+5. **Source mapping**: `mapped` (one or more primary-source references on
+   file), `not_required` (the classification does not call for one), or
+   `exempted` (a substantive legal statement without a mapped source,
+   carrying an explicit stated reason). A `binding_rule` classification
+   without a mapped source or an exemption reason is a release-gate
+   failure; `market_practice` / `firm_judgment` / `illustration` /
+   `explanatory` statements are never forced into a source requirement they
+   do not need.
+
+### Good example (Ontario legal definition with a scope qualifier)
+
+> Applicability: required. Classification: binding_rule. Jurisdiction/scope:
+> Ontario, commercial tenancies under a standard-form lease. Source: mapped,
+> *Commercial Tenancies Act, R.S.O. 1990, c. L.7*.
+>
+> "In Ontario, a commercial landlord may seize a defaulting tenant's goods
+> on the leased premises to recover unpaid rent (the right of distress),
+> without a court order, unless the lease itself removes that right."
+
+Scoped to Ontario, scoped to commercial tenancies, sourced to the governing
+statute. This is exactly the shape the rule wants: a binding-law statement
+that cannot be mistaken for a universal truth.
+
+### Bad example (overbroad legal claim, do not ship)
+
+> "A landlord can always seize a tenant's property if rent is unpaid."
+
+No jurisdiction, no source, and factually wrong as a universal statement
+(the right of distress does not exist in every jurisdiction, can be
+excluded by the lease, and is subject to exemptions for certain goods).
+This is precisely the false-universality failure mode `validateFactualClaim`
+and this rule's absolute-language check both exist to catch.
+
+### Good example (practical judgment framed as firm judgment)
+
+> Applicability: optional. Classification: firm_judgment. Source:
+> not_required.
+>
+> "In our experience reviewing commercial leases, the relocation clause is
+> the term clients are most likely to sign without reading."
+
+Framed honestly as the firm's own observation, not a legal rule and not
+market-wide data. No source mapping required because it is not a claim
+about the law.
+
+### Bad example (generic SEO definition, do not ship)
+
+> "A commercial lease is a document businesses use for space."
+
+Technically an "answer," but content-free: no jurisdiction, no practical
+consequence, nothing a reader could not already have guessed. A quotable
+definition earns its place by being genuinely useful, not by satisfying a
+checklist. The validator cannot catch vague-but-technically-present text
+like this; editorial judgment is still required (see "What the validator
+cannot do" below).
+
+### A case where "not applicable" is correct
+
+A `paid_traffic_landing` piece built for a single Google Ads campaign,
+single CTA, no body copy beyond the offer and the compliance disclaimers.
+Applicability: not_applicable. Rationale: "single-CTA ad landing page, no
+reader-orientation content to define." Nothing about this format benefits
+from a formal quotable definition, and forcing one in would just be
+keyword-stuffing dressed up as doctrine.
+
+### Validator behavior (proportionate, not brittle)
+
+`validateDirectAnswerDefinition` (in `content-validators.ts`, wired into
+both `runDeterministicValidators` and `runCanonicalServicePageValidators`,
+so it runs for every format that generates today):
+
+- A format outside the required-decision set with no decision on file:
+  **pass, silent.** Never a false failure for a format where a definition
+  is inappropriate.
+- A format inside the required-decision set with **no decision at all**:
+  **fail.** Silence is not a valid choice on these formats.
+- `not_applicable` with no stated reason on a format that expects a
+  decision: **warn**, not fail. The choice itself is respected; only the
+  missing rationale is flagged, and only as advisory.
+- `required` / `optional` with no text, or no classification: **fail.**
+- `binding_rule` with no jurisdiction/scope, or no source mapping and no
+  exemption reason: **fail.**
+- `binding_rule` text containing absolute language ("always", "never",
+  "universally", "guaranteed", "every time"): **warn**, a false-universality
+  flag for editorial review, not an automatic block (some of these words
+  are legitimate inside a correctly scoped sentence).
+- Whether the declared text actually appears near the top of the generated
+  body: **warn only**, via a significant-word-overlap heuristic over the
+  first 30% of the piece (the same mechanism `validateAnswerInTop30PercentText`
+  already uses). This is a heuristic, not proof; a miss is reported as
+  "needs editorial review," never as a hard failure, because word-overlap
+  scoring cannot tell a paraphrase from an absence.
+
+### What the validator cannot do
+
+It cannot judge whether a definition is actually GOOD (useful, not generic,
+not content-free), whether a `firm_judgment` statement is defensible, or
+whether a `market_practice` claim is accurate. It checks structure and
+proportionate completeness, the same limits every other validator in this
+file already has. Editorial and legal judgment remain load-bearing; the
+validator's job is to make sure the DECISION was made deliberately and the
+CLASSIFICATION is honest, not to grade the prose.
+
+### Legal review
+
+Because the decision is snapshotted onto the version's `seo_metadata` at
+generation/edit time and rendered into the same `body_html` the lawyer
+reviews (`renderDirectAnswerSummary`, part of `renderReviewPayload`), it
+participates in the existing approval-identity check automatically: editing
+the applicability, classification, or text after sign-off without posting a
+new version is detected the same way an edited body paragraph would be
+(`approval_stale`). No new approval action, no parallel sign-off mechanism:
+the definition is reviewed and approved as part of the version it lives in,
+consistent with DR-094 (approval binds to the exact artifact bytes
+reviewed).
+
+### Locale
+
+EN and PT are authored separately per the existing bilingual doctrine
+(Section 8 of `PB_Authority_DecisionSupportCopy_v2.md`: authored for
+meaning, never mechanically translated). The applicability/classification/
+source decision is piece-level (shared across languages, since it describes
+what KIND of statement this is, not its wording), but each language's
+`content_piece_versions` row carries its own snapshot and its own
+generated body, so a PT version is never silently assumed to carry the same
+realized text as its EN sibling. The presence-in-body heuristic above is
+intentionally EN-only: an English significant-word-overlap check against
+Portuguese prose would produce false misses, which this rule explicitly
+treats as worse than under-checking.
+
+---
+
 ## 5. AEO readiness validator
 
 Every check below is designed as a deterministic function following the

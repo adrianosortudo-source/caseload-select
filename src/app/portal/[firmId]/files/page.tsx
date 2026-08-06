@@ -14,6 +14,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getPortalSession } from "@/lib/portal-auth";
+import { getPreviewIntent } from "@/lib/preview-mode";
 import { listFirmFiles, type FirmFileRow } from "@/lib/firm-files";
 import {
   FILE_SECTIONS,
@@ -43,6 +44,13 @@ export default async function FilesPage({
     redirect("/portal/login");
   }
 
+  // Support preview: an operator previewing this firm cannot upload files
+  // on the firm's behalf. The server route already refuses the write;
+  // this disables the control so the operator sees why before clicking.
+  const preview = await getPreviewIntent();
+  const inSupportPreview =
+    session?.role === "operator" && !!preview && preview.firm_id === firmId;
+
   const includeArchived = archived === "1";
   const files = await listFirmFiles(firmId, { includeArchived });
 
@@ -60,7 +68,7 @@ export default async function FilesPage({
     <div className="space-y-6">
       <Header count={files.length} includeArchived={includeArchived} firmId={firmId} />
 
-      <FileUploader firmId={firmId} />
+      <FileUploader firmId={firmId} supportPreview={inSupportPreview} />
 
       {files.length === 0 ? (
         <EmptyState includeArchived={includeArchived} />

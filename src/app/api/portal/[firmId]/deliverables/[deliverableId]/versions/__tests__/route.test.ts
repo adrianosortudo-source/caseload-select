@@ -19,10 +19,13 @@ vi.mock("server-only", () => ({}));
 
 // The route announces a new version into the CaseLoad Connect channel; mock
 // that module so the test does not pull in the real supabase-admin chain.
-vi.mock("@/lib/deliverable-channel-post", () => ({
+// vi.hoisted is required because vi.mock's factory is hoisted above this
+// file's own top-level const declarations.
+const channelPostMock = vi.hoisted(() => ({
   postDeliverableCommentToChannel: vi.fn(() => Promise.resolve()),
   postDeliverableLifecycleToChannel: vi.fn(() => Promise.resolve()),
 }));
+vi.mock("@/lib/deliverable-channel-post", () => channelPostMock);
 
 const FIRM = "11111111-1111-1111-1111-111111111111";
 const DELIV = "22222222-2222-2222-2222-222222222222";
@@ -32,10 +35,21 @@ type Actor = { role: string; id: string | null; name: string | null; email: stri
 interface State {
   actor: Actor;
   detail: unknown;
+  // Release-integrity item 1: simulates a Supabase read error at
+  // getDeliverableDetail, distinct from state.detail === null (genuinely
+  // not found) and a populated state.detail (found).
+  detailReadError: boolean;
   addVersionArgs: Record<string, unknown> | null;
+  notification: { requested: boolean; status: string; error?: string };
 }
 
-const state: State = { actor: null, detail: null, addVersionArgs: null };
+const state: State = {
+  actor: null,
+  detail: null,
+  detailReadError: false,
+  addVersionArgs: null,
+  notification: { requested: false, status: "not_requested" },
+};
 
 vi.mock("@/lib/deliverables-auth", () => ({
   resolveDeliverableActor: () =>
@@ -43,11 +57,22 @@ vi.mock("@/lib/deliverables-auth", () => ({
 }));
 
 vi.mock("@/lib/deliverables", () => ({
-  getDeliverableDetail: () => Promise.resolve(state.detail),
+  getDeliverableDetail: () =>
+    Promise.resolve(
+      state.detailReadError
+        ? { ok: false, error: "mock read error" }
+        : state.detail === null
+          ? { ok: true, found: false }
+          : { ok: true, found: true, detail: state.detail },
+    ),
   uploadDeliverableAsset: () => Promise.resolve({ ok: true, storagePath: "deliverables/x/y/z.png" }),
   addVersion: (args: Record<string, unknown>) => {
     state.addVersionArgs = args;
-    return Promise.resolve({ ok: true, version: { id: "vNew", version_number: 3 } });
+    return Promise.resolve({
+      ok: true,
+      version: { id: "vNew", version_number: 3 },
+      notification: state.notification,
+    });
   },
 }));
 
@@ -61,13 +86,18 @@ const APPROVAL_OLD = "88888888-8888-8888-8888-888888888888";
 function makeDetail(
   kind: "text" | "image" | "pdf",
   firmId = FIRM,
-  over: { status?: string; approvals?: Array<{ id: string; decision: string; created_at?: string }> } = {},
+  over: {
+    status?: string;
+    approvals?: Array<{ id: string; decision: string; created_at?: string }>;
+    approvalsError?: boolean;
+  } = {},
 ) {
   return {
     deliverable: { id: DELIV, firm_id: firmId, title: "T", content_kind: kind, status: over.status ?? "in_review" },
     versions: [],
     comments: [],
     approvals: over.approvals ?? [],
+    approvalsError: over.approvalsError ?? false,
   };
 }
 
@@ -101,7 +131,10 @@ const params = () => ({ params: Promise.resolve({ firmId: FIRM, deliverableId: D
 beforeEach(() => {
   state.actor = OPERATOR;
   state.detail = makeDetail("text");
+  state.detailReadError = false;
   state.addVersionArgs = null;
+  state.notification = { requested: false, status: "not_requested" };
+  channelPostMock.postDeliverableLifecycleToChannel.mockClear();
 });
 
 describe("POST versions", () => {
@@ -202,6 +235,39 @@ describe("POST versions", () => {
     expect(state.addVersionArgs!.respondsToApprovalId).toBeNull();
   });
 
+  it("503 when the detail read itself errors; addVersion is never called", async () => {
+    state.detailReadError = true;
+    const res = await POST(jsonReq({ body_html: "<p>hi</p>" }), params());
+    expect(res.status).toBe(503);
+    expect(state.addVersionArgs).toBeNull();
+  });
+
+  it("503 when the approvals read failed and the deliverable is changes_requested with no explicit id (the audit's exact scenario); addVersion is never called", async () => {
+    state.detail = makeDetail("text", FIRM, { status: "changes_requested", approvals: [], approvalsError: true });
+    const res = await POST(jsonReq({ body_html: "<p>fixed</p>" }), params());
+    expect(res.status).toBe(503);
+    expect(state.addVersionArgs).toBeNull();
+  });
+
+  it("does not block on an approvals read failure when an explicit responds_to_approval_id is supplied", async () => {
+    state.detail = makeDetail("text", FIRM, {
+      status: "changes_requested",
+      approvals: [{ id: APPROVAL_1, decision: "changes_requested" }],
+      approvalsError: true,
+    });
+    const res = await POST(
+      jsonReq({ body_html: "<p>fixed</p>", responds_to_approval_id: APPROVAL_1 }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("does not block on an approvals read failure when the deliverable is not changes_requested", async () => {
+    state.detail = makeDetail("text", FIRM, { status: "in_review", approvalsError: true });
+    const res = await POST(jsonReq({ body_html: "<p>routine update</p>" }), params());
+    expect(res.status).toBe(200);
+  });
+
   it("400 when responds_to_approval_id does not belong to this deliverable", async () => {
     state.detail = makeDetail("text", FIRM, { status: "changes_requested", approvals: [] });
     const res = await POST(
@@ -224,5 +290,74 @@ describe("POST versions", () => {
     const res = await POST(multipartReq(form), params());
     expect(res.status).toBe(200);
     expect(state.addVersionArgs!.respondsToApprovalId).toBe(APPROVAL_1);
+  });
+});
+
+describe("POST versions: client_notification_choice (fail-safe explicit opt-in)", () => {
+  it("defaults to silent (JSON path) when the field is omitted", async () => {
+    const res = await POST(jsonReq({ body_html: "<p>hi</p>" }), params());
+    expect(res.status).toBe(200);
+    expect(state.addVersionArgs!.clientNotificationChoice).toBe("silent");
+  });
+
+  it("passes notify_now through explicitly (JSON path)", async () => {
+    const res = await POST(
+      jsonReq({ body_html: "<p>hi</p>", client_notification_choice: "notify_now" }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+    expect(state.addVersionArgs!.clientNotificationChoice).toBe("notify_now");
+  });
+
+  it("an invalid/legacy value resolves to silent, never to notify", async () => {
+    const res = await POST(
+      jsonReq({ body_html: "<p>hi</p>", client_notification_choice: "true" }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+    expect(state.addVersionArgs!.clientNotificationChoice).toBe("silent");
+  });
+
+  it("defaults to silent (multipart path) when the field is omitted", async () => {
+    state.detail = makeDetail("image");
+    const form = new FormData();
+    const pngHeader = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
+    form.append("file", new File([pngHeader], "ad.png", { type: "image/png" }));
+    const res = await POST(multipartReq(form), params());
+    expect(res.status).toBe(200);
+    expect(state.addVersionArgs!.clientNotificationChoice).toBe("silent");
+  });
+
+  it("passes notify_now through explicitly (multipart path)", async () => {
+    state.detail = makeDetail("image");
+    const form = new FormData();
+    const pngHeader = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
+    form.append("file", new File([pngHeader], "ad.png", { type: "image/png" }));
+    form.append("client_notification_choice", "notify_now");
+    const res = await POST(multipartReq(form), params());
+    expect(res.status).toBe(200);
+    expect(state.addVersionArgs!.clientNotificationChoice).toBe("notify_now");
+  });
+
+  it("surfaces a failed notification in the response so the UI can show the warning", async () => {
+    state.notification = { requested: true, status: "failed", error: "outbox insert failed" };
+    const res = await POST(
+      jsonReq({ body_html: "<p>hi</p>", client_notification_choice: "notify_now" }),
+      params(),
+    );
+    const json = await res.json();
+    expect(res.status).toBe(200);
+    expect(json.notification.status).toBe("failed");
+    expect(json.version.id).toBe("vNew");
+  });
+
+  it("posts to the CaseLoad Connect channel regardless of the notification choice (internal audit trail, never emails on its own)", async () => {
+    await POST(jsonReq({ body_html: "<p>silent one</p>" }), params());
+    expect(channelPostMock.postDeliverableLifecycleToChannel).toHaveBeenCalledTimes(1);
+    await POST(
+      jsonReq({ body_html: "<p>notify one</p>", client_notification_choice: "notify_now" }),
+      params(),
+    );
+    expect(channelPostMock.postDeliverableLifecycleToChannel).toHaveBeenCalledTimes(2);
   });
 });

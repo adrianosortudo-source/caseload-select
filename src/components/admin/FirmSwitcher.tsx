@@ -26,7 +26,12 @@ const NAV_LINKS = [
   {
     label: "Content studio",
     href: (id: string) => `/admin/firms/${id}/content-studio`,
-    active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/content-studio`),
+    active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/content-studio`) && !p.includes("/attribution"),
+  },
+  {
+    label: "Content performance",
+    href: (id: string) => `/admin/firms/${id}/content-studio/attribution`,
+    active: (p: string, id: string) => p.startsWith(`/admin/firms/${id}/content-studio/attribution`),
   },
   {
     label: "Firm chat",
@@ -57,9 +62,10 @@ const NAV_LINKS = [
 // operator had to route through Portal access to reach the firm's triage
 // queue; the day-to-day engagement surface should be one click from here.
 const FIRM_PORTAL_LINKS = [
-  { label: "New leads", href: (id: string) => `/portal/${id}/triage` },
+  { label: "Open Operator Workspace", href: (id: string) => `/api/portal/${id}/workspace/enter?next=/portal/${id}/triage` },
   { label: "Messages", href: (id: string) => `/portal/${id}/inbox` },
   { label: "Clients", href: (id: string) => `/portal/${id}/clients` },
+  { label: "Files", href: (id: string) => `/portal/${id}/files` },
   { label: "Deliverables", href: (id: string) => `/portal/${id}/deliverables` },
   { label: "Dashboards", href: (id: string) => `/portal/${id}/boards` },
 ];
@@ -67,6 +73,7 @@ const FIRM_PORTAL_LINKS = [
 // Client-acquisition tools (selling CaseLoad Select, prospecting law firms).
 // Not firm-scoped, so they sit in their own group rather than under a firm.
 const SELL_LINKS = [
+  { label: "Prospect list", href: "/admin/prospects" },
   { label: "Agency CRM", href: "/admin/agency-crm" },
   { label: "SEO check", href: "/admin/seo-check" },
   { label: "Marketing Diagnostic 2.0", href: "/admin/prospecting-diagnostic" },

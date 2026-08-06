@@ -34,6 +34,7 @@ function makeMetadataCompleteDeliverable(): ContentDeliverable {
     content_kind: "text", status: "in_review", current_version_id: "v1", approved_version_id: null,
     approved_at: null, created_by_role: "operator", created_by_id: null, created_at: "2026-07-14T00:00:00Z",
     updated_at: "2026-07-14T00:00:00Z", excerpt: null, topic: null, byline: null, publish_date: "2026-07-14",
+    published_at: null,
     read_time: null, hero_image_url: null, kicker: null, period_id: REAL_FOUNDER_VESTING_PERIOD_ID, format: null,
     locale: "en-CA", deliverable_role: "article", publication_destination: "firm_website", publication_path: "/journal/founder-vesting-ontario",
     cta_target_path: null,
@@ -47,6 +48,9 @@ function makeVersion(): DeliverableVersion {
     storage_path: null, asset_mime: null, asset_size_bytes: null, asset_name: null, note: null,
     responds_to_approval_id: null, asset_sha256: null, asset_validation: null,
     created_by_role: "operator", created_by_id: null, created_at: "2026-07-14T00:00:00Z",
+    requires_individual_review: false, requires_individual_review_reason: null,
+    requires_individual_review_set_by_role: null, requires_individual_review_set_by_id: null,
+    requires_individual_review_set_by_name: null, requires_individual_review_set_at: null,
   };
 }
 

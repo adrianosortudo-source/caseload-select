@@ -9,8 +9,17 @@
 
 import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 export async function GET(req: Request) {
+  const rl = await checkRateLimit("screen", ipFromRequest(req));
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "rate limited" },
+      { status: 429, headers: rateLimitHeaders(rl) },
+    );
+  }
+
   const { searchParams } = new URL(req.url);
   const sessionId = searchParams.get("session_id");
 

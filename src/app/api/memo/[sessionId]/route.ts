@@ -8,6 +8,10 @@
  * Auth:
  *  - Portal: verified via portal session cookie (firm must own the session).
  *  - Widget: session_id is a sufficient secret for the widget context (no PII in URL).
+ *    This is a deliberate capability-URL design, not a gap: the widget has no
+ *    portal session to check, and the session_id (a gen_random_uuid()) is the
+ *    only credential an anonymous intake caller can hold. Rate limiting below
+ *    is the abuse control for this path, not an ownership check.
  *
  * Returns:
  *   { memo_text: string; generated_at: string } | { pending: true } | { error: string }
@@ -16,11 +20,20 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { getPortalSession } from "@/lib/portal-auth";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
 export async function GET(
   req: Request,
   ctx: { params: Promise<{ sessionId: string }> }
 ) {
+  const rl = await checkRateLimit("memo", ipFromRequest(req));
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "rate limited" },
+      { status: 429, headers: rateLimitHeaders(rl) },
+    );
+  }
+
   const { sessionId } = await ctx.params;
 
   // Determine caller context: portal (has session cookie) or widget (query param auth)

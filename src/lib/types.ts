@@ -266,6 +266,17 @@ export interface ContentDeliverable {
   topic: string | null;
   byline: string | null;
   publish_date: string | null;  // YYYY-MM-DD; null means "draft, not scheduled"
+  /**
+   * YYYY-MM-DD the operator recorded this piece as actually published; null
+   * means not published. Distinct from publish_date, which is the intended
+   * schedule and can be set on something that never shipped.
+   *
+   * This is the operator's record, not receipt evidence. publication_receipts
+   * remains the durable per-destination proof that a specific approved
+   * version reached a specific destination and was verified live; a date here
+   * must never be presented as that proof.
+   */
+  published_at: string | null;
   read_time: string | null;     // "8 min read"
   hero_image_url: string | null;
   /**
@@ -303,26 +314,55 @@ export type DeliverableRole =
   | "social_post"
   | "gbp_post"
   | "lead_magnet_pdf"
-  | "landing_page";
+  | "landing_page"
+  | "email_newsletter";
 
 export type PublicationDestination =
   | "firm_website"
   | "linkedin"
-  | "google_business_profile";
+  | "linkedin_article"
+  | "google_business_profile"
+  | "email";
 
 /**
  * A weekly content period: the editorial frame the firm sees above a batch of
  * deliverables (theme + what's covered + the strategic rationale). Operator
  * authored; the firm reads it. See migration 20260624_content_periods.sql.
  */
+export interface StrategyBrief {
+  readerAndSituation: string;
+  workSupported: string;
+  whyThisWeek: string;
+  practicalAngle: string;
+  authorityAndEvidence: string;
+  websiteAndConversionRole: string;
+}
+
 export interface ContentPeriod {
   id: string;
   firm_id: string;
   starts_on: string;   // YYYY-MM-DD
   ends_on: string;     // YYYY-MM-DD
+  /**
+   * Operator-facing week label: 3 renders as "Week 3". This is the period's
+   * identity in the plan, replacing the date range that used to head each
+   * card.
+   *
+   * NULL is meaningful, not missing data: it marks a period that is not a
+   * numbered publishing week (standing assets not tied to one week,
+   * retroactive backfill-review passes). Those keep their theme as their
+   * only label and sort after the numbered weeks.
+   *
+   * Never derived from starts_on ordering. The numbering is already
+   * asserted in live PT content ("Semana 1", "Semana 2"), so it must stay
+   * pinned rather than shift when a period is added or removed. See
+   * migration 20260725000000_content_periods_week_number.sql.
+   */
+  week_number: number | null;
   theme: string | null;
   details: string | null;
   rationale: string | null;   // the "why": brand relevance + search intent
+  strategyBrief?: StrategyBrief | null;
   sort_index: number;
   created_by_role: string | null;
   created_by_id: string | null;
@@ -396,6 +436,19 @@ export interface DeliverableVersion {
   created_by_role: DeliverableActorRole;
   created_by_id: string | null;
   created_at: string;
+  // Standing Publishing Authorization: operator-only per-version exception.
+  // See migration 20260717230956_standing_publishing_authorization.sql and
+  // set_deliverable_version_individual_review_requirement. When true, this
+  // exact version can never be released via standing authorization
+  // (claim_placement_for_publish falls back to requiring an individual
+  // lawyer approval), regardless of whether the firm currently holds an
+  // enabled authorization.
+  requires_individual_review: boolean;
+  requires_individual_review_reason: string | null;
+  requires_individual_review_set_by_role: "operator" | null;
+  requires_individual_review_set_by_id: string | null;
+  requires_individual_review_set_by_name: string | null;
+  requires_individual_review_set_at: string | null;
 }
 
 // ─── Publication Readiness (Workstreams 1-8) ────────────────────────────────
@@ -414,12 +467,17 @@ export type PublicationArtifactType =
   | "form"
   | "external_post";
 
+export type PublicationArtifactAssetRole =
+  | "website_article_hero_overlay"
+  | "website_homepage_cta_textless";
+
 export interface PublicationArtifact {
   id: string;
   firm_id: string;
   deliverable_id: string;
   version_id: string;
   artifact_type: PublicationArtifactType;
+  asset_role?: PublicationArtifactAssetRole | null;
   locale: string | null;
   destination: PublicationDestination | null;
   storage_bucket: string | null;
@@ -436,7 +494,29 @@ export interface PublicationArtifact {
   created_by_role: "operator" | "lawyer" | "system";
   created_by_id: string | null;
   created_at: string;
-  superseded_at: string | null; // insert-time-only note; never read for staleness
+  /**
+   * When this artifact was retracted, or null when it is active. A unique
+   * partial index enforces at most one active row per (deliverable_id,
+   * version_id, artifact_type, asset_role, locale, destination) slot -- superseding an
+   * artifact stamps this column on the prior row rather than deleting it.
+   * A publication receipt referencing a superseded artifact is rejected at
+   * the database level. See content-period-export.ts and publish-kit-pure.ts,
+   * which both now read this for exactly that staleness check.
+   */
+  superseded_at: string | null;
+}
+
+export interface PublicationArtifactRoleAssignment {
+  id: string;
+  firm_id: string;
+  artifact_id: string;
+  deliverable_id: string;
+  version_id: string;
+  asset_role: PublicationArtifactAssetRole;
+  assigned_by_role: "operator";
+  assigned_by_id: string | null;
+  created_at: string;
+  superseded_at: string | null;
 }
 
 export type PublicationArtifactValidator =
@@ -606,4 +686,83 @@ export interface PublicationReceipt {
   failure_reason: string | null;
   reconciles_receipt_id: string | null;
   created_at: string;
+  // Standing Publishing Authorization (migration
+  // 20260717230956_standing_publishing_authorization.sql): which of the two
+  // release paths authorized this publication. Derived from the matching
+  // publication_placement_claims row when the receipt doesn't set it
+  // explicitly (see derive_publication_receipt_release_path); null only for
+  // receipts written before this feature existed.
+  release_path: "individual_approval" | "standing_authorization" | null;
+  standing_authorization_event_id: string | null;
+}
+
+// ─── Content Performance / Content-to-Matter Attribution ───────────────────
+// See supabase/migrations/20260717030000_content_attribution_evidence.sql.
+// content_attribution_evidence is an append-only evidence ledger: every
+// fact is a distinct observation, never a mutated "current attribution"
+// field. content_attribution_current is a derived, read-only view (no
+// stored state) picking the best evidence per lead by state priority.
+
+export type AttributionState =
+  | "known_first_touch"
+  | "known_assisted"
+  | "self_reported"
+  | "offline_referral"
+  | "unknown";
+
+export type AttributionEvidenceMethod =
+  | "verified_utm"
+  | "observed_referrer"
+  | "verified_landing_path"
+  | "self_report"
+  | "operator_offline_referral"
+  | "imported_crm_outcome"
+  | "insufficient_evidence";
+
+export type AttributionSelfReportCategory =
+  | "referral"
+  | "search"
+  | "social"
+  | "ai_tool"
+  | "event"
+  | "existing_client"
+  | "other";
+
+export interface ContentAttributionEvidence {
+  id: string;
+  firm_id: string;
+  screened_lead_id: string;
+  deliverable_id: string | null;
+  deliverable_version_id: string | null;
+  placement_id: string | null;
+  receipt_id: string | null;
+  attribution_state: AttributionState;
+  evidence_method: AttributionEvidenceMethod;
+  self_report_category: AttributionSelfReportCategory | null;
+  evidence_payload: Record<string, unknown> | null;
+  evidence_note: string | null;
+  observed_at: string;
+  recorded_by_role: "system" | "operator" | "lawyer";
+  recorded_by_id: string | null;
+  recorded_by_name: string | null;
+  supersedes_evidence_id: string | null;
+  created_at: string;
+}
+
+export interface ContentAttributionCurrent {
+  firm_id: string;
+  screened_lead_id: string;
+  evidence_id: string;
+  deliverable_id: string | null;
+  deliverable_version_id: string | null;
+  placement_id: string | null;
+  receipt_id: string | null;
+  attribution_state: AttributionState;
+  evidence_method: AttributionEvidenceMethod;
+  self_report_category: AttributionSelfReportCategory | null;
+  evidence_note: string | null;
+  observed_at: string;
+  created_at: string;
+  matter_id: string | null;
+  matter_stage: string | null;
 }

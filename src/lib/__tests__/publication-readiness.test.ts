@@ -35,6 +35,7 @@ function makeDeliverable(overrides: Partial<ContentDeliverable> = {}): ContentDe
     topic: null,
     byline: null,
     publish_date: "2026-07-14",
+    published_at: null,
     read_time: null,
     hero_image_url: null,
     kicker: null,
@@ -71,6 +72,12 @@ function makeVersion(overrides: Partial<DeliverableVersion> = {}): DeliverableVe
     created_by_role: "operator",
     created_by_id: null,
     created_at: "2026-07-14T00:00:00Z",
+    requires_individual_review: false,
+    requires_individual_review_reason: null,
+    requires_individual_review_set_by_role: null,
+    requires_individual_review_set_by_id: null,
+    requires_individual_review_set_by_name: null,
+    requires_individual_review_set_at: null,
     ...overrides,
   };
 }

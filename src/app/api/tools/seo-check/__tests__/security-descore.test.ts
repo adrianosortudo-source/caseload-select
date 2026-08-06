@@ -78,7 +78,7 @@ describe("issues-list findings still fire for missing security headers", () => {
       canonicalSameOrigin: null, metaNoindex: false, metaNofollow: false, headerNoindex: false,
       headerNofollow: false, indexable: true, inSitemap: null, mixedSignals: false,
     },
-    schema: { blocks: 0, invalidBlocks: 0, types: [], hasOrganization: false, hasLocalBusiness: false, hasLegalService: false, hasAttorney: false, hasPerson: false, hasBreadcrumb: false, hasFaq: false, hasWebsite: false, hasReview: false, fields: { name: false, url: false, telephone: false, address: false, areaServed: false, sameAs: false, priceRange: false, openingHours: false }, conflictingEntity: false },
+    schema: { blocks: 0, invalidBlocks: 0, types: [], hasOrganization: false, hasLocalBusiness: false, hasLegalService: false, hasAttorney: false, hasPerson: false, hasBreadcrumb: false, hasFaq: false, hasWebsite: false, hasReview: false, fields: { name: false, url: false, telephone: false, address: false, areaServed: false, sameAs: false, priceRange: false, openingHours: false }, conflictingEntity: false, sameAsUrls: [] },
     lawFirm: { practiceAreaIntent: false, trust: { testimonials: false, reviews: false, caseResults: false, awards: false, credentials: false } } as PageResult["lawFirm"],
     wordCount: 0,
     keyWarnings: [],

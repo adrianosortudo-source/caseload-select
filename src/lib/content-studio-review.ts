@@ -24,6 +24,10 @@ import {
   renderMarkdownToSafeHtml,
   type ServicePageBlock,
 } from "./content-studio-structured";
+import {
+  parseDirectAnswerMetadata,
+  DIRECT_ANSWER_CLASSIFICATION_LABELS,
+} from "./content-studio-direct-answer";
 
 export interface ReviewVersionInput {
   body_markdown: string | null;
@@ -118,6 +122,84 @@ export function renderSeoSummary(seoMetadata: Record<string, unknown> | null | u
 }
 
 /**
+ * Renders the direct-answer / quotable-definition decision (Direct answer /
+ * quotable definition rule) prominently but quietly for the reviewing
+ * lawyer: what the decision was, how the statement is classified, its
+ * jurisdiction/scope, and its source-mapping status, so the lawyer can tell
+ * legal fact from firm judgment before signing off. Reads the version-bound
+ * snapshot at seoMetadata.direct_answer (copied from source_brief.direct_answer
+ * at generation/edit time), never the live brief, so what the lawyer reviews
+ * here is exactly what was locked into this version.
+ *
+ * Part of the same body_html the approval-identity check byte-compares
+ * (evaluateApprovalIdentity below), so a later edit to this decision without
+ * a fresh version and re-approval is detected the same way an edited body
+ * would be: no separate staleness mechanism needed.
+ */
+export function renderDirectAnswerSummary(
+  seoMetadata: Record<string, unknown> | null | undefined,
+): string {
+  const directAnswer = parseDirectAnswerMetadata(seoMetadata?.direct_answer);
+  if (!directAnswer) return "";
+
+  if (directAnswer.applicability === "not_applicable") {
+    return (
+      `<section class="cls-review-direct-answer">` +
+      `<h3>Direct answer / quotable definition</h3>` +
+      `<p class="cls-review-direct-answer-na">Not applicable to this piece` +
+      (directAnswer.not_applicable_reason
+        ? `: ${escapeHtml(directAnswer.not_applicable_reason)}`
+        : " (no rationale on file).") +
+      `</p>` +
+      `</section>`
+    );
+  }
+
+  const classificationLabel = directAnswer.classification
+    ? DIRECT_ANSWER_CLASSIFICATION_LABELS[directAnswer.classification]
+    : "Not classified";
+
+  const rows: Array<[string, string]> = [
+    ["Applicability", directAnswer.applicability === "required" ? "Required" : "Optional"],
+    ["Classification", classificationLabel],
+  ];
+  if (directAnswer.jurisdiction_scope) {
+    rows.push(["Jurisdiction / scope", directAnswer.jurisdiction_scope]);
+  }
+  const sourceLine =
+    directAnswer.source_status === "mapped"
+      ? directAnswer.source_refs.length > 0
+        ? `Mapped (${directAnswer.source_refs.join("; ")})`
+        : "Mapped (no references on file)"
+      : directAnswer.source_status === "exempted"
+        ? `Exempted${directAnswer.source_exemption_reason ? `: ${directAnswer.source_exemption_reason}` : ""}`
+        : "Not required for this classification";
+  rows.push(["Source mapping", sourceLine]);
+
+  const dl = rows
+    .map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`)
+    .join("");
+
+  const classificationNote =
+    directAnswer.classification === "binding_rule"
+      ? `<p class="cls-review-direct-answer-note">Presented as binding law. Confirm the scope and source before sign-off.</p>`
+      : directAnswer.classification && directAnswer.classification !== "explanatory"
+        ? `<p class="cls-review-direct-answer-note">Presented as ${escapeHtml(
+            classificationLabel.toLowerCase(),
+          )}, not a legal proposition.</p>`
+        : "";
+
+  return (
+    `<section class="cls-review-direct-answer">` +
+    `<h3>Direct answer / quotable definition</h3>` +
+    (directAnswer.text ? `<blockquote>${escapeHtml(directAnswer.text)}</blockquote>` : "") +
+    `<dl>${dl}</dl>` +
+    classificationNote +
+    `</section>`
+  );
+}
+
+/**
  * The ONE renderer for the lawyer-visible review artifact. Used by:
  *   - legal_gate deliverable creation (pieces/[id]/route.ts)
  *   - send-to-review (posts a new deliverable version)
@@ -132,6 +214,8 @@ export function renderReviewPayload(input: RenderReviewPayloadInput): string {
     parts.push(renderVersionBody(input.format, input.en));
     const summary = renderSeoSummary(input.en.seo_metadata);
     if (summary) parts.push(summary);
+    const directAnswer = renderDirectAnswerSummary(input.en.seo_metadata);
+    if (directAnswer) parts.push(directAnswer);
   }
 
   if (input.languageMode === "bilingual" && input.pt) {
@@ -140,6 +224,8 @@ export function renderReviewPayload(input: RenderReviewPayloadInput): string {
     parts.push(renderVersionBody(input.format, input.pt));
     const ptSummary = renderSeoSummary(input.pt.seo_metadata);
     if (ptSummary) parts.push(ptSummary);
+    const ptDirectAnswer = renderDirectAnswerSummary(input.pt.seo_metadata);
+    if (ptDirectAnswer) parts.push(ptDirectAnswer);
   }
 
   return parts.join("\n");

@@ -78,10 +78,12 @@ authoritative phrasing an agent can be handed verbatim:
 
 1. **Download the bundle first.** Never conversation history, never
    filesystem search (see "The permanent rule" above).
-2. **Only `may_publish: true`.** As of the version-ownership hardening
-   fix, this is true only when the current version both IS the approved
-   version and actually resolves to a real, owned `deliverable_versions`
-   row, never on ID equality alone.
+2. **Only `may_publish: true`.** Read the boolean; never re-derive it. It is
+   true through EITHER individual approval OR the firm's standing publishing
+   authorization, so a piece can be publishable while `status` is
+   `"in_review"` and `approved_version_id` is `null`. Either way the current
+   version must resolve to a real, owned `deliverable_versions` row — never
+   ID equality alone. See "How the agent interprets `may_publish`" below.
 3. **Never generate, rewrite, translate, or infer.** The bundle's
    `generation_policy` states this machine-readably; this clause states it
    in plain language for the agent executing the instruction.
@@ -109,23 +111,85 @@ authoritative phrasing an agent can be handed verbatim:
    documents schema `1.0`. A version bump signals the shape below may have
    changed.
 
+## What the export withholds, and what it never withholds
+
+Both formats apply the same withholding, decided by the same predicate
+(`shouldWithholdArtifactLinks`). An agent should expect these gaps and must
+not treat them as data corruption or try to route around them.
+
+**ACCESS is withheld.** The temporary `signed_url` (and the `public_url`
+beside it) is removed for any object that is retracted (`superseded_at` set),
+not bound to the deliverable's current version, or belongs to a deliverable
+that is not cleared to publish. In JSON those fields come back `null`; in
+Markdown you get a `Signed URL withheld: <reasons>` line naming which of the
+three applies.
+
+**IDENTITY and CONTENT are not withheld.** `storage_path`, `storage_bucket`,
+`sha256`, `mime_type` and sizes are always present, so an operator who cannot
+be handed a URL can still find the file by hand. Unapproved `body_html` is
+also always present — a signed URL mints a time-limited capability against
+storage, whereas a body is data already inside a response this operator-only
+route is authorised to return.
+
+Three consequences worth internalising:
+
+- **A `signed_url` is never durable evidence.** It expires in one hour. Do not
+  cache it, store it in a receipt, or pass it to a later step. `storage_path`
+  + `sha256` are the canonical identity; re-request the export to re-sign.
+- **A retracted artifact is never publishable**, even on a deliverable whose
+  `may_publish` is true. Retraction is more final than approval: approving the
+  piece will never make a superseded artifact publishable, and the database
+  rejects a publication receipt that references one.
+- **An artifact bound to a different `version_id` is not evidence for the
+  version you are publishing.** Compare `artifacts[].version_id` against the
+  version you are about to publish before treating any asset as belonging to
+  it. A crop cut for v2 is not the v5 crop.
+
 ## How the agent interprets `may_publish`
 
 Each deliverable in `bundle.deliverables[]` carries `may_publish` (boolean)
 and, when false, `may_publish_reason` (exact string, never inferred).
 
-`may_publish` is true only when all of the following hold, computed fresh
-from the row, never from a cached or remembered status:
+> **Do not re-derive `may_publish` from `status` and `approved_version_id`.**
+> Read the boolean. This is the single most common mistake made against this
+> bundle, by humans and agents alike, and the rest of this section explains
+> why the obvious derivation is wrong.
 
-- `current_version_id` is set (a version exists at all).
-- `status === "approved"`.
-- `approved_version_id` is set.
-- `approved_version_id === current_version_id` (the approved version is the
-  one that is actually current; a newer, unapproved version posted after
-  approval does not count as approved).
+There are **two** paths to publishability, not one. The bundle computes them
+through the canonical release-authorization bar
+(`src/lib/release-authorization.ts`, a read-only port of the
+`claim_placement_for_publish()` RPC that actually enforces this in the
+database). Nothing may reconstruct that decision independently.
 
-If any of those is false, `may_publish` is false and the reason string says
-exactly which condition failed. An agent must treat `may_publish: false` as
+**Path A, individual approval.** `status === "approved"` AND
+`approved_version_id === current_version_id`.
+
+**Path B, standing publishing authorization.** The firm's lawyer has enabled
+standing authorization, and the current version is **not** flagged
+`requires_individual_review`. On this path the deliverable is genuinely
+cleared to publish while `status` is still `"in_review"` and
+`approved_version_id` is **`null`**.
+
+Path B is not an edge case. For a firm running on standing authorization it
+is the normal path, and most of a week's content will reach you that way.
+An agent that checks `status === "approved"` will refuse to publish
+everything that firm has authorized, and will most likely report the bundle
+as broken. It is not broken; the check is.
+
+Both paths still require the version-ownership guarantee: `current_version_id`
+must resolve to a real `deliverable_versions` row owned by this deliverable.
+A dangling or foreign pointer is never publishable on either path.
+
+`requires_individual_review` **overrides standing authorization
+unconditionally** and is checked before the firm's authorization state is
+consulted. When a version carries it, the deliverable also carries
+`individual_review_hold` with the `reason`, `set_by_role`, `set_by_name` and
+`set_at` recorded when a person held it. That reason is written by a
+colleague and is usually actionable ("unsubscribe link is a placeholder") —
+quote it when reporting, rather than reporting only that a flag is set.
+
+If neither path holds, `may_publish` is false and `may_publish_reason` names
+which path failed and why. An agent must treat `may_publish: false` as
 an instruction not to publish that deliverable, full stop, regardless of
 how the piece reads or how close it looks to done. Publishing a
 `may_publish: false` deliverable is the same class of error as skipping the
@@ -347,10 +411,14 @@ publication-preflight report.
 1. Call GET /api/portal/<firm_id>/periods/<period_id>/publication-preflight.
    If the period's periodLifecycle is not "enforced", stop and report that
    verbatim -- do not proceed past this point.
-2. For every placement with mayPublish: true, pull its approved content
-   from GET /api/admin/content-periods/<period_id>/content-export
-   (matching by deliverableId and approvedVersionId). Never generate,
-   rewrite, translate, or infer missing content.
+2. For every placement with mayPublish: true, pull its cleared content
+   from GET /api/admin/content-periods/<period_id>/content-export,
+   matching by deliverableId and the version the placement is actually
+   publishing. Do NOT match on approved_version_id alone: under standing
+   publishing authorization it is null on content that is genuinely
+   cleared, and matching on it will silently find nothing. Read the
+   bundle's may_publish boolean; never re-derive it from status. Never
+   generate, rewrite, translate, or infer missing content.
 3. For every placement with mayPublish: false, record its exact reason
    and do not act on it.
 4. Publish each may-publish placement independently, to its own

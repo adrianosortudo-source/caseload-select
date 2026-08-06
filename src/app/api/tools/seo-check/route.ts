@@ -43,7 +43,24 @@ import {
   scoreItems,
   aiScoresFromItems,
   CATEGORY_WEIGHTS,
+  applyPageTypeApplicability,
+  applyEligibilityCaps,
+  deriveEligibilityGates,
+  describeEligibilityCaps,
+  type EligibilityCapApplied,
+  type PageType,
 } from "./engine-core";
+import {
+  summarizeImageAlt,
+  hasGoogleBusinessProfileLink,
+  hasTestimonialStructure,
+  likelyServiceAreaBusiness,
+  classifyCsp,
+  classifyTtfb,
+  classifyWordCount,
+  classifyContentRatio,
+  type TtfbMeasurement,
+} from "./content-signals";
 
 import {
   type PageResult,
@@ -52,6 +69,7 @@ import {
   type LawFirmSignals,
   type TopFix,
   type SeoCheckResult,
+  type Issue,
   buildIssues,
   buildSiteStructureIssues,
   buildInternalSummary,
@@ -378,6 +396,29 @@ function hasKeyDeep(root: unknown, keys: string[]): boolean {
   return false;
 }
 
+/**
+ * Collect every URL in any sameAs array anywhere in the parsed JSON-LD, at any
+ * nesting depth, deduplicated. sameAs is where directory and profile URLs
+ * reach the entity graph, and per the Directory Submission playbook a captured
+ * listing URL that never lands here is half-finished work.
+ */
+function collectSameAsUrls(node: unknown, out: Set<string>): void {
+  if (Array.isArray(node)) {
+    for (const n of node) collectSameAsUrls(n, out);
+    return;
+  }
+  if (!node || typeof node !== "object") return;
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    if (key.toLowerCase() === "sameas") {
+      const vals = Array.isArray(value) ? value : [value];
+      for (const v of vals) {
+        if (typeof v === "string" && /^https?:\/\//i.test(v.trim())) out.add(v.trim());
+      }
+    }
+    collectSameAsUrls(value, out);
+  }
+}
+
 export function extractSchemaSummary(html: string): SchemaSummary {
   const scriptTags = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
   const types = new Set<string>();
@@ -431,6 +472,7 @@ export function extractSchemaSummary(html: string): SchemaSummary {
     // fires. Field case: preszlerlaw.com declares Organization + LegalService +
     // 22 LocalBusiness locations in one @graph, which is best practice.
     conflictingEntity: businessTypeBlockCount >= 2 && !hasGraph,
+    sameAsUrls: (() => { const s = new Set<string>(); collectSameAsUrls(parsed, s); return [...s]; })(),
   };
 }
 
@@ -474,20 +516,27 @@ function extractLawFirmSignals(html: string, schema: SchemaSummary): LawFirmSign
     hasIntakeIframe ||
     /(free consultation|book a consultation|schedule a consultation|request a consultation|book a call|schedule a call|get started|request a quote|contact us|talk to (a|an) (lawyer|attorney)|speak (to|with) (a|an) (lawyer|attorney))/i.test(cta);
 
+  const addressVisible = ADDRESS_RE.test(bodyText) || schema.fields.address;
+
   return {
     phoneVisible: PHONE_RE.test(bodyText),
     contactFormPresent: hasForm,
-    addressVisible: ADDRESS_RE.test(bodyText) || schema.fields.address,
+    addressVisible,
     consultationCta,
     policyPagePresent: /href=["'][^"']*(privacy|terms|disclaimer)/i.test(html),
     practiceAreaIntent: /\b(lawyer|attorney|law firm|legal|solicitor|barrister|counsel|litigation|real estate|immigration|criminal|family law|corporate|employment|estate|wills|probate|personal injury)\b/i.test(bodyText),
+    serviceAreaLikely: likelyServiceAreaBusiness(bodyText, schema.fields.areaServed, addressVisible),
     trust: {
       // Trust signals must be VISIBLE to a person, so they scan the extracted
       // body text, not the raw HTML. Field bug (marathonlaw.ca): scanning the
       // full HTML matched "rating" inside Squarespace's script-config JSON and
       // credited reviews the page does not show. Word-bounded "ratings?" also
       // stops crediting unrelated words that merely contain the substring.
-      testimonials: /(testimonial|what our clients say|client stories|in their words)/i.test(bodyLower),
+      // testimonials also checks for structural quote+attribution markup
+      // (hasTestimonialStructure), since real client quotes rarely use the
+      // literal word "testimonial" (field case drglaw.ca: three attributed
+      // client quotes, zero occurrences of "testimonial").
+      testimonials: /(testimonial|what our clients say|client stories|in their words)/i.test(bodyLower) || hasTestimonialStructure(html),
       reviews: /(google reviews?|client reviews?|\d+(\.\d+)?\s*(star|\/\s*5)|★|\bratings?\b)/i.test(bodyLower) || schema.hasReview,
       caseResults: /(case results|verdicts|settlements|results we|recovered|successful outcomes|notable cases)/i.test(bodyLower),
       awards: /(super lawyers|best lawyers|martindale|avvo|rising star|award|recognized by|top \d+)/i.test(bodyLower),
@@ -500,8 +549,87 @@ function extractLawFirmSignals(html: string, schema: SchemaSummary): LawFirmSign
    Category analyzers
    ════════════════════════════════════════════════════════ */
 
+/**
+ * hreflang annotations.
+ *
+ * Only multi-language sites need them, so absence is unscored rather than a
+ * defect: a single-language firm site is not missing anything. When
+ * annotations do exist they are validated, because a malformed or
+ * one-directional cluster silently suppresses the alternate-language tree
+ * without any other symptom. Field gap: drglaw.ca publishes en-CA, pt-BR and
+ * x-default and this audit was blind to all three.
+ */
+export function checkHreflang(html: string, pageUrl: string): CheckItem {
+  const tags = html.match(/<link\b[^>]*\bhreflang\s*=\s*["'][^"']*["'][^>]*>/gi) || [];
+  if (tags.length === 0) {
+    return {
+      label: "Hreflang annotations",
+      status: "pass",
+      scored: false,
+      detail: "No hreflang annotations found. Only multi-language sites need them, so this is shown for completeness and not scored.",
+    };
+  }
+
+  const entries = tags.map((t) => ({
+    lang: (t.match(/\bhreflang\s*=\s*["']([^"']*)["']/i)?.[1] || "").trim(),
+    href: (t.match(/\bhref\s*=\s*["']([^"']*)["']/i)?.[1] || "").trim(),
+  }));
+
+  const LANG_RE = /^([a-z]{2,3}(-[a-z]{2,4})?|x-default)$/i;
+  const badLang = entries.filter((e) => !LANG_RE.test(e.lang)).map((e) => e.lang || "(empty)");
+  const missingHref = entries.filter((e) => !e.href).length;
+  const relative = entries.filter((e) => e.href && !/^https?:\/\//i.test(e.href)).length;
+
+  let selfReferenced = false;
+  try {
+    const self = new URL(pageUrl);
+    selfReferenced = entries.some((e) => {
+      if (!e.href) return false;
+      try {
+        const u = new URL(e.href, pageUrl);
+        return u.hostname.replace(/^www\./, "") === self.hostname.replace(/^www\./, "")
+          && (u.pathname.replace(/\/$/, "") || "/") === (self.pathname.replace(/\/$/, "") || "/");
+      } catch { return false; }
+    });
+  } catch { selfReferenced = false; }
+
+  const hasXDefault = entries.some((e) => e.lang.toLowerCase() === "x-default");
+  const count = entries.length;
+
+  if (badLang.length > 0 || missingHref > 0) {
+    const problems: string[] = [];
+    if (badLang.length > 0) problems.push(`invalid language code${badLang.length > 1 ? "s" : ""}: ${[...new Set(badLang)].join(", ")}`);
+    if (missingHref > 0) problems.push(`${missingHref} annotation${missingHref > 1 ? "s" : ""} with no href`);
+    return {
+      label: "Hreflang annotations",
+      status: "fail",
+      detail: `${count} hreflang annotation${count > 1 ? "s" : ""} found, but ${problems.join(" and ")}. Search engines discard a cluster they cannot parse.`,
+      fix: "Use valid ISO codes (for example en-CA, pt-BR) or x-default, and give every annotation an href.",
+    };
+  }
+
+  if (!selfReferenced || relative > 0) {
+    const problems: string[] = [];
+    if (!selfReferenced) problems.push("no self-referencing annotation");
+    if (relative > 0) problems.push(`${relative} relative URL${relative > 1 ? "s" : ""}`);
+    return {
+      label: "Hreflang annotations",
+      status: "warn",
+      detail: `${count} hreflang annotation${count > 1 ? "s" : ""} found, but ${problems.join(" and ")}. Google requires each page in a cluster to point at itself using absolute URLs.`,
+      fix: "Add a self-referencing hreflang for this page and make every href an absolute https URL.",
+    };
+  }
+
+  const xDefaultNote = hasXDefault ? " x-default is set." : " No x-default is set, which is optional but recommended for a language selector fallback.";
+  return {
+    label: "Hreflang annotations",
+    status: "pass",
+    detail: `${count} valid hreflang annotations with a self-reference.${xDefaultNote}`,
+  };
+}
+
 /* 1. On-Page SEO */
-function checkOnPageSeo(html: string): CategoryResult {
+function checkOnPageSeo(html: string, pageUrl: string): CategoryResult {
   const items: CheckItem[] = [];
 
   const rawTitle = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim();
@@ -509,9 +637,12 @@ function checkOnPageSeo(html: string): CategoryResult {
   if (!title) {
     items.push({ label: "Page title", status: "fail", detail: "Missing. Every page needs a unique <title> tag.", fix: "Add a <title> tag inside your <head>. Aim for 50-60 characters with your main keyword near the front." });
   } else if (title.length < 30) {
-    items.push({ label: "Page title", status: "warn", detail: `Too short (${title.length} chars). Aim for 50-60 characters.`, fix: "Expand the title to include your main keyword and a brief value proposition." });
+    items.push({ label: "Page title", status: "warn", detail: `Too short (${title.length} chars). As a guideline, 50-60 characters gives search engines more to work with; this is not a hard limit.`, fix: "Expand the title to include your main keyword and a brief value proposition." });
   } else if (title.length > 65) {
-    items.push({ label: "Page title", status: "warn", detail: `Too long (${title.length} chars). Google truncates after ~60 characters.`, fix: "Trim to under 60 characters. Put the most important keyword first." });
+    // Google's truncation is pixel-width based, not a fixed character count,
+    // so "~60 characters" is a practical guideline (most titles under that
+    // length are not visibly truncated), not a rule Google enforces.
+    items.push({ label: "Page title", status: "warn", detail: `Too long (${title.length} chars). As a guideline, titles past roughly 60 characters are more likely to be truncated or rewritten in search results; the actual cutoff is pixel-width based, not a fixed character count.`, fix: "Consider trimming to under 60 characters, with the most important keyword first." });
   } else {
     items.push({ label: "Page title", status: "pass", detail: `Good length (${title.length} chars).` });
   }
@@ -520,9 +651,9 @@ function checkOnPageSeo(html: string): CategoryResult {
   if (!desc) {
     items.push({ label: "Meta description", status: "fail", detail: "Missing. This is the snippet Google shows in search results.", fix: "Add <meta name=\"description\" content=\"...\"> in your <head>. Write 120-160 characters describing what this page offers." });
   } else if (desc.length < 70) {
-    items.push({ label: "Meta description", status: "warn", detail: `Short (${desc.length} chars). Aim for 120-160 characters.`, fix: "Expand to 120-160 characters. Lead with your most compelling value proposition." });
+    items.push({ label: "Meta description", status: "warn", detail: `Short (${desc.length} chars). As a guideline, 120-160 characters uses more of the search-result snippet; this is not a hard limit.`, fix: "Expand to 120-160 characters. Lead with your most compelling value proposition." });
   } else if (desc.length > 170) {
-    items.push({ label: "Meta description", status: "warn", detail: `Long (${desc.length} chars). May be truncated in search results.`, fix: "Trim to under 160 characters so the full description shows in search results." });
+    items.push({ label: "Meta description", status: "warn", detail: `Long (${desc.length} chars). May be truncated in search results, since Google's snippet length is pixel-width based rather than a fixed character count; this is a recommendation, not a hard limit.`, fix: "Consider trimming to under 160 characters so more of the description shows in search results." });
   } else {
     items.push({ label: "Meta description", status: "pass", detail: `Good length (${desc.length} chars).` });
   }
@@ -556,15 +687,23 @@ function checkOnPageSeo(html: string): CategoryResult {
     items.push({ label: "Open Graph tags", status: "pass", detail: "Title, description, and image all present." });
   }
 
-  const imgTags = html.match(/<img[^>]*>/gi) || [];
-  const imgsWithoutAlt = imgTags.filter((tag) => !/alt=["'][^"']+["']/i.test(tag));
-  if (imgTags.length === 0) {
+  // Missing alt attribute, empty alt="" on a decorative image, and empty
+  // alt="" on an icon-only link/button are three different findings with
+  // three different fixes; collapsing them into one "missing alt text" count
+  // flags a correctly-decorative image as an accessibility failure (field
+  // case drglaw.ca: alt="" on a full-bleed background image). See
+  // content-signals.ts for the classification rules.
+  const altSummary = summarizeImageAlt(html);
+  if (altSummary.total === 0) {
     items.push({ label: "Image alt text", status: "pass", detail: "No images found to check." });
-  } else if (imgsWithoutAlt.length === 0) {
-    items.push({ label: "Image alt text", status: "pass", detail: `All ${imgTags.length} images have alt text.` });
+  } else if (altSummary.missing === 0 && altSummary.suspiciousEmpty === 0) {
+    const decorativeNote = altSummary.decorative > 0 ? ` (${altSummary.decorative} correctly decorative with alt="")` : "";
+    items.push({ label: "Image alt text", status: "pass", detail: `All ${altSummary.total} images have alt text or a valid empty alt${decorativeNote}.` });
+  } else if (altSummary.missing > 0) {
+    const pct = Math.round((altSummary.missing / altSummary.total) * 100);
+    items.push({ label: "Image alt text", status: pct > 50 ? "fail" : "warn", detail: `${altSummary.missing} of ${altSummary.total} images (${pct}%) have no alt attribute at all. This is an accessibility failure: screen readers fall back to announcing the file name.`, fix: "Add a descriptive alt attribute to every <img> tag that lacks one. Purely decorative images should get alt=\"\", not a missing attribute." });
   } else {
-    const pct = Math.round((imgsWithoutAlt.length / imgTags.length) * 100);
-    items.push({ label: "Image alt text", status: pct > 50 ? "fail" : "warn", detail: `${imgsWithoutAlt.length} of ${imgTags.length} images (${pct}%) missing alt text.`, fix: "Add descriptive alt attributes to every <img> tag. Describe what the image shows." });
+    items.push({ label: "Image alt text", status: "warn", detail: `${altSummary.suspiciousEmpty} image${altSummary.suspiciousEmpty > 1 ? "s" : ""} with alt="" ${altSummary.suspiciousEmpty > 1 ? "are" : "is"} the only content of a link or button with no other accessible label. This needs a human look: confirm the image is decorative, or give the control real alt text or an aria-label.`, fix: "For each flagged control, add descriptive alt text (or an aria-label on the link/button) if the image conveys meaning; leave alt=\"\" only if the control has another visible label." });
   }
 
   const langAttr = html.match(/<html[^>]+lang=["']([^"']+)["']/i);
@@ -573,6 +712,8 @@ function checkOnPageSeo(html: string): CategoryResult {
   } else {
     items.push({ label: "HTML lang attribute", status: "warn", detail: "Missing. Tells browsers and search engines the page's primary language.", fix: "Add lang=\"en\" (or your language code) to the <html> tag." });
   }
+
+  items.push(checkHreflang(html, pageUrl));
 
   const { score, maxScore } = scoreItems(items);
   return { name: "On-Page SEO", score, maxScore, items };
@@ -627,7 +768,15 @@ function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean;
     items.push({ label: "robots.txt crawl access", status: blocked ? "fail" : "warn", detail: blocked ? `Blocked for ${blocked} in robots.txt.` : "Crawl access is restricted for some agents.", fix: "Remove the Disallow rule for this path so search engines can crawl it." });
   }
 
-  if (idx.inSitemap === null) {
+  // A noindex page is deliberately excluded from search, and Google's own
+  // guidance is to leave noindexed URLs out of the sitemap: recommending one
+  // be added contradicts the noindex directive the page already carries.
+  // Field case drglaw.ca: an intentional intake/conversion page absent from
+  // the sitemap read as a discoverability gap to fix rather than a page the
+  // firm may not want indexed in the first place.
+  if (idx.metaNoindex || idx.headerNoindex) {
+    items.push({ label: "Sitemap membership", status: "pass", detail: "Page is noindexed, so its absence from the XML sitemap is expected, not a gap." });
+  } else if (idx.inSitemap === null) {
     items.push({ label: "Sitemap membership", status: "warn", detail: "No sitemap found, so this page is not listed for discovery.", fix: "Publish an XML sitemap that lists your important pages and reference it in robots.txt." });
   } else if (idx.inSitemap) {
     items.push({ label: "Sitemap membership", status: "pass", detail: "Page is listed in the XML sitemap." });
@@ -640,7 +789,105 @@ function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean;
 }
 
 /* 3. Schema & Structured Data */
-export function checkSchemaMarkup(schema: SchemaSummary): CategoryResult {
+
+/**
+ * Known entity surfaces, keyed by a hostname fragment. Wave 1-R and Wave 1-P
+ * from PB_Capture_DirectorySubmission_v5.html, plus the social profiles firms
+ * commonly publish. Social profiles count as sameAs hygiene but NOT as
+ * directory coverage: they are not citation surfaces.
+ */
+const ENTITY_SURFACES: Array<{ match: RegExp; name: string; directory: boolean }> = [
+  { match: /(^|\.)google\.[a-z.]+\/maps|maps\.google\.|(^|\.)g\.page/i, name: "Google Business Profile", directory: true },
+  { match: /(^|\.)bing\.com\/(maps|forbusiness)|bingplaces\.com/i, name: "Bing Places", directory: true },
+  { match: /maps\.apple\.com/i, name: "Apple Business Connect", directory: true },
+  { match: /lso\.ca/i, name: "Law Society of Ontario", directory: true },
+  { match: /yellowpages\.ca|(^|\.)yp\.ca/i, name: "Yellow Pages Canada", directory: true },
+  { match: /canada411\.ca/i, name: "Canada411", directory: true },
+  { match: /canadianlawlist\.com/i, name: "Canadian Law List", directory: true },
+  { match: /bbb\.org/i, name: "Better Business Bureau", directory: true },
+  { match: /linkedin\.com/i, name: "LinkedIn", directory: false },
+  { match: /instagram\.com/i, name: "Instagram", directory: false },
+  { match: /facebook\.com/i, name: "Facebook", directory: false },
+  { match: /(^|\.)x\.com|twitter\.com/i, name: "X", directory: false },
+  { match: /youtube\.com/i, name: "YouTube", directory: false },
+];
+
+/**
+ * Entity sameAs coverage.
+ *
+ * Directory work has an on-page shadow. Per PB_Capture_DirectorySubmission_v5
+ * section 12, every captured listing URL must be pushed into the entity graph's
+ * sameAs array, because those URLs are what let search and answer engines
+ * reconcile the firm as a single entity across the web. A firm can hold eight
+ * live listings and still publish none of them here, and the audit could not
+ * see the difference: sameAs was a boolean folded into a six-field composite.
+ *
+ * Deliberately NOT checked: whether the values match what those surfaces
+ * publish. The playbook's purpose-class rule says an approved difference is not
+ * a defect, and this engine cannot see the client's exception register, so a
+ * cross-surface consistency finding would be a coin flip presented as fact.
+ */
+export function checkEntitySameAs(schema: SchemaSummary, hasBusiness: boolean): CheckItem {
+  if (!hasBusiness) {
+    return {
+      label: "Entity sameAs coverage",
+      status: "fail",
+      scored: false,
+      detail: "Not applicable: no business entity in the structured data to attach profile or listing URLs to.",
+      fix: "Add a LegalService or LocalBusiness block first, then add its directory and profile URLs as sameAs.",
+    };
+  }
+
+  const urls = schema.sameAsUrls;
+  if (urls.length === 0) {
+    return {
+      label: "Entity sameAs coverage",
+      status: "fail",
+      detail: "No sameAs URLs in the business entity. Directory and profile listings are not connected to the entity, so search and AI systems cannot reconcile them as the same firm.",
+      fix: "Add a sameAs array to the business entity listing your Google Business Profile, law society directory, and other claimed listing URLs.",
+    };
+  }
+
+  const matched = ENTITY_SURFACES.filter((s) => urls.some((u) => s.match.test(u)));
+  const directories = matched.filter((s) => s.directory).map((s) => s.name);
+  const socials = matched.filter((s) => !s.directory).map((s) => s.name);
+  const unrecognised = urls.length - matched.length;
+
+  const found = [
+    directories.length > 0 ? `directories: ${directories.join(", ")}` : null,
+    socials.length > 0 ? `profiles: ${socials.join(", ")}` : null,
+    unrecognised > 0 ? `${unrecognised} other URL${unrecognised > 1 ? "s" : ""}` : null,
+  ].filter(Boolean).join("; ");
+
+  if (directories.length >= 3) {
+    return {
+      label: "Entity sameAs coverage",
+      status: "pass",
+      detail: `${urls.length} sameAs URLs covering ${directories.length} directory surfaces (${found}).`,
+    };
+  }
+
+  if (directories.length === 0) {
+    return {
+      label: "Entity sameAs coverage",
+      status: "fail",
+      detail: `${urls.length} sameAs URLs, but none point at a directory or map surface (${found}). Social profiles alone do not establish the firm as a local entity.`,
+      fix: "Add your Google Business Profile URL and your law society directory URL to the sameAs array.",
+    };
+  }
+
+  return {
+    label: "Entity sameAs coverage",
+    status: "warn",
+    detail: `${urls.length} sameAs URLs covering only ${directories.length} directory surface${directories.length > 1 ? "s" : ""} (${found}). Claimed listings that never reach the entity graph do not help search or AI systems connect them to this firm.`,
+    fix: "Add the remaining claimed listing URLs to sameAs: Google Business Profile, law society directory, Bing Places, Apple Business Connect.",
+  };
+}
+
+// serviceAreaLikely defaults to false so the direct-call tests (e.g.
+// acceptance-trust-pass.test.ts, schema-recs.test.ts) that predate the
+// service-area detection keep working without threading it through.
+export function checkSchemaMarkup(schema: SchemaSummary, serviceAreaLikely: boolean = false): CategoryResult {
   const items: CheckItem[] = [];
 
   if (schema.blocks === 0) {
@@ -650,7 +897,9 @@ export function checkSchemaMarkup(schema: SchemaSummary): CategoryResult {
   }
 
   if (schema.blocks === 0) {
-    items.push({ label: "JSON-LD validity", status: "fail", detail: "No blocks to validate.", fix: "Add valid JSON-LD structured data to your page." });
+    // Unscored: "no blocks to validate" restates the JSON-LD structured data
+    // failure. One missing feature, one charge.
+    items.push({ label: "JSON-LD validity", status: "fail", scored: false, detail: "No blocks to validate.", fix: "Add valid JSON-LD structured data to your page." });
   } else if (schema.invalidBlocks > 0) {
     items.push({ label: "JSON-LD validity", status: "fail", detail: `${schema.invalidBlocks} of ${schema.blocks} blocks have JSON parse errors.`, fix: "Fix the malformed JSON in your structured data blocks. Validate with Google's Rich Results Test." });
   } else {
@@ -672,13 +921,22 @@ export function checkSchemaMarkup(schema: SchemaSummary): CategoryResult {
     const missing = want.filter(([has]) => !has).map(([, k]) => k);
     if (missing.length === 0) {
       items.push({ label: "Business schema fields", status: "pass", detail: "Core fields present: name, url, telephone, address, areaServed, sameAs." });
+    } else if (missing.length === 1 && missing[0] === "address" && serviceAreaLikely) {
+      // Same root cause as the Address / NAP finding in Legal Marketing and
+      // Local SEO: a service-area/remote practice with no street address to
+      // put in schema either. Not a defect to fix by inventing one.
+      items.push({ label: "Business schema fields", status: "pass", detail: "Only the address field is unset, and the site reads as a service-area or remote practice with no street address to publish. See Address / NAP for the same finding." });
     } else if (missing.length <= 2) {
       items.push({ label: "Business schema fields", status: "warn", detail: `Missing field${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}.`, fix: `Add the missing JSON-LD field${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}.` });
     } else {
       items.push({ label: "Business schema fields", status: "fail", detail: `Several core fields missing: ${missing.join(", ")}.`, fix: `Complete the business schema with: ${missing.join(", ")}.` });
     }
   } else {
-    items.push({ label: "Business schema fields", status: "fail", detail: "No business entity to evaluate fields on.", fix: "Add a LegalService or LocalBusiness block first, then populate name, address, telephone, and areaServed." });
+    // Unscored, not failed: "no business entity to evaluate fields on" is a
+    // restatement of the Business / LegalService schema failure directly
+    // above, and charging both bills one defect twice. The finding stays
+    // visible so the fix path is obvious.
+    items.push({ label: "Business schema fields", status: "fail", scored: false, detail: "No business entity to evaluate fields on.", fix: "Add a LegalService or LocalBusiness block first, then populate name, address, telephone, and areaServed." });
   }
 
   // Unscored both directions (trust-fix pass WI-3): Google limited FAQ rich
@@ -712,9 +970,17 @@ export function checkSchemaMarkup(schema: SchemaSummary): CategoryResult {
 
   if (schema.conflictingEntity) {
     items.push({ label: "Schema conflicts", status: "warn", detail: "Business entity types are declared in separate, unlinked blocks, which can read as competing entities.", fix: "Connect them in one @graph, or link them with @id references, so parsers read a single business entity." });
+  } else if (schema.blocks === 0) {
+    // Vacuous pass: a site with no JSON-LD has no declarations that could
+    // conflict. Crediting it for the absence of a defect inside a feature it
+    // does not have is how a site with zero structured data used to score 34%
+    // in this category. Shown for completeness, scored zero either way.
+    items.push({ label: "Schema conflicts", status: "pass", scored: false, detail: "Not applicable: no structured data blocks on the page, so there is nothing that could conflict." });
   } else {
     items.push({ label: "Schema conflicts", status: "pass", detail: "No conflicting business entity declarations." });
   }
+
+  items.push(checkEntitySameAs(schema, hasBusiness));
 
   const { score, maxScore } = scoreItems(items);
   return { name: "Schema & Structured Data", score, maxScore, items };
@@ -771,22 +1037,36 @@ export function checkAiVisibility(html: string, parsedRobots: ParsedRobots | nul
   const questionHeadings = [...h2s, ...h3s].filter(
     (h) => h.endsWith("?") || /^(what|how|when|where|why|who|can|do|does|is|are|should|will)\b/i.test(h)
   );
+  // Worded as an optimization opportunity, not a citation guarantee: a
+  // question-shaped heading may help an AI system extract an answer, but its
+  // presence or absence says nothing about whether any AI assistant actually
+  // cites the page.
   if (questionHeadings.length >= 3) {
-    items.push({ label: "Question-format headings", status: "pass", detail: `${questionHeadings.length} question headings found. Matches question-style queries; may support answer extraction.` });
+    items.push({ label: "Question-format headings", status: "pass", detail: `${questionHeadings.length} question headings found. Question-shaped headings may help AI systems extract answers; this does not guarantee citation.` });
   } else if (questionHeadings.length > 0) {
-    items.push({ label: "Question-format headings", status: "warn", detail: `Only ${questionHeadings.length} question heading${questionHeadings.length > 1 ? "s" : ""}. More may support answer extraction; usefulness depends on the questions matching real queries.`, fix: "Reframe section headings as questions people actually ask, like \"What happens if...\" or \"How long does...\"" });
+    items.push({ label: "Question-format headings", status: "warn", detail: `Only ${questionHeadings.length} question heading${questionHeadings.length > 1 ? "s" : ""}. More may help AI systems pull answers from the page, though this is an optimization, not a guarantee.`, fix: "Reframe section headings as questions people actually ask, like \"What happens if...\" or \"How long does...\"" });
   } else {
-    items.push({ label: "Question-format headings", status: "fail", detail: "No question-format headings. Question-shaped headings may support answer extraction. No citation outcome can be inferred from this check alone.", fix: "Add H2 or H3 headings phrased as questions that match queries people type into AI search." });
+    items.push({ label: "Question-format headings", status: "fail", detail: "No question-format headings. Q&A-shaped headings are one optional signal AI systems may use to extract answers, not a requirement.", fix: "Add H2 or H3 headings phrased as questions that match queries people type into AI search." });
   }
 
+  // Boundary note: this is a coarse, general-purpose structural heuristic for
+  // ANY external site scanned by this public/operator tool, with no access to
+  // authored editorial metadata. It is a separate, disconnected system from
+  // Content Studio's own direct-answer / quotable-definition doctrine
+  // (docs/CONTENT_STUDIO_SEO_AEO_SPEC.md Section 4A, enforced by
+  // validateDirectAnswerDefinition in src/lib/content-validators.ts), which
+  // is the authoritative check for CaseLoad-authored long-form content: it
+  // reads the operator's actual applicability/classification/source decision
+  // rather than guessing from sentence shape. Do not treat this check's
+  // pass/fail as a proxy for that doctrine's compliance.
   const sentences = bodyText.split(/[.!?]+/).filter((s) => s.trim().length > 20);
   const directAnswers = sentences.filter((s) => /\b(is|are|means|refers to|defined as|consists of|requires|involves)\b/i.test(s));
   if (directAnswers.length >= 5) {
-    items.push({ label: "Direct-answer sentences", status: "pass", detail: "Content includes clear definitional sentences, a structure consistent with answer extraction." });
+    items.push({ label: "Direct-answer sentences", status: "pass", detail: "Content includes clear definitional sentences that may be easier for AI systems to extract as answers." });
   } else if (directAnswers.length > 0) {
-    items.push({ label: "Direct-answer sentences", status: "warn", detail: "Some direct-answer content found. Adding more clear definitions may support answer extraction.", fix: "Write more sentences that directly answer questions: \"X is...\", \"X means...\", \"X requires...\"" });
+    items.push({ label: "Direct-answer sentences", status: "warn", detail: "Some direct-answer content found. More clear definitions may help AI systems extract answers, though this is an optimization, not a requirement.", fix: "Write more sentences that directly answer questions: \"X is...\", \"X means...\", \"X requires...\"" });
   } else {
-    items.push({ label: "Direct-answer sentences", status: "fail", detail: "No direct-answer patterns detected. Definitional sentences may support answer extraction; this check detects structure, not outcomes.", fix: "Include explicit definitional sentences. Example: \"A power of attorney is a legal document that...\"" });
+    items.push({ label: "Direct-answer sentences", status: "fail", detail: "No direct-answer patterns detected. Explicit definitional sentences are one optional signal that may help AI systems extract answers, not a requirement.", fix: "Include explicit definitional sentences. Example: \"A power of attorney is a legal document that...\"" });
   }
 
   const anchorTags = html.match(/<a[^>]+href=["']https?:\/\/([^"']+)["']/gi) || [];
@@ -842,9 +1122,17 @@ function checkLegalMarketing(signals: LawFirmSignals): CategoryResult {
     ? { label: "Consultation call to action", status: "pass", detail: "A consultation or contact call to action is present." }
     : { label: "Consultation call to action", status: "fail", detail: "No clear consultation call to action. Ready-to-act visitors have no obvious next step.", fix: "Add a prominent call to action such as \"Book a consultation\" near the top of the page." });
 
-  items.push(signals.addressVisible
-    ? { label: "Address / NAP", status: "pass", detail: "A street address is visible." }
-    : { label: "Address / NAP", status: "warn", detail: "No street address detected. NAP consistency supports local trust and search.", fix: "Show the firm's full address in the footer and on the contact page." });
+  if (signals.addressVisible) {
+    items.push({ label: "Address / NAP", status: "pass", detail: "A street address is visible." });
+  } else if (signals.serviceAreaLikely) {
+    // A service-area / remote practice legitimately has no walk-in office.
+    // Recommending one either invents an address or pressures the firm into
+    // publishing a private home/mailing address. Field case drglaw.ca:
+    // areaServed schema + "closes ... by video" copy, no address anywhere.
+    items.push({ label: "Address / NAP", status: "pass", detail: "No street address published, but the site reads as a service-area or remote practice (areaServed schema and remote/virtual language). A published street address is optional for this business model." });
+  } else {
+    items.push({ label: "Address / NAP", status: "warn", detail: "No street address detected. NAP consistency supports local trust and search.", fix: "Show the firm's full address in the footer and on the contact page." });
+  }
 
   const trust = signals.trust;
   const trustCount = [trust.testimonials, trust.reviews, trust.caseResults, trust.awards, trust.credentials].filter(Boolean).length;
@@ -869,7 +1157,7 @@ function checkLegalMarketing(signals: LawFirmSignals): CategoryResult {
 }
 
 /* 6. Local SEO */
-function checkLocalSeo(html: string, schema: SchemaSummary): CategoryResult {
+function checkLocalSeo(html: string, schema: SchemaSummary, serviceAreaLikely: boolean): CategoryResult {
   const items: CheckItem[] = [];
   const bodyText = html.replace(/<[^>]+>/g, " ");
 
@@ -877,9 +1165,13 @@ function checkLocalSeo(html: string, schema: SchemaSummary): CategoryResult {
     ? { label: "Phone number (NAP)", status: "pass", detail: "Phone number found on page." }
     : { label: "Phone number (NAP)", status: "fail", detail: "No phone number found. Local SEO depends on visible NAP.", fix: "Add the firm's phone number to the header or footer." });
 
-  items.push(ADDRESS_RE.test(bodyText)
-    ? { label: "Street address (NAP)", status: "pass", detail: "Physical address found on page." }
-    : { label: "Street address (NAP)", status: "warn", detail: "No street address detected. A physical address strengthens local ranking.", fix: "Add the full street address to the footer or contact page." });
+  if (ADDRESS_RE.test(bodyText)) {
+    items.push({ label: "Street address (NAP)", status: "pass", detail: "Physical address found on page." });
+  } else if (serviceAreaLikely) {
+    items.push({ label: "Street address (NAP)", status: "pass", detail: "No street address published, but the site reads as a service-area or remote practice. See Address / NAP in Legal Marketing for the same finding." });
+  } else {
+    items.push({ label: "Street address (NAP)", status: "warn", detail: "No street address detected. A physical address strengthens local ranking.", fix: "Add the full street address to the footer or contact page." });
+  }
 
   items.push(/google\.com\/maps|maps\.googleapis\.com|gmp-map/i.test(html)
     ? { label: "Google Maps embed", status: "pass", detail: "Maps integration found." }
@@ -889,11 +1181,13 @@ function checkLocalSeo(html: string, schema: SchemaSummary): CategoryResult {
     ? { label: "NAP in structured data", status: "pass", detail: "Contact info found in JSON-LD." }
     : { label: "NAP in structured data", status: "fail", detail: "No NAP in structured data.", fix: "Add telephone, address, and name to a LocalBusiness or LegalService schema block." });
 
-  // maps/dir directions links embed the firm's Google place ID, so they tie
-  // the site to its GBP entity just like a maps/place link does. Field case
-  // marathonlaw.ca: two /maps/dir/ office links were on the page yet the
-  // finding claimed no GBP link at all.
-  items.push((/google\.com\/(maps\/(place|dir)|search\?.*business|business)/i.test(html) || /g\.page\//i.test(html) || /maps\.app\.goo\.gl|goo\.gl\/maps/i.test(html))
+  // maps/dir directions links embed the firm's Google place ID, and a
+  // maps?cid= link is the permalink format Google issues from a verified
+  // Business Profile, so both tie the site to its GBP entity just like a
+  // maps/place link does. Field cases: marathonlaw.ca (two /maps/dir/ office
+  // links) and drglaw.ca (a maps?cid= link under "Public client reviews from
+  // Google") both read as no GBP link at all under the narrower regex.
+  items.push(hasGoogleBusinessProfileLink(html)
     ? { label: "Google Business Profile link", status: "pass", detail: "GBP link found. Cross-linking strengthens local authority." }
     : { label: "Google Business Profile link", status: "warn", detail: "No link to Google Business Profile.", fix: "Link to the firm's Google Business Profile in the footer or contact section." });
 
@@ -966,10 +1260,20 @@ export function checkTechnicalSecurity(html: string, url: string, headers: Heade
     ? { label: "X-Content-Type-Options", status: "pass", scored: false, detail: "Set to nosniff. Security hygiene; shown for completeness and excluded from the SEO score." }
     : { label: "X-Content-Type-Options", status: "warn", scored: false, detail: "Missing or incorrect. Prevents MIME-type sniffing. Security hygiene; shown for completeness and excluded from the SEO score.", fix: "Add X-Content-Type-Options: nosniff to response headers." });
 
+  // See classifyCsp for why report-only is credited as progress in flight,
+  // not scored the same as a missing policy; the matching exception in
+  // analysis.ts's severity coverage bump keeps a sitewide rollout in
+  // progress from being inflated back up to a "genuinely missing" severity.
+  // Security hygiene (WI-5): CSP, like HSTS and X-Content-Type-Options above,
+  // is excluded from the SEO score so its presence or absence never moves the
+  // grade. classifyCsp additionally recognizes report-only mode (the trust
+  // pass predates that distinction and read report-only as flatly "Missing"),
+  // so a rollout in progress is neither scored nor described as an absent
+  // control. See classifyCsp's own docblock for why the detail leads with
+  // "Monitoring enabled ... enforcement still pending."
   const csp = headers.get("content-security-policy");
-  items.push(csp
-    ? { label: "Content-Security-Policy", status: "pass", scored: false, detail: "Present. Reduces the risk of injection attacks. Security hygiene; shown for completeness and excluded from the SEO score." }
-    : { label: "Content-Security-Policy", status: "warn", scored: false, detail: "Missing. CSP helps prevent cross-site scripting. Security hygiene; shown for completeness and excluded from the SEO score.", fix: "Configure a Content-Security-Policy header, starting in report-only mode." });
+  const cspReportOnly = headers.get("content-security-policy-report-only");
+  items.push({ label: "Content-Security-Policy", scored: false, ...classifyCsp(csp, cspReportOnly) });
 
   items.push(/<meta[^>]+name=["']viewport["']/i.test(html)
     ? { label: "Viewport meta tag", status: "pass", detail: "Present. Required for mobile rendering." }
@@ -985,17 +1289,12 @@ export function checkTechnicalSecurity(html: string, url: string, headers: Heade
 }
 
 /* 8. Performance */
-function checkPerformance(html: string, ttfbMs: number, pageHostname: string): CategoryResult {
+// One HTTP round trip is not a performance measurement, it is a sample; see
+// classifyTtfb in content-signals.ts for why single- and multi-sample
+// readings are scored differently.
+function checkPerformance(html: string, ttfb: TtfbMeasurement, pageHostname: string): CategoryResult {
   const items: CheckItem[] = [];
-
-  if (ttfbMs === 0) {
-    items.push({ label: "Time to first byte", status: "warn", detail: "Could not measure response time for this page.", fix: "Improve TTFB with caching, a CDN, or faster hosting." });
-  } else {
-    const ttfbRound = Math.round(ttfbMs);
-    if (ttfbMs < 400) items.push({ label: "Time to first byte", status: "pass", detail: `Fast (${ttfbRound}ms).` });
-    else if (ttfbMs < 900) items.push({ label: "Time to first byte", status: "warn", detail: `Moderate (${ttfbRound}ms).`, fix: "Improve TTFB with caching, a CDN, or faster hosting." });
-    else items.push({ label: "Time to first byte", status: "fail", detail: `Slow (${ttfbRound}ms).`, fix: "Investigate server response time: caching, CDN, hosting upgrade." });
-  }
+  items.push({ label: "Time to first byte", ...classifyTtfb(ttfb) });
 
   const htmlSizeKb = Math.round(html.length / 1024);
   if (htmlSizeKb <= 150) items.push({ label: "HTML document size", status: "pass", detail: `${htmlSizeKb} KB.` });
@@ -1037,9 +1336,11 @@ function checkLinksContent(html: string, pageHostname: string): CategoryResult {
   const bodyText = extractBodyText(html);
   const words = countWords(bodyText);
 
-  if (words >= 300) items.push({ label: "Word count", status: "pass", detail: `${words.toLocaleString()} words.` });
-  else if (words >= 200) items.push({ label: "Word count", status: "warn", detail: `${words} words. Thin content may rank poorly.`, fix: "Expand to at least 300 words of substantive content." });
-  else items.push({ label: "Word count", status: "fail", detail: `${words} words. Very thin content signals low value.`, fix: "Add substantive content: services, common questions, process." });
+  // This check only counts as a requirement on content pages in the first
+  // place (see applyPageTypeApplicability, which exempts homepage/contact/
+  // intake/tool pages from Word count entirely). See classifyWordCount for
+  // why the wording stays a guideline, not a hard minimum.
+  items.push({ label: "Word count", ...classifyWordCount(words) });
 
   const headingPattern = /<h([1-6])[^>]*>/gi;
   const headingLevels: number[] = [];
@@ -1076,10 +1377,10 @@ function checkLinksContent(html: string, pageHostname: string): CategoryResult {
   else if (internalCount > 0) items.push({ label: "Internal links", status: "warn", detail: `Only ${internalCount} internal link${internalCount > 1 ? "s" : ""}.`, fix: "Link to related pages: practice areas, about, contact." });
   else items.push({ label: "Internal links", status: "fail", detail: "No internal links detected.", fix: "Add links to your other pages." });
 
+  // See classifyContentRatio for why this only fires "add substantive text"
+  // when the page ALSO has thin content by word count, not on ratio alone.
   const ratio = html.length > 0 ? Math.round((bodyText.length / html.length) * 100) : 0;
-  if (ratio >= 15) items.push({ label: "Content-to-HTML ratio", status: "pass", detail: `${ratio}% text content.` });
-  else if (ratio >= 8) items.push({ label: "Content-to-HTML ratio", status: "warn", detail: `${ratio}% text content. Page is heavy on code.`, fix: "Add more text relative to markup; remove unused code." });
-  else items.push({ label: "Content-to-HTML ratio", status: "fail", detail: `${ratio}% text content. Very code-heavy page.`, fix: "Add substantive text content." });
+  items.push({ label: "Content-to-HTML ratio", ...classifyContentRatio(ratio, words) });
 
   if (genericAnchors.length === 0) items.push({ label: "Anchor text quality", status: "pass", detail: "Links use descriptive text." });
   else if (genericAnchors.length <= 2) items.push({ label: "Anchor text quality", status: "warn", detail: `${genericAnchors.length} link${genericAnchors.length > 1 ? "s" : ""} with generic text.`, fix: "Replace \"click here\" and \"learn more\" with descriptive text." });
@@ -1181,7 +1482,7 @@ function buildPageResult(
   finalUrl: string,
   requestedUrl: string,
   headers: Headers,
-  ttfbMs: number,
+  ttfb: TtfbMeasurement,
   redirectHops: number,
   domain: string,
   parsedRobots: ParsedRobots | null,
@@ -1208,21 +1509,27 @@ function buildPageResult(
   const path = (() => { try { return new URL(finalUrl).pathname || "/"; } catch { return "/"; } })();
   const robotsAllowed = robotsAllowedFor(parsedRobots, path);
 
-  const categories: CategoryResult[] = [
-    checkOnPageSeo(html),
+  const rawCategories: CategoryResult[] = [
+    checkOnPageSeo(html, finalUrl),
     checkIndexability(idx, robotsAllowed),
-    checkSchemaMarkup(schema),
+    checkSchemaMarkup(schema, lawFirm.serviceAreaLikely),
     checkAiVisibility(html, parsedRobots, llmsTxt, schema),
     checkLegalMarketing(lawFirm),
-    checkLocalSeo(html, schema),
+    checkLocalSeo(html, schema, lawFirm.serviceAreaLikely),
     checkTechnicalSecurity(html, finalUrl, headers),
     buildRenderingCategory(rendering),
-    checkPerformance(html, ttfbMs, pageHostname),
+    checkPerformance(html, ttfb, pageHostname),
     checkLinksContent(html, pageHostname),
   ];
   const intentCategory = buildIntentCategory(intentAlignment ?? null);
-  if (intentCategory) categories.push(intentCategory);
+  if (intentCategory) rawCategories.push(intentCategory);
 
+  // Downgrade checks that do not apply to this page's type (AEO/content
+  // depth checks off practice/faq/blog pages, breadcrumb schema on the
+  // homepage/language root) BEFORE scoring, page-level aggregation, and
+  // issue-building all run off this same categories array. See
+  // engine-core.ts's applyPageTypeApplicability.
+  const categories = applyPageTypeApplicability(rawCategories, pageType, finalUrl);
   const pageScore = computeWeightedScore(categories);
   const pageGrade = computeGrade(pageScore);
 
@@ -1272,17 +1579,46 @@ async function scanPage(
   try {
     const t0 = Date.now();
     handle = await safeFetch(url, 12000);
-    const ttfbMs = Date.now() - t0;
+    const ttfb: TtfbMeasurement = { ms: Date.now() - t0, sampleCount: 1 };
     const { res, finalUrl, redirectHops } = handle;
     if (!res.ok) return null;
     const ct = res.headers.get("content-type") || "";
     if (!ct.includes("html") && !ct.includes("xhtml")) return null;
     const read = await readCappedText(res, MAX_HTML_BYTES);
     if (!read.ok) return null;
-    const page = buildPageResult(read.text, finalUrl, url, res.headers, ttfbMs, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete);
+    const page = buildPageResult(read.text, finalUrl, url, res.headers, ttfb, redirectHops, domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete);
     return { page, html: read.text };
   } catch { return null; }
   finally { handle?.cleanup(); }
+}
+
+// Take a small number of EXTRA lightweight timing samples against a URL
+// (headers only; the body is cancelled immediately) and combine them with an
+// already-measured first sample to produce a median + range. Reserved for the
+// homepage: it is the one page whose performance finding is used as a
+// standalone, single-page headline claim ("Time to first byte: 1 page"), so
+// it is the one page worth the extra round trips. Failed samples are simply
+// dropped; the first (already-measured) sample always counts even if every
+// extra sample fails.
+async function sampleAdditionalTtfb(url: string, firstSampleMs: number, extraSamples: number, timeoutMs = 6000): Promise<TtfbMeasurement> {
+  const samples = [firstSampleMs];
+  for (let i = 0; i < extraSamples; i++) {
+    let handle: SafeFetchResult | null = null;
+    try {
+      const t0 = Date.now();
+      handle = await safeFetch(url, timeoutMs);
+      samples.push(Date.now() - t0);
+      handle.res.body?.cancel().catch(() => {});
+    } catch {
+      // Skip a failed extra sample; the first sample still counts.
+    } finally {
+      handle?.cleanup();
+    }
+  }
+  const sorted = [...samples].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+  return { ms: median, sampleCount: sorted.length, min: sorted[0], max: sorted[sorted.length - 1] };
 }
 
 /* ────────────────────────────────────────────────────────
@@ -1308,7 +1644,7 @@ function computeTopFixes(pages: PageResult[], limit: number): TopFix[] {
     .slice(0, limit);
 }
 
-function aggregateCategories(pages: PageResult[]): CategoryResult[] {
+export function aggregateCategories(pages: PageResult[]): CategoryResult[] {
   const catNames = pages[0].categories.map((c) => c.name);
   return catNames.map((name) => {
     const pageCats = pages.map((p) => p.categories.find((c) => c.name === name)).filter((c): c is CategoryResult => !!c);
@@ -1328,9 +1664,22 @@ function aggregateCategories(pages: PageResult[]): CategoryResult[] {
         if (affected > 0 && affected < pages.length) detail += ` (${affected} of ${pages.length} pages)`;
         else if (affected === pages.length) detail += ` (all ${pages.length} pages)`;
       }
-      return { label, status, detail, fix: representative.fix };
+      // Carry the trust-fix `scored` flag through the merge, or the aggregated
+      // report loses every "excluded from the SEO score" treatment the per-page
+      // checks set (security headers, llms.txt, FAQPage / Review schema). An
+      // item counts as unscored only when it is unscored on every page it
+      // appears on, so a label that is scored anywhere still grades.
+      const unscored = instances.every((i) => i.scored === false);
+      return { label, status, detail, fix: representative.fix, ...(unscored ? { scored: false } : {}) };
     });
-    const maxScore = items.length * 10;
+    // maxScore comes from scoreItems so unscored items stay out of the
+    // denominator, and an all-unscored category reports 0/0 rather than 0/N
+    // (which would defeat computeWeightedScore's `maxScore <= 0` skip and get
+    // counted as 0% at full weight plus the low-pct penalty). The score itself
+    // stays the per-page average ratio rather than scoreItems' own tally, so
+    // multi-page grading is unchanged: a label failing on 1 of 10 pages still
+    // costs a tenth of the category rather than the whole item.
+    const { maxScore } = scoreItems(items);
     const score = Math.round(avgPct * maxScore);
     return { name, score, maxScore, items };
   });
@@ -1347,6 +1696,35 @@ const FRONTIER_CAP = 600;
 // Dedupe / membership key. URL already lowercases scheme + host; we strip the
 // fragment and a trailing slash but PRESERVE path and query case, because URL
 // paths can be case-sensitive and this key is also reused as a fetch URL.
+/**
+ * Turn an applied eligibility cap into a top-priority finding, so the reason a
+ * headline score is capped appears in the same issues list as everything else
+ * rather than only in a response field the report does not render.
+ */
+function eligibilityIssues(
+  capsApplied: EligibilityCapApplied[],
+  uncapped: number,
+  homeUrl: string,
+  totalPages: number
+): Issue[] {
+  return capsApplied.map((c) => ({
+    id: `eligibility-${c.gate}`,
+    category: "Indexability",
+    severity: "critical" as const,
+    status: "fail" as const,
+    title: `Score capped at ${c.cap}: ${c.headline}`,
+    detail: `${c.reason} The rest of the audit scored ${uncapped}, but that is not reachable while this holds, so the headline score is capped at ${c.cap}.`,
+    fix: c.fix,
+    affectedUrls: [homeUrl],
+    affectedCount: 1,
+    totalPages,
+    pageTypeImpact: ["homepage" as PageType],
+    confidence: "high" as const,
+    effort: "medium" as const,
+    priority: 100,
+  }));
+}
+
 /* ────────────────────────────────────────────────────────
    POST handler
    ──────────────────────────────────────────────────────── */
@@ -1420,11 +1798,24 @@ export async function POST(req: NextRequest) {
     // 401 site-wide password page on both apex and www) is reported honestly
     // instead of as a dead domain.
     let lastHttpStatus = 0;
-    for (const h of [domain, `www.${domain}`]) {
+    // https first for both hosts, then http. A site that answers on https is
+    // never downgraded: the http entries are only reached when both https
+    // attempts fail. Field case: sanjlaw.ca and thecastlelawyers.com are live
+    // Ontario firm sites whose TLS handshake fails, and which this scanner
+    // used to report as "could not connect" rather than as sites with no SSL.
+    // Reaching them over http also makes the notHttps eligibility cap
+    // reachable, which it never was while every fetch was https.
+    for (const candidate of [
+      `https://${domain}`,
+      `https://www.${domain}`,
+      `http://${domain}`,
+      `http://www.${domain}`,
+    ]) {
+      const h = candidate.replace(/^https?:\/\//, "");
       let handle: SafeFetchResult | null = null;
       try {
         const t0 = Date.now();
-        handle = await safeFetch(`https://${h}`, 15000);
+        handle = await safeFetch(candidate, 15000);
         const { res, finalUrl, redirectHops } = handle;
         if (!res.ok) { lastHttpStatus = res.status; continue; }
         const ct = res.headers.get("content-type") || "";
@@ -1517,10 +1908,16 @@ export async function POST(req: NextRequest) {
     // budget note on fetchSitemapUrls).
     const sitemapComplete = !sitemapTruncated;
 
+    // The homepage's performance finding is reported as a standalone,
+    // single-page claim, so it is the one page worth two extra round trips
+    // to turn a single noisy sample into a median + range (see
+    // sampleAdditionalTtfb and the dogfood note on TtfbMeasurement).
+    const homeTtfb = await sampleAdditionalTtfb(homeUrl, homeTtfbMs, 2);
+
     // The homepage HTML + headers were already captured during host resolution
     // above; build its result now that robots + sitemap are available.
     const homePage: PageResult = buildPageResult(
-      homeHtml, homeFinalUrl, homeUrl, homeHeaders, homeTtfbMs, homeRedirectHops,
+      homeHtml, homeFinalUrl, homeUrl, homeHeaders, homeTtfb, homeRedirectHops,
       domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete
     );
 
@@ -1605,7 +2002,13 @@ export async function POST(req: NextRequest) {
 
     // Backward-compatible aggregation.
     const aggregatedCategories = aggregateCategories(forFindings);
-    const overallScore = computeWeightedScore(aggregatedCategories);
+    // Declared here rather than further down because the eligibility gates
+    // below need the rendering risk before the headline score is settled.
+    const renderingSummary = aggregateRenderingSummary(forFindings);
+    const eligibilityGates = deriveEligibilityGates(aggregatedCategories, renderingSummary?.risk);
+    const uncappedScore = computeWeightedScore(aggregatedCategories);
+    const overallScore = applyEligibilityCaps(uncappedScore, eligibilityGates);
+    const capsApplied = describeEligibilityCaps(eligibilityGates);
     const grade = computeGrade(overallScore);
 
     const perPageAi = forFindings.map((p) => {
@@ -1620,7 +2023,6 @@ export async function POST(req: NextRequest) {
       ...AI_TRAINING_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : false, category: "training" as const })),
     ];
     const intentAlignment = aggregateIntentAlignment(forFindings);
-    const renderingSummary = aggregateRenderingSummary(forFindings);
 
     const topFixes = computeTopFixes(forFindings, 5);
 
@@ -1628,7 +2030,13 @@ export async function POST(req: NextRequest) {
     const discoveryConfidence = computeDiscoveryConfidence(pages.length, sitemapSet?.size ?? 0, homeInternalLinkCount, maxPages);
     const pageIssues = buildIssues(forFindings, effectiveContentPages);
     const structureIssues = buildSiteStructureIssues(pages, !!sitemapSet, parsedRobots, discoveryConfidence, uncrawledUrls, wpStarterUrls);
-    const issues = [...pageIssues, ...structureIssues].sort(compareIssuesByPriority);
+    const capIssues = eligibilityIssues(
+      capsApplied,
+      uncappedScore,
+      pages[0]?.url ?? `https://${domain}`,
+      pages.length
+    );
+    const issues = [...pageIssues, ...structureIssues, ...capIssues].sort(compareIssuesByPriority);
     const internalSummary = buildInternalSummary(pages, issues, overallScore, aiSearchScore);
     const breakdown = severityBreakdown(issues);
 
@@ -1661,6 +2069,7 @@ export async function POST(req: NextRequest) {
       severityBreakdown: breakdown,
       partial,
       discoveryConfidence,
+      ...(capsApplied.length > 0 ? { eligibility: { uncappedScore, capsApplied } } : {}),
       buildSha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
       checkedAt: new Date().toISOString(),
       // Trust-fix pass WI-8 (acceptance criterion): expose exactly which

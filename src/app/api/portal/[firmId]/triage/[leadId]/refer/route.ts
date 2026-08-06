@@ -30,6 +30,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getPortalSession } from "@/lib/portal-auth";
+import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { buildReferredPayload, fireGhlWebhook, type LeadFacts } from "@/lib/ghl-webhook";
 import { isDecisionReasonCode } from "@/lib/screened-leads-labels";
@@ -63,6 +64,9 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const actor = session.role === "operator" ? "operator" : "lawyer";
+
+  const previewDenied = await denyWriteIfPreview(firmId);
+  if (previewDenied) return previewDenied;
 
   let body: { referredTo?: string; note?: string; reason_code?: string };
   try {

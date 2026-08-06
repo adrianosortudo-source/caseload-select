@@ -2,6 +2,14 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import {
+  DIRECT_ANSWER_CLASSIFICATION_LABELS,
+  DIRECT_ANSWER_DECISION_FORMATS,
+  type DirectAnswerApplicability,
+  type DirectAnswerClassification,
+  type DirectAnswerMetadata,
+  type DirectAnswerSourceStatus,
+} from "@/lib/content-studio-direct-answer";
 
 /* ── Source Brief Form ────────────────────────────────────── */
 
@@ -15,14 +23,219 @@ const BRIEF_FIELDS = [
   { key: "seo_target_query", label: "SEO target query", hint: "Primary search query this piece targets." },
 ] as const;
 
-type BriefData = Record<string, string>;
+type BriefData = Record<string, unknown>;
+
+function briefString(values: BriefData, key: string): string {
+  const v = values[key];
+  return typeof v === "string" ? v : "";
+}
+
+function readDirectAnswer(values: BriefData): Partial<DirectAnswerMetadata> {
+  const v = values.direct_answer;
+  return v && typeof v === "object" ? (v as Partial<DirectAnswerMetadata>) : {};
+}
+
+/* ── Direct answer / quotable definition section ─────────────
+ * A concise, standalone, plain-language answer to the piece's central
+ * question. Applies where a reader needs orientation (Counsel Note, Clause
+ * in the Margin, decision tool, checklist, landing page, resource article).
+ * Not a mandate: "Not applicable" is a valid, intentional choice for formats
+ * where a formal definition would not help the reader. See
+ * docs/CONTENT_STUDIO_SEO_AEO_SPEC.md, Direct answer / quotable definition
+ * rule, for the full doctrine and worked examples. */
+
+function DirectAnswerSection({
+  values,
+  setValues,
+  format,
+}: {
+  values: BriefData;
+  setValues: (fn: (v: BriefData) => BriefData) => void;
+  format?: string | null;
+}) {
+  const directAnswer = readDirectAnswer(values);
+  const applicability = (directAnswer.applicability ?? "") as DirectAnswerApplicability | "";
+  const decisionExpected = !!format && DIRECT_ANSWER_DECISION_FORMATS.has(format);
+
+  const update = (patch: Partial<DirectAnswerMetadata>) => {
+    setValues((v) => ({
+      ...v,
+      direct_answer: { ...readDirectAnswer(v), ...patch },
+    }));
+  };
+
+  return (
+    <div className="border-t border-black/10 pt-4 mt-2">
+      <div className="text-xs font-medium text-black/70 mb-1">
+        Direct answer / quotable definition
+      </div>
+      <p className="text-xs text-black/45 mb-3">
+        A concise, standalone answer to this piece&apos;s central question,
+        understandable if quoted on its own. Only add one where it genuinely
+        helps the reader. &ldquo;Not applicable&rdquo; is a real, reviewable
+        choice, not a fallback.
+        {decisionExpected && !applicability && (
+          <span className="text-amber-600"> This format expects a decision before the piece can advance.</span>
+        )}
+      </p>
+
+      <label className="block text-xs font-medium text-black/60 mb-1">Applicability</label>
+      <select
+        value={applicability}
+        onChange={(e) =>
+          update({ applicability: (e.target.value || undefined) as DirectAnswerApplicability })
+        }
+        className="w-full text-sm border border-black/15 rounded px-3 py-2 mb-3 focus:outline-none focus:border-sky-400"
+      >
+        <option value="">Choose...</option>
+        <option value="required">Required</option>
+        <option value="optional">Optional</option>
+        <option value="not_applicable">Not applicable</option>
+      </select>
+
+      {applicability === "not_applicable" && (
+        <div className="mb-1">
+          <label className="block text-xs font-medium text-black/60 mb-1">
+            Why not applicable (short rationale)
+          </label>
+          <input
+            type="text"
+            value={directAnswer.not_applicable_reason ?? ""}
+            onChange={(e) => update({ not_applicable_reason: e.target.value })}
+            placeholder="e.g. purely promotional CTA, no reader-orientation content"
+            className="w-full text-sm border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400 placeholder:text-black/30"
+          />
+        </div>
+      )}
+
+      {(applicability === "required" || applicability === "optional") && (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-black/60 mb-1">
+              Answer / definition text (1-3 sentences)
+            </label>
+            <textarea
+              value={directAnswer.text ?? ""}
+              onChange={(e) => update({ text: e.target.value })}
+              rows={3}
+              placeholder={
+                'e.g. "A shareholder agreement is a contract among a corporation\'s shareholders ' +
+                'that sets rules for control, decision-making, share transfers, and disputes."'
+              }
+              className="w-full text-sm border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400 placeholder:text-black/30"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-black/60 mb-1">Classification</label>
+            <select
+              value={directAnswer.classification ?? ""}
+              onChange={(e) =>
+                update({ classification: (e.target.value || undefined) as DirectAnswerClassification })
+              }
+              className="w-full text-sm border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400"
+            >
+              <option value="">Choose...</option>
+              {(Object.keys(DIRECT_ANSWER_CLASSIFICATION_LABELS) as DirectAnswerClassification[]).map(
+                (key) => (
+                  <option key={key} value={key}>
+                    {DIRECT_ANSWER_CLASSIFICATION_LABELS[key]}
+                  </option>
+                ),
+              )}
+            </select>
+            <p className="text-xs text-black/40 mt-1">
+              Binding rule = governing law. Market practice = how it&apos;s commonly done. Firm judgment
+              = the firm&apos;s own position. Illustration = a worked example. Explanatory = plain
+              framing, not a legal claim.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-black/60 mb-1">
+              Jurisdiction / scope
+            </label>
+            <input
+              type="text"
+              value={directAnswer.jurisdiction_scope ?? ""}
+              onChange={(e) => update({ jurisdiction_scope: e.target.value })}
+              placeholder="e.g. Ontario, or: under a standard-form commercial lease"
+              className="w-full text-sm border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400 placeholder:text-black/30"
+            />
+            {directAnswer.classification === "binding_rule" && !directAnswer.jurisdiction_scope && (
+              <p className="text-xs text-amber-600 mt-1">
+                Required for a binding legal rule, so it is never presented as universally true.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-black/60 mb-1">
+              Primary source mapping
+            </label>
+            <select
+              value={directAnswer.source_status ?? ""}
+              onChange={(e) =>
+                update({ source_status: (e.target.value || undefined) as DirectAnswerSourceStatus })
+              }
+              className="w-full text-sm border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400"
+            >
+              <option value="">Choose...</option>
+              <option value="mapped">Mapped to a primary source</option>
+              <option value="not_required">Not required for this classification</option>
+              <option value="exempted">Exempted (state why below)</option>
+            </select>
+          </div>
+
+          {directAnswer.source_status === "mapped" && (
+            <div>
+              <label className="block text-xs font-medium text-black/60 mb-1">
+                Source references (one per line: statute, regulation, case name)
+              </label>
+              <textarea
+                value={(directAnswer.source_refs ?? []).join("\n")}
+                onChange={(e) =>
+                  update({
+                    source_refs: e.target.value
+                      .split("\n")
+                      .map((s) => s.trim())
+                      .filter((s) => s.length > 0),
+                  })
+                }
+                rows={2}
+                placeholder={"R.S.O. 1990, c. B.16, s. 108\nRe: Standard Commercial Lease Precedent"}
+                className="w-full text-sm border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400 placeholder:text-black/30"
+              />
+            </div>
+          )}
+
+          {directAnswer.source_status === "exempted" && (
+            <div>
+              <label className="block text-xs font-medium text-black/60 mb-1">
+                Reason a primary source is not mapped
+              </label>
+              <input
+                type="text"
+                value={directAnswer.source_exemption_reason ?? ""}
+                onChange={(e) => update({ source_exemption_reason: e.target.value })}
+                className="w-full text-sm border border-black/15 rounded px-3 py-2 focus:outline-none focus:border-sky-400"
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function SourceBriefForm({
   pieceId,
   initial,
+  format,
 }: {
   pieceId: string;
   initial: BriefData | null;
+  format?: string | null;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -57,7 +270,13 @@ export function SourceBriefForm({
   }, [pieceId, values, router]);
 
   const hasContent =
-    initial && Object.values(initial).some((v) => v && v.trim().length > 0);
+    initial &&
+    Object.entries(initial).some(([k, v]) => {
+      if (k === "direct_answer") return v && typeof v === "object";
+      return typeof v === "string" && v.trim().length > 0;
+    });
+
+  const initialDirectAnswer = initial ? readDirectAnswer(initial) : {};
 
   if (!editing) {
     return (
@@ -81,7 +300,7 @@ export function SourceBriefForm({
         ) : (
           <dl className="space-y-3">
             {BRIEF_FIELDS.map(({ key, label }) => {
-              const val = initial?.[key];
+              const val = initial ? briefString(initial, key) : "";
               if (!val) return null;
               return (
                 <div key={key}>
@@ -90,6 +309,26 @@ export function SourceBriefForm({
                 </div>
               );
             })}
+            {initialDirectAnswer.applicability && (
+              <div>
+                <dt className="text-xs font-medium text-black/60">
+                  Direct answer / quotable definition
+                </dt>
+                <dd className="mt-0.5 text-sm text-black/80">
+                  {initialDirectAnswer.applicability === "not_applicable"
+                    ? `Not applicable${
+                        initialDirectAnswer.not_applicable_reason
+                          ? `: ${initialDirectAnswer.not_applicable_reason}`
+                          : ""
+                      }`
+                    : `${initialDirectAnswer.applicability === "required" ? "Required" : "Optional"} — ${
+                        initialDirectAnswer.classification
+                          ? DIRECT_ANSWER_CLASSIFICATION_LABELS[initialDirectAnswer.classification]
+                          : "not classified"
+                      }${initialDirectAnswer.text ? `: "${initialDirectAnswer.text}"` : ""}`}
+                </dd>
+              </div>
+            )}
           </dl>
         )}
       </div>
@@ -136,7 +375,7 @@ export function SourceBriefForm({
             </label>
             {key === "five_line_brief_seeds" ? (
               <textarea
-                value={values[key] ?? ""}
+                value={briefString(values, key)}
                 onChange={(e) =>
                   setValues((v) => ({ ...v, [key]: e.target.value }))
                 }
@@ -147,7 +386,7 @@ export function SourceBriefForm({
             ) : (
               <input
                 type="text"
-                value={values[key] ?? ""}
+                value={briefString(values, key)}
                 onChange={(e) =>
                   setValues((v) => ({ ...v, [key]: e.target.value }))
                 }
@@ -158,6 +397,7 @@ export function SourceBriefForm({
           </div>
         ))}
       </div>
+      <DirectAnswerSection values={values} setValues={setValues} format={format} />
     </div>
   );
 }

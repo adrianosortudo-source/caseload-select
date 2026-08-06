@@ -613,6 +613,10 @@ export function buildMarkdownSeoMetadata(input: {
     answer_summary: (sourceBrief.answer_summary as string | undefined) ?? null,
     jurisdiction: (sourceBrief.jurisdiction as string | undefined) ?? null,
     service_area: (sourceBrief.service_area as string | string[] | undefined) ?? null,
+    // Direct answer / quotable definition rule: snapshot the brief's
+    // decision onto this version, the same no-new-column pattern as every
+    // other field above. Null when the brief has not made a decision.
+    direct_answer: (sourceBrief as Record<string, unknown>).direct_answer ?? null,
     schema: {
       article: input.articleSchema,
     },

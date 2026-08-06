@@ -14,6 +14,12 @@ import {
   type ServicePageBlock,
 } from "./content-studio-structured";
 import { extractHost, type InternalLinkTarget } from "./content-studio-links";
+import {
+  DIRECT_ANSWER_DECISION_FORMATS,
+  countSentences,
+  parseDirectAnswerMetadata,
+  type DirectAnswerMetadata,
+} from "./content-studio-direct-answer";
 
 export type ValidatorKey =
   | "answer_top_30_percent_text"
@@ -66,7 +72,8 @@ export type ValidatorKey =
   | "secondary_query_coverage"
   | "service_area_presence"
   | "no_cannibalization"
-  | "pt_jurisdiction_disclosure";
+  | "pt_jurisdiction_disclosure"
+  | "direct_answer_definition";
 
 export type Severity = "fail" | "warn" | "info";
 
@@ -620,6 +627,163 @@ export function validateJurisdictionServiceAreaEarlyText(
     key: "jurisdiction_service_area_early_text",
     status: findings.some((f) => f.severity === "fail") ? "fail" : findings.length > 0 ? "warn" : "pass",
     severity: findings.some((f) => f.severity === "fail") ? "fail" : findings.length > 0 ? "warn" : "info",
+    findings,
+  };
+}
+
+// =============================================================================
+// Direct answer / quotable definition rule. Shared by both the Markdown
+// battery (runDeterministicValidators, reading sourceBrief.direct_answer
+// live, same as validateAnswerInTop30PercentText above) and the structured
+// canonical_service_page battery (runCanonicalServicePageValidators, reading
+// seo_metadata.direct_answer, the version-bound snapshot). Proportionate by
+// design: a format outside DIRECT_ANSWER_DECISION_FORMATS with no decision
+// on file passes silently (never a false failure for a format where a
+// definition is inappropriate); a format inside that set with NO decision at
+// all fails (a silent omission is not a valid choice); not_applicable is
+// always a legitimate pass, only flagged (warn) when the rationale is
+// missing on a format where a decision is normally expected.
+// =============================================================================
+
+export function validateDirectAnswerDefinition(
+  text: string,
+  format: string | undefined,
+  directAnswer: DirectAnswerMetadata | null
+): ValidatorResult {
+  const findings: Finding[] = [];
+  const decisionExpected = !!format && DIRECT_ANSWER_DECISION_FORMATS.has(format);
+
+  if (!directAnswer) {
+    if (decisionExpected) {
+      findings.push({
+        rule: "direct_answer_definition",
+        severity: "fail",
+        message:
+          "No direct-answer / quotable-definition decision is on file for this format. Choose Required, Optional, or Not applicable in the source brief before this piece can advance (docs/CONTENT_STUDIO_SEO_AEO_SPEC.md, Direct answer / quotable definition rule).",
+      });
+    }
+    return {
+      key: "direct_answer_definition",
+      status: findings.length > 0 ? "fail" : "pass",
+      severity: findings.length > 0 ? "fail" : "info",
+      findings,
+    };
+  }
+
+  if (directAnswer.applicability === "not_applicable") {
+    if (decisionExpected && !directAnswer.not_applicable_reason) {
+      findings.push({
+        rule: "direct_answer_definition",
+        severity: "warn",
+        message:
+          "Direct answer marked not applicable with no stated rationale. A short reason keeps this an intentional, reviewable choice instead of a silent omission.",
+      });
+    }
+    return {
+      key: "direct_answer_definition",
+      status: findings.length > 0 ? "warn" : "pass",
+      severity: findings.length > 0 ? "warn" : "info",
+      findings,
+    };
+  }
+
+  // applicability is "required" or "optional" from here on; held to the same
+  // quality bar either way.
+  if (!directAnswer.text) {
+    findings.push({
+      rule: "direct_answer_definition",
+      severity: "fail",
+      message: `Direct answer is marked "${directAnswer.applicability}" but no answer/definition text has been written.`,
+    });
+  } else {
+    const sentences = countSentences(directAnswer.text);
+    if (sentences > 3) {
+      findings.push({
+        rule: "direct_answer_definition",
+        severity: "warn",
+        message: `The direct answer reads as ${sentences} sentences. A quotable definition works best at 1-3 concise sentences.`,
+      });
+    }
+  }
+
+  if (!directAnswer.classification) {
+    findings.push({
+      rule: "direct_answer_definition",
+      severity: "fail",
+      message:
+        "Direct answer has no classification. Label it as a binding legal rule, market practice, firm judgment, illustration, or explanatory framing so a reader, and the reviewing lawyer, can tell what kind of statement it is.",
+    });
+  } else if (directAnswer.classification === "binding_rule") {
+    if (!directAnswer.jurisdiction_scope) {
+      findings.push({
+        rule: "direct_answer_definition",
+        severity: "fail",
+        message:
+          "A binding legal rule must state its jurisdiction or scope. A rule stated without a scope qualifier reads as universally true, a legal-overstatement risk.",
+      });
+    }
+    if (directAnswer.source_status === "mapped" && directAnswer.source_refs.length === 0) {
+      findings.push({
+        rule: "direct_answer_definition",
+        severity: "fail",
+        message: 'Source status is "mapped" but no source references are on file.',
+      });
+    } else if (directAnswer.source_status === "exempted" && !directAnswer.source_exemption_reason) {
+      findings.push({
+        rule: "direct_answer_definition",
+        severity: "fail",
+        message: "A primary source is marked exempted with no stated reason.",
+      });
+    } else if (!directAnswer.source_status || directAnswer.source_status === "not_required") {
+      findings.push({
+        rule: "direct_answer_definition",
+        severity: "fail",
+        message:
+          "A binding legal rule requires a primary source mapping, or an explicit exemption reason where a source is not feasible.",
+      });
+    }
+    if (
+      directAnswer.text &&
+      /\b(always|never|in all cases|universally|guaranteed|every time)\b/i.test(directAnswer.text)
+    ) {
+      findings.push({
+        rule: "direct_answer_definition",
+        severity: "warn",
+        message:
+          'A binding-rule definition uses absolute language ("always", "never", "universally", or similar). Confirm it does not overstate applicability beyond the stated scope and any statutory exceptions.',
+      });
+    }
+  } else if (directAnswer.source_status === "mapped" && directAnswer.source_refs.length === 0) {
+    findings.push({
+      rule: "direct_answer_definition",
+      severity: "warn",
+      message: 'Source status is "mapped" but no source references are on file.',
+    });
+  }
+
+  // Heuristic, non-brittle presence check: does the declared answer appear
+  // (by significant-word overlap, not exact match) within the first 30% of
+  // the actual body? Always advisory: a miss here is "needs editorial
+  // review", never proof the definition is absent from the page.
+  if (directAnswer.text && text && text.trim().length > 0) {
+    const top30 = text.slice(0, Math.max(1, Math.ceil(text.length * 0.3)));
+    const ratio = queryOverlapRatio(directAnswer.text, top30);
+    if (ratio < 0.4) {
+      findings.push({
+        rule: "direct_answer_definition",
+        severity: "warn",
+        message:
+          "The declared direct answer / quotable definition was not clearly detected within the first 30% of the piece. Heuristic only, not proof it is missing: needs editorial review, confirm by reading the opening.",
+      });
+    }
+  }
+
+  const hasFail = findings.some((f) => f.severity === "fail");
+  const hasWarn = findings.some((f) => f.severity === "warn");
+  return {
+    key: "direct_answer_definition",
+    status: hasFail ? "fail" : hasWarn ? "warn" : "pass",
+    severity: hasFail ? "fail" : hasWarn ? "warn" : "info",
     findings,
   };
 }
@@ -2504,6 +2668,18 @@ export function runDeterministicValidators(
       );
     }
 
+    // Direct answer / quotable definition rule. Always runs (not gated on a
+    // field being present) because a missing decision is itself the failure
+    // mode on a format where one is expected; validateDirectAnswerDefinition
+    // handles the "not applicable to this format" case internally.
+    results.push(
+      validateDirectAnswerDefinition(
+        text,
+        config.format,
+        parseDirectAnswerMetadata(sourceBrief.direct_answer)
+      )
+    );
+
     // Ses.17 WP-3 additions.
     const secondaryQueries = sourceBrief.secondary_queries as string[] | undefined;
     const clientQuestionVariants = sourceBrief.client_question_variants as string[] | undefined;
@@ -2966,5 +3142,15 @@ export function runCanonicalServicePageValidators(
     validateFaqQuestionsAreQuestionShaped(blocks),
     validateSchemaDirectivesPresent(seoMetadata),
     validateInternalLinkDomains(context.internalLinkTargets, context.firmWebsite),
+    // Direct answer / quotable definition rule. Reads the version-bound
+    // snapshot (seoMetadata.direct_answer, copied from source_brief.direct_answer
+    // at generation time by buildSeoMetadata) rather than a live sourceBrief
+    // read, since this is the structured-output branch and seoMetadata is
+    // already this branch's canonical per-version record.
+    validateDirectAnswerDefinition(
+      flattenServicePageToPlainText(blocks),
+      "canonical_service_page",
+      parseDirectAnswerMetadata(seoMetadata?.direct_answer)
+    ),
   ];
 }

@@ -212,12 +212,32 @@ lawyer (`approved_version_id !== current_version_id`, or `status =
 lifecycle, regardless of how much other evidence exists, and no
 reconciliation action in this system can change that. The operator
 cannot approve on the licensee's behalf; the only way a deliverable
-clears that check is the firm's lawyer signing off through the existing
-approval workflow (`docs/CONTENT_STUDIO_APPROVAL_PLAYBOOK.md`). The
-relocation-clause period's own "Clause in the Margin" PT article
-(`b767ef14-dd4e-405e-9c54-1f7f9364f13c`) is `in_review` today and stays
-that way through every migration in this feature; nothing here touches
-its `status` or `approved_version_id`.
+clears that check through `evaluateDeliverableReadiness` (this document's
+`ready`/manifest surface) is the firm's lawyer signing off through the
+existing approval workflow. The relocation-clause period's own "Clause in
+the Margin" PT article (`b767ef14-dd4e-405e-9c54-1f7f9364f13c`) is
+`in_review` today and stays that way through every migration in this
+feature; nothing here touches its `status` or `approved_version_id`.
+
+**Standing Publishing Authorization (2026-07-17) is a narrower, separate
+exception at the claim layer, not a change to this document's readiness
+evaluator.** `evaluateDeliverableReadiness`'s `current_version_approved`
+check above is unchanged and still passes only via individual lawyer
+sign-off -- a firm's standing authorization does not flip it, and a
+deliverable relying on standing authorization still shows
+`current_version_approved: fail` in this manifest/readiness surface. The
+actual second path lives one layer down, in
+`claim_placement_for_publish()` (see `lib/publication-placement-claims.ts`
+and `supabase/migrations/20260717230956_standing_publishing_authorization.sql`):
+a claim may proceed either because the version was individually approved
+(this document's existing path, unchanged) or because the firm's latest
+`standing_publishing_authorizations` event is `'enabled'` and the version
+is not flagged `requires_individual_review`. Every other requirement this
+document describes -- role/locale metadata, artifact binding, placement
+readiness, journey validation -- applies identically on both paths; only
+the single "has a lawyer individually signed this exact version"
+condition gets a second way to be satisfied. See the CLAUDE.md "Standing
+Publishing Authorization (DR-104)" section for the full model.
 
 **Rollback and recovery.** The lifecycle columns and their two triggers
 are purely additive (new columns, new constraints, new triggers on
@@ -309,6 +329,48 @@ on this route.
 
 Any instruction to publish begins with read-only reconciliation. Missing
 assets are blockers, never implied authorization to create them.
+
+## Approval binds to the version, not the rendering (DR-105)
+
+`may_modify_copy: false` in the manifest's policy block, above, governs
+the deliverable's own substantive copy. It does not, and was never meant
+to, forbid a separate, narrower thing: rendering an already-approved
+version's exact substantive content on a destination surface other than
+its source surface, wrapped in that destination's own required
+presentation and compliance boilerplate. DR-105 (`00_System/01_Doctrine/DECISION_RECORDS.md`)
+names this a Surface-Presentation Adaptation and gives it its own
+controlled path, `docs/publication-operator/surface-presentation-adaptation-registry.md`,
+so the two concerns stay distinct: an agent still may never regenerate,
+shorten, translate, or otherwise rewrite a deliverable's substantive
+copy, on this or any other route; a pre-registered, whitelisted
+presentation difference (most concretely, a compliance disclaimer whose
+website wording literally says "this website" and would be false on a
+different surface) is not that, and is resolved by exact registry
+lookup, never drafted at runtime. See `docs/publication-operator/publication-resolution-preflight-design-2026-07-19.md`
+§4.1a and §5 for where this sits in the full publication preflight, and
+"Pending legal approval is never bypassed by reconciliation," below, for
+the unrelated, unchanged rule this does not touch: individual lawyer
+sign-off on substantive content is never something a Surface-
+Presentation Adaptation, an operator, or an agent may substitute for.
+This section is doctrine only as of 2026-07-19: the manifest evaluator
+does not yet call a `resolve_surface_presentation_adaptation` step, and
+no code path reads the registry file above at runtime.
+
+The registry's own source-authorization eligibility bar
+(`immutable_release_authorized_version`) is the same two-path model this
+document already describes above under "Standing Publishing Authorization
+(2026-07-17)": a source version is eligible for a Surface-Presentation
+Adaptation only when it is immutable and release-authorized through an
+individual lawyer approval, or through an active standing authorization
+covering a version that is not flagged `requires_individual_review`. This
+is not a separate or looser authorization concept unique to surface
+adaptation; it is the identical bar `claim_placement_for_publish()`
+already applies. A registered adaptation rule's `platform_link_formatting`
+allowance is narrow in the same way: it may only re-render an
+already-approved, existing link in the destination platform's required
+format, never change the URL, destination, CTA target, or anchor
+meaning, and never add, remove, or substitute a link (see the registry's
+own scope note for the exact boundary).
 
 ## Registering a new artifact today (manual, no UI yet)
 

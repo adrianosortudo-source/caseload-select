@@ -38,6 +38,8 @@ interface State {
   bundleResult: BundleResult | BundleError;
   bundleArgs: string | null;
   markdownArg: unknown;
+  /** The bundle handed to withholdBundleLinks, or null when it was never called. */
+  withheldArg: unknown;
 }
 
 const state: State = {
@@ -45,6 +47,7 @@ const state: State = {
   bundleResult: { ok: true, bundle: { schema_version: "1.0", period: { id: PERIOD, title: "Test period" } } },
   bundleArgs: null,
   markdownArg: null,
+  withheldArg: null,
 };
 
 // Only the cookie read is mocked; the real requireOperator (which wraps it)
@@ -61,6 +64,14 @@ vi.mock("@/lib/content-period-export", () => ({
   renderContentExportMarkdown: (bundle: unknown) => {
     state.markdownArg = bundle;
     return "# markdown output";
+  },
+  // Stands in for the real withholding pass. Tagging the result lets the
+  // tests below prove the json branch serialises the WITHHELD bundle rather
+  // than the raw one -- buildContentExportBundle signs every asset
+  // unconditionally, so the raw bundle is not safe to return.
+  withholdBundleLinks: (bundle: unknown) => {
+    state.withheldArg = bundle;
+    return { ...(bundle as Record<string, unknown>), __withheld: true };
   },
 }));
 
@@ -84,6 +95,7 @@ beforeEach(() => {
   state.bundleResult = { ok: true, bundle: { schema_version: "1.0", period: { id: PERIOD, title: "Test period" } } };
   state.bundleArgs = null;
   state.markdownArg = null;
+  state.withheldArg = null;
 });
 
 describe("GET content-export: operator export success", () => {
@@ -93,7 +105,28 @@ describe("GET content-export: operator export success", () => {
     expect(res.status).toBe(200);
     expect(state.bundleArgs).toBe(PERIOD);
     const body = await res.json();
-    expect(body).toEqual({ ok: true, bundle: (state.bundleResult as BundleResult).bundle });
+    expect(body).toEqual({
+      ok: true,
+      bundle: { ...(state.bundleResult as BundleResult).bundle, __withheld: true },
+    });
+  });
+
+  it("the json branch serialises the WITHHELD bundle, never the raw one", async () => {
+    state.operatorSession = { firm_id: "f1", role: "operator", lawyer_id: "op-1", exp: Date.now() + 1000 };
+    const res = await GET(makeReq(BASE_URL), params(PERIOD));
+    const body = await res.json();
+    // withholdBundleLinks was handed the raw bundle...
+    expect(state.withheldArg).toEqual((state.bundleResult as BundleResult).bundle);
+    // ...and its output, not its input, is what went over the wire. json is
+    // the DEFAULT format, so an ungated body here is the path an agent hits
+    // first.
+    expect(body.bundle.__withheld).toBe(true);
+  });
+
+  it("?format=markdown does NOT pre-withhold: the renderer needs to see a signed_url in order to refuse it", async () => {
+    state.operatorSession = { firm_id: "f1", role: "operator", lawyer_id: "op-1", exp: Date.now() + 1000 };
+    await GET(makeReq(`${BASE_URL}?format=markdown`), params(PERIOD));
+    expect(state.withheldArg).toBeNull();
   });
 
   it("?format=markdown calls renderContentExportMarkdown with the bundle and returns text/markdown", async () => {

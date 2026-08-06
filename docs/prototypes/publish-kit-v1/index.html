@@ -1,0 +1,1899 @@
+<title>Publish Kit — prototype v4</title>
+
+<style>
+  /* ───────────────────────────────────────────────────────────────
+     Publish Kit — operator and publishing-agent surface, v4
+     Tokens mirror tailwind.config.ts. Asset model follows the CSB:
+     one weekly master per editorial format, recorded slot crops as
+     derivatives, text-led formats carrying no photograph.
+     Every deliverable in the period is present; the kit is the
+     complete week record, not the manual subset.
+     ─────────────────────────────────────────────────────────────── */
+  :root{
+    --ink:#1E2F58; --ink-strong:#0D1520; --body:#4A5A72; --muted:#8090A8; --label:#5E6D82;
+    --ground:#F4F3EF; --surface:#FFFFFF; --surface-2:#ECEAE4; --surface-3:#F9F8F5;
+    --line:#E0DDD6; --line-strong:#CFCABF;
+    --accent:#8B7A5E; --accent-soft:#FFF8F0;
+    --ok:#27834A; --ok-soft:#EAF3ED;
+    --warn:#8A5A0E; --warn-soft:#F7EEDC;
+    --bad:#C0564E; --bad-soft:#F8E9E7;
+    --cn-ground:#6B4A2E; --clause-ground:#6E2C2C; --paper-ground:#FFFCF6;
+    --sans:"Manrope",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --serif:"Iowan Old Style",Cambria,"Palatino Linotype",Georgia,serif;
+    --mono:ui-monospace,"Cascadia Code",Consolas,"SFMono-Regular",Menlo,monospace;
+    --rail:250px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --ink:#E6E9F0; --ink-strong:#F5F7FA; --body:#A9B6CB; --muted:#7C8AA3; --label:#94A2B8;
+      --ground:#10151F; --surface:#171D2A; --surface-2:#1E2534; --surface-3:#141A26;
+      --line:#2A3245; --line-strong:#3A4459;
+      --accent:#C4B49A; --accent-soft:#241E15;
+      --ok:#5FB57F; --ok-soft:#15251C; --warn:#D9A441; --warn-soft:#2A2210;
+      --bad:#E08078; --bad-soft:#2B1917;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#E6E9F0; --ink-strong:#F5F7FA; --body:#A9B6CB; --muted:#7C8AA3; --label:#94A2B8;
+    --ground:#10151F; --surface:#171D2A; --surface-2:#1E2534; --surface-3:#141A26;
+    --line:#2A3245; --line-strong:#3A4459;
+    --accent:#C4B49A; --accent-soft:#241E15;
+    --ok:#5FB57F; --ok-soft:#15251C; --warn:#D9A441; --warn-soft:#2A2210;
+    --bad:#E08078; --bad-soft:#2B1917;
+  }
+  :root[data-theme="light"]{
+    --ink:#1E2F58; --ink-strong:#0D1520; --body:#4A5A72; --muted:#8090A8; --label:#5E6D82;
+    --ground:#F4F3EF; --surface:#FFFFFF; --surface-2:#ECEAE4; --surface-3:#F9F8F5;
+    --line:#E0DDD6; --line-strong:#CFCABF;
+    --accent:#8B7A5E; --accent-soft:#FFF8F0;
+    --ok:#27834A; --ok-soft:#EAF3ED; --warn:#8A5A0E; --warn-soft:#F7EEDC;
+    --bad:#C0564E; --bad-soft:#F8E9E7;
+  }
+
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--ground); color:var(--body); font-family:var(--sans); font-size:14px; line-height:1.55; -webkit-font-smoothing:antialiased;}
+  h1,h2,h3,h4{margin:0; color:var(--ink); font-weight:700; text-wrap:balance; line-height:1.25;}
+  p{margin:0; text-wrap:pretty;}
+  a{color:var(--ink);}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .mono{font-family:var(--mono); font-variant-numeric:tabular-nums;}
+
+  .eyebrow{font-size:10px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; color:var(--label);}
+  .chip{display:inline-flex; align-items:center; gap:5px; flex:none; font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; padding:3px 8px; border:1px solid var(--line); background:var(--surface-3); color:var(--label); white-space:nowrap;}
+  .chip-ok{background:var(--ok-soft); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 32%,transparent);}
+  .chip-warn{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 34%,transparent);}
+  .chip-ink{background:color-mix(in srgb,var(--ink) 7%,transparent); color:var(--ink); border-color:color-mix(in srgb,var(--ink) 20%,transparent);}
+  .chip-accent{background:var(--accent-soft); color:var(--accent); border-color:color-mix(in srgb,var(--accent) 38%,transparent);}
+  .dot{width:6px; height:6px; flex:none; background:currentColor; border-radius:50%;}
+
+  .btn{font:inherit; font-size:12px; font-weight:700; padding:7px 13px; border:1px solid var(--ink); background:var(--ink); color:var(--ground); cursor:pointer; display:inline-flex; align-items:center; gap:7px; white-space:nowrap;}
+  .btn:hover{background:var(--ink-strong); border-color:var(--ink-strong);}
+  .btn-quiet{background:var(--surface); color:var(--ink); border-color:var(--line-strong);}
+  .btn-quiet:hover{background:var(--surface-2); border-color:var(--ink);}
+  .btn-ghost{background:transparent; color:var(--muted); border-color:var(--line); border-style:dashed; cursor:not-allowed;}
+  .btn-ghost:hover{background:transparent; border-color:var(--line);}
+  .btn[data-copied="1"]{background:var(--ok); border-color:var(--ok); color:#fff;}
+  .btn-sm{font-size:11px; padding:5px 10px;}
+
+  .wrap{max-width:1440px; margin:0 auto; padding:0 22px 90px;}
+  .topbar{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; padding:14px 0 13px; border-bottom:1px solid var(--line);}
+  .crumbs{display:flex; align-items:center; gap:9px; font-size:11px; color:var(--muted);}
+  .crumbs b{color:var(--ink);}
+  .proto-tag{font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; padding:4px 9px; background:var(--accent-soft); color:var(--accent); border:1px solid color-mix(in srgb,var(--accent) 38%,transparent);}
+
+  .masthead{padding:26px 0 20px; display:flex; gap:24px; justify-content:space-between; align-items:flex-start; flex-wrap:wrap;}
+  .masthead h1{font-size:27px; letter-spacing:-.015em;}
+  .masthead .sub{margin-top:7px; font-size:13px; color:var(--body); max-width:64ch;}
+  .masthead-meta{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px;}
+  .masthead-actions{display:flex; flex-direction:column; gap:8px; align-items:flex-end;}
+  .masthead-actions .hint{font-size:11px; color:var(--muted); text-align:right; max-width:26ch;}
+
+  .truth{border:1px solid var(--line); background:var(--surface); display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr));}
+  .truth-cell{padding:13px 16px; border-right:1px solid var(--line);}
+  .truth-cell:last-child{border-right:none;}
+  .truth-cell .k{font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--label);}
+  .truth-cell .v{margin-top:5px; font-size:19px; font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums;}
+  .truth-cell .v small{font-size:12px; font-weight:600; color:var(--muted);}
+
+  .notice{margin-top:12px; padding:13px 16px; border:1px solid; font-size:13px; display:flex; gap:11px; align-items:flex-start;}
+  .notice-warn{background:var(--warn-soft); border-color:color-mix(in srgb,var(--warn) 34%,transparent); color:var(--warn);}
+  .notice h4{font-size:12px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:3px; color:inherit;}
+  .notice .ico{font-family:var(--mono); font-weight:700; flex:none;}
+
+  .sec{margin-top:30px;}
+  .sec-dek{font-size:13px; color:var(--body); max-width:78ch;}
+
+  details.sysdisclosure{border:1px solid var(--line); background:var(--surface);}
+  details.sysdisclosure > summary{padding:14px 17px; cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;}
+  details.sysdisclosure > summary::-webkit-details-marker{display:none;}
+  details.sysdisclosure > summary h2{font-size:18px;}
+  details.sysdisclosure[open] > summary{border-bottom:1px solid var(--line);}
+  .sys-sum{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .sys-toggle{font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--accent); white-space:nowrap;}
+  details.sysdisclosure[open] .sys-toggle::after{content:"Hide";}
+  details.sysdisclosure:not([open]) .sys-toggle::after{content:"Show";}
+  .sysbody{padding:17px;}
+  .sysbody > .sec-dek{margin-bottom:16px;}
+
+  .masters{display:grid; grid-template-columns:repeat(auto-fit,minmax(272px,1fr)); gap:16px;}
+  .master{border:1px solid var(--line); background:var(--surface); display:flex; flex-direction:column;}
+  .master-swatch{height:74px; display:flex; align-items:flex-end; padding:9px 12px;}
+  .master-swatch span{font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,252,246,.92); font-weight:700;}
+  .swatch-cn{background:linear-gradient(118deg,#7C5735 0%,var(--cn-ground) 52%,#4A3221 100%);}
+  .swatch-clause{background:linear-gradient(118deg,#8A3A38 0%,var(--clause-ground) 52%,#4C1D1D 100%);}
+  .swatch-paper{background:linear-gradient(118deg,#FFFCF6 0%,#F2ECE0 100%); border-bottom:1px solid var(--line);}
+  .swatch-paper span{color:#62584E;}
+  .master-body{padding:13px 15px; display:flex; flex-direction:column; gap:9px; flex:1;}
+  .master-body h3{font-size:14px;}
+  .master-spec{display:grid; grid-template-columns:auto 1fr; gap:2px 11px; font-size:11.5px;}
+  .master-spec dt{color:var(--label); text-transform:uppercase; letter-spacing:.05em; font-size:10px; padding-top:2px;}
+  .master-spec dd{margin:0; font-family:var(--mono); color:var(--body); overflow-wrap:anywhere;}
+  .master-foot{margin-top:auto; padding-top:9px; border-top:1px solid var(--line); display:flex; gap:7px; flex-wrap:wrap; align-items:center;}
+
+  .tblwrap{margin-top:18px; border:1px solid var(--line); background:var(--surface); overflow-x:auto;}
+  table.matrix{width:100%; border-collapse:collapse; font-size:12.5px; min-width:640px;}
+  table.matrix th{text-align:left; font-size:10px; letter-spacing:.09em; text-transform:uppercase; color:var(--label); font-weight:700; padding:10px 13px; border-bottom:1px solid var(--line); background:var(--surface-3); white-space:nowrap;}
+  table.matrix td{padding:10px 13px; border-bottom:1px solid var(--line); vertical-align:top;}
+  table.matrix tr:last-child td{border-bottom:none;}
+  table.matrix .slot{font-weight:700; color:var(--ink);}
+  table.matrix .px{font-family:var(--mono); font-size:11.5px; color:var(--body); display:block; margin-top:2px;}
+  .cellstate{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700;}
+  .st-ok{color:var(--ok);} .st-warn{color:var(--warn);} .st-na{color:var(--muted); font-weight:600;}
+
+  .filterbar{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:28px 0 16px; padding-bottom:14px; border-bottom:1px solid var(--line);}
+  .seg{display:flex; border:1px solid var(--line-strong); background:var(--surface); flex-wrap:wrap;}
+  .seg button{font:inherit; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:7px 12px; background:transparent; color:var(--label); border:none; border-right:1px solid var(--line); cursor:pointer;}
+  .seg button:last-child{border-right:none;}
+  .seg button[aria-pressed="true"]{background:var(--ink); color:var(--ground);}
+  .filter-note{font-size:12px; color:var(--muted); max-width:58ch;}
+
+  .daybar{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;}
+  .daybar h3{font-size:14px; white-space:nowrap;}
+  .daybar .rule{flex:1; height:1px; background:var(--line); min-width:24px; align-self:center;}
+  .daybar .note{font-size:11.5px; color:var(--muted);}
+
+  .shell{display:grid; grid-template-columns:var(--rail) 1fr; gap:28px; align-items:start;}
+  @media (max-width:1020px){ .shell{grid-template-columns:1fr;} }
+  .rail{position:sticky; top:14px; max-height:calc(100vh - 28px); overflow-y:auto;}
+  @media (max-width:1020px){ .rail{position:static; max-height:none;} }
+  .rail-group{margin-bottom:16px;}
+  .rail-group > .eyebrow{display:block; padding-bottom:6px; border-bottom:1px solid var(--line);}
+  .rail-link{display:flex; gap:8px; align-items:baseline; padding:6px 8px 6px 7px; font-size:12px; color:var(--body); border-left:2px solid transparent; text-decoration:none;}
+  .rail-link:hover{background:var(--surface); color:var(--ink);}
+  .rail-link[aria-current="true"]{background:var(--surface); color:var(--ink); font-weight:600; border-left-color:var(--ink);}
+  .rail-link .dot{margin-top:6px;}
+
+  .stack{display:flex; flex-direction:column; gap:22px; min-width:0;}
+
+  .piece{border:1px solid var(--line); background:var(--surface); scroll-margin-top:16px;}
+  .piece-head{display:flex; gap:14px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; padding:14px 17px; border-bottom:1px solid var(--line); background:var(--surface-3);}
+  .piece-head h2{font-size:15.5px;}
+  .piece-head .meta{margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
+  .piece-status{display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:none;}
+  .status-line{font-size:12px; font-weight:700; text-align:right;}
+  .status-ok{color:var(--ok);} .status-warn{color:var(--warn);} .status-ink{color:var(--ink);}
+
+  .piece-body{display:grid; grid-template-columns:minmax(0,1fr) 322px;}
+  @media (max-width:940px){ .piece-body{grid-template-columns:1fr;} }
+  .col-text{padding:17px; border-right:1px solid var(--line); min-width:0;}
+  @media (max-width:940px){ .col-text{border-right:none; border-bottom:1px solid var(--line);} }
+  .col-asset{padding:17px; min-width:0; background:var(--surface-3);}
+
+  .field{margin-bottom:16px;}
+  .field:last-child{margin-bottom:0;}
+  .field-head{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:7px;}
+  .field-actions{display:flex; gap:6px; align-items:center;}
+  .copybox{border:1px solid var(--line); background:var(--surface-3); padding:12px 14px; font-size:13.5px; line-height:1.62; color:var(--ink-strong); white-space:pre-wrap; overflow-wrap:break-word; user-select:text; -webkit-user-select:text; cursor:text; max-height:320px; overflow-y:auto;}
+  .copybox::selection{background:color-mix(in srgb,var(--accent) 30%,transparent);}
+
+  .gauges{display:flex; gap:16px; flex-wrap:wrap; margin-top:8px;}
+  .gauge{display:flex; align-items:center; gap:7px; font-size:11px; color:var(--muted);}
+  .meter{width:70px; height:3px; background:var(--line); flex:none;}
+  .meter span{display:block; height:100%; background:var(--ok);}
+  .meter[data-state="over"] span{background:var(--bad);}
+  .meter[data-state="under"] span{background:var(--warn);}
+  .gauge b{color:var(--body); font-family:var(--mono); font-weight:700;}
+  .gauge[data-state="over"]{color:var(--bad);} .gauge[data-state="over"] b{color:var(--bad);}
+  .gauge[data-state="under"]{color:var(--warn);} .gauge[data-state="under"] b{color:var(--warn);}
+
+  .deriv + .deriv{margin-top:16px; padding-top:16px; border-top:1px solid var(--line);}
+  .deriv-slot{display:flex; align-items:baseline; justify-content:space-between; gap:9px; flex-wrap:wrap; margin-bottom:8px;}
+  .deriv-slot h4{font-size:12.5px;}
+  .deriv-slot .px{font-family:var(--mono); font-size:11px; color:var(--label);}
+  .thumb{position:relative; width:100%; border:1px solid var(--line-strong); display:grid; place-items:center; overflow:hidden;}
+  .thumb-cn{background:linear-gradient(118deg,#7C5735 0%,var(--cn-ground) 52%,#4A3221 100%);}
+  .thumb-clause{background:linear-gradient(118deg,#8A3A38 0%,var(--clause-ground) 52%,#4C1D1D 100%);}
+  .thumb-paper{background:var(--paper-ground);}
+  .thumb .ratio{font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:.07em; color:rgba(255,252,246,.62);}
+  .thumb-paper .ratio{color:#A79C8C;}
+  .band{position:absolute; border:1.5px dashed rgba(255,252,246,.68); pointer-events:none;}
+  .thumb-paper .band{border-color:rgba(110,44,44,.45);}
+  .band-safe{inset:10% 4%;}
+  .band-gbp{top:14%; bottom:14%; left:4%; width:72%;}
+  .band-tag{position:absolute; font-family:var(--mono); font-size:9px; letter-spacing:.04em; background:var(--ink); color:var(--ground); padding:1px 5px; white-space:nowrap;}
+  .scrim-low{position:absolute; inset:auto 0 0 0; height:62%; background:linear-gradient(to top,rgba(26,20,16,.78) 0%,rgba(26,20,16,.34) 45%,transparent 100%); pointer-events:none;}
+  .scrim-side{position:absolute; inset:0; background:linear-gradient(100deg,rgba(26,20,16,.94) 0%,rgba(26,20,16,.5) 55%,transparent 92%); pointer-events:none;}
+
+  .deriv-name{margin-top:9px; font-family:var(--mono); font-size:11px; color:var(--ink); overflow-wrap:anywhere;}
+  .deriv-tags{margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;}
+  .deriv-actions{margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;}
+
+  .baked{margin-top:10px; border:1px solid var(--line); background:var(--surface); padding:10px 12px;}
+  .baked .k{font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--accent); margin-bottom:5px;}
+  .baked-line{font-family:var(--serif); font-size:14px; color:var(--ink-strong); line-height:1.35;}
+  .baked-line + .baked-line{margin-top:3px;}
+  .baked-rule{margin-top:6px; font-size:11px; color:var(--muted); display:flex; align-items:flex-start; gap:6px;}
+  .baked-rule .ok{color:var(--ok); font-weight:700;}
+  .baked-list{margin:5px 0 0; padding-left:15px; font-size:12px; color:var(--body);}
+  .baked-list li::marker{color:var(--clause-ground);}
+
+  details.prov{margin-top:10px; border:1px solid var(--line); background:var(--surface);}
+  details.prov > summary{padding:8px 12px; cursor:pointer; list-style:none; font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  details.prov > summary::-webkit-details-marker{display:none;}
+  details.prov > summary::after{content:"+"; font-family:var(--mono); font-size:13px; color:var(--muted);}
+  details.prov[open] > summary::after{content:"–";}
+  details.prov[open] > summary{border-bottom:1px solid var(--line);}
+  .prov-body{padding:12px; display:flex; flex-direction:column; gap:9px;}
+  .prov-row .k{font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--label);}
+  .prov-row .v{margin-top:2px; font-size:12px; color:var(--body);}
+  .prov-row .v.mono{font-size:11px; overflow-wrap:anywhere;}
+  .prov-note{padding:10px 12px; background:var(--surface-3); border:1px solid var(--line); font-size:11.5px; color:var(--body);}
+
+  .no-photo{border:1px solid var(--line); background:var(--surface); padding:12px 14px; font-size:12.5px; color:var(--body);}
+  .no-photo h4{font-size:11px; text-transform:uppercase; letter-spacing:.07em; margin-bottom:5px; color:var(--accent);}
+
+  .piece-foot{padding:10px 17px; border-top:1px solid var(--line); background:var(--surface-3); display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:11.5px; color:var(--muted);}
+  .blocked-bar{padding:11px 17px; background:var(--warn-soft); border-bottom:1px solid color-mix(in srgb,var(--warn) 30%,transparent); color:var(--warn); font-size:12.5px; display:flex; gap:10px; align-items:flex-start;}
+  .gate{display:flex; gap:13px; flex-wrap:wrap; font-size:11.5px; margin-top:8px;}
+  .gate span{display:inline-flex; align-items:center; gap:5px;}
+  .gate .pass{color:var(--ok); font-weight:700;}
+  .gate .fail{color:var(--warn); font-weight:700;}
+
+  .toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(14px); background:var(--ink); color:var(--ground); padding:10px 18px; font-size:12.5px; font-weight:700; opacity:0; pointer-events:none; transition:opacity .18s ease, transform .18s ease; z-index:50;}
+  .toast[data-show="1"]{opacity:1; transform:translateX(-50%) translateY(0);}
+  @media (prefers-reduced-motion:reduce){ .toast{transition:none;} }
+
+  footer.sign{margin-top:44px; padding-top:20px; border-top:1px solid var(--line); font-size:12px; color:var(--muted);}
+  footer.sign h4{font-size:12px; text-transform:uppercase; letter-spacing:.07em; margin-bottom:8px;}
+  footer.sign ul{margin:0 0 16px; padding-left:18px; display:flex; flex-direction:column; gap:5px;}
+  [hidden]{display:none !important;}
+</style>
+
+<div class="wrap">
+
+  <div class="topbar">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="#">Deliverables</a><span aria-hidden="true">/</span>
+      <b>Publish Kit</b><span aria-hidden="true">/</span>
+      <span>The renewal clause</span>
+    </nav>
+    <div style="display:flex;gap:9px;align-items:center;">
+      <span class="chip chip-ink"><span class="dot"></span>Operator view</span>
+      <span class="proto-tag">Prototype v4 · sample data</span>
+    </div>
+  </div>
+
+  <header class="masthead">
+    <div>
+      <h1>Publish Kit — The renewal clause</h1>
+      <p class="sub">
+        The complete week: every deliverable, its copy, its recorded slot crop, and the gates that
+        decide whether it can go out. Built to be worked by hand and read by the publishing agent
+        from the same record. Approvals stay on the deliverable pages.
+      </p>
+      <div class="masthead-meta">
+        <span class="chip">DRG Law Professional Corporation</span>
+        <span class="chip">Period 2026-06-29 → 2026-07-03</span>
+        <span class="chip">Vol IV · No 08</span>
+        <span class="chip chip-ink">16 deliverables · 4 channels</span>
+      </div>
+    </div>
+    <div class="masthead-actions">
+      <button class="btn" type="button" id="manifestBtn">Copy week manifest · JSON</button>
+      <button class="btn btn-quiet" type="button" id="expandAll">Expand every provenance panel</button>
+      <p class="hint">The manifest is what the publishing agent reads: one record per deliverable. Held pieces appear with their reason but without their copy or asset.</p>
+    </div>
+  </header>
+
+  <section class="truth" aria-label="Kit summary">
+    <div class="truth-cell">
+      <div class="k">Deliverables</div>
+      <div class="v">16</div>
+    </div>
+    <div class="truth-cell">
+      <div class="k">Cleared to publish</div>
+      <div class="v" style="color:var(--ok)">13</div>
+    </div>
+    <div class="truth-cell">
+      <div class="k">Held</div>
+      <div class="v" style="color:var(--warn)">2</div>
+    </div>
+    <div class="truth-cell">
+      <div class="k">Blocked upstream</div>
+      <div class="v" style="color:var(--warn)">1</div>
+    </div>
+    <div class="truth-cell">
+      <div class="k">Agent-eligible</div>
+      <div class="v">5 <small>of 16</small></div>
+    </div>
+    <div class="truth-cell">
+      <div class="k">Masters</div>
+      <div class="v">2 <small>+ text-led</small></div>
+    </div>
+    <div class="truth-cell">
+      <div class="k">Serving</div>
+      <div class="v" style="font-size:15px">Approved version</div>
+    </div>
+  </section>
+
+  <div class="notice notice-warn">
+    <span class="ico" aria-hidden="true">!</span>
+    <div>
+      <h4>Three deliverables cannot go out</h4>
+      <p>
+        The Clause master was regenerated to version 2 on 1 July, which returned every derivative
+        to review; the Clause LinkedIn feed scrim is still cut from version 1, which holds the
+        LinkedIn Article and, through it, blocks the Clause promoter that points at it. One re-cut
+        clears all three. Separately, the Portuguese Clause article has a version 6 draft newer
+        than the version 5 the firm approved, so the kit is serving version 5 and refusing
+        version 6.
+      </p>
+    </div>
+  </div>
+
+  <!-- ══ image system ══════════════════════════════════════════════ -->
+  <section class="sec" aria-labelledby="imgsys">
+    <details class="sysdisclosure" open>
+      <summary>
+        <h2 id="imgsys">The week's image system</h2>
+        <span class="sys-sum">
+          <span class="chip">2 masters</span>
+          <span class="chip">8 recorded crops</span>
+          <span class="chip chip-warn"><span class="dot"></span>1 behind its master</span>
+          <span class="sys-toggle"></span>
+        </span>
+      </summary>
+      <div class="sysbody">
+        <p class="sec-dek">
+          Every published image is a recorded crop of one weekly master. No surface uses an
+          independently generated image, and no slot ever receives an asset cut for a different
+          slot. The Checklist and the Minute carry no photograph at all: their surfaces are
+          text-led by design.
+        </p>
+
+        <div class="masters">
+          <article class="master">
+            <div class="master-swatch swatch-cn"><span>Warm brown · reading room</span></div>
+            <div class="master-body">
+              <h3>Counsel Note master</h3>
+              <dl class="master-spec">
+                <dt>Version</dt><dd>v3 · current</dd>
+                <dt>Frame</dt><dd>4800 × 3200 · 3:2 · sRGB PNG</dd>
+                <dt>Topic object</dt><dd>Brass perpetual desk calendar</dd>
+                <dt>SHA-256</dt><dd>c7da78b2…5865</dd>
+              </dl>
+              <div class="master-foot">
+                <span class="chip chip-ok"><span class="dot"></span>4 derivatives current</span>
+                <button class="btn btn-quiet btn-sm" type="button" data-download="cn-master-v3-4800x3200.png">Master .png</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="master">
+            <div class="master-swatch swatch-clause"><span>Deep red · matter still life</span></div>
+            <div class="master-body">
+              <h3>Clause in the Margin master</h3>
+              <dl class="master-spec">
+                <dt>Version</dt><dd>v2 · regenerated 2026-07-01</dd>
+                <dt>Frame</dt><dd>4800 × 3200 · 3:2 · sRGB PNG</dd>
+                <dt>Topic object</dt><dd>Brass perpetual desk calendar</dd>
+                <dt>SHA-256</dt><dd>4b19aa07…8e92</dd>
+              </dl>
+              <div class="master-foot">
+                <span class="chip chip-warn"><span class="dot"></span>1 derivative behind</span>
+                <button class="btn btn-quiet btn-sm" type="button" data-download="clause-master-v2-4800x3200.png">Master .png</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="master">
+            <div class="master-swatch swatch-paper"><span>Paper · typographic</span></div>
+            <div class="master-body">
+              <h3>Checklist and Minute — no photograph</h3>
+              <p style="font-size:12.5px">
+                The landing pages, the PDFs, the Google Business Ad card, and the Minute email are
+                all text-led. Typography and structure do the visual work. There is no photograph
+                to hunt for, and none should be produced.
+              </p>
+              <div class="master-foot">
+                <span class="chip">Ad card · 1200 × 900 typographic</span>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="tblwrap">
+          <table class="matrix">
+            <caption class="eyebrow" style="text-align:left; padding:11px 13px 0">Recorded slot crops</caption>
+            <thead>
+              <tr>
+                <th scope="col">Slot</th>
+                <th scope="col">Counsel Note</th>
+                <th scope="col">Clause in the Margin</th>
+                <th scope="col">Checklist</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="slot">Home surface<span class="px">not shared between formats</span></td>
+                <td><span class="cellstate st-ok"><span class="dot"></span>Current</span><span class="px">Home feature 1200 × 675 · 16:9</span></td>
+                <td><span class="cellstate st-ok"><span class="dot"></span>Current</span><span class="px">Home card 1200 × 900 · 4:3</span></td>
+                <td><span class="cellstate st-na">Text-led</span><span class="px">no photograph</span></td>
+              </tr>
+              <tr>
+                <td class="slot">Article hero<span class="px">site sets type over the image</span></td>
+                <td><span class="cellstate st-ok"><span class="dot"></span>Current</span><span class="px">1200 × 628 · text-free</span></td>
+                <td><span class="cellstate st-ok"><span class="dot"></span>Current</span><span class="px">1200 × 628 · text-free</span></td>
+                <td><span class="cellstate st-na">—</span></td>
+              </tr>
+              <tr>
+                <td class="slot">LinkedIn feed scrim<span class="px">Article cover and link card</span></td>
+                <td><span class="cellstate st-ok"><span class="dot"></span>Current</span><span class="px">1200 × 628 · text baked</span></td>
+                <td><span class="cellstate st-warn"><span class="dot"></span>Behind master</span><span class="px">cut from v1 · returned to review</span></td>
+                <td><span class="cellstate st-na">—</span></td>
+              </tr>
+              <tr>
+                <td class="slot">Google Business<span class="px">advertising surface</span></td>
+                <td><span class="cellstate st-ok"><span class="dot"></span>Current</span><span class="px">Photo-scrim 1200 × 900</span></td>
+                <td><span class="cellstate st-ok"><span class="dot"></span>Current</span><span class="px">Photo-scrim 1200 × 900</span></td>
+                <td><span class="cellstate st-ok"><span class="dot"></span>Current</span><span class="px">Ad card 1200 × 900</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ══ filters ═══════════════════════════════════════════════════ -->
+  <div class="filterbar">
+    <div class="seg" role="group" aria-label="Filter by channel">
+      <button type="button" data-filter="all" aria-pressed="true">Everything</button>
+      <button type="button" data-filter="website">Website</button>
+      <button type="button" data-filter="linkedin">LinkedIn</button>
+      <button type="button" data-filter="gbp">Google Business</button>
+      <button type="button" data-filter="email">Email</button>
+    </div>
+    <div class="seg" role="group" aria-label="Filter by who publishes">
+      <button type="button" data-pub="any" aria-pressed="true">Any publisher</button>
+      <button type="button" data-pub="agent">Agent-eligible</button>
+      <button type="button" data-pub="operator">You, by hand</button>
+      <button type="button" data-pub="pipeline">Pipeline</button>
+    </div>
+    <p class="filter-note" id="filterNote">
+      Showing all 16 deliverables in publication order. Destinations go live Monday; nothing
+      promotes a destination before it is approved and returning HTTP 200.
+    </p>
+  </div>
+
+  <div class="shell">
+
+    <nav class="rail" aria-label="Deliverables in publication order">
+      <div class="rail-group" data-dayrail="2026-06-29">
+        <span class="eyebrow">Monday 29 June · destinations</span>
+        <a class="rail-link" href="#p-cn-en" data-railfor="p-cn-en" data-chan="website" data-pub="pipeline"><span class="dot" style="color:var(--ok)"></span><span>Counsel Note · EN</span></a>
+        <a class="rail-link" href="#p-cn-pt" data-railfor="p-cn-pt" data-chan="website" data-pub="pipeline"><span class="dot" style="color:var(--ok)"></span><span>Counsel Note · PT</span></a>
+        <a class="rail-link" href="#p-cl-en" data-railfor="p-cl-en" data-chan="website" data-pub="pipeline"><span class="dot" style="color:var(--ok)"></span><span>Clause · EN</span></a>
+        <a class="rail-link" href="#p-cl-pt" data-railfor="p-cl-pt" data-chan="website" data-pub="pipeline"><span class="dot" style="color:var(--warn)"></span><span>Clause · PT</span></a>
+        <a class="rail-link" href="#p-lp-en" data-railfor="p-lp-en" data-chan="website" data-pub="pipeline"><span class="dot" style="color:var(--ok)"></span><span>Checklist landing · EN</span></a>
+        <a class="rail-link" href="#p-lp-pt" data-railfor="p-lp-pt" data-chan="website" data-pub="pipeline"><span class="dot" style="color:var(--ok)"></span><span>Checklist landing · PT</span></a>
+        <a class="rail-link" href="#p-pdf-en" data-railfor="p-pdf-en" data-chan="website" data-pub="pipeline"><span class="dot" style="color:var(--ok)"></span><span>Checklist PDF · EN</span></a>
+        <a class="rail-link" href="#p-pdf-pt" data-railfor="p-pdf-pt" data-chan="website" data-pub="pipeline"><span class="dot" style="color:var(--ok)"></span><span>Checklist PDF · PT</span></a>
+      </div>
+      <div class="rail-group" data-dayrail="2026-06-30">
+        <span class="eyebrow">Tuesday 30 June</span>
+        <a class="rail-link" href="#p-gbp-cn" data-railfor="p-gbp-cn" data-chan="gbp" data-pub="agent"><span class="dot" style="color:var(--ok)"></span><span>Google Business · Counsel Note</span></a>
+      </div>
+      <div class="rail-group" data-dayrail="2026-07-01">
+        <span class="eyebrow">Wednesday 1 July</span>
+        <a class="rail-link" href="#p-gbp-cl" data-railfor="p-gbp-cl" data-chan="gbp" data-pub="agent"><span class="dot" style="color:var(--ok)"></span><span>Google Business · Checklist</span></a>
+      </div>
+      <div class="rail-group" data-dayrail="2026-07-02">
+        <span class="eyebrow">Thursday 2 July</span>
+        <a class="rail-link" href="#p-gbp-cm" data-railfor="p-gbp-cm" data-chan="gbp" data-pub="agent"><span class="dot" style="color:var(--ok)"></span><span>Google Business · Clause</span></a>
+      </div>
+      <div class="rail-group" data-dayrail="2026-07-03">
+        <span class="eyebrow">Friday 3 July</span>
+        <a class="rail-link" href="#p-minute" data-railfor="p-minute" data-chan="email" data-pub="pipeline"><span class="dot" style="color:var(--ok)"></span><span>Minute DRG</span></a>
+      </div>
+      <div class="rail-group" data-dayrail="">
+        <span class="eyebrow">No day recorded</span>
+        <a class="rail-link" href="#p-li-art-cn" data-railfor="p-li-art-cn" data-chan="linkedin" data-pub="operator"><span class="dot" style="color:var(--ok)"></span><span>LinkedIn Article · Counsel Note</span></a>
+        <a class="rail-link" href="#p-li-art-cl" data-railfor="p-li-art-cl" data-chan="linkedin" data-pub="operator"><span class="dot" style="color:var(--warn)"></span><span>LinkedIn Article · Clause</span></a>
+        <a class="rail-link" href="#p-li-cn" data-railfor="p-li-cn" data-chan="linkedin" data-pub="agent"><span class="dot" style="color:var(--ok)"></span><span>LinkedIn promoter · Counsel Note</span></a>
+        <a class="rail-link" href="#p-li-cl" data-railfor="p-li-cl" data-chan="linkedin" data-pub="agent"><span class="dot" style="color:var(--warn)"></span><span>LinkedIn promoter · Clause</span></a>
+      </div>
+    </nav>
+
+    <main class="stack">
+
+      <!-- ═══ MONDAY · destinations ══════════════════════════════════ -->
+
+      <article class="piece" id="p-cn-en" data-chan="website" data-pub="pipeline" data-day="2026-06-29"
+               data-kind="counsel_note" data-locale="en" data-version="5" data-state="clear">
+        <div class="piece-head">
+          <div>
+            <h2>Counsel Note — article</h2>
+            <div class="meta">
+              <span class="chip">Firm website</span><span class="chip">EN</span>
+              <span class="chip mono">v5 · approved</span><span class="chip chip-ink">Pipeline</span>
+            </div>
+          </div>
+          <div class="piece-status">
+            <span class="status-line status-ok">Individually approved</span>
+            <span class="chip chip-ok"><span class="dot"></span>Clear to publish</span>
+          </div>
+        </div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Headline · set as HTML over the hero</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-cn-en-h">Copy</button></div></div>
+              <div class="copybox" id="t-cn-en-h" data-field="headline">Does your commercial lease renewal option actually give you control of the next term?</div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Five-Line Brief</span>
+                <div class="field-actions"><button class="btn" type="button" data-copy="t-cn-en">Copy body</button>
+                <button class="btn btn-quiet btn-sm" type="button" data-download="counsel-note-en.txt">.txt</button></div></div>
+              <div class="copybox" id="t-cn-en" data-field="body">Question: Does an option to renew give the tenant control of the next term?
+
+Answer: Not on its own. The option grants the right; five other provisions decide what the right is worth.
+
+Mechanism: The rent mechanism, notice window, delivery rules, good-standing conditions, and the disagreement procedure operate together.
+
+Preparation: Place the signed lease, amendments, calendar, payment records, notices, and cure evidence together before the exercise window opens.
+
+Next step: Compare the renewal condition with the default and notice provisions, and test the clause against an acceptable rent.
+
+The rent mechanism is where most of the value sits. An option that renews at "market rent to be agreed" leaves the price open, and an option with no disagreement procedure leaves it open with no mechanism to close it. Independent arbitration, or a stated formula, is what turns a right to stay into a price you can plan against.
+
+The notice window is where most of the loss sits. Miss it, and the option is gone regardless of how carefully the rest of the clause was negotiated. Delivery rules matter as much as the date: a notice sent by email where the lease requires registered mail may not count as delivered at all.
+
+The conditions are where the surprises sit. Good standing is the common one, and it is broader than rent paid on time.</div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Destination</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-cn-en-u">Copy link</button></div></div>
+              <div class="copybox" id="t-cn-en-u" data-field="destination">https://drglaw.ca/journal/renewal-option-control</div>
+              <div class="gate"><span class="pass">✓ Approved</span><span class="pass">✓ Reachable · HTTP 200</span><span class="pass">✓ Hero bound to v5</span></div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Two derivatives, one master</span>
+            <div class="deriv" style="margin-top:10px">
+              <div class="deriv-slot"><h4>Article hero</h4><span class="px">1200 × 628</span></div>
+              <div class="thumb thumb-cn" style="aspect-ratio:1200/628">
+                <span class="scrim-low" aria-hidden="true"></span><span class="band band-safe" aria-hidden="true"></span>
+                <span class="band-tag" style="left:4%;top:10%;transform:translateY(-100%)" aria-hidden="true">safe band 92% × 80%</span>
+                <span class="ratio">Counsel Note master v3</span>
+              </div>
+              <div class="deriv-name" data-asset>cn-article-hero-1200x628.jpg</div>
+              <div class="deriv-tags"><span class="chip chip-ok">Text-free</span><span class="chip chip-ok">Serves EN + PT</span></div>
+              <div class="deriv-actions"><button class="btn btn-sm" type="button" data-download="cn-article-hero-1200x628.jpg">Download .jpg</button></div>
+              <details class="prov"><summary>How this derivative was cut</summary><div class="prov-body">
+                <div class="prov-row"><div class="k">Derives from</div><div class="v">Counsel Note master v3 · recorded crop</div></div>
+                <div class="prov-row"><div class="k">Overlay</div><div class="v">Bottom-up scrim, ink #1A1410 at 72% at the lower edge, 34% at 34% height, transparent by 62%. Eyebrow brass #B8956A 22px caps; headline paper #FFFCF6 serif 48px, three lines maximum. No byline, read-time, or button.</div></div>
+                <div class="prov-row"><div class="k">SHA-256</div><div class="v mono" data-sha>7e05d3c1a94f28b60d17ce5382ab4f019c6d7a85be23104fd9c807e6b1a45f30</div></div>
+                <p class="prov-note">QA rendered at 360px: the headline fits the band without clipping and holds 4.5:1.</p>
+              </div></details>
+            </div>
+            <div class="deriv">
+              <div class="deriv-slot"><h4>Home feature</h4><span class="px">1200 × 675 · 16:9</span></div>
+              <div class="thumb thumb-cn" style="aspect-ratio:16/9"><span class="ratio">Counsel Note master v3</span></div>
+              <div class="deriv-name">cn-home-feature-1200x675.jpg</div>
+              <div class="deriv-tags"><span class="chip chip-ok">Text-free</span><span class="chip">Text beside, never over</span></div>
+              <div class="deriv-actions"><button class="btn btn-sm" type="button" data-download="cn-home-feature-1200x675.jpg">Download .jpg</button></div>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Approved 2026-06-26 · deployed by the pipeline</span>
+          <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy publish payload</button></div>
+      </article>
+
+      <article class="piece" id="p-cn-pt" data-chan="website" data-pub="pipeline" data-day="2026-06-29"
+               data-kind="counsel_note" data-locale="pt" data-version="2" data-state="clear">
+        <div class="piece-head">
+          <div>
+            <h2>Análise Jurídica — artigo</h2>
+            <div class="meta"><span class="chip">Firm website</span><span class="chip">PT</span>
+              <span class="chip mono">v2 · approved</span><span class="chip chip-ink">Pipeline</span></div>
+          </div>
+          <div class="piece-status"><span class="status-line status-ok">Individually approved</span>
+            <span class="chip chip-ok"><span class="dot"></span>Clear to publish</span></div>
+        </div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Título</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-cn-pt-h">Copy</button></div></div>
+              <div class="copybox" id="t-cn-pt-h" data-field="headline">A opção de renovação do seu contrato comercial realmente lhe dá controle do próximo período?</div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Resumo em cinco linhas</span>
+                <div class="field-actions"><button class="btn" type="button" data-copy="t-cn-pt">Copy body</button>
+                <button class="btn btn-quiet btn-sm" type="button" data-download="analise-juridica-pt.txt">.txt</button></div></div>
+              <div class="copybox" id="t-cn-pt" data-field="body">Pergunta: A opção de renovação dá ao locatário o controle do próximo período?
+
+Resposta: Não por si só. A opção concede o direito; outras cinco disposições determinam quanto esse direito vale.
+
+Mecanismo: O mecanismo do aluguel, o prazo de aviso, as regras de entrega, as condições de boa situação e o procedimento de discordância funcionam em conjunto.
+
+Preparação: Reúna o contrato assinado, os aditivos, o calendário, os registros de pagamento, os avisos e as provas de saneamento antes da abertura do prazo.
+
+Próximo passo: Compare a condição de renovação com as disposições de inadimplemento e aviso, e teste a cláusula contra um aluguel aceitável.</div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Destination</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-cn-pt-u">Copy link</button></div></div>
+              <div class="copybox" id="t-cn-pt-u" data-field="destination">https://drglaw.ca/pt/jornal/opcao-renovacao-controle</div>
+              <div class="gate"><span class="pass">✓ Approved</span><span class="pass">✓ Reachable · HTTP 200</span></div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Same file as the English article</span>
+            <div class="deriv" style="margin-top:10px">
+              <div class="deriv-slot"><h4>Article hero</h4><span class="px">1200 × 628</span></div>
+              <div class="thumb thumb-cn" style="aspect-ratio:1200/628">
+                <span class="scrim-low" aria-hidden="true"></span><span class="band band-safe" aria-hidden="true"></span>
+                <span class="ratio">Counsel Note master v3</span>
+              </div>
+              <div class="deriv-name" data-asset>cn-article-hero-1200x628.jpg</div>
+              <div class="deriv-tags"><span class="chip chip-ok">Identical file</span><span class="chip">Only the HTML text changes</span></div>
+              <div class="deriv-actions"><button class="btn btn-sm" type="button" data-download="cn-article-hero-1200x628.jpg">Download .jpg</button></div>
+              <div class="no-photo" style="margin-top:10px">
+                <h4>There is no Portuguese asset</h4>
+                <p>
+                  One file serves both locales and none is ever produced for Portuguese. Accents
+                  cannot corrupt inside raster text, headlines stay real text for search and
+                  assistive technology, and there is no second file that can drift. Scrim values,
+                  margins, type sizes, and safe band are identical in both languages.
+                </p>
+              </div>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Approved 2026-06-26 · shares every asset with the English article</span>
+          <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy publish payload</button></div>
+      </article>
+
+      <article class="piece" id="p-cl-en" data-chan="website" data-pub="pipeline" data-day="2026-06-29"
+               data-kind="clause" data-locale="en" data-version="5" data-state="clear">
+        <div class="piece-head">
+          <div>
+            <h2>Clause in the Margin — article</h2>
+            <div class="meta"><span class="chip">Firm website</span><span class="chip">EN</span>
+              <span class="chip mono">v5 · approved</span><span class="chip chip-ink">Pipeline</span></div>
+          </div>
+          <div class="piece-status"><span class="status-line status-ok">Individually approved</span>
+            <span class="chip chip-ok"><span class="dot"></span>Clear to publish</span></div>
+        </div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Headline · anchored in the margin</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-cl-en-h">Copy</button></div></div>
+              <div class="copybox" id="t-cl-en-h" data-field="headline">"Good standing" in a lease renewal is an evidence question</div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Body</span>
+                <div class="field-actions"><button class="btn" type="button" data-copy="t-cl-en">Copy body</button>
+                <button class="btn btn-quiet btn-sm" type="button" data-download="clause-en.txt">.txt</button></div></div>
+              <div class="copybox" id="t-cl-en" data-field="body">Renewal is rarely automatic. In most Ontario commercial leases it is conditional, and the condition is that the tenant is in good standing on the day the renewal would begin.
+
+That phrase does more work than it looks like it does. It can reach insurance certificates that lapsed for a week, maintenance obligations nobody enforced, and notice defaults that were never raised at the time.
+
+Compare the condition with the default, notice, and cure provisions; identify every unresolved notice; collect proof of the response; and confirm whether the clause distinguishes minor, cured, disputed, or non-material defaults.
+
+The practical consequence is that the evidence has to exist before the landlord asks for it. A default cured two years ago is only cured if the correspondence proving it can still be produced, and a certificate that lapsed briefly is only immaterial if the lease says so.
+
+Good standing is not merely a label. It is a contractual test supported or challenged by evidence at a particular time.</div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Destination</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-cl-en-u">Copy link</button></div></div>
+              <div class="copybox" id="t-cl-en-u" data-field="destination">https://drglaw.ca/journal/good-standing-evidence-question</div>
+              <div class="gate"><span class="pass">✓ Approved</span><span class="pass">✓ Reachable · HTTP 200</span></div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Two derivatives, one master</span>
+            <div class="deriv" style="margin-top:10px">
+              <div class="deriv-slot"><h4>Article hero</h4><span class="px">1200 × 628</span></div>
+              <div class="thumb thumb-clause" style="aspect-ratio:1200/628">
+                <span class="band" style="top:16%;right:6%;width:56%;bottom:16%" aria-hidden="true"></span>
+                <span class="ratio">Clause master v2 · re-cut</span>
+              </div>
+              <div class="deriv-name" data-asset>clause-article-hero-1200x628.jpg</div>
+              <div class="deriv-tags"><span class="chip chip-ok">Text-free</span><span class="chip">Margin anchor</span><span class="chip chip-ok">Re-cut from v2</span></div>
+              <div class="deriv-actions"><button class="btn btn-sm" type="button" data-download="clause-article-hero-1200x628.jpg">Download .jpg</button></div>
+              <details class="prov"><summary>How this derivative was cut</summary><div class="prov-body">
+                <div class="prov-row"><div class="k">Overlay</div><div class="v">Radial vignette rather than a bottom-up scrim. Text block at top 16%, right 6%, width 56%, right-aligned. The Clause hero never borrows the Counsel Note's construction.</div></div>
+                <div class="prov-row"><div class="k">SHA-256</div><div class="v mono" data-sha>5c8f0a2be71d9436ac52f180e6b3d79014ea8c25fd6b03917ce4a8d25f10b6e3</div></div>
+              </div></details>
+            </div>
+            <div class="deriv">
+              <div class="deriv-slot"><h4>Home card</h4><span class="px">1200 × 900 · 4:3</span></div>
+              <div class="thumb thumb-clause" style="aspect-ratio:4/3"><span class="ratio">Clause master v2</span></div>
+              <div class="deriv-name">clause-home-card-1200x900.jpg</div>
+              <div class="deriv-tags"><span class="chip chip-ok">Text-free</span><span class="chip">Its own component</span></div>
+              <div class="deriv-actions"><button class="btn btn-sm" type="button" data-download="clause-home-card-1200x900.jpg">Download .jpg</button></div>
+              <details class="prov"><summary>Why this is 4:3, not 16:9</summary><div class="prov-body">
+                <p class="prov-note">Home slots are not uniform across formats. The Counsel Note feature is 16:9 at 1200 × 675; the Clause card is 4:3 at 1200 × 900 and renders in its own component. The recorded crop exists so the choice is made once rather than left to the site's default object-position.</p>
+              </div></details>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Approved 2026-06-26 · derivatives re-cut after the master regeneration</span>
+          <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy publish payload</button></div>
+      </article>
+
+      <article class="piece" id="p-cl-pt" data-chan="website" data-pub="pipeline" data-day="2026-06-29"
+               data-kind="clause" data-locale="pt" data-version="5" data-state="held">
+        <div class="piece-head">
+          <div>
+            <h2>Cláusula Comentada — artigo</h2>
+            <div class="meta"><span class="chip">Firm website</span><span class="chip">PT</span>
+              <span class="chip chip-warn mono">v6 draft ≠ v5 approved</span><span class="chip chip-ink">Pipeline</span></div>
+          </div>
+          <div class="piece-status"><span class="status-line status-warn">Newer draft than the approved version</span>
+            <span class="chip chip-warn"><span class="dot"></span>Held</span></div>
+        </div>
+        <div class="blocked-bar"><span class="ico mono" aria-hidden="true">!</span>
+          <div><b>Why this is held.</b> Version 6 was drafted after the firm approved version 5.
+          The kit only ever hands over bytes a lawyer signed for, so it is serving version 5 and
+          refusing version 6. Either send version 6 for approval, or publish version 5.</div></div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Título aprovado · versão 5</span>
+                <div class="field-actions"><button class="btn btn-ghost btn-sm" type="button" disabled>Copy held</button></div></div>
+              <div class="copybox" id="t-cl-pt-h" data-field="headline">"Boa situação" na renovação de um contrato é uma questão de prova</div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Corpo aprovado · versão 5</span>
+                <div class="field-actions"><button class="btn btn-ghost btn-sm" type="button" disabled>Copy held</button></div></div>
+              <div class="copybox" id="t-cl-pt" data-field="body">A renovação raramente é automática. Na maioria dos contratos comerciais em Ontário ela é condicional, e a condição é que o locatário esteja em boa situação no dia em que a renovação começaria.
+
+Essa expressão faz mais do que aparenta. Ela pode alcançar certificados de seguro vencidos por uma semana, obrigações de manutenção que ninguém cobrou e inadimplementos de aviso que nunca foram levantados na época.
+
+Boa situação não é apenas um rótulo. É um teste contratual sustentado ou contestado por provas em um momento determinado.</div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Same file as the English article</span>
+            <div class="deriv" style="margin-top:10px">
+              <div class="deriv-slot"><h4>Article hero</h4><span class="px">1200 × 628</span></div>
+              <div class="thumb thumb-clause" style="aspect-ratio:1200/628">
+                <span class="band" style="top:16%;right:6%;width:56%;bottom:16%" aria-hidden="true"></span>
+                <span class="ratio">Clause master v2</span>
+              </div>
+              <div class="deriv-name" data-asset>clause-article-hero-1200x628.jpg</div>
+              <div class="deriv-tags"><span class="chip chip-ok">Identical file and crop</span></div>
+              <div class="deriv-actions"><button class="btn btn-ghost btn-sm" type="button" disabled>Download held</button></div>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Version 5 approved 2026-06-26 · version 6 drafted 2026-07-02, unapproved</span>
+          <span style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy held record</button>
+            <a class="btn btn-quiet btn-sm" href="#">Open review page</a>
+          </span></div>
+      </article>
+
+      <article class="piece" id="p-lp-en" data-chan="website" data-pub="pipeline" data-day="2026-06-29"
+               data-kind="checklist_landing" data-locale="en" data-version="2" data-state="clear">
+        <div class="piece-head">
+          <div><h2>Checklist landing page</h2>
+            <div class="meta"><span class="chip">Firm website</span><span class="chip">EN</span>
+              <span class="chip mono">v2 · approved</span><span class="chip chip-ink">Pipeline</span></div></div>
+          <div class="piece-status"><span class="status-line status-ok">Individually approved</span>
+            <span class="chip chip-ok"><span class="dot"></span>Clear to publish</span></div>
+        </div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Headline · names the exposure, never the tool</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-lp-en-h">Copy</button></div></div>
+              <div class="copybox" id="t-lp-en-h" data-field="headline">Your renewal option is only as good as the five terms around it.</div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Descriptor and contents</span>
+                <div class="field-actions"><button class="btn" type="button" data-copy="t-lp-en">Copy body</button>
+                <button class="btn btn-quiet btn-sm" type="button" data-download="checklist-landing-en.txt">.txt</button></div></div>
+              <div class="copybox" id="t-lp-en" data-field="body">Eight pages, for business owners preparing a commercial lease renewal: the documents to gather, the dates that bind, the evidence to preserve, and the questions to ask.
+
+01 The signed note. Fixed wording, in the reviewing lawyer's own voice.
+02 The broken state. The document as it arrives, annotated.
+03 The corrected state. The same document repaired, annotated.
+04 Three terms. Named clauses, each with sample language to ask for.
+05 The math and five questions. A number on the exposure, then five questions for any reviewing lawyer.</div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Destination</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-lp-en-u">Copy link</button></div></div>
+              <div class="copybox" id="t-lp-en-u" data-field="destination">https://drglaw.ca/resources/renewal-clause-checklist</div>
+              <div class="gate"><span class="pass">✓ Approved</span><span class="pass">✓ Reachable · HTTP 200</span>
+                <span class="pass">✓ Landing page precedes the download</span>
+                <span class="pass">✓ Contents match the PDF, in PDF order</span></div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Artifacts</span>
+            <div class="no-photo" style="margin-top:10px">
+              <h4>Text-led by design</h4>
+              <p>The Checklist has no master photograph. Every checklist surface is built from typography and structure, the same discipline as the Minute. Nothing here traces back to a photograph, and nothing should.</p>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Approved 2026-06-26 · consent wording version-pinned</span>
+          <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy publish payload</button></div>
+      </article>
+
+      <article class="piece" id="p-lp-pt" data-chan="website" data-pub="pipeline" data-day="2026-06-29"
+               data-kind="checklist_landing" data-locale="pt" data-version="2" data-state="clear">
+        <div class="piece-head">
+          <div><h2>Página do checklist</h2>
+            <div class="meta"><span class="chip">Firm website</span><span class="chip">PT</span>
+              <span class="chip mono">v2 · approved</span><span class="chip chip-ink">Pipeline</span></div></div>
+          <div class="piece-status"><span class="status-line status-ok">Individually approved</span>
+            <span class="chip chip-ok"><span class="dot"></span>Clear to publish</span></div>
+        </div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Título</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-lp-pt-h">Copy</button></div></div>
+              <div class="copybox" id="t-lp-pt-h" data-field="headline">Sua opção de renovação vale o que valem os cinco termos ao redor dela.</div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Descritivo e conteúdo</span>
+                <div class="field-actions"><button class="btn" type="button" data-copy="t-lp-pt">Copy body</button></div></div>
+              <div class="copybox" id="t-lp-pt" data-field="body">Oito páginas, para empresários que preparam a renovação de um contrato comercial: os documentos a reunir, as datas que obrigam, as provas a preservar e as perguntas a fazer.
+
+01 A nota assinada. Texto fixo, na voz do advogado revisor.
+02 O estado quebrado. O documento como chega, anotado.
+03 O estado corrigido. O mesmo documento reparado, anotado.
+04 Três termos. Cláusulas nomeadas, cada uma com linguagem de exemplo a solicitar.
+05 As contas e cinco perguntas. Um número sobre a exposição, depois cinco perguntas para qualquer advogado revisor.</div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Destination</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-lp-pt-u">Copy link</button></div></div>
+              <div class="copybox" id="t-lp-pt-u" data-field="destination">https://drglaw.ca/pt/recursos/checklist-clausula-renovacao</div>
+              <div class="gate"><span class="pass">✓ Approved</span><span class="pass">✓ Reachable · HTTP 200</span>
+                <span class="pass">✓ Disclaimer band renders before the content</span></div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Artifacts</span>
+            <div class="no-photo" style="margin-top:10px">
+              <h4>Text-led by design</h4>
+              <p>No photograph, in either locale. The Portuguese page is authored as reader-facing text like any other, not translated chrome over a shared image.</p>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Approved 2026-06-26</span>
+          <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy publish payload</button></div>
+      </article>
+
+      <article class="piece" id="p-pdf-en" data-chan="website" data-pub="pipeline" data-day="2026-06-29"
+               data-kind="checklist_pdf" data-locale="en" data-version="2" data-state="clear">
+        <div class="piece-head">
+          <div><h2>Checklist PDF</h2>
+            <div class="meta"><span class="chip">Lead magnet</span><span class="chip">EN</span>
+              <span class="chip mono">v2 · approved</span><span class="chip chip-ink">Pipeline</span></div></div>
+          <div class="piece-status"><span class="status-line status-ok">Individually approved</span>
+            <span class="chip chip-ok"><span class="dot"></span>Clear to publish</span></div>
+        </div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Direct download URL</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-pdf-en-u">Copy link</button></div></div>
+              <div class="copybox" id="t-pdf-en-u" data-field="destination">https://drglaw.ca/files/renewal-clause-checklist-en-v2.pdf</div>
+              <div class="gate"><span class="pass">✓ Resolves directly to the PDF</span>
+                <span class="pass">✓ No viewer, folder, or redirect chain</span>
+                <span class="pass">✓ Landing page precedes access</span></div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Table of contents · governs the landing page</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-pdf-en">Copy</button></div></div>
+              <div class="copybox" id="t-pdf-en" data-field="body">01 The signed note
+02 The broken state, annotated
+03 The corrected state, annotated
+04 Three terms with sample language
+05 The math and five questions
+06 Cost accounts, five questions
+07 Next steps
+08 Professional boundary and firm identification</div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Artifact</span>
+            <div class="deriv" style="margin-top:10px">
+              <div class="deriv-slot"><h4>Print-ready document</h4><span class="px">A4 portrait · 8 pp</span></div>
+              <div class="thumb thumb-paper" style="aspect-ratio:210/297">
+                <span class="band" style="inset:9%" aria-hidden="true"></span>
+                <span class="ratio">Typeset from the approved template</span>
+              </div>
+              <div class="deriv-name" data-asset>renewal-clause-checklist-en-v2.pdf</div>
+              <div class="deriv-tags"><span class="chip">application/pdf</span><span class="chip">412,880 bytes</span></div>
+              <div class="deriv-actions"><button class="btn btn-sm" type="button" data-download="renewal-clause-checklist-en-v2.pdf">Download .pdf</button></div>
+              <details class="prov"><summary>How this file was rendered</summary><div class="prov-body">
+                <div class="prov-row"><div class="k">Method</div><div class="v">A4 portrait rendered from the approved HTML template through the standard print pipeline. The template is the controlled asset; this file inherits its version and hash.</div></div>
+                <div class="prov-row"><div class="k">SHA-256</div><div class="v mono" data-sha>d10b6ee2f4c37a8951be0d64c2a7f3901e58bb47ca9d036f27e1b845a09c7d62</div></div>
+                <p class="prov-note">Re-rendering creates a new version. The direct-download URL always serves this exact file, never a viewer or a preview.</p>
+              </div></details>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Rendered 2026-06-26 · flat reference document, not an interactive form</span>
+          <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy publish payload</button></div>
+      </article>
+
+      <article class="piece" id="p-pdf-pt" data-chan="website" data-pub="pipeline" data-day="2026-06-29"
+               data-kind="checklist_pdf" data-locale="pt" data-version="2" data-state="clear">
+        <div class="piece-head">
+          <div><h2>Checklist PDF · PT</h2>
+            <div class="meta"><span class="chip">Lead magnet</span><span class="chip">PT</span>
+              <span class="chip mono">v2 · approved</span><span class="chip chip-ink">Pipeline</span></div></div>
+          <div class="piece-status"><span class="status-line status-ok">Individually approved</span>
+            <span class="chip chip-ok"><span class="dot"></span>Clear to publish</span></div>
+        </div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Direct download URL</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-pdf-pt-u">Copy link</button></div></div>
+              <div class="copybox" id="t-pdf-pt-u" data-field="destination">https://drglaw.ca/files/checklist-clausula-renovacao-pt-v2.pdf</div>
+              <div class="gate"><span class="pass">✓ Resolves directly to the PDF</span><span class="pass">✓ Landing page precedes access</span></div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Próximo passo · página 8</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-pdf-pt">Copy</button></div></div>
+              <div class="copybox" id="t-pdf-pt" data-field="body">Opção A — Chamada de revisão da cláusula de renovação. Agende em drglaw.ca/pt/book
+
+Opção B — Revisão completa do contrato, por escrito. Comece em drglaw.ca/pt/ongoingcounsel
+
+Opção C — Assinatura do Diário Semanal. Assine em drglaw.ca/pt/journal</div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Artifact</span>
+            <div class="deriv" style="margin-top:10px">
+              <div class="deriv-slot"><h4>Print-ready document</h4><span class="px">A4 portrait · 8 pp</span></div>
+              <div class="thumb thumb-paper" style="aspect-ratio:210/297">
+                <span class="band" style="inset:9%" aria-hidden="true"></span>
+                <span class="ratio">Typeset from the approved template</span>
+              </div>
+              <div class="deriv-name" data-asset>checklist-clausula-renovacao-pt-v2.pdf</div>
+              <div class="deriv-tags"><span class="chip">application/pdf</span><span class="chip">418,204 bytes</span></div>
+              <div class="deriv-actions"><button class="btn btn-sm" type="button" data-download="checklist-clausula-renovacao-pt-v2.pdf">Download .pdf</button></div>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Rendered 2026-06-26 · V2 · junho de 2026</span>
+          <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy publish payload</button></div>
+      </article>
+
+      <!-- ═══ TUESDAY ════════════════════════════════════════════════ -->
+
+      <article class="piece" id="p-gbp-cn" data-chan="gbp" data-pub="agent" data-day="2026-06-30"
+               data-kind="gbp_post" data-locale="en" data-version="2" data-state="clear">
+        <div class="piece-head">
+          <div><h2>Google Business — Counsel Note promotion</h2>
+            <div class="meta"><span class="chip">Google Business Profile</span><span class="chip">EN</span>
+              <span class="chip mono">v2 · approved</span><span class="chip chip-accent">Agent-eligible</span></div></div>
+          <div class="piece-status"><span class="status-line status-ok">Individually approved</span>
+            <span class="chip chip-ok"><span class="dot"></span>Clear to publish</span></div>
+        </div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Post body</span>
+                <div class="field-actions"><button class="btn" type="button" data-copy="t-gbp-cn">Copy text</button>
+                <button class="btn btn-quiet btn-sm" type="button" data-download="gbp-counsel-note.txt">.txt</button></div></div>
+              <div class="copybox" id="t-gbp-cn" data-field="body">A commercial lease renewal option may preserve the location without controlling the next rent. Review the right, notice process, conditions, and disagreement mechanism before the exercise window opens.</div>
+              <div class="gauges" data-gauge="t-gbp-cn" data-words-max="50" data-chars-max="300"></div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Call to action</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-gbp-cn-u">Copy link</button></div></div>
+              <div class="copybox" id="t-gbp-cn-u" data-field="destination">Read the website Counsel Note
+https://drglaw.ca/journal/renewal-option-control</div>
+              <div class="gate"><span class="pass">✓ Destination approved</span><span class="pass">✓ Reachable · HTTP 200</span>
+                <span class="pass">✓ Promoter approved against its own version</span></div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Derivative for this surface</span>
+            <div class="deriv" style="margin-top:10px">
+              <div class="deriv-slot"><h4>GBP photo-scrim</h4><span class="px">1200 × 900 · 4:3</span></div>
+              <div class="thumb thumb-cn" style="aspect-ratio:4/3">
+                <span class="scrim-side" aria-hidden="true"></span><span class="band band-gbp" aria-hidden="true"></span>
+                <span class="band-tag" style="left:4%;top:14%;transform:translateY(-100%)" aria-hidden="true">text block · 4% left, 72% wide</span>
+                <span class="ratio">Counsel Note master v3</span>
+              </div>
+              <div class="deriv-name" data-asset>cn-gbp-photoscrim-1200x900.jpg</div>
+              <div class="deriv-tags"><span class="chip chip-accent">Text baked</span><span class="chip">Advertising surface</span></div>
+              <div class="deriv-actions"><button class="btn btn-sm" type="button" data-download="cn-gbp-photoscrim-1200x900.jpg">Download .jpg</button></div>
+              <div class="baked">
+                <div class="k">Text baked into this image</div>
+                <div class="baked-line" style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)">DRG · Law</div>
+                <div class="baked-line">Your renewal option is only as good as who sets the rent.</div>
+                <div class="baked-rule"><span class="ok">✓</span><span>Query line is 12 words · rule allows at most 12, on at most two lines</span></div>
+                <div class="baked-rule"><span class="ok">✓</span><span>No bullets, no action band, no fee, no contact line</span></div>
+              </div>
+              <details class="prov"><summary>How this derivative was cut</summary><div class="prov-body">
+                <div class="prov-row"><div class="k">Scrim</div><div class="v">Left-to-right 100° gradient, ink #1A1410 at 94% behind the text edge, transparent by 92% of the width. Text block at 4% left, at most 72% wide, vertically centred.</div></div>
+                <div class="prov-row"><div class="k">Register</div><div class="v">Google Business is an advertising surface. It does not follow the format scrim text anchor; its position and type scale are set for this surface alone.</div></div>
+                <div class="prov-row"><div class="k">SHA-256</div><div class="v mono" data-sha>a3f7c210d84b95e6032fa17c4d8e0b593716cd82ef450a9d13c6b7248fe0195c</div></div>
+                <p class="prov-note">Photo-scrims are reserved for editorial pieces and run Tuesday and Thursday, with the Ad card on Wednesday between them.</p>
+              </div></details>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Approved 2026-06-30 · at most 50 words and 300 characters</span>
+          <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy publish payload</button></div>
+      </article>
+
+      <!-- ═══ WEDNESDAY ══════════════════════════════════════════════ -->
+
+      <article class="piece" id="p-gbp-cl" data-chan="gbp" data-pub="agent" data-day="2026-07-01"
+               data-kind="gbp_post" data-locale="en" data-version="1" data-state="clear">
+        <div class="piece-head">
+          <div><h2>Google Business — Checklist promotion</h2>
+            <div class="meta"><span class="chip">Google Business Profile</span><span class="chip">EN</span>
+              <span class="chip mono">v1 · approved</span><span class="chip chip-accent">Agent-eligible</span></div></div>
+          <div class="piece-status"><span class="status-line status-ok">Individually approved</span>
+            <span class="chip chip-ok"><span class="dot"></span>Clear to publish</span></div>
+        </div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Post body</span>
+                <div class="field-actions"><button class="btn" type="button" data-copy="t-gbp-cl">Copy text</button>
+                <button class="btn btn-quiet btn-sm" type="button" data-download="gbp-checklist.txt">.txt</button></div></div>
+              <div class="copybox" id="t-gbp-cl" data-field="body">Preparing for a commercial lease renewal? Gather the signed lease, amendments, notice dates, delivery requirements, payment records, default correspondence, and business objectives before review.</div>
+              <div class="gauges" data-gauge="t-gbp-cl" data-words-max="50" data-chars-max="300"></div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Call to action</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-gbp-cl-u">Copy link</button></div></div>
+              <div class="copybox" id="t-gbp-cl-u" data-field="destination">Open the English Checklist landing page
+https://drglaw.ca/resources/renewal-clause-checklist</div>
+              <div class="gate"><span class="pass">✓ Landing page approved</span><span class="pass">✓ Reachable · HTTP 200</span></div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Derivative for this surface</span>
+            <div class="deriv" style="margin-top:10px">
+              <div class="deriv-slot"><h4>Ad card</h4><span class="px">1200 × 900 · typographic</span></div>
+              <div class="thumb thumb-paper" style="aspect-ratio:4/3">
+                <span class="band" style="inset:8%" aria-hidden="true"></span>
+                <span class="ratio">No photograph by design</span>
+              </div>
+              <div class="deriv-name" data-asset>checklist-adcard-1200x900.jpg</div>
+              <div class="deriv-tags"><span class="chip chip-accent">Typographic only</span><span class="chip">Paper ground</span><span class="chip">8% margins</span></div>
+              <div class="deriv-actions"><button class="btn btn-sm" type="button" data-download="checklist-adcard-1200x900.jpg">Download .jpg</button></div>
+              <div class="baked">
+                <div class="k">Text set on this card</div>
+                <div class="baked-line">Renewal clause</div>
+                <div class="baked-line" style="color:var(--clause-ground)">checklist.</div>
+                <ul class="baked-list">
+                  <li>Four terms to check before Year Five.</li>
+                  <li>Good-standing conditions before renewal.</li>
+                  <li>Who sets the renewal rent, and how.</li>
+                  <li>What to confirm before the option deadline.</li>
+                </ul>
+                <div class="baked-rule"><span class="ok">✓</span><span>Two beats, each at most four words</span></div>
+                <div class="baked-rule"><span class="ok">✓</span><span>Four proof points, each at most ten words</span></div>
+                <div class="baked-rule"><span class="ok">✓</span><span>No fees, service pitches, or editorial claims</span></div>
+              </div>
+              <details class="prov"><summary>How this card was built</summary><div class="prov-body">
+                <div class="prov-row"><div class="k">Construction</div><div class="v">Paper #FFFCF6 ground, 8% (96px) margins. Two-beat serif headline at 60px: first beat ink #1A1410, second oxblood #6E2C2C. Oxblood-bulleted proof points at 26px. Action band 110px tall carrying DRG · Law at the left and the free-download destination at the right.</div></div>
+                <div class="prov-row"><div class="k">SHA-256</div><div class="v mono" data-sha>2ac9e1f75b30d8c46a2f19e0837bd5c14fa6029e3d7b81cc45a0e692f3d18b74</div></div>
+                <p class="prov-note">Ad cards are reserved for preparation artifacts and never post on the same day as a photo-scrim.</p>
+              </div></details>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Approved 2026-06-29 · sequenced between the two photo-scrims</span>
+          <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy publish payload</button></div>
+      </article>
+
+      <!-- ═══ THURSDAY ═══════════════════════════════════════════════ -->
+
+      <article class="piece" id="p-gbp-cm" data-chan="gbp" data-pub="agent" data-day="2026-07-02"
+               data-kind="gbp_post" data-locale="en" data-version="2" data-state="clear">
+        <div class="piece-head">
+          <div><h2>Google Business — Clause promotion</h2>
+            <div class="meta"><span class="chip">Google Business Profile</span><span class="chip">EN</span>
+              <span class="chip mono">v2 · approved</span><span class="chip chip-accent">Agent-eligible</span></div></div>
+          <div class="piece-status"><span class="status-line status-ok">Individually approved</span>
+            <span class="chip chip-ok"><span class="dot"></span>Clear to publish</span></div>
+        </div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Post body</span>
+                <div class="field-actions"><button class="btn" type="button" data-copy="t-gbp-cm">Copy text</button>
+                <button class="btn btn-quiet btn-sm" type="button" data-download="gbp-clause.txt">.txt</button></div></div>
+              <div class="copybox" id="t-gbp-cm" data-field="body">A "good standing" condition may depend on old notices, cure rights, repair records, certificates, and proof. Understand what the lease tests before renewal notice is sent.</div>
+              <div class="gauges" data-gauge="t-gbp-cm" data-words-max="50" data-chars-max="300"></div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Call to action</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-gbp-cm-u">Copy link</button></div></div>
+              <div class="copybox" id="t-gbp-cm-u" data-field="destination">Read the website Clause in the Margin
+https://drglaw.ca/journal/good-standing-evidence-question</div>
+              <div class="gate"><span class="pass">✓ Destination approved</span><span class="pass">✓ Reachable · HTTP 200</span></div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Derivative for this surface</span>
+            <div class="deriv" style="margin-top:10px">
+              <div class="deriv-slot"><h4>GBP photo-scrim</h4><span class="px">1200 × 900 · 4:3</span></div>
+              <div class="thumb thumb-clause" style="aspect-ratio:4/3">
+                <span class="scrim-side" aria-hidden="true"></span><span class="band band-gbp" aria-hidden="true"></span>
+                <span class="ratio">Clause master v2 · re-cut</span>
+              </div>
+              <div class="deriv-name" data-asset>clause-gbp-photoscrim-1200x900.jpg</div>
+              <div class="deriv-tags"><span class="chip chip-accent">Text baked</span><span class="chip chip-ok">Re-cut from v2</span></div>
+              <div class="deriv-actions"><button class="btn btn-sm" type="button" data-download="clause-gbp-photoscrim-1200x900.jpg">Download .jpg</button></div>
+              <div class="baked">
+                <div class="k">Text baked into this image</div>
+                <div class="baked-line" style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)">DRG · Law</div>
+                <div class="baked-line">Good standing is tested with evidence, not assumed.</div>
+                <div class="baked-rule"><span class="ok">✓</span><span>Query line is 8 words · rule allows at most 12</span></div>
+                <div class="baked-rule"><span class="ok">✓</span><span>Re-baked after the master regeneration</span></div>
+              </div>
+              <details class="prov"><summary>How this derivative was cut</summary><div class="prov-body">
+                <div class="prov-row"><div class="k">Derives from</div><div class="v">Clause master v2 · re-cut 2026-07-01 after the regeneration</div></div>
+                <div class="prov-row"><div class="k">SHA-256</div><div class="v mono" data-sha>5c8f0a2be71d9436ac52f180e6b3d79014ea8c25fd6b03917ce4a8d25f10b6e3</div></div>
+                <p class="prov-note">The composition reserves empty ground for the scrim to write into, which is why the 4:3 crop keeps the left portion of the frame where the object sits.</p>
+              </div></details>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Approved 2026-07-01 · derivative re-cut the same day</span>
+          <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy publish payload</button></div>
+      </article>
+
+      <!-- ═══ FRIDAY ═════════════════════════════════════════════════ -->
+
+      <article class="piece" id="p-minute" data-chan="email" data-pub="pipeline" data-day="2026-07-03"
+               data-kind="minute" data-locale="en" data-version="3" data-state="clear">
+        <div class="piece-head">
+          <div><h2>Minute DRG — email</h2>
+            <div class="meta"><span class="chip">Email</span><span class="chip">EN</span>
+              <span class="chip mono">v3 · approved</span><span class="chip chip-ink">Pipeline</span></div></div>
+          <div class="piece-status"><span class="status-line status-ok">Individually approved</span>
+            <span class="chip chip-ok"><span class="dot"></span>Clear to send</span></div>
+        </div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Subject line</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-min-s">Copy</button></div></div>
+              <div class="copybox" id="t-min-s" data-field="headline">A renewal option may not control the next rent</div>
+              <div class="gauges" data-gauge="t-min-s" data-chars-max="65"></div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Body · three paragraphs</span>
+                <div class="field-actions"><button class="btn" type="button" data-copy="t-min">Copy body</button>
+                <button class="btn btn-quiet btn-sm" type="button" data-download="minute-drg.txt">.txt</button></div></div>
+              <div class="copybox" id="t-min" data-field="body">A commercial lease may contain an option to renew without giving the tenant complete control of the next term. The practical result depends on the rent mechanism, notice window, delivery rules, conditions such as good standing, and what the lease says will happen if the parties cannot agree.
+
+Before the exercise window opens, place the signed lease, amendments, calendar, payment records, notices, cure evidence, and relevant correspondence together. Compare the renewal condition with the default and notice provisions, and test the clause against the business's acceptable rent and relocation alternatives.
+
+Read the Counsel Note: Does your commercial lease renewal option actually give you control? , examine the Clause in the Margin: "Good standing" in a lease renewal is an evidence question , and use the Checklist: Commercial lease renewal preparation to organise the review. The effect of a particular option depends on the complete agreement, facts, applicable law, and timing.</div>
+              <div class="gauges" data-gauge="t-min" data-words-min="180" data-words-max="300"></div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Artifacts</span>
+            <div class="no-photo" style="margin-top:10px">
+              <h4>No images at all</h4>
+              <p>The Minute is a text-led letter. It carries no photographs, hero images, or decorative graphics; typography, hairlines, and structure do the visual work.</p>
+            </div>
+            <div class="deriv" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line)">
+              <div class="deriv-slot"><h4>Links block</h4><span class="px">three destinations</span></div>
+              <div class="gate" style="margin-top:0">
+                <span class="pass">✓ Counsel Note · HTTP 200</span>
+                <span class="pass">✓ Clause · HTTP 200</span>
+                <span class="pass">✓ Checklist · HTTP 200</span>
+              </div>
+              <div class="prov-note" style="margin-top:10px">
+                Rendering is verified across common email clients before send. A layout failure is
+                a release blocker. The Minute uses an approved recipient basis and a verified
+                sending path.
+              </div>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Approved 2026-07-02 · sends Friday after every destination is live</span>
+          <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy publish payload</button></div>
+      </article>
+
+      <!-- ═══ NO DAY RECORDED · LinkedIn ═════════════════════════════ -->
+
+      <article class="piece" id="p-li-art-cn" data-chan="linkedin" data-pub="operator" data-day=""
+               data-kind="linkedin_article" data-locale="en" data-version="3" data-state="clear">
+        <div class="piece-head">
+          <div><h2>LinkedIn Article — Counsel Note adaptation</h2>
+            <div class="meta"><span class="chip">LinkedIn</span><span class="chip">EN</span>
+              <span class="chip mono">v3 · approved</span><span class="chip chip-ink">You, by hand</span></div></div>
+          <div class="piece-status"><span class="status-line status-ok">Individually approved</span>
+            <span class="chip chip-ok"><span class="dot"></span>Clear to publish</span></div>
+        </div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Article title</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-li-art-cn-h">Copy</button></div></div>
+              <div class="copybox" id="t-li-art-cn-h" data-field="headline">Does your commercial lease renewal option actually give you control of the next term?</div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Article body · devices re-set in plain text</span>
+                <div class="field-actions"><button class="btn" type="button" data-copy="t-li-art-cn">Copy body</button>
+                <button class="btn btn-quiet btn-sm" type="button" data-download="linkedin-article-counsel-note.txt">.txt</button></div></div>
+              <div class="copybox" id="t-li-art-cn" data-field="body">Does a renewal option give you control of the next term? Not on its own.
+
+Question: Does an option to renew give the tenant control of the next term?
+Answer: The option grants the right. Five other provisions decide what the right is worth.
+Mechanism: Rent mechanism, notice window, delivery rules, good-standing conditions, and the disagreement procedure operate together.
+Preparation: Place the signed lease, amendments, calendar, payment records, notices, and cure evidence together before the exercise window opens.
+Next step: Compare the renewal condition with the default and notice provisions.
+
+The rent mechanism is where most of the value sits. An option that renews "at market rent to be agreed" leaves the price open, and an option with no disagreement procedure leaves it open with no way to close it.
+
+The notice window is where most of the loss sits. Miss it, and the option is gone regardless of how well the rest of the clause was negotiated.
+
+1. Confirm the exercise window and the delivery method the lease requires.
+2. Test the rent mechanism against a rent your business can carry.
+3. Collect the evidence that proves good standing before you need it.
+
+General information only. The actual lease, facts, applicable law, and timing control the analysis.
+
+Read the Clause in the Margin: drglaw.ca/journal/good-standing-evidence-question
+Use the Checklist: drglaw.ca/resources/renewal-clause-checklist</div>
+              <div class="gauges" data-gauge="t-li-art-cn" data-words-ratio-of="t-cn-en"></div>
+              <div class="gate"><span class="pass">✓ Approved</span>
+                <span class="pass">✓ Stands alone for a reader who never visits the website</span>
+                <span class="pass">✓ No material qualification dropped</span></div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Cover · shared with the promoter</span>
+            <div class="deriv" style="margin-top:10px">
+              <div class="deriv-slot"><h4>LinkedIn feed scrim</h4><span class="px">1200 × 628 · 1.91:1</span></div>
+              <div class="thumb thumb-cn" style="aspect-ratio:1200/628">
+                <span class="scrim-low" aria-hidden="true"></span><span class="band band-safe" aria-hidden="true"></span>
+                <span class="ratio">Counsel Note master v3</span>
+              </div>
+              <div class="deriv-name" data-asset>cn-linkedin-scrim-1200x628.jpg</div>
+              <div class="deriv-tags"><span class="chip chip-accent">Text baked</span><span class="chip">Anchor low</span>
+                <span class="chip chip-ok">Serves cover and link card</span></div>
+              <div class="deriv-actions"><button class="btn btn-sm" type="button" data-download="cn-linkedin-scrim-1200x628.jpg">Download .jpg</button></div>
+              <div class="baked">
+                <div class="k">Text baked into this image</div>
+                <div class="baked-line">Renewal secured. Rent still unsettled.</div>
+                <div class="baked-rule"><span class="ok">✓</span><span>Hook is 5 words · rule allows five to eight, at most two lines</span></div>
+                <div class="baked-rule"><span class="ok">✓</span><span>Shares at most two content words with the Article title</span></div>
+                <div class="baked-rule"><span class="ok">✓</span><span>Names a consequence the title does not state</span></div>
+              </div>
+              <details class="prov"><summary>How this derivative was cut</summary><div class="prov-body">
+                <div class="prov-row"><div class="k">Serves two placements</div><div class="v">One derivative is the Article cover and the link card that appears when the promoter post shares the Article. The promoter row records this same cover as its image asset.</div></div>
+                <div class="prov-row"><div class="k">Hook type</div><div class="v">Cream #EFE9DD serif at 76px, left-anchored at a 4% margin, positioned low per the Counsel Note text anchor. Brass DRG · Law wordmark at 24px caps.</div></div>
+                <div class="prov-row"><div class="k">SHA-256</div><div class="v mono" data-sha>7e05d3c1a94f28b60d17ce5382ab4f019c6d7a85be23104fd9c807e6b1a45f30</div></div>
+              </div></details>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Carries 90–110% of the website article's authored word count · no material qualification dropped</span>
+          <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy publish payload</button></div>
+      </article>
+
+      <article class="piece" id="p-li-art-cl" data-chan="linkedin" data-pub="operator" data-day=""
+               data-kind="linkedin_article" data-locale="en" data-version="2" data-state="held">
+        <div class="piece-head">
+          <div><h2>LinkedIn Article — Clause adaptation</h2>
+            <div class="meta"><span class="chip">LinkedIn</span><span class="chip">EN</span>
+              <span class="chip mono">v2 · approved</span><span class="chip chip-warn mono">cover cut from master v1</span></div></div>
+          <div class="piece-status"><span class="status-line status-warn">Cover behind its master</span>
+            <span class="chip chip-warn"><span class="dot"></span>Asset held</span></div>
+        </div>
+        <div class="blocked-bar"><span class="ico mono" aria-hidden="true">!</span>
+          <div><b>Why the cover is held.</b> The Clause master went to version 2 on 1 July, which
+          returned every derivative to review. This feed scrim is still the crop cut from version 1,
+          so it no longer traces to the master it claims. The copy is approved and free to use;
+          the scrim needs re-cutting from v2 first.</div></div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Article title</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-li-art-cl-h">Copy</button></div></div>
+              <div class="copybox" id="t-li-art-cl-h" data-field="headline">"Good standing" in a lease renewal is an evidence question</div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Article body</span>
+                <div class="field-actions"><button class="btn" type="button" data-copy="t-li-art-cl">Copy body</button></div></div>
+              <div class="copybox" id="t-li-art-cl" data-field="body" data-hasgauge>A one-line condition can decide whether a renewal happens at all.
+
+Renewal is rarely automatic. In most Ontario commercial leases it is conditional, and the condition is that the tenant is in good standing on the day the renewal would begin.
+
+That phrase reaches further than it appears to. Insurance certificates that lapsed for a week, maintenance obligations nobody enforced, notice defaults never raised at the time: each can be pulled into the test.
+
+Compare the condition with the default, notice, and cure provisions. Identify every unresolved notice. Collect proof of the response. Confirm whether the clause distinguishes minor, cured, disputed, or non-material defaults.
+
+The evidence has to exist before the landlord asks for it. A default cured two years ago is only cured if the correspondence proving it can still be produced.
+
+Good standing is not merely a label. It is a contractual test supported or challenged by evidence at a particular time.
+
+General information only. The actual lease, facts, applicable law, and timing control the analysis.
+
+Read the Counsel Note: drglaw.ca/journal/renewal-option-control
+Use the Checklist: drglaw.ca/resources/renewal-clause-checklist</div>
+              <div class="gauges" data-gauge="t-li-art-cl" data-words-ratio-of="t-cl-en"></div>
+              <div class="gate"><span class="pass">✓ Copy approved</span>
+                <span class="fail">! Cover held — cannot publish until re-cut</span></div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Cover · shared with the promoter</span>
+            <div class="deriv" style="margin-top:10px">
+              <div class="deriv-slot"><h4>LinkedIn feed scrim</h4><span class="px">1200 × 628 · 1.91:1</span></div>
+              <div class="thumb thumb-clause" style="aspect-ratio:1200/628">
+                <span class="scrim-low" aria-hidden="true"></span><span class="band band-safe" aria-hidden="true"></span>
+                <span class="ratio">Clause master v1 — stale</span>
+              </div>
+              <div class="deriv-name" data-asset>clause-linkedin-scrim-1200x628.jpg</div>
+              <div class="deriv-tags"><span class="chip chip-accent">Text baked</span>
+                <span class="chip">Anchor centred in margin</span><span class="chip chip-warn">Returned to review</span></div>
+              <div class="deriv-actions"><button class="btn btn-ghost btn-sm" type="button" disabled>Download held</button>
+                <a class="btn btn-quiet btn-sm" href="#">Re-cut from master v2</a></div>
+              <div class="baked">
+                <div class="k">Text baked into this image</div>
+                <div class="baked-line">One lapsed certificate ends the renewal.</div>
+                <div class="baked-rule"><span class="ok">✓</span><span>Hook is 6 words · rule allows five to eight</span></div>
+                <div class="baked-rule" style="color:var(--warn)"><span aria-hidden="true">!</span><span>Baked over master v1 · re-bake required after re-cut</span></div>
+              </div>
+              <details class="prov"><summary>Why the hashes disagree</summary><div class="prov-body">
+                <div class="prov-row"><div class="k">Current master</div><div class="v mono">4b19aa07d2e3c8815f6a0d47bb2e9c31f0ad5e6482c7139be40aa71d3c5f8e92</div></div>
+                <div class="prov-row"><div class="k">This crop derives from</div><div class="v mono" data-sha>9f2c41b8e07da5361c9be24f8a0d7e53bb18c6402fd93a71e5c084dd6b217a3f</div></div>
+                <p class="prov-note">The two hashes disagree, which is the whole reason this asset is held. A crop that no longer traces to the current master cannot be published, even when it looks correct.</p>
+              </div></details>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Copy approved 2026-07-02 · cover awaiting re-cut from master v2</span>
+          <span style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy held record</button>
+            <a class="btn btn-quiet btn-sm" href="#">Open review page</a>
+          </span></div>
+      </article>
+
+      <article class="piece" id="p-li-cn" data-chan="linkedin" data-pub="agent" data-day=""
+               data-kind="linkedin_post" data-locale="en" data-version="2" data-state="clear">
+        <div class="piece-head">
+          <div><h2>LinkedIn promoter — Counsel Note</h2>
+            <div class="meta"><span class="chip">LinkedIn post</span><span class="chip">EN</span>
+              <span class="chip mono">v2 · approved</span><span class="chip chip-accent">Agent-eligible</span></div></div>
+          <div class="piece-status"><span class="status-line status-ok">Individually approved</span>
+            <span class="chip chip-ok"><span class="dot"></span>Clear to publish</span></div>
+        </div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Post body</span>
+                <div class="field-actions"><button class="btn" type="button" data-copy="t-li-cn">Copy text</button>
+                <button class="btn btn-quiet btn-sm" type="button" data-download="linkedin-promoter-counsel-note.txt">.txt</button></div></div>
+              <div class="copybox" id="t-li-cn" data-field="body">A renewal option can preserve a business location without fixing the next rent, or guaranteeing that every condition has been satisfied.
+
+The real decision depends on five connected points: the right granted, rent mechanism, notice process, conditions, and disagreement procedure.
+
+Read the LinkedIn Counsel Note Article</div>
+              <div class="gauges" data-gauge="t-li-cn" data-words-min="40" data-words-max="80"></div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Destination</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-li-cn-u">Copy link</button></div></div>
+              <div class="copybox" id="t-li-cn-u" data-field="destination">https://www.linkedin.com/pulse/renewal-option-control-next-term-drglaw</div>
+              <div class="gate"><span class="pass">✓ Article approved</span><span class="pass">✓ Reachable · HTTP 200</span></div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Link card image</span>
+            <div class="deriv" style="margin-top:10px">
+              <div class="deriv-slot"><h4>LinkedIn feed scrim</h4><span class="px">1200 × 628 · 1.91:1</span></div>
+              <div class="thumb thumb-cn" style="aspect-ratio:1200/628">
+                <span class="scrim-low" aria-hidden="true"></span><span class="band band-safe" aria-hidden="true"></span>
+                <span class="ratio">Counsel Note master v3</span>
+              </div>
+              <div class="deriv-name" data-asset>cn-linkedin-scrim-1200x628.jpg</div>
+              <div class="deriv-tags"><span class="chip chip-ok">Same file as the Article cover</span></div>
+              <div class="deriv-actions"><button class="btn btn-sm" type="button" data-download="cn-linkedin-scrim-1200x628.jpg">Download .jpg</button></div>
+              <div class="prov-note" style="margin-top:10px">
+                The promoter does not get its own image. It records the Article cover as its image
+                asset, so the feed shows one consistent card whichever way a reader arrives.
+              </div>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Approved 2026-06-30 · promoter approval recorded against its own version</span>
+          <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy publish payload</button></div>
+      </article>
+
+      <article class="piece" id="p-li-cl" data-chan="linkedin" data-pub="agent" data-day=""
+               data-kind="linkedin_post" data-locale="en" data-version="3" data-state="blocked_upstream">
+        <div class="piece-head">
+          <div><h2>LinkedIn promoter — Clause</h2>
+            <div class="meta"><span class="chip">LinkedIn post</span><span class="chip">EN</span>
+              <span class="chip mono">v3 · approved</span><span class="chip chip-accent">Agent-eligible</span></div></div>
+          <div class="piece-status"><span class="status-line status-warn">Waiting on its destination</span>
+            <span class="chip chip-warn"><span class="dot"></span>Blocked upstream</span></div>
+        </div>
+        <div class="blocked-bar"><span class="ico mono" aria-hidden="true">!</span>
+          <div><b>Why this cannot go yet.</b> A promoter can never publish before its destination
+          is approved and reachable. The Clause LinkedIn Article it points at is held on its cover
+          asset, so this post waits. The copy itself is approved and its own gates pass.</div></div>
+        <div class="piece-body">
+          <div class="col-text">
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Post body</span>
+                <div class="field-actions"><button class="btn" type="button" data-copy="t-li-cl">Copy text</button>
+                <button class="btn btn-quiet btn-sm" type="button" data-download="linkedin-promoter-clause.txt">.txt</button></div></div>
+              <div class="copybox" id="t-li-cl" data-field="body">A one-line "good standing" condition can turn an old repair, notice, certificate, or payment question into a renewal dispute.
+
+The clause is not only a label. It is an evidence test applied at a particular time.
+
+Read the LinkedIn Clause in the Margin Article</div>
+              <div class="gauges" data-gauge="t-li-cl" data-words-min="40" data-words-max="80"></div>
+            </div>
+            <div class="field">
+              <div class="field-head"><span class="eyebrow">Destination</span>
+                <div class="field-actions"><button class="btn btn-quiet btn-sm" type="button" data-copy="t-li-cl-u">Copy link</button></div></div>
+              <div class="copybox" id="t-li-cl-u" data-field="destination">https://www.linkedin.com/pulse/good-standing-evidence-question-drglaw</div>
+              <div class="gate"><span class="pass">✓ Copy approved</span>
+                <span class="fail">! Destination not publishable — cover held</span></div>
+            </div>
+          </div>
+          <aside class="col-asset">
+            <span class="eyebrow">Link card image</span>
+            <div class="deriv" style="margin-top:10px">
+              <div class="deriv-slot"><h4>LinkedIn feed scrim</h4><span class="px">1200 × 628 · 1.91:1</span></div>
+              <div class="thumb thumb-clause" style="aspect-ratio:1200/628">
+                <span class="scrim-low" aria-hidden="true"></span><span class="ratio">Clause master v1 — stale</span>
+              </div>
+              <div class="deriv-name" data-asset>clause-linkedin-scrim-1200x628.jpg</div>
+              <div class="deriv-tags"><span class="chip chip-warn">Same held file as the Article cover</span></div>
+              <div class="deriv-actions"><button class="btn btn-ghost btn-sm" type="button" disabled>Download held</button></div>
+              <div class="prov-note" style="margin-top:10px">
+                Because the promoter records the Article cover as its image asset, one re-cut
+                clears both this post and the Article at once.
+              </div>
+            </div>
+          </aside>
+        </div>
+        <div class="piece-foot"><span>Approved 2026-07-02 · releases automatically once the cover is re-cut</span>
+          <span style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-quiet btn-sm" type="button" data-payload>Copy held record</button>
+            <a class="btn btn-quiet btn-sm" href="#">Open review page</a>
+          </span></div>
+      </article>
+
+    </main>
+  </div>
+
+  <footer class="sign">
+    <h4>What changed in v4</h4>
+    <ul>
+      <li>All sixteen deliverables are present. The kit is the complete week record, not the subset posted by hand, so the publishing agent and the operator read the same surface.</li>
+      <li>A second filter names who publishes each piece: agent-eligible, you by hand, or the pipeline. Channel and publisher filter independently.</li>
+      <li>Every piece carries a "Copy publish payload" that emits one JSON record — text fields, asset, hash, destination, constraints, and gate results. The masthead emits the whole week as a manifest.</li>
+      <li>Held pieces emit a record too, so the agent can report what is stuck and why rather than silently reporting a shorter week. That record carries the reason and the failed gate, but no copy, asset, or destination — the agent is never handed material it is not cleared to publish.</li>
+      <li>Promoter dependency is enforced and visible: the Clause LinkedIn promoter is blocked because its destination is held, not because anything is wrong with the post itself.</li>
+      <li>Monday holds the destinations and the rest of the week promotes them, which is the CSB rule that a promoter cannot publish before its destination is approved and returning HTTP 200.</li>
+      <li>Locale pairs are shown as separate deliverables sharing one asset, with the Portuguese pieces stating plainly that no Portuguese asset exists or ever will.</li>
+    </ul>
+    <h4>Still not built</h4>
+    <ul>
+      <li>Downloads emit a stub file. In the built kit they resolve short-lived signed URLs from the private firm-files bucket, so the bytes match the hash shown.</li>
+      <li>Image previews are ground-and-overlay placeholders: correct format ground, correct scrim geometry, correct safe band, no photograph.</li>
+      <li>Gate results are static here. In the built kit the reachability check is a live HEAD request and the version and derivative checks read the database.</li>
+      <li>Recording a publication claim when the agent or the operator posts stays phase 2.</li>
+    </ul>
+  </footer>
+
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  function countWords(s){
+    var m = s.trim().match(/\S+/g);
+    return m ? m.length : 0;
+  }
+
+  /* ── dual-constraint gauges ─────────────────────────────────── */
+  function addGauge(host, value, limitText, pct, state){
+    var wrap = document.createElement("span");
+    wrap.className = "gauge";
+    if (state) wrap.setAttribute("data-state", state);
+    var meter = document.createElement("span");
+    meter.className = "meter";
+    if (state) meter.setAttribute("data-state", state);
+    var fill = document.createElement("span");
+    fill.style.width = Math.min(100, pct) + "%";
+    meter.appendChild(fill);
+    var b = document.createElement("b");
+    b.textContent = value;
+    var txt = document.createElement("span");
+    txt.textContent = limitText;
+    wrap.appendChild(meter); wrap.appendChild(b); wrap.appendChild(txt);
+    host.appendChild(wrap);
+  }
+
+  document.querySelectorAll("[data-gauge]").forEach(function(host){
+    var src = document.getElementById(host.getAttribute("data-gauge"));
+    if (!src) return;
+    var text = src.textContent;
+    var words = countWords(text), chars = text.length;
+    var wMax = parseInt(host.getAttribute("data-words-max"), 10);
+    var wMin = parseInt(host.getAttribute("data-words-min"), 10);
+    var cMax = parseInt(host.getAttribute("data-chars-max"), 10);
+
+    if (!isNaN(wMax)) {
+      var wState = words > wMax ? "over" : (!isNaN(wMin) && words < wMin ? "under" : null);
+      var wLabel = !isNaN(wMin) ? "words · " + wMin + "–" + wMax + " allowed" : "words · " + wMax + " max";
+      addGauge(host, words, wLabel, (words / wMax) * 100, wState);
+    }
+    if (!isNaN(cMax)) {
+      addGauge(host, chars, "characters · " + cMax + " max", (chars / cMax) * 100, chars > cMax ? "over" : null);
+    }
+
+    /* A LinkedIn adaptation is bounded by its source article, not by a
+       fixed count: it carries 90 to 110 percent of the website article's
+       authored word count. */
+    var refId = host.getAttribute("data-words-ratio-of");
+    if (refId) {
+      var ref = document.getElementById(refId);
+      if (ref) {
+        var refWords = countWords(ref.textContent);
+        var lo = Math.round(refWords * 0.9), hi = Math.round(refWords * 1.1);
+        var rState = words > hi ? "over" : words < lo ? "under" : null;
+        addGauge(host, words, "words · " + lo + "–" + hi + " (90–110% of the website article)", (words / hi) * 100, rState);
+      }
+    }
+  });
+
+  /* ── toast ──────────────────────────────────────────────────── */
+  var toast = document.getElementById("toast");
+  var toastTimer = null;
+  function say(msg){
+    toast.textContent = msg;
+    toast.setAttribute("data-show", "1");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toast.removeAttribute("data-show"); }, 2100);
+  }
+
+  /* ── clipboard ──────────────────────────────────────────────── */
+  function copyText(text){
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function(resolve, reject){
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.setAttribute("readonly", "");
+      ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      ok ? resolve() : reject(new Error("copy blocked"));
+    });
+  }
+
+  function flash(btn, label, msg){
+    btn.setAttribute("data-copied", "1");
+    btn.textContent = "Copied";
+    say(msg);
+    setTimeout(function(){
+      btn.removeAttribute("data-copied");
+      btn.textContent = label;
+    }, 1600);
+  }
+
+  document.querySelectorAll("[data-copy]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var src = document.getElementById(btn.getAttribute("data-copy"));
+      if (!src) return;
+      var label = btn.textContent;
+      copyText(src.textContent)
+        .then(function(){ flash(btn, label, "Copied to clipboard"); })
+        .catch(function(){ say("Clipboard blocked — select the text and copy manually"); });
+    });
+  });
+
+  /* ── publish payload: what the agent consumes ───────────────── */
+  function fieldText(piece, name){
+    var el = piece.querySelector('[data-field="' + name + '"]');
+    return el ? el.textContent.trim() : null;
+  }
+
+  /**
+   * One record per deliverable. A held piece still gets a record so the agent
+   * can see it exists and report why it is stuck, but the copy, the asset, and
+   * the destination are left out: the agent is never handed material it is not
+   * cleared to publish, rather than being handed it with a warning attached.
+   */
+  function buildPayload(piece){
+    var state = piece.getAttribute("data-state");
+    var gates = [];
+    piece.querySelectorAll(".gate span").forEach(function(g){
+      gates.push({
+        check: g.textContent.replace(/^[✓!]\s*/, "").trim(),
+        pass: g.classList.contains("pass")
+      });
+    });
+
+    var record = {
+      deliverable_id: piece.id,
+      kind: piece.getAttribute("data-kind"),
+      channel: piece.getAttribute("data-chan"),
+      locale: piece.getAttribute("data-locale"),
+      approved_version: Number(piece.getAttribute("data-version")),
+      publisher: piece.getAttribute("data-pub"),
+      scheduled_day: piece.getAttribute("data-day") || null,
+      state: state,
+      gates: gates,
+      publishable: state === "clear" && gates.every(function(g){ return g.pass; })
+    };
+
+    if (!record.publishable) {
+      var bar = piece.querySelector(".blocked-bar");
+      record.withheld = true;
+      record.blocked_reason = bar
+        ? bar.textContent.replace(/\s+/g, " ").replace(/^!\s*/, "").trim()
+        : null;
+      record.note = "Copy, asset, and destination are withheld until this clears.";
+      return record;
+    }
+
+    var body = fieldText(piece, "body");
+    var deriv = piece.querySelector(".deriv");
+    var assetEl = piece.querySelector("[data-asset]");
+    var shaEl = piece.querySelector("[data-sha]");
+    var slotEl = deriv ? deriv.querySelector(".deriv-slot h4") : null;
+    var specEl = deriv ? deriv.querySelector(".deriv-slot .px") : null;
+
+    record.withheld = false;
+    record.headline = fieldText(piece, "headline");
+    record.body = body;
+    record.body_words = body ? countWords(body) : null;
+    record.body_chars = body ? body.length : null;
+    record.destination = fieldText(piece, "destination");
+    record.asset = assetEl ? {
+      slot: slotEl ? slotEl.textContent.trim() : null,
+      spec: specEl ? specEl.textContent.trim() : null,
+      filename: assetEl.textContent.trim(),
+      sha256: shaEl ? shaEl.textContent.trim() : null
+    } : null;
+    return record;
+  }
+
+  document.querySelectorAll("[data-payload]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var piece = btn.closest(".piece");
+      var label = btn.textContent;
+      copyText(JSON.stringify(buildPayload(piece), null, 2))
+        .then(function(){ flash(btn, label, "Publish payload copied"); })
+        .catch(function(){ say("Clipboard blocked"); });
+    });
+  });
+
+  document.getElementById("manifestBtn").addEventListener("click", function(){
+    var btn = this;
+    var label = btn.textContent;
+    var records = [];
+    document.querySelectorAll(".piece").forEach(function(p){ records.push(buildPayload(p)); });
+    var manifest = {
+      firm: "DRG Law Professional Corporation",
+      period: { starts_on: "2026-06-29", ends_on: "2026-07-03" },
+      theme: "The renewal clause",
+      masters: [
+        { format: "counsel_note", version: 3, sha256: "c7da78b2…5865", derivatives_current: true },
+        { format: "clause", version: 2, sha256: "4b19aa07…8e92", derivatives_current: false }
+      ],
+      deliverables: records
+    };
+    copyText(JSON.stringify(manifest, null, 2))
+      .then(function(){ flash(btn, label, records.length + " deliverables copied as JSON"); })
+      .catch(function(){ say("Clipboard blocked"); });
+  });
+
+  document.getElementById("expandAll").addEventListener("click", function(){
+    var panels = document.querySelectorAll("details.prov");
+    var anyClosed = false;
+    panels.forEach(function(d){ if (!d.open) anyClosed = true; });
+    panels.forEach(function(d){ d.open = anyClosed; });
+    this.textContent = anyClosed ? "Collapse every provenance panel" : "Expand every provenance panel";
+  });
+
+  /* ── download stubs ─────────────────────────────────────────── */
+  document.querySelectorAll("[data-download]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var name = btn.getAttribute("data-download");
+      var isTxt = /\.txt$/.test(name);
+      var body;
+      if (isTxt) {
+        var piece = btn.closest(".piece");
+        var box = piece ? piece.querySelector('[data-field="body"]') : null;
+        body = box ? box.textContent : "";
+      } else {
+        body = "Publish Kit prototype\n\nThis stands in for " + name + ".\n" +
+          "In the built kit this resolves a short-lived signed URL from the private\n" +
+          "firm-files bucket and downloads the exact stored bytes, so the file matches\n" +
+          "the SHA-256 shown beside it.\n";
+      }
+      var blob = new Blob([body], { type: "text/plain;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = isTxt ? name : name + ".txt";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+      say("Downloaded " + a.download);
+    });
+  });
+
+  /* ── order by recorded publication day ──────────────────────── */
+  var stack = document.querySelector(".stack");
+  var DAY_LABEL = {
+    "2026-06-29": "Monday 29 June",
+    "2026-06-30": "Tuesday 30 June",
+    "2026-07-01": "Wednesday 1 July",
+    "2026-07-02": "Thursday 2 July",
+    "2026-07-03": "Friday 3 July"
+  };
+  var DAY_NOTE = {
+    "2026-06-29": "Destinations go live first — nothing may promote a page that is not yet reachable",
+    "2026-06-30": "Photo-scrim day",
+    "2026-07-01": "Ad card day — never alongside a photo-scrim",
+    "2026-07-02": "Photo-scrim day",
+    "2026-07-03": "The Minute sends once every destination is live"
+  };
+  var NO_DAY_NOTE = "The calendar sequences Google Business posts. LinkedIn carries no recorded day.";
+
+  (function orderByDay(){
+    var all = Array.prototype.slice.call(stack.querySelectorAll(".piece"));
+    var days = [];
+    all.forEach(function(p){
+      var d = p.getAttribute("data-day") || "";
+      if (days.indexOf(d) === -1) days.push(d);
+    });
+    days.sort(function(a, b){
+      if (a === b) return 0;
+      if (a === "") return 1;
+      if (b === "") return -1;
+      return a < b ? -1 : 1;
+    });
+    days.forEach(function(d){
+      var bar = document.createElement("div");
+      bar.className = "daybar";
+      bar.setAttribute("data-daybar", d);
+      var h = document.createElement("h3");
+      h.textContent = d ? DAY_LABEL[d] : "No publication day recorded";
+      var rule = document.createElement("span"); rule.className = "rule";
+      var note = document.createElement("span"); note.className = "note";
+      note.textContent = d ? (DAY_NOTE[d] || "") : NO_DAY_NOTE;
+      bar.appendChild(h); bar.appendChild(rule); bar.appendChild(note);
+      stack.appendChild(bar);
+      all.forEach(function(p){
+        if ((p.getAttribute("data-day") || "") === d) stack.appendChild(p);
+      });
+    });
+  })();
+
+  /* ── filters: channel and publisher, independent ────────────── */
+  var chanFilter = "all", pubFilter = "any";
+  var note = document.getElementById("filterNote");
+  var CHAN_NOTE = {
+    all: "Showing all 16 deliverables in publication order.",
+    website: "Showing the website surfaces: both articles, both checklist landing pages, and both PDFs.",
+    linkedin: "Showing LinkedIn. One feed scrim serves both the Article cover and the promoter's link card.",
+    gbp: "Showing Google Business. Photo-scrims run Tuesday and Thursday, with the Ad card on Wednesday between them.",
+    email: "Showing the Minute, which carries no images and sends after every destination is live."
+  };
+  var PUB_NOTE = {
+    any: "",
+    agent: " Filtered to the pieces the publishing agent can take.",
+    operator: " Filtered to the pieces you still post by hand.",
+    pipeline: " Filtered to the pieces the pipeline deploys."
+  };
+
+  function apply(){
+    document.querySelectorAll(".piece").forEach(function(p){
+      var okChan = chanFilter === "all" || p.getAttribute("data-chan") === chanFilter;
+      var okPub = pubFilter === "any" || p.getAttribute("data-pub") === pubFilter;
+      p.hidden = !(okChan && okPub);
+    });
+    document.querySelectorAll("[data-daybar]").forEach(function(bar){
+      var any = false;
+      var n = bar.nextElementSibling;
+      while (n && n.classList.contains("piece")) {
+        if (!n.hidden) { any = true; break; }
+        n = n.nextElementSibling;
+      }
+      bar.hidden = !any;
+    });
+    document.querySelectorAll("[data-dayrail]").forEach(function(g){
+      var any = false;
+      g.querySelectorAll(".rail-link").forEach(function(a){
+        var ok = (chanFilter === "all" || a.getAttribute("data-chan") === chanFilter) &&
+                 (pubFilter === "any" || a.getAttribute("data-pub") === pubFilter);
+        a.hidden = !ok;
+        if (ok) any = true;
+      });
+      g.hidden = !any;
+    });
+    var shown = document.querySelectorAll(".piece:not([hidden])").length;
+    note.textContent = CHAN_NOTE[chanFilter] + PUB_NOTE[pubFilter] +
+      (shown === 0 ? " Nothing matches both filters." : " " + shown + " showing.");
+  }
+
+  document.querySelectorAll("[data-filter]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      chanFilter = btn.getAttribute("data-filter");
+      document.querySelectorAll("[data-filter]").forEach(function(b){
+        b.setAttribute("aria-pressed", String(b === btn));
+      });
+      apply();
+    });
+  });
+  document.querySelectorAll("[data-pub]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      pubFilter = btn.getAttribute("data-pub");
+      document.querySelectorAll("[data-pub]").forEach(function(b){
+        b.setAttribute("aria-pressed", String(b === btn));
+      });
+      apply();
+    });
+  });
+
+  apply();
+
+  /* ── rail scroll-spy ────────────────────────────────────────── */
+  var links = {};
+  document.querySelectorAll("[data-railfor]").forEach(function(a){
+    links[a.getAttribute("data-railfor")] = a;
+  });
+  if ("IntersectionObserver" in window) {
+    var spy = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        var a = links[entry.target.id];
+        if (!a) return;
+        if (entry.isIntersecting) {
+          Object.keys(links).forEach(function(k){ links[k].removeAttribute("aria-current"); });
+          a.setAttribute("aria-current", "true");
+        }
+      });
+    }, { rootMargin: "-10% 0px -70% 0px", threshold: 0 });
+    document.querySelectorAll(".piece").forEach(function(p){ spy.observe(p); });
+  }
+})();
+</script>

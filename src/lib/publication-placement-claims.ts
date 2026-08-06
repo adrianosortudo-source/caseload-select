@@ -38,6 +38,8 @@ export type ClaimNextAction =
   | "needs_reverification"
   | "use_new_idempotency_key";
 
+export type ReleasePath = "individual_approval" | "standing_authorization";
+
 export interface ClaimPlacementResult {
   ok: boolean;
   claimId?: string;
@@ -46,12 +48,26 @@ export interface ClaimPlacementResult {
   error?: string;
   existingClaimId?: string;
   nextAction?: ClaimNextAction;
+  /**
+   * Which release path authorized this claim: an individually approved
+   * version, or an enabled standing publishing authorization (see
+   * supabase/migrations/20260717230956_standing_publishing_authorization.sql).
+   * Optional in this parser (not required on every ok:true response) so a
+   * caller mocking an RPC response predating this field keeps working;
+   * the real RPC always includes it on every ok:true response.
+   */
+  releasePath?: ReleasePath;
 }
 
 const KNOWN_CLAIM_STATUSES: ReadonlySet<string> = new Set([
   "active",
   "released",
   "superseded",
+]);
+
+const KNOWN_RELEASE_PATHS: ReadonlySet<string> = new Set([
+  "individual_approval",
+  "standing_authorization",
 ]);
 
 const KNOWN_NEXT_ACTIONS: ReadonlySet<string> = new Set([
@@ -152,6 +168,14 @@ function parseClaimPlacementResponse(data: unknown): ClaimPlacementResult {
     return fail(`unrecognized "next_action" value: ${JSON.stringify(nextActionRaw)}`);
   }
 
+  const releasePathRaw = data.release_path;
+  if (
+    releasePathRaw !== undefined &&
+    (typeof releasePathRaw !== "string" || !KNOWN_RELEASE_PATHS.has(releasePathRaw))
+  ) {
+    return fail(`unrecognized "release_path" value: ${JSON.stringify(releasePathRaw)}`);
+  }
+
   const claimIdRaw = data.claim_id;
   if (data.ok === true) {
     // Fail-closed shape requirements for every ok:true response: the RPC
@@ -183,7 +207,40 @@ function parseClaimPlacementResponse(data: unknown): ClaimPlacementResult {
     error: errorRaw as string | undefined,
     existingClaimId: existingClaimIdRaw as string | undefined,
     nextAction: nextActionRaw as ClaimNextAction | undefined,
+    releasePath: releasePathRaw as ReleasePath | undefined,
   };
+}
+
+export interface PlacementClaimRecord {
+  id: string;
+  placement_id: string;
+  approved_version_id: string;
+  status: "active" | "released" | "superseded";
+  release_path: ReleasePath;
+  standing_authorization_event_id: string | null;
+  claimed_by_role: "operator" | "lawyer" | "system";
+  claimed_by_name: string | null;
+  claimed_at: string;
+}
+
+/**
+ * The most recent claim for a placement, regardless of status -- used to
+ * render publication status (which release path authorized the current
+ * or most recent release attempt) on the deliverable detail page. Read
+ * directly, not through the RPC: this is a display query, not a mutation.
+ */
+export async function getLatestClaimForPlacement(
+  placementId: string,
+): Promise<PlacementClaimRecord | null> {
+  const { data, error } = await supabase
+    .from("publication_placement_claims")
+    .select("id, placement_id, approved_version_id, status, release_path, standing_authorization_event_id, claimed_by_role, claimed_by_name, claimed_at")
+    .eq("placement_id", placementId)
+    .order("claimed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`getLatestClaimForPlacement failed: ${error.message}`);
+  return (data as PlacementClaimRecord | null) ?? null;
 }
 
 /**

@@ -36,6 +36,7 @@ const SAKURABA = load("sakurabalaw");
 const TMALAW = load("tmalaw");
 const THEMB = load("themblawfirm");
 const GOSAI = load("gosailaw");
+const DRGLAW = load("drglaw");
 
 function titlesOf(issues: Array<{ title: string }>): string[] {
   return issues.map((i) => i.title);
@@ -195,5 +196,81 @@ describe("calibration: marathonlaw.ca (Squarespace, sitemap-only pages, short se
     expect(titles).toContain("Business / LegalService schema");
     expect(titles).toContain("Content-Security-Policy");
     expect(titles).toContain("Trust signals");
+  });
+});
+
+describe("calibration: drglaw.ca (2026-07-16 dogfood audit corrections)", () => {
+  // Captured live via the fixed engine (POST /api/tools/seo-check, quick
+  // mode, 10 pages). The ORIGINAL 50-page deep audit against this same site
+  // reported: Image alt text missing (decorative walnut background), CSP
+  // High/Missing (report-only was live sitewide), no Google Business Profile
+  // link (a maps?cid= permalink was on the page), only 2/5 trust signal
+  // types (three attributed client quotes went undetected), and Question-
+  // format headings / Authoritative citations required on every page type
+  // including /contact. This fixture pins that none of those regress.
+
+  it("does not flag Image alt text: the decorative walnut background is correctly credited, not missing", () => {
+    const home = DRGLAW.pages.find((p) => p.url === "https://drglaw.ca");
+    const onPage = home?.categories.find((c) => c.name === "On-Page SEO");
+    const altItem = onPage?.items.find((i) => i.label === "Image alt text");
+    expect(altItem?.status).toBe("pass");
+    const issues = buildIssues(DRGLAW.pages);
+    expect(titlesOf(issues)).not.toContain("Image alt text");
+  });
+
+  it("recognizes the maps?cid= Google Business Profile link and does not fire the missing-GBP finding", () => {
+    const home = DRGLAW.pages.find((p) => p.url === "https://drglaw.ca");
+    const localSeo = home?.categories.find((c) => c.name === "Local SEO");
+    const gbpItem = localSeo?.items.find((i) => i.label === "Google Business Profile link");
+    expect(gbpItem?.status).toBe("pass");
+    const issues = buildIssues(DRGLAW.pages);
+    expect(titlesOf(issues)).not.toContain("Google Business Profile link");
+  });
+
+  it("credits Content-Security-Policy-Report-Only as implementation in progress, never at High severity", () => {
+    const issues = buildIssues(DRGLAW.pages);
+    const csp = issues.find((i) => i.title === "Content-Security-Policy");
+    expect(csp).toBeTruthy();
+    expect(csp?.severity).not.toBe("high");
+    expect(csp?.severity).not.toBe("critical");
+  });
+
+  it("credits the homepage's attributed client quotes as testimonials (3 of 5 trust signal types, up from 2)", () => {
+    const home = DRGLAW.pages.find((p) => p.url === "https://drglaw.ca");
+    expect(home?.lawFirm.trust.testimonials).toBe(true);
+    expect(home?.lawFirm.trust.reviews).toBe(true);
+    const legalMkt = home?.categories.find((c) => c.name === "Legal Marketing");
+    const trustItem = legalMkt?.items.find((i) => i.label === "Trust signals");
+    expect(trustItem?.status).toBe("pass");
+  });
+
+  it("does not require question headings or authoritative citations on the contact page", () => {
+    const contact = DRGLAW.pages.find((p) => p.url === "https://drglaw.ca/contact");
+    const aiVis = contact?.categories.find((c) => c.name === "AI Visibility");
+    const questionItem = aiVis?.items.find((i) => i.label === "Question-format headings");
+    const citationItem = aiVis?.items.find((i) => i.label === "Authoritative citations");
+    expect(questionItem?.status).toBe("pass");
+    expect(citationItem?.status).toBe("pass");
+    expect(questionItem?.detail).toMatch(/not required for a contact page/i);
+  });
+
+  it("does not require a fixed word-count minimum on the contact page", () => {
+    const contact = DRGLAW.pages.find((p) => p.url === "https://drglaw.ca/contact");
+    const linksContent = contact?.categories.find((c) => c.name === "Links & Content");
+    const wordCountItem = linksContent?.items.find((i) => i.label === "Word count");
+    expect(wordCountItem?.status).toBe("pass");
+  });
+
+  it("merges the Address / NAP duplicate: at most one Address-related issue per affected page set", () => {
+    const issues = buildIssues(DRGLAW.pages);
+    const addressIssues = issues.filter((i) => i.title === "Address / NAP" || i.title === "Street address (NAP)");
+    // Both labels may appear only if their affected-page sets genuinely
+    // differ; they must never both list the identical page set.
+    const legal = issues.find((i) => i.title === "Address / NAP");
+    const local = issues.find((i) => i.title === "Street address (NAP)");
+    if (legal && local) {
+      expect(new Set(legal.affectedUrls)).not.toEqual(new Set(local.affectedUrls));
+    }
+    expect(addressIssues.length).toBeLessThanOrEqual(2);
   });
 });

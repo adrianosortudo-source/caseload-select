@@ -265,6 +265,23 @@ describe("buildSeoMetadata", () => {
     expect(seoMetadata.generator).toBe("structured_v1");
     expect((seoMetadata.schema as Record<string, unknown>).legal_service).toBeDefined();
   });
+
+  it("snapshots source_brief.direct_answer onto the version (direct answer / quotable definition rule)", () => {
+    const output = makeValidOutput();
+    const strategy = makeStrategy();
+    const directAnswer = { applicability: "required", text: "A shareholder agreement is a contract.", classification: "explanatory" };
+    const schema = assembleSchemaBlocks(output, strategy, { primary_query: "x" });
+    const seoMetadata = buildSeoMetadata(output, { primary_query: "x", direct_answer: directAnswer }, schema);
+    expect(seoMetadata.direct_answer).toEqual(directAnswer);
+  });
+
+  it("defaults direct_answer to null when the brief made no decision", () => {
+    const output = makeValidOutput();
+    const strategy = makeStrategy();
+    const schema = assembleSchemaBlocks(output, strategy, { primary_query: "x" });
+    const seoMetadata = buildSeoMetadata(output, { primary_query: "x" }, schema);
+    expect(seoMetadata.direct_answer).toBeNull();
+  });
 });
 
 describe("flattenServicePageToPlainText", () => {
