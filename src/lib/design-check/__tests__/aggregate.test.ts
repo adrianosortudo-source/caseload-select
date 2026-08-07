@@ -31,14 +31,25 @@ function authority(score: number, redFlags: AuthorityDimensionResult["redFlags"]
 }
 
 describe("scoreToLetterGrade", () => {
-  it("maps the fixed A/B/C/D/F curve both source docs agree on", () => {
+  it("maps the curve recalibrated in Phase 5 of docs/BUILD_PLAN_design_check_calibration_v1.md, not the framework doc's original 90/80/70/60", () => {
+    // That original academic curve graded all six regression domains F,
+    // including a site built to doctrine with zero active flags: a
+    // calibration failure, not a market finding. This curve is derived
+    // from the measured six-domain baseline under three fixed
+    // constraints (the doctrine-built anchor lands B+, uncapped
+    // mid-market sites land C/D not F, F stays reserved for a real
+    // disqualifying flag or the genuine bottom tail); see
+    // docs/CALIBRATION_PROPOSAL_website_design_grading_v1.md "Corrected
+    // baseline v2" for the full derivation.
     expect(scoreToLetterGrade(100)).toBe("A");
-    expect(scoreToLetterGrade(90)).toBe("A");
-    expect(scoreToLetterGrade(89)).toBe("B");
-    expect(scoreToLetterGrade(80)).toBe("B");
-    expect(scoreToLetterGrade(70)).toBe("C");
-    expect(scoreToLetterGrade(60)).toBe("D");
-    expect(scoreToLetterGrade(59)).toBe("F");
+    expect(scoreToLetterGrade(85)).toBe("A");
+    expect(scoreToLetterGrade(84)).toBe("B");
+    expect(scoreToLetterGrade(65)).toBe("B");
+    expect(scoreToLetterGrade(64)).toBe("C");
+    expect(scoreToLetterGrade(55)).toBe("C");
+    expect(scoreToLetterGrade(54)).toBe("D");
+    expect(scoreToLetterGrade(45)).toBe("D");
+    expect(scoreToLetterGrade(44)).toBe("F");
     expect(scoreToLetterGrade(0)).toBe("F");
   });
 });
@@ -117,7 +128,9 @@ describe("buildTrack1Report red-flag capping", () => {
     );
     expect(report.uncappedScore).toBeGreaterThan(55);
     expect(report.score).toBe(55);
-    expect(report.letterGrade).toBe("F");
+    // 55 is the recalibrated curve's exact C threshold (Phase 5); the
+    // letter is incidental here, the real assertion is the cap above.
+    expect(report.letterGrade).toBe("C");
   });
 
   it("leaves the score uncapped when no flag is active", () => {

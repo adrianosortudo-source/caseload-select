@@ -263,6 +263,67 @@ while its dimension score rose from 50 to 83 as other, genuinely
 resolvable samples on the same page gained real coverage. Server logs
 confirmed no `[design-check]` vision-degradation lines across all scans.
 
+## Corrected baseline v2 (2026-08-06, post Phases 1-4)
+
+Same six domains, measured after every fix in
+`BUILD_PLAN_design_check_calibration_v1.md` Phases 1 through 4 (sample-
+pollution and 8pt-grid fixes to spacing, paint-order contrast resolution,
+the disqualifying/advisory flag split, and the attainable-score
+mechanic). Grades in this table use the curve derived below, not the
+original 90/80/70/60 curve the "Corrected baseline" table further up
+this document still shows.
+
+| Domain | Score | Uncapped | Attainable | Grade | Ceiling | Flags |
+|---|---|---|---|---|---|---|
+| drglaw.ca | 68 | 68 | 74 (B) | B | none | none |
+| sakurabalaw.ca | 71 | 71 | 73 (B) | B | none | generic_full_service (advisory), no_author_entity (advisory) |
+| gosailaw.com | 69 | 69 | 75 (B) | B | none | no_author_entity (advisory) |
+| tmalaw.ca | 59 | 59 | 62 (C) | C | none | no_author_entity (advisory) |
+| marathonlaw.ca | 40 | 47 | 47 (F) | F | 40 | self_designation_without_proof (disqualifying), lso_specialist_expert_unearned (disqualifying), no_author_entity (advisory), unattributed_testimonials (advisory) |
+| themblawfirm.ca | 40 | 55 | 55 (F) | F | 40 | contrast_failure (disqualifying), self_designation_without_proof (disqualifying), no_author_entity (advisory) |
+
+Every uncapped site improved over the "Corrected baseline" table earlier
+in this document (drglaw 58 to 68, sakurabalaw 55 to 71, gosailaw 55 to
+69, tmalaw 55 to 59), because the Phase 1 and 2 fixes recovered real,
+previously-mismeasured points (drglaw's spacing check alone moved 0 to
+100), not because anything was loosened. marathonlaw.ca and
+themblawfirm.ca correctly still cap at 40: their disqualifying flags are
+real (an unearned LSO "expert" claim, an actual WCAG contrast failure),
+and capping, not averaging, is the framework's own explicit instruction.
+
+### Recalibrated curve
+
+```
+A: 85+   B: 65+   C: 55+   D: 45+   F: below 45
+```
+
+Replaces the framework doc's original 90/80/70/60. Derived under three
+constraints fixed by the execution plan before this curve was chosen,
+not adjusted after the fact to fit a target:
+
+1. **drglaw.ca (zero flags, built to doctrine) lands B or better.** At
+   68, it clears 65 with a 3-point margin, enough to absorb the ordinary
+   vision-model run-to-run variance already observed this session
+   (typically 1-3 points on repeated scans of the same unchanged page).
+2. **Uncapped mid-market sites land C or D, never F.** sakurabalaw (71)
+   and gosailaw (69) land B; tmalaw (59) lands C. None land F.
+3. **F stays reserved for a real disqualifying flag or the genuine
+   bottom tail.** marathonlaw and themblawfirm are the only two F
+   grades, and both are F because their score is capped at 40 by an
+   active dark pattern, WCAG failure, or LSO exposure, exactly the
+   "active harm" bar Phase 3 set for disqualifying status; nothing about
+   the curve itself pushes them there.
+
+Sample size is 6 domains. This is a rubric position, derived from what
+has actually been measured, not a claim about the Toronto law firm
+market as a whole, and it is expected to move as the measured sample
+grows past 6. It must never be presented to a reader as "how this site
+compares to other firms," only as "how this site compares to this
+tool's own published rubric." The curve-pinning test in
+`aggregate.test.ts` documents this basis inline so a future change to
+the thresholds has to consciously overwrite the reasoning, not just the
+numbers.
+
 ## What is not proposed
 
 No change to what the tool measures, to the dimension weights, to the

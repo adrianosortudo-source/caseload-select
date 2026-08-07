@@ -27,13 +27,39 @@ export interface GradeBand {
   min: number;
 }
 
-// Fixed curve, consistent between the master framework's own example
-// (line 183) and the Authority module's grade-band table (line 162).
+// Recalibrated 2026-08-06, Phase 5 of
+// docs/BUILD_PLAN_design_check_calibration_v1.md, replacing the
+// framework doc's original academic curve (90/80/70/60). That curve
+// graded every one of the six regression domains F, including
+// drglaw.ca, a site built to doctrine with zero active flags: a
+// calibration failure, not a finding about the market, and a direct
+// conflict with the standing "frame upside, never deficit" product rule.
+//
+// Derived from the corrected six-domain baseline (measured after the
+// Phase 1-4 fixes: the sample-pollution and paint-order contrast fixes,
+// the disqualifying/advisory flag split, and the attainable-score
+// mechanic), under three constraints fixed by the plan before this
+// curve was chosen:
+//   - drglaw.ca (zero flags, built to doctrine) must land B or better;
+//   - the uncapped mid-market sites must land C or D, never F;
+//   - F stays reserved for a site actually capped by a disqualifying
+//     flag (an active dark pattern, a WCAG contrast failure, an LSO
+//     Rule 4.2-1 exposure), or the genuine bottom tail.
+// Measured (2026-08-06): drglaw.ca 68, sakurabalaw.ca 71, gosailaw.com
+// 69, tmalaw.ca 59, all uncapped; marathonlaw.ca and themblawfirm.ca
+// both capped at 40 by a real disqualifying flag. See
+// docs/CALIBRATION_PROPOSAL_website_design_grading_v1.md "Corrected
+// baseline v2" for the full table this curve was derived from.
+//
+// Sample size is 6 domains. This curve is a rubric position, not a
+// market-ranking claim, and is expected to move as the measured sample
+// grows; do not present it anywhere as "how this site compares to other
+// firms," only as "how this site compares to this tool's own rubric."
 const GRADE_BANDS: GradeBand[] = [
-  { letter: "A", min: 90 },
-  { letter: "B", min: 80 },
-  { letter: "C", min: 70 },
-  { letter: "D", min: 60 },
+  { letter: "A", min: 85 },
+  { letter: "B", min: 65 },
+  { letter: "C", min: 55 },
+  { letter: "D", min: 45 },
   { letter: "F", min: 0 },
 ];
 
