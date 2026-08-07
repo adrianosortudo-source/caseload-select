@@ -189,6 +189,122 @@
   display: block;
 }
 
+/* ---------------------------------------------------------------------------
+   Hero headline overlay.
+
+   The weekly web crops are deliberately text-free (CSB `format-image-web`);
+   the site sets the eyebrow and headline as live HTML over the photograph, and
+   this reproduces that so a reviewer sees the finished article rather than a
+   bare image. Values are the CSB's own, expressed as proportions of the hero
+   width so they hold at any preview size:
+
+     Counsel Note, `format-image-hero` at 1200x628 -- bottom-up linear scrim,
+     ink #1A1410 at 72% on the lower edge, 34% at 34% height, transparent by
+     62%; text block 4% left/right, 6% bottom; eyebrow brass 22px uppercase
+     700 at .18em; headline paper #FFFCF6 serif 48px/1.2 700.
+
+     Clause in the Margin, `format-clause-overlay` -- NOT the bottom band (that
+     slide states a Clause hero built to the Counsel Note's values "is now the
+     defect"). A soft radial vignette centred in the reserved empty ground, ink
+     #1A1410 at 52% fading to transparent; text block top 16%, right 6%,
+     width 56%, right-aligned.
+
+   Each font-size carries a px fallback first for engines without container
+   query units, then the cqw value that actually scales.
+   --------------------------------------------------------------------------- */
+.cls-drg-article .drg-hero-frame {
+  container-type: inline-size;
+}
+
+.cls-drg-article .drg-hero-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.cls-drg-article .drg-hero-scrim {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+
+.cls-drg-article .drg-hero-overlay.is-low .drg-hero-scrim {
+  background: linear-gradient(
+    to top,
+    rgba(26, 20, 16, 0.72) 0%,
+    rgba(26, 20, 16, 0.34) 34%,
+    rgba(26, 20, 16, 0) 62%
+  );
+}
+
+.cls-drg-article .drg-hero-overlay.is-margin .drg-hero-scrim {
+  background: radial-gradient(
+    ellipse 52% 74% at 72% 34%,
+    rgba(26, 20, 16, 0.52) 0%,
+    rgba(26, 20, 16, 0.3) 46%,
+    rgba(26, 20, 16, 0) 76%
+  );
+}
+
+.cls-drg-article .drg-hero-text {
+  position: absolute;
+  /* Only the text captures clicks; the rest of the hero stays a click target
+     for an image comment. */
+  pointer-events: auto;
+}
+
+.cls-drg-article .drg-hero-overlay.is-low .drg-hero-text {
+  left: 4%;
+  right: 4%;
+  bottom: 6%;
+  text-align: left;
+}
+
+.cls-drg-article .drg-hero-overlay.is-margin .drg-hero-text {
+  top: 16%;
+  right: 6%;
+  width: 56%;
+  text-align: right;
+}
+
+.cls-drg-article .drg-hero-eyebrow {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--brass);
+  margin: 0 0 0.6em;
+  font-size: 13px;
+  font-size: 1.833cqw;
+  text-shadow: 0 1px 10px rgba(26, 20, 16, 0.5);
+}
+
+.cls-drg-article .drg-display.on-hero {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.012em;
+  color: var(--paper);
+  margin: 0;
+  font-size: 28px;
+  font-size: 4cqw;
+  font-variation-settings: "opsz" 48;
+  text-shadow: 0 2px 18px rgba(26, 20, 16, 0.42);
+}
+
+/* The header's commented cue is a pale brass tint, which disappears against a
+   dark scrim. On the hero the same state reads as a brass rule instead. */
+.cls-drg-article .drg-display.on-hero:hover {
+  background: rgba(184, 149, 106, 0.16);
+}
+
+.cls-drg-article .drg-display.on-hero.is-commented {
+  background: rgba(184, 149, 106, 0.2);
+  box-shadow: inset 0 0 0 2px var(--brass);
+}
+
 .cls-drg-article .drg-hero-frame.is-empty {
   font-family: var(--font-serif);
   font-weight: 600;
