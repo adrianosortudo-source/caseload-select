@@ -459,7 +459,13 @@ describe('Pending-slot reply routing across the contact-capture detour (#172)', 
     expect(sentText.toLowerCase()).toContain('starting something new');
     expect(sentText.toLowerCase()).not.toContain('what is your name');
     // Carries the clarifier prefix (#174 confirmation-framed copy).
-    expect(sentText.toLowerCase()).toContain("didn't get your last reply");
+    // Copy softened 2026-08-07 (C3): by the time this clarifier fires,
+    // the LLM option-mapping fallback has also already failed to resolve
+    // the reply (this test does not mock @/lib/llm-option-map, so the
+    // real helper runs and returns {value:null, mode:'disabled'} since
+    // no Gemini key is configured in the test env — same outcome as a
+    // mocked null).
+    expect(sentText.toLowerCase()).toContain('make sure i record this correctly');
     // pendingAskedSlotId stays on advisory_path so the next reply routes
     // back to it.
     const persisted = mocks.lastPersistedState as

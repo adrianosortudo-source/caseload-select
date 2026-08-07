@@ -46,7 +46,7 @@ import { runEvidencePass } from '@/lib/screen-engine/slotEvidence';
 import { mergeLlmResults } from '@/lib/screen-engine/llm/extractor';
 import { buildReport } from '@/lib/screen-engine/report';
 import { computeBand } from '@/lib/screen-engine/band';
-import { getNextStep } from '@/lib/screen-engine/control';
+import { getNextStep, applyAnswer } from '@/lib/screen-engine/control';
 import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
 import type { EngineState, Band, SlotDefinition, LawyerReport } from '@/lib/screen-engine/types';
@@ -56,6 +56,8 @@ import {
   describeSituationFirstAsk,
   contactCaptureFirstAsk,
 } from '@/lib/channel-intake-intro';
+import { llmMapOptionReply } from '@/lib/llm-option-map';
+import { isValidOptionValue } from '@/lib/llm-option-map-pure';
 import { buildClosingMessage } from '@/lib/screen-engine/closing';
 import { persistUnconfirmedInquiry } from '@/lib/unconfirmed-inquiry';
 import {
@@ -570,6 +572,61 @@ export async function processChannelInbound(
     state = applyFreeTextAnswerMapping(trimmed, state);
   }
 
+  // LLM option-mapping fallback (C3, 2026-08-07). Every deterministic
+  // adapter above (pending-slot digit/word-number/sentinel/fuzzy match,
+  // numeric mapping, free-text fuzzy match, free-text answer mapping)
+  // has now had a chance to resolve the reply. If the bot's last ask was
+  // a numbered (single_select) question and none of them resolved it,
+  // isUserGroundedFill is still false. Rather than falling straight to
+  // the "I didn't get your reply, use a number" clarifier — a broken
+  // promise once the C2 intro says "answer in your own words" — ask the
+  // LLM to map the lead's own wording onto one of the options offered.
+  //
+  // A mapped value earns 'answered' provenance via applyAnswer (not
+  // 'llm_inferred' slot-fill), because the user DID answer this specific
+  // question; the LLM only translates their wording onto the option list
+  // WE offered, which is a materially different and narrower claim than
+  // a free-form extraction guess. See llm-option-map-pure.ts for why the
+  // membership check before applyAnswer is mandatory: never feed an
+  // LLM-invented value into the engine.
+  //
+  // Ordering: must run BEFORE llmExtractServer (immediately below), not
+  // inside Phase C's pending-slot block further down. Phase C computes
+  // getNextStep(state) later in this same turn; the answer applied here
+  // needs to already be in `state` at that point so the NEXT question is
+  // selected correctly, not the one we just resolved.
+  let pendingLlmMapped = false;
+  if (isResume && !pendingConsumed && !nameCaptureConsumed) {
+    const pendingId = state.pendingAskedSlotId;
+    const pendingSlot = pendingId ? SLOT_REGISTRY.find((s) => s.id === pendingId) : undefined;
+    if (
+      pendingId &&
+      pendingSlot &&
+      pendingSlot.tier !== 'contact' &&
+      pendingSlot.input_type === 'single_select' &&
+      pendingSlot.options &&
+      pendingSlot.options.length > 0 &&
+      pendingSlot.applies_to.includes(state.matter_type as never) &&
+      !isUserGroundedFill(state, pendingId)
+    ) {
+      try {
+        const mapped = await llmMapOptionReply({
+          questionLabel: pendingSlot.question,
+          options: pendingSlot.options,
+          reply: trimmed,
+          language: state.language ?? 'en',
+        });
+        if (isValidOptionValue(mapped.value, pendingSlot.options)) {
+          state = applyAnswer(state, pendingId, mapped.value as string);
+          state = { ...state, pendingAskedSlotId: null };
+          pendingLlmMapped = true;
+        }
+      } catch (err) {
+        console.warn(`[channel-intake] llmMapOptionReply failed channel=${channel}:`, err);
+      }
+    }
+  }
+
   // LLM extraction: best-effort, never aborts. Runs on the new turn text
   // and merges into existing state. On a resume turn, the LLM sees just
   // the new text; on first turn it sees the full inbound. The doctrine
@@ -581,7 +638,12 @@ export async function processChannelInbound(
   // Hoisted so the LLM-disabled alert (#128, global across channels per the
   // fixes-are-global doctrine) can see what extraction returned.
   let llmMode: 'live' | 'disabled' | 'error' | 'degraded' | null = null;
-  if (state.matter_type !== 'out_of_scope' && !nameCaptureConsumed && !pendingConsumed) {
+  if (
+    state.matter_type !== 'out_of_scope' &&
+    !nameCaptureConsumed &&
+    !pendingConsumed &&
+    !pendingLlmMapped
+  ) {
     try {
       const llm = await llmExtractServer(trimmed, state);
       llmMode = llm.mode;
@@ -1030,9 +1092,17 @@ export async function processChannelInbound(
       if (clarifyReask) {
         // Brand-safe clarifier, i18n-aware with English fallback. No
         // em-dash, no banned vocabulary, no time-relative promise.
+        //
+        // Copy softened 2026-08-07 (C3): by the time this fires, the C3
+        // LLM option-mapping fallback (above) has ALSO already failed to
+        // resolve the reply — every available path, deterministic and
+        // LLM, came up empty. Asking for a number at that point is an
+        // honest ask, not a contradiction of the C2 intro's "answer in
+        // your own words" — the intro's promise was kept; two independent
+        // attempts to honor it did not work for this particular reply.
         const clarifier =
           i18n.widget_strings?.didnt_catch ||
-          "Sorry, I didn't get your last reply. Could you confirm by replying with the number of the option that fits best?";
+          "Thanks, I want to make sure I record this correctly. Could you reply with the number of the option that fits best?";
         questionText = `${clarifier}\n\n${questionText}`;
       }
       // First-ask intro (C2, 2026-08-07): !isResume specifically (see
