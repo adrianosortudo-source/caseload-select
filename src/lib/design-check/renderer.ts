@@ -310,11 +310,72 @@ const DOM_SNAPSHOT_SCRIPT = /* js */ `
     } catch (e) { return null; }
   }
 
+  // A transparent own background-color means this element paints nothing;
+  // the effective background is whatever is actually painted behind it.
+  // Uses document.elementsFromPoint at the element's own on-screen
+  // centre to read the real browser paint order, rather than walking the
+  // DOM ancestor tree: an ancestor-only walk cannot see a hero photo
+  // implemented as an absolutely-positioned sibling image plus a
+  // gradient-scrim sibling div (the standard technique for a
+  // photo-with-darkening-overlay hero, and the technique drglaw.ca's own
+  // hero uses), because neither the image nor the scrim is a CSS
+  // ancestor of the text. An ancestor-only version of this fix was tried
+  // first and rejected: it resolved past the hero entirely to the plain
+  // page background four sections down, producing a false 1:1 "contrast
+  // failure" on legible white-on-dark hero text, a materially worse
+  // defect than the "not checkable" it replaced (a confident wrong
+  // accusation instead of a disclosed unknown, on the exact kind of
+  // finding this tool's own copy calls "an accessibility floor, not a
+  // stylistic preference"). elementsFromPoint returns every element
+  // stacked at that pixel in real front-to-back paint order, so an
+  // absolutely-positioned sibling image or scrim is seen exactly where
+  // it visually sits, the same way gosailaw.com's ancestor-owned hero
+  // photo is: if an image-painting element (an <img>/<video>/<canvas>/
+  // <svg>, or anything with a background-image) is encountered before an
+  // opaque background-color, the result is left unresolved rather than
+  // trusted, so wcag-contrast.ts's existing checkTextContrast (which
+  // already treats any alpha>0 colour as checkable) can grade the
+  // remaining, genuinely resolvable, extremely common case of a text
+  // element with no background of its own sitting over a plain-coloured
+  // section, without guessing at the cases it cannot see through.
+  function colorAlpha(rgbaString) {
+    var m = rgbaString.match(/rgba?\\(\\s*[\\d.]+\\s*,\\s*[\\d.]+\\s*,\\s*[\\d.]+\\s*(?:,\\s*([\\d.]+)\\s*)?\\)/);
+    if (!m) return 0;
+    return m[1] !== undefined ? parseFloat(m[1]) : 1;
+  }
+
+  function resolveEffectiveBackgroundColor(el) {
+    var rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    var x = rect.left + rect.width / 2;
+    var y = rect.top + rect.height / 2;
+    if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) return null; // off-screen at capture time; elementsFromPoint is unreliable outside the viewport
+    var stack;
+    try { stack = document.elementsFromPoint(x, y); } catch (e) { return null; }
+    if (!stack) return null;
+    for (var i = 0; i < stack.length; i++) {
+      var node = stack[i];
+      if (node === el || el.contains(node)) continue; // the text element and its own inline markup, not a background
+      var cs = getComputedStyle(node);
+      var isImagePaintingNode = ['IMG', 'VIDEO', 'CANVAS', 'SVG', 'PICTURE'].indexOf(node.tagName) !== -1;
+      if (isImagePaintingNode || (cs.backgroundImage && cs.backgroundImage !== 'none')) return null;
+      if (colorAlpha(cs.backgroundColor) > 0) return cs.backgroundColor; // first opaque colour actually painted behind the text, nothing image-like was in front of it
+    }
+    return null;
+  }
+
   function sampleText(el) {
     var cs = getComputedStyle(el);
     var rect = el.getBoundingClientRect();
     var text = (el.innerText || '').trim().slice(0, 200);
     var fontSizePx = parseFloat(cs.fontSize) || 0;
+    // Only resolve through the paint stack when the element has no
+    // background of its own; an element that already declares a real
+    // opaque background (e.g. a filled button) must use that colour
+    // directly, never whatever happens to sit behind it once the
+    // element itself is excluded from the stack walk.
+    var ownBackgroundIsTransparent = colorAlpha(cs.backgroundColor) === 0;
+    var effectiveBackground = ownBackgroundIsTransparent ? resolveEffectiveBackgroundColor(el) : null;
     return {
       tag: el.tagName.toLowerCase(),
       text: text,
@@ -323,7 +384,7 @@ const DOM_SNAPSHOT_SCRIPT = /* js */ `
       fontFamily: cs.fontFamily,
       lineHeightPx: parseFloat(cs.lineHeight) || 0,
       color: cs.color,
-      backgroundColor: cs.backgroundColor,
+      backgroundColor: effectiveBackground || cs.backgroundColor,
       textTransform: cs.textTransform,
       textAlign: cs.textAlign,
       widthPx: rect.width,

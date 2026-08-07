@@ -186,10 +186,82 @@ dimension, and no other domain in the regression set, changed status
 under the fix; the named-scale-only path is untouched for every value
 that was already correctly classified before this change.
 
-### Phase 2: contrast not-checkable on drglaw.ca and gosailaw.com
+### Phase 2: contrast not-checkable on drglaw.ca and gosailaw.com (fixed)
 
-Pending. See `BUILD_PLAN_design_check_calibration_v1.md` Phase 2 for the
-investigation protocol.
+**Root cause.** Confirmed the plan's hypothesis exactly: every sampled
+text element (h1, body paragraphs, CTAs, one per heading level) on
+drglaw.ca and gosailaw.com had a transparent own `background-color`, so
+`checkTextContrast` reported every one of them not checkable. Dumping
+the actual ancestor chain behind each sample showed the effective
+background was always painted by something further up.
+
+**Fix, attempt 1 (rejected, kept for the record).** A DOM ancestor walk,
+finding the first ancestor with a non-transparent own background-color
+and refusing to trust it if an intervening ancestor carried a
+background-image. This correctly fixed gosailaw.com (whose hero photo is
+a real `background-image` on the `<header>` ancestor itself) but, live
+on drglaw.ca, produced a **false contrast failure**: a confident `1:1`
+"fail" on legible white hero text. Root cause of THIS defect: drglaw.ca's
+hero uses the standard photo-with-darkening-scrim technique via
+absolutely-positioned SIBLING elements (`<img class="v3-hero-bg">` and a
+`<div class="v3-hero-scrim">` carrying the gradient), not an ancestor's
+own CSS properties. A DOM-ancestor-only walk cannot see a sibling; it
+resolved straight past the entire hero to the plain page background four
+sections down, and that background happened to be close in luminance to
+the hero text colour, producing a false near-identical-colours failure.
+A confidently wrong accusation on a check the tool's own copy calls "an
+accessibility floor, not a stylistic preference" is a materially worse
+defect than the "not checkable" it was meant to fix, so this version was
+not shipped.
+
+**Fix, attempt 2 (shipped).** Replaced the DOM-tree walk with
+`document.elementsFromPoint()` at the sampled element's own on-screen
+centre: this asks the browser for the real front-to-back paint order at
+that pixel, which inherently includes absolutely-positioned siblings,
+z-index stacking, and everything else a hand-rolled ancestor walk would
+have to reimplement. The walk still refuses to trust anything once it
+passes an `<img>`/`<video>`/`<canvas>`/`<svg>`/`<picture>` element or
+anything with a `background-image`, before it reaches an opaque
+`background-color`; drglaw.ca's hero scrim and photo are both correctly
+encountered first in paint order and correctly leave that specific
+sample unresolved. Also fixed a second defect caught before it shipped:
+the resolver was being called unconditionally, including for elements
+that already declare their OWN real opaque background (a filled button),
+which would have resolved to whatever sits BEHIND the element once the
+element itself was excluded from the stack walk, discarding a colour
+that was already correct. Gated: the resolver only runs when the
+element's own background is genuinely transparent.
+
+**Exact code path.** `src/lib/design-check/renderer.ts`,
+`resolveEffectiveBackgroundColor` (new, in-page) and `sampleText`
+(gates the call on the element's own background actually being
+transparent). `wcag-contrast.ts` and `color-contrast.ts` are unchanged;
+the fix only changes what colour string reaches their existing,
+untouched checkable/not-checkable logic.
+
+**Tests added.** `src/lib/design-check/dimensions/__tests__/color-contrast.test.ts`
+(new, 4 tests; `scoreColorContrast` had zero prior coverage). The paint-stack
+resolver itself runs only in a real browser and is not unit-testable in
+jsdom; these tests instead pin how the dimension scorer combines resolved
+and still-unresolved samples, using fixtures that reproduce the three
+real outcomes the live check produced (a clean resolved pass, a resolved
+sample that still fails WCAG, and a genuinely unresolvable sample staying
+not-checkable), plus the mixed-coverage note. `wcag-contrast.test.ts`'s
+existing 15 math tests pass unchanged, confirming the fix did not touch
+the contrast formula itself, only what background colour reaches it.
+
+**Impact on existing behavior.** Live-verified end to end, both
+directions, through the real API route: drglaw.ca Color and Contrast
+moved from fully uncheckable to 100 (every resolvable sample passes
+clean, zero contrast findings, no `contrast_failure` flag), overall
+score 73 to 78. gosailaw.com's dimension honestly stays fully
+uncheckable: its one substantive text sample (the h1) sits directly over
+its hero photo, so correctly staying unresolved is the accurate outcome,
+not a remaining gap in the fix. themblawfirm.ca's real `contrast_failure`
+flag survives unchanged (still fires on "Book an appointment" at 1.77:1),
+while its dimension score rose from 50 to 83 as other, genuinely
+resolvable samples on the same page gained real coverage. Server logs
+confirmed no `[design-check]` vision-degradation lines across all scans.
 
 ## What is not proposed
 
