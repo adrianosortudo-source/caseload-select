@@ -79,6 +79,7 @@ export async function runGate(
   // --- content checks (mojibake, bare URLs, article structure, locked strings) ---
   const articlePieces = weekConfig.pieces.filter((p) => p.formatFamily === "counsel_note" || p.formatFamily === "clause_in_the_margin");
   const landingPieces = weekConfig.pieces.filter((p) => p.formatFamily === "lead_magnet_landing_page");
+  const decisionToolPieces = weekConfig.pieces.filter((p) => p.formatFamily === "decision_tool");
 
   for (const piece of articlePieces) {
     const { title, bodyHtml } = await currentBodyHtml(supabase, piece.deliverableId);
@@ -98,8 +99,34 @@ export async function runGate(
     push(`locked-string:${piece.contentSlotId}`, hasLockedCta, hasLockedCta ? "form-CTA convention present, byte-exact" : `"${LOCKED_STRINGS.leadMagnetCtaHref}" not found in "${title}"`);
   }
 
+  // --- checklist derivation from the Brief (validate_checklist_derivation.py) ---
+  // CSB_RULE_INDEX.yaml names format-checklist-derivation; before 2026-08-07 no
+  // script implemented it, which let a compliance-workflow checklist (three
+  // process steps, three decision questions, an un-numbered next step) pass
+  // every existing validator. Runs against checklist-source-{locale}.json under
+  // the week root -- the JSON source, not the rendered PDF/DB body, since the
+  // structural shape (section headings, question count, next-step framing) lives
+  // there and this check is meant to catch the defect before generation, not
+  // after. locale->file-suffix inferred from each decision_tool piece's own
+  // locale field, never hardcoded to "en"/"pt" alone.
+  for (const piece of decisionToolPieces) {
+    const localeSuffix = piece.locale.startsWith("pt") ? "pt" : "en";
+    const sourceFile = `checklist-source-${localeSuffix}.json`;
+    const sourcePath = path.join(root, sourceFile);
+    try {
+      const pyResult = runPythonScript(skillRoot, "validate_checklist_derivation.py", [sourcePath]);
+      const parsed: { result: "pass" | "fail"; errors: string[] } = JSON.parse(pyResult.stdout);
+      push(
+        `checklist-derivation:${piece.contentSlotId}`,
+        parsed.result === "pass",
+        parsed.result === "pass" ? "3 axis sections, 5 decision questions, cost-framed next step" : parsed.errors.join("; "),
+      );
+    } catch (e) {
+      push(`checklist-derivation:${piece.contentSlotId}`, false, `could not run validator against ${sourceFile}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   // --- content_kind conformance (F12: report-only, never blocks, never writes) ---
-  const decisionToolPieces = weekConfig.pieces.filter((p) => p.formatFamily === "decision_tool");
   for (const piece of decisionToolPieces) {
     const { data: d } = await supabase
       .from("content_deliverables")
