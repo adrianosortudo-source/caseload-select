@@ -278,6 +278,12 @@ const FAIL_CLOSED_BUCKETS: ReadonlySet<RateLimitBucket> = new Set<RateLimitBucke
   "requestLink",
   "otpSend",
   "otpVerify",
+  // designCheck: public, unauthenticated, and each request costs two real
+  // headless-browser renders plus two Gemini vision calls. A fail-open
+  // limiter on this route means the 8-per-10-minute cap silently does not
+  // exist whenever UPSTASH_* is unset, on the single most expensive
+  // public endpoint in the app.
+  "designCheck",
 ]);
 
 function failClosedMode(): boolean {

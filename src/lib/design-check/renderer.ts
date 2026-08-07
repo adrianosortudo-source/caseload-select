@@ -1,5 +1,5 @@
-import type { Browser, Page, Route } from "playwright-core";
-import { checkOutboundRequest } from "./ssrf-guard";
+import type { Browser, BrowserContext, Route } from "playwright-core";
+import { checkOutboundRequest, type ResolvedRequestCheck } from "./ssrf-guard";
 
 /**
  * Phase 0 rendering layer for the website design grading tool. Loads a URL
@@ -195,6 +195,11 @@ export interface WebVitalsSample {
 
 const NAV_TIMEOUT_MS = 20_000;
 const RENDER_SETTLE_MS = 1_500; // let web-vitals observers + fonts settle
+// Caps the redirect chain guardContextRoutes will walk for a single
+// intercepted request before refusing it outright. Bounds both a
+// pathological/hostile infinite-redirect loop and how long one request can
+// spend re-checking hops.
+const MAX_REDIRECT_HOPS = 10;
 
 /**
  * The Anthropic Messages API rejects any image whose longest edge exceeds
@@ -226,24 +231,130 @@ async function launchBrowser(): Promise<Browser> {
   return playwright.chromium.launch({ headless: true }) as unknown as Browser;
 }
 
-/** SSRF-guards every request the page issues: subresources, redirects, everything. */
-async function guardRoutes(page: Page, blocked: BlockedRequestLog[]): Promise<void> {
+/**
+ * SSRF-guards every request the browser context issues: subresources,
+ * popups, and — the part that matters here — every hop of a redirect.
+ *
+ * Registered on the BROWSER CONTEXT (context.route), not the page
+ * (page.route). page.route only covers the top-level page object it was
+ * attached to: a page opened by the rendered site itself (window.open, a
+ * target="_blank" click simulated by the site's own script) gets its own
+ * Page instance with NO route handler at all, so none of its requests are
+ * ever checked. context.route applies to every page the context creates,
+ * present and future, closing that gap (finding 3).
+ *
+ * Redirects are walked manually rather than trusting Playwright to re-fire
+ * this handler on each hop, because it does not: page.route's own request
+ * interception is only invoked once per *user-initiated* request. When
+ * that request's response is a same-navigation HTTP redirect, Chromium
+ * follows the Location header internally and Playwright surfaces the final
+ * destination without ever calling the route handler again for it. This
+ * was confirmed empirically while building this fix: a route handler that
+ * only inspected route.request().url() saw the original URL, never the
+ * redirect target, and a page that 302'd to a loopback address rendered
+ * its content through to the report with zero indication the guard had
+ * been bypassed (see renderer.redirect.test.ts).
+ *
+ * The fix drives the whole hop chain from inside this one route callback
+ * via route.fetch({ maxRedirects: 0 }), which performs exactly one HTTP
+ * request and returns its raw response — including a 3xx with a Location
+ * header — without Chromium ever being told to follow it. Each hop's
+ * *target* URL is checked with checkFn before it is ever fetched, so an
+ * attacker-controlled redirect to an internal address is rejected before
+ * a single byte of it is requested, not after the fact. Once a
+ * non-redirect response is reached (or the chain is exhausted / a hop is
+ * blocked), the original route is resolved exactly once via
+ * route.fulfill() or route.abort() — Chromium never performs its own
+ * follow-the-redirect network call for this request at all.
+ *
+ * checkFn defaults to the real SSRF guard and is only ever overridden in
+ * tests, to drive the same real interception mechanism against a local
+ * fixture server without depending on live DNS/network access.
+ */
+export async function guardContextRoutes(
+  context: BrowserContext,
+  blocked: BlockedRequestLog[],
+  checkFn: (url: string) => Promise<ResolvedRequestCheck> = checkOutboundRequest
+): Promise<void> {
   let intercepted = 0;
-  await page.route("**/*", async (route: Route) => {
+  await context.route("**/*", async (route: Route) => {
     intercepted++;
     if (intercepted > MAX_INTERCEPTED_REQUESTS) {
       blocked.push({ url: route.request().url(), reason: "request_budget_exceeded" });
       await route.abort();
       return;
     }
-    const url = route.request().url();
-    const check = await checkOutboundRequest(url);
-    if (check.blocked) {
-      blocked.push({ url, reason: check.reason ?? "blocked" });
+
+    const originalUrl = route.request().url();
+    let protocol: string;
+    try {
+      protocol = new URL(originalUrl).protocol;
+    } catch {
+      blocked.push({ url: originalUrl, reason: "unsupported_protocol" });
       await route.abort();
       return;
     }
-    await route.continue();
+    if (protocol !== "http:" && protocol !== "https:") {
+      // data:/blob:/about: and similar are same-document, no network
+      // request for checkFn to evaluate; nothing to guard.
+      await route.continue();
+      return;
+    }
+
+    let currentUrl = originalUrl;
+    let finalResponse: Awaited<ReturnType<Route["fetch"]>> | null = null;
+
+    for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
+      const check = await checkFn(currentUrl);
+      if (check.blocked) {
+        blocked.push({ url: currentUrl, reason: check.reason ?? "blocked" });
+        await route.abort();
+        return;
+      }
+
+      let hopResponse: Awaited<ReturnType<Route["fetch"]>>;
+      try {
+        hopResponse = await route.fetch({ url: currentUrl, maxRedirects: 0, timeout: NAV_TIMEOUT_MS });
+      } catch (err) {
+        blocked.push({
+          url: currentUrl,
+          reason: `fetch_failed: ${err instanceof Error ? err.message : String(err)}`,
+        });
+        await route.abort();
+        return;
+      }
+
+      const status = hopResponse.status();
+      if (status >= 300 && status < 400) {
+        const location = hopResponse.headers()["location"];
+        if (!location) {
+          blocked.push({ url: currentUrl, reason: "redirect_missing_location" });
+          await route.abort();
+          return;
+        }
+        let nextUrl: string;
+        try {
+          nextUrl = new URL(location, currentUrl).toString();
+        } catch {
+          blocked.push({ url: currentUrl, reason: "redirect_invalid_location" });
+          await route.abort();
+          return;
+        }
+        currentUrl = nextUrl;
+        continue; // next hop is re-checked by checkFn at the top of the loop before being fetched
+      }
+
+      finalResponse = hopResponse;
+      break;
+    }
+
+    if (!finalResponse) {
+      blocked.push({ url: currentUrl, reason: "too_many_redirects" });
+      await route.abort();
+      return;
+    }
+
+    await route.fulfill({ response: finalResponse });
   });
 }
 
@@ -777,8 +888,26 @@ async function captureViewport(
       "Mozilla/5.0 (compatible; CaseLoadSelect-DesignCheck/1.0; +https://caseloadselect.ca)",
   });
   const blocked: BlockedRequestLog[] = [];
+  // Registered on the context, before any page exists, so the very first
+  // navigation request is guarded and so is any page the rendered site
+  // opens on its own (see guardContextRoutes' docstring for why
+  // page-level routing does not cover that case).
+  await guardContextRoutes(context, blocked);
   const page = await context.newPage();
-  await guardRoutes(page, blocked);
+  // This tool only ever needs the single page it navigated itself: no
+  // dimension or vision check reads anything from a popup, and scoring a
+  // marketing page's design/accessibility/copy never requires following a
+  // target="_blank" link or a window.open() call. Registered only after
+  // the main page above is created, so this only ever sees genuine
+  // popups, never fights with the main page's own creation. Rather than
+  // rely solely on request interception (already in place via
+  // guardContextRoutes) to make an unwanted popup inert, close any
+  // further page the context spawns the moment it appears, before it gets
+  // a chance to run more script or navigate again.
+  context.on("page", (popup) => {
+    blocked.push({ url: popup.url(), reason: "popup_closed" });
+    popup.close().catch(() => undefined);
+  });
   await page.addInitScript(WEB_VITALS_COLLECTOR);
 
   try {
