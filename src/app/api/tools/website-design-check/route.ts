@@ -139,7 +139,17 @@ export async function POST(request: NextRequest) {
         domain,
         checkedAt: new Date().toISOString(),
         score: track1Report.score,
+        // The uncapped weighted average, before any red-flag ceiling.
+        // Named on the report as "the underlying measured craft" when a
+        // disqualifying flag is capping the visible score. Not itself the
+        // grade shown; see letterGrade below and attainable further down.
+        uncappedScore: track1Report.uncappedScore,
         letterGrade: track1Report.letterGrade,
+        // The grade within reach if every item in the path (the findings
+        // carrying inAttainablePath: true, see rankedFindings) were
+        // fixed. Leads the report per Phase 4 of
+        // docs/BUILD_PLAN_design_check_calibration_v1.md.
+        attainable: track1Report.attainable,
         dimensionBar: track1Report.dimensionBar,
         notMeasuredDimensions: track1Report.notMeasuredDimensions,
         notApplicableDimensions: track1Report.notApplicableDimensions,

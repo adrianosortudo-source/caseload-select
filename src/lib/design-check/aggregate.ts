@@ -112,6 +112,15 @@ export interface RankedFinding {
    * an advisory one (a real opportunity, caps nothing) within the flag
    * tier, and so the report can visually tell the two apart. */
   flagClassification?: "disqualifying" | "advisory";
+  /** Set only on severity "flag" entries: the flag's own unique key
+   * (RedFlag.key), for matching a finding back to its source flag by
+   * identity rather than by label text. */
+  flagKey?: string;
+  /** True for the leading run of findings the report leads with (every
+   * active flag, plus enough top ordinary findings to reach at least
+   * five total). See buildAttainableScore below and Phase 4 of
+   * docs/BUILD_PLAN_design_check_calibration_v1.md. */
+  inAttainablePath?: boolean;
 }
 
 const HIGH_EFFORT_PATTERN = /restructure|rebuild|redesign|narrow the text column|add (organization|person) schema|reorganiz/i;
@@ -159,6 +168,7 @@ function buildFlagFindings(activeFlags: RedFlag[]): RankedFinding[] {
       evidence: f.detail,
       estimatedEffort: estimateEffort(opportunity),
       flagClassification: f.classification,
+      flagKey: f.key,
     };
   });
 }
@@ -199,10 +209,88 @@ function buildRankedFindings(dimensions: DimensionResult[], flagFindings: Ranked
   });
 }
 
+// The path always covers every active flag (flags sort first in
+// rankedFindings, per Phase 3), plus enough of the next-ranked ordinary
+// findings to give a reader a concrete list even on a clean site with
+// few or no flags. Phase 4 of docs/BUILD_PLAN_design_check_calibration_v1.md.
+const MIN_PATH_LENGTH = 5;
+
+export interface AttainableScore {
+  score: number;
+  letterGrade: GradeBand["letter"];
+}
+
+/**
+ * The grade within reach if every finding in "the path" were fixed. This
+ * is the tool's own arithmetic, never an invented promise: only items
+ * whose underlying check belongs to a deterministic, item-additive
+ * dimension are credited (a fail recovers the full 10 points a pass item
+ * earns; a warn recovers the 5 points between it and a pass), against
+ * that dimension's own unchanged maxScore, exactly mirroring
+ * scoreItems's own point values.
+ *
+ * Authority and the two vision-judgment dimensions are deliberately NOT
+ * credited: their scores are not the sum of discrete recoverable items
+ * (a sub-score or an LLM 0-100 read cannot be decomposed into "clear
+ * this one check and gain exactly N points" the way a deterministic
+ * checklist can), so crediting them would be a guess dressed up as
+ * arithmetic. Leaving them uncredited makes the number a floor, never an
+ * overpromise: the real attainable grade, if anything, is only higher
+ * than what is shown here.
+ *
+ * Flags are not credited by dimension math at all; instead, since the
+ * path is constructed to always include every active flag, the
+ * attainable score is computed WITHOUT the overall red-flag ceiling
+ * applied (clearing the path is assumed to clear every flag in it,
+ * including the ones that cap the grade). If a future change to the
+ * path-selection logic above ever let a disqualifying flag fall outside
+ * the path, that flag's own ceiling still applies here: this function
+ * does not blindly trust "the path always has every flag," it re-derives
+ * it from the actual flags represented in the path.
+ */
+function buildAttainableScore(
+  scoredDimensions: DimensionResult[],
+  deterministicDimensionNames: Set<string>,
+  totalWeight: number,
+  pathFindings: RankedFinding[],
+  activeFlags: RedFlag[]
+): AttainableScore {
+  const creditedScoreByName = new Map(scoredDimensions.map((d) => [d.name, d.score]));
+  for (const finding of pathFindings) {
+    if (finding.severity === "flag" || !deterministicDimensionNames.has(finding.dimension)) continue;
+    const dim = scoredDimensions.find((d) => d.name === finding.dimension);
+    if (!dim) continue;
+    const recoverable = finding.severity === "high" ? 10 : 5; // fail-to-pass vs warn-to-pass, per scoreItems
+    const current = creditedScoreByName.get(dim.name) ?? dim.score;
+    creditedScoreByName.set(dim.name, Math.min(dim.maxScore, current + recoverable));
+  }
+
+  const weightedSum = scoredDimensions.reduce((sum, d) => {
+    const credited = creditedScoreByName.get(d.name) ?? d.score;
+    return sum + (credited / d.maxScore) * 100 * d.weight;
+  }, 0);
+  const uncapped = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+
+  // Defensive, currently unreachable through this module's own
+  // path-selection formula (Math.max(MIN_PATH_LENGTH, flagCount) always
+  // covers the full, contiguous, flags-sort-first block): a disqualifying
+  // flag not represented among the path's flag findings still caps the
+  // attainable score at its own ceiling.
+  const flagKeysInPath = new Set(pathFindings.filter((f) => f.severity === "flag").map((f) => f.flagKey));
+  const excludedDisqualifyingCeilings = activeFlags.filter((f) => f.classification === "disqualifying" && !flagKeysInPath.has(f.key)).map((f) => f.ceiling);
+  const score = excludedDisqualifyingCeilings.length > 0 ? Math.min(uncapped, Math.min(...excludedDisqualifyingCeilings)) : uncapped;
+
+  return { score, letterGrade: scoreToLetterGrade(score) };
+}
+
 export interface Track1Report {
   score: number; // 0-100, post red-flag cap
   uncappedScore: number;
   letterGrade: GradeBand["letter"];
+  /** The grade within reach if every finding in the path (see
+   * RankedFinding.inAttainablePath) were fixed. Always >= score; see
+   * buildAttainableScore. */
+  attainable: AttainableScore;
   dimensionBar: DimensionBarEntry[];
   notMeasuredDimensions: string[];
   /** Dimensions this page gave the tool nothing to score. Reported, never
@@ -247,14 +335,31 @@ export function buildTrack1Report(
     score: d.maxScore > 0 ? Math.round((d.score / d.maxScore) * 100) : null,
   }));
 
+  const rankedFindings = buildRankedFindings(allDimensions, buildFlagFindings(redFlagPanel.activeFlags));
+
+  // The path: every flag finding (they sort first, per Phase 3), plus
+  // enough of the next-ranked ordinary findings to reach at least
+  // MIN_PATH_LENGTH, so a clean site with few or no flags still gets a
+  // concrete list rather than an empty one.
+  const flagFindingCount = rankedFindings.filter((f) => f.severity === "flag").length;
+  const pathLength = Math.max(MIN_PATH_LENGTH, flagFindingCount);
+  rankedFindings.forEach((f, i) => {
+    f.inAttainablePath = i < pathLength;
+  });
+  const pathFindings = rankedFindings.slice(0, pathLength);
+
+  const deterministicDimensionNames = new Set(deterministicDimensions.map((d) => d.name));
+  const attainable = buildAttainableScore(scoredDimensions, deterministicDimensionNames, totalWeight, pathFindings, redFlagPanel.activeFlags);
+
   return {
     score,
     uncappedScore,
     letterGrade: scoreToLetterGrade(score),
+    attainable,
     dimensionBar,
     notMeasuredDimensions: NOT_MEASURED_DIMENSIONS,
     notApplicableDimensions: notApplicableDimensions.map((d) => d.name),
-    rankedFindings: buildRankedFindings(allDimensions, buildFlagFindings(redFlagPanel.activeFlags)),
+    rankedFindings,
     redFlagPanel,
   };
 }

@@ -18,6 +18,10 @@ export interface RankedFinding {
   // (advisory). See docs/BUILD_PLAN_design_check_calibration_v1.md
   // Phase 3.
   flagClassification?: "disqualifying" | "advisory";
+  // True for the leading run of findings the report leads with (every
+  // active flag, plus enough top ordinary findings to reach at least
+  // five total). See "attainable" below and Phase 4 of the same plan.
+  inAttainablePath?: boolean;
 }
 
 export interface RedFlag {
@@ -30,11 +34,23 @@ export interface RedFlag {
   classification: "disqualifying" | "advisory";
 }
 
+export interface AttainableScore {
+  score: number;
+  letterGrade: "A" | "B" | "C" | "D" | "F";
+}
+
 export interface DesignCheckResult {
   domain: string;
   checkedAt: string;
   score: number;
+  // The uncapped weighted average, before any red-flag ceiling. Used
+  // only to name what a disqualifying flag is holding back; the grade
+  // shown to a reader is always the capped `score` above.
+  uncappedScore: number;
   letterGrade: "A" | "B" | "C" | "D" | "F";
+  // The grade within reach if every finding carrying
+  // inAttainablePath: true were fixed. Always >= score.
+  attainable: AttainableScore;
   dimensionBar: DimensionBarEntry[];
   notMeasuredDimensions: string[];
   notApplicableDimensions: string[];
@@ -68,19 +84,49 @@ function severityClass(f: RankedFinding): string {
   return `dc-finding-severity-${f.severity}`;
 }
 
+function FindingCard({ f }: { f: RankedFinding }) {
+  return (
+    <li className="dc-finding-item">
+      <div className="dc-finding-head">
+        <span className={`dc-finding-severity ${severityClass(f)}`}>{severityLabel(f)}</span>
+        <span className="dc-finding-effort">{effortLabel(f.estimatedEffort)}</span>
+      </div>
+      <p className="dc-finding-opportunity">{f.opportunity}</p>
+      <p className="dc-finding-evidence">{f.evidence}</p>
+      <span className="dc-finding-dim">{f.dimension}</span>
+    </li>
+  );
+}
+
 export default function WebsiteDesignCheckReport({ result, onReset }: { result: DesignCheckResult; onReset: () => void }) {
   const { activeFlags, notCheckableInV1 } = result.redFlagPanel;
   const disqualifyingFlags = activeFlags.filter((f) => f.classification === "disqualifying");
-  const advisoryFlags = activeFlags.filter((f) => f.classification === "advisory");
+  const isCapped = result.redFlagPanel.ceiling !== null;
+  const pathFindings = result.rankedFindings.filter((f) => f.inAttainablePath);
+  const restFindings = result.rankedFindings.filter((f) => !f.inAttainablePath);
+  const hasRealGap = result.attainable.score > result.score;
 
   return (
     <div className="dc-report">
       <div className="dc-report-header">
-        <div className="dc-grade-block">
-          <span className="dc-grade-letter" style={{ color: gradeColor(result.letterGrade) }}>
+        <div className="dc-attainable-block">
+          <span className="dc-attainable-label">Within reach</span>
+          <span className="dc-grade-letter" style={{ color: gradeColor(result.attainable.letterGrade) }}>
+            {result.attainable.letterGrade}
+          </span>
+          <span className="dc-grade-score">{result.attainable.score}/100</span>
+        </div>
+        <div className="dc-current-block">
+          <span className="dc-current-label">Today</span>
+          <span className="dc-current-letter" style={{ color: gradeColor(result.letterGrade) }}>
             {result.letterGrade}
           </span>
-          <span className="dc-grade-score">{result.score}/100</span>
+          <span className="dc-current-score">{result.score}/100</span>
+          {isCapped && (
+            <p className="dc-unlock-line">
+              The underlying measured craft is {result.uncappedScore}. The flagged items below are the ceiling.
+            </p>
+          )}
         </div>
         <div className="dc-report-meta">
           <p className="dc-report-domain">{result.domain}</p>
@@ -91,39 +137,21 @@ export default function WebsiteDesignCheckReport({ result, onReset }: { result: 
         </button>
       </div>
 
-      {disqualifyingFlags.length > 0 && (
-        <div className="dc-redflag-panel">
-          <h3 className="dc-redflag-title">What&apos;s holding this grade back</h3>
-          <p className="dc-redflag-sub">
-            These findings cap the grade regardless of how the rest of the site scores. Fixing them unlocks the rest of the site&apos;s real score.
+      {pathFindings.length > 0 && (
+        <div className="dc-path-section">
+          <h3 className="dc-section-title">
+            {hasRealGap ? `Close these ${pathFindings.length} to reach ${result.attainable.letterGrade}` : "Worth fixing next"}
+          </h3>
+          <p className="dc-path-sub">
+            {hasRealGap
+              ? "Ranked by impact: every flagged item first, then the findings worth the most."
+              : "No further points are recoverable from these specific items, but they are still worth doing."}
           </p>
-          <ul className="dc-redflag-list">
-            {disqualifyingFlags.map((flag) => (
-              <li key={flag.key} className="dc-redflag-item">
-                <span className="dc-redflag-label">{flag.label}</span>
-                <span className="dc-redflag-detail">{flag.detail}</span>
-                {flag.confidence === "best_effort" && <span className="dc-redflag-tag">Best-effort detection</span>}
-              </li>
+          <ol className="dc-findings-list">
+            {pathFindings.map((f, i) => (
+              <FindingCard key={i} f={f} />
             ))}
-          </ul>
-        </div>
-      )}
-
-      {advisoryFlags.length > 0 && (
-        <div className="dc-advisoryflag-panel">
-          <h3 className="dc-advisoryflag-title">Real opportunities on this site</h3>
-          <p className="dc-advisoryflag-sub">
-            These do not cap the grade. They are ranked first among the findings below because clearing them is worth the most.
-          </p>
-          <ul className="dc-redflag-list">
-            {advisoryFlags.map((flag) => (
-              <li key={flag.key} className="dc-redflag-item">
-                <span className="dc-redflag-label">{flag.label}</span>
-                <span className="dc-redflag-detail">{flag.detail}</span>
-                {flag.confidence === "best_effort" && <span className="dc-redflag-tag">Best-effort detection</span>}
-              </li>
-            ))}
-          </ul>
+          </ol>
         </div>
       )}
 
@@ -153,22 +181,34 @@ export default function WebsiteDesignCheckReport({ result, onReset }: { result: 
         )}
       </div>
 
-      <div className="dc-findings">
-        <h3 className="dc-section-title">The specific opportunities on this site</h3>
-        <ol className="dc-findings-list">
-          {result.rankedFindings.map((f, i) => (
-            <li key={i} className="dc-finding-item">
-              <div className="dc-finding-head">
-                <span className={`dc-finding-severity ${severityClass(f)}`}>{severityLabel(f)}</span>
-                <span className="dc-finding-effort">{effortLabel(f.estimatedEffort)}</span>
-              </div>
-              <p className="dc-finding-opportunity">{f.opportunity}</p>
-              <p className="dc-finding-evidence">{f.evidence}</p>
-              <span className="dc-finding-dim">{f.dimension}</span>
-            </li>
-          ))}
-        </ol>
-      </div>
+      {disqualifyingFlags.length > 0 && (
+        <div className="dc-redflag-panel">
+          <h3 className="dc-redflag-title">What&apos;s holding this grade back</h3>
+          <p className="dc-redflag-sub">
+            These findings cap the grade regardless of how the rest of the site scores. Fixing them unlocks the rest of the site&apos;s real score.
+          </p>
+          <ul className="dc-redflag-list">
+            {disqualifyingFlags.map((flag) => (
+              <li key={flag.key} className="dc-redflag-item">
+                <span className="dc-redflag-label">{flag.label}</span>
+                <span className="dc-redflag-detail">{flag.detail}</span>
+                {flag.confidence === "best_effort" && <span className="dc-redflag-tag">Best-effort detection</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {restFindings.length > 0 && (
+        <div className="dc-findings">
+          <h3 className="dc-section-title">The rest of what we found</h3>
+          <ol className="dc-findings-list">
+            {restFindings.map((f, i) => (
+              <FindingCard key={i} f={f} />
+            ))}
+          </ol>
+        </div>
+      )}
 
       {notCheckableInV1.length > 0 && (
         <div className="dc-disclosure">
@@ -196,9 +236,21 @@ export default function WebsiteDesignCheckReport({ result, onReset }: { result: 
           padding: var(--sp-6);
           margin-bottom: var(--sp-6);
         }
-        .dc-grade-block { display: flex; flex-direction: column; align-items: center; min-width: 96px; }
+        .dc-attainable-block { display: flex; flex-direction: column; align-items: center; min-width: 100px; }
+        .dc-attainable-label {
+          font-family: var(--font-display); font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+          color: var(--stone-on-light); margin-bottom: var(--sp-1);
+        }
         .dc-grade-letter { font-family: var(--font-display); font-size: 56px; font-weight: 800; line-height: 1; }
         .dc-grade-score { font-family: var(--font-body); font-size: 13px; color: var(--text-muted); margin-top: var(--sp-1); }
+        .dc-current-block { display: flex; flex-direction: column; align-items: center; min-width: 140px; padding-left: var(--sp-5); border-left: 1px solid var(--border); }
+        .dc-current-label {
+          font-family: var(--font-display); font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+          color: var(--stone-on-light); margin-bottom: var(--sp-1);
+        }
+        .dc-current-letter { font-family: var(--font-display); font-size: 32px; font-weight: 800; line-height: 1; }
+        .dc-current-score { font-family: var(--font-body); font-size: 12px; color: var(--text-muted); margin-top: var(--sp-1); }
+        .dc-unlock-line { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: var(--sp-2) 0 0; text-align: center; max-width: 160px; }
         .dc-report-meta { flex: 1; }
         .dc-report-domain { font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--navy); margin: 0; }
         .dc-report-date { font-size: 12.5px; color: var(--text-muted); margin: var(--sp-1) 0 0; }
@@ -225,12 +277,11 @@ export default function WebsiteDesignCheckReport({ result, onReset }: { result: 
           color: var(--stone-on-light); width: fit-content; margin-top: 2px;
         }
 
-        .dc-advisoryflag-panel {
+        .dc-path-section {
           background: var(--white); border: 1.5px solid var(--stone); border-radius: var(--r-card);
           padding: var(--sp-5); margin-bottom: var(--sp-6);
         }
-        .dc-advisoryflag-title { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--navy); margin: 0 0 var(--sp-2); }
-        .dc-advisoryflag-sub { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin: 0 0 var(--sp-4); }
+        .dc-path-sub { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin: 0 0 var(--sp-4); }
 
         .dc-dimension-bar { background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card); padding: var(--sp-5); margin-bottom: var(--sp-6); }
         .dc-section-title { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--navy); margin: 0 0 var(--sp-4); }
@@ -265,6 +316,8 @@ export default function WebsiteDesignCheckReport({ result, onReset }: { result: 
 
         @media (max-width: 640px) {
           .dc-report-header { flex-direction: column; align-items: flex-start; }
+          .dc-current-block { border-left: none; border-top: 1px solid var(--border); padding-left: 0; padding-top: var(--sp-4); align-items: flex-start; }
+          .dc-unlock-line { text-align: left; max-width: none; }
           .dc-dim-row { flex-wrap: wrap; }
           .dc-dim-name { width: 100%; }
         }

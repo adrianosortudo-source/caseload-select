@@ -253,6 +253,94 @@ describe("buildTrack1Report flag findings (Phase 3)", () => {
   });
 });
 
+describe("buildTrack1Report attainable score (Phase 4)", () => {
+  it("credits a recoverable fail item against its own dimension's unchanged maxScore", () => {
+    // Typography 70/100 with one failing, fixable item: recovering it is
+    // worth +10 (a fail item recovers the full 10 points a pass item
+    // earns, per scoreItems). Authority sits alongside, untouched.
+    // Verified independently by script before pinning: uncapped/score 81,
+    // attainable 86.
+    const dims = [
+      dimension("Typography and Legibility", 12, 70, [{ label: "Line height", status: "fail", detail: "150%", fix: "Reduce line-height on body copy." }]),
+    ];
+    const report = buildTrack1Report(dims, authority(90), undefined, cleanDarkPatterns());
+    expect(report.score).toBe(81);
+    expect(report.attainable.score).toBe(86);
+    expect(report.attainable.letterGrade).toBe(scoreToLetterGrade(86));
+  });
+
+  it("holds the invariant that attainable is never below the current score, especially when a disqualifying flag caps the current score deeply", () => {
+    // The case Phase 4 exists for: a flag caps the visible score at 40
+    // while the underlying measured craft is 96. Attainable ignores the
+    // ceiling (the path always contains the capping flag, so clearing
+    // the path is assumed to clear it), surfacing the real number.
+    // Verified independently by script: uncapped 96, score 40, attainable 96.
+    const report = buildTrack1Report(
+      [dimension("Typography and Legibility", 12, 90)],
+      authority(100, [{ key: "lso_prohibited_word", label: "Prohibited word", detail: "best", ceiling: 40, classification: "disqualifying" }]),
+      undefined,
+      cleanDarkPatterns()
+    );
+    expect(report.score).toBe(40);
+    expect(report.attainable.score).toBe(96);
+    expect(report.attainable.score).toBeGreaterThanOrEqual(report.score);
+  });
+
+  it("renders the equal case (a clean site) without a fabricated gap", () => {
+    // Nothing to fix, no flags: attainable equals the current score
+    // exactly, not an invented improvement.
+    const report = buildTrack1Report([dimension("Typography and Legibility", 12, 100)], authority(100), undefined, cleanDarkPatterns());
+    expect(report.attainable.score).toBe(report.score);
+    expect(report.attainable.letterGrade).toBe(report.letterGrade);
+    expect(report.rankedFindings).toHaveLength(0);
+  });
+
+  it("never credits an Authority-dimension finding, even when it sits in the path: the conservative rule", () => {
+    // Authority's own sub-scores are not item-additive the way a
+    // deterministic checklist is, so a fail item there must not move the
+    // attainable number even though it is a real, ranked, in-path
+    // finding. Verified independently by script: uncapped/score 68,
+    // attainable 68 (unchanged).
+    const authorityWithFailItem: AuthorityDimensionResult = {
+      name: "Authority and Positioning",
+      weight: 15,
+      score: 50,
+      maxScore: 100,
+      subScores: [
+        {
+          key: "author_credibility",
+          name: "Author credibility",
+          weight: 20,
+          score: 50,
+          items: [{ label: "No named author", status: "fail", detail: "none found", fix: "Add a byline." }],
+        },
+      ],
+      redFlags: [],
+      cappedAt: null,
+    };
+    const report = buildTrack1Report([dimension("Typography and Legibility", 12, 90)], authorityWithFailItem, undefined, cleanDarkPatterns());
+    const authorityFinding = report.rankedFindings.find((f) => f.dimension === "Authority and Positioning");
+    expect(authorityFinding?.inAttainablePath).toBe(true); // it IS in the path
+    expect(report.attainable.score).toBe(report.score); // but contributes no credit
+    expect(report.attainable.score).toBe(68);
+  });
+
+  it("marks every active flag plus enough ordinary findings to reach at least five as in the path", () => {
+    const dims = [
+      dimension("Typography and Legibility", 12, 50, [
+        { label: "Line height", status: "warn", detail: "150%", fix: "Reduce line-height." },
+        { label: "Line length", status: "fail", detail: "110 characters", fix: "Narrow the text column." },
+      ]),
+      dimension("Mobile and Responsive", 6, 50, [{ label: "Tap targets", status: "fail", detail: "95% too small", fix: "Increase padding." }]),
+    ];
+    const report = buildTrack1Report(dims, authority(90), undefined, cleanDarkPatterns());
+    // 3 ordinary findings, no flags: path length is max(5, 0) = 5, but
+    // only 3 findings exist, so all 3 are in the path.
+    expect(report.rankedFindings).toHaveLength(3);
+    expect(report.rankedFindings.every((f) => f.inAttainablePath)).toBe(true);
+  });
+});
+
 describe("buildTrack1Report findings and honesty", () => {
   it("ranks high-severity findings above medium ones", () => {
     const dims = [
