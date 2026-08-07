@@ -180,6 +180,24 @@ describe('buildContactCaptureFollowUp', () => {
     expect(msg.toLowerCase()).toMatch(/name/);
     expect(msg.toLowerCase()).toMatch(/phone|email/);
   });
+
+  it('defaults to English when no language is passed (byte-identical to the pre-i18n literal)', () => {
+    expect(buildContactCaptureFollowUp('both')).toBe(buildContactCaptureFollowUp('both', 'en'));
+  });
+
+  it('Portuguese: all three variants return real translations, distinct from English (2026-08-07)', () => {
+    const name = buildContactCaptureFollowUp('name', 'pt');
+    const reachability = buildContactCaptureFollowUp('reachability', 'pt');
+    const both = buildContactCaptureFollowUp('both', 'pt');
+
+    expect(name).not.toBe(buildContactCaptureFollowUp('name', 'en'));
+    expect(reachability).not.toBe(buildContactCaptureFollowUp('reachability', 'en'));
+    expect(both).not.toBe(buildContactCaptureFollowUp('both', 'en'));
+    expect(new Set([name, reachability, both]).size).toBe(3);
+    for (const msg of [name, reachability, both]) {
+      expect(msg).not.toContain('—');
+    }
+  });
 });
 
 describe('buildContactCaptureExhaustedMessage', () => {
@@ -221,6 +239,26 @@ describe('buildContactCaptureExhaustedMessage', () => {
     const cases: Array<'name' | 'reachability' | 'both'> = ['name', 'reachability', 'both'];
     for (const c of cases) {
       const msg = buildContactCaptureExhaustedMessage(c);
+      expect(msg).not.toContain('—');
+    }
+  });
+
+  it('defaults to English when no language is passed (byte-identical to the pre-i18n literal)', () => {
+    expect(buildContactCaptureExhaustedMessage('both')).toBe(
+      buildContactCaptureExhaustedMessage('both', 'en'),
+    );
+  });
+
+  it('Portuguese: all three variants return real translations, distinct from English (2026-08-07)', () => {
+    const name = buildContactCaptureExhaustedMessage('name', 'pt');
+    const reachability = buildContactCaptureExhaustedMessage('reachability', 'pt');
+    const both = buildContactCaptureExhaustedMessage('both', 'pt');
+
+    expect(name).not.toBe(buildContactCaptureExhaustedMessage('name', 'en'));
+    expect(reachability).not.toBe(buildContactCaptureExhaustedMessage('reachability', 'en'));
+    expect(both).not.toBe(buildContactCaptureExhaustedMessage('both', 'en'));
+    expect(new Set([name, reachability, both]).size).toBe(3);
+    for (const msg of [name, reachability, both]) {
       expect(msg).not.toContain('—');
     }
   });
