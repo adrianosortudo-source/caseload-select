@@ -66,7 +66,8 @@ export default function FirmVoiceBuilder() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const latestInterviewerRef = useRef<HTMLDivElement>(null);
+  const seenInterviewerCountRef = useRef<number | null>(null);
   const savedSessionRef = useRef<SavedSession | null>(null);
 
   useEffect(() => {
@@ -79,8 +80,33 @@ export default function FirmVoiceBuilder() {
     }
   }, []);
 
+  // Move the view only when a NEW interviewer question arrives, and anchor it
+  // to the top of that message so it reads from its first line.
+  //
+  // Deliberately silent in three cases the previous version scrolled on:
+  // the lawyer's own message being appended (the composer is sticky, so
+  // nothing needs to move, and scrolling there yanked the page down on every
+  // Send), the first paint after mount, and any phase change. Resuming a
+  // saved session therefore leaves the reader where they are.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (phase !== "chat") return;
+    const interviewerCount = messages.reduce(
+      (count, m) => (m.role === "interviewer" ? count + 1 : count),
+      0,
+    );
+    if (seenInterviewerCountRef.current === null) {
+      seenInterviewerCountRef.current = interviewerCount;
+      return;
+    }
+    if (interviewerCount <= seenInterviewerCountRef.current) return;
+    seenInterviewerCountRef.current = interviewerCount;
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    latestInterviewerRef.current?.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+      block: "start",
+    });
   }, [messages, phase]);
 
   function currentSection(): number | null {
@@ -221,6 +247,14 @@ export default function FirmVoiceBuilder() {
     );
   }
 
+  let lastInterviewerIndex = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "interviewer") {
+      lastInterviewerIndex = i;
+      break;
+    }
+  }
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-4 sticky top-0 bg-parchment/95 backdrop-blur py-2 z-10">
@@ -229,7 +263,11 @@ export default function FirmVoiceBuilder() {
 
       <div className="flex flex-col gap-3 pb-4">
         {messages.map((m, i) => (
-          <div key={i}>
+          <div
+            key={i}
+            ref={i === lastInterviewerIndex ? latestInterviewerRef : undefined}
+            className="scroll-mt-20"
+          >
             <div
               className={[
                 "px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap max-w-[85%]",
@@ -256,7 +294,6 @@ export default function FirmVoiceBuilder() {
             </button>
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-2 sticky bottom-0 bg-parchment/95 backdrop-blur py-3">
