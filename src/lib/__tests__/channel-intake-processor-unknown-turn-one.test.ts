@@ -16,13 +16,27 @@
  *
  * Fix: on turn one only (discoveryFollowUpCount === 0) with an unknown
  * matter, ask an opening description question instead of finalizing.
- * KNOWN LIMITATION locked in by this suite: turn two does NOT reclassify
- * (matter_type is only ever set once, by initialiseState on turn 1 — see
- * slotEvidence.ts:24, which no-ops runEvidencePass for an unknown
- * matter). So a real description on turn two still finalizes on turn two,
- * NOT with more discovery. This suite asserts that documented behavior
- * exactly, so a future change to it is a deliberate decision, not a
- * silent regression.
+ *
+ * CORRECTED 2026-08-07: this file originally claimed turn two can never
+ * reclassify away from 'unknown' (reasoning only from initialiseState
+ * being turn-1-only and runEvidencePass no-oping for 'unknown' per
+ * slotEvidence.ts:24 — both true, but incomplete). llmExtractServer +
+ * mergeLlmResults run on every resume turn, before this guard's own
+ * Phase C block, and promote matter_type away from 'unknown' explicitly
+ * ungated by design (see the DR-069 comment in
+ * screen-engine/llm/extractor.ts). Production confirmed this live
+ * 2026-08-07 (screened_leads.6ff7d438-2eda-42b4-be43-758df2c89bb1):
+ * turn two's real description reclassified to business_setup_advisory
+ * and ran a full discovery to a band B brief, in the same turn.
+ *
+ * The third test below ("turn two ... finalizes") is still correct for
+ * what it actually exercises: this suite's llmExtractServer mock always
+ * returns `{ mode: 'mock', extracted: {} }`, which the processor treats
+ * as non-live, so mergeLlmResults never promotes anything. That is the
+ * genuine, narrower path — LLM extraction unavailable or erroring on the
+ * turn — not the normal outcome. See
+ * docs/BUILD_PLAN_channel_intake_intro_optionmap_v1.md § 1 and C1 for
+ * the full correction record.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -240,13 +254,16 @@ describe('Unknown-matter turn-one guard (F2)', () => {
     }
   });
 
-  it('turn two: matter still unknown after the guard fired once — finalizes rather than asking again (documented limitation, not a loop)', async () => {
+  it('turn two with LLM extraction unavailable: finalizes rather than re-asking (graceful degradation, not the normal path)', async () => {
     // Turn one already consumed the single guard slot
-    // (discoveryFollowUpCount: 1). Even if the lead's turn-two reply is a
-    // real description, matter_type stays 'unknown' (no reclassification
-    // on resume — see file header). The guard's own discoveryCount === 0
-    // condition prevents it from firing twice, so this must finalize
-    // rather than loop.
+    // (discoveryFollowUpCount: 1). This suite's llmExtractServer mock
+    // always returns empty (mode: 'mock'), so mergeLlmResults never
+    // promotes matter_type here — this exercises the LLM-unavailable
+    // path specifically, NOT the normal outcome of a turn-two reply (see
+    // file header correction). The guard's own discoveryCount === 0
+    // condition also prevents it from firing twice regardless, so this
+    // must finalize rather than loop even when reclassification does not
+    // happen.
     mocks.loadOpenChannelSession.mockResolvedValueOnce({
       id: 'session-uuid',
       firm_id: FIRM_ID,
@@ -302,5 +319,92 @@ describe('Unknown-matter turn-one guard (F2)', () => {
 
     expect(r.persisted).toBe(true);
     expect(mocks.insertPayload).not.toBeNull();
+  });
+
+  it('turn two with live LLM classification: reclassifies away from unknown and continues discovery in the SAME turn (the normal, common-case path — added 2026-08-07 to lock in the corrected understanding)', async () => {
+    // This is the field repro's actual outcome (screened_leads.6ff7d438-
+    // 2eda-42b4-be43-758df2c89bb1, 2026-08-07): unlike the sibling test
+    // above, here llmExtractServer returns a LIVE classification, exactly
+    // as it does in production when the Gemini key is configured and the
+    // call succeeds. mergeLlmResults promotes matter_type away from
+    // 'unknown' (screen-engine/llm/extractor.ts, DR-069 ungated-unknown
+    // path) BEFORE this Phase C block runs, so the F2 guard's own
+    // condition (matter_type === 'unknown') is false and normal
+    // discovery fires immediately — not a second describe-prompt, not a
+    // finalize.
+    mocks.llmExtractServer.mockResolvedValueOnce({
+      mode: 'live',
+      extracted: { __matter_type: 'business_setup_advisory' },
+    });
+
+    mocks.loadOpenChannelSession.mockResolvedValueOnce({
+      id: 'session-uuid',
+      firm_id: FIRM_ID,
+      channel: 'whatsapp',
+      sender_id: '16475492106',
+      engine_state: {
+        lead_id: 'L-test-unknown-turn-two-live',
+        input: 'i want to speak to a lawyer',
+        matter_type: 'unknown',
+        practice_area: 'unknown',
+        intent_family: 'unknown',
+        dispute_family: 'unknown',
+        advisory_subtrack: 'unknown',
+        slots: {
+          client_name: 'Adriano',
+          client_phone: '+16475492106',
+        },
+        slot_meta: {
+          client_name: { source: 'profile_metadata', confidence: 1.0 },
+          client_phone: { source: 'system_metadata', confidence: 1.0 },
+        },
+        slot_evidence: {},
+        raw: {
+          mentions_urgency: false, mentions_money: false, mentions_access: false,
+          mentions_ownership: false, mentions_documents: false, mentions_payment: false,
+          mentions_agreement: false, mentions_vendor: false, mentions_fraud: false,
+          mentions_property: false, mentions_closing: false, mentions_lease: false,
+          mentions_construction: false, mentions_mortgage: false,
+          mentions_preconstruction: false, input_length: 28,
+        },
+        confidence: 0,
+        coreCompleteness: 0,
+        answeredQuestionGroups: [],
+        questionHistory: [],
+        insightShown: false,
+        contactCaptureStarted: true,
+        submitted_at: '2026-08-06T18:39:44.471Z',
+        language: 'en',
+        discoveryFollowUpCount: 1,
+      },
+      follow_up_count: 0,
+      max_follow_ups: 3,
+      finalized: false,
+      expires_at: '2026-08-07T18:39:44.471Z',
+      created_at: '2026-08-06T18:39:44.471Z',
+    } as never);
+
+    const r = await processChannelInbound({
+      firmId: FIRM_ID,
+      text: 'i have a business and i want to formalize it',
+      sender: whatsappSender('Adriano'),
+    });
+
+    // Did NOT finalize with an empty brief, and did NOT re-send the
+    // describe-your-situation ask again.
+    expect(r.persisted).toBe(false);
+    expect(mocks.insertPayload).toBeNull();
+    expect(mocks.sendChannelMessage).toHaveBeenCalledTimes(1);
+    const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
+    expect(sentText).not.toMatch(/describe in a sentence or two/i);
+    expect(sentText).toMatch(/\?/);
+
+    // The persisted session shows the real matter type, not 'unknown'.
+    const persistCall =
+      mocks.updateChannelSession.mock.calls[0] ?? mocks.createChannelSession.mock.calls[0];
+    const persistedState = (
+      persistCall as unknown as Array<{ engineState: { matter_type: string } }>
+    )[0].engineState;
+    expect(persistedState.matter_type).toBe('business_setup_advisory');
   });
 });

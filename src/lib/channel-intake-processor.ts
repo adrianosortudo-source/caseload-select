@@ -46,11 +46,18 @@ import { runEvidencePass } from '@/lib/screen-engine/slotEvidence';
 import { mergeLlmResults } from '@/lib/screen-engine/llm/extractor';
 import { buildReport } from '@/lib/screen-engine/report';
 import { computeBand } from '@/lib/screen-engine/band';
-import { getNextStep } from '@/lib/screen-engine/control';
+import { getNextStep, applyAnswer } from '@/lib/screen-engine/control';
 import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
 import type { EngineState, Band, SlotDefinition, LawyerReport } from '@/lib/screen-engine/types';
 import { evaluateContactGate } from '@/lib/screen-engine/contact-doctrine';
+import {
+  withFirstAskIntro,
+  describeSituationFirstAsk,
+  contactCaptureFirstAsk,
+} from '@/lib/channel-intake-intro';
+import { llmMapOptionReply } from '@/lib/llm-option-map';
+import { isValidOptionValue } from '@/lib/llm-option-map-pure';
 import { buildClosingMessage } from '@/lib/screen-engine/closing';
 import { persistUnconfirmedInquiry } from '@/lib/unconfirmed-inquiry';
 import {
@@ -565,6 +572,61 @@ export async function processChannelInbound(
     state = applyFreeTextAnswerMapping(trimmed, state);
   }
 
+  // LLM option-mapping fallback (C3, 2026-08-07). Every deterministic
+  // adapter above (pending-slot digit/word-number/sentinel/fuzzy match,
+  // numeric mapping, free-text fuzzy match, free-text answer mapping)
+  // has now had a chance to resolve the reply. If the bot's last ask was
+  // a numbered (single_select) question and none of them resolved it,
+  // isUserGroundedFill is still false. Rather than falling straight to
+  // the "I didn't get your reply, use a number" clarifier — a broken
+  // promise once the C2 intro says "answer in your own words" — ask the
+  // LLM to map the lead's own wording onto one of the options offered.
+  //
+  // A mapped value earns 'answered' provenance via applyAnswer (not
+  // 'llm_inferred' slot-fill), because the user DID answer this specific
+  // question; the LLM only translates their wording onto the option list
+  // WE offered, which is a materially different and narrower claim than
+  // a free-form extraction guess. See llm-option-map-pure.ts for why the
+  // membership check before applyAnswer is mandatory: never feed an
+  // LLM-invented value into the engine.
+  //
+  // Ordering: must run BEFORE llmExtractServer (immediately below), not
+  // inside Phase C's pending-slot block further down. Phase C computes
+  // getNextStep(state) later in this same turn; the answer applied here
+  // needs to already be in `state` at that point so the NEXT question is
+  // selected correctly, not the one we just resolved.
+  let pendingLlmMapped = false;
+  if (isResume && !pendingConsumed && !nameCaptureConsumed) {
+    const pendingId = state.pendingAskedSlotId;
+    const pendingSlot = pendingId ? SLOT_REGISTRY.find((s) => s.id === pendingId) : undefined;
+    if (
+      pendingId &&
+      pendingSlot &&
+      pendingSlot.tier !== 'contact' &&
+      pendingSlot.input_type === 'single_select' &&
+      pendingSlot.options &&
+      pendingSlot.options.length > 0 &&
+      pendingSlot.applies_to.includes(state.matter_type as never) &&
+      !isUserGroundedFill(state, pendingId)
+    ) {
+      try {
+        const mapped = await llmMapOptionReply({
+          questionLabel: pendingSlot.question,
+          options: pendingSlot.options,
+          reply: trimmed,
+          language: state.language ?? 'en',
+        });
+        if (isValidOptionValue(mapped.value, pendingSlot.options)) {
+          state = applyAnswer(state, pendingId, mapped.value as string);
+          state = { ...state, pendingAskedSlotId: null };
+          pendingLlmMapped = true;
+        }
+      } catch (err) {
+        console.warn(`[channel-intake] llmMapOptionReply failed channel=${channel}:`, err);
+      }
+    }
+  }
+
   // LLM extraction: best-effort, never aborts. Runs on the new turn text
   // and merges into existing state. On a resume turn, the LLM sees just
   // the new text; on first turn it sees the full inbound. The doctrine
@@ -576,7 +638,12 @@ export async function processChannelInbound(
   // Hoisted so the LLM-disabled alert (#128, global across channels per the
   // fixes-are-global doctrine) can see what extraction returned.
   let llmMode: 'live' | 'disabled' | 'error' | 'degraded' | null = null;
-  if (state.matter_type !== 'out_of_scope' && !nameCaptureConsumed && !pendingConsumed) {
+  if (
+    state.matter_type !== 'out_of_scope' &&
+    !nameCaptureConsumed &&
+    !pendingConsumed &&
+    !pendingLlmMapped
+  ) {
     try {
       const llm = await llmExtractServer(trimmed, state);
       llmMode = llm.mode;
@@ -701,7 +768,10 @@ export async function processChannelInbound(
     // (the lead still moves to ops visibility either way).
     if (priorFollowUpCount >= MAX_FOLLOW_UPS) {
       try {
-        const exhaustedText = buildContactCaptureExhaustedMessage(gate.missing ?? 'both');
+        const exhaustedText = buildContactCaptureExhaustedMessage(
+          gate.missing ?? 'both',
+          (state.language ?? 'en') as SupportedLanguage,
+        );
         const exhaustedSend = await sendChannelMessage({
           firmId,
           sender,
@@ -737,8 +807,16 @@ export async function processChannelInbound(
       };
     }
 
-    // Send the follow-up question.
-    const followUpText = buildContactCaptureFollowUp(gate.missing ?? 'both');
+    // Send the follow-up question. First-ask intro (C2, 2026-08-07):
+    // on a fresh conversation (!isResume), frame the questioning before
+    // asking for contact — resume turns (attempt 2, 3...) keep the
+    // unmodified, opener-carrying copy from buildContactCaptureFollowUp.
+    const followUpText = isResume
+      ? buildContactCaptureFollowUp(gate.missing ?? 'both', (state.language ?? 'en') as SupportedLanguage)
+      : withFirstAskIntro(
+          (state.language ?? 'en') as SupportedLanguage,
+          contactCaptureFirstAsk(gate.missing ?? 'both', (state.language ?? 'en') as SupportedLanguage),
+        );
     const sendResult = await sendChannelMessage({
       firmId,
       sender,
@@ -864,24 +942,48 @@ export async function processChannelInbound(
     // registry entry applies to an unclassified matter), so the normal
     // slotToAsk machinery below cannot produce this question.
     //
-    // KNOWN LIMITATION, not fixed here: matter_type is set once by
-    // initialiseState on turn 1 and never re-derived on resume turns
-    // (see the "Fresh first turn" branch above, and slotEvidence.ts:24,
-    // which no-ops runEvidencePass whenever matter_type is 'unknown'). If
-    // the lead's reply to this question describes a real matter, that text
-    // lands in state.input (so the lawyer sees it in the transcript) but
-    // does NOT reclassify matter_type or unlock discovery questions — the
-    // very next turn hits this same floor with discoveryCount no longer 0
-    // and finalizes as before. That is a real, scoped improvement (a bare
-    // greeting no longer kills the conversation before anything is asked)
-    // but not full multi-turn intake recovery for unclassified matters.
-    // Turn-2+ reclassification would mean re-running classify() on resume,
-    // which is a larger, separate change — see
-    // docs/BUILD_PLAN_meta_channel_intake_fixes_v1.md § F2.
+    // CORRECTED 2026-08-07 (was wrong at ship time; see
+    // docs/BUILD_PLAN_meta_channel_intake_fixes_v1.md § F2 correction and
+    // docs/BUILD_PLAN_channel_intake_intro_optionmap_v1.md § 1 for the
+    // production evidence). The original comment here claimed the lead's
+    // reply to this question can never reclassify matter_type on resume,
+    // reasoning only from the regex layers: initialiseState runs once on
+    // turn 1, and runEvidencePass no-ops for 'unknown' (slotEvidence.ts:24)
+    // — both true, but incomplete. llmExtractServer + mergeLlmResults run
+    // earlier in THIS SAME function, on every resume turn (line ~581,
+    // well before this Phase C block), and mergeLlmResults promotes
+    // matter_type away from the 'unknown' lane explicitly ungated by
+    // design (screen-engine/llm/extractor.ts, DR-069 comment: "The
+    // 'unknown' lane is NOT gated by this option"). So when the lead's
+    // reply to this question is a real description, matter_type is
+    // usually ALREADY reclassified by the time this block runs, the
+    // condition below is false, and normal Phase C discovery fires in
+    // the SAME turn's response — confirmed live 2026-08-07, WhatsApp
+    // row screened_leads.6ff7d438-2eda-42b4-be43-758df2c89bb1: greeting
+    // -> this ask -> "i have a business and i want to formalize it" ->
+    // reclassified to business_setup_advisory -> 10 discovery questions
+    // -> band B brief in the same conversation.
+    //
+    // The path below (matter_type still 'unknown', so it finalizes) is
+    // real but narrower than originally documented: it fires only when
+    // LLM extraction is unavailable or errors this turn (no API key,
+    // rate limit, network failure — llmExtractServer degrades
+    // gracefully rather than blocking). That is deliberate graceful
+    // degradation, not a gap to close.
     if (state.matter_type === 'unknown' && discoveryCount === 0) {
-      const openingQuestion =
-        i18n.widget_strings?.describe_situation ||
-        'Thanks for reaching out. Before a lawyer reviews this, could you describe in a sentence or two what your situation is about?';
+      // First-ask intro (C2, 2026-08-07): gated on !isResume specifically,
+      // NOT on discoveryCount === 0 alone. Those are not equivalent — a
+      // session that failed the contact gate on turn 1 (Phase B never
+      // touches discoveryFollowUpCount) and reaches Phase C for the first
+      // time on turn 2 still has discoveryCount === 0 there, but turn 2 is
+      // a resume turn and must not repeat the intro.
+      const openingQuestion = isResume
+        ? i18n.widget_strings?.describe_situation ||
+          'Thanks for reaching out. Before a lawyer reviews this, could you describe in a sentence or two what your situation is about?'
+        : withFirstAskIntro(
+            (state.language ?? 'en') as SupportedLanguage,
+            describeSituationFirstAsk((state.language ?? 'en') as SupportedLanguage),
+          );
       const sendResult = await sendChannelMessage({
         firmId,
         sender,
@@ -993,10 +1095,27 @@ export async function processChannelInbound(
       if (clarifyReask) {
         // Brand-safe clarifier, i18n-aware with English fallback. No
         // em-dash, no banned vocabulary, no time-relative promise.
+        //
+        // Copy softened 2026-08-07 (C3): by the time this fires, the C3
+        // LLM option-mapping fallback (above) has ALSO already failed to
+        // resolve the reply — every available path, deterministic and
+        // LLM, came up empty. Asking for a number at that point is an
+        // honest ask, not a contradiction of the C2 intro's "answer in
+        // your own words" — the intro's promise was kept; two independent
+        // attempts to honor it did not work for this particular reply.
         const clarifier =
           i18n.widget_strings?.didnt_catch ||
-          "Sorry, I didn't get your last reply. Could you confirm by replying with the number of the option that fits best?";
+          "Thanks, I want to make sure I record this correctly. Could you reply with the number of the option that fits best?";
         questionText = `${clarifier}\n\n${questionText}`;
+      }
+      // First-ask intro (C2, 2026-08-07): !isResume specifically (see
+      // the two comments above at the Phase B and F2-guard sites for why
+      // this cannot be inferred from discoveryCount or any other counter
+      // alone). clarifyReask can only be true when pendingAskedSlotId was
+      // already set from a prior ask, which requires isResume, so the two
+      // conditions never overlap.
+      if (!isResume) {
+        questionText = withFirstAskIntro(language, questionText);
       }
       const sendResult = await sendChannelMessage({
         firmId,
