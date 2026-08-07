@@ -17,7 +17,7 @@ import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limi
 /**
  * The Website Design Grading tool's public scan endpoint. Runs the full
  * pipeline built across Phases 0-4: real headless-browser render at two
- * viewports, deterministic dimension scoring, two Anthropic vision-model
+ * viewports, deterministic dimension scoring, two Gemini vision-model
  * judgment passes (general design quality + authority/positioning), and
  * Track 1 aggregation into a letter grade with ranked findings.
  *

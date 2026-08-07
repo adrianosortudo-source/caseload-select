@@ -1,14 +1,21 @@
 import { createHash } from "node:crypto";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { DimensionResult } from "./dimension-types";
 
 /**
  * Phase 2: the vision-model judgment layer. Covers what a text/HTML
  * parser structurally cannot verify (Gestalt hierarchy, whitespace
  * confidence, whether a layout "reads as designed"), using the
- * framework's fixed 7-item rubric verbatim, low temperature, one cited
- * reason per score. Mirrors Content Studio's proven Anthropic call
- * pattern (draft/route.ts): raw fetch, strict structured outputs via
- * constrained decoding, so the score object cannot arrive malformed.
+ * framework's fixed 7-item rubric verbatim, one cited reason per score.
+ * Runs on Gemini, matching every other AI call site in this app (screen
+ * engine extraction, Firm Assist embeddings, voice transcription): the
+ * SDK's native JSON-schema constrained decoding (responseMimeType +
+ * responseSchema), the same mechanism screen-llm-server.ts already uses,
+ * combined with an inline base64 image part the same way
+ * /api/transcribe/route.ts already sends inline audio. Originally built
+ * on Anthropic (Content Studio's call pattern); migrated 2026-08-06 for
+ * vendor consistency, per the operator's standing rule that this stack
+ * runs on Gemini.
  *
  * Caching note: the build plan commits to caching on screenshot hash so
  * a re-scan of an unchanged page does not re-spend tokens. There is
@@ -18,9 +25,7 @@ import type { DimensionResult } from "./dimension-types";
  * caching against no store.
  */
 
-const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-const MODEL = process.env.CONTENT_STUDIO_MODEL ?? "claude-sonnet-5";
-const JUDGMENT_TOOL_NAME = "emit_design_judgment";
+const MODEL = "gemini-2.5-flash";
 
 export const JUDGMENT_RUBRIC_ITEMS = [
   {
@@ -67,28 +72,27 @@ export interface VisionJudgmentResult {
   usage: { inputTokens: number; outputTokens: number };
 }
 
-const JUDGMENT_TOOL_SCHEMA = {
-  type: "object" as const,
-  additionalProperties: false,
+const JUDGMENT_RESPONSE_SCHEMA = {
+  type: "object",
   properties: {
     judgments: {
-      type: "array" as const,
+      type: "array",
       items: {
-        type: "object" as const,
-        additionalProperties: false,
+        type: "object",
         properties: {
           item: {
-            type: "string" as const,
+            type: "string",
             enum: JUDGMENT_RUBRIC_ITEMS.map((r) => r.key),
           },
-          // Strict structured-output mode rejects minimum/maximum on
-          // integer properties (confirmed live: "For 'integer' type,
-          // properties maximum, minimum are not supported"). The 0-100
-          // range is stated in the description and re-validated below in
-          // judgeScreenshot rather than enforced by the schema.
-          score: { type: "integer" as const, description: "0 to 100." },
+          // The 0-100 range is stated in the description and re-validated
+          // below in judgeScreenshot rather than enforced by the schema
+          // (Gemini's schema subset has no reliable cross-vendor min/max
+          // guarantee for integers, matching the defensive posture this
+          // file already needs for the enum-uniqueness check below, which
+          // no JSON-schema-shaped mechanism can express either way).
+          score: { type: "integer", description: "0 to 100." },
           reason: {
-            type: "string" as const,
+            type: "string",
             description: "One sentence of visual evidence for this score. Cite what is actually visible, not a generic opinion.",
           },
         },
@@ -136,11 +140,13 @@ export function hashScreenshot(screenshotPng: Buffer): string {
 
 /**
  * One retry on a validation failure (duplicate or missing rubric item).
- * Confirmed live (2026-07-16) that this happens at a meaningfully high
- * rate, not a rare fluke: 1 of 2 real calls against sakurabalaw.ca hit
- * it. Not retried: ANTHROPIC_API_KEY missing, network failure, or a
- * non-2xx HTTP response, none of which a same-input retry is likely to
- * fix.
+ * Confirmed live (2026-07-16, on the prior Anthropic implementation)
+ * that this happens at a meaningfully high rate, not a rare fluke: 1 of
+ * 2 real calls against sakurabalaw.ca hit it. The same enum-uniqueness
+ * gap exists regardless of vendor (no JSON-schema-shaped mechanism can
+ * express "each of these keys appears exactly once"), so the retry
+ * stays. Not retried: no Gemini API key configured, network failure, or
+ * a thrown SDK error, none of which a same-input retry is likely to fix.
  */
 export async function judgeScreenshot(
   screenshotPng: Buffer,
@@ -159,77 +165,46 @@ async function judgeScreenshotOnce(
   screenshotPng: Buffer,
   deterministicFindings: DimensionResult[]
 ): Promise<VisionJudgmentResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  // GOOGLE_AI_API_KEY first (operator standard, matches screen-llm-server.ts
+  // and /api/transcribe), GEMINI_API_KEY accepted as a fallback.
+  const apiKey = process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is not configured.");
+    throw new Error("No Gemini API key configured (set GOOGLE_AI_API_KEY or GEMINI_API_KEY).");
   }
 
   const screenshotHash = hashScreenshot(screenshotPng);
   const screenshotBase64 = screenshotPng.toString("base64");
 
-  const response = await fetch(ANTHROPIC_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-beta": "structured-outputs-2025-11-13",
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: MODEL,
+    systemInstruction: buildSystemPrompt(),
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: JUDGMENT_RESPONSE_SCHEMA as never,
     },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 2048,
-      // No temperature parameter: confirmed live that this model deprecates
-      // it ("temperature is deprecated for this model"), matching Content
-      // Studio's own call (draft/route.ts), which never sets it either.
-      // Strict structured outputs (constrained decoding) is the
-      // determinism mechanism here, not a low-temperature setting.
-      system: buildSystemPrompt(),
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: { type: "base64", media_type: "image/png", data: screenshotBase64 },
-            },
-            { type: "text", text: buildUserPrompt(deterministicFindings) },
-          ],
-        },
-      ],
-      tools: [
-        {
-          name: JUDGMENT_TOOL_NAME,
-          description: "Emit the 7-item design judgment rubric scores.",
-          input_schema: JUDGMENT_TOOL_SCHEMA,
-          strict: true,
-        },
-      ],
-      tool_choice: { type: "tool", name: JUDGMENT_TOOL_NAME },
-    }),
   });
 
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "unknown error");
-    throw new Error(`Anthropic API returned ${response.status}: ${errorBody}`);
+  const result = await model.generateContent([
+    { inlineData: { mimeType: "image/png", data: screenshotBase64 } },
+    { text: buildUserPrompt(deterministicFindings) },
+  ]);
+
+  const raw = result.response.text();
+  let parsed: { judgments: JudgmentScore[] };
+  try {
+    parsed = JSON.parse(raw) as { judgments: JudgmentScore[] };
+  } catch {
+    throw new Error(`Gemini response was not valid JSON: ${raw.slice(0, 500)}`);
   }
 
-  const result = (await response.json()) as {
-    content: Array<{ type: string; input?: unknown }>;
-    usage: { input_tokens: number; output_tokens: number };
-  };
-
-  const toolUse = result.content.find((c) => c.type === "tool_use");
-  if (!toolUse || !toolUse.input) {
-    throw new Error("Anthropic response contained no tool_use block.");
-  }
-
-  const parsed = toolUse.input as { judgments: JudgmentScore[] };
   const judgments = validateJudgments(parsed.judgments);
+  const usage = result.response.usageMetadata;
 
   return {
     screenshotHash,
     judgments,
-    usage: { inputTokens: result.usage.input_tokens, outputTokens: result.usage.output_tokens },
+    usage: { inputTokens: usage?.promptTokenCount ?? 0, outputTokens: usage?.candidatesTokenCount ?? 0 },
   };
 }
 

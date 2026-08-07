@@ -1,12 +1,15 @@
 import { createHash } from "node:crypto";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 /**
  * Authority and Positioning judgment layer (WEBSITE_AUTHORITY_SIGNAL_MODULE.md
  * "Judgment prompts" list). Separate rubric and separate call from Phase 2's
  * vision-judgment.ts (that one grades general design-quality composition;
  * this one grades positioning and proof-authenticity), but the exact same
- * proven call shape: raw fetch, strict structured outputs, no temperature
- * param, one retry on a duplicate/missing-entry validation failure.
+ * call shape: Gemini SDK, native JSON-schema constrained decoding, one
+ * retry on a duplicate/missing-entry validation failure. Migrated from
+ * Anthropic 2026-08-06 alongside vision-judgment.ts for vendor consistency
+ * (see that file's header for the full rationale).
  *
  * The module lists 7 judgment prompts. One, "is the message consistent
  * across home, about, and service pages," is a cross-page check the
@@ -16,9 +19,7 @@ import { createHash } from "node:crypto";
  * rather than asked anyway. The other 6 run against the single screenshot.
  */
 
-const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-const MODEL = process.env.CONTENT_STUDIO_MODEL ?? "claude-sonnet-5";
-const JUDGMENT_TOOL_NAME = "emit_authority_judgment";
+const MODEL = "gemini-2.5-flash";
 
 export const AUTHORITY_JUDGMENT_RUBRIC_ITEMS = [
   {
@@ -61,26 +62,26 @@ export interface AuthorityVisionJudgmentResult {
   usage: { inputTokens: number; outputTokens: number };
 }
 
-const JUDGMENT_TOOL_SCHEMA = {
-  type: "object" as const,
-  additionalProperties: false,
+const JUDGMENT_RESPONSE_SCHEMA = {
+  type: "object",
   properties: {
     judgments: {
-      type: "array" as const,
+      type: "array",
       items: {
-        type: "object" as const,
-        additionalProperties: false,
+        type: "object",
         properties: {
           item: {
-            type: "string" as const,
+            type: "string",
             enum: AUTHORITY_JUDGMENT_RUBRIC_ITEMS.map((r) => r.key),
           },
-          // Strict mode rejects minimum/maximum on integers (confirmed
-          // live in Phase 2); the 0-100 range lives in the description
-          // and is re-validated at runtime below instead.
-          score: { type: "integer" as const, description: "0 to 100." },
+          // The 0-100 range lives in the description and is re-validated
+          // at runtime below instead of relying on schema-level min/max
+          // (see vision-judgment.ts for the full rationale; the
+          // enum-uniqueness check below needs runtime validation
+          // regardless of what the schema can express).
+          score: { type: "integer", description: "0 to 100." },
           reason: {
-            type: "string" as const,
+            type: "string",
             description: "One sentence of evidence for this score, citing what is actually visible in the screenshot.",
           },
         },
@@ -116,7 +117,7 @@ export function hashScreenshot(screenshotPng: Buffer): string {
 }
 
 /** One retry on a duplicate/missing-entry validation failure, matching
- * Phase 2's confirmed-live failure rate for this exact call shape. */
+ * vision-judgment.ts's confirmed-live failure rate for this call shape. */
 export async function judgeAuthorityScreenshot(
   screenshotPng: Buffer,
   deterministicSummary: string
@@ -134,69 +135,44 @@ async function judgeAuthorityScreenshotOnce(
   screenshotPng: Buffer,
   deterministicSummary: string
 ): Promise<AuthorityVisionJudgmentResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GOOGLE_AI_API_KEY ?? process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is not configured.");
+    throw new Error("No Gemini API key configured (set GOOGLE_AI_API_KEY or GEMINI_API_KEY).");
   }
 
   const screenshotHash = hashScreenshot(screenshotPng);
   const screenshotBase64 = screenshotPng.toString("base64");
 
-  const response = await fetch(ANTHROPIC_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-beta": "structured-outputs-2025-11-13",
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: MODEL,
+    systemInstruction: buildSystemPrompt(),
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: JUDGMENT_RESPONSE_SCHEMA as never,
     },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 2048,
-      system: buildSystemPrompt(),
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: "image/png", data: screenshotBase64 } },
-            { type: "text", text: buildUserPrompt(deterministicSummary) },
-          ],
-        },
-      ],
-      tools: [
-        {
-          name: JUDGMENT_TOOL_NAME,
-          description: "Emit the 6-item authority and positioning judgment rubric scores.",
-          input_schema: JUDGMENT_TOOL_SCHEMA,
-          strict: true,
-        },
-      ],
-      tool_choice: { type: "tool", name: JUDGMENT_TOOL_NAME },
-    }),
   });
 
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "unknown error");
-    throw new Error(`Anthropic API returned ${response.status}: ${errorBody}`);
+  const result = await model.generateContent([
+    { inlineData: { mimeType: "image/png", data: screenshotBase64 } },
+    { text: buildUserPrompt(deterministicSummary) },
+  ]);
+
+  const raw = result.response.text();
+  let parsed: { judgments: AuthorityJudgmentScore[] };
+  try {
+    parsed = JSON.parse(raw) as { judgments: AuthorityJudgmentScore[] };
+  } catch {
+    throw new Error(`Gemini response was not valid JSON: ${raw.slice(0, 500)}`);
   }
 
-  const result = (await response.json()) as {
-    content: Array<{ type: string; input?: unknown }>;
-    usage: { input_tokens: number; output_tokens: number };
-  };
-
-  const toolUse = result.content.find((c) => c.type === "tool_use");
-  if (!toolUse || !toolUse.input) {
-    throw new Error("Anthropic response contained no tool_use block.");
-  }
-
-  const parsed = toolUse.input as { judgments: AuthorityJudgmentScore[] };
   const judgments = validateJudgments(parsed.judgments);
+  const usage = result.response.usageMetadata;
 
   return {
     screenshotHash,
     judgments,
-    usage: { inputTokens: result.usage.input_tokens, outputTokens: result.usage.output_tokens },
+    usage: { inputTokens: usage?.promptTokenCount ?? 0, outputTokens: usage?.candidatesTokenCount ?? 0 },
   };
 }
 
