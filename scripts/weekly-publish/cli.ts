@@ -70,6 +70,7 @@ async function main() {
     case "prove": {
       const report = await runProve(supabase, weekConfig);
       console.log(renderProveReport(report));
+      if (!report.placementOk) process.exitCode = 1;
       break;
     }
     case "run": {
@@ -89,6 +90,7 @@ async function main() {
       console.log(`\n--- prove (${week}) ---`);
       const proveReport = await runProve(supabase, weekConfig);
       console.log(renderProveReport(proveReport));
+      if (!proveReport.placementOk) process.exitCode = 1;
       break;
     }
     default:
