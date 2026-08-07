@@ -1,10 +1,26 @@
 /**
  * Phase 2.3: the `prove` command. Read-only audit + operator report: 16
  * deliverables x version/hero/body state, Kit asset counts by status,
- * publication_artifacts counts, period lifecycle. Never writes.
+ * publication_artifacts counts, period lifecycle, and (fix/weekly-publish-
+ * placement-roles Phase 2) a hard assertion that every website article
+ * resolves BOTH placement roles. Never writes.
+ *
+ * The publication_artifacts summary previously filtered to
+ * `.is("asset_role", null)`, which silently hid every homepage-CTA row (role
+ * set) and undercounted the true evidence set (9 reported vs. 17 actual for
+ * W32) -- the same class of blind spot that let the placement gap itself go
+ * unnoticed: a report that only shows unplaced rows cannot ever say
+ * "placement is missing". Fixed: report ALL active artifacts grouped by
+ * (artifact_type, destination, asset_role).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { WeekConfig } from "../config";
+import {
+  missingPlacementRoles,
+  type ArtifactRow,
+  type RoleAssignmentRow,
+  type MissingPlacementResult,
+} from "./placement-resolution";
 
 export interface ProveDeliverableRow {
   contentSlotId: string;
@@ -18,7 +34,10 @@ export interface ProveReport {
   week: string;
   deliverables: ProveDeliverableRow[];
   kitAssetCountsByStatus: Record<string, number>;
-  publicationArtifactCounts: Array<{ artifactType: string; destination: string; count: number }>;
+  /** ALL active publication_artifacts rows for this week, grouped by (artifact_type, destination, asset_role) -- not filtered to unplaced rows. See module header. */
+  publicationArtifactCounts: Array<{ artifactType: string; destination: string; assetRole: string | null; count: number }>;
+  articlePlacementChecks: MissingPlacementResult[];
+  placementOk: boolean;
   periodLifecycle: string | null;
   readinessEnforcedAt: string | null;
 }
@@ -68,21 +87,65 @@ export async function runProve(supabase: SupabaseClient, weekConfig: WeekConfig)
     kitAssetCountsByStatus[status] = (kitAssetCountsByStatus[status] ?? 0) + 1;
   }
 
+  // ALL deliverables for the period, not just weekConfig.evidence's rows --
+  // the evidence config only lists the 9 image/social rows; the pdf rows
+  // (register-pdf-evidence.ts) and homepage-CTA rows (register-homepage-
+  // cta.ts) attach to deliverables not in that list. deliverableIds (from
+  // weekConfig.pieces, all 16) is the correct scope.
   const { data: pubArtifacts } = await supabase
     .from("publication_artifacts")
-    .select("artifact_type, destination")
-    .in("deliverable_id", weekConfig.evidence.map((e) => e.deliverableId))
-    .is("superseded_at", null)
-    .is("asset_role", null);
-  const pubCounts = new Map<string, number>();
+    .select("artifact_type, destination, asset_role")
+    .in("deliverable_id", deliverableIds)
+    .is("superseded_at", null);
+  const pubCounts = new Map<string, { artifactType: string; destination: string; assetRole: string | null; count: number }>();
   for (const row of pubArtifacts ?? []) {
-    const key = `${row.artifact_type}|${row.destination}`;
-    pubCounts.set(key, (pubCounts.get(key) ?? 0) + 1);
+    const assetRole = (row.asset_role as string | null) ?? null;
+    const key = `${row.artifact_type}|${row.destination}|${assetRole ?? ""}`;
+    const existing = pubCounts.get(key);
+    if (existing) existing.count += 1;
+    else pubCounts.set(key, { artifactType: row.artifact_type as string, destination: row.destination as string, assetRole, count: 1 });
   }
-  const publicationArtifactCounts = [...pubCounts.entries()].map(([key, count]) => {
-    const [artifactType, destination] = key.split("|");
-    return { artifactType, destination, count };
+  const publicationArtifactCounts = [...pubCounts.values()];
+
+  // Placement check: every website article must resolve BOTH required
+  // roles (lib/placement-resolution.ts). Needs every artifact (any role,
+  // any version -- the pure function does its own current-version and
+  // superseded filtering) plus every active role assignment, scoped to the
+  // article deliverables only.
+  const articleDeliverableIds = weekConfig.pieces
+    .filter((p) => p.assetShape === "articleHero")
+    .map((p) => p.deliverableId);
+
+  const { data: articleArtifactsRaw } = articleDeliverableIds.length
+    ? await supabase
+        .from("publication_artifacts")
+        .select("id, deliverable_id, version_id, artifact_type, asset_role, superseded_at")
+        .in("deliverable_id", articleDeliverableIds)
+    : { data: [] as Array<{ id: string; deliverable_id: string; version_id: string; artifact_type: string; asset_role: string | null; superseded_at: string | null }> };
+
+  const { data: activeAssignmentsRaw } = articleDeliverableIds.length
+    ? await supabase
+        .from("publication_artifact_role_assignments")
+        .select("artifact_id, asset_role, superseded_at")
+        .in("deliverable_id", articleDeliverableIds)
+        .is("superseded_at", null)
+    : { data: [] as Array<{ artifact_id: string; asset_role: string; superseded_at: string | null }> };
+
+  const assignments: RoleAssignmentRow[] = (activeAssignmentsRaw ?? []).map((a) => ({
+    artifactId: a.artifact_id,
+    assetRole: a.asset_role,
+    supersededAt: a.superseded_at,
+  }));
+
+  const articlePlacementChecks: MissingPlacementResult[] = articleDeliverableIds.map((deliverableId) => {
+    const currentVersionId = byId.get(deliverableId)?.current_version_id ?? null;
+    if (!currentVersionId) return { deliverableId, missingRoles: ["website_article_hero_overlay", "website_homepage_cta_textless"] } as MissingPlacementResult;
+    const artifacts: ArtifactRow[] = (articleArtifactsRaw ?? [])
+      .filter((a) => a.deliverable_id === deliverableId)
+      .map((a) => ({ id: a.id, versionId: a.version_id, artifactType: a.artifact_type, assetRole: a.asset_role, supersededAt: a.superseded_at }));
+    return missingPlacementRoles(deliverableId, currentVersionId, artifacts, assignments);
   });
+  const placementOk = articlePlacementChecks.every((c) => c.missingRoles.length === 0);
 
   const { data: period } = await supabase
     .from("content_periods")
@@ -95,6 +158,8 @@ export async function runProve(supabase: SupabaseClient, weekConfig: WeekConfig)
     deliverables: deliverableRows,
     kitAssetCountsByStatus,
     publicationArtifactCounts,
+    articlePlacementChecks,
+    placementOk,
     periodLifecycle: (period?.readiness_lifecycle as string) ?? null,
     readinessEnforcedAt: (period?.readiness_enforced_at as string) ?? null,
   };
@@ -117,7 +182,24 @@ export function renderProveReport(report: ProveReport): string {
   }
   lines.push("");
   lines.push("Publishing Kit assets by status: " + JSON.stringify(report.kitAssetCountsByStatus));
-  lines.push("publication_artifacts (evidence, asset_role null): " + JSON.stringify(report.publicationArtifactCounts));
+  lines.push("");
+  lines.push("publication_artifacts (all active rows, by type/destination/role):");
+  const totalArtifacts = report.publicationArtifactCounts.reduce((sum, r) => sum + r.count, 0);
+  for (const r of report.publicationArtifactCounts) {
+    lines.push(`  ${String(r.count).padStart(2)}  ${r.artifactType}/${r.destination}  role=${r.assetRole ?? "null"}`);
+  }
+  lines.push(`  TOTAL: ${totalArtifacts}`);
+  lines.push("");
+  lines.push("Article placement check (website_article_hero_overlay + website_homepage_cta_textless):");
+  for (const c of report.articlePlacementChecks) {
+    lines.push(
+      c.missingRoles.length === 0
+        ? `  [OK]   ${c.deliverableId}`
+        : `  [FAIL] ${c.deliverableId}  missing: ${c.missingRoles.join(", ")}`,
+    );
+  }
+  lines.push(report.placementOk ? "  placement: PASS" : "  placement: FAIL");
+  lines.push("");
   lines.push(`Period readiness_lifecycle: ${report.periodLifecycle} (enforced_at: ${report.readinessEnforcedAt ?? "n/a"})`);
   return lines.join("\n");
 }

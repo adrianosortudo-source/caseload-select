@@ -49,6 +49,14 @@ export interface PdfEvidenceRowConfig {
   locale: string;
 }
 
+export interface HomepageCtaRowConfig {
+  deliverableId: string;
+  label: string;
+  locale: string;
+  /** Relative to the week root's assets/ dir, read directly from disk (unlike EvidenceRowConfig, this role has no prior storage object to source from -- see register-homepage-cta.ts). */
+  file: string;
+}
+
 export interface PieceConfig {
   contentSlotId: string;
   deliverableId: string;
@@ -85,6 +93,8 @@ export interface WeekConfig {
   expectedPieceCount: number;
   evidence: EvidenceRowConfig[];
   pdfEvidence: PdfEvidenceRowConfig[];
+  /** Second website placement per article (fix/weekly-publish-placement-roles). See register-homepage-cta.ts header for why this is a distinct row shape from `evidence`. */
+  homepageCta: HomepageCtaRowConfig[];
   pieces: PieceConfig[];
   kitAssets: KitAssetRowConfig[];
 }
@@ -187,6 +197,19 @@ export const WEEKS: Record<string, WeekConfig> = {
     pdfEvidence: [
       { deliverableId: "66ef8598-178c-40fd-9d1f-42d96ebe5902", label: "checklist EN (Federal Corporation Annual Filing Check)", locale: "en-CA" },
       { deliverableId: "21df651f-4b96-43e9-b01f-6e15a7e56b7c", label: "checklist PT (Verificação anual da empresa federal)", locale: "pt-BR" },
+    ],
+
+    // Second website placement per article (fix/weekly-publish-placement-
+    // roles Phase 1.3). Files already present under 2026-W32/assets/website/
+    // (Counsel Note and Clause each already ship a homepage-feature crop
+    // distinct from the article hero). One shared file per format family,
+    // reused for both locales -- matches the article-hero pattern (one
+    // asset, locale N/A per the visual-surface-matrix rule).
+    homepageCta: [
+      { deliverableId: "3d3d71d5-7c97-4e9c-a0c5-cbb3ec4ea90a", label: "article EN (Counsel Note) homepage CTA", locale: "en-CA", file: "assets/website/counsel-note-home-feature-v2.png" },
+      { deliverableId: "5c959092-3468-43b1-8eb6-ef26733b6644", label: "article PT (Counsel Note) homepage CTA", locale: "pt-BR", file: "assets/website/counsel-note-home-feature-v2.png" },
+      { deliverableId: "1452704a-286c-488d-8393-c1d5e3ec97ce", label: "article EN (Clause) homepage CTA", locale: "en-CA", file: "assets/website/clause-home-card-v3.png" },
+      { deliverableId: "4eaefa5a-403e-4131-a194-ba63236fabf3", label: "article PT (Clause) homepage CTA", locale: "pt-BR", file: "assets/website/clause-home-card-v3.png" },
     ],
 
     // 16 pieces, structural mirror of Week 3's shipped manifest (Phase 0/2.1).
