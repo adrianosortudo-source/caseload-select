@@ -673,8 +673,19 @@ const DOM_SNAPSHOT_SCRIPT = /* js */ `
   // a real disclaimer on the Portuguese sakurabalaw.ca fixture ("Este
   // site e apenas informativo e nao constitui aconselhamento juridico")
   // went undetected.
+  //
+  // Tested against the FULL body text, not a truncated slice: a fixed
+  // character cap here was tried first and found live (2026-08-06) to
+  // produce a false negative on drglaw.ca. That site's real, doctrine-
+  // locked disclaimer ("Legal information, not legal advice.") sits at
+  // character 6064 of its homepage, past a 3000-character cutoff the
+  // check previously used, because the hero and services content ahead
+  // of the disclaimer's placement near the intake widget is substantial.
+  // A plain regex .test() against a full page's innerText is cheap
+  // (microseconds even on a long page), so there was no real performance
+  // reason for the cap in the first place.
   var disclaimerPresent = /legal information[,]? not legal advice|does not constitute legal advice|for informational purposes only|no attorney-client relationship|apenas informativo|n[aã]o constitui aconselhamento|(a|à) titre informatif|ne constitue pas un avis juridique/i.test(
-    (document.body.innerText || '').slice(0, 3000)
+    document.body.innerText || ''
   );
 
   var authority = {
