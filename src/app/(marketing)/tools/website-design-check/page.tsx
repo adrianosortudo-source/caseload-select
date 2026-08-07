@@ -14,10 +14,33 @@ export const metadata: Metadata = {
   },
 };
 
-export default function WebsiteDesignCheckPage() {
+/**
+ * `?embed=1` strips the page down to the tool itself.
+ *
+ * The marketing site frames this route inline on tools.html alongside the
+ * other three public tools. Without the flag the embed carries its own
+ * ToolNav (a second CaseLoad wordmark plus a "Back to home" link) and the
+ * (marketing) layout's full site footer, both stranded mid-page inside a
+ * page that already has them. The layout owns the footer and App Router
+ * layouts do not receive searchParams, so the page hides it with a scoped
+ * rule rather than the layout branching on the flag.
+ *
+ * No flag to propagate onward: this tool has no internal navigation. The
+ * scan posts to /api/tools/website-design-check and the report renders in
+ * place, so unlike the screen demo's CasePicker there is no router.push
+ * that would drop ?embed=1 and bring the chrome back inside the iframe.
+ */
+interface PageProps {
+  searchParams: Promise<{ embed?: string }>;
+}
+
+export default async function WebsiteDesignCheckPage({ searchParams }: PageProps) {
+  const { embed } = await searchParams;
+  const isEmbedded = embed === "1";
+
   return (
     <>
-      <ToolNav />
+      {!isEmbedded && <ToolNav />}
 
       <main className="dc-main">
         <section className="dc-hero">
@@ -141,6 +164,25 @@ export default function WebsiteDesignCheckPage() {
           .dc-hero-stats { grid-template-columns: 1fr; max-width: 200px; }
         }
       `}</style>
+
+      {isEmbedded && (
+        <style>{`
+          /* Embedded on the marketing site. The framing page supplies the
+             footer and the surrounding narrative, so this route renders the
+             tool alone. min-height drops the 100vh-minus-nav reservation,
+             which would otherwise force dead space inside a fixed-height
+             iframe now that the nav is gone.
+
+             The hero goes too. It is a full viewport of title, sub, and
+             stats that the framing section already states in its own words,
+             and leaving it in pushes the URL field below the fold of the
+             iframe, so the embed reads as a poster rather than a tool.
+             Everything below the tool stays, including the disclaimer. */
+          .cls-footer { display: none; }
+          .dc-main { min-height: 0; }
+          .dc-hero { display: none; }
+        `}</style>
+      )}
     </>
   );
 }
