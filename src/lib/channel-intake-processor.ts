@@ -864,20 +864,34 @@ export async function processChannelInbound(
     // registry entry applies to an unclassified matter), so the normal
     // slotToAsk machinery below cannot produce this question.
     //
-    // KNOWN LIMITATION, not fixed here: matter_type is set once by
-    // initialiseState on turn 1 and never re-derived on resume turns
-    // (see the "Fresh first turn" branch above, and slotEvidence.ts:24,
-    // which no-ops runEvidencePass whenever matter_type is 'unknown'). If
-    // the lead's reply to this question describes a real matter, that text
-    // lands in state.input (so the lawyer sees it in the transcript) but
-    // does NOT reclassify matter_type or unlock discovery questions — the
-    // very next turn hits this same floor with discoveryCount no longer 0
-    // and finalizes as before. That is a real, scoped improvement (a bare
-    // greeting no longer kills the conversation before anything is asked)
-    // but not full multi-turn intake recovery for unclassified matters.
-    // Turn-2+ reclassification would mean re-running classify() on resume,
-    // which is a larger, separate change — see
-    // docs/BUILD_PLAN_meta_channel_intake_fixes_v1.md § F2.
+    // CORRECTED 2026-08-07 (was wrong at ship time; see
+    // docs/BUILD_PLAN_meta_channel_intake_fixes_v1.md § F2 correction and
+    // docs/BUILD_PLAN_channel_intake_intro_optionmap_v1.md § 1 for the
+    // production evidence). The original comment here claimed the lead's
+    // reply to this question can never reclassify matter_type on resume,
+    // reasoning only from the regex layers: initialiseState runs once on
+    // turn 1, and runEvidencePass no-ops for 'unknown' (slotEvidence.ts:24)
+    // — both true, but incomplete. llmExtractServer + mergeLlmResults run
+    // earlier in THIS SAME function, on every resume turn (line ~581,
+    // well before this Phase C block), and mergeLlmResults promotes
+    // matter_type away from the 'unknown' lane explicitly ungated by
+    // design (screen-engine/llm/extractor.ts, DR-069 comment: "The
+    // 'unknown' lane is NOT gated by this option"). So when the lead's
+    // reply to this question is a real description, matter_type is
+    // usually ALREADY reclassified by the time this block runs, the
+    // condition below is false, and normal Phase C discovery fires in
+    // the SAME turn's response — confirmed live 2026-08-07, WhatsApp
+    // row screened_leads.6ff7d438-2eda-42b4-be43-758df2c89bb1: greeting
+    // -> this ask -> "i have a business and i want to formalize it" ->
+    // reclassified to business_setup_advisory -> 10 discovery questions
+    // -> band B brief in the same conversation.
+    //
+    // The path below (matter_type still 'unknown', so it finalizes) is
+    // real but narrower than originally documented: it fires only when
+    // LLM extraction is unavailable or errors this turn (no API key,
+    // rate limit, network failure — llmExtractServer degrades
+    // gracefully rather than blocking). That is deliberate graceful
+    // degradation, not a gap to close.
     if (state.matter_type === 'unknown' && discoveryCount === 0) {
       const openingQuestion =
         i18n.widget_strings?.describe_situation ||
