@@ -35,6 +35,15 @@ const scriptSrc = process.env.NODE_ENV === "production"
  *    page.tsx metadata) and was previously unlinked pending an email-gate
  *    and consent-wiring follow-up (BUILD_PLAN_firm_voice_builder_tool_v1.md
  *    S8); Adriano directed embedding it now regardless, 2026-08-06.
+ *    http://localhost:3300 is also on this allow-list (2026-08-06): the
+ *    Version3_CaseLoadSelect static site has no deployment target yet, so
+ *    Adriano previews tools.html via a local `serve` static server on that
+ *    port. Low risk to add permanently: these three routes carry no auth,
+ *    no session, and no per-visitor state to hijack by framing, so a
+ *    malicious page framing them from localhost gains nothing a real
+ *    visitor couldn't already do by visiting the URL directly. Remove once
+ *    tools.html has a real deployed origin and local-preview testing is
+ *    no longer needed.
  *
  * CSP design notes:
  * - script-src 'self' 'unsafe-inline' — Next.js 16 with React Server
@@ -50,7 +59,7 @@ const scriptSrc = process.env.NODE_ENV === "production"
  *   integrations the client calls. Add new origins explicitly.
  * - font-src 'self' data: https://fonts.gstatic.com — Google Fonts.
  * - frame-ancestors 'none' on main app, * on /widget/*, a scoped
- *   CaseLoad-only allow-list on the three tools-embed routes.
+ *   CaseLoad-plus-local-dev allow-list on the three tools-embed routes.
  * - base-uri 'none' — blocks <base href=...> attacks.
  * - form-action 'self' — forms post only to same-origin endpoints.
  */
@@ -132,10 +141,12 @@ const toolsEmbedSecurityHeaders = [
       "img-src 'self' data: https:",
       "font-src 'self' data: https://fonts.gstatic.com",
       "connect-src 'self' https://*.supabase.co https://api.resend.com https://generativelanguage.googleapis.com https://openrouter.ai",
-      // Scoped, not '*': only our own marketing origins may frame these two
-      // public tool pages. www is the canonical host; the bare apex is kept
-      // in case anything still resolves without the www redirect applied.
-      "frame-ancestors 'self' https://www.caseloadselect.ca https://caseloadselect.ca",
+      // Scoped, not '*': only our own marketing origins may frame these
+      // three public tool pages. www is the canonical host; the bare apex
+      // is kept in case anything still resolves without the www redirect
+      // applied; localhost:3300 is the local static-preview server, see
+      // the file-header comment above for why it's safe to leave permanent.
+      "frame-ancestors 'self' https://www.caseloadselect.ca https://caseloadselect.ca http://localhost:3300",
       "base-uri 'none'",
       "form-action 'self'",
       "object-src 'none'",
