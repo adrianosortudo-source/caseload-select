@@ -49,15 +49,22 @@ export function describeSituationFirstAsk(language: SupportedLanguage): string {
  * the single source of truth for the RESUME-turn copy, which is unchanged
  * and far more frequently hit.
  */
-export function contactCaptureFirstAsk(missing: ContactMissing): string {
+export function contactCaptureFirstAsk(missing: ContactMissing, language: SupportedLanguage): string {
+  const s = getI18n(language).widget_strings;
   switch (missing) {
     case 'name':
-      return 'First, what name should the firm use when they reach out?';
+      return s?.contact_capture_first_ask_name || 'First, what name should the firm use when they reach out?';
     case 'reachability':
-      return "First, what's the best phone or email for the firm to reach you?";
+      return (
+        s?.contact_capture_first_ask_reachability ||
+        "First, what's the best phone or email for the firm to reach you?"
+      );
     case 'both':
     default:
-      return 'First, could you share your name and the best phone or email for the firm to reach you?';
+      return (
+        s?.contact_capture_first_ask_both ||
+        'First, could you share your name and the best phone or email for the firm to reach you?'
+      );
   }
 }
 

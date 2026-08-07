@@ -768,7 +768,10 @@ export async function processChannelInbound(
     // (the lead still moves to ops visibility either way).
     if (priorFollowUpCount >= MAX_FOLLOW_UPS) {
       try {
-        const exhaustedText = buildContactCaptureExhaustedMessage(gate.missing ?? 'both');
+        const exhaustedText = buildContactCaptureExhaustedMessage(
+          gate.missing ?? 'both',
+          (state.language ?? 'en') as SupportedLanguage,
+        );
         const exhaustedSend = await sendChannelMessage({
           firmId,
           sender,
@@ -809,10 +812,10 @@ export async function processChannelInbound(
     // asking for contact — resume turns (attempt 2, 3...) keep the
     // unmodified, opener-carrying copy from buildContactCaptureFollowUp.
     const followUpText = isResume
-      ? buildContactCaptureFollowUp(gate.missing ?? 'both')
+      ? buildContactCaptureFollowUp(gate.missing ?? 'both', (state.language ?? 'en') as SupportedLanguage)
       : withFirstAskIntro(
           (state.language ?? 'en') as SupportedLanguage,
-          contactCaptureFirstAsk(gate.missing ?? 'both'),
+          contactCaptureFirstAsk(gate.missing ?? 'both', (state.language ?? 'en') as SupportedLanguage),
         );
     const sendResult = await sendChannelMessage({
       firmId,
