@@ -1567,6 +1567,56 @@ export function extractPostalCode(transcript: string): string | null {
   return null;
 }
 
+// ─── Lead-intent heuristic (DR-112) ────────────────────────────────────────
+//
+// Deterministic, offline-safe fallback for lead-intent classification. The
+// LLM's `__lead_intent` field (llm/schema.ts) is authoritative and
+// language-agnostic whenever a live extraction runs; this heuristic only
+// matters when the LLM is unavailable (mode: 'disabled' / 'error') or
+// before the first extraction settles. English + Portuguese coverage,
+// same two languages the widget currently ships copy for; other
+// supported languages rely on the LLM.
+//
+// Length-gated: a text over CONTACT_REQUEST_LENGTH_GATE characters is
+// assumed to carry enough substance that a contact-request phrase inside
+// it is incidental, not the whole point (e.g. a long description that
+// happens to end with "please call me" still has real matter facts the
+// engine should use).
+export const CONTACT_REQUEST_LENGTH_GATE = 160;
+
+export const CONTACT_REQUEST_SIGNALS: readonly string[] = [
+  // English
+  'speak to a lawyer', 'speak with a lawyer', 'speak to an attorney', 'speak with an attorney',
+  'talk to a lawyer', 'talk with a lawyer', 'talk to an attorney', 'talk with an attorney',
+  'talk to someone', 'speak to someone', 'speak with someone',
+  'meet with a lawyer', 'meet a lawyer', 'meet an attorney',
+  'book a call', 'book a consult', 'book a consultation', 'book an appointment',
+  'schedule a call', 'schedule a consult', 'schedule a consultation', 'schedule an appointment',
+  'set up a call', 'set up a consult', 'set up a consultation', 'set up an appointment',
+  'need a lawyer', 'need an attorney', 'need to speak to a lawyer', 'need to talk to a lawyer',
+  'want a lawyer', 'want an attorney', 'want to speak to a lawyer', 'want to talk to a lawyer',
+  'get a lawyer', 'find a lawyer', 'hire a lawyer', 'looking for a lawyer',
+  'please call me', 'can you call me', 'call me back',
+  // Portuguese
+  'falar com um advogado', 'falar com uma advogada', 'falar com advogado', 'falar com advogada',
+  'preciso de um advogado', 'preciso de uma advogada', 'quero um advogado', 'quero uma advogada',
+  'procuro um advogado', 'procuro uma advogada',
+  'marcar uma consulta', 'agendar uma consulta', 'marcar uma chamada', 'agendar uma chamada',
+  'marcar uma reuniao', 'agendar uma reuniao', 'marcar uma reunião', 'agendar uma reunião',
+];
+
+/**
+ * Offline-safe heuristic: 'contact_request' when the (short) text matches
+ * a known contact-request phrase, 'unknown' otherwise (initialiseState's
+ * caller treats 'unknown' as "let the LLM decide"). Never returns
+ * 'case_description' — the heuristic only asserts what it is confident
+ * about; absence of a match is not proof the text IS a description.
+ */
+export function detectLeadIntentHeuristic(text: string): 'contact_request' | 'unknown' {
+  if (!text || text.trim().length > CONTACT_REQUEST_LENGTH_GATE) return 'unknown';
+  return matchesAny(text, [...CONTACT_REQUEST_SIGNALS]) ? 'contact_request' : 'unknown';
+}
+
 // ─── State initialiser ────────────────────────────────────────────────────
 
 export function initialiseState(input: string): EngineState {
@@ -1633,10 +1683,18 @@ export function initialiseState(input: string): EngineState {
   // lead wrote in another supported language.
   const language: SupportedLanguage = 'en';
 
+  // Lead-intent heuristic (DR-112). Offline-safe default; the LLM's
+  // __lead_intent field overwrites this via mergeLlmResults whenever a
+  // live extraction runs, language-agnostic. See detectLeadIntentHeuristic
+  // above for why this only ever asserts 'contact_request' or 'unknown',
+  // never 'case_description'.
+  const lead_intent = detectLeadIntentHeuristic(input);
+
   return {
     input,
     practice_area,
     matter_type,
+    lead_intent,
     // DR-069: the initial classification always comes from the regex
     // classifier above, including its 'unknown' and 'out_of_scope'
     // outcomes. Later setters (rerouteFrom*General, the LLM __matter_type

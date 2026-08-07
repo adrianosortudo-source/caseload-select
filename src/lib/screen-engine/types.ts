@@ -273,6 +273,27 @@ export type SlotMetaSource =
 export type AdvisorySubtrack = 'solo_setup' | 'partner_setup' | 'buy_in_or_joining' | 'unknown';
 
 /**
+ * How the lead opened the conversation (DR-112). Routing and presentation
+ * metadata ONLY — never a scoring input to computeBand or the four-axis
+ * scorer.
+ *
+ *  - `'case_description'`: the lead described a matter, even briefly.
+ *  - `'contact_request'`: the lead asked to speak with, meet, or book a
+ *    call with a lawyer, with no facts about an actual legal matter. When
+ *    combined with matter_type='unknown', the clarify step acknowledges
+ *    the request instead of showing generic "tell me more" copy.
+ *  - `'unknown'`: not yet classified (initial default; also covers states
+ *    serialized before this field existed).
+ *
+ * Set by two layers, same pattern as SupportedLanguage detection (DR-039):
+ * a deterministic length-gated EN/PT heuristic in extractor.ts runs first
+ * (offline-safe), and the LLM's `__lead_intent` synthetic field
+ * (llm/schema.ts) is authoritative whenever a live extraction runs,
+ * language-agnostic, via mergeLlmResults.
+ */
+export type LeadIntent = 'case_description' | 'contact_request' | 'unknown';
+
+/**
  * How the CURRENT matter_type was determined (added 2026-06-11, DR-069).
  *
  * matter_type is the engine's most load-bearing classification: it selects
@@ -454,6 +475,14 @@ export interface EngineState {
    * Optional; absent on web / sandbox states.
    */
   pendingAskedSlotId?: string | null;
+  /**
+   * How the lead opened the conversation (DR-112). Defaults to 'unknown'
+   * at initialiseState; set by the deterministic heuristic there, then
+   * overwritten by the LLM's `__lead_intent` field via mergeLlmResults
+   * whenever a live extraction runs. Absent on states serialized before
+   * this field existed; readers treat absence as 'unknown'.
+   */
+  lead_intent?: LeadIntent;
   debug?: Record<string, unknown>;
 }
 
@@ -509,6 +538,31 @@ export interface SlotDefinition {
   llm_extractable?: boolean;
 }
 
+/**
+ * Why the clarify step fired (DR-112). Drives which acknowledgment copy a
+ * surface shows.
+ *
+ *  - `'contact_request'`: the lead's opener was a request to speak with a
+ *    lawyer, with no matter facts (state.lead_intent === 'contact_request').
+ *    Surfaces should acknowledge the request before redirecting.
+ *  - `'unclassified'`: the lead described something, but the engine
+ *    genuinely could not place it in any matter-type bucket. Default
+ *    "tell me more" copy.
+ */
+export type ClarifyReason = 'contact_request' | 'unclassified';
+
+/**
+ * One menu option on a structured clarify step (DR-112). `value` is one
+ * of the engine's four general routing lanes; `applyClarifyChoice`
+ * (control.ts) accepts exactly this set. `labelKey` is an i18n
+ * widget_strings key surfaces should look up (with an English fallback
+ * literal), not a ready-to-render label — the engine never picks UI copy.
+ */
+export interface ClarifyOption {
+  value: MatterType;
+  labelKey: string;
+}
+
 export interface NextStep {
   type: StepType;
   slot?: SlotDefinition;
@@ -522,6 +576,16 @@ export interface NextStep {
    * surface this via the channel's Send API after persistence.
    */
   closingMessage?: string;
+  /**
+   * Present only when type === 'clarify' (DR-112). `reason` and `options`
+   * let surfaces render a warm, correctly-acknowledged menu instead of
+   * parsing `message`. `message` is kept unchanged for backward
+   * compatibility with any caller that only reads it (e.g. a channel
+   * surface not yet updated to render the menu).
+   */
+  reason?: ClarifyReason;
+  messageKey?: string;
+  options?: ClarifyOption[];
 }
 
 export interface BandResult {
@@ -702,4 +766,12 @@ export interface LawyerReport {
    * 'unknown' for states serialized before this field existed.
    */
   matter_type_provenance: MatterTypeProvenance;
+  /**
+   * How the lead opened the conversation (DR-112). Mirrors
+   * `EngineState.lead_intent` into the persisted brief so the renderer can
+   * surface a contact-request opening honestly (see buildMatterSnapshot).
+   * 'unknown' for states serialized before this field existed, or when
+   * the opener classified as a normal case description.
+   */
+  lead_intent: LeadIntent;
 }

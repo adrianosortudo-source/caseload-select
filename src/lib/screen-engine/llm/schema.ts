@@ -52,6 +52,18 @@ export const MATTER_TYPE_CLASSIFIER_FIELD = '__matter_type';
  */
 export const LANGUAGE_DETECTOR_FIELD = '__detected_language';
 
+/**
+ * Always-injected synthetic field (DR-112). Classifies how the lead
+ * opened: did they describe a matter, or ask to speak with a lawyer with
+ * no facts about an actual matter? Language-agnostic — the LLM classifies
+ * from meaning, not English keyword patterns, so it works for any
+ * language `__detected_language` supports. `mergeLlmResults` writes this
+ * back into `state.lead_intent` on every call, same convention as
+ * `LANGUAGE_DETECTOR_FIELD` and `MATTER_TYPE_CLASSIFIER_FIELD`: never a
+ * slot, never a scoring input.
+ */
+export const LEAD_INTENT_FIELD = '__lead_intent';
+
 // Slots that should never be filled by the LLM extractor (per-id allowlist).
 //
 // Two categories:
@@ -154,8 +166,9 @@ const ROUTING_PEER_SETS: Partial<Record<MatterType, MatterType[]>> = {
 export function getExtractableSlots(matterType: MatterType): ExtractionSlot[] {
   // Language detector slot is ALWAYS at the head of the catalogue (DR-039).
   // The LLM resolves language on every call, not just when an upstream
-  // detector was uncertain.
-  const prefix: ExtractionSlot[] = [languageDetectorSlot()];
+  // detector was uncertain. Lead-intent classifier (DR-112) is always
+  // injected alongside it, same rationale: every call, not just clarify.
+  const prefix: ExtractionSlot[] = [languageDetectorSlot(), leadIntentSlot()];
 
   // For unknown matter, return routing-level slots so the LLM can help
   // disambiguate within an area. Plus inject the special matter-type
@@ -228,6 +241,26 @@ function languageDetectorSlot(): ExtractionSlot {
       "Identify the language of the lead's description. Return the ISO 639-1 code of the lead's language: 'en' for English, 'fr' for French, 'es' for Spanish, 'pt' for Portuguese, 'zh' for Mandarin or Simplified Chinese, 'ar' for Arabic. Return null only if the language is outside this supported set.",
     input_type: 'single_select',
     options: ['en', 'fr', 'es', 'pt', 'zh', 'ar'],
+    description: 'Tier: classifier. Group: routing.',
+  };
+}
+
+/**
+ * The synthetic lead-intent classifier slot (DR-112). Always injected,
+ * same convention as languageDetectorSlot. Distinguishes a lead who
+ * described a matter from one who only asked to speak with a lawyer, so
+ * the clarify step (control.ts) can acknowledge a contact request instead
+ * of showing generic "tell me more" copy. Deliberately narrow: a
+ * description that ALSO happens to ask for a call is still
+ * case_description, because it contains matter facts.
+ */
+function leadIntentSlot(): ExtractionSlot {
+  return {
+    id: LEAD_INTENT_FIELD,
+    question:
+      "CLASSIFICATION TASK, not extraction. Did the lead describe a legal matter, or only ask to speak with, meet, or book a call with a lawyer? Return 'contact_request' ONLY when the description contains no facts about an actual legal matter and is purely a request for contact — examples: 'I want to speak to a lawyer', 'I want to book a call with a lawyer', 'I need a lawyer to help me', 'quero falar com um advogado', 'preciso de um advogado'. Return 'case_description' for everything else, including short or vague descriptions that contain ANY fact about a situation (e.g. 'my landlord is threatening me', 'I got fired', 'something happened at work and I don't know what to do') and for text that both describes a matter and asks for a call. When genuinely unsure, prefer 'case_description'.",
+    input_type: 'single_select',
+    options: ['case_description', 'contact_request'],
     description: 'Tier: classifier. Group: routing.',
   };
 }

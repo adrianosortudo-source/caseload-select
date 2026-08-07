@@ -114,6 +114,15 @@ them to reach you?" Do not ask for documents, do not ask for the names of \
 opposing parties, do not collect anything beyond the lead's OWN name + contact. \
 Never finalise an intake without these fields captured.
 
+10. LEAD-INTENT CLASSIFICATION. The schema ALWAYS includes a \`__lead_intent\` \
+field, and you MUST return a value on every call: 'contact_request' when the \
+lead's description contains no facts about an actual legal matter and is \
+purely a request to speak with, meet, or book a call with a lawyer, or \
+'case_description' for everything else, including short or vague \
+descriptions that state any fact about a situation. Do not confuse this \
+with rule 0's null rule — this field is never null. When genuinely unsure, \
+return 'case_description'.
+
 Output the JSON object with one key per field in the schema. Every field must \
 be present in your output, with either an extracted value or null.`;
 }
