@@ -111,6 +111,8 @@ jobs:
         run: npm ci
       - name: Run tsc --noEmit
         run: npx tsc --noEmit
+      - name: Cron contract guard
+        run: node scripts/check-cron-contract.mjs
 
   lint:
     name: ESLint
