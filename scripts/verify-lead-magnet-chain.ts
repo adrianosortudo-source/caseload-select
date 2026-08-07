@@ -25,6 +25,16 @@
  *      `publication_artifacts` row exists for that deliverable, and its sha256 matches the
  *      bytes just downloaded anonymously -- the same "ambiguous live PDF" check
  *      verify-checklist-chain.ts runs for the portal layer, applied here to the public layer.
+ *   8. EXACTLY one LSO disclaimer on the page (mirrors the website's own post-build guard,
+ *      scripts/verify-static-output.mjs, from the consumer side). Counted by occurrence
+ *      (`split(needle).length - 1`), never `grep -c` / a line count -- 2026-08-07's website
+ *      handoff names that exact mistake as what hid a live double-disclaimer defect through a
+ *      full day of "verified against production" checks (prerendered HTML is one line, so a
+ *      line-count sees a duplicate as 1). The needle is the disclaimer headline's own literal
+ *      text (src/components/layout/LsoDisclaimer.tsx / src/lib/i18n.ts,
+ *      `lsoDisclaimerHeadline`), copied here rather than read cross-repo at runtime.
+ *   9. At least one `"BreadcrumbList"` occurrence (the breadcrumb JSON-LD the build guard also
+ *      requires on every content page).
  *
  * GHL tag verification is deliberately NOT done here (L6: that happens via the GHL MCP
  * `contacts_get-contacts` tool, against a real captured lead, not scripted against the GHL
@@ -99,6 +109,16 @@ const CONSENT_MARKERS: Record<"en" | "pt", string> = {
   en: "so DRG Law can follow up about this checklist",
   pt: "para que a DRG Law possa dar seguimento",
 };
+// Literal text of LsoDisclaimer's headline (src/lib/i18n.ts, lsoDisclaimerHeadline), copied
+// rather than read cross-repo. If the wording ever changes there, update it here too.
+const DISCLAIMER_HEADLINE: Record<"en" | "pt", string> = {
+  en: "Legal information, not legal advice.",
+  pt: "Informação jurídica, não aconselhamento jurídico.",
+};
+
+function occurrences(haystack: string, needle: string): number {
+  return haystack.split(needle).length - 1;
+}
 const DASH_PATTERN = /[–—]/; // en dash, em dash
 // Case-SENSITIVE: this codebase's real placeholder convention is all-caps
 // ("[FORM DESTINATION PENDING]"). A case-insensitive match on TODO/PENDING
@@ -144,6 +164,15 @@ async function checkLocale(locale: "en" | "pt", stageQuestionMarker: string): Pr
   const placeholderMatch = html.match(PLACEHOLDER_PATTERN);
   if (placeholderMatch) violations.push(`placeholder token found on the landing page: "${placeholderMatch[0]}"`);
 
+  const disclaimerCount = occurrences(html, DISCLAIMER_HEADLINE[locale]);
+  if (disclaimerCount !== 1) {
+    violations.push(`expected exactly 1 LSO disclaimer occurrence, found ${disclaimerCount} (counted by occurrence, not line)`);
+  }
+  const breadcrumbCount = occurrences(html, "BreadcrumbList");
+  if (breadcrumbCount < 1) {
+    violations.push(`no "BreadcrumbList" JSON-LD found on the landing page`);
+  }
+
   let pdfBytes = 0;
   let pdfSha256: string | undefined;
   const pdfRes = await fetch(pdfUrl, { redirect: "manual" });
@@ -187,7 +216,10 @@ async function checkLocale(locale: "en" | "pt", stageQuestionMarker: string): Pr
 
   return {
     locale, landingUrl, pdfUrl, violations, notes,
-    summary: { landingStatus: landingRes.status, pdfStatus: pdfRes.status, pdfBytes, pdfSha256, liveArtifactCount },
+    summary: {
+      landingStatus: landingRes.status, pdfStatus: pdfRes.status, pdfBytes, pdfSha256, liveArtifactCount,
+      disclaimerCount, breadcrumbCount,
+    },
   };
 }
 
