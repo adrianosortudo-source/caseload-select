@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import FirmVoiceBuilder from "@/components/firm-voice-builder/FirmVoiceBuilder";
+import ToolHeader from "@/components/firm-voice-builder/ToolHeader";
 
 export const metadata: Metadata = {
   title: "The Firm Voice Builder · CaseLoad Select",
@@ -20,8 +21,11 @@ export const metadata: Metadata = {
  */
 export default function FirmVoiceBuilderPage() {
   return (
-    <main className="min-h-screen bg-parchment px-4 py-10">
-      <FirmVoiceBuilder />
-    </main>
+    <>
+      <ToolHeader />
+      <main className="min-h-screen bg-parchment px-4 py-10">
+        <FirmVoiceBuilder />
+      </main>
+    </>
   );
 }
