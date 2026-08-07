@@ -418,11 +418,28 @@ const DOM_SNAPSHOT_SCRIPT = /* js */ `
   // Spacing: non-zero margin/padding values from layout containers, for
   // the scale-adherence histogram check. Capped sample; zero values are
   // excluded since they carry no scale-decision information.
+  //
+  // marginLeft/marginRight are also excluded on a centered max-width
+  // container (the extremely common .container max-width plus margin:
+  // 0 auto pattern). Confirmed live (2026-08-06) on drglaw.ca: a
+  // max-width 1240px container computes marginLeft = marginRight =
+  // 100px at a 1440px viewport, and that 100 dominated the sample (26
+  // of 178 raw values) despite having nothing to do with the site's
+  // spacing tokens: it is the output of (viewport width - max-width) /
+  // 2, arithmetic that changes with viewport, not a value anyone chose
+  // from a scale. Only the two horizontal margins on a genuinely
+  // centered box are dropped; vertical margins and all padding on the
+  // same element, plus every margin on non-centered elements, are
+  // unaffected.
   var spacingValuesPx = [];
   var layoutEls = Array.from(document.querySelectorAll('section,header,footer,nav,article,main,div')).slice(0, 150);
   layoutEls.forEach(function (el) {
     var cs = getComputedStyle(el);
+    var marginLeftPx = parseFloat(cs.marginLeft) || 0;
+    var marginRightPx = parseFloat(cs.marginRight) || 0;
+    var isAutoCenteredContainer = cs.maxWidth !== 'none' && marginLeftPx > 0 && Math.abs(marginLeftPx - marginRightPx) < 0.5;
     ['marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'].forEach(function (prop) {
+      if (isAutoCenteredContainer && (prop === 'marginLeft' || prop === 'marginRight')) return;
       var v = parseFloat(cs[prop]);
       if (v && v > 0) spacingValuesPx.push(Math.round(v));
     });

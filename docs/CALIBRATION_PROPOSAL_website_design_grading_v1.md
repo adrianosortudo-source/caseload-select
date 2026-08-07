@@ -1,6 +1,9 @@
 # Website Design Grading: calibration proposal v1
 
-Status: **proposed, awaiting Adriano's decision.** Nothing here is implemented.
+Status: **approved by Adriano 2026-08-06.** Execution tracked in
+`BUILD_PLAN_design_check_calibration_v1.md`; this document remains the
+evidence record and now also carries the investigation results the
+execution plan's gated phases produced.
 Companion to `BUILD_PLAN_website_design_grading_v1.md`.
 
 ## Why this exists
@@ -110,11 +113,83 @@ own look:
   accessibility standard in the tool silently covers nothing there. Likely
   cause is transparent/inherited backgrounds the checker will not resolve
   to an effective colour. The honest disclosure is working, but the
-  coverage gap is real.
-- **Spacing scores 0 on drglaw.ca.** A site built to a deliberate token
-  scale should not score zero on scale adherence. Either the check is
-  miscalibrated or DRG's scale genuinely does not match the expected ratio
-  set. Worth confirming before the dimension is trusted.
+  coverage gap is real. **Status: investigated, see Phase 2 below.**
+- ~~**Spacing scores 0 on drglaw.ca.**~~ **Status: investigated and fixed,
+  see Phase 1 below.**
+
+## Investigation results
+
+### Phase 1: spacing scores 0 on drglaw.ca (fixed)
+
+**Root cause.** Two independent defects in the spacing-scale-adherence
+sample, found by dumping the raw `spacingValuesPx` distribution live
+against all six regression domains rather than assuming either "the check
+is wrong" or "the site is wrong."
+
+First, the sample was polluted by auto-centering margins. drglaw.ca's
+`.container { max-width: 1240px; margin: 0 auto; }` pattern (the single
+most common CSS layout idiom in existence) computes `marginLeft` and
+`marginRight` to identical values driven purely by viewport arithmetic:
+`(1440 - 1240) / 2 = 100`. That 100 is not a spacing decision anyone made;
+it is a side effect of centering a fixed-width box in whatever viewport
+the tool happens to render at. It dominated the raw sample (26 of 178
+values, tied for the single most frequent value) and, being 4px off the
+nearest named scale step, was scored as evidence of ad-hoc spacing.
+Confirmed by dumping the actual element, class, and computed style behind
+every repeated off-scale value: every instance traced to a
+`max-width`-constrained container with `marginLeft === marginRight`.
+
+Second, once the polluted margins were excluded, drglaw.ca's remaining
+off-scale values (56, 80, 88, 112, 40, 72, 200, all appearing repeatedly)
+were checked against the framework's named canonical progression
+(4/8/12/16/24/32/48/64/96px) and found not to match, at 52% adherence
+(the "warn" band, not "fail" but still short of "pass"). Every one of
+those values is an exact multiple of 8, none of them a coincidence: this
+is the plain 8-point grid, the other extremely common spacing convention
+alongside the named progressive scale the check already recognized. The
+named scale is one legitimate design-token system; a linear 8px grid is
+another, equally legitimate one the check simply did not know about.
+
+**Exact code path.** `src/lib/design-check/renderer.ts`, the
+`spacingValuesPx` capture inside `DOM_SNAPSHOT_SCRIPT` (in-page script,
+runs in the rendered browser): now skips `marginLeft`/`marginRight` on an
+element whose `maxWidth !== 'none'` and whose two margins are equal
+(the auto-centering signature). `src/lib/design-check/dimensions/spacing.ts`:
+`isOnScale` now accepts a value on EITHER the named `SCALE_STEPS` list
+(unchanged, ±2px) OR an exact multiple of 8 (new, tight ±1px tolerance,
+deliberately not the same generous slack as the named list, so this does
+not become a net wide enough to also catch ad-hoc spacing).
+
+**Fix.** Both changes above, plus the report copy updated to state both
+accepted systems rather than only the named one.
+
+**Tests added.** `src/lib/design-check/dimensions/__tests__/spacing.test.ts`,
+5 tests. Two are pinned against the exact, real, unmodified value lists
+captured live from drglaw.ca (150 values post centering-margin exclusion:
+52% named-only, 93% combined, now "pass") and marathonlaw.ca (73 values,
+no centering containers to exclude: 36% named-only, 42% combined, still
+"fail"), each verified against the fixed logic by script before being
+hardcoded, not hand-computed (an earlier hand-computed draft of these
+fixtures contained real classification errors, caught by that
+verification step rather than shipped). The remaining three tests cover
+the too-small-sample no-op path, a pure-8pt-grid-only distribution
+(proves the new branch fires on its own), and a near-miss case 2px off
+grid alignment (proves the tolerance is genuinely tight, not accidentally
+wide enough to credit arbitrary numbers).
+
+**Impact on existing behavior.** Live-verified end to end through the
+real API route (not just the standalone investigation probes): drglaw.ca
+spacing moved from 0 to 100 (fail to pass), overall score from 58 to 73.
+marathonlaw.ca spacing stayed at 0 (fail, 42%), overall score unchanged
+at 40 (still separately capped by its LSO and authority flags). No other
+dimension, and no other domain in the regression set, changed status
+under the fix; the named-scale-only path is untouched for every value
+that was already correctly classified before this change.
+
+### Phase 2: contrast not-checkable on drglaw.ca and gosailaw.com
+
+Pending. See `BUILD_PLAN_design_check_calibration_v1.md` Phase 2 for the
+investigation protocol.
 
 ## What is not proposed
 
