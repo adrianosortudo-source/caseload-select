@@ -51,6 +51,11 @@ import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
 import type { EngineState, Band, SlotDefinition, LawyerReport } from '@/lib/screen-engine/types';
 import { evaluateContactGate } from '@/lib/screen-engine/contact-doctrine';
+import {
+  withFirstAskIntro,
+  describeSituationFirstAsk,
+  contactCaptureFirstAsk,
+} from '@/lib/channel-intake-intro';
 import { buildClosingMessage } from '@/lib/screen-engine/closing';
 import { persistUnconfirmedInquiry } from '@/lib/unconfirmed-inquiry';
 import {
@@ -737,8 +742,16 @@ export async function processChannelInbound(
       };
     }
 
-    // Send the follow-up question.
-    const followUpText = buildContactCaptureFollowUp(gate.missing ?? 'both');
+    // Send the follow-up question. First-ask intro (C2, 2026-08-07):
+    // on a fresh conversation (!isResume), frame the questioning before
+    // asking for contact — resume turns (attempt 2, 3...) keep the
+    // unmodified, opener-carrying copy from buildContactCaptureFollowUp.
+    const followUpText = isResume
+      ? buildContactCaptureFollowUp(gate.missing ?? 'both')
+      : withFirstAskIntro(
+          (state.language ?? 'en') as SupportedLanguage,
+          contactCaptureFirstAsk(gate.missing ?? 'both'),
+        );
     const sendResult = await sendChannelMessage({
       firmId,
       sender,
@@ -893,9 +906,19 @@ export async function processChannelInbound(
     // gracefully rather than blocking). That is deliberate graceful
     // degradation, not a gap to close.
     if (state.matter_type === 'unknown' && discoveryCount === 0) {
-      const openingQuestion =
-        i18n.widget_strings?.describe_situation ||
-        'Thanks for reaching out. Before a lawyer reviews this, could you describe in a sentence or two what your situation is about?';
+      // First-ask intro (C2, 2026-08-07): gated on !isResume specifically,
+      // NOT on discoveryCount === 0 alone. Those are not equivalent — a
+      // session that failed the contact gate on turn 1 (Phase B never
+      // touches discoveryFollowUpCount) and reaches Phase C for the first
+      // time on turn 2 still has discoveryCount === 0 there, but turn 2 is
+      // a resume turn and must not repeat the intro.
+      const openingQuestion = isResume
+        ? i18n.widget_strings?.describe_situation ||
+          'Thanks for reaching out. Before a lawyer reviews this, could you describe in a sentence or two what your situation is about?'
+        : withFirstAskIntro(
+            (state.language ?? 'en') as SupportedLanguage,
+            describeSituationFirstAsk((state.language ?? 'en') as SupportedLanguage),
+          );
       const sendResult = await sendChannelMessage({
         firmId,
         sender,
@@ -1011,6 +1034,15 @@ export async function processChannelInbound(
           i18n.widget_strings?.didnt_catch ||
           "Sorry, I didn't get your last reply. Could you confirm by replying with the number of the option that fits best?";
         questionText = `${clarifier}\n\n${questionText}`;
+      }
+      // First-ask intro (C2, 2026-08-07): !isResume specifically (see
+      // the two comments above at the Phase B and F2-guard sites for why
+      // this cannot be inferred from discoveryCount or any other counter
+      // alone). clarifyReask can only be true when pendingAskedSlotId was
+      // already set from a prior ask, which requires isResume, so the two
+      // conditions never overlap.
+      if (!isResume) {
+        questionText = withFirstAskIntro(language, questionText);
       }
       const sendResult = await sendChannelMessage({
         firmId,
