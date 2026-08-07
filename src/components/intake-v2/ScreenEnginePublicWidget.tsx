@@ -9,7 +9,7 @@ import { initialiseState } from "@/lib/screen-engine/extractor";
 import { runEvidencePass } from "@/lib/screen-engine/slotEvidence";
 import { computeBand } from "@/lib/screen-engine/band";
 import { computeCoreCompleteness, getDecisionGap } from "@/lib/screen-engine/selector";
-import { applyAnswer, buildLeadSummary, getNextStep, markInsightShown, startContactCapture } from "@/lib/screen-engine/control";
+import { applyAnswer, applyClarifyChoice, buildLeadSummary, getNextStep, markInsightShown, startContactCapture } from "@/lib/screen-engine/control";
 import { getI18n, type I18nBundle } from "@/lib/screen-engine/i18n/loader";
 import { getOptionDisplayLabel, getQuestionDisplayText } from "@/lib/screen-engine/i18n/display";
 import type { SupportedLanguage } from "@/lib/screen-engine/types";
@@ -17,7 +17,7 @@ import { llmExtract, mergeLlmResults } from "@/lib/screen-engine/llm/extractor";
 import { buildReport } from "@/lib/screen-engine/report";
 import { renderBriefHtmlServer } from "@/lib/screen-brief-html";
 import { getWebAttribution } from "@/lib/screen-engine/persist";
-import type { EngineState, SlotDefinition } from "@/lib/screen-engine/types";
+import type { EngineState, MatterType, SlotDefinition } from "@/lib/screen-engine/types";
 
 export interface ScreenEnginePublicWidgetProps {
   firmId: string;
@@ -127,6 +127,27 @@ export function slotToItem(
 function getContactValue(state: EngineState | null, key: string): string {
   return state?.slots[key] ?? "";
 }
+
+// Clarify menu copy (DR-112). English fallback literals for the engine's
+// i18n keys (ClarifyOption.labelKey, NextStep.messageKey) — the engine
+// picks the KEY, never the copy; the widget owns the actual strings, same
+// division of labour as every other ws() call in this file. PT
+// translations live in i18n/pt.json widget_strings; EN intentionally has
+// no matching keys there and relies on these literals (see the existing
+// kickoff_* convention this file already follows).
+const CLARIFY_CHIP_FALLBACK_LABELS: Record<string, string> = {
+  clarify_chip_business: "Business and contracts",
+  clarify_chip_real_estate: "Real estate",
+  clarify_chip_employment: "Employment",
+  clarify_chip_estates: "Wills and estates",
+};
+
+const CLARIFY_MESSAGE_FALLBACKS: Record<string, string> = {
+  clarify_body_meta:
+    "A lawyer reviews what you share before any call is booked, so tell us what the call is about. Pick the closest area below, or describe it in your own words.",
+  clarify_body_default:
+    "Could you share a little more about what's going on? Pick the closest area below, or describe it in your own words.",
+};
 
 /**
  * Inline wrapper for free-text slots (no preset options + allowFreeText).
@@ -720,27 +741,66 @@ export function ScreenEnginePublicWidget({
     );
   }
 
-  // Clarify branch (DR-071, 2026-06-11). When the engine cannot classify
-  // the lead's input ("Fractional Counsel", "Notary Services", anything
-  // outside the 27 canonical matter types after DR-070's no-force-fit
-  // rule), `getNextStep` returns `{ type: 'clarify', message }` with no
-  // `slot`. Without this branch the widget hits the no-currentItem
-  // spinner forever. With it, render a free-text card asking for more
-  // context. `submitClarify` increments the counter and re-runs the
-  // engine; after two unsuccessful rounds it falls back to contact
-  // capture (handled in submitClarify itself, not in render).
+  // Clarify branch (DR-071, extended DR-112). When the engine cannot
+  // classify the lead's input ("Fractional Counsel", "Notary Services",
+  // anything outside the canonical matter types after DR-070's
+  // no-force-fit rule, OR a bare contact request like "I want to speak
+  // to a lawyer"), `getNextStep` returns a structured `{ type: 'clarify',
+  // reason, messageKey, options, message }` with no `slot`. Without this
+  // branch the widget hits the no-currentItem spinner forever.
+  //
+  // DR-112 replaced the free-text-only retry with a menu: DecisionCard
+  // renders the engine's `options` (the four general routing lanes) plus
+  // its own built-in "Something else" free-text affordance. A chip tap
+  // routes deterministically via `applyClarifyChoice` and does NOT
+  // consume a clarify round (it is not a retry, it is a resolved
+  // answer). The free-text path still goes through `submitClarify`,
+  // which increments `clarifyAttempts` and, after two unsuccessful
+  // rounds, falls back to contact capture with the calm "We can still
+  // get this to the team" copy (unchanged from DR-071).
+  //
+  // Round 1 shows the engine's acknowledgment: when `reason ===
+  // 'contact_request'` (the lead's opener was a bare request to speak
+  // with a lawyer, no matter facts), the heading and body acknowledge
+  // that instead of asking generic "tell me more" questions the lead
+  // already answered by asking for the call. Round 2 always shows the
+  // lower-bar "even a topic works" copy, regardless of reason — by round
+  // 2 the lead has already seen the acknowledgment once if it applied.
   if (next?.type === "clarify") {
-    const clarifyDescription =
-      clarifyAttempts === 0
-        ? next.message ??
-          ws(
-            "clarify_body_1",
-            "Could you share a little more about what's going on? A short sentence is enough. Common areas: business setup, contracts, real estate, wills and estates, and employment matters.",
-          )
-        : ws(
-            "clarify_body_2",
-            "One more line if you can. Even a topic or a few keywords would help.",
-          );
+    const isRound2 = clarifyAttempts > 0;
+    const heading = isRound2
+      ? ws("clarify_heading_2", "Even a topic works.")
+      : next.reason === "contact_request"
+        ? ws("clarify_heading_meta", "We can get that arranged.")
+        : ws("clarify_heading", "A few more details?");
+    const description = isRound2
+      ? ws(
+          "clarify_body_2_menu",
+          "One or two words is enough to point this to the right lawyer. Pick an area below, or type the topic in your own words.",
+        )
+      : ws(
+          next.messageKey ?? "clarify_body_default",
+          CLARIFY_MESSAGE_FALLBACKS[next.messageKey ?? "clarify_body_default"] ??
+            CLARIFY_MESSAGE_FALLBACKS.clarify_body_default,
+        );
+    const clarifyOptions = (next.options ?? []).map((opt) => ({
+      value: opt.value,
+      label: ws(opt.labelKey, CLARIFY_CHIP_FALLBACK_LABELS[opt.labelKey] ?? opt.labelKey),
+    }));
+
+    function handleClarifySelect(picked: string | string[]) {
+      const value = Array.isArray(picked) ? picked[0] : picked;
+      if (!value) return;
+      if (value.startsWith("other:")) {
+        const text = value.slice("other:".length).trim();
+        if (text.length === 0) return;
+        void submitClarify(text);
+        return;
+      }
+      if (!state) return;
+      mutate(applyClarifyChoice(state, value as MatterType));
+    }
+
     return (
       <Shell
         totalScreens={5}
@@ -749,20 +809,18 @@ export function ScreenEnginePublicWidget({
         onBack={back}
         backLabel={backLabel}
       >
-        <FreeTextAnswerCard
+        <DecisionCard
           key={`clarify-${clarifyAttempts}`}
           item={{
-            id: "clarify",
-            question: ws("clarify_heading", "A few more details?"),
-            description: clarifyDescription,
-            presentation: "text",
-            placeholder: ws(
-              "clarify_placeholder",
-              "For example: I need an on-call lawyer for my business to review contracts as they come in.",
-            ),
+            id: `clarify-${clarifyAttempts}`,
+            question: heading,
+            description,
+            presentation: "card",
+            options: clarifyOptions,
+            allowFreeText: true,
+            freeTextLabel: i18n.widget_strings?.["free_text_other_label"],
           }}
-          onSubmit={submitClarify}
-          submitLabel={ws("clarify_submit", "Continue")}
+          onChange={handleClarifySelect}
         />
       </Shell>
     );
