@@ -19,10 +19,28 @@ export const metadata: Metadata = {
   },
 };
 
-export default function SeoCheckPage() {
+/**
+ * `?embed=1` strips the page down to the tool itself.
+ *
+ * The marketing site frames this route inline on capture.html and
+ * tools.html. Without the flag the embed carries its own ToolNav (a second
+ * CaseLoad wordmark plus a "Back to home" link) and the (marketing) layout's
+ * full site footer, both stranded mid-page inside a page that already has
+ * them. The layout owns the footer and App Router layouts do not receive
+ * searchParams, so the page hides it with a scoped rule rather than the
+ * layout branching on the flag.
+ */
+interface PageProps {
+  searchParams: Promise<{ embed?: string }>;
+}
+
+export default async function SeoCheckPage({ searchParams }: PageProps) {
+  const { embed } = await searchParams;
+  const isEmbedded = embed === "1";
+
   return (
     <>
-      <ToolNav />
+      {!isEmbedded && <ToolNav />}
 
       <main className="seo-main">
         <section className="seo-hero">
@@ -306,6 +324,25 @@ export default function SeoCheckPage() {
           .seo-hero-stats { grid-template-columns: 1fr; max-width: 200px; }
         }
       `}</style>
+
+      {isEmbedded && (
+        <style>{`
+          /* Embedded on the marketing site. The framing page supplies the
+             footer and the surrounding narrative, so this route renders the
+             tool alone. min-height drops the 100vh-minus-nav reservation,
+             which would otherwise force dead space inside a fixed-height
+             iframe now that the nav is gone.
+
+             The hero goes too. It is a full viewport of title, sub, and stats
+             that the framing section already states in its own words, and
+             leaving it in pushes the URL field below the fold of the iframe,
+             so the embed reads as a poster rather than a tool. Everything
+             below the tool stays, including the disclaimer. */
+          .cls-footer { display: none; }
+          .seo-main { min-height: 0; }
+          .seo-hero { display: none; }
+        `}</style>
+      )}
     </>
   );
 }

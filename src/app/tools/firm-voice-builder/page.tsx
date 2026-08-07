@@ -18,11 +18,25 @@ export const metadata: Metadata = {
  * frozen (marketing)/ route group by necessity (check-website-boundary.mjs
  * Rule A has zero exceptions since 2026-07-05); this is a fresh top-level
  * route, sibling to /widget and /book, added to the AdminShell bypass list.
+ *
+ * `?embed=1` drops the ToolHeader. The marketing site frames this route
+ * inline on authority.html and tools.html; without the flag the embed shows
+ * a second CaseLoad wordmark and a "Back to home" link stranded mid-page,
+ * inside a page that already has both. There is no layout footer to hide
+ * here: this route sits outside the (marketing) group and bypasses
+ * AdminShell, so ToolHeader is the only chrome it renders.
  */
-export default function FirmVoiceBuilderPage() {
+interface PageProps {
+  searchParams: Promise<{ embed?: string }>;
+}
+
+export default async function FirmVoiceBuilderPage({ searchParams }: PageProps) {
+  const { embed } = await searchParams;
+  const isEmbedded = embed === "1";
+
   return (
     <>
-      <ToolHeader />
+      {!isEmbedded && <ToolHeader />}
       <main className="min-h-screen bg-parchment px-4 py-10">
         <FirmVoiceBuilder />
       </main>
