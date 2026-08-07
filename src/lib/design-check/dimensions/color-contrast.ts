@@ -1,4 +1,4 @@
-import type { DomSnapshot, TextBlockSample } from "../renderer";
+import type { DomSnapshot, TextBlockSample } from "../render-types";
 import { type CheckItem, type DimensionResult, scoreItems, tagUntagged } from "../dimension-types";
 import { checkTextContrast } from "../wcag-contrast";
 

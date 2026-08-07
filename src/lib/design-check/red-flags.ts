@@ -1,4 +1,4 @@
-import type { DarkPatternSnapshot } from "./renderer";
+import type { DarkPatternSnapshot } from "./render-types";
 import type { DimensionResult } from "./dimension-types";
 import type { AuthorityRedFlag } from "./dimensions/authority";
 

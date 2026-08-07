@@ -1,7 +1,7 @@
 import type { CheckItem, DimensionResult } from "./dimension-types";
 import type { AuthorityDimensionResult } from "./dimensions/authority";
 import type { JudgmentScore } from "./vision-judgment";
-import type { DarkPatternSnapshot } from "./renderer";
+import type { DarkPatternSnapshot } from "./render-types";
 import { buildRedFlagPanel, type RedFlagPanel, type RedFlag } from "./red-flags";
 
 /**

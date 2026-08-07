@@ -1,4 +1,4 @@
-import type { AuthoritySnapshot, DomSnapshot } from "../renderer";
+import type { AuthoritySnapshot, DomSnapshot } from "../render-types";
 import { type CheckItem, scoreItems } from "../dimension-types";
 import { scanForLexiconHits, scoreClaimIntegrity, type LexiconHit } from "../authority-lexicon";
 import { AUTHORITY_JUDGMENT_RUBRIC_ITEMS, type AuthorityJudgmentScore } from "../authority-vision";

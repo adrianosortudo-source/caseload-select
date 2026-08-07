@@ -1,4 +1,4 @@
-import type { DomSnapshot, WebVitalsSample } from "../renderer";
+import type { DomSnapshot, WebVitalsSample } from "../render-types";
 import { type CheckItem, type DimensionResult, scoreItems, tagUntagged } from "../dimension-types";
 
 /**

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { scoreSpacing } from "../spacing";
-import type { DomSnapshot } from "../../renderer";
+import type { DomSnapshot } from "../../render-types";
 
 /**
  * Phase 1 investigation (2026-08-06,

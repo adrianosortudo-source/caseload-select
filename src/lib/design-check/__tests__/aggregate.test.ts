@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildTrack1Report, scoreToLetterGrade, buildJudgmentDimensions } from "../aggregate";
 import type { DimensionResult } from "../dimension-types";
 import type { AuthorityDimensionResult } from "../dimensions/authority";
-import type { DarkPatternSnapshot } from "../renderer";
+import type { DarkPatternSnapshot } from "../render-types";
 import type { JudgmentScore } from "../vision-judgment";
 
 function dimension(name: string, weight: number, score: number, items: DimensionResult["items"] = []): DimensionResult {

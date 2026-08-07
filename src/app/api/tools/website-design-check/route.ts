@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { renderUrl } from "@/lib/design-check/renderer";
-import { checkOutboundRequest } from "@/lib/design-check/ssrf-guard";
+import {
+  fetchRenderResult,
+  RenderServiceBlockedError,
+  RenderServiceRenderFailedError,
+} from "@/lib/design-check/render-client";
+import { validateOutboundUrl } from "@/lib/ssrf";
 import { scoreTypography } from "@/lib/design-check/dimensions/typography";
 import { scoreColorContrast } from "@/lib/design-check/dimensions/color-contrast";
 import { scoreForms } from "@/lib/design-check/dimensions/forms";
@@ -20,6 +24,14 @@ import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limi
  * viewports, deterministic dimension scoring, two Gemini vision-model
  * judgment passes (general design quality + authority/positioning), and
  * Track 1 aggregation into a letter grade with ranked findings.
+ *
+ * The render itself (fetchRenderResult, below) runs out-of-process in
+ * services/render/, a separate Vercel project with zero application
+ * secrets: this route hands it a URL and gets back plain data (base64
+ * screenshots, a DOM snapshot, web vitals), never a browser handle. See
+ * docs/BUILD_PLAN_render_isolation_v1.md for why -- the browser executes
+ * attacker-chosen content, and this route's own runtime holds every
+ * secret the app has.
  *
  * v1 scope, per the build plan's operator-confirmed decisions: single-URL
  * only (no multi-page crawl), no Supabase persistence (nothing is stored;
@@ -67,13 +79,21 @@ export async function POST(request: NextRequest) {
   }
 
   const url = `https://${domain}`;
-  const ssrfCheck = await checkOutboundRequest(url);
-  if (ssrfCheck.blocked) {
+  // Defence in depth (docs/BUILD_PLAN_render_isolation_v1.md §3.5): the
+  // render itself now happens in an isolated service with zero
+  // application secrets (see render-client.ts), which re-checks every
+  // hop of the actual render with a DNS-pinned transport. This pre-check
+  // stays so an obviously internal target never even reaches that
+  // service call; it shares the same sync classification the service
+  // itself uses (@/lib/ssrf), rather than the app maintaining a second,
+  // independently-drifting implementation.
+  const ssrfCheck = validateOutboundUrl(new URL(url), { allowedSchemes: ["https:"] });
+  if (!ssrfCheck.ok) {
     return NextResponse.json({ error: "That domain can't be checked." }, { status: 400 });
   }
 
   try {
-    const result = await renderUrl(url);
+    const result = await fetchRenderResult(url);
     const desktopCapture = result.captures.find((c) => c.viewport === "desktop");
     const mobileCapture = result.captures.find((c) => c.viewport === "mobile");
     if (!desktopCapture || !mobileCapture) {
@@ -175,6 +195,17 @@ export async function POST(request: NextRequest) {
     // vague, so without this an operator has nothing to debug a failing
     // scan from.
     console.error("[design-check] scan failed:", err instanceof Error ? `${err.message}\n${err.stack}` : String(err));
+
+    // A 403 from the render service must read identically to this
+    // route's own pre-check rejection above -- same status, same exact
+    // string -- so a prober cannot tell the two guard layers apart from
+    // the outside (docs/BUILD_PLAN_render_isolation_v1.md §3.5).
+    if (err instanceof RenderServiceBlockedError) {
+      return NextResponse.json({ error: "That domain can't be checked." }, { status: 400 });
+    }
+    if (err instanceof RenderServiceRenderFailedError) {
+      return NextResponse.json({ error: "Could not render this site. Try again or check the domain." }, { status: 502 });
+    }
     return NextResponse.json({ error: "Something went wrong scanning this site. Try again." }, { status: 500 });
   }
 }

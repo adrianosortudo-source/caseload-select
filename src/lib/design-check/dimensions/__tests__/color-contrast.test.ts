@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { scoreColorContrast } from "../color-contrast";
-import type { DomSnapshot, TextBlockSample } from "../../renderer";
+import type { DomSnapshot, TextBlockSample } from "../../render-types";
 
 /**
  * Phase 2 investigation (2026-08-06,

@@ -1,4 +1,4 @@
-import type { DomSnapshot } from "../renderer";
+import type { DomSnapshot } from "../render-types";
 import { type CheckItem, type DimensionResult, scoreItems } from "../dimension-types";
 
 /**
