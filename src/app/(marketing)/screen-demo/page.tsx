@@ -15,11 +15,23 @@ export const metadata: Metadata = {
  *
  * Single-purpose flow. Minimal nav. No competing CTAs. The lawyer either
  * picks a case to run or exits via the small "Back to home" link in the nav.
+ *
+ * `?embed=1` strips DemoNav and the (marketing) layout footer so the demo
+ * can be framed inline on the-screen.html and tools.html. CasePicker carries
+ * the flag through to /screen-demo/quiz/[caseId], otherwise the chrome
+ * reappears the moment the lawyer picks a case inside the iframe.
  */
-export default function ScreenDemoEntry() {
+interface PageProps {
+  searchParams: Promise<{ embed?: string }>;
+}
+
+export default async function ScreenDemoEntry({ searchParams }: PageProps) {
+  const { embed } = await searchParams;
+  const isEmbedded = embed === "1";
+
   return (
     <>
-      <DemoNav />
+      {!isEmbedded && <DemoNav />}
 
       <main className="cls-demo-main">
         <section className="cls-demo-hero">
@@ -206,6 +218,18 @@ export default function ScreenDemoEntry() {
           .cls-demo-stats { grid-template-columns: 1fr; }
         }
       `}</style>
+
+      {isEmbedded && (
+        <style>{`
+          /* Embedded on the marketing site. See the note on the component.
+             The hero goes too: the framing section states the same five
+             questions and five minutes in its own words, and keeping it here
+             pushes the case picker below the fold of the iframe. */
+          .cls-footer { display: none; }
+          .cls-demo-main { min-height: 0; }
+          .cls-demo-hero { display: none; }
+        `}</style>
+      )}
     </>
   );
 }
