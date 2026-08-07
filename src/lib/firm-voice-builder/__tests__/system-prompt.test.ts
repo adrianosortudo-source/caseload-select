@@ -118,17 +118,24 @@ describe("SYSTEM_PROMPT", () => {
 
   it("contains the confidentiality rule about client names", () => {
     // The prompt is hard-wrapped for readability in the spec's fenced block,
-    // so this phrase spans a line break in the actual string; \s+ tolerates
-    // the newline and indentation between words.
-    expect(SYSTEM_PROMPT).toMatch(/describe situations in\s+general terms/);
+    // so this phrase spans a line break in the actual string. Every gap is
+    // \s+ rather than a literal space, because the v4 rewrite moved where
+    // the wrap falls and a fixed-space regex broke on it.
+    expect(SYSTEM_PROMPT).toMatch(/describe\s+situations\s+in\s+general\s+terms/);
     expect(SYSTEM_PROMPT).toMatch(/Never reproduce a client's name/);
   });
 
   // v3 (operator correction, 2026-07-17): the interview must never ask the
   // lawyer to paste or upload source material (client emails, transcripts).
   // Every writing sample comes from live, typed answers instead.
+  //
+  // v4 restates the same guarantee in the third person. The old assertion
+  // quoted the first-person wording ("I will never paste or upload
+  // anything"), which is exactly the phrasing the point-of-view rewrite had
+  // to remove, so it is asserted here in the voice the prompt now uses.
   it("never asks the lawyer to paste or upload source material", () => {
-    expect(SYSTEM_PROMPT).toMatch(/I will never paste or upload anything/);
+    expect(SYSTEM_PROMPT).toMatch(/The lawyer never pastes or\s+uploads anything/);
+    expect(SYSTEM_PROMPT).toMatch(/Nothing\s+is ever pasted or uploaded/);
     expect(SYSTEM_PROMPT).not.toMatch(/Paste things you have written/);
     expect(SYSTEM_PROMPT).not.toMatch(/Paste a transcript/);
     expect(SYSTEM_PROMPT).not.toMatch(/Paste one piece of writing/);
