@@ -5,6 +5,12 @@ import { getCase, SAMPLE_CASES } from "../../_data/cases";
 
 interface PageProps {
   params: Promise<{ caseId: string }>;
+  // `?embed=1` is handed down by CasePicker so the chrome stays hidden when
+  // the lawyer picks a case from inside a framed demo. Reading it opts this
+  // route into dynamic rendering; generateStaticParams below still enumerates
+  // the case IDs, and the quiz holds all its state client-side, so nothing
+  // here depended on being statically rendered.
+  searchParams: Promise<{ embed?: string }>;
 }
 
 export function generateStaticParams() {
@@ -20,14 +26,16 @@ export function generateStaticParams() {
  *
  * All state lives client-side in ScreenQuiz; this page is just the mount.
  */
-export default async function ScreenDemoQuizPage({ params }: PageProps) {
+export default async function ScreenDemoQuizPage({ params, searchParams }: PageProps) {
   const { caseId } = await params;
+  const { embed } = await searchParams;
+  const isEmbedded = embed === "1";
   const caseFixture = getCase(caseId);
   if (!caseFixture) notFound();
 
   return (
     <>
-      <DemoNav />
+      {!isEmbedded && <DemoNav />}
       <main className="cls-quiz-main">
         <ScreenQuiz caseFixture={caseFixture} />
       </main>
@@ -39,6 +47,13 @@ export default async function ScreenDemoQuizPage({ params }: PageProps) {
           padding: var(--sp-7) var(--sp-4) var(--sp-9);
         }
       `}</style>
+
+      {isEmbedded && (
+        <style>{`
+          .cls-footer { display: none; }
+          .cls-quiz-main { min-height: 0; }
+        `}</style>
+      )}
     </>
   );
 }
