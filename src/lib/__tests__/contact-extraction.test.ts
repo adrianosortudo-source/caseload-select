@@ -127,6 +127,37 @@ describe('extractContactFromTurn — bare name (gated)', () => {
     expect(r.name).toBeUndefined();
     expect(r.phone).toBe('+16475559999');
   });
+
+  // F3 (2026-08-06 field repro, build plan
+  // docs/BUILD_PLAN_meta_channel_intake_fixes_v1.md): BARE_NAME_RE
+  // required a leading capital per token, so a lowercase reply on the
+  // default (non-nameCaptureContext) path was silently dropped. People
+  // type their name lowercase in chat constantly.
+  it('extracts a lowercase bare name and title-cases it (F3)', () => {
+    // Matches the real field repro exactly: newline-separated turns, not
+    // space-separated — space is not a chunk delimiter in this extractor
+    // (only \n , | ; are), so "adriano 6475492106" on one line would
+    // never match BARE_NAME_RE (letters only) regardless of this fix.
+    const r = extractContactFromTurn('adriano\n6475492106');
+    expect(r.name).toBe('Adriano');
+    expect(r.phone).toBe('+16475492106');
+  });
+
+  it('extracts an all-caps bare name and title-cases it (F3)', () => {
+    const r = extractContactFromTurn('ADRIANO DOMINGUES, 647-549-2106');
+    expect(r.name).toBe('Adriano Domingues');
+  });
+
+  it('regression: casual matter description with a capitalised name and no contact info still does NOT set client_name (F3 must not loosen this guard)', () => {
+    const r = extractContactFromTurn('My executor is Sarah Patel and we have a dispute');
+    expect(r.name).toBeUndefined();
+  });
+
+  it('regression: blocklist rejection still holds in lowercase (F3 must not loosen this guard)', () => {
+    const r = extractContactFromTurn('yes\n647-555-9999');
+    expect(r.name).toBeUndefined();
+    expect(r.phone).toBe('+16475559999');
+  });
 });
 
 // ── State mutator ───────────────────────────────────────────────────────

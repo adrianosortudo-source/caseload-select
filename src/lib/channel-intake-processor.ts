@@ -773,11 +773,20 @@ export async function processChannelInbound(
 
     // Send succeeded. Persist state in channel_intake_sessions so the
     // NEXT inbound from this sender resumes mid-conversation.
+    //
+    // contactCaptureStarted MUST be set here (F1, 2026-08-06 field repro).
+    // Without it, control.ts:960's contact-doctrine branch never runs on
+    // the resume turn, so nameCaptureContext never lifts, so a bare-name
+    // reply like "adriano" fails the default (capitalised) bare-name regex
+    // and the gate fails again — Messenger looped 3x asking for the name
+    // it had already been given. Phase C (the discovery loop below) has
+    // set this flag correctly since it was introduced; Phase A never did.
     const newCount = priorFollowUpCount + 1;
+    const persistedState: EngineState = { ...state, contactCaptureStarted: true };
     if (sessionId) {
       await updateChannelSession({
         sessionId,
-        engineState: state,
+        engineState: persistedState,
         followUpCount: newCount,
       });
     } else {
@@ -785,7 +794,7 @@ export async function processChannelInbound(
         firmId,
         channel,
         senderId,
-        engineState: state,
+        engineState: persistedState,
         maxFollowUps: MAX_FOLLOW_UPS,
       });
     }
@@ -840,6 +849,80 @@ export async function processChannelInbound(
     //    candidate set so off-axis answers don't trigger early finalize.
     //  - out_of_scope and unknown are explicit exceptions; finalize allowed.
     const floorMet = meetsDiscoveryFloor(state);
+
+    // F2 (2026-08-06 field repro): turn-one guard for unclassified matters.
+    // EARLY_FINALIZE_MATTERS (discovery-floor.ts) treats 'unknown' as a
+    // legitimate reason to stop — there is nothing matter-specific to ask.
+    // That is correct once the lead has actually described their situation.
+    // It is wrong on turn one of a messaging channel, where the opening
+    // line is almost always a greeting, not a description. WhatsApp field
+    // repro 2026-08-06: "i want to speak to a lawyer" finalized immediately
+    // with four_axis all zero and zero questions asked.
+    //
+    // This is a bespoke one-shot ask, not a slot: selectNextSlot() returns
+    // null for matter_type === 'unknown' by design (selector.ts:678, no
+    // registry entry applies to an unclassified matter), so the normal
+    // slotToAsk machinery below cannot produce this question.
+    //
+    // KNOWN LIMITATION, not fixed here: matter_type is set once by
+    // initialiseState on turn 1 and never re-derived on resume turns
+    // (see the "Fresh first turn" branch above, and slotEvidence.ts:24,
+    // which no-ops runEvidencePass whenever matter_type is 'unknown'). If
+    // the lead's reply to this question describes a real matter, that text
+    // lands in state.input (so the lawyer sees it in the transcript) but
+    // does NOT reclassify matter_type or unlock discovery questions — the
+    // very next turn hits this same floor with discoveryCount no longer 0
+    // and finalizes as before. That is a real, scoped improvement (a bare
+    // greeting no longer kills the conversation before anything is asked)
+    // but not full multi-turn intake recovery for unclassified matters.
+    // Turn-2+ reclassification would mean re-running classify() on resume,
+    // which is a larger, separate change — see
+    // docs/BUILD_PLAN_meta_channel_intake_fixes_v1.md § F2.
+    if (state.matter_type === 'unknown' && discoveryCount === 0) {
+      const openingQuestion =
+        i18n.widget_strings?.describe_situation ||
+        'Thanks for reaching out. Before a lawyer reviews this, could you describe in a sentence or two what your situation is about?';
+      const sendResult = await sendChannelMessage({
+        firmId,
+        sender,
+        text: openingQuestion,
+      });
+      if (sendResult.sent) {
+        const persistedState: EngineState = {
+          ...state,
+          contactCaptureStarted: true,
+          discoveryFollowUpCount: discoveryCount + 1,
+        };
+        if (sessionId) {
+          await updateChannelSession({
+            sessionId,
+            engineState: persistedState,
+            followUpCount: priorFollowUpCount,
+          });
+        } else {
+          await createChannelSession({
+            firmId,
+            channel,
+            senderId,
+            engineState: persistedState,
+            maxFollowUps: MAX_FOLLOW_UPS,
+          });
+        }
+        console.log(
+          `[channel-intake] unknown-matter opening question sent firm=${firmId} channel=${channel}`,
+        );
+        return {
+          persisted: false,
+          reason: 'awaiting_situation_description',
+          followUpSent: true,
+        };
+      }
+      console.warn(
+        `[channel-intake] unknown-matter opening question send failed firm=${firmId} channel=${channel}: ${sendResult.reason ?? 'unknown'}; finalising with what we have`,
+      );
+      // Send failed: fall through to the existing floor/finalize logic
+      // below with what we have, same fallback discipline as Phase C.
+    }
 
     // Build the slot-to-ask in priority order:
     //   0. STICKY PENDING SLOT (#172 follow-up, 2026-06-09). If the bot
