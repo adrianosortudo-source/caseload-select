@@ -1,16 +1,23 @@
 export interface DimensionBarEntry {
   name: string;
   weight: number;
-  score: number;
+  // null when this page had nothing to grade for the dimension (e.g. no
+  // form to check), never a fabricated 0.
+  score: number | null;
 }
 
 export interface RankedFinding {
   dimension: string;
   label: string;
-  severity: "high" | "medium";
+  severity: "flag" | "high" | "medium";
   opportunity: string;
   evidence: string;
   estimatedEffort: "low" | "medium" | "high";
+  // Set only on severity "flag" entries: whether this specific flag caps
+  // the grade (disqualifying) or is a real opportunity that does not
+  // (advisory). See docs/BUILD_PLAN_design_check_calibration_v1.md
+  // Phase 3.
+  flagClassification?: "disqualifying" | "advisory";
 }
 
 export interface RedFlag {
@@ -20,6 +27,7 @@ export interface RedFlag {
   ceiling: number;
   confidence: "proven" | "best_effort";
   source: string;
+  classification: "disqualifying" | "advisory";
 }
 
 export interface DesignCheckResult {
@@ -50,8 +58,20 @@ function effortLabel(effort: RankedFinding["estimatedEffort"]): string {
   return "Moderate effort";
 }
 
+function severityLabel(f: RankedFinding): string {
+  if (f.severity === "flag") return f.flagClassification === "disqualifying" ? "Caps the grade" : "Real opportunity";
+  return f.severity === "high" ? "High impact" : "Worth fixing";
+}
+
+function severityClass(f: RankedFinding): string {
+  if (f.severity === "flag") return f.flagClassification === "disqualifying" ? "dc-finding-severity-flag-disqualifying" : "dc-finding-severity-flag-advisory";
+  return `dc-finding-severity-${f.severity}`;
+}
+
 export default function WebsiteDesignCheckReport({ result, onReset }: { result: DesignCheckResult; onReset: () => void }) {
   const { activeFlags, notCheckableInV1 } = result.redFlagPanel;
+  const disqualifyingFlags = activeFlags.filter((f) => f.classification === "disqualifying");
+  const advisoryFlags = activeFlags.filter((f) => f.classification === "advisory");
 
   return (
     <div className="dc-report">
@@ -71,14 +91,32 @@ export default function WebsiteDesignCheckReport({ result, onReset }: { result: 
         </button>
       </div>
 
-      {activeFlags.length > 0 && (
+      {disqualifyingFlags.length > 0 && (
         <div className="dc-redflag-panel">
           <h3 className="dc-redflag-title">What&apos;s holding this grade back</h3>
           <p className="dc-redflag-sub">
             These findings cap the grade regardless of how the rest of the site scores. Fixing them unlocks the rest of the site&apos;s real score.
           </p>
           <ul className="dc-redflag-list">
-            {activeFlags.map((flag) => (
+            {disqualifyingFlags.map((flag) => (
+              <li key={flag.key} className="dc-redflag-item">
+                <span className="dc-redflag-label">{flag.label}</span>
+                <span className="dc-redflag-detail">{flag.detail}</span>
+                {flag.confidence === "best_effort" && <span className="dc-redflag-tag">Best-effort detection</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {advisoryFlags.length > 0 && (
+        <div className="dc-advisoryflag-panel">
+          <h3 className="dc-advisoryflag-title">Real opportunities on this site</h3>
+          <p className="dc-advisoryflag-sub">
+            These do not cap the grade. They are ranked first among the findings below because clearing them is worth the most.
+          </p>
+          <ul className="dc-redflag-list">
+            {advisoryFlags.map((flag) => (
               <li key={flag.key} className="dc-redflag-item">
                 <span className="dc-redflag-label">{flag.label}</span>
                 <span className="dc-redflag-detail">{flag.detail}</span>
@@ -121,7 +159,7 @@ export default function WebsiteDesignCheckReport({ result, onReset }: { result: 
           {result.rankedFindings.map((f, i) => (
             <li key={i} className="dc-finding-item">
               <div className="dc-finding-head">
-                <span className={`dc-finding-severity dc-finding-severity-${f.severity}`}>{f.severity === "high" ? "High impact" : "Worth fixing"}</span>
+                <span className={`dc-finding-severity ${severityClass(f)}`}>{severityLabel(f)}</span>
                 <span className="dc-finding-effort">{effortLabel(f.estimatedEffort)}</span>
               </div>
               <p className="dc-finding-opportunity">{f.opportunity}</p>
@@ -187,6 +225,13 @@ export default function WebsiteDesignCheckReport({ result, onReset }: { result: 
           color: var(--stone-on-light); width: fit-content; margin-top: 2px;
         }
 
+        .dc-advisoryflag-panel {
+          background: var(--white); border: 1.5px solid var(--stone); border-radius: var(--r-card);
+          padding: var(--sp-5); margin-bottom: var(--sp-6);
+        }
+        .dc-advisoryflag-title { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--navy); margin: 0 0 var(--sp-2); }
+        .dc-advisoryflag-sub { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin: 0 0 var(--sp-4); }
+
         .dc-dimension-bar { background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card); padding: var(--sp-5); margin-bottom: var(--sp-6); }
         .dc-section-title { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--navy); margin: 0 0 var(--sp-4); }
         .dc-dim-row { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); }
@@ -206,6 +251,8 @@ export default function WebsiteDesignCheckReport({ result, onReset }: { result: 
         }
         .dc-finding-severity-high { color: var(--white); background: var(--danger); }
         .dc-finding-severity-medium { color: var(--navy); background: var(--stone-light); }
+        .dc-finding-severity-flag-disqualifying { color: var(--white); background: var(--danger); }
+        .dc-finding-severity-flag-advisory { color: var(--navy); background: var(--stone-light); }
         .dc-finding-effort { font-size: 11.5px; color: var(--text-muted); }
         .dc-finding-opportunity { font-size: 14.5px; color: var(--text); line-height: 1.55; margin: 0 0 var(--sp-2); font-weight: 600; }
         .dc-finding-evidence { font-size: 12.5px; color: var(--text-muted); line-height: 1.55; margin: 0 0 var(--sp-2); }

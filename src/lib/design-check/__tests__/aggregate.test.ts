@@ -105,12 +105,13 @@ describe("buildTrack1Report handling of dimensions with nothing to score", () =>
 describe("buildTrack1Report red-flag capping", () => {
   it("caps rather than averages, so a strong page cannot outscore its own red flag", () => {
     // The framework is explicit: "Do not average away a red flag. A dark
-    // pattern or a contrast failure is not offset by a beautiful hero.
-    // Cap, do not average."
+    // pattern or a contrast failure is not offset by a beautiful hero."
+    // Uses a disqualifying flag (lso_aggressive_framing): after the
+    // Phase 3 split, only disqualifying flags cap the overall grade.
     const strong = [dimension("Typography and Legibility", 12, 100), dimension("Color and Contrast", 10, 100)];
     const report = buildTrack1Report(
       strong,
-      authority(100, [{ key: "no_author_entity", label: "No author entity", detail: "none found", ceiling: 55 }]),
+      authority(100, [{ key: "lso_aggressive_framing", label: "Aggressive framing", detail: "dominate", ceiling: 55, classification: "disqualifying" }]),
       undefined,
       cleanDarkPatterns()
     );
@@ -125,17 +126,50 @@ describe("buildTrack1Report red-flag capping", () => {
     expect(report.score).toBe(report.uncappedScore);
   });
 
-  it("applies the lowest ceiling when several flags are active", () => {
+  it("applies the lowest ceiling among several disqualifying flags", () => {
     const report = buildTrack1Report(
       [dimension("Typography and Legibility", 12, 100)],
       authority(100, [
-        { key: "generic_full_service", label: "Generic full-service", detail: "9 areas", ceiling: 55 },
-        { key: "lso_prohibited_word", label: "Prohibited word", detail: "best", ceiling: 40 },
+        { key: "lso_aggressive_framing", label: "Aggressive framing", detail: "dominate", ceiling: 55, classification: "disqualifying" },
+        { key: "lso_prohibited_word", label: "Prohibited word", detail: "best", ceiling: 40, classification: "disqualifying" },
       ]),
       undefined,
       cleanDarkPatterns()
     );
     expect(report.score).toBe(40);
+  });
+
+  it("never caps the overall grade on advisory flags alone, even though the Authority dimension still self-caps on them", () => {
+    // Phase 3 of docs/BUILD_PLAN_design_check_calibration_v1.md: fires on
+    // 5 of 6 regression domains, describing a market-wide gap, not harm.
+    const strong = [dimension("Typography and Legibility", 12, 100), dimension("Color and Contrast", 10, 100)];
+    const report = buildTrack1Report(
+      strong,
+      authority(55, [{ key: "no_author_entity", label: "No author entity", detail: "none found", ceiling: 55, classification: "advisory" }]),
+      undefined,
+      cleanDarkPatterns()
+    );
+    expect(report.redFlagPanel.ceiling).toBeNull();
+    expect(report.score).toBe(report.uncappedScore);
+    // The Authority dimension's OWN score is still 55 (its self-cap,
+    // untouched by this phase); only the OVERALL grade is uncapped.
+    expect(report.dimensionBar.find((d) => d.name === "Authority and Positioning")?.score).toBe(55);
+  });
+
+  it("caps at the lowest disqualifying ceiling and ignores a numerically lower advisory ceiling entirely", () => {
+    const report = buildTrack1Report(
+      [dimension("Typography and Legibility", 12, 100)],
+      authority(100, [
+        { key: "lso_prohibited_word", label: "Prohibited word", detail: "best", ceiling: 60, classification: "disqualifying" },
+        // Lower ceiling than the disqualifying flag above, but advisory:
+        // must not win, or an advisory flag would silently cap the grade
+        // through the back door.
+        { key: "generic_full_service", label: "Generic full-service", detail: "9 areas", ceiling: 40, classification: "advisory" },
+      ]),
+      undefined,
+      cleanDarkPatterns()
+    );
+    expect(report.score).toBe(60);
   });
 
   it("promotes a WCAG contrast failure into a capping flag, not an ordinary deduction", () => {
@@ -170,6 +204,52 @@ describe("buildTrack1Report red-flag capping", () => {
     const keys = report.redFlagPanel.notCheckableInV1.map((n) => n.key);
     expect(keys).toContain("bait_reciprocity");
     expect(keys).toContain("color_only_status");
+  });
+});
+
+describe("buildTrack1Report flag findings (Phase 3)", () => {
+  it("pins every active flag at the top of rankedFindings, ahead of ordinary high-severity findings", () => {
+    const dims = [
+      dimension("Mobile and Responsive", 6, 50, [
+        { label: "Tap target size", status: "fail", detail: "95% too small", fix: "Increase padding on small links." },
+      ]),
+    ];
+    const report = buildTrack1Report(
+      dims,
+      authority(100, [{ key: "lso_prohibited_word", label: "Prohibited word", detail: "best", ceiling: 40, classification: "disqualifying" }]),
+      undefined,
+      cleanDarkPatterns()
+    );
+    expect(report.rankedFindings[0].severity).toBe("flag");
+    expect(report.rankedFindings[0].label).toBe("Prohibited word");
+    expect(report.rankedFindings[1].label).toBe("Tap target size");
+  });
+
+  it("ranks a disqualifying flag ahead of an advisory one within the flag tier", () => {
+    const report = buildTrack1Report(
+      [dimension("Typography and Legibility", 12, 90)],
+      authority(90, [
+        { key: "no_author_entity", label: "No author entity", detail: "none found", ceiling: 55, classification: "advisory" },
+        { key: "lso_prohibited_word", label: "Prohibited word", detail: "best", ceiling: 40, classification: "disqualifying" },
+      ]),
+      undefined,
+      cleanDarkPatterns()
+    );
+    const flagFindings = report.rankedFindings.filter((f) => f.severity === "flag");
+    expect(flagFindings[0].flagClassification).toBe("disqualifying");
+    expect(flagFindings[1].flagClassification).toBe("advisory");
+  });
+
+  it("writes upside-framed opportunity copy for a flag finding, never a bare restatement of the problem", () => {
+    const report = buildTrack1Report(
+      [dimension("Typography and Legibility", 12, 90)],
+      authority(90, [{ key: "no_author_entity", label: "No author entity", detail: "none found", ceiling: 55, classification: "advisory" }]),
+      undefined,
+      cleanDarkPatterns()
+    );
+    const finding = report.rankedFindings.find((f) => f.severity === "flag");
+    expect(finding!.opportunity).toContain("Add");
+    expect(finding!.evidence).toBe("none found");
   });
 });
 

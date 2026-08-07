@@ -29,6 +29,13 @@ export interface RedFlag {
   ceiling: number;
   confidence: RedFlagConfidence;
   source: "dark_pattern" | "contrast_failure" | "authority_module";
+  /** Whether this flag caps the overall Track 1 grade. See
+   * docs/BUILD_PLAN_design_check_calibration_v1.md Phase 3. Every dark
+   * pattern and the WCAG contrast floor are disqualifying (active harm
+   * or a hard accessibility standard); authority-sourced flags carry
+   * their own classification through from dimensions/authority.ts,
+   * their single source of truth. */
+  classification: "disqualifying" | "advisory";
 }
 
 const NOT_CHECKABLE_IN_V1 = [
@@ -59,6 +66,7 @@ export function detectFrameworkRedFlags(
       ceiling: 79, // "no higher than a C" per the framework's own example
       confidence: "proven",
       source: "dark_pattern",
+      classification: "disqualifying",
     });
   }
 
@@ -70,6 +78,7 @@ export function detectFrameworkRedFlags(
       ceiling: 79,
       confidence: "best_effort",
       source: "dark_pattern",
+      classification: "disqualifying",
     });
   }
 
@@ -81,6 +90,7 @@ export function detectFrameworkRedFlags(
       ceiling: 79,
       confidence: "best_effort",
       source: "dark_pattern",
+      classification: "disqualifying",
     });
   }
 
@@ -92,6 +102,7 @@ export function detectFrameworkRedFlags(
       ceiling: 79,
       confidence: "proven",
       source: "dark_pattern",
+      classification: "disqualifying",
     });
   }
 
@@ -110,15 +121,19 @@ export function detectFrameworkRedFlags(
       ceiling: 79,
       confidence: "proven",
       source: "contrast_failure",
+      classification: "disqualifying",
     });
   }
 
-  // The Authority module's own dimension-level capping flags also matter
-  // at the overall-grade scope when they are severe enough: an LSO
-  // compliance breach or a page with zero verifiable authority is not
-  // something a strong Typography score should be able to average away
-  // either. Reuse the Authority module's own ceilings rather than
-  // inventing separate overall-grade thresholds.
+  // The Authority module's own dimension-level flags also matter at the
+  // overall-grade scope, but not all equally (see
+  // docs/BUILD_PLAN_design_check_calibration_v1.md Phase 3): an LSO
+  // compliance breach is not something a strong Typography score should
+  // be able to average away, but a market-wide gap like missing author
+  // markup (5 of 6 regression domains) is a real opportunity, not harm,
+  // and does not belong capping unrelated dimensions. Classification is
+  // carried through from authority.ts, its single source of truth, not
+  // re-decided here.
   authorityRedFlags.forEach((f) => {
     flags.push({
       key: f.key,
@@ -127,6 +142,7 @@ export function detectFrameworkRedFlags(
       ceiling: f.ceiling,
       confidence: "proven",
       source: "authority_module",
+      classification: f.classification,
     });
   });
 
@@ -136,6 +152,8 @@ export function detectFrameworkRedFlags(
 export interface RedFlagPanel {
   activeFlags: RedFlag[];
   notCheckableInV1: Array<{ key: string; label: string; reason: string }>;
+  /** Derived from disqualifying flags only. An advisory flag can appear
+   * in activeFlags without affecting this ceiling at all. */
   ceiling: number | null;
 }
 
@@ -145,6 +163,7 @@ export function buildRedFlagPanel(
   authorityRedFlags: AuthorityRedFlag[]
 ): RedFlagPanel {
   const activeFlags = detectFrameworkRedFlags(darkPatterns, allDimensions, authorityRedFlags);
-  const ceiling = activeFlags.length > 0 ? Math.min(...activeFlags.map((f) => f.ceiling)) : null;
+  const disqualifyingFlags = activeFlags.filter((f) => f.classification === "disqualifying");
+  const ceiling = disqualifyingFlags.length > 0 ? Math.min(...disqualifyingFlags.map((f) => f.ceiling)) : null;
   return { activeFlags, notCheckableInV1: [...NOT_CHECKABLE_IN_V1], ceiling };
 }

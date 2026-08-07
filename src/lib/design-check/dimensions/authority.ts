@@ -419,6 +419,20 @@ export interface AuthorityRedFlag {
   label: string;
   detail: string;
   ceiling: number;
+  /** Whether this flag caps the OVERALL Track 1 grade (see
+   * docs/BUILD_PLAN_design_check_calibration_v1.md Phase 3, classification
+   * table). "disqualifying" flags represent active harm or real
+   * compliance exposure (LSO breaches, unverifiable superiority claims).
+   * "advisory" flags are real opportunities, not harm, and never cap the
+   * overall grade; they still rank first among findings. This field does
+   * NOT change how this dimension's own internal score is capped below:
+   * every flag, of either classification, still caps the Authority
+   * dimension's own score, since a flag of any kind is real evidence
+   * about this dimension specifically, at dimension scope. The
+   * disqualifying/advisory split only governs whether a flag can cap the
+   * OTHER nine dimensions (typography, contrast, performance, and so on)
+   * that have nothing to do with it. */
+  classification: "disqualifying" | "advisory";
 }
 
 function detectRedFlags(
@@ -437,6 +451,11 @@ function detectRedFlags(
       label: "Self-designation without proof",
       detail: "Strong-quality words appear with no verifiable evidence anywhere on the page.",
       ceiling: 40,
+      // Unverifiable superiority claims sit inside LSO Rule 4.2-1 scope
+      // ("Ontario / LSO Rule 4.2-1 compliance... no unverifiable
+      // superlatives"), the same regulatory ground as the other LSO
+      // flags below, not a stylistic opportunity.
+      classification: "disqualifying",
     });
   }
   if (authority.practiceAreaLabels.length >= GENERIC_FULL_SERVICE_THRESHOLD) {
@@ -445,6 +464,7 @@ function detectRedFlags(
       label: "Generic full-service positioning",
       detail: `${authority.practiceAreaLabels.length} practice areas listed with no named niche or stated point of difference.`,
       ceiling: 55,
+      classification: "advisory", // a positioning opportunity, not harm
     });
   }
   if (authority.authorBylines.length === 0 && personNodeCount === 0) {
@@ -453,6 +473,10 @@ function detectRedFlags(
       label: "No author entity on any content",
       detail: "No named byline and no Person schema found on this page.",
       ceiling: 55,
+      // Fires on 5 of the 6 regression domains: a market-wide gap, not a
+      // defect specific to any one site. See docs/CALIBRATION_PROPOSAL_
+      // website_design_grading_v1.md "What the data actually shows".
+      classification: "advisory",
     });
   }
   const unattributedTestimonials = authority.testimonials.filter((t) => !t.hasAttribution);
@@ -462,6 +486,7 @@ function detectRedFlags(
       label: "Testimonials with no attribution",
       detail: `All ${authority.testimonials.length} testimonial(s) on this page carry no name or verifiable basis.`,
       ceiling: 60,
+      classification: "advisory", // a credibility opportunity, not harm
     });
   }
 
@@ -473,6 +498,7 @@ function detectRedFlags(
       label: 'LSO Rule 4.2-1: "specialist"/"expert" without the Certified Specialist designation',
       detail: "This term is only LSO-compliant for a lawyer holding the Certified Specialist designation, named alongside the practice area.",
       ceiling: 40,
+      classification: "disqualifying",
     });
   }
   const prohibitedHit = hits.some((h) => h.category === "prohibited");
@@ -482,6 +508,7 @@ function detectRedFlags(
       label: 'LSO Rule 4.2-1: prohibited superiority word ("best", "super", "#1")',
       detail: "These words are named as prohibited in the Rule 4.2-1 commentary regardless of adjacent proof.",
       ceiling: 40,
+      classification: "disqualifying",
     });
   }
   const lawMarketingHit = hits.some((h) => h.category === "law_marketing");
@@ -491,6 +518,7 @@ function detectRedFlags(
       label: "Aggressiveness or dominance framing",
       detail: 'Language such as "dominate" or "pit bull" reads as aggressiveness framing rather than earned authority.',
       ceiling: 55,
+      classification: "disqualifying",
     });
   }
 
@@ -510,6 +538,7 @@ function detectRedFlags(
       label: "Possible outcome or result guarantee (best-effort)",
       detail: 'A "guarantee" term was found alongside a low positioning-clarity read. Manually confirm whether this is an outcome promise or a legitimate use (e.g. "personal guarantee").',
       ceiling: 55,
+      classification: "disqualifying", // an outcome promise is direct LSO Rule 4.2-1 exposure
     });
   }
 
