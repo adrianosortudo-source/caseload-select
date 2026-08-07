@@ -43,6 +43,12 @@ export interface EvidenceRowConfig {
   sha256: string;
 }
 
+export interface PdfEvidenceRowConfig {
+  deliverableId: string;
+  label: string;
+  locale: string;
+}
+
 export interface PieceConfig {
   contentSlotId: string;
   deliverableId: string;
@@ -78,6 +84,7 @@ export interface WeekConfig {
   bodyRelationship: string;
   expectedPieceCount: number;
   evidence: EvidenceRowConfig[];
+  pdfEvidence: PdfEvidenceRowConfig[];
   pieces: PieceConfig[];
   kitAssets: KitAssetRowConfig[];
 }
@@ -173,6 +180,13 @@ export const WEEKS: Record<string, WeekConfig> = {
         file: "assets/gbp/GBP-W32-CHECKLIST_1200x900.png",
         sha256: "00aed6d653590998e010ff2eee290793556ef7b3619b3c521a27564c39cef22f",
       },
+    ],
+
+    // publication_artifacts 'pdf' rows, one per lead_magnet_pdf deliverable
+    // (F5 correction -- see lib/register-pdf-evidence.ts header).
+    pdfEvidence: [
+      { deliverableId: "66ef8598-178c-40fd-9d1f-42d96ebe5902", label: "checklist EN (Federal Corporation Annual Filing Check)", locale: "en-CA" },
+      { deliverableId: "21df651f-4b96-43e9-b01f-6e15a7e56b7c", label: "checklist PT (Verificação anual da empresa federal)", locale: "pt-BR" },
     ],
 
     // 16 pieces, structural mirror of Week 3's shipped manifest (Phase 0/2.1).

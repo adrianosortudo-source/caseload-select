@@ -12,6 +12,7 @@ import { buildManifest } from "./manifest";
 import { createPackage } from "./package";
 import { registerKitAssets, type RegisterKitAssetsResult } from "./kit-assets";
 import { registerEvidence, type RegisterEvidenceResult } from "./register-evidence";
+import { registerPdfEvidence, type RegisterPdfEvidenceResult } from "./register-pdf-evidence";
 import { activateReadiness, type ActivateReadinessResult } from "./readiness";
 
 export interface WriteAllResult {
@@ -21,6 +22,7 @@ export interface WriteAllResult {
   package: { status: string; packageId: string; reason?: string } | null;
   kitAssets: RegisterKitAssetsResult | null;
   evidence: RegisterEvidenceResult;
+  pdfEvidence: RegisterPdfEvidenceResult;
   readiness: ActivateReadinessResult;
   totalWrites: number;
 }
@@ -36,12 +38,14 @@ export async function runWriteAll(supabase: SupabaseClient, weekConfig: WeekConf
   const packageResult = await createPackage(supabase, weekConfig, manifestResult.manifest);
   const kitAssetsResult = await registerKitAssets(supabase, weekConfig, packageResult.packageId, manifestResult.manifest, root);
   const evidenceResult = await registerEvidence(supabase, weekConfig);
+  const pdfEvidenceResult = await registerPdfEvidence(supabase, weekConfig);
   const readinessResult = await activateReadiness(supabase, weekConfig);
 
   const totalWrites =
     (packageResult.status === "created" ? 1 : 0) +
     kitAssetsResult.registered +
     evidenceResult.inserted +
+    pdfEvidenceResult.inserted +
     (readinessResult.status === "activated" ? 1 : 0);
 
   return {
@@ -51,6 +55,7 @@ export async function runWriteAll(supabase: SupabaseClient, weekConfig: WeekConf
     package: packageResult,
     kitAssets: kitAssetsResult,
     evidence: evidenceResult,
+    pdfEvidence: pdfEvidenceResult,
     readiness: readinessResult,
     totalWrites,
   };
