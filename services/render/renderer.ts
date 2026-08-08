@@ -62,36 +62,38 @@ const MAX_REDIRECT_HOPS = 10;
 const MAX_SCREENSHOT_HEIGHT_PX = 7_800;
 const MAX_INTERCEPTED_REQUESTS = 300; // guard against a runaway page
 
-/**
- * TypeScript's CommonJS module target (this service's tsconfig.json sets
- * "module": "commonjs") downlevels a plain `await import(...)` into a
- * synchronous `require()` call at compile time -- a longstanding,
- * well-documented TypeScript behavior (microsoft/TypeScript#43329), not a
- * bug in this code. That is harmless for a CommonJS-compatible package,
- * but @sparticuz/chromium ships `"type": "module"` (ESM-only, verified via
- * its own package.json), so the downleveled require() fails at runtime
- * with "require() of ES Module ... not supported" -- confirmed live: the
- * first real production render (2026-08-07) failed in 23ms with exactly
- * this error, once server-side logging (see handle-render-request.ts)
- * made it visible at all.
- *
- * `new Function` constructs the import() call from a string, which
- * defeats TypeScript's static analysis (it cannot see an import()
- * expression to downlevel inside a function body it never parses as
- * TypeScript source), so the emitted JS keeps a real, native dynamic
- * import() -- exactly what the runtime error message itself recommends.
- * playwright-core does not need this: verified via its own package.json,
- * it has no top-level "type": "module", so the downleveled require()
- * resolves it correctly.
- */
-const importEsmOnly = new Function("specifier", "return import(specifier)") as (
-  specifier: string
-) => Promise<unknown>;
-
 async function launchBrowser(): Promise<Browser> {
   const isServerless = !!process.env.VERCEL || process.env.NODE_ENV === "production";
   if (isServerless) {
-    const chromium = ((await importEsmOnly("@sparticuz/chromium")) as typeof import("@sparticuz/chromium")).default;
+    // @sparticuz/chromium ships `"type": "module"` (ESM-only, verified via
+    // its own package.json); this import must reach the runtime as a real
+    // dynamic import(), never a require(). Two things had to both be true
+    // to get there, discovered the hard way against real production
+    // renders on 2026-08-07:
+    //
+    // 1. tsconfig.json's module target must not downlevel import() to
+    //    require(). It was "commonjs" originally, which does exactly that
+    //    -- a longstanding, documented TypeScript behavior
+    //    (microsoft/TypeScript#43329) -- and the first real render failed
+    //    in 23ms with "require() of ES Module ... not supported" once
+    //    server-side logging (handle-render-request.ts) made the error
+    //    visible at all. Switched to "NodeNext", which preserves a
+    //    literal import() call as real ESM-loader syntax even from this
+    //    CommonJS-typed package (no "type": "module" of our own), while
+    //    leaving every other static `import {...} from "..."` in this
+    //    codebase compiling to require() exactly as before.
+    // 2. The import specifier must stay a literal string Vercel's own
+    //    build-time dependency tracer can see. A `new Function(...)`
+    //    string-construction trick was tried first specifically to defeat
+    //    TypeScript's static analysis and stop the require() downlevel --
+    //    it worked for that, but it also hid the specifier from Vercel's
+    //    tracer, so @sparticuz/chromium never got included in the
+    //    deployed function bundle at all: the very next real render
+    //    failed instantly with "Cannot find package '@sparticuz/chromium'"
+    //    (ERR_MODULE_NOT_FOUND). Fixing the compiler setting instead of
+    //    hiding the import from it is what satisfies both constraints at
+    //    once: a real import() AND a specifier every tool can still see.
+    const chromium = (await import("@sparticuz/chromium")).default;
     const { chromium: launcher } = await import("playwright-core");
     return launcher.launch({
       args: chromium.args,

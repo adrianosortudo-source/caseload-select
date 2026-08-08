@@ -230,7 +230,7 @@ describe("guardContextRoutes", () => {
         cb: (err: Error | null, addresses: { address: string; family: number }[]) => void
       ) => cb(null, [{ address: "127.0.0.1", family: 4 }]),
     }));
-    const { guardContextRoutes } = await import("../renderer");
+    const { guardContextRoutes } = await import("../renderer.js");
     const { context, getHandler } = makeContext();
     const blocked: import("../render-types").BlockedRequestLog[] = [];
     await guardContextRoutes(context, blocked); // no third argument -- exercises the real default
@@ -255,6 +255,6 @@ describe("guardContextRoutes", () => {
  * regardless of vitest's execution order within this file.
  */
 async function importRenderer() {
-  const renderer = await import("../renderer");
+  const renderer = await import("../renderer.js");
   return { renderer };
 }
