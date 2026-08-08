@@ -43,7 +43,7 @@ export type AssetRole = (typeof ASSET_ROLES)[number];
 export const TEXT_POLICIES = ["textless", "text_bearing", "platform_rendered_text"] as const;
 export type TextPolicy = (typeof TEXT_POLICIES)[number];
 
-export const CTA_BEHAVIORS = ["download", "open", "navigate", "none"] as const;
+export const CTA_BEHAVIORS = ["download", "gated_download", "open", "navigate", "none"] as const;
 export type CtaBehavior = (typeof CTA_BEHAVIORS)[number];
 
 /** Format families that require a resolved source_version_id (Section 8: "missing source version where the format requires a source"). Every format family carries a body drawn from an existing deliverable version except a bare CTA-only or not-yet-drafted slot. */
@@ -132,6 +132,16 @@ function isNonEmptyString(v: unknown): v is string {
 /** Section 15/16: a lead-magnet CTA target pointing at the portal Files hub is a release blocker -- never a partial pass. Matches by path segment, not a full-URL parse, since targets may be root-relative ("/files/...") or absolute (".../files/...";  a named reference to "the Files hub" in prose is explicitly NOT a substitute for removing the link, per this project's own prior finding on that exact failure mode). */
 export function targetsFilesHub(target: string): boolean {
   return /(^|\/)files(\/|$|\?)/i.test(target);
+}
+
+/** Section 16 / 8: the two format families whose CTA is a lead-magnet download rather than an ordinary content link. Exported so every consumer of this manifest (the validator itself, the Overview status, the Release gate) asks the same question instead of re-deriving it and risking drift. */
+export function isLeadMagnetFormatFamily(formatFamily: unknown): boolean {
+  return formatFamily === "lead_magnet_document" || formatFamily === "lead_magnet_landing_page";
+}
+
+/** Section 16 / 8: the only CTA behaviors a lead-magnet piece may declare. "download" is a direct file link; "gated_download" (added 2026-08-07) is the accurate value for a CTA that leads to a form-gated landing page instead of a direct file. Shared for the same reason as isLeadMagnetFormatFamily -- the Overview/Release surfaces must never disagree with the validator about what counts as valid. */
+export function isValidLeadMagnetCtaBehavior(behavior: unknown): boolean {
+  return behavior === "download" || behavior === "gated_download";
 }
 
 /**
@@ -252,13 +262,21 @@ export function validatePackageManifest(raw: unknown): PackageManifestValidation
         }
 
         // Section 16 / 8: lead-magnet CTA rules -- /files is a hard blocker,
-        // behavior must be exactly "download", regardless of what the label says.
-        const isLeadMagnet = formatFamily === "lead_magnet_document" || formatFamily === "lead_magnet_landing_page";
+        // behavior must be "download" or "gated_download", regardless of what the label says.
+        const isLeadMagnet = isLeadMagnetFormatFamily(formatFamily);
         if (isLeadMagnet && typeof ctaTarget === "string" && targetsFilesHub(ctaTarget)) {
           errors.push({ path: `${ctaBase}.target`, message: `lead-magnet CTA must not point at the Files hub (got ${JSON.stringify(ctaTarget)})` });
         }
-        if (isLeadMagnet && ctaBehavior !== undefined && ctaBehavior !== "download") {
-          errors.push({ path: `${ctaBase}.behavior`, message: `lead-magnet CTA behavior must be "download" (got ${JSON.stringify(ctaBehavior)})` });
+        // "download" is a direct file link. "gated_download" (added 2026-08-07) is the
+        // accurate value for what every current checklist lead magnet actually does: the
+        // CTA leads to a form-gated landing page, not a direct file -- the exact distinction
+        // whose absence let a landing CTA get pointed at an authenticated portal URL
+        // (returning 401 to the anonymous prospects it was for) while still validating as a
+        // correct "download" CTA. Both values remain accepted so this does not retroactively
+        // invalidate already-shipped pieces recorded as "download"; new/updated lead-magnet
+        // pieces should use "gated_download".
+        if (isLeadMagnet && ctaBehavior !== undefined && !isValidLeadMagnetCtaBehavior(ctaBehavior)) {
+          errors.push({ path: `${ctaBase}.behavior`, message: `lead-magnet CTA behavior must be "download" or "gated_download" (got ${JSON.stringify(ctaBehavior)})` });
         }
 
         if (
