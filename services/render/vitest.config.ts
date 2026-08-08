@@ -35,5 +35,18 @@ export default defineConfig({
     include: ["__tests__/**/*.test.ts"],
     globals: true,
     css: false,
+    // guard-context-routes.test.ts imports ../renderer dynamically from
+    // inside the test body (it must, so the DNS-mocking case can
+    // vi.resetModules() without leaving a stale module graph for the
+    // others). That module is ~900 lines including two large inlined
+    // browser-script template literals, so the FIRST test to trigger the
+    // transform pays the whole cost inside its own timeout. It normally
+    // lands around 400-1600ms, but was observed twice exceeding the 5s
+    // default while this machine was busy with a concurrent npm install
+    // -- always the same first-in-file test, always a timeout rather
+    // than an assertion failure. Raised rather than re-run-until-green:
+    // a 5s budget that depends on how loaded the host happens to be is
+    // a CI flake waiting to happen, not a real signal.
+    testTimeout: 20_000,
   },
 });

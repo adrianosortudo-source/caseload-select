@@ -136,6 +136,48 @@ describe("guardContextRoutes", () => {
     expect(blocked).toEqual([]);
   });
 
+  it("strips content-encoding/content-length/transfer-encoding before fulfilling, since the body handed over is already decoded", async () => {
+    // Regression guard for the hang found in production on 2026-08-07:
+    // fetch's arrayBuffer() decompresses the body, but the response still
+    // carries the on-the-wire content-encoding/content-length. Passing
+    // those verbatim to route.fulfill() told Chromium the plain body was
+    // gzip and a different length, so it stalled to the render timeout on
+    // even a trivial page. These headers must be dropped; everything else
+    // passes through.
+    const { renderer } = await importRenderer();
+    const { context, getHandler } = makeContext();
+    const blocked: import("../render-types").BlockedRequestLog[] = [];
+    const fetchHop = vi.fn(async () =>
+      makeFetchResponse(
+        200,
+        {
+          "content-type": "text/html",
+          "content-encoding": "gzip",
+          "content-length": "1234",
+          "transfer-encoding": "chunked",
+          "cache-control": "no-cache",
+        },
+        "<html></html>"
+      )
+    );
+    await renderer.guardContextRoutes(context, blocked, fetchHop);
+    const handler = getHandler();
+
+    const { route, fulfill } = makeRoute("https://public.example/");
+    await handler(route);
+
+    const call = fulfill.mock.calls[0][0] as { headers: Record<string, string> };
+    // Case-insensitive: makeFetchResponse uses a real Headers instance,
+    // which lowercases keys, but the strip must not depend on that.
+    const keys = Object.keys(call.headers).map((k) => k.toLowerCase());
+    expect(keys).not.toContain("content-encoding");
+    expect(keys).not.toContain("content-length");
+    expect(keys).not.toContain("transfer-encoding");
+    // Unrelated headers still pass through untouched.
+    expect(call.headers["content-type"]).toBe("text/html");
+    expect(call.headers["cache-control"]).toBe("no-cache");
+  });
+
   it("walks a multi-hop safe redirect chain, re-checking every hop via fetchHop, and fulfills with the final response", async () => {
     const { renderer } = await importRenderer();
     const { context, getHandler } = makeContext();
@@ -230,7 +272,7 @@ describe("guardContextRoutes", () => {
         cb: (err: Error | null, addresses: { address: string; family: number }[]) => void
       ) => cb(null, [{ address: "127.0.0.1", family: 4 }]),
     }));
-    const { guardContextRoutes } = await import("../renderer");
+    const { guardContextRoutes } = await import("../renderer.js");
     const { context, getHandler } = makeContext();
     const blocked: import("../render-types").BlockedRequestLog[] = [];
     await guardContextRoutes(context, blocked); // no third argument -- exercises the real default
@@ -255,6 +297,6 @@ describe("guardContextRoutes", () => {
  * regardless of vitest's execution order within this file.
  */
 async function importRenderer() {
-  const renderer = await import("../renderer");
+  const renderer = await import("../renderer.js");
   return { renderer };
 }

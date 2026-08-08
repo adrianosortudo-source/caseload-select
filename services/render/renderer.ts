@@ -65,6 +65,34 @@ const MAX_INTERCEPTED_REQUESTS = 300; // guard against a runaway page
 async function launchBrowser(): Promise<Browser> {
   const isServerless = !!process.env.VERCEL || process.env.NODE_ENV === "production";
   if (isServerless) {
+    // @sparticuz/chromium ships `"type": "module"` (ESM-only, verified via
+    // its own package.json); this import must reach the runtime as a real
+    // dynamic import(), never a require(). Two things had to both be true
+    // to get there, discovered the hard way against real production
+    // renders on 2026-08-07:
+    //
+    // 1. tsconfig.json's module target must not downlevel import() to
+    //    require(). It was "commonjs" originally, which does exactly that
+    //    -- a longstanding, documented TypeScript behavior
+    //    (microsoft/TypeScript#43329) -- and the first real render failed
+    //    in 23ms with "require() of ES Module ... not supported" once
+    //    server-side logging (handle-render-request.ts) made the error
+    //    visible at all. Switched to "NodeNext", which preserves a
+    //    literal import() call as real ESM-loader syntax even from this
+    //    CommonJS-typed package (no "type": "module" of our own), while
+    //    leaving every other static `import {...} from "..."` in this
+    //    codebase compiling to require() exactly as before.
+    // 2. The import specifier must stay a literal string Vercel's own
+    //    build-time dependency tracer can see. A `new Function(...)`
+    //    string-construction trick was tried first specifically to defeat
+    //    TypeScript's static analysis and stop the require() downlevel --
+    //    it worked for that, but it also hid the specifier from Vercel's
+    //    tracer, so @sparticuz/chromium never got included in the
+    //    deployed function bundle at all: the very next real render
+    //    failed instantly with "Cannot find package '@sparticuz/chromium'"
+    //    (ERR_MODULE_NOT_FOUND). Fixing the compiler setting instead of
+    //    hiding the import from it is what satisfies both constraints at
+    //    once: a real import() AND a specifier every tool can still see.
     const chromium = (await import("@sparticuz/chromium")).default;
     const { chromium: launcher } = await import("playwright-core");
     return launcher.launch({
@@ -228,10 +256,26 @@ export async function guardContextRoutes(
       return;
     }
 
+    // finalResponse.arrayBuffer() is the DECODED body: undici/fetch
+    // transparently decompresses gzip/br/deflate before handing it back.
+    // So the body passed to route.fulfill() is already plain bytes -- but
+    // the response headers still describe the ON-THE-WIRE encoding that no
+    // longer applies. Copying content-encoding / content-length /
+    // transfer-encoding verbatim tells Chromium "these bytes are
+    // gzip-compressed and N bytes long" about a body that is neither, so
+    // Chromium either fails to decode or waits for compressed data that
+    // never arrives -- which is exactly how a render of even a trivial
+    // page (example.com) hung to the 280s timeout on 2026-08-07 once the
+    // earlier crash-before-navigation bugs (#136/#137 module loading,
+    // #138 concurrent single-process contexts) were cleared and execution
+    // finally reached this fulfill path. These three headers must be
+    // dropped whenever the body is handed over decoded; Chromium
+    // recomputes the correct length itself.
     const bodyBuffer = Buffer.from(await finalResponse.arrayBuffer());
+    const STRIP_HEADERS = new Set(["content-encoding", "content-length", "transfer-encoding"]);
     const headers: Record<string, string> = {};
     finalResponse.headers.forEach((value, key) => {
-      headers[key] = value;
+      if (!STRIP_HEADERS.has(key.toLowerCase())) headers[key] = value;
     });
     await route.fulfill({ status: finalResponse.status, headers, body: bodyBuffer });
   });
@@ -844,21 +888,51 @@ async function captureViewport(
       renderMs: Date.now() - start,
     };
   } finally {
-    await context.close();
+    // Never let cleanup mask the real failure. When the browser has
+    // already died, context.close() throws "Target page, context or
+    // browser has been closed" -- and because that throw happens in a
+    // finally block, it REPLACES whatever error actually caused the
+    // failure, which is the error worth seeing. That is exactly what
+    // happened on the 2026-08-07 production renders: every real cause
+    // was invisible behind a close() error, and the logs showed only the
+    // symptom. Swallowing it here is safe: a context on a browser that
+    // is about to be closed (see renderUrl's finally) needs no explicit
+    // cleanup to avoid a leak.
+    await context.close().catch(() => undefined);
   }
 }
 
-/** Renders one URL at both viewports. One browser instance shared across both. */
+/** Renders one URL at both viewports, sequentially. One browser instance
+ * shared across both. */
 export async function renderUrl(url: string): Promise<RenderRunResult> {
   const start = Date.now();
   const browser = await launchBrowser();
   try {
-    const captures = await Promise.all([
-      captureViewport(browser, url, "mobile"),
-      captureViewport(browser, url, "desktop"),
-    ]);
+    // Sequential, NOT Promise.all. @sparticuz/chromium's own argument set
+    // forces --single-process (plus --no-zygote and the site-isolation
+    // disables) because Lambda-class serverless environments cannot give
+    // Chromium the process/namespace primitives it normally relies on --
+    // see README.md for the full flag rationale. Under --single-process
+    // the browser, every renderer, and the GPU process all share one OS
+    // process, and driving two BrowserContexts concurrently through it is
+    // unstable: the 2026-08-07 production renders died mid-capture with
+    // the browser process gone, for both a heavy real site (drglaw.ca)
+    // and a trivial one (example.com), which rules out page weight as the
+    // cause. Running the viewports one after the other also halves peak
+    // memory, which matters on a 2GB-capped Hobby-tier function.
+    //
+    // The cost is wall-clock: two sequential ~5-10s captures instead of
+    // two overlapping ones. That is well within this service's 300s
+    // budget and not worth trading for a browser that falls over.
+    const captures: RenderCapture[] = [];
+    for (const viewport of ["mobile", "desktop"] as const) {
+      captures.push(await captureViewport(browser, url, viewport));
+    }
     return { captures, totalMs: Date.now() - start };
   } finally {
-    await browser.close();
+    // Same masking rationale as captureViewport's own cleanup above: if
+    // the browser is already gone, close() throws and would replace the
+    // real error on the way out.
+    await browser.close().catch(() => undefined);
   }
 }

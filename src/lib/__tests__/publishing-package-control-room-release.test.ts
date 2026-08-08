@@ -55,6 +55,29 @@ describe("assembleReleaseGates", () => {
     expect(experience.allPass).toBe(false);
   });
 
+  it("a gated_download lead-magnet CTA passes experience_cta_behavior -- Overview and Release agree with the validator", () => {
+    // Cross-layer regression for the 2026-08-07 CTA_BEHAVIORS widening: the
+    // manifest validator accepts "gated_download" for a lead-magnet CTA, but
+    // Overview's ctaPdfStatusForPiece and this gate's experience_cta_behavior
+    // check each independently hardcoded "must be download" and were never
+    // updated when the validator changed. A manifest carrying gated_download
+    // validated cleanly while release_blocked on this exact check -- the two
+    // surfaces disagreed about what the validator itself had just accepted.
+    // This test chains validatePackageManifest -> assembleOverviewViewModel ->
+    // assembleReleaseGates in one assertion so that drift cannot recur silently.
+    const manifest = validManifest();
+    const piece = manifest.pieces.find((p) => p.contentSlotId === "lead-magnet-document-en")!;
+    piece.cta.behavior = "gated_download";
+    const overview = assembleOverviewViewModel(manifest, "assembling", []);
+    const row = overview.rows.find((r) => r.contentSlotId === "lead-magnet-document-en")!;
+    expect(row.ctaPdfStatus).toBe("ok");
+    const gates = assembleReleaseGates(overview, manifest, NO_AUTH_INPUTS);
+    const gatedPiece = gates.find((p) => p.contentSlotId === "lead-magnet-document-en")!;
+    const experience = gatedPiece.gates.find((g) => g.gate === "experience")!;
+    const behaviorCheck = experience.checks.find((c) => c.checkKey === "experience_cta_behavior")!;
+    expect(behaviorCheck.status).toBe("pass");
+  });
+
   it("the blocked PT landing-page slot fails the Asset gate", () => {
     const manifest = validManifest();
     const overview = assembleOverviewViewModel(manifest, "assembling", []);
