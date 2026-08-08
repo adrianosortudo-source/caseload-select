@@ -207,7 +207,7 @@ export default function ReportView({
           clock. A 30-minute call walks through what that looks like for
           your practice and your case mix.
         </p>
-        <a href="/next-steps" className="r-cta-btn">See if this fits your practice →</a>
+        <a href="/tools/start-a-conversation" className="r-cta-btn">See if this fits your practice →</a>
         <p className="r-cta-fine">
           Or run another sample case: <a href="/screen-demo">choose a different scenario</a>
         </p>
