@@ -50,13 +50,15 @@ describe("getQuestionDisplayText: language-aware question lookup", () => {
   });
 
   it("falls back to English when the slot id is missing from the PT bundle", () => {
-    // employment Phase B slots are intentionally NOT in the launch-week
-    // PT scope. They MUST fall back to English so the engine keeps
-    // working coherently while translation rolls out matter-type by
-    // matter-type.
+    // The fallback must hold for ANY slot id the bundle does not carry, so
+    // this uses a synthetic id rather than a real untranslated slot. It
+    // previously used 'tenure_band', which was valid only while the
+    // employment lane had no PT coverage; once that lane was translated the
+    // fixture started asserting the opposite of the truth. A synthetic id
+    // cannot be "fixed" out from under the test by future translation work.
     const i18n = getI18n("pt");
     const text = getQuestionDisplayText(
-      "tenure_band",
+      "__slot_that_will_never_be_translated__",
       "How long did you work for that employer?",
       "pt",
       i18n,
