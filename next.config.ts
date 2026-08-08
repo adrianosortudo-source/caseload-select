@@ -146,8 +146,21 @@ const toolsEmbedSecurityHeaders = [
       "img-src 'self' data: https:",
       "font-src 'self' data: https://fonts.gstatic.com",
       "connect-src 'self' https://*.supabase.co https://api.resend.com https://generativelanguage.googleapis.com https://openrouter.ai",
+      // frame-src for the Cal.com hosted booking widget (2026-08-07). The
+      // booking ending of /tools/start-a-conversation embeds Cal.com's page
+      // by URL (the adapter pattern in booking-adapter-pure.ts: no API
+      // client, the iframe IS the integration). Without this the directive
+      // falls back to default-src 'self' and the browser blocks the widget,
+      // so the booking outcome renders an empty frame.
+      //
+      // Declared on the shared tools tier rather than a fourth header set:
+      // the other three routes gain only the ability to frame cal.com, and
+      // none of them has an injection sink that would let an attacker
+      // choose an iframe source. A separate near-identical tier would be
+      // more surface to keep in sync for no real reduction in risk.
+      "frame-src https://cal.com https://app.cal.com",
       // Scoped, not '*': only our own marketing origins may frame these
-      // three public tool pages. www is the canonical host; the bare apex
+      // four public tool pages. www is the canonical host; the bare apex
       // is kept in case anything still resolves without the www redirect
       // applied; localhost:3300 is the local static-preview server, see
       // the file-header comment above for why it's safe to leave permanent.
