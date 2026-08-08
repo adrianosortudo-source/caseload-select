@@ -44,6 +44,13 @@ interface Detail {
   versions: DeliverableVersion[];
   comments: DeliverableComment[];
   approvals: ApprovalRecord[];
+  // Release-integrity item 1: true when the underlying table read errored
+  // rather than genuinely returning zero rows, so the review UI can tell a
+  // signed-off deliverable that failed to load its history apart from one
+  // that has no history yet.
+  versionsError?: boolean;
+  commentsError?: boolean;
+  approvalsError?: boolean;
 }
 
 function cssEscapeId(id: string): string {
@@ -130,6 +137,9 @@ export default function DeliverableReview({
         versions: json.versions,
         comments: json.comments,
         approvals: json.approvals,
+        versionsError: json.versionsError ?? false,
+        commentsError: json.commentsError ?? false,
+        approvalsError: json.approvalsError ?? false,
       });
     }
   }, [firmId, deliverableId]);
@@ -343,6 +353,7 @@ export default function DeliverableReview({
               deliverableId={deliverableId}
               viewerRole={viewerRole}
               approvals={approvals}
+              approvalsError={detail.approvalsError ?? false}
               comments={comments}
               versions={versions}
               deliverable={deliverable}
@@ -396,13 +407,34 @@ export default function DeliverableReview({
           )}
 
           {shouldShowHeroImageControl(selectedVersion?.id ?? null, viewerRole) && (
-            <HeroImageControl
-              firmId={firmId}
-              deliverableId={deliverableId}
-              deliverableTitle={deliverable.title}
-              hasHero={Boolean(deliverable.hero_image_url)}
-              onSaved={refetch}
-            />
+            deliverable.deliverable_role === "article" ? (
+              <div className="grid gap-3 md:grid-cols-2" aria-label="Website image controls">
+                <HeroImageControl
+                  firmId={firmId}
+                  deliverableId={deliverableId}
+                  deliverableTitle={deliverable.title}
+                  hasHero={Boolean(deliverable.hero_image_url)}
+                  onSaved={refetch}
+                  assetRole="website_article_hero_overlay"
+                />
+                <HeroImageControl
+                  firmId={firmId}
+                  deliverableId={deliverableId}
+                  deliverableTitle={deliverable.title}
+                  hasHero={false}
+                  onSaved={refetch}
+                  assetRole="website_homepage_cta_textless"
+                />
+              </div>
+            ) : (
+              <HeroImageControl
+                firmId={firmId}
+                deliverableId={deliverableId}
+                deliverableTitle={deliverable.title}
+                hasHero={Boolean(deliverable.hero_image_url)}
+                onSaved={refetch}
+              />
+            )
           )}
 
           {selectedVersion && (
@@ -1899,6 +1931,7 @@ function ApprovalHistory({
   deliverableId,
   viewerRole,
   approvals,
+  approvalsError,
   comments,
   versions,
   deliverable,
@@ -1910,6 +1943,7 @@ function ApprovalHistory({
   deliverableId: string;
   viewerRole: "operator" | "lawyer";
   approvals: ApprovalRecord[];
+  approvalsError: boolean;
   comments: DeliverableComment[];
   versions: DeliverableVersion[];
   deliverable: ContentDeliverable;
@@ -1919,7 +1953,20 @@ function ApprovalHistory({
 }) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
 
-  if (approvals.length === 0) return null;
+  // Release-integrity item 1: an empty approvals array now means either
+  // "no approval history yet" (approvalsError false) or "the history could
+  // not be loaded" (approvalsError true) -- these must not render the same
+  // way, since the latter could be hiding a real signed-off record.
+  if (approvals.length === 0) {
+    if (!approvalsError) return null;
+    return (
+      <div className="bg-white border border-border-brand p-4">
+        <p className="text-xs text-red-fail">
+          Approval history could not be loaded. Refresh to retry.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="bg-white border border-border-brand p-4">
       <h3 className="text-sm font-bold text-navy mb-3">Approval record</h3>

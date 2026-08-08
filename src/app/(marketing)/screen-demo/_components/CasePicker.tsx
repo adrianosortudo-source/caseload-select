@@ -13,12 +13,17 @@
  * output on the first pass.
  */
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { SAMPLE_CASES, type SampleCase } from "../_data/cases";
 import { BAND_COLOR } from "../_lib/scoring";
 
 function CaseCard({ sample }: { sample: SampleCase }) {
   const router = useRouter();
+  // Carry ?embed=1 into the quiz. When the demo is framed on the marketing
+  // site, dropping the flag here would bring the nav and site footer back the
+  // moment the lawyer picks a case, inside the iframe.
+  const searchParams = useSearchParams();
+  const embedSuffix = searchParams.get("embed") === "1" ? "?embed=1" : "";
   const accent = sample.isCustom ? "#C4B49A" : BAND_COLOR[sample.expectedBand];
 
   return (
@@ -37,7 +42,7 @@ function CaseCard({ sample }: { sample: SampleCase }) {
       <button
         type="button"
         className="case-cta"
-        onClick={() => router.push(`/screen-demo/quiz/${sample.id}`)}
+        onClick={() => router.push(`/screen-demo/quiz/${sample.id}${embedSuffix}`)}
       >
         {sample.isCustom ? "Run my inquiry" : "Run this case"}
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" aria-hidden="true">

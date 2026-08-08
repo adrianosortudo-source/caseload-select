@@ -30,20 +30,32 @@ export async function PATCH(
     return NextResponse.json({ error: "resolved (boolean) is required" }, { status: 400 });
   }
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) {
+  const result = await getDeliverableDetail(deliverableId);
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (!result.found || result.detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
-  if (!detail.comments.some((c) => c.id === commentId)) {
+  if (result.detail.commentsError) {
+    return NextResponse.json(
+      { error: "could not verify this comment, try again" },
+      { status: 503 },
+    );
+  }
+  if (!result.detail.comments.some((c) => c.id === commentId)) {
     return NextResponse.json({ error: "comment not found" }, { status: 404 });
   }
 
-  const result = await setCommentResolved({
+  const setResult = await setCommentResolved({
     commentId,
     firmId,
     resolved: body.resolved,
     actorRole: resolved.actor.role,
   });
-  if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
+  if (!setResult.ok) return NextResponse.json({ error: setResult.error }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

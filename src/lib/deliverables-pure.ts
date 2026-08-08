@@ -451,6 +451,9 @@ export interface PlanDeliverable {
   status: DeliverableStatus;
   content_kind: ContentKind;
   format: string | null;
+  locale?: string | null;
+  deliverable_role?: string | null;
+  publication_destination?: string | null;
   period_id: string | null;
   publish_date: string | null;
   /** Date the operator recorded the piece as actually published. */
@@ -461,6 +464,122 @@ export interface PlanDeliverable {
 export interface FormatGroup {
   format: string | null; // null = no format set ("Unfiled")
   items: PlanDeliverable[];
+}
+
+export const CANONICAL_FORMATS = [
+  "Website articles",
+  "LinkedIn",
+  "Google Business Profile",
+  "Checklists & downloadable resources",
+  "Email",
+  "Other",
+] as const;
+
+export type CanonicalFormat = (typeof CANONICAL_FORMATS)[number];
+
+const WEBSITE_FORMAT_ALIASES = new Set([
+  "counsel note",
+  "análise jurídica",
+  "analise juridica",
+  "clause in the margin",
+  "cláusula comentada",
+  "clausula comentada",
+]);
+const LINKEDIN_FORMAT_ALIASES = new Set(["linkedin", "linkedin post", "linkedin variation"]);
+const GBP_FORMAT_ALIASES = new Set(["google business profile", "gbp", "gbp post"]);
+const RESOURCE_FORMAT_ALIASES = new Set([
+  "lead magnet",
+  "preparation artifact",
+  "material de preparação",
+  "material de preparacao",
+]);
+const EMAIL_FORMAT_ALIASES = new Set(["drg law minute", "email", "email newsletter"]);
+
+function normalized(value: string | null | undefined): string {
+  return value?.trim().toLocaleLowerCase() ?? "";
+}
+
+/**
+ * Map existing publication metadata and explicit format aliases to the
+ * operator's publishing workflow. Metadata is checked first so a cosmetic
+ * label cannot move a deliverable away from its recorded destination.
+ */
+export function canonicalFormat(item: Pick<PlanDeliverable, "format" | "locale" | "deliverable_role" | "publication_destination">): CanonicalFormat {
+  const role = normalized(item.deliverable_role);
+  const destination = normalized(item.publication_destination);
+
+  if (destination === "linkedin" || role === "social_post") return "LinkedIn";
+  if (destination === "google_business_profile" || destination === "google business profile" || destination === "gbp" || role === "gbp_post") {
+    return "Google Business Profile";
+  }
+  if (destination === "email" || role === "email_newsletter") return "Email";
+  if (role === "article") return "Website articles";
+  if (role === "lead_magnet_pdf" || role === "landing_page") return "Checklists & downloadable resources";
+
+  const format = normalized(item.format);
+  if (WEBSITE_FORMAT_ALIASES.has(format)) return "Website articles";
+  if (LINKEDIN_FORMAT_ALIASES.has(format) || format.includes("linkedin")) return "LinkedIn";
+  if (GBP_FORMAT_ALIASES.has(format) || format.includes("google business")) return "Google Business Profile";
+  if (RESOURCE_FORMAT_ALIASES.has(format)) return "Checklists & downloadable resources";
+  if (EMAIL_FORMAT_ALIASES.has(format)) return "Email";
+  return "Other";
+}
+
+export function languageLabel(locale: string | null | undefined): string {
+  const value = normalized(locale);
+  if (value.startsWith("en")) return "EN";
+  if (value.startsWith("pt")) return "PT";
+  return value ? value.toUpperCase().slice(0, 8) : "—";
+}
+
+function subtypeRank(item: Pick<PlanDeliverable, "format">): number {
+  const format = normalized(item.format);
+  if (format === "counsel note" || format === "análise jurídica" || format === "analise juridica") return 0;
+  if (format === "clause in the margin" || format === "cláusula comentada" || format === "clausula comentada") return 1;
+  if (format === "lead magnet") return 0;
+  if (format === "preparation artifact" || format === "material de preparação" || format === "material de preparacao") return 1;
+  return 2;
+}
+
+function languageRank(locale: string | null | undefined): number {
+  const label = languageLabel(locale);
+  return label === "EN" ? 0 : label === "PT" ? 1 : 2;
+}
+
+export function periodFormatAnchorId(periodId: string, format: CanonicalFormat): string {
+  const token = format.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return `period-${periodId}-format-${token}`;
+}
+
+export interface CanonicalFormatGroup {
+  format: CanonicalFormat;
+  items: PlanDeliverable[];
+}
+
+function compareCanonicalItems(a: PlanDeliverable, b: PlanDeliverable, group: CanonicalFormat): number {
+  if (group === "Website articles" || group === "Checklists & downloadable resources") {
+    const subtype = subtypeRank(a) - subtypeRank(b);
+    if (subtype !== 0) return subtype;
+    const language = languageRank(a.locale) - languageRank(b.locale);
+    if (language !== 0) return language;
+  }
+  return comparePublishDate(a, b);
+}
+
+export function groupByCanonicalFormat(items: PlanDeliverable[]): CanonicalFormatGroup[] {
+  const groups = new Map<CanonicalFormat, PlanDeliverable[]>();
+  for (const item of items) {
+    const format = canonicalFormat(item);
+    const existing = groups.get(format);
+    if (existing) existing.push(item);
+    else groups.set(format, [item]);
+  }
+  return CANONICAL_FORMATS
+    .filter((format) => groups.has(format))
+    .map((format) => ({
+      format,
+      items: groups.get(format)!.sort((a, b) => compareCanonicalItems(a, b, format)),
+    }));
 }
 
 function comparePublishDate(a: PlanDeliverable, b: PlanDeliverable): number {

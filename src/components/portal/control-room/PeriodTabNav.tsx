@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * CR-12: shared tab navigation for the Weekly Package Control Room's 5
- * routes (Section 5). Same active-state/styling convention as the
+ * CR-12: shared navigation for the Weekly Package workspace routes and the
+ * existing Publish Kit. Same active-state/styling convention as the
  * top-level PortalTabNav (usePathname + Link, border-bottom active
  * indicator) so the period sub-tabs read as part of the same system, not a
  * bolted-on widget.
@@ -25,6 +25,7 @@ export default function PeriodTabNav({ firmId, periodId }: PeriodTabNavProps) {
     { href: `${base}/assets`, label: "Assets" },
     { href: `${base}/review`, label: "Review" },
     { href: `${base}/release`, label: "Release" },
+    { href: `/portal/${firmId}/publish-kit/${periodId}`, label: "Publish Kit" },
   ];
 
   return (

@@ -135,7 +135,7 @@ export async function updateChannelSession(
  * successful screened_leads insert. Leave it undefined / null for
  * abandoned, exhausted, or send-failure paths — those finalizations
  * close the session but did NOT produce a brief. The post-finalization
- * secretary mode (DR-104) gates on screened_lead_id IS NOT NULL so a
+ * secretary mode (DR-110) gates on screened_lead_id IS NOT NULL so a
  * lead who timed out on contact capture does NOT later receive a
  * "lawyer is reviewing your matter" reply (Codex pushback, 2026-05-26).
  */

@@ -74,6 +74,20 @@
  *       run up the bill against a single firm while staying under a
  *       global-IP ceiling.
  *
+ *   designCheck        8 per 10 minutes
+ *     - /api/tools/website-design-check. Public. Each call launches a
+ *       real headless-browser render at two viewports plus two Anthropic
+ *       vision calls; same bucket size as seoCheck, whose own real crawl
+ *       cost this mirrors.
+ *
+ *   firmVoiceBuilder   20 per minute
+ *     - POST /api/tools/firm-voice-builder/turn. Public, same-origin, no
+ *       auth, no firmId scoping (standalone tool, not per-client-firm).
+ *       Each call is one Gemini generation. A real interview runs roughly
+ *       25+ turns over about 25 minutes, so 20/min/IP is generous for a
+ *       genuine session while still bounding a scripted loop's Gemini
+ *       spend. Identity is the IP alone.
+ *
  *   memo              60 per minute
  *     - /api/memo/[sessionId]. Read-only lookup by session UUID, no
  *       write cost. Two callers share this route: the widget polls it
@@ -125,6 +139,8 @@ export type RateLimitBucket =
   | "otpVerify"
   | "seoCheck"
   | "assist"
+  | "designCheck"
+  | "firmVoiceBuilder"
   | "memo"
   | "screenDemoReport"
   | "discoveryReport";
@@ -146,6 +162,8 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   otpVerify:      { limit: 10, windowSeconds: 600 },   // 10 per 10 minutes
   seoCheck:       { limit: 8,  windowSeconds: 600 },   // 8 per 10 minutes (public, unauth only)
   assist:         { limit: 8,  windowSeconds: 60 },    // 8 per minute (public, unauth, per firmId:ip)
+  designCheck:    { limit: 8,  windowSeconds: 600 },   // 8 per 10 minutes (public, unauth only)
+  firmVoiceBuilder: { limit: 20, windowSeconds: 60 },  // 20 per minute (public, unauth, per ip)
   memo:              { limit: 60, windowSeconds: 60 },   // 60 per minute (read-only, widget + portal)
   screenDemoReport:  { limit: 10, windowSeconds: 3600 }, // 10 per hour (public marketing form)
   discoveryReport:   { limit: 20, windowSeconds: 3600 }, // 20 per hour (ChatGPT Action caller)
@@ -260,6 +278,12 @@ const FAIL_CLOSED_BUCKETS: ReadonlySet<RateLimitBucket> = new Set<RateLimitBucke
   "requestLink",
   "otpSend",
   "otpVerify",
+  // designCheck: public, unauthenticated, and each request costs two real
+  // headless-browser renders plus two Gemini vision calls. A fail-open
+  // limiter on this route means the 8-per-10-minute cap silently does not
+  // exist whenever UPSTASH_* is unset, on the single most expensive
+  // public endpoint in the app.
+  "designCheck",
 ]);
 
 function failClosedMode(): boolean {
