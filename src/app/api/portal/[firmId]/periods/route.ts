@@ -10,6 +10,7 @@ import { resolveDeliverableActor } from "@/lib/deliverables-auth";
 import { denyWriteIfPreview } from "@/lib/preview-guard";
 import { createPeriod } from "@/lib/deliverables";
 import { parseWeekNumber } from "@/lib/deliverables-pure";
+import { isCompleteStrategyBrief, parseStrategyBrief } from "@/lib/strategy-brief";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -39,6 +40,7 @@ export async function POST(
     theme?: unknown;
     details?: unknown;
     rationale?: unknown;
+    strategy_brief?: unknown;
   };
   try {
     body = await req.json();
@@ -69,6 +71,14 @@ export async function POST(
     );
   }
 
+  const strategyBrief = parseStrategyBrief(body.strategy_brief);
+  if (!isCompleteStrategyBrief(strategyBrief)) {
+    return NextResponse.json(
+      { error: "strategy_brief must contain all six non-empty fields" },
+      { status: 400 },
+    );
+  }
+
   const result = await createPeriod({
     firmId,
     startsOn,
@@ -77,6 +87,7 @@ export async function POST(
     theme: cleanText(body.theme, 200),
     details: cleanText(body.details, 2000),
     rationale: cleanText(body.rationale, 2000),
+    strategyBrief,
     actor: resolved.actor,
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });

@@ -66,9 +66,22 @@ export async function POST(
     return NextResponse.json({ error: "you must confirm the statement to sign" }, { status: 400 });
   }
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) {
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (!detailResult.found || detailResult.detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+  const detail = detailResult.detail;
+  if (detail.versionsError) {
+    return NextResponse.json(
+      { error: "could not verify the current version, try again" },
+      { status: 503 },
+    );
   }
 
   const attachments = validateDeliverableAttachments(body.attachments, firmId, deliverableId);

@@ -17,6 +17,8 @@ import type {
   ContentExportArtifact,
 } from "@/lib/content-period-export";
 import type { DeliverableRole } from "@/lib/types";
+import { CANONICAL_FORMATS, canonicalFormat, type CanonicalFormat } from "@/lib/deliverables-pure";
+import { isEnglishLocale } from "@/lib/linkedin-article-paste-pure";
 
 // ─── Copy constraints ────────────────────────────────────────────────────────
 
@@ -298,6 +300,7 @@ export interface PublishKitArtifact {
    */
   versionId: string;
   artifactType: string;
+  assetRole?: string | null;
   locale: string | null;
   destination: string | null;
   filename: string | null; // basename of storagePath, or null
@@ -448,6 +451,21 @@ export interface PublishKitDateGroup {
   pieces: PublishKitPiece[];
 }
 
+/** A format cluster in the same order used by the weekly Deliverables page. */
+export interface PublishKitFormatGroup {
+  key: string;
+  label: CanonicalFormat;
+  pieces: PublishKitPiece[];
+}
+
+/** Shared compatibility shape for older date-group fixtures and the live format groups. */
+export interface PublishKitGroup {
+  key?: string;
+  label?: CanonicalFormat;
+  date?: string;
+  pieces: PublishKitPiece[];
+}
+
 export interface PublishKitView {
   periodId: string;
   periodTitle: string | null;
@@ -463,7 +481,7 @@ export interface PublishKitView {
     manual: number;
     pipeline: number;
   };
-  groups: PublishKitDateGroup[];
+  groups: PublishKitGroup[];
   bundleWarnings: string[];
 }
 
@@ -518,6 +536,35 @@ export function groupByPublishDate(pieces: PublishKitPiece[]): PublishKitDateGro
   return groups;
 }
 
+/**
+ * Groups the Publish Kit by the operator's canonical format order. This keeps
+ * the kit aligned with the Deliverables page: a publisher can open one format
+ * lane and find all of that lane's pieces together, regardless of publish date.
+ * Metadata is authoritative; titles are never inspected to determine a lane.
+ */
+export function groupByCanonicalFormat(pieces: PublishKitPiece[]): PublishKitFormatGroup[] {
+  const groups = new Map<CanonicalFormat, PublishKitPiece[]>();
+  for (const piece of pieces) {
+    const format = canonicalFormat({
+      format: piece.format,
+      locale: piece.locale,
+      deliverable_role: piece.role,
+      publication_destination: piece.destination,
+    });
+    const existing = groups.get(format);
+    if (existing) existing.push(piece);
+    else groups.set(format, [piece]);
+  }
+
+  return CANONICAL_FORMATS
+    .filter((format) => groups.has(format))
+    .map((format) => ({
+      key: format.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      label: format,
+      pieces: groups.get(format)!.sort(comparePieces),
+    }));
+}
+
 // ─── Copy column presentation ────────────────────────────────────────────────
 
 /**
@@ -544,6 +591,56 @@ export function copyColumnMessage(piece: PublishKitPiece): CopyColumnMessage {
   }
   if (!piece.mayPublish && piece.currentVersionHasBody) return "has_unapproved_copy";
   return "no_copy";
+}
+
+// ─── LinkedIn Article paste eligibility ──────────────────────────────────────
+
+/**
+ * Whether this piece is a genuine LinkedIn Article -- as opposed to a
+ * LinkedIn feed/promoter post, which shares the same "LinkedIn" canonical
+ * format bucket (see groupByCanonicalFormat/canonicalFormat in
+ * deliverables-pure.ts) but is plain-text-only on LinkedIn's feed composer.
+ * Keyed on publication_destination, the one column that actually carries
+ * this distinction: "linkedin_article" vs "linkedin" (see
+ * PublicationDestination in @/lib/types). deliverable_role stays "article"
+ * for both a website Counsel Note and its LinkedIn Article adaptation, and
+ * content_kind is "text" for both a LinkedIn Article and a LinkedIn feed
+ * post, so neither of those columns can tell them apart. A title-text
+ * pattern (e.g. a "[LINKEDIN POST]" prefix some titles carry) is
+ * deliberately never checked here: it is incidental copy, not schema, and
+ * pasting rich HTML into LinkedIn's plain-text-only feed composer would be
+ * wrong, possibly visibly broken.
+ */
+export function isLinkedInArticlePiece(piece: Pick<PublishKitPiece, "destination">): boolean {
+  return piece.destination === "linkedin_article";
+}
+
+/**
+ * Whether the Publish Kit's LinkedIn-formatted copy control should render
+ * for this piece, and if not, why:
+ *  - "not_applicable": not a LinkedIn Article at all (see
+ *    isLinkedInArticlePiece) -- the control must not render for this piece.
+ *  - "unsupported_locale": IS a LinkedIn Article, but its locale is not
+ *    confirmed English. linkedin-article-paste-pure.ts is English-only (see
+ *    that module's header). A null/unset locale is treated the same as a
+ *    confirmed non-English one here -- deliberately more conservative than
+ *    toLinkedInArticlePasteHtmlEnglishOnly's own default, which proceeds on
+ *    an omitted/null locale (that default exists for a generic caller with
+ *    nothing to pass, e.g. a unit test; this function instead decides what
+ *    a real operator sees for real piece data, where "we do not actually
+ *    know it is English" must read the same as "known not English", never
+ *    as "assume yes"). The control should still render, disabled and
+ *    clearly labelled English-only, rather than silently disappear -- an
+ *    operator who cannot see why a control is missing cannot act on it.
+ *  - "eligible": render the control, enabled.
+ */
+export type LinkedInArticlePasteEligibility = "not_applicable" | "unsupported_locale" | "eligible";
+
+export function linkedInArticlePasteEligibility(
+  piece: Pick<PublishKitPiece, "destination" | "locale">,
+): LinkedInArticlePasteEligibility {
+  if (!isLinkedInArticlePiece(piece)) return "not_applicable";
+  return isEnglishLocale(piece.locale) ? "eligible" : "unsupported_locale";
 }
 
 // ─── Filtering and filtered totals ───────────────────────────────────────────
@@ -856,6 +953,7 @@ function toArtifact(artifact: ContentExportArtifact): PublishKitArtifact {
     id: artifact.id,
     versionId: artifact.version_id,
     artifactType: artifact.artifact_type,
+    assetRole: artifact.asset_role ?? null,
     locale: artifact.locale,
     destination: artifact.destination,
     filename: basename(artifact.storage_path),
@@ -939,7 +1037,7 @@ function partitionArtifacts(
  * as a false "duplicate".
  */
 function slotKey(a: PublishKitArtifact): string {
-  return `${a.artifactType}::${a.locale ?? ""}::${a.destination ?? ""}`;
+  return `${a.artifactType}::${a.assetRole ?? ""}::${a.locale ?? ""}::${a.destination ?? ""}`;
 }
 
 /**
@@ -988,6 +1086,9 @@ function dedupeArtifacts(
   // plain string present on every artifact, so this is total and stable.
   const kept = [...winnerByKey.values()].sort((a, b) => {
     if (a.artifactType !== b.artifactType) return a.artifactType.localeCompare(b.artifactType);
+    const aRole = a.assetRole ?? "";
+    const bRole = b.assetRole ?? "";
+    if (aRole !== bRole) return aRole.localeCompare(bRole);
     const aLocale = a.locale ?? "";
     const bLocale = b.locale ?? "";
     if (aLocale !== bLocale) return aLocale.localeCompare(bLocale);
@@ -1142,7 +1243,7 @@ function toPiece(deliverable: ContentExportDeliverable): PublishKitPiece {
 /** Maps a raw bundle into the view model the Publish Kit UI renders. */
 export function toPublishKitView(bundle: ContentExportBundle): PublishKitView {
   const pieces = bundle.deliverables.map(toPiece);
-  const groups = groupByPublishDate(pieces);
+  const groups = groupByCanonicalFormat(pieces);
 
   const publishableCount = pieces.filter((p) => p.mayPublish).length;
   const manualCount = pieces.filter((p) => p.lane === "manual").length;

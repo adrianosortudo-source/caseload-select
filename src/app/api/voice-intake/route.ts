@@ -89,6 +89,7 @@ import {
 } from '@/lib/voice-callback-notify';
 import type { VoiceNameSource } from '@/lib/voice-callback-notify-pure';
 import { shouldAlertLlmDisabled } from '@/lib/llm-health-alert';
+import { lintVoiceTranscript, summariseVoiceLint } from '@/lib/voice-transcript-lint';
 
 interface VoiceIntakeBody {
   caller_phone?: string;
@@ -868,6 +869,36 @@ export async function POST(req: NextRequest) {
   const { status: initialStatus, changedBy: initialChangedBy } =
     computeInitialStatus(state.matter_type);
 
+  // ── Prompt-compliance lint (deterministic, no model) ───────────────────
+  // Closes the instrumentation gap named in the questionHistory comment
+  // below: the conversation itself ran inside the GHL Voice AI agent, a
+  // system we cannot instrument directly. The transcript is the one artefact
+  // it hands back, so we lint that instead.
+  //
+  // Motivating defect (DRG, 2026-07-28): three of four discovery turns asked
+  // two questions at once; the caller answered one each time, readiness went
+  // uncaptured, and the lead scored an axis short. Prompt hard rules had
+  // been tightened for this repeatedly and kept regressing, undetected,
+  // because nothing measured compliance. Now every call scores itself.
+  //
+  // Advisory only. Findings never block persistence; a flawed call still
+  // produces a lead, it just produces one carrying flags.
+  const resolvedLintName = state.slots['client_name'] ?? callerName ?? null;
+  const resolvedLintPhone = state.slots['client_phone'] ?? callerPhone ?? null;
+  const promptLint = lintVoiceTranscript({
+    transcript,
+    readinessAnswered: axes.readinessAnswered,
+    callerName: resolvedLintName,
+    callerPhone: resolvedLintPhone,
+  });
+  const promptLintSummary = summariseVoiceLint(promptLint);
+  if (promptLintSummary) {
+    // warn-level so it surfaces in Vercel's error-filtered log view.
+    console.warn(
+      `[voice-intake] prompt lint firm=${firmIdParam} lead=${state.lead_id} ${promptLintSummary}`,
+    );
+  }
+
   // ── Insert ──────────────────────────────────────────────────────────────
   const slotAnswers = {
     slots: state.slots,
@@ -904,6 +935,10 @@ export async function POST(req: NextRequest) {
       branch_reconciliation_reason: branchDecision.reason,
       branch_operator_review: branchDecision.operatorReview,
       urgency_triggers: branchDecision.urgencyTriggers,
+      // Deterministic prompt-compliance findings for this call. Queryable
+      // for the weekly reconciliation, e.g.
+      //   slot_answers->'voice_meta'->'prompt_lint'->>'clean' = 'false'
+      prompt_lint: promptLint,
     },
   };
 

@@ -93,6 +93,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   typecheck:
@@ -110,6 +111,70 @@ jobs:
         run: npm ci
       - name: Run tsc --noEmit
         run: npx tsc --noEmit
+      - name: Cron contract guard
+        run: node scripts/check-cron-contract.mjs
+
+  render-service-parity:
+    name: Render service parity (render-isolation)
+    runs-on: ubuntu-latest
+    # No Node setup needed: the check script only reads files with
+    # node:fs and does simple string transforms, same rationale as the
+    # engine-sync job below skipping Node setup. See
+    # docs/BUILD_PLAN_render_isolation_v1.md §3.3 -- services/render/ is a
+    # separate deployable that cannot `import` from src/lib, so
+    # render-types.ts, ssrf.ts, and ssrf-fetch.ts are copied across the
+    # boundary instead. This job fails the moment either side of a copied
+    # pair drifts from the other, so the render service can never
+    # silently fall behind a security fix landed only in the main app (or
+    # vice versa).
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check services/render's copied files against their main-app originals
+        run: node scripts/check-render-service-parity.mjs
+
+  render-service:
+    name: Render service typecheck + tests (services/render)
+    runs-on: ubuntu-latest
+    # services/render is its own deployable with its own package.json and
+    # dependency tree (playwright-core, @sparticuz/chromium, undici --
+    # deliberately NOT the root app's node_modules), so it gets its own
+    # install + typecheck + test steps here rather than folding into the
+    # root `typecheck` / `test` jobs above. Its unit tests (auth,
+    # handle-render-request, guard-context-routes) run against mocked
+    # Playwright/fetch, no real browser or network, so they need no
+    # special CI setup beyond `npm ci`.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # 22, not the repo-wide 20: @sparticuz/chromium 149 declares
+          # `engines: { node: "^22.17.0 || >=24.0.0" }`, so installing it
+          # under Node 20 emits an EBADENGINE warning and runs the browser
+          # on a Node version its own maintainers do not support. This job
+          # must match what actually runs the service in production (Vercel
+          # resolves the runtime from services/render/package.json's own
+          # engines field), or CI is testing a configuration that never
+          # ships. The root app's jobs stay on 20 -- this override is
+          # scoped to the render service alone.
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: services/render/package-lock.json
+      - name: Install dependencies
+        working-directory: services/render
+        run: npm ci
+      - name: Run tsc --noEmit
+        working-directory: services/render
+        run: npm run tsc
+      - name: Run vitest
+        working-directory: services/render
+        run: npm test
 
   lint:
     name: ESLint

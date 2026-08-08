@@ -329,6 +329,15 @@ export type PublicationDestination =
  * deliverables (theme + what's covered + the strategic rationale). Operator
  * authored; the firm reads it. See migration 20260624_content_periods.sql.
  */
+export interface StrategyBrief {
+  readerAndSituation: string;
+  workSupported: string;
+  whyThisWeek: string;
+  practicalAngle: string;
+  authorityAndEvidence: string;
+  websiteAndConversionRole: string;
+}
+
 export interface ContentPeriod {
   id: string;
   firm_id: string;
@@ -353,6 +362,7 @@ export interface ContentPeriod {
   theme: string | null;
   details: string | null;
   rationale: string | null;   // the "why": brand relevance + search intent
+  strategyBrief?: StrategyBrief | null;
   sort_index: number;
   created_by_role: string | null;
   created_by_id: string | null;
@@ -457,12 +467,17 @@ export type PublicationArtifactType =
   | "form"
   | "external_post";
 
+export type PublicationArtifactAssetRole =
+  | "website_article_hero_overlay"
+  | "website_homepage_cta_textless";
+
 export interface PublicationArtifact {
   id: string;
   firm_id: string;
   deliverable_id: string;
   version_id: string;
   artifact_type: PublicationArtifactType;
+  asset_role?: PublicationArtifactAssetRole | null;
   locale: string | null;
   destination: PublicationDestination | null;
   storage_bucket: string | null;
@@ -482,12 +497,25 @@ export interface PublicationArtifact {
   /**
    * When this artifact was retracted, or null when it is active. A unique
    * partial index enforces at most one active row per (deliverable_id,
-   * version_id, artifact_type, locale, destination) slot -- superseding an
+   * version_id, artifact_type, asset_role, locale, destination) slot -- superseding an
    * artifact stamps this column on the prior row rather than deleting it.
    * A publication receipt referencing a superseded artifact is rejected at
    * the database level. See content-period-export.ts and publish-kit-pure.ts,
    * which both now read this for exactly that staleness check.
    */
+  superseded_at: string | null;
+}
+
+export interface PublicationArtifactRoleAssignment {
+  id: string;
+  firm_id: string;
+  artifact_id: string;
+  deliverable_id: string;
+  version_id: string;
+  asset_role: PublicationArtifactAssetRole;
+  assigned_by_role: "operator";
+  assigned_by_id: string | null;
+  created_at: string;
   superseded_at: string | null;
 }
 

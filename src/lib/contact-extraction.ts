@@ -50,11 +50,17 @@ const EMAIL_RE = /\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b/;
 // rule — area codes never start with 0 or 1).
 const PHONE_NA_RE = /(?:\+?1[-.\s]?)?\(?([2-9]\d{2})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})\b/;
 
-// Bare-name line: 1-3 capitalised tokens, no digits/punctuation other
-// than apostrophe / hyphen (handles "O'Brien", "Jean-Claude"). Length
-// cap 30 per token matches extractContactName. The pattern is anchored
-// so the WHOLE chunk must be a name — rules out "Sarah Patel's email is".
-const BARE_NAME_RE = /^[A-Z][a-zA-Z'’\-]{1,29}(?:\s+[A-Z][a-zA-Z'’\-]{1,29}){0,2}$/;
+// Bare-name line: 1-3 letter tokens, no digits/punctuation other than
+// apostrophe / hyphen (handles "O'Brien", "Jean-Claude"). Length cap 30
+// per token matches extractContactName. The pattern is anchored so the
+// WHOLE chunk must be a name — rules out "Sarah Patel's email is".
+//
+// Case-insensitive (F3, 2026-08-06 field repro): people type their name
+// lowercase in chat constantly ("adriano 6475492106"). The original
+// pattern required a leading capital per token, which silently dropped
+// every lowercase reply. Casing is normalised at the call site via
+// titleCase(); this regex only judges shape, not case.
+const BARE_NAME_RE = /^[A-Za-z][a-zA-Z'’\-]{1,29}(?:\s+[A-Za-z][a-zA-Z'’\-]{1,29}){0,2}$/;
 
 // Tokens that look like proper nouns but aren't names (mirror of
 // extractor.ts NAME_BLOCKLIST, kept in sync manually because that one
@@ -106,12 +112,29 @@ export interface ExtractContactOpts {
 const NAME_INTRO_RE =
   /\b(?:my\s+name\s+is|i\s+am|i'?m|this\s+is|it'?s|name'?s|the\s+name'?s)\s+([A-Za-zÀ-ÖØ-öø-ÿ'’\-]{2,30}(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ'’\-]{2,30}){0,2})\b/i;
 
-/** Title-case each whitespace-separated token. */
+/**
+ * Title-case each whitespace-separated token, also capitalising after an
+ * internal hyphen or apostrophe ("jean-claude o'brien" -> "Jean-Claude
+ * O'Brien"). A naive per-token capitalise (capitalise-first-letter,
+ * lowercase-rest) turns "O'Brien" into "O'brien" and "Jean-Claude" into
+ * "Jean-claude" — this was latent until F3 (2026-08-06) started calling
+ * titleCase on the default bare-name path, which previously stored the
+ * raw chunk verbatim and so preserved correct casing by accident.
+ */
 function titleCase(s: string): string {
   return s
     .split(/\s+/)
     .filter(Boolean)
-    .map((t) => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase())
+    .map((token) =>
+      token
+        .split(/([-'’])/)
+        .map((part) =>
+          part === '-' || part === "'" || part === '’'
+            ? part
+            : part.charAt(0).toUpperCase() + part.slice(1).toLowerCase(),
+        )
+        .join(''),
+    )
     .join(' ');
 }
 
@@ -231,7 +254,10 @@ export function extractContactFromTurn(
       if (!BARE_NAME_RE.test(chunk)) continue;
       const firstToken = chunk.split(/\s+/)[0]?.toLowerCase() ?? '';
       if (NAME_BLOCKLIST.has(firstToken)) continue;
-      result.name = chunk;
+      // F3: normalise case (was previously stored verbatim, so an
+      // all-caps or lowercase reply landed in the brief as typed).
+      // No new filters added here — same guard set as before this fix.
+      result.name = titleCase(chunk);
       break;
     }
   }

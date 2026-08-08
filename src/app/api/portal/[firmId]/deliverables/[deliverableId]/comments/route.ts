@@ -56,9 +56,22 @@ export async function POST(
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) {
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (!detailResult.found || detailResult.detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+  const detail = detailResult.detail;
+  if (detail.versionsError || detail.commentsError || detail.approvalsError) {
+    return NextResponse.json(
+      { error: "could not verify the review history for this deliverable, try again" },
+      { status: 503 },
+    );
   }
 
   // A reply on an approval record: resolve the record first so version_id and

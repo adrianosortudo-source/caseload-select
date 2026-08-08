@@ -341,10 +341,15 @@ describe('processChannelInbound — closing message dispatch', () => {
     // The single send is the follow-up question, not a closing.
     expect(mocks.sendChannelMessage).toHaveBeenCalledTimes(1);
     const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
-    // Follow-up phrasing uses buildContactCaptureFollowUp (mocked above
-    // to return 'follow-up text'); the closing phrasing starts with
-    // "Thanks ..." and is what would NOT have been emitted on this path.
-    expect(sentText).toBe('follow-up text');
-    expect(sentText).not.toMatch(/^Thanks/);
+    // Updated 2026-08-07 (C2): this is a fresh turn (!isResume), so the
+    // first-ask intro fires and the processor uses the opener-less
+    // contactCaptureFirstAsk variant directly, NOT the mocked
+    // buildContactCaptureFollowUp (that mock is now only exercised on
+    // resume turns — see channel-intake-processor-phase-b-contact-loop.
+    // test.ts's turn-2 case). The original assertion's actual intent —
+    // this is the contact follow-up, not the "a lawyer is reviewing"
+    // closing — is preserved below.
+    expect(sentText).toContain('First, could you share your name');
+    expect(sentText).not.toMatch(/reviewing your matter/);
   });
 });

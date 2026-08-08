@@ -11,7 +11,7 @@
  * claim than release-readiness.
  */
 import type { PackageManifest, PackageManifestPiece } from "@/lib/publishing-package-control-room-manifest";
-import { targetsFilesHub } from "@/lib/publishing-package-control-room-manifest";
+import { targetsFilesHub, isLeadMagnetFormatFamily, isValidLeadMagnetCtaBehavior } from "@/lib/publishing-package-control-room-manifest";
 
 export type AssetStatus =
   | "required" | "missing" | "candidate" | "visually_selected" | "hash_verified"
@@ -103,8 +103,7 @@ function ctaPdfStatusForPiece(piece: PackageManifestPiece): OverviewRow["ctaPdfS
   if (!piece.cta.required) return "not_applicable";
   if (!piece.cta.target) return "missing";
   if (targetsFilesHub(piece.cta.target)) return "files_hub_blocked";
-  const isLeadMagnet = piece.formatFamily === "lead_magnet_document" || piece.formatFamily === "lead_magnet_landing_page";
-  if (isLeadMagnet && piece.cta.behavior !== "download") return "wrong_behavior";
+  if (isLeadMagnetFormatFamily(piece.formatFamily) && !isValidLeadMagnetCtaBehavior(piece.cta.behavior)) return "wrong_behavior";
   return "ok";
 }
 
@@ -134,7 +133,7 @@ function releaseBlockersForPiece(piece: PackageManifestPiece, assetsById: Map<st
 
   const ctaStatus = ctaPdfStatusForPiece(piece);
   if (ctaStatus === "files_hub_blocked") blockers.push("CTA points at the Files hub");
-  if (ctaStatus === "wrong_behavior") blockers.push("lead-magnet CTA behavior is not \"download\"");
+  if (ctaStatus === "wrong_behavior") blockers.push("lead-magnet CTA behavior must be \"download\" or \"gated_download\"");
   if (ctaStatus === "missing") blockers.push("required CTA has no target");
 
   return blockers;

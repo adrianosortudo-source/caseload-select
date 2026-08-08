@@ -178,8 +178,11 @@ describe('processChannelInbound — discovery follow-up phase', () => {
     const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
     // The slot question varies by classification; the common discovery
     // questions for a corporate / contract / vendor matter end with `?`
-    // and are NOT a "Thanks..." closing.
-    expect(sentText).not.toMatch(/^Thanks/);
+    // and are NOT the finalization closing. Updated 2026-08-07 (C2): this
+    // is a fresh turn, so the first-ask intro legitimately starts with
+    // "Thanks for reaching out." now — the original assertion guarded
+    // against the CLOSING message leading, not this. Narrowed to that.
+    expect(sentText).not.toContain('reviewing your matter');
     expect(sentText).toMatch(/\?/);
 
     // A session was created so the next inbound resumes.
@@ -337,10 +340,13 @@ describe('processChannelInbound — discovery follow-up phase', () => {
     expect(r.persisted).toBe(false);
     expect(r.reason).toBe('awaiting_contact');
     expect(r.followUpSent).toBe(true);
-    // The send is the contact follow-up (`follow-up text` from the mock).
+    // Updated 2026-08-07 (C2): fresh turn (!isResume), so the first-ask
+    // intro fires via the opener-less contactCaptureFirstAsk variant, not
+    // the mocked buildContactCaptureFollowUp ('follow-up text' — that
+    // mock is only exercised on resume turns).
     expect(mocks.sendChannelMessage).toHaveBeenCalledTimes(1);
     const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
-    expect(sentText).toBe('follow-up text');
+    expect(sentText).toContain('First, could you share your name');
   });
 });
 

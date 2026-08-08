@@ -1,0 +1,29 @@
+{
+  "_readme": [
+    "Registry of cron-route schedulers that live OUTSIDE this repo, plus",
+    "deliberately-unscheduled routes. Enforced by scripts/check-cron-contract.mjs",
+    "(runs in `npm run build` and CI). vercel.json crons are read directly and",
+    "are NOT duplicated here. pgCron entries mirror the live pg_cron jobs on",
+    "the production Supabase project (ssxryjxifwiivghglqer), verified",
+    "2026-08-07. If you add/remove a pg_cron job via migration, update this",
+    "file in the same PR — the guard fails the build on drift it can detect",
+    "(a manifest path with no route on disk, or a route with no registration)."
+  ],
+  "pgCron": [
+    { "jobname": "triage-backstop-hourly", "schedule": "7 * * * *", "path": "/api/cron/triage-backstop" },
+    { "jobname": "webhook-retry-5m", "schedule": "*/5 * * * *", "path": "/api/cron/webhook-retry" },
+    { "jobname": "expire-channel-intake-sessions-hourly", "schedule": "23 * * * *", "path": "/api/cron/expire-channel-intake-sessions" },
+    { "jobname": "notification-batch-5m", "schedule": "*/5 * * * *", "path": "/api/cron/notification-batch" },
+    { "jobname": "token-expiry-check-daily", "schedule": "41 6 * * *", "path": "/api/cron/token-expiry-check" },
+    { "jobname": "deadline-reminder-hourly", "schedule": "37 * * * *", "path": "/api/cron/deadline-reminder" },
+    { "jobname": "expire-web-intake-sessions-hourly", "schedule": "17 * * * *", "path": "/api/cron/expire-web-intake-sessions" },
+    { "jobname": "consent-log-repair-daily", "schedule": "52 5 * * *", "path": "/api/cron/consent-log-repair" },
+    { "jobname": "assist-reindex-daily", "schedule": "53 5 * * *", "path": "/api/cron/assist-reindex" },
+    { "jobname": "deploy-alarm-quarterly-drill", "schedule": "0 13 1 1,4,7,10 *", "path": "/api/internal/vercel-deployment-check" }
+  ],
+  "unscheduled": [
+    { "path": "/api/cron/cadence-dispatch", "reason": "Dormant real-send dispatch path; manual-trigger only; short-circuits unless CADENCE_REAL_SEND_ENABLED (per its docblock)." },
+    { "path": "/api/cron/cadence-runner", "reason": "Shadow cadence engine (CRM Migration Phase 2 rail 1); records what it WOULD send into outbound_messages with shadow=true and dispatches nothing. Its backing migration (supabase/migrations/20260703_cadence_engine_shadow.sql) IS applied to prod, so the engine is live-but-unscheduled, not inert: no scheduler means no shadow ledger accumulates on its own. Deliberately unscheduled per its docblock until the ledger has been eyeballed on a manual run, ahead of any rail cutover." },
+    { "path": "/api/cron/quiet-file-nudge", "reason": "J8 quiet-file nudge. Deliberately deferred, NOT an oversight: the schedule exists as a held-back draft at supabase/migrations-draft/20260702_quiet_file_nudge_cron_schedule.sql, and commit 11bc04f3 ('apply milestone-assistant schema to prod, defer cron scheduling') applied the schema half only. The gate is operator verification before it starts emailing lawyers daily. Verify with the read-only SQL in the route docblock, NOT by invoking the route: the route inserts notification_outbox rows, which notification-batch-5m drains into real Resend email within 5 minutes. Moot as of 2026-08-07 in any case: client_matters is empty (0 rows), so it would scan nothing. Revisit when the portal carries its first active matter." }
+  ]
+}
