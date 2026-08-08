@@ -49,6 +49,38 @@ const RENDER_SETTLE_MS = 1_500; // let web-vitals observers + fonts settle
 const MAX_REDIRECT_HOPS = 10;
 
 /**
+ * Ceiling on reading one intercepted response body. Deliberately shorter
+ * than NAV_TIMEOUT_MS: a body that has not finished streaming within this
+ * window is not worth stranding the whole render for, and the request is
+ * aborted rather than waited on. See the comment at the fulfill site for
+ * why this bound has to exist here rather than being inherited from the
+ * fetch's own AbortSignal.
+ */
+const BODY_READ_TIMEOUT_MS = 15_000;
+
+/**
+ * Rejects with `label` if `promise` has not settled within `ms`.
+ *
+ * The timer is always cleared, including on the success path, so a
+ * resolved promise never leaves a pending handle holding the Node event
+ * loop open -- which on a serverless runtime would keep the function
+ * billable and alive past its useful work.
+ */
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(label)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+/**
  * The Anthropic Messages API rejects any image whose longest edge exceeds
  * 8000 pixels ("At least one of the image dimensions exceed max allowed
  * size: 8000 pixels", HTTP 400). A full-page screenshot of a long
@@ -188,6 +220,28 @@ export async function guardContextRoutes(
 ): Promise<void> {
   let intercepted = 0;
   await context.route("**/*", async (route: Route) => {
+    // Belt and braces around the whole handler. Every branch below already
+    // ends in exactly one abort/continue/fulfill (audited line by line),
+    // but an intercepted request that is never settled does not fail --
+    // it hangs Chromium indefinitely, and then hangs context.close() on
+    // the way out, which is a 280s outage rather than an error. That
+    // failure mode is silent and expensive enough that it should be
+    // structurally impossible rather than merely absent today, so any
+    // escape from the logic below is caught here and the route aborted.
+    // Double-settling throws inside Playwright, hence the swallow: if the
+    // route was already settled normally, this is a no-op.
+    try {
+      await handleRoute(route);
+    } catch (err) {
+      blocked.push({
+        url: route.request().url(),
+        reason: `handler_escaped: ${err instanceof Error ? err.message : String(err)}`,
+      });
+      await route.abort().catch(() => undefined);
+    }
+  });
+
+  async function handleRoute(route: Route): Promise<void> {
     intercepted++;
     if (intercepted > MAX_INTERCEPTED_REQUESTS) {
       blocked.push({ url: route.request().url(), reason: "request_budget_exceeded" });
@@ -271,14 +325,47 @@ export async function guardContextRoutes(
     // finally reached this fulfill path. These three headers must be
     // dropped whenever the body is handed over decoded; Chromium
     // recomputes the correct length itself.
-    const bodyBuffer = Buffer.from(await finalResponse.arrayBuffer());
-    const STRIP_HEADERS = new Set(["content-encoding", "content-length", "transfer-encoding"]);
-    const headers: Record<string, string> = {};
-    finalResponse.headers.forEach((value, key) => {
-      if (!STRIP_HEADERS.has(key.toLowerCase())) headers[key] = value;
-    });
-    await route.fulfill({ status: finalResponse.status, headers, body: bodyBuffer });
-  });
+    // Reading the body is the ONE step in this handler that had neither a
+    // timeout nor a catch, and that combination is what stranded Chromium
+    // for 280s on 2026-08-07. Two facts combine into the bug:
+    //
+    //   1. fetch() resolves when RESPONSE HEADERS arrive, not when the
+    //      body is read. ssrfSafeFetchOneHop clears its abort timer in a
+    //      `finally` at that moment (ssrf-fetch.ts), so the AbortSignal
+    //      that bounded the request is already cancelled by the time the
+    //      body is streamed -- arrayBuffer() below ran completely
+    //      unprotected.
+    //   2. If arrayBuffer() then stalls, this handler never reaches
+    //      fulfill() and never calls abort(), so the intercepted request
+    //      is never settled. Chromium waits on it forever. page.goto()
+    //      does eventually hit its own 20s timeout and throw, but the
+    //      cleanup path then blocks in context.close() waiting on this
+    //      still-pending handler -- which is why the failure surfaced as
+    //      the outer render_timeout (504) rather than a render_failed
+    //      (422), and why it reproduced on a page as trivial as
+    //      example.com.
+    //
+    // A hang is not a rejection, so no catch anywhere upstream could see
+    // it. Bounding the read and aborting on failure is what makes it
+    // observable and non-fatal.
+    try {
+      const bodyBuffer = Buffer.from(
+        await withTimeout(finalResponse.arrayBuffer(), BODY_READ_TIMEOUT_MS, "body_read_timeout")
+      );
+      const STRIP_HEADERS = new Set(["content-encoding", "content-length", "transfer-encoding"]);
+      const headers: Record<string, string> = {};
+      finalResponse.headers.forEach((value, key) => {
+        if (!STRIP_HEADERS.has(key.toLowerCase())) headers[key] = value;
+      });
+      await route.fulfill({ status: finalResponse.status, headers, body: bodyBuffer });
+    } catch (err) {
+      blocked.push({
+        url: currentUrl,
+        reason: err instanceof Error ? err.message : String(err),
+      });
+      await route.abort().catch(() => undefined);
+    }
+  }
 }
 
 const WEB_VITALS_COLLECTOR = /* js */ `
