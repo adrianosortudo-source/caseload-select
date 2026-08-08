@@ -93,6 +93,32 @@ describe("ScreenEnginePublicWidget clarify menu render (DR-112)", () => {
     expect(screen.queryByText("We can get that arranged.")).toBeNull();
   });
 
+  it("Back after a chip tap returns to the clarify menu, not to kickoff", async () => {
+    renderWidget();
+    await submitKickoff(META_REQUEST);
+    await waitFor(() =>
+      expect(screen.queryByText("We can get that arranged.")).not.toBeNull(),
+    );
+
+    fireEvent.click(screen.getByText("Employment"));
+    await waitFor(() =>
+      expect(screen.queryByText("What best describes the situation?")).not.toBeNull(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Go back" }));
+
+    // Back lands on the clarify menu again (chip tap pushed history, same
+    // convention as answer()) — not the kickoff textarea, which is what a
+    // missing history push would produce.
+    await waitFor(() =>
+      expect(screen.queryByText("We can get that arranged.")).not.toBeNull(),
+    );
+    expect(
+      screen.queryByRole("textbox", { name: "Tell us how a lawyer can help you today." }),
+    ).toBeNull();
+    expect(screen.queryByText("Employment")).not.toBeNull();
+  });
+
   it("shows the default (non-acknowledgment) menu for a vague, non-meta opener", async () => {
     renderWidget();
     await submitKickoff(UNCLASSIFIABLE);

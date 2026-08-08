@@ -798,6 +798,10 @@ export function ScreenEnginePublicWidget({
         return;
       }
       if (!state) return;
+      // Push the pre-chip state onto history (DR-112, same convention as
+      // answer()), so Back from the routed lane's question returns to
+      // this clarify menu rather than skipping past it to kickoff.
+      setHistory((items) => [...items, state]);
       mutate(applyClarifyChoice(state, value as MatterType));
     }
 
