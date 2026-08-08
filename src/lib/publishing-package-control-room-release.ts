@@ -111,7 +111,7 @@ function experienceGate(piece: PackageManifestPiece, row: OverviewRow): ReleaseG
     check("experience_rendered_verified", row.assetStatus === "rendered_verified" || row.assetStatus === "release_ready", "not_rendered_verified", "Selected asset has cleared rendered verification"),
     check("experience_cta_present", !ctaRequired || row.ctaPdfStatus !== "missing", "missing_cta", "Required CTA has a target"),
     check("experience_no_files_hub", row.ctaPdfStatus !== "files_hub_blocked", "files_hub_cta", "CTA does not point at the Files hub"),
-    check("experience_cta_behavior", !ctaRequired || row.ctaPdfStatus !== "wrong_behavior", "wrong_cta_behavior", "Lead-magnet CTA behavior is exactly \"download\""),
+    check("experience_cta_behavior", !ctaRequired || row.ctaPdfStatus !== "wrong_behavior", "wrong_cta_behavior", "Lead-magnet CTA behavior is \"download\" or \"gated_download\""),
   ];
   return { gate: "experience", checks, allPass: checks.every((c) => c.status === "pass") };
 }

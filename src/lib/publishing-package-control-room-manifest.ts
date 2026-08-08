@@ -134,6 +134,16 @@ export function targetsFilesHub(target: string): boolean {
   return /(^|\/)files(\/|$|\?)/i.test(target);
 }
 
+/** Section 16 / 8: the two format families whose CTA is a lead-magnet download rather than an ordinary content link. Exported so every consumer of this manifest (the validator itself, the Overview status, the Release gate) asks the same question instead of re-deriving it and risking drift. */
+export function isLeadMagnetFormatFamily(formatFamily: unknown): boolean {
+  return formatFamily === "lead_magnet_document" || formatFamily === "lead_magnet_landing_page";
+}
+
+/** Section 16 / 8: the only CTA behaviors a lead-magnet piece may declare. "download" is a direct file link; "gated_download" (added 2026-08-07) is the accurate value for a CTA that leads to a form-gated landing page instead of a direct file. Shared for the same reason as isLeadMagnetFormatFamily -- the Overview/Release surfaces must never disagree with the validator about what counts as valid. */
+export function isValidLeadMagnetCtaBehavior(behavior: unknown): boolean {
+  return behavior === "download" || behavior === "gated_download";
+}
+
 /**
  * Validates a raw, already-JSON-parsed Control Room package manifest.
  * Merges the source spec's Section 8 (manifest validation) and Section 17
@@ -252,8 +262,8 @@ export function validatePackageManifest(raw: unknown): PackageManifestValidation
         }
 
         // Section 16 / 8: lead-magnet CTA rules -- /files is a hard blocker,
-        // behavior must be exactly "download", regardless of what the label says.
-        const isLeadMagnet = formatFamily === "lead_magnet_document" || formatFamily === "lead_magnet_landing_page";
+        // behavior must be "download" or "gated_download", regardless of what the label says.
+        const isLeadMagnet = isLeadMagnetFormatFamily(formatFamily);
         if (isLeadMagnet && typeof ctaTarget === "string" && targetsFilesHub(ctaTarget)) {
           errors.push({ path: `${ctaBase}.target`, message: `lead-magnet CTA must not point at the Files hub (got ${JSON.stringify(ctaTarget)})` });
         }
@@ -265,7 +275,7 @@ export function validatePackageManifest(raw: unknown): PackageManifestValidation
         // correct "download" CTA. Both values remain accepted so this does not retroactively
         // invalidate already-shipped pieces recorded as "download"; new/updated lead-magnet
         // pieces should use "gated_download".
-        if (isLeadMagnet && ctaBehavior !== undefined && ctaBehavior !== "download" && ctaBehavior !== "gated_download") {
+        if (isLeadMagnet && ctaBehavior !== undefined && !isValidLeadMagnetCtaBehavior(ctaBehavior)) {
           errors.push({ path: `${ctaBase}.behavior`, message: `lead-magnet CTA behavior must be "download" or "gated_download" (got ${JSON.stringify(ctaBehavior)})` });
         }
 
