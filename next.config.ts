@@ -278,6 +278,29 @@ const nextConfig: NextConfig = {
         destination: "/",
         permanent: true,
       },
+      // /next-steps outage fix (2026-08-08): the page embedded the GHL
+      // strategy-call booking widget in an iframe. This app's default CSP
+      // (mainSecurityHeaders, see the header comment above) has no
+      // frame-src, so it falls back to default-src 'self' and blocks any
+      // third-party frame outright -- verified live, a real
+      // securitypolicyviolation naming api.leadconnectorhq.com as the
+      // blocked URI. Every visitor who clicked "Book a Strategy Call" got
+      // an empty box where the calendar should be.
+      //
+      // Fix is a redirect to the working, already-qualified booking flow
+      // at /tools/start-a-conversation (its own toolsEmbedSecurityHeaders
+      // tier carries frame-src for cal.com) rather than adding frame-src
+      // to the whole (marketing) group for one page: /next-steps no
+      // longer exists as a route (the GHL iframe page is deleted), so
+      // there is nothing left under (marketing) that needs to frame
+      // anything. Permanent (308): the page is gone for good, and any
+      // existing bookmark, backlink, or indexed URL should resolve to the
+      // real destination rather than 404.
+      {
+        source: "/next-steps",
+        destination: "/tools/start-a-conversation",
+        permanent: true,
+      },
     ];
   },
 };
