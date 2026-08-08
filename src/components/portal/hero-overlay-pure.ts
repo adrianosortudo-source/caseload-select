@@ -1,30 +1,36 @@
 /**
- * Decides whether a deliverable's preview hero carries the live-HTML headline
- * overlay, and which anchor it uses.
+ * Decides whether a deliverable's preview hero carries a live-HTML headline
+ * overlay. Under DR-114 the answer is always no.
  *
- * Why this exists: the weekly masters and their web crops are deliberately
- * text-free (CSB `format-image-web`: "Web surfaces never bake text into an
- * image ... Because the web derivative is text-free, one asset serves English
- * and Portuguese"). The website sets the eyebrow and headline as live HTML
- * over the photograph. The portal preview previously rendered the title above
- * a bare photograph instead, so a reviewer could not see the finished article
- * and would reasonably report the image as "missing its text".
+ * WHY THIS RETURNS NULL, AND WHY THAT IS THE POINT (Operator ruling, 2026-08-08,
+ * DR-114): every article image now carries its eyebrow and headline BAKED into
+ * the raster, on every surface -- website article hero, homepage feature and
+ * card, and the LinkedIn Article cover. The image arrives with its words already
+ * in it. Drawing a second headline over it in HTML puts the same line on the
+ * card twice, which is exactly the defect Week 3 shipped and had to be fixed.
  *
- * The anchor is the CSB's fifth axis, scrim text anchor, applied to the hero:
- * the Counsel Note anchors LOW over a bottom-up linear scrim
- * (`format-image-hero`); the Clause in the Margin anchors IN THE MARGIN, into
- * the empty ground its composition already reserves, over a radial vignette
- * (`format-clause-overlay`, which states a Clause hero built to the Counsel
- * Note's bottom-band values "is now the defect, not the other way round").
+ * The rule this replaces is RETIRED -- do not restore it from the CSB. The CSB's
+ * `format-image-web` still reads "Web surfaces never bake text into an image ...
+ * Because the web derivative is text-free, one asset serves English and
+ * Portuguese", and this module used to quote that as its justification. The
+ * ruling reverses it: baked words are language-specific, so EN and PT are now
+ * separate files, and the Operator was shown that doubled production cost and
+ * accepted it. Where the CSB and DR-114 disagree, DR-114 governs until Part XI
+ * change control lands the amendment.
  *
- * Pure: no I/O, no DOM. The renderer composes this with the actual markup.
+ * The anchor distinction below is still real, but it moved: the compositor
+ * (drg-content-skills, runtime/scripts/render_hero_overlay.py) now bakes the
+ * Counsel Note low-left and the Clause into its upper-right open margin. This
+ * module no longer positions anything; it only guarantees the portal draws
+ * nothing on top.
+ *
+ * Pure: no I/O, no DOM.
  */
 
 export type HeroOverlayAnchor = "low" | "margin";
 
 export interface HeroOverlay {
-  /** Rendered above the headline, in brass small caps. The deliverable's own
-   *  format name, so a Portuguese row yields its Portuguese eyebrow. */
+  /** Rendered above the headline, in brass small caps. */
   eyebrow: string;
   anchor: HeroOverlayAnchor;
 }
@@ -41,6 +47,11 @@ export interface HeroOverlayInput {
  * Clause-family format names across the locales DRG publishes in. Matched
  * loosely (case- and accent-insensitive substring) so a renamed or
  * re-cased format still resolves rather than silently falling back.
+ *
+ * Retained because it names which anchor the compositor bakes for a given
+ * format, and because the Portuguese names moved under DR-115 ("Cláusula
+ * Comentada" replaced "Cláusula na Margem"); accent-insensitive matching is
+ * what let that rename land without breaking the mapping.
  */
 const CLAUSE_MARKERS = ["clause", "clausula"];
 
@@ -58,22 +69,13 @@ export function isMarginAnchoredFormat(format: string | null): boolean {
 }
 
 /**
- * Returns the overlay for a deliverable, or null when the preview should show
- * the photograph plain.
+ * Always null: no deliverable's preview hero gets a live-HTML overlay.
  *
- * Only website articles get one. A LinkedIn feed cover and a GBP card already
- * carry their text baked into the raster under their own rules, so drawing a
- * second headline over them would restate the same line twice -- the failure
- * `format-image-linkedin` names when it says the baked line "loses". A lead
- * magnet, a landing page, and the Minute are not article surfaces at all.
+ * Kept as a named function rather than inlining `null` at the call site so
+ * there is exactly one place to look when asking "why doesn't the portal draw
+ * the headline any more", and exactly one place to change if the ruling ever
+ * moves again. The parameter is deliberately still accepted for that reason.
  */
-export function heroOverlayFor(d: HeroOverlayInput): HeroOverlay | null {
-  if (d.deliverable_role !== "article") return null;
-  if (d.publication_destination !== "firm_website") return null;
-  const eyebrow = (d.format ?? "").trim();
-  if (!eyebrow) return null;
-  return {
-    eyebrow,
-    anchor: isMarginAnchoredFormat(d.format) ? "margin" : "low",
-  };
+export function heroOverlayFor(_d: HeroOverlayInput): HeroOverlay | null {
+  return null;
 }
