@@ -20,7 +20,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: {} }));
 vi.mock("@/lib/portal-auth", () => ({ getOperatorSession: async () => null }));
 
-import { extractSchemaSummary, checkSchemaMarkup, checkAiVisibility, checkTechnicalSecurity } from "../route";
+import { extractSchemaSummary, checkSchemaMarkup, checkAiVisibility, checkTechnicalSecurity } from "../page-checks";
 import { computeWeightedScore, aiScoresFromItems, parseRobotsTxt } from "../engine-core";
 import type { SchemaSummary } from "../analysis";
 

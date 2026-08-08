@@ -16,7 +16,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: {} }));
 vi.mock("@/lib/portal-auth", () => ({ getOperatorSession: async () => null }));
 
-import { countMixedContentResources } from "../route";
+import { countMixedContentResources } from "../page-checks";
 
 describe("countMixedContentResources", () => {
   it("does NOT count the WordPress XFN profile link (rel=profile, never fetched)", () => {
