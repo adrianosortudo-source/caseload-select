@@ -108,6 +108,17 @@
  *       (one operator, occasional Discovery interviews), so the cap is
  *       purely an abuse backstop.
  *
+ *   startConversation  10 per 10 minutes
+ *     - POST /api/start-conversation. Public, same-origin, no auth (the
+ *       flow's own tool page embeds it, and static-site conversation.html
+ *       frames that page). Each successful call writes a caseload_prospects
+ *       row plus a consent-log row and sends a Resend brief to Adriano.
+ *       Fail-closed (see FAIL_CLOSED_BUCKETS below): unlike intake or
+ *       seoCheck, this route protects CaseLoad Select's OWN inbox from
+ *       being flooded, not a client firm's, so an unconfigured limiter
+ *       should deny rather than silently let scripted spam through to
+ *       Adriano's email.
+ *
  * Per-route bucket selection is done by the caller. Caller passes the
  * bucket name + the IP. We never trust the request body for IP
  * resolution; the helper reads x-forwarded-for and x-real-ip in that
@@ -136,7 +147,8 @@ export type RateLimitBucket =
   | "firmVoiceBuilder"
   | "memo"
   | "screenDemoReport"
-  | "discoveryReport";
+  | "discoveryReport"
+  | "startConversation";
 
 interface BucketConfig {
   limit: number;
@@ -159,6 +171,7 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   memo:              { limit: 60, windowSeconds: 60 },   // 60 per minute (read-only, widget + portal)
   screenDemoReport:  { limit: 10, windowSeconds: 3600 }, // 10 per hour (public marketing form)
   discoveryReport:   { limit: 20, windowSeconds: 3600 }, // 20 per hour (ChatGPT Action caller)
+  startConversation: { limit: 10, windowSeconds: 600 },  // 10 per 10 minutes (public, unauth, fail-closed)
 };
 
 /**
@@ -270,6 +283,11 @@ const FAIL_CLOSED_BUCKETS: ReadonlySet<RateLimitBucket> = new Set<RateLimitBucke
   "requestLink",
   "otpSend",
   "otpVerify",
+  // startConversation (2026-08-07): unlike intake/seoCheck, this route
+  // protects CaseLoad Select's OWN inbox, not a client firm's -- an
+  // unconfigured limiter must deny rather than let scripted spam through
+  // to Adriano's email. See the bucket's own doc comment above.
+  "startConversation",
 ]);
 
 function failClosedMode(): boolean {

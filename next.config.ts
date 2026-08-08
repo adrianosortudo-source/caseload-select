@@ -24,26 +24,31 @@ const scriptSrc = process.env.NODE_ENV === "production"
  *    allow-listing is a follow-up (would need a request-time middleware
  *    decision based on intake_firms.allowed_embed_origins).
  *
- * 3. /tools/seo-check, /screen-demo, and /tools/firm-voice-builder
- *    (2026-08-06, Tools embed decision) — same CSP, frame-ancestors scoped
- *    to CaseLoad Select's own marketing origins only (not '*' like
+ * 3. /tools/seo-check, /screen-demo, /tools/firm-voice-builder, and
+ *    /tools/start-a-conversation (2026-08-06, Tools embed decision; the
+ *    fourth route added 2026-08-07 per
+ *    BUILD_PLAN_start_conversation_flow_v1.md) — same CSP, frame-ancestors
+ *    scoped to CaseLoad Select's own marketing origins only (not '*' like
  *    /widget/*). These public tool pages are embedded inline on the
- *    Version3_CaseLoadSelect/tools.html directory so a visitor can run them
- *    without leaving the page. Unlike /widget/*, this is not meant to be
- *    embeddable by arbitrary firm websites, so the allow-list stays narrow
- *    rather than open. /tools/firm-voice-builder ships noindex (its own
- *    page.tsx metadata) and was previously unlinked pending an email-gate
- *    and consent-wiring follow-up (BUILD_PLAN_firm_voice_builder_tool_v1.md
- *    S8); Adriano directed embedding it now regardless, 2026-08-06.
- *    http://localhost:3300 is also on this allow-list (2026-08-06): the
- *    Version3_CaseLoadSelect static site has no deployment target yet, so
- *    Adriano previews tools.html via a local `serve` static server on that
- *    port. Low risk to add permanently: these three routes carry no auth,
- *    no session, and no per-visitor state to hijack by framing, so a
- *    malicious page framing them from localhost gains nothing a real
- *    visitor couldn't already do by visiting the URL directly. Remove once
- *    tools.html has a real deployed origin and local-preview testing is
- *    no longer needed.
+ *    Version3_CaseLoadSelect static site (tools.html and, for
+ *    start-a-conversation, the new conversation.html) so a visitor can run
+ *    them without leaving the page. Unlike /widget/*, this is not meant to
+ *    be embeddable by arbitrary firm websites, so the allow-list stays
+ *    narrow rather than open. /tools/firm-voice-builder ships noindex (its
+ *    own page.tsx metadata) and was previously unlinked pending an
+ *    email-gate and consent-wiring follow-up
+ *    (BUILD_PLAN_firm_voice_builder_tool_v1.md S8); Adriano directed
+ *    embedding it now regardless, 2026-08-06. /tools/start-a-conversation
+ *    also ships noindex until launch (its own page.tsx metadata), same
+ *    posture. http://localhost:3300 is also on this allow-list
+ *    (2026-08-06): the Version3_CaseLoadSelect static site has no
+ *    deployment target yet, so Adriano previews its pages via a local
+ *    `serve` static server on that port. Low risk to add permanently: these
+ *    four routes carry no auth, no session, and no per-visitor state to
+ *    hijack by framing, so a malicious page framing them from localhost
+ *    gains nothing a real visitor couldn't already do by visiting the URL
+ *    directly. Remove once the static site has a real deployed origin and
+ *    local-preview testing is no longer needed.
  *
  * CSP design notes:
  * - script-src 'self' 'unsafe-inline' — Next.js 16 with React Server
@@ -212,6 +217,13 @@ const nextConfig: NextConfig = {
         headers: toolsEmbedSecurityHeaders,
       },
       {
+        // Added 2026-08-07 (BUILD_PLAN_start_conversation_flow_v1.md):
+        // the Start a Conversation flow, single route, no subpaths, framed
+        // inline by the new static conversation.html.
+        source: "/tools/start-a-conversation",
+        headers: toolsEmbedSecurityHeaders,
+      },
+      {
         // Catch-all for EVERYTHING that is NOT a widget or a tools-embed
         // route. Negative lookahead is required here because Next.js
         // headers() MERGES headers from every matching rule rather than
@@ -220,7 +232,7 @@ const nextConfig: NextConfig = {
         // both their embeddable set AND the strict main-app set, and the
         // latter's X-Frame-Options: DENY would block iframe embedding.
         source:
-          "/((?!widget/|widget-public/|tools/seo-check|tools/firm-voice-builder|screen-demo).*)",
+          "/((?!widget/|widget-public/|tools/seo-check|tools/firm-voice-builder|tools/start-a-conversation|screen-demo).*)",
         headers: mainSecurityHeaders,
       },
     ];

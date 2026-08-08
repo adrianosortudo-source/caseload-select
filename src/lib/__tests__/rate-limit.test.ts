@@ -124,6 +124,55 @@ describe("checkRateLimit — fail-open when Upstash env vars are missing", () =>
   });
 });
 
+// ─── checkRateLimit fail-closed buckets ────────────────────────────────────
+//
+// startConversation was added to FAIL_CLOSED_BUCKETS alongside requestLink,
+// otpSend, and otpVerify (BUILD_PLAN_start_conversation_flow_v1.md): unlike
+// intake/seoCheck, that route protects CaseLoad Select's OWN inbox, so an
+// unconfigured limiter must deny rather than silently let scripted spam
+// through to Adriano's email. This pins the acceptance criterion directly:
+// "Rate-limit bucket present in FAIL_CLOSED_BUCKETS (test)."
+
+describe("checkRateLimit — fail-closed buckets when RATE_LIMIT_FAIL_CLOSED=true", () => {
+  const origUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const origToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const origFailClosed = process.env.RATE_LIMIT_FAIL_CLOSED;
+
+  beforeEach(() => {
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    process.env.RATE_LIMIT_FAIL_CLOSED = "true";
+  });
+
+  afterEach(() => {
+    if (origUrl === undefined) delete process.env.UPSTASH_REDIS_REST_URL;
+    else process.env.UPSTASH_REDIS_REST_URL = origUrl;
+    if (origToken === undefined) delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    else process.env.UPSTASH_REDIS_REST_TOKEN = origToken;
+    if (origFailClosed === undefined) delete process.env.RATE_LIMIT_FAIL_CLOSED;
+    else process.env.RATE_LIMIT_FAIL_CLOSED = origFailClosed;
+  });
+
+  it("denies startConversation when the limiter is unconfigured and fail-closed mode is on", async () => {
+    const r = await checkRateLimit("startConversation", "203.0.113.5");
+    expect(r.ok).toBe(false);
+    expect(r.active).toBe(false);
+    expect(r.limit).toBe(10);
+  });
+
+  it("still fails open for a bucket NOT in FAIL_CLOSED_BUCKETS (intake)", async () => {
+    const r = await checkRateLimit("intake", "203.0.113.5");
+    expect(r.ok).toBe(true);
+  });
+
+  it("also denies the pre-existing fail-closed buckets (requestLink, otpSend, otpVerify)", async () => {
+    for (const bucket of ["requestLink", "otpSend", "otpVerify"] as const) {
+      const r = await checkRateLimit(bucket, "203.0.113.5");
+      expect(r.ok).toBe(false);
+    }
+  });
+});
+
 // ─── rateLimitHeaders ──────────────────────────────────────────────────────
 
 describe("rateLimitHeaders", () => {
