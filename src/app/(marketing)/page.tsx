@@ -61,7 +61,7 @@ export default function MarketingHomePage() {
             where qualified cases are being lost, and decide together whether
             CaseLoad Select is the right fit for your practice.
           </p>
-          <a href="/next-steps" className="btn-primary reveal">
+          <a href="/tools/start-a-conversation" className="btn-primary reveal">
             Book a Strategy Call
           </a>
           <p
