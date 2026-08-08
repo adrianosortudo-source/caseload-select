@@ -256,10 +256,26 @@ export async function guardContextRoutes(
       return;
     }
 
+    // finalResponse.arrayBuffer() is the DECODED body: undici/fetch
+    // transparently decompresses gzip/br/deflate before handing it back.
+    // So the body passed to route.fulfill() is already plain bytes -- but
+    // the response headers still describe the ON-THE-WIRE encoding that no
+    // longer applies. Copying content-encoding / content-length /
+    // transfer-encoding verbatim tells Chromium "these bytes are
+    // gzip-compressed and N bytes long" about a body that is neither, so
+    // Chromium either fails to decode or waits for compressed data that
+    // never arrives -- which is exactly how a render of even a trivial
+    // page (example.com) hung to the 280s timeout on 2026-08-07 once the
+    // earlier crash-before-navigation bugs (#136/#137 module loading,
+    // #138 concurrent single-process contexts) were cleared and execution
+    // finally reached this fulfill path. These three headers must be
+    // dropped whenever the body is handed over decoded; Chromium
+    // recomputes the correct length itself.
     const bodyBuffer = Buffer.from(await finalResponse.arrayBuffer());
+    const STRIP_HEADERS = new Set(["content-encoding", "content-length", "transfer-encoding"]);
     const headers: Record<string, string> = {};
     finalResponse.headers.forEach((value, key) => {
-      headers[key] = value;
+      if (!STRIP_HEADERS.has(key.toLowerCase())) headers[key] = value;
     });
     await route.fulfill({ status: finalResponse.status, headers, body: bodyBuffer });
   });
