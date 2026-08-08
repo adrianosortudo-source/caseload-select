@@ -59,6 +59,30 @@ const MAX_REDIRECT_HOPS = 10;
 const BODY_READ_TIMEOUT_MS = 15_000;
 
 /**
+ * Ceiling on a BrowserContext.close() or Browser.close() call. Neither
+ * Playwright method accepts a `timeout` option (checked directly against
+ * the installed playwright-core type definitions -- there is no native
+ * way to bound either call), so a hang inside Chromium's own teardown is
+ * otherwise unrecoverable: an `await` on a promise that never settles
+ * blocks forever, and no `.catch()` can help, because nothing rejects.
+ *
+ * This is exactly what production logs showed on 2026-08-07 after the
+ * body-read-hang fix (#144): a single-viewport render (mobile) completed
+ * cleanly end to end in under 2 seconds, phase markers and all, then
+ * NOTHING -- no further phase markers, no error, no second viewport --
+ * until the outer 280s budget fired. The mobile capture's own
+ * `context.close()` in its `finally` block is the only await between
+ * "mobile succeeded" and "desktop should have started"; it never
+ * returning is consistent with every observed symptom. This is a known
+ * class of instability under @sparticuz/chromium's forced
+ * --single-process flag (see README.md): Chromium's single-process mode
+ * does not always tear down a context's compositor/renderer state
+ * cleanly, and there is no upstream fix to wait for from this service's
+ * side -- only a bound on how long it is allowed to try.
+ */
+const CLOSE_TIMEOUT_MS = 10_000;
+
+/**
  * Rejects with `label` if `promise` has not settled within `ms`.
  *
  * The timer is always cleared, including on the success path, so a
@@ -991,17 +1015,22 @@ async function captureViewport(
       renderMs: Date.now() - start,
     };
   } finally {
-    // Never let cleanup mask the real failure. When the browser has
-    // already died, context.close() throws "Target page, context or
-    // browser has been closed" -- and because that throw happens in a
-    // finally block, it REPLACES whatever error actually caused the
-    // failure, which is the error worth seeing. That is exactly what
-    // happened on the 2026-08-07 production renders: every real cause
-    // was invisible behind a close() error, and the logs showed only the
-    // symptom. Swallowing it here is safe: a context on a browser that
-    // is about to be closed (see renderUrl's finally) needs no explicit
-    // cleanup to avoid a leak.
-    await context.close().catch(() => undefined);
+    // Never let cleanup mask the real failure -- and never let it hang
+    // forever either. context.close() can throw "Target page, context or
+    // browser has been closed" when the browser has already died: a
+    // throw inside finally REPLACES whatever error actually caused the
+    // failure, which is the one worth seeing, so it is swallowed (safe:
+    // renderUrl closes the whole browser next, so this context needs no
+    // explicit cleanup to avoid leaking). But it can also simply never
+    // resolve at all -- no throw, nothing to catch -- which is the
+    // failure mode CLOSE_TIMEOUT_MS exists for; see that constant's own
+    // comment for the production evidence. Bounding it turns an
+    // unrecoverable 280s stall into a fast, logged, forward-progressing
+    // failure.
+    await withTimeout(context.close(), CLOSE_TIMEOUT_MS, "context_close_timeout").catch((err) => {
+      blocked.push({ url: "(cleanup)", reason: err instanceof Error ? err.message : String(err) });
+    });
+    phase("context closed (or close timed out)");
   }
 }
 
@@ -1033,9 +1062,12 @@ export async function renderUrl(url: string): Promise<RenderRunResult> {
     }
     return { captures, totalMs: Date.now() - start };
   } finally {
-    // Same masking rationale as captureViewport's own cleanup above: if
-    // the browser is already gone, close() throws and would replace the
-    // real error on the way out.
-    await browser.close().catch(() => undefined);
+    // Same masking rationale as captureViewport's own cleanup above, and
+    // the same unbounded-hang risk CLOSE_TIMEOUT_MS exists for: if
+    // browser.close() throws, that must not replace a real upstream
+    // error; if it never resolves at all, waiting on it forever would
+    // strand the whole function for no purpose -- the browser process is
+    // going away in either case, successfully or not.
+    await withTimeout(browser.close(), CLOSE_TIMEOUT_MS, "browser_close_timeout").catch(() => undefined);
   }
 }
