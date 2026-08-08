@@ -25,7 +25,7 @@ import {
   scoreItems,
   type CategoryResult,
 } from "../engine-core";
-import { checkHreflang, checkSchemaMarkup, extractSchemaSummary, checkEntitySameAs } from "../route";
+import { checkHreflang, checkSchemaMarkup, extractSchemaSummary, checkEntitySameAs } from "../page-checks";
 import type { SchemaSummary } from "../analysis";
 
 describe("applyPageTypeApplicability: exempted items are scored:false, not free passes (A1)", () => {

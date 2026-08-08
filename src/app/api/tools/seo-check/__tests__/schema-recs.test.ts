@@ -18,7 +18,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: {} }));
 vi.mock("@/lib/portal-auth", () => ({ getOperatorSession: async () => null }));
 
-import { extractSchemaSummary, checkSchemaMarkup } from "../route";
+import { extractSchemaSummary, checkSchemaMarkup } from "../page-checks";
 import type { SchemaSummary } from "../analysis";
 
 const ldjson = (obj: unknown) => `<script type="application/ld+json">${JSON.stringify(obj)}</script>`;
