@@ -172,8 +172,24 @@ export async function handleRenderRequest(
     return { status: 200, body: result };
   } catch (err) {
     if (err instanceof Error && err.message === "render_timeout") {
+      console.error(`[render] timed out after ${timeoutMs}ms rendering ${parsed.url}`);
       return errorResponse("render_timeout", "Rendering this site exceeded the time budget.");
     }
+    // Logged, never swallowed -- the same discipline the main app's own
+    // route.ts applies to this pipeline's other half, and for the same
+    // reason: the caller-facing message is deliberately generic (it must
+    // not leak why a render failed to an attacker probing the service),
+    // so without this line an operator debugging a failing render has
+    // literally nothing to work from. Omitting it cost a full
+    // diagnosis cycle on the first real deploy: a render failed in 23ms
+    // with "Could not render this site." and no way to tell a missing
+    // Chromium binary from a navigation error without adding this and
+    // redeploying. The stack matters as much as the message here, since
+    // launch failures surface deep inside playwright-core.
+    console.error(
+      `[render] failed for ${parsed.url}:`,
+      err instanceof Error ? `${err.message}\n${err.stack}` : String(err)
+    );
     return errorResponse("render_failed", "Could not render this site.");
   } finally {
     state.inFlight--;
