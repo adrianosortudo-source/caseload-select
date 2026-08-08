@@ -41,7 +41,24 @@ function matterClassificationInferred(state: EngineState): boolean {
 
 // ─── Matter snapshot ──────────────────────────────────────────────────────
 
+/**
+ * Contact-request opening prefix (DR-112). When the lead's opener was a
+ * bare request to speak with a lawyer (no matter facts), the brief says
+ * so plainly, once, before the matter snapshot line. Contact-request
+ * openers usually end up here via a clarify-menu pick, so the snapshot
+ * below is the matter the lead chose from the menu, not the (empty)
+ * original description; this line gives the lawyer that context.
+ */
+function buildLeadIntentPrefix(state: EngineState): string {
+  if (state.lead_intent !== 'contact_request') return '';
+  return 'The lead opened by asking to speak with a lawyer, then provided the details below. ';
+}
+
 function buildMatterSnapshot(state: EngineState): string {
+  return buildLeadIntentPrefix(state) + buildMatterSnapshotBody(state);
+}
+
+function buildMatterSnapshotBody(state: EngineState): string {
   switch (state.matter_type) {
     case 'business_setup_advisory': {
       const sub = state.advisory_subtrack;
@@ -1574,6 +1591,11 @@ export function buildReport(state: EngineState): LawyerReport {
     // classification was determined. 'unknown' covers states serialized
     // before the field existed. Same DR-054 rationale as advisory_subtrack.
     matter_type_provenance: state.matter_type_provenance ?? 'unknown',
+    // Persist lead_intent into the brief (DR-112), same DR-054 rationale
+    // as advisory_subtrack and matter_type_provenance above: a downstream
+    // decision (the renderer's contact-request line) needs it, so it must
+    // be on LawyerReport or serialization drops it.
+    lead_intent: state.lead_intent ?? 'unknown',
   };
 }
 

@@ -3,14 +3,15 @@
 // EngineState, and gracefully degrades to regex-only when the endpoint is
 // unavailable or no API key is configured.
 
-import type { EngineState, MatterType, SupportedLanguage } from '../types';
+import type { EngineState, LeadIntent, MatterType, SupportedLanguage } from '../types';
 import { computeBand } from '../band';
 import { computeCoreCompleteness, getDecisionGap } from '../selector';
 import { classificationForMatterType, isValidMatterType } from '../extractor';
 import { SLOT_REGISTRY } from '../slotRegistry';
-import { MATTER_TYPE_CLASSIFIER_FIELD, LANGUAGE_DETECTOR_FIELD } from './schema';
+import { MATTER_TYPE_CLASSIFIER_FIELD, LANGUAGE_DETECTOR_FIELD, LEAD_INTENT_FIELD } from './schema';
 
 const VALID_SUPPORTED_LANGUAGES = new Set<string>(['en', 'fr', 'es', 'pt', 'zh', 'ar']);
+const VALID_LEAD_INTENTS = new Set<string>(['case_description', 'contact_request']);
 
 // Matter types that act as routing catch-alls — the LLM's __matter_type
 // classifier is allowed to PROMOTE these to a more specific sub-type
@@ -225,6 +226,19 @@ export function mergeLlmResults(
     working = { ...working, language: llmLang as SupportedLanguage };
   }
 
+  // ── Lead-intent field (DR-112) ───────────────────────────────────────
+  // The LLM is authoritative for lead intent, language-agnostic. The
+  // schema's __lead_intent field is ALWAYS present (see schema.ts) and
+  // the LLM returns one of the two enum values on every call. A missing
+  // or invalid value is a no-op (state.lead_intent stays as initialised,
+  // from the deterministic heuristic in extractor.ts, defaulting to
+  // 'unknown'). Routing/presentation metadata only — never feeds
+  // computeBand or the four-axis scorer.
+  const llmIntent = extracted[LEAD_INTENT_FIELD];
+  if (llmIntent && typeof llmIntent === 'string' && VALID_LEAD_INTENTS.has(llmIntent)) {
+    working = { ...working, lead_intent: llmIntent as LeadIntent };
+  }
+
   // ── Classifier field ──────────────────────────────────────────────────
   // When state.matter_type was a routing catch-all (unknown, or one of
   // the *_general buckets like corporate_general / real_estate_general),
@@ -297,6 +311,10 @@ export function mergeLlmResults(
     // (e.g. "fr") as if it were a user's slot answer, leaking detector
     // output into state.slots.
     if (slotId === LANGUAGE_DETECTOR_FIELD) continue;
+    // Skip the synthetic lead-intent field (DR-112) — already handled
+    // above. Same rationale as the language skip: this is engine-internal
+    // classifier output, not a user-answered slot.
+    if (slotId === LEAD_INTENT_FIELD) continue;
 
     if (value === null || value === '' || value === undefined) continue;
     // Drop non-answer literals — except when BOTH (a) the lead's own

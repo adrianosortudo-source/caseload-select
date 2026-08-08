@@ -1,4 +1,4 @@
-import type { EngineState, NextStep, Band, LeadSummary } from './types';
+import type { EngineState, NextStep, Band, LeadSummary, ClarifyOption, MatterType } from './types';
 import { getI18n } from './i18n/loader';
 import type { I18nBundle } from './i18n/loader';
 import { selectNextSlot, computeCoreCompleteness, getDecisionGap, isWeakName } from './selector';
@@ -10,12 +10,35 @@ import {
   rerouteFromRealEstateGeneral,
   rerouteFromEmploymentGeneral,
   rerouteFromEstatesGeneral,
+  classificationForMatterType,
 } from './extractor';
 import { deriveAdvisorySpecificTask } from './slotEvidence';
 import { buildClosingMessage } from './closing';
 
 const INSIGHT_THRESHOLD_COMPLETENESS = 75;
 const BAND_A_COMPLETENESS = 65;
+
+// ─── Clarify menu (DR-112) ──────────────────────────────────────────────
+//
+// Single source of truth for the clarify step's menu options. Each value
+// is one of the engine's four general routing lanes — the same lanes the
+// chip-UI routing questions (corporate_problem_type etc.) and the LLM's
+// __matter_type catch-all promotion already target. A lead's menu choice
+// sets matter_type to the LANE itself (not a specific sub-type); the
+// lane's existing routing question then narrows it further, exactly as
+// if the lead had typed enough for the regex classifier to land there
+// directly. labelKey is an i18n widget_strings lookup key; surfaces
+// supply the English fallback literal, the engine never picks UI copy.
+export const CLARIFY_AREA_OPTIONS: readonly ClarifyOption[] = [
+  { value: 'corporate_general', labelKey: 'clarify_chip_business' },
+  { value: 'real_estate_general', labelKey: 'clarify_chip_real_estate' },
+  { value: 'employment_general', labelKey: 'clarify_chip_employment' },
+  { value: 'estates_general', labelKey: 'clarify_chip_estates' },
+];
+
+const CLARIFY_AREA_VALUES: ReadonlySet<MatterType> = new Set(
+  CLARIFY_AREA_OPTIONS.map((o) => o.value),
+);
 
 // ─── Channel-aware question budgets ────────────────────────────────────
 //
@@ -1042,8 +1065,20 @@ export function getNextStep(state: EngineState): NextStep {
   }
 
   if (state.matter_type === 'unknown') {
+    // Structured clarify step (DR-112, extends DR-071). `reason` and
+    // `options` let a surface render a warm, correctly-acknowledged menu;
+    // `message` is kept verbatim for any caller that only reads it (the
+    // pre-DR-112 shape). A lead who opened with a bare contact request
+    // (lead_intent, set by the LLM's __lead_intent field or the offline
+    // heuristic — see extractor.ts) gets the acknowledgment reason so
+    // surfaces don't respond with generic "tell me more" copy to someone
+    // who already said what they wanted.
+    const reason = state.lead_intent === 'contact_request' ? 'contact_request' : 'unclassified';
     return {
       type: 'clarify',
+      reason,
+      messageKey: reason === 'contact_request' ? 'clarify_body_meta' : 'clarify_body_default',
+      options: [...CLARIFY_AREA_OPTIONS],
       message: "Could you share a little more about what's going on? A short sentence is enough. Common areas: business setup, contracts, real estate, wills and estates, and employment matters.",
     };
   }
@@ -1135,4 +1170,48 @@ export function markInsightShown(state: EngineState): EngineState {
 
 export function startContactCapture(state: EngineState): EngineState {
   return { ...state, contactCaptureStarted: true };
+}
+
+/**
+ * Applies a clarify-menu choice (DR-112). The lead picked one of the four
+ * CLARIFY_AREA_OPTIONS lanes from the structured clarify step. Reuses
+ * `classificationForMatterType` — the same helper the LLM's __matter_type
+ * catch-all promotion already uses (llm/extractor.ts) — so a menu pick
+ * derives intent_family / practice_area / dispute_family / advisory_
+ * subtrack identically to that path, then stamps provenance
+ * 'user_routing_answer': the strongest provenance, because the lead
+ * picked the bucket themselves (same rationale as rerouteFrom*General).
+ *
+ * Landing on a *_general lane (not a specific sub-type) is deliberate:
+ * the lane's own routing question (corporate_problem_type etc.) then
+ * narrows further, exactly as if the regex classifier had placed the
+ * lead there directly from their original text.
+ *
+ * Only accepts a value from CLARIFY_AREA_OPTIONS; any other value is a
+ * caller bug (a surface passing through unsanitised input) and is a
+ * no-op, matching the defensive stance of rerouteFrom*General ("Something
+ * else" / unmapped stays put). Does not touch clarify-round accounting —
+ * a menu choice is a deterministic route-out, not a free-text retry; the
+ * DR-071 two-round budget only counts free-text submissions.
+ */
+export function applyClarifyChoice(state: EngineState, choice: MatterType): EngineState {
+  if (!CLARIFY_AREA_VALUES.has(choice)) return state;
+
+  const classification = classificationForMatterType(choice);
+  let updated: EngineState = {
+    ...state,
+    ...classification,
+    matter_type_provenance: 'user_routing_answer',
+  };
+
+  updated = { ...updated, coreCompleteness: computeCoreCompleteness(updated) };
+  const bandResult = computeBand(updated);
+  updated = {
+    ...updated,
+    band: bandResult.band,
+    confidence: bandResult.confidence,
+    currentGap: getDecisionGap(updated),
+  };
+
+  return updated;
 }

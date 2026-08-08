@@ -117,3 +117,42 @@ describe("Kickoff localization (initialLang hint, 2026-06-08)", () => {
     expect(en).toBeTruthy();
   });
 });
+
+describe("Clarify menu localization (DR-112)", () => {
+  // Same convention as KICKOFF_KEYS above: PT must carry every new
+  // clarify key or a PT lead sees English clarify copy (the exact bug
+  // this build fixes, just for a different screen).
+  const CLARIFY_KEYS = [
+    "clarify_heading_meta",
+    "clarify_body_meta",
+    "clarify_body_default",
+    "clarify_heading_2",
+    "clarify_body_2_menu",
+    "clarify_chip_business",
+    "clarify_chip_real_estate",
+    "clarify_chip_employment",
+    "clarify_chip_estates",
+  ];
+
+  it("pt bundle carries every new clarify_* widget string", () => {
+    const pt = getI18n("pt");
+    for (const key of CLARIFY_KEYS) {
+      expect(pt.widget_strings?.[key], `pt.json missing widget_strings.${key}`).toBeTruthy();
+    }
+  });
+
+  it("pt clarify strings are actually Portuguese, not English passthrough", () => {
+    const pt = getI18n("pt");
+    expect(pt.widget_strings?.["clarify_heading_meta"]).toContain("providenciar");
+    expect(pt.widget_strings?.["clarify_body_meta"]).toContain("advogado");
+    expect(pt.widget_strings?.["clarify_chip_real_estate"]).toBe("Imóveis");
+  });
+
+  it("en bundle has no clarify_heading_meta / clarify_body_meta keys (uses inline English fallbacks)", () => {
+    // Matches the existing en.json convention pinned above for kickoff_*:
+    // EN relies on ws() fallback literals in the component. This just
+    // documents the convention holds for the new DR-112 keys too.
+    const en = getI18n("en");
+    expect(en.widget_strings?.["clarify_heading_meta"]).toBeUndefined();
+  });
+});

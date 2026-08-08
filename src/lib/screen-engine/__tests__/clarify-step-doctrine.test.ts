@@ -26,7 +26,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { initialiseState } from '../extractor';
-import { getNextStep } from '../control';
+import { getNextStep, applyClarifyChoice, CLARIFY_AREA_OPTIONS } from '../control';
 import { mergeLlmResults } from '../llm/extractor';
 import { MATTER_TYPE_CLASSIFIER_FIELD } from '../llm/schema';
 
@@ -148,5 +148,104 @@ describe('clarify step doctrine (DR-071)', () => {
         step.type === 'stop';
       expect(hasSlot || hasClarifyMessage || isTerminal).toBe(true);
     }
+  });
+});
+
+/**
+ * DR-112: the clarify step is now structured (reason, messageKey, options)
+ * on top of the DR-071 shape, and a menu choice deterministically exits
+ * clarify via applyClarifyChoice. These tests extend, not replace, the
+ * DR-071 invariants above.
+ */
+describe('structured clarify step (DR-112)', () => {
+  it('carries reason=unclassified and the 4-option menu for a non-meta unclassifiable input', () => {
+    const state = initialiseState('I would like to learn more about how you can help me');
+    const step = getNextStep(state);
+    expect(step.type).toBe('clarify');
+    expect(step.reason).toBe('unclassified');
+    expect(step.messageKey).toBe('clarify_body_default');
+    expect(step.options).toEqual(CLARIFY_AREA_OPTIONS);
+  });
+
+  it('carries reason=contact_request and the same menu for a bare contact-request opener', () => {
+    const state = initialiseState('i want to speak to a lawyer');
+    expect(state.matter_type).toBe('unknown');
+    const step = getNextStep(state);
+    expect(step.type).toBe('clarify');
+    expect(step.reason).toBe('contact_request');
+    expect(step.messageKey).toBe('clarify_body_meta');
+    expect(step.options).toEqual(CLARIFY_AREA_OPTIONS);
+  });
+
+  it('still carries a non-empty message (backward compatibility for callers that only read it)', () => {
+    const state = initialiseState('i want to speak to a lawyer');
+    const step = getNextStep(state);
+    expect(step.message).toBeTruthy();
+  });
+
+  it.each(CLARIFY_AREA_OPTIONS.map((o) => o.value))(
+    'applyClarifyChoice(%s) exits clarify: getNextStep returns a slot, never clarify',
+    (choice) => {
+      const state = initialiseState('I would like to learn more about how you can help me');
+      expect(state.matter_type).toBe('unknown');
+      const routed = applyClarifyChoice(state, choice);
+      expect(routed.matter_type).toBe(choice);
+      expect(routed.matter_type_provenance).toBe('user_routing_answer');
+      const step = getNextStep(routed);
+      expect(step.type).not.toBe('clarify');
+      expect(step.slot).toBeTruthy();
+    },
+  );
+
+  it('applyClarifyChoice(corporate_general) sets practice_area=corporate and routes to the corporate routing question', () => {
+    const state = initialiseState('i want to speak to a lawyer');
+    const routed = applyClarifyChoice(state, 'corporate_general');
+    expect(routed.practice_area).toBe('corporate');
+    const step = getNextStep(routed);
+    expect(step.slot?.id).toBe('corporate_problem_type');
+  });
+
+  it('applyClarifyChoice(real_estate_general) sets practice_area=real_estate and routes to the real-estate routing question', () => {
+    const state = initialiseState('i want to speak to a lawyer');
+    const routed = applyClarifyChoice(state, 'real_estate_general');
+    expect(routed.practice_area).toBe('real_estate');
+    const step = getNextStep(routed);
+    expect(step.slot?.id).toBe('real_estate_problem_type');
+  });
+
+  it('applyClarifyChoice(employment_general) sets practice_area=employment and routes to the employment routing question', () => {
+    const state = initialiseState('i want to speak to a lawyer');
+    const routed = applyClarifyChoice(state, 'employment_general');
+    expect(routed.practice_area).toBe('employment');
+    const step = getNextStep(routed);
+    expect(step.slot?.id).toBe('employment_problem_type');
+  });
+
+  it('applyClarifyChoice(estates_general) sets practice_area=estates and routes to the estates routing question', () => {
+    const state = initialiseState('i want to speak to a lawyer');
+    const routed = applyClarifyChoice(state, 'estates_general');
+    expect(routed.practice_area).toBe('estates');
+    const step = getNextStep(routed);
+    expect(step.slot?.id).toBe('estates_problem_type');
+  });
+
+  it('rejects a value outside CLARIFY_AREA_OPTIONS as a no-op', () => {
+    const state = initialiseState('i want to speak to a lawyer');
+    const routed = applyClarifyChoice(state, 'wrongful_dismissal');
+    expect(routed).toEqual(state);
+  });
+
+  it('does not mutate clarify-round accounting fields (menu choice is not a free-text retry)', () => {
+    // applyClarifyChoice only touches matter-type-derived fields + scoring.
+    // Any round-budget counter lives on the surface (widget clarifyAttempts
+    // state), not on EngineState, so there is nothing here to increment;
+    // this test pins that assumption by checking no unexpected top-level
+    // key beyond the classification + scoring fields changed.
+    const state = initialiseState('i want to speak to a lawyer');
+    const routed = applyClarifyChoice(state, 'corporate_general');
+    expect(routed.lead_id).toBe(state.lead_id);
+    expect(routed.slots).toBe(state.slots);
+    expect(routed.slot_meta).toBe(state.slot_meta);
+    expect(routed.questionHistory).toBe(state.questionHistory);
   });
 });
