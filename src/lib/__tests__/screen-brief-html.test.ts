@@ -81,6 +81,7 @@ function buildFakeReport(overrides: Partial<LawyerReport> = {}): LawyerReport {
     contact_complete: true,
     advisory_subtrack: 'unknown',
     matter_type_provenance: 'deterministic',
+    lead_intent: 'unknown',
   } as LawyerReport;
   return { ...base, ...overrides };
 }
