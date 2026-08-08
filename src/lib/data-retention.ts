@@ -19,6 +19,7 @@
  */
 
 import { supabaseAdmin as supabase } from "./supabase-admin";
+import { runProspectRetentionSweep } from "./caseload-prospect-erasure";
 
 const RETENTION_DAYS: Record<string, number> = {
   A: 1095,
@@ -57,6 +58,7 @@ export interface RetentionResult {
   leads_anonymized: number;
   sessions_cleared: number;
   screened_leads_anonymized: number;
+  caseload_prospects_anonymized: number;
   errors: string[];
 }
 
@@ -65,6 +67,7 @@ export async function runDataRetention(): Promise<RetentionResult> {
     leads_anonymized: 0,
     sessions_cleared: 0,
     screened_leads_anonymized: 0,
+    caseload_prospects_anonymized: 0,
     errors: [],
   };
   const now = new Date();
@@ -175,6 +178,32 @@ export async function runDataRetention(): Promise<RetentionResult> {
     } catch (e) {
       result.errors.push(`screened band ${band}: ${(e as Error).message}`);
     }
+  }
+
+  // ─── caseload_prospects (CaseLoad Select's own inbound demand) ────────────
+  //
+  // Not band-based: these are sales enquiries about CaseLoad Select itself,
+  // not legal matters, so there is no CPI band to key a schedule off. One flat
+  // period from submitted_at (PROSPECT_RETENTION_DAYS, see DR-114).
+  //
+  // Anonymised, never deleted: deletion is structurally blocked because the
+  // linked consent evidence is append-only and must outlive the prospect row.
+  // The replacement itself lives in the anonymize_caseload_prospects SQL
+  // function so this sweep and the operator purge route cannot drift.
+  try {
+    const sweep = await runProspectRetentionSweep(now);
+    if (sweep.ok) {
+      result.caseload_prospects_anonymized = sweep.anonymized_count;
+      if (sweep.anonymized_count > 0) {
+        console.log(
+          `[data-retention] Anonymized ${sweep.anonymized_count} caseload_prospects rows past retention`,
+        );
+      }
+    } else {
+      result.errors.push(`caseload_prospects: ${sweep.error}`);
+    }
+  } catch (e) {
+    result.errors.push(`caseload_prospects: ${(e as Error).message}`);
   }
 
   return result;
