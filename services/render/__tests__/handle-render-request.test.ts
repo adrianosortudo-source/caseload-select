@@ -170,6 +170,46 @@ describe("handleRenderRequest", () => {
     expect(JSON.stringify(result.body)).not.toContain("some.internal.detail.example");
   });
 
+  it("logs the underlying failure server-side even though the response stays generic", async () => {
+    // The counterpart to the assertion above: the caller must learn
+    // nothing, but the OPERATOR must learn everything. Shipping the
+    // generic response without this log left the first real production
+    // render failure undiagnosable -- a 23ms failure reported only as
+    // "Could not render this site.", with no way to distinguish a
+    // missing Chromium binary from a navigation error. Pinned as a test
+    // so the log line cannot be quietly dropped again.
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const renderFn = () => Promise.reject(new Error("ENOTFOUND some.internal.detail.example"));
+      await handleRenderRequest(
+        { method: "POST", authorizationHeader: AUTH, rawBody: JSON.stringify({ url: "https://example.com" }) },
+        { env: ENV, renderFn }
+      );
+      expect(spy).toHaveBeenCalled();
+      const logged = spy.mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(logged).toContain("ENOTFOUND some.internal.detail.example");
+      expect(logged).toContain("https://example.com");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("logs a distinguishable message on timeout rather than reusing the generic failure log", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const renderFn = () => new Promise<RenderRunResult>(() => {});
+      await handleRenderRequest(
+        { method: "POST", authorizationHeader: AUTH, rawBody: JSON.stringify({ url: "https://example.com" }) },
+        { env: ENV, renderFn, renderTimeoutMs: 20 }
+      );
+      const logged = spy.mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(logged).toContain("timed out");
+      expect(logged).toContain("https://example.com");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("returns 200 with the renderFn's result verbatim on success", async () => {
     const renderFn = vi.fn().mockResolvedValue(SAMPLE_RESULT);
     const result = await handleRenderRequest(
