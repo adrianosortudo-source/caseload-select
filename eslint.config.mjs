@@ -2,6 +2,14 @@ import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
 
 const eslintConfig = [
+  {
+    // services/render is a separate deployable (its own package.json, its
+    // own tsconfig.json, its own CI job in ci.yml) with none of this
+    // config's Next.js/React assumptions -- see
+    // docs/BUILD_PLAN_render_isolation_v1.md §3.3. Mirrors the same
+    // exclusion in the root tsconfig.json.
+    ignores: ["services/render/**"],
+  },
   ...nextCoreWebVitals,
   ...nextTypescript,
   {

@@ -10,10 +10,9 @@
  * share the same range classification via ssrf.ts.
  */
 
-import "server-only";
 import { lookup as dnsLookup } from "node:dns";
 import { Agent } from "undici";
-import { ipInBlockedRange, validateOutboundUrl } from "@/lib/ssrf";
+import { ipInBlockedRange, validateOutboundUrl } from "./ssrf";
 
 interface DnsAddr {
   address: string;

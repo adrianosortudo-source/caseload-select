@@ -132,8 +132,14 @@ describe("checkRateLimit — fail-open when Upstash env vars are missing", () =>
 // unconfigured limiter must deny rather than silently let scripted spam
 // through to Adriano's email. This pins the acceptance criterion directly:
 // "Rate-limit bucket present in FAIL_CLOSED_BUCKETS (test)."
+//
+// designCheck joined the same set the same week: public, unauthenticated,
+// and each request costs two real headless-browser renders plus two Gemini
+// vision calls, so a fail-open limiter would leave the single most
+// expensive public endpoint in the app with no real cap whenever Upstash
+// is unset.
 
-describe("checkRateLimit — fail-closed buckets when RATE_LIMIT_FAIL_CLOSED=true", () => {
+describe("checkRateLimit — fail-closed buckets when RATE_LIMIT_FAIL_CLOSED=true and Upstash is unconfigured", () => {
   const origUrl = process.env.UPSTASH_REDIS_REST_URL;
   const origToken = process.env.UPSTASH_REDIS_REST_TOKEN;
   const origFailClosed = process.env.RATE_LIMIT_FAIL_CLOSED;
@@ -160,15 +166,31 @@ describe("checkRateLimit — fail-closed buckets when RATE_LIMIT_FAIL_CLOSED=tru
     expect(r.limit).toBe(10);
   });
 
-  it("still fails open for a bucket NOT in FAIL_CLOSED_BUCKETS (intake)", async () => {
-    const r = await checkRateLimit("intake", "203.0.113.5");
-    expect(r.ok).toBe(true);
+  it("rejects designCheck (ok=false, active=false) when the limiter is unconfigured", async () => {
+    // designCheck costs two real headless-browser renders plus two Gemini
+    // vision calls per request; it must not silently have no cap at all
+    // when Upstash env vars are missing and the operator has opted into
+    // fail-closed mode. Same shape as the requestLink/otpSend/otpVerify
+    // buckets already covered above.
+    const r = await checkRateLimit("designCheck", "203.0.113.5");
+    expect(r.ok).toBe(false);
+    expect(r.active).toBe(false);
+    expect(r.limit).toBe(8);
   });
 
-  it("also denies the pre-existing fail-closed buckets (requestLink, otpSend, otpVerify)", async () => {
+  it("still denies the pre-existing fail-closed buckets (requestLink, otpSend, otpVerify)", async () => {
     for (const bucket of ["requestLink", "otpSend", "otpVerify"] as const) {
       const r = await checkRateLimit(bucket, "203.0.113.5");
       expect(r.ok).toBe(false);
+      expect(r.active).toBe(false);
+    }
+  });
+
+  it("leaves fail-open buckets (e.g. intake, seoCheck) unaffected by fail-closed mode", async () => {
+    for (const bucket of ["intake", "seoCheck", "screen"] as const) {
+      const r = await checkRateLimit(bucket, "203.0.113.5");
+      expect(r.ok).toBe(true);
+      expect(r.active).toBe(false);
     }
   });
 });
