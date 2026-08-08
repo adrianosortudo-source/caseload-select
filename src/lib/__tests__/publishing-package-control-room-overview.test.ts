@@ -64,6 +64,22 @@ describe("assembleOverviewViewModel", () => {
     expect(row.releaseBlockers.some((b) => b.includes("Files hub"))).toBe(true);
   });
 
+  it("reports ctaPdfStatus ok for a lead-magnet CTA whose behavior is gated_download, not wrong_behavior", () => {
+    // 2026-08-07: CTA_BEHAVIORS gained gated_download in the manifest validator
+    // (a lead-magnet CTA that leads to a form-gated landing page rather than a
+    // direct file). This proves the Overview status computation -- which used
+    // to hardcode a "must equal download" check -- was updated to match via the
+    // shared isValidLeadMagnetCtaBehavior predicate, not left to independently
+    // reject the value the validator now accepts.
+    const manifest = validManifest();
+    const piece = manifest.pieces.find((p) => p.contentSlotId === "lead-magnet-document-en")!;
+    piece.cta.behavior = "gated_download";
+    const vm = assembleOverviewViewModel(manifest, "assembling", candidateAssetRefs);
+    const row = vm.rows.find((r) => r.contentSlotId === "lead-magnet-document-en")!;
+    expect(row.ctaPdfStatus).toBe("ok");
+    expect(row.releaseBlockers.some((b) => b.includes("CTA behavior"))).toBe(false);
+  });
+
   it("marks cta not_applicable for pieces with no CTA requirement", () => {
     const vm = assembleOverviewViewModel(validManifest(), "assembling", candidateAssetRefs);
     const row = vm.rows.find((r) => r.contentSlotId === "counsel-note-en")!;

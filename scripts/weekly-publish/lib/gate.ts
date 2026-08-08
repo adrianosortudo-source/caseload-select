@@ -7,9 +7,11 @@
  * codebase's own validatePackageManifest convention.
  *
  * F11 Node-native checks: entity-mojibake signature, bare-URL-outside-href
- * scan, article structure presence, byte-exact locked strings, sha256 of
- * every asset file against the week's manifest, role->content_kind
- * conformance (report-only line).
+ * scan, article structure presence (per format-family/locale canon, see
+ * canon/article-structure.ts), lead-magnet CTA rule (canon/locked-strings.ts,
+ * Decision D4 -- a rule, not a byte-exact literal), sha256 of every asset
+ * file against the week's manifest, role->content_kind conformance
+ * (report-only line).
  *
  * F10 Python step: shells to the skill runtime's calculate_hashes.py via
  * the launcher (lib/python-launcher.ts) for an independent, second-
@@ -26,7 +28,8 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { WeekConfig } from "../config";
-import { LOCKED_STRINGS } from "../canon/locked-strings";
+import { evaluateLeadMagnetCta } from "../canon/locked-strings";
+import { evaluateArticleStructure } from "../canon/article-structure";
 import { runPythonScript } from "./python-launcher";
 
 export interface GateFinding {
@@ -41,7 +44,6 @@ export interface GateReport {
 }
 
 const MOJIBAKE_RE = /&#\d{1,3};/;
-const ARTICLE_STRUCTURE_MARKERS = ["Five-Line Brief", "Decision Box", "FAQ"];
 
 function findBareUrls(html: string): string[] {
   // Strip href="..." / href='...' attribute values first, so a real link's
@@ -89,14 +91,14 @@ export async function runGate(
     const bareUrls = findBareUrls(bodyHtml);
     push(`bare-url:${piece.contentSlotId}`, bareUrls.length === 0, bareUrls.length === 0 ? "clean" : `${bareUrls.length} bare URL(s) outside href: ${bareUrls.join(", ")}`);
 
-    const missingMarkers = ARTICLE_STRUCTURE_MARKERS.filter((marker) => !bodyHtml.includes(marker));
-    push(`structure:${piece.contentSlotId}`, missingMarkers.length === 0, missingMarkers.length === 0 ? "Five-Line Brief / Decision Box / FAQ all present" : `missing: ${missingMarkers.join(", ")}`);
+    const structure = evaluateArticleStructure(piece.formatFamily, piece.locale, bodyHtml);
+    push(`structure:${piece.contentSlotId}`, structure.ok, structure.detail);
   }
 
   for (const piece of landingPieces) {
-    const { title, bodyHtml } = await currentBodyHtml(supabase, piece.deliverableId);
-    const hasLockedCta = bodyHtml.includes(LOCKED_STRINGS.leadMagnetCtaHref);
-    push(`locked-string:${piece.contentSlotId}`, hasLockedCta, hasLockedCta ? "form-CTA convention present, byte-exact" : `"${LOCKED_STRINGS.leadMagnetCtaHref}" not found in "${title}"`);
+    const { bodyHtml } = await currentBodyHtml(supabase, piece.deliverableId);
+    const cta = evaluateLeadMagnetCta(bodyHtml);
+    push(`lead-magnet-cta:${piece.contentSlotId}`, cta.ok, cta.detail);
   }
 
   // --- checklist derivation from the Brief (validate_checklist_derivation.py) ---
