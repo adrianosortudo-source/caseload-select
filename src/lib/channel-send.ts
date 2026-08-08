@@ -11,6 +11,8 @@ import { sendMessengerMessage } from '@/lib/messenger-send';
 import { sendInstagramMessage } from '@/lib/instagram-send';
 import { sendWhatsappMessage } from '@/lib/whatsapp-send';
 import type { ChannelSender } from '@/lib/channel-intake-processor';
+import { getI18n } from '@/lib/screen-engine/i18n/loader';
+import type { SupportedLanguage } from '@/lib/screen-engine/types';
 
 export interface ChannelSendResult {
   sent: boolean;
@@ -107,20 +109,39 @@ export async function sendChannelMessage(
  * Single source of truth for the contact-capture follow-up question.
  * Returns the phrasing that asks for whatever piece is still missing.
  *
+ * language wired 2026-08-07: routes through i18n.widget_strings with an
+ * English fallback (en.json has no widget_strings section at all, so the
+ * English literal below is the canonical English text, not a fallback of
+ * a fallback). Added when the C2 first-ask intro made English-only
+ * contact-capture copy a visible, jarring gap — a PT-speaking lead was
+ * getting PT on turn 1's intro and then abruptly English asking the same
+ * thing on turn 2's resume-turn follow-up.
+ *
  * Future: per-firm tone customisation (intake_firms.contact_capture_phrasing).
  * Per spec scope, this is system-wide for now.
  */
 export function buildContactCaptureFollowUp(
   missing: 'name' | 'reachability' | 'both',
+  language: SupportedLanguage = 'en',
 ): string {
+  const s = getI18n(language).widget_strings;
   switch (missing) {
     case 'name':
-      return "Got it. Before I get this to the firm, what name should they use when they reach out?";
+      return (
+        s?.contact_capture_followup_name ||
+        "Got it. Before I get this to the firm, what name should they use when they reach out?"
+      );
     case 'reachability':
-      return "Got it. What's the best phone or email for the firm to reach you?";
+      return (
+        s?.contact_capture_followup_reachability ||
+        "Got it. What's the best phone or email for the firm to reach you?"
+      );
     case 'both':
     default:
-      return "Got it. Before I get this to the firm, can you share your name and the best phone or email for them to reach you?";
+      return (
+        s?.contact_capture_followup_both ||
+        "Got it. Before I get this to the firm, can you share your name and the best phone or email for them to reach you?"
+      );
   }
 }
 
@@ -135,18 +156,34 @@ export function buildContactCaptureFollowUp(
  * and leaves the door open for the lead to reply with contact info
  * later (the next inbound creates a fresh session). No LSO-non-compliant
  * outcome promises, no "specialist" or "expert" language.
+ *
+ * language wired 2026-08-07 (same reasoning as buildContactCaptureFollowUp
+ * above). PT ships as three full pre-composed sentences, not a template
+ * substitution into a shared PT frame — substituting a PT noun-phrase
+ * into an otherwise-English sentence structure is exactly the kind of
+ * composed-not-sourced construction that reads as translated.
  */
 export function buildContactCaptureExhaustedMessage(
   missing: 'name' | 'reachability' | 'both',
+  language: SupportedLanguage = 'en',
 ): string {
-  const what =
-    missing === 'name'
-      ? "a name the firm can use"
-      : missing === 'reachability'
-      ? "the best phone or email to reach you"
-      : "your name and the best phone or email to reach you";
-  return (
-    `Thanks for the messages. The firm needs ${what} before they can follow up. ` +
-    "Reply with that when you're ready and I'll pass it along."
-  );
+  const s = getI18n(language).widget_strings;
+  switch (missing) {
+    case 'name':
+      return (
+        s?.contact_capture_exhausted_name ||
+        "Thanks for the messages. The firm needs a name the firm can use before they can follow up. Reply with that when you're ready and I'll pass it along."
+      );
+    case 'reachability':
+      return (
+        s?.contact_capture_exhausted_reachability ||
+        "Thanks for the messages. The firm needs the best phone or email to reach you before they can follow up. Reply with that when you're ready and I'll pass it along."
+      );
+    case 'both':
+    default:
+      return (
+        s?.contact_capture_exhausted_both ||
+        "Thanks for the messages. The firm needs your name and the best phone or email to reach you before they can follow up. Reply with that when you're ready and I'll pass it along."
+      );
+  }
 }

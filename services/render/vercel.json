@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/render.ts": {
+      "maxDuration": 300
+    }
+  }
+}

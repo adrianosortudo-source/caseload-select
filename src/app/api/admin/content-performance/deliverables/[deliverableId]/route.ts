@@ -29,8 +29,15 @@ export async function GET(
   if (denied) return denied;
 
   const { deliverableId } = await params;
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (!detailResult.found) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const detail = detailResult.detail;
 
   const [placements, currentReceiptsByPlacement, attribution] = await Promise.all([
     listPlacementsForDeliverable(deliverableId),

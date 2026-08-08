@@ -53,13 +53,14 @@ import type {
   DeliverableComment,
   ApprovalRecord,
   PublicationArtifact,
+  PublicationArtifactRoleAssignment,
   PublicationArtifactValidation,
 } from "@/lib/types";
 
 const ASSET_BUCKET = "firm-files";
 const SIGNED_URL_TTL = 3600; // 1 hour, matching deliverables.ts's existing convention
 
-export const CONTENT_EXPORT_SCHEMA_VERSION = "1.0";
+export const CONTENT_EXPORT_SCHEMA_VERSION = "1.1";
 
 export interface ContentExportVersionBody {
   id: string;
@@ -103,6 +104,7 @@ export interface ContentExportArtifact {
    */
   version_id: string;
   artifact_type: string;
+  asset_role?: string | null;
   locale: string | null;
   destination: string | null;
   storage_bucket: string | null;
@@ -462,7 +464,13 @@ export async function buildContentExportBundle(
 
   const deliverableIds = active.map((d) => d.id);
 
-  const [{ data: versions }, { data: comments }, { data: approvals }, { data: artifacts }] = await Promise.all([
+  const [
+    { data: versions },
+    { data: comments },
+    { data: approvals },
+    { data: artifacts },
+    { data: roleAssignments },
+  ] = await Promise.all([
     deliverableIds.length
       ? supabase.from("deliverable_versions").select("*").in("deliverable_id", deliverableIds)
       : Promise.resolve({ data: [] as DeliverableVersion[] }),
@@ -479,6 +487,13 @@ export async function buildContentExportBundle(
     deliverableIds.length
       ? supabase.from("publication_artifacts").select("*").in("deliverable_id", deliverableIds)
       : Promise.resolve({ data: [] as PublicationArtifact[] }),
+    deliverableIds.length
+      ? supabase
+          .from("publication_artifact_role_assignments")
+          .select("*")
+          .in("deliverable_id", deliverableIds)
+          .is("superseded_at", null)
+      : Promise.resolve({ data: [] as PublicationArtifactRoleAssignment[] }),
   ]);
 
   const allVersions = (versions ?? []) as DeliverableVersion[];
@@ -512,6 +527,10 @@ export async function buildContentExportBundle(
   }
 
   const allArtifacts = (artifacts ?? []) as PublicationArtifact[];
+  const activeRoleAssignmentByArtifact = new Map<string, PublicationArtifactRoleAssignment>();
+  for (const assignment of (roleAssignments ?? []) as PublicationArtifactRoleAssignment[]) {
+    activeRoleAssignmentByArtifact.set(assignment.artifact_id, assignment);
+  }
   const artifactIds = allArtifacts.map((a) => a.id);
   const { data: validations } = artifactIds.length
     ? await supabase
@@ -601,6 +620,9 @@ export async function buildContentExportBundle(
           id: a.id,
           version_id: a.version_id,
           artifact_type: a.artifact_type,
+          // Legacy artifacts remain immutable. An explicit operator assignment
+          // supplies the effective role only for this export/view.
+          asset_role: a.asset_role ?? activeRoleAssignmentByArtifact.get(a.id)?.asset_role ?? null,
           locale: a.locale,
           destination: a.destination,
           storage_bucket: a.storage_bucket,

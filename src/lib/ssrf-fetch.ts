@@ -67,6 +67,47 @@ export interface SsrfSafeFetchResult {
 }
 
 /**
+ * Fetches exactly ONE hop through the same pinned-DNS transport
+ * ssrfSafeFetch uses, without following a redirect itself. Exists for
+ * callers that need to inspect and re-validate each hop's target
+ * themselves -- the render service's guardContextRoutes (see
+ * services/render/renderer.ts) drives its own redirect-chain loop so it
+ * can log a specific blocked reason per hop and enforce its own hop
+ * budget, rather than delegating the whole chain to ssrfSafeFetch's
+ * internal loop, which throws generically on hop exhaustion and cannot
+ * distinguish "the caller's hop budget ran out" from "this exact hop was
+ * a redirect." A redirect response (3xx with Location) is returned to the
+ * caller exactly like any other status; it is the caller's job to decide
+ * whether and how to follow it.
+ */
+export async function ssrfSafeFetchOneHop(
+  url: string,
+  opts: { method?: string; timeoutMs: number; allowedSchemes?: string[] },
+): Promise<Response> {
+  const parsed = new URL(url);
+  const check = validateOutboundUrl(parsed, { allowedSchemes: opts.allowedSchemes });
+  if (!check.ok) throw new Error(check.reason ?? "url rejected");
+
+  const agent = getSharedAgent();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+  try {
+    return await fetch(url, {
+      method: opts.method ?? "GET",
+      signal: controller.signal,
+      redirect: "manual",
+      dispatcher: agent,
+    } as RequestInit & { dispatcher: Agent });
+  } catch (e) {
+    const code = (e as { cause?: { code?: string } })?.cause?.code;
+    if (code === "ESSRFBLOCKED") throw new Error("hostname resolved to a blocked address");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Fetches a URL with the initial URL and every redirect target validated
  * before it is requested. Redirects are followed manually, up to
  * maxRedirects, so a target that fails validation is refused before any
@@ -80,31 +121,14 @@ export async function ssrfSafeFetch(
   opts: { method?: string; timeoutMs: number; maxRedirects?: number; allowedSchemes?: string[] },
 ): Promise<SsrfSafeFetchResult> {
   const maxRedirects = opts.maxRedirects ?? 5;
-  const agent = getSharedAgent();
   let currentUrl = startUrl;
 
   for (let hop = 0; hop <= maxRedirects; hop++) {
-    const parsed = new URL(currentUrl);
-    const check = validateOutboundUrl(parsed, { allowedSchemes: opts.allowedSchemes });
-    if (!check.ok) throw new Error(check.reason ?? "url rejected");
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
-    let res: Response;
-    try {
-      res = await fetch(currentUrl, {
-        method: opts.method ?? "GET",
-        signal: controller.signal,
-        redirect: "manual",
-        dispatcher: agent,
-      } as RequestInit & { dispatcher: Agent });
-    } catch (e) {
-      const code = (e as { cause?: { code?: string } })?.cause?.code;
-      if (code === "ESSRFBLOCKED") throw new Error("hostname resolved to a blocked address");
-      throw e;
-    } finally {
-      clearTimeout(timer);
-    }
+    // Delegates the actual validate-then-fetch of this one hop to
+    // ssrfSafeFetchOneHop, so there is exactly one place that pairs
+    // validateOutboundUrl with the pinned-DNS dispatcher; this loop only
+    // owns the redirect-following decision.
+    const res = await ssrfSafeFetchOneHop(currentUrl, { method: opts.method, timeoutMs: opts.timeoutMs, allowedSchemes: opts.allowedSchemes });
 
     if (res.status >= 300 && res.status < 400) {
       if (hop === maxRedirects) throw new Error("too many redirects");

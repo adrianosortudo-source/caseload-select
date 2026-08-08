@@ -18,6 +18,8 @@ import {
   toAgentManifest,
   toPublishKitView,
   copyColumnMessage,
+  isLinkedInArticlePiece,
+  linkedInArticlePasteEligibility,
   pieceMatchesFilter,
   filteredTotals,
   blockedPiecesAreFullyWithheld,
@@ -1392,6 +1394,51 @@ describe("copyColumnMessage", () => {
       expect(copyColumnMessage(piece)).toBe(expected);
     },
   );
+});
+
+// ─── LinkedIn Article paste eligibility ──────────────────────────────────────
+
+describe("isLinkedInArticlePiece", () => {
+  it.each([
+    ["linkedin_article", true],
+    ["linkedin", false], // the feed/promoter post, NOT an Article
+    ["firm_website", false],
+    ["google_business_profile", false],
+    ["email", false],
+    [null, false],
+  ] as const)("destination=%s -> %s", (destination, expected) => {
+    expect(isLinkedInArticlePiece({ destination })).toBe(expected);
+  });
+
+  it("is never fooled by title text alone -- a '[LINKEDIN POST]'-prefixed title on a linkedin_article destination still reads as an Article", () => {
+    const piece = makePiece({ title: "[LINKEDIN POST] Renewal Clause Basics", destination: "linkedin_article" });
+    expect(isLinkedInArticlePiece(piece)).toBe(true);
+  });
+});
+
+describe("linkedInArticlePasteEligibility", () => {
+  it.each([
+    ["linkedin_article", "en-CA", "eligible"],
+    ["linkedin_article", "en-US", "eligible"],
+    ["linkedin_article", "pt-BR", "unsupported_locale"],
+    ["linkedin_article", null, "unsupported_locale"], // unknown locale is treated as NOT confirmed English
+    ["linkedin", "en-CA", "not_applicable"], // a feed/promoter post is never eligible, regardless of locale
+    ["firm_website", "en-CA", "not_applicable"],
+    [null, "en-CA", "not_applicable"],
+  ] as const)("destination=%s locale=%s -> %s", (destination, locale, expected) => {
+    const piece = makePiece({ destination, locale });
+    expect(linkedInArticlePasteEligibility(piece)).toBe(expected);
+  });
+
+  it("is more conservative on unknown locale than the pure transform's own default -- a real operator surface must never assume English", () => {
+    // toLinkedInArticlePasteHtmlEnglishOnly proceeds (ok: true) when locale is
+    // omitted/null, because it is a generic library default for a caller with
+    // nothing to pass. This function decides what an operator actually sees
+    // for a real piece, so it deliberately disagrees: null reads as
+    // "not confirmed English", the same as a known non-English locale.
+    const piece = makePiece({ destination: "linkedin_article", locale: null });
+    expect(linkedInArticlePasteEligibility(piece)).toBe("unsupported_locale");
+  });
 });
 
 // ─── blocked piece with no approved version: the reachable shape ─────────────

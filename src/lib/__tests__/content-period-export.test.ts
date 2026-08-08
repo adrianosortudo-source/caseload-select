@@ -30,6 +30,7 @@ const state: {
   approvals: Row[];
   artifacts: Row[];
   validations: Row[];
+  roleAssignments: Row[];
   standingAuth: Row[];
   writeAttempted: boolean;
   signedUrlCalls: { bucket: string; path: string; download?: string | boolean }[];
@@ -43,6 +44,7 @@ const state: {
   approvals: [],
   artifacts: [],
   validations: [],
+  roleAssignments: [],
   standingAuth: [],
   signedUrlFailFor: new Set(),
   writeAttempted: false,
@@ -69,6 +71,13 @@ function chainable(rows: Row[]) {
     },
     in: (col: string, vals: unknown[]) => {
       current = current.filter((r) => vals.includes(r[col]));
+      return builder;
+    },
+    // PostgREST `.is(col, null)`, used by the role-assignment read to take only
+    // live rows (superseded_at IS NULL). Treats an absent key as null, since
+    // fixture rows omit columns they do not exercise.
+    is: (col: string, val: unknown) => {
+      current = current.filter((r) => (r[col] ?? null) === val);
       return builder;
     },
     order: (col: string, opts?: { ascending?: boolean }) => {
@@ -112,6 +121,11 @@ vi.mock("@/lib/supabase-admin", () => ({
       if (table === "approval_records") return chainable(state.approvals);
       if (table === "publication_artifacts") return chainable(state.artifacts);
       if (table === "publication_artifact_validations") return chainable(state.validations);
+      // Empty by default: the bundle asks for role assignments alongside
+      // artifacts, and every test written before explicit asset-role slots
+      // therefore keeps asserting exactly what it did. Tests that care about
+      // role assignment populate this explicitly.
+      if (table === "publication_artifact_role_assignments") return chainable(state.roleAssignments);
       // Empty by default, so getStandingAuthorizationState returns null and
       // standingAuthorizationActive is false. Every test written before the
       // two-path release-authorization bar therefore keeps asserting the
@@ -213,6 +227,7 @@ beforeEach(() => {
   state.approvals = [];
   state.artifacts = [];
   state.validations = [];
+  state.roleAssignments = [];
   state.standingAuth = [];
   state.writeAttempted = false;
   state.signedUrlCalls = [];

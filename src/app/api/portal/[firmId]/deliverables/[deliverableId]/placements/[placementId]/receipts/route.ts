@@ -121,8 +121,14 @@ export async function GET(
   if (denied) return denied;
 
   const { firmId, deliverableId, placementId } = await params;
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) {
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (!detailResult.found || detailResult.detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
@@ -157,10 +163,17 @@ export async function POST(
   const previewDenied = await denyWriteIfPreview(firmId);
   if (previewDenied) return previewDenied;
 
-  const detail = await getDeliverableDetail(deliverableId);
-  if (!detail || detail.deliverable.firm_id !== firmId) {
+  const detailResult = await getDeliverableDetail(deliverableId);
+  if (!detailResult.ok) {
+    return NextResponse.json(
+      { error: "could not load this deliverable, try again" },
+      { status: 503 },
+    );
+  }
+  if (!detailResult.found || detailResult.detail.deliverable.firm_id !== firmId) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
+  const detail = detailResult.detail;
 
   const placements = await listPlacementsForDeliverable(deliverableId);
   const placement = placements.find((p) => p.id === placementId);
