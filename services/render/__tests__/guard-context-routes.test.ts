@@ -178,6 +178,55 @@ describe("guardContextRoutes", () => {
     expect(call.headers["cache-control"]).toBe("no-cache");
   });
 
+  it("aborts rather than hanging when the response body never finishes streaming", async () => {
+    // The 2026-08-07 production outage in one test. fetch() resolves on
+    // HEADERS, so a body that never streams left arrayBuffer() awaiting
+    // forever with its abort signal already cleared -- the route was
+    // never settled, Chromium waited indefinitely, and context.close()
+    // then blocked behind it, turning a stalled subresource into a 280s
+    // render_timeout. The route must be aborted instead.
+    const { renderer } = await importRenderer();
+    const { context, getHandler } = makeContext();
+    const blocked: import("../render-types").BlockedRequestLog[] = [];
+    const fetchHop = vi.fn(async () => ({
+      status: 200,
+      headers: new Headers({ "content-type": "text/html" }),
+      // Never resolves: the exact shape of the hang.
+      arrayBuffer: () => new Promise<ArrayBuffer>(() => {}),
+    }) as unknown as Response);
+    await renderer.guardContextRoutes(context, blocked, fetchHop);
+    const handler = getHandler();
+
+    const { route, abort, fulfill } = makeRoute("https://public.example/");
+    await handler(route);
+
+    expect(abort).toHaveBeenCalledTimes(1);
+    expect(fulfill).not.toHaveBeenCalled();
+    expect(blocked.some((b) => b.reason.includes("body_read_timeout"))).toBe(true);
+  }, 30_000);
+
+  it("aborts rather than leaving the route unsettled if the handler throws unexpectedly", async () => {
+    // Structural guarantee, not a specific bug: an intercepted request
+    // that is never settled does not surface as an error, it hangs the
+    // browser. Any escape must still terminate the route.
+    const { renderer } = await importRenderer();
+    const { context, getHandler } = makeContext();
+    const blocked: import("../render-types").BlockedRequestLog[] = [];
+    const fetchHop = vi.fn(async () => {
+      // Not an Error instance, and thrown outside the hop loop's own
+      // catch semantics -- stands in for an unanticipated failure.
+      throw { weird: "non-error throw" };
+    });
+    await renderer.guardContextRoutes(context, blocked, fetchHop as unknown as typeof fetchHop);
+    const handler = getHandler();
+
+    const { route, abort, fulfill } = makeRoute("https://public.example/");
+    await handler(route);
+
+    expect(abort).toHaveBeenCalled();
+    expect(fulfill).not.toHaveBeenCalled();
+  });
+
   it("walks a multi-hop safe redirect chain, re-checking every hop via fetchHop, and fulfills with the final response", async () => {
     const { renderer } = await importRenderer();
     const { context, getHandler } = makeContext();
