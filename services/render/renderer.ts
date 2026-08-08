@@ -944,17 +944,6 @@ async function captureViewport(
   });
   await page.addInitScript(WEB_VITALS_COLLECTOR);
 
-  // TEMPORARY diagnostic instrumentation (2026-08-07). The render hangs to
-  // the 280s outer timeout on even a trivial page (example.com), and
-  // because goto() has its own 20s timeout, the hang must be in a
-  // post-navigation step below that has no timeout of its own. These
-  // phase markers name exactly which await never returns, so the fix
-  // targets a proven line instead of a guess. Remove once the hang is
-  // located and fixed.
-  const phase = (label: string) =>
-    console.log(`[render-phase] ${viewport} +${Date.now() - start}ms ${label}`);
-  phase("context+page ready, starting goto");
-
   try {
     // "networkidle" is discouraged by Playwright's own docs: a real-world
     // site with persistent analytics/tracking chatter (beacons, polling)
@@ -965,13 +954,10 @@ async function captureViewport(
       waitUntil: "load",
       timeout: NAV_TIMEOUT_MS,
     });
-    phase("goto done");
     // Let fonts finish swapping and the observers above finish collecting
     // before reading anything: LCP/CLS finalize on a delay, not at load.
     await page.waitForTimeout(RENDER_SETTLE_MS);
-    phase("settle delay done");
     await page.evaluate(() => document.fonts.ready).catch(() => undefined);
-    phase("fonts.ready done");
 
     // Measure the real page height first: a full-page capture taller than
     // the vision API's hard pixel ceiling is rejected outright, so the
@@ -980,7 +966,6 @@ async function captureViewport(
     const fullPageHeightPx = (await page
       .evaluate(() => document.documentElement.scrollHeight)
       .catch(() => 0)) as number;
-    phase(`height measured (${fullPageHeightPx}px)`);
     const needsClip = fullPageHeightPx > MAX_SCREENSHOT_HEIGHT_PX;
 
     const [screenshotBuffer, domSnapshot, webVitals] = await Promise.all([
@@ -993,7 +978,6 @@ async function captureViewport(
       page.evaluate(DOM_SNAPSHOT_SCRIPT) as Promise<DomSnapshot>,
       page.evaluate("window.__designCheckVitals") as Promise<WebVitalsSample>,
     ]);
-    phase("screenshot+dom+vitals done");
 
     return {
       viewport,
@@ -1030,7 +1014,6 @@ async function captureViewport(
     await withTimeout(context.close(), CLOSE_TIMEOUT_MS, "context_close_timeout").catch((err) => {
       blocked.push({ url: "(cleanup)", reason: err instanceof Error ? err.message : String(err) });
     });
-    phase("context closed (or close timed out)");
   }
 }
 
