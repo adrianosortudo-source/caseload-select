@@ -30,13 +30,14 @@ function makeDeliverable(role: (typeof ROLES)[number], locale: (typeof LOCALES)[
     channel: role === "checklist" ? "lead_magnet_pdf" : "article",
     locale,
     content_kind: "text",
-    status: "approved",
+    status: "in_review",
     publish_date: "2026-08-12",
     current_version_id: versionId,
-    approved_version_id: versionId,
-    is_current_version_approved: true,
+    approved_version_id: null,
+    is_current_version_approved: false,
     may_publish: true,
     may_publish_reason: null,
+    release_authorization: { path: "standing_authorization", evidence_id: `standing-${id}`, deliverable_id: id, deliverable_version_id: versionId, firm_id: "firm-1", recorded_at: "2026-08-08T00:00:00.000Z", evidence_sha256: HASH_A, standing_authorization_event_id: `standing-event-${id}`, standing_authorization_active: true, revoked_at: null },
     current_version: { id: versionId, version_number: 2, body_html: `<p>${id} locked.</p>`, storage_bucket: null, storage_path: null, signed_url: null, signed_url_expires_at: null, asset_mime: null, asset_size_bytes: null, asset_name: null, asset_sha256: null, note: null, responds_to_approval_id: null, created_at: "2026-08-08T00:00:00.000Z" },
     approved_version: null,
     individual_review_hold: null,
@@ -87,7 +88,7 @@ function makeInput(): DrgWebsitePackageBuildInput {
 }
 
 describe("DRG package protocol", () => {
-  it("builds a deterministic complete six-piece website package from an approved Control Room projection", () => {
+  it("builds a deterministic complete six-piece website package from standing release authorization without fabricating approval records", () => {
     const first = buildDrgWebsitePackageExport(makeSource(), makeInput());
     const second = buildDrgWebsitePackageExport(makeSource(), makeInput());
     expect(first.ok).toBe(true);
@@ -95,8 +96,24 @@ describe("DRG package protocol", () => {
     if (!first.ok || !second.ok) return;
     expect(first.value.schema_version).toBe(DRG_WEBSITE_PACKAGE_SCHEMA_VERSION);
     expect(first.value.pieces).toHaveLength(6);
+    expect(first.value.pieces.every((piece) => piece.release_authorization.path === "standing_authorization")).toBe(true);
     expect(first.value.package.package_sha256).toBe(second.value.package.package_sha256);
     expect(validateDrgWebsitePackageExport(first.value)).toEqual([]);
+  });
+
+  it("fails closed when canonical release evidence is fabricated, revoked, held, or superseded by a client change request", () => {
+    const cases = [
+      (source: ContentExportBundle) => { source.deliverables[0].release_authorization = null; },
+      (source: ContentExportBundle) => { source.deliverables[0].release_authorization = { ...source.deliverables[0].release_authorization!, standing_authorization_active: false }; },
+      (source: ContentExportBundle) => { source.deliverables[0].release_authorization = { ...source.deliverables[0].release_authorization!, revoked_at: "2026-08-09T00:00:00.000Z" }; },
+      (source: ContentExportBundle) => { source.deliverables[0].individual_review_hold = { reason: "client exception", set_by_role: "operator", set_by_name: "CaseLoad", set_at: "2026-08-09T00:00:00.000Z" }; },
+      (source: ContentExportBundle) => { source.deliverables[0].unresolved_change_request = { approval_record_id: "change-1", requested_at: "2026-08-09T00:00:00.000Z", signer_name: "Client", note: "Revise" }; },
+    ];
+    for (const mutate of cases) {
+      const source = makeSource();
+      mutate(source);
+      expect(buildDrgWebsitePackageExport(source, makeInput()).ok).toBe(false);
+    }
   });
 
   it("refuses an export when a selection is not the exact approved source version", () => {
@@ -105,7 +122,7 @@ describe("DRG package protocol", () => {
     const result = buildDrgWebsitePackageExport(makeSource(), input);
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.errors[0].message).toContain("exact current approved version");
+    expect(result.errors[0].message).toContain("exact current release-authorized version");
   });
 
   it("rejects incomplete, cyclic, and hash-tampered package payloads", () => {

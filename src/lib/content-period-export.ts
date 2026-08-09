@@ -199,6 +199,25 @@ export interface ContentExportDeliverable {
   may_publish: boolean;
   /** Exact reason when may_publish is false; null when may_publish is true. */
   may_publish_reason: string | null;
+  /**
+   * Canonical release decision snapshot.  Null means export consumers must
+   * fail closed; they may not synthesize an individual approval from
+   * may_publish. This narrow type is intentionally compatible with the later
+   * release-authorization receipt contract.
+   */
+  release_authorization?: {
+    path: "individual_approval" | "standing_authorization";
+    evidence_id: string;
+    deliverable_id: string;
+    deliverable_version_id: string;
+    firm_id: string;
+    recorded_at: string;
+    evidence_sha256: string;
+    individual_approval_record_id?: string;
+    standing_authorization_event_id?: string;
+    standing_authorization_active?: boolean;
+    revoked_at?: string | null;
+  } | null;
   current_version: ContentExportVersionBody | null;
   /** Populated only when the approved version differs from the current version. */
   approved_version: ContentExportVersionBody | null;

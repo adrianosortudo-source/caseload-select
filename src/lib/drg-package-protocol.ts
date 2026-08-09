@@ -5,7 +5,11 @@
  * Content Period export. It does not create Deliverables rows, stage a
  * Publishing Kit, alter approvals, write storage, or publish a website.
  * Those are separate Control Room adapters and their state remains theirs.
- * This protocol owns only the source-to-approved-website-export boundary.
+ * This protocol owns only the source-to-release-authorized-website-export
+ * boundary. Client release authorization is immutable evidence, not a
+ * fabricated individual-approval record: a package may be authorized either
+ * by an exact individual approval or by a standing authorization snapshot
+ * bound to the exact current version.
  */
 import { createHash } from "crypto";
 
@@ -26,8 +30,8 @@ export const DRG_PACKAGE_STATES = [
   "counsel_note_locked",
   "derivatives_generated",
   "validation_passed",
-  "client_approval_pending",
-  "client_approved",
+  "release_authorization_pending",
+  "release_authorized",
   "website_export_ready",
   "website_release_authorized",
   "published",
@@ -41,7 +45,7 @@ export const DRG_PACKAGE_GATE_KINDS = [
   "topic_selection",
   "source_brief_lock",
   "counsel_note_lock",
-  "client_approval",
+  "release_authorization",
   "website_release_authorization",
 ] as const;
 
@@ -53,6 +57,26 @@ export interface DrgPackageGateEvidence {
   subject_sha256: string;
   actor_id: string;
   recorded_at: string;
+}
+
+/**
+ * Immutable, per-piece client release evidence.  The standing path is an
+ * explicit snapshot bound to this exact deliverable version; it never
+ * pretends that an approval_records row exists.
+ */
+export interface DrgReleaseAuthorizationEvidence {
+  path: "individual_approval" | "standing_authorization";
+  evidence_id: string;
+  deliverable_id: string;
+  deliverable_version_id: string;
+  firm_id: string;
+  recorded_at: string;
+  /** Hash of the evidence snapshot, not merely a live authorization flag. */
+  evidence_sha256: string;
+  individual_approval_record_id?: string;
+  standing_authorization_event_id?: string;
+  standing_authorization_active?: boolean;
+  revoked_at?: string | null;
 }
 
 export interface DrgDoctrinePin {
@@ -87,6 +111,7 @@ export interface DrgWebsitePackagePiece {
   body_html: string | null;
   publication_path: string | null;
   cta_target_path: string | null;
+  release_authorization: DrgReleaseAuthorizationEvidence;
   /** Deterministic verification expectations for the later website release adapter. */
   expected_metadata: {
     canonical_route: string;
@@ -213,9 +238,9 @@ const NEXT_STATES: Readonly<Record<DrgPackageState, readonly DrgPackageState[]>>
   source_brief_locked: ["counsel_note_locked", "blocked", "needs_editorial_decision"],
   counsel_note_locked: ["derivatives_generated", "blocked", "needs_editorial_decision"],
   derivatives_generated: ["validation_passed", "blocked", "needs_editorial_decision"],
-  validation_passed: ["client_approval_pending", "blocked", "needs_editorial_decision"],
-  client_approval_pending: ["client_approved", "blocked", "needs_editorial_decision"],
-  client_approved: ["website_export_ready", "blocked"],
+  validation_passed: ["release_authorization_pending", "blocked", "needs_editorial_decision"],
+  release_authorization_pending: ["release_authorized", "blocked", "needs_editorial_decision"],
+  release_authorized: ["website_export_ready", "blocked"],
   website_export_ready: ["website_release_authorized", "blocked"],
   website_release_authorized: ["published", "blocked"],
   published: [],
@@ -227,7 +252,7 @@ const GATE_FOR_DESTINATION: Partial<Record<DrgPackageState, DrgPackageGateKind>>
   topic_selected: "topic_selection",
   source_brief_locked: "source_brief_lock",
   counsel_note_locked: "counsel_note_lock",
-  client_approved: "client_approval",
+  release_authorized: "release_authorization",
   website_release_authorized: "website_release_authorization",
 };
 
@@ -357,6 +382,22 @@ export function validateDrgWebsitePackageExport(raw: unknown): DrgProtocolViolat
     }
     if (!isNonEmptyString(piece.title)) errors.push({ path: `${path}.title`, message: "must be non-empty" });
     if (!isNonEmptyString(piece.body_html) || piece.body_html.trim().length === 0) errors.push({ path: `${path}.body_html`, message: "must be non-empty approved content" });
+    const authorization = piece.release_authorization;
+    if (
+      !authorization ||
+      (authorization.path !== "individual_approval" && authorization.path !== "standing_authorization") ||
+      !isNonEmptyString(authorization.evidence_id) ||
+      authorization.deliverable_id !== piece.deliverable_id ||
+      authorization.deliverable_version_id !== piece.deliverable_version_id ||
+      authorization.firm_id !== value.package?.firm_id ||
+      !isNonEmptyString(authorization.recorded_at) ||
+      Number.isNaN(Date.parse(authorization.recorded_at)) ||
+      !isSha256(authorization.evidence_sha256)
+      || (authorization.path === "individual_approval" && !isNonEmptyString(authorization.individual_approval_record_id))
+      || (authorization.path === "standing_authorization" && (!isNonEmptyString(authorization.standing_authorization_event_id) || authorization.standing_authorization_active !== true || authorization.revoked_at !== null))
+    ) {
+      errors.push({ path: `${path}.release_authorization`, message: "must be immutable exact-version individual_approval or standing_authorization evidence" });
+    }
     const metadata = piece.expected_metadata;
     if (!metadata || typeof metadata !== "object") errors.push({ path: `${path}.expected_metadata`, message: "is required" });
     else {
@@ -416,6 +457,7 @@ function toPiece(selection: DrgWebsitePieceSelection, deliverable: ContentExport
     body_html: version.body_html,
     publication_path: deliverable.publication_path,
     cta_target_path: deliverable.cta_target_path,
+    release_authorization: deliverable.release_authorization as DrgReleaseAuthorizationEvidence,
     expected_metadata: selection.expected_metadata,
     assets: deliverable.artifacts
       .filter((asset) => asset.matches_current_version && asset.superseded_at === null)
@@ -460,12 +502,33 @@ export function buildDrgWebsitePackageExport(
       errors.push({ path: `pieces[${index}].deliverable_id`, message: "is not a firm_website deliverable" });
       return;
     }
-    if (!deliverable.may_publish || !deliverable.is_current_version_approved || !deliverable.current_version) {
-      errors.push({ path: `pieces[${index}].deliverable_id`, message: "does not have a current approved, publishable version" });
+    if (!deliverable.may_publish || !deliverable.current_version) {
+      errors.push({ path: `pieces[${index}].deliverable_id`, message: "does not have a current release-authorized, publishable version" });
       return;
     }
     if (deliverable.current_version.id !== selection.deliverable_version_id) {
-      errors.push({ path: `pieces[${index}].deliverable_version_id`, message: "does not equal the exact current approved version" });
+      errors.push({ path: `pieces[${index}].deliverable_version_id`, message: "does not equal the exact current release-authorized version" });
+      return;
+    }
+    const authorization = deliverable.release_authorization;
+    if (
+      !authorization ||
+      (authorization.path !== "individual_approval" && authorization.path !== "standing_authorization") ||
+      !isNonEmptyString(authorization.evidence_id) ||
+      authorization.deliverable_id !== deliverable.id ||
+      authorization.deliverable_version_id !== deliverable.current_version.id ||
+      authorization.firm_id !== source.firm.id ||
+      !isNonEmptyString(authorization.recorded_at) ||
+      Number.isNaN(Date.parse(authorization.recorded_at)) ||
+      !isSha256(authorization.evidence_sha256)
+      || (authorization.path === "individual_approval" && !isNonEmptyString(authorization.individual_approval_record_id))
+      || (authorization.path === "standing_authorization" && (!isNonEmptyString(authorization.standing_authorization_event_id) || authorization.standing_authorization_active !== true || authorization.revoked_at !== null))
+    ) {
+      errors.push({ path: `deliverables.${deliverable.id}.release_authorization`, message: "canonical export must provide immutable exact-version individual_approval or active standing_authorization evidence" });
+      return;
+    }
+    if (deliverable.unresolved_change_request || deliverable.individual_review_hold) {
+      errors.push({ path: `deliverables.${deliverable.id}.release_authorization`, message: "open change request or individual-review hold blocks package export" });
       return;
     }
     if (deliverable.locale !== selection.locale) {
