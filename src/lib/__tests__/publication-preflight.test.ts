@@ -139,7 +139,7 @@ describe("buildPreflightReport: fail-closed branches", () => {
   });
 
   it("approved_version_id != current_version_id (drift) -> may_publish false via the canonical authorization result", () => {
-    const deliverable = makeDeliverable({ approved_version_id: "stale-version-id" });
+    const deliverable = makeDeliverable({ status: "in_review", approved_version_id: "stale-version-id" });
     const report = buildPreflightReport(baseInput({ deliverable }));
     expect(report.placements[0].mayPublish).toBe(false);
     expect(report.placements[0].reason).toMatch(/not release-authorized/);
@@ -503,7 +503,7 @@ describe("buildPreflightReport: releaseAuthorizationByDeliverableId (canonical t
   });
 
   it("supplied and NOT authorized -> reason names the canonical kind, never the old 'not approved'/'version drift' wording", () => {
-    const deliverable = makeDeliverable({ status: "draft", approved_version_id: null });
+    const deliverable = makeDeliverable({ status: "in_review", approved_version_id: null });
     const authorization = isVersionReleaseAuthorized({
       deliverableStatus: deliverable.status,
       approvedVersionId: deliverable.approved_version_id,

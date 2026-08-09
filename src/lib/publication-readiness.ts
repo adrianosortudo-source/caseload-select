@@ -31,6 +31,7 @@ import type {
   PublicationArtifactValidation,
 } from "./types";
 import { resolveRequirements, type RequirementKey } from "./publication-requirements";
+import { isVersionReleaseAuthorized, type ReleaseAuthorizationResult } from "./release-authorization";
 
 export type ReadinessStatus = "pass" | "fail" | "not_required" | "unknown";
 
@@ -62,6 +63,13 @@ export interface DeliverableReadiness {
 export interface EvaluateReadinessInput {
   deliverable: ContentDeliverable;
   currentVersion: DeliverableVersion | null;
+  /**
+   * The live loader's one canonical authorization decision for this exact
+   * current version. Pure callers may omit it; they still use the same
+   * canonical bar with standing authorization fail-closed rather than a
+   * second individual-approval-only interpretation.
+   */
+  releaseAuthorization?: ReleaseAuthorizationResult;
   /** All publication_artifacts rows for this deliverable, any version. */
   artifacts: PublicationArtifact[];
   /** The most recent validation per artifact id, pre-resolved by the caller. */
@@ -122,16 +130,21 @@ function evaluateOne(
 
     case "current_version_approved": {
       if (!currentVersionId) return { status: "fail", reason: "no current version exists" };
-      if (deliverable.approved_version_id === currentVersionId) {
+      const authorization = input.releaseAuthorization ?? isVersionReleaseAuthorized({
+        deliverableStatus: deliverable.status,
+        approvedVersionId: deliverable.approved_version_id,
+        targetVersionId: currentVersionId,
+        versionRequiresIndividualReview: currentVersion?.requires_individual_review ?? true,
+        hasUnresolvedClientChangeHold: false,
+        standingAuthorizationActive: false,
+      });
+      if (authorization.authorized) {
         return { status: "pass", evidence: { versionId: currentVersionId } };
       }
-      if (deliverable.approved_version_id) {
-        return {
-          status: "fail",
-          reason: `approved version is not the current version (approved v${deliverable.approved_version_id}, current v${currentVersionId})`,
-        };
-      }
-      return { status: "fail", reason: "the current version has not been formally approved by legal counsel" };
+      return {
+        status: "fail",
+        reason: `current version is not release-authorized (${authorization.kind}): ${authorization.reason}`,
+      };
     }
 
     case "hero_image":

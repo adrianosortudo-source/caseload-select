@@ -19,6 +19,8 @@ import { getFirmAbout } from "@/lib/firm-about";
 import { getContentCadence } from "@/lib/content-cadence";
 import { loadPlanPublicationReadiness } from "@/lib/publication-readiness-loader";
 import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
+import { loadUnresolvedClientChangeHoldDeliverableIds } from "@/lib/deliverable-client-change-holds";
+import { isVersionReleaseAuthorized } from "@/lib/release-authorization";
 import ContentPlan from "@/components/portal/ContentPlan";
 import AboutPanel from "@/components/portal/AboutPanel";
 import ContentCadencePanel from "@/components/portal/ContentCadencePanel";
@@ -49,7 +51,7 @@ export default async function DeliverablesPage({
   const isLawyerPreview =
     session.role === "operator" && preview?.target === "lawyer" && preview.firm_id === firmId;
   const viewerRole = session.role === "operator" && !isLawyerPreview ? "operator" : "lawyer";
-  const includeArchived = archived === "1";
+  const includeArchived = viewerRole === "operator" && archived === "1";
 
   const [plan, about] = await Promise.all([
     getContentPlan(firmId, { includeArchived }),
@@ -58,6 +60,28 @@ export default async function DeliverablesPage({
 
   const cadence = getContentCadence(firmId);
   const authState = await getStandingAuthorizationState(firmId);
+  let standingAuthorizedDeliverableIds: string[] = [];
+  try {
+    const heldDeliverableIds = await loadUnresolvedClientChangeHoldDeliverableIds(
+      firmId,
+      plan.deliverables.map((deliverable) => deliverable.id),
+    );
+    standingAuthorizedDeliverableIds = plan.deliverables.flatMap((deliverable) => {
+      if (!deliverable.current_version_id) return [];
+      const authorization = isVersionReleaseAuthorized({
+        deliverableStatus: deliverable.status,
+        approvedVersionId: null,
+        targetVersionId: deliverable.current_version_id,
+        versionRequiresIndividualReview: deliverable.requires_individual_review,
+        hasUnresolvedClientChangeHold: heldDeliverableIds.has(deliverable.id),
+        standingAuthorizationActive: authState?.active ?? false,
+      });
+      return authorization.authorizationPath === "standing_authorization" ? [deliverable.id] : [];
+    });
+  } catch {
+    // A missing hold projection must never turn into an affirmative client label.
+    standingAuthorizedDeliverableIds = [];
+  }
 
   // Additive: Publication Readiness (Workstream 5). loadPlanPublicationReadiness
   // never throws on its own, but the .catch below is a second, independent
@@ -98,6 +122,7 @@ export default async function DeliverablesPage({
         settings={plan.settings}
         planReadiness={planReadiness}
         standingAuthActive={authState?.active ?? false}
+        standingAuthorizedDeliverableIds={standingAuthorizedDeliverableIds}
       />
     </div>
   );

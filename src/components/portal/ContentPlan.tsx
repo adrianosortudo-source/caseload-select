@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { createContext, useContext, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type {
@@ -93,6 +93,8 @@ export interface PlanReadinessProp {
   unavailable?: boolean;
 }
 
+const StandingAuthorizedIdsContext = createContext<ReadonlySet<string>>(new Set());
+
 export default function ContentPlan({
   firmId,
   viewerRole,
@@ -102,6 +104,7 @@ export default function ContentPlan({
   settings,
   planReadiness,
   standingAuthActive = false,
+  standingAuthorizedDeliverableIds = [],
 }: {
   firmId: string;
   viewerRole: "operator" | "lawyer";
@@ -111,6 +114,8 @@ export default function ContentPlan({
   settings: ContentPlanSettings | null;
   planReadiness?: PlanReadinessProp;
   standingAuthActive?: boolean;
+  /** Server-derived canonical standing authorization; omitted/unavailable fails closed. */
+  standingAuthorizedDeliverableIds?: string[];
 }) {
   const router = useRouter();
   const [showNewWeek, setShowNewWeek] = useState(false);
@@ -120,11 +125,13 @@ export default function ContentPlan({
   const live = deliverables.filter((d) => d.status !== "archived");
   const unscheduled = live.filter((d) => !d.period_id);
   const archived = includeArchived ? deliverables.filter((d) => d.status === "archived") : [];
-  const overview = computeOverview(live, { standingAuthActive });
+  const standingAuthorizedIds = new Set(standingAuthorizedDeliverableIds);
+  const overview = computeOverview(live, { standingAuthorizedDeliverableIds: standingAuthorizedIds });
 
   const refresh = () => router.refresh();
 
   return (
+    <StandingAuthorizedIdsContext.Provider value={standingAuthorizedIds}>
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
@@ -139,7 +146,7 @@ export default function ContentPlan({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Link
+          {isOperator && <Link
             href={
               includeArchived
                 ? `/portal/${firmId}/deliverables`
@@ -152,7 +159,7 @@ export default function ContentPlan({
             }`}
           >
             {includeArchived ? "Hide archived" : "Show archived"}
-          </Link>
+          </Link>}
           {isOperator && (
             <>
               <button
@@ -181,13 +188,13 @@ export default function ContentPlan({
         planReadiness={planReadiness}
       />
 
-      <ContentArchive
+        {isOperator && <ContentArchive
         firmId={firmId}
         periods={periods}
         deliverables={deliverables}
         includeArchived={includeArchived}
-        standingAuthActive={standingAuthActive}
-      />
+          standingAuthActive={false}
+        />}
 
       {isOperator && showNewWeek && (
         <PeriodForm
@@ -313,6 +320,7 @@ export default function ContentPlan({
         record. Posting a new version returns a piece to review.
       </p>
     </div>
+    </StandingAuthorizedIdsContext.Provider>
   );
 }
 
@@ -1051,6 +1059,7 @@ function DeliverableRow({
   onChanged: () => void;
   standingAuthActive: boolean;
 }) {
+  const standingAuthorizedIds = useContext(StandingAuthorizedIdsContext);
   const [placing, setPlacing] = useState(false);
   // A recorded published_at outranks every other label: once a piece is out,
   // that is the fact the row needs to carry. Below it, DR-107: an in_review
@@ -1063,7 +1072,7 @@ function DeliverableRow({
         label: PUBLISHED_LABEL,
         cls: "bg-blue-published/10 text-blue-published border-blue-published/30",
       }
-    : item.status === "in_review" && standingAuthActive && !item.requires_individual_review
+    : item.status === "in_review" && standingAuthorizedIds.has(item.id)
       ? { label: PRE_APPROVED_LABEL, cls: "bg-green-pass/10 text-green-pass border-green-pass/30" }
       : PLAN_STATUS[item.status];
   // Report the date the piece actually went out when we have one. The old

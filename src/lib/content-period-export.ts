@@ -47,6 +47,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { shouldWithholdArtifactLinks } from "@/lib/artifact-links";
 import { isVersionReleaseAuthorized } from "@/lib/release-authorization";
 import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
+import { loadUnresolvedClientChangeHoldDeliverableIds } from "@/lib/deliverable-client-change-holds";
 import type {
   ContentDeliverable,
   DeliverableVersion,
@@ -264,6 +265,7 @@ function evaluateMayPublish(
   currentVersionExists: boolean,
   approvedVersionExists: boolean,
   currentVersionRequiresIndividualReview: boolean,
+  hasUnresolvedClientChangeHold: boolean,
   standingAuthorizationActive: boolean,
 ): { may_publish: boolean; reason: string | null } {
   // The pointer-integrity checks below are this module's own and stay here:
@@ -314,6 +316,7 @@ function evaluateMayPublish(
     approvedVersionId: deliverable.approved_version_id,
     targetVersionId: deliverable.current_version_id,
     versionRequiresIndividualReview: currentVersionRequiresIndividualReview,
+    hasUnresolvedClientChangeHold,
     standingAuthorizationActive,
   });
 
@@ -463,6 +466,7 @@ export async function buildContentExportBundle(
   const archived = rows.filter((d) => d.status === "archived");
 
   const deliverableIds = active.map((d) => d.id);
+  const heldDeliverableIds = await loadUnresolvedClientChangeHoldDeliverableIds(period.firm_id, deliverableIds);
 
   const [
     { data: versions },
@@ -708,6 +712,7 @@ export async function buildContentExportBundle(
       // flag to true there keeps the standing-authorization path closed for a
       // version this deliverable does not actually own.
       currentResolved.version?.requires_individual_review ?? true,
+      heldDeliverableIds.has(d.id),
       standingAuthorizationActive,
     );
 

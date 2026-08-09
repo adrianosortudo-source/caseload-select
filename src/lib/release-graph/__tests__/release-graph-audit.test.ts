@@ -545,7 +545,7 @@ describe("all eighteen gap classifications are independently reachable", () => {
     expect(wrapperFact!.authorityRequired).toMatch(/Firm's lawyer/);
     expect(wrapperFact!.canonicalSourceConsulted).toMatch(/approved_version_id/);
     expect(wrapperFact!.canonicalSourceConsulted).toMatch(/standing_publishing_authorizations/);
-    expect(wrapperFact!.factualEvidence).toMatch(/no active standing publishing authorization/);
+    expect(wrapperFact!.factualEvidence).toMatch(/standing publishing authorization only covers a deliverable whose exact current version is in_review/);
   });
 
   // ─── Two-path release authorization: the version-bound source edge must
@@ -574,7 +574,7 @@ describe("all eighteen gap classifications are independently reachable", () => {
     const audit = resolveAndAuditReleaseGraph(
       baseInput({
         // Not individually approved -- only path B can supply authorization here.
-        deliverable: makeDeliverable({ status: "draft", approved_version_id: null }),
+        deliverable: makeDeliverable({ status: "in_review", approved_version_id: null }),
         currentVersion: makeVersion({ requires_individual_review: false }),
         placement: makePlacement({ destination: "linkedin_article" }),
         artifacts: [makeArtifact()],
@@ -591,7 +591,7 @@ describe("all eighteen gap classifications are independently reachable", () => {
   it("fails closed — standing authorization active BUT requires_individual_review=true overrides it unconditionally", () => {
     const audit = resolveAndAuditReleaseGraph(
       baseInput({
-        deliverable: makeDeliverable({ status: "draft", approved_version_id: null }),
+        deliverable: makeDeliverable({ status: "in_review", approved_version_id: null }),
         currentVersion: makeVersion({ requires_individual_review: true }),
         placement: makePlacement({ destination: "linkedin_article" }),
         artifacts: [makeArtifact()],
@@ -610,7 +610,7 @@ describe("all eighteen gap classifications are independently reachable", () => {
   it("fails closed — standing authorization inactive/revoked/expired and not individually approved", () => {
     const audit = resolveAndAuditReleaseGraph(
       baseInput({
-        deliverable: makeDeliverable({ status: "draft", approved_version_id: null }),
+        deliverable: makeDeliverable({ status: "in_review", approved_version_id: null }),
         currentVersion: makeVersion({ requires_individual_review: false }),
         placement: makePlacement({ destination: "linkedin_article" }),
         artifacts: [makeArtifact()],
@@ -633,7 +633,7 @@ describe("all eighteen gap classifications are independently reachable", () => {
       baseInput({
         // Authorized via path B this time, to prove the artifact-binding
         // gate is checked independently of WHICH path authorized the version.
-        deliverable: makeDeliverable({ status: "draft", approved_version_id: null }),
+        deliverable: makeDeliverable({ status: "in_review", approved_version_id: null }),
         currentVersion: makeVersion({ requires_individual_review: false }),
         placement: makePlacement({ destination: "linkedin_article" }),
         artifacts: [makeArtifact({ version_id: olderVersionId })],
@@ -650,7 +650,7 @@ describe("all eighteen gap classifications are independently reachable", () => {
   it("fails closed — neither individually approved nor standing-authorized (no override in play)", () => {
     const audit = resolveAndAuditReleaseGraph(
       baseInput({
-        deliverable: makeDeliverable({ status: "draft", approved_version_id: null }),
+        deliverable: makeDeliverable({ status: "in_review", approved_version_id: null }),
         currentVersion: makeVersion({ requires_individual_review: false }),
         placement: makePlacement({ destination: "linkedin_article" }),
         artifacts: [makeArtifact()],
@@ -1183,7 +1183,7 @@ describe("release-authorization consistency: fact 1, fact 7, and existingPreflig
   }) {
     return baseInput({
       deliverable: makeDeliverable({
-        status: overrides.approvedStatus ?? "draft",
+        status: overrides.approvedStatus ?? "in_review",
         approved_version_id: overrides.approvedVersionId ?? null,
       }),
       currentVersion: makeVersion({ requires_individual_review: overrides.requiresIndividualReview ?? false }),
@@ -1235,14 +1235,14 @@ describe("release-authorization consistency: fact 1, fact 7, and existingPreflig
 
   it("B. valid standing authorization (no individual approval, requires_individual_review=false) -> all three agree: authorized", () => {
     const audit = resolveAndAuditReleaseGraph(
-      authInput({ approvedStatus: "draft", approvedVersionId: null, requiresIndividualReview: false, standingAuthorizationActive: true }),
+      authInput({ approvedStatus: "in_review", approvedVersionId: null, requiresIndividualReview: false, standingAuthorizationActive: true }),
     );
     assertConsistent(audit, { authorized: true, kind: "standing_authorization" });
   });
 
   it("C. requires_individual_review=true blocks an otherwise-active standing authorization -> all three agree: blocked", () => {
     const audit = resolveAndAuditReleaseGraph(
-      authInput({ approvedStatus: "draft", approvedVersionId: null, requiresIndividualReview: true, standingAuthorizationActive: true }),
+      authInput({ approvedStatus: "in_review", approvedVersionId: null, requiresIndividualReview: true, standingAuthorizationActive: true }),
     );
     assertConsistent(audit, { authorized: false, kind: "blocked_requires_individual_review" });
   });
@@ -1256,21 +1256,21 @@ describe("release-authorization consistency: fact 1, fact 7, and existingPreflig
 
   it("E. stale approval (approved_version_id references another version), standing authorization inactive -> all three agree: blocked, never called approved", () => {
     const audit = resolveAndAuditReleaseGraph(
-      authInput({ approvedStatus: "approved", approvedVersionId: MISMATCHED_VERSION_ID, requiresIndividualReview: false, standingAuthorizationActive: false }),
+      authInput({ approvedStatus: "in_review", approvedVersionId: MISMATCHED_VERSION_ID, requiresIndividualReview: false, standingAuthorizationActive: false }),
     );
     assertConsistent(audit, { authorized: false, kind: "approved_version_mismatch" });
   });
 
   it("F. stale approval PLUS valid standing authorization -> all three agree: authorized through standing authorization, not individual approval", () => {
     const audit = resolveAndAuditReleaseGraph(
-      authInput({ approvedStatus: "approved", approvedVersionId: MISMATCHED_VERSION_ID, requiresIndividualReview: false, standingAuthorizationActive: true }),
+      authInput({ approvedStatus: "in_review", approvedVersionId: MISMATCHED_VERSION_ID, requiresIndividualReview: false, standingAuthorizationActive: true }),
     );
     assertConsistent(audit, { authorized: true, kind: "standing_authorization" });
   });
 
   it("G. inactive/revoked standing authorization, no individual approval on record -> all three agree: blocked", () => {
     const audit = resolveAndAuditReleaseGraph(
-      authInput({ approvedStatus: "draft", approvedVersionId: null, requiresIndividualReview: false, standingAuthorizationActive: false }),
+      authInput({ approvedStatus: "in_review", approvedVersionId: null, requiresIndividualReview: false, standingAuthorizationActive: false }),
     );
     assertConsistent(audit, { authorized: false, kind: "standing_authorization_inactive" });
   });
@@ -1295,7 +1295,7 @@ describe("release-authorization consistency: fact 1, fact 7, and existingPreflig
 
     const standingAuthorizedStaleArtifact = resolveAndAuditReleaseGraph(
       baseInput({
-        deliverable: makeDeliverable({ status: "draft", approved_version_id: null }),
+        deliverable: makeDeliverable({ status: "in_review", approved_version_id: null }),
         currentVersion: makeVersion({ requires_individual_review: false }),
         placement: makePlacement({ destination: "linkedin_article" }),
         artifacts: [makeArtifact({ version_id: MISMATCHED_VERSION_ID })], // bound to a DIFFERENT version

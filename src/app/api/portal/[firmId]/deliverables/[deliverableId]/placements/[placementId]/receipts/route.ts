@@ -10,10 +10,10 @@
  * Body (POST): { approved_version_id, claim_id, published_at, public_url?,
  *   external_post_id?, artifact_id? }
  *
- * approved_version_id must be the deliverable's OWN current
- * approved_version_id (never an arbitrary version): this route refuses to
- * record a receipt for anything else, so a receipt can never claim to
- * publish content the lawyer did not actually approve as current.
+ * approved_version_id must name the deliverable's exact current version.
+ * The active claim determines whether that version was individually approved
+ * or covered by standing authorization; the route never recovers the old
+ * individual-approval-only rule from a deliverable pointer.
  *
  * claim_id (corrective release, workstream 1) is required for every new
  * root receipt: it must name an active publication_placement_claims row
@@ -52,6 +52,7 @@ interface ClaimRow {
   status: "active" | "released" | "superseded";
   claimed_by_role: "operator" | "lawyer" | "system";
   claimed_by_id: string | null;
+  release_path: "individual_approval" | "standing_authorization" | null;
 }
 
 type ClaimValidation =
@@ -71,7 +72,7 @@ async function loadAndValidateClaim(
 ): Promise<ClaimValidation> {
   const { data, error } = await supabaseAdmin
     .from("publication_placement_claims")
-    .select("id, firm_id, deliverable_id, placement_id, approved_version_id, status, claimed_by_role, claimed_by_id")
+    .select("id, firm_id, deliverable_id, placement_id, approved_version_id, status, claimed_by_role, claimed_by_id, release_path")
     .eq("id", claimId)
     .maybeSingle();
   if (error) {
@@ -200,16 +201,9 @@ export async function POST(
   if (!approvedVersionId) {
     return NextResponse.json({ error: "approved_version_id is required" }, { status: 400 });
   }
-  if (
-    detail.deliverable.status !== "approved" ||
-    detail.deliverable.approved_version_id !== approvedVersionId ||
-    detail.deliverable.approved_version_id !== detail.deliverable.current_version_id
-  ) {
+  if (detail.deliverable.current_version_id !== approvedVersionId) {
     return NextResponse.json(
-      {
-        error:
-          "approved_version_id must equal this deliverable's own current approved_version_id; a receipt cannot record publication of a version that is not the deliverable's current approved version",
-      },
+      { error: "approved_version_id must name this deliverable's exact current version" },
       { status: 409 },
     );
   }
@@ -230,6 +224,33 @@ export async function POST(
     return NextResponse.json(
       { error: claimValidation.error, nextAction: claimValidation.nextAction },
       { status: claimValidation.status },
+    );
+  }
+  const currentVersion = detail.versions.find((version) => version.id === approvedVersionId);
+  if (!currentVersion) {
+    return NextResponse.json({ error: "current version details are unavailable; do not record a receipt" }, { status: 409 });
+  }
+  if (claimValidation.claim.release_path === "individual_approval") {
+    if (
+      detail.deliverable.status !== "approved" ||
+      detail.deliverable.approved_version_id !== approvedVersionId
+    ) {
+      return NextResponse.json(
+        { error: "the active claim requires exact current individual approval" },
+        { status: 409 },
+      );
+    }
+  } else if (claimValidation.claim.release_path === "standing_authorization") {
+    if (detail.deliverable.status !== "in_review" || currentVersion.requires_individual_review) {
+      return NextResponse.json(
+        { error: "the active standing-authorized claim no longer covers this current version" },
+        { status: 409 },
+      );
+    }
+  } else {
+    return NextResponse.json(
+      { error: "claim has no recognized release authorization path; reclaim this placement" },
+      { status: 409 },
     );
   }
 

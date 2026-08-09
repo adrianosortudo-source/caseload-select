@@ -51,7 +51,7 @@ export interface RequirementSpec {
 const ALWAYS_FIRST: RequirementSpec[] = [
   { key: "role_and_locale_known", label: "Deliverable role and locale are set", blocking: true },
   { key: "current_body", label: "Current version has content", blocking: true },
-  { key: "current_version_approved", label: "Current version is legally approved", blocking: true },
+  { key: "current_version_approved", label: "Current version is release-authorized", blocking: true },
 ];
 
 const ARTICLE: RequirementSpec[] = [

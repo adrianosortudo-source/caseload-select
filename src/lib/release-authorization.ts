@@ -1,17 +1,18 @@
 /**
  * The canonical two-path release-authorization bar: the ONE interpretation
  * of "is this version release-authorized" for the entire Content Studio
- * publishing surface, ported faithfully from claim_placement_for_publish()
- * (supabase/migrations/20260717230956_standing_publishing_authorization.sql,
- * the Path A / Path B branch at lines 407-439) -- the actual, authoritative
- * enforcement of this rule in this codebase. No other pure, importable
- * TypeScript implementation of it exists: the RPC itself is the only real
- * enforcement, and calling it performs a database write (it creates a
- * publication_placement_claims row), which read-only callers (a preflight
- * report, a dry-run audit) must never do. This module is a faithful,
- * read-only port of that same decision -- one shared helper every other
- * authorization-aware module in this codebase composes with, never a
- * second, competing rule reinvented locally.
+ * publishing surface. It is the read-only projection of the composed
+ * database contract: the legacy claim RPC's Path A / Path B choice
+ * (20260717230956_standing_publishing_authorization.sql), plus the current
+ * version/status, client-change-hold, claim, and receipt trigger guards in
+ * 20260809150948_release_safety_authorization_and_change_holds.sql and
+ * 20260809170708_deliverable_scoped_client_change_holds.sql. The database
+ * functions and triggers remain authoritative: calling the claim RPC writes
+ * a publication_placement_claims row, while the receipt trigger revalidates
+ * the live release state. Read-only callers (a preflight report, a dry-run
+ * audit) must never create a claim just to answer this question. This module
+ * is the shared read model every authorization-aware caller composes with,
+ * never a second, competing release rule reinvented locally.
  *
  * A version is release-authorized only through EITHER:
  *   A. individual lawyer approval of that exact version
@@ -19,8 +20,7 @@
  *   B. an active standing publishing authorization for the firm, PROVIDED
  *      the version is not flagged requires_individual_review -- that flag
  *      always overrides path B unconditionally and is checked BEFORE the
- *      firm's authorization state is ever consulted, exactly as the RPC
- *      rejects on that flag first.
+ *      firm's authorization state is ever consulted.
  * There is no third path. Every caller in this codebase must call
  * isVersionReleaseAuthorized() and use its result as-is; no function may
  * reconstruct any part of this decision independently (re-comparing
@@ -88,6 +88,8 @@ export type ReleaseAuthorizationPath = "individual_approval" | "standing_authori
 export type ReleaseAuthorizationResultKind =
   | "individually_approved"
   | "standing_authorization"
+  | "blocked_client_change_hold"
+  | "blocked_standing_status"
   | "blocked_requires_individual_review"
   | "standing_authorization_inactive"
   | "approved_version_mismatch"
@@ -98,6 +100,8 @@ export interface ReleaseAuthorizationInput {
   approvedVersionId: string | null;
   targetVersionId: string;
   versionRequiresIndividualReview: boolean;
+  /** An append-only client change hold remains unresolved for this deliverable. */
+  hasUnresolvedClientChangeHold?: boolean;
   /** This firm's CURRENT standing-authorization state (standing-publishing-authorization.ts's getStandingAuthorizationState().active) -- never historical presence; see this function's own doc comment on why "ever configured" is not a distinction this input can make. */
   standingAuthorizationActive: boolean;
 }
@@ -112,6 +116,7 @@ export interface ReleaseAuthorizationResult {
   approvedVersionId: string | null;
   targetVersionId: string;
   versionRequiresIndividualReview: boolean;
+  hasUnresolvedClientChangeHold: boolean;
   standingAuthorizationActive: boolean;
 }
 
@@ -120,6 +125,7 @@ export function isVersionReleaseAuthorized(input: ReleaseAuthorizationInput): Re
     approvedVersionId: input.approvedVersionId,
     targetVersionId: input.targetVersionId,
     versionRequiresIndividualReview: input.versionRequiresIndividualReview,
+    hasUnresolvedClientChangeHold: Boolean(input.hasUnresolvedClientChangeHold),
     standingAuthorizationActive: input.standingAuthorizationActive,
   };
 
@@ -134,6 +140,18 @@ export function isVersionReleaseAuthorized(input: ReleaseAuthorizationInput): Re
   // with approved_version_id already equal to the evaluated version) --
   // every reason string below now names only what is actually true.
   const approvedVersionIdMatches = input.approvedVersionId === input.targetVersionId;
+
+  // A client request for changes is a hard release hold. Clearing it is a
+  // separate client action and never fabricates an approval record.
+  if (input.hasUnresolvedClientChangeHold) {
+    return {
+      kind: "blocked_client_change_hold",
+      authorized: false,
+      authorizationPath: null,
+      reason: `Not release-authorized: the client has an unresolved change hold on version ${input.targetVersionId}. The hold must be explicitly resolved by the client decision-maker before this version can be released.`,
+      ...evidence,
+    };
+  }
 
   if (input.deliverableStatus === "approved" && approvedVersionIdMatches) {
     return {
@@ -155,6 +173,18 @@ export function isVersionReleaseAuthorized(input: ReleaseAuthorizationInput): Re
     : input.approvedVersionId !== null
       ? `approved_version_id=${input.approvedVersionId} does not match the evaluated version (${input.targetVersionId})`
       : `approved_version_id is null -- this version has never been individually approved`;
+
+  // Standing authorization covers review-ready material only. Draft,
+  // changes_requested, archived, and unknown states fail closed.
+  if (input.deliverableStatus !== "in_review") {
+    return {
+      kind: "blocked_standing_status",
+      authorized: false,
+      authorizationPath: null,
+      reason: `Not release-authorized: standing publishing authorization only covers a deliverable whose exact current version is in_review; deliverableStatus="${input.deliverableStatus}" is not eligible. ${individualApprovalGapReason}.`,
+      ...evidence,
+    };
+  }
 
   if (input.versionRequiresIndividualReview) {
     return {
