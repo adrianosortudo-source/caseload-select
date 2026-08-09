@@ -679,13 +679,23 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
       `select set_standing_publishing_authorization($1, 'enabled', 'lawyer', $2, 'Canonical Lawyer', 'canonical@drglaw.test', 'Standing authorization text', 'v1', 'all_future_content', 'weekly_digest', null, null, null) as result`,
       [firm, lawyer],
     );
-    await connA.query(`update deliverable_versions set requires_individual_review = true where id = $1`, [v2]);
+    await connA.query(
+      `update deliverable_versions
+       set requires_individual_review = true, individual_review_reason = 'Regression: individual review required'
+       where id = $1`,
+      [v2],
+    );
     const individualReviewClaim = await connA.query(
       `select claim_placement_for_publish($1, $2, $3, $4, 'individual-review-v2-claim', 'operator', null, 'Test Operator') as result`,
       [firm, deliverable, placement, v2],
     );
     expect(individualReviewClaim.rows[0].result.ok).toBe(false);
-    await connA.query(`update deliverable_versions set requires_individual_review = false where id = $1`, [v2]);
+    await connA.query(
+      `update deliverable_versions
+       set requires_individual_review = false, individual_review_reason = null
+       where id = $1`,
+      [v2],
+    );
     await connA.query(`update content_deliverables set status = 'draft' where id = $1`, [deliverable]);
     const statusDriftClaim = await connA.query(
       `select claim_placement_for_publish($1, $2, $3, $4, 'status-drift-v2-claim', 'operator', null, 'Test Operator') as result`,
