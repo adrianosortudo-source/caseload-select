@@ -95,6 +95,17 @@ export interface VerifiedDrgReleaseAuthorizationEnvelope {
   readonly envelope: DrgReleaseAuthorizationEnvelope;
 }
 
+function deepFreezeReleaseEnvelope(envelope: DrgReleaseAuthorizationEnvelope): DrgReleaseAuthorizationEnvelope {
+  for (const piece of envelope.pieces) {
+    Object.freeze(piece.asset_sha256s);
+    Object.freeze(piece);
+  }
+  Object.freeze(envelope.pieces);
+  Object.freeze(envelope.package);
+  Object.freeze(envelope.signature);
+  return Object.freeze(envelope);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -221,5 +232,9 @@ export function verifyDrgReleaseAuthorizationEnvelope(
   if (sha256DrgRelease(publicDer) !== trusted.publicKeySpkiSha256) throw new Error("repository-pinned release authorization key hash is invalid");
   const { signature: _signature, ...withoutSignature } = envelope;
   if (!verifySignature(null, signaturePayload(withoutSignature), trusted.publicKeyPem, Buffer.from(signature.signature_base64, "base64"))) throw new Error("release authorization envelope signature verification failed");
-  return Object.freeze({ [verifiedAuthorizationBrand]: true, envelope });
+  // Never brand caller-owned mutable memory. Otherwise a caller could verify a
+  // valid envelope and mutate its evidence before passing the branded result to
+  // a downstream projection.
+  const immutableEnvelope = deepFreezeReleaseEnvelope(structuredClone(envelope));
+  return Object.freeze({ [verifiedAuthorizationBrand]: true as const, envelope: immutableEnvelope });
 }

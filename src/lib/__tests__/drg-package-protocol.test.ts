@@ -151,8 +151,9 @@ function makeInput(): DrgWebsitePackageBuildInput {
 
 describe("DRG package protocol", () => {
   it("builds a deterministic complete six-piece website package from standing release authorization without fabricating approval records", () => {
-    const first = buildDrgWebsitePackageExport(makeSource(), makeInput());
-    const second = buildDrgWebsitePackageExport(makeSource(), makeInput());
+    const source = makeSource();
+    const first = buildDrgWebsitePackageExport(source, makeInput());
+    const second = buildDrgWebsitePackageExport(source, makeInput());
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
     if (!first.ok || !second.ok) return;
@@ -166,8 +167,14 @@ describe("DRG package protocol", () => {
   it("fails closed when canonical release evidence is fabricated, revoked, held, or superseded by a client change request", () => {
     const cases = [
       (source: ContentExportBundle) => { source.release_authorization_envelope = null; },
-      (source: ContentExportBundle) => { (source.release_authorization_envelope!.signature as { signature_base64: string }).signature_base64 = Buffer.from("forged").toString("base64"); },
-      (source: ContentExportBundle) => { (source.release_authorization_envelope!.pieces[0] as { revoked_at: string | null }).revoked_at = "2026-08-09T00:00:00.000Z"; },
+      (source: ContentExportBundle) => {
+        source.release_authorization_envelope = structuredClone(source.release_authorization_envelope!);
+        (source.release_authorization_envelope.signature as { signature_base64: string }).signature_base64 = Buffer.from("forged").toString("base64");
+      },
+      (source: ContentExportBundle) => {
+        source.release_authorization_envelope = structuredClone(source.release_authorization_envelope!);
+        (source.release_authorization_envelope.pieces[0] as { revoked_at: string | null }).revoked_at = "2026-08-09T00:00:00.000Z";
+      },
       (source: ContentExportBundle) => { source.deliverables[0].individual_review_hold = { reason: "client exception", set_by_role: "operator", set_by_name: "CaseLoad", set_at: "2026-08-09T00:00:00.000Z" }; },
       (source: ContentExportBundle) => { source.deliverables[0].unresolved_change_request = { approval_record_id: "change-1", requested_at: "2026-08-09T00:00:00.000Z", signer_name: "Client", note: "Revise" }; },
     ];
