@@ -478,7 +478,7 @@ begin
         v_expected_action := 'new_version';
         if v_plan_action->>'action' is distinct from 'new_version'
            or (v_plan_action->>'priorVersionId') is distinct from
-              case when v_deliverable.version_id is null then null else v_deliverable.version_id::text end
+              (case when v_deliverable.version_id is null then null else v_deliverable.version_id::text end)
            or (v_plan_action->>'expectedVersionNumber')::integer is distinct from coalesce(v_deliverable.version_number, 0) + 1 then
           raise exception 'stale new-version plan for %', v_piece_ids[v_index];
         end if;
