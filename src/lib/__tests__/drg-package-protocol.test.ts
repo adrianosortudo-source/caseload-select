@@ -14,6 +14,7 @@ import type { ContentExportBundle, ContentExportDeliverable } from "@/lib/conten
 import {
   DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS,
   DRG_RELEASE_AUTHORIZATION_PIECE_IDS,
+  DRG_RELEASE_TRUST_BUNDLE_SHA256,
   computeDrgReleaseEvidenceSha256,
   createSignedDrgReleaseAuthorizationEnvelope,
   type DrgReleaseAuthorizationPieceSnapshot,
@@ -150,6 +151,10 @@ function makeInput(): DrgWebsitePackageBuildInput {
 }
 
 describe("DRG package protocol", () => {
+  it("pins the portal trust bundle to the cross-repository parity fixture", () => {
+    expect(DRG_RELEASE_TRUST_BUNDLE_SHA256).toBe("2c3f4af2928181d507d1c3b0f15d4d8ccdacaf6a83238311825eb121e6808247");
+  });
+
   it("builds a deterministic complete six-piece website package from standing release authorization without fabricating approval records", () => {
     const source = makeSource();
     const first = buildDrgWebsitePackageExport(source, makeInput());
