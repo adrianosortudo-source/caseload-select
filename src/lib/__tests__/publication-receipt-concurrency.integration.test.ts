@@ -697,11 +697,12 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
       [v2],
     );
     await connA.query(`update content_deliverables set status = 'draft' where id = $1`, [deliverable]);
-    const statusDriftClaim = await connA.query(
-      `select claim_placement_for_publish($1, $2, $3, $4, 'status-drift-v2-claim', 'operator', null, 'Test Operator') as result`,
-      [firm, deliverable, placement, v2],
-    );
-    expect(statusDriftClaim.rows[0].result.ok).toBe(false);
+    await expect(
+      connA.query(
+        `select claim_placement_for_publish($1, $2, $3, $4, 'status-drift-v2-claim', 'operator', null, 'Test Operator') as result`,
+        [firm, deliverable, placement, v2],
+      ),
+    ).rejects.toThrow(/standing release claim requires deliverable status in_review/i);
     await connA.query(`update content_deliverables set status = 'in_review' where id = $1`, [deliverable]);
 
     const finalClaimQuery = await connA.query(
