@@ -10,13 +10,15 @@ key in application code, commit a private key, or treat a missing signer as an
 approval. Activation requires a human-controlled provisioning change:
 
 1. Generate an Ed25519 key pair in the approved secret-management process.
-2. Add only the public PEM, its SPKI SHA-256, a stable key ID, and
-   `usage: "production"` to
+2. Add only the public PEM, its SPKI SHA-256, a stable key ID, the production
+   environment, and explicit effective/retired bounds to
    `src/lib/drg-release-authorization-envelope.ts`.
-3. Copy that exact public trust entry to the DRG website repository's
-   `scripts/drg-release-authorization-trust.mjs` and review the two hashes as
-   one change.
-4. Store the private PEM only in the portal server's secret environment as
+3. Update the complete versioned `DRG_RELEASE_TRUST_BUNDLE` in the portal and
+   website repositories atomically. Confirm both repositories compute the same
+   canonical bundle SHA. Envelopes sign that SHA, so partial rotation fails
+   closed.
+4. Only after both reviewed bundles are present, store the private PEM in the
+   portal server's secret environment as
    `DRG_RELEASE_AUTHORIZATION_PRIVATE_KEY_PEM`; set the matching key ID in
    `DRG_RELEASE_AUTHORIZATION_SIGNING_KEY_ID`.
 5. Run the portal envelope tests, Publishing Kit verifier tests, and website

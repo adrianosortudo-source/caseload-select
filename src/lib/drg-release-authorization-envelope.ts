@@ -42,6 +42,7 @@ export interface DrgReleaseAuthorizationPieceSnapshot {
 
 export interface DrgReleaseAuthorizationEnvelope {
   readonly schema_version: typeof DRG_RELEASE_AUTHORIZATION_SCHEMA;
+  readonly trust_bundle_sha256: string;
   readonly envelope_id: string;
   readonly issued_at: string;
   readonly expires_at: string;
@@ -72,7 +73,9 @@ export interface DrgReleaseAuthorizationPublicKey {
   readonly keyId: string;
   readonly publicKeyPem: string;
   readonly publicKeySpkiSha256: string;
-  readonly usage: "production" | "test_only";
+  readonly environment: "production" | "test_only";
+  readonly effectiveAt: string;
+  readonly retiredAt: string | null;
 }
 
 /**
@@ -84,7 +87,16 @@ export const DRG_RELEASE_AUTHORIZATION_PUBLIC_KEYS: readonly DrgReleaseAuthoriza
   keyId: "drg-release-rfc8032-test-v1",
   publicKeyPem: "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=\n-----END PUBLIC KEY-----\n",
   publicKeySpkiSha256: "06e3fd8fda29bb60ab59557de61edb0aecdb231134be30e75b455f8e1b792fa9",
-  usage: "test_only",
+  environment: "test_only",
+  effectiveAt: "2026-08-09T00:00:00.000Z",
+  retiredAt: null,
+}, {
+  keyId: "drg-release-rfc8032-retired-test-v1",
+  publicKeyPem: "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=\n-----END PUBLIC KEY-----\n",
+  publicKeySpkiSha256: "06e3fd8fda29bb60ab59557de61edb0aecdb231134be30e75b455f8e1b792fa9",
+  environment: "test_only",
+  effectiveAt: "2026-08-09T00:00:00.000Z",
+  retiredAt: "2026-08-09T12:00:00.000Z",
 }] as const;
 
 const SHA256_RE = /^[a-f0-9]{64}$/;
@@ -129,9 +141,23 @@ export function sha256DrgRelease(value: string | Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function envelopeHashPayload(envelope: Pick<DrgReleaseAuthorizationEnvelope, "schema_version" | "envelope_id" | "issued_at" | "expires_at" | "package" | "pieces">) {
+export const DRG_RELEASE_TRUST_BUNDLE = Object.freeze({
+  schema_version: "drg.release-trust-bundle.v1" as const,
+  keys: DRG_RELEASE_AUTHORIZATION_PUBLIC_KEYS.map((key) => ({
+    key_id: key.keyId,
+    public_key_spki_sha256: key.publicKeySpkiSha256,
+    public_key_pem: key.publicKeyPem,
+    environment: key.environment,
+    effective_at: key.effectiveAt,
+    retired_at: key.retiredAt,
+  })),
+});
+export const DRG_RELEASE_TRUST_BUNDLE_SHA256 = sha256DrgRelease(canonicalDrgReleaseJson(DRG_RELEASE_TRUST_BUNDLE));
+
+function envelopeHashPayload(envelope: Pick<DrgReleaseAuthorizationEnvelope, "schema_version" | "trust_bundle_sha256" | "envelope_id" | "issued_at" | "expires_at" | "package" | "pieces">) {
   return {
     schema_version: envelope.schema_version,
+    trust_bundle_sha256: envelope.trust_bundle_sha256,
     envelope_id: envelope.envelope_id,
     issued_at: envelope.issued_at,
     expires_at: envelope.expires_at,
@@ -160,6 +186,7 @@ export function createSignedDrgReleaseAuthorizationEnvelope(input: {
 }): DrgReleaseAuthorizationEnvelope {
   const payload = {
     schema_version: DRG_RELEASE_AUTHORIZATION_SCHEMA,
+    trust_bundle_sha256: DRG_RELEASE_TRUST_BUNDLE_SHA256,
     envelope_id: input.envelopeId,
     issued_at: input.issuedAt,
     expires_at: input.expiresAt,
@@ -213,6 +240,7 @@ export function verifyDrgReleaseAuthorizationEnvelope(
   if (!isRecord(value)) throw new Error("release authorization envelope must be an object");
   const envelope = value as unknown as DrgReleaseAuthorizationEnvelope;
   if (envelope.schema_version !== DRG_RELEASE_AUTHORIZATION_SCHEMA || !envelope.envelope_id) throw new Error("unsupported release authorization envelope schema");
+  if (envelope.trust_bundle_sha256 !== DRG_RELEASE_TRUST_BUNDLE_SHA256) throw new Error("release authorization trust bundle SHA mismatch");
   const issuedAt = Date.parse(envelope.issued_at);
   const expiresAt = Date.parse(envelope.expires_at);
   if (!Number.isFinite(issuedAt) || !Number.isFinite(expiresAt) || expiresAt <= issuedAt || expiresAt - issuedAt > DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS) throw new Error("release authorization envelope timestamps are invalid");
@@ -227,7 +255,10 @@ export function verifyDrgReleaseAuthorizationEnvelope(
   if (!signature || signature.algorithm !== DRG_RELEASE_AUTHORIZATION_SIGNATURE_ALGORITHM || !signature.signature_base64) throw new Error("release authorization envelope signature is malformed");
   const trusted = DRG_RELEASE_AUTHORIZATION_PUBLIC_KEYS.find((entry) => entry.keyId === signature.key_id);
   if (!trusted || trusted.publicKeySpkiSha256 !== signature.public_key_spki_sha256) throw new Error("release authorization signer is not repository-pinned");
-  if (process.env.NODE_ENV === "production" && trusted.usage !== "production") throw new Error("test-only release authorization signer is forbidden in production");
+  if (process.env.NODE_ENV === "production" && trusted.environment !== "production") throw new Error("test-only release authorization signer is forbidden in production");
+  const effectiveAt = Date.parse(trusted.effectiveAt);
+  const retiredAt = trusted.retiredAt === null ? null : Date.parse(trusted.retiredAt);
+  if (!Number.isFinite(effectiveAt) || issuedAt < effectiveAt || (retiredAt !== null && (!Number.isFinite(retiredAt) || issuedAt >= retiredAt))) throw new Error("release authorization signer was not active when the envelope was issued");
   const publicDer = createPublicKey(trusted.publicKeyPem).export({ type: "spki", format: "der" });
   if (sha256DrgRelease(publicDer) !== trusted.publicKeySpkiSha256) throw new Error("repository-pinned release authorization key hash is invalid");
   const { signature: _signature, ...withoutSignature } = envelope;

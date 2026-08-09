@@ -24,7 +24,7 @@ export function loadConfiguredDrgReleaseAuthorizationSigner(
   if (!keyId || !privateKeyPem) throw new Error("DRG release authorization signer is not provisioned");
   const trusted = DRG_RELEASE_AUTHORIZATION_PUBLIC_KEYS.find((entry) => entry.keyId === keyId);
   if (!trusted) throw new Error("DRG release authorization signing key is not repository-pinned");
-  if (env.NODE_ENV === "production" && trusted.usage !== "production") throw new Error("test-only DRG release signer is forbidden in production");
+  if (env.NODE_ENV === "production" && trusted.environment !== "production") throw new Error("test-only DRG release signer is forbidden in production");
   const privateKey = createPrivateKey(privateKeyPem);
   const publicDer = createPublicKey(privateKey).export({ type: "spki", format: "der" });
   const publicKeySpkiSha256 = createHash("sha256").update(publicDer).digest("hex");
