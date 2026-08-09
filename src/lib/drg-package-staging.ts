@@ -14,6 +14,7 @@ import type {
   DeliverableRole,
   PublicationDestination,
 } from "./types";
+import type { VerifiedDrgReleaseAuthorizationEnvelope } from "./drg-release-authorization-envelope";
 
 export type DrgLocale = "en-CA" | "pt-BR";
 
@@ -228,31 +229,6 @@ export interface DrgPackageReconciliation {
   readonly correctCount: number;
   readonly missingOrDriftedCount: number;
   readonly blockers: readonly DrgPackageBlocker[];
-}
-
-export interface DrgPackageReleaseAuthorization {
-  /** Immutable client release path; staging is intentionally not this gate. */
-  readonly releasePath: "individual_approval" | "standing_authorization";
-  readonly releaseEvidenceId: string;
-  readonly packageId: string;
-  readonly packageVersion: number;
-  readonly packageSha256: string;
-  readonly approvedAt: string;
-  readonly approvedBy: string;
-  readonly pieces: readonly {
-    readonly pieceId: string;
-    readonly deliverableId: string;
-    readonly versionId: string;
-    readonly versionNumber: number;
-    readonly pieceSha256: string;
-    /** Evidence stays bound to the sealed source and asset identity. */
-    readonly sourceSha256: string;
-    readonly assetSha256: string | null;
-    readonly releaseEvidenceSha256: string;
-    readonly changeHoldActive: boolean;
-    readonly requiresIndividualReview: boolean;
-    readonly standingAuthorizationEventId?: string;
-  }[];
 }
 
 export interface PublishingKitPieceProjection {
@@ -616,9 +592,10 @@ export function reconcileDrgPackageStaging(
 export function projectReleaseAuthorizedDrgPublishingKit(
   pkg: SealedDrgWeeklyPackage,
   snapshot: DrgPortalStagingSnapshot,
-  releaseAuthorization: DrgPackageReleaseAuthorization,
+  verifiedReleaseAuthorization: VerifiedDrgReleaseAuthorizationEnvelope,
   sha256: Sha256Function,
 ): ReleaseAuthorizedPublishingKitProjection {
+  const releaseAuthorization = verifiedReleaseAuthorization.envelope;
   const blockers = verifyPackage(pkg, sha256);
   const stagingReconciliation = reconcileDrgPackageStaging(pkg, snapshot, sha256);
   if (stagingReconciliation.status !== "exact_match") {
@@ -632,26 +609,19 @@ export function projectReleaseAuthorizedDrgPublishingKit(
     );
   }
   if (
-    (releaseAuthorization.releasePath !== "individual_approval" && releaseAuthorization.releasePath !== "standing_authorization") ||
-    !releaseAuthorization.releaseEvidenceId.trim() ||
-    releaseAuthorization.packageId !== pkg.packageId ||
-    releaseAuthorization.packageVersion !== pkg.packageVersion ||
-    releaseAuthorization.packageSha256 !== pkg.packageSha256
+    releaseAuthorization.package.id !== pkg.packageId ||
+    releaseAuthorization.package.version !== pkg.packageVersion ||
+    releaseAuthorization.package.firm_id !== pkg.firmId ||
+    releaseAuthorization.package.period_id !== pkg.periodId ||
+    releaseAuthorization.package.package_sha256 !== pkg.packageSha256
   ) {
     blockers.push({ code: "release_authorization_mismatch", pieceId: null, message: "release authorization is not bound to this exact package SHA and version" });
   }
-  if (!releaseAuthorization.approvedBy.trim() || Number.isNaN(Date.parse(releaseAuthorization.approvedAt))) {
-    blockers.push({ code: "release_authorization_mismatch", pieceId: null, message: "release authorization requires a named actor and valid timestamp" });
-  }
   const stateByPiece = new Map(snapshot.deliverables.map((row) => [row.pieceId, row]));
-  const releaseAuthorizationByPiece = new Map(releaseAuthorization.pieces.map((piece) => [piece.pieceId, piece]));
+  const releaseAuthorizationByPiece = new Map(releaseAuthorization.pieces.map((piece) => [piece.piece_id, piece]));
   if (releaseAuthorizationByPiece.size !== DRG_SIXTEEN_PIECE_REGISTRY.length || releaseAuthorization.pieces.length !== DRG_SIXTEEN_PIECE_REGISTRY.length) {
     blockers.push({ code: "release_authorization_mismatch", pieceId: null, message: "release authorization must bind exactly sixteen unique package pieces" });
   }
-  if (releaseAuthorization.pieces.some((piece) => !piece.deliverableId.trim() || !piece.versionId.trim() || !Number.isInteger(piece.versionNumber) || piece.versionNumber < 1 || !SHA256_RE.test(piece.pieceSha256) || !SHA256_RE.test(piece.sourceSha256) || !SHA256_RE.test(piece.releaseEvidenceSha256))) {
-    blockers.push({ code: "release_authorization_mismatch", pieceId: null, message: "release authorization contains malformed piece/version identity" });
-  }
-
   const pieces: PublishingKitPieceProjection[] = [];
   for (const piece of pkg.pieces) {
     const row = stateByPiece.get(piece.id);
@@ -660,15 +630,15 @@ export function projectReleaseAuthorizedDrgPublishingKit(
     const exact = Boolean(
       row && authorized && version &&
       row.currentVersionId === version.id &&
-      (releaseAuthorization.releasePath === "individual_approval"
+      (authorized.path === "individual_approval"
         ? row.approvedVersionId === version.id && row.approval?.decision === "approved" && row.approval.versionId === version.id && row.approval.packageSha256 === pkg.packageSha256
-        : Boolean(authorized.standingAuthorizationEventId) && !authorized.changeHoldActive && !authorized.requiresIndividualReview) &&
-      authorized.deliverableId === row.deliverableId &&
-      authorized.versionId === version.id &&
-      authorized.versionNumber === version.versionNumber &&
-      authorized.pieceSha256 === piece.pieceSha256 &&
-      authorized.sourceSha256 === piece.sourceSha256 &&
-      authorized.assetSha256 === (piece.payload.kind === "pdf" ? piece.payload.assetSha256 : null) &&
+        : Boolean(authorized.standing_authorization_event_id) && authorized.standing_authorization_active && !authorized.change_hold_active && !authorized.requires_individual_review) &&
+      authorized.deliverable_id === row.deliverableId &&
+      authorized.current_version_id === version.id &&
+      authorized.version_number === version.versionNumber &&
+      authorized.piece_sha256 === piece.pieceSha256 &&
+      authorized.source_sha256 === piece.sourceSha256 &&
+      (piece.payload.kind !== "pdf" || authorized.asset_sha256s.includes(piece.payload.assetSha256)) &&
       version.packageId === pkg.packageId &&
       version.packageVersion === pkg.packageVersion &&
       version.packageSha256 === pkg.packageSha256 &&

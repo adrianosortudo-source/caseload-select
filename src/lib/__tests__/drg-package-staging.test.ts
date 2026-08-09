@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createPrivateKey, sign } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   DRG_PACKAGE_VISIBILITY_CONTRACT,
@@ -9,12 +9,23 @@ import {
   projectReleaseAuthorizedDrgPublishingKit,
   reconcileDrgPackageStaging,
   sealDrgWeeklyPackage,
-  type DrgPackageReleaseAuthorization,
   type DrgPortalStagingSnapshot,
   type DrgWeeklyPackageDraft,
   type SealedDrgWeeklyPackage,
   type StagedDeliverableSnapshot,
 } from "../drg-package-staging";
+import {
+  DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS,
+  computeDrgReleaseEvidenceSha256,
+  createSignedDrgReleaseAuthorizationEnvelope,
+  verifyDrgReleaseAuthorizationEnvelope,
+  type DrgReleaseAuthorizationEnvelope,
+  type DrgReleaseAuthorizationPath,
+  type DrgReleaseAuthorizationPieceSnapshot,
+  type VerifiedDrgReleaseAuthorizationEnvelope,
+} from "../drg-release-authorization-envelope";
+
+const TEST_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIJ1hsZ3v/VpguoRK9JLsLMREScVpezJpGXA7rAMcrn9g\n-----END PRIVATE KEY-----\n";
 
 function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -127,34 +138,66 @@ function makeSnapshot(pkg: SealedDrgWeeklyPackage, approved = false): DrgPortalS
   };
 }
 
+function makeSignedReleaseAuthorization(
+  pkg: SealedDrgWeeklyPackage,
+  snapshot: DrgPortalStagingSnapshot,
+  options: {
+    path?: DrgReleaseAuthorizationPath;
+    packageSha256?: string;
+    mutatePiece?: (piece: Omit<DrgReleaseAuthorizationPieceSnapshot, "evidence_sha256">, index: number) => Omit<DrgReleaseAuthorizationPieceSnapshot, "evidence_sha256">;
+    pieceCount?: number;
+  } = {},
+): DrgReleaseAuthorizationEnvelope {
+  const path = options.path ?? "individual_approval";
+  const packageSha256 = options.packageSha256 ?? pkg.packageSha256;
+  const issuedAt = new Date(Date.now() - 1_000).toISOString();
+  const pieces = pkg.pieces.map((piece, index) => {
+      const row = snapshot.deliverables.find((candidate) => candidate.pieceId === piece.id)!;
+      const evidence: Omit<DrgReleaseAuthorizationPieceSnapshot, "evidence_sha256"> = {
+        piece_id: piece.id,
+        firm_id: pkg.firmId,
+        period_id: pkg.periodId,
+        package_id: pkg.packageId,
+        package_version: pkg.packageVersion,
+        package_sha256: packageSha256,
+        deliverable_id: row.deliverableId,
+        current_version_id: row.currentVersion!.id,
+        version_number: row.currentVersion!.versionNumber,
+        piece_sha256: piece.pieceSha256,
+        source_sha256: piece.sourceSha256,
+        asset_sha256s: piece.payload.kind === "pdf" ? [piece.payload.assetSha256] : [],
+        path,
+        approval_record_id: path === "individual_approval" ? `approval-${piece.id}` : null,
+        standing_authorization_event_id: path === "standing_authorization" ? "standing-event-1" : null,
+        standing_authorization_active: path === "standing_authorization",
+        change_hold_active: false,
+        requires_individual_review: false,
+        revoked_at: null,
+        evidence_recorded_at: issuedAt,
+      };
+      const mutated = options.mutatePiece?.(evidence, index) ?? evidence;
+      return { ...mutated, evidence_sha256: computeDrgReleaseEvidenceSha256(mutated) };
+    }).slice(0, options.pieceCount ?? 16);
+  return createSignedDrgReleaseAuthorizationEnvelope({
+    envelopeId: `release:${pkg.packageId}:v${pkg.packageVersion}:${packageSha256}`,
+    issuedAt,
+    expiresAt: new Date(Date.parse(issuedAt) + DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS).toISOString(),
+    package: { id: pkg.packageId, version: pkg.packageVersion, firm_id: pkg.firmId, period_id: pkg.periodId, package_sha256: packageSha256 },
+    pieces,
+    signer: {
+      keyId: "drg-release-rfc8032-test-v1",
+      publicKeySpkiSha256: "06e3fd8fda29bb60ab59557de61edb0aecdb231134be30e75b455f8e1b792fa9",
+      sign: (payload) => sign(null, payload, createPrivateKey(TEST_PRIVATE_KEY)).toString("base64"),
+    },
+  });
+}
+
 function makeReleaseAuthorization(
   pkg: SealedDrgWeeklyPackage,
   snapshot: DrgPortalStagingSnapshot,
-): DrgPackageReleaseAuthorization {
-  return {
-    releasePath: "individual_approval",
-    releaseEvidenceId: "approval-record-1",
-    packageId: pkg.packageId,
-    packageVersion: pkg.packageVersion,
-    packageSha256: pkg.packageSha256,
-    approvedAt: "2026-08-09T04:00:00.000Z",
-    approvedBy: "lawyer@example.test",
-    pieces: pkg.pieces.map((piece) => {
-      const row = snapshot.deliverables.find((candidate) => candidate.pieceId === piece.id)!;
-      return {
-        pieceId: piece.id,
-        deliverableId: row.deliverableId,
-        versionId: row.currentVersion!.id,
-        versionNumber: row.currentVersion!.versionNumber,
-        pieceSha256: piece.pieceSha256,
-        sourceSha256: piece.sourceSha256,
-        assetSha256: piece.payload.kind === "pdf" ? piece.payload.assetSha256 : null,
-        releaseEvidenceSha256: sha256(`approval:${piece.id}`),
-        changeHoldActive: false,
-        requiresIndividualReview: false,
-      };
-    }),
-  };
+  options: Parameters<typeof makeSignedReleaseAuthorization>[2] = {},
+): VerifiedDrgReleaseAuthorizationEnvelope {
+  return verifyDrgReleaseAuthorizationEnvelope(makeSignedReleaseAuthorization(pkg, snapshot, options));
 }
 
 const INVALID_PROJECTION_TOPOLOGIES: ReadonlyArray<
@@ -443,10 +486,23 @@ describe("approved Publishing Kit projection", () => {
     expect(projection.writesPerformed).toBe(0);
   });
 
+  it("projects standing-authorized pieces without approval records", () => {
+    const pkg = makePackage();
+    const snapshot = makeSnapshot(pkg, false);
+    const projection = projectReleaseAuthorizedDrgPublishingKit(
+      pkg,
+      snapshot,
+      makeReleaseAuthorization(pkg, snapshot, { path: "standing_authorization" }),
+      sha256,
+    );
+    expect(projection.status).toBe("ready");
+    expect(snapshot.deliverables.every((row) => row.approval === null)).toBe(true);
+  });
+
   it("returns zero pieces when aggregate release authorization names another package SHA", () => {
     const pkg = makePackage();
     const snapshot = makeSnapshot(pkg, true);
-    const releaseAuthorization = { ...makeReleaseAuthorization(pkg, snapshot), packageSha256: sha256("other-package") };
+    const releaseAuthorization = makeReleaseAuthorization(pkg, snapshot, { packageSha256: sha256("other-package") });
     const projection = projectReleaseAuthorizedDrgPublishingKit(pkg, snapshot, releaseAuthorization, sha256);
     expect(projection.status).toBe("blocked");
     if (projection.status !== "blocked") throw new Error("expected blocked projection");
@@ -473,16 +529,36 @@ describe("approved Publishing Kit projection", () => {
     expect(projection.blockers.some((blocker) => blocker.pieceId === "CN-EN")).toBe(true);
   });
 
-  it("returns zero pieces for partial per-piece release authorization", () => {
+  it("rejects partial signed release authorization before projection", () => {
     const pkg = makePackage();
     const snapshot = makeSnapshot(pkg, true);
-    const releaseAuthorization = makeReleaseAuthorization(pkg, snapshot);
-    const partial = { ...releaseAuthorization, pieces: releaseAuthorization.pieces.slice(0, 15) };
-    const projection = projectReleaseAuthorizedDrgPublishingKit(pkg, snapshot, partial, sha256);
-    expect(projection.status).toBe("blocked");
-    if (projection.status !== "blocked") throw new Error("expected blocked projection");
-    expect(projection.pieces).toEqual([]);
-    expect(projection.blockers.some((blocker) => blocker.message.includes("exactly sixteen"))).toBe(true);
+    expect(() => verifyDrgReleaseAuthorizationEnvelope(
+      makeSignedReleaseAuthorization(pkg, snapshot, { pieceCount: 15 }),
+    )).toThrow("exactly sixteen");
+  });
+
+  it.each([
+    ["active change hold", (piece: Omit<DrgReleaseAuthorizationPieceSnapshot, "evidence_sha256">) => ({ ...piece, change_hold_active: true })],
+    ["individual-review exception", (piece: Omit<DrgReleaseAuthorizationPieceSnapshot, "evidence_sha256">) => ({ ...piece, requires_individual_review: true })],
+    ["revoked standing event", (piece: Omit<DrgReleaseAuthorizationPieceSnapshot, "evidence_sha256">) => ({ ...piece, revoked_at: "2026-08-09T18:00:00.000Z" })],
+  ] as const)("rejects a signed standing envelope with %s", (_label, mutatePiece) => {
+    const pkg = makePackage();
+    const snapshot = makeSnapshot(pkg, false);
+    expect(() => makeReleaseAuthorization(pkg, snapshot, {
+      path: "standing_authorization",
+      mutatePiece: (piece, index) => index === 0 ? mutatePiece(piece) : piece,
+    })).toThrow();
+  });
+
+  it("rejects forged evidence and signature before a branded result exists", () => {
+    const pkg = makePackage();
+    const snapshot = makeSnapshot(pkg, true);
+    const forgedEvidence = structuredClone(makeSignedReleaseAuthorization(pkg, snapshot));
+    (forgedEvidence.pieces[0] as { source_sha256: string }).source_sha256 = sha256("forged-source");
+    expect(() => verifyDrgReleaseAuthorizationEnvelope(forgedEvidence)).toThrow("evidence SHA mismatch");
+    const forgedSignature = structuredClone(makeSignedReleaseAuthorization(pkg, snapshot));
+    (forgedSignature.signature as { signature_base64: string }).signature_base64 = Buffer.from("forged").toString("base64");
+    expect(() => verifyDrgReleaseAuthorizationEnvelope(forgedSignature)).toThrow("signature verification failed");
   });
 
   it.each(INVALID_PROJECTION_TOPOLOGIES)("returns zero pieces when staging topology has %s", (_label, mutate) => {
