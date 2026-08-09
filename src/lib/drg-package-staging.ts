@@ -307,6 +307,16 @@ function validPin(pin: ImmutableHashPin): boolean {
   return Boolean(pin.id.trim() && pin.version.trim() && SHA256_RE.test(pin.sha256));
 }
 
+function comparePins(left: ImmutableHashPin, right: ImmutableHashPin): number {
+  if (left.id < right.id) return -1;
+  if (left.id > right.id) return 1;
+  if (left.version < right.version) return -1;
+  if (left.version > right.version) return 1;
+  if (left.sha256 < right.sha256) return -1;
+  if (left.sha256 > right.sha256) return 1;
+  return 0;
+}
+
 function validateDraft(draft: DrgWeeklyPackageDraft): string[] {
   const errors: string[] = [];
   if (draft.schemaVersion !== "drg-weekly-package/v1") errors.push("schemaVersion must be drg-weekly-package/v1");
@@ -410,9 +420,7 @@ export function sealDrgWeeklyPackage(
       pieceSha256: checkedHash(sha256, pieceHashInput(piece)),
     };
   });
-  const doctrine = [...draft.doctrine].sort((left, right) =>
-    `${left.id}\u0000${left.version}\u0000${left.sha256}`.localeCompare(`${right.id}\u0000${right.version}\u0000${right.sha256}`),
-  );
+  const doctrine = [...draft.doctrine].sort(comparePins);
   const withoutHash = { ...draft, doctrine, pieces };
   return cloneAndFreeze({
     ...withoutHash,
@@ -427,6 +435,23 @@ function verifyPackage(pkg: SealedDrgWeeklyPackage, sha256: Sha256Function): Drg
     pieceId: null,
     message,
   }));
+  for (let index = 0; index < DRG_SIXTEEN_PIECE_REGISTRY.length; index += 1) {
+    if (pkg.pieces[index]?.id !== DRG_SIXTEEN_PIECE_REGISTRY[index].id) {
+      blockers.push({
+        code: "invalid_package",
+        pieceId: pkg.pieces[index]?.id ?? null,
+        message: `sealed package piece ${index + 1} must be ${DRG_SIXTEEN_PIECE_REGISTRY[index].id} in canonical registry order`,
+      });
+    }
+  }
+  const sortedDoctrine = [...pkg.doctrine].sort(comparePins);
+  if (pkg.doctrine.some((pin, index) =>
+    pin.id !== sortedDoctrine[index]?.id ||
+    pin.version !== sortedDoctrine[index]?.version ||
+    pin.sha256 !== sortedDoctrine[index]?.sha256
+  )) {
+    blockers.push({ code: "invalid_package", pieceId: null, message: "sealed package doctrine pins are not in canonical lexical order" });
+  }
   for (const piece of pkg.pieces) {
     if (piece.pieceSha256 !== checkedHash(sha256, pieceHashInput(piece))) {
       blockers.push({ code: "package_hash_mismatch", pieceId: piece.id, message: `${piece.id} content hash does not match its payload` });

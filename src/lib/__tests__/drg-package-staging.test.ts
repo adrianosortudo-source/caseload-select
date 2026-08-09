@@ -60,6 +60,30 @@ function makePackage(): SealedDrgWeeklyPackage {
   return sealDrgWeeklyPackage(makeDraft(), sha256);
 }
 
+function manuallyRehashPackage(
+  pkg: SealedDrgWeeklyPackage,
+  overrides: Partial<Pick<SealedDrgWeeklyPackage, "pieces" | "doctrine">>,
+): SealedDrgWeeklyPackage {
+  const pieces = overrides.pieces ?? pkg.pieces;
+  const doctrine = overrides.doctrine ?? pkg.doctrine;
+  const hashInput = {
+    schemaVersion: pkg.schemaVersion,
+    packageId: pkg.packageId,
+    packageVersion: pkg.packageVersion,
+    firmId: pkg.firmId,
+    periodId: pkg.periodId,
+    sources: pkg.sources,
+    doctrine,
+    pieces,
+  };
+  return {
+    ...pkg,
+    pieces,
+    doctrine,
+    packageSha256: sha256(canonicalJson(hashInput)),
+  };
+}
+
 function exactRow(
   pkg: SealedDrgWeeklyPackage,
   index: number,
@@ -244,6 +268,38 @@ describe("sealed package identity", () => {
         : authority),
     };
     expect(() => sealDrgWeeklyPackage(wrongCsbHash, sha256)).toThrow("DRGLaw_ContentStrategy version 4.18 SHA-256");
+  });
+
+  it("rejects manually reordered sealed pieces even when the package SHA is recomputed", () => {
+    const canonical = makePackage();
+    const tampered = manuallyRehashPackage(canonical, { pieces: [...canonical.pieces].reverse() });
+    const plan = planDrgPackageStaging(
+      tampered,
+      { firmId: tampered.firmId, periodId: tampered.periodId, deliverables: [] },
+      sha256,
+    );
+    expect(plan.kind).toBe("no_plan");
+    if (plan.kind !== "no_plan") throw new Error("expected no plan");
+    expect(plan.blockers.some((blocker) => blocker.message.includes("canonical registry order"))).toBe(true);
+
+    const snapshot = makeSnapshot(tampered, true);
+    const projection = projectApprovedDrgPublishingKit(tampered, snapshot, makeApproval(tampered, snapshot), sha256);
+    expect(projection.status).toBe("blocked");
+    if (projection.status !== "blocked") throw new Error("expected blocked projection");
+    expect(projection.pieces).toEqual([]);
+  });
+
+  it("rejects manually reordered doctrine pins even when the package SHA is recomputed", () => {
+    const canonical = makePackage();
+    const tampered = manuallyRehashPackage(canonical, { doctrine: [...canonical.doctrine].reverse() });
+    const plan = planDrgPackageStaging(
+      tampered,
+      { firmId: tampered.firmId, periodId: tampered.periodId, deliverables: [] },
+      sha256,
+    );
+    expect(plan.kind).toBe("no_plan");
+    if (plan.kind !== "no_plan") throw new Error("expected no plan");
+    expect(plan.blockers.some((blocker) => blocker.message.includes("doctrine pins") && blocker.message.includes("canonical"))).toBe(true);
   });
 });
 
