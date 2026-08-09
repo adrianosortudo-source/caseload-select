@@ -152,8 +152,10 @@ export function drgWebsiteProjectionPayload(value: Pick<DrgWebsitePackageExport,
   return {
     schema_version: value.schema_version,
     package: packageWithoutHash,
-    release_envelope_sha256: value.release_authorization_envelope.envelope_sha256,
-    pieces: value.pieces,
+    // Release evidence is deliberately excluded from this stable content
+    // digest. The signed projection authorization binds this digest to the
+    // separately verified, short-lived envelope SHA.
+    pieces: value.pieces.map(({ release_authorization: ignoredAuthorization, ...piece }) => piece),
     dependencies: value.dependencies,
   };
 }
@@ -297,7 +299,7 @@ function validatePins(
     if (!isNonEmptyString(id)) errors.push({ path: `${path}[${index}]`, message: "id must be non-empty" });
     if (ids.has(id)) errors.push({ path: `${path}[${index}]`, message: `duplicate id ${id}` });
     ids.add(id);
-    if ("source_kind" in record && !["research", "source_brief", "counsel_note", "decision_record"].includes(record.source_kind)) {
+    if ("source_kind" in record && !["research", "source_brief", "counsel_note", "decision_record", "package_piece_source"].includes(record.source_kind)) {
       errors.push({ path: `${path}[${index}].source_kind`, message: "must be a supported immutable source kind" });
     }
     if (!isNonEmptyString(record.version)) errors.push({ path: `${path}[${index}].version`, message: "version must be non-empty" });
@@ -456,19 +458,12 @@ export function validateDrgWebsitePackageExport(raw: unknown): DrgProtocolViolat
       if (!ids.has(dependency.piece_id) || !ids.has(dependency.depends_on_piece_id)) errors.push({ path: `dependencies[${index}]`, message: "must reference known pieces" });
       if (dependency.piece_id === dependency.depends_on_piece_id) errors.push({ path: `dependencies[${index}]`, message: "a piece cannot depend on itself" });
     });
-    if (errors.length === 0 && hasDependencyCycle(value.pieces as DrgWebsitePackagePiece[], value.dependencies)) errors.push({ path: "dependencies", message: "dependency graph contains a cycle" });
+    if (hasDependencyCycle(value.pieces as DrgWebsitePackagePiece[], value.dependencies)) errors.push({ path: "dependencies", message: "dependency graph contains a cycle" });
   }
   if (!isSha256(value.package.package_sha256)) errors.push({ path: "package.package_sha256", message: "must be lowercase SHA-256 hex" });
   else {
     const { package_sha256: _ignored, ...packageWithoutHash } = value.package;
-    const expectedHash = sha256({
-      schema_version: value.schema_version,
-      package: packageWithoutHash,
-      release_authorization_envelope: value.release_authorization_envelope,
-      website_projection_authorization: value.website_projection_authorization,
-      pieces: value.pieces,
-      dependencies: value.dependencies,
-    });
+    const expectedHash = sha256(drgWebsiteProjectionPayload(value as DrgWebsitePackageExport));
     if (value.package.package_sha256 !== expectedHash) errors.push({ path: "package.package_sha256", message: "does not match the immutable package payload" });
   }
   return errors;
@@ -609,7 +604,7 @@ export function buildDrgWebsitePackageExport(
   const value: DrgWebsitePackageExport = {
     ...withoutHash,
     website_projection_authorization: websiteProjectionAuthorization,
-    package: { ...withoutHash.package, package_sha256: sha256({ ...withoutHash, website_projection_authorization: websiteProjectionAuthorization }) },
+    package: { ...withoutHash.package, package_sha256: websiteProjectionAuthorization.projection_sha256 },
   };
   const structuralErrors = validateDrgWebsitePackageExport(value);
   return structuralErrors.length ? { ok: false, value: null, errors: structuralErrors } : { ok: true, value, errors: [] };

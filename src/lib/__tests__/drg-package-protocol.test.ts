@@ -161,7 +161,7 @@ describe("DRG package protocol", () => {
     expect(DRG_RELEASE_TRUST_BUNDLE_SHA256).toBe("2c3f4af2928181d507d1c3b0f15d4d8ccdacaf6a83238311825eb121e6808247");
   });
 
-  it("builds a deterministic complete six-piece website package from standing release authorization without fabricating approval records", () => {
+  it("builds a complete signed six-piece website package from standing release authorization without fabricating approval records", () => {
     const source = makeSource();
     const first = buildDrgWebsitePackageExport(source, makeInput(), TEST_SIGNER);
     const second = buildDrgWebsitePackageExport(source, makeInput(), TEST_SIGNER);
@@ -172,6 +172,8 @@ describe("DRG package protocol", () => {
     expect(first.value.pieces).toHaveLength(6);
     expect(first.value.pieces.every((piece) => piece.release_authorization.path === "standing_authorization")).toBe(true);
     expect(first.value.package.package_sha256).toBe(second.value.package.package_sha256);
+    expect(first.value.package.source_package_sha256).toBe(second.value.package.source_package_sha256);
+    expect(first.value.website_projection_authorization.projection_sha256).toBe(second.value.website_projection_authorization.projection_sha256);
     expect(validateDrgWebsitePackageExport(first.value)).toEqual([]);
   });
 
@@ -233,15 +235,7 @@ describe("DRG package protocol", () => {
       tampered.pieces[0].expected_metadata.canonical_route = tampered.pieces[0].route;
       tampered.pieces[0].expected_metadata.alternate_routes["en-CA"] = tampered.pieces[0].route;
     }
-    const { package_sha256: ignored, ...packageWithoutHash } = tampered.package;
-    tampered.package.package_sha256 = sha256({
-      schema_version: tampered.schema_version,
-      package: packageWithoutHash,
-      release_authorization_envelope: tampered.release_authorization_envelope,
-      website_projection_authorization: tampered.website_projection_authorization,
-      pieces: tampered.pieces,
-      dependencies: tampered.dependencies,
-    });
+    tampered.package.package_sha256 = sha256(drgWebsiteProjectionPayload(tampered));
     expect(tampered.website_projection_authorization.projection_sha256).not.toBe(sha256(drgWebsiteProjectionPayload(tampered)));
     expect(validateDrgWebsitePackageExport(tampered).some((error) => error.message.includes("exact final six-piece website projection"))).toBe(true);
   });

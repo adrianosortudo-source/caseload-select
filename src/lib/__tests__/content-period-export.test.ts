@@ -1756,11 +1756,19 @@ describe("authoritative DRG website release issuance", () => {
     process.env.DRG_RELEASE_AUTHORIZATION_PRIVATE_KEY_PEM = TEST_RELEASE_PRIVATE_KEY;
     const result = await buildAuthoritativeDrgWebsiteRelease(PERIOD_ID);
     if (!result.ok) throw new Error(result.error);
+    vi.setSystemTime(new Date(Date.now() + 1_000));
+    const reissued = await buildAuthoritativeDrgWebsiteRelease(PERIOD_ID);
+    if (!reissued.ok) throw new Error(reissued.error);
     expect(result.release.release_authorization_envelope.pieces).toHaveLength(16);
     expect(result.release.pieces).toHaveLength(6);
     expect(result.release.website_projection_authorization.release_envelope_sha256).toBe(result.release.release_authorization_envelope.envelope_sha256);
+    expect(reissued.release.package.package_sha256).toBe(result.release.package.package_sha256);
+    expect(reissued.release.website_projection_authorization.projection_sha256).toBe(result.release.website_projection_authorization.projection_sha256);
+    expect(reissued.release.release_authorization_envelope.envelope_sha256).not.toBe(result.release.release_authorization_envelope.envelope_sha256);
+    expect(reissued.release.release_authorization_envelope.signature.signature_base64).not.toBe(result.release.release_authorization_envelope.signature.signature_base64);
     expect(result.release.pieces.map((piece) => piece.title)).toContain("Authoritative CN-EN");
     expect(result.release.pieces.find((piece) => piece.piece_id === "CN-EN")?.body_html).toBe("<p>Authoritative CN-EN body.</p>");
+    vi.useRealTimers();
   });
 
   it("fails closed in the normal server path when no signing key is provisioned", async () => {
