@@ -68,14 +68,14 @@ export type GapClassification =
   | "external_verification_target_mismatch";
 
 /**
- * Website article/homepage media must be textless (headline rendered live
- * in HTML/CSS over a plain photo); LinkedIn/GBP/OG media may be a
- * pre-composed card with the headline baked into the image bytes. These
- * are two different objects with two different validation rules -- an
- * agent must never treat one as a substitute for the other. See
+ * Website article media carries its locale-specific eyebrow and headline in
+ * the raster; social media carries its own channel-specific editorial card.
+ * These are still different objects with different validation rules -- an
+ * agent must never treat one as a substitute for the other. The website
+ * renderer must not add a second HTML headline over its baked hero. See
  * visual_rendition_role_mismatch.
  */
-export type VisualRenditionRole = "textless_html_headline" | "baked_editorial_card";
+export type VisualRenditionRole = "baked_localized_website_hero" | "baked_editorial_card";
 
 /**
  * How a single finding affects THIS release, distinct from the release-

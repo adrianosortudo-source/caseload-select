@@ -1,5 +1,5 @@
 /**
- * Assigns the website_article_hero_overlay role to each article's hero
+ * Assigns the website_article_hero_baked role to each article's baked hero
  * artifact via an append-only publication_artifact_role_assignments row.
  *
  * Ported from the proven, already-executed ToDelete/assign-w32-hero-roles.mjs
@@ -25,7 +25,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { WeekConfig } from "../config";
 
-const ROLE = "website_article_hero_overlay";
+const ROLE = "website_article_hero_baked";
 
 export interface AssignPlacementRoleRowResult {
   label: string;

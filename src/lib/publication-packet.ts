@@ -323,7 +323,7 @@ export function resolveImageForPacket(
   }
 
   const scoped = artifacts.filter((a) => a.deliverable_id === deliverable.id && a.firm_id === deliverable.firm_id);
-  const artifactTypes: PublicationArtifactType[] = requiredRole === "textless_html_headline" ? ["hero_image"] : ["social_image"];
+  const artifactTypes: PublicationArtifactType[] = requiredRole === "baked_localized_website_hero" ? ["hero_image"] : ["social_image"];
   const matching = findArtifact(scoped, artifactTypes, currentVersion?.id ?? null, deliverable.locale);
 
   if (!matching) {

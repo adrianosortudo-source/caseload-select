@@ -348,7 +348,7 @@ describe("DRG Renewal Clause case study — 6. wrong hero-card reuse on a homepa
     );
     const f = audit.findings.find((x) => x.classification === "visual_rendition_role_mismatch");
     expect(f).toBeDefined();
-    expect(f!.factualEvidence).toMatch(/textless_html_headline/);
+    expect(f!.factualEvidence).toMatch(/baked_localized_website_hero/);
     expect(f!.factualEvidence).toMatch(/social_image/);
     expect(classificationsWithout(audit, "visual_rendition_role_mismatch")).not.toContain("required_visual_rendition_missing");
   });

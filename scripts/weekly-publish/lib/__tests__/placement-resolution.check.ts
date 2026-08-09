@@ -45,7 +45,7 @@ function artifact(overrides: Partial<ArtifactRow> = {}): ArtifactRow {
 function assignment(overrides: Partial<RoleAssignmentRow> = {}): RoleAssignmentRow {
   return {
     artifactId: "art-1",
-    assetRole: "website_article_hero_overlay",
+    assetRole: "website_article_hero_baked",
     supersededAt: null,
     ...overrides,
   };
@@ -61,14 +61,14 @@ function check(name: string, fn: () => void): void {
 console.log("placement-resolution.check.ts");
 
 check("case 1: role set directly on the artifact row resolves", () => {
-  const a = artifact({ assetRole: "website_article_hero_overlay" });
-  assert.equal(resolveEffectiveRole(a, []), "website_article_hero_overlay");
+  const a = artifact({ assetRole: "website_article_hero_baked" });
+  assert.equal(resolveEffectiveRole(a, []), "website_article_hero_baked");
 });
 
 check("case 2: role only via an active assignment resolves", () => {
   const a = artifact({ id: "art-1", assetRole: null });
-  const assigns = [assignment({ artifactId: "art-1", assetRole: "website_article_hero_overlay" })];
-  assert.equal(resolveEffectiveRole(a, assigns), "website_article_hero_overlay");
+  const assigns = [assignment({ artifactId: "art-1", assetRole: "website_article_hero_baked" })];
+  assert.equal(resolveEffectiveRole(a, assigns), "website_article_hero_baked");
 });
 
 check("case 3: an artifact whose only assignment is superseded does NOT resolve", () => {
@@ -83,29 +83,36 @@ check("case 4a: an article missing BOTH placements reports both roles missing", 
 });
 
 check("case 4b: an article missing only the homepage CTA reports exactly that role", () => {
-  const artifacts = [artifact({ id: "hero-art", assetRole: "website_article_hero_overlay" })];
+  const artifacts = [artifact({ id: "hero-art", assetRole: "website_article_hero_baked" })];
   const result = missingPlacementRoles("deliv-1", VERSION, artifacts, []);
-  assert.deepEqual(result.missingRoles, ["website_homepage_cta_textless"]);
+  assert.deepEqual(result.missingRoles, ["website_homepage_cta_baked"]);
 });
 
 check("case 4c: an article with both placements filled (one direct, one via assignment) reports nothing missing", () => {
   const artifacts = [
     artifact({ id: "hero-art", assetRole: null }),
-    artifact({ id: "cta-art", assetRole: "website_homepage_cta_textless" }),
+    artifact({ id: "cta-art", assetRole: "website_homepage_cta_baked" }),
   ];
-  const assigns = [assignment({ artifactId: "hero-art", assetRole: "website_article_hero_overlay" })];
+  const assigns = [assignment({ artifactId: "hero-art", assetRole: "website_article_hero_baked" })];
   const result = missingPlacementRoles("deliv-1", VERSION, artifacts, assigns);
   assert.deepEqual(result.missingRoles, []);
 });
 
 check("case 4d: a role filled only on a NON-current version does not count", () => {
-  const artifacts = [artifact({ id: "hero-art", versionId: OTHER_VERSION, assetRole: "website_article_hero_overlay" })];
+  const artifacts = [artifact({ id: "hero-art", versionId: OTHER_VERSION, assetRole: "website_article_hero_baked" })];
   const result = missingPlacementRoles("deliv-1", VERSION, artifacts, []);
   assert.deepEqual(result.missingRoles, [...REQUIRED_ARTICLE_PLACEMENT_ROLES]);
 });
 
 check("case 4e: a superseded artifact on the current version does not count even with a role set directly", () => {
-  const artifacts = [artifact({ id: "hero-art", assetRole: "website_article_hero_overlay", supersededAt: "2026-01-01T00:00:00Z" })];
+  const artifacts = [artifact({ id: "hero-art", assetRole: "website_article_hero_baked", supersededAt: "2026-01-01T00:00:00Z" })];
+
+check("case 5: legacy W32 role labels normalize to the baked role names", () => {
+  const legacyHero = artifact({ assetRole: "website_article_hero_overlay" });
+  const legacyCta = artifact({ id: "cta-art", assetRole: "website_homepage_cta_textless" });
+  assert.equal(resolveEffectiveRole(legacyHero, []), "website_article_hero_baked");
+  assert.equal(resolveEffectiveRole(legacyCta, []), "website_homepage_cta_baked");
+});
   const result = missingPlacementRoles("deliv-1", VERSION, artifacts, []);
   assert.deepEqual(result.missingRoles, [...REQUIRED_ARTICLE_PLACEMENT_ROLES]);
 });

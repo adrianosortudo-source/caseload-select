@@ -322,7 +322,7 @@ describe("all eighteen gap classifications are independently reachable", () => {
     expect(classificationsOf(audit.findings)).toContain("required_visual_rendition_missing");
   });
 
-  it("visual_rendition_role_mismatch — a baked social_image card bound where a textless hero is required", () => {
+  it("visual_rendition_role_mismatch — a social card bound where a baked localized website hero is required", () => {
     const audit = resolveAndAuditReleaseGraph(
       baseInput({
         artifacts: [

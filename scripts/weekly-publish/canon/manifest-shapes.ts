@@ -37,16 +37,17 @@ export type AssetShapeKind =
   | "linkedinCard";
 
 function hero(locale: PackageLocale): RequiredAssetShape {
+  const language = locale === "pt-BR" ? "pt" : "en";
   return {
     locale,
-    safe_area: "Keep the full text-free image available for website cropping.",
+    safe_area: "Keep the baked locale-specific eyebrow and headline inside the approved website crop.",
     asset_role: "website_article_hero",
     destination: "website",
-    text_policy: "textless",
+    text_policy: "text_bearing",
     required_copy: null,
     required_width: 1200,
     required_height: 628,
-    overlay_language: null,
+    overlay_language: language,
     selected_asset_id: null,
   };
 }
