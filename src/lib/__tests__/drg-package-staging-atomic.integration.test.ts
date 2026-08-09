@@ -111,7 +111,7 @@ describe.skipIf(!DB_URL)("stage_drg_weekly_package_atomic (real Postgres)", () =
       await connA.query(
         `insert into storage.objects (bucket_id, name, metadata)
          values ('firm-files', $1, jsonb_build_object(
-          'mimetype', 'application/pdf', 'size', $2
+           'mimetype', 'application/pdf', 'size', $2::bigint
          ))`,
         [piece.payload.storageKey, piece.payload.byteSize],
       );
