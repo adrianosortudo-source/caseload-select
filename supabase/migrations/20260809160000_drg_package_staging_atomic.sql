@@ -62,6 +62,30 @@ comment on column public.deliverable_versions.drg_piece_sha256 is
 comment on column public.deliverable_versions.drg_source_sha256 is
   'Immutable source-content SHA-256 carried by the sealed DRG package.';
 
+-- The existing current-version trigger predated hardened empty-search-path
+-- writers and referenced both tables without schema qualification. Preserve
+-- its exact invariant while making it safe and callable from this RPC.
+create or replace function public.deliverable_track_current_version()
+returns trigger
+language plpgsql
+set search_path = ''
+as $function$
+begin
+  if new.version_number = (
+    select max(version_number)
+    from public.deliverable_versions
+    where deliverable_id = new.deliverable_id
+  ) then
+    update public.content_deliverables
+    set current_version_id = new.id,
+        updated_at = now()
+    where id = new.deliverable_id
+      and current_version_id is distinct from new.id;
+  end if;
+  return new;
+end;
+$function$;
+
 create table if not exists public.drg_package_staging_operations (
   id uuid primary key,
   idempotency_key text not null unique check (length(btrim(idempotency_key)) > 0),
