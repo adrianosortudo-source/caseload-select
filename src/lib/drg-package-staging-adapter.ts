@@ -133,7 +133,7 @@ function packageCanonicalInput(pkg: SealedDrgWeeklyPackage): string {
   });
 }
 
-function validateAuthorization(
+export function validateDrgPackageStagingExecutionAuthorization(
   authorization: DrgPackageStagingExecutionAuthorization,
   pkg: SealedDrgWeeklyPackage,
   now: Date,
@@ -218,6 +218,14 @@ async function readSnapshot(
   return parseSnapshot(data, pkg);
 }
 
+/** Read-only exact-scope snapshot for plan-only operator entrypoints. */
+export async function readLiveDrgStagingSnapshot(input: {
+  readonly pkg: SealedDrgWeeklyPackage;
+  readonly rpc: DrgPackageStagingRpcClient;
+}): Promise<DrgPortalStagingSnapshot> {
+  return readSnapshot(input.rpc, input.pkg);
+}
+
 async function verifyPdfBytes(input: {
   readonly pkg: SealedDrgWeeklyPackage;
   readonly rpc: DrgPackageStagingRpcClient;
@@ -290,7 +298,7 @@ export async function stageExecutionAuthorizedDrgPackage(input: {
 }): Promise<AuthorizedDrgStagingResult> {
   const plan = planDrgPackageStaging(input.pkg, input.snapshot, input.sha256);
   if (plan.kind === "no_plan") return { status: "blocked", plan, writesPerformed: 0 };
-  validateAuthorization(input.executionAuthorization, input.pkg, input.now ?? new Date());
+  validateDrgPackageStagingExecutionAuthorization(input.executionAuthorization, input.pkg, input.now ?? new Date());
   if (
     !input.executionAuthorization.signingKeyId.trim() ||
     !SHA256_RE.test(input.executionAuthorization.signingPublicKeySha256) ||
