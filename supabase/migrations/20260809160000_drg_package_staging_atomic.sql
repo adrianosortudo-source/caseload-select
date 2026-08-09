@@ -263,7 +263,6 @@ declare
   v_firm_id uuid;
   v_period_id uuid;
   v_actor_id uuid;
-  v_authorizer_id uuid;
   v_package_id text;
   v_package_version integer;
   v_package_sha text;
@@ -298,15 +297,14 @@ begin
   end if;
   if p_package->>'schemaVersion' <> 'drg-weekly-package/v1'
      or p_plan->>'kind' <> 'atomic_plan'
-     or p_authorization->>'schemaVersion' <> 'drg-package-staging-authorization/v1' then
+     or p_authorization->>'schemaVersion' <> 'drg-package-staging-execution-authorization/v1' then
     raise exception 'unsupported DRG package, plan, or authorization schema';
   end if;
 
   begin
     v_firm_id := (p_package->>'firmId')::uuid;
     v_period_id := (p_package->>'periodId')::uuid;
-    v_actor_id := (p_authorization->>'actorId')::uuid;
-    v_authorizer_id := (p_authorization->>'authorizerId')::uuid;
+    v_actor_id := (p_authorization->>'operatorId')::uuid;
     v_package_version := (p_package->>'packageVersion')::integer;
     v_authorized_at := (p_authorization->>'authorizedAt')::timestamptz;
     v_expires_at := (p_authorization->>'expiresAt')::timestamptz;
@@ -316,7 +314,7 @@ begin
   v_package_id := p_package->>'packageId';
   v_package_sha := p_package->>'packageSha256';
   v_idempotency_key := p_plan->>'packageIdempotencyKey';
-  v_authorization_id := p_authorization->>'authorizationId';
+  v_authorization_id := p_authorization->>'executionAuthorizationId';
 
   if v_package_version < 1 or length(btrim(coalesce(v_package_id, ''))) = 0
      or v_package_sha !~ '^[0-9a-f]{64}$'
@@ -393,17 +391,17 @@ begin
      or p_authorization->>'packageId' is distinct from v_package_id
      or (p_authorization->>'packageVersion')::integer is distinct from v_package_version
      or p_authorization->>'packageSha256' is distinct from v_package_sha
-     or p_authorization->>'actorRole' is distinct from 'operator'
+     or p_authorization->>'operatorRole' is distinct from 'operator'
      or v_actor_id is null
-     or length(btrim(coalesce(p_authorization->>'actorName', ''))) = 0
-     or coalesce(p_authorization->>'authorizerRole', '') not in ('lawyer', 'client_authorized')
-     or v_authorizer_id is null
-     or length(btrim(coalesce(p_authorization->>'authorizerName', ''))) = 0
+     or length(btrim(coalesce(p_authorization->>'operatorName', ''))) = 0
+     or p_authorization ? 'authorizerRole'
+     or p_authorization ? 'authorizerId'
+     or p_authorization ? 'authorizerName'
      or length(btrim(coalesce(p_authorization->>'signingKeyId', ''))) = 0
      or coalesce(p_authorization->>'signingPublicKeySha256', '') !~ '^[0-9a-f]{64}$'
      or coalesce(p_authorization->>'authorizationEnvelopeSha256', '') !~ '^[0-9a-f]{64}$'
      or coalesce(p_authorization->>'authorizationSignatureBase64', '') !~ '^[A-Za-z0-9+/]+={0,2}$' then
-    raise exception 'authorization is not bound to the exact package, executor, authorizer, and signer evidence';
+    raise exception 'execution authorization is not bound to the exact package, operator, and signer evidence';
   end if;
 
   perform 1
@@ -579,13 +577,15 @@ begin
   end loop;
 
   v_receipt := jsonb_build_object(
-    'schemaVersion', 'drg-package-staging-receipt/v1',
+    'schemaVersion', 'drg-package-staging-execution-receipt/v1',
+    'operationKind', 'deliverables_staging',
+    'releaseAuthorizationGranted', false,
     'operationId', v_operation_id,
     'idempotencyKey', v_idempotency_key,
-    'authorizationId', v_authorization_id,
-    'authorizerRole', p_authorization->>'authorizerRole',
-    'authorizerId', v_authorizer_id,
-    'authorizerName', p_authorization->>'authorizerName',
+    'executionAuthorizationId', v_authorization_id,
+    'operatorRole', 'operator',
+    'operatorId', v_actor_id,
+    'operatorName', p_authorization->>'operatorName',
     'signingKeyId', p_authorization->>'signingKeyId',
     'signingPublicKeySha256', p_authorization->>'signingPublicKeySha256',
     'authorizationEnvelopeSha256', p_authorization->>'authorizationEnvelopeSha256',
@@ -612,7 +612,7 @@ begin
     v_operation_id, v_idempotency_key, v_authorization_id, v_firm_id,
     v_period_id, v_package_id, v_package_version, v_package_sha,
     p_package_canonical, p_authorization, p_pdf_evidence, 'operator', v_actor_id,
-    p_authorization->>'actorName', v_authorized_at, v_expires_at,
+    p_authorization->>'operatorName', v_authorized_at, v_expires_at,
     v_receipt, v_committed_at
   );
 

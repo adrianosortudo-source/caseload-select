@@ -1,12 +1,12 @@
 import {
   canonicalJson,
   planDrgPackageStaging,
-  projectApprovedDrgPublishingKit,
+  projectReleaseAuthorizedDrgPublishingKit,
   reconcileDrgPackageStaging,
-  type ApprovedPublishingKitProjection,
-  type DrgPackageApproval,
+  type DrgPackageReleaseAuthorization,
   type DrgPackageReconciliation,
   type DrgPortalStagingSnapshot,
+  type ReleaseAuthorizedPublishingKitProjection,
   type DrgStagingPlan,
   type SealedDrgWeeklyPackage,
   type Sha256Function,
@@ -16,25 +16,27 @@ const SHA256_RE = /^[0-9a-f]{64}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
-export interface DrgPackageStagingAuthorization {
-  readonly schemaVersion: "drg-package-staging-authorization/v1";
-  readonly authorizationId: string;
+/**
+ * Authorizes one operator to execute the already-sealed staging operation.
+ * It is deliberately not client release authorization and cannot be used as
+ * publication evidence.
+ */
+export interface DrgPackageStagingExecutionAuthorization {
+  readonly schemaVersion: "drg-package-staging-execution-authorization/v1";
+  readonly executionAuthorizationId: string;
   readonly firmId: string;
   readonly periodId: string;
   readonly packageId: string;
   readonly packageVersion: number;
   readonly packageSha256: string;
-  readonly actorRole: "operator";
-  readonly actorId: string;
-  readonly actorName: string;
-  readonly authorizerRole: "lawyer" | "client_authorized";
-  readonly authorizerId: string;
-  readonly authorizerName: string;
+  readonly operatorRole: "operator";
+  readonly operatorId: string;
+  readonly operatorName: string;
   readonly authorizedAt: string;
   readonly expiresAt: string;
 }
 
-export interface DrgPackageStagingAuthorizationEvidence extends DrgPackageStagingAuthorization {
+export interface DrgPackageStagingExecutionAuthorizationEvidence extends DrgPackageStagingExecutionAuthorization {
   readonly signingKeyId: string;
   readonly signingPublicKeySha256: string;
   readonly authorizationEnvelopeSha256: string;
@@ -42,13 +44,16 @@ export interface DrgPackageStagingAuthorizationEvidence extends DrgPackageStagin
 }
 
 export interface DrgStagingOperationReceipt {
-  readonly schemaVersion: "drg-package-staging-receipt/v1";
+  readonly schemaVersion: "drg-package-staging-execution-receipt/v1";
+  readonly operationKind: "deliverables_staging";
+  /** Always false: client release authorization is a later, separate gate. */
+  readonly releaseAuthorizationGranted: false;
   readonly operationId: string;
   readonly idempotencyKey: string;
-  readonly authorizationId: string;
-  readonly authorizerRole: "lawyer" | "client_authorized";
-  readonly authorizerId: string;
-  readonly authorizerName: string;
+  readonly executionAuthorizationId: string;
+  readonly operatorRole: "operator";
+  readonly operatorId: string;
+  readonly operatorName: string;
   readonly signingKeyId: string;
   readonly signingPublicKeySha256: string;
   readonly authorizationEnvelopeSha256: string;
@@ -129,24 +134,21 @@ function packageCanonicalInput(pkg: SealedDrgWeeklyPackage): string {
 }
 
 function validateAuthorization(
-  authorization: DrgPackageStagingAuthorization,
+  authorization: DrgPackageStagingExecutionAuthorization,
   pkg: SealedDrgWeeklyPackage,
   now: Date,
 ): void {
-  if (authorization.schemaVersion !== "drg-package-staging-authorization/v1") {
-    throw new Error("unsupported DRG package staging authorization schema");
+  if (authorization.schemaVersion !== "drg-package-staging-execution-authorization/v1") {
+    throw new Error("unsupported DRG package staging execution authorization schema");
   }
-  if (!authorization.authorizationId.trim()) throw new Error("staging authorization id is required");
-  if (!UUID_RE.test(authorization.actorId)) throw new Error("staging authorization requires an authenticated operator UUID");
-  if (authorization.actorRole !== "operator" || !authorization.actorName.trim()) {
-    throw new Error("staging authorization requires a named operator");
+  if (!authorization.executionAuthorizationId.trim()) throw new Error("staging execution authorization id is required");
+  if (!UUID_RE.test(authorization.operatorId)) throw new Error("staging execution authorization requires an authenticated operator UUID");
+  if (authorization.operatorRole !== "operator" || !authorization.operatorName.trim()) {
+    throw new Error("staging execution authorization requires a named operator");
   }
-  if (
-    (authorization.authorizerRole !== "lawyer" && authorization.authorizerRole !== "client_authorized") ||
-    !UUID_RE.test(authorization.authorizerId) ||
-    !authorization.authorizerName.trim()
-  ) {
-    throw new Error("staging authorization requires a named lawyer or client-authorized approver");
+  const legacyReleaseFields = authorization as unknown as Record<string, unknown>;
+  if ("authorizerRole" in legacyReleaseFields || "authorizerId" in legacyReleaseFields || "authorizerName" in legacyReleaseFields) {
+    throw new Error("staging execution authorization must not carry lawyer or client release authorization");
   }
   if (
     authorization.firmId !== pkg.firmId ||
@@ -155,16 +157,16 @@ function validateAuthorization(
     authorization.packageVersion !== pkg.packageVersion ||
     authorization.packageSha256 !== pkg.packageSha256
   ) {
-    throw new Error("staging authorization is not bound to the exact package scope and SHA");
+    throw new Error("staging execution authorization is not bound to the exact package scope and SHA");
   }
-  if (!SHA256_RE.test(authorization.packageSha256)) throw new Error("staging authorization package SHA-256 is malformed");
+  if (!SHA256_RE.test(authorization.packageSha256)) throw new Error("staging execution authorization package SHA-256 is malformed");
   const authorizedAt = Date.parse(authorization.authorizedAt);
   const expiresAt = Date.parse(authorization.expiresAt);
   if (!Number.isFinite(authorizedAt) || !Number.isFinite(expiresAt) || expiresAt <= authorizedAt) {
-    throw new Error("staging authorization timestamps are invalid");
+    throw new Error("staging execution authorization timestamps are invalid");
   }
-  if (authorizedAt > now.getTime() + 5 * 60_000) throw new Error("staging authorization timestamp is in the future");
-  if (expiresAt <= now.getTime()) throw new Error("staging authorization has expired");
+  if (authorizedAt > now.getTime() + 5 * 60_000) throw new Error("staging execution authorization timestamp is in the future");
+  if (expiresAt <= now.getTime()) throw new Error("staging execution authorization has expired");
 }
 
 function parseSnapshot(data: unknown, pkg: SealedDrgWeeklyPackage): DrgPortalStagingSnapshot {
@@ -175,15 +177,17 @@ function parseSnapshot(data: unknown, pkg: SealedDrgWeeklyPackage): DrgPortalSta
   return value as unknown as DrgPortalStagingSnapshot;
 }
 
-function parseReceipt(data: unknown, pkg: SealedDrgWeeklyPackage, authorization: DrgPackageStagingAuthorizationEvidence): DrgStagingOperationReceipt {
+function parseReceipt(data: unknown, pkg: SealedDrgWeeklyPackage, authorization: DrgPackageStagingExecutionAuthorizationEvidence): DrgStagingOperationReceipt {
   const value = record(data);
   if (
     !value ||
-    value.schemaVersion !== "drg-package-staging-receipt/v1" ||
-    value.authorizationId !== authorization.authorizationId ||
-    value.authorizerRole !== authorization.authorizerRole ||
-    value.authorizerId !== authorization.authorizerId ||
-    value.authorizerName !== authorization.authorizerName ||
+    value.schemaVersion !== "drg-package-staging-execution-receipt/v1" ||
+    value.operationKind !== "deliverables_staging" ||
+    value.releaseAuthorizationGranted !== false ||
+    value.executionAuthorizationId !== authorization.executionAuthorizationId ||
+    value.operatorRole !== authorization.operatorRole ||
+    value.operatorId !== authorization.operatorId ||
+    value.operatorName !== authorization.operatorName ||
     value.signingKeyId !== authorization.signingKeyId ||
     value.signingPublicKeySha256 !== authorization.signingPublicKeySha256 ||
     value.authorizationEnvelopeSha256 !== authorization.authorizationEnvelopeSha256 ||
@@ -274,10 +278,10 @@ async function verifyPdfBytes(input: {
  * plan before crossing the database boundary, executes one service-role RPC,
  * then performs the mandatory fresh, zero-write reconciliation.
  */
-export async function stageAuthorizedDrgPackage(input: {
+export async function stageExecutionAuthorizedDrgPackage(input: {
   readonly pkg: SealedDrgWeeklyPackage;
   readonly snapshot: DrgPortalStagingSnapshot;
-  readonly authorization: DrgPackageStagingAuthorizationEvidence;
+  readonly executionAuthorization: DrgPackageStagingExecutionAuthorizationEvidence;
   readonly sha256: Sha256Function;
   readonly sha256Bytes: Sha256BytesFunction;
   readonly rpc: DrgPackageStagingRpcClient;
@@ -286,12 +290,12 @@ export async function stageAuthorizedDrgPackage(input: {
 }): Promise<AuthorizedDrgStagingResult> {
   const plan = planDrgPackageStaging(input.pkg, input.snapshot, input.sha256);
   if (plan.kind === "no_plan") return { status: "blocked", plan, writesPerformed: 0 };
-  validateAuthorization(input.authorization, input.pkg, input.now ?? new Date());
+  validateAuthorization(input.executionAuthorization, input.pkg, input.now ?? new Date());
   if (
-    !input.authorization.signingKeyId.trim() ||
-    !SHA256_RE.test(input.authorization.signingPublicKeySha256) ||
-    !SHA256_RE.test(input.authorization.authorizationEnvelopeSha256) ||
-    !BASE64_RE.test(input.authorization.authorizationSignatureBase64)
+    !input.executionAuthorization.signingKeyId.trim() ||
+    !SHA256_RE.test(input.executionAuthorization.signingPublicKeySha256) ||
+    !SHA256_RE.test(input.executionAuthorization.authorizationEnvelopeSha256) ||
+    !BASE64_RE.test(input.executionAuthorization.authorizationSignatureBase64)
   ) {
     throw new Error("staging authorization signer evidence is malformed");
   }
@@ -301,11 +305,11 @@ export async function stageAuthorizedDrgPackage(input: {
     p_package: input.pkg,
     p_package_canonical: packageCanonicalInput(input.pkg),
     p_plan: plan,
-    p_authorization: input.authorization,
+    p_authorization: input.executionAuthorization,
     p_pdf_evidence: pdfEvidence,
   });
   if (error) throw new Error(`atomic DRG package staging failed: ${error.message ?? "unknown database error"}`);
-  const receipt = parseReceipt(data, input.pkg, input.authorization);
+  const receipt = parseReceipt(data, input.pkg, input.executionAuthorization);
 
   const snapshot = await readSnapshot(input.rpc, input.pkg);
   const reconciliation = reconcileDrgPackageStaging(input.pkg, snapshot, input.sha256);
@@ -319,10 +323,10 @@ export async function stageAuthorizedDrgPackage(input: {
 /** Read-only Publishing Kit projection. No database mutation is possible. */
 export async function projectLiveApprovedDrgPublishingKit(input: {
   readonly pkg: SealedDrgWeeklyPackage;
-  readonly approval: DrgPackageApproval;
+  readonly releaseAuthorization: DrgPackageReleaseAuthorization;
   readonly sha256: Sha256Function;
   readonly rpc: DrgPackageStagingRpcClient;
-}): Promise<ApprovedPublishingKitProjection> {
+}): Promise<ReleaseAuthorizedPublishingKitProjection> {
   const snapshot = await readSnapshot(input.rpc, input.pkg);
-  return projectApprovedDrgPublishingKit(input.pkg, snapshot, input.approval, input.sha256);
+  return projectReleaseAuthorizedDrgPublishingKit(input.pkg, snapshot, input.releaseAuthorization, input.sha256);
 }

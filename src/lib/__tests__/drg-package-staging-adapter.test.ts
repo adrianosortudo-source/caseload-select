@@ -4,15 +4,15 @@ import {
   DRG_REQUIRED_DOCTRINE_PINS,
   DRG_SIXTEEN_PIECE_REGISTRY,
   sealDrgWeeklyPackage,
-  type DrgPackageApproval,
+  type DrgPackageReleaseAuthorization,
   type DrgPortalStagingSnapshot,
   type DrgWeeklyPackageDraft,
   type SealedDrgWeeklyPackage,
 } from "../drg-package-staging";
 import {
   projectLiveApprovedDrgPublishingKit,
-  stageAuthorizedDrgPackage,
-  type DrgPackageStagingAuthorizationEvidence,
+  stageExecutionAuthorizedDrgPackage,
+  type DrgPackageStagingExecutionAuthorizationEvidence,
   type DrgPackageStagingRpcClient,
   type DrgPackageStorageClient,
 } from "../drg-package-staging-adapter";
@@ -88,24 +88,21 @@ function storageFor(pkg: SealedDrgWeeklyPackage, tamperedPieceId?: string): DrgP
   };
 }
 
-function authorization(pkg: SealedDrgWeeklyPackage): DrgPackageStagingAuthorizationEvidence {
+function executionAuthorization(pkg: SealedDrgWeeklyPackage): DrgPackageStagingExecutionAuthorizationEvidence {
   return {
-    schemaVersion: "drg-package-staging-authorization/v1",
-    authorizationId: randomUUID(),
+    schemaVersion: "drg-package-staging-execution-authorization/v1",
+    executionAuthorizationId: randomUUID(),
     firmId: pkg.firmId,
     periodId: pkg.periodId,
     packageId: pkg.packageId,
     packageVersion: pkg.packageVersion,
     packageSha256: pkg.packageSha256,
-    actorRole: "operator",
-    actorId: randomUUID(),
-    actorName: "Test Operator",
-    authorizerRole: "lawyer",
-    authorizerId: randomUUID(),
-    authorizerName: "Test Lawyer",
+    operatorRole: "operator",
+    operatorId: randomUUID(),
+    operatorName: "Test Operator",
     authorizedAt: "2026-08-09T15:55:00.000Z",
     expiresAt: "2026-08-09T16:15:00.000Z",
-    signingKeyId: "drg-test-lawyer-key",
+    signingKeyId: "drg-test-operator-key",
     signingPublicKeySha256: "a".repeat(64),
     authorizationEnvelopeSha256: "b".repeat(64),
     authorizationSignatureBase64: "c2lnbmF0dXJl",
@@ -146,15 +143,17 @@ function exactSnapshot(pkg: SealedDrgWeeklyPackage, approved = false): DrgPortal
   };
 }
 
-function receipt(pkg: SealedDrgWeeklyPackage, auth: DrgPackageStagingAuthorizationEvidence, snapshot: DrgPortalStagingSnapshot) {
+function receipt(pkg: SealedDrgWeeklyPackage, auth: DrgPackageStagingExecutionAuthorizationEvidence, snapshot: DrgPortalStagingSnapshot) {
   return {
-    schemaVersion: "drg-package-staging-receipt/v1",
+    schemaVersion: "drg-package-staging-execution-receipt/v1",
+    operationKind: "deliverables_staging",
+    releaseAuthorizationGranted: false,
     operationId: randomUUID(),
     idempotencyKey: "drg-stage/exact",
-    authorizationId: auth.authorizationId,
-    authorizerRole: auth.authorizerRole,
-    authorizerId: auth.authorizerId,
-    authorizerName: auth.authorizerName,
+    executionAuthorizationId: auth.executionAuthorizationId,
+    operatorRole: auth.operatorRole,
+    operatorId: auth.operatorId,
+    operatorName: auth.operatorName,
     signingKeyId: auth.signingKeyId,
     signingPublicKeySha256: auth.signingPublicKeySha256,
     authorizationEnvelopeSha256: auth.authorizationEnvelopeSha256,
@@ -183,17 +182,17 @@ function receipt(pkg: SealedDrgWeeklyPackage, auth: DrgPackageStagingAuthorizati
 describe("authorized DRG package staging adapter", () => {
   it("executes one atomic RPC and then a fresh zero-write exact reconciliation", async () => {
     const pkg = makePackage();
-    const auth = authorization(pkg);
+    const auth = executionAuthorization(pkg);
     const fresh = exactSnapshot(pkg);
     const rpc = vi.fn()
       .mockResolvedValueOnce({ data: pdfIdentities(pkg), error: null })
       .mockResolvedValueOnce({ data: receipt(pkg, auth, fresh), error: null })
       .mockResolvedValueOnce({ data: fresh, error: null });
 
-    const result = await stageAuthorizedDrgPackage({
+    const result = await stageExecutionAuthorizedDrgPackage({
       pkg,
       snapshot: { firmId: pkg.firmId, periodId: pkg.periodId, deliverables: [] },
-      authorization: auth,
+      executionAuthorization: auth,
       sha256,
       sha256Bytes,
       rpc: { rpc } as DrgPackageStagingRpcClient,
@@ -202,6 +201,11 @@ describe("authorized DRG package staging adapter", () => {
     });
 
     expect(result.status).toBe("reconciled");
+    expect(result.status === "reconciled" && result.receipt).toMatchObject({
+      operationKind: "deliverables_staging",
+      releaseAuthorizationGranted: false,
+      operatorRole: "operator",
+    });
     expect(rpc).toHaveBeenCalledTimes(3);
     expect(rpc.mock.calls[0][0]).toBe("read_drg_pdf_storage_identities");
     expect(rpc.mock.calls[1][0]).toBe("stage_drg_weekly_package_atomic");
@@ -216,12 +220,12 @@ describe("authorized DRG package staging adapter", () => {
 
   it("fails before any RPC when authorization drifts from package SHA", async () => {
     const pkg = makePackage();
-    const auth = { ...authorization(pkg), packageSha256: "0".repeat(64) };
+    const auth = { ...executionAuthorization(pkg), packageSha256: "0".repeat(64) };
     const rpc = vi.fn();
-    await expect(stageAuthorizedDrgPackage({
+    await expect(stageExecutionAuthorizedDrgPackage({
       pkg,
       snapshot: { firmId: pkg.firmId, periodId: pkg.periodId, deliverables: [] },
-      authorization: auth,
+      executionAuthorization: auth,
       sha256,
       sha256Bytes,
       rpc: { rpc } as DrgPackageStagingRpcClient,
@@ -231,35 +235,55 @@ describe("authorized DRG package staging adapter", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it("rejects an operator self-authorizing instead of a lawyer or client-authorized approver", async () => {
+  it("rejects a malformed operator execution identity before any RPC", async () => {
     const pkg = makePackage();
     const auth = {
-      ...authorization(pkg),
-      authorizerRole: "operator",
-    } as unknown as DrgPackageStagingAuthorizationEvidence;
+      ...executionAuthorization(pkg),
+      operatorId: "not-a-uuid",
+    } as unknown as DrgPackageStagingExecutionAuthorizationEvidence;
     const rpc = vi.fn();
-    await expect(stageAuthorizedDrgPackage({
+    await expect(stageExecutionAuthorizedDrgPackage({
       pkg,
       snapshot: { firmId: pkg.firmId, periodId: pkg.periodId, deliverables: [] },
-      authorization: auth,
+      executionAuthorization: auth,
       sha256,
       sha256Bytes,
       rpc: { rpc } as DrgPackageStagingRpcClient,
       storage: storageFor(pkg),
       now: new Date("2026-08-09T16:00:00.000Z"),
-    })).rejects.toThrow(/lawyer or client-authorized approver/);
+    })).rejects.toThrow(/authenticated operator UUID/);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("rejects a lawyer/client release field because staging is not release approval", async () => {
+    const pkg = makePackage();
+    const auth = {
+      ...executionAuthorization(pkg),
+      authorizerRole: "lawyer",
+    } as unknown as DrgPackageStagingExecutionAuthorizationEvidence;
+    const rpc = vi.fn();
+    await expect(stageExecutionAuthorizedDrgPackage({
+      pkg,
+      snapshot: { firmId: pkg.firmId, periodId: pkg.periodId, deliverables: [] },
+      executionAuthorization: auth,
+      sha256,
+      sha256Bytes,
+      rpc: { rpc } as DrgPackageStagingRpcClient,
+      storage: storageFor(pkg),
+      now: new Date("2026-08-09T16:00:00.000Z"),
+    })).rejects.toThrow(/must not carry lawyer or client release authorization/);
     expect(rpc).not.toHaveBeenCalled();
   });
 
   it("rejects tampered downloaded PDF bytes before the write RPC even when object identity resolves", async () => {
     const pkg = makePackage();
-    const auth = authorization(pkg);
+    const auth = executionAuthorization(pkg);
     const firstPdf = pkg.pieces.find((piece) => piece.payload.kind === "pdf")!;
     const rpc = vi.fn().mockResolvedValueOnce({ data: pdfIdentities(pkg), error: null });
-    await expect(stageAuthorizedDrgPackage({
+    await expect(stageExecutionAuthorizedDrgPackage({
       pkg,
       snapshot: { firmId: pkg.firmId, periodId: pkg.periodId, deliverables: [] },
-      authorization: auth,
+      executionAuthorization: auth,
       sha256,
       sha256Bytes,
       rpc: { rpc } as DrgPackageStagingRpcClient,
@@ -272,15 +296,15 @@ describe("authorized DRG package staging adapter", () => {
 
   it("fails closed when the database receipt drifts after the transaction", async () => {
     const pkg = makePackage();
-    const auth = authorization(pkg);
+    const auth = executionAuthorization(pkg);
     const fresh = exactSnapshot(pkg);
     const rpc = vi.fn()
       .mockResolvedValueOnce({ data: pdfIdentities(pkg), error: null })
       .mockResolvedValueOnce({ data: { ...receipt(pkg, auth, fresh), periodId: randomUUID() }, error: null });
-    await expect(stageAuthorizedDrgPackage({
+    await expect(stageExecutionAuthorizedDrgPackage({
       pkg,
       snapshot: { firmId: pkg.firmId, periodId: pkg.periodId, deliverables: [] },
-      authorization: auth,
+      executionAuthorization: auth,
       sha256,
       sha256Bytes,
       rpc: { rpc } as DrgPackageStagingRpcClient,
@@ -290,28 +314,35 @@ describe("authorized DRG package staging adapter", () => {
     expect(rpc).toHaveBeenCalledTimes(2);
   });
 
-  it("projects Publishing Kit only from the exact approved current versions", async () => {
+  it("projects Publishing Kit only from exact standing release evidence, not staging", async () => {
     const pkg = makePackage();
-    const snapshot = exactSnapshot(pkg, true);
-    const approval: DrgPackageApproval = {
-      decision: "approved",
+    const snapshot = exactSnapshot(pkg);
+    const releaseAuthorization: DrgPackageReleaseAuthorization = {
+      releasePath: "standing_authorization",
+      releaseEvidenceId: "standing-policy-event-2026-08-09",
       packageId: pkg.packageId,
       packageVersion: pkg.packageVersion,
       packageSha256: pkg.packageSha256,
       approvedAt: "2026-08-09T16:00:00.000Z",
-      approvedBy: "lawyer@example.test",
+      approvedBy: "DRG standing authorization policy",
       pieces: snapshot.deliverables.map((row, index) => ({
         pieceId: row.pieceId,
         deliverableId: row.deliverableId,
         versionId: row.currentVersionId!,
         versionNumber: row.currentVersion!.versionNumber,
         pieceSha256: pkg.pieces[index].pieceSha256,
+        sourceSha256: pkg.pieces[index].sourceSha256,
+        assetSha256: pkg.pieces[index].payload.kind === "pdf" ? pkg.pieces[index].payload.assetSha256 : null,
+        releaseEvidenceSha256: sha256(`standing-evidence:${row.pieceId}`),
+        changeHoldActive: false,
+        requiresIndividualReview: false,
+        standingAuthorizationEventId: "standing-policy-event-2026-08-09",
       })),
     };
     const rpc = vi.fn().mockResolvedValue({ data: snapshot, error: null });
     const ready = await projectLiveApprovedDrgPublishingKit({
       pkg,
-      approval,
+      releaseAuthorization,
       sha256,
       rpc: { rpc } as DrgPackageStagingRpcClient,
     });
@@ -327,7 +358,7 @@ describe("authorized DRG package staging adapter", () => {
     rpc.mockResolvedValueOnce({ data: drifted, error: null });
     const blocked = await projectLiveApprovedDrgPublishingKit({
       pkg,
-      approval,
+      releaseAuthorization,
       sha256,
       rpc: { rpc } as DrgPackageStagingRpcClient,
     });
