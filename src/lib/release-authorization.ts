@@ -1,17 +1,18 @@
 /**
  * The canonical two-path release-authorization bar: the ONE interpretation
  * of "is this version release-authorized" for the entire Content Studio
- * publishing surface, ported faithfully from claim_placement_for_publish()
- * (supabase/migrations/20260717230956_standing_publishing_authorization.sql,
- * the Path A / Path B branch at lines 407-439) -- the actual, authoritative
- * enforcement of this rule in this codebase. No other pure, importable
- * TypeScript implementation of it exists: the RPC itself is the only real
- * enforcement, and calling it performs a database write (it creates a
- * publication_placement_claims row), which read-only callers (a preflight
- * report, a dry-run audit) must never do. This module is a faithful,
- * read-only port of that same decision -- one shared helper every other
- * authorization-aware module in this codebase composes with, never a
- * second, competing rule reinvented locally.
+ * publishing surface. It is the read-only projection of the composed
+ * database contract: the legacy claim RPC's Path A / Path B choice
+ * (20260717230956_standing_publishing_authorization.sql), plus the current
+ * version/status, client-change-hold, claim, and receipt trigger guards in
+ * 20260809150948_release_safety_authorization_and_change_holds.sql and
+ * 20260809170708_deliverable_scoped_client_change_holds.sql. The database
+ * functions and triggers remain authoritative: calling the claim RPC writes
+ * a publication_placement_claims row, while the receipt trigger revalidates
+ * the live release state. Read-only callers (a preflight report, a dry-run
+ * audit) must never create a claim just to answer this question. This module
+ * is the shared read model every authorization-aware caller composes with,
+ * never a second, competing release rule reinvented locally.
  *
  * A version is release-authorized only through EITHER:
  *   A. individual lawyer approval of that exact version
@@ -19,8 +20,7 @@
  *   B. an active standing publishing authorization for the firm, PROVIDED
  *      the version is not flagged requires_individual_review -- that flag
  *      always overrides path B unconditionally and is checked BEFORE the
- *      firm's authorization state is ever consulted, exactly as the RPC
- *      rejects on that flag first.
+ *      firm's authorization state is ever consulted.
  * There is no third path. Every caller in this codebase must call
  * isVersionReleaseAuthorized() and use its result as-is; no function may
  * reconstruct any part of this decision independently (re-comparing
@@ -100,7 +100,7 @@ export interface ReleaseAuthorizationInput {
   approvedVersionId: string | null;
   targetVersionId: string;
   versionRequiresIndividualReview: boolean;
-  /** An append-only client change hold remains unresolved for this exact version. */
+  /** An append-only client change hold remains unresolved for this deliverable. */
   hasUnresolvedClientChangeHold?: boolean;
   /** This firm's CURRENT standing-authorization state (standing-publishing-authorization.ts's getStandingAuthorizationState().active) -- never historical presence; see this function's own doc comment on why "ever configured" is not a distinction this input can make. */
   standingAuthorizationActive: boolean;

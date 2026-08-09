@@ -17,7 +17,10 @@
  * scope-matching claim; two receipt-insert attempts racing to consume the
  * SAME claim_id must yield exactly one winner; a NULL claim_id on a root
  * receipt is rejected outright; and a receipt cannot release a claim held
- * by a different actor.
+ * by a different actor. The composed release contract is intentional: the
+ * legacy standing-claim RPC selects its path, while the current
+ * 20260809150948 release triggers and 20260809170708 deliverable-scoped
+ * hold function authoritatively revalidate claim and receipt inserts.
  *
  * Gated behind DIRECT_DATABASE_URL (a direct, non-pooled Postgres
  * connection string -- Supabase project settings -> Database -> Connection
