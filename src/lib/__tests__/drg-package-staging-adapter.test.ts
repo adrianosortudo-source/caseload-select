@@ -1,0 +1,246 @@
+import { createHash, randomUUID } from "node:crypto";
+import { describe, expect, it, vi } from "vitest";
+import {
+  DRG_REQUIRED_DOCTRINE_PINS,
+  DRG_SIXTEEN_PIECE_REGISTRY,
+  sealDrgWeeklyPackage,
+  type DrgPackageApproval,
+  type DrgPortalStagingSnapshot,
+  type DrgWeeklyPackageDraft,
+  type SealedDrgWeeklyPackage,
+} from "../drg-package-staging";
+import {
+  projectLiveApprovedDrgPublishingKit,
+  stageAuthorizedDrgPackage,
+  type DrgPackageStagingAuthorization,
+  type DrgPackageStagingRpcClient,
+} from "../drg-package-staging-adapter";
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function makePackage(): SealedDrgWeeklyPackage {
+  const firmId = randomUUID();
+  const periodId = randomUUID();
+  const pin = (id: string, version: string) => ({ id, version, sha256: sha256(`${id}:${version}`) });
+  const draft: DrgWeeklyPackageDraft = {
+    schemaVersion: "drg-weekly-package/v1",
+    packageId: "DRG-2026-W33",
+    packageVersion: 1,
+    firmId,
+    periodId,
+    sources: {
+      topicSelection: pin("topic-selection", "2026-W33"),
+      researchEvidence: pin("research-evidence", "2026-W33"),
+      contentManifest: pin("content-manifest", "1.0.0"),
+    },
+    doctrine: DRG_REQUIRED_DOCTRINE_PINS.map((authority) => ({ ...authority })),
+    pieces: DRG_SIXTEEN_PIECE_REGISTRY.map((piece) => ({
+      id: piece.id,
+      locale: piece.locale,
+      title: `Title for ${piece.id}`,
+      sourceSha256: sha256(`source:${piece.id}`),
+      payload: piece.contentKind === "pdf"
+        ? {
+            kind: "pdf" as const,
+            storageKey: `${firmId}/content/${piece.id}.pdf`,
+            filename: `${piece.id}.pdf`,
+            mimeType: "application/pdf" as const,
+            byteSize: 2048,
+            assetSha256: sha256(`pdf:${piece.id}`),
+          }
+        : { kind: "text" as const, bodyHtml: `<p>Exact ${piece.id}</p>` },
+    })),
+  };
+  return sealDrgWeeklyPackage(draft, sha256);
+}
+
+function authorization(pkg: SealedDrgWeeklyPackage): DrgPackageStagingAuthorization {
+  return {
+    schemaVersion: "drg-package-staging-authorization/v1",
+    authorizationId: randomUUID(),
+    firmId: pkg.firmId,
+    periodId: pkg.periodId,
+    packageId: pkg.packageId,
+    packageVersion: pkg.packageVersion,
+    packageSha256: pkg.packageSha256,
+    actorRole: "operator",
+    actorId: randomUUID(),
+    actorName: "Test Operator",
+    authorizedAt: "2026-08-09T15:55:00.000Z",
+    expiresAt: "2026-08-09T16:15:00.000Z",
+  };
+}
+
+function exactSnapshot(pkg: SealedDrgWeeklyPackage, approved = false): DrgPortalStagingSnapshot {
+  return {
+    firmId: pkg.firmId,
+    periodId: pkg.periodId,
+    deliverables: pkg.pieces.map((piece, index) => {
+      const registry = DRG_SIXTEEN_PIECE_REGISTRY[index];
+      const deliverableId = randomUUID();
+      const versionId = randomUUID();
+      return {
+        pieceId: piece.id,
+        deliverableId,
+        firmId: pkg.firmId,
+        periodId: pkg.periodId,
+        locale: registry.locale,
+        contentKind: registry.contentKind,
+        deliverableRole: registry.deliverableRole,
+        destination: registry.destination,
+        currentVersionId: versionId,
+        approvedVersionId: approved ? versionId : null,
+        currentVersion: {
+          id: versionId,
+          versionNumber: 1,
+          packageId: pkg.packageId,
+          packageVersion: pkg.packageVersion,
+          packageSha256: pkg.packageSha256,
+          pieceSha256: piece.pieceSha256,
+          sourceSha256: piece.sourceSha256,
+        },
+        approval: approved ? { decision: "approved" as const, versionId, packageSha256: pkg.packageSha256 } : null,
+      };
+    }),
+  };
+}
+
+function receipt(pkg: SealedDrgWeeklyPackage, auth: DrgPackageStagingAuthorization, snapshot: DrgPortalStagingSnapshot) {
+  return {
+    schemaVersion: "drg-package-staging-receipt/v1",
+    operationId: randomUUID(),
+    idempotencyKey: "drg-stage/exact",
+    authorizationId: auth.authorizationId,
+    firmId: pkg.firmId,
+    periodId: pkg.periodId,
+    packageId: pkg.packageId,
+    packageVersion: pkg.packageVersion,
+    packageSha256: pkg.packageSha256,
+    committedAt: "2026-08-09T16:00:00.000Z",
+    addedCount: 16,
+    newVersionCount: 0,
+    skippedCount: 0,
+    writesPerformed: 16,
+    replay: false,
+    pieces: snapshot.deliverables.map((row, index) => ({
+      pieceId: row.pieceId,
+      action: "add",
+      deliverableId: row.deliverableId,
+      versionId: row.currentVersionId,
+      versionNumber: 1,
+      pieceSha256: pkg.pieces[index].pieceSha256,
+    })),
+  };
+}
+
+describe("authorized DRG package staging adapter", () => {
+  it("executes one atomic RPC and then a fresh zero-write exact reconciliation", async () => {
+    const pkg = makePackage();
+    const auth = authorization(pkg);
+    const fresh = exactSnapshot(pkg);
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: receipt(pkg, auth, fresh), error: null })
+      .mockResolvedValueOnce({ data: fresh, error: null });
+
+    const result = await stageAuthorizedDrgPackage({
+      pkg,
+      snapshot: { firmId: pkg.firmId, periodId: pkg.periodId, deliverables: [] },
+      authorization: auth,
+      sha256,
+      rpc: { rpc } as DrgPackageStagingRpcClient,
+      now: new Date("2026-08-09T16:00:00.000Z"),
+    });
+
+    expect(result.status).toBe("reconciled");
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls[0][0]).toBe("stage_drg_weekly_package_atomic");
+    expect(rpc.mock.calls[1][0]).toBe("read_drg_package_staging_snapshot");
+    expect(result.status === "reconciled" && result.reconciliation).toMatchObject({
+      status: "exact_match",
+      visible: true,
+      writesPerformed: 0,
+      correctCount: 16,
+    });
+  });
+
+  it("fails before any RPC when authorization drifts from package SHA", async () => {
+    const pkg = makePackage();
+    const auth = { ...authorization(pkg), packageSha256: "0".repeat(64) };
+    const rpc = vi.fn();
+    await expect(stageAuthorizedDrgPackage({
+      pkg,
+      snapshot: { firmId: pkg.firmId, periodId: pkg.periodId, deliverables: [] },
+      authorization: auth,
+      sha256,
+      rpc: { rpc } as DrgPackageStagingRpcClient,
+      now: new Date("2026-08-09T16:00:00.000Z"),
+    })).rejects.toThrow(/exact package scope and SHA/);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the database receipt drifts after the transaction", async () => {
+    const pkg = makePackage();
+    const auth = authorization(pkg);
+    const fresh = exactSnapshot(pkg);
+    const rpc = vi.fn().mockResolvedValueOnce({
+      data: { ...receipt(pkg, auth, fresh), periodId: randomUUID() },
+      error: null,
+    });
+    await expect(stageAuthorizedDrgPackage({
+      pkg,
+      snapshot: { firmId: pkg.firmId, periodId: pkg.periodId, deliverables: [] },
+      authorization: auth,
+      sha256,
+      rpc: { rpc } as DrgPackageStagingRpcClient,
+      now: new Date("2026-08-09T16:00:00.000Z"),
+    })).rejects.toThrow(/malformed or drifted DRG staging receipt/);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("projects Publishing Kit only from the exact approved current versions", async () => {
+    const pkg = makePackage();
+    const snapshot = exactSnapshot(pkg, true);
+    const approval: DrgPackageApproval = {
+      decision: "approved",
+      packageId: pkg.packageId,
+      packageVersion: pkg.packageVersion,
+      packageSha256: pkg.packageSha256,
+      approvedAt: "2026-08-09T16:00:00.000Z",
+      approvedBy: "lawyer@example.test",
+      pieces: snapshot.deliverables.map((row, index) => ({
+        pieceId: row.pieceId,
+        deliverableId: row.deliverableId,
+        versionId: row.currentVersionId!,
+        versionNumber: row.currentVersion!.versionNumber,
+        pieceSha256: pkg.pieces[index].pieceSha256,
+      })),
+    };
+    const rpc = vi.fn().mockResolvedValue({ data: snapshot, error: null });
+    const ready = await projectLiveApprovedDrgPublishingKit({
+      pkg,
+      approval,
+      sha256,
+      rpc: { rpc } as DrgPackageStagingRpcClient,
+    });
+    expect(ready.status).toBe("ready");
+    expect(ready.pieces).toHaveLength(16);
+
+    const drifted = {
+      ...snapshot,
+      deliverables: snapshot.deliverables.map((row, index) => index === 0
+        ? { ...row, approvedVersionId: randomUUID() }
+        : row),
+    };
+    rpc.mockResolvedValueOnce({ data: drifted, error: null });
+    const blocked = await projectLiveApprovedDrgPublishingKit({
+      pkg,
+      approval,
+      sha256,
+      rpc: { rpc } as DrgPackageStagingRpcClient,
+    });
+    expect(blocked.status).toBe("blocked");
+    expect(blocked.pieces).toEqual([]);
+  });
+});
