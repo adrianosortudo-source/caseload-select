@@ -33,12 +33,6 @@ import {
   searchContentArchive,
   type ContentArchiveEntry,
 } from "@/lib/content-archive-pure";
-import PublicationReadinessSummary from "@/components/portal/PublicationReadinessSummary";
-import {
-  sliceReadinessForPeriod,
-  type DeliverableReadiness,
-  type PeriodLifecycle,
-} from "@/lib/publication-readiness";
 
 const PLAN_STATUS: Record<DeliverableStatus, { label: string; cls: string }> = {
   draft: { label: "Draft", cls: "bg-parchment-2 text-muted border-border-brand" },
@@ -83,16 +77,6 @@ function periodLabel(period: ContentPeriod): string {
     : fmtRange(period.starts_on, period.ends_on);
 }
 
-export interface PlanReadinessProp {
-  summary: { active: number; ready: number; blocked: number; excluded: number };
-  items: DeliverableReadiness[];
-  titles: Record<string, string>;
-  /** DR-097: deliverable id to its period's explicit readiness lifecycle. */
-  lifecycleByDeliverableId: Record<string, PeriodLifecycle>;
-  /** True only on a load failure, never on a legitimately empty plan. */
-  unavailable?: boolean;
-}
-
 const StandingAuthorizedIdsContext = createContext<ReadonlySet<string>>(new Set());
 
 export default function ContentPlan({
@@ -102,7 +86,6 @@ export default function ContentPlan({
   periods,
   deliverables,
   settings,
-  planReadiness,
   standingAuthActive = false,
   standingAuthorizedDeliverableIds = [],
 }: {
@@ -112,7 +95,6 @@ export default function ContentPlan({
   periods: ContentPeriod[];
   deliverables: PlanDeliverable[];
   settings: ContentPlanSettings | null;
-  planReadiness?: PlanReadinessProp;
   standingAuthActive?: boolean;
   /** Server-derived canonical standing authorization; omitted/unavailable fails closed. */
   standingAuthorizedDeliverableIds?: string[];
@@ -185,7 +167,6 @@ export default function ContentPlan({
         firmId={firmId}
         settings={settings}
         onChanged={refresh}
-        planReadiness={planReadiness}
       />
 
         {isOperator && <ContentArchive
@@ -225,30 +206,6 @@ export default function ContentPlan({
         const items = live.filter((d) => d.period_id === period.id);
         const { approved, published, total } = planProgress(items);
         const groups = groupByCanonicalFormat(items);
-        // Slice the whole-plan readiness set down to this period's own
-        // deliverables. Reuses the ids already computed above rather than
-        // adding a second period-scoped data load; sliceReadinessForPeriod
-        // keeps the per-period counts using the exact same rules as the
-        // whole-plan summary (see publication-readiness.test.ts for the
-        // proof this slicing is correct, and
-        // PublicationReadinessSummary.test.tsx for the proof the resulting
-        // periodId reaches the rendered "download manifest" link).
-        const periodDeliverableIds = new Set(items.map((d) => d.id));
-        const sliced = sliceReadinessForPeriod(planReadiness?.items ?? [], periodDeliverableIds);
-        const periodReadiness: PlanReadinessProp | undefined = planReadiness
-          ? {
-              summary: sliced.summary,
-              items: sliced.items,
-              titles: planReadiness.titles,
-              lifecycleByDeliverableId: planReadiness.lifecycleByDeliverableId,
-              // A whole-plan load failure means every period's slice is
-              // equally unreliable, not just the aggregate: propagate it so
-              // each PeriodCard's own readiness panel shows the unavailable
-              // state too, instead of a misleadingly clean per-period slice
-              // of data that was never actually loaded.
-              unavailable: planReadiness.unavailable,
-            }
-          : undefined;
         return (
           <PeriodCard
             key={period.id}
@@ -261,7 +218,6 @@ export default function ContentPlan({
             groups={groups}
             periods={periods}
             onChanged={refresh}
-            periodReadiness={periodReadiness}
             standingAuthActive={standingAuthActive}
           />
         );
@@ -404,14 +360,12 @@ export function ReviewOverview({
   firmId,
   settings,
   onChanged,
-  planReadiness,
 }: {
   overview: PlanOverview;
   isOperator: boolean;
   firmId: string;
   settings: ContentPlanSettings | null;
   onChanged: () => void;
-  planReadiness?: PlanReadinessProp;
 }) {
   const [editing, setEditing] = useState(false);
   const {
@@ -426,33 +380,6 @@ export function ReviewOverview({
     byFormat,
     nextPublish,
   } = overview;
-  // A genuinely empty plan (total === 0) normally means "nothing to show
-  // here yet" and the whole card returns null. But total comes from a
-  // SEPARATE content_deliverables query than planReadiness -- a brand new
-  // firm, or one whose content is all archived, has total === 0 for a
-  // reason that has nothing to do with whether the readiness read itself
-  // succeeded. If that read failed (planReadiness.unavailable), that is
-  // still a real data error worth surfacing to an operator, not something
-  // the empty-plan early return should silently swallow. Render only the
-  // minimal unavailable banner in that case, not the full progress card
-  // (which would otherwise divide by a zero total and show a meaningless
-  // NaN% for a plan that may not actually be empty).
-  if (total === 0 && planReadiness?.unavailable && isOperator) {
-    return (
-      <div className="bg-white border border-border-brand p-5">
-        <div className="flex items-center gap-2 border border-red-fail/30 bg-red-fail/10 px-3 py-2.5 text-sm text-red-fail">
-          <span className="flex-none text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 border rounded-full bg-red-fail/10 border-red-fail/30">
-            Unavailable
-          </span>
-          <span className="flex-1 min-w-0">
-            Publication readiness could not be loaded. This is a data error,
-            not a clean state, it does not mean nothing needs attention.
-            Reload the page; if this persists, check the server logs.
-          </span>
-        </div>
-      </div>
-    );
-  }
   if (total === 0) return null;
   const pct = Math.round((approved / total) * 100);
   const waiting = pending + changes;
@@ -561,15 +488,6 @@ export function ReviewOverview({
         </div>
       )}
 
-      {planReadiness && (
-        <PublicationReadinessSummary
-          firmId={firmId}
-          isOperator={isOperator}
-          readiness={{ summary: planReadiness.summary, items: planReadiness.items, unavailable: planReadiness.unavailable }}
-          titles={planReadiness.titles}
-          lifecycleByDeliverableId={planReadiness.lifecycleByDeliverableId}
-        />
-      )}
     </div>
   );
 }
@@ -676,7 +594,6 @@ function PeriodCard({
   groups,
   periods,
   onChanged,
-  periodReadiness,
   standingAuthActive,
 }: {
   firmId: string;
@@ -688,7 +605,6 @@ function PeriodCard({
   groups: ReturnType<typeof groupByCanonicalFormat>;
   periods: ContentPeriod[];
   onChanged: () => void;
-  periodReadiness?: PlanReadinessProp;
   standingAuthActive: boolean;
 }) {
   const [editing, setEditing] = useState(false);
@@ -750,27 +666,8 @@ function PeriodCard({
       </div>
 
       {/* Placement (operator decision): the weekly strategic record leads the
-          card, immediately after the header block and above Publication
-          Readiness / Details / Why. Luna's own "Clarify strategic record
-          hierarchy" commit refined this section's typography but did not
-          move it here; this ordering is the deliberate final placement. */}
+          card, immediately after the header block and above Details / Why. */}
       <StrategyBriefSection brief={period.strategyBrief} approved={showPublished || approved > 0} />
-
-      {periodReadiness && (
-        <div className="px-6 py-3 border-b border-border-brand/60 space-y-2">
-          <PublicationReadinessSummary
-            firmId={firmId}
-            isOperator={isOperator}
-            readiness={{ summary: periodReadiness.summary, items: periodReadiness.items, unavailable: periodReadiness.unavailable }}
-            titles={periodReadiness.titles}
-            periodId={period.id}
-            lifecycleByDeliverableId={periodReadiness.lifecycleByDeliverableId}
-          />
-          {isOperator && period.readiness_lifecycle !== "enforced" && periodReadiness.summary.active > 0 && (
-            <ActivateReadinessButton firmId={firmId} periodId={period.id} onActivated={onChanged} />
-          )}
-        </div>
-      )}
 
       {isOperator && editing ? (
         <div className="px-6 py-4 border-b border-border-brand/60 bg-parchment-2/30">
@@ -855,10 +752,8 @@ function StrategyBriefSection({
   );
 }
 
-// Independent of Publication Readiness (rendered outside that panel above):
-// pulls the exact, already-stored deliverable content for this period via
-// GET /api/admin/content-periods/[periodId]/content-export, operator-only,
-// no readiness activation required. See content-period-export.ts.
+// Pulls the exact, already-stored deliverable content for this period via the
+// operator-only content export. It never derives or changes client review.
 function PackageToolsButton({ periodId }: { periodId: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -893,67 +788,6 @@ function PackageToolsButton({ periodId }: { periodId: string }) {
           </a>
         </div>
       )}
-    </div>
-  );
-}
-
-/**
- * DR-097/DR-098. Operator-only. Activates publication-readiness enforcement
- * for this period, gated server-side by the activation preflight: refuses
- * with the blocking piece count if any active deliverable is still missing
- * role, locale, or destination. Never a blanket/bulk action; one period at
- * a time, and the operator sees exactly what to finish backfilling first
- * on refusal.
- */
-function ActivateReadinessButton({
-  firmId,
-  periodId,
-  onActivated,
-}: {
-  firmId: string;
-  periodId: string;
-  onActivated: () => void;
-}) {
-  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
-  const [message, setMessage] = useState<string | null>(null);
-
-  async function activate() {
-    setState("loading");
-    setMessage(null);
-    try {
-      const res = await fetch(`/api/portal/${firmId}/periods/${periodId}/activate-readiness`, {
-        method: "POST",
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        setState("error");
-        const blockingCount = Array.isArray(json.blockingDeliverableIds) ? json.blockingDeliverableIds.length : 0;
-        setMessage(
-          blockingCount > 0
-            ? `${blockingCount} piece${blockingCount === 1 ? "" : "s"} still need role, locale, or destination set. See "Setup required" below.`
-            : (json.error ?? "Could not activate readiness."),
-        );
-        return;
-      }
-      setState("idle");
-      onActivated();
-    } catch (err) {
-      setState("error");
-      setMessage(err instanceof Error ? err.message : "Network error.");
-    }
-  }
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={activate}
-        disabled={state === "loading"}
-        className="text-[11px] font-semibold text-navy/70 hover:text-navy disabled:opacity-50"
-      >
-        {state === "loading" ? "Checking metadata..." : "Activate readiness for this week"}
-      </button>
-      {message && <p className="text-[11px] mt-1 text-amber-800">{message}</p>}
     </div>
   );
 }
