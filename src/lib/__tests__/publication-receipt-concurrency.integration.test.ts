@@ -286,6 +286,10 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
        values ($1, $2, $3, 'firm_website', $4, now(), 'https://example.test/stale', 'operator', 'Test Operator', $5)`,
       [firmId, deliverableId, placementId, versionOld, claimOldId],
     );
+    // Attach the rejection handler immediately: the deliberately blocked
+    // query can reject as soon as A commits, before this test reaches its
+    // later assertion on a fast CI runner.
+    const staleReceiptRejected = expect(insertStale).rejects.toThrow(/exact current version \(version drift\)/i);
 
     // Give B's blocked query a moment to actually reach the database and
     // start waiting (proving it's blocked, not merely slow to schedule),
@@ -304,7 +308,7 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
     // versionOld.
     await connA.query("commit");
 
-    await expect(insertStale).rejects.toThrow(/exact current version \(version drift\)/i);
+    await staleReceiptRejected;
 
     // Confirm no stale-version receipt row exists.
     const { rows } = await connA.query(

@@ -458,6 +458,7 @@ export interface PlanDeliverable {
   publish_date: string | null;
   /** Date the operator recorded the piece as actually published. */
   published_at: string | null;
+  current_version_id?: string | null;
   requires_individual_review: boolean;
 }
 
@@ -699,7 +700,7 @@ export interface PlanOverview {
  */
 export function computeOverview(
   items: PlanDeliverable[],
-  opts?: { standingAuthActive?: boolean },
+  opts?: { standingAuthorizedDeliverableIds?: ReadonlySet<string>; standingAuthActive?: boolean },
 ): PlanOverview {
   let approved = 0;
   let pending = 0;
@@ -712,7 +713,7 @@ export function computeOverview(
   for (const it of items) {
     if (it.status === "approved") approved++;
     else if (it.status === "in_review") {
-      if (opts?.standingAuthActive && !it.requires_individual_review) preapproved++;
+      if (opts?.standingAuthorizedDeliverableIds?.has(it.id) || (opts?.standingAuthActive && !it.requires_individual_review)) preapproved++;
       else pending++;
     } else if (it.status === "changes_requested") changes++;
     else if (it.status === "draft") draft++;
