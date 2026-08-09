@@ -1,7 +1,9 @@
 # DRG release-authorization signer activation
 
-The portal issues one short-lived `drg.release-authorization-envelope.v1`
-for an exact staged sixteen-piece package. Staging receipts are deliberately
+The operator-only portal POST route issues one short-lived
+`drg.release-authorization-envelope.v1` for an exact staged sixteen-piece
+package plus a signed final six-piece website projection. The request accepts
+no package identity or release-evidence body. Staging receipts are deliberately
 not release authorization and always retain `releaseAuthorizationGranted:
 false`.
 
@@ -28,6 +30,10 @@ approval. Activation requires a human-controlled provisioning change:
 6. Activate through the ordinary reviewed PR/deployment process. Do not use a
    CLI production deploy and do not apply any database migration from an
    unpushed branch.
+7. For every release, issue the artifact and complete website materialization
+   from those exact bytes inside the 15-minute authorization window. Never
+   cache an envelope for a later run; if it expires, issue a fresh artifact
+   from the current authoritative rows and re-verify before any write.
 
 The repository contains the public RFC 8032 test-vector key only for
 deterministic tests. Both signer and verifier reject that entry when

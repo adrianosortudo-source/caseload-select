@@ -15,10 +15,15 @@ import { createHash } from "crypto";
 
 import type { ContentExportBundle, ContentExportDeliverable } from "@/lib/content-period-export";
 import {
+  createSignedDrgWebsiteProjectionAuthorization,
   verifyDrgReleaseAuthorizationEnvelope,
+  verifyDrgWebsiteProjectionAuthorization,
+  DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS,
   type DrgReleaseAuthorizationEnvelope,
   type DrgReleaseAuthorizationPieceSnapshot,
+  type DrgWebsiteProjectionAuthorization,
 } from "@/lib/drg-release-authorization-envelope";
+import { loadConfiguredDrgReleaseAuthorizationSigner } from "@/lib/drg-release-authorization-envelope-server";
 
 export const DRG_WEBSITE_PACKAGE_SCHEMA_VERSION = "drg.website-package-export.v1" as const;
 
@@ -77,7 +82,7 @@ export interface DrgDoctrinePin {
 
 export interface DrgSourceVersion {
   source_id: string;
-  source_kind: "research" | "source_brief" | "counsel_note" | "decision_record";
+  source_kind: "research" | "source_brief" | "counsel_note" | "decision_record" | "package_piece_source";
   version: string;
   sha256: string;
 }
@@ -137,8 +142,20 @@ export interface DrgWebsitePackageExport {
     package_sha256: string;
   };
   release_authorization_envelope: DrgReleaseAuthorizationEnvelope;
+  website_projection_authorization: DrgWebsiteProjectionAuthorization;
   pieces: DrgWebsitePackagePiece[];
   dependencies: DrgPackageDependency[];
+}
+
+export function drgWebsiteProjectionPayload(value: Pick<DrgWebsitePackageExport, "schema_version" | "package" | "release_authorization_envelope" | "pieces" | "dependencies">) {
+  const { package_sha256: ignoredPackageSha, ...packageWithoutHash } = value.package;
+  return {
+    schema_version: value.schema_version,
+    package: packageWithoutHash,
+    release_envelope_sha256: value.release_authorization_envelope.envelope_sha256,
+    pieces: value.pieces,
+    dependencies: value.dependencies,
+  };
 }
 
 export interface DrgWebsitePieceSelection {
@@ -350,6 +367,14 @@ export function validateDrgWebsitePackageExport(raw: unknown): DrgProtocolViolat
   } catch (error) {
     errors.push({ path: "release_authorization_envelope", message: error instanceof Error ? error.message : String(error) });
   }
+  try {
+    const projectionAuthorization = verifyDrgWebsiteProjectionAuthorization(value.website_projection_authorization);
+    if (projectionAuthorization.release_envelope_sha256 !== verifiedEnvelope?.envelope.envelope_sha256) errors.push({ path: "website_projection_authorization", message: "must bind the exact verified release envelope" });
+    const expectedProjectionSha = sha256(drgWebsiteProjectionPayload(value as DrgWebsitePackageExport));
+    if (projectionAuthorization.projection_sha256 !== expectedProjectionSha) errors.push({ path: "website_projection_authorization", message: "does not bind the exact final six-piece website projection" });
+  } catch (error) {
+    errors.push({ path: "website_projection_authorization", message: error instanceof Error ? error.message : String(error) });
+  }
   if (!Array.isArray(value.package.doctrine) || value.package.doctrine.length === 0) errors.push({ path: "package.doctrine", message: "must pin at least one doctrine release" });
   else validatePins(value.package.doctrine, "package.doctrine", errors);
   if (!Array.isArray(value.package.source_versions) || value.package.source_versions.length === 0) errors.push({ path: "package.source_versions", message: "must pin at least one source version" });
@@ -440,6 +465,7 @@ export function validateDrgWebsitePackageExport(raw: unknown): DrgProtocolViolat
       schema_version: value.schema_version,
       package: packageWithoutHash,
       release_authorization_envelope: value.release_authorization_envelope,
+      website_projection_authorization: value.website_projection_authorization,
       pieces: value.pieces,
       dependencies: value.dependencies,
     });
@@ -565,9 +591,24 @@ export function buildDrgWebsitePackageExport(
     pieces: [...pieces].sort((a, b) => a.piece_id.localeCompare(b.piece_id)),
     dependencies: [...input.dependencies].sort((a, b) => `${a.piece_id}:${a.depends_on_piece_id}`.localeCompare(`${b.piece_id}:${b.depends_on_piece_id}`)),
   };
+  let websiteProjectionAuthorization: DrgWebsiteProjectionAuthorization;
+  try {
+    const issuedAt = new Date().toISOString();
+    websiteProjectionAuthorization = createSignedDrgWebsiteProjectionAuthorization({
+      authorizationId: `drg-website-projection:${input.package_id}:v${input.package_version}:${verifiedEnvelope!.envelope.envelope_sha256}`,
+      issuedAt,
+      expiresAt: new Date(Date.parse(issuedAt) + DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS).toISOString(),
+      releaseEnvelopeSha256: verifiedEnvelope!.envelope.envelope_sha256,
+      projectionSha256: sha256(drgWebsiteProjectionPayload({ ...withoutHash, package: { ...withoutHash.package, package_sha256: "" } } as DrgWebsitePackageExport)),
+      signer: loadConfiguredDrgReleaseAuthorizationSigner(),
+    });
+  } catch (error) {
+    return { ok: false, value: null, errors: [{ path: "website_projection_authorization", message: `issuance failed closed: ${error instanceof Error ? error.message : String(error)}` }] };
+  }
   const value: DrgWebsitePackageExport = {
     ...withoutHash,
-    package: { ...withoutHash.package, package_sha256: sha256(withoutHash) },
+    website_projection_authorization: websiteProjectionAuthorization,
+    package: { ...withoutHash.package, package_sha256: sha256({ ...withoutHash, website_projection_authorization: websiteProjectionAuthorization }) },
   };
   const structuralErrors = validateDrgWebsitePackageExport(value);
   return structuralErrors.length ? { ok: false, value: null, errors: structuralErrors } : { ok: true, value, errors: [] };

@@ -3,6 +3,7 @@ import { createHash, createPublicKey, verify as verifySignature } from "node:cry
 export const DRG_RELEASE_AUTHORIZATION_SCHEMA = "drg.release-authorization-envelope.v1" as const;
 export const DRG_RELEASE_AUTHORIZATION_SIGNATURE_ALGORITHM = "Ed25519" as const;
 export const DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS = 15 * 60_000;
+export const DRG_WEBSITE_PROJECTION_AUTHORIZATION_SCHEMA = "drg.website-projection-authorization.v1" as const;
 
 export const DRG_RELEASE_AUTHORIZATION_PIECE_IDS = [
   "CN-EN", "CN-PT", "CIM-EN", "CIM-PT",
@@ -63,6 +64,18 @@ export interface DrgReleaseAuthorizationEnvelope {
   };
 }
 
+export interface DrgWebsiteProjectionAuthorization {
+  readonly schema_version: typeof DRG_WEBSITE_PROJECTION_AUTHORIZATION_SCHEMA;
+  readonly trust_bundle_sha256: string;
+  readonly authorization_id: string;
+  readonly issued_at: string;
+  readonly expires_at: string;
+  readonly release_envelope_sha256: string;
+  readonly projection_sha256: string;
+  readonly authorization_sha256: string;
+  readonly signature: DrgReleaseAuthorizationEnvelope["signature"];
+}
+
 export interface DrgReleaseAuthorizationSigner {
   readonly keyId: string;
   readonly publicKeySpkiSha256: string;
@@ -101,10 +114,20 @@ export const DRG_RELEASE_AUTHORIZATION_PUBLIC_KEYS: readonly DrgReleaseAuthoriza
 
 const SHA256_RE = /^[a-f0-9]{64}$/;
 const verifiedAuthorizationBrand: unique symbol = Symbol("verified-drg-release-authorization");
+const verifiedAuthorizationResults = new WeakSet<object>();
 
 export interface VerifiedDrgReleaseAuthorizationEnvelope {
   readonly [verifiedAuthorizationBrand]: true;
   readonly envelope: DrgReleaseAuthorizationEnvelope;
+}
+
+/** Runtime brand check. A TypeScript assertion cannot mint this capability. */
+export function assertVerifiedDrgReleaseAuthorizationEnvelope(
+  value: VerifiedDrgReleaseAuthorizationEnvelope,
+): void {
+  if (!value || typeof value !== "object" || !verifiedAuthorizationResults.has(value)) {
+    throw new Error("release authorization verifier result was not issued by the canonical verifier");
+  }
 }
 
 function deepFreezeReleaseEnvelope(envelope: DrgReleaseAuthorizationEnvelope): DrgReleaseAuthorizationEnvelope {
@@ -166,7 +189,7 @@ function envelopeHashPayload(envelope: Pick<DrgReleaseAuthorizationEnvelope, "sc
   };
 }
 
-function signaturePayload(envelope: Omit<DrgReleaseAuthorizationEnvelope, "signature">): Uint8Array {
+function signaturePayload(envelope: unknown): Uint8Array {
   return new TextEncoder().encode(canonicalDrgReleaseJson(envelope));
 }
 
@@ -206,6 +229,67 @@ export function createSignedDrgReleaseAuthorizationEnvelope(input: {
       signature_base64: input.signer.sign(signaturePayload(envelopeWithoutSignature)),
     }),
   });
+}
+
+export function createSignedDrgWebsiteProjectionAuthorization(input: {
+  readonly authorizationId: string;
+  readonly issuedAt: string;
+  readonly expiresAt: string;
+  readonly releaseEnvelopeSha256: string;
+  readonly projectionSha256: string;
+  readonly signer: DrgReleaseAuthorizationSigner;
+}): DrgWebsiteProjectionAuthorization {
+  if (!SHA256_RE.test(input.releaseEnvelopeSha256) || !SHA256_RE.test(input.projectionSha256)) throw new Error("website projection authorization hashes are malformed");
+  const payload = {
+    schema_version: DRG_WEBSITE_PROJECTION_AUTHORIZATION_SCHEMA,
+    trust_bundle_sha256: DRG_RELEASE_TRUST_BUNDLE_SHA256,
+    authorization_id: input.authorizationId,
+    issued_at: input.issuedAt,
+    expires_at: input.expiresAt,
+    release_envelope_sha256: input.releaseEnvelopeSha256,
+    projection_sha256: input.projectionSha256,
+  } as const;
+  const authorizationWithoutSignature = { ...payload, authorization_sha256: sha256DrgRelease(canonicalDrgReleaseJson(payload)) };
+  return Object.freeze({
+    ...authorizationWithoutSignature,
+    signature: Object.freeze({
+      key_id: input.signer.keyId,
+      algorithm: DRG_RELEASE_AUTHORIZATION_SIGNATURE_ALGORITHM,
+      public_key_spki_sha256: input.signer.publicKeySpkiSha256,
+      signature_base64: input.signer.sign(signaturePayload(authorizationWithoutSignature)),
+    }),
+  });
+}
+
+export function verifyDrgWebsiteProjectionAuthorization(value: unknown, now: Date = new Date()): DrgWebsiteProjectionAuthorization {
+  if (!isRecord(value)) throw new Error("website projection authorization must be an object");
+  const authorization = value as unknown as DrgWebsiteProjectionAuthorization;
+  if (authorization.schema_version !== DRG_WEBSITE_PROJECTION_AUTHORIZATION_SCHEMA || !authorization.authorization_id) throw new Error("unsupported website projection authorization schema");
+  if (authorization.trust_bundle_sha256 !== DRG_RELEASE_TRUST_BUNDLE_SHA256) throw new Error("website projection trust bundle SHA mismatch");
+  const issuedAt = Date.parse(authorization.issued_at);
+  const expiresAt = Date.parse(authorization.expires_at);
+  if (!Number.isFinite(issuedAt) || !Number.isFinite(expiresAt) || expiresAt <= issuedAt || expiresAt - issuedAt > DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS || expiresAt <= now.getTime()) throw new Error("website projection authorization timestamps are invalid or expired");
+  if (!SHA256_RE.test(authorization.release_envelope_sha256) || !SHA256_RE.test(authorization.projection_sha256)) throw new Error("website projection authorization hashes are malformed");
+  const { authorization_sha256: ignoredSha, signature, ...hashPayload } = authorization;
+  if (authorization.authorization_sha256 !== sha256DrgRelease(canonicalDrgReleaseJson(hashPayload))) throw new Error("website projection authorization SHA mismatch");
+  if (!signature || signature.algorithm !== DRG_RELEASE_AUTHORIZATION_SIGNATURE_ALGORITHM || !signature.signature_base64 || !SHA256_RE.test(signature.public_key_spki_sha256)) throw new Error("website projection authorization signature is malformed");
+  const trusted = DRG_RELEASE_AUTHORIZATION_PUBLIC_KEYS.find((entry) => entry.keyId === signature?.key_id);
+  if (!trusted || trusted.publicKeySpkiSha256 !== signature.public_key_spki_sha256) throw new Error("website projection signer is not repository-pinned");
+  if (process.env.NODE_ENV === "production" && trusted.environment !== "production") throw new Error("test-only website projection signer is forbidden in production");
+  const effectiveAt = Date.parse(trusted.effectiveAt);
+  const retiredAt = trusted.retiredAt === null ? null : Date.parse(trusted.retiredAt);
+  if (!Number.isFinite(effectiveAt) || issuedAt < effectiveAt || (retiredAt !== null && (!Number.isFinite(retiredAt) || issuedAt >= retiredAt))) throw new Error("website projection signer was not active when authorization was issued");
+  const { signature: ignoredSignature, ...withoutSignature } = authorization;
+  if (!verifySignature(null, signaturePayload(withoutSignature), trusted.publicKeyPem, Buffer.from(signature.signature_base64, "base64"))) throw new Error("website projection authorization signature verification failed");
+  return deepFreezeReleaseEnvelopeValue(structuredClone(authorization));
+}
+
+function deepFreezeReleaseEnvelopeValue<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value as Record<string, unknown>)) deepFreezeReleaseEnvelopeValue(child);
+    Object.freeze(value);
+  }
+  return value;
 }
 
 function validatePiece(
@@ -267,5 +351,7 @@ export function verifyDrgReleaseAuthorizationEnvelope(
   // valid envelope and mutate its evidence before passing the branded result to
   // a downstream projection.
   const immutableEnvelope = deepFreezeReleaseEnvelope(structuredClone(envelope));
-  return Object.freeze({ [verifiedAuthorizationBrand]: true as const, envelope: immutableEnvelope });
+  const result = Object.freeze({ [verifiedAuthorizationBrand]: true as const, envelope: immutableEnvelope });
+  verifiedAuthorizationResults.add(result);
+  return result;
 }

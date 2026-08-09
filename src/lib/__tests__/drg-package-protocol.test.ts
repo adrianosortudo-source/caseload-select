@@ -4,6 +4,7 @@ import { createPrivateKey, sign } from "node:crypto";
 import {
   buildDrgIdempotencyKey,
   buildDrgWebsitePackageExport,
+  drgWebsiteProjectionPayload,
   DRG_WEBSITE_PACKAGE_SCHEMA_VERSION,
   sha256,
   validateDrgPackageTransition,
@@ -25,6 +26,8 @@ const HASH_B = "b".repeat(64);
 const ROLES = ["counsel_note", "clause_in_margin", "checklist"] as const;
 const LOCALES = ["en-CA", "pt-BR"] as const;
 const TEST_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIJ1hsZ3v/VpguoRK9JLsLMREScVpezJpGXA7rAMcrn9g\n-----END PRIVATE KEY-----\n";
+process.env.DRG_RELEASE_AUTHORIZATION_SIGNING_KEY_ID = "drg-release-rfc8032-test-v1";
+process.env.DRG_RELEASE_AUTHORIZATION_PRIVATE_KEY_PEM = TEST_PRIVATE_KEY;
 
 function idFor(role: string, locale: string): string {
   return `${role}-${locale === "en-CA" ? "en" : "pt"}`;
@@ -213,6 +216,31 @@ describe("DRG package protocol", () => {
     const tampered = structuredClone(good.value);
     tampered.pieces[0].title = "Changed after approval";
     expect(validateDrgWebsitePackageExport(tampered).some((error) => error.message.includes("does not match"))).toBe(true);
+  });
+
+  it.each(["title", "body_html", "route"] as const)("rejects benign %s tamper even when the caller recomputes the self-package hash", (field) => {
+    const good = buildDrgWebsitePackageExport(makeSource(), makeInput());
+    if (!good.ok) throw new Error("expected good package");
+    const tampered = structuredClone(good.value);
+    if (field === "title") tampered.pieces[0].title = "Benign editorial title change";
+    if (field === "body_html") tampered.pieces[0].body_html = "<p>Benign editorial body change.</p>";
+    if (field === "route") {
+      tampered.pieces[0].route = "/journal/benign-route-change";
+      tampered.pieces[0].publication_path = tampered.pieces[0].route;
+      tampered.pieces[0].expected_metadata.canonical_route = tampered.pieces[0].route;
+      tampered.pieces[0].expected_metadata.alternate_routes["en-CA"] = tampered.pieces[0].route;
+    }
+    const { package_sha256: ignored, ...packageWithoutHash } = tampered.package;
+    tampered.package.package_sha256 = sha256({
+      schema_version: tampered.schema_version,
+      package: packageWithoutHash,
+      release_authorization_envelope: tampered.release_authorization_envelope,
+      website_projection_authorization: tampered.website_projection_authorization,
+      pieces: tampered.pieces,
+      dependencies: tampered.dependencies,
+    });
+    expect(tampered.website_projection_authorization.projection_sha256).not.toBe(sha256(drgWebsiteProjectionPayload(tampered)));
+    expect(validateDrgWebsitePackageExport(tampered).some((error) => error.message.includes("exact final six-piece website projection"))).toBe(true);
   });
 
   it("requires traceable source-lock gate evidence and generates collision-resistant idempotency keys", () => {

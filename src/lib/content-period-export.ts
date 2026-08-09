@@ -282,19 +282,14 @@ export interface ContentExportBundle {
   release_authorization_envelope?: DrgReleaseAuthorizationEnvelope | null;
 }
 
-export interface ContentExportReleasePackageBinding {
-  readonly id: string;
-  readonly version: number;
-  readonly package_sha256: string;
-}
-
 export interface BuildContentExportBundleOptions {
   /**
-   * Requests one short-lived, portal-issued envelope. The package identity is
-   * matched against all sixteen authoritative staged version rows; callers do
-   * not supply release paths, evidence IDs, hold flags, or approvals.
+   * Operator-only release issuance mode. Package identity and all release
+   * evidence are derived from the sixteen authoritative current version rows;
+   * callers cannot assert a package hash, path, evidence id, hold flag, or
+   * approval. Ordinary read-only preview exports leave this false.
    */
-  readonly releasePackage?: ContentExportReleasePackageBinding;
+  readonly issueReleaseAuthorization?: true;
 }
 
 type DrgBoundDeliverable = ContentDeliverable & { drg_piece_id?: string | null };
@@ -829,11 +824,7 @@ export async function buildContentExportBundle(
   }
 
   let releaseAuthorizationEnvelope: DrgReleaseAuthorizationEnvelope | null = null;
-  if (options.releasePackage) {
-    const requested = options.releasePackage;
-    if (!requested.id.trim() || !Number.isSafeInteger(requested.version) || requested.version < 1 || !/^[a-f0-9]{64}$/.test(requested.package_sha256)) {
-      return { ok: false, error: "release package identity is malformed" };
-    }
+  if (options.issueReleaseAuthorization) {
     const drgDeliverables = active.filter((deliverable) => deliverable.drg_piece_id !== null && deliverable.drg_piece_id !== undefined);
     const byPieceId = new Map(drgDeliverables.map((deliverable) => [deliverable.drg_piece_id as string, deliverable]));
     if (
@@ -842,6 +833,26 @@ export async function buildContentExportBundle(
       DRG_RELEASE_AUTHORIZATION_PIECE_IDS.some((pieceId) => !byPieceId.has(pieceId))
     ) return { ok: false, error: "release envelope requires the exact sixteen staged DRG deliverables" };
 
+    const packageBindings = DRG_RELEASE_AUTHORIZATION_PIECE_IDS.map((pieceId) => {
+      const deliverable = byPieceId.get(pieceId)!;
+      const version = resolveOwnedVersion(deliverable.current_version_id, deliverable.id, versionById).version as DrgBoundVersion | null;
+      return version
+        ? { id: version.drg_package_id, version: version.drg_package_version, package_sha256: version.drg_package_sha256 }
+        : null;
+    });
+    const requested = packageBindings[0];
+    if (
+      !requested || typeof requested.id !== "string" || !requested.id.trim() ||
+      !Number.isSafeInteger(requested.version) || (requested.version as number) < 1 ||
+      typeof requested.package_sha256 !== "string" || !/^[a-f0-9]{64}$/.test(requested.package_sha256) ||
+      packageBindings.some((binding) => !binding || binding.id !== requested.id || binding.version !== requested.version || binding.package_sha256 !== requested.package_sha256)
+    ) return { ok: false, error: "authoritative current versions do not share one exact DRG package identity" };
+    const canonicalPackage = {
+      id: requested.id,
+      version: requested.version as number,
+      package_sha256: requested.package_sha256,
+    };
+
     const snapshots: DrgReleaseAuthorizationPieceSnapshot[] = [];
     for (const pieceId of DRG_RELEASE_AUTHORIZATION_PIECE_IDS) {
       const deliverable = byPieceId.get(pieceId)!;
@@ -849,9 +860,9 @@ export async function buildContentExportBundle(
       const version = resolved.version as DrgBoundVersion | null;
       if (
         !version ||
-        version.drg_package_id !== requested.id ||
-        version.drg_package_version !== requested.version ||
-        version.drg_package_sha256 !== requested.package_sha256 ||
+        version.drg_package_id !== canonicalPackage.id ||
+        version.drg_package_version !== canonicalPackage.version ||
+        version.drg_package_sha256 !== canonicalPackage.package_sha256 ||
         !version.drg_piece_sha256 || !/^[a-f0-9]{64}$/.test(version.drg_piece_sha256) ||
         !version.drg_source_sha256 || !/^[a-f0-9]{64}$/.test(version.drg_source_sha256)
       ) return { ok: false, error: `release package binding does not match the authoritative current version for ${pieceId}` };
@@ -885,9 +896,9 @@ export async function buildContentExportBundle(
         piece_id: pieceId as DrgReleaseAuthorizationPieceId,
         firm_id: period.firm_id,
         period_id: period.id,
-        package_id: requested.id,
-        package_version: requested.version,
-        package_sha256: requested.package_sha256,
+        package_id: canonicalPackage.id,
+        package_version: canonicalPackage.version,
+        package_sha256: canonicalPackage.package_sha256,
         deliverable_id: deliverable.id,
         current_version_id: version.id,
         version_number: version.version_number,
@@ -909,10 +920,10 @@ export async function buildContentExportBundle(
     try {
       const issuedAt = new Date().toISOString();
       releaseAuthorizationEnvelope = createSignedDrgReleaseAuthorizationEnvelope({
-        envelopeId: `drg-release:${requested.id}:v${requested.version}:${requested.package_sha256}`,
+        envelopeId: `drg-release:${canonicalPackage.id}:v${canonicalPackage.version}:${canonicalPackage.package_sha256}`,
         issuedAt,
         expiresAt: new Date(Date.parse(issuedAt) + DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS).toISOString(),
-        package: { id: requested.id, version: requested.version, firm_id: period.firm_id, period_id: period.id, package_sha256: requested.package_sha256 },
+        package: { id: canonicalPackage.id, version: canonicalPackage.version, firm_id: period.firm_id, period_id: period.id, package_sha256: canonicalPackage.package_sha256 },
         pieces: snapshots,
         signer: loadConfiguredDrgReleaseAuthorizationSigner(),
       });
