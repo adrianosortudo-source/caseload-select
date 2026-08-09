@@ -3,7 +3,6 @@ import {
   planDrgPackageStaging,
   projectReleaseAuthorizedDrgPublishingKit,
   reconcileDrgPackageStaging,
-  type DrgPackageReleaseAuthorization,
   type DrgPackageReconciliation,
   type DrgPortalStagingSnapshot,
   type ReleaseAuthorizedPublishingKitProjection,
@@ -11,6 +10,7 @@ import {
   type SealedDrgWeeklyPackage,
   type Sha256Function,
 } from "./drg-package-staging";
+import { verifyDrgReleaseAuthorizationEnvelope } from "./drg-release-authorization-envelope";
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -301,6 +301,10 @@ export async function stageExecutionAuthorizedDrgPackage(input: {
   }
   const pdfEvidence = await verifyPdfBytes(input);
 
+  // This RPC deliberately does not verify Ed25519. The service-role adapter
+  // has already authenticated the repository-pinned execution signer and
+  // verified exact bytes/package scope; Postgres enforces the atomic package,
+  // receipt, idempotency and TOCTOU invariants at the write boundary.
   const { data, error } = await input.rpc.rpc("stage_drg_weekly_package_atomic", {
     p_package: input.pkg,
     p_package_canonical: packageCanonicalInput(input.pkg),
@@ -321,12 +325,15 @@ export async function stageExecutionAuthorizedDrgPackage(input: {
 }
 
 /** Read-only Publishing Kit projection. No database mutation is possible. */
-export async function projectLiveApprovedDrgPublishingKit(input: {
+export async function projectLiveReleaseAuthorizedDrgPublishingKit(input: {
   readonly pkg: SealedDrgWeeklyPackage;
-  readonly releaseAuthorization: DrgPackageReleaseAuthorization;
+  readonly releaseAuthorizationEnvelope: unknown;
   readonly sha256: Sha256Function;
   readonly rpc: DrgPackageStagingRpcClient;
 }): Promise<ReleaseAuthorizedPublishingKitProjection> {
+  // Brand evidence only after the portal trust registry verifies its canonical
+  // hash, pinned Ed25519 signer, expiry, topology, holds and release path.
+  const verifiedReleaseAuthorization = verifyDrgReleaseAuthorizationEnvelope(input.releaseAuthorizationEnvelope);
   const snapshot = await readSnapshot(input.rpc, input.pkg);
-  return projectReleaseAuthorizedDrgPublishingKit(input.pkg, snapshot, input.releaseAuthorization, input.sha256);
+  return projectReleaseAuthorizedDrgPublishingKit(input.pkg, snapshot, verifiedReleaseAuthorization, input.sha256);
 }

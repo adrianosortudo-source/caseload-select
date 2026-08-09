@@ -1,21 +1,28 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createPrivateKey, randomUUID, sign } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
   DRG_REQUIRED_DOCTRINE_PINS,
   DRG_SIXTEEN_PIECE_REGISTRY,
   sealDrgWeeklyPackage,
-  type DrgPackageReleaseAuthorization,
   type DrgPortalStagingSnapshot,
   type DrgWeeklyPackageDraft,
   type SealedDrgWeeklyPackage,
 } from "../drg-package-staging";
 import {
-  projectLiveApprovedDrgPublishingKit,
+  projectLiveReleaseAuthorizedDrgPublishingKit,
   stageExecutionAuthorizedDrgPackage,
   type DrgPackageStagingExecutionAuthorizationEvidence,
   type DrgPackageStagingRpcClient,
   type DrgPackageStorageClient,
 } from "../drg-package-staging-adapter";
+import {
+  DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS,
+  computeDrgReleaseEvidenceSha256,
+  createSignedDrgReleaseAuthorizationEnvelope,
+  type DrgReleaseAuthorizationPieceSnapshot,
+} from "../drg-release-authorization-envelope";
+
+const TEST_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIJ1hsZ3v/VpguoRK9JLsLMREScVpezJpGXA7rAMcrn9g\n-----END PRIVATE KEY-----\n";
 
 function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -141,6 +148,53 @@ function exactSnapshot(pkg: SealedDrgWeeklyPackage, approved = false): DrgPortal
       };
     }),
   };
+}
+
+function standingReleaseEnvelope(
+  pkg: SealedDrgWeeklyPackage,
+  snapshot: DrgPortalStagingSnapshot,
+  mutatePiece?: (piece: Omit<DrgReleaseAuthorizationPieceSnapshot, "evidence_sha256">, index: number) => Omit<DrgReleaseAuthorizationPieceSnapshot, "evidence_sha256">,
+) {
+  const issuedAt = new Date(Date.now() - 1_000).toISOString();
+  const pieces = pkg.pieces.map((piece, index) => {
+    const row = snapshot.deliverables[index];
+    const evidence: Omit<DrgReleaseAuthorizationPieceSnapshot, "evidence_sha256"> = {
+      piece_id: piece.id,
+      firm_id: pkg.firmId,
+      period_id: pkg.periodId,
+      package_id: pkg.packageId,
+      package_version: pkg.packageVersion,
+      package_sha256: pkg.packageSha256,
+      deliverable_id: row.deliverableId,
+      current_version_id: row.currentVersionId!,
+      version_number: row.currentVersion!.versionNumber,
+      piece_sha256: piece.pieceSha256,
+      source_sha256: piece.sourceSha256,
+      asset_sha256s: piece.payload.kind === "pdf" ? [piece.payload.assetSha256] : [],
+      path: "standing_authorization",
+      approval_record_id: null,
+      standing_authorization_event_id: "standing-policy-event-2026-08-09",
+      standing_authorization_active: true,
+      change_hold_active: false,
+      requires_individual_review: false,
+      revoked_at: null,
+      evidence_recorded_at: issuedAt,
+    };
+    const mutated = mutatePiece?.(evidence, index) ?? evidence;
+    return { ...mutated, evidence_sha256: computeDrgReleaseEvidenceSha256(mutated) };
+  });
+  return createSignedDrgReleaseAuthorizationEnvelope({
+    envelopeId: `release:${pkg.packageId}:v${pkg.packageVersion}:${pkg.packageSha256}`,
+    issuedAt,
+    expiresAt: new Date(Date.parse(issuedAt) + DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS).toISOString(),
+    package: { id: pkg.packageId, version: pkg.packageVersion, firm_id: pkg.firmId, period_id: pkg.periodId, package_sha256: pkg.packageSha256 },
+    pieces,
+    signer: {
+      keyId: "drg-release-rfc8032-test-v1",
+      publicKeySpkiSha256: "06e3fd8fda29bb60ab59557de61edb0aecdb231134be30e75b455f8e1b792fa9",
+      sign: (payload) => sign(null, payload, createPrivateKey(TEST_PRIVATE_KEY)).toString("base64"),
+    },
+  });
 }
 
 function receipt(pkg: SealedDrgWeeklyPackage, auth: DrgPackageStagingExecutionAuthorizationEvidence, snapshot: DrgPortalStagingSnapshot) {
@@ -317,52 +371,27 @@ describe("authorized DRG package staging adapter", () => {
   it("projects Publishing Kit only from exact standing release evidence, not staging", async () => {
     const pkg = makePackage();
     const snapshot = exactSnapshot(pkg);
-    const releaseAuthorization: DrgPackageReleaseAuthorization = {
-      releasePath: "standing_authorization",
-      releaseEvidenceId: "standing-policy-event-2026-08-09",
-      packageId: pkg.packageId,
-      packageVersion: pkg.packageVersion,
-      packageSha256: pkg.packageSha256,
-      approvedAt: "2026-08-09T16:00:00.000Z",
-      approvedBy: "DRG standing authorization policy",
-      pieces: snapshot.deliverables.map((row, index) => ({
-        pieceId: row.pieceId,
-        deliverableId: row.deliverableId,
-        versionId: row.currentVersionId!,
-        versionNumber: row.currentVersion!.versionNumber,
-        pieceSha256: pkg.pieces[index].pieceSha256,
-        sourceSha256: pkg.pieces[index].sourceSha256,
-        assetSha256: pkg.pieces[index].payload.kind === "pdf" ? pkg.pieces[index].payload.assetSha256 : null,
-        releaseEvidenceSha256: sha256(`standing-evidence:${row.pieceId}`),
-        changeHoldActive: false,
-        requiresIndividualReview: false,
-        standingAuthorizationEventId: "standing-policy-event-2026-08-09",
-      })),
-    };
+    const releaseAuthorizationEnvelope = standingReleaseEnvelope(pkg, snapshot);
     const rpc = vi.fn().mockResolvedValue({ data: snapshot, error: null });
-    const ready = await projectLiveApprovedDrgPublishingKit({
+    const ready = await projectLiveReleaseAuthorizedDrgPublishingKit({
       pkg,
-      releaseAuthorization,
+      releaseAuthorizationEnvelope,
       sha256,
       rpc: { rpc } as DrgPackageStagingRpcClient,
     });
     expect(ready.status).toBe("ready");
     expect(ready.pieces).toHaveLength(16);
 
-    const heldReleaseAuthorization = {
-      ...releaseAuthorization,
-      pieces: releaseAuthorization.pieces.map((piece, index) => index === 0
-        ? { ...piece, changeHoldActive: true }
-        : piece),
-    };
-    rpc.mockResolvedValueOnce({ data: snapshot, error: null });
-    const blocked = await projectLiveApprovedDrgPublishingKit({
+    const heldReleaseAuthorizationEnvelope = standingReleaseEnvelope(pkg, snapshot, (piece, index) => index === 0
+      ? { ...piece, change_hold_active: true }
+      : piece);
+    await expect(projectLiveReleaseAuthorizedDrgPublishingKit({
       pkg,
-      releaseAuthorization: heldReleaseAuthorization,
+      releaseAuthorizationEnvelope: heldReleaseAuthorizationEnvelope,
       sha256,
       rpc: { rpc } as DrgPackageStagingRpcClient,
-    });
-    expect(blocked.status).toBe("blocked");
-    expect(blocked.pieces).toEqual([]);
+    })).rejects.toThrow(/blocked or revoked evidence/);
+    // Signature verification fails before any database read.
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 });
