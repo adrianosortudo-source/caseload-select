@@ -9,6 +9,7 @@
  * publishes anything.
  */
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { PieceReleaseGates, ReleaseGateName } from "@/lib/publishing-package-control-room-release";
 
 interface ReleaseTabViewProps {
@@ -17,6 +18,8 @@ interface ReleaseTabViewProps {
   periodId?: string;
   /** Only true on the real route; the fixture preview never sets this, keeping its Release tab strictly read-only (no database to persist to). */
   canRun?: boolean;
+  /** Internal lifecycle state, rendered only on the operator-only Release route. */
+  readinessLifecycle?: "legacy_unreconciled" | "setup_required" | "enforced";
 }
 
 const GATE_LABEL: Record<ReleaseGateName, string> = {
@@ -26,10 +29,13 @@ const GATE_LABEL: Record<ReleaseGateName, string> = {
   publication: "Publication",
 };
 
-export default function ReleaseTabView({ pieces, firmId, periodId, canRun }: ReleaseTabViewProps) {
+export default function ReleaseTabView({ pieces, firmId, periodId, canRun, readinessLifecycle }: ReleaseTabViewProps) {
+  const router = useRouter();
   const releaseReadyCount = pieces.filter((p) => p.allPass).length;
   const [result, setResult] = useState<{ kind: "success" | "error"; message: string } | null>(null);
   const [running, setRunning] = useState(false);
+  const [activatingReadiness, setActivatingReadiness] = useState(false);
+  const [readinessMessage, setReadinessMessage] = useState<string | null>(null);
 
   async function runPreflight() {
     if (!firmId || !periodId) return;
@@ -49,6 +55,32 @@ export default function ReleaseTabView({ pieces, firmId, periodId, canRun }: Rel
       setResult({ kind: "error", message: err instanceof Error ? err.message : "preflight run failed" });
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function activateReadiness() {
+    if (!firmId || !periodId) return;
+    setActivatingReadiness(true);
+    setReadinessMessage(null);
+    try {
+      const res = await fetch(`/api/portal/${firmId}/periods/${periodId}/activate-readiness`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        const blockingCount = Array.isArray(json.blockingDeliverableIds) ? json.blockingDeliverableIds.length : 0;
+        setReadinessMessage(
+          blockingCount > 0
+            ? `${blockingCount} piece${blockingCount === 1 ? " still needs" : "s still need"} release metadata before enforcement can be enabled.`
+            : (json.error ?? "Could not activate readiness enforcement."),
+        );
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      setReadinessMessage(err instanceof Error ? err.message : "Network error.");
+    } finally {
+      setActivatingReadiness(false);
     }
   }
 
@@ -76,6 +108,23 @@ export default function ReleaseTabView({ pieces, firmId, periodId, canRun }: Rel
         {result && (
           <div className={`text-xs px-2.5 py-1.5 border mt-2 ${result.kind === "success" ? "border-navy/30 bg-navy/5 text-navy" : "border-red-300 bg-red-50 text-red-800"}`}>
             {result.message}
+          </div>
+        )}
+        {canRun && readinessLifecycle && readinessLifecycle !== "enforced" && (
+          <div className="mt-3 border border-black/10 bg-white px-3 py-2.5">
+            <p className="text-xs font-medium text-navy">Readiness enforcement</p>
+            <p className="text-xs text-black/55 mt-0.5">
+              This internal release control is separate from client review. Enable it after the package metadata is complete.
+            </p>
+            <button
+              type="button"
+              onClick={activateReadiness}
+              disabled={activatingReadiness}
+              className="mt-2 text-[11px] font-medium text-navy border border-navy/30 px-2 py-1 hover:bg-navy/5 disabled:opacity-50"
+            >
+              {activatingReadiness ? "Checking metadata..." : "Enable readiness enforcement"}
+            </button>
+            {readinessMessage && <p className="text-xs text-red-800 mt-2">{readinessMessage}</p>}
           </div>
         )}
       </div>

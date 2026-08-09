@@ -51,5 +51,13 @@ export default async function ControlRoomReleasePage({
   );
   const pieces = assembleReleaseGates(overview, result.manifest, publicationInputs);
 
-  return <ReleaseTabView pieces={pieces} firmId={firmId} periodId={periodId} canRun />;
+  return (
+    <ReleaseTabView
+      pieces={pieces}
+      firmId={firmId}
+      periodId={periodId}
+      canRun
+      readinessLifecycle={result.period.readiness_lifecycle}
+    />
+  );
 }

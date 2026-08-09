@@ -17,7 +17,6 @@ import { getPreviewIntent } from "@/lib/preview-mode";
 import { getContentPlan } from "@/lib/deliverables";
 import { getFirmAbout } from "@/lib/firm-about";
 import { getContentCadence } from "@/lib/content-cadence";
-import { loadPlanPublicationReadiness } from "@/lib/publication-readiness-loader";
 import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
 import { loadUnresolvedClientChangeHoldDeliverableIds } from "@/lib/deliverable-client-change-holds";
 import { isVersionReleaseAuthorized } from "@/lib/release-authorization";
@@ -83,24 +82,6 @@ export default async function DeliverablesPage({
     standingAuthorizedDeliverableIds = [];
   }
 
-  // Additive: Publication Readiness (Workstream 5). loadPlanPublicationReadiness
-  // never throws on its own, but the .catch below is a second, independent
-  // guard so a readiness-load failure can never take down a page that
-  // rendered fine before this feature existed.
-  const planReadiness = await loadPlanPublicationReadiness(firmId).catch(() => ({
-    summary: { active: 0, ready: 0, blocked: 0, excluded: 0 },
-    items: [],
-    titles: {},
-    lifecycleByDeliverableId: {},
-    // loadPlanPublicationReadiness does not throw on its own (it resolves
-    // every internal failure to an unavailable:true result); this .catch is
-    // a second, independent guard for anything unexpected reaching this
-    // far. It must mark unavailable too, for the same reason the loader's
-    // own error paths do: an empty result here must never render as "all
-    // clear" to the operator.
-    unavailable: true,
-  }));
-
   return (
     <div className="space-y-6">
       <StandingAuthorizationBanner firmId={firmId} active={authState?.active ?? false} />
@@ -120,7 +101,6 @@ export default async function DeliverablesPage({
         periods={plan.periods}
         deliverables={plan.deliverables}
         settings={plan.settings}
-        planReadiness={planReadiness}
         standingAuthActive={authState?.active ?? false}
         standingAuthorizedDeliverableIds={standingAuthorizedDeliverableIds}
       />
