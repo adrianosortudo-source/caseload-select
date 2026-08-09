@@ -473,6 +473,14 @@ describe("zero-write second reconciliation", () => {
 });
 
 describe("approved Publishing Kit projection", () => {
+  it("rejects a caller-fabricated verifier result even when its envelope bytes are valid", () => {
+    const pkg = makePackage();
+    const snapshot = makeSnapshot(pkg, true);
+    const verified = makeReleaseAuthorization(pkg, snapshot);
+    const fabricated = { envelope: verified.envelope } as VerifiedDrgReleaseAuthorizationEnvelope;
+    expect(() => projectReleaseAuthorizedDrgPublishingKit(pkg, snapshot, fabricated, sha256)).toThrow("canonical verifier");
+  });
+
   it("projects all sixteen payloads only from each exact current approved version", () => {
     const pkg = makePackage();
     const snapshot = makeSnapshot(pkg, true);

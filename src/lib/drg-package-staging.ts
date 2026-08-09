@@ -14,7 +14,10 @@ import type {
   DeliverableRole,
   PublicationDestination,
 } from "./types";
-import type { VerifiedDrgReleaseAuthorizationEnvelope } from "./drg-release-authorization-envelope";
+import {
+  assertVerifiedDrgReleaseAuthorizationEnvelope,
+  type VerifiedDrgReleaseAuthorizationEnvelope,
+} from "./drg-release-authorization-envelope";
 
 export type DrgLocale = "en-CA" | "pt-BR";
 
@@ -595,6 +598,10 @@ export function projectReleaseAuthorizedDrgPublishingKit(
   verifiedReleaseAuthorization: VerifiedDrgReleaseAuthorizationEnvelope,
   sha256: Sha256Function,
 ): ReleaseAuthorizedPublishingKitProjection {
+  // A structural lookalike or TypeScript cast is not a release capability.
+  // Only the canonical signature/evidence verifier can populate its private
+  // WeakSet and pass this runtime boundary.
+  assertVerifiedDrgReleaseAuthorizationEnvelope(verifiedReleaseAuthorization);
   const releaseAuthorization = verifiedReleaseAuthorization.envelope;
   const blockers = verifyPackage(pkg, sha256);
   const stagingReconciliation = reconcileDrgPackageStaging(pkg, snapshot, sha256);
