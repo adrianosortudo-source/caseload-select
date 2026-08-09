@@ -88,6 +88,8 @@ export type ReleaseAuthorizationPath = "individual_approval" | "standing_authori
 export type ReleaseAuthorizationResultKind =
   | "individually_approved"
   | "standing_authorization"
+  | "blocked_client_change_hold"
+  | "blocked_standing_status"
   | "blocked_requires_individual_review"
   | "standing_authorization_inactive"
   | "approved_version_mismatch"
@@ -98,6 +100,8 @@ export interface ReleaseAuthorizationInput {
   approvedVersionId: string | null;
   targetVersionId: string;
   versionRequiresIndividualReview: boolean;
+  /** An append-only client change hold remains unresolved for this exact version. */
+  hasUnresolvedClientChangeHold?: boolean;
   /** This firm's CURRENT standing-authorization state (standing-publishing-authorization.ts's getStandingAuthorizationState().active) -- never historical presence; see this function's own doc comment on why "ever configured" is not a distinction this input can make. */
   standingAuthorizationActive: boolean;
 }
@@ -112,6 +116,7 @@ export interface ReleaseAuthorizationResult {
   approvedVersionId: string | null;
   targetVersionId: string;
   versionRequiresIndividualReview: boolean;
+  hasUnresolvedClientChangeHold: boolean;
   standingAuthorizationActive: boolean;
 }
 
@@ -120,6 +125,7 @@ export function isVersionReleaseAuthorized(input: ReleaseAuthorizationInput): Re
     approvedVersionId: input.approvedVersionId,
     targetVersionId: input.targetVersionId,
     versionRequiresIndividualReview: input.versionRequiresIndividualReview,
+    hasUnresolvedClientChangeHold: Boolean(input.hasUnresolvedClientChangeHold),
     standingAuthorizationActive: input.standingAuthorizationActive,
   };
 
@@ -134,6 +140,18 @@ export function isVersionReleaseAuthorized(input: ReleaseAuthorizationInput): Re
   // with approved_version_id already equal to the evaluated version) --
   // every reason string below now names only what is actually true.
   const approvedVersionIdMatches = input.approvedVersionId === input.targetVersionId;
+
+  // A client request for changes is a hard release hold. Clearing it is a
+  // separate client action and never fabricates an approval record.
+  if (input.hasUnresolvedClientChangeHold) {
+    return {
+      kind: "blocked_client_change_hold",
+      authorized: false,
+      authorizationPath: null,
+      reason: `Not release-authorized: the client has an unresolved change hold on version ${input.targetVersionId}. The hold must be explicitly resolved by the client decision-maker before this version can be released.`,
+      ...evidence,
+    };
+  }
 
   if (input.deliverableStatus === "approved" && approvedVersionIdMatches) {
     return {
@@ -155,6 +173,18 @@ export function isVersionReleaseAuthorized(input: ReleaseAuthorizationInput): Re
     : input.approvedVersionId !== null
       ? `approved_version_id=${input.approvedVersionId} does not match the evaluated version (${input.targetVersionId})`
       : `approved_version_id is null -- this version has never been individually approved`;
+
+  // Standing authorization covers review-ready material only. Draft,
+  // changes_requested, archived, and unknown states fail closed.
+  if (input.deliverableStatus !== "in_review") {
+    return {
+      kind: "blocked_standing_status",
+      authorized: false,
+      authorizationPath: null,
+      reason: `Not release-authorized: standing publishing authorization only covers a deliverable whose exact current version is in_review; deliverableStatus="${input.deliverableStatus}" is not eligible. ${individualApprovalGapReason}.`,
+      ...evidence,
+    };
+  }
 
   if (input.versionRequiresIndividualReview) {
     return {
