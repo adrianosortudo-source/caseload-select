@@ -263,8 +263,9 @@ describe("DRG staging operator plan-only safety", () => {
     expect(result.receipt?.outcome).toMatchObject({ status: "planned", writesPerformed: 0 });
     expect(result.receipt?.plan).toMatchObject({ addedCount: 16, newVersionCount: 0, skippedCount: 0, writesPerformed: 0 });
     expect(result.receipt).toMatchObject({
-      authorizerRole: "lawyer",
-      authorizerId: ACTOR_ID,
+      operatorId: ACTOR_ID,
+      operatorName: "DRG automation operator",
+      releaseAuthorizationGranted: false,
       signingKeyId: "drg-operator-test-key",
       signingPublicKeySha256: fixture.signingPublicKeySha256,
       authorizationEnvelopeSha256: fixture.authorizationFileSha256,
