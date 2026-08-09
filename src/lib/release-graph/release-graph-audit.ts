@@ -393,7 +393,7 @@ function finding(
 export function requiredRenditionRole(destination: PlacementDestination): VisualRenditionRole | null {
   switch (destination) {
     case "firm_website":
-      return "textless_html_headline";
+      return "baked_localized_website_hero";
     case "linkedin_article":
     case "linkedin_post":
     case "linkedin_company_page":
@@ -405,7 +405,7 @@ export function requiredRenditionRole(destination: PlacementDestination): Visual
 }
 
 export function actualRenditionRole(artifactType: PublicationArtifactType): VisualRenditionRole | null {
-  if (artifactType === "hero_image") return "textless_html_headline";
+  if (artifactType === "hero_image") return "baked_localized_website_hero";
   if (artifactType === "social_image") return "baked_editorial_card";
   return null;
 }
@@ -669,7 +669,7 @@ function resolveFact4VisualRendition(
   }
   if (requiredRole === null) return out; // email_delivery: no rendition-role requirement modeled in this phase
 
-  const artifactTypes: PublicationArtifactType[] = requiredRole === "textless_html_headline" ? ["hero_image"] : ["social_image"];
+  const artifactTypes: PublicationArtifactType[] = requiredRole === "baked_localized_website_hero" ? ["hero_image"] : ["social_image"];
   const matchingRoleArtifact = findArtifact(artifacts, artifactTypes, currentVersion?.id ?? null, locale);
   const wrongRoleArtifact = matchingRoleArtifact
     ? null
@@ -706,7 +706,7 @@ function resolveFact4VisualRendition(
         releaseImpact: "blocks_today",
         factualEvidence: `Destination "${placement.destination}" requires ${requiredRole}, but the only current-version, current-locale image on record is publication_artifacts.id=${wrongRoleArtifact.id} (artifact_type=${wrongRoleArtifact.artifact_type}, rendition role ${actualRole ?? "unknown"}).`,
         canonicalSourceConsulted: "publication_artifacts",
-        immediateDisposition: "Hold. Do not publish this asset to this destination -- it is the wrong visual object for the surface (e.g. a baked-text card reused as a textless website hero, or vice versa).",
+        immediateDisposition: "Hold. Do not publish this asset to this destination -- it is the wrong visual object for the surface (e.g. a social editorial card reused as a baked localized website hero, or vice versa).",
         rootCause: "An asset registered for one channel's rendition role was reused for a destination requiring the other role, rather than each surface's own asset being generated and registered separately.",
         proposedDurableSolution: "Generate and register the correct-role asset for this destination; never treat the wrong-role asset as an acceptable substitute regardless of how visually similar it looks.",
         authorityRequired: "Operator/designer -- an actual visual-asset change, out of this audit's scope.",

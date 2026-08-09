@@ -139,7 +139,7 @@ export async function runProve(supabase: SupabaseClient, weekConfig: WeekConfig)
 
   const articlePlacementChecks: MissingPlacementResult[] = articleDeliverableIds.map((deliverableId) => {
     const currentVersionId = byId.get(deliverableId)?.current_version_id ?? null;
-    if (!currentVersionId) return { deliverableId, missingRoles: ["website_article_hero_overlay", "website_homepage_cta_textless"] } as MissingPlacementResult;
+    if (!currentVersionId) return { deliverableId, missingRoles: ["website_article_hero_baked", "website_homepage_cta_baked"] } as MissingPlacementResult;
     const artifacts: ArtifactRow[] = (articleArtifactsRaw ?? [])
       .filter((a) => a.deliverable_id === deliverableId)
       .map((a) => ({ id: a.id, versionId: a.version_id, artifactType: a.artifact_type, assetRole: a.asset_role, supersededAt: a.superseded_at }));
@@ -190,7 +190,7 @@ export function renderProveReport(report: ProveReport): string {
   }
   lines.push(`  TOTAL: ${totalArtifacts}`);
   lines.push("");
-  lines.push("Article placement check (website_article_hero_overlay + website_homepage_cta_textless):");
+  lines.push("Article placement check (website_article_hero_baked + website_homepage_cta_baked):");
   for (const c of report.articlePlacementChecks) {
     lines.push(
       c.missingRoles.length === 0
