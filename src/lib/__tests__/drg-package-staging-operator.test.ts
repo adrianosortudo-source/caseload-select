@@ -89,6 +89,7 @@ interface FixtureOptions {
   readonly packageId?: string;
   readonly authorizedAt?: string;
   readonly expiresAt?: string;
+  readonly trustedSignerFirmId?: string;
   readonly mutateAuthorization?: (authorization: DrgPackageStagingAuthorization) => DrgPackageStagingAuthorization;
 }
 
@@ -141,7 +142,7 @@ function makeFixture(options: FixtureOptions = {}) {
   const trustedSigners = [{
     signingKeyId: signedFields.signingKeyId,
     spkiSha256: signingPublicKeySha256,
-    firmId: pkg.firmId,
+    firmId: options.trustedSignerFirmId ?? pkg.firmId,
     authorizerRole: "lawyer" as const,
     authorizerId: AUTHORIZER_ID,
     authorizerName: "DRG Law approving lawyer",
@@ -400,15 +401,36 @@ describe("DRG staging operator plan-only safety", () => {
       ...authorization,
       authorizerName: "Another approving lawyer",
     })],
-    ["firm", (authorization: DrgPackageStagingAuthorization) => ({
-      ...authorization,
-      firmId: "88888888-8888-4888-8888-888888888888",
-    })],
   ] satisfies ReadonlyArray<readonly [
     string,
     (authorization: DrgPackageStagingAuthorization) => DrgPackageStagingAuthorization,
   ]>)("rejects a valid trusted signature with mismatched authorizer %s", async (_field, mutateAuthorization) => {
     const fixture = makeFixture({ mutateAuthorization });
+    const clients = fakeClients();
+    const createClients = vi.fn(() => clients);
+    const stagePackage = vi.fn();
+    const result = await runDrgStagingOperator({
+      argv: fixture.args,
+      env: fixture.env,
+      trustedSigners: fixture.trustedSigners,
+      now: NOW,
+      terminal: { stdinIsTTY: false, stdoutIsTTY: false },
+      createClients,
+      stagePackage,
+      log: vi.fn(),
+      logError: vi.fn(),
+    });
+    expect(result.exitCode).toBe(1);
+    expect(createClients).not.toHaveBeenCalled();
+    expect(clients.rpc.rpc).not.toHaveBeenCalled();
+    expect(stagePackage).not.toHaveBeenCalled();
+    expect(existsSync(fixture.receiptPath)).toBe(false);
+  });
+
+  it("rejects a trusted signer entry scoped to a different firm", async () => {
+    const fixture = makeFixture({
+      trustedSignerFirmId: "88888888-8888-4888-8888-888888888888",
+    });
     const clients = fakeClients();
     const createClients = vi.fn(() => clients);
     const stagePackage = vi.fn();
