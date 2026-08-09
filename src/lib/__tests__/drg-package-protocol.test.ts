@@ -26,8 +26,11 @@ const HASH_B = "b".repeat(64);
 const ROLES = ["counsel_note", "clause_in_margin", "checklist"] as const;
 const LOCALES = ["en-CA", "pt-BR"] as const;
 const TEST_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIJ1hsZ3v/VpguoRK9JLsLMREScVpezJpGXA7rAMcrn9g\n-----END PRIVATE KEY-----\n";
-process.env.DRG_RELEASE_AUTHORIZATION_SIGNING_KEY_ID = "drg-release-rfc8032-test-v1";
-process.env.DRG_RELEASE_AUTHORIZATION_PRIVATE_KEY_PEM = TEST_PRIVATE_KEY;
+const TEST_SIGNER = {
+  keyId: "drg-release-rfc8032-test-v1",
+  publicKeySpkiSha256: "06e3fd8fda29bb60ab59557de61edb0aecdb231134be30e75b455f8e1b792fa9",
+  sign: (payload: Uint8Array) => sign(null, payload, createPrivateKey(TEST_PRIVATE_KEY)).toString("base64"),
+};
 
 function idFor(role: string, locale: string): string {
   return `${role}-${locale === "en-CA" ? "en" : "pt"}`;
@@ -160,8 +163,8 @@ describe("DRG package protocol", () => {
 
   it("builds a deterministic complete six-piece website package from standing release authorization without fabricating approval records", () => {
     const source = makeSource();
-    const first = buildDrgWebsitePackageExport(source, makeInput());
-    const second = buildDrgWebsitePackageExport(source, makeInput());
+    const first = buildDrgWebsitePackageExport(source, makeInput(), TEST_SIGNER);
+    const second = buildDrgWebsitePackageExport(source, makeInput(), TEST_SIGNER);
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
     if (!first.ok || !second.ok) return;
@@ -189,14 +192,14 @@ describe("DRG package protocol", () => {
     for (const mutate of cases) {
       const source = makeSource();
       mutate(source);
-      expect(buildDrgWebsitePackageExport(source, makeInput()).ok).toBe(false);
+      expect(buildDrgWebsitePackageExport(source, makeInput(), TEST_SIGNER).ok).toBe(false);
     }
   });
 
   it("refuses an export when a selection is not the exact approved source version", () => {
     const input = makeInput();
     input.pieces[0].deliverable_version_id = "old-version";
-    const result = buildDrgWebsitePackageExport(makeSource(), input);
+    const result = buildDrgWebsitePackageExport(makeSource(), input, TEST_SIGNER);
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors[0].message).toContain("exact current release-authorized version");
@@ -205,9 +208,9 @@ describe("DRG package protocol", () => {
   it("rejects incomplete, cyclic, and hash-tampered package payloads", () => {
     const incomplete = makeInput();
     incomplete.pieces.pop();
-    expect(buildDrgWebsitePackageExport(makeSource(), incomplete).ok).toBe(false);
+    expect(buildDrgWebsitePackageExport(makeSource(), incomplete, TEST_SIGNER).ok).toBe(false);
 
-    const good = buildDrgWebsitePackageExport(makeSource(), makeInput());
+    const good = buildDrgWebsitePackageExport(makeSource(), makeInput(), TEST_SIGNER);
     if (!good.ok) throw new Error("expected good package");
     const cyclic = structuredClone(good.value);
     cyclic.dependencies.push({ piece_id: "CN-EN", depends_on_piece_id: "CIM-EN" });
@@ -219,7 +222,7 @@ describe("DRG package protocol", () => {
   });
 
   it.each(["title", "body_html", "route"] as const)("rejects benign %s tamper even when the caller recomputes the self-package hash", (field) => {
-    const good = buildDrgWebsitePackageExport(makeSource(), makeInput());
+    const good = buildDrgWebsitePackageExport(makeSource(), makeInput(), TEST_SIGNER);
     if (!good.ok) throw new Error("expected good package");
     const tampered = structuredClone(good.value);
     if (field === "title") tampered.pieces[0].title = "Benign editorial title change";

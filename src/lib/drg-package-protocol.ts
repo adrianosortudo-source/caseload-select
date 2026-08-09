@@ -21,9 +21,9 @@ import {
   DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS,
   type DrgReleaseAuthorizationEnvelope,
   type DrgReleaseAuthorizationPieceSnapshot,
+  type DrgReleaseAuthorizationSigner,
   type DrgWebsiteProjectionAuthorization,
 } from "@/lib/drg-release-authorization-envelope";
-import { loadConfiguredDrgReleaseAuthorizationSigner } from "@/lib/drg-release-authorization-envelope-server";
 
 export const DRG_WEBSITE_PACKAGE_SCHEMA_VERSION = "drg.website-package-export.v1" as const;
 
@@ -515,6 +515,7 @@ function toPiece(selection: DrgWebsitePieceSelection, deliverable: ContentExport
 export function buildDrgWebsitePackageExport(
   source: ContentExportBundle,
   input: DrgWebsitePackageBuildInput,
+  signer: DrgReleaseAuthorizationSigner,
 ): DrgWebsitePackageBuildResult {
   const errors: DrgProtocolViolation[] = [];
   if (!isNonEmptyString(input.package_id)) errors.push({ path: "package_id", message: "must be non-empty" });
@@ -600,7 +601,7 @@ export function buildDrgWebsitePackageExport(
       expiresAt: new Date(Date.parse(issuedAt) + DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS).toISOString(),
       releaseEnvelopeSha256: verifiedEnvelope!.envelope.envelope_sha256,
       projectionSha256: sha256(drgWebsiteProjectionPayload({ ...withoutHash, package: { ...withoutHash.package, package_sha256: "" } } as DrgWebsitePackageExport)),
-      signer: loadConfiguredDrgReleaseAuthorizationSigner(),
+      signer,
     });
   } catch (error) {
     return { ok: false, value: null, errors: [{ path: "website_projection_authorization", message: `issuance failed closed: ${error instanceof Error ? error.message : String(error)}` }] };

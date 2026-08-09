@@ -13,6 +13,7 @@ import {
   type DrgWebsitePieceSelection,
 } from "@/lib/drg-package-protocol";
 import { verifyDrgReleaseAuthorizationEnvelope } from "@/lib/drg-release-authorization-envelope";
+import { loadConfiguredDrgReleaseAuthorizationSigner } from "@/lib/drg-release-authorization-envelope-server";
 
 const WEBSITE_PIECES = [
   { pieceId: "CN-EN", locale: "en-CA", role: "counsel_note" },
@@ -123,7 +124,13 @@ export async function buildAuthoritativeDrgWebsiteRelease(
   if (!result.ok) return result;
   const input = buildInput(result.bundle);
   if (typeof input === "string") return { ok: false, error: input };
-  const projected = buildDrgWebsitePackageExport(result.bundle, input);
+  let signer;
+  try {
+    signer = loadConfiguredDrgReleaseAuthorizationSigner();
+  } catch (error) {
+    return { ok: false, error: `website projection signer is unavailable: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  const projected = buildDrgWebsitePackageExport(result.bundle, input, signer);
   if (!projected.ok) return { ok: false, error: projected.errors.map((item) => `${item.path}: ${item.message}`).join("; ") };
   return { ok: true, release: projected.value };
 }

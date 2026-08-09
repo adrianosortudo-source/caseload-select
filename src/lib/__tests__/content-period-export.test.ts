@@ -284,6 +284,7 @@ function configureAuthoritativeDrgPackage(): void {
   state.roleAssignments = [...website].map(([pieceId, site]) => ({
     id: `assignment-${pieceId}`,
     artifact_id: `artifact-${pieceId}`,
+    deliverable_id: `drg-${pieceId}`,
     asset_role: site.assetRole,
     locale: site.locale,
     destination: "firm_website",
@@ -1754,8 +1755,7 @@ describe("authoritative DRG website release issuance", () => {
     process.env.DRG_RELEASE_AUTHORIZATION_SIGNING_KEY_ID = "drg-release-rfc8032-test-v1";
     process.env.DRG_RELEASE_AUTHORIZATION_PRIVATE_KEY_PEM = TEST_RELEASE_PRIVATE_KEY;
     const result = await buildAuthoritativeDrgWebsiteRelease(PERIOD_ID);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
+    if (!result.ok) throw new Error(result.error);
     expect(result.release.release_authorization_envelope.pieces).toHaveLength(16);
     expect(result.release.pieces).toHaveLength(6);
     expect(result.release.website_projection_authorization.release_envelope_sha256).toBe(result.release.release_authorization_envelope.envelope_sha256);
