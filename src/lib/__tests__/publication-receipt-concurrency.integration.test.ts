@@ -681,7 +681,7 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
     );
     await connA.query(
       `update deliverable_versions
-       set requires_individual_review = true, individual_review_reason = 'Regression: individual review required'
+       set requires_individual_review = true, requires_individual_review_reason = 'Regression: individual review required'
        where id = $1`,
       [v2],
     );
@@ -692,7 +692,7 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
     expect(individualReviewClaim.rows[0].result.ok).toBe(false);
     await connA.query(
       `update deliverable_versions
-       set requires_individual_review = false, individual_review_reason = null
+       set requires_individual_review = false, requires_individual_review_reason = null
        where id = $1`,
       [v2],
     );
