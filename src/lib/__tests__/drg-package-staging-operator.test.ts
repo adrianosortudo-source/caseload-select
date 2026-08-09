@@ -132,6 +132,7 @@ function makeFixture(options: FixtureOptions = {}) {
   writeFileSync(authorizationPath, `${JSON.stringify({ ...signedFields, signatureBase64 }, null, 2)}\n`, "utf8");
   const authorizationFileSha256 = sha256File(authorizationPath);
   const env: NodeJS.ProcessEnv = {
+    NODE_ENV: "test",
     DRG_STAGING_TARGET: "staging",
     DRG_STAGING_AUTHORIZATION_KEY_ID: signedFields.signingKeyId,
     DRG_STAGING_AUTHORIZATION_PUBLIC_KEY_PEM: keys.publicKey.export({ type: "spki", format: "pem" }).toString(),
