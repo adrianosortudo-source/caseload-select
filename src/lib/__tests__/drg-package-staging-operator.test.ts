@@ -104,7 +104,7 @@ function makeFixture(options: FixtureOptions = {}) {
   const keys = generateKeyPairSync("ed25519");
   const baseAuthorization: DrgPackageStagingExecutionAuthorization = {
     schemaVersion: "drg-package-staging-execution-authorization/v1",
-    executionAuthorizationId: EXECUTION_EXECUTION_AUTHORIZATION_ID,
+    executionAuthorizationId: EXECUTION_AUTHORIZATION_ID,
     firmId: pkg.firmId,
     periodId: pkg.periodId,
     packageId: pkg.packageId,
@@ -174,7 +174,7 @@ function operationReceipt(pkg: SealedDrgWeeklyPackage, writesPerformed: number, 
     releaseAuthorizationGranted: false,
     operationId: "44444444-4444-4444-8444-444444444444",
     idempotencyKey: "drg-stage-idempotency-key",
-    executionAuthorizationId: EXECUTION_EXECUTION_AUTHORIZATION_ID,
+    executionAuthorizationId: EXECUTION_AUTHORIZATION_ID,
     operatorRole: "operator",
     operatorId: ACTOR_ID,
     operatorName: "DRG automation operator",
@@ -264,7 +264,7 @@ describe("DRG staging operator plan-only safety", () => {
     expect(result.receipt?.plan).toMatchObject({ addedCount: 16, newVersionCount: 0, skippedCount: 0, writesPerformed: 0 });
     expect(result.receipt).toMatchObject({
       authorizerRole: "lawyer",
-      authorizerId: AUTHORIZER_ID,
+      authorizerId: ACTOR_ID,
       signingKeyId: "drg-operator-test-key",
       signingPublicKeySha256: fixture.signingPublicKeySha256,
       authorizationEnvelopeSha256: fixture.authorizationFileSha256,
