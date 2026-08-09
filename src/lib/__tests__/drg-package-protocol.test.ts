@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createPrivateKey, sign } from "node:crypto";
 
 import {
   buildDrgIdempotencyKey,
@@ -10,14 +11,28 @@ import {
   type DrgWebsitePackageBuildInput,
 } from "@/lib/drg-package-protocol";
 import type { ContentExportBundle, ContentExportDeliverable } from "@/lib/content-period-export";
+import {
+  DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS,
+  DRG_RELEASE_AUTHORIZATION_PIECE_IDS,
+  computeDrgReleaseEvidenceSha256,
+  createSignedDrgReleaseAuthorizationEnvelope,
+  type DrgReleaseAuthorizationPieceSnapshot,
+} from "@/lib/drg-release-authorization-envelope";
 
 const HASH_A = "a".repeat(64);
 const HASH_B = "b".repeat(64);
 const ROLES = ["counsel_note", "clause_in_margin", "checklist"] as const;
 const LOCALES = ["en-CA", "pt-BR"] as const;
+const TEST_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIJ1hsZ3v/VpguoRK9JLsLMREScVpezJpGXA7rAMcrn9g\n-----END PRIVATE KEY-----\n";
 
 function idFor(role: string, locale: string): string {
   return `${role}-${locale === "en-CA" ? "en" : "pt"}`;
+}
+
+function pieceIdFor(role: (typeof ROLES)[number], locale: (typeof LOCALES)[number]): (typeof DRG_RELEASE_AUTHORIZATION_PIECE_IDS)[number] {
+  if (role === "counsel_note") return locale === "en-CA" ? "CN-EN" : "CN-PT";
+  if (role === "clause_in_margin") return locale === "en-CA" ? "CIM-EN" : "CIM-PT";
+  return locale === "en-CA" ? "CHECKLIST-LANDING-EN" : "CHECKLIST-LANDING-PT";
 }
 
 function makeDeliverable(role: (typeof ROLES)[number], locale: (typeof LOCALES)[number]): ContentExportDeliverable {
@@ -37,7 +52,7 @@ function makeDeliverable(role: (typeof ROLES)[number], locale: (typeof LOCALES)[
     is_current_version_approved: false,
     may_publish: true,
     may_publish_reason: null,
-    release_authorization: { path: "standing_authorization", evidence_id: `standing-${id}`, deliverable_id: id, deliverable_version_id: versionId, firm_id: "firm-1", recorded_at: "2026-08-08T00:00:00.000Z", evidence_sha256: HASH_A, standing_authorization_event_id: `standing-event-${id}`, standing_authorization_active: true, revoked_at: null },
+    release_authorization: null,
     current_version: { id: versionId, version_number: 2, body_html: `<p>${id} locked.</p>`, storage_bucket: null, storage_path: null, signed_url: null, signed_url_expires_at: null, asset_mime: null, asset_size_bytes: null, asset_name: null, asset_sha256: null, note: null, responds_to_approval_id: null, created_at: "2026-08-08T00:00:00.000Z" },
     approved_version: null,
     individual_review_hold: null,
@@ -51,7 +66,53 @@ function makeDeliverable(role: (typeof ROLES)[number], locale: (typeof LOCALES)[
   };
 }
 
+function makeEnvelope(deliverables: ContentExportDeliverable[]) {
+  const issuedAt = new Date(Date.now() - 1_000).toISOString();
+  const pieces = DRG_RELEASE_AUTHORIZATION_PIECE_IDS.map((pieceId, index) => {
+    const deliverable = deliverables.find((candidate) => {
+      const role = ROLES.find((candidateRole) => candidate.id.startsWith(`${candidateRole}-`));
+      return role ? pieceIdFor(role, candidate.locale as (typeof LOCALES)[number]) === pieceId : false;
+    });
+    const evidenceWithoutHash: Omit<DrgReleaseAuthorizationPieceSnapshot, "evidence_sha256"> = {
+      piece_id: pieceId,
+      firm_id: "firm-1",
+      period_id: "period-1",
+      package_id: "drg-2026-w33",
+      package_version: 2,
+      package_sha256: HASH_A,
+      deliverable_id: deliverable?.id ?? `other-deliverable-${index}`,
+      current_version_id: deliverable?.current_version_id ?? `other-version-${index}`,
+      version_number: 2,
+      piece_sha256: HASH_A,
+      source_sha256: HASH_B,
+      asset_sha256s: [HASH_B],
+      path: "standing_authorization",
+      approval_record_id: null,
+      standing_authorization_event_id: "standing-event-1",
+      standing_authorization_active: true,
+      change_hold_active: false,
+      requires_individual_review: false,
+      revoked_at: null,
+      evidence_recorded_at: issuedAt,
+    };
+    return { ...evidenceWithoutHash, evidence_sha256: computeDrgReleaseEvidenceSha256(evidenceWithoutHash) };
+  });
+  return createSignedDrgReleaseAuthorizationEnvelope({
+    envelopeId: `drg-release:drg-2026-w33:v2:${HASH_A}`,
+    issuedAt,
+    expiresAt: new Date(Date.parse(issuedAt) + DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS).toISOString(),
+    package: { id: "drg-2026-w33", version: 2, firm_id: "firm-1", period_id: "period-1", package_sha256: HASH_A },
+    pieces,
+    signer: {
+      keyId: "drg-release-rfc8032-test-v1",
+      publicKeySpkiSha256: "06e3fd8fda29bb60ab59557de61edb0aecdb231134be30e75b455f8e1b792fa9",
+      sign: (payload) => sign(null, payload, createPrivateKey(TEST_PRIVATE_KEY)).toString("base64"),
+    },
+  });
+}
+
 function makeSource(): ContentExportBundle {
+  const deliverables = LOCALES.flatMap((locale) => ROLES.map((role) => makeDeliverable(role, locale)));
   return {
     schema_version: "1.1",
     generated_at: "2026-08-08T00:00:00.000Z",
@@ -61,8 +122,9 @@ function makeSource(): ContentExportBundle {
     archived_deliverable_count: 0,
     warnings: [],
     generation_policy: { may_generate: false, may_rewrite: false, may_translate: false, use_portal_source_only: true },
-    deliverables: LOCALES.flatMap((locale) => ROLES.map((role) => makeDeliverable(role, locale))),
+    deliverables,
     archived_deliverables: [],
+    release_authorization_envelope: makeEnvelope(deliverables),
   };
 }
 
@@ -76,13 +138,13 @@ function makeInput(): DrgWebsitePackageBuildInput {
       const id = idFor(role, locale);
       const slug = id.replace(/_/g, "-");
       const route = locale === "en-CA" ? `/journal/${slug}` : `/pt/journal/${slug}`;
-      return { piece_id: id, deliverable_id: id, deliverable_version_id: `${id}-v2`, locale, role, slug, route, expected_metadata: { canonical_route: route, alternate_routes: { "en-CA": `/journal/${slug}`, "pt-BR": `/pt/journal/${slug}` }, required_structured_data: [role === "checklist" ? "WebPage" : "Article", "BreadcrumbList"] } };
+      return { piece_id: pieceIdFor(role, locale), deliverable_id: id, deliverable_version_id: `${id}-v2`, locale, role, slug, route, expected_metadata: { canonical_route: route, alternate_routes: { "en-CA": `/journal/${slug}`, "pt-BR": `/pt/journal/${slug}` }, required_structured_data: [role === "checklist" ? "WebPage" : "Article", "BreadcrumbList"] } };
     })),
     dependencies: [
-      { piece_id: "clause_in_margin-en", depends_on_piece_id: "counsel_note-en" },
-      { piece_id: "checklist-en", depends_on_piece_id: "counsel_note-en" },
-      { piece_id: "clause_in_margin-pt", depends_on_piece_id: "counsel_note-pt" },
-      { piece_id: "checklist-pt", depends_on_piece_id: "counsel_note-pt" },
+      { piece_id: "CIM-EN", depends_on_piece_id: "CN-EN" },
+      { piece_id: "CHECKLIST-LANDING-EN", depends_on_piece_id: "CN-EN" },
+      { piece_id: "CIM-PT", depends_on_piece_id: "CN-PT" },
+      { piece_id: "CHECKLIST-LANDING-PT", depends_on_piece_id: "CN-PT" },
     ],
   };
 }
@@ -103,9 +165,9 @@ describe("DRG package protocol", () => {
 
   it("fails closed when canonical release evidence is fabricated, revoked, held, or superseded by a client change request", () => {
     const cases = [
-      (source: ContentExportBundle) => { source.deliverables[0].release_authorization = null; },
-      (source: ContentExportBundle) => { source.deliverables[0].release_authorization = { ...source.deliverables[0].release_authorization!, standing_authorization_active: false }; },
-      (source: ContentExportBundle) => { source.deliverables[0].release_authorization = { ...source.deliverables[0].release_authorization!, revoked_at: "2026-08-09T00:00:00.000Z" }; },
+      (source: ContentExportBundle) => { source.release_authorization_envelope = null; },
+      (source: ContentExportBundle) => { (source.release_authorization_envelope!.signature as { signature_base64: string }).signature_base64 = Buffer.from("forged").toString("base64"); },
+      (source: ContentExportBundle) => { (source.release_authorization_envelope!.pieces[0] as { revoked_at: string | null }).revoked_at = "2026-08-09T00:00:00.000Z"; },
       (source: ContentExportBundle) => { source.deliverables[0].individual_review_hold = { reason: "client exception", set_by_role: "operator", set_by_name: "CaseLoad", set_at: "2026-08-09T00:00:00.000Z" }; },
       (source: ContentExportBundle) => { source.deliverables[0].unresolved_change_request = { approval_record_id: "change-1", requested_at: "2026-08-09T00:00:00.000Z", signer_name: "Client", note: "Revise" }; },
     ];
@@ -133,7 +195,7 @@ describe("DRG package protocol", () => {
     const good = buildDrgWebsitePackageExport(makeSource(), makeInput());
     if (!good.ok) throw new Error("expected good package");
     const cyclic = structuredClone(good.value);
-    cyclic.dependencies.push({ piece_id: "counsel_note-en", depends_on_piece_id: "clause_in_margin-en" });
+    cyclic.dependencies.push({ piece_id: "CN-EN", depends_on_piece_id: "CIM-EN" });
     expect(validateDrgWebsitePackageExport(cyclic).some((error) => error.message.includes("cycle"))).toBe(true);
 
     const tampered = structuredClone(good.value);

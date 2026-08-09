@@ -14,6 +14,11 @@
 import { createHash } from "crypto";
 
 import type { ContentExportBundle, ContentExportDeliverable } from "@/lib/content-period-export";
+import {
+  verifyDrgReleaseAuthorizationEnvelope,
+  type DrgReleaseAuthorizationEnvelope,
+  type DrgReleaseAuthorizationPieceSnapshot,
+} from "@/lib/drg-release-authorization-envelope";
 
 export const DRG_WEBSITE_PACKAGE_SCHEMA_VERSION = "drg.website-package-export.v1" as const;
 
@@ -64,21 +69,6 @@ export interface DrgPackageGateEvidence {
  * explicit snapshot bound to this exact deliverable version; it never
  * pretends that an approval_records row exists.
  */
-export interface DrgReleaseAuthorizationEvidence {
-  path: "individual_approval" | "standing_authorization";
-  evidence_id: string;
-  deliverable_id: string;
-  deliverable_version_id: string;
-  firm_id: string;
-  recorded_at: string;
-  /** Hash of the evidence snapshot, not merely a live authorization flag. */
-  evidence_sha256: string;
-  individual_approval_record_id?: string;
-  standing_authorization_event_id?: string;
-  standing_authorization_active?: boolean;
-  revoked_at?: string | null;
-}
-
 export interface DrgDoctrinePin {
   id: string;
   version: string;
@@ -111,7 +101,7 @@ export interface DrgWebsitePackagePiece {
   body_html: string | null;
   publication_path: string | null;
   cta_target_path: string | null;
-  release_authorization: DrgReleaseAuthorizationEvidence;
+  release_authorization: DrgReleaseAuthorizationPieceSnapshot;
   /** Deterministic verification expectations for the later website release adapter. */
   expected_metadata: {
     canonical_route: string;
@@ -140,10 +130,13 @@ export interface DrgWebsitePackageExport {
     firm_id: string;
     period_id: string;
     source_content_export_schema_version: string;
+    /** SHA of the exact sixteen-piece package authorized by the portal. */
+    source_package_sha256: string;
     doctrine: DrgDoctrinePin[];
     source_versions: DrgSourceVersion[];
     package_sha256: string;
   };
+  release_authorization_envelope: DrgReleaseAuthorizationEnvelope;
   pieces: DrgWebsitePackagePiece[];
   dependencies: DrgPackageDependency[];
 }
@@ -344,6 +337,19 @@ export function validateDrgWebsitePackageExport(raw: unknown): DrgProtocolViolat
   if (!isNonEmptyString(value.package.firm_id)) errors.push({ path: "package.firm_id", message: "must be non-empty" });
   if (!isNonEmptyString(value.package.period_id)) errors.push({ path: "package.period_id", message: "must be non-empty" });
   if (!isNonEmptyString(value.package.source_content_export_schema_version)) errors.push({ path: "package.source_content_export_schema_version", message: "must be non-empty" });
+  let verifiedEnvelope: ReturnType<typeof verifyDrgReleaseAuthorizationEnvelope> | null = null;
+  try {
+    verifiedEnvelope = verifyDrgReleaseAuthorizationEnvelope(value.release_authorization_envelope);
+    if (
+      verifiedEnvelope.envelope.package.id !== value.package.id ||
+      verifiedEnvelope.envelope.package.version !== value.package.version ||
+      verifiedEnvelope.envelope.package.firm_id !== value.package.firm_id ||
+      verifiedEnvelope.envelope.package.period_id !== value.package.period_id ||
+      verifiedEnvelope.envelope.package.package_sha256 !== value.package.source_package_sha256
+    ) errors.push({ path: "release_authorization_envelope", message: "must bind the exact source package identity, scope, and SHA" });
+  } catch (error) {
+    errors.push({ path: "release_authorization_envelope", message: error instanceof Error ? error.message : String(error) });
+  }
   if (!Array.isArray(value.package.doctrine) || value.package.doctrine.length === 0) errors.push({ path: "package.doctrine", message: "must pin at least one doctrine release" });
   else validatePins(value.package.doctrine, "package.doctrine", errors);
   if (!Array.isArray(value.package.source_versions) || value.package.source_versions.length === 0) errors.push({ path: "package.source_versions", message: "must pin at least one source version" });
@@ -383,20 +389,17 @@ export function validateDrgWebsitePackageExport(raw: unknown): DrgProtocolViolat
     if (!isNonEmptyString(piece.title)) errors.push({ path: `${path}.title`, message: "must be non-empty" });
     if (!isNonEmptyString(piece.body_html) || piece.body_html.trim().length === 0) errors.push({ path: `${path}.body_html`, message: "must be non-empty approved content" });
     const authorization = piece.release_authorization;
+    const envelopeAuthorization = verifiedEnvelope?.envelope.pieces.find((candidate) => candidate.piece_id === piece.piece_id);
     if (
       !authorization ||
-      (authorization.path !== "individual_approval" && authorization.path !== "standing_authorization") ||
-      !isNonEmptyString(authorization.evidence_id) ||
+      !envelopeAuthorization || authorization.evidence_sha256 !== envelopeAuthorization.evidence_sha256 ||
       authorization.deliverable_id !== piece.deliverable_id ||
-      authorization.deliverable_version_id !== piece.deliverable_version_id ||
+      authorization.current_version_id !== piece.deliverable_version_id ||
       authorization.firm_id !== value.package?.firm_id ||
-      !isNonEmptyString(authorization.recorded_at) ||
-      Number.isNaN(Date.parse(authorization.recorded_at)) ||
-      !isSha256(authorization.evidence_sha256)
-      || (authorization.path === "individual_approval" && !isNonEmptyString(authorization.individual_approval_record_id))
-      || (authorization.path === "standing_authorization" && (!isNonEmptyString(authorization.standing_authorization_event_id) || authorization.standing_authorization_active !== true || authorization.revoked_at !== null))
+      authorization.period_id !== value.package?.period_id ||
+      authorization.package_sha256 !== value.package?.source_package_sha256
     ) {
-      errors.push({ path: `${path}.release_authorization`, message: "must be immutable exact-version individual_approval or standing_authorization evidence" });
+      errors.push({ path: `${path}.release_authorization`, message: "must be the exact verified portal-envelope piece snapshot" });
     }
     const metadata = piece.expected_metadata;
     if (!metadata || typeof metadata !== "object") errors.push({ path: `${path}.expected_metadata`, message: "is required" });
@@ -413,6 +416,7 @@ export function validateDrgWebsitePackageExport(raw: unknown): DrgProtocolViolat
       if (asset.sha256 !== null && !isSha256(asset.sha256)) errors.push({ path: `${path}.assets[${assetIndex}].sha256`, message: "must be null or lowercase SHA-256 hex" });
     });
     if (Array.isArray(piece.assets) && !hasRequiredAsset(piece)) errors.push({ path: `${path}.assets`, message: piece.role === "checklist" ? "requires a locale-matched hash-bearing checklist PDF" : "requires a locale-matched hash-bearing website article image" });
+    if (Array.isArray(piece.assets) && authorization && piece.assets.some((asset) => asset.sha256 && !authorization.asset_sha256s.includes(asset.sha256))) errors.push({ path: `${path}.assets`, message: "contains an asset hash absent from the signed portal envelope" });
   });
   const expectedRoleKeys = [
     "en-CA:counsel_note", "en-CA:clause_in_margin", "en-CA:checklist",
@@ -435,6 +439,7 @@ export function validateDrgWebsitePackageExport(raw: unknown): DrgProtocolViolat
     const expectedHash = sha256({
       schema_version: value.schema_version,
       package: packageWithoutHash,
+      release_authorization_envelope: value.release_authorization_envelope,
       pieces: value.pieces,
       dependencies: value.dependencies,
     });
@@ -443,7 +448,7 @@ export function validateDrgWebsitePackageExport(raw: unknown): DrgProtocolViolat
   return errors;
 }
 
-function toPiece(selection: DrgWebsitePieceSelection, deliverable: ContentExportDeliverable): DrgWebsitePackagePiece {
+function toPiece(selection: DrgWebsitePieceSelection, deliverable: ContentExportDeliverable, authorization: DrgReleaseAuthorizationPieceSnapshot): DrgWebsitePackagePiece {
   const version = deliverable.current_version!;
   return {
     piece_id: selection.piece_id,
@@ -457,7 +462,7 @@ function toPiece(selection: DrgWebsitePieceSelection, deliverable: ContentExport
     body_html: version.body_html,
     publication_path: deliverable.publication_path,
     cta_target_path: deliverable.cta_target_path,
-    release_authorization: deliverable.release_authorization as DrgReleaseAuthorizationEvidence,
+    release_authorization: authorization,
     expected_metadata: selection.expected_metadata,
     assets: deliverable.artifacts
       .filter((asset) => asset.matches_current_version && asset.superseded_at === null)
@@ -490,6 +495,19 @@ export function buildDrgWebsitePackageExport(
   if (!Number.isSafeInteger(input.package_version) || input.package_version < 1) errors.push({ path: "package_version", message: "must be a positive safe integer" });
   validatePins(input.doctrine, "doctrine", errors);
   validatePins(input.source_versions, "source_versions", errors);
+  let verifiedEnvelope: ReturnType<typeof verifyDrgReleaseAuthorizationEnvelope> | null = null;
+  try {
+    verifiedEnvelope = verifyDrgReleaseAuthorizationEnvelope(source.release_authorization_envelope);
+    if (
+      verifiedEnvelope.envelope.package.id !== input.package_id ||
+      verifiedEnvelope.envelope.package.version !== input.package_version ||
+      verifiedEnvelope.envelope.package.firm_id !== source.firm.id ||
+      verifiedEnvelope.envelope.package.period_id !== source.period.id
+    ) errors.push({ path: "release_authorization_envelope", message: "does not match the requested exact package and export scope" });
+  } catch (error) {
+    errors.push({ path: "release_authorization_envelope", message: error instanceof Error ? error.message : String(error) });
+  }
+  const envelopeByDeliverable = new Map((verifiedEnvelope?.envelope.pieces ?? []).map((piece) => [piece.deliverable_id, piece]));
   const deliverables = new Map(source.deliverables.map((deliverable) => [deliverable.id, deliverable]));
   const pieces: DrgWebsitePackagePiece[] = [];
   input.pieces.forEach((selection, index) => {
@@ -510,24 +528,12 @@ export function buildDrgWebsitePackageExport(
       errors.push({ path: `pieces[${index}].deliverable_version_id`, message: "does not equal the exact current release-authorized version" });
       return;
     }
-    const authorization = deliverable.release_authorization;
-    if (
-      !authorization ||
-      (authorization.path !== "individual_approval" && authorization.path !== "standing_authorization") ||
-      !isNonEmptyString(authorization.evidence_id) ||
-      authorization.deliverable_id !== deliverable.id ||
-      authorization.deliverable_version_id !== deliverable.current_version.id ||
-      authorization.firm_id !== source.firm.id ||
-      !isNonEmptyString(authorization.recorded_at) ||
-      Number.isNaN(Date.parse(authorization.recorded_at)) ||
-      !isSha256(authorization.evidence_sha256)
-      || (authorization.path === "individual_approval" && !isNonEmptyString(authorization.individual_approval_record_id))
-      || (authorization.path === "standing_authorization" && (!isNonEmptyString(authorization.standing_authorization_event_id) || authorization.standing_authorization_active !== true || authorization.revoked_at !== null))
-    ) {
-      errors.push({ path: `deliverables.${deliverable.id}.release_authorization`, message: "canonical export must provide immutable exact-version individual_approval or active standing_authorization evidence" });
+    const authorization = envelopeByDeliverable.get(deliverable.id);
+    if (!authorization || authorization.current_version_id !== deliverable.current_version.id) {
+      errors.push({ path: `deliverables.${deliverable.id}.release_authorization`, message: "signed portal envelope does not bind this exact current version" });
       return;
     }
-    if (deliverable.unresolved_change_request || deliverable.individual_review_hold) {
+    if (deliverable.unresolved_change_request || (deliverable.individual_review_hold && authorization.path === "standing_authorization")) {
       errors.push({ path: `deliverables.${deliverable.id}.release_authorization`, message: "open change request or individual-review hold blocks package export" });
       return;
     }
@@ -535,7 +541,12 @@ export function buildDrgWebsitePackageExport(
       errors.push({ path: `pieces[${index}].locale`, message: "does not equal the Control Room deliverable locale" });
       return;
     }
-    pieces.push(toPiece(selection, deliverable));
+    const artifactHashes = deliverable.artifacts.filter((asset) => asset.matches_current_version && asset.superseded_at === null && asset.sha256).map((asset) => asset.sha256 as string);
+    if (artifactHashes.some((hash) => !authorization.asset_sha256s.includes(hash))) {
+      errors.push({ path: `deliverables.${deliverable.id}.release_authorization`, message: "signed portal envelope does not bind every current asset hash" });
+      return;
+    }
+    pieces.push(toPiece(selection, deliverable, authorization));
   });
   if (errors.length > 0) return { ok: false, value: null, errors };
   const withoutHash = {
@@ -546,9 +557,11 @@ export function buildDrgWebsitePackageExport(
       firm_id: source.firm.id,
       period_id: source.period.id,
       source_content_export_schema_version: source.schema_version,
+      source_package_sha256: verifiedEnvelope!.envelope.package.package_sha256,
       doctrine: [...input.doctrine].sort((a, b) => a.id.localeCompare(b.id)),
       source_versions: [...input.source_versions].sort((a, b) => a.source_id.localeCompare(b.source_id)),
     },
+    release_authorization_envelope: verifiedEnvelope!.envelope,
     pieces: [...pieces].sort((a, b) => a.piece_id.localeCompare(b.piece_id)),
     dependencies: [...input.dependencies].sort((a, b) => `${a.piece_id}:${a.depends_on_piece_id}`.localeCompare(`${b.piece_id}:${b.depends_on_piece_id}`)),
   };

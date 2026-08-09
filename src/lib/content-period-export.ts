@@ -48,6 +48,17 @@ import { shouldWithholdArtifactLinks } from "@/lib/artifact-links";
 import { isVersionReleaseAuthorized } from "@/lib/release-authorization";
 import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
 import { loadUnresolvedClientChangeHoldDeliverableIds } from "@/lib/deliverable-client-change-holds";
+import {
+  DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS,
+  DRG_RELEASE_AUTHORIZATION_PIECE_IDS,
+  computeDrgReleaseEvidenceSha256,
+  createSignedDrgReleaseAuthorizationEnvelope,
+  sha256DrgRelease,
+  type DrgReleaseAuthorizationEnvelope,
+  type DrgReleaseAuthorizationPieceId,
+  type DrgReleaseAuthorizationPieceSnapshot,
+} from "@/lib/drg-release-authorization-envelope";
+import { loadConfiguredDrgReleaseAuthorizationSigner } from "@/lib/drg-release-authorization-envelope-server";
 import type {
   ContentDeliverable,
   DeliverableVersion,
@@ -267,7 +278,33 @@ export interface ContentExportBundle {
   };
   deliverables: ContentExportDeliverable[];
   archived_deliverables: ContentExportArchivedDeliverable[];
+  /** Present only when the caller requests issuance for an exact staged DRG package. */
+  release_authorization_envelope?: DrgReleaseAuthorizationEnvelope | null;
 }
+
+export interface ContentExportReleasePackageBinding {
+  readonly id: string;
+  readonly version: number;
+  readonly package_sha256: string;
+}
+
+export interface BuildContentExportBundleOptions {
+  /**
+   * Requests one short-lived, portal-issued envelope. The package identity is
+   * matched against all sixteen authoritative staged version rows; callers do
+   * not supply release paths, evidence IDs, hold flags, or approvals.
+   */
+  readonly releasePackage?: ContentExportReleasePackageBinding;
+}
+
+type DrgBoundDeliverable = ContentDeliverable & { drg_piece_id?: string | null };
+type DrgBoundVersion = DeliverableVersion & {
+  drg_package_id?: string | null;
+  drg_package_version?: number | null;
+  drg_package_sha256?: string | null;
+  drg_piece_sha256?: string | null;
+  drg_source_sha256?: string | null;
+};
 
 const GENERATION_POLICY = {
   may_generate: false as const,
@@ -443,6 +480,7 @@ async function signArtifact(
  */
 export async function buildContentExportBundle(
   periodId: string,
+  options: BuildContentExportBundleOptions = {},
 ): Promise<{ ok: true; bundle: ContentExportBundle } | { ok: false; error: string }> {
   const { data: period, error: periodErr } = await supabase
     .from("content_periods")
@@ -467,8 +505,8 @@ export async function buildContentExportBundle(
   // deliverable. This is the second half of the release-authorization bar
   // (see evaluateMayPublish): without it every piece cleared through standing
   // authorization rather than individual approval reads as unpublishable.
-  const standingAuthorizationActive =
-    (await getStandingAuthorizationState(period.firm_id))?.active ?? false;
+  const standingAuthorizationState = await getStandingAuthorizationState(period.firm_id);
+  const standingAuthorizationActive = standingAuthorizationState?.active ?? false;
 
   // Double-keyed by period_id AND firm_id (defense in depth, matching this
   // codebase's existing convention elsewhere): a deliverable only belongs
@@ -480,7 +518,7 @@ export async function buildContentExportBundle(
     .eq("firm_id", period.firm_id);
   if (delErr) return { ok: false, error: delErr.message };
 
-  const rows = (allDeliverables ?? []) as ContentDeliverable[];
+  const rows = (allDeliverables ?? []) as DrgBoundDeliverable[];
   const active = rows.filter((d) => d.status !== "archived");
   const archived = rows.filter((d) => d.status === "archived");
 
@@ -519,7 +557,7 @@ export async function buildContentExportBundle(
       : Promise.resolve({ data: [] as PublicationArtifactRoleAssignment[] }),
   ]);
 
-  const allVersions = (versions ?? []) as DeliverableVersion[];
+  const allVersions = (versions ?? []) as DrgBoundVersion[];
   const versionById = new Map(allVersions.map((v) => [v.id, v]));
   const versionsByDeliverable = new Map<string, DeliverableVersion[]>();
   for (const v of allVersions) {
@@ -543,7 +581,11 @@ export async function buildContentExportBundle(
 
   const allApprovals = (approvals ?? []) as ApprovalRecord[];
   const latestApprovalByDeliverable = new Map<string, ApprovalRecord>();
+  const approvalsByDeliverable = new Map<string, ApprovalRecord[]>();
   for (const a of allApprovals) {
+    const list = approvalsByDeliverable.get(a.deliverable_id) ?? [];
+    list.push(a);
+    approvalsByDeliverable.set(a.deliverable_id, list);
     if (!latestApprovalByDeliverable.has(a.deliverable_id)) {
       latestApprovalByDeliverable.set(a.deliverable_id, a); // already ordered created_at desc
     }
@@ -786,6 +828,99 @@ export async function buildContentExportBundle(
     );
   }
 
+  let releaseAuthorizationEnvelope: DrgReleaseAuthorizationEnvelope | null = null;
+  if (options.releasePackage) {
+    const requested = options.releasePackage;
+    if (!requested.id.trim() || !Number.isSafeInteger(requested.version) || requested.version < 1 || !/^[a-f0-9]{64}$/.test(requested.package_sha256)) {
+      return { ok: false, error: "release package identity is malformed" };
+    }
+    const drgDeliverables = active.filter((deliverable) => deliverable.drg_piece_id !== null && deliverable.drg_piece_id !== undefined);
+    const byPieceId = new Map(drgDeliverables.map((deliverable) => [deliverable.drg_piece_id as string, deliverable]));
+    if (
+      drgDeliverables.length !== DRG_RELEASE_AUTHORIZATION_PIECE_IDS.length ||
+      byPieceId.size !== DRG_RELEASE_AUTHORIZATION_PIECE_IDS.length ||
+      DRG_RELEASE_AUTHORIZATION_PIECE_IDS.some((pieceId) => !byPieceId.has(pieceId))
+    ) return { ok: false, error: "release envelope requires the exact sixteen staged DRG deliverables" };
+
+    const snapshots: DrgReleaseAuthorizationPieceSnapshot[] = [];
+    for (const pieceId of DRG_RELEASE_AUTHORIZATION_PIECE_IDS) {
+      const deliverable = byPieceId.get(pieceId)!;
+      const resolved = resolveOwnedVersion(deliverable.current_version_id, deliverable.id, versionById);
+      const version = resolved.version as DrgBoundVersion | null;
+      if (
+        !version ||
+        version.drg_package_id !== requested.id ||
+        version.drg_package_version !== requested.version ||
+        version.drg_package_sha256 !== requested.package_sha256 ||
+        !version.drg_piece_sha256 || !/^[a-f0-9]{64}$/.test(version.drg_piece_sha256) ||
+        !version.drg_source_sha256 || !/^[a-f0-9]{64}$/.test(version.drg_source_sha256)
+      ) return { ok: false, error: `release package binding does not match the authoritative current version for ${pieceId}` };
+
+      const decision = isVersionReleaseAuthorized({
+        deliverableStatus: deliverable.status,
+        approvedVersionId: deliverable.approved_version_id,
+        targetVersionId: version.id,
+        versionRequiresIndividualReview: version.requires_individual_review,
+        hasUnresolvedClientChangeHold: heldDeliverableIds.has(deliverable.id),
+        standingAuthorizationActive,
+      });
+      if (!decision.authorized || !decision.authorizationPath) return { ok: false, error: `release authorization blocked for ${pieceId}: ${decision.reason}` };
+
+      const approvalRecord = decision.authorizationPath === "individual_approval"
+        ? (approvalsByDeliverable.get(deliverable.id) ?? []).find((approval) => approval.decision === "approved" && approval.version_id === version.id) ?? null
+        : null;
+      const standingEvent = decision.authorizationPath === "standing_authorization" && standingAuthorizationState?.active
+        ? standingAuthorizationState.latestEvent
+        : null;
+      if (decision.authorizationPath === "individual_approval" && !approvalRecord) return { ok: false, error: `authoritative approval record is missing for ${pieceId}` };
+      if (decision.authorizationPath === "standing_authorization" && (!standingEvent || standingEvent.event !== "enabled")) return { ok: false, error: `active standing authorization event is missing for ${pieceId}` };
+
+      const exported = exportDeliverables.find((item) => item.id === deliverable.id)!;
+      const assetHashes = new Set<string>();
+      if (version.asset_sha256 && /^[a-f0-9]{64}$/.test(version.asset_sha256)) assetHashes.add(version.asset_sha256);
+      for (const artifact of exported.artifacts) {
+        if (artifact.matches_current_version && artifact.superseded_at === null && artifact.sha256 && /^[a-f0-9]{64}$/.test(artifact.sha256)) assetHashes.add(artifact.sha256);
+      }
+      const evidenceWithoutHash: Omit<DrgReleaseAuthorizationPieceSnapshot, "evidence_sha256"> = {
+        piece_id: pieceId as DrgReleaseAuthorizationPieceId,
+        firm_id: period.firm_id,
+        period_id: period.id,
+        package_id: requested.id,
+        package_version: requested.version,
+        package_sha256: requested.package_sha256,
+        deliverable_id: deliverable.id,
+        current_version_id: version.id,
+        version_number: version.version_number,
+        piece_sha256: version.drg_piece_sha256,
+        source_sha256: version.drg_source_sha256,
+        asset_sha256s: [...assetHashes].sort(),
+        path: decision.authorizationPath,
+        approval_record_id: approvalRecord?.id ?? null,
+        standing_authorization_event_id: standingEvent?.id ?? null,
+        standing_authorization_active: Boolean(standingEvent),
+        change_hold_active: heldDeliverableIds.has(deliverable.id),
+        requires_individual_review: version.requires_individual_review,
+        revoked_at: null,
+        evidence_recorded_at: approvalRecord?.created_at ?? standingEvent!.effective_at,
+      };
+      snapshots.push({ ...evidenceWithoutHash, evidence_sha256: computeDrgReleaseEvidenceSha256(evidenceWithoutHash) });
+    }
+
+    try {
+      const issuedAt = new Date().toISOString();
+      releaseAuthorizationEnvelope = createSignedDrgReleaseAuthorizationEnvelope({
+        envelopeId: `drg-release:${requested.id}:v${requested.version}:${requested.package_sha256}`,
+        issuedAt,
+        expiresAt: new Date(Date.parse(issuedAt) + DRG_RELEASE_AUTHORIZATION_MAX_TTL_MS).toISOString(),
+        package: { id: requested.id, version: requested.version, firm_id: period.firm_id, period_id: period.id, package_sha256: requested.package_sha256 },
+        pieces: snapshots,
+        signer: loadConfiguredDrgReleaseAuthorizationSigner(),
+      });
+    } catch (error) {
+      return { ok: false, error: `release authorization envelope issuance failed: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
   const bundle: ContentExportBundle = {
     schema_version: CONTENT_EXPORT_SCHEMA_VERSION,
     generated_at: new Date().toISOString(),
@@ -803,6 +938,7 @@ export async function buildContentExportBundle(
     generation_policy: GENERATION_POLICY,
     deliverables: exportDeliverables,
     archived_deliverables: archived.map((d) => ({ id: d.id, title: d.title, status: d.status })),
+    release_authorization_envelope: releaseAuthorizationEnvelope,
   };
 
   return { ok: true, bundle };
