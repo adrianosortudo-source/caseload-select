@@ -213,6 +213,22 @@ jobs:
       - name: Run vitest
         run: npx vitest run
 
+  drg-staging-operator:
+    name: DRG staging operator safety tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run operator and live-adapter safety tests
+        run: npm run test:drg-stage-package
+
   brief-equality-eval:
     name: DR-039 brief-equality eval (language parity)
     runs-on: ubuntu-latest
