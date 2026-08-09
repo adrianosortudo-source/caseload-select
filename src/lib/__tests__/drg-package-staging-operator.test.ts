@@ -29,6 +29,7 @@ import {
 const FIRM_ID = "11111111-1111-4111-8111-111111111111";
 const PERIOD_ID = "22222222-2222-4222-8222-222222222222";
 const ACTOR_ID = "33333333-3333-4333-8333-333333333333";
+const AUTHORIZER_ID = "55555555-5555-4555-8555-555555555555";
 const AUTHORIZATION_ID = "drg-auth-2026-w33";
 const NOW = new Date("2026-08-09T15:00:00.000Z");
 const tempFolders: string[] = [];
@@ -112,6 +113,9 @@ function makeFixture(options: FixtureOptions = {}) {
     actorRole: "operator",
     actorId: ACTOR_ID,
     actorName: "DRG automation operator",
+    authorizerRole: "lawyer",
+    authorizerId: AUTHORIZER_ID,
+    authorizerName: "DRG Law approving lawyer",
     authorizedAt: options.authorizedAt ?? "2026-08-09T14:55:00.000Z",
     expiresAt: options.expiresAt ?? "2026-08-09T15:30:00.000Z",
   };
@@ -131,10 +135,17 @@ function makeFixture(options: FixtureOptions = {}) {
   ).toString("base64");
   writeFileSync(authorizationPath, `${JSON.stringify({ ...signedFields, signatureBase64 }, null, 2)}\n`, "utf8");
   const authorizationFileSha256 = sha256File(authorizationPath);
+  const signingPublicKeySha256 = createHash("sha256")
+    .update(keys.publicKey.export({ type: "spki", format: "der" }))
+    .digest("hex");
+  const trustedSigners = [{
+    signingKeyId: signedFields.signingKeyId,
+    spkiSha256: signingPublicKeySha256,
+    authorizerRoles: ["lawyer" as const],
+  }];
   const env: NodeJS.ProcessEnv = {
     NODE_ENV: "test",
     DRG_STAGING_TARGET: "staging",
-    DRG_STAGING_AUTHORIZATION_KEY_ID: signedFields.signingKeyId,
     DRG_STAGING_AUTHORIZATION_PUBLIC_KEY_PEM: keys.publicKey.export({ type: "spki", format: "pem" }).toString(),
     NEXT_PUBLIC_SUPABASE_URL: "https://safe-project.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "service-role-test-secret",
@@ -147,7 +158,7 @@ function makeFixture(options: FixtureOptions = {}) {
     "--receipt", receiptPath,
     "--target", "staging",
   ];
-  return { folder, pkg, packagePath, authorizationPath, receiptPath, packageFileSha256, authorizationFileSha256, env, args };
+  return { folder, pkg, packagePath, authorizationPath, receiptPath, packageFileSha256, authorizationFileSha256, env, args, trustedSigners, signingPublicKeySha256 };
 }
 
 function fakeClients(): { rpc: DrgPackageStagingRpcClient; storage: DrgPackageStorageClient } {
@@ -163,6 +174,12 @@ function operationReceipt(pkg: SealedDrgWeeklyPackage, writesPerformed: number, 
     operationId: "44444444-4444-4444-8444-444444444444",
     idempotencyKey: "drg-stage-idempotency-key",
     authorizationId: AUTHORIZATION_ID,
+    authorizerRole: "lawyer",
+    authorizerId: AUTHORIZER_ID,
+    authorizerName: "DRG Law approving lawyer",
+    signingKeyId: "drg-operator-test-key",
+    signingPublicKeySha256: "a".repeat(64),
+    authorizationEnvelopeSha256: "b".repeat(64),
     firmId: pkg.firmId,
     periodId: pkg.periodId,
     packageId: pkg.packageId,
@@ -230,6 +247,7 @@ describe("DRG staging operator plan-only safety", () => {
     const result = await runDrgStagingOperator({
       argv: fixture.args,
       env: fixture.env,
+      trustedSigners: fixture.trustedSigners,
       now: NOW,
       terminal: { stdinIsTTY: false, stdoutIsTTY: false },
       createClients: fakeClients,
@@ -243,6 +261,13 @@ describe("DRG staging operator plan-only safety", () => {
     expect(result.receipt?.mode).toBe("plan_only");
     expect(result.receipt?.outcome).toMatchObject({ status: "planned", writesPerformed: 0 });
     expect(result.receipt?.plan).toMatchObject({ addedCount: 16, newVersionCount: 0, skippedCount: 0, writesPerformed: 0 });
+    expect(result.receipt).toMatchObject({
+      authorizerRole: "lawyer",
+      authorizerId: AUTHORIZER_ID,
+      signingKeyId: "drg-operator-test-key",
+      signingPublicKeySha256: fixture.signingPublicKeySha256,
+      authorizationEnvelopeSha256: fixture.authorizationFileSha256,
+    });
     expect(stagePackage).not.toHaveBeenCalled();
     expect(readSnapshot).toHaveBeenCalledOnce();
     expect(JSON.parse(readFileSync(fixture.receiptPath, "utf8"))).toEqual(result.receipt);
@@ -254,6 +279,7 @@ describe("DRG staging operator plan-only safety", () => {
     const result = await runDrgStagingOperator({
       argv: fixture.args,
       env: fixture.env,
+      trustedSigners: fixture.trustedSigners,
       now: NOW,
       terminal: { stdinIsTTY: true, stdoutIsTTY: false },
       createClients,
@@ -271,6 +297,7 @@ describe("DRG staging operator plan-only safety", () => {
     const result = await runDrgStagingOperator({
       argv: fixture.args,
       env: fixture.env,
+      trustedSigners: fixture.trustedSigners,
       now: NOW,
       terminal: { stdinIsTTY: false, stdoutIsTTY: false },
       createClients,
@@ -292,6 +319,7 @@ describe("DRG staging operator plan-only safety", () => {
       const result = await runDrgStagingOperator({
         argv: fixture.args,
         env: fixture.env,
+        trustedSigners: fixture.trustedSigners,
         now: NOW,
         terminal: { stdinIsTTY: false, stdoutIsTTY: false },
         createClients,
@@ -318,6 +346,7 @@ describe("DRG staging operator plan-only safety", () => {
       const result = await runDrgStagingOperator({
         argv: fixture.args,
         env: fixture.env,
+        trustedSigners: fixture.trustedSigners,
         now: NOW,
         terminal: { stdinIsTTY: false, stdoutIsTTY: false },
         createClients,
@@ -332,11 +361,81 @@ describe("DRG staging operator plan-only safety", () => {
     }
   });
 
+  it("rejects an operator self-authorizing with a non-authoritative role", async () => {
+    const fixture = makeFixture({
+      mutateAuthorization: (authorization) => ({
+        ...authorization,
+        authorizerRole: "operator",
+      } as unknown as DrgPackageStagingAuthorization),
+    });
+    const createClients = vi.fn(fakeClients);
+    const result = await runDrgStagingOperator({
+      argv: fixture.args,
+      env: fixture.env,
+      trustedSigners: fixture.trustedSigners,
+      now: NOW,
+      terminal: { stdinIsTTY: false, stdoutIsTTY: false },
+      createClients,
+      log: vi.fn(),
+      logError: vi.fn(),
+    });
+    expect(result.exitCode).toBe(1);
+    expect(createClients).not.toHaveBeenCalled();
+    expect(existsSync(fixture.receiptPath)).toBe(false);
+  });
+
+  it("rejects a fresh valid key pair even when mutable runtime env supplies its matching PEM", async () => {
+    const fixture = makeFixture();
+    const forgedKeys = generateKeyPairSync("ed25519");
+    const originalEnvelope = JSON.parse(readFileSync(fixture.authorizationPath, "utf8")) as SignedDrgStagingAuthorizationEnvelope;
+    const forgedSignedFields: Omit<SignedDrgStagingAuthorizationEnvelope, "signatureBase64"> = {
+      schemaVersion: originalEnvelope.schemaVersion,
+      packageFileSha256: originalEnvelope.packageFileSha256,
+      recordedAt: originalEnvelope.recordedAt,
+      signingKeyId: originalEnvelope.signingKeyId,
+      signatureAlgorithm: originalEnvelope.signatureAlgorithm,
+      authorization: originalEnvelope.authorization,
+    };
+    const forgedSignature = sign(
+      null,
+      new TextEncoder().encode(authorizationEnvelopeSigningPayload(forgedSignedFields)),
+      forgedKeys.privateKey,
+    ).toString("base64");
+    writeFileSync(
+      fixture.authorizationPath,
+      `${JSON.stringify({ ...forgedSignedFields, signatureBase64: forgedSignature }, null, 2)}\n`,
+      "utf8",
+    );
+    const forgedAuthorizationSha = sha256File(fixture.authorizationPath);
+    const args = [...fixture.args];
+    args[args.indexOf("--authorization-sha256") + 1] = forgedAuthorizationSha;
+    const env = {
+      ...fixture.env,
+      DRG_STAGING_AUTHORIZATION_KEY_ID: originalEnvelope.signingKeyId,
+      DRG_STAGING_AUTHORIZATION_PUBLIC_KEY_PEM: forgedKeys.publicKey.export({ type: "spki", format: "pem" }).toString(),
+    };
+    const createClients = vi.fn(fakeClients);
+    const result = await runDrgStagingOperator({
+      argv: args,
+      env,
+      trustedSigners: fixture.trustedSigners,
+      now: NOW,
+      terminal: { stdinIsTTY: false, stdoutIsTTY: false },
+      createClients,
+      log: vi.fn(),
+      logError: vi.fn(),
+    });
+    expect(result.exitCode).toBe(1);
+    expect(createClients).not.toHaveBeenCalled();
+    expect(existsSync(fixture.receiptPath)).toBe(false);
+  });
+
   it("requires a new receipt destination and never overwrites the first receipt", async () => {
     const fixture = makeFixture();
     const first = await runDrgStagingOperator({
       argv: fixture.args,
       env: fixture.env,
+      trustedSigners: fixture.trustedSigners,
       now: NOW,
       terminal: { stdinIsTTY: false, stdoutIsTTY: false },
       createClients: fakeClients,
@@ -349,6 +448,7 @@ describe("DRG staging operator plan-only safety", () => {
     const second = await runDrgStagingOperator({
       argv: fixture.args,
       env: fixture.env,
+      trustedSigners: fixture.trustedSigners,
       now: NOW,
       terminal: { stdinIsTTY: false, stdoutIsTTY: false },
       createClients,
@@ -369,6 +469,7 @@ describe("DRG staging operator plan-only safety", () => {
     const result = await runDrgStagingOperator({
       argv: fixture.args,
       env,
+      trustedSigners: fixture.trustedSigners,
       now: NOW,
       terminal: { stdinIsTTY: false, stdoutIsTTY: false },
       createClients: () => { throw new Error(`client failed with ${secret}`); },
@@ -395,6 +496,7 @@ describe("DRG staging operator explicit execution", () => {
     const result = await runDrgStagingOperator({
       argv: [...args, "--execute"],
       env,
+      trustedSigners: fixture.trustedSigners,
       now: NOW,
       terminal: { stdinIsTTY: false, stdoutIsTTY: false },
       createClients,
@@ -412,6 +514,7 @@ describe("DRG staging operator explicit execution", () => {
     const result = await runDrgStagingOperator({
       argv: [...fixture.args, "--execute"],
       env: { ...fixture.env, NEXT_PUBLIC_SUPABASE_URL: "https://ssxryjxifwiivghglqer.supabase.co" },
+      trustedSigners: fixture.trustedSigners,
       now: NOW,
       terminal: { stdinIsTTY: false, stdoutIsTTY: false },
       createClients,
@@ -439,6 +542,7 @@ describe("DRG staging operator explicit execution", () => {
     const result = await runDrgStagingOperator({
       argv: [...fixture.args, "--execute"],
       env: fixture.env,
+      trustedSigners: fixture.trustedSigners,
       now: NOW,
       terminal: { stdinIsTTY: false, stdoutIsTTY: false },
       createClients: () => clients,
@@ -462,6 +566,7 @@ describe("DRG staging operator explicit execution", () => {
       .mockResolvedValueOnce(reconciledResult(fixture.pkg, 0, true));
     const common = {
       env: fixture.env,
+      trustedSigners: fixture.trustedSigners,
       now: NOW,
       terminal: { stdinIsTTY: false, stdoutIsTTY: false } as const,
       createClients: fakeClients,
