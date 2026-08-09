@@ -349,16 +349,16 @@ describe("authorized DRG package staging adapter", () => {
     expect(ready.status).toBe("ready");
     expect(ready.pieces).toHaveLength(16);
 
-    const drifted = {
-      ...snapshot,
-      deliverables: snapshot.deliverables.map((row, index) => index === 0
-        ? { ...row, approvedVersionId: randomUUID() }
-        : row),
+    const heldReleaseAuthorization = {
+      ...releaseAuthorization,
+      pieces: releaseAuthorization.pieces.map((piece, index) => index === 0
+        ? { ...piece, changeHoldActive: true }
+        : piece),
     };
-    rpc.mockResolvedValueOnce({ data: drifted, error: null });
+    rpc.mockResolvedValueOnce({ data: snapshot, error: null });
     const blocked = await projectLiveApprovedDrgPublishingKit({
       pkg,
-      releaseAuthorization,
+      releaseAuthorization: heldReleaseAuthorization,
       sha256,
       rpc: { rpc } as DrgPackageStagingRpcClient,
     });

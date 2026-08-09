@@ -126,19 +126,16 @@ describe.skipIf(!DB_URL)("stage_drg_weekly_package_atomic (real Postgres)", () =
   it("rolls back all prior piece inserts when stored PDF byte evidence mismatches", async () => {
     const now = Date.now();
     const rejectedAuthorization = {
-      schemaVersion: "drg-package-staging-authorization/v1",
-      authorizationId: randomUUID(),
+      schemaVersion: "drg-package-staging-execution-authorization/v1",
+      executionAuthorizationId: randomUUID(),
       firmId,
       periodId,
       packageId: pkg.packageId,
       packageVersion: pkg.packageVersion,
       packageSha256: pkg.packageSha256,
-      actorRole: "operator",
-      actorId,
-      actorName: "Integration Operator",
-      authorizerRole: "lawyer",
-      authorizerId: actorId,
-      authorizerName: "Integration Lawyer",
+      operatorRole: "operator",
+      operatorId: actorId,
+      operatorName: "Integration Operator",
       authorizedAt: new Date(now - 60_000).toISOString(),
       expiresAt: new Date(now + 10 * 60_000).toISOString(),
       signingKeyId: "drg-integration-lawyer-key",
@@ -177,34 +174,31 @@ describe.skipIf(!DB_URL)("stage_drg_weekly_package_atomic (real Postgres)", () =
     );
     expect(afterRejection.rows[0]).toEqual({ operations: 0, deliverables: 0, versions: 0 });
 
-    const wrongRoleAuthorization = {
+    const releaseFieldAuthorization = {
       ...rejectedAuthorization,
-      authorizationId: randomUUID(),
-      authorizerRole: "operator",
+      executionAuthorizationId: randomUUID(),
+      authorizerRole: "lawyer",
     };
     await expect(connA.query(
       `select public.stage_drg_weekly_package_atomic($1::jsonb, $2::text, $3::jsonb, $4::jsonb, $5::jsonb)`,
-      [JSON.stringify(pkg), canonicalPackage, JSON.stringify(plan), JSON.stringify(wrongRoleAuthorization), JSON.stringify(evidence)],
-    )).rejects.toThrow(/authorizer/i);
+      [JSON.stringify(pkg), canonicalPackage, JSON.stringify(plan), JSON.stringify(releaseFieldAuthorization), JSON.stringify(evidence)],
+    )).rejects.toThrow(/execution authorization/i);
 
   }, 30_000);
 
   it("serializes concurrent identical calls into one commit and one zero-write replay", async () => {
     const now = Date.now();
     const authorization = {
-      schemaVersion: "drg-package-staging-authorization/v1",
-      authorizationId,
+      schemaVersion: "drg-package-staging-execution-authorization/v1",
+      executionAuthorizationId: authorizationId,
       firmId,
       periodId,
       packageId: pkg.packageId,
       packageVersion: pkg.packageVersion,
       packageSha256: pkg.packageSha256,
-      actorRole: "operator",
-      actorId,
-      actorName: "Integration Operator",
-      authorizerRole: "lawyer",
-      authorizerId: actorId,
-      authorizerName: "Integration Lawyer",
+      operatorRole: "operator",
+      operatorId: actorId,
+      operatorName: "Integration Operator",
       authorizedAt: new Date(now - 60_000).toISOString(),
       expiresAt: new Date(now + 10 * 60_000).toISOString(),
       signingKeyId: "drg-integration-lawyer-key",
@@ -233,10 +227,10 @@ describe.skipIf(!DB_URL)("stage_drg_weekly_package_atomic (real Postgres)", () =
 
     expect(receipts.map((item) => item.replay).sort()).toEqual([false, true]);
     expect(receipts.find((item) => item.replay === false)).toMatchObject({
-      schemaVersion: "drg-package-staging-receipt/v1",
+      schemaVersion: "drg-package-staging-execution-receipt/v1",
       packageSha256: pkg.packageSha256,
-      authorizerRole: "lawyer",
-      authorizerId: actorId,
+      operatorRole: "operator",
+      operatorId: actorId,
       signingKeyId: "drg-integration-lawyer-key",
       signingPublicKeySha256: "a".repeat(64),
       authorizationEnvelopeSha256: "b".repeat(64),
@@ -271,7 +265,7 @@ describe.skipIf(!DB_URL)("stage_drg_weekly_package_atomic (real Postgres)", () =
       [firmId, periodId],
     );
     const prior = operation.rows[0];
-    const drifted = { ...prior.authorization_payload, actorName: "Different Operator" };
+    const drifted = { ...prior.authorization_payload, operatorName: "Different Operator" };
     await expect(connA.query(
       `select public.stage_drg_weekly_package_atomic($1::jsonb, $2, $3::jsonb, $4::jsonb, $5::jsonb)`,
       [JSON.stringify(pkg), prior.package_canonical, JSON.stringify(plan), JSON.stringify(drifted), JSON.stringify(prior.pdf_evidence)],
