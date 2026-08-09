@@ -124,7 +124,7 @@ export interface DrgPackageBlocker {
     | "unexpected_state_piece"
     | "deliverable_identity_mismatch"
     | "current_version_unresolved"
-    | "approval_mismatch";
+    | "release_authorization_mismatch";
   readonly pieceId: string | null;
   readonly message: string;
 }
@@ -230,8 +230,10 @@ export interface DrgPackageReconciliation {
   readonly blockers: readonly DrgPackageBlocker[];
 }
 
-export interface DrgPackageApproval {
-  readonly decision: "approved";
+export interface DrgPackageReleaseAuthorization {
+  /** Immutable client release path; staging is intentionally not this gate. */
+  readonly releasePath: "individual_approval" | "standing_authorization";
+  readonly releaseEvidenceId: string;
   readonly packageId: string;
   readonly packageVersion: number;
   readonly packageSha256: string;
@@ -243,6 +245,13 @@ export interface DrgPackageApproval {
     readonly versionId: string;
     readonly versionNumber: number;
     readonly pieceSha256: string;
+    /** Evidence stays bound to the sealed source and asset identity. */
+    readonly sourceSha256: string;
+    readonly assetSha256: string | null;
+    readonly releaseEvidenceSha256: string;
+    readonly changeHoldActive: boolean;
+    readonly requiresIndividualReview: boolean;
+    readonly standingAuthorizationEventId?: string;
   }[];
 }
 
@@ -257,7 +266,7 @@ export interface PublishingKitPieceProjection {
   readonly payload: DrgVersionPayload;
 }
 
-export type ApprovedPublishingKitProjection =
+export type ReleaseAuthorizedPublishingKitProjection =
   | {
       readonly status: "ready";
       readonly packageSha256: string;
@@ -604,68 +613,70 @@ export function reconcileDrgPackageStaging(
   } as const);
 }
 
-export function projectApprovedDrgPublishingKit(
+export function projectReleaseAuthorizedDrgPublishingKit(
   pkg: SealedDrgWeeklyPackage,
   snapshot: DrgPortalStagingSnapshot,
-  approval: DrgPackageApproval,
+  releaseAuthorization: DrgPackageReleaseAuthorization,
   sha256: Sha256Function,
-): ApprovedPublishingKitProjection {
+): ReleaseAuthorizedPublishingKitProjection {
   const blockers = verifyPackage(pkg, sha256);
   const stagingReconciliation = reconcileDrgPackageStaging(pkg, snapshot, sha256);
   if (stagingReconciliation.status !== "exact_match") {
     blockers.push(
       ...stagingReconciliation.blockers,
       {
-        code: "approval_mismatch",
+        code: "release_authorization_mismatch",
         pieceId: null,
         message: "Publishing Kit requires an exact sixteen-piece staging reconciliation",
       },
     );
   }
   if (
-    approval.decision !== "approved" ||
-    approval.packageId !== pkg.packageId ||
-    approval.packageVersion !== pkg.packageVersion ||
-    approval.packageSha256 !== pkg.packageSha256
+    (releaseAuthorization.releasePath !== "individual_approval" && releaseAuthorization.releasePath !== "standing_authorization") ||
+    !releaseAuthorization.releaseEvidenceId.trim() ||
+    releaseAuthorization.packageId !== pkg.packageId ||
+    releaseAuthorization.packageVersion !== pkg.packageVersion ||
+    releaseAuthorization.packageSha256 !== pkg.packageSha256
   ) {
-    blockers.push({ code: "approval_mismatch", pieceId: null, message: "approval is not bound to this exact package SHA and version" });
+    blockers.push({ code: "release_authorization_mismatch", pieceId: null, message: "release authorization is not bound to this exact package SHA and version" });
   }
-  if (!approval.approvedBy.trim() || Number.isNaN(Date.parse(approval.approvedAt))) {
-    blockers.push({ code: "approval_mismatch", pieceId: null, message: "approval requires a named actor and valid timestamp" });
+  if (!releaseAuthorization.approvedBy.trim() || Number.isNaN(Date.parse(releaseAuthorization.approvedAt))) {
+    blockers.push({ code: "release_authorization_mismatch", pieceId: null, message: "release authorization requires a named actor and valid timestamp" });
   }
   const stateByPiece = new Map(snapshot.deliverables.map((row) => [row.pieceId, row]));
-  const approvalByPiece = new Map(approval.pieces.map((piece) => [piece.pieceId, piece]));
-  if (approvalByPiece.size !== DRG_SIXTEEN_PIECE_REGISTRY.length || approval.pieces.length !== DRG_SIXTEEN_PIECE_REGISTRY.length) {
-    blockers.push({ code: "approval_mismatch", pieceId: null, message: "approval must bind exactly sixteen unique package pieces" });
+  const releaseAuthorizationByPiece = new Map(releaseAuthorization.pieces.map((piece) => [piece.pieceId, piece]));
+  if (releaseAuthorizationByPiece.size !== DRG_SIXTEEN_PIECE_REGISTRY.length || releaseAuthorization.pieces.length !== DRG_SIXTEEN_PIECE_REGISTRY.length) {
+    blockers.push({ code: "release_authorization_mismatch", pieceId: null, message: "release authorization must bind exactly sixteen unique package pieces" });
   }
-  if (approval.pieces.some((piece) => !piece.deliverableId.trim() || !piece.versionId.trim() || !Number.isInteger(piece.versionNumber) || piece.versionNumber < 1 || !SHA256_RE.test(piece.pieceSha256))) {
-    blockers.push({ code: "approval_mismatch", pieceId: null, message: "approval contains malformed piece/version identity" });
+  if (releaseAuthorization.pieces.some((piece) => !piece.deliverableId.trim() || !piece.versionId.trim() || !Number.isInteger(piece.versionNumber) || piece.versionNumber < 1 || !SHA256_RE.test(piece.pieceSha256) || !SHA256_RE.test(piece.sourceSha256) || !SHA256_RE.test(piece.releaseEvidenceSha256))) {
+    blockers.push({ code: "release_authorization_mismatch", pieceId: null, message: "release authorization contains malformed piece/version identity" });
   }
 
   const pieces: PublishingKitPieceProjection[] = [];
   for (const piece of pkg.pieces) {
     const row = stateByPiece.get(piece.id);
-    const approved = approvalByPiece.get(piece.id);
+    const authorized = releaseAuthorizationByPiece.get(piece.id);
     const version = row?.currentVersion;
     const exact = Boolean(
-      row && approved && version &&
+      row && authorized && version &&
       row.currentVersionId === version.id &&
-      row.approvedVersionId === version.id &&
-      row.approval?.decision === "approved" &&
-      row.approval.versionId === version.id &&
-      row.approval.packageSha256 === pkg.packageSha256 &&
-      approved.deliverableId === row.deliverableId &&
-      approved.versionId === version.id &&
-      approved.versionNumber === version.versionNumber &&
-      approved.pieceSha256 === piece.pieceSha256 &&
+      (releaseAuthorization.releasePath === "individual_approval"
+        ? row.approvedVersionId === version.id && row.approval?.decision === "approved" && row.approval.versionId === version.id && row.approval.packageSha256 === pkg.packageSha256
+        : Boolean(authorized.standingAuthorizationEventId) && !authorized.changeHoldActive && !authorized.requiresIndividualReview) &&
+      authorized.deliverableId === row.deliverableId &&
+      authorized.versionId === version.id &&
+      authorized.versionNumber === version.versionNumber &&
+      authorized.pieceSha256 === piece.pieceSha256 &&
+      authorized.sourceSha256 === piece.sourceSha256 &&
+      authorized.assetSha256 === (piece.payload.kind === "pdf" ? piece.payload.assetSha256 : null) &&
       version.packageId === pkg.packageId &&
       version.packageVersion === pkg.packageVersion &&
       version.packageSha256 === pkg.packageSha256 &&
       version.pieceSha256 === piece.pieceSha256 &&
       version.sourceSha256 === piece.sourceSha256,
     );
-    if (!exact || !row || !approved || !version) {
-      blockers.push({ code: "approval_mismatch", pieceId: piece.id, message: `${piece.id} is not approved on its exact current package version` });
+    if (!exact || !row || !authorized || !version) {
+      blockers.push({ code: "release_authorization_mismatch", pieceId: piece.id, message: `${piece.id} is not release-authorized on its exact current package version` });
       continue;
     }
     pieces.push({

@@ -6,10 +6,10 @@ import {
   DRG_SIXTEEN_PIECE_REGISTRY,
   canonicalJson,
   planDrgPackageStaging,
-  projectApprovedDrgPublishingKit,
+  projectReleaseAuthorizedDrgPublishingKit,
   reconcileDrgPackageStaging,
   sealDrgWeeklyPackage,
-  type DrgPackageApproval,
+  type DrgPackageReleaseAuthorization,
   type DrgPortalStagingSnapshot,
   type DrgWeeklyPackageDraft,
   type SealedDrgWeeklyPackage,
@@ -127,12 +127,13 @@ function makeSnapshot(pkg: SealedDrgWeeklyPackage, approved = false): DrgPortalS
   };
 }
 
-function makeApproval(
+function makeReleaseAuthorization(
   pkg: SealedDrgWeeklyPackage,
   snapshot: DrgPortalStagingSnapshot,
-): DrgPackageApproval {
+): DrgPackageReleaseAuthorization {
   return {
-    decision: "approved",
+    releasePath: "individual_approval",
+    releaseEvidenceId: "approval-record-1",
     packageId: pkg.packageId,
     packageVersion: pkg.packageVersion,
     packageSha256: pkg.packageSha256,
@@ -146,6 +147,11 @@ function makeApproval(
         versionId: row.currentVersion!.id,
         versionNumber: row.currentVersion!.versionNumber,
         pieceSha256: piece.pieceSha256,
+        sourceSha256: piece.sourceSha256,
+        assetSha256: piece.payload.kind === "pdf" ? piece.payload.assetSha256 : null,
+        releaseEvidenceSha256: sha256(`approval:${piece.id}`),
+        changeHoldActive: false,
+        requiresIndividualReview: false,
       };
     }),
   };
@@ -283,7 +289,7 @@ describe("sealed package identity", () => {
     expect(plan.blockers.some((blocker) => blocker.message.includes("canonical registry order"))).toBe(true);
 
     const snapshot = makeSnapshot(tampered, true);
-    const projection = projectApprovedDrgPublishingKit(tampered, snapshot, makeApproval(tampered, snapshot), sha256);
+    const projection = projectReleaseAuthorizedDrgPublishingKit(tampered, snapshot, makeReleaseAuthorization(tampered, snapshot), sha256);
     expect(projection.status).toBe("blocked");
     if (projection.status !== "blocked") throw new Error("expected blocked projection");
     expect(projection.pieces).toEqual([]);
@@ -425,8 +431,8 @@ describe("approved Publishing Kit projection", () => {
   it("projects all sixteen payloads only from each exact current approved version", () => {
     const pkg = makePackage();
     const snapshot = makeSnapshot(pkg, true);
-    const approval = makeApproval(pkg, snapshot);
-    const projection = projectApprovedDrgPublishingKit(pkg, snapshot, approval, sha256);
+    const releaseAuthorization = makeReleaseAuthorization(pkg, snapshot);
+    const projection = projectReleaseAuthorizedDrgPublishingKit(pkg, snapshot, releaseAuthorization, sha256);
     expect(projection.status).toBe("ready");
     if (projection.status !== "ready") throw new Error("expected ready projection");
     expect(projection.pieces).toHaveLength(16);
@@ -437,11 +443,11 @@ describe("approved Publishing Kit projection", () => {
     expect(projection.writesPerformed).toBe(0);
   });
 
-  it("returns zero pieces when the aggregate approval names another package SHA", () => {
+  it("returns zero pieces when aggregate release authorization names another package SHA", () => {
     const pkg = makePackage();
     const snapshot = makeSnapshot(pkg, true);
-    const approval = { ...makeApproval(pkg, snapshot), packageSha256: sha256("other-package") };
-    const projection = projectApprovedDrgPublishingKit(pkg, snapshot, approval, sha256);
+    const releaseAuthorization = { ...makeReleaseAuthorization(pkg, snapshot), packageSha256: sha256("other-package") };
+    const projection = projectReleaseAuthorizedDrgPublishingKit(pkg, snapshot, releaseAuthorization, sha256);
     expect(projection.status).toBe("blocked");
     if (projection.status !== "blocked") throw new Error("expected blocked projection");
     expect(projection.pieces).toEqual([]);
@@ -460,19 +466,19 @@ describe("approved Publishing Kit projection", () => {
         ...snapshot.deliverables.slice(1),
       ],
     };
-    const projection = projectApprovedDrgPublishingKit(pkg, superseded, makeApproval(pkg, snapshot), sha256);
+    const projection = projectReleaseAuthorizedDrgPublishingKit(pkg, superseded, makeReleaseAuthorization(pkg, snapshot), sha256);
     expect(projection.status).toBe("blocked");
     if (projection.status !== "blocked") throw new Error("expected blocked projection");
     expect(projection.pieces).toEqual([]);
     expect(projection.blockers.some((blocker) => blocker.pieceId === "CN-EN")).toBe(true);
   });
 
-  it("returns zero pieces for a partial per-piece approval", () => {
+  it("returns zero pieces for partial per-piece release authorization", () => {
     const pkg = makePackage();
     const snapshot = makeSnapshot(pkg, true);
-    const approval = makeApproval(pkg, snapshot);
-    const partial = { ...approval, pieces: approval.pieces.slice(0, 15) };
-    const projection = projectApprovedDrgPublishingKit(pkg, snapshot, partial, sha256);
+    const releaseAuthorization = makeReleaseAuthorization(pkg, snapshot);
+    const partial = { ...releaseAuthorization, pieces: releaseAuthorization.pieces.slice(0, 15) };
+    const projection = projectReleaseAuthorizedDrgPublishingKit(pkg, snapshot, partial, sha256);
     expect(projection.status).toBe("blocked");
     if (projection.status !== "blocked") throw new Error("expected blocked projection");
     expect(projection.pieces).toEqual([]);
@@ -482,7 +488,7 @@ describe("approved Publishing Kit projection", () => {
   it.each(INVALID_PROJECTION_TOPOLOGIES)("returns zero pieces when staging topology has %s", (_label, mutate) => {
     const pkg = makePackage();
     const snapshot = makeSnapshot(pkg, true);
-    const projection = projectApprovedDrgPublishingKit(pkg, mutate(snapshot), makeApproval(pkg, snapshot), sha256);
+    const projection = projectReleaseAuthorizedDrgPublishingKit(pkg, mutate(snapshot), makeReleaseAuthorization(pkg, snapshot), sha256);
     expect(projection.status).toBe("blocked");
     if (projection.status !== "blocked") throw new Error("expected blocked projection");
     expect(projection.pieces).toEqual([]);
