@@ -331,8 +331,10 @@ describe("sealed package identity", () => {
     if (plan.kind !== "no_plan") throw new Error("expected no plan");
     expect(plan.blockers.some((blocker) => blocker.message.includes("canonical registry order"))).toBe(true);
 
+    const canonicalSnapshot = makeSnapshot(canonical, true);
+    const releaseAuthorization = makeReleaseAuthorization(canonical, canonicalSnapshot);
     const snapshot = makeSnapshot(tampered, true);
-    const projection = projectReleaseAuthorizedDrgPublishingKit(tampered, snapshot, makeReleaseAuthorization(tampered, snapshot), sha256);
+    const projection = projectReleaseAuthorizedDrgPublishingKit(tampered, snapshot, releaseAuthorization, sha256);
     expect(projection.status).toBe("blocked");
     if (projection.status !== "blocked") throw new Error("expected blocked projection");
     expect(projection.pieces).toEqual([]);
