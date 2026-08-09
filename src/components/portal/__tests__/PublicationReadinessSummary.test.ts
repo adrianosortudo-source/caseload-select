@@ -289,7 +289,7 @@ describe("PublicationReadinessSummary: DR-097 explicit lifecycle rendering", () 
       }),
     );
 
-    expect(html).toContain("Ready to activate");
+    expect(html).toContain("Publication readiness");
     expect(html).not.toContain("historical, not reconciled");
     expect(html).not.toContain("bg-red-fail");
     // "Setup required" as a bucket label must not appear since nothing

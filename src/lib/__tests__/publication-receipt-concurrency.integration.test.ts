@@ -301,7 +301,7 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
     // versionOld.
     await connA.query("commit");
 
-    await expect(insertStale).rejects.toThrow(/approved_version_id/i);
+    await expect(insertStale).rejects.toThrow(/exact current version \(version drift\)/i);
 
     // Confirm no stale-version receipt row exists.
     const { rows } = await connA.query(
@@ -369,7 +369,7 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
          values ($1, $2, $3, 'linkedin_post', $4, now(), 'https://example.test/no-claim', 'operator', 'Test Operator', null)`,
         [firmId, deliverableId2, placementId2, versionId2],
       ),
-    ).rejects.toThrow(/claim_id/i);
+    ).rejects.toThrow(/active release claim/i);
   }, 30000);
 
   it("rejects a receipt whose actor does not match the claim's claimed-by identity, leaving the claim active", async () => {
@@ -429,7 +429,7 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
     expect(rejectedResult).toBeDefined();
     if (rejectedResult && rejectedResult.status === "rejected") {
       const message = String(rejectedResult.reason?.message ?? rejectedResult.reason);
-      expect(message).toMatch(/claim_id|not active/i);
+      expect(message).toMatch(/active release claim/i);
     }
 
     const { rows } = await connA.query(`select count(*)::int as n from publication_receipts where claim_id = $1`, [claimId]);
@@ -480,7 +480,7 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
          values ($1, $2, $3, 'linkedin_post', $4, now(), 'https://example.test/null-actor', 'operator', null, 'Anonymous', $5)`,
         [firm, deliverable, placement, version, claimId],
       ),
-    ).rejects.toThrow(/authenticated operator identity/i);
+    ).rejects.toThrow(/authenticated claim actor/i);
 
     const { rows } = await connA.query(`select status from publication_placement_claims where id = $1`, [claimId]);
     expect(rows[0].status).toBe("active");

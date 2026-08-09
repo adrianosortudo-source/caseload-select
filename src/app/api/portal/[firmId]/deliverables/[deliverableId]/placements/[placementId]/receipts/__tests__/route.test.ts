@@ -244,7 +244,10 @@ describe("POST receipts: entity and validation gates (regression)", () => {
   });
 
   it("404s when the deliverable does not belong to this firm", async () => {
-    state.detail = { deliverable: { firm_id: "other-firm", status: "approved", approved_version_id: VERSION, current_version_id: VERSION } };
+    state.detail = {
+      deliverable: { firm_id: "other-firm", status: "approved", approved_version_id: VERSION, current_version_id: VERSION },
+      versions: [{ id: VERSION, requires_individual_review: false }],
+    };
     const res = await POST(makePostReq({ approved_version_id: VERSION, claim_id: CLAIM_ID, public_url: "https://example.test" }), params());
     expect(res.status).toBe(404);
   });

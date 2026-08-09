@@ -545,7 +545,7 @@ describe("all eighteen gap classifications are independently reachable", () => {
     expect(wrapperFact!.authorityRequired).toMatch(/Firm's lawyer/);
     expect(wrapperFact!.canonicalSourceConsulted).toMatch(/approved_version_id/);
     expect(wrapperFact!.canonicalSourceConsulted).toMatch(/standing_publishing_authorizations/);
-    expect(wrapperFact!.factualEvidence).toMatch(/no active standing publishing authorization/);
+    expect(wrapperFact!.factualEvidence).toMatch(/standing publishing authorization only covers a deliverable whose exact current version is in_review/);
   });
 
   // ─── Two-path release authorization: the version-bound source edge must
