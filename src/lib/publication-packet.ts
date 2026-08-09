@@ -544,7 +544,14 @@ export function assemblePublicationPacket(input: AssemblePublicationPacketInput)
 
   const readiness = deliverable.status === "archived"
     ? { ready: false, excluded: true }
-    : evaluateDeliverableReadiness({ deliverable, ...input.readinessInput });
+    : evaluateDeliverableReadiness({
+        deliverable,
+        ...input.readinessInput,
+        // Reuse the exact result already used for the packet's authorization
+        // check. A standing-authorized version must not be legalAuthorized
+        // here yet blocked by an individual-only readiness interpretation.
+        releaseAuthorization: legal.result ?? undefined,
+      });
   // Makes a readiness-only failure (e.g. webpage_artifact/webpage_validated/
   // localized_route -- requirements evaluateDeliverableReadiness tracks
   // internally with no prior counterpart here) a real, named, reasoned
