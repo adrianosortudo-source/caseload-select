@@ -2,13 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { computeOverview } from "@/lib/deliverables-pure";
+import type { PlanDeliverable } from "@/lib/deliverables-pure";
 
 const root = process.cwd();
 const read = (...parts: string[]) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const item = (id: string, status: "in_review" | "changes_requested" = "in_review") => ({
   id, title: id, kicker: null, status, content_kind: "text", format: null,
   period_id: null, publish_date: null, published_at: null, current_version_id: `${id}-v2`, requires_individual_review: false,
-});
+} as PlanDeliverable);
 
 describe("client review authorization projection", () => {
   it("counts only canonical standing-authorized ids; a V1 change hold on V2 and an individual-review item fail closed", () => {

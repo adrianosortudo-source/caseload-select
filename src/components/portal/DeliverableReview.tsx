@@ -908,7 +908,6 @@ function FloatingAnnotationPopover({
   onDismiss,
   onPosted,
   supportPreview = false,
-  unresolvedHold = null,
 }: {
   annotation: DeliverableAnnotation;
   position: AnnotationPosition;
@@ -919,24 +918,10 @@ function FloatingAnnotationPopover({
   onDismiss: () => void;
   onPosted: () => Promise<void>;
   supportPreview?: boolean;
-  unresolvedHold?: { id: string; versionId: string } | null;
 }) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [resolvingHold, setResolvingHold] = useState(false);
-
-  async function resolveHold() {
-    if (!unresolvedHold || !selectedVersion) return;
-    setResolvingHold(true); setError(null);
-    try {
-      const res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/change-holds/${unresolvedHold.id}/resolve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version_id: unresolvedHold.versionId }) });
-      const json = await res.json();
-      if (!res.ok || !json.ok) setError(json.error ?? "Could not resolve the requested changes hold.");
-      else await onSigned();
-    } catch (err) { setError(err instanceof Error ? err.message : "Network error."); }
-    finally { setResolvingHold(false); }
-  }
   const wrapRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -1482,6 +1467,7 @@ function SignOffPanel({
   status,
   onSigned,
   supportPreview = false,
+  unresolvedHold = null,
 }: {
   firmId: string;
   deliverableId: string;
@@ -1496,6 +1482,7 @@ function SignOffPanel({
   status: ContentDeliverable["status"];
   onSigned: () => Promise<void> | void;
   supportPreview?: boolean;
+  unresolvedHold?: { id: string; versionId: string } | null;
 }) {
   const [decision, setDecision] = useState<"approved" | "changes_requested">("approved");
   const [agreed, setAgreed] = useState(false);
@@ -1503,6 +1490,16 @@ function SignOffPanel({
   const [attachments, setAttachments] = useState<DeliverableAttachment[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolvingHold, setResolvingHold] = useState(false);
+  async function resolveHold() {
+    if (!unresolvedHold) return;
+    setResolvingHold(true); setError(null);
+    try {
+      const res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/change-holds/${unresolvedHold.id}/resolve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version_id: unresolvedHold.versionId }) });
+      const json = await res.json();
+      if (!res.ok || !json.ok) setError(json.error ?? "Could not resolve the requested changes hold."); else await onSigned();
+    } catch (err) { setError(err instanceof Error ? err.message : "Network error."); } finally { setResolvingHold(false); }
+  }
 
   if (viewerRole !== "lawyer") {
     return (
