@@ -72,7 +72,8 @@ create table if not exists public.drg_package_staging_operations (
   package_version integer not null check (package_version > 0),
   package_sha256 text not null check (package_sha256 ~ '^[0-9a-f]{64}$'),
   package_canonical text not null check (length(package_canonical) > 0),
-  authorization jsonb not null check (jsonb_typeof(authorization) = 'object'),
+  authorization_payload jsonb not null check (jsonb_typeof(authorization_payload) = 'object'),
+  pdf_evidence jsonb not null check (jsonb_typeof(pdf_evidence) = 'array'),
   actor_role text not null check (actor_role = 'operator'),
   actor_id uuid not null,
   actor_name text not null check (length(btrim(actor_name)) > 0),
@@ -165,11 +166,36 @@ revoke all on function public.read_drg_package_staging_snapshot(uuid, uuid)
 grant execute on function public.read_drg_package_staging_snapshot(uuid, uuid)
   to service_role;
 
+create or replace function public.read_drg_pdf_storage_identities(
+  p_storage_keys text[]
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $function$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'storageKey', o.name,
+    'storageObjectId', o.id,
+    'objectUpdatedAt', to_jsonb(o)->>'updated_at'
+  ) order by array_position(p_storage_keys, o.name)), '[]'::jsonb)
+  from storage.objects o
+  where o.bucket_id = 'firm-files'
+    and o.name = any(p_storage_keys);
+$function$;
+
+revoke all on function public.read_drg_pdf_storage_identities(text[])
+  from public, anon, authenticated;
+grant execute on function public.read_drg_pdf_storage_identities(text[])
+  to service_role;
+
 create or replace function public.stage_drg_weekly_package_atomic(
   p_package jsonb,
   p_package_canonical text,
   p_plan jsonb,
-  p_authorization jsonb
+  p_authorization jsonb,
+  p_pdf_evidence jsonb
 )
 returns jsonb
 language plpgsql
@@ -225,6 +251,7 @@ declare
   v_existing_operation public.drg_package_staging_operations%rowtype;
   v_piece jsonb;
   v_plan_action jsonb;
+  v_pdf_evidence jsonb;
   v_deliverable record;
   v_deliverable_id uuid;
   v_version_id uuid;
@@ -240,8 +267,9 @@ declare
 begin
   if jsonb_typeof(p_package) <> 'object'
      or jsonb_typeof(p_plan) <> 'object'
-     or jsonb_typeof(p_authorization) <> 'object' then
-    raise exception 'package, plan, and authorization must be JSON objects';
+     or jsonb_typeof(p_authorization) <> 'object'
+     or jsonb_typeof(p_pdf_evidence) <> 'array' then
+    raise exception 'package, plan, authorization, and PDF evidence have invalid JSON shapes';
   end if;
   if p_package->>'schemaVersion' <> 'drg-weekly-package/v1'
      or p_plan->>'kind' <> 'atomic_plan'
@@ -277,7 +305,8 @@ begin
   end if;
   if p_plan->>'packageSha256' is distinct from v_package_sha
      or jsonb_array_length(coalesce(p_plan->'actions', '[]'::jsonb)) <> 16
-     or jsonb_array_length(coalesce(p_package->'pieces', '[]'::jsonb)) <> 16 then
+     or jsonb_array_length(coalesce(p_package->'pieces', '[]'::jsonb)) <> 16
+     or jsonb_array_length(p_pdf_evidence) <> 2 then
     raise exception 'plan or package does not contain the exact sixteen-piece topology';
   end if;
   if not (p_package->'doctrine' @> jsonb_build_array(
@@ -317,6 +346,20 @@ begin
     ) then
       raise exception 'PDF payload is incomplete for piece %', v_piece_ids[v_index];
     end if;
+    if v_kinds[v_index] = 'pdf' then
+      select evidence into v_pdf_evidence
+      from jsonb_array_elements(p_pdf_evidence) evidence
+      where evidence->>'pieceId' = v_piece_ids[v_index];
+      if not found
+         or v_pdf_evidence->>'storageKey' is distinct from v_piece->'payload'->>'storageKey'
+         or v_pdf_evidence->>'assetSha256' is distinct from v_piece->'payload'->>'assetSha256'
+         or (v_pdf_evidence->>'byteSize')::bigint is distinct from (v_piece->'payload'->>'byteSize')::bigint
+         or v_pdf_evidence->>'mimeType' is distinct from 'application/pdf'
+         or v_pdf_evidence->>'storageObjectId' is null
+         or v_pdf_evidence->>'objectUpdatedAt' is null then
+        raise exception 'computed PDF byte evidence mismatch for %', v_piece_ids[v_index];
+      end if;
+    end if;
   end loop;
 
   if p_authorization->>'firmId' is distinct from v_firm_id::text
@@ -340,13 +383,14 @@ begin
   where o.idempotency_key = v_idempotency_key
   for share;
   if found then
-    if v_existing_operation.authorization <> p_authorization
+    if v_existing_operation.authorization_payload <> p_authorization
        or v_existing_operation.firm_id <> v_firm_id
        or v_existing_operation.period_id <> v_period_id
        or v_existing_operation.package_id <> v_package_id
        or v_existing_operation.package_version <> v_package_version
        or v_existing_operation.package_sha256 <> v_package_sha
-       or v_existing_operation.package_canonical <> p_package_canonical then
+       or v_existing_operation.package_canonical <> p_package_canonical
+       or v_existing_operation.pdf_evidence <> p_pdf_evidence then
       raise exception 'idempotency replay drifted from the committed authorization or package';
     end if;
     return jsonb_set(
@@ -447,12 +491,21 @@ begin
     end if;
 
     if v_version_id is null then
+      select evidence into v_pdf_evidence
+      from jsonb_array_elements(p_pdf_evidence) evidence
+      where evidence->>'pieceId' = v_piece_ids[v_index];
+      -- The adapter computed the byte hash immediately before this call.
+      -- Recheck the exact storage row identity/update token under the same
+      -- transaction so an overwrite between byte verification and staging
+      -- cannot silently substitute a different object.
       if v_kinds[v_index] = 'pdf' and not exists (
         select 1 from storage.objects o
         where o.bucket_id = 'firm-files'
           and o.name = v_piece->'payload'->>'storageKey'
+          and o.id = (v_pdf_evidence->>'storageObjectId')::uuid
+          and to_jsonb(o)->>'updated_at' = v_pdf_evidence->>'objectUpdatedAt'
       ) then
-        raise exception 'PDF storage object does not exist for %', v_piece_ids[v_index];
+        raise exception 'PDF storage object identity changed after byte verification for %', v_piece_ids[v_index];
       end if;
       insert into public.deliverable_versions (
         deliverable_id, firm_id, version_number, body_html, storage_path,
@@ -513,12 +566,12 @@ begin
   insert into public.drg_package_staging_operations (
     id, idempotency_key, authorization_id, firm_id, period_id,
     package_id, package_version, package_sha256, package_canonical,
-    authorization, actor_role, actor_id, actor_name, authorized_at,
+    authorization_payload, pdf_evidence, actor_role, actor_id, actor_name, authorized_at,
     expires_at, receipt, committed_at
   ) values (
     v_operation_id, v_idempotency_key, v_authorization_id, v_firm_id,
     v_period_id, v_package_id, v_package_version, v_package_sha,
-    p_package_canonical, p_authorization, 'operator', v_actor_id,
+    p_package_canonical, p_authorization, p_pdf_evidence, 'operator', v_actor_id,
     p_authorization->>'actorName', v_authorized_at, v_expires_at,
     v_receipt, v_committed_at
   );
@@ -527,9 +580,9 @@ begin
 end;
 $function$;
 
-revoke all on function public.stage_drg_weekly_package_atomic(jsonb, text, jsonb, jsonb)
+revoke all on function public.stage_drg_weekly_package_atomic(jsonb, text, jsonb, jsonb, jsonb)
   from public, anon, authenticated;
-grant execute on function public.stage_drg_weekly_package_atomic(jsonb, text, jsonb, jsonb)
+grant execute on function public.stage_drg_weekly_package_atomic(jsonb, text, jsonb, jsonb, jsonb)
   to service_role;
 
 notify pgrst, 'reload schema';

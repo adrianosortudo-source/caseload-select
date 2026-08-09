@@ -110,7 +110,9 @@ describe.skipIf(!DB_URL)("stage_drg_weekly_package_atomic (real Postgres)", () =
       if (piece.payload.kind !== "pdf") continue;
       await connA.query(
         `insert into storage.objects (bucket_id, name, metadata)
-         values ('firm-files', $1, jsonb_build_object('mimetype', 'application/pdf', 'size', $2))`,
+         values ('firm-files', $1, jsonb_build_object(
+          'mimetype', 'application/pdf', 'size', $2
+         ))`,
         [piece.payload.storageKey, piece.payload.byteSize],
       );
     }
@@ -120,6 +122,55 @@ describe.skipIf(!DB_URL)("stage_drg_weekly_package_atomic (real Postgres)", () =
     if (connA) await connA.end();
     if (connB) await connB.end();
   });
+
+  it("rolls back all prior piece inserts when stored PDF byte evidence mismatches", async () => {
+    const now = Date.now();
+    const rejectedAuthorization = {
+      schemaVersion: "drg-package-staging-authorization/v1",
+      authorizationId: randomUUID(),
+      firmId,
+      periodId,
+      packageId: pkg.packageId,
+      packageVersion: pkg.packageVersion,
+      packageSha256: pkg.packageSha256,
+      actorRole: "operator",
+      actorId,
+      actorName: "Integration Operator",
+      authorizedAt: new Date(now - 60_000).toISOString(),
+      expiresAt: new Date(now + 10 * 60_000).toISOString(),
+    };
+    const keys = pkg.pieces.filter((piece) => piece.payload.kind === "pdf").map((piece) => piece.payload.kind === "pdf" ? piece.payload.storageKey : "");
+    const identities = await connA.query(
+      `select public.read_drg_pdf_storage_identities($1::text[]) as identities`,
+      [keys],
+    );
+    const identityByKey = new Map(identities.rows[0].identities.map((item: { storageKey: string }) => [item.storageKey, item]));
+    const evidence = pkg.pieces.filter((piece) => piece.payload.kind === "pdf").map((piece) => {
+      if (piece.payload.kind !== "pdf") throw new Error("fixture topology drift");
+      return {
+        pieceId: piece.id,
+        storageKey: piece.payload.storageKey,
+        ...(identityByKey.get(piece.payload.storageKey) as object),
+        assetSha256: piece.payload.assetSha256,
+        byteSize: piece.payload.byteSize,
+        mimeType: piece.payload.mimeType,
+      };
+    });
+    const mismatchedEvidence = evidence.map((item, index) => index === 0 ? { ...item, assetSha256: "0".repeat(64) } : item);
+    await expect(connA.query(
+      `select public.stage_drg_weekly_package_atomic($1::jsonb, $2::text, $3::jsonb, $4::jsonb, $5::jsonb)`,
+      [JSON.stringify(pkg), canonicalPackage, JSON.stringify(plan), JSON.stringify(rejectedAuthorization), JSON.stringify(mismatchedEvidence)],
+    )).rejects.toThrow(/byte evidence mismatch/i);
+    const afterRejection = await connA.query(
+      `select
+         (select count(*)::int from drg_package_staging_operations where firm_id = $1 and period_id = $2) as operations,
+         (select count(*)::int from content_deliverables where firm_id = $1 and period_id = $2 and drg_piece_id is not null) as deliverables,
+         (select count(*)::int from deliverable_versions where firm_id = $1 and drg_package_sha256 = $3) as versions`,
+      [firmId, periodId, pkg.packageSha256],
+    );
+    expect(afterRejection.rows[0]).toEqual({ operations: 0, deliverables: 0, versions: 0 });
+
+  }, 30_000);
 
   it("serializes concurrent identical calls into one commit and one zero-write replay", async () => {
     const now = Date.now();
@@ -137,8 +188,22 @@ describe.skipIf(!DB_URL)("stage_drg_weekly_package_atomic (real Postgres)", () =
       authorizedAt: new Date(now - 60_000).toISOString(),
       expiresAt: new Date(now + 10 * 60_000).toISOString(),
     };
-    const sql = `select public.stage_drg_weekly_package_atomic($1::jsonb, $2::text, $3::jsonb, $4::jsonb) as receipt`;
-    const args = [JSON.stringify(pkg), canonicalPackage, JSON.stringify(plan), JSON.stringify(authorization)];
+    const keys = pkg.pieces.filter((piece) => piece.payload.kind === "pdf").map((piece) => piece.payload.kind === "pdf" ? piece.payload.storageKey : "");
+    const identities = await connA.query(`select public.read_drg_pdf_storage_identities($1::text[]) as identities`, [keys]);
+    const identityByKey = new Map(identities.rows[0].identities.map((item: { storageKey: string }) => [item.storageKey, item]));
+    const evidence = pkg.pieces.filter((piece) => piece.payload.kind === "pdf").map((piece) => {
+      if (piece.payload.kind !== "pdf") throw new Error("fixture topology drift");
+      return {
+        pieceId: piece.id,
+        storageKey: piece.payload.storageKey,
+        ...(identityByKey.get(piece.payload.storageKey) as object),
+        assetSha256: piece.payload.assetSha256,
+        byteSize: piece.payload.byteSize,
+        mimeType: piece.payload.mimeType,
+      };
+    });
+    const sql = `select public.stage_drg_weekly_package_atomic($1::jsonb, $2::text, $3::jsonb, $4::jsonb, $5::jsonb) as receipt`;
+    const args = [JSON.stringify(pkg), canonicalPackage, JSON.stringify(plan), JSON.stringify(authorization), JSON.stringify(evidence)];
     const [left, right] = await Promise.all([connA.query(sql, args), connB.query(sql, args)]);
     const receipts = [left.rows[0].receipt, right.rows[0].receipt];
 
@@ -172,15 +237,15 @@ describe.skipIf(!DB_URL)("stage_drg_weekly_package_atomic (real Postgres)", () =
 
   it("rejects authorization drift without changing the committed topology", async () => {
     const operation = await connA.query(
-      `select package_canonical, receipt, authorization from drg_package_staging_operations
+      `select package_canonical, receipt, authorization_payload, pdf_evidence from drg_package_staging_operations
        where firm_id = $1 and period_id = $2`,
       [firmId, periodId],
     );
     const prior = operation.rows[0];
-    const drifted = { ...prior.authorization, actorName: "Different Operator" };
+    const drifted = { ...prior.authorization_payload, actorName: "Different Operator" };
     await expect(connA.query(
-      `select public.stage_drg_weekly_package_atomic($1::jsonb, $2, $3::jsonb, $4::jsonb)`,
-      [JSON.stringify(pkg), prior.package_canonical, JSON.stringify(plan), JSON.stringify(drifted)],
+      `select public.stage_drg_weekly_package_atomic($1::jsonb, $2, $3::jsonb, $4::jsonb, $5::jsonb)`,
+      [JSON.stringify(pkg), prior.package_canonical, JSON.stringify(plan), JSON.stringify(drifted), JSON.stringify(prior.pdf_evidence)],
     )).rejects.toThrow(/replay drifted/i);
     const counts = await connA.query(
       `select count(*)::int as operations from drg_package_staging_operations where firm_id = $1 and period_id = $2`,

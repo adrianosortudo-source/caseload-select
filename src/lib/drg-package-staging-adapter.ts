@@ -57,11 +57,25 @@ export interface DrgStagingOperationReceipt {
   readonly replay: boolean;
 }
 
+export type Sha256BytesFunction = (bytes: Uint8Array) => string;
+
 export interface DrgPackageStagingRpcClient {
   rpc(
-    functionName: "stage_drg_weekly_package_atomic" | "read_drg_package_staging_snapshot",
+    functionName:
+      | "stage_drg_weekly_package_atomic"
+      | "read_drg_package_staging_snapshot"
+      | "read_drg_pdf_storage_identities",
     args: Record<string, unknown>,
   ): PromiseLike<{ data: unknown; error: { message?: string } | null }>;
+}
+
+export interface DrgPackageStorageClient {
+  from(bucket: "firm-files"): {
+    download(path: string): PromiseLike<{
+      data: { arrayBuffer(): Promise<ArrayBuffer>; type: string } | null;
+      error: { message?: string } | null;
+    }>;
+  };
 }
 
 export type AuthorizedDrgStagingResult =
@@ -170,6 +184,61 @@ async function readSnapshot(
   return parseSnapshot(data, pkg);
 }
 
+async function verifyPdfBytes(input: {
+  readonly pkg: SealedDrgWeeklyPackage;
+  readonly rpc: DrgPackageStagingRpcClient;
+  readonly storage: DrgPackageStorageClient;
+  readonly sha256Bytes: Sha256BytesFunction;
+}) {
+  const pdfPieces = input.pkg.pieces.filter((piece) => piece.payload.kind === "pdf");
+  const { data, error } = await input.rpc.rpc("read_drg_pdf_storage_identities", {
+    p_storage_keys: pdfPieces.map((piece) => piece.payload.kind === "pdf" ? piece.payload.storageKey : ""),
+  });
+  if (error) throw new Error(`PDF object identity preflight failed: ${error.message ?? "unknown database error"}`);
+  if (!Array.isArray(data) || data.length !== pdfPieces.length) {
+    throw new Error("PDF object identity preflight did not resolve every exact package PDF");
+  }
+  const identityByKey = new Map(data.map((item) => {
+    const value = record(item);
+    return [String(value?.storageKey ?? ""), value] as const;
+  }));
+
+  return Promise.all(pdfPieces.map(async (piece) => {
+    if (piece.payload.kind !== "pdf") throw new Error("PDF preflight topology drift");
+    const identity = identityByKey.get(piece.payload.storageKey);
+    if (
+      !identity ||
+      !UUID_RE.test(String(identity.storageObjectId ?? "")) ||
+      !Number.isFinite(Date.parse(String(identity.objectUpdatedAt ?? "")))
+    ) {
+      throw new Error(`PDF object identity is malformed for ${piece.id}`);
+    }
+    const downloaded = await input.storage.from("firm-files").download(piece.payload.storageKey);
+    if (downloaded.error || !downloaded.data) {
+      throw new Error(`PDF byte download failed for ${piece.id}: ${downloaded.error?.message ?? "missing object"}`);
+    }
+    const bytes = new Uint8Array(await downloaded.data.arrayBuffer());
+    const computedSha256 = input.sha256Bytes(bytes);
+    if (!SHA256_RE.test(computedSha256)) throw new Error("PDF byte hasher returned a malformed SHA-256");
+    if (
+      computedSha256 !== piece.payload.assetSha256 ||
+      bytes.byteLength !== piece.payload.byteSize ||
+      downloaded.data.type !== piece.payload.mimeType
+    ) {
+      throw new Error(`PDF downloaded bytes do not match the sealed package for ${piece.id}`);
+    }
+    return {
+      pieceId: piece.id,
+      storageKey: piece.payload.storageKey,
+      storageObjectId: identity.storageObjectId,
+      objectUpdatedAt: identity.objectUpdatedAt,
+      assetSha256: computedSha256,
+      byteSize: bytes.byteLength,
+      mimeType: downloaded.data.type,
+    };
+  }));
+}
+
 /**
  * The only live write adapter for the offline protocol. It validates the pure
  * plan before crossing the database boundary, executes one service-role RPC,
@@ -180,18 +249,22 @@ export async function stageAuthorizedDrgPackage(input: {
   readonly snapshot: DrgPortalStagingSnapshot;
   readonly authorization: DrgPackageStagingAuthorization;
   readonly sha256: Sha256Function;
+  readonly sha256Bytes: Sha256BytesFunction;
   readonly rpc: DrgPackageStagingRpcClient;
+  readonly storage: DrgPackageStorageClient;
   readonly now?: Date;
 }): Promise<AuthorizedDrgStagingResult> {
   const plan = planDrgPackageStaging(input.pkg, input.snapshot, input.sha256);
   if (plan.kind === "no_plan") return { status: "blocked", plan, writesPerformed: 0 };
   validateAuthorization(input.authorization, input.pkg, input.now ?? new Date());
+  const pdfEvidence = await verifyPdfBytes(input);
 
   const { data, error } = await input.rpc.rpc("stage_drg_weekly_package_atomic", {
     p_package: input.pkg,
     p_package_canonical: packageCanonicalInput(input.pkg),
     p_plan: plan,
     p_authorization: input.authorization,
+    p_pdf_evidence: pdfEvidence,
   });
   if (error) throw new Error(`atomic DRG package staging failed: ${error.message ?? "unknown database error"}`);
   const receipt = parseReceipt(data, input.pkg, input.authorization);

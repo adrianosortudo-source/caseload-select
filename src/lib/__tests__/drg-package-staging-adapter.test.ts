@@ -14,10 +14,15 @@ import {
   stageAuthorizedDrgPackage,
   type DrgPackageStagingAuthorization,
   type DrgPackageStagingRpcClient,
+  type DrgPackageStorageClient,
 } from "../drg-package-staging-adapter";
 
 function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function sha256Bytes(value: Uint8Array): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function makePackage(): SealedDrgWeeklyPackage {
@@ -47,13 +52,40 @@ function makePackage(): SealedDrgWeeklyPackage {
             storageKey: `${firmId}/content/${piece.id}.pdf`,
             filename: `${piece.id}.pdf`,
             mimeType: "application/pdf" as const,
-            byteSize: 2048,
+            byteSize: new TextEncoder().encode(`pdf:${piece.id}`).byteLength,
             assetSha256: sha256(`pdf:${piece.id}`),
           }
         : { kind: "text" as const, bodyHtml: `<p>Exact ${piece.id}</p>` },
     })),
   };
   return sealDrgWeeklyPackage(draft, sha256);
+}
+
+function pdfIdentities(pkg: SealedDrgWeeklyPackage) {
+  return pkg.pieces.filter((piece) => piece.payload.kind === "pdf").map((piece) => ({
+    storageKey: piece.payload.kind === "pdf" ? piece.payload.storageKey : "",
+    storageObjectId: randomUUID(),
+    objectUpdatedAt: "2026-08-09T15:59:00.000Z",
+  }));
+}
+
+function storageFor(pkg: SealedDrgWeeklyPackage, tamperedPieceId?: string): DrgPackageStorageClient {
+  return {
+    from: () => ({
+      download: async (path: string) => {
+        const piece = pkg.pieces.find((candidate) => candidate.payload.kind === "pdf" && candidate.payload.storageKey === path);
+        if (!piece || piece.payload.kind !== "pdf") return { data: null, error: { message: "not found" } };
+        const bytes = new TextEncoder().encode(tamperedPieceId === piece.id ? `tampered:${piece.id}` : `pdf:${piece.id}`);
+        return {
+          data: {
+            type: "application/pdf",
+            arrayBuffer: async () => bytes.slice().buffer as ArrayBuffer,
+          },
+          error: null,
+        };
+      },
+    }),
+  };
 }
 
 function authorization(pkg: SealedDrgWeeklyPackage): DrgPackageStagingAuthorization {
@@ -141,6 +173,7 @@ describe("authorized DRG package staging adapter", () => {
     const auth = authorization(pkg);
     const fresh = exactSnapshot(pkg);
     const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: pdfIdentities(pkg), error: null })
       .mockResolvedValueOnce({ data: receipt(pkg, auth, fresh), error: null })
       .mockResolvedValueOnce({ data: fresh, error: null });
 
@@ -149,14 +182,17 @@ describe("authorized DRG package staging adapter", () => {
       snapshot: { firmId: pkg.firmId, periodId: pkg.periodId, deliverables: [] },
       authorization: auth,
       sha256,
+      sha256Bytes,
       rpc: { rpc } as DrgPackageStagingRpcClient,
+      storage: storageFor(pkg),
       now: new Date("2026-08-09T16:00:00.000Z"),
     });
 
     expect(result.status).toBe("reconciled");
-    expect(rpc).toHaveBeenCalledTimes(2);
-    expect(rpc.mock.calls[0][0]).toBe("stage_drg_weekly_package_atomic");
-    expect(rpc.mock.calls[1][0]).toBe("read_drg_package_staging_snapshot");
+    expect(rpc).toHaveBeenCalledTimes(3);
+    expect(rpc.mock.calls[0][0]).toBe("read_drg_pdf_storage_identities");
+    expect(rpc.mock.calls[1][0]).toBe("stage_drg_weekly_package_atomic");
+    expect(rpc.mock.calls[2][0]).toBe("read_drg_package_staging_snapshot");
     expect(result.status === "reconciled" && result.reconciliation).toMatchObject({
       status: "exact_match",
       visible: true,
@@ -174,29 +210,51 @@ describe("authorized DRG package staging adapter", () => {
       snapshot: { firmId: pkg.firmId, periodId: pkg.periodId, deliverables: [] },
       authorization: auth,
       sha256,
+      sha256Bytes,
       rpc: { rpc } as DrgPackageStagingRpcClient,
+      storage: storageFor(pkg),
       now: new Date("2026-08-09T16:00:00.000Z"),
     })).rejects.toThrow(/exact package scope and SHA/);
     expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("rejects tampered downloaded PDF bytes before the write RPC even when object identity resolves", async () => {
+    const pkg = makePackage();
+    const auth = authorization(pkg);
+    const firstPdf = pkg.pieces.find((piece) => piece.payload.kind === "pdf")!;
+    const rpc = vi.fn().mockResolvedValueOnce({ data: pdfIdentities(pkg), error: null });
+    await expect(stageAuthorizedDrgPackage({
+      pkg,
+      snapshot: { firmId: pkg.firmId, periodId: pkg.periodId, deliverables: [] },
+      authorization: auth,
+      sha256,
+      sha256Bytes,
+      rpc: { rpc } as DrgPackageStagingRpcClient,
+      storage: storageFor(pkg, firstPdf.id),
+      now: new Date("2026-08-09T16:00:00.000Z"),
+    })).rejects.toThrow(/downloaded bytes do not match/);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc.mock.calls[0][0]).toBe("read_drg_pdf_storage_identities");
   });
 
   it("fails closed when the database receipt drifts after the transaction", async () => {
     const pkg = makePackage();
     const auth = authorization(pkg);
     const fresh = exactSnapshot(pkg);
-    const rpc = vi.fn().mockResolvedValueOnce({
-      data: { ...receipt(pkg, auth, fresh), periodId: randomUUID() },
-      error: null,
-    });
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({ data: pdfIdentities(pkg), error: null })
+      .mockResolvedValueOnce({ data: { ...receipt(pkg, auth, fresh), periodId: randomUUID() }, error: null });
     await expect(stageAuthorizedDrgPackage({
       pkg,
       snapshot: { firmId: pkg.firmId, periodId: pkg.periodId, deliverables: [] },
       authorization: auth,
       sha256,
+      sha256Bytes,
       rpc: { rpc } as DrgPackageStagingRpcClient,
+      storage: storageFor(pkg),
       now: new Date("2026-08-09T16:00:00.000Z"),
     })).rejects.toThrow(/malformed or drifted DRG staging receipt/);
-    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledTimes(2);
   });
 
   it("projects Publishing Kit only from the exact approved current versions", async () => {
