@@ -12,7 +12,7 @@ import {
 import {
   projectLiveApprovedDrgPublishingKit,
   stageAuthorizedDrgPackage,
-  type DrgPackageStagingAuthorization,
+  type DrgPackageStagingAuthorizationEvidence,
   type DrgPackageStagingRpcClient,
   type DrgPackageStorageClient,
 } from "../drg-package-staging-adapter";
@@ -88,7 +88,7 @@ function storageFor(pkg: SealedDrgWeeklyPackage, tamperedPieceId?: string): DrgP
   };
 }
 
-function authorization(pkg: SealedDrgWeeklyPackage): DrgPackageStagingAuthorization {
+function authorization(pkg: SealedDrgWeeklyPackage): DrgPackageStagingAuthorizationEvidence {
   return {
     schemaVersion: "drg-package-staging-authorization/v1",
     authorizationId: randomUUID(),
@@ -100,8 +100,15 @@ function authorization(pkg: SealedDrgWeeklyPackage): DrgPackageStagingAuthorizat
     actorRole: "operator",
     actorId: randomUUID(),
     actorName: "Test Operator",
+    authorizerRole: "lawyer",
+    authorizerId: randomUUID(),
+    authorizerName: "Test Lawyer",
     authorizedAt: "2026-08-09T15:55:00.000Z",
     expiresAt: "2026-08-09T16:15:00.000Z",
+    signingKeyId: "drg-test-lawyer-key",
+    signingPublicKeySha256: "a".repeat(64),
+    authorizationEnvelopeSha256: "b".repeat(64),
+    authorizationSignatureBase64: "c2lnbmF0dXJl",
   };
 }
 
@@ -139,12 +146,18 @@ function exactSnapshot(pkg: SealedDrgWeeklyPackage, approved = false): DrgPortal
   };
 }
 
-function receipt(pkg: SealedDrgWeeklyPackage, auth: DrgPackageStagingAuthorization, snapshot: DrgPortalStagingSnapshot) {
+function receipt(pkg: SealedDrgWeeklyPackage, auth: DrgPackageStagingAuthorizationEvidence, snapshot: DrgPortalStagingSnapshot) {
   return {
     schemaVersion: "drg-package-staging-receipt/v1",
     operationId: randomUUID(),
     idempotencyKey: "drg-stage/exact",
     authorizationId: auth.authorizationId,
+    authorizerRole: auth.authorizerRole,
+    authorizerId: auth.authorizerId,
+    authorizerName: auth.authorizerName,
+    signingKeyId: auth.signingKeyId,
+    signingPublicKeySha256: auth.signingPublicKeySha256,
+    authorizationEnvelopeSha256: auth.authorizationEnvelopeSha256,
     firmId: pkg.firmId,
     periodId: pkg.periodId,
     packageId: pkg.packageId,
@@ -215,6 +228,26 @@ describe("authorized DRG package staging adapter", () => {
       storage: storageFor(pkg),
       now: new Date("2026-08-09T16:00:00.000Z"),
     })).rejects.toThrow(/exact package scope and SHA/);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("rejects an operator self-authorizing instead of a lawyer or client-authorized approver", async () => {
+    const pkg = makePackage();
+    const auth = {
+      ...authorization(pkg),
+      authorizerRole: "operator",
+    } as unknown as DrgPackageStagingAuthorizationEvidence;
+    const rpc = vi.fn();
+    await expect(stageAuthorizedDrgPackage({
+      pkg,
+      snapshot: { firmId: pkg.firmId, periodId: pkg.periodId, deliverables: [] },
+      authorization: auth,
+      sha256,
+      sha256Bytes,
+      rpc: { rpc } as DrgPackageStagingRpcClient,
+      storage: storageFor(pkg),
+      now: new Date("2026-08-09T16:00:00.000Z"),
+    })).rejects.toThrow(/lawyer or client-authorized approver/);
     expect(rpc).not.toHaveBeenCalled();
   });
 

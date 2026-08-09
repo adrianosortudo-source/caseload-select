@@ -14,6 +14,7 @@ import {
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
 export interface DrgPackageStagingAuthorization {
   readonly schemaVersion: "drg-package-staging-authorization/v1";
@@ -26,8 +27,18 @@ export interface DrgPackageStagingAuthorization {
   readonly actorRole: "operator";
   readonly actorId: string;
   readonly actorName: string;
+  readonly authorizerRole: "lawyer" | "client_authorized";
+  readonly authorizerId: string;
+  readonly authorizerName: string;
   readonly authorizedAt: string;
   readonly expiresAt: string;
+}
+
+export interface DrgPackageStagingAuthorizationEvidence extends DrgPackageStagingAuthorization {
+  readonly signingKeyId: string;
+  readonly signingPublicKeySha256: string;
+  readonly authorizationEnvelopeSha256: string;
+  readonly authorizationSignatureBase64: string;
 }
 
 export interface DrgStagingOperationReceipt {
@@ -35,6 +46,12 @@ export interface DrgStagingOperationReceipt {
   readonly operationId: string;
   readonly idempotencyKey: string;
   readonly authorizationId: string;
+  readonly authorizerRole: "lawyer" | "client_authorized";
+  readonly authorizerId: string;
+  readonly authorizerName: string;
+  readonly signingKeyId: string;
+  readonly signingPublicKeySha256: string;
+  readonly authorizationEnvelopeSha256: string;
   readonly firmId: string;
   readonly periodId: string;
   readonly packageId: string;
@@ -125,6 +142,13 @@ function validateAuthorization(
     throw new Error("staging authorization requires a named operator");
   }
   if (
+    (authorization.authorizerRole !== "lawyer" && authorization.authorizerRole !== "client_authorized") ||
+    !UUID_RE.test(authorization.authorizerId) ||
+    !authorization.authorizerName.trim()
+  ) {
+    throw new Error("staging authorization requires a named lawyer or client-authorized approver");
+  }
+  if (
     authorization.firmId !== pkg.firmId ||
     authorization.periodId !== pkg.periodId ||
     authorization.packageId !== pkg.packageId ||
@@ -151,12 +175,18 @@ function parseSnapshot(data: unknown, pkg: SealedDrgWeeklyPackage): DrgPortalSta
   return value as unknown as DrgPortalStagingSnapshot;
 }
 
-function parseReceipt(data: unknown, pkg: SealedDrgWeeklyPackage, authorization: DrgPackageStagingAuthorization): DrgStagingOperationReceipt {
+function parseReceipt(data: unknown, pkg: SealedDrgWeeklyPackage, authorization: DrgPackageStagingAuthorizationEvidence): DrgStagingOperationReceipt {
   const value = record(data);
   if (
     !value ||
     value.schemaVersion !== "drg-package-staging-receipt/v1" ||
     value.authorizationId !== authorization.authorizationId ||
+    value.authorizerRole !== authorization.authorizerRole ||
+    value.authorizerId !== authorization.authorizerId ||
+    value.authorizerName !== authorization.authorizerName ||
+    value.signingKeyId !== authorization.signingKeyId ||
+    value.signingPublicKeySha256 !== authorization.signingPublicKeySha256 ||
+    value.authorizationEnvelopeSha256 !== authorization.authorizationEnvelopeSha256 ||
     value.firmId !== pkg.firmId ||
     value.periodId !== pkg.periodId ||
     value.packageId !== pkg.packageId ||
@@ -247,7 +277,7 @@ async function verifyPdfBytes(input: {
 export async function stageAuthorizedDrgPackage(input: {
   readonly pkg: SealedDrgWeeklyPackage;
   readonly snapshot: DrgPortalStagingSnapshot;
-  readonly authorization: DrgPackageStagingAuthorization;
+  readonly authorization: DrgPackageStagingAuthorizationEvidence;
   readonly sha256: Sha256Function;
   readonly sha256Bytes: Sha256BytesFunction;
   readonly rpc: DrgPackageStagingRpcClient;
@@ -257,6 +287,14 @@ export async function stageAuthorizedDrgPackage(input: {
   const plan = planDrgPackageStaging(input.pkg, input.snapshot, input.sha256);
   if (plan.kind === "no_plan") return { status: "blocked", plan, writesPerformed: 0 };
   validateAuthorization(input.authorization, input.pkg, input.now ?? new Date());
+  if (
+    !input.authorization.signingKeyId.trim() ||
+    !SHA256_RE.test(input.authorization.signingPublicKeySha256) ||
+    !SHA256_RE.test(input.authorization.authorizationEnvelopeSha256) ||
+    !BASE64_RE.test(input.authorization.authorizationSignatureBase64)
+  ) {
+    throw new Error("staging authorization signer evidence is malformed");
+  }
   const pdfEvidence = await verifyPdfBytes(input);
 
   const { data, error } = await input.rpc.rpc("stage_drg_weekly_package_atomic", {

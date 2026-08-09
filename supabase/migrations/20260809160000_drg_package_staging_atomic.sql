@@ -263,6 +263,7 @@ declare
   v_firm_id uuid;
   v_period_id uuid;
   v_actor_id uuid;
+  v_authorizer_id uuid;
   v_package_id text;
   v_package_version integer;
   v_package_sha text;
@@ -305,6 +306,7 @@ begin
     v_firm_id := (p_package->>'firmId')::uuid;
     v_period_id := (p_package->>'periodId')::uuid;
     v_actor_id := (p_authorization->>'actorId')::uuid;
+    v_authorizer_id := (p_authorization->>'authorizerId')::uuid;
     v_package_version := (p_package->>'packageVersion')::integer;
     v_authorized_at := (p_authorization->>'authorizedAt')::timestamptz;
     v_expires_at := (p_authorization->>'expiresAt')::timestamptz;
@@ -392,8 +394,16 @@ begin
      or (p_authorization->>'packageVersion')::integer is distinct from v_package_version
      or p_authorization->>'packageSha256' is distinct from v_package_sha
      or p_authorization->>'actorRole' is distinct from 'operator'
-     or length(btrim(coalesce(p_authorization->>'actorName', ''))) = 0 then
-    raise exception 'authorization is not bound to the exact package scope, SHA, and operator';
+     or v_actor_id is null
+     or length(btrim(coalesce(p_authorization->>'actorName', ''))) = 0
+     or coalesce(p_authorization->>'authorizerRole', '') not in ('lawyer', 'client_authorized')
+     or v_authorizer_id is null
+     or length(btrim(coalesce(p_authorization->>'authorizerName', ''))) = 0
+     or length(btrim(coalesce(p_authorization->>'signingKeyId', ''))) = 0
+     or coalesce(p_authorization->>'signingPublicKeySha256', '') !~ '^[0-9a-f]{64}$'
+     or coalesce(p_authorization->>'authorizationEnvelopeSha256', '') !~ '^[0-9a-f]{64}$'
+     or coalesce(p_authorization->>'authorizationSignatureBase64', '') !~ '^[A-Za-z0-9+/]+={0,2}$' then
+    raise exception 'authorization is not bound to the exact package, executor, authorizer, and signer evidence';
   end if;
 
   perform 1
@@ -573,6 +583,12 @@ begin
     'operationId', v_operation_id,
     'idempotencyKey', v_idempotency_key,
     'authorizationId', v_authorization_id,
+    'authorizerRole', p_authorization->>'authorizerRole',
+    'authorizerId', v_authorizer_id,
+    'authorizerName', p_authorization->>'authorizerName',
+    'signingKeyId', p_authorization->>'signingKeyId',
+    'signingPublicKeySha256', p_authorization->>'signingPublicKeySha256',
+    'authorizationEnvelopeSha256', p_authorization->>'authorizationEnvelopeSha256',
     'firmId', v_firm_id,
     'periodId', v_period_id,
     'packageId', v_package_id,

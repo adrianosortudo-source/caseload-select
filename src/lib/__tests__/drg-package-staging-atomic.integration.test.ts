@@ -136,8 +136,15 @@ describe.skipIf(!DB_URL)("stage_drg_weekly_package_atomic (real Postgres)", () =
       actorRole: "operator",
       actorId,
       actorName: "Integration Operator",
+      authorizerRole: "lawyer",
+      authorizerId: actorId,
+      authorizerName: "Integration Lawyer",
       authorizedAt: new Date(now - 60_000).toISOString(),
       expiresAt: new Date(now + 10 * 60_000).toISOString(),
+      signingKeyId: "drg-integration-lawyer-key",
+      signingPublicKeySha256: "a".repeat(64),
+      authorizationEnvelopeSha256: "b".repeat(64),
+      authorizationSignatureBase64: "c2lnbmF0dXJl",
     };
     const keys = pkg.pieces.filter((piece) => piece.payload.kind === "pdf").map((piece) => piece.payload.kind === "pdf" ? piece.payload.storageKey : "");
     const identities = await connA.query(
@@ -170,6 +177,16 @@ describe.skipIf(!DB_URL)("stage_drg_weekly_package_atomic (real Postgres)", () =
     );
     expect(afterRejection.rows[0]).toEqual({ operations: 0, deliverables: 0, versions: 0 });
 
+    const wrongRoleAuthorization = {
+      ...rejectedAuthorization,
+      authorizationId: randomUUID(),
+      authorizerRole: "operator",
+    };
+    await expect(connA.query(
+      `select public.stage_drg_weekly_package_atomic($1::jsonb, $2::text, $3::jsonb, $4::jsonb, $5::jsonb)`,
+      [JSON.stringify(pkg), canonicalPackage, JSON.stringify(plan), JSON.stringify(wrongRoleAuthorization), JSON.stringify(evidence)],
+    )).rejects.toThrow(/authorizer/i);
+
   }, 30_000);
 
   it("serializes concurrent identical calls into one commit and one zero-write replay", async () => {
@@ -185,8 +202,15 @@ describe.skipIf(!DB_URL)("stage_drg_weekly_package_atomic (real Postgres)", () =
       actorRole: "operator",
       actorId,
       actorName: "Integration Operator",
+      authorizerRole: "lawyer",
+      authorizerId: actorId,
+      authorizerName: "Integration Lawyer",
       authorizedAt: new Date(now - 60_000).toISOString(),
       expiresAt: new Date(now + 10 * 60_000).toISOString(),
+      signingKeyId: "drg-integration-lawyer-key",
+      signingPublicKeySha256: "a".repeat(64),
+      authorizationEnvelopeSha256: "b".repeat(64),
+      authorizationSignatureBase64: "c2lnbmF0dXJl",
     };
     const keys = pkg.pieces.filter((piece) => piece.payload.kind === "pdf").map((piece) => piece.payload.kind === "pdf" ? piece.payload.storageKey : "");
     const identities = await connA.query(`select public.read_drg_pdf_storage_identities($1::text[]) as identities`, [keys]);
@@ -211,6 +235,11 @@ describe.skipIf(!DB_URL)("stage_drg_weekly_package_atomic (real Postgres)", () =
     expect(receipts.find((item) => item.replay === false)).toMatchObject({
       schemaVersion: "drg-package-staging-receipt/v1",
       packageSha256: pkg.packageSha256,
+      authorizerRole: "lawyer",
+      authorizerId: actorId,
+      signingKeyId: "drg-integration-lawyer-key",
+      signingPublicKeySha256: "a".repeat(64),
+      authorizationEnvelopeSha256: "b".repeat(64),
       addedCount: 16,
       newVersionCount: 0,
       skippedCount: 0,
