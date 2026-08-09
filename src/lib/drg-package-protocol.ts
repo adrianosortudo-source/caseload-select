@@ -390,8 +390,7 @@ export function validateDrgWebsitePackageExport(raw: unknown): DrgProtocolViolat
   }
   if (!isSha256(value.package.package_sha256)) errors.push({ path: "package.package_sha256", message: "must be lowercase SHA-256 hex" });
   else {
-    const packageWithoutHash = { ...value.package } as Omit<DrgWebsitePackageExport["package"], "package_sha256"> & { package_sha256?: never };
-    delete (packageWithoutHash as { package_sha256?: never }).package_sha256;
+    const { package_sha256: _ignored, ...packageWithoutHash } = value.package;
     const expectedHash = sha256({
       schema_version: value.schema_version,
       package: packageWithoutHash,

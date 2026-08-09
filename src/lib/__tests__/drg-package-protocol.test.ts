@@ -59,7 +59,7 @@ function makeSource(): ContentExportBundle {
     active_deliverable_count: 6,
     archived_deliverable_count: 0,
     warnings: [],
-    generation_policy: { may_generate: false, may_rewrite: false, may_translate: false },
+    generation_policy: { may_generate: false, may_rewrite: false, may_translate: false, use_portal_source_only: true },
     deliverables: LOCALES.flatMap((locale) => ROLES.map((role) => makeDeliverable(role, locale))),
     archived_deliverables: [],
   };
