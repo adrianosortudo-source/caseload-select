@@ -208,7 +208,7 @@ describe("evaluateDeliverableReadiness: approval binding", () => {
     );
     const check = result.checks.find((c) => c.key === "current_version_approved");
     expect(check?.status).toBe("fail");
-    expect(check?.reason).toMatch(/not been formally approved/);
+    expect(check?.reason).toMatch(/not release-authorized/);
     expect(result.ready).toBe(false);
   });
 
@@ -218,7 +218,7 @@ describe("evaluateDeliverableReadiness: approval binding", () => {
     );
     const check = result.checks.find((c) => c.key === "current_version_approved");
     expect(check?.status).toBe("fail");
-    expect(check?.reason).toMatch(/is not the current version/);
+    expect(check?.reason).toMatch(/approved_version_id/);
     expect(result.ready).toBe(false);
   });
 });

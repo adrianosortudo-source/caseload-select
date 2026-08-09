@@ -33,6 +33,7 @@ interface ClaimFixture {
   status: "active" | "released" | "superseded";
   claimed_by_role: "operator" | "lawyer" | "system";
   claimed_by_id: string | null;
+  release_path: "individual_approval" | "standing_authorization" | null;
 }
 
 const state = {
@@ -43,7 +44,7 @@ const state = {
     name: string | null;
     email: string | null;
   } | null,
-  detail: null as { deliverable: { firm_id: string; status: string; approved_version_id: string | null; current_version_id: string | null } } | null,
+  detail: null as { deliverable: { firm_id: string; status: string; approved_version_id: string | null; current_version_id: string | null }; versions: Array<{ id: string; requires_individual_review: boolean }> } | null,
   detailReadError: false,
   placements: [] as Array<{ id: string; destination: string; locale: string | null }>,
   createReceiptArgs: null as unknown,
@@ -65,6 +66,7 @@ function defaultClaim(overrides: Partial<ClaimFixture> = {}): ClaimFixture {
     // available" in the corrective-release spec. Tests that need to assert
     // the identity check itself set this explicitly.
     claimed_by_id: null,
+    release_path: "individual_approval",
     ...overrides,
   };
 }
@@ -153,6 +155,7 @@ beforeEach(() => {
   state.resolvedActor = { role: "operator", id: "op-1", name: "Adriano Domingues", email: "adriano@caseloadselect.ca" };
   state.detail = {
     deliverable: { firm_id: FIRM, status: "approved", approved_version_id: VERSION, current_version_id: VERSION },
+    versions: [{ id: VERSION, requires_individual_review: false }],
   };
   state.detailReadError = false;
   state.placements = [{ id: PLACEMENT, destination: "linkedin_post", locale: null }];
