@@ -10,7 +10,10 @@
 export interface DrgTrustedStagingAuthorizationSigner {
   readonly signingKeyId: string;
   readonly spkiSha256: string;
-  readonly authorizerRoles: readonly ("lawyer" | "client_authorized")[];
+  readonly firmId: string;
+  readonly authorizerRole: "lawyer" | "client_authorized";
+  readonly authorizerId: string;
+  readonly authorizerName: string;
 }
 
 export const DRG_TRUSTED_STAGING_AUTHORIZATION_SIGNERS = Object.freeze(

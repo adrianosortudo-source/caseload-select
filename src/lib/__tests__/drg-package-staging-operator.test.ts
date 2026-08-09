@@ -141,7 +141,10 @@ function makeFixture(options: FixtureOptions = {}) {
   const trustedSigners = [{
     signingKeyId: signedFields.signingKeyId,
     spkiSha256: signingPublicKeySha256,
-    authorizerRoles: ["lawyer" as const],
+    firmId: pkg.firmId,
+    authorizerRole: "lawyer" as const,
+    authorizerId: AUTHORIZER_ID,
+    authorizerName: "DRG Law approving lawyer",
   }];
   const env: NodeJS.ProcessEnv = {
     NODE_ENV: "test",
@@ -381,6 +384,49 @@ describe("DRG staging operator plan-only safety", () => {
     });
     expect(result.exitCode).toBe(1);
     expect(createClients).not.toHaveBeenCalled();
+    expect(existsSync(fixture.receiptPath)).toBe(false);
+  });
+
+  it.each([
+    ["role", (authorization: DrgPackageStagingAuthorization) => ({
+      ...authorization,
+      authorizerRole: "client_authorized" as const,
+    })],
+    ["id", (authorization: DrgPackageStagingAuthorization) => ({
+      ...authorization,
+      authorizerId: "77777777-7777-4777-8777-777777777777",
+    })],
+    ["name", (authorization: DrgPackageStagingAuthorization) => ({
+      ...authorization,
+      authorizerName: "Another approving lawyer",
+    })],
+    ["firm", (authorization: DrgPackageStagingAuthorization) => ({
+      ...authorization,
+      firmId: "88888888-8888-4888-8888-888888888888",
+    })],
+  ] satisfies ReadonlyArray<readonly [
+    string,
+    (authorization: DrgPackageStagingAuthorization) => DrgPackageStagingAuthorization,
+  ]>)("rejects a valid trusted signature with mismatched authorizer %s", async (_field, mutateAuthorization) => {
+    const fixture = makeFixture({ mutateAuthorization });
+    const clients = fakeClients();
+    const createClients = vi.fn(() => clients);
+    const stagePackage = vi.fn();
+    const result = await runDrgStagingOperator({
+      argv: fixture.args,
+      env: fixture.env,
+      trustedSigners: fixture.trustedSigners,
+      now: NOW,
+      terminal: { stdinIsTTY: false, stdoutIsTTY: false },
+      createClients,
+      stagePackage,
+      log: vi.fn(),
+      logError: vi.fn(),
+    });
+    expect(result.exitCode).toBe(1);
+    expect(createClients).not.toHaveBeenCalled();
+    expect(clients.rpc.rpc).not.toHaveBeenCalled();
+    expect(stagePackage).not.toHaveBeenCalled();
     expect(existsSync(fixture.receiptPath)).toBe(false);
   });
 

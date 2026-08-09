@@ -336,7 +336,10 @@ function parseSignedAuthorizationEnvelope(
     const trustedSigner = trustedSigners.find((signer) =>
       signer.signingKeyId === envelope.signingKeyId &&
       signer.spkiSha256 === signingPublicKeySha256 &&
-      signer.authorizerRoles.includes(authorization.authorizerRole)
+      signer.firmId === authorization.firmId &&
+      signer.authorizerRole === authorization.authorizerRole &&
+      signer.authorizerId === authorization.authorizerId &&
+      signer.authorizerName === authorization.authorizerName
     );
     if (!trustedSigner) throw new Error("untrusted signer");
     signatureValid = verify(
