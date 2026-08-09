@@ -225,6 +225,7 @@ export function deriveLegalAuthorization(
   deliverable: ContentDeliverable,
   currentVersion: DeliverableVersion | null,
   standingAuthorizationActive: boolean,
+  hasUnresolvedClientChangeHold = false,
 ): { authorized: boolean; result: ReleaseAuthorizationResult | null; check: PublicationPacketCheck } {
   if (!currentVersion) {
     return {
@@ -238,6 +239,7 @@ export function deriveLegalAuthorization(
     approvedVersionId: deliverable.approved_version_id,
     targetVersionId: currentVersion.id,
     versionRequiresIndividualReview: currentVersion.requires_individual_review,
+    hasUnresolvedClientChangeHold,
     standingAuthorizationActive,
   });
   if (!result.authorized) {
@@ -511,6 +513,7 @@ export interface AssemblePublicationPacketInput {
   artifacts: PublicationArtifact[];
   readinessInput: Omit<EvaluateReadinessInput, "deliverable">;
   standingAuthorizationActive: boolean;
+  hasUnresolvedClientChangeHold?: boolean;
   ctaRequired: boolean;
   ctaLabel: string | null;
   /** Result of the loader's injected HTTP check for this CTA, or null if not attempted. */
@@ -520,11 +523,11 @@ export interface AssemblePublicationPacketInput {
 
 /** Composes every check above into one packet. Zero findings/checks failing is never assumed -- every branch is checked explicitly and named. */
 export function assemblePublicationPacket(input: AssemblePublicationPacketInput): PublicationPacket {
-  const { deliverable, currentVersion, placement, artifacts, standingAuthorizationActive, ctaRequired, ctaLabel, ctaHttpCheckPassed, currentReceipt } = input;
+  const { deliverable, currentVersion, placement, artifacts, standingAuthorizationActive, hasUnresolvedClientChangeHold = false, ctaRequired, ctaLabel, ctaHttpCheckPassed, currentReceipt } = input;
 
   const checks: PublicationPacketCheck[] = [];
 
-  const legal = deriveLegalAuthorization(deliverable, currentVersion, standingAuthorizationActive);
+  const legal = deriveLegalAuthorization(deliverable, currentVersion, standingAuthorizationActive, hasUnresolvedClientChangeHold);
   checks.push(legal.check);
 
   const copyCheck = checkFinalCopyExists(currentVersion, deliverable.id);

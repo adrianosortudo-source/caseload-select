@@ -74,7 +74,7 @@ const ROWS: Row[] = [
   },
   {
     name: "Scenario E: stale approval (approved_version_id references another version), standing authorization inactive -> blocked, never called approved",
-    input: { deliverableStatus: "approved", approvedVersionId: OTHER_VERSION_ID, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: false, standingAuthorizationActive: false },
+    input: { deliverableStatus: "in_review", approvedVersionId: OTHER_VERSION_ID, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: false, standingAuthorizationActive: false },
     expectedKind: "approved_version_mismatch",
     expectedAuthorized: false,
     expectedPath: null,

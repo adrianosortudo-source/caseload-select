@@ -22,6 +22,9 @@ import {
   type DisplayStateCounts,
 } from "./publication-readiness";
 import { resolveRequirements } from "./publication-requirements";
+import { isVersionReleaseAuthorized, type ReleaseAuthorizationResult } from "./release-authorization";
+import { getStandingAuthorizationState } from "./standing-publishing-authorization";
+import { loadUnresolvedClientChangeHoldVersionIds } from "./deliverable-client-change-holds";
 import type {
   ContentDeliverable,
   DeliverableVersion,
@@ -87,7 +90,10 @@ export interface ManifestDeliverable {
   current_version_id: string | null;
   current_version_number: number | null;
   approved_version_id: string | null;
+  /** Individual-approval fact only; it is not the release gate. */
   approved: boolean;
+  release_authorized: boolean;
+  release_authorization_path: "individual_approval" | "standing_authorization" | null;
   copy_present: boolean;
   required_artifacts: string[];
   existing_artifacts: { artifact_type: string; artifact_id: string; version_id: string; public_url: string | null }[];
@@ -125,6 +131,7 @@ function toManifestDeliverable(
   readiness: DeliverableReadiness,
   artifacts: PublicationArtifact[],
   periodLifecycle: PeriodLifecycle,
+  releaseAuthorization: ReleaseAuthorizationResult | null,
 ): ManifestDeliverable {
   const currentArtifacts = artifacts.filter(
     (a) => a.deliverable_id === deliverable.id && a.version_id === deliverable.current_version_id,
@@ -140,6 +147,8 @@ function toManifestDeliverable(
     current_version_number: currentVersion?.version_number ?? null,
     approved_version_id: deliverable.approved_version_id,
     approved: deliverable.approved_version_id === deliverable.current_version_id && deliverable.current_version_id !== null,
+    release_authorized: releaseAuthorization?.authorized ?? false,
+    release_authorization_path: releaseAuthorization?.authorizationPath ?? null,
     copy_present: readiness.checks.find((c) => c.key === "current_body")?.status === "pass",
     required_artifacts: resolveRequirements(deliverable)
       .filter((r) => r.blocking)
@@ -178,6 +187,11 @@ export async function buildPublicationManifest(
     .eq("period_id", periodId);
   if (delErr) return { ok: false, error: delErr.message };
   const rows = (deliverables ?? []) as ContentDeliverable[];
+  const [standingAuthorization, heldVersionIds] = await Promise.all([
+    getStandingAuthorizationState(period.firm_id),
+    loadUnresolvedClientChangeHoldVersionIds(period.firm_id, rows.map((d) => d.id)),
+  ]);
+  const standingAuthorizationActive = standingAuthorization?.active ?? false;
 
   const versionIds = rows.map((d) => d.current_version_id).filter((id): id is string => !!id);
   const { data: versions, error: verErr } = versionIds.length
@@ -213,15 +227,26 @@ export async function buildPublicationManifest(
 
   for (const deliverable of rows) {
     const currentVersion = deliverable.current_version_id ? (versionById.get(deliverable.current_version_id) ?? null) : null;
+    const releaseAuthorization = currentVersion
+      ? isVersionReleaseAuthorized({
+          deliverableStatus: deliverable.status,
+          approvedVersionId: deliverable.approved_version_id,
+          targetVersionId: currentVersion.id,
+          versionRequiresIndividualReview: currentVersion.requires_individual_review,
+          hasUnresolvedClientChangeHold: heldVersionIds.has(currentVersion.id),
+          standingAuthorizationActive,
+        })
+      : null;
     const input: EvaluateReadinessInput = {
       deliverable,
       currentVersion,
       artifacts: allArtifacts.filter((a) => a.deliverable_id === deliverable.id),
       latestValidationByArtifactId,
+      releaseAuthorization: releaseAuthorization ?? undefined,
     };
     const readiness = evaluateDeliverableReadiness(input);
     allReadiness.push(readiness);
-    const manifestRow = toManifestDeliverable(deliverable, currentVersion, readiness, allArtifacts, periodLifecycle);
+    const manifestRow = toManifestDeliverable(deliverable, currentVersion, readiness, allArtifacts, periodLifecycle, releaseAuthorization);
     if (readiness.excluded) excluded.push(manifestRow);
     else included.push(manifestRow);
   }

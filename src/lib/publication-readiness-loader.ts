@@ -44,6 +44,9 @@ import type {
   PublicationArtifact,
   PublicationArtifactValidation,
 } from "@/lib/types";
+import { isVersionReleaseAuthorized } from "@/lib/release-authorization";
+import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
+import { loadUnresolvedClientChangeHoldVersionIds } from "@/lib/deliverable-client-change-holds";
 
 /**
  * Bundles the evaluatePeriodReadiness result with the title lookup the UI
@@ -104,6 +107,12 @@ export async function loadPlanPublicationReadiness(firmId: string): Promise<Plan
     const rows = deliverables as ContentDeliverable[];
     if (rows.length === 0) return EMPTY_PLAN_READINESS;
 
+    const [standingAuthorization, heldVersionIds] = await Promise.all([
+      getStandingAuthorizationState(firmId),
+      loadUnresolvedClientChangeHoldVersionIds(firmId, rows.map((d) => d.id)),
+    ]);
+    const standingAuthorizationActive = standingAuthorization?.active ?? false;
+
     const versionIds = rows.map((d) => d.current_version_id).filter((id): id is string => !!id);
     const { data: versions, error: verErr } = versionIds.length
       ? await supabase.from("deliverable_versions").select("*").in("id", versionIds)
@@ -154,6 +163,16 @@ export async function loadPlanPublicationReadiness(firmId: string): Promise<Plan
         : null,
       artifacts: allArtifacts.filter((a) => a.deliverable_id === deliverable.id),
       latestValidationByArtifactId,
+      releaseAuthorization: deliverable.current_version_id && versionById.get(deliverable.current_version_id)
+        ? isVersionReleaseAuthorized({
+            deliverableStatus: deliverable.status,
+            approvedVersionId: deliverable.approved_version_id,
+            targetVersionId: deliverable.current_version_id,
+            versionRequiresIndividualReview: Boolean(versionById.get(deliverable.current_version_id)?.requires_individual_review),
+            hasUnresolvedClientChangeHold: heldVersionIds.has(deliverable.current_version_id),
+            standingAuthorizationActive,
+          })
+        : undefined,
     }));
 
     const { items, summary } = evaluatePeriodReadiness(inputs);
@@ -203,6 +222,12 @@ export async function loadPeriodPublicationReadiness(
   const rows = deliverables as ContentDeliverable[];
   if (rows.length === 0) return [];
 
+  const [standingAuthorization, heldVersionIds] = await Promise.all([
+    getStandingAuthorizationState(firmId),
+    loadUnresolvedClientChangeHoldVersionIds(firmId, rows.map((d) => d.id)),
+  ]);
+  const standingAuthorizationActive = standingAuthorization?.active ?? false;
+
   const versionIds = rows.map((d) => d.current_version_id).filter((id): id is string => !!id);
   const { data: versions, error: verErr } = versionIds.length
     ? await supabase.from("deliverable_versions").select("*").in("id", versionIds)
@@ -238,6 +263,16 @@ export async function loadPeriodPublicationReadiness(
       : null,
     artifacts: allArtifacts.filter((a) => a.deliverable_id === deliverable.id),
     latestValidationByArtifactId,
+    releaseAuthorization: deliverable.current_version_id && versionById.get(deliverable.current_version_id)
+      ? isVersionReleaseAuthorized({
+          deliverableStatus: deliverable.status,
+          approvedVersionId: deliverable.approved_version_id,
+          targetVersionId: deliverable.current_version_id,
+          versionRequiresIndividualReview: Boolean(versionById.get(deliverable.current_version_id)?.requires_individual_review),
+          hasUnresolvedClientChangeHold: heldVersionIds.has(deliverable.current_version_id),
+          standingAuthorizationActive,
+        })
+      : undefined,
   }));
 
   return inputs.map(evaluateDeliverableReadiness);

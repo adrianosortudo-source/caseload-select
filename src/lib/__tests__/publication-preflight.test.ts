@@ -503,7 +503,7 @@ describe("buildPreflightReport: releaseAuthorizationByDeliverableId (canonical t
   });
 
   it("supplied and NOT authorized -> reason names the canonical kind, never the old 'not approved'/'version drift' wording", () => {
-    const deliverable = makeDeliverable({ status: "draft", approved_version_id: null });
+    const deliverable = makeDeliverable({ status: "in_review", approved_version_id: null });
     const authorization = isVersionReleaseAuthorized({
       deliverableStatus: deliverable.status,
       approvedVersionId: deliverable.approved_version_id,

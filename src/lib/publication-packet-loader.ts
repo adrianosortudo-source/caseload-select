@@ -17,6 +17,7 @@ import "server-only";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { listCurrentReceiptsByPlacementForDeliverable } from "@/lib/publication-receipts";
 import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
+import { loadUnresolvedClientChangeHoldVersionIds } from "@/lib/deliverable-client-change-holds";
 import {
   assemblePublicationPacket,
   type PublicationPacket,
@@ -84,7 +85,7 @@ export async function loadPublicationPacketsForPeriod(
   const deliverableIds = activeRows.map((d) => d.id);
   const versionIds = activeRows.map((d) => d.current_version_id).filter((id): id is string => !!id);
 
-  const [{ data: versions }, { data: placements }, { data: artifacts }, standingAuthorization] = await Promise.all([
+  const [{ data: versions }, { data: placements }, { data: artifacts }, standingAuthorization, heldVersionIds] = await Promise.all([
     versionIds.length
       ? supabase.from("deliverable_versions").select("*").in("id", versionIds)
       : Promise.resolve({ data: [] as DeliverableVersion[] }),
@@ -95,6 +96,7 @@ export async function loadPublicationPacketsForPeriod(
       ? supabase.from("publication_artifacts").select("*").in("deliverable_id", deliverableIds)
       : Promise.resolve({ data: [] as PublicationArtifact[] }),
     getStandingAuthorizationState(firmId),
+    loadUnresolvedClientChangeHoldVersionIds(firmId, deliverableIds),
   ]);
 
   const versionById = new Map(((versions ?? []) as DeliverableVersion[]).map((v) => [v.id, v]));
@@ -150,6 +152,7 @@ export async function loadPublicationPacketsForPeriod(
           artifacts: allArtifacts,
           readinessInput: { currentVersion, artifacts: deliverableArtifacts, latestValidationByArtifactId },
           standingAuthorizationActive,
+          hasUnresolvedClientChangeHold: currentVersion ? heldVersionIds.has(currentVersion.id) : false,
           ctaRequired,
           ctaLabel: null, // see publication-packet.ts header comment: no schema field exists for this today
           ctaHttpCheckPassed,

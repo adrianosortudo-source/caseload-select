@@ -49,13 +49,16 @@ create function public.set_deliverable_client_change_hold(
 ) returns jsonb
 language plpgsql security definer set search_path = public
 as $$
-declare v_open public.deliverable_client_change_hold_events%rowtype;
+declare v_open public.deliverable_client_change_hold_events%rowtype; v_actor_name text; v_actor_email text;
 begin
   if p_event not in ('opened', 'resolved') or p_actor_role is distinct from 'lawyer' then
     return jsonb_build_object('ok', false, 'error', 'only an authorized firm lawyer may open or resolve a client change hold');
   end if;
-  perform 1 from public.firm_lawyers where id = p_actor_id and firm_id = p_firm_id;
-  if not found then return jsonb_build_object('ok', false, 'error', 'actor is not a lawyer for this firm'); end if;
+  if p_actor_id is null then return jsonb_build_object('ok', false, 'error', 'authenticated lawyer identity is required'); end if;
+  select coalesce(display_name, name), email into v_actor_name, v_actor_email
+    from public.firm_lawyers
+    where id = p_actor_id and firm_id = p_firm_id and role in ('lawyer', 'admin') and disabled = false;
+  if not found then return jsonb_build_object('ok', false, 'error', 'actor is not an active client decision-maker for this firm'); end if;
   perform 1 from public.content_deliverables where id = p_deliverable_id and firm_id = p_firm_id;
   if not found then return jsonb_build_object('ok', false, 'error', 'deliverable not found for this firm'); end if;
   perform 1 from public.deliverable_versions where id = p_version_id and deliverable_id = p_deliverable_id and firm_id = p_firm_id;
@@ -71,7 +74,7 @@ begin
   end if;
   insert into public.deliverable_client_change_hold_events (
     firm_id, deliverable_id, version_id, event, resolves_open_event_id, actor_role, actor_id, actor_name, actor_email, reason
-  ) values (p_firm_id, p_deliverable_id, p_version_id, p_event, p_resolves_open_event_id, p_actor_role, p_actor_id, p_actor_name, p_actor_email, p_reason)
+  ) values (p_firm_id, p_deliverable_id, p_version_id, p_event, p_resolves_open_event_id, p_actor_role, p_actor_id, coalesce(v_actor_name, p_actor_name), v_actor_email, p_reason)
   returning id into v_open.id;
   return jsonb_build_object('ok', true, 'event_id', v_open.id, 'event', p_event);
 end;
@@ -164,11 +167,16 @@ create or replace function public.record_approval_atomic(
   p_ip_address text, p_user_agent text, p_note text, p_attachments jsonb default '[]'::jsonb
 ) returns jsonb language plpgsql security definer set search_path = public
 as $$
-declare v_current_version uuid; v_record_id uuid; v_created_at timestamptz;
+declare v_current_version uuid; v_record_id uuid; v_created_at timestamptz; v_signer_name text; v_signer_email text;
 begin
   if p_decision not in ('approved', 'changes_requested') or p_signer_role is distinct from 'lawyer' then
     return jsonb_build_object('ok', false, 'error', 'invalid approval decision or signer role');
   end if;
+  if p_signer_id is null then return jsonb_build_object('ok', false, 'error', 'authenticated client decision-maker identity is required'); end if;
+  select coalesce(display_name, name), email into v_signer_name, v_signer_email
+    from public.firm_lawyers
+    where id = p_signer_id and firm_id = p_firm_id and role in ('lawyer', 'admin') and disabled = false;
+  if not found then return jsonb_build_object('ok', false, 'error', 'signer is not an active client decision-maker for this firm'); end if;
   select current_version_id into v_current_version from public.content_deliverables
    where id = p_deliverable_id and firm_id = p_firm_id for update;
   if not found then return jsonb_build_object('ok', false, 'error', 'deliverable not found'); end if;
@@ -177,7 +185,7 @@ begin
     deliverable_id, version_id, firm_id, decision, signer_role, signer_id, signer_name, signer_email,
     attestation, version_number, deliverable_title, ip_address, user_agent, note, attachments
   ) values (
-    p_deliverable_id, p_version_id, p_firm_id, p_decision, p_signer_role, p_signer_id, p_signer_name, p_signer_email,
+    p_deliverable_id, p_version_id, p_firm_id, p_decision, p_signer_role, p_signer_id, coalesce(v_signer_name, p_signer_name), v_signer_email,
     p_attestation, p_version_number, p_deliverable_title, p_ip_address, p_user_agent, p_note, coalesce(p_attachments, '[]'::jsonb)
   ) returning id, created_at into v_record_id, v_created_at;
   if p_decision = 'approved' then
@@ -196,6 +204,52 @@ end;
 $$;
 revoke all on function public.record_approval_atomic(uuid, uuid, uuid, text, text, uuid, text, text, text, int, text, text, text, text, jsonb) from public, anon, authenticated;
 grant execute on function public.record_approval_atomic(uuid, uuid, uuid, text, text, uuid, text, text, text, int, text, text, text, text, jsonb) to service_role;
+
+-- The event ledger is an authorization boundary. Do not accept a caller's
+-- claimed role, name, or email when the database can prove the active firm
+-- decision-maker identity itself.
+create or replace function public.set_standing_publishing_authorization(
+  p_firm_id uuid, p_event text, p_actor_role text, p_actor_id uuid,
+  p_actor_name text, p_actor_email text, p_authorization_text text,
+  p_policy_version text, p_scope text, p_notification_preference text,
+  p_reason text, p_ip_address text, p_user_agent text
+) returns jsonb language plpgsql security definer set search_path = public
+as $$
+declare v_new_row record; v_actor_name text; v_actor_email text;
+begin
+  if p_event not in ('enabled', 'disabled') then return jsonb_build_object('ok', false, 'error', 'event must be enabled or disabled'); end if;
+  if p_actor_role is distinct from 'lawyer' or p_actor_id is null then
+    return jsonb_build_object('ok', false, 'error', 'authenticated client decision-maker identity is required');
+  end if;
+  select coalesce(display_name, name), email into v_actor_name, v_actor_email
+    from public.firm_lawyers
+    where id = p_actor_id and firm_id = p_firm_id and role in ('lawyer', 'admin') and disabled = false;
+  if not found then return jsonb_build_object('ok', false, 'error', 'actor is not an active client decision-maker for this firm'); end if;
+  if p_event = 'enabled' and (
+    p_authorization_text is null or length(btrim(p_authorization_text)) = 0 or
+    p_policy_version is null or length(btrim(p_policy_version)) = 0 or
+    p_scope is null or length(btrim(p_scope)) = 0 or
+    p_notification_preference not in ('per_publication', 'weekly_digest')
+  ) then return jsonb_build_object('ok', false, 'error', 'complete standing authorization terms are required to enable'); end if;
+  perform 1 from public.intake_firms where id = p_firm_id for update;
+  if not found then return jsonb_build_object('ok', false, 'error', 'firm not found'); end if;
+  insert into public.standing_publishing_authorizations (
+    firm_id, event, actor_role, actor_id, actor_name, actor_email,
+    authorization_text, policy_version, scope, notification_preference,
+    reason, ip_address, user_agent
+  ) values (
+    p_firm_id, p_event, 'lawyer', p_actor_id, coalesce(v_actor_name, p_actor_name), v_actor_email,
+    case when p_event = 'enabled' then p_authorization_text else null end,
+    case when p_event = 'enabled' then p_policy_version else null end,
+    case when p_event = 'enabled' then p_scope else null end,
+    case when p_event = 'enabled' then p_notification_preference else null end,
+    p_reason, p_ip_address, p_user_agent
+  ) returning * into v_new_row;
+  return jsonb_build_object('ok', true, 'event_id', v_new_row.id, 'event_seq', v_new_row.event_seq, 'event', v_new_row.event, 'effective_at', v_new_row.effective_at);
+end;
+$$;
+revoke all on function public.set_standing_publishing_authorization(uuid, text, text, uuid, text, text, text, text, text, text, text, text, text) from public, anon, authenticated;
+grant execute on function public.set_standing_publishing_authorization(uuid, text, text, uuid, text, text, text, text, text, text, text, text, text) to service_role;
 
 notify pgrst, 'reload schema';
 
