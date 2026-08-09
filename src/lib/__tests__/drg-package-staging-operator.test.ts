@@ -13,24 +13,23 @@ import {
   type SealedDrgWeeklyPackage,
 } from "../drg-package-staging";
 import {
-  type DrgPackageStagingAuthorization,
+  type DrgPackageStagingExecutionAuthorization,
   type DrgPackageStagingRpcClient,
   type DrgPackageStorageClient,
   type DrgStagingOperationReceipt,
-  stageAuthorizedDrgPackage,
+  stageExecutionAuthorizedDrgPackage,
 } from "../drg-package-staging-adapter";
 import {
   authorizationEnvelopeSigningPayload,
   parseDrgOperatorArgs,
   runDrgStagingOperator,
-  type SignedDrgStagingAuthorizationEnvelope,
+  type SignedDrgStagingExecutionAuthorizationEnvelope,
 } from "../../../scripts/stage-drg-weekly-package";
 
 const FIRM_ID = "11111111-1111-4111-8111-111111111111";
 const PERIOD_ID = "22222222-2222-4222-8222-222222222222";
 const ACTOR_ID = "33333333-3333-4333-8333-333333333333";
-const AUTHORIZER_ID = "55555555-5555-4555-8555-555555555555";
-const AUTHORIZATION_ID = "drg-auth-2026-w33";
+const EXECUTION_AUTHORIZATION_ID = "drg-execution-2026-w33";
 const NOW = new Date("2026-08-09T15:00:00.000Z");
 const tempFolders: string[] = [];
 
@@ -90,7 +89,7 @@ interface FixtureOptions {
   readonly authorizedAt?: string;
   readonly expiresAt?: string;
   readonly trustedSignerFirmId?: string;
-  readonly mutateAuthorization?: (authorization: DrgPackageStagingAuthorization) => DrgPackageStagingAuthorization;
+  readonly mutateAuthorization?: (authorization: DrgPackageStagingExecutionAuthorization) => DrgPackageStagingExecutionAuthorization;
 }
 
 function makeFixture(options: FixtureOptions = {}) {
@@ -103,31 +102,28 @@ function makeFixture(options: FixtureOptions = {}) {
   writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
   const packageFileSha256 = sha256File(packagePath);
   const keys = generateKeyPairSync("ed25519");
-  const baseAuthorization: DrgPackageStagingAuthorization = {
-    schemaVersion: "drg-package-staging-authorization/v1",
-    authorizationId: AUTHORIZATION_ID,
+  const baseAuthorization: DrgPackageStagingExecutionAuthorization = {
+    schemaVersion: "drg-package-staging-execution-authorization/v1",
+    executionAuthorizationId: EXECUTION_EXECUTION_AUTHORIZATION_ID,
     firmId: pkg.firmId,
     periodId: pkg.periodId,
     packageId: pkg.packageId,
     packageVersion: pkg.packageVersion,
     packageSha256: pkg.packageSha256,
-    actorRole: "operator",
-    actorId: ACTOR_ID,
-    actorName: "DRG automation operator",
-    authorizerRole: "lawyer",
-    authorizerId: AUTHORIZER_ID,
-    authorizerName: "DRG Law approving lawyer",
+    operatorRole: "operator",
+    operatorId: ACTOR_ID,
+    operatorName: "DRG automation operator",
     authorizedAt: options.authorizedAt ?? "2026-08-09T14:55:00.000Z",
     expiresAt: options.expiresAt ?? "2026-08-09T15:30:00.000Z",
   };
   const authorization = options.mutateAuthorization?.(baseAuthorization) ?? baseAuthorization;
-  const signedFields: Omit<SignedDrgStagingAuthorizationEnvelope, "signatureBase64"> = {
-    schemaVersion: "drg-package-staging-authorization-envelope/v1",
+  const signedFields: Omit<SignedDrgStagingExecutionAuthorizationEnvelope, "signatureBase64"> = {
+    schemaVersion: "drg-package-staging-execution-authorization-envelope/v1",
     packageFileSha256,
     recordedAt: authorization.authorizedAt,
     signingKeyId: "drg-operator-test-key",
     signatureAlgorithm: "ed25519",
-    authorization,
+    executionAuthorization: authorization,
   };
   const signatureBase64 = sign(
     null,
@@ -143,9 +139,8 @@ function makeFixture(options: FixtureOptions = {}) {
     signingKeyId: signedFields.signingKeyId,
     spkiSha256: signingPublicKeySha256,
     firmId: options.trustedSignerFirmId ?? pkg.firmId,
-    authorizerRole: "lawyer" as const,
-    authorizerId: AUTHORIZER_ID,
-    authorizerName: "DRG Law approving lawyer",
+    operatorId: ACTOR_ID,
+    operatorName: "DRG automation operator",
   }];
   const env: NodeJS.ProcessEnv = {
     NODE_ENV: "test",
@@ -174,13 +169,15 @@ function fakeClients(): { rpc: DrgPackageStagingRpcClient; storage: DrgPackageSt
 
 function operationReceipt(pkg: SealedDrgWeeklyPackage, writesPerformed: number, replay: boolean): DrgStagingOperationReceipt {
   return {
-    schemaVersion: "drg-package-staging-receipt/v1",
+    schemaVersion: "drg-package-staging-execution-receipt/v1",
+    operationKind: "deliverables_staging",
+    releaseAuthorizationGranted: false,
     operationId: "44444444-4444-4444-8444-444444444444",
     idempotencyKey: "drg-stage-idempotency-key",
-    authorizationId: AUTHORIZATION_ID,
-    authorizerRole: "lawyer",
-    authorizerId: AUTHORIZER_ID,
-    authorizerName: "DRG Law approving lawyer",
+    executionAuthorizationId: EXECUTION_EXECUTION_AUTHORIZATION_ID,
+    operatorRole: "operator",
+    operatorId: ACTOR_ID,
+    operatorName: "DRG automation operator",
     signingKeyId: "drg-operator-test-key",
     signingPublicKeySha256: "a".repeat(64),
     authorizationEnvelopeSha256: "b".repeat(64),
@@ -370,7 +367,7 @@ describe("DRG staging operator plan-only safety", () => {
       mutateAuthorization: (authorization) => ({
         ...authorization,
         authorizerRole: "operator",
-      } as unknown as DrgPackageStagingAuthorization),
+      } as unknown as DrgPackageStagingExecutionAuthorization),
     });
     const createClients = vi.fn(fakeClients);
     const result = await runDrgStagingOperator({
@@ -389,21 +386,21 @@ describe("DRG staging operator plan-only safety", () => {
   });
 
   it.each([
-    ["role", (authorization: DrgPackageStagingAuthorization) => ({
+    ["role", (authorization: DrgPackageStagingExecutionAuthorization) => ({
       ...authorization,
       authorizerRole: "client_authorized" as const,
     })],
-    ["id", (authorization: DrgPackageStagingAuthorization) => ({
+    ["id", (authorization: DrgPackageStagingExecutionAuthorization) => ({
       ...authorization,
       authorizerId: "77777777-7777-4777-8777-777777777777",
     })],
-    ["name", (authorization: DrgPackageStagingAuthorization) => ({
+    ["name", (authorization: DrgPackageStagingExecutionAuthorization) => ({
       ...authorization,
       authorizerName: "Another approving lawyer",
     })],
   ] satisfies ReadonlyArray<readonly [
     string,
-    (authorization: DrgPackageStagingAuthorization) => DrgPackageStagingAuthorization,
+    (authorization: DrgPackageStagingExecutionAuthorization) => DrgPackageStagingExecutionAuthorization,
   ]>)("rejects a valid trusted signature with mismatched authorizer %s", async (_field, mutateAuthorization) => {
     const fixture = makeFixture({ mutateAuthorization });
     const clients = fakeClients();
@@ -455,14 +452,14 @@ describe("DRG staging operator plan-only safety", () => {
   it("rejects a fresh valid key pair even when mutable runtime env supplies its matching PEM", async () => {
     const fixture = makeFixture();
     const forgedKeys = generateKeyPairSync("ed25519");
-    const originalEnvelope = JSON.parse(readFileSync(fixture.authorizationPath, "utf8")) as SignedDrgStagingAuthorizationEnvelope;
-    const forgedSignedFields: Omit<SignedDrgStagingAuthorizationEnvelope, "signatureBase64"> = {
+    const originalEnvelope = JSON.parse(readFileSync(fixture.authorizationPath, "utf8")) as SignedDrgStagingExecutionAuthorizationEnvelope;
+    const forgedSignedFields: Omit<SignedDrgStagingExecutionAuthorizationEnvelope, "signatureBase64"> = {
       schemaVersion: originalEnvelope.schemaVersion,
       packageFileSha256: originalEnvelope.packageFileSha256,
       recordedAt: originalEnvelope.recordedAt,
       signingKeyId: originalEnvelope.signingKeyId,
       signatureAlgorithm: originalEnvelope.signatureAlgorithm,
-      authorization: originalEnvelope.authorization,
+      executionAuthorization: originalEnvelope.executionAuthorization,
     };
     const forgedSignature = sign(
       null,
@@ -597,9 +594,9 @@ describe("DRG staging operator explicit execution", () => {
   it("passes the exact in-memory package, authorization, snapshot, hashers, RPC, and storage to the live adapter", async () => {
     const fixture = makeFixture();
     const clients = fakeClients();
-    const stagePackage = vi.fn(async (input: Parameters<typeof stageAuthorizedDrgPackage>[0]) => {
+    const stagePackage = vi.fn(async (input: Parameters<typeof stageExecutionAuthorizedDrgPackage>[0]) => {
       expect(input.pkg).toEqual(fixture.pkg);
-      expect(input.authorization.authorizationId).toBe(AUTHORIZATION_ID);
+      expect(input.executionAuthorization.executionAuthorizationId).toBe(EXECUTION_AUTHORIZATION_ID);
       expect(input.snapshot).toEqual(emptySnapshot(fixture.pkg));
       expect(input.sha256("proof")).toBe(sha256Text("proof"));
       expect(input.sha256Bytes(new TextEncoder().encode("proof"))).toBe(sha256Text("proof"));
@@ -657,7 +654,7 @@ describe("DRG staging operator explicit execution", () => {
 describe("server-only boundary", () => {
   it("has no HTTP route and always wires execution through the byte-verifying live adapter", () => {
     const source = readFileSync(join(process.cwd(), "scripts", "stage-drg-weekly-package.ts"), "utf8");
-    expect(source).toContain("stageAuthorizedDrgPackage");
+    expect(source).toContain("stageExecutionAuthorizedDrgPackage");
     expect(source).toContain("sha256Bytes");
     expect(source).not.toMatch(/src\/app\/api|NextRequest|NextResponse|fetch\s*\(/);
   });

@@ -7,15 +7,14 @@
  * supply the matching public-key bytes, but may never create a new trust root.
  */
 
-export interface DrgTrustedStagingAuthorizationSigner {
+export interface DrgTrustedStagingExecutionSigner {
   readonly signingKeyId: string;
   readonly spkiSha256: string;
   readonly firmId: string;
-  readonly authorizerRole: "lawyer" | "client_authorized";
-  readonly authorizerId: string;
-  readonly authorizerName: string;
+  readonly operatorId: string;
+  readonly operatorName: string;
 }
 
-export const DRG_TRUSTED_STAGING_AUTHORIZATION_SIGNERS = Object.freeze(
-  [] as readonly DrgTrustedStagingAuthorizationSigner[],
+export const DRG_TRUSTED_STAGING_EXECUTION_SIGNERS = Object.freeze(
+  [] as readonly DrgTrustedStagingExecutionSigner[],
 );

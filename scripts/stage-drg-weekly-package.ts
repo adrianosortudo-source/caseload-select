@@ -31,16 +31,16 @@ import {
   type SealedDrgWeeklyPackage,
 } from "../src/lib/drg-package-staging";
 import {
-  DRG_TRUSTED_STAGING_AUTHORIZATION_SIGNERS,
-  type DrgTrustedStagingAuthorizationSigner,
+  DRG_TRUSTED_STAGING_EXECUTION_SIGNERS,
+  type DrgTrustedStagingExecutionSigner,
 } from "../src/lib/drg-package-staging-authority";
 import {
   readLiveDrgStagingSnapshot,
-  stageAuthorizedDrgPackage,
-  validateDrgPackageStagingAuthorization,
+  stageExecutionAuthorizedDrgPackage,
+  validateDrgPackageStagingExecutionAuthorization,
   type AuthorizedDrgStagingResult,
-  type DrgPackageStagingAuthorization,
-  type DrgPackageStagingAuthorizationEvidence,
+  type DrgPackageStagingExecutionAuthorization,
+  type DrgPackageStagingExecutionAuthorizationEvidence,
   type DrgPackageStagingRpcClient,
   type DrgPackageStorageClient,
 } from "../src/lib/drg-package-staging-adapter";
@@ -63,13 +63,13 @@ export interface DrgOperatorArgs {
   readonly productionAcknowledgement: string | null;
 }
 
-export interface SignedDrgStagingAuthorizationEnvelope {
-  readonly schemaVersion: "drg-package-staging-authorization-envelope/v1";
+export interface SignedDrgStagingExecutionAuthorizationEnvelope {
+  readonly schemaVersion: "drg-package-staging-execution-authorization-envelope/v1";
   readonly packageFileSha256: string;
   readonly recordedAt: string;
   readonly signingKeyId: string;
   readonly signatureAlgorithm: "ed25519";
-  readonly authorization: DrgPackageStagingAuthorization;
+  readonly executionAuthorization: DrgPackageStagingExecutionAuthorization;
   readonly signatureBase64: string;
 }
 
@@ -86,11 +86,10 @@ export interface DrgOperatorReceipt {
   readonly target: DrgStagingTarget;
   readonly packageFileSha256: string;
   readonly authorizationFileSha256: string;
-  readonly authorizationId: string;
-  readonly actorId: string;
-  readonly authorizerRole: "lawyer" | "client_authorized";
-  readonly authorizerId: string;
-  readonly authorizerName: string;
+  readonly executionAuthorizationId: string;
+  readonly operatorId: string;
+  readonly operatorName: string;
+  readonly releaseAuthorizationGranted: false;
   readonly signingKeyId: string;
   readonly signingPublicKeySha256: string;
   readonly authorizationEnvelopeSha256: string;
@@ -130,9 +129,9 @@ export interface RunDrgStagingOperatorOptions {
     readonly pkg: SealedDrgWeeklyPackage;
     readonly rpc: DrgPackageStagingRpcClient;
   }) => Promise<DrgPortalStagingSnapshot>;
-  readonly stagePackage?: typeof stageAuthorizedDrgPackage;
+  readonly stagePackage?: typeof stageExecutionAuthorizedDrgPackage;
   readonly receiptId?: () => string;
-  readonly trustedSigners?: readonly DrgTrustedStagingAuthorizationSigner[];
+  readonly trustedSigners?: readonly DrgTrustedStagingExecutionSigner[];
   readonly log?: (message: string) => void;
   readonly logError?: (message: string) => void;
 }
@@ -266,19 +265,18 @@ function parseExactSealedPackage(raw: unknown): SealedDrgWeeklyPackage {
 }
 
 export function authorizationEnvelopeSigningPayload(
-  envelope: Omit<SignedDrgStagingAuthorizationEnvelope, "signatureBase64">,
+  envelope: Omit<SignedDrgStagingExecutionAuthorizationEnvelope, "signatureBase64">,
 ): string {
   return canonicalJson(envelope);
 }
 
-function parseAuthorizationRecord(raw: unknown): DrgPackageStagingAuthorization {
+function parseAuthorizationRecord(raw: unknown): DrgPackageStagingExecutionAuthorization {
   if (!isRecord(raw)) throw new Error("authorization record must be an object");
   assertExactKeys(raw, [
-    "schemaVersion", "authorizationId", "firmId", "periodId", "packageId", "packageVersion",
-    "packageSha256", "actorRole", "actorId", "actorName", "authorizerRole", "authorizerId",
-    "authorizerName", "authorizedAt", "expiresAt",
+    "schemaVersion", "executionAuthorizationId", "firmId", "periodId", "packageId", "packageVersion",
+    "packageSha256", "operatorRole", "operatorId", "operatorName", "authorizedAt", "expiresAt",
   ], "authorization record");
-  return raw as unknown as DrgPackageStagingAuthorization;
+  return raw as unknown as DrgPackageStagingExecutionAuthorization;
 }
 
 function parseSignedAuthorizationEnvelope(
@@ -287,16 +285,16 @@ function parseSignedAuthorizationEnvelope(
   pkg: SealedDrgWeeklyPackage,
   packageFileSha256: string,
   now: Date,
-  trustedSigners: readonly DrgTrustedStagingAuthorizationSigner[],
-): { envelope: SignedDrgStagingAuthorizationEnvelope; signingPublicKeySha256: string } {
+  trustedSigners: readonly DrgTrustedStagingExecutionSigner[],
+): { envelope: SignedDrgStagingExecutionAuthorizationEnvelope; signingPublicKeySha256: string } {
   if (!isRecord(raw)) throw new Error("authorization file must contain one JSON object");
   assertExactKeys(raw, [
     "schemaVersion", "packageFileSha256", "recordedAt", "signingKeyId", "signatureAlgorithm",
-    "authorization", "signatureBase64",
+    "executionAuthorization", "signatureBase64",
   ], "authorization envelope");
-  const authorization = parseAuthorizationRecord(raw.authorization);
-  const envelope = { ...raw, authorization } as unknown as SignedDrgStagingAuthorizationEnvelope;
-  if (envelope.schemaVersion !== "drg-package-staging-authorization-envelope/v1") {
+  const executionAuthorization = parseAuthorizationRecord(raw.executionAuthorization);
+  const envelope = { ...raw, executionAuthorization } as unknown as SignedDrgStagingExecutionAuthorizationEnvelope;
+  if (envelope.schemaVersion !== "drg-package-staging-execution-authorization-envelope/v1") {
     throw new Error("unsupported authorization envelope schema");
   }
   if (envelope.packageFileSha256 !== packageFileSha256) {
@@ -305,11 +303,11 @@ function parseSignedAuthorizationEnvelope(
   if (envelope.signatureAlgorithm !== "ed25519") throw new Error("authorization signature algorithm must be ed25519");
   if (!envelope.signingKeyId.trim()) throw new Error("authorization signing key id is required");
   const recordedAt = Date.parse(envelope.recordedAt);
-  if (!Number.isFinite(recordedAt) || envelope.recordedAt !== authorization.authorizedAt) {
+  if (!Number.isFinite(recordedAt) || envelope.recordedAt !== executionAuthorization.authorizedAt) {
     throw new Error("authorization recording timestamp must equal the authorized timestamp");
   }
   if (recordedAt > now.getTime() + 5 * 60_000) throw new Error("authorization recording timestamp is in the future");
-  validateDrgPackageStagingAuthorization(authorization, pkg, now);
+  validateDrgPackageStagingExecutionAuthorization(executionAuthorization, pkg, now);
 
   const publicKeyPem = env.DRG_STAGING_AUTHORIZATION_PUBLIC_KEY_PEM;
   if (!publicKeyPem) throw new Error("trusted authorization public key is missing");
@@ -318,13 +316,13 @@ function parseSignedAuthorizationEnvelope(
   if (signature.length !== 64 || signature.toString("base64") !== envelope.signatureBase64) {
     throw new Error("authorization signature is malformed");
   }
-  const signedFields: Omit<SignedDrgStagingAuthorizationEnvelope, "signatureBase64"> = {
+  const signedFields: Omit<SignedDrgStagingExecutionAuthorizationEnvelope, "signatureBase64"> = {
     schemaVersion: envelope.schemaVersion,
     packageFileSha256: envelope.packageFileSha256,
     recordedAt: envelope.recordedAt,
     signingKeyId: envelope.signingKeyId,
     signatureAlgorithm: envelope.signatureAlgorithm,
-    authorization: envelope.authorization,
+    executionAuthorization: envelope.executionAuthorization,
   };
   let signatureValid = false;
   let publicKey: ReturnType<typeof createPublicKey>;
@@ -336,10 +334,9 @@ function parseSignedAuthorizationEnvelope(
     const trustedSigner = trustedSigners.find((signer) =>
       signer.signingKeyId === envelope.signingKeyId &&
       signer.spkiSha256 === signingPublicKeySha256 &&
-      signer.firmId === authorization.firmId &&
-      signer.authorizerRole === authorization.authorizerRole &&
-      signer.authorizerId === authorization.authorizerId &&
-      signer.authorizerName === authorization.authorizerName
+      signer.firmId === executionAuthorization.firmId &&
+      signer.operatorId === executionAuthorization.operatorId &&
+      signer.operatorName === executionAuthorization.operatorName
     );
     if (!trustedSigner) throw new Error("untrusted signer");
     signatureValid = verify(
@@ -452,7 +449,7 @@ function errorMessage(error: unknown): string {
 function receiptForPlan(input: {
   readonly args: DrgOperatorArgs;
   readonly pkg: SealedDrgWeeklyPackage;
-  readonly authorization: DrgPackageStagingAuthorizationEvidence;
+  readonly executionAuthorization: DrgPackageStagingExecutionAuthorizationEvidence;
   readonly plan: Extract<DrgStagingPlan, { kind: "atomic_plan" }>;
   readonly reconciliationStatus: "exact_match" | "not_reconciled" | "blocked";
   readonly authorizationFileSha256: string;
@@ -467,14 +464,13 @@ function receiptForPlan(input: {
     target: input.args.target,
     packageFileSha256: input.args.packageFileSha256,
     authorizationFileSha256: input.authorizationFileSha256,
-    authorizationId: input.authorization.authorizationId,
-    actorId: input.authorization.actorId,
-    authorizerRole: input.authorization.authorizerRole,
-    authorizerId: input.authorization.authorizerId,
-    authorizerName: input.authorization.authorizerName,
-    signingKeyId: input.authorization.signingKeyId,
-    signingPublicKeySha256: input.authorization.signingPublicKeySha256,
-    authorizationEnvelopeSha256: input.authorization.authorizationEnvelopeSha256,
+    executionAuthorizationId: input.executionAuthorization.executionAuthorizationId,
+    operatorId: input.executionAuthorization.operatorId,
+    operatorName: input.executionAuthorization.operatorName,
+    releaseAuthorizationGranted: false,
+    signingKeyId: input.executionAuthorization.signingKeyId,
+    signingPublicKeySha256: input.executionAuthorization.signingPublicKeySha256,
+    authorizationEnvelopeSha256: input.executionAuthorization.authorizationEnvelopeSha256,
     firmId: input.pkg.firmId,
     periodId: input.pkg.periodId,
     packageId: input.pkg.packageId,
@@ -488,7 +484,7 @@ function receiptForPlan(input: {
 function receiptForExecution(input: {
   readonly args: DrgOperatorArgs;
   readonly pkg: SealedDrgWeeklyPackage;
-  readonly authorization: DrgPackageStagingAuthorizationEvidence;
+  readonly executionAuthorization: DrgPackageStagingExecutionAuthorizationEvidence;
   readonly plan: Extract<DrgStagingPlan, { kind: "atomic_plan" }>;
   readonly result: Extract<AuthorizedDrgStagingResult, { status: "reconciled" }>;
   readonly authorizationFileSha256: string;
@@ -503,14 +499,13 @@ function receiptForExecution(input: {
     target: input.args.target,
     packageFileSha256: input.args.packageFileSha256,
     authorizationFileSha256: input.authorizationFileSha256,
-    authorizationId: input.authorization.authorizationId,
-    actorId: input.authorization.actorId,
-    authorizerRole: input.authorization.authorizerRole,
-    authorizerId: input.authorization.authorizerId,
-    authorizerName: input.authorization.authorizerName,
-    signingKeyId: input.authorization.signingKeyId,
-    signingPublicKeySha256: input.authorization.signingPublicKeySha256,
-    authorizationEnvelopeSha256: input.authorization.authorizationEnvelopeSha256,
+    executionAuthorizationId: input.executionAuthorization.executionAuthorizationId,
+    operatorId: input.executionAuthorization.operatorId,
+    operatorName: input.executionAuthorization.operatorName,
+    releaseAuthorizationGranted: false,
+    signingKeyId: input.executionAuthorization.signingKeyId,
+    signingPublicKeySha256: input.executionAuthorization.signingPublicKeySha256,
+    authorizationEnvelopeSha256: input.executionAuthorization.authorizationEnvelopeSha256,
     firmId: input.pkg.firmId,
     periodId: input.pkg.periodId,
     packageId: input.pkg.packageId,
@@ -562,11 +557,11 @@ export async function runDrgStagingOperator(
       pkg,
       actualPackageFileSha256,
       now,
-      options.trustedSigners ?? DRG_TRUSTED_STAGING_AUTHORIZATION_SIGNERS,
+      options.trustedSigners ?? DRG_TRUSTED_STAGING_EXECUTION_SIGNERS,
     );
     const envelope = verified.envelope;
-    const authorization: DrgPackageStagingAuthorizationEvidence = {
-      ...envelope.authorization,
+    const executionAuthorization: DrgPackageStagingExecutionAuthorizationEvidence = {
+      ...envelope.executionAuthorization,
       signingKeyId: envelope.signingKeyId,
       signingPublicKeySha256: verified.signingPublicKeySha256,
       authorizationEnvelopeSha256: actualAuthorizationFileSha256,
@@ -590,7 +585,7 @@ export async function runDrgStagingOperator(
       receipt = receiptForPlan({
         args,
         pkg,
-        authorization,
+        executionAuthorization,
         plan,
         reconciliationStatus: reconciliation.status,
         authorizationFileSha256: actualAuthorizationFileSha256,
@@ -598,10 +593,10 @@ export async function runDrgStagingOperator(
         receiptId: (options.receiptId ?? randomUUID)(),
       });
     } else {
-      const result = await (options.stagePackage ?? stageAuthorizedDrgPackage)({
+      const result = await (options.stagePackage ?? stageExecutionAuthorizedDrgPackage)({
         pkg,
         snapshot,
-        authorization,
+        executionAuthorization,
         sha256: sha256Text,
         sha256Bytes,
         rpc: clients.rpc,
@@ -612,7 +607,7 @@ export async function runDrgStagingOperator(
       receipt = receiptForExecution({
         args,
         pkg,
-        authorization,
+        executionAuthorization,
         plan,
         result,
         authorizationFileSha256: actualAuthorizationFileSha256,
