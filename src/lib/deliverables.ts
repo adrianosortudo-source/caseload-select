@@ -206,6 +206,7 @@ export async function getContentPlan(
     period_id: d.period_id,
     publish_date: d.publish_date,
     published_at: d.published_at,
+    current_version_id: d.current_version_id,
     requires_individual_review: d.current_version_id
       ? (flagByVersionId.get(d.current_version_id) ?? false)
       : false,

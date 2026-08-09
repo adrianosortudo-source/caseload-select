@@ -20,6 +20,8 @@ import DeliverableReview from "@/components/portal/DeliverableReview";
 import { listPlacementsForDeliverable } from "@/lib/content-placements";
 import { getLatestClaimForPlacement } from "@/lib/publication-placement-claims";
 import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
+import { loadUnresolvedClientChangeHoldDeliverableIds } from "@/lib/deliverable-client-change-holds";
+import { isVersionReleaseAuthorized } from "@/lib/release-authorization";
 import PublicationStatusSummary, {
   type PlacementStatusRow,
 } from "@/components/portal/PublicationStatusSummary";
@@ -75,13 +77,22 @@ export default async function DeliverableReviewPage({
     signerEmail = branding?.lawyer_email ?? null;
   }
 
-  const authState = await getStandingAuthorizationState(firmId);
+  const [authState, heldDeliverableIds, holdEvents] = await Promise.all([
+    getStandingAuthorizationState(firmId),
+    loadUnresolvedClientChangeHoldDeliverableIds(firmId, [detail.deliverable.id]),
+    supabase.from("deliverable_client_change_hold_events").select("id, version_id, event, resolves_open_event_id").eq("firm_id", firmId).eq("deliverable_id", detail.deliverable.id),
+  ]);
   const currentVersion =
     detail.versions.find((v) => v.id === detail.deliverable.current_version_id) ?? null;
   // DR-107: folds both eligibility conditions (auth on, version not flagged)
   // into one boolean so DeliverableReview/StatusPill need no auth knowledge
   // of their own.
-  const standingAuthEligible = !!authState?.active && !currentVersion?.requires_individual_review;
+  const unresolvedOpenIds = new Set((holdEvents.data ?? []).filter((event) => event.event === "resolved").map((event) => event.resolves_open_event_id));
+  const unresolvedHold = (holdEvents.data ?? []).find((event) => event.event === "opened" && !unresolvedOpenIds.has(event.id)) ?? null;
+  const releaseAuthorization = currentVersion && detail.deliverable.current_version_id
+    ? isVersionReleaseAuthorized({ deliverableStatus: detail.deliverable.status, approvedVersionId: detail.deliverable.approved_version_id, targetVersionId: detail.deliverable.current_version_id, versionRequiresIndividualReview: currentVersion.requires_individual_review, hasUnresolvedClientChangeHold: heldDeliverableIds.has(detail.deliverable.id), standingAuthorizationActive: authState?.active ?? false })
+    : null;
+  const standingAuthEligible = releaseAuthorization?.authorizationPath === "standing_authorization";
 
   const statusRows = await buildPlacementStatusRows(detail, authState);
 
@@ -106,6 +117,7 @@ export default async function DeliverableReviewPage({
         initialDetail={detail}
         supportPreview={isLawyerPreview}
         standingAuthEligible={standingAuthEligible}
+        unresolvedHold={unresolvedHold ? { id: unresolvedHold.id, versionId: unresolvedHold.version_id } : null}
       />
     </div>
   );

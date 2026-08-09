@@ -85,6 +85,7 @@ export default function DeliverableReview({
   initialDetail,
   supportPreview = false,
   standingAuthEligible = false,
+  unresolvedHold = null,
 }: {
   firmId: string;
   viewerRole: "operator" | "lawyer";
@@ -95,6 +96,7 @@ export default function DeliverableReview({
   initialDetail: Detail;
   supportPreview?: boolean;
   standingAuthEligible?: boolean;
+  unresolvedHold?: { id: string; versionId: string } | null;
 }) {
   const [detail, setDetail] = useState<Detail>(initialDetail);
   const { deliverable, versions, comments, approvals } = detail;
@@ -346,6 +348,7 @@ export default function DeliverableReview({
             status={deliverable.status}
             onSigned={refetch}
             supportPreview={supportPreview}
+            unresolvedHold={unresolvedHold}
           />
           <div className="space-y-3">
             <ApprovalHistory
@@ -905,6 +908,7 @@ function FloatingAnnotationPopover({
   onDismiss,
   onPosted,
   supportPreview = false,
+  unresolvedHold = null,
 }: {
   annotation: DeliverableAnnotation;
   position: AnnotationPosition;
@@ -915,10 +919,24 @@ function FloatingAnnotationPopover({
   onDismiss: () => void;
   onPosted: () => Promise<void>;
   supportPreview?: boolean;
+  unresolvedHold?: { id: string; versionId: string } | null;
 }) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolvingHold, setResolvingHold] = useState(false);
+
+  async function resolveHold() {
+    if (!unresolvedHold || !selectedVersion) return;
+    setResolvingHold(true); setError(null);
+    try {
+      const res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/change-holds/${unresolvedHold.id}/resolve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version_id: unresolvedHold.versionId }) });
+      const json = await res.json();
+      if (!res.ok || !json.ok) setError(json.error ?? "Could not resolve the requested changes hold.");
+      else await onSigned();
+    } catch (err) { setError(err instanceof Error ? err.message : "Network error."); }
+    finally { setResolvingHold(false); }
+  }
   const wrapRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -1535,6 +1553,12 @@ function SignOffPanel({
   return (
     <div className="bg-white border-2 border-navy/15 p-4">
       <h3 className="text-sm font-bold text-navy mb-1">Sign-off</h3>
+      {unresolvedHold && isCurrentVersion && (
+        <div className="mb-3 border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 space-y-2">
+          <p>Requested changes are holding publication. Resolving this hold does not approve this version.</p>
+          {viewerRole === "lawyer" && <button type="button" onClick={resolveHold} disabled={supportPreview || resolvingHold} className="border border-amber-800 px-2 py-1 font-semibold disabled:opacity-50">{resolvingHold ? "Resolving..." : "Mark requested changes resolved"}</button>}
+        </div>
+      )}
       {status === "approved" && (
         <p className="text-xs text-green-pass font-semibold mb-2">
           The current version is approved. Posting a new version reopens review.
