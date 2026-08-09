@@ -24,7 +24,7 @@ import {
 import { resolveRequirements } from "./publication-requirements";
 import { isVersionReleaseAuthorized, type ReleaseAuthorizationResult } from "./release-authorization";
 import { getStandingAuthorizationState } from "./standing-publishing-authorization";
-import { loadUnresolvedClientChangeHoldVersionIds } from "./deliverable-client-change-holds";
+import { loadUnresolvedClientChangeHoldDeliverableIds } from "./deliverable-client-change-holds";
 import type {
   ContentDeliverable,
   DeliverableVersion,
@@ -187,9 +187,9 @@ export async function buildPublicationManifest(
     .eq("period_id", periodId);
   if (delErr) return { ok: false, error: delErr.message };
   const rows = (deliverables ?? []) as ContentDeliverable[];
-  const [standingAuthorization, heldVersionIds] = await Promise.all([
+  const [standingAuthorization, heldDeliverableIds] = await Promise.all([
     getStandingAuthorizationState(period.firm_id),
-    loadUnresolvedClientChangeHoldVersionIds(period.firm_id, rows.map((d) => d.id)),
+    loadUnresolvedClientChangeHoldDeliverableIds(period.firm_id, rows.map((d) => d.id)),
   ]);
   const standingAuthorizationActive = standingAuthorization?.active ?? false;
 
@@ -233,7 +233,7 @@ export async function buildPublicationManifest(
           approvedVersionId: deliverable.approved_version_id,
           targetVersionId: currentVersion.id,
           versionRequiresIndividualReview: currentVersion.requires_individual_review,
-          hasUnresolvedClientChangeHold: heldVersionIds.has(currentVersion.id),
+          hasUnresolvedClientChangeHold: heldDeliverableIds.has(deliverable.id),
           standingAuthorizationActive,
         })
       : null;

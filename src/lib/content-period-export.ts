@@ -47,7 +47,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { shouldWithholdArtifactLinks } from "@/lib/artifact-links";
 import { isVersionReleaseAuthorized } from "@/lib/release-authorization";
 import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
-import { loadUnresolvedClientChangeHoldVersionIds } from "@/lib/deliverable-client-change-holds";
+import { loadUnresolvedClientChangeHoldDeliverableIds } from "@/lib/deliverable-client-change-holds";
 import type {
   ContentDeliverable,
   DeliverableVersion,
@@ -466,7 +466,7 @@ export async function buildContentExportBundle(
   const archived = rows.filter((d) => d.status === "archived");
 
   const deliverableIds = active.map((d) => d.id);
-  const heldVersionIds = await loadUnresolvedClientChangeHoldVersionIds(period.firm_id, deliverableIds);
+  const heldDeliverableIds = await loadUnresolvedClientChangeHoldDeliverableIds(period.firm_id, deliverableIds);
 
   const [
     { data: versions },
@@ -712,7 +712,7 @@ export async function buildContentExportBundle(
       // flag to true there keeps the standing-authorization path closed for a
       // version this deliverable does not actually own.
       currentResolved.version?.requires_individual_review ?? true,
-      currentResolved.version ? heldVersionIds.has(currentResolved.version.id) : false,
+      heldDeliverableIds.has(d.id),
       standingAuthorizationActive,
     );
 

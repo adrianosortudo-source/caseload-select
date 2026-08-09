@@ -14,7 +14,7 @@ import { listCurrentReceiptsByPlacementForDeliverable } from "@/lib/publication-
 import { buildPreflightReport, type PreflightPeriodReport } from "@/lib/publication-preflight";
 import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
 import { isVersionReleaseAuthorized, type ReleaseAuthorizationResult } from "@/lib/release-authorization";
-import { loadUnresolvedClientChangeHoldVersionIds } from "@/lib/deliverable-client-change-holds";
+import { loadUnresolvedClientChangeHoldDeliverableIds } from "@/lib/deliverable-client-change-holds";
 import type {
   ContentDeliverable,
   ContentPeriod,
@@ -49,7 +49,7 @@ export async function loadPublicationPreflightForPeriod(
   const approvedVersionByDeliverableId = new Map(rows.map((d) => [d.id, d.approved_version_id ?? null]));
   const currentVersionIds = rows.map((d) => d.current_version_id).filter((id): id is string => !!id);
 
-  const [comments, placementsByDeliverableId, receiptsByPlacementParts, { data: currentVersions }, standingAuthorization, heldVersionIds] = await Promise.all([
+  const [comments, placementsByDeliverableId, receiptsByPlacementParts, { data: currentVersions }, standingAuthorization, heldDeliverableIds] = await Promise.all([
     activeIds.length
       ? supabase
           .from("deliverable_comments")
@@ -81,7 +81,7 @@ export async function loadPublicationPreflightForPeriod(
       ? supabase.from("deliverable_versions").select("id, requires_individual_review").in("id", currentVersionIds)
       : Promise.resolve({ data: [] as Pick<DeliverableVersion, "id" | "requires_individual_review">[] }),
     getStandingAuthorizationState(firmId),
-    loadUnresolvedClientChangeHoldVersionIds(firmId, activeIds),
+    loadUnresolvedClientChangeHoldDeliverableIds(firmId, activeIds),
   ]);
 
   const commentsByDeliverableId: Record<string, DeliverableComment[]> = {};
@@ -129,7 +129,7 @@ export async function loadPublicationPreflightForPeriod(
       approvedVersionId: deliverable.approved_version_id,
       targetVersionId: deliverable.current_version_id,
       versionRequiresIndividualReview,
-      hasUnresolvedClientChangeHold: heldVersionIds.has(deliverable.current_version_id),
+      hasUnresolvedClientChangeHold: heldDeliverableIds.has(deliverable.id),
       standingAuthorizationActive,
     });
   }

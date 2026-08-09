@@ -149,7 +149,7 @@ vi.mock("@/lib/supabase-admin", () => ({
 }));
 
 vi.mock("@/lib/deliverable-client-change-holds", () => ({
-  loadUnresolvedClientChangeHoldVersionIds: () => Promise.resolve(new Set<string>()),
+  loadUnresolvedClientChangeHoldDeliverableIds: () => Promise.resolve(new Set<string>()),
 }));
 
 import {

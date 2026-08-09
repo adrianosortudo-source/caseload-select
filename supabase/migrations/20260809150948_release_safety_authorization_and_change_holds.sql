@@ -137,6 +137,9 @@ as $$
 declare v_claim public.publication_placement_claims%rowtype;
 begin
   if new.reconciles_receipt_id is not null then return new; end if;
+  if public.has_unresolved_deliverable_client_change_hold(new.firm_id, new.deliverable_id, new.approved_version_id) then
+    raise exception 'publication receipt is blocked by an unresolved client change hold' using errcode = 'CLM01';
+  end if;
   select * into v_claim from public.publication_placement_claims where id = new.claim_id for update;
   if not found or v_claim.status <> 'active' then raise exception 'root publication receipt requires an active release claim' using errcode = 'CLM01'; end if;
   if v_claim.firm_id is distinct from new.firm_id or v_claim.deliverable_id is distinct from new.deliverable_id
@@ -146,9 +149,6 @@ begin
   -- Claim evidence, not caller input or a latest unrelated claim, is the immutable authorization snapshot.
   new.release_path := v_claim.release_path;
   new.standing_authorization_event_id := v_claim.standing_authorization_event_id;
-  if public.has_unresolved_deliverable_client_change_hold(new.firm_id, new.deliverable_id, new.approved_version_id) then
-    raise exception 'publication receipt is blocked by an unresolved client change hold' using errcode = 'CLM01';
-  end if;
   return new;
 end;
 $$;
@@ -195,7 +195,7 @@ begin
     insert into public.deliverable_client_change_hold_events (
       firm_id, deliverable_id, version_id, event, actor_role, actor_id, actor_name, actor_email, reason
     ) values (
-      p_firm_id, p_deliverable_id, p_version_id, 'opened', 'lawyer', p_signer_id, p_signer_name, p_signer_email,
+      p_firm_id, p_deliverable_id, p_version_id, 'opened', 'lawyer', p_signer_id, v_signer_name, v_signer_email,
       coalesce(nullif(btrim(p_note), ''), 'Client requested changes')
     );
   end if;

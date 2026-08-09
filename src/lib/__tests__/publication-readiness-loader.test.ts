@@ -71,7 +71,7 @@ vi.mock("@/lib/standing-publishing-authorization", () => ({
 }));
 
 vi.mock("@/lib/deliverable-client-change-holds", () => ({
-  loadUnresolvedClientChangeHoldVersionIds: () => Promise.resolve(new Set<string>()),
+  loadUnresolvedClientChangeHoldDeliverableIds: () => Promise.resolve(new Set<string>()),
 }));
 
 import { loadPlanPublicationReadiness, loadPeriodPublicationReadiness } from "@/lib/publication-readiness-loader";
