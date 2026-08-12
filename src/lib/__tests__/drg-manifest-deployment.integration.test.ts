@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- integration fixture mirrors JSONB payloads */
 /**
  * Real-Postgres acceptance for DR-122 manifest placement. The test proves the
  * migration replays on a fresh Supabase database, concurrent identical calls

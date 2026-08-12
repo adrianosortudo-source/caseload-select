@@ -3,7 +3,7 @@ import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { createSupabaseAdmin, loadDotEnv } from "../weekly-publish/lib/env";
 import {
-  applyDeployment, canonicalJsonSha256, loadAndValidateBundle, prepareDeployment,
+  applyDeployment, loadAndValidateBundle, prepareDeployment,
   proveDeployment, validateAuthorization,
 } from "./deployment-bundle";
 

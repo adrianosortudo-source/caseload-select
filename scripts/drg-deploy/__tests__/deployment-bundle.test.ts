@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- compact adversarial JSON fixtures */
+import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,7 +11,7 @@ function fixture() {
   mkdirSync(path.join(root, "sources")); mkdirSync(path.join(root, "assets")); mkdirSync(path.join(root, "approvals"));
   writeFileSync(path.join(root, "run-state.json"), "{}");
   writeFileSync(path.join(root, "weekly-strategy-brief.json"), "{}");
-  const sha = (value: Buffer | string) => require("node:crypto").createHash("sha256").update(value).digest("hex");
+  const sha = (value: Buffer | string) => createHash("sha256").update(value).digest("hex");
   const pieces = [...EXPECTED_SLOTS].sort().map((slot, index) => {
     const source = JSON.stringify({ slot }); writeFileSync(path.join(root, "sources", `${slot}.json`), source);
     const bodyHtml = `<p>Reader-facing body for ${slot} with enough content.</p>`;
