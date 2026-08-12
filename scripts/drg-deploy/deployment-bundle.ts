@@ -135,8 +135,8 @@ export function validateAuthorization(auth: ExecutionAuthorization, bundle: Depl
   if (auth.planSha256 !== canonicalSha256) throw new Error("authorization plan hash mismatch");
   if (new Date(auth.expiresAt).getTime() <= now.getTime()) throw new Error("authorization expired");
   const touched = touchedTargets(bundle);
-  const allowedIds = new Set(auth.allowedTargetIds ?? []);
-  const allowedRecords = new Set(auth.allowedDestinationRecords ?? []);
+  const allowedIds = new Set<string>((auth.allowedTargetIds ?? []) as string[]);
+  const allowedRecords = new Set<string>((auth.allowedDestinationRecords ?? []) as string[]);
   const extraIds = [...touched.ids].filter((id) => !allowedIds.has(id));
   const extraRecords = [...touched.records].filter((record) => !allowedRecords.has(record));
   const unusedIds = [...allowedIds].filter((id) => !touched.ids.has(id));
