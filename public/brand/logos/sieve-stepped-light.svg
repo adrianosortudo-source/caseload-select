@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+  <title id="title">CaseLoad Select stepped Sieve</title>
+  <desc id="desc">Fifteen equal squares in rows of five, four, three, two, and one. Row offsets are zero, one, one, two, and two grid steps. The lowest square is gold.</desc>
+  <g fill="#1E2F58">
+    <path d="M0 0h16v16H0zM21 0h16v16H21zM42 0h16v16H42zM63 0h16v16H63zM84 0h16v16H84z"/>
+    <path d="M21 21h16v16H21zM42 21h16v16H42zM63 21h16v16H63zM84 21h16v16H84z"/>
+    <path d="M21 42h16v16H21zM42 42h16v16H42zM63 42h16v16H63z"/>
+    <path d="M42 63h16v16H42zM63 63h16v16H63z"/>
+  </g>
+  <path fill="#C4B49A" d="M42 84h16v16H42z"/>
+</svg>

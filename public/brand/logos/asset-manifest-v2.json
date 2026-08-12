@@ -1,0 +1,133 @@
+﻿{
+    "version":  "2.0.0",
+    "effectiveDate":  "2026-08-11",
+    "status":  "canonical",
+    "construction":  {
+                         "rows":  [
+                                      5,
+                                      4,
+                                      3,
+                                      2,
+                                      1
+                                  ],
+                         "offsets":  [
+                                         0,
+                                         1,
+                                         1,
+                                         2,
+                                         2
+                                     ],
+                         "equalCells":  true,
+                         "goldTerminalCells":  1
+                     },
+    "assets":  [
+                   {
+                       "file":  "icon-dark-bg-1024.png",
+                       "width":  1024,
+                       "height":  1024,
+                       "sha256":  "1E4F4F8F3E8EF7B53C5A5B36D27BD5700031054D92531DDEF73822605A1533D4"
+                   },
+                   {
+                       "file":  "icon-dark-bg.png",
+                       "width":  118,
+                       "height":  145,
+                       "sha256":  "EF94816508A25DDDFFEF9C9C1A1A03A3527A2281517814CE346371157B87A497"
+                   },
+                   {
+                       "file":  "icon-dark-transparent.png",
+                       "width":  118,
+                       "height":  145,
+                       "sha256":  "18D466943F2576FD74986DFF22CE891878589E22CD84EB2F3555152F9993A119"
+                   },
+                   {
+                       "file":  "icon-light-bg.png",
+                       "width":  118,
+                       "height":  145,
+                       "sha256":  "0BEC014E6C8F9A9BEDFEBF160A5BEADA5B9A2BC179CB19F171C975C3403386C4"
+                   },
+                   {
+                       "file":  "icon-light-transparent.png",
+                       "width":  118,
+                       "height":  145,
+                       "sha256":  "4BA0BA27406FDDF96B65CB0C0A3510A590D79C5EF8EE1FB1536A5249A591A886"
+                   },
+                   {
+                       "file":  "lockup-horizontal-dark-bg.png",
+                       "width":  794,
+                       "height":  117,
+                       "sha256":  "8353E34284B21296BE5C43BE5C4335733C8D33FDA3804AF9BAC0BC903DDDD64B"
+                   },
+                   {
+                       "file":  "lockup-horizontal-dark-transparent.png",
+                       "width":  794,
+                       "height":  117,
+                       "sha256":  "C9B2B3CF4C823B4991DB3791BC3B854F1A0F63E903995A0DE8F76568ACDC871F"
+                   },
+                   {
+                       "file":  "lockup-horizontal-light-bg.png",
+                       "width":  794,
+                       "height":  117,
+                       "sha256":  "7D4337AB81B47BE3706994247815E5B84190CFC0C25199F6375658BF6357104A"
+                   },
+                   {
+                       "file":  "lockup-horizontal-light-transparent.png",
+                       "width":  794,
+                       "height":  117,
+                       "sha256":  "D73D4D4E4848AB8BF899C79BB2A49D72D2F631102CDB40B01D734407F3A38BF2"
+                   },
+                   {
+                       "file":  "lockup-horizontal-tagline-dark-bg.png",
+                       "width":  833,
+                       "height":  160,
+                       "sha256":  "B1AA7F4EA5A442A4B94F3036E813D476AF14F2F460A74DA271394B077008B35E"
+                   },
+                   {
+                       "file":  "lockup-horizontal-tagline-dark-transparent.png",
+                       "width":  833,
+                       "height":  160,
+                       "sha256":  "2B35F1BA85AC277240F24107E2F8D183F091A6FFE350F378E001F37130962133"
+                   },
+                   {
+                       "file":  "lockup-horizontal-tagline-light-bg.png",
+                       "width":  834,
+                       "height":  165,
+                       "sha256":  "4E6CEC0B3024C07BF0026D22F2C4A9FA6BDC6328BA4394DF2B1126C86BACD7A6"
+                   },
+                   {
+                       "file":  "lockup-horizontal-tagline-light-transparent.png",
+                       "width":  834,
+                       "height":  165,
+                       "sha256":  "1B0D677B71C1584E3CE9A7F43A2F4F4C0FC1700EAA3025F603AAA4DB4B6AB673"
+                   },
+                   {
+                       "file":  "lockup-stacked-dark-bg.png",
+                       "width":  525,
+                       "height":  302,
+                       "sha256":  "F985D70F2C4A8DA674B72191485C49E6BFDCB108014B65354C29B5E6E398DBF1"
+                   },
+                   {
+                       "file":  "lockup-stacked-dark-transparent.png",
+                       "width":  525,
+                       "height":  302,
+                       "sha256":  "0E06AD718719144B0CD9AC5ACE65483DAC43B393A22891BFD21EA74B5A9E44FC"
+                   },
+                   {
+                       "file":  "lockup-stacked-light-bg.png",
+                       "width":  525,
+                       "height":  302,
+                       "sha256":  "12D6B3D7A2BAC0551CBEAFDC03042F74EA5FF8B40339D6947C5D0910CB9BB47E"
+                   },
+                   {
+                       "file":  "lockup-stacked-light-transparent.png",
+                       "width":  525,
+                       "height":  302,
+                       "sha256":  "0CC8080FA2F1178060F02F6D7D9EF724342727AF6B88EEBD7735F2C24D8FDE05"
+                   },
+                   {
+                       "file":  "logo-light-transparent@3x.png",
+                       "width":  947,
+                       "height":  155,
+                       "sha256":  "6D19504172D48B0C4DAB447D67F13E0F984D38C84FE9DB2565069A0B5F7696EC"
+                   }
+               ]
+}
