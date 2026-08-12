@@ -652,7 +652,15 @@ export interface PublishKitFilter {
 }
 
 export function pieceMatchesFilter(piece: PublishKitPiece, filter: PublishKitFilter): boolean {
-  const channelOk = filter.channel === null || piece.destination === filter.channel;
+  // The "linkedin" filter tab means the LinkedIn surface as an operator
+  // thinks of it, which spans two destination values: "linkedin" (feed
+  // posts) and "linkedin_article" (native Articles). Matching the raw
+  // destination string would silently drop Articles from the LinkedIn tab
+  // the moment a piece is correctly labelled linkedin_article.
+  const channelOk =
+    filter.channel === null ||
+    piece.destination === filter.channel ||
+    (filter.channel === "linkedin" && piece.destination === "linkedin_article");
   const laneOk = filter.lane === null || piece.lane === filter.lane;
   return channelOk && laneOk;
 }

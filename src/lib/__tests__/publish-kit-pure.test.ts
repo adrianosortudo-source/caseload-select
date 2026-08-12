@@ -1876,6 +1876,19 @@ describe("pieceMatchesFilter", () => {
     expect(pieceMatchesFilter(makePiece({ destination: "firm_website" }), filter)).toBe(false);
   });
 
+  it("the linkedin channel spans both feed posts and native Articles", () => {
+    // Regression guard for the 2026-07-31 relabelling: once the two Week 3
+    // Articles were correctly stored as linkedin_article, an exact-match
+    // filter would have silently dropped them from the LinkedIn tab.
+    const filter: PublishKitFilter = { channel: "linkedin", lane: null };
+    expect(pieceMatchesFilter(makePiece({ destination: "linkedin_article" }), filter)).toBe(true);
+    // The reverse is intentionally NOT true: linkedin_article is a rendering
+    // of the operator-facing LinkedIn tab, not a filter value of its own.
+    const articleOnly: PublishKitFilter = { channel: "linkedin_article", lane: null };
+    expect(pieceMatchesFilter(makePiece({ destination: "linkedin_article" }), articleOnly)).toBe(true);
+    expect(pieceMatchesFilter(makePiece({ destination: "linkedin" }), articleOnly)).toBe(false);
+  });
+
   it("a lane filter excludes pieces in a different lane", () => {
     const filter: PublishKitFilter = { channel: null, lane: "pipeline" };
     expect(pieceMatchesFilter(makePiece({ lane: "pipeline" }), filter)).toBe(true);
