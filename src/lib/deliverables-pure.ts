@@ -509,7 +509,13 @@ export function canonicalFormat(item: Pick<PlanDeliverable, "format" | "locale" 
   const role = normalized(item.deliverable_role);
   const destination = normalized(item.publication_destination);
 
-  if (destination === "linkedin" || role === "social_post") return "LinkedIn";
+  if (
+    destination === "linkedin" ||
+    destination === "linkedin_article" ||
+    destination === "linkedin_post" ||
+    destination === "linkedin_company_page" ||
+    role === "social_post"
+  ) return "LinkedIn";
   if (destination === "google_business_profile" || destination === "google business profile" || destination === "gbp" || role === "gbp_post") {
     return "Google Business Profile";
   }

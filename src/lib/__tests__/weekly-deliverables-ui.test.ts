@@ -58,10 +58,30 @@ describe("weekly deliverables primary slice", () => {
     expect(canonicalFormat({ format: "Counsel Note", locale: "en-CA", deliverable_role: null, publication_destination: null })).toBe("Website articles");
     expect(canonicalFormat({ format: "Análise Jurídica", locale: "pt-BR", deliverable_role: null, publication_destination: null })).toBe("Website articles");
     expect(canonicalFormat({ format: "LinkedIn variation", locale: "en-CA", deliverable_role: null, publication_destination: null })).toBe("LinkedIn");
+    expect(canonicalFormat({ format: "linkedin_article", locale: "en-CA", deliverable_role: "article", publication_destination: "linkedin_article" })).toBe("LinkedIn");
     expect(canonicalFormat({ format: "anything", locale: "en-CA", deliverable_role: null, publication_destination: "Google Business Profile" })).toBe("Google Business Profile");
     expect(canonicalFormat({ format: "Preparation Artifact", locale: "en-CA", deliverable_role: null, publication_destination: null })).toBe("Checklists & downloadable resources");
     expect(canonicalFormat({ format: "DRG Law Minute", locale: "en-CA", deliverable_role: null, publication_destination: null })).toBe("Email");
     expect(canonicalFormat({ format: "LinkedIn", locale: "en-CA", deliverable_role: "article", publication_destination: "website" })).toBe("Website articles");
+  });
+
+  it("keeps native LinkedIn Articles and feed posts together in the LinkedIn panel", () => {
+    const article = deliverable({
+      id: "linkedin-article",
+      format: "linkedin_article",
+      deliverable_role: "article",
+      publication_destination: "linkedin_article",
+    });
+    const post = deliverable({
+      id: "linkedin-post",
+      format: "linkedin_post",
+      deliverable_role: "social_post",
+      publication_destination: "linkedin",
+    });
+
+    expect(groupByCanonicalFormat([article, post])).toEqual([
+      { format: "LinkedIn", items: [article, post] },
+    ]);
   });
 
   it("keeps unknown formats visible in Other", () => {
