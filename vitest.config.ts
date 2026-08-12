@@ -6,6 +6,7 @@ export default defineConfig({
     environment: "node",
     include: [
       "src/**/__tests__/**/*.test.ts",
+      "scripts/drg-deploy/__tests__/**/*.test.ts",
       // Scoped, not "src/**/*.test.tsx" (DR-112): a repo-wide .tsx include
       // would also pick up other components' pre-existing, unrelated
       // .test.tsx files that were never part of the running suite and may
