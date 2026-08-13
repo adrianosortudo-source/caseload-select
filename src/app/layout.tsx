@@ -1,18 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Oxanium, Manrope } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import AdminShell from "@/components/AdminShell";
 
-const oxanium = Oxanium({
-  subsets: ["latin"],
-  weight: ["600", "700"],
+const oxanium = localFont({
+  src: "../../public/fonts/Oxanium-VF.ttf",
+  weight: "200 800",
   variable: "--font-oxanium",
   display: "swap",
 });
 
-const manrope = Manrope({
-  subsets: ["latin"],
-  weight: ["400", "500", "700", "800"],
+const manrope = localFont({
+  src: "../../public/fonts/Manrope-VF.ttf",
+  weight: "200 800",
   variable: "--font-manrope",
   display: "swap",
 });
