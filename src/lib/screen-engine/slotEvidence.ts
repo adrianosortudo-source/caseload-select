@@ -94,6 +94,12 @@ export function deriveAdvisorySpecificTask(state: EngineState): EngineState {
   const concern = state.slots['advisory_concern'];
   if (!concern) return state;
 
+  // 'All of the above' (WP-4, 2026-08-13) is deliberately NOT mapped
+  // here. Every other key maps to exactly one specific_task value; a
+  // lead who said "all of the above" to the broader concern question
+  // did not pick one, so fabricating a single specific-task guess would
+  // misrepresent them. advisory_specific_task stays unfilled and gets
+  // asked on its own turn when the chain reaches it.
   const map: Record<string, string> = {
     'Knowing what kind of company to set up': 'Choosing the right structure',
     'Deciding who owns what': 'Splitting ownership',

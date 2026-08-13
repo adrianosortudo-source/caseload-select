@@ -564,11 +564,56 @@ function scoreSlot(slot: SlotDefinition, currentGap: DecisionGap): number {
 //
 // Adding new entries: study the matter's slot set in slotRegistry, list
 // IDs in the order a coordinator would ask them in conversation. The map
-// is launch-week-scoped to the 9 DRG matter types. Corporate / real
-// estate / business_setup_advisory keep the scorer-default order until
-// we audit each in the same way.
+// was launch-week-scoped to the 9 DRG matter types; business_setup_advisory
+// was added under DR-121 (2026-08-13). Corporate / real estate keep the
+// scorer-default order until audited the same way.
+//
+// business_setup_advisory (DR-121): the criteria above are joined by a
+// sixth, scoring-specific one for this matter type only:
+//   6. Scoring floor first: every slot that feeds computeCoreCompleteness
+//      or the four-axis scorer (band.ts) is asked before any slot that
+//      feeds neither. Field case 2026-08-07 (DRG Law Test): the prior
+//      scorer-default order placed 4 of 6 core-tier scoring drivers at
+//      walk positions 10-14, past any realistic async question budget,
+//      so a WhatsApp session ending around 11 questions reported LOW
+//      confidence and 34% completeness despite genuine engagement.
+//      advisory_concern and documents_exist are tier:'core'/'proof' (they
+//      count toward completeness%) but feed no axis in band.ts, so they
+//      sit after the true scoring drivers, not before. See DR-121 for
+//      the full rationale, including two documented, deliberately
+//      unaddressed limits (a subtrack-blind completeness ceiling, and a
+//      DR-56-calibration quirk where an answered low revenue tier scores
+//      below the unanswered default).
 
 const MATTER_SPECIFIC_SLOT_ORDER: Record<string, readonly string[]> = {
+  // BUSINESS SETUP ADVISORY (DR-121). Order: routing/subtrack, then the
+  // urgency inputs, then the readiness triple (DR-083 precedent), then
+  // the remaining core-tier value/complexity drivers, then the two
+  // completeness-only core/proof slots, then pure-color qualification
+  // slots last.
+  business_setup_advisory: [
+    'advisory_path',              // core; routing
+    'co_owner_count',             // core; subtrack (solo/partner/unknown)
+    'signed_anything',            // proof; urgency + complexity input, all subtracks
+    'business_stage',             // qualification; urgency input, solo/partner
+    'hiring_timeline',            // core; readiness (DR-083 precedent)
+    'other_counsel',              // core; readiness
+    'decision_authority',         // core; readiness
+    'revenue_expectation',        // core; value driver
+    'regulated_industry',         // core; complexity driver
+    'employees_planned',          // core; complexity driver, also urgency material-exposure input
+    'cross_border_work',          // core; complexity driver
+    'ip_planned',                 // core; complexity driver
+    'advisory_concern',           // core; completeness-only (partner/buy_in/unknown), feeds no axis
+    'documents_exist',            // proof; completeness-only (buy_in only), feeds no axis
+    'advisory_timing',            // qualification; urgency input, buy_in only
+    'business_activity_type',     // qualification; color (solo/partner)
+    'setup_needs',                // qualification; color (solo)
+    'ownership_split_discussed',  // qualification; color (partner)
+    'business_location',          // qualification; color
+    'advisory_actionability',     // qualification; color
+    'advisory_specific_task',     // qualification; color, usually auto-derived
+  ],
   // NOTARY SERVICES (DR-073): one document-type question, then contact.
   notary_services: [
     'notary_document_type',

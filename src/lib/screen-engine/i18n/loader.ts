@@ -20,6 +20,15 @@ export interface I18nBundle {
    */
   slot_questions?: Record<string, string>;
   slot_options: Record<string, Record<string, string>>;
+  /**
+   * Per-option example text translation (WP-5, 2026-08-13). Maps
+   * slot.id -> option.value -> translated description. Optional and
+   * additive, same fallback discipline as slot_options: a bundle
+   * without this key, or missing a specific slot/value, falls back to
+   * the option's English `description` field via
+   * `getOptionDescription`.
+   */
+  slot_option_descriptions?: Record<string, Record<string, string>>;
   summary: Record<string, Record<string, string>>;
   summary_labels: Record<string, string>;
   prompts: Record<string, string>;

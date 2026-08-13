@@ -12,6 +12,8 @@ import type { Presentation } from "./presentation";
 export interface OptionItem {
   value: string;
   label: string;
+  /** Short example text shown under the label (WP-5, 2026-08-13). Undefined for options with no examples. */
+  description?: string;
 }
 
 export interface ScreenItem {

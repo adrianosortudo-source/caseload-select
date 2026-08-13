@@ -387,6 +387,14 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       'Starting a new business': [
         'start a business', 'starting a business', 'start a company', 'starting a company',
         'open a company', 'opening a company', 'set up a company', 'setting up a company',
+        // WP-2 (2026-08-13, field case 2026-08-07): 'open a business' and
+        // near variants were missing, so a lead who typed the literal
+        // phrase got no regex fill and saw the full 4-option menu
+        // (including the irrelevant "Selling or closing down" option).
+        'open a business', 'opening a business', 'open my own business',
+        'open my business', 'start my own business', 'start my business',
+        'open up a business', 'launch a business', 'launching a business',
+        'register a business', 'registering a business', 'open a small business',
         'incorporate', 'incorporating', 'business idea', 'company together', 'business together',
         'with a friend', 'with a partner', 'bring someone in', 'bring in a partner',
         'do it properly', 'protect myself', 'structure it properly', 'split ownership',
@@ -450,6 +458,11 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
       { value: 'Deciding who owns what', label: 'Deciding who owns what' },
       { value: 'Avoiding problems with a partner later', label: 'Avoiding problems with a partner later' },
       { value: 'Reviewing documents before signing', label: 'Reviewing documents before signing' },
+      // WP-4 (2026-08-13, field case 2026-08-07): real answers often span
+      // more than one of the listed concerns. Added before 'Not sure' so
+      // a lead who genuinely means all of them has an honest option
+      // instead of being forced to pick one or type free text.
+      { value: 'All of the above', label: 'All of the above' },
       { value: 'Not sure', label: 'Not sure' },
     ],
     applies_to: ['business_setup_advisory'],
@@ -638,11 +651,14 @@ export const SLOT_REGISTRY: SlotDefinition[] = [
     question: 'What kind of business are you planning to start?',
     input_type: 'single_select',
     options: [
-      { value: 'Professional services', label: 'Professional services' },
-      { value: 'Online business', label: 'Online business' },
-      { value: 'Retail or storefront', label: 'Retail or storefront' },
-      { value: 'Trades or construction', label: 'Trades or construction' },
-      { value: 'Holding company or investment', label: 'Holding company or investment' },
+      // WP-5 (2026-08-13, field case 2026-08-07): a lead formalising a
+      // home-cleaning business could not tell which category their own
+      // work belonged to without an example. Descriptions added below.
+      { value: 'Professional services', label: 'Professional services', description: 'consulting, accounting, cleaning, tutoring' },
+      { value: 'Online business', label: 'Online business', description: 'app, online store, content, digital services' },
+      { value: 'Retail or storefront', label: 'Retail or storefront', description: 'shop, restaurant, cafe, salon' },
+      { value: 'Trades or construction', label: 'Trades or construction', description: 'plumbing, electrical, contracting, renovations' },
+      { value: 'Holding company or investment', label: 'Holding company or investment', description: 'passive investment, holding assets' },
       { value: 'Not sure', label: 'Not sure' },
     ],
     applies_to: ['business_setup_advisory'],

@@ -128,6 +128,7 @@
       "Deciding who owns what": "Decidir quem é dono de quanto",
       "Avoiding problems with a partner later": "Evitar problemas com sócio no futuro",
       "Reviewing documents before signing": "Revisar os documentos antes de assinar",
+      "All of the above": "Todas as opções acima",
       "Not sure": "Não tenho certeza"
     },
     "signed_anything": {
@@ -445,7 +446,11 @@
     "clients_outside_canada": "Clientes fora do Canadá",
     "ip_protection": "Marca ou propriedade intelectual a proteger"
   },
-  "prompts": {},
+  "prompts": {
+    "numbered_reply_hint": "Responda com um número, ou escreva com suas próprias palavras.",
+    "intake_expectation": "Leva uns cinco minutos. Um advogado analisa o que você compartilhar e entra em contato diretamente se o seu caso se encaixar na atuação do escritório.",
+    "multi_pick_ack": "Certo, registrei sua primeira escolha. Pode acrescentar o resto com suas próprias palavras quando quiser."
+  },
   "bridge_text": {},
   "chips": {},
   "widget_strings": {
