@@ -6,13 +6,24 @@
  * capture doctrine, 2026-05-15).
  *
  * Graph API endpoint:
- *   POST https://graph.facebook.com/v25.0/<ig_business_account_id>/messages
+ *   POST https://graph.facebook.com/v25.0/me/messages
  *   Authorization: Bearer <page_access_token>
  *   Body: { recipient: { id: <igsid> }, message: { text: "..." } }
  *
  * IG inherits the LINKED Facebook Page's access token — that's why this
  * helper takes `pageAccessToken` instead of an IG-specific token. The
  * intake_firms column is `facebook_page_access_token` for both channels.
+ *
+ * The endpoint MUST be Page-scoped (`/me/messages`, which resolves to the
+ * Page that owns the token), not `/<ig_business_account_id>/messages`.
+ * Those are two different API flavours: the IG-account-ID path belongs to
+ * the Instagram-Login flow and expects an Instagram User token, so calling
+ * it with a Page token fails with `(#3) Application does not have the
+ * capability to make this API call` regardless of granted permissions.
+ * Verified against the live DRG test assets 2026-08-13: the IG-account-ID
+ * path returned error #3 while `/me/messages` delivered with the same
+ * token. `igBusinessAccountId` is still required as a configuration
+ * sanity check (an unconfigured firm should never reach a send).
  *
  * Same 24h messaging window as Messenger. Follow-up runs on the same
  * webhook turn as the inbound so the window is always open.
@@ -43,9 +54,7 @@ export async function sendInstagramMessage(
   if (!args.recipientIgsid) return { sent: false, reason: 'missing recipientIgsid' };
   if (!args.text || !args.text.trim()) return { sent: false, reason: 'empty text' };
 
-  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(
-    args.igBusinessAccountId,
-  )}/messages`;
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/me/messages`;
 
   let res: Response;
   try {
