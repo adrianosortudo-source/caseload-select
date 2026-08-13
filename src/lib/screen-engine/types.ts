@@ -489,6 +489,16 @@ export interface EngineState {
 export interface SlotOption {
   value: string;  // canonical English string — stored in state.slots, read by scoring
   label: string;  // English display string — shown to the lead (initially equals value)
+  /**
+   * Optional short examples shown alongside the label (WP-5, 2026-08-13,
+   * field case 2026-08-07): a lead who does not recognise legal/business
+   * category language ("Professional services") cannot map their own
+   * situation ("home cleaning business") onto it without a concrete
+   * example. Rendered as "Label (description)" by the channel processor
+   * and the widget chip; absent on options where the label is already
+   * self-explanatory. Under ~8 words; no terminal punctuation.
+   */
+  description?: string;
 }
 
 export interface SlotDefinition {

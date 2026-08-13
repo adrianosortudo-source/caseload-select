@@ -155,6 +155,22 @@ function napMissingFollowupLabel(_channel: string | null | undefined): string {
   return 'Confirm on follow-up';
 }
 
+/**
+ * WP-6 (2026-08-13, field case 2026-08-07): sub-label for a missing
+ * Email or Postal code cell when the Phone cell is already
+ * channel-verified (source === 'system_metadata' — WhatsApp wa_id,
+ * voice caller-ID). Reachability is established through the phone;
+ * these two fields were never part of most channels' question flow, so
+ * labelling them "Confirm on follow-up" (the same phrase used for a
+ * field the lead was actually asked and did not answer) overstates the
+ * gap and reads as more alarming than it is. Name and Phone themselves
+ * always keep napMissingFollowupLabel — a genuinely missing name or
+ * phone is a real gap regardless of channel.
+ */
+function napNotAskedInChatLabel(): string {
+  return 'Not asked in chat';
+}
+
 
 function esc(s: string | null | undefined): string {
   if (s == null) return '';
@@ -509,6 +525,8 @@ function napBlock(facts: ResolvedFact[], channel: string | null | undefined): st
     if (f && f.label) byLabel.set(f.label, f);
   }
   const followupLabel = napMissingFollowupLabel(channel);
+  // WP-6: see napNotAskedInChatLabel for the rationale.
+  const phoneReachabilityEstablished = byLabel.get('Phone')?.source === 'system_metadata';
   const cells = NAP_FIELD_ORDER.map(({ label, key }) => {
     const fact = byLabel.get(key);
     if (fact) {
@@ -519,11 +537,15 @@ function napBlock(facts: ResolvedFact[], channel: string | null | undefined): st
           <p class="nap-source ${FACT_SOURCE_CLASS[fact.source] ?? ''}">${esc(factSourceLabel(fact.source, channel))}</p>
         </div>`;
     }
+    const missingLabel =
+      phoneReachabilityEstablished && (key === 'Email' || key === 'Postal code')
+        ? napNotAskedInChatLabel()
+        : followupLabel;
     return `
       <div class="nap-cell nap-cell-missing">
         <p class="nap-label">${esc(label)}</p>
         <p class="nap-value nap-value-missing">Not captured</p>
-        <p class="nap-source nap-source-missing">${esc(followupLabel)}</p>
+        <p class="nap-source nap-source-missing">${esc(missingLabel)}</p>
       </div>`;
   }).join('');
   return `

@@ -155,8 +155,8 @@ function buildLikelyServices(state: EngineState): string[] {
   switch (state.matter_type) {
     case 'business_setup_advisory': {
       const services: string[] = [];
-      if (sub === 'buy_in_or_joining' || docsExist === 'Yes') services.push('Document review and advice before signing');
-      if (sub === 'partner_setup' || concern === 'Avoiding problems with a partner later' || concern === 'Deciding who owns what') {
+      if (sub === 'buy_in_or_joining' || docsExist === 'Yes' || concern === 'All of the above') services.push('Document review and advice before signing');
+      if (sub === 'partner_setup' || concern === 'Avoiding problems with a partner later' || concern === 'Deciding who owns what' || concern === 'All of the above') {
         services.push('Shareholder agreement drafting');
         services.push('Ownership and equity structuring advice');
       }
@@ -476,7 +476,7 @@ function buildFeeEstimate(state: EngineState): string {
       if (revenue === 'Over $500,000 (early-stage business with momentum)') {
         lo += 500; hi += 1500; drivers.push('established-revenue structuring');
       }
-      if (concern === 'Avoiding problems with a partner later' || concern === 'Deciding who owns what') {
+      if (concern === 'Avoiding problems with a partner later' || concern === 'Deciding who owns what' || concern === 'All of the above') {
         if (sub !== 'solo_setup') { lo += 500; hi += 1500; drivers.push('detailed ownership and exit terms'); }
       }
       if (coOwners === 'Multiple partners' && sub === 'partner_setup') {

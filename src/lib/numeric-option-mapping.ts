@@ -60,6 +60,93 @@ import type { EngineState, SlotDefinition } from './screen-engine/types';
 // applyNumericAnswerMapping and detectOutOfRangeDigitReply.
 const DIGIT_REPLY_RE = /^[\s`'"‘’“”]*(?:option\s+|#|number\s+|choice\s+)?(\d+)\.?\s*$/i;
 
+// ── Multi-digit reply mapping (WP-3c, 2026-08-13) ──────────────────────
+//
+// Field case 2026-08-07: a lead replied "1 and 2 and 3" to a single-pick
+// question. DIGIT_REPLY_RE only matches a lone digit, so the reply fell
+// through to the LLM, which cannot map bare digits without question
+// context (same root problem the single-digit mapper above exists to
+// solve). The engine re-asked the same question with no acknowledgment.
+//
+// Matches "1 and 2", "1, 2, 3", "1 & 2", and the PT/ES conjunctions "e"
+// / "y" seen on WhatsApp intakes in those languages. Anchored the same
+// way as DIGIT_REPLY_RE (leading junk tolerated, no mid-sentence match).
+const MULTI_DIGIT_REPLY_RE =
+  /^[\s`'"‘’“”]*(?:option\s+|#|number\s+|choice\s+)?(\d+(?:\s*(?:,|and|&|e|y|\+)\s*\d+)+)\.?\s*$/i;
+
+export interface MultiNumericMappingResult {
+  state: EngineState;
+  /**
+   * True when the reply named 2+ distinct valid options and the slot had
+   * no "All of the above" option to collapse them into, so only the
+   * FIRST pick was recorded. The caller should tell the lead their other
+   * picks were not lost — they can still add them as free text.
+   */
+  pickedFirstOfMultiple: boolean;
+}
+
+/**
+ * Multi-digit sibling of `applyNumericAnswerMapping`. Handles a reply
+ * naming 2+ options for the single_select slot the engine is currently
+ * waiting on:
+ *   - If the slot has an "All of the above" option, apply that (the
+ *     lead is telling us every listed option applies).
+ *   - Otherwise, apply the FIRST named option and flag
+ *     `pickedFirstOfMultiple` so the caller can reassure the lead their
+ *     other picks were not silently dropped.
+ *
+ * No-ops (returns the state unchanged, `pickedFirstOfMultiple: false`)
+ * on the same guard conditions as the single-digit mapper: slot already
+ * filled, not single_select, or any named digit out of range (an
+ * out-of-range digit inside a multi-pick reply is rare enough to punt
+ * to the LLM / out-of-range path rather than guess which of the lead's
+ * picks was the typo).
+ */
+export function applyMultiNumericAnswerMapping(
+  text: string,
+  state: EngineState,
+): MultiNumericMappingResult {
+  const noop = { state, pickedFirstOfMultiple: false };
+  if (!text || typeof text !== 'string') return noop;
+
+  const m = MULTI_DIGIT_REPLY_RE.exec(text);
+  if (!m) return noop;
+
+  const digits = m[1]
+    .split(/\s*(?:,|and|&|e|y|\+)\s*/i)
+    .filter(Boolean)
+    .map((d) => parseInt(d, 10));
+  if (digits.some((d) => !Number.isFinite(d) || d < 1)) return noop;
+  const uniqueDigits = [...new Set(digits)];
+  if (uniqueDigits.length < 2) return noop; // effectively a single pick; let the single-digit path handle it
+
+  let next: ReturnType<typeof getNextStep>;
+  try {
+    next = getNextStep(state);
+  } catch {
+    return noop;
+  }
+
+  const slot = next.slot;
+  if (!slot) return noop;
+  if (slot.input_type !== 'single_select') return noop;
+  if (!slot.options || slot.options.length === 0) return noop;
+  if (state.slots[slot.id]) return noop;
+  if (uniqueDigits.some((d) => d > slot.options!.length)) return noop;
+
+  const allOfTheAbove = slot.options.find((o) =>
+    o.value.toLowerCase().startsWith('all of the above'),
+  );
+  if (allOfTheAbove) {
+    return { state: applyAnswer(state, slot.id, allOfTheAbove.value), pickedFirstOfMultiple: false };
+  }
+
+  const firstValue = slot.options[uniqueDigits[0] - 1]?.value;
+  if (!firstValue) return noop;
+
+  return { state: applyAnswer(state, slot.id, firstValue), pickedFirstOfMultiple: true };
+}
+
 export function applyNumericAnswerMapping(
   text: string,
   state: EngineState,
@@ -188,7 +275,7 @@ export function detectOutOfRangeDigitReply(
 export function buildOutOfRangeDigitReply(detection: OutOfRangeDigitDetection): string {
   const { slot, digit, maxOption } = detection;
   const optionList = slot.options!
-    .map((o, idx) => `${idx + 1}. ${o.label}`)
+    .map((o, idx) => `${idx + 1}. ${o.label}${o.description ? ` (${o.description})` : ''}`)
     .join('\n');
   return `I didn't catch that — "${digit}" isn't one of the options. Please reply with a number from 1 to ${maxOption}, or describe your answer in words.\n\n${slot.question.trim()}\n\n${optionList}`;
 }

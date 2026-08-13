@@ -829,7 +829,9 @@
   "prompts": {
     "sms_reply_instruction": "Reply with the number of your choice.",
     "gbp_reply_instruction": "Reply with the number of your choice.",
-    "clarify_message": "To route this correctly, could you tell me a bit more about what's happening? A few examples of the buckets we handle: starting a business, partner dispute, contract issue, money owed, real estate matter."
+    "clarify_message": "To route this correctly, could you tell me a bit more about what's happening? A few examples of the buckets we handle: starting a business, partner dispute, contract issue, money owed, real estate matter.",
+    "numbered_reply_hint": "Reply with a number, or answer in your own words.",
+    "multi_pick_ack": "Got it, I recorded your first pick. You can add the rest in your own words anytime."
   },
   "bridge_text": {
     "shareholder_dispute": "Thank you. The firm will receive a brief on your situation along with the next-step questions a lawyer would normally ask, so the team can decide how to follow up.",

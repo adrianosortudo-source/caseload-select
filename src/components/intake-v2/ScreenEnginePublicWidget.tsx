@@ -11,7 +11,7 @@ import { computeBand } from "@/lib/screen-engine/band";
 import { computeCoreCompleteness, getDecisionGap } from "@/lib/screen-engine/selector";
 import { applyAnswer, applyClarifyChoice, buildLeadSummary, getNextStep, markInsightShown, startContactCapture } from "@/lib/screen-engine/control";
 import { getI18n, type I18nBundle } from "@/lib/screen-engine/i18n/loader";
-import { getOptionDisplayLabel, getQuestionDisplayText } from "@/lib/screen-engine/i18n/display";
+import { getOptionDisplayLabel, getOptionDescription, getQuestionDisplayText } from "@/lib/screen-engine/i18n/display";
 import type { SupportedLanguage } from "@/lib/screen-engine/types";
 import { llmExtract, mergeLlmResults } from "@/lib/screen-engine/llm/extractor";
 import { buildReport } from "@/lib/screen-engine/report";
@@ -106,6 +106,7 @@ export function slotToItem(
   const options = (slot.options ?? []).map((opt) => ({
     value: opt.value,
     label: getOptionDisplayLabel(opt, slot.id, language, i18n),
+    description: getOptionDescription(opt, slot.id, language, i18n),
   }));
 
   // Localized label for the synthetic "Something else (I will explain)"

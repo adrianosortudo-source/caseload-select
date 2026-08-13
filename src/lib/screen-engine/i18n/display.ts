@@ -63,6 +63,27 @@ export function getOptionDisplayLabel(
 }
 
 /**
+ * Returns the display description (example text) for a slot option in
+ * the lead's language, or undefined when the option has no description
+ * at all (most options; only a few slots carry examples, see
+ * SlotOption.description in types.ts). Same fallback cascade as
+ * getOptionDisplayLabel: an untranslated bundle, or a bundle missing
+ * this specific slot/value, falls back to the English `opt.description`
+ * rather than rendering nothing.
+ */
+export function getOptionDescription(
+  opt: SlotOption,
+  slotId: string,
+  language: SupportedLanguage,
+  i18n: I18nBundle,
+): string | undefined {
+  if (!opt.description) return undefined;
+  if (language === 'en') return opt.description;
+  const translated = i18n.slot_option_descriptions?.[slotId]?.[opt.value];
+  return translated || opt.description;
+}
+
+/**
  * Returns the display labels for all options of a slot in the lead's language.
  * Returns an array parallel to slot.options — index i of this array maps to
  * slot.options[i].value for applyAnswer().

@@ -80,13 +80,14 @@ import {
 import { applyContactExtractionToState } from '@/lib/contact-extraction';
 import {
   applyNumericAnswerMapping,
+  applyMultiNumericAnswerMapping,
   detectOutOfRangeDigitReply,
   buildOutOfRangeDigitReply,
 } from '@/lib/numeric-option-mapping';
 import { applyFreeTextFuzzyMatch } from '@/lib/free-text-fuzzy-match';
 import { applyFreeTextAnswerMapping } from '@/lib/free-text-answer-mapping';
 import { getI18n, type I18nBundle } from '@/lib/screen-engine/i18n/loader';
-import { getQuestionDisplayText, getOptionDisplayLabel } from '@/lib/screen-engine/i18n/display';
+import { getQuestionDisplayText, getOptionDisplayLabel, getOptionDescription } from '@/lib/screen-engine/i18n/display';
 import type { SupportedLanguage } from '@/lib/screen-engine/types';
 import { selectNextSlot } from '@/lib/screen-engine/selector';
 import { meetsDiscoveryFloor } from '@/lib/discovery-floor';
@@ -133,6 +134,14 @@ const DISCOVERY_CHANNELS = new Set<MetaChannel>(['whatsapp', 'facebook', 'instag
  * for that language is missing or the slot is not yet translated, the
  * helpers cascade to English so the propagation contract holds even
  * during partial translation rollouts.
+ *
+ * WP-3a (2026-08-13, field case 2026-08-07): a trailing reply hint on
+ * every numbered single_select question, instead of a single upfront
+ * "reply with a number" instruction on turn 1. The prior upfront-only
+ * instruction arrived before the flow's first two free-text questions
+ * (matter description, name), so it read as premature and was easy to
+ * forget by the time a numbered question actually appeared several
+ * turns later. Free-text slots get no hint (there is nothing to number).
  */
 function formatDiscoveryQuestion(
   slot: SlotDefinition,
@@ -144,9 +153,15 @@ function formatDiscoveryQuestion(
     return base;
   }
   const labels = slot.options
-    .map((o, idx) => `${idx + 1}. ${getOptionDisplayLabel(o, slot.id, language, i18n)}`)
+    .map((o, idx) => {
+      const label = getOptionDisplayLabel(o, slot.id, language, i18n);
+      const description = getOptionDescription(o, slot.id, language, i18n);
+      return `${idx + 1}. ${label}${description ? ` (${description})` : ''}`;
+    })
     .join('\n');
-  return `${base}\n\n${labels}`;
+  const hint =
+    i18n.prompts?.numbered_reply_hint || 'Reply with a number, or answer in your own words.';
+  return `${base}\n\n${labels}\n\n${hint}`;
 }
 
 // ── Sender metadata ─────────────────────────────────────────────────────
@@ -541,7 +556,19 @@ export async function processChannelInbound(
   // single_select. Skipped on name-capture turns (#171) and on
   // pendingSlot-consumed turns (#172): the reply was already routed
   // to the right slot.
+  //
+  // Multi-digit mapping (WP-3c, 2026-08-13) runs FIRST: "1 and 2" would
+  // otherwise fall through DIGIT_REPLY_RE (single-digit only) untouched
+  // and reach the LLM, which cannot map bare digits without question
+  // context. multiDigitAckNeeded surfaces to the discovery-question send
+  // below so the lead is told their other picks were not dropped.
+  let multiDigitAckNeeded = false;
   if (!nameCaptureConsumed && !pendingConsumed) {
+    const multiResult = applyMultiNumericAnswerMapping(trimmed, state);
+    state = multiResult.state;
+    multiDigitAckNeeded = multiResult.pickedFirstOfMultiple;
+  }
+  if (!nameCaptureConsumed && !pendingConsumed && !multiDigitAckNeeded) {
     state = applyNumericAnswerMapping(trimmed, state);
   }
 
@@ -637,6 +664,7 @@ export async function processChannelInbound(
   // slot could corrupt the brief.
   // Hoisted so the LLM-disabled alert (#128, global across channels per the
   // fixes-are-global doctrine) can see what extraction returned.
+  const matterTypeBeforeLlm = state.matter_type;
   let llmMode: 'live' | 'disabled' | 'error' | 'degraded' | null = null;
   if (
     state.matter_type !== 'out_of_scope' &&
@@ -656,6 +684,24 @@ export async function processChannelInbound(
     } catch (err) {
       console.warn(`[channel-intake] llmExtractServer failed channel=${channel}:`, err);
     }
+  }
+
+  // Re-run the regex evidence pass on THIS turn's text once the LLM has
+  // classified matter_type from 'unknown' to a concrete type (WP-2,
+  // 2026-08-13, part of the same field case DR-121 addresses). The
+  // evidence pass at the top of this function ran BEFORE classification,
+  // so it early-returned (extractSlotEvidence no-ops on matter_type ===
+  // 'unknown'); a message that both establishes the matter type AND
+  // contains the wording for its own routing slot (e.g. "open a
+  // business" classifying to business_setup_advisory while also matching
+  // advisory_path's 'Starting a new business' evidence pattern) got zero
+  // chance for the regex layer to fill that slot. Re-running here lets
+  // the SAME turn's text be evaluated against the now-known matter type,
+  // so the routing question does not need to be asked again when the
+  // lead already said enough to answer it. Regex evidence only (source:
+  // 'explicit'); this does not touch the LLM's own slot guesses.
+  if (matterTypeBeforeLlm === 'unknown' && state.matter_type !== 'unknown') {
+    state = runEvidencePass(trimmed, state);
   }
 
   // Post-merge matter-type reroute REMOVED (DR-069, 2026-06-11). This
@@ -713,6 +759,12 @@ export async function processChannelInbound(
   }
 
   const report = buildReport(state);
+
+  // Hoisted above the contact-capture gate (WP-3b, 2026-08-13) so both
+  // the contact-capture follow-up and the Phase C discovery send can
+  // apply the same language bundle without recomputing it.
+  const language: SupportedLanguage = (state.language ?? 'en') as SupportedLanguage;
+  const i18n = getI18n(language);
 
   // Compute the decision deadline up front so the renderer can stamp it onto
   // the cover decision band + sidebar Queue posture. The DB insert below
@@ -811,6 +863,8 @@ export async function processChannelInbound(
     // on a fresh conversation (!isResume), frame the questioning before
     // asking for contact — resume turns (attempt 2, 3...) keep the
     // unmodified, opener-carrying copy from buildContactCaptureFollowUp.
+    // (DR-121's WP-3b expectation line was superseded by C2 at merge
+    // time: same intent, C2 landed on main first with PT coverage.)
     const followUpText = isResume
       ? buildContactCaptureFollowUp(gate.missing ?? 'both', (state.language ?? 'en') as SupportedLanguage)
       : withFirstAskIntro(
@@ -907,8 +961,6 @@ export async function processChannelInbound(
     // capture_contact when client_name is profile_metadata + weak,
     // which IS an ask we want to honor).
     const nextStep = getNextStep(state);
-    const language: SupportedLanguage = (state.language ?? 'en') as SupportedLanguage;
-    const i18n = getI18n(language);
 
     // Minimum-discovery floor (#170, 2026-06-08). The engine's stopping
     // rule (readyToStop / shouldPresentInsight / matter-gap='none') can
@@ -1108,12 +1160,26 @@ export async function processChannelInbound(
           "Thanks, I want to make sure I record this correctly. Could you reply with the number of the option that fits best?";
         questionText = `${clarifier}\n\n${questionText}`;
       }
+      // WP-3c (DR-121): the prior turn named more than one option for a
+      // single-pick question with no "All of the above" choice; only
+      // the first was recorded. Reassure the lead nothing was dropped.
+      // Mutually exclusive with clarifyReask (multiDigitAckNeeded only
+      // ever comes from a reply that just filled a slot; clarifyReask
+      // only fires when the pending slot is STILL unfilled).
+      if (multiDigitAckNeeded) {
+        const ack =
+          i18n.prompts?.multi_pick_ack ||
+          'Got it, I recorded your first pick. You can add the rest in your own words anytime.';
+        questionText = `${ack}\n\n${questionText}`;
+      }
       // First-ask intro (C2, 2026-08-07): !isResume specifically (see
       // the two comments above at the Phase B and F2-guard sites for why
       // this cannot be inferred from discoveryCount or any other counter
       // alone). clarifyReask can only be true when pendingAskedSlotId was
       // already set from a prior ask, which requires isResume, so the two
-      // conditions never overlap.
+      // conditions never overlap. multiDigitAckNeeded likewise requires a
+      // resume turn, so the intro and the multi-pick ack never co-occur.
+      // (DR-121's WP-3b expectation line was superseded by C2 here.)
       if (!isResume) {
         questionText = withFirstAskIntro(language, questionText);
       }

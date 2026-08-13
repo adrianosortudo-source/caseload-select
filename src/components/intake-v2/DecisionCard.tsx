@@ -198,7 +198,21 @@ export function DecisionCard({ item, value, onChange }: Props) {
               ].join(" ")}
               style={{ fontFamily: fontBody }}
             >
-              <span className="flex-1 text-[16px] font-medium leading-snug">{opt.label}</span>
+              <span className="flex-1 flex flex-col gap-0.5">
+                <span className="text-[16px] font-medium leading-snug">{opt.label}</span>
+                {opt.description && (
+                  <span
+                    className={[
+                      "text-[13px] leading-snug",
+                      isOn
+                        ? "text-[color-mix(in_srgb,var(--cls-accent-text,#FFFFFF)_75%,transparent)]"
+                        : "text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_55%,transparent)]",
+                    ].join(" ")}
+                  >
+                    {opt.description}
+                  </span>
+                )}
+              </span>
               {multi && (
                 <span
                   className={[
