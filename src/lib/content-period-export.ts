@@ -4,7 +4,7 @@
  * A read-only, period-scoped "publishing bundle": every existing
  * deliverable and its exact, already-stored content_deliverables /
  * deliverable_versions / approval_records / deliverable_comments /
- * publication_artifacts source, so an operator or a publishing agent can
+ * publication_artifacts / selected publishing_package_assets sources, so an operator or a publishing agent can
  * retrieve exactly what already exists in the client portal without
  * searching the filesystem, guessing asset locations, or regenerating
  * anything.
@@ -61,7 +61,45 @@ import type {
 const ASSET_BUCKET = "firm-files";
 const SIGNED_URL_TTL = 3600; // 1 hour, matching deliverables.ts's existing convention
 
-export const CONTENT_EXPORT_SCHEMA_VERSION = "1.1";
+export const CONTENT_EXPORT_SCHEMA_VERSION = "1.2";
+
+interface SelectedPublishingPackageAsset {
+  id: string;
+  deliverable_id: string | null;
+  source_version_id: string | null;
+  locale: string;
+  destination: string;
+  asset_role: string;
+  filename: string;
+  mime_type: string;
+  byte_size: number;
+  sha256: string;
+  storage_key: string | null;
+  status: string;
+  is_selected: boolean;
+  created_at: string;
+}
+
+const PACKAGE_ASSET_ARTIFACT_TYPE: Record<string, string> = {
+  website_article_hero: "hero_image",
+  website_homepage_cta: "hero_image",
+  native_linkedin_article_cover: "social_image",
+  linkedin_post_card: "social_image",
+  gbp_card: "social_image",
+  lead_magnet_document_hero: "hero_image",
+  lead_magnet_landing_page_hero: "hero_image",
+  pdf_document: "pdf",
+};
+
+function isPublishKitPackageAsset(asset: SelectedPublishingPackageAsset): boolean {
+  return Boolean(
+    asset.is_selected &&
+      asset.deliverable_id &&
+      asset.source_version_id &&
+      asset.storage_key &&
+      PACKAGE_ASSET_ARTIFACT_TYPE[asset.asset_role],
+  );
+}
 
 export interface ContentExportVersionBody {
   id: string;
@@ -403,7 +441,7 @@ async function signVersionAsset(
  * download filename for the same cross-origin reason as signVersionAsset.
  */
 async function signArtifact(
-  artifact: PublicationArtifact,
+  artifact: Pick<PublicationArtifact, "storage_path" | "storage_bucket">,
 ): Promise<{ signedUrl: string | null; signingFailed: boolean }> {
   if (!artifact.storage_path) return { signedUrl: null, signingFailed: false };
   const bucket = artifact.storage_bucket ?? ASSET_BUCKET;
@@ -468,12 +506,27 @@ export async function buildContentExportBundle(
   const deliverableIds = active.map((d) => d.id);
   const heldDeliverableIds = await loadUnresolvedClientChangeHoldDeliverableIds(period.firm_id, deliverableIds);
 
+  // Manifest deployments write approved weekly assets to the package registry,
+  // while older/manual portal workflows write publication_artifacts. Read the
+  // latest package only so an earlier manifest revision cannot reappear beside
+  // its replacement. This is a projection, not a copy: the package registry
+  // remains the source of truth for these bytes.
+  const { data: latestPackage } = await supabase
+    .from("publishing_packages")
+    .select("id")
+    .eq("firm_id", period.firm_id)
+    .eq("period_id", periodId)
+    .order("manifest_revision", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const [
     { data: versions },
     { data: comments },
     { data: approvals },
     { data: artifacts },
     { data: roleAssignments },
+    { data: packageAssets },
   ] = await Promise.all([
     deliverableIds.length
       ? supabase.from("deliverable_versions").select("*").in("deliverable_id", deliverableIds)
@@ -498,6 +551,15 @@ export async function buildContentExportBundle(
           .in("deliverable_id", deliverableIds)
           .is("superseded_at", null)
       : Promise.resolve({ data: [] as PublicationArtifactRoleAssignment[] }),
+    deliverableIds.length && latestPackage?.id
+      ? supabase
+          .from("publishing_package_assets")
+          .select(
+            "id, deliverable_id, source_version_id, locale, destination, asset_role, filename, mime_type, byte_size, sha256, storage_key, status, is_selected, created_at",
+          )
+          .eq("package_id", latestPackage.id)
+          .eq("is_selected", true)
+      : Promise.resolve({ data: [] as SelectedPublishingPackageAsset[] }),
   ]);
 
   const allVersions = (versions ?? []) as DeliverableVersion[];
@@ -552,6 +614,14 @@ export async function buildContentExportBundle(
     const list = artifactsByDeliverable.get(a.deliverable_id) ?? [];
     list.push(a);
     artifactsByDeliverable.set(a.deliverable_id, list);
+  }
+  const packageAssetsByDeliverable = new Map<string, SelectedPublishingPackageAsset[]>();
+  const selectedPackageAssets = (packageAssets ?? []) as SelectedPublishingPackageAsset[];
+  for (const asset of selectedPackageAssets) {
+    if (!isPublishKitPackageAsset(asset) || !asset.deliverable_id) continue;
+    const list = packageAssetsByDeliverable.get(asset.deliverable_id) ?? [];
+    list.push(asset);
+    packageAssetsByDeliverable.set(asset.deliverable_id, list);
   }
 
   const bundleWarnings: string[] = [];
@@ -612,10 +682,11 @@ export async function buildContentExportBundle(
     }
 
     const deliverableArtifacts = artifactsByDeliverable.get(d.id) ?? [];
-    if (deliverableArtifacts.length === 0) {
-      warnings.push("No publication_artifacts registered for this deliverable yet.");
+    const deliverablePackageAssets = packageAssetsByDeliverable.get(d.id) ?? [];
+    if (deliverableArtifacts.length === 0 && deliverablePackageAssets.length === 0) {
+      warnings.push("No publication or selected package artifacts are registered for this deliverable yet.");
     }
-    const exportArtifacts: ContentExportArtifact[] = await Promise.all(
+    const legacyExportArtifacts: ContentExportArtifact[] = await Promise.all(
       deliverableArtifacts.map(async (a) => {
         const latest = latestValidationByArtifact.get(a.id) ?? null;
         const { signedUrl: signed, signingFailed } = await signArtifact(a);
@@ -652,6 +723,54 @@ export async function buildContentExportBundle(
         };
       }),
     );
+    const packageExportArtifacts: ContentExportArtifact[] = await Promise.all(
+      deliverablePackageAssets.map(async (asset) => {
+        const storageArtifact = {
+          storage_bucket: ASSET_BUCKET,
+          storage_path: asset.storage_key,
+        };
+        const { signedUrl: signed, signingFailed } = await signArtifact(storageArtifact);
+        if (signingFailed) artifactSigningFailures += 1;
+        return {
+          id: asset.id,
+          version_id: asset.source_version_id as string,
+          artifact_type: PACKAGE_ASSET_ARTIFACT_TYPE[asset.asset_role],
+          asset_role: asset.asset_role,
+          locale: asset.locale,
+          destination: asset.destination,
+          storage_bucket: ASSET_BUCKET,
+          storage_path: asset.storage_key,
+          public_url: null,
+          sha256: asset.sha256,
+          size_bytes: asset.byte_size,
+          mime_type: asset.mime_type,
+          signed_url: signed,
+          signed_url_expires_at: signed ? signedUrlExpiresAt : null,
+          created_at: asset.created_at,
+          superseded_at: null,
+          matches_current_version:
+            currentResolved.version !== null && asset.source_version_id === currentResolved.version.id,
+          latest_validation: null,
+        };
+      }),
+    );
+    // A row registered in both systems is one set of bytes, not two cards.
+    // Prefer the explicit publication_artifacts record and use package assets
+    // only when their durable (version, role, hash) identity is not present.
+    const legacyIdentities = new Set(
+      legacyExportArtifacts.map((artifact) =>
+        [artifact.version_id, artifact.asset_role ?? "", artifact.sha256 ?? ""].join("::"),
+      ),
+    );
+    const exportArtifacts = [
+      ...legacyExportArtifacts,
+      ...packageExportArtifacts.filter(
+        (artifact) =>
+          !legacyIdentities.has(
+            [artifact.version_id, artifact.asset_role ?? "", artifact.sha256 ?? ""].join("::"),
+          ),
+      ),
+    ];
 
     if (versionSigningFailures > 0) {
       warnings.push(

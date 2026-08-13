@@ -17,7 +17,12 @@ import type {
   ContentExportArtifact,
 } from "@/lib/content-period-export";
 import type { DeliverableRole } from "@/lib/types";
-import { CANONICAL_FORMATS, canonicalFormat, type CanonicalFormat } from "@/lib/deliverables-pure";
+import {
+  CANONICAL_FORMATS,
+  canonicalFormat,
+  isLinkedInDestination,
+  type CanonicalFormat,
+} from "@/lib/deliverables-pure";
 import { isEnglishLocale } from "@/lib/linkedin-article-paste-pure";
 
 // ─── Copy constraints ────────────────────────────────────────────────────────
@@ -257,12 +262,7 @@ export type PublisherLane = "pipeline" | "manual" | "unknown";
 
 export function publisherLane(destination: string | null): PublisherLane {
   if (destination === "firm_website") return "pipeline";
-  if (
-    destination === "linkedin" ||
-    destination === "linkedin_article" ||
-    destination === "google_business_profile" ||
-    destination === "email"
-  ) {
+  if (isLinkedInDestination(destination) || destination === "google_business_profile" || destination === "email") {
     return "manual";
   }
   return "unknown";
@@ -651,8 +651,43 @@ export interface PublishKitFilter {
   lane: PublisherLane | null;
 }
 
+export type WebsiteArtifactPlacement = "article_hero" | "homepage_cta";
+
+const WEBSITE_ASSET_ROLES: Record<WebsiteArtifactPlacement, ReadonlySet<string>> = {
+  article_hero: new Set(["website_article_hero_overlay", "website_article_hero"]),
+  homepage_cta: new Set(["website_homepage_cta_textless", "website_homepage_cta"]),
+};
+
+/**
+ * Website placement slots belong only to firm-website articles. Native
+ * LinkedIn Articles also have role=article, but their cover is a social image
+ * and must never render two empty website-placement boxes above it.
+ */
+export function shouldShowWebsiteArtifactSlots(
+  piece: Pick<PublishKitPiece, "role" | "destination">,
+): boolean {
+  return piece.role === "article" && piece.destination === "firm_website";
+}
+
+/** Resolves both the legacy publication-artifact roles and manifest-package roles. */
+export function websitePlacementArtifact(
+  piece: Pick<PublishKitPiece, "artifacts">,
+  placement: WebsiteArtifactPlacement,
+): PublishKitArtifact | null {
+  const exact = piece.artifacts.find((artifact) => WEBSITE_ASSET_ROLES[placement].has(artifact.assetRole ?? ""));
+  if (exact || placement === "article_hero") return exact ?? null;
+  // Current weekly manifests may deliberately reuse one approved article
+  // image for the homepage feature instead of registering duplicate bytes in
+  // a second database row. Prefer a dedicated homepage artifact whenever one
+  // exists; otherwise show that same bound article image in both placements.
+  return piece.artifacts.find((artifact) => WEBSITE_ASSET_ROLES.article_hero.has(artifact.assetRole ?? "")) ?? null;
+}
+
 export function pieceMatchesFilter(piece: PublishKitPiece, filter: PublishKitFilter): boolean {
-  const channelOk = filter.channel === null || piece.destination === filter.channel;
+  const channelOk =
+    filter.channel === null ||
+    piece.destination === filter.channel ||
+    (filter.channel === "linkedin" && isLinkedInDestination(piece.destination));
   const laneOk = filter.lane === null || piece.lane === filter.lane;
   return channelOk && laneOk;
 }
