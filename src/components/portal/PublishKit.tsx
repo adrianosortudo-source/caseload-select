@@ -877,29 +877,50 @@ function LinkedInArticlePasteControl({
     // the rich clipboard path is unavailable, so the fallback degrades to
     // already-tested, already-familiar behaviour instead of a new one.
     const ok = await copyRichToClipboard(result.html, piece.plainText);
-    onToast(ok ? "Formatted copy copied" : "Clipboard blocked. Use the preview below to select and copy manually.");
+    onToast(ok ? "Formatted article body copied" : "Clipboard blocked. Use the preview below to select and copy manually.");
+  }
+
+  async function handleCopyTitle() {
+    const ok = await copyToClipboard(piece.title);
+    onToast(ok ? "LinkedIn Article title copied" : "Clipboard blocked. Select and copy the title manually.");
   }
 
   const buttonLabel =
     eligibility === "unsupported_locale"
       ? "Formatted copy: English only"
       : piece.mayPublish
-        ? "Copy formatted (for LinkedIn)"
+        ? "Copy formatted body"
         : "Copy locked";
 
   return (
     <div className="mt-3 pt-3 border-t border-border-brand">
       <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
         <span className="text-[10px] uppercase tracking-wider font-semibold text-black/40">LinkedIn Article</span>
-        <button
-          type="button"
-          disabled={!enabled}
-          onClick={handleCopyFormatted}
-          className="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1.5 border border-navy bg-navy text-white hover:bg-navy/90 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-black/20 disabled:border-black/20"
-        >
-          {buttonLabel}
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            disabled={!enabled}
+            onClick={handleCopyTitle}
+            className="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1.5 border border-navy text-navy bg-white hover:bg-parchment-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Copy title
+          </button>
+          <button
+            type="button"
+            disabled={!enabled}
+            onClick={handleCopyFormatted}
+            className="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1.5 border border-navy bg-navy text-white hover:bg-navy/90 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-black/20 disabled:border-black/20"
+          >
+            {buttonLabel}
+          </button>
+        </div>
       </div>
+      {result?.ok && (
+        <div className="mb-2 border border-border-brand bg-white px-3 py-2">
+          <p className="text-[9px] uppercase tracking-wider font-semibold text-black/40 mb-1">Article title</p>
+          <p className="text-[12px] font-semibold text-navy">{piece.title}</p>
+        </div>
+      )}
       {eligibility === "unsupported_locale" && (
         <p className="text-[11px] text-black/50">
           This piece&apos;s locale ({piece.locale ?? "not set"}) is not confirmed English. The LinkedIn Article
@@ -910,7 +931,7 @@ function LinkedInArticlePasteControl({
       {result?.ok && (
         <details className="mt-2">
           <summary className="text-[10px] uppercase tracking-wider font-semibold text-navy/70 cursor-pointer">
-            Preview formatted HTML
+            Preview formatted body
           </summary>
           <div
             className="mt-2 bg-white border border-border-brand p-3 text-[13px] leading-relaxed text-black/80 max-h-72 overflow-y-auto [&_h2]:font-bold [&_h2]:text-navy [&_h2]:text-sm [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:font-bold [&_h3]:text-navy [&_h3]:text-[13px] [&_h3]:mt-3 [&_h3]:mb-1 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_a]:text-navy [&_a]:underline [&_em]:italic [&_blockquote]:bg-parchment-2 [&_blockquote]:px-3 [&_blockquote]:py-2 [&_blockquote]:my-2 [&_hr]:border-border-brand [&_hr]:my-3"

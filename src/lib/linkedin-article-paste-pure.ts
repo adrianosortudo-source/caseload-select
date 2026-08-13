@@ -21,14 +21,10 @@
  * had to hand-fix on a published article once the naked URL showed up as
  * anchor text.
  *
- * The transform also: promotes a Decision Box's numbered paragraphs to a
- * real <ol>; converts the Five-Line Brief (Risk / Price / Timeline /
- * Decision / Next step) into one blockquote per line; turns the FAQ block
- * into bulleted bold-question / italic-answer pairs; italicises the locked
- * DR-082 disclaimer without ever altering its wording; and maps <h2> onto
- * either LinkedIn's "Heading" (kept as <h2>, when the section is divided off
- * from the article body by a preceding <hr>) or "Subheading" (<h3>,
- * everywhere else).
+ * The transform also converts the Five-Line Brief, headings, FAQs, and
+ * numbered action blocks into conservative paragraph/strong/emphasis markup.
+ * Live destination proof showed that LinkedIn flattens pasted h2/h3/list tags
+ * and merges adjacent blockquotes, while it preserves these simpler tags.
  *
  * ENGLISH ONLY. Every pattern below -- the Five-Line Brief labels,
  * "Frequently asked questions", the DR-082 disclaimer's opening words,
@@ -152,16 +148,17 @@ function convertBareLinks(s: string): string {
 /** A run of 2+ "<p>N. ...</p>" paragraphs -- the shape a Decision Box's numbered steps arrive in. */
 const NUMBERED_PARAGRAPH_RUN_SOURCE = "(?:<p>\\s*\\d+\\.\\s*[\\s\\S]*?<\\/p>\\s*){2,}";
 
-/** Promotes a matched numbered-paragraph run into a real <ol>. Stripping the literal numeral matters: leaving it produces "6. 6." once LinkedIn's editor adds its own. */
-function promoteNumberedParagraphsToListItems(block: string): string {
-  const items = [...block.matchAll(/<p>\s*\d+\.\s*([\s\S]*?)<\/p>/g)].map((m) => `<li>${m[1].trim()}</li>`);
-  return `<ol>${items.join("")}</ol>`;
+/** Converts a numbered-paragraph run to separately preserved bold-number paragraphs. */
+function numberedParagraphs(block: string): string {
+  return [...block.matchAll(/<p>\s*(\d+)\.\s*([\s\S]*?)<\/p>/g)]
+    .map((m) => `<p><strong>${m[1]}.</strong> ${m[2].trim()}</p>`)
+    .join("");
 }
 
 /**
  * Decision Box detection: an <h2> immediately followed by a run of 2+
  * numbered <p> paragraphs IS a Decision Box, regardless of its wording. That
- * single match promotes the numbered run to a real <ol> AND prepends the
+ * single match separates the numbered run into stable paragraphs AND prepends the
  * section-divider <hr> before the heading, in one step -- structural
  * detection, not keyed to any specific heading text, so it holds for any
  * week's Decision Box.
@@ -181,7 +178,7 @@ function promoteNumberedParagraphsToListItems(block: string): string {
  *
  * A numbered-paragraph run with no <h2> directly above it (not seen in
  * practice, but the original tolerated it via a separate, unconditional
- * promotion regex) still promotes to <ol>, just without a divider: that is
+ * promotion regex) still separates into numbered paragraphs, just without a divider: that is
  * the fallback pass below, which only ever sees runs the first pass did not
  * already consume.
  */
@@ -189,24 +186,48 @@ function decisionBoxAndNumberedLists(s: string): string {
   const withHeadings = s.replace(
     new RegExp(`<h2>([^<]*)<\\/h2>(\\s*)(${NUMBERED_PARAGRAPH_RUN_SOURCE})`, "g"),
     (_m: string, headingText: string, gap: string, listBlock: string) =>
-      `<hr><h2>${headingText}</h2>${gap}${promoteNumberedParagraphsToListItems(listBlock)}`,
+      `<hr><p><strong>${headingText}</strong></p>${gap}${numberedParagraphs(listBlock)}`,
   );
-  return withHeadings.replace(new RegExp(NUMBERED_PARAGRAPH_RUN_SOURCE, "g"), (block: string) =>
-    promoteNumberedParagraphsToListItems(block),
+  const separate = withHeadings.replace(new RegExp(NUMBERED_PARAGRAPH_RUN_SOURCE, "g"), (block: string) =>
+    numberedParagraphs(block),
   );
+
+  // Production imports keep a Decision Box's numbered lines in one paragraph
+  // when the source uses line breaks without blank lines. Split that shape too.
+  return separate.replace(/<p>\s*(1\.\s[\s\S]*?\s2\.\s[\s\S]*?)<\/p>/g, (_m: string, inner: string) => {
+    const items = inner.trim().split(/\s+(?=\d+\.\s)/);
+    if (items.length < 2 || !items.every((item) => /^\d+\.\s/.test(item))) return _m;
+    return items
+      .map((item) => item.replace(/^(\d+)\.\s*([\s\S]*)$/, `<p><strong>$1.</strong> $2</p>`))
+      .join("");
+  });
 }
 
 // ─── Five-Line Brief ──────────────────────────────────────────────────────────
 
 const BRIEF_LABELS = ["Risk", "Price", "Timeline", "Decision", "Next step"];
 
-/** Five-Line Brief -> one blockquote per line, label bold. Reads far better as discrete blocks than as five plain-text label-and-colon lines. */
+/** Five-Line Brief -> one paragraph per line, with the label bold. */
 function convertFiveLineBrief(s: string): string {
-  let out = s;
+  // The current production body keeps all five lines in one paragraph. Handle
+  // that form first so the Risk capture cannot swallow the remaining labels.
+  let out = s.replace(
+    /<p>\s*Risk:\s*([\s\S]*?)\s+Price:\s*([\s\S]*?)\s+Timeline:\s*([\s\S]*?)\s+Decision:\s*([\s\S]*?)\s+Next step:\s*([\s\S]*?)<\/p>/,
+    (_m, risk, price, timeline, decision, nextStep) =>
+      [
+        ["Risk", risk],
+        ["Price", price],
+        ["Timeline", timeline],
+        ["Decision", decision],
+        ["Next step", nextStep],
+      ]
+        .map(([label, text]) => `<p><strong>${label}:</strong> ${String(text).trim()}</p>`)
+        .join(""),
+  );
   for (const label of BRIEF_LABELS) {
     out = out.replace(
       new RegExp(`<p>\\s*${label}:\\s*([\\s\\S]*?)<\\/p>`),
-      `<blockquote><p><strong>${label}:</strong> $1</p></blockquote>`,
+      `<p><strong>${label}:</strong> $1</p>`,
     );
   }
   return out;
@@ -215,7 +236,7 @@ function convertFiveLineBrief(s: string): string {
 // ─── FAQ ────────────────────────────────────────────────────────────────────
 
 /**
- * FAQ -> bulleted pairs, question bold, answer italic. Italics here are one
+ * FAQ -> paragraph pairs, question bold, answer italic. Italics here are one
  * of exactly two sanctioned LinkedIn-only exceptions to the no-italics rule
  * (the other is the disclaimer below). The terminator tolerates the
  * <strong> the disclaimer opens with, and also stops at the next <h2> (a
@@ -224,14 +245,14 @@ function convertFiveLineBrief(s: string): string {
  */
 function convertFaq(s: string): string {
   return s.replace(
-    /(<h2>Frequently asked questions<\/h2>)([\s\S]*?)(?=<h2>|<p>\s*(?:<strong>)?\s*Legal information)/,
-    (_m: string, heading: string, block: string) => {
+    /<(?:h2|p)>\s*Frequently asked questions\s*<\/(?:h2|p)>([\s\S]*?)(?=<h[1-3]>|<p>\s*(?:A qualified next step|(?:<strong>)?\s*Legal information))/,
+    (_m: string, block: string) => {
       const paras = [...block.matchAll(/<p>([\s\S]*?)<\/p>/g)].map((m) => m[1].trim());
-      const items: string[] = [];
+      const pairs: string[] = [];
       for (let i = 0; i + 1 < paras.length; i += 2) {
-        items.push(`<li><strong>${paras[i]}</strong> <em>${paras[i + 1]}</em></li>`);
+        pairs.push(`<p><strong>${paras[i]}</strong></p><p><em>${paras[i + 1]}</em></p>`);
       }
-      return `<hr>${heading}<ul>${items.join("")}</ul>`;
+      return `<hr><p><strong>Frequently asked questions</strong></p>${pairs.join("")}`;
     },
   );
 }
@@ -257,22 +278,24 @@ function convertRelatedReadingDivider(s: string): string {
   return s.replace(/<p>Related reading on the DRG Law website:/, "<hr>$&");
 }
 
-// ─── Heading levels ───────────────────────────────────────────────────────────
+// ─── Destination-safe headings ───────────────────────────────────────────────
 
 /**
- * Two heading levels: sections divided off from the article body (the FAQ,
- * and now structurally, the Decision Box -- each introduced by a divider)
- * take LinkedIn's "Heading" and stay <h2>; sections inside the argument take
- * "Subheading" and downgrade to <h3>. A divider immediately before the
- * heading is exactly what "divided from the main article" means, so this
- * keys off that rather than any heading text, and holds for any week's
- * article.
+ * LinkedIn's current paste sanitizer flattens h2/h3 but reliably keeps strong
+ * text. Convert stored heading tags and short standalone question paragraphs
+ * into bold paragraphs, preserving the source's section boundaries.
  */
-function promoteHeadingLevels(s: string): string {
-  return s.replace(
-    /(<hr>\s*)?<h2>([\s\S]*?)<\/h2>/g,
-    (_m: string, divider: string | undefined, text: string) => (divider ? `${divider}<h2>${text}</h2>` : `<h3>${text}</h3>`),
+function destinationSafeHeadings(s: string): string {
+  let out = s.replace(
+    /(<hr>\s*)?<h[1-3]>([\s\S]*?)<\/h[1-3]>/g,
+    (_m: string, divider: string | undefined, text: string) => `${divider ?? ""}<p><strong>${text}</strong></p>`,
   );
+  out = out.replace(/<p>\s*([^<]{3,180}\?)\s*<\/p>/g, `<p><strong>$1</strong></p>`);
+  out = out.replace(
+    /<p>\s*(Decision Box|Frequently asked questions|A qualified next step)\s*<\/p>/g,
+    `<hr><p><strong>$1</strong></p>`,
+  );
+  return out;
 }
 
 // ─── Entry points ─────────────────────────────────────────────────────────────
@@ -298,7 +321,7 @@ function promoteHeadingLevels(s: string): string {
  * heading and freshly-built <li> items, not the raw text it captured.
  * Running decisionBoxAndNumberedLists after convertFaq avoids the collision
  * entirely: the FAQ region is already finalized, and decisionBoxAndNumberedLists
- * does not care about <ul>/<li> content at all.
+ * does not care about the FAQ's final paragraph pairs.
  */
 export function toLinkedInArticleHtml(raw: string): LinkedInArticlePasteBody {
   let s = normalizeLineEndings(raw);
@@ -313,7 +336,7 @@ export function toLinkedInArticleHtml(raw: string): LinkedInArticlePasteBody {
   s = decisionBoxAndNumberedLists(s);
   s = convertDisclaimer(s);
   s = convertRelatedReadingDivider(s);
-  s = promoteHeadingLevels(s);
+  s = destinationSafeHeadings(s);
 
   return { headline, html: s.trim() };
 }

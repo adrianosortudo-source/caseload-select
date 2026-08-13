@@ -95,3 +95,22 @@ export const HEADINGLESS_NUMBERED_LIST_BODY = `
 export const TAG_OPENING_BODY = `<h1>Already a Heading Tag</h1>
       <p>The body starts with a tag, not plain text, so there is no headline to pull out.</p>
 `;
+
+/**
+ * The production import shape that exposed the W5 defect: section headings
+ * are plain paragraphs, the entire Five-Line Brief is one paragraph, and all
+ * numbered Decision Box actions are one paragraph.
+ */
+export const WEEK_FIVE_IMPORTED_BODY = `<p>Before signing, organize the actual transaction record.</p>
+<p>Risk: Missing records can hide an obligation. Price: Map every stated and continuing cost. Timeline: Preserve delivery, signing, and payment dates. Decision: Decide whether the file supports qualified review. Next step: Build one indexed working file.</p>
+<p>What is the buyer actually deciding?</p>
+<p>The buyer is deciding whether the record is ready for review.</p>
+<p>Decision Box</p>
+<p>1. Preserve every disclosure version. 2. Build Risk, Price, and Timeline summaries. 3. List unresolved questions.</p>
+<p>Frequently asked questions</p>
+<p>What should I review?</p>
+<p>Start with the disclosure package and proposed agreements.</p>
+<p>When should I seek review?</p>
+<p>Before commitment, with the actual records organized.</p>
+<p>A qualified next step</p>
+<p>Organize first, then ask for qualified review.</p>`;
