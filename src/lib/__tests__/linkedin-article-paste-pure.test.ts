@@ -21,6 +21,7 @@ import {
   SINGLE_NUMBERED_PARAGRAPH_BODY,
   HEADINGLESS_NUMBERED_LIST_BODY,
   TAG_OPENING_BODY,
+  WEEK_FIVE_IMPORTED_BODY,
 } from "@/lib/__fixtures__/linkedin-article-paste-bodies";
 
 function countOccurrences(haystack: string, needle: string): number {
@@ -38,7 +39,7 @@ describe("toLinkedInArticleHtml", () => {
     it("yields an empty headline when the body opens directly with a tag", () => {
       const { headline, html } = toLinkedInArticleHtml(TAG_OPENING_BODY);
       expect(headline).toBe("");
-      expect(html.startsWith("<h1>Already a Heading Tag</h1>")).toBe(true);
+      expect(html.startsWith("<p><strong>Already a Heading Tag</strong></p>")).toBe(true);
     });
   });
 
@@ -83,17 +84,15 @@ describe("toLinkedInArticleHtml", () => {
   });
 
   describe("Decision Box (structural detection, gap 1 fix)", () => {
-    it("promotes a heading's numbered paragraphs to <ol> and dividers the heading, for a heading text that is NOT the original script's hardcoded 'Six actions before committing to the sale'", () => {
+    it("separates a heading's numbered paragraphs into LinkedIn-safe bold-number paragraphs", () => {
       const { html } = toLinkedInArticleHtml(FULL_ARTICLE_BODY);
       expect(html).toContain(
-        "<hr><h2>Three questions before signing the lease renewal</h2>\n" +
-          "<ol><li>Confirm the renewal window in writing.</li>" +
-          "<li>Calendar the deadline with a buffer.</li>" +
-          "<li>Review the rent-reset mechanism before it locks in.</li></ol>",
+        "<hr><p><strong>Three questions before signing the lease renewal</strong></p>\n" +
+          "<p><strong>1.</strong> Confirm the renewal window in writing.</p>" +
+          "<p><strong>2.</strong> Calendar the deadline with a buffer.</p>" +
+          "<p><strong>3.</strong> Review the rent-reset mechanism before it locks in.</p>",
       );
-      // Never downgraded to a Subheading -- the divider must keep it <h2>.
-      expect(html).not.toContain("<h3>Three questions before signing the lease renewal</h3>");
-      // The literal numbered <p> markup must be gone, not merely duplicated.
+      expect(html).not.toContain("<ol>");
       expect(html).not.toContain("<p>1. Confirm the renewal window in writing.</p>");
     });
 
@@ -101,9 +100,9 @@ describe("toLinkedInArticleHtml", () => {
       const { headline, html } = toLinkedInArticleHtml(ORIGINAL_WEEK_DECISION_BOX_BODY);
       expect(headline).toBe("Selling the Business When You Lease the Premises");
       expect(html).toBe(
-        "<hr><h2>Six actions before committing to the sale</h2>\n" +
-          "<ol><li>Confirm whether the lease is assignable.</li>" +
-          "<li>Ask the landlord for written consent early.</li></ol>",
+        "<hr><p><strong>Six actions before committing to the sale</strong></p>\n" +
+          "<p><strong>1.</strong> Confirm whether the lease is assignable.</p>" +
+          "<p><strong>2.</strong> Ask the landlord for written consent early.</p>",
       );
     });
 
@@ -111,7 +110,7 @@ describe("toLinkedInArticleHtml", () => {
       const { headline, html } = toLinkedInArticleHtml(SINGLE_NUMBERED_PARAGRAPH_BODY);
       expect(headline).toBe("Not Actually a Decision Box");
       expect(html).not.toContain("<ol>");
-      expect(html).toContain("<h3>Only one step here</h3>");
+      expect(html).toContain("<p><strong>Only one step here</strong></p>");
       expect(html).toContain("<p>1. Just one thing to do.</p>");
       expect(html).not.toContain("<hr>");
     });
@@ -119,47 +118,46 @@ describe("toLinkedInArticleHtml", () => {
     it("falls back to a bare <ol> (no divider) for a numbered run with no heading directly above it", () => {
       const { headline, html } = toLinkedInArticleHtml(HEADINGLESS_NUMBERED_LIST_BODY);
       expect(headline).toBe("Steps With No Heading Above Them");
-      expect(html).toContain("<ol><li>First step.</li><li>Second step.</li></ol>");
+      expect(html).toContain("<p><strong>1.</strong> First step.</p><p><strong>2.</strong> Second step.</p>");
       expect(html).not.toContain("<hr>");
     });
   });
 
   describe("Five-Line Brief", () => {
-    it("wraps each of the five labelled lines in its own blockquote with a bold label", () => {
+    it("keeps each labelled line in a separate bold-led paragraph, never a blockquote", () => {
       const { html } = toLinkedInArticleHtml(FULL_ARTICLE_BODY);
       expect(html).toContain(
-        "<blockquote><p><strong>Risk:</strong> A missed notice deadline can forfeit the right to renew entirely.</p></blockquote>",
+        "<p><strong>Risk:</strong> A missed notice deadline can forfeit the right to renew entirely.</p>",
       );
       expect(html).toContain(
-        "<blockquote><p><strong>Price:</strong> Renegotiated rent at renewal is rarely below market once a landlord senses leverage.</p></blockquote>",
+        "<p><strong>Price:</strong> Renegotiated rent at renewal is rarely below market once a landlord senses leverage.</p>",
       );
       expect(html).toContain(
-        "<blockquote><p><strong>Timeline:</strong> Most leases require 90 to 180 days written notice before the term ends.</p></blockquote>",
+        "<p><strong>Timeline:</strong> Most leases require 90 to 180 days written notice before the term ends.</p>",
       );
       expect(html).toContain(
-        "<blockquote><p><strong>Decision:</strong> Calendar the notice deadline the day the lease is signed, not the year before it matters.</p></blockquote>",
+        "<p><strong>Decision:</strong> Calendar the notice deadline the day the lease is signed, not the year before it matters.</p>",
       );
       expect(html).toContain(
-        "<blockquote><p><strong>Next step:</strong> Confirm the exact notice mechanism the lease requires, in writing.</p></blockquote>",
+        "<p><strong>Next step:</strong> Confirm the exact notice mechanism the lease requires, in writing.</p>",
       );
-      expect(countOccurrences(html, "<blockquote>")).toBe(5);
+      expect(countOccurrences(html, "<blockquote>")).toBe(0);
     });
   });
 
   describe("FAQ", () => {
-    it("converts the FAQ block to a dividered, bold-question/italic-answer bulleted list", () => {
+    it("converts the FAQ block to dividered bold-question/italic-answer paragraph pairs", () => {
       const { html } = toLinkedInArticleHtml(FULL_ARTICLE_BODY);
-      expect(html).toContain("<hr><h2>Frequently asked questions</h2><ul>");
+      expect(html).toContain("<hr><p><strong>Frequently asked questions</strong></p>");
       expect(html).toContain(
-        "<li><strong>Does a renewal clause renew automatically?</strong> " +
-          "<em>No. Almost every commercial lease requires the tenant to give written notice inside a defined window, or the right lapses.</em></li>",
+        "<p><strong>Does a renewal clause renew automatically?</strong></p>" +
+          "<p><em>No. Almost every commercial lease requires the tenant to give written notice inside a defined window, or the right lapses.</em></p>",
       );
       expect(html).toContain(
-        "<li><strong>Can a landlord refuse a valid renewal notice?</strong> " +
-          "<em>Only on the narrow grounds the lease itself sets out. A validly exercised option is generally binding on both sides.</em></li>",
+        "<p><strong>Can a landlord refuse a valid renewal notice?</strong></p>" +
+          "<p><em>Only on the narrow grounds the lease itself sets out. A validly exercised option is generally binding on both sides.</em></p>",
       );
-      // FAQ heading survives as a kept Heading, never downgraded.
-      expect(html).not.toContain("<h3>Frequently asked questions</h3>");
+      expect(html).not.toContain("<ul>");
     });
   });
 
@@ -179,11 +177,11 @@ describe("toLinkedInArticleHtml", () => {
       const totalEm = countOccurrences(html, "<em>");
       expect(totalEm).toBe(3); // 2 FAQ answers + 1 disclaimer
 
-      const ulMatch = html.match(/<ul>[\s\S]*?<\/ul>/);
+      const faqMatch = html.match(/<p><strong>Frequently asked questions<\/strong><\/p>[\s\S]*?<hr>/);
       const disclaimerMatch = html.match(/<p><em>Legal information[\s\S]*?<\/p>/);
-      expect(ulMatch).not.toBeNull();
+      expect(faqMatch).not.toBeNull();
       expect(disclaimerMatch).not.toBeNull();
-      const emInFaq = countOccurrences(ulMatch![0], "<em>");
+      const emInFaq = countOccurrences(faqMatch![0], "<em>");
       const emInDisclaimer = countOccurrences(disclaimerMatch![0], "<em>");
       expect(emInFaq).toBe(2);
       expect(emInDisclaimer).toBe(1);
@@ -194,22 +192,43 @@ describe("toLinkedInArticleHtml", () => {
   });
 
   describe("heading levels", () => {
-    it("keeps only the divided-off sections (FAQ, Decision Box) as <h2>, and downgrades everything else to <h3>", () => {
+    it("maps stored headings to bold paragraphs because LinkedIn strips pasted h2/h3 tags", () => {
       const { html } = toLinkedInArticleHtml(FULL_ARTICLE_BODY);
-      expect(countOccurrences(html, "<h2>")).toBe(2); // FAQ + Decision Box
-      expect(countOccurrences(html, "<h3>")).toBe(1); // "What the courts have said"
-      expect(html).toContain("<h3>What the courts have said</h3>");
-      expect(html).not.toContain("<h2>What the courts have said</h2>");
+      expect(countOccurrences(html, "<h2>")).toBe(0);
+      expect(countOccurrences(html, "<h3>")).toBe(0);
+      expect(html).toContain("<p><strong>What the courts have said</strong></p>");
     });
   });
 
   describe("structural totals", () => {
-    it("produces exactly one <ol>, one <ul>, and four <hr> dividers for the full article", () => {
+    it("avoids destination-fragile list and blockquote tags while retaining four dividers", () => {
       const { html } = toLinkedInArticleHtml(FULL_ARTICLE_BODY);
-      expect(countOccurrences(html, "<ol>")).toBe(1);
-      expect(countOccurrences(html, "<ul>")).toBe(1);
+      expect(countOccurrences(html, "<ol>")).toBe(0);
+      expect(countOccurrences(html, "<ul>")).toBe(0);
+      expect(countOccurrences(html, "<blockquote>")).toBe(0);
       // FAQ, Decision Box, disclaimer, and the closing "Related reading" line.
       expect(countOccurrences(html, "<hr>")).toBe(4);
+    });
+  });
+
+  describe("Week 5 production import shape", () => {
+    it("separates the combined Brief and Decision Box and bolds plain-paragraph headings", () => {
+      const { headline, html } = toLinkedInArticleHtml(WEEK_FIVE_IMPORTED_BODY);
+      expect(headline).toBe("");
+      expect(countOccurrences(html, "<p><strong>Risk:</strong>")).toBe(1);
+      expect(countOccurrences(html, "<p><strong>Price:</strong>")).toBe(1);
+      expect(countOccurrences(html, "<p><strong>Timeline:</strong>")).toBe(1);
+      expect(countOccurrences(html, "<p><strong>Decision:</strong>")).toBe(1);
+      expect(countOccurrences(html, "<p><strong>Next step:</strong>")).toBe(1);
+      expect(html).toContain("<p><strong>What is the buyer actually deciding?</strong></p>");
+      expect(html).toContain("<p><strong>1.</strong> Preserve every disclosure version.</p>");
+      expect(html).toContain("<p><strong>2.</strong> Build Risk, Price, and Timeline summaries.</p>");
+      expect(html).toContain("<p><strong>3.</strong> List unresolved questions.</p>");
+      expect(html).toContain("<p><strong>What should I review?</strong></p>");
+      expect(html).toContain("<p><strong>A qualified next step</strong></p>");
+      expect(html).not.toContain("<blockquote>");
+      expect(html).not.toContain("<ol>");
+      expect(html).not.toContain("<ul>");
     });
   });
 });
@@ -237,7 +256,7 @@ describe("toLinkedInArticlePasteHtmlEnglishOnly", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.headline).toBe("Selling the Business When You Lease the Premises");
-      expect(result.html).toContain("<hr><h2>Six actions before committing to the sale</h2>");
+      expect(result.html).toContain("<hr><p><strong>Six actions before committing to the sale</strong></p>");
     }
   });
 
