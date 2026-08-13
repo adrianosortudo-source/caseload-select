@@ -487,6 +487,12 @@ const WEBSITE_FORMAT_ALIASES = new Set([
   "clausula comentada",
 ]);
 const LINKEDIN_FORMAT_ALIASES = new Set(["linkedin", "linkedin post", "linkedin variation"]);
+const LINKEDIN_DESTINATIONS = new Set([
+  "linkedin",
+  "linkedin_article",
+  "linkedin_post",
+  "linkedin_company_page",
+]);
 const GBP_FORMAT_ALIASES = new Set(["google business profile", "gbp", "gbp post"]);
 const RESOURCE_FORMAT_ALIASES = new Set([
   "lead magnet",
@@ -509,13 +515,7 @@ export function canonicalFormat(item: Pick<PlanDeliverable, "format" | "locale" 
   const role = normalized(item.deliverable_role);
   const destination = normalized(item.publication_destination);
 
-  if (
-    destination === "linkedin" ||
-    destination === "linkedin_article" ||
-    destination === "linkedin_post" ||
-    destination === "linkedin_company_page" ||
-    role === "social_post"
-  ) return "LinkedIn";
+  if (isLinkedInDestination(destination) || role === "social_post") return "LinkedIn";
   if (destination === "google_business_profile" || destination === "google business profile" || destination === "gbp" || role === "gbp_post") {
     return "Google Business Profile";
   }
@@ -530,6 +530,16 @@ export function canonicalFormat(item: Pick<PlanDeliverable, "format" | "locale" 
   if (RESOURCE_FORMAT_ALIASES.has(format)) return "Checklists & downloadable resources";
   if (EMAIL_FORMAT_ALIASES.has(format)) return "Email";
   return "Other";
+}
+
+/**
+ * True when a stored publication destination belongs to the operator-facing
+ * LinkedIn channel. The portal intentionally distinguishes native Articles,
+ * feed posts and company-page placements at the record level, while its
+ * top-level LinkedIn filters and panels must include the complete family.
+ */
+export function isLinkedInDestination(destination: string | null | undefined): boolean {
+  return LINKEDIN_DESTINATIONS.has(normalized(destination));
 }
 
 export function languageLabel(locale: string | null | undefined): string {

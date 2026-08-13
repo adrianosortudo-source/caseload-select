@@ -23,6 +23,8 @@ import {
   pieceMatchesFilter,
   filteredTotals,
   blockedPiecesAreFullyWithheld,
+  shouldShowWebsiteArtifactSlots,
+  websitePlacementArtifact,
   ROLE_COPY_CONSTRAINTS,
   type PublishKitPiece,
   type PublishKitView,
@@ -1865,6 +1867,34 @@ describe("totals", () => {
 
 const NO_FILTER: PublishKitFilter = { channel: null, lane: null };
 
+describe("website artifact placement compatibility", () => {
+  it("shows website slots only for firm-website articles, never native LinkedIn Articles", () => {
+    expect(shouldShowWebsiteArtifactSlots(makePiece({ role: "article", destination: "firm_website" }))).toBe(true);
+    expect(shouldShowWebsiteArtifactSlots(makePiece({ role: "article", destination: "linkedin_article" }))).toBe(false);
+    expect(shouldShowWebsiteArtifactSlots(makePiece({ role: "social_post", destination: "firm_website" }))).toBe(false);
+  });
+
+  it.each([
+    ["website_article_hero_overlay", "article_hero"],
+    ["website_article_hero", "article_hero"],
+    ["website_homepage_cta_textless", "homepage_cta"],
+    ["website_homepage_cta", "homepage_cta"],
+  ] as const)("resolves the %s role into the %s slot", (assetRole, placement) => {
+    const artifact = makeArtifact({ id: assetRole, asset_role: assetRole, artifact_type: "hero_image" });
+    const view = toPublishKitView(makeBundle([makeDeliverable({ artifacts: [artifact] })]));
+    expect(websitePlacementArtifact(view.groups[0].pieces[0], placement)?.id).toBe(assetRole);
+  });
+
+  it("reuses the article hero for the homepage only when no dedicated homepage asset exists", () => {
+    const article = makeArtifact({ id: "article", asset_role: "website_article_hero", artifact_type: "hero_image" });
+    const homepage = makeArtifact({ id: "homepage", asset_role: "website_homepage_cta", artifact_type: "hero_image" });
+    const articleOnly = toPublishKitView(makeBundle([makeDeliverable({ artifacts: [article] })])).groups[0].pieces[0];
+    const both = toPublishKitView(makeBundle([makeDeliverable({ artifacts: [article, homepage] })])).groups[0].pieces[0];
+    expect(websitePlacementArtifact(articleOnly, "homepage_cta")?.id).toBe("article");
+    expect(websitePlacementArtifact(both, "homepage_cta")?.id).toBe("homepage");
+  });
+});
+
 describe("pieceMatchesFilter", () => {
   it("null channel and null lane match every piece", () => {
     expect(pieceMatchesFilter(makePiece({ destination: "linkedin", lane: "manual" }), NO_FILTER)).toBe(true);
@@ -1874,6 +1904,22 @@ describe("pieceMatchesFilter", () => {
     const filter: PublishKitFilter = { channel: "linkedin", lane: null };
     expect(pieceMatchesFilter(makePiece({ destination: "linkedin" }), filter)).toBe(true);
     expect(pieceMatchesFilter(makePiece({ destination: "firm_website" }), filter)).toBe(false);
+  });
+
+  it.each([
+    "linkedin",
+    "linkedin_article",
+    "linkedin_post",
+    "linkedin_company_page",
+  ])("the LinkedIn channel filter includes the %s destination", (destination) => {
+    const filter: PublishKitFilter = { channel: "linkedin", lane: null };
+    expect(pieceMatchesFilter(makePiece({ destination }), filter)).toBe(true);
+  });
+
+  it("an explicit LinkedIn Article destination filter remains article-only", () => {
+    const filter: PublishKitFilter = { channel: "linkedin_article", lane: null };
+    expect(pieceMatchesFilter(makePiece({ destination: "linkedin_article" }), filter)).toBe(true);
+    expect(pieceMatchesFilter(makePiece({ destination: "linkedin" }), filter)).toBe(false);
   });
 
   it("a lane filter excludes pieces in a different lane", () => {

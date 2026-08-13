@@ -22,6 +22,8 @@ import {
   pieceMatchesFilter,
   filteredTotals,
   blockedPiecesAreFullyWithheld,
+  shouldShowWebsiteArtifactSlots,
+  websitePlacementArtifact,
   type PublishKitView,
   type PublishKitPiece,
   type ConstraintReading,
@@ -695,27 +697,31 @@ function PieceCard({
               here.
             </p>
           )}
-          {piece.role === "article" && (
+          {shouldShowWebsiteArtifactSlots(piece) && (
             <div className="grid gap-3 md:grid-cols-2">
               <WebsiteArtifactSlot
-                role="website_article_hero_overlay"
                 label="Article hero"
                 helper="Overlay text · article placement"
-                artifact={piece.artifacts.find((a) => a.assetRole === "website_article_hero_overlay") ?? null}
+                artifact={websitePlacementArtifact(piece, "article_hero")}
                 piece={piece}
               />
               <WebsiteArtifactSlot
-                role="website_homepage_cta_textless"
                 label="Homepage CTA"
-                helper="No overlay text · homepage placement"
-                artifact={piece.artifacts.find((a) => a.assetRole === "website_homepage_cta_textless") ?? null}
+                helper={
+                  websitePlacementArtifact(piece, "homepage_cta")?.assetRole === "website_article_hero"
+                    ? "Reuses article image · homepage placement"
+                    : "Homepage placement"
+                }
+                artifact={websitePlacementArtifact(piece, "homepage_cta")}
                 piece={piece}
               />
             </div>
           )}
           {(piece.role !== "article"
             ? piece.artifacts.filter((artifact) => !(isChecklistPdf && artifact.artifactType === "pdf"))
-            : piece.artifacts.filter((a) => a.artifactType !== "hero_image")
+            : piece.destination === "firm_website"
+              ? piece.artifacts.filter((a) => a.artifactType !== "hero_image")
+              : piece.artifacts
           ).map((artifact) => (
             <ArtifactBlock
               key={artifact.id}
@@ -917,13 +923,11 @@ function LinkedInArticlePasteControl({
 }
 
 function WebsiteArtifactSlot({
-  role,
   label,
   helper,
   artifact,
   piece,
 }: {
-  role: "website_article_hero_overlay" | "website_homepage_cta_textless";
   label: string;
   helper: string;
   artifact: PublishKitPiece["artifacts"][number] | null;
@@ -952,7 +956,7 @@ function WebsiteArtifactSlot({
             destination={artifact.destination}
             unapproved={piece.boundArtifactsAreUnapproved}
             supersededAt={artifact.supersededAt}
-            assetRole={role}
+            assetRole={artifact.assetRole}
           />
         </div>
       ) : (
