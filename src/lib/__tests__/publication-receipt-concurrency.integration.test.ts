@@ -17,7 +17,10 @@
  * scope-matching claim; two receipt-insert attempts racing to consume the
  * SAME claim_id must yield exactly one winner; a NULL claim_id on a root
  * receipt is rejected outright; and a receipt cannot release a claim held
- * by a different actor.
+ * by a different actor. The composed release contract is intentional: the
+ * legacy standing-claim RPC selects its path, while the current
+ * 20260809150948 release triggers and 20260809170708 deliverable-scoped
+ * hold function authoritatively revalidate claim and receipt inserts.
  *
  * Gated behind DIRECT_DATABASE_URL (a direct, non-pooled Postgres
  * connection string -- Supabase project settings -> Database -> Connection
@@ -283,6 +286,10 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
        values ($1, $2, $3, 'firm_website', $4, now(), 'https://example.test/stale', 'operator', 'Test Operator', $5)`,
       [firmId, deliverableId, placementId, versionOld, claimOldId],
     );
+    // Attach the rejection handler immediately: the deliberately blocked
+    // query can reject as soon as A commits, before this test reaches its
+    // later assertion on a fast CI runner.
+    const staleReceiptRejected = expect(insertStale).rejects.toThrow(/exact current version \(version drift\)/i);
 
     // Give B's blocked query a moment to actually reach the database and
     // start waiting (proving it's blocked, not merely slow to schedule),
@@ -301,7 +308,7 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
     // versionOld.
     await connA.query("commit");
 
-    await expect(insertStale).rejects.toThrow(/approved_version_id/i);
+    await staleReceiptRejected;
 
     // Confirm no stale-version receipt row exists.
     const { rows } = await connA.query(
@@ -369,7 +376,7 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
          values ($1, $2, $3, 'linkedin_post', $4, now(), 'https://example.test/no-claim', 'operator', 'Test Operator', null)`,
         [firmId, deliverableId2, placementId2, versionId2],
       ),
-    ).rejects.toThrow(/claim_id/i);
+    ).rejects.toThrow(/active release claim/i);
   }, 30000);
 
   it("rejects a receipt whose actor does not match the claim's claimed-by identity, leaving the claim active", async () => {
@@ -429,7 +436,7 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
     expect(rejectedResult).toBeDefined();
     if (rejectedResult && rejectedResult.status === "rejected") {
       const message = String(rejectedResult.reason?.message ?? rejectedResult.reason);
-      expect(message).toMatch(/claim_id|not active/i);
+      expect(message).toMatch(/active release claim/i);
     }
 
     const { rows } = await connA.query(`select count(*)::int as n from publication_receipts where claim_id = $1`, [claimId]);
@@ -480,7 +487,7 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
          values ($1, $2, $3, 'linkedin_post', $4, now(), 'https://example.test/null-actor', 'operator', null, 'Anonymous', $5)`,
         [firm, deliverable, placement, version, claimId],
       ),
-    ).rejects.toThrow(/authenticated operator identity/i);
+    ).rejects.toThrow(/authenticated claim actor/i);
 
     const { rows } = await connA.query(`select status from publication_placement_claims where id = $1`, [claimId]);
     expect(rows[0].status).toBe("active");
@@ -523,5 +530,213 @@ describe.skipIf(!DB_URL)("publication_receipts concurrency (real Postgres, two c
       [firm, deliverable, placement, version, claimId, "deadbeef".repeat(8)],
     );
     expect(rows[0].artifact_sha256).toBeNull();
+  }, 30000);
+
+  it("keeps a V1 client-change hold on its deliverable through V2 until that exact hold is resolved", async () => {
+    const firm = randomUUID();
+    const lawyer = randomUUID();
+    const deliverable = randomUUID();
+    const otherDeliverable = randomUUID();
+    const placement = randomUUID();
+    const v1 = randomUUID();
+    const v2 = randomUUID();
+    const otherVersion = randomUUID();
+
+    await connA.query(
+      `insert into intake_firms (id, name, custom_domain, subdomain)
+       values ($1, 'Deliverable Hold Fixture', null, $2)`,
+      [firm, `deliverable-hold-fixture-${firm}`],
+    );
+    await connA.query(
+      `insert into firm_lawyers (id, firm_id, email, name, role, display_name)
+       values ($1, $2, 'canonical@drglaw.test', 'Canonical Lawyer', 'admin', 'Canonical Lawyer')`,
+      [lawyer, firm],
+    );
+    await connA.query(
+      `insert into content_deliverables (id, firm_id, title, content_kind, status, created_by_role)
+       values ($1, $2, 'V1-to-V2 hold fixture', 'text', 'in_review', 'operator'),
+              ($3, $2, 'Other resolution target', 'text', 'draft', 'operator')`,
+      [deliverable, firm, otherDeliverable],
+    );
+    await connA.query(
+      `insert into deliverable_versions (id, deliverable_id, firm_id, version_number, body_html, created_by_role)
+       values ($1, $2, $3, 1, '<p>v1</p>', 'operator'),
+              ($4, $2, $3, 2, '<p>v2</p>', 'operator'),
+              ($5, $6, $3, 1, '<p>other</p>', 'operator')`,
+      [v1, deliverable, firm, v2, otherVersion, otherDeliverable],
+    );
+    await connA.query(
+      `update content_deliverables set current_version_id = $1 where id = $2`,
+      [v1, deliverable],
+    );
+    await connA.query(
+      `insert into content_placements (id, firm_id, deliverable_id, destination, created_by_role)
+       values ($1, $2, $3, 'linkedin_post', 'operator')`,
+      [placement, firm, deliverable],
+    );
+
+    // The approval RPC, rather than a hand-written hold event, proves that
+    // a caller cannot forge the signer identity written into the immutable
+    // changes_requested ledger.
+    const changeRequest = await connA.query(
+      `select record_approval_atomic(
+         $1, $2, $3, 'changes_requested', 'lawyer', $4,
+         'Forged signer', 'forged@example.test', 'Please revise', 1,
+         'V1-to-V2 hold fixture', null, null, 'Client requested a revision', '[]'::jsonb
+       ) as result`,
+      [deliverable, v1, firm, lawyer],
+    );
+    expect(changeRequest.rows[0].result.ok).toBe(true);
+
+    const opened = await connA.query(
+      `select id, version_id, actor_name, actor_email
+       from deliverable_client_change_hold_events
+       where firm_id = $1 and deliverable_id = $2 and event = 'opened'`,
+      [firm, deliverable],
+    );
+    expect(opened.rows).toHaveLength(1);
+    const openedHoldId: string = opened.rows[0].id;
+    expect(opened.rows[0]).toMatchObject({
+      version_id: v1,
+      actor_name: 'Canonical Lawyer',
+      actor_email: 'canonical@drglaw.test',
+    });
+
+    // Posting V2 makes it the current standing-eligible version, but must
+    // not silently clear the V1 client request.
+    await connA.query(
+      `update content_deliverables
+       set status = 'in_review', current_version_id = $1, approved_version_id = null, approved_at = null
+       where id = $2`,
+      [v2, deliverable],
+    );
+    const enableStanding = await connA.query(
+      `select set_standing_publishing_authorization(
+         $1, 'enabled', 'lawyer', $2, 'Forged signer', 'forged@example.test',
+         'Standing authorization text', 'v1', 'all_future_content', 'weekly_digest', null, null, null
+       ) as result`,
+      [firm, lawyer],
+    );
+    expect(enableStanding.rows[0].result.ok).toBe(true);
+
+    const heldV2 = await connA.query(
+      `select has_unresolved_deliverable_client_change_hold($1, $2, $3) as held`,
+      [firm, deliverable, v2],
+    );
+    expect(heldV2.rows[0].held).toBe(true);
+
+    await expect(
+      connA.query(
+        `select claim_placement_for_publish($1, $2, $3, $4, 'held-v2-claim', 'operator', null, 'Test Operator') as result`,
+        [firm, deliverable, placement, v2],
+      ),
+    ).rejects.toThrow(/unresolved client change hold/i);
+    await expect(
+      connA.query(
+        `insert into publication_receipts
+           (firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, public_url, actor_role, actor_name, claim_id)
+         values ($1, $2, $3, 'linkedin_post', $4, now(), 'https://example.test/held-v2', 'operator', 'Test Operator', null)`,
+        [firm, deliverable, placement, v2],
+      ),
+    ).rejects.toThrow(/unresolved client change hold/i);
+
+    // A resolution must identify the original ledger event and its original
+    // V1 audit version. Neither another deliverable nor V2 may resolve it.
+    const wrongDeliverable = await connA.query(
+      `select set_deliverable_client_change_hold($1, $2, $3, 'resolved', $4, 'lawyer', $5, 'Forged signer', 'forged@example.test', null) as result`,
+      [firm, otherDeliverable, otherVersion, openedHoldId, lawyer],
+    );
+    expect(wrongDeliverable.rows[0].result).toMatchObject({ ok: false });
+    expect(wrongDeliverable.rows[0].result.error).toMatch(/open client change hold not found/i);
+    const wrongVersion = await connA.query(
+      `select set_deliverable_client_change_hold($1, $2, $3, 'resolved', $4, 'lawyer', $5, 'Forged signer', 'forged@example.test', null) as result`,
+      [firm, deliverable, v2, openedHoldId, lawyer],
+    );
+    expect(wrongVersion.rows[0].result).toMatchObject({ ok: false });
+    expect(wrongVersion.rows[0].result.error).toMatch(/resolution version does not match/i);
+
+    const resolved = await connA.query(
+      `select set_deliverable_client_change_hold($1, $2, $3, 'resolved', $4, 'lawyer', $5, 'Forged signer', 'forged@example.test', null) as result`,
+      [firm, deliverable, v1, openedHoldId, lawyer],
+    );
+    expect(resolved.rows[0].result.ok).toBe(true);
+    const releasedV2 = await connA.query(
+      `select has_unresolved_deliverable_client_change_hold($1, $2, $3) as held`,
+      [firm, deliverable, v2],
+    );
+    expect(releasedV2.rows[0].held).toBe(false);
+
+    // Standing authorization may now be used, but its normal release gates
+    // still cannot be bypassed after the hold is resolved.
+    const disableStanding = await connA.query(
+      `select set_standing_publishing_authorization($1, 'disabled', 'lawyer', $2, 'Canonical Lawyer', 'canonical@drglaw.test', null, null, null, null, 'test disabled', null, null) as result`,
+      [firm, lawyer],
+    );
+    expect(disableStanding.rows[0].result.ok).toBe(true);
+    const disabledClaim = await connA.query(
+      `select claim_placement_for_publish($1, $2, $3, $4, 'disabled-v2-claim', 'operator', null, 'Test Operator') as result`,
+      [firm, deliverable, placement, v2],
+    );
+    expect(disabledClaim.rows[0].result.ok).toBe(false);
+
+    await connA.query(
+      `select set_standing_publishing_authorization($1, 'enabled', 'lawyer', $2, 'Canonical Lawyer', 'canonical@drglaw.test', 'Standing authorization text', 'v1', 'all_future_content', 'weekly_digest', null, null, null) as result`,
+      [firm, lawyer],
+    );
+    await connA.query(
+      `update deliverable_versions
+       set requires_individual_review = true, requires_individual_review_reason = 'Regression: individual review required'
+       where id = $1`,
+      [v2],
+    );
+    const individualReviewClaim = await connA.query(
+      `select claim_placement_for_publish($1, $2, $3, $4, 'individual-review-v2-claim', 'operator', null, 'Test Operator') as result`,
+      [firm, deliverable, placement, v2],
+    );
+    expect(individualReviewClaim.rows[0].result.ok).toBe(false);
+    await connA.query(
+      `update deliverable_versions
+       set requires_individual_review = false, requires_individual_review_reason = null
+       where id = $1`,
+      [v2],
+    );
+    await connA.query(`update content_deliverables set status = 'draft' where id = $1`, [deliverable]);
+    await expect(
+      connA.query(
+        `select claim_placement_for_publish($1, $2, $3, $4, 'status-drift-v2-claim', 'operator', null, 'Test Operator') as result`,
+        [firm, deliverable, placement, v2],
+      ),
+    ).rejects.toThrow(/standing release claim requires deliverable status in_review/i);
+    await connA.query(`update content_deliverables set status = 'in_review' where id = $1`, [deliverable]);
+
+    const finalClaimQuery = await connA.query(
+      `select claim_placement_for_publish($1, $2, $3, $4, 'final-v2-claim', 'operator', null, 'Test Operator') as result`,
+      [firm, deliverable, placement, v2],
+    );
+    const finalClaim = finalClaimQuery.rows[0].result;
+    expect(finalClaim).toMatchObject({ ok: true, release_path: 'standing_authorization' });
+
+    // Claims are snapshots, not perpetual authority: status drift after a
+    // claim must stop the root receipt until the release state is restored.
+    await connA.query(`update content_deliverables set status = 'draft' where id = $1`, [deliverable]);
+    await expect(
+      connA.query(
+        `insert into publication_receipts
+           (firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, public_url, actor_role, actor_name, claim_id)
+         values ($1, $2, $3, 'linkedin_post', $4, now(), 'https://example.test/status-drift-v2', 'operator', 'Test Operator', $5)`,
+        [firm, deliverable, placement, v2, finalClaim.claim_id],
+      ),
+    ).rejects.toThrow(/exact individual approval or eligible in_review standing authorization/i);
+    await connA.query(`update content_deliverables set status = 'in_review' where id = $1`, [deliverable]);
+
+    const receipt = await connA.query(
+      `insert into publication_receipts
+         (firm_id, deliverable_id, placement_id, destination, approved_version_id, published_at, public_url, actor_role, actor_name, claim_id)
+       values ($1, $2, $3, 'linkedin_post', $4, now(), 'https://example.test/released-v2', 'operator', 'Test Operator', $5)
+       returning release_path, standing_authorization_event_id`,
+      [firm, deliverable, placement, v2, finalClaim.claim_id],
+    );
+    expect(receipt.rows[0].release_path).toBe('standing_authorization');
+    expect(receipt.rows[0].standing_authorization_event_id).toBeTruthy();
   }, 30000);
 });

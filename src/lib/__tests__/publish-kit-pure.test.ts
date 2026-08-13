@@ -18,9 +18,13 @@ import {
   toAgentManifest,
   toPublishKitView,
   copyColumnMessage,
+  isLinkedInArticlePiece,
+  linkedInArticlePasteEligibility,
   pieceMatchesFilter,
   filteredTotals,
   blockedPiecesAreFullyWithheld,
+  shouldShowWebsiteArtifactSlots,
+  websitePlacementArtifact,
   ROLE_COPY_CONSTRAINTS,
   type PublishKitPiece,
   type PublishKitView,
@@ -1394,6 +1398,51 @@ describe("copyColumnMessage", () => {
   );
 });
 
+// ─── LinkedIn Article paste eligibility ──────────────────────────────────────
+
+describe("isLinkedInArticlePiece", () => {
+  it.each([
+    ["linkedin_article", true],
+    ["linkedin", false], // the feed/promoter post, NOT an Article
+    ["firm_website", false],
+    ["google_business_profile", false],
+    ["email", false],
+    [null, false],
+  ] as const)("destination=%s -> %s", (destination, expected) => {
+    expect(isLinkedInArticlePiece({ destination })).toBe(expected);
+  });
+
+  it("is never fooled by title text alone -- a '[LINKEDIN POST]'-prefixed title on a linkedin_article destination still reads as an Article", () => {
+    const piece = makePiece({ title: "[LINKEDIN POST] Renewal Clause Basics", destination: "linkedin_article" });
+    expect(isLinkedInArticlePiece(piece)).toBe(true);
+  });
+});
+
+describe("linkedInArticlePasteEligibility", () => {
+  it.each([
+    ["linkedin_article", "en-CA", "eligible"],
+    ["linkedin_article", "en-US", "eligible"],
+    ["linkedin_article", "pt-BR", "unsupported_locale"],
+    ["linkedin_article", null, "unsupported_locale"], // unknown locale is treated as NOT confirmed English
+    ["linkedin", "en-CA", "not_applicable"], // a feed/promoter post is never eligible, regardless of locale
+    ["firm_website", "en-CA", "not_applicable"],
+    [null, "en-CA", "not_applicable"],
+  ] as const)("destination=%s locale=%s -> %s", (destination, locale, expected) => {
+    const piece = makePiece({ destination, locale });
+    expect(linkedInArticlePasteEligibility(piece)).toBe(expected);
+  });
+
+  it("is more conservative on unknown locale than the pure transform's own default -- a real operator surface must never assume English", () => {
+    // toLinkedInArticlePasteHtmlEnglishOnly proceeds (ok: true) when locale is
+    // omitted/null, because it is a generic library default for a caller with
+    // nothing to pass. This function decides what an operator actually sees
+    // for a real piece, so it deliberately disagrees: null reads as
+    // "not confirmed English", the same as a known non-English locale.
+    const piece = makePiece({ destination: "linkedin_article", locale: null });
+    expect(linkedInArticlePasteEligibility(piece)).toBe("unsupported_locale");
+  });
+});
+
 // ─── blocked piece with no approved version: the reachable shape ─────────────
 //
 // Per evaluateMayPublish in content-period-export.ts, approved_version_id can
@@ -1818,6 +1867,34 @@ describe("totals", () => {
 
 const NO_FILTER: PublishKitFilter = { channel: null, lane: null };
 
+describe("website artifact placement compatibility", () => {
+  it("shows website slots only for firm-website articles, never native LinkedIn Articles", () => {
+    expect(shouldShowWebsiteArtifactSlots(makePiece({ role: "article", destination: "firm_website" }))).toBe(true);
+    expect(shouldShowWebsiteArtifactSlots(makePiece({ role: "article", destination: "linkedin_article" }))).toBe(false);
+    expect(shouldShowWebsiteArtifactSlots(makePiece({ role: "social_post", destination: "firm_website" }))).toBe(false);
+  });
+
+  it.each([
+    ["website_article_hero_overlay", "article_hero"],
+    ["website_article_hero", "article_hero"],
+    ["website_homepage_cta_textless", "homepage_cta"],
+    ["website_homepage_cta", "homepage_cta"],
+  ] as const)("resolves the %s role into the %s slot", (assetRole, placement) => {
+    const artifact = makeArtifact({ id: assetRole, asset_role: assetRole, artifact_type: "hero_image" });
+    const view = toPublishKitView(makeBundle([makeDeliverable({ artifacts: [artifact] })]));
+    expect(websitePlacementArtifact(view.groups[0].pieces[0], placement)?.id).toBe(assetRole);
+  });
+
+  it("reuses the article hero for the homepage only when no dedicated homepage asset exists", () => {
+    const article = makeArtifact({ id: "article", asset_role: "website_article_hero", artifact_type: "hero_image" });
+    const homepage = makeArtifact({ id: "homepage", asset_role: "website_homepage_cta", artifact_type: "hero_image" });
+    const articleOnly = toPublishKitView(makeBundle([makeDeliverable({ artifacts: [article] })])).groups[0].pieces[0];
+    const both = toPublishKitView(makeBundle([makeDeliverable({ artifacts: [article, homepage] })])).groups[0].pieces[0];
+    expect(websitePlacementArtifact(articleOnly, "homepage_cta")?.id).toBe("article");
+    expect(websitePlacementArtifact(both, "homepage_cta")?.id).toBe("homepage");
+  });
+});
+
 describe("pieceMatchesFilter", () => {
   it("null channel and null lane match every piece", () => {
     expect(pieceMatchesFilter(makePiece({ destination: "linkedin", lane: "manual" }), NO_FILTER)).toBe(true);
@@ -1827,6 +1904,22 @@ describe("pieceMatchesFilter", () => {
     const filter: PublishKitFilter = { channel: "linkedin", lane: null };
     expect(pieceMatchesFilter(makePiece({ destination: "linkedin" }), filter)).toBe(true);
     expect(pieceMatchesFilter(makePiece({ destination: "firm_website" }), filter)).toBe(false);
+  });
+
+  it.each([
+    "linkedin",
+    "linkedin_article",
+    "linkedin_post",
+    "linkedin_company_page",
+  ])("the LinkedIn channel filter includes the %s destination", (destination) => {
+    const filter: PublishKitFilter = { channel: "linkedin", lane: null };
+    expect(pieceMatchesFilter(makePiece({ destination }), filter)).toBe(true);
+  });
+
+  it("an explicit LinkedIn Article destination filter remains article-only", () => {
+    const filter: PublishKitFilter = { channel: "linkedin_article", lane: null };
+    expect(pieceMatchesFilter(makePiece({ destination: "linkedin_article" }), filter)).toBe(true);
+    expect(pieceMatchesFilter(makePiece({ destination: "linkedin" }), filter)).toBe(false);
   });
 
   it("a lane filter excludes pieces in a different lane", () => {

@@ -29,7 +29,10 @@ const state: {
   comments: Row[];
   approvals: Row[];
   artifacts: Row[];
+  packages: Row[];
+  packageAssets: Row[];
   validations: Row[];
+  roleAssignments: Row[];
   standingAuth: Row[];
   writeAttempted: boolean;
   signedUrlCalls: { bucket: string; path: string; download?: string | boolean }[];
@@ -42,7 +45,10 @@ const state: {
   comments: [],
   approvals: [],
   artifacts: [],
+  packages: [],
+  packageAssets: [],
   validations: [],
+  roleAssignments: [],
   standingAuth: [],
   signedUrlFailFor: new Set(),
   writeAttempted: false,
@@ -69,6 +75,13 @@ function chainable(rows: Row[]) {
     },
     in: (col: string, vals: unknown[]) => {
       current = current.filter((r) => vals.includes(r[col]));
+      return builder;
+    },
+    // PostgREST `.is(col, null)`, used by the role-assignment read to take only
+    // live rows (superseded_at IS NULL). Treats an absent key as null, since
+    // fixture rows omit columns they do not exercise.
+    is: (col: string, val: unknown) => {
+      current = current.filter((r) => (r[col] ?? null) === val);
       return builder;
     },
     order: (col: string, opts?: { ascending?: boolean }) => {
@@ -111,7 +124,14 @@ vi.mock("@/lib/supabase-admin", () => ({
       if (table === "deliverable_comments") return chainable(state.comments);
       if (table === "approval_records") return chainable(state.approvals);
       if (table === "publication_artifacts") return chainable(state.artifacts);
+      if (table === "publishing_packages") return chainable(state.packages);
+      if (table === "publishing_package_assets") return chainable(state.packageAssets);
       if (table === "publication_artifact_validations") return chainable(state.validations);
+      // Empty by default: the bundle asks for role assignments alongside
+      // artifacts, and every test written before explicit asset-role slots
+      // therefore keeps asserting exactly what it did. Tests that care about
+      // role assignment populate this explicitly.
+      if (table === "publication_artifact_role_assignments") return chainable(state.roleAssignments);
       // Empty by default, so getStandingAuthorizationState returns null and
       // standingAuthorizationActive is false. Every test written before the
       // two-path release-authorization bar therefore keeps asserting the
@@ -132,6 +152,10 @@ vi.mock("@/lib/supabase-admin", () => ({
       }),
     },
   },
+}));
+
+vi.mock("@/lib/deliverable-client-change-holds", () => ({
+  loadUnresolvedClientChangeHoldDeliverableIds: () => Promise.resolve(new Set<string>()),
 }));
 
 import {
@@ -212,7 +236,10 @@ beforeEach(() => {
   state.comments = [];
   state.approvals = [];
   state.artifacts = [];
+  state.packages = [];
+  state.packageAssets = [];
   state.validations = [];
+  state.roleAssignments = [];
   state.standingAuth = [];
   state.writeAttempted = false;
   state.signedUrlCalls = [];
@@ -392,7 +419,7 @@ describe("buildContentExportBundle: missing metadata never removes a deliverable
     );
   });
 
-  it("missing publication_artifacts produces a warning, never a thrown error or generation attempt", async () => {
+  it("missing publication and selected package artifacts produces a warning, never a thrown error or generation attempt", async () => {
     state.deliverables = [
       makeDeliverable({ id: "d1", current_version_id: "v1", approved_version_id: "v1" }),
     ];
@@ -403,7 +430,113 @@ describe("buildContentExportBundle: missing metadata never removes a deliverable
     if (!result.ok) return;
     const d1 = result.bundle.deliverables[0];
     expect(d1.artifacts).toEqual([]);
-    expect(d1.warnings).toContain("No publication_artifacts registered for this deliverable yet.");
+    expect(d1.warnings).toContain(
+      "No publication or selected package artifacts are registered for this deliverable yet.",
+    );
+  });
+});
+
+describe("buildContentExportBundle: manifest package asset projection", () => {
+  it("surfaces selected assets from the latest package with their exact role, version, hash, and signed bytes", async () => {
+    state.deliverables = [
+      makeDeliverable({
+        id: "d1",
+        current_version_id: "v1",
+        approved_version_id: "v1",
+        deliverable_role: "article",
+        publication_destination: "linkedin_article",
+      }),
+    ];
+    state.versions = [makeVersion({ id: "v1", deliverable_id: "d1" })];
+    state.packages = [
+      { id: "pkg-old", firm_id: FIRM_ID, period_id: PERIOD_ID, manifest_revision: 1 },
+      { id: "pkg-current", firm_id: FIRM_ID, period_id: PERIOD_ID, manifest_revision: 2 },
+    ];
+    state.packageAssets = [
+      {
+        id: "pa-current",
+        package_id: "pkg-current",
+        deliverable_id: "d1",
+        source_version_id: "v1",
+        locale: "en-CA",
+        destination: "linkedin",
+        asset_role: "native_linkedin_article_cover",
+        filename: "linkedin-cover.png",
+        mime_type: "image/png",
+        byte_size: 2048,
+        sha256: "a".repeat(64),
+        storage_key: "deliverables/firm/week/linkedin-cover.png",
+        status: "hash_verified",
+        is_selected: true,
+        created_at: "2026-08-12T00:00:00Z",
+      },
+      {
+        id: "pa-old",
+        package_id: "pkg-old",
+        deliverable_id: "d1",
+        source_version_id: "v1",
+        locale: "en-CA",
+        destination: "linkedin",
+        asset_role: "native_linkedin_article_cover",
+        filename: "old-cover.png",
+        mime_type: "image/png",
+        byte_size: 1024,
+        sha256: "b".repeat(64),
+        storage_key: "deliverables/firm/week/old-cover.png",
+        status: "hash_verified",
+        is_selected: true,
+        created_at: "2026-08-11T00:00:00Z",
+      },
+    ];
+
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.bundle.deliverables[0].artifacts).toEqual([
+      expect.objectContaining({
+        id: "pa-current",
+        version_id: "v1",
+        artifact_type: "social_image",
+        asset_role: "native_linkedin_article_cover",
+        sha256: "a".repeat(64),
+        storage_path: "deliverables/firm/week/linkedin-cover.png",
+        signed_url: "https://signed.example/deliverables/firm/week/linkedin-cover.png",
+        matches_current_version: true,
+      }),
+    ]);
+    expect(result.bundle.deliverables[0].warnings).not.toContain(
+      "No publication or selected package artifacts are registered for this deliverable yet.",
+    );
+  });
+
+  it("does not surface unselected, unbound, or internal QA package rows", async () => {
+    state.deliverables = [
+      makeDeliverable({ id: "d1", current_version_id: "v1", approved_version_id: "v1" }),
+    ];
+    state.versions = [makeVersion({ id: "v1", deliverable_id: "d1" })];
+    state.packages = [{ id: "pkg-current", firm_id: FIRM_ID, period_id: PERIOD_ID, manifest_revision: 1 }];
+    const base = {
+      package_id: "pkg-current",
+      deliverable_id: "d1",
+      source_version_id: "v1",
+      locale: "en-CA",
+      destination: "linkedin",
+      filename: "asset.png",
+      mime_type: "image/png",
+      byte_size: 2048,
+      sha256: "c".repeat(64),
+      storage_key: "deliverables/firm/week/asset.png",
+      status: "hash_verified",
+      created_at: "2026-08-12T00:00:00Z",
+    };
+    state.packageAssets = [
+      { ...base, id: "not-selected", asset_role: "linkedin_post_card", is_selected: false },
+      { ...base, id: "not-bound", asset_role: "linkedin_post_card", is_selected: true, source_version_id: null },
+      { ...base, id: "qa-only", asset_role: "rendered_qa_evidence", is_selected: true },
+    ];
+
+    const result = await buildContentExportBundle(PERIOD_ID);
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.bundle.deliverables[0].artifacts).toEqual([]);
   });
 });
 

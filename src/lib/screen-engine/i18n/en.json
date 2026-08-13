@@ -831,7 +831,6 @@
     "gbp_reply_instruction": "Reply with the number of your choice.",
     "clarify_message": "To route this correctly, could you tell me a bit more about what's happening? A few examples of the buckets we handle: starting a business, partner dispute, contract issue, money owed, real estate matter.",
     "numbered_reply_hint": "Reply with a number, or answer in your own words.",
-    "intake_expectation": "This takes about five minutes. A lawyer reviews what you share and reaches out directly if your matter fits the firm's practice.",
     "multi_pick_ack": "Got it, I recorded your first pick. You can add the rest in your own words anytime."
   },
   "bridge_text": {

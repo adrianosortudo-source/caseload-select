@@ -153,6 +153,19 @@ describe("validatePackageManifest -- manifest shape", () => {
     }
   });
 
+  it("accepts a lead-magnet CTA whose behavior is gated_download", () => {
+    // 2026-08-07: "gated_download" is the accurate value for a CTA that leads to a
+    // form-gated landing page rather than a direct file -- both "download" (existing,
+    // already-shipped pieces) and "gated_download" (new pieces) must validate.
+    const manifest = baseManifestJson();
+    const piece = (manifest.pieces as Array<Record<string, unknown>>).find(
+      (p) => p.content_slot_id === "lead-magnet-document-en",
+    )!;
+    (piece.cta as Record<string, unknown>).behavior = "gated_download";
+    const result = validatePackageManifest(manifest);
+    expect(result.ok).toBe(true);
+  });
+
   it("rejects a direct-PDF piece whose CTA is not required", () => {
     const manifest = baseManifestJson();
     const piece = (manifest.pieces as Array<Record<string, unknown>>).find(

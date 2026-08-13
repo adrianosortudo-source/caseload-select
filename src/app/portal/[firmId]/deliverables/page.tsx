@@ -17,8 +17,9 @@ import { getPreviewIntent } from "@/lib/preview-mode";
 import { getContentPlan } from "@/lib/deliverables";
 import { getFirmAbout } from "@/lib/firm-about";
 import { getContentCadence } from "@/lib/content-cadence";
-import { loadPlanPublicationReadiness } from "@/lib/publication-readiness-loader";
 import { getStandingAuthorizationState } from "@/lib/standing-publishing-authorization";
+import { loadUnresolvedClientChangeHoldDeliverableIds } from "@/lib/deliverable-client-change-holds";
+import { isVersionReleaseAuthorized } from "@/lib/release-authorization";
 import ContentPlan from "@/components/portal/ContentPlan";
 import AboutPanel from "@/components/portal/AboutPanel";
 import ContentCadencePanel from "@/components/portal/ContentCadencePanel";
@@ -49,7 +50,7 @@ export default async function DeliverablesPage({
   const isLawyerPreview =
     session.role === "operator" && preview?.target === "lawyer" && preview.firm_id === firmId;
   const viewerRole = session.role === "operator" && !isLawyerPreview ? "operator" : "lawyer";
-  const includeArchived = archived === "1";
+  const includeArchived = viewerRole === "operator" && archived === "1";
 
   const [plan, about] = await Promise.all([
     getContentPlan(firmId, { includeArchived }),
@@ -58,24 +59,28 @@ export default async function DeliverablesPage({
 
   const cadence = getContentCadence(firmId);
   const authState = await getStandingAuthorizationState(firmId);
-
-  // Additive: Publication Readiness (Workstream 5). loadPlanPublicationReadiness
-  // never throws on its own, but the .catch below is a second, independent
-  // guard so a readiness-load failure can never take down a page that
-  // rendered fine before this feature existed.
-  const planReadiness = await loadPlanPublicationReadiness(firmId).catch(() => ({
-    summary: { active: 0, ready: 0, blocked: 0, excluded: 0 },
-    items: [],
-    titles: {},
-    lifecycleByDeliverableId: {},
-    // loadPlanPublicationReadiness does not throw on its own (it resolves
-    // every internal failure to an unavailable:true result); this .catch is
-    // a second, independent guard for anything unexpected reaching this
-    // far. It must mark unavailable too, for the same reason the loader's
-    // own error paths do: an empty result here must never render as "all
-    // clear" to the operator.
-    unavailable: true,
-  }));
+  let standingAuthorizedDeliverableIds: string[] = [];
+  try {
+    const heldDeliverableIds = await loadUnresolvedClientChangeHoldDeliverableIds(
+      firmId,
+      plan.deliverables.map((deliverable) => deliverable.id),
+    );
+    standingAuthorizedDeliverableIds = plan.deliverables.flatMap((deliverable) => {
+      if (!deliverable.current_version_id) return [];
+      const authorization = isVersionReleaseAuthorized({
+        deliverableStatus: deliverable.status,
+        approvedVersionId: null,
+        targetVersionId: deliverable.current_version_id,
+        versionRequiresIndividualReview: deliverable.requires_individual_review,
+        hasUnresolvedClientChangeHold: heldDeliverableIds.has(deliverable.id),
+        standingAuthorizationActive: authState?.active ?? false,
+      });
+      return authorization.authorizationPath === "standing_authorization" ? [deliverable.id] : [];
+    });
+  } catch {
+    // A missing hold projection must never turn into an affirmative client label.
+    standingAuthorizedDeliverableIds = [];
+  }
 
   return (
     <div className="space-y-6">
@@ -96,8 +101,8 @@ export default async function DeliverablesPage({
         periods={plan.periods}
         deliverables={plan.deliverables}
         settings={plan.settings}
-        planReadiness={planReadiness}
         standingAuthActive={authState?.active ?? false}
+        standingAuthorizedDeliverableIds={standingAuthorizedDeliverableIds}
       />
     </div>
   );

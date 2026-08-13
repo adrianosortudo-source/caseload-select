@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { createContext, useContext, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type {
@@ -8,9 +8,18 @@ import type {
   ContentPlanSettings,
   ContentKind,
   DeliverableStatus,
+  StrategyBrief,
 } from "@/lib/types";
 import {
-  groupByFormat,
+  isCompleteStrategyBrief,
+  STRATEGY_BRIEF_FIELDS,
+  strategyBriefFieldValue,
+} from "@/lib/strategy-brief";
+import {
+  groupByCanonicalFormat,
+  CANONICAL_FORMATS,
+  languageLabel,
+  periodFormatAnchorId,
   planProgress,
   computeOverview,
   isPublished,
@@ -19,12 +28,11 @@ import {
   type PlanDeliverable,
   type PlanOverview,
 } from "@/lib/deliverables-pure";
-import PublicationReadinessSummary from "@/components/portal/PublicationReadinessSummary";
 import {
-  sliceReadinessForPeriod,
-  type DeliverableReadiness,
-  type PeriodLifecycle,
-} from "@/lib/publication-readiness";
+  buildContentArchiveIndex,
+  searchContentArchive,
+  type ContentArchiveEntry,
+} from "@/lib/content-archive-pure";
 
 const PLAN_STATUS: Record<DeliverableStatus, { label: string; cls: string }> = {
   draft: { label: "Draft", cls: "bg-parchment-2 text-muted border-border-brand" },
@@ -69,15 +77,7 @@ function periodLabel(period: ContentPeriod): string {
     : fmtRange(period.starts_on, period.ends_on);
 }
 
-export interface PlanReadinessProp {
-  summary: { active: number; ready: number; blocked: number; excluded: number };
-  items: DeliverableReadiness[];
-  titles: Record<string, string>;
-  /** DR-097: deliverable id to its period's explicit readiness lifecycle. */
-  lifecycleByDeliverableId: Record<string, PeriodLifecycle>;
-  /** True only on a load failure, never on a legitimately empty plan. */
-  unavailable?: boolean;
-}
+const StandingAuthorizedIdsContext = createContext<ReadonlySet<string>>(new Set());
 
 export default function ContentPlan({
   firmId,
@@ -86,8 +86,8 @@ export default function ContentPlan({
   periods,
   deliverables,
   settings,
-  planReadiness,
   standingAuthActive = false,
+  standingAuthorizedDeliverableIds = [],
 }: {
   firmId: string;
   viewerRole: "operator" | "lawyer";
@@ -95,8 +95,9 @@ export default function ContentPlan({
   periods: ContentPeriod[];
   deliverables: PlanDeliverable[];
   settings: ContentPlanSettings | null;
-  planReadiness?: PlanReadinessProp;
   standingAuthActive?: boolean;
+  /** Server-derived canonical standing authorization; omitted/unavailable fails closed. */
+  standingAuthorizedDeliverableIds?: string[];
 }) {
   const router = useRouter();
   const [showNewWeek, setShowNewWeek] = useState(false);
@@ -106,11 +107,13 @@ export default function ContentPlan({
   const live = deliverables.filter((d) => d.status !== "archived");
   const unscheduled = live.filter((d) => !d.period_id);
   const archived = includeArchived ? deliverables.filter((d) => d.status === "archived") : [];
-  const overview = computeOverview(live, { standingAuthActive });
+  const standingAuthorizedIds = new Set(standingAuthorizedDeliverableIds);
+  const overview = computeOverview(live, { standingAuthorizedDeliverableIds: standingAuthorizedIds });
 
   const refresh = () => router.refresh();
 
   return (
+    <StandingAuthorizedIdsContext.Provider value={standingAuthorizedIds}>
     <div className="space-y-6">
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
@@ -125,7 +128,7 @@ export default function ContentPlan({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Link
+          {isOperator && <Link
             href={
               includeArchived
                 ? `/portal/${firmId}/deliverables`
@@ -138,7 +141,7 @@ export default function ContentPlan({
             }`}
           >
             {includeArchived ? "Hide archived" : "Show archived"}
-          </Link>
+          </Link>}
           {isOperator && (
             <>
               <button
@@ -164,8 +167,15 @@ export default function ContentPlan({
         firmId={firmId}
         settings={settings}
         onChanged={refresh}
-        planReadiness={planReadiness}
       />
+
+        {isOperator && <ContentArchive
+        firmId={firmId}
+        periods={periods}
+        deliverables={deliverables}
+        includeArchived={includeArchived}
+          standingAuthActive={false}
+        />}
 
       {isOperator && showNewWeek && (
         <PeriodForm
@@ -195,31 +205,7 @@ export default function ContentPlan({
       {periods.map((period) => {
         const items = live.filter((d) => d.period_id === period.id);
         const { approved, published, total } = planProgress(items);
-        const groups = groupByFormat(items);
-        // Slice the whole-plan readiness set down to this period's own
-        // deliverables. Reuses the ids already computed above rather than
-        // adding a second period-scoped data load; sliceReadinessForPeriod
-        // keeps the per-period counts using the exact same rules as the
-        // whole-plan summary (see publication-readiness.test.ts for the
-        // proof this slicing is correct, and
-        // PublicationReadinessSummary.test.tsx for the proof the resulting
-        // periodId reaches the rendered "download manifest" link).
-        const periodDeliverableIds = new Set(items.map((d) => d.id));
-        const sliced = sliceReadinessForPeriod(planReadiness?.items ?? [], periodDeliverableIds);
-        const periodReadiness: PlanReadinessProp | undefined = planReadiness
-          ? {
-              summary: sliced.summary,
-              items: sliced.items,
-              titles: planReadiness.titles,
-              lifecycleByDeliverableId: planReadiness.lifecycleByDeliverableId,
-              // A whole-plan load failure means every period's slice is
-              // equally unreliable, not just the aggregate: propagate it so
-              // each PeriodCard's own readiness panel shows the unavailable
-              // state too, instead of a misleadingly clean per-period slice
-              // of data that was never actually loaded.
-              unavailable: planReadiness.unavailable,
-            }
-          : undefined;
+        const groups = groupByCanonicalFormat(items);
         return (
           <PeriodCard
             key={period.id}
@@ -232,7 +218,6 @@ export default function ContentPlan({
             groups={groups}
             periods={periods}
             onChanged={refresh}
-            periodReadiness={periodReadiness}
             standingAuthActive={standingAuthActive}
           />
         );
@@ -247,7 +232,7 @@ export default function ContentPlan({
             <p className="text-base font-bold text-navy mt-0.5">Unscheduled</p>
           </div>
           <div className="px-3 py-3">
-            {groupByFormat(unscheduled).map((g) => (
+            {groupByCanonicalFormat(unscheduled).map((g) => (
               <FormatGroupBlock
                 key={g.format ?? "_unfiled"}
                 firmId={firmId}
@@ -256,6 +241,8 @@ export default function ContentPlan({
                 periods={periods}
                 standingAuthActive={standingAuthActive}
                 onChanged={refresh}
+                anchorId={periodFormatAnchorId("unscheduled", g.format)}
+                highlighted={false}
               />
             ))}
           </div>
@@ -289,10 +276,70 @@ export default function ContentPlan({
         record. Posting a new version returns a piece to review.
       </p>
     </div>
+    </StandingAuthorizedIdsContext.Provider>
   );
 }
 
 // ─── Review overview (whole-plan summary) ────────────────────────────────────
+
+function ContentArchive({
+  firmId,
+  periods,
+  deliverables,
+  includeArchived,
+  standingAuthActive,
+}: {
+  firmId: string;
+  periods: ContentPeriod[];
+  deliverables: PlanDeliverable[];
+  includeArchived: boolean;
+  standingAuthActive: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const [format, setFormat] = useState<(typeof CANONICAL_FORMATS)[number] | "all">("all");
+  const [language, setLanguage] = useState("all");
+  const [status, setStatus] = useState("all");
+  const [periodId, setPeriodId] = useState("all");
+  const entries = buildContentArchiveIndex(firmId, periods, deliverables, standingAuthActive);
+  const results = searchContentArchive(entries, firmId, { query, format, language, status, periodId });
+  const active = Boolean(query.trim()) || format !== "all" || language !== "all" || status !== "all" || periodId !== "all";
+  const statusOptions = [...new Set(entries.map((entry) => entry.status))].sort();
+
+  return (
+    <section className="bg-white border border-border-brand px-5 py-4" aria-labelledby="content-archive-title">
+      <div className="flex items-baseline justify-between gap-4 flex-wrap mb-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[color:var(--portal-accent)]">Content archive</p>
+          <h2 id="content-archive-title" className="text-base font-bold text-navy mt-0.5">Find this client&rsquo;s content</h2>
+        </div>
+        <p className="text-[11px] text-muted">Current and historical weekly packages{includeArchived ? ", including archived pieces" : ""}</p>
+      </div>
+      <form className="flex flex-wrap gap-2" role="search" onSubmit={(event) => event.preventDefault()}>
+        <label className="sr-only" htmlFor="content-archive-search">Search this client&rsquo;s content archive</label>
+        <input id="content-archive-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this client&rsquo;s complete content archive" className="flex-1 min-w-[220px] border border-border-brand px-3 py-2 text-sm bg-white" />
+        <label className="sr-only" htmlFor="content-archive-format">Filter by format</label>
+        <select id="content-archive-format" value={format} onChange={(event) => setFormat(event.target.value as typeof format)} className="border border-border-brand px-2 py-2 text-xs bg-white text-navy"><option value="all">All formats</option>{CANONICAL_FORMATS.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+        <label className="sr-only" htmlFor="content-archive-language">Filter by language</label>
+        <select id="content-archive-language" value={language} onChange={(event) => setLanguage(event.target.value)} className="border border-border-brand px-2 py-2 text-xs bg-white text-navy"><option value="all">All languages</option><option value="EN">English</option><option value="PT">Portuguese</option></select>
+        <label className="sr-only" htmlFor="content-archive-status">Filter by status</label>
+        <select id="content-archive-status" value={status} onChange={(event) => setStatus(event.target.value)} className="border border-border-brand px-2 py-2 text-xs bg-white text-navy"><option value="all">All statuses</option>{statusOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+        <label className="sr-only" htmlFor="content-archive-week">Filter by week</label>
+        <select id="content-archive-week" value={periodId} onChange={(event) => setPeriodId(event.target.value)} className="border border-border-brand px-2 py-2 text-xs bg-white text-navy"><option value="all">All weeks</option>{periods.map((period) => <option key={period.id} value={period.id}>{periodLabel(period)}{period.theme ? ` · ${period.theme}` : ""}</option>)}</select>
+      </form>
+      {!active ? <p className="text-[11px] text-muted mt-2">Search by title, week, format, language, or status. Results appear here without duplicating the full archive.</p> : <div className="mt-3 border-t border-border-brand/60" aria-live="polite"><p className="text-[11px] text-muted py-2">{results.length} result{results.length === 1 ? "" : "s"} in this client&rsquo;s archive</p>{results.length === 0 ? <p className="text-sm text-black/55 py-3">No content matches these filters.</p> : results.map((entry) => <ArchiveResult key={entry.deliverable.id} firmId={firmId} entry={entry} />)}</div>}
+    </section>
+  );
+}
+
+function ArchiveResult({ firmId, entry }: { firmId: string; entry: ContentArchiveEntry }) {
+  const published = isPublished(entry.deliverable.published_at) && entry.deliverable.status !== "archived";
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border-brand/40 last:border-b-0">
+      <div className="min-w-0"><Link href={`/portal/${firmId}/deliverables/${entry.deliverable.id}`} className="text-sm font-semibold text-navy hover:underline">{entry.deliverable.title}</Link><p className="text-[11px] text-muted mt-0.5">{entry.period ? `${periodLabel(entry.period)} · ${entry.period.theme ?? ""}` : "Unscheduled"} · {entry.format} · {entry.language} · {entry.status}</p></div>
+      <Link href={`/portal/${firmId}/deliverables/${entry.deliverable.id}`} className="flex-none text-xs font-semibold text-navy hover:underline">{entry.deliverable.status === "approved" || published ? "Open" : "Review"} →</Link>
+    </div>
+  );
+}
 
 function daysUntil(iso: string): number {
   const d = new Date(`${iso}T00:00:00`);
@@ -313,14 +360,12 @@ export function ReviewOverview({
   firmId,
   settings,
   onChanged,
-  planReadiness,
 }: {
   overview: PlanOverview;
   isOperator: boolean;
   firmId: string;
   settings: ContentPlanSettings | null;
   onChanged: () => void;
-  planReadiness?: PlanReadinessProp;
 }) {
   const [editing, setEditing] = useState(false);
   const {
@@ -335,33 +380,6 @@ export function ReviewOverview({
     byFormat,
     nextPublish,
   } = overview;
-  // A genuinely empty plan (total === 0) normally means "nothing to show
-  // here yet" and the whole card returns null. But total comes from a
-  // SEPARATE content_deliverables query than planReadiness -- a brand new
-  // firm, or one whose content is all archived, has total === 0 for a
-  // reason that has nothing to do with whether the readiness read itself
-  // succeeded. If that read failed (planReadiness.unavailable), that is
-  // still a real data error worth surfacing to an operator, not something
-  // the empty-plan early return should silently swallow. Render only the
-  // minimal unavailable banner in that case, not the full progress card
-  // (which would otherwise divide by a zero total and show a meaningless
-  // NaN% for a plan that may not actually be empty).
-  if (total === 0 && planReadiness?.unavailable && isOperator) {
-    return (
-      <div className="bg-white border border-border-brand p-5">
-        <div className="flex items-center gap-2 border border-red-fail/30 bg-red-fail/10 px-3 py-2.5 text-sm text-red-fail">
-          <span className="flex-none text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 border rounded-full bg-red-fail/10 border-red-fail/30">
-            Unavailable
-          </span>
-          <span className="flex-1 min-w-0">
-            Publication readiness could not be loaded. This is a data error,
-            not a clean state, it does not mean nothing needs attention.
-            Reload the page; if this persists, check the server logs.
-          </span>
-        </div>
-      </div>
-    );
-  }
   if (total === 0) return null;
   const pct = Math.round((approved / total) * 100);
   const waiting = pending + changes;
@@ -470,15 +488,6 @@ export function ReviewOverview({
         </div>
       )}
 
-      {planReadiness && (
-        <PublicationReadinessSummary
-          firmId={firmId}
-          isOperator={isOperator}
-          readiness={{ summary: planReadiness.summary, items: planReadiness.items, unavailable: planReadiness.unavailable }}
-          titles={planReadiness.titles}
-          lifecycleByDeliverableId={planReadiness.lifecycleByDeliverableId}
-        />
-      )}
     </div>
   );
 }
@@ -585,7 +594,6 @@ function PeriodCard({
   groups,
   periods,
   onChanged,
-  periodReadiness,
   standingAuthActive,
 }: {
   firmId: string;
@@ -594,13 +602,13 @@ function PeriodCard({
   approved: number;
   published: number;
   total: number;
-  groups: ReturnType<typeof groupByFormat>;
+  groups: ReturnType<typeof groupByCanonicalFormat>;
   periods: ContentPeriod[];
   onChanged: () => void;
-  periodReadiness?: PlanReadinessProp;
   standingAuthActive: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const [highlightedAnchor, setHighlightedAnchor] = useState<string | null>(null);
   // Once anything in the week has shipped, publication is the honest
   // headline. A week released under standing authorization never accrues
   // individual approvals, so an approval-only bar would sit at 0% forever
@@ -631,56 +639,35 @@ function PeriodCard({
               style={{ width: `${pct}%` }}
             />
           </div>
-          <div className="flex justify-end mt-2">
-            <Link
-              href={`/portal/${firmId}/deliverables/periods/${period.id}`}
-              className="text-[11px] font-semibold text-navy/70 hover:text-navy"
-            >
-              Open Package Control Room
-            </Link>
-          </div>
           {isOperator && (
-            <div className="flex items-center justify-end gap-3 mt-2">
+            <div className="flex items-center justify-end gap-2 mt-2 flex-wrap">
+              <Link
+                href={`/portal/${firmId}/deliverables/periods/${period.id}`}
+                className="inline-flex items-center px-2.5 py-1.5 text-[11px] font-semibold border border-border-brand bg-white text-navy hover:border-navy"
+              >
+                Package workspace
+              </Link>
               <button
                 onClick={() => setEditing((s) => !s)}
-                className="text-[11px] font-semibold text-navy/70 hover:text-navy"
+                className="inline-flex items-center px-2.5 py-1.5 text-[11px] font-semibold border border-border-brand bg-white text-navy hover:border-navy"
               >
-                {editing ? "Close" : "Edit week"}
+                {editing ? "Close editor" : "Edit package overview"}
               </button>
-              <DownloadBundleButton periodId={period.id} />
-              {/*
-                Filled, not a text link, and last in the row: this is the
-                primary action on a week card -- the place an operator goes to
-                actually collect the week's copy and assets. Sitting in plain
-                navy/70 beside "Edit week" made it read as a tertiary utility,
-                and operators could not find it.
-              */}
+              <PackageToolsButton periodId={period.id} />
               <Link
                 href={`/portal/${firmId}/publish-kit/${period.id}`}
                 className="text-[11px] font-semibold uppercase tracking-wider px-3 py-1.5 border border-navy bg-navy text-white hover:bg-navy/90"
               >
-                Publish Kit
+                Open Publish Kit
               </Link>
             </div>
           )}
         </div>
       </div>
 
-      {periodReadiness && (
-        <div className="px-6 py-3 border-b border-border-brand/60 space-y-2">
-          <PublicationReadinessSummary
-            firmId={firmId}
-            isOperator={isOperator}
-            readiness={{ summary: periodReadiness.summary, items: periodReadiness.items, unavailable: periodReadiness.unavailable }}
-            titles={periodReadiness.titles}
-            periodId={period.id}
-            lifecycleByDeliverableId={periodReadiness.lifecycleByDeliverableId}
-          />
-          {isOperator && period.readiness_lifecycle !== "enforced" && periodReadiness.summary.active > 0 && (
-            <ActivateReadinessButton firmId={firmId} periodId={period.id} onActivated={onChanged} />
-          )}
-        </div>
-      )}
+      {/* Placement (operator decision): the weekly strategic record leads the
+          card, immediately after the header block and above Details / Why. */}
+      <StrategyBriefSection brief={period.strategyBrief} approved={showPublished || approved > 0} />
 
       {isOperator && editing ? (
         <div className="px-6 py-4 border-b border-border-brand/60 bg-parchment-2/30">
@@ -693,28 +680,32 @@ function PeriodCard({
             }}
           />
         </div>
-      ) : (
-        (period.details || period.rationale) && (
-          <div className="px-6 py-4 border-b border-border-brand/60 space-y-2.5">
-            {period.details && <MetaRow label="Details" value={period.details} />}
-            {period.rationale && <MetaRow label="Why" value={period.rationale} />}
-          </div>
-        )
-      )}
+      ) : null}
 
       <div className="px-3 py-3">
+        <FormatJumpNav periodId={period.id} groups={groups} onJump={(anchorId) => {
+          const target = document.getElementById(anchorId);
+          if (!target) return;
+          const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          target.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+          window.setTimeout(() => target.focus({ preventScroll: true }), reduced ? 0 : 200);
+          setHighlightedAnchor(anchorId);
+          window.setTimeout(() => setHighlightedAnchor((current) => current === anchorId ? null : current), 1400);
+        }} />
         {total === 0 ? (
           <p className="px-3 py-4 text-sm text-black/45">No pieces in this week yet.</p>
         ) : (
           groups.map((g) => (
             <FormatGroupBlock
-              key={g.format ?? "_unfiled"}
+              key={g.format}
               firmId={firmId}
               isOperator={isOperator}
               group={g}
               periods={periods}
               onChanged={onChanged}
               standingAuthActive={standingAuthActive}
+              anchorId={periodFormatAnchorId(period.id, g.format)}
+              highlighted={highlightedAnchor === periodFormatAnchorId(period.id, g.format)}
             />
           ))
         )}
@@ -723,37 +714,77 @@ function PeriodCard({
   );
 }
 
-// Independent of Publication Readiness (rendered outside that panel above):
-// pulls the exact, already-stored deliverable content for this period via
-// GET /api/admin/content-periods/[periodId]/content-export, operator-only,
-// no readiness activation required. See content-period-export.ts.
-function DownloadBundleButton({ periodId }: { periodId: string }) {
+function StrategyBriefSection({
+  brief,
+  approved,
+}: {
+  brief: StrategyBrief | null | undefined;
+  approved: boolean;
+}) {
+  const complete = isCompleteStrategyBrief(brief);
+  return (
+    <section className="px-6 py-4 border-b border-border-brand/60 bg-parchment-2/20">
+      <h3 className="text-sm font-bold text-navy">Weekly strategic record</h3>
+      <p className="text-[12px] text-black/65 leading-[1.45] mt-1 max-w-3xl">
+        This brief records the strategic decision behind this week&rsquo;s {approved ? "approved" : "proposed"} content package. Every listed deliverable must support this approved reader, matter, and practical question.
+      </p>
+      {!complete && (
+        <p className="text-sm text-amber-800 leading-relaxed mt-3">
+          The strategy record is incomplete. The content remains available; complete all six fields in Edit package overview before marking this package ready for client release.
+        </p>
+      )}
+      <dl className="mt-3 grid grid-cols-2 border-t border-border-brand/60 max-[900px]:grid-cols-1">
+        {STRATEGY_BRIEF_FIELDS.map(([key, label]) => (
+          <div
+            key={key}
+            className="grid grid-cols-[minmax(8rem,0.38fr)_1fr] items-start gap-x-3 gap-y-1 px-3 py-2 border-b border-border-brand/40 min-[901px]:odd:border-r max-[640px]:grid-cols-1"
+          >
+            <dt className="text-[10px] uppercase tracking-[0.08em] font-bold text-navy pt-0.5">
+              {label}
+            </dt>
+            <dd className={strategyBriefFieldValue(brief, key).complete ? "text-[12px] text-black/75 leading-[1.45]" : "text-[11px] text-muted italic leading-[1.4]"}>
+              {strategyBriefFieldValue(brief, key).complete ? strategyBriefFieldValue(brief, key).value : <><span className="not-italic text-navy/70">What belongs here: </span>{strategyBriefFieldValue(brief, key).value}</>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+// Pulls the exact, already-stored deliverable content for this period via the
+// operator-only content export. It never derives or changes client review.
+function PackageToolsButton({ periodId }: { periodId: string }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative inline-block">
       <button
         onClick={() => setOpen((s) => !s)}
-        className="text-[11px] font-semibold text-navy/70 hover:text-navy"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className="inline-flex items-center px-2.5 py-1.5 text-[11px] font-semibold border border-border-brand bg-white text-navy hover:border-navy"
       >
-        {open ? "Close" : "Download publishing bundle"}
+        {open ? "Close tools" : "Package tools"}
       </button>
       {open && (
-        <div className="absolute right-0 mt-1 z-10 bg-white border border-border-brand shadow-sm flex flex-col min-w-[130px]">
+        <div role="menu" className="absolute right-0 mt-1 z-10 bg-white border border-border-brand shadow-sm flex flex-col min-w-[150px]">
           <a
             href={`/api/admin/content-periods/${periodId}/content-export?format=json`}
             target="_blank"
             rel="noreferrer"
+            role="menuitem"
             className="px-3 py-2 text-xs font-semibold text-black/70 hover:bg-parchment-2 hover:text-navy whitespace-nowrap"
           >
-            JSON
+            Export JSON
           </a>
           <a
             href={`/api/admin/content-periods/${periodId}/content-export?format=markdown`}
             target="_blank"
             rel="noreferrer"
+            role="menuitem"
             className="px-3 py-2 text-xs font-semibold text-black/70 hover:bg-parchment-2 hover:text-navy border-t border-border-brand/60 whitespace-nowrap"
           >
-            Markdown
+            Export Markdown
           </a>
         </div>
       )}
@@ -761,79 +792,42 @@ function DownloadBundleButton({ periodId }: { periodId: string }) {
   );
 }
 
-/**
- * DR-097/DR-098. Operator-only. Activates publication-readiness enforcement
- * for this period, gated server-side by the activation preflight: refuses
- * with the blocking piece count if any active deliverable is still missing
- * role, locale, or destination. Never a blanket/bulk action; one period at
- * a time, and the operator sees exactly what to finish backfilling first
- * on refusal.
- */
-function ActivateReadinessButton({
-  firmId,
-  periodId,
-  onActivated,
-}: {
-  firmId: string;
-  periodId: string;
-  onActivated: () => void;
-}) {
-  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
-  const [message, setMessage] = useState<string | null>(null);
-
-  async function activate() {
-    setState("loading");
-    setMessage(null);
-    try {
-      const res = await fetch(`/api/portal/${firmId}/periods/${periodId}/activate-readiness`, {
-        method: "POST",
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        setState("error");
-        const blockingCount = Array.isArray(json.blockingDeliverableIds) ? json.blockingDeliverableIds.length : 0;
-        setMessage(
-          blockingCount > 0
-            ? `${blockingCount} piece${blockingCount === 1 ? "" : "s"} still need role, locale, or destination set. See "Setup required" below.`
-            : (json.error ?? "Could not activate readiness."),
-        );
-        return;
-      }
-      setState("idle");
-      onActivated();
-    } catch (err) {
-      setState("error");
-      setMessage(err instanceof Error ? err.message : "Network error.");
-    }
-  }
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={activate}
-        disabled={state === "loading"}
-        className="text-[11px] font-semibold text-navy/70 hover:text-navy disabled:opacity-50"
-      >
-        {state === "loading" ? "Checking metadata..." : "Activate readiness for this week"}
-      </button>
-      {message && <p className="text-[11px] mt-1 text-amber-800">{message}</p>}
-    </div>
-  );
-}
-
-function MetaRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex gap-3">
-      <span className="flex-none w-14 text-[10px] uppercase tracking-[0.1em] font-semibold text-navy pt-0.5">
-        {label}
-      </span>
-      <span className="flex-1 text-sm text-black/75 leading-relaxed">{value}</span>
-    </div>
-  );
-}
-
 // ─── Format group + rows ─────────────────────────────────────────────────────
+
+function FormatJumpNav({
+  periodId,
+  groups,
+  onJump,
+}: {
+  periodId: string;
+  groups: ReturnType<typeof groupByCanonicalFormat>;
+  onJump: (anchorId: string) => void;
+}) {
+  if (groups.length === 0) return null;
+  return (
+    <nav aria-label="This week's formats" className="flex flex-wrap items-center gap-2 border-b border-border-brand/60 pb-2">
+      <span className="mr-1 text-[10px] uppercase tracking-[0.1em] font-semibold text-navy">
+        This week&apos;s formats
+      </span>
+      {groups.map((group) => {
+        const anchorId = periodFormatAnchorId(periodId, group.format);
+        return (
+          <a
+            key={anchorId}
+            href={`#${anchorId}`}
+            onClick={(event) => {
+              event.preventDefault();
+              onJump(anchorId);
+            }}
+            className="border border-border-brand px-2 py-1 text-[11px] font-semibold text-navy hover:border-navy hover:bg-parchment-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy"
+          >
+            {group.format === "Checklists & downloadable resources" ? "Checklists & resources" : group.format} · {group.items.length}
+          </a>
+        );
+      })}
+    </nav>
+  );
+}
 
 function FormatGroupBlock({
   firmId,
@@ -842,19 +836,27 @@ function FormatGroupBlock({
   periods,
   onChanged,
   standingAuthActive,
+  anchorId,
+  highlighted,
 }: {
   firmId: string;
   isOperator: boolean;
-  group: ReturnType<typeof groupByFormat>[number];
+  group: ReturnType<typeof groupByCanonicalFormat>[number];
   periods: ContentPeriod[];
   onChanged: () => void;
   standingAuthActive: boolean;
+  anchorId: string;
+  highlighted: boolean;
 }) {
   return (
     <div className="mb-1.5">
-      <div className="flex items-center gap-2.5 px-3 pt-3 pb-1.5">
+      <div
+        id={anchorId}
+        tabIndex={-1}
+        className={`scroll-mt-4 flex items-center gap-2.5 px-3 pt-3 pb-1.5 transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-navy ${highlighted ? "bg-parchment-2/70" : ""}`}
+      >
         <span className="text-[12px] font-bold uppercase tracking-[0.05em] text-navy">
-          {group.format ?? "No format set"}
+          {group.format}
         </span>
         <span className="text-[11px] font-semibold text-muted bg-parchment-2 border border-border-brand rounded-full px-2 leading-5">
           {group.items.length}
@@ -891,6 +893,7 @@ function DeliverableRow({
   onChanged: () => void;
   standingAuthActive: boolean;
 }) {
+  const standingAuthorizedIds = useContext(StandingAuthorizedIdsContext);
   const [placing, setPlacing] = useState(false);
   // A recorded published_at outranks every other label: once a piece is out,
   // that is the fact the row needs to carry. Below it, DR-107: an in_review
@@ -903,7 +906,7 @@ function DeliverableRow({
         label: PUBLISHED_LABEL,
         cls: "bg-blue-published/10 text-blue-published border-blue-published/30",
       }
-    : item.status === "in_review" && standingAuthActive && !item.requires_individual_review
+    : item.status === "in_review" && standingAuthorizedIds.has(item.id)
       ? { label: PRE_APPROVED_LABEL, cls: "bg-green-pass/10 text-green-pass border-green-pass/30" }
       : PLAN_STATUS[item.status];
   // Report the date the piece actually went out when we have one. The old
@@ -919,6 +922,9 @@ function DeliverableRow({
   return (
     <div>
       <div className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-parchment-2/50 transition-colors">
+        <span className="flex-none w-8 text-center text-[10px] uppercase tracking-[0.08em] font-semibold text-muted" aria-label={`Language: ${languageLabel(item.locale)}`}>
+          {languageLabel(item.locale)}
+        </span>
         <Link href={`/portal/${firmId}/deliverables/${item.id}`} className="flex-1 min-w-0 group">
           <p className="text-[15px] font-medium text-black/85 leading-snug group-hover:text-navy">
             {item.kicker ? `${item.kicker} · ` : ""}
@@ -1069,8 +1075,16 @@ function PeriodForm({
     period?.week_number != null ? String(period.week_number) : "",
   );
   const [theme, setTheme] = useState(period?.theme ?? "");
-  const [details, setDetails] = useState(period?.details ?? "");
-  const [rationale, setRationale] = useState(period?.rationale ?? "");
+  const [strategyBrief, setStrategyBrief] = useState<StrategyBrief>(
+    period?.strategyBrief ?? {
+      readerAndSituation: "",
+      workSupported: "",
+      whyThisWeek: "",
+      practicalAngle: "",
+      authorityAndEvidence: "",
+      websiteAndConversionRole: "",
+    },
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1085,6 +1099,10 @@ function PeriodForm({
       setError("Week number must be a whole number, or left blank.");
       return;
     }
+    if (!isCompleteStrategyBrief(strategyBrief)) {
+      setError("Complete all six Weekly strategic record fields before saving this week.");
+      return;
+    }
     setSaving(true);
     setError(null);
     const payload = {
@@ -1093,8 +1111,7 @@ function PeriodForm({
       // Blank clears the number: the period is not a numbered publishing week.
       week_number: trimmedWeek ? Number(trimmedWeek) : null,
       theme: theme.trim() || null,
-      details: details.trim() || null,
-      rationale: rationale.trim() || null,
+      strategy_brief: strategyBrief,
     };
     const url = period
       ? `/api/portal/${firmId}/periods/${period.id}`
@@ -1190,33 +1207,36 @@ function PeriodForm({
           className="w-full text-sm border border-border-brand px-3 py-2 bg-white"
         />
       </div>
-      <div>
-        <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
-          Details
-        </label>
-        <textarea
-          value={details}
-          onChange={(e) => setDetails(e.target.value)}
-          rows={3}
-          placeholder="The topics and angles this week covers."
-          className="w-full text-sm border border-border-brand px-3 py-2 bg-white resize-y"
-        />
-      </div>
-      <div>
-        <label className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1">
-          Why{" "}
-          <span className="text-black/40 normal-case font-normal">
-            (brand relevance + search intent)
-          </span>
-        </label>
-        <textarea
-          value={rationale}
-          onChange={(e) => setRationale(e.target.value)}
-          rows={3}
-          placeholder="The strategic reason these pieces were chosen this week."
-          className="w-full text-sm border border-border-brand px-3 py-2 bg-white resize-y"
-        />
-      </div>
+      <fieldset className="border-t border-border-brand/60 pt-3 space-y-3">
+        <legend className="text-[10px] uppercase tracking-wider font-semibold text-navy">
+          Weekly strategic record
+        </legend>
+        <p className="text-xs text-black/55">
+          Complete all six fields. The content remains accessible while this strategy record is being completed.
+        </p>
+        {STRATEGY_BRIEF_FIELDS.map(([key, label]) => {
+          const inputId = `period-${period?.id ?? "new"}-strategy-${key}`;
+          return (
+            <div key={key}>
+              <label
+                htmlFor={inputId}
+                className="block text-[10px] uppercase tracking-wider font-semibold text-navy mb-1"
+              >
+                {label}
+              </label>
+              <textarea
+                id={inputId}
+                value={strategyBrief[key]}
+                onChange={(e) =>
+                  setStrategyBrief((current) => ({ ...current, [key]: e.target.value }))
+                }
+                rows={3}
+                className="w-full text-sm border border-border-brand px-3 py-2 bg-white resize-y"
+              />
+            </div>
+          );
+        })}
+      </fieldset>
       {error && <p className="text-xs text-red-fail">{error}</p>}
       <div className="flex items-center gap-3">
         <button

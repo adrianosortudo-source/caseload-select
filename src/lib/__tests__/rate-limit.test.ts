@@ -124,6 +124,77 @@ describe("checkRateLimit — fail-open when Upstash env vars are missing", () =>
   });
 });
 
+// ─── checkRateLimit fail-closed buckets ────────────────────────────────────
+//
+// startConversation was added to FAIL_CLOSED_BUCKETS alongside requestLink,
+// otpSend, and otpVerify (BUILD_PLAN_start_conversation_flow_v1.md): unlike
+// intake/seoCheck, that route protects CaseLoad Select's OWN inbox, so an
+// unconfigured limiter must deny rather than silently let scripted spam
+// through to Adriano's email. This pins the acceptance criterion directly:
+// "Rate-limit bucket present in FAIL_CLOSED_BUCKETS (test)."
+//
+// designCheck joined the same set the same week: public, unauthenticated,
+// and each request costs two real headless-browser renders plus two Gemini
+// vision calls, so a fail-open limiter would leave the single most
+// expensive public endpoint in the app with no real cap whenever Upstash
+// is unset.
+
+describe("checkRateLimit — fail-closed buckets when RATE_LIMIT_FAIL_CLOSED=true and Upstash is unconfigured", () => {
+  const origUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const origToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const origFailClosed = process.env.RATE_LIMIT_FAIL_CLOSED;
+
+  beforeEach(() => {
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    process.env.RATE_LIMIT_FAIL_CLOSED = "true";
+  });
+
+  afterEach(() => {
+    if (origUrl === undefined) delete process.env.UPSTASH_REDIS_REST_URL;
+    else process.env.UPSTASH_REDIS_REST_URL = origUrl;
+    if (origToken === undefined) delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    else process.env.UPSTASH_REDIS_REST_TOKEN = origToken;
+    if (origFailClosed === undefined) delete process.env.RATE_LIMIT_FAIL_CLOSED;
+    else process.env.RATE_LIMIT_FAIL_CLOSED = origFailClosed;
+  });
+
+  it("denies startConversation when the limiter is unconfigured and fail-closed mode is on", async () => {
+    const r = await checkRateLimit("startConversation", "203.0.113.5");
+    expect(r.ok).toBe(false);
+    expect(r.active).toBe(false);
+    expect(r.limit).toBe(10);
+  });
+
+  it("rejects designCheck (ok=false, active=false) when the limiter is unconfigured", async () => {
+    // designCheck costs two real headless-browser renders plus two Gemini
+    // vision calls per request; it must not silently have no cap at all
+    // when Upstash env vars are missing and the operator has opted into
+    // fail-closed mode. Same shape as the requestLink/otpSend/otpVerify
+    // buckets already covered above.
+    const r = await checkRateLimit("designCheck", "203.0.113.5");
+    expect(r.ok).toBe(false);
+    expect(r.active).toBe(false);
+    expect(r.limit).toBe(8);
+  });
+
+  it("still denies the pre-existing fail-closed buckets (requestLink, otpSend, otpVerify)", async () => {
+    for (const bucket of ["requestLink", "otpSend", "otpVerify"] as const) {
+      const r = await checkRateLimit(bucket, "203.0.113.5");
+      expect(r.ok).toBe(false);
+      expect(r.active).toBe(false);
+    }
+  });
+
+  it("leaves fail-open buckets (e.g. intake, seoCheck) unaffected by fail-closed mode", async () => {
+    for (const bucket of ["intake", "seoCheck", "screen"] as const) {
+      const r = await checkRateLimit(bucket, "203.0.113.5");
+      expect(r.ok).toBe(true);
+      expect(r.active).toBe(false);
+    }
+  });
+});
+
 // ─── rateLimitHeaders ──────────────────────────────────────────────────────
 
 describe("rateLimitHeaders", () => {

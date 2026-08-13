@@ -84,6 +84,10 @@ vi.mock("@/lib/standing-publishing-authorization", () => ({
   getStandingAuthorizationState: () => Promise.resolve(state.standingAuthorization),
 }));
 
+vi.mock("@/lib/deliverable-client-change-holds", () => ({
+  loadUnresolvedClientChangeHoldDeliverableIds: () => Promise.resolve(new Set<string>()),
+}));
+
 import { loadPublicationPreflightForPeriod } from "@/lib/publication-preflight-loader";
 
 function baseDeliverable(overrides: Row = {}): Row {
@@ -130,7 +134,7 @@ beforeEach(() => {
 
 describe("loadPublicationPreflightForPeriod: receives and applies canonical release-authorization context", () => {
   it("an eligible standing-authorization-only version (no individual approval) resolves mayPublish=true, not blocked as 'not approved'", async () => {
-    state.deliverables = [baseDeliverable({ status: "draft", approved_version_id: null })];
+    state.deliverables = [baseDeliverable({ status: "in_review", approved_version_id: null })];
     state.versions = [{ id: CURRENT_VERSION_ID, requires_individual_review: false }];
     state.standingAuthorization = { active: true };
 
@@ -142,7 +146,7 @@ describe("loadPublicationPreflightForPeriod: receives and applies canonical rele
   });
 
   it("requires_individual_review=true blocks standing authorization even though it is active -- the override is respected end to end", async () => {
-    state.deliverables = [baseDeliverable({ status: "draft", approved_version_id: null })];
+    state.deliverables = [baseDeliverable({ status: "in_review", approved_version_id: null })];
     state.versions = [{ id: CURRENT_VERSION_ID, requires_individual_review: true }];
     state.standingAuthorization = { active: true };
 
@@ -162,7 +166,7 @@ describe("loadPublicationPreflightForPeriod: receives and applies canonical rele
   });
 
   it("inactive standing authorization, no individual approval on record -> not release-authorized, canonical wording, never bare 'not approved'", async () => {
-    state.deliverables = [baseDeliverable({ status: "draft", approved_version_id: null })];
+    state.deliverables = [baseDeliverable({ status: "in_review", approved_version_id: null })];
     state.versions = [{ id: CURRENT_VERSION_ID, requires_individual_review: false }];
     state.standingAuthorization = { active: false };
 
@@ -173,7 +177,7 @@ describe("loadPublicationPreflightForPeriod: receives and applies canonical rele
   });
 
   it("getStandingAuthorizationState returning null (never configured) resolves standingAuthorizationActive=false, never assumed true", async () => {
-    state.deliverables = [baseDeliverable({ status: "draft", approved_version_id: null })];
+    state.deliverables = [baseDeliverable({ status: "in_review", approved_version_id: null })];
     state.versions = [{ id: CURRENT_VERSION_ID, requires_individual_review: false }];
     state.standingAuthorization = null;
 

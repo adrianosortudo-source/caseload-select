@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev:turbo": "next dev --turbopack",
-    "build": "node scripts/check-no-em-dash-marketing.mjs && next build",
+    "build": "node scripts/check-no-em-dash-marketing.mjs && node scripts/check-cron-contract.mjs && next build",
     "start": "next start",
     "lint": "eslint .",
     "check:em-dash-marketing": "node scripts/check-no-em-dash-marketing.mjs",
@@ -21,7 +21,8 @@
     "publishing:bind-heroes": "node scripts/publishing-bind-heroes.mjs",
     "publishing:export-packets": "node scripts/publishing-export-packets.mjs",
     "check:seo-calibration": "node scripts/seo-check-calibration-acceptance.mjs",
-    "record:seo-calibration": "node scripts/seo-check-record-calibration-fixture.mjs"
+    "record:seo-calibration": "node scripts/seo-check-record-calibration-fixture.mjs",
+    "drg:deploy": "tsx scripts/drg-deploy/cli.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -37,7 +38,8 @@
     "resend": "^4.0.1",
     "sanitize-html": "^2.17.4",
     "server-only": "^0.0.1",
-    "undici": "^6.27.0"
+    "undici": "^6.27.0",
+    "web-vitals": "^4.2.4"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
@@ -53,6 +55,7 @@
     "pg": "^8.13.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
+    "tsx": "^4.23.12",
     "typescript": "^5.6.3",
     "vitest": "^2.1.9"
   },

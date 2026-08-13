@@ -273,7 +273,7 @@ describe("PublicationReadinessSummary: DR-097 explicit lifecycle rendering", () 
     const hero = { id: "hero-fv", firm_id: FIRM_ID, deliverable_id: "d1", version_id: "v1", artifact_type: "hero_image" as const, locale: "en-CA", destination: "firm_website" as const, storage_bucket: "firm-files", storage_path: "images/hero.png", public_url: null, repository: null, repository_path: null, deployment_commit: null, deployment_url: null, mime_type: "image/png", size_bytes: 1024, sha256: "a".repeat(64), validation_result: null, created_by_role: "system" as const, created_by_id: null, created_at: "2026-07-14T00:00:00Z", superseded_at: null };
     const webpage = { ...hero, id: "wp-fv", artifact_type: "webpage" as const, storage_bucket: null, storage_path: null, public_url: "https://drglaw.ca/journal/founder-vesting-ontario", mime_type: null, size_bytes: null, sha256: null };
     const fullyReadyItem = evaluateDeliverableReadiness({
-      deliverable: { ...makeMetadataCompleteDeliverable(), approved_version_id: "v1" },
+      deliverable: { ...makeMetadataCompleteDeliverable(), status: "approved", approved_version_id: "v1" },
       currentVersion: makeVersion(),
       artifacts: [hero, webpage],
       latestValidationByArtifactId: { "wp-fv": { id: "val-1", artifact_id: "wp-fv", firm_id: FIRM_ID, validator: "storage_object_check", result: "pass", details: null, validated_by_role: "system", validated_by_id: null, created_at: "2026-07-14T00:00:00Z" } },
@@ -289,7 +289,7 @@ describe("PublicationReadinessSummary: DR-097 explicit lifecycle rendering", () 
       }),
     );
 
-    expect(html).toContain("Ready to activate");
+    expect(html).toContain("Publication readiness");
     expect(html).not.toContain("historical, not reconciled");
     expect(html).not.toContain("bg-red-fail");
     // "Setup required" as a bucket label must not appear since nothing

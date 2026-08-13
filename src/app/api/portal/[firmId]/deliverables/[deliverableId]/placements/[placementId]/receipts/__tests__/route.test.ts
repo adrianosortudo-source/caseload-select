@@ -33,6 +33,7 @@ interface ClaimFixture {
   status: "active" | "released" | "superseded";
   claimed_by_role: "operator" | "lawyer" | "system";
   claimed_by_id: string | null;
+  release_path: "individual_approval" | "standing_authorization" | null;
 }
 
 const state = {
@@ -43,7 +44,8 @@ const state = {
     name: string | null;
     email: string | null;
   } | null,
-  detail: null as { deliverable: { firm_id: string; status: string; approved_version_id: string | null; current_version_id: string | null } } | null,
+  detail: null as { deliverable: { firm_id: string; status: string; approved_version_id: string | null; current_version_id: string | null }; versions: Array<{ id: string; requires_individual_review: boolean }> } | null,
+  detailReadError: false,
   placements: [] as Array<{ id: string; destination: string; locale: string | null }>,
   createReceiptArgs: null as unknown,
   receipts: [] as unknown[],
@@ -64,6 +66,7 @@ function defaultClaim(overrides: Partial<ClaimFixture> = {}): ClaimFixture {
     // available" in the corrective-release spec. Tests that need to assert
     // the identity check itself set this explicitly.
     claimed_by_id: null,
+    release_path: "individual_approval",
     ...overrides,
   };
 }
@@ -83,7 +86,14 @@ vi.mock("@/lib/deliverables-auth", () => ({
 }));
 
 vi.mock("@/lib/deliverables", () => ({
-  getDeliverableDetail: () => Promise.resolve(state.detail),
+  getDeliverableDetail: () =>
+    Promise.resolve(
+      state.detailReadError
+        ? { ok: false, error: "mock read error" }
+        : state.detail === null
+          ? { ok: true, found: false }
+          : { ok: true, found: true, detail: state.detail },
+    ),
 }));
 
 vi.mock("@/lib/content-placements", () => ({
@@ -145,7 +155,9 @@ beforeEach(() => {
   state.resolvedActor = { role: "operator", id: "op-1", name: "Adriano Domingues", email: "adriano@caseloadselect.ca" };
   state.detail = {
     deliverable: { firm_id: FIRM, status: "approved", approved_version_id: VERSION, current_version_id: VERSION },
+    versions: [{ id: VERSION, requires_individual_review: false }],
   };
+  state.detailReadError = false;
   state.placements = [{ id: PLACEMENT, destination: "linkedin_post", locale: null }];
   state.createReceiptArgs = null;
   state.receipts = [];
@@ -222,8 +234,20 @@ describe("POST receipts: real operator identity is recorded (adversarial-review 
 });
 
 describe("POST receipts: entity and validation gates (regression)", () => {
+  it("503s (never 404) when the deliverable-detail read itself errors, on GET and POST", async () => {
+    state.detailReadError = true;
+    const getRes = await GET(makeGetReq(), params());
+    expect(getRes.status).toBe(503);
+    const postRes = await POST(makePostReq({ approved_version_id: VERSION, claim_id: CLAIM_ID, public_url: "https://example.test" }), params());
+    expect(postRes.status).toBe(503);
+    expect(state.createReceiptArgs).toBeNull();
+  });
+
   it("404s when the deliverable does not belong to this firm", async () => {
-    state.detail = { deliverable: { firm_id: "other-firm", status: "approved", approved_version_id: VERSION, current_version_id: VERSION } };
+    state.detail = {
+      deliverable: { firm_id: "other-firm", status: "approved", approved_version_id: VERSION, current_version_id: VERSION },
+      versions: [{ id: VERSION, requires_individual_review: false }],
+    };
     const res = await POST(makePostReq({ approved_version_id: VERSION, claim_id: CLAIM_ID, public_url: "https://example.test" }), params());
     expect(res.status).toBe(404);
   });

@@ -63,7 +63,89 @@
     "employees_planned": "Você está planejando contratar alguém no primeiro ano?",
     "regulated_industry": "O seu setor é regulamentado?",
     "cross_border_work": "Você vai vender ou trabalhar com clientes fora do Canadá?",
-    "ip_planned": "Você tem marca, software ou outra propriedade intelectual para proteger?"
+    "ip_planned": "Você tem marca, software ou outra propriedade intelectual para proteger?",
+    "employment_problem_type": "Qual descreve melhor a sua situação?",
+    "tenure_band": "Por quanto tempo você trabalhou nesse empregador?",
+    "salary_band": "Qual era aproximadamente a sua remuneração anual?",
+    "dismissal_reason_given": "Qual motivo o empregador deu para a demissão?",
+    "severance_offered": "O empregador ofereceu alguma rescisão?",
+    "signed_release": "Você já assinou algum documento (quitação, acordo ou papelada final)?",
+    "desired_outcome_wrongful_dismissal": "Qual seria o melhor resultado para você?",
+    "severance_offer_amount": "Como a proposta de rescisão se compara ao seu tempo de casa?",
+    "severance_deadline": "Existe um prazo para responder?",
+    "desired_outcome_severance_review": "Qual seria o melhor resultado para você?",
+    "harassment_type": "Que tipo de conduta está em questão?",
+    "harassment_employment_status": "Você ainda trabalha lá?",
+    "reported_to_hr": "Você comunicou isso ao RH ou a alguém na empresa?",
+    "desired_outcome_harassment": "Qual seria o melhor resultado para você?",
+    "wages_owed_band": "Aproximadamente quanto está sendo devido?",
+    "wages_type": "Que tipo de pagamento está sendo devido?",
+    "desired_outcome_wage_recovery": "Qual seria o melhor resultado para você?",
+    "contract_review_type": "Que tipo de contrato é esse?",
+    "contract_review_timeline": "Com que urgência você precisa da revisão?",
+    "contract_review_concerns": "Existe alguma cláusula específica que preocupa você?",
+    "desired_outcome_contract_review": "Qual seria o melhor resultado para você?",
+    "estates_problem_type": "Qual descreve melhor a sua situação?",
+    "marital_status": "Qual é o seu estado civil?",
+    "children_count": "Você tem filhos ou dependentes a considerar?",
+    "estate_complexity": "Como você descreveria o seu patrimônio?",
+    "existing_will_status": "Você tem um testamento atualmente?",
+    "desired_outcome_will_drafting": "O que você pretende deixar preparado?",
+    "poa_type": "Que tipo de procuração você precisa?",
+    "poa_urgency": "O que motivou isso agora?",
+    "poa_existing_documents": "Já existem documentos preparados?",
+    "relationship_to_deceased": "Qual era a sua relação com a pessoa que faleceu?",
+    "will_status_probate": "Existe um testamento?",
+    "estate_value_band": "Aproximadamente qual é o valor do espólio?",
+    "executor_role": "Qual é o seu papel no espólio?",
+    "estate_dispute_type": "Que tipo de disputa é essa?",
+    "estate_dispute_role": "Qual é o seu papel nessa disputa?",
+    "estate_court_status": "Já foi protocolado algo no tribunal?",
+    "desired_outcome_estate_dispute": "Qual seria o melhor resultado para você?",
+    "real_estate_problem_type": "Qual descreve melhor o que você precisa?",
+    "commercial_re_role": "Você é o comprador, vendedor, locador ou inquilino?",
+    "commercial_property_type": "Que tipo de imóvel comercial está envolvido?",
+    "commercial_re_amount": "Qual é o valor aproximado da transação ou do aluguel?",
+    "commercial_re_stage": "Em que ponto está o negócio?",
+    "commercial_re_concerns": "Que preocupação trouxe você a um advogado?",
+    "residential_role": "Você está comprando ou vendendo?",
+    "residential_property_type": "Que tipo de imóvel?",
+    "residential_re_amount": "Qual é o valor aproximado do imóvel?",
+    "residential_re_stage": "Em que ponto está o processo?",
+    "residential_re_concern": "Com o que você mais precisa de ajuda?",
+    "residential_closing_timeline": "Quando é o fechamento?",
+    "residential_mortgage_situation": "Como está o financiamento?",
+    "residential_representation": "Você tem um corretor de imóveis envolvido?",
+    "litigation_subject": "Sobre o que é a disputa?",
+    "litigation_role": "Qual é o seu papel nessa disputa?",
+    "litigation_amount": "Aproximadamente quanto está em jogo?",
+    "litigation_documents": "Você tem o contrato de compra e venda ou outro contrato por escrito?",
+    "litigation_stage": "Já foi protocolado algo no tribunal?",
+    "litigation_when_event": "Quando o problema aconteceu ou veio à tona?",
+    "litigation_settlement_attempted": "Houve alguma tentativa de acordo até agora?",
+    "tenancy_party": "Você é o locador ou o inquilino?",
+    "tenancy_type": "A locação é residencial ou comercial?",
+    "tenancy_issue": "Sobre o que é a disputa?",
+    "tenancy_amount": "Quanto de aluguel ou danos está envolvido?",
+    "tenancy_lease_exists": "Existe contrato de locação por escrito?",
+    "tenancy_notice_status": "Já foi enviada notificação formal ou aberto algum processo?",
+    "lien_role": "Qual é o seu papel na obra?",
+    "lien_amount": "Quanto está sendo devido?",
+    "lien_last_supply": "Quando você forneceu trabalho ou material à obra pela última vez?",
+    "lien_preserved": "Já foi registrado algum gravame contra o imóvel?",
+    "lien_documents": "Você tem o contrato, as faturas e a comprovação do trabalho?",
+    "precon_role": "Qual é o seu papel?",
+    "precon_issue": "Qual é o problema?",
+    "precon_developer_status": "Como a incorporadora está respondendo?",
+    "precon_amount": "Quanto está em jogo?",
+    "precon_documents": "Você tem o contrato de compra e venda com a construtora?",
+    "mortgage_role": "Qual é a sua posição nessa questão?",
+    "mortgage_status": "O que está acontecendo agora?",
+    "mortgage_amount": "Qual é o saldo aproximado da hipoteca ou o valor em disputa?",
+    "mortgage_lender_type": "Que tipo de credor?",
+    "mortgage_documents": "Você tem os documentos da hipoteca e as notificações recebidas?",
+    "desired_outcome_money_control": "Qual seria o melhor resultado para você?",
+    "ownership_percentage": "Qual percentual da empresa pertence a você, se souber?"
   },
   "slot_options": {
     "corporate_problem_type": {
@@ -425,6 +507,587 @@
       "Yes, software, code, or formulas": "Sim, software, código ou fórmulas",
       "Yes, multiple types of IP": "Sim, vários tipos de propriedade intelectual",
       "Not sure": "Não tenho certeza"
+    },
+    "employment_problem_type": {
+      "I was fired or let go": "Fui demitido ou dispensado",
+      "My job changed so much I had to leave, or I felt forced out": "Meu trabalho mudou tanto que tive que sair, ou me senti forçado a sair",
+      "I work as a contractor and the company ended or changed my contract": "Trabalho como contratado e a empresa encerrou ou alterou meu contrato",
+      "I have a severance offer to review": "Tenho uma proposta de rescisão para revisar",
+      "I am being harassed or discriminated against": "Estou sofrendo assédio ou discriminação",
+      "I am owed wages that have not been paid": "Tenho salários que não foram pagos",
+      "I need an employment contract reviewed": "Preciso revisar um contrato de trabalho",
+      "I am an employer and need help with an employee matter": "Sou empregador e preciso de ajuda com uma questão de funcionário",
+      "Something else": "Outra coisa"
+    },
+    "tenure_band": {
+      "Less than 1 year": "Menos de 1 ano",
+      "1 to 3 years": "1 a 3 anos",
+      "4 to 7 years": "4 a 7 anos",
+      "8 to 15 years": "8 a 15 anos",
+      "15+ years": "Mais de 15 anos"
+    },
+    "salary_band": {
+      "Under $50,000": "Menos de $50.000",
+      "$50,000 to $100,000": "$50.000 a $100.000",
+      "$100,000 to $200,000": "$100.000 a $200.000",
+      "Over $200,000": "Mais de $200.000",
+      "Not sure": "Não tenho certeza"
+    },
+    "dismissal_reason_given": {
+      "No reason given": "Nenhum motivo foi dado",
+      "Performance": "Desempenho",
+      "Restructuring or layoff": "Reestruturação ou corte de pessoal",
+      "Cause was alleged": "Foi alegada justa causa",
+      "Other": "Outro"
+    },
+    "severance_offered": {
+      "Yes, I have a written offer": "Sim, tenho uma proposta por escrito",
+      "Yes, but only verbally": "Sim, mas apenas verbalmente",
+      "No offer yet": "Nenhuma proposta até agora",
+      "Not sure": "Não tenho certeza"
+    },
+    "signed_release": {
+      "No, I have not signed anything": "Não, não assinei nada",
+      "Yes, I signed something": "Sim, assinei algo",
+      "Not sure": "Não tenho certeza"
+    },
+    "desired_outcome_wrongful_dismissal": {
+      "Higher severance": "Uma rescisão maior",
+      "Reinstatement or rehire": "Reintegração ou recontratação",
+      "Reference letter or clean exit": "Carta de referência ou uma saída tranquila",
+      "Other": "Outro"
+    },
+    "severance_offer_amount": {
+      "Less than 3 months of pay": "Menos de 3 meses de salário",
+      "3 to 6 months of pay": "3 a 6 meses de salário",
+      "6 to 12 months of pay": "6 a 12 meses de salário",
+      "More than 12 months of pay": "Mais de 12 meses de salário",
+      "A lump sum, unclear": "Um valor único, não está claro"
+    },
+    "severance_deadline": {
+      "Yes, in the next few days": "Sim, nos próximos dias",
+      "Yes, within the next week": "Sim, dentro de uma semana",
+      "Yes, within the next month": "Sim, dentro de um mês",
+      "No clear deadline": "Não há prazo definido",
+      "The deadline has already passed": "O prazo já passou"
+    },
+    "desired_outcome_severance_review": {
+      "Negotiate a better package": "Negociar uma proposta melhor",
+      "Confirm the offer is fair before signing": "Confirmar se a proposta é justa antes de assinar",
+      "Reject and pursue more": "Recusar e buscar mais",
+      "Other": "Outro"
+    },
+    "harassment_type": {
+      "Sexual harassment": "Assédio sexual",
+      "Discrimination (race, gender, age, disability, or other protected ground)": "Discriminação (raça, gênero, idade, deficiência ou outro motivo protegido)",
+      "Bullying or hostile work environment": "Assédio moral ou ambiente de trabalho hostil",
+      "Retaliation for raising a concern": "Retaliação por ter feito uma reclamação",
+      "Other": "Outro"
+    },
+    "harassment_employment_status": {
+      "Yes, still employed": "Sim, ainda trabalho lá",
+      "No, I left": "Não, eu saí",
+      "No, I was fired or terminated": "Não, fui demitido"
+    },
+    "reported_to_hr": {
+      "Yes, and they took action": "Sim, e tomaram providências",
+      "Yes, but no action was taken": "Sim, mas nada foi feito",
+      "No, I have not reported it yet": "Não, ainda não comuniquei",
+      "Not sure": "Não tenho certeza"
+    },
+    "desired_outcome_harassment": {
+      "Stop the behaviour": "Fazer a conduta parar",
+      "Compensation or damages": "Compensação ou indenização",
+      "File a Human Rights Tribunal complaint": "Abrir queixa no Tribunal de Direitos Humanos",
+      "Leave with a fair package": "Sair com uma proposta justa",
+      "Other": "Outro"
+    },
+    "wages_owed_band": {
+      "Under $2,000": "Menos de $2.000",
+      "$2,000 to $10,000": "$2.000 a $10.000",
+      "$10,000 to $50,000": "$10.000 a $50.000",
+      "Over $50,000": "Mais de $50.000",
+      "Not sure": "Não tenho certeza"
+    },
+    "wages_type": {
+      "Regular wages": "Salário normal",
+      "Overtime": "Horas extras",
+      "Vacation pay": "Férias",
+      "Commission or bonus": "Comissão ou bônus",
+      "Final pay on termination": "Acerto final na rescisão",
+      "A mix of the above": "Uma combinação dos anteriores"
+    },
+    "desired_outcome_wage_recovery": {
+      "Recover the unpaid amount": "Recuperar o valor não pago",
+      "File an Employment Standards claim": "Abrir reclamação no Employment Standards",
+      "Sue in Small Claims or Superior Court": "Processar no Small Claims ou na Superior Court",
+      "Other": "Outro"
+    },
+    "contract_review_type": {
+      "A new job offer": "Uma proposta de emprego nova",
+      "A promotion or role change": "Uma promoção ou mudança de cargo",
+      "A severance or termination agreement": "Um acordo de rescisão ou desligamento",
+      "A non-compete or non-disclosure agreement": "Um acordo de não concorrência ou de confidencialidade",
+      "A contractor or consulting agreement": "Um contrato de prestação de serviços ou consultoria",
+      "Other": "Outro"
+    },
+    "contract_review_timeline": {
+      "Within 24 hours": "Em até 24 horas",
+      "This week": "Esta semana",
+      "Within the next 30 days": "Nos próximos 30 dias",
+      "No rush": "Sem pressa"
+    },
+    "contract_review_concerns": {
+      "Non-compete or non-solicit": "Não concorrência ou não aliciamento",
+      "Intellectual property assignment": "Cessão de propriedade intelectual",
+      "Compensation or bonus structure": "Estrutura de remuneração ou bônus",
+      "Termination clause": "Cláusula de rescisão",
+      "Not sure, I just want a full review": "Não tenho certeza, quero uma revisão completa"
+    },
+    "desired_outcome_contract_review": {
+      "Sign as-is with confidence": "Assinar como está, com segurança",
+      "Negotiate specific clauses": "Negociar cláusulas específicas",
+      "Decide whether to accept or walk away": "Decidir entre aceitar ou recusar",
+      "Other": "Outro"
+    },
+    "estates_problem_type": {
+      "I need a will drafted or updated": "Preciso fazer ou atualizar um testamento",
+      "I want to set up a trust": "Quero constituir um trust",
+      "I need a power of attorney": "Preciso de uma procuração",
+      "A family member can no longer manage their affairs and nothing is in place": "Um familiar não consegue mais cuidar dos próprios assuntos e não há nada preparado",
+      "Someone has passed and I need help with probate": "Alguém faleceu e preciso de ajuda com o inventário",
+      "There is a dispute over a will or an estate": "Existe uma disputa sobre um testamento ou uma herança",
+      "Someone is misusing a power of attorney": "Alguém está usando indevidamente uma procuração",
+      "Something else": "Outra coisa"
+    },
+    "marital_status": {
+      "Single": "Solteiro",
+      "Married": "Casado",
+      "Common-law": "União estável",
+      "Separated or divorced": "Separado ou divorciado",
+      "Widowed": "Viúvo"
+    },
+    "children_count": {
+      "None": "Nenhum",
+      "One": "Um",
+      "Two or three": "Dois ou três",
+      "Four or more": "Quatro ou mais"
+    },
+    "estate_complexity": {
+      "Simple, one residence and savings": "Simples, uma residência e poupança",
+      "Multiple properties or investments": "Vários imóveis ou investimentos",
+      "Business or company ownership": "Participação em empresa ou negócio",
+      "Cross-border assets": "Bens em mais de um país",
+      "Not sure": "Não tenho certeza"
+    },
+    "existing_will_status": {
+      "No, I have never had one": "Não, nunca tive",
+      "Yes, but it is outdated": "Sim, mas está desatualizado",
+      "Yes, and it just needs an update": "Sim, e só precisa de uma atualização",
+      "Not sure": "Não tenho certeza"
+    },
+    "desired_outcome_will_drafting": {
+      "Simple will": "Um testamento simples",
+      "Will and power of attorney": "Testamento e procuração",
+      "Full estate plan (will, POAs, trusts)": "Um planejamento sucessório completo (testamento, procurações, trusts)",
+      "Not sure yet": "Ainda não tenho certeza"
+    },
+    "poa_type": {
+      "Property (financial affairs)": "Bens (assuntos financeiros)",
+      "Personal care (health and care decisions)": "Cuidados pessoais (decisões de saúde e cuidados)",
+      "Both": "Ambas",
+      "Not sure": "Não tenho certeza"
+    },
+    "poa_urgency": {
+      "Family member health crisis or recent diagnosis": "Crise de saúde ou diagnóstico recente de um familiar",
+      "The person may no longer be able to sign documents": "A pessoa pode já não conseguir assinar documentos",
+      "Planning ahead, no immediate trigger": "Planejamento antecipado, sem urgência imediata",
+      "Court application is being prepared": "Está sendo preparado um pedido judicial",
+      "Other": "Outro"
+    },
+    "poa_existing_documents": {
+      "Yes, an older POA exists": "Sim, existe uma procuração antiga",
+      "No, nothing exists": "Não, não existe nada",
+      "Not sure": "Não tenho certeza"
+    },
+    "relationship_to_deceased": {
+      "Spouse or partner": "Cônjuge ou companheiro",
+      "Child": "Filho",
+      "Parent": "Pai ou mãe",
+      "Sibling": "Irmão",
+      "Other family or close connection": "Outro familiar ou pessoa próxima"
+    },
+    "will_status_probate": {
+      "Yes, and it is valid": "Sim, e é válido",
+      "Yes, but it is being contested": "Sim, mas está sendo contestado",
+      "No will (intestate)": "Não há testamento",
+      "Not sure": "Não tenho certeza"
+    },
+    "estate_value_band": {
+      "Under $100,000": "Menos de $100.000",
+      "$100,000 to $500,000": "$100.000 a $500.000",
+      "$500,000 to $2 million": "$500.000 a $2 milhões",
+      "Over $2 million": "Mais de $2 milhões",
+      "Not sure": "Não tenho certeza"
+    },
+    "executor_role": {
+      "I am the executor (estate trustee)": "Sou o inventariante (estate trustee)",
+      "I am a co-executor": "Sou co-inventariante",
+      "I am a beneficiary, not the executor": "Sou beneficiário, não o inventariante",
+      "I have not been appointed": "Não fui nomeado"
+    },
+    "estate_dispute_type": {
+      "The will is being challenged": "O testamento está sendo contestado",
+      "The executor is not acting properly": "O inventariante não está agindo corretamente",
+      "Beneficiaries disagree": "Os beneficiários não concordam entre si",
+      "Capacity of the deceased at the time of the will is at issue": "A capacidade do falecido na época do testamento está em questão",
+      "I was left out or not properly provided for": "Fui excluído ou não fui devidamente contemplado",
+      "Other": "Outro"
+    },
+    "estate_dispute_role": {
+      "Beneficiary": "Beneficiário",
+      "Executor or estate trustee": "Inventariante (estate trustee)",
+      "Excluded family member": "Familiar excluído",
+      "Other": "Outro"
+    },
+    "estate_court_status": {
+      "Yes, an application has been filed": "Sim, já foi protocolado um pedido",
+      "No, but we are considering it": "Não, mas estamos considerando",
+      "Nothing yet, just exploring options": "Nada ainda, só explorando as opções",
+      "Not sure": "Não tenho certeza"
+    },
+    "desired_outcome_estate_dispute": {
+      "Set aside the will": "Anular o testamento",
+      "Remove or replace the executor": "Remover ou substituir o inventariante",
+      "Recover what I believe is my share": "Recuperar o que acredito ser a minha parte",
+      "Reach a negotiated settlement": "Chegar a um acordo negociado",
+      "Other": "Outro"
+    },
+    "real_estate_problem_type": {
+      "Buying or selling commercial property": "Comprar ou vender um imóvel comercial",
+      "Leasing commercial space (new lease, renewal, or review)": "Alugar espaço comercial (novo contrato, renovação ou revisão)",
+      "Buying or selling a home or condo": "Comprar ou vender uma casa ou condo",
+      "Adding or removing someone on title (no sale)": "Incluir ou remover alguém da escritura (sem venda)",
+      "A real estate deal that has gone wrong (deposit, closing, misrepresentation)": "Um negócio imobiliário que deu errado (depósito, fechamento, informação falsa)",
+      "A landlord or tenant dispute": "Uma disputa entre locador e inquilino",
+      "Unpaid construction or renovation work": "Obra ou reforma não paga",
+      "A pre-construction condo or new build issue": "Problema com condo na planta ou imóvel novo",
+      "A mortgage or power-of-sale issue": "Problema de hipoteca ou power of sale",
+      "Something else": "Outra coisa"
+    },
+    "commercial_re_role": {
+      "Buyer": "Comprador",
+      "Seller": "Vendedor",
+      "Landlord": "Locador",
+      "Tenant": "Inquilino",
+      "Investor": "Investidor",
+      "Not sure": "Não tenho certeza"
+    },
+    "commercial_property_type": {
+      "Office": "Escritório",
+      "Retail / storefront": "Loja / ponto comercial",
+      "Industrial / warehouse": "Industrial / galpão",
+      "Mixed-use": "Uso misto",
+      "Multi-residential / apartment building": "Prédio residencial / multifamiliar",
+      "Land / development site": "Terreno / área para incorporação",
+      "Not sure": "Não tenho certeza"
+    },
+    "commercial_re_amount": {
+      "Under $500,000": "Menos de $500.000",
+      "$500,000–$2M": "$500.000 a $2 milhões",
+      "$2M–$10M": "$2 milhões a $10 milhões",
+      "Over $10M": "Mais de $10 milhões",
+      "Not sure": "Não tenho certeza"
+    },
+    "commercial_re_stage": {
+      "Just exploring": "Só explorando",
+      "Talking with the other side": "Conversando com a outra parte",
+      "A draft lease or renewal is on the table": "Há uma minuta de contrato ou renovação em análise",
+      "Signed an offer or letter of intent": "Assinei uma proposta ou carta de intenção",
+      "Conditions still to clear": "Ainda há condições a cumprir",
+      "Closing date set": "Data de fechamento definida",
+      "Already closed": "Já foi fechado",
+      "Not sure": "Não tenho certeza"
+    },
+    "commercial_re_concerns": {
+      "Reviewing the agreement": "Revisar o contrato",
+      "Title or zoning concern": "Questão de titularidade ou zoneamento",
+      "Environmental concern": "Questão ambiental",
+      "Financing or mortgage": "Financiamento ou hipoteca",
+      "Tenant or lease structure": "Estrutura de locação ou inquilinos",
+      "Not sure yet": "Ainda não tenho certeza"
+    },
+    "residential_role": {
+      "Buying": "Comprando",
+      "Selling": "Vendendo",
+      "Both (buying and selling)": "Os dois (comprando e vendendo)",
+      "Not sure": "Não tenho certeza"
+    },
+    "residential_property_type": {
+      "Detached / semi-detached": "Casa isolada / geminada",
+      "Townhouse": "Townhouse",
+      "Condo": "Condo",
+      "Pre-construction unit": "Unidade na planta",
+      "Vacant land": "Terreno",
+      "Not sure": "Não tenho certeza"
+    },
+    "residential_re_amount": {
+      "Under $500,000": "Menos de $500.000",
+      "$500,000–$1M": "$500.000 a $1 milhão",
+      "$1M–$2M": "$1 milhão a $2 milhões",
+      "Over $2M": "Mais de $2 milhões",
+      "Not sure": "Não tenho certeza"
+    },
+    "residential_re_stage": {
+      "Just exploring": "Só explorando",
+      "Offer not yet made": "Ainda não fiz proposta",
+      "Offer accepted, still working through conditions": "Proposta aceita, ainda cumprindo condições",
+      "Deal is locked, closing soon": "Negócio fechado, fechamento em breve",
+      "Closing this week, urgent": "Fechamento esta semana, urgente",
+      "Already closed": "Já foi fechado",
+      "Not sure": "Não tenho certeza"
+    },
+    "residential_re_concern": {
+      "Reviewing the contract before signing": "Revisar o contrato antes de assinar",
+      "Title and closing paperwork": "Escritura e documentação do fechamento",
+      "Mortgage and financing": "Hipoteca e financiamento",
+      "Conditions or guarantees": "Condições ou garantias",
+      "Something has gone wrong at closing": "Algo deu errado no fechamento",
+      "Not sure yet": "Ainda não tenho certeza"
+    },
+    "residential_closing_timeline": {
+      "No firm date yet": "Ainda sem data definida",
+      "More than 60 days away": "Faltam mais de 60 dias",
+      "30 to 60 days away": "Faltam de 30 a 60 dias",
+      "Less than 30 days away": "Faltam menos de 30 dias",
+      "This week": "Esta semana",
+      "Already passed (closing was missed)": "Já passou (o fechamento não ocorreu)",
+      "Not sure": "Não tenho certeza"
+    },
+    "residential_mortgage_situation": {
+      "Pre-approved": "Pré-aprovado",
+      "Approved with conditions still open": "Aprovado, com condições em aberto",
+      "Application submitted, no answer yet": "Pedido enviado, ainda sem resposta",
+      "Cash purchase, no financing": "Compra à vista, sem financiamento",
+      "Private or alternative lender": "Credor privado ou alternativo",
+      "Not started": "Ainda não comecei",
+      "Not sure": "Não tenho certeza"
+    },
+    "residential_representation": {
+      "Yes, I have an agent": "Sim, tenho um corretor",
+      "No, dealing with the other side directly": "Não, estou tratando direto com a outra parte",
+      "No, the seller has an agent and I do not": "Não, o vendedor tem corretor e eu não",
+      "Not sure": "Não tenho certeza"
+    },
+    "litigation_subject": {
+      "The other side did not close the deal": "A outra parte não concluiu o negócio",
+      "Deposit was lost or is being kept": "O depósito foi perdido ou está retido",
+      "Seller hid problems or misrepresented the property": "O vendedor escondeu problemas ou prestou informação falsa sobre o imóvel",
+      "Title or boundary problem": "Problema de titularidade ou de divisa",
+      "Disagreement over use of land (easement)": "Divergência sobre uso do terreno (servidão)",
+      "Real estate fraud": "Fraude imobiliária",
+      "A dispute between co-owners of a property": "Disputa entre coproprietários de um imóvel",
+      "Not sure": "Não tenho certeza"
+    },
+    "litigation_role": {
+      "Buyer": "Comprador",
+      "Seller": "Vendedor",
+      "Property owner": "Proprietário do imóvel",
+      "Neighbour": "Vizinho",
+      "Investor": "Investidor",
+      "Not sure": "Não tenho certeza"
+    },
+    "litigation_amount": {
+      "Under $25,000": "Menos de $25.000",
+      "$25,000–$100,000": "$25.000 a $100.000",
+      "$100,000–$500,000": "$100.000 a $500.000",
+      "Over $500,000": "Mais de $500.000",
+      "Not sure": "Não tenho certeza"
+    },
+    "litigation_documents": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Some, but only drafts or partial": "Alguns, mas só minutas ou partes",
+      "Not sure": "Não tenho certeza"
+    },
+    "litigation_stage": {
+      "No, not yet": "Não, ainda não",
+      "Already in court (we filed)": "Já está no tribunal (nós entramos)",
+      "Already in court (we were served)": "Já está no tribunal (fomos citados)",
+      "Not sure": "Não tenho certeza",
+      "A lawyer's letter has been sent": "Já foi enviada uma notificação por advogado"
+    },
+    "litigation_when_event": {
+      "In the last 30 days": "Nos últimos 30 dias",
+      "Within the last 6 months": "Nos últimos 6 meses",
+      "6 months to 2 years ago": "Entre 6 meses e 2 anos atrás",
+      "Over 2 years ago": "Mais de 2 anos atrás",
+      "Not sure": "Não tenho certeza"
+    },
+    "litigation_settlement_attempted": {
+      "No contact yet": "Ainda não houve contato",
+      "Informal conversations only": "Apenas conversas informais",
+      "Demand letters exchanged": "Troca de notificações extrajudiciais",
+      "Mediation attempted, did not resolve": "Houve tentativa de mediação, sem solução",
+      "Settlement offer on the table": "Há uma proposta de acordo na mesa",
+      "Not sure": "Não tenho certeza"
+    },
+    "tenancy_party": {
+      "Landlord": "Locador",
+      "Tenant": "Inquilino",
+      "Property manager": "Administrador do imóvel",
+      "Not sure": "Não tenho certeza"
+    },
+    "tenancy_type": {
+      "Residential (house, condo, apartment)": "Residencial (casa, condo, apartamento)",
+      "Commercial (office, retail, industrial)": "Comercial (escritório, loja, industrial)",
+      "Mixed": "Misto",
+      "Not sure": "Não tenho certeza"
+    },
+    "tenancy_issue": {
+      "Unpaid rent": "Aluguel não pago",
+      "Eviction or possession": "Despejo ou retomada do imóvel",
+      "Lease terms or breach": "Termos do contrato ou descumprimento",
+      "Damage or repairs": "Danos ou reparos",
+      "Illegal use / nuisance": "Uso irregular / perturbação",
+      "Other": "Outro"
+    },
+    "tenancy_amount": {
+      "Under $5,000": "Menos de $5.000",
+      "$5,000–$25,000": "$5.000 a $25.000",
+      "$25,000–$100,000": "$25.000 a $100.000",
+      "Over $100,000": "Mais de $100.000",
+      "Not sure": "Não tenho certeza"
+    },
+    "tenancy_lease_exists": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Verbal only": "Apenas verbal",
+      "Not sure": "Não tenho certeza"
+    },
+    "tenancy_notice_status": {
+      "No, nothing started": "Não, nada foi iniciado",
+      "Formal notice given to the other side": "Notificação formal enviada à outra parte",
+      "I received a formal notice": "Recebi uma notificação formal",
+      "Application filed at the Landlord and Tenant Board": "Processo aberto no Landlord and Tenant Board",
+      "Court action started (commercial)": "Ação judicial iniciada (comercial)",
+      "Not sure": "Não tenho certeza"
+    },
+    "lien_role": {
+      "Property owner": "Proprietário do imóvel",
+      "General contractor": "Construtora responsável",
+      "Subcontractor or trade": "Subempreiteiro ou prestador",
+      "Supplier of materials": "Fornecedor de materiais",
+      "Architect or consultant": "Arquiteto ou consultor",
+      "Not sure": "Não tenho certeza"
+    },
+    "lien_amount": {
+      "Under $25,000": "Menos de $25.000",
+      "$25,000–$100,000": "$25.000 a $100.000",
+      "$100,000–$500,000": "$100.000 a $500.000",
+      "Over $500,000": "Mais de $500.000",
+      "Not sure": "Não tenho certeza"
+    },
+    "lien_last_supply": {
+      "Within the last 60 days": "Nos últimos 60 dias",
+      "60–90 days ago": "Entre 60 e 90 dias atrás",
+      "More than 90 days ago": "Mais de 90 dias atrás",
+      "Does not apply, a lien was registered against my property": "Não se aplica, foi registrado um gravame contra o meu imóvel",
+      "Not sure": "Não tenho certeza"
+    },
+    "lien_preserved": {
+      "Yes, a claim was registered": "Sim, foi registrado",
+      "Yes, registered and a court action started": "Sim, registrado e com ação judicial iniciada",
+      "No, nothing registered yet": "Não, nada foi registrado ainda",
+      "Not sure": "Não tenho certeza"
+    },
+    "lien_documents": {
+      "Yes, all three": "Sim, os três",
+      "Some paperwork, not all": "Parte da documentação, não toda",
+      "It was a verbal agreement": "Foi um acordo verbal",
+      "Not sure": "Não tenho certeza"
+    },
+    "precon_role": {
+      "I am the original buyer": "Sou o comprador original",
+      "I am taking over a unit from someone else": "Estou assumindo a unidade de outra pessoa",
+      "I am selling my unit before closing": "Estou vendendo minha unidade antes do fechamento",
+      "I bought multiple units (investor)": "Comprei várias unidades (investidor)",
+      "Not sure": "Não tenho certeza"
+    },
+    "precon_issue": {
+      "Builder keeps delaying closing": "A construtora continua adiando o fechamento",
+      "Worried about my deposit": "Estou preocupado com o meu depósito",
+      "Trouble selling my unit before closing": "Dificuldade para vender minha unidade antes do fechamento",
+      "New-home warranty issue (Tarion)": "Problema de garantia de imóvel novo (Tarion)",
+      "Reviewing the contract before signing": "Revisar o contrato antes de assinar",
+      "Builder hid problems or misrepresented the unit": "A construtora escondeu problemas ou prestou informação falsa sobre a unidade",
+      "Other": "Outro"
+    },
+    "precon_developer_status": {
+      "Refusing or stalling": "Recusando ou enrolando",
+      "Offering a settlement": "Oferecendo um acordo",
+      "No response": "Sem resposta",
+      "Not sure": "Não tenho certeza"
+    },
+    "precon_amount": {
+      "Under $50,000": "Menos de $50.000",
+      "$50,000–$200,000": "$50.000 a $200.000",
+      "Over $200,000": "Mais de $200.000",
+      "Not sure": "Não tenho certeza"
+    },
+    "precon_documents": {
+      "Yes": "Sim",
+      "No": "Não",
+      "Partial": "Parcial",
+      "Not sure": "Não tenho certeza"
+    },
+    "mortgage_role": {
+      "I am the borrower (property owner)": "Sou o devedor (proprietário do imóvel)",
+      "I am the lender": "Sou o credor",
+      "I co-signed or guaranteed the loan": "Fui coobrigado ou avalista do empréstimo",
+      "I am another involved party": "Sou outra parte envolvida",
+      "Not sure": "Não tenho certeza"
+    },
+    "mortgage_status": {
+      "Lender is threatening to call the mortgage": "O credor está ameaçando vencer a hipoteca antecipadamente",
+      "I received a Notice of Sale": "Recebi um Notice of Sale",
+      "The lender has started the power-of-sale process": "O credor iniciou o processo de power of sale",
+      "Disagreement over refinancing": "Divergência sobre refinanciamento",
+      "Issue with paying off or discharging the mortgage": "Problema para quitar ou baixar a hipoteca",
+      "Other": "Outro"
+    },
+    "mortgage_amount": {
+      "Under $250,000": "Menos de $250.000",
+      "$250,000–$1M": "$250.000 a $1 milhão",
+      "$1M–$5M": "$1 milhão a $5 milhões",
+      "Over $5M": "Mais de $5 milhões",
+      "Not sure": "Não tenho certeza"
+    },
+    "mortgage_lender_type": {
+      "A bank or major institution": "Um banco ou instituição grande",
+      "A private lender": "Um credor privado",
+      "A credit union": "Uma cooperativa de crédito",
+      "A mortgage investment company": "Uma empresa de investimento em hipotecas",
+      "Not sure": "Não tenho certeza"
+    },
+    "mortgage_documents": {
+      "Yes": "Sim",
+      "Some": "Alguns",
+      "No": "Não",
+      "Not sure": "Não tenho certeza"
+    },
+    "reported_to_anyone": {
+      "Yes, reported": "Sim, foi reportado",
+      "No, not yet": "Não, ainda não",
+      "In progress": "Em andamento",
+      "Not sure": "Não tenho certeza"
+    },
+    "desired_outcome_money_control": {
+      "Recover the missing money": "Recuperar o dinheiro desviado",
+      "Stop the misuse": "Impedir o uso indevido",
+      "Internal investigation": "Investigação interna",
+      "Report to authorities": "Comunicar às autoridades",
+      "Not sure": "Não tenho certeza"
     }
   },
   "summary": {
@@ -448,7 +1111,6 @@
   },
   "prompts": {
     "numbered_reply_hint": "Responda com um número, ou escreva com suas próprias palavras.",
-    "intake_expectation": "Leva uns cinco minutos. Um advogado analisa o que você compartilhar e entra em contato diretamente se o seu caso se encaixar na atuação do escritório.",
     "multi_pick_ack": "Certo, registrei sua primeira escolha. Pode acrescentar o resto com suas próprias palavras quando quiser."
   },
   "bridge_text": {},
@@ -488,7 +1150,19 @@
     "done_body_template": "Um advogado em {firmName} vai ler o que você compartilhou e entrar em contato diretamente para conversar sobre a parte jurídica.",
     "free_text_other_label": "Outra coisa (vou explicar)",
     "status_submitted": "enviado",
-    "didnt_catch": "Desculpe, não consegui entender sua última resposta. Pode confirmar respondendo com o número da opção que se encaixa melhor?",
+    "didnt_catch": "Obrigado, quero ter certeza de registrar isso corretamente. Pode responder com o número da opção que mais se encaixa?",
+    "intro_first_ask": "Obrigado por entrar em contato. Para que um advogado possa avaliar a sua situação, vou fazer algumas perguntas rápidas. Você pode responder com o número de uma opção ou escrever com suas próprias palavras.",
+    "describe_situation": "Obrigado por entrar em contato. Antes de um advogado revisar isso, pode descrever em uma ou duas frases do que se trata a sua situação?",
+    "describe_situation_short": "Para começar, pode descrever em uma ou duas frases do que se trata a sua situação?",
+    "contact_capture_first_ask_name": "Primeiro, qual nome o escritório deve usar para entrar em contato?",
+    "contact_capture_first_ask_reachability": "Primeiro, qual é o melhor telefone ou e-mail para o escritório entrar em contato com você?",
+    "contact_capture_first_ask_both": "Primeiro, pode compartilhar seu nome e o melhor telefone ou e-mail para o escritório entrar em contato com você?",
+    "contact_capture_followup_name": "Entendido. Antes de encaminhar isso ao escritório, qual nome eles devem usar para entrar em contato?",
+    "contact_capture_followup_reachability": "Entendido. Qual é o melhor telefone ou e-mail para o escritório entrar em contato com você?",
+    "contact_capture_followup_both": "Entendido. Antes de encaminhar isso ao escritório, pode compartilhar seu nome e o melhor telefone ou e-mail para eles entrarem em contato com você?",
+    "contact_capture_exhausted_name": "Obrigado pelas mensagens. O escritório precisa de um nome para poder retornar o contato. Responda quando estiver pronto e eu encaminho a informação.",
+    "contact_capture_exhausted_reachability": "Obrigado pelas mensagens. O escritório precisa do melhor telefone ou e-mail para entrar em contato antes de poder retornar. Responda quando estiver pronto e eu encaminho a informação.",
+    "contact_capture_exhausted_both": "Obrigado pelas mensagens. O escritório precisa do seu nome e do melhor telefone ou e-mail para entrar em contato antes de poder retornar. Responda quando estiver pronto e eu encaminho a informação.",
     "voice_hint": "fale a sua resposta em vez de digitar",
     "clarify_heading": "Mais alguns detalhes?",
     "clarify_body_1": "Pode compartilhar um pouco mais sobre o que está acontecendo? Uma frase curta já basta. Áreas comuns: abertura de empresa, contratos, imóveis, testamentos e heranças, e questões trabalhistas.",

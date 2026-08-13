@@ -11,7 +11,7 @@ vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: {} }));
 vi.mock("@/lib/portal-auth", () => ({ getOperatorSession: async () => null }));
 
 import { scoreItems, computeWeightedScore, aiScoresFromItems, type CheckItem, type CategoryResult } from "../engine-core";
-import { aggregateCategories } from "../route";
+import { aggregateCategories } from "../page-checks";
 import type { PageResult, Indexability, SchemaSummary, LawFirmSignals } from "../analysis";
 import type { PageType } from "../engine-core";
 

@@ -18,9 +18,15 @@ const DELIV = "22222222-2222-2222-2222-222222222222";
 
 type Actor = { role: string; id: string | null; name: string | null; email: string | null } | null;
 
-const state: { actor: Actor; detail: unknown; uploadArgs: Record<string, unknown> | null } = {
+const state: {
+  actor: Actor;
+  detail: unknown;
+  detailReadError: boolean;
+  uploadArgs: Record<string, unknown> | null;
+} = {
   actor: null,
   detail: null,
+  detailReadError: false,
   uploadArgs: null,
 };
 
@@ -30,7 +36,14 @@ vi.mock("@/lib/deliverables-auth", () => ({
 }));
 
 vi.mock("@/lib/deliverables", () => ({
-  getDeliverableDetail: () => Promise.resolve(state.detail),
+  getDeliverableDetail: () =>
+    Promise.resolve(
+      state.detailReadError
+        ? { ok: false, error: "mock read error" }
+        : state.detail === null
+          ? { ok: true, found: false }
+          : { ok: true, found: true, detail: state.detail },
+    ),
   uploadDeliverableFeedbackAsset: (args: Record<string, unknown>) => {
     state.uploadArgs = args;
     return Promise.resolve({ ok: true, storagePath: `deliverables/${FIRM}/${DELIV}/feedback/uuid-shot.png` });
@@ -60,6 +73,7 @@ const PNG_HEADER = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0
 beforeEach(() => {
   state.actor = OPERATOR;
   state.detail = makeDetail();
+  state.detailReadError = false;
   state.uploadArgs = null;
 });
 

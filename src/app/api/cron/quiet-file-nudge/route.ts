@@ -27,11 +27,39 @@
  *
  * Scheduling: pg_cron job 'quiet-file-nudge-daily', defined in the DRAFT
  * migration supabase/migrations-draft/20260702_quiet_file_nudge_cron_schedule.sql.
- * NOT YET APPLIED to prod (deliberately held back until the operator runs
- * this route manually at least once and confirms the output). The backing
- * schema (matter_milestone / matter_milestone_note / quiet_nudge_sent_at)
- * IS applied, so the route is callable and functionally correct today;
- * it just is not on a schedule yet.
+ * NOT YET APPLIED to prod, deliberately held back pending operator
+ * verification. The backing schema (matter_milestone / matter_milestone_note
+ * / quiet_nudge_sent_at) IS applied, so the route is callable and
+ * functionally correct today; it just is not on a schedule yet.
+ *
+ * HOW TO VERIFY BEFORE SCHEDULING — do NOT do it by calling this route.
+ * This route is not read-only: it inserts notification_outbox rows and
+ * stamps quiet_nudge_sent_at. The notification-batch-5m pg_cron job drains
+ * that outbox every 5 minutes and sends real email via Resend (this event
+ * type renders as 'Quiet file: update due'), so a "quick test call" puts
+ * live mail in lawyers' inboxes and burns the suppression window. Preview
+ * the selection with this read-only query instead, which mirrors the
+ * filter below:
+ *
+ *   WITH active AS (
+ *     SELECT id, lead_id, assignee_ids, quiet_nudge_sent_at
+ *     FROM client_matters WHERE matter_stage = 'active'),
+ *   last_msg AS (
+ *     SELECT matter_id, MAX(created_at) AS last_sent FROM matter_messages
+ *     WHERE channel_type = 'client' AND sender_role = 'admin'
+ *     GROUP BY matter_id)
+ *   SELECT a.id, l.last_sent FROM active a
+ *   LEFT JOIN last_msg l ON l.matter_id = a.id
+ *   WHERE (l.last_sent IS NULL OR l.last_sent < now() - interval '10 days')
+ *     AND (a.quiet_nudge_sent_at IS NULL
+ *          OR a.quiet_nudge_sent_at < now() - interval '7 days');
+ *
+ * Keep the intervals in that query in step with QUIET_FILE_DAYS and
+ * QUIET_NUDGE_SUPPRESSION_DAYS below.
+ *
+ * As of 2026-08-07 that query returns nothing: client_matters is empty, so
+ * there is no live matter to verify against and nothing for a schedule to
+ * act on. Revisit when the portal carries its first active matter.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

@@ -140,7 +140,11 @@ export async function POST(req: NextRequest) {
 
   const token = generatePortalToken(firmId, { role, lawyer_id: lawyerId });
   const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN;
+  const previewOrigin = process.env.VERCEL_ENV === "preview" && process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : null;
   const origin =
+    previewOrigin ??
     (appDomain ? `https://app.${appDomain}` : null) ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
   const magicLink = `${origin}/api/portal/login?token=${encodeURIComponent(token)}`;

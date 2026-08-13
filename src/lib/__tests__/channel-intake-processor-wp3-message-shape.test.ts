@@ -1,8 +1,15 @@
 /**
  * WP-3 message shape (2026-08-13, field case 2026-08-07): the numbered
- * reply hint on every single_select discovery question, the intake
- * expectation line on the first outbound of a fresh session only, and
- * the multi-pick acknowledgment.
+ * reply hint on every single_select discovery question, and the
+ * multi-pick acknowledgment.
+ *
+ * WP-3b (an expectation line on the first outbound of a fresh session)
+ * was dropped at merge time: main's C2 first-ask intro (2026-08-07,
+ * channel-intake-intro.ts) shipped the same feature first, with PT
+ * coverage and its own processor-level test
+ * (channel-intake-processor-first-ask-intro.test.ts). That test owns
+ * fresh-vs-resume intro coverage; this file covers only the two DR-121
+ * message-shape features that survived the merge.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -144,83 +151,6 @@ describe('WP-3a: numbered reply hint', () => {
     });
     const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
     expect(sentText).toContain('Reply with a number, or answer in your own words.');
-  });
-});
-
-describe('WP-3b: intake expectation line', () => {
-  it('appears on the first outbound of a fresh session (discovery-question path)', async () => {
-    await processChannelInbound({
-      firmId: FIRM_ID,
-      text: VENDOR_DISPUTE_270_CHAR,
-      sender: whatsappSender('A D'),
-    });
-    const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
-    expect(sentText).toContain('This takes about five minutes.');
-  });
-
-  it('appears on the first outbound of a fresh session (contact-capture-followup path)', async () => {
-    // No name/phone signal in the text and a weak WhatsApp profile name,
-    // so the contact gate fails on turn 1 and the follow-up fires first.
-    await processChannelInbound({
-      firmId: FIRM_ID,
-      text: 'i want to speak to a lawyer about my business',
-      sender: whatsappSender('WhatsApp User'),
-    });
-    const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
-    expect(sentText).toContain('This takes about five minutes.');
-  });
-
-  it('does NOT repeat on a resume turn', async () => {
-    mocks.loadOpenChannelSession.mockResolvedValueOnce({
-      id: 'session-resume-wp3',
-      firm_id: FIRM_ID,
-      channel: 'whatsapp',
-      sender_id: '16475492106',
-      engine_state: {
-        input: VENDOR_DISPUTE_270_CHAR,
-        practice_area: 'corporate',
-        matter_type: 'vendor_supplier_dispute',
-        intent_family: 'business_dispute',
-        dispute_family: 'vendor_supplier',
-        advisory_subtrack: 'unknown',
-        slots: {
-          client_name: 'Adriano',
-          client_phone: '+16475492106',
-          amount_at_stake: '$25,000–$100,000',
-        },
-        slot_meta: {
-          client_name: { source: 'explicit', confidence: 0.95 },
-          client_phone: { source: 'answered', confidence: 1.0 },
-          amount_at_stake: { source: 'answered', confidence: 1.0 },
-        },
-        slot_evidence: {},
-        raw: rawSignals(),
-        confidence: 0,
-        coreCompleteness: 0,
-        answeredQuestionGroups: [],
-        questionHistory: ['amount_at_stake'],
-        insightShown: false,
-        contactCaptureStarted: true,
-        lead_id: 'L-wp3-resume',
-        submitted_at: '2026-08-07T00:00:00.000Z',
-        language: 'en',
-        discoveryFollowUpCount: 1,
-      },
-      follow_up_count: 0,
-      max_follow_ups: 3,
-      finalized: false,
-      expires_at: '2026-08-08T00:00:00.000Z',
-      created_at: '2026-08-07T00:00:00.000Z',
-    } as never);
-
-    await processChannelInbound({
-      firmId: FIRM_ID,
-      text: 'The invoice exists in writing.',
-      sender: whatsappSender('Adriano'),
-    });
-
-    const sentText = mocks.sendChannelMessage.mock.calls[0][0].text as string;
-    expect(sentText).not.toContain('This takes about five minutes.');
   });
 });
 

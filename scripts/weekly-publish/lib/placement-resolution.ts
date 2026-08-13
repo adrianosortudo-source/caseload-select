@@ -1,6 +1,6 @@
 /**
  * Pure resolution logic for whether a website article's two placement roles
- * (website_article_hero_overlay, website_homepage_cta_textless) are actually
+ * (website_article_hero_baked, website_homepage_cta_baked) are actually
  * filled -- i.e. whether the operator's Publish Kit placement cards would
  * render an image or "No image registered for this placement."
  *
@@ -35,10 +35,19 @@ export interface RoleAssignmentRow {
 
 /** The two roles a website article deliverable must have filled. */
 export const REQUIRED_ARTICLE_PLACEMENT_ROLES = [
-  "website_article_hero_overlay",
-  "website_homepage_cta_textless",
+  "website_article_hero_baked",
+  "website_homepage_cta_baked",
 ] as const;
 export type ArticlePlacementRole = (typeof REQUIRED_ARTICLE_PLACEMENT_ROLES)[number];
+
+const LEGACY_ROLE_ALIASES: Record<string, ArticlePlacementRole> = {
+  website_article_hero_overlay: "website_article_hero_baked",
+  website_homepage_cta_textless: "website_homepage_cta_baked",
+};
+
+function normalizeRole(role: string): string {
+  return LEGACY_ROLE_ALIASES[role] ?? role;
+}
 
 /**
  * The effective role for one artifact: its own asset_role column when set,
@@ -54,9 +63,9 @@ export function resolveEffectiveRole(
   artifact: Pick<ArtifactRow, "id" | "assetRole">,
   assignments: RoleAssignmentRow[],
 ): string | null {
-  if (artifact.assetRole) return artifact.assetRole;
+  if (artifact.assetRole) return normalizeRole(artifact.assetRole);
   const active = assignments.find((a) => a.artifactId === artifact.id && !a.supersededAt);
-  return active ? active.assetRole : null;
+  return active ? normalizeRole(active.assetRole) : null;
 }
 
 export interface MissingPlacementResult {

@@ -61,18 +61,35 @@ describe("ScreenEnginePublicWidget.slotToItem: language-aware rendering", () => 
     expect(labels).toContain("Starting a new business");
   });
 
-  it("falls back to English when a PT lead hits an out-of-scope matter type", () => {
-    // Employment Phase B is intentionally NOT in the launch-week PT
-    // scope; a PT lead with a wrongful_dismissal classification gets
-    // English question text. Tested via 'tenure_band' (wrongful_
-    // dismissal slot, not in pt.json).
-    const slot = findSlot("tenure_band");
+  it("falls back to English for a slot the PT bundle does not carry", () => {
+    // The employment / estates / real-estate lanes are now fully translated,
+    // so this no longer has a real untranslated slot to point at. The
+    // BEHAVIOUR still matters (any future untranslated slot must degrade to
+    // English rather than render blank), so it is tested against a synthetic
+    // slot instead of whichever lane happens to be uncovered this month.
+    const slot = { ...findSlot("tenure_band"), id: "__untranslated_slot__" };
     const i18n = getI18n("pt");
     const item = slotToItem(slot, "pt", i18n);
 
     // Question text falls back to the English source from slotRegistry.
     expect(item.question).toBe(slot.question);
     expect(item.question).not.toContain("Você");
+  });
+
+  it("renders a real employment slot in Portuguese now that the lane is covered", () => {
+    // The positive counterpart to the fallback test above: the lane the
+    // DR-112 clarify menu routes a PT lead into must actually speak PT.
+    const slot = findSlot("tenure_band");
+    const i18n = getI18n("pt");
+    const item = slotToItem(slot, "pt", i18n);
+
+    expect(item.question).toContain("Por quanto tempo");
+    expect(item.question).not.toBe(slot.question);
+    const labels = item.options?.map((o) => o.label) ?? [];
+    expect(labels).toContain("Menos de 1 ano");
+    // Canonical English values must survive translation (DR-036).
+    const values = item.options?.map((o) => o.value) ?? [];
+    expect(values).toContain("Less than 1 year");
   });
 });
 

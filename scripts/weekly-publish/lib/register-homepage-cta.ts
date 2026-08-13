@@ -1,5 +1,5 @@
 /**
- * Registers the website_homepage_cta_textless placement for each article,
+ * Registers the website_homepage_cta_baked placement for each article,
  * uploading the homepage-feature crop and inserting a NEW publication_
  * artifacts row that carries the role directly on the row (not via
  * assignment).
@@ -29,7 +29,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { HomepageCtaRowConfig, WeekConfig } from "../config";
 
 const BUCKET = "firm-files";
-const ROLE = "website_homepage_cta_textless";
+const ROLE = "website_homepage_cta_baked";
 
 export interface RegisterHomepageCtaRowResult {
   label: string;

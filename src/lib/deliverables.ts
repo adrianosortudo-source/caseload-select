@@ -18,6 +18,7 @@ import type {
   ContentDeliverable,
   ContentPeriod,
   ContentPlanSettings,
+  StrategyBrief,
   DeliverableVersion,
   DeliverableComment,
   ApprovalRecord,
@@ -27,6 +28,7 @@ import type {
   DeliverableAnnotation,
   ApprovalDecision,
 } from "@/lib/types";
+import { parseStrategyBrief } from "@/lib/strategy-brief";
 import {
   statusAfterNewVersion,
   statusAfterDecision,
@@ -126,6 +128,15 @@ export interface ContentPlanData {
   settings: ContentPlanSettings | null; // operator batch note + custom deadline
 }
 
+function mapContentPeriod(row: Record<string, unknown>): ContentPeriod {
+  const parsed = parseStrategyBrief(row.strategy_brief);
+  const { strategy_brief: _strategyBrief, ...period } = row;
+  return {
+    ...(period as Omit<ContentPeriod, "strategyBrief">),
+    strategyBrief: parsed === "invalid" ? null : parsed,
+  };
+}
+
 export async function getContentPlan(
   firmId: string,
   options: { includeArchived?: boolean } = {},
@@ -133,7 +144,7 @@ export async function getContentPlan(
   let dq = supabase
     .from("content_deliverables")
     .select(
-      "id, title, kicker, status, content_kind, format, period_id, publish_date, published_at, current_version_id",
+      "id, title, kicker, status, content_kind, format, locale, deliverable_role, publication_destination, period_id, publish_date, published_at, current_version_id",
     )
     .eq("firm_id", firmId);
   if (!options.includeArchived) dq = dq.neq("status", "archived");
@@ -189,16 +200,20 @@ export async function getContentPlan(
     status: d.status,
     content_kind: d.content_kind,
     format: d.format,
+    locale: d.locale,
+    deliverable_role: d.deliverable_role,
+    publication_destination: d.publication_destination,
     period_id: d.period_id,
     publish_date: d.publish_date,
     published_at: d.published_at,
+    current_version_id: d.current_version_id,
     requires_individual_review: d.current_version_id
       ? (flagByVersionId.get(d.current_version_id) ?? false)
       : false,
   }));
 
   return {
-    periods: (periodsRes.data ?? []) as ContentPeriod[],
+    periods: (periodsRes.data ?? []).map((row) => mapContentPeriod(row as Record<string, unknown>)),
     deliverables,
     settings: (settingsRes.data ?? null) as ContentPlanSettings | null,
   };
@@ -233,8 +248,9 @@ export async function createPeriod(input: {
   /** null = not a numbered publishing week. */
   weekNumber?: number | null;
   theme: string | null;
-  details: string | null;
-  rationale: string | null;
+  details?: string | null;
+  rationale?: string | null;
+  strategyBrief: StrategyBrief;
   actor: DeliverableActor;
 }): Promise<{ ok: true; period: ContentPeriod } | { ok: false; error: string }> {
   const { data, error } = await supabase
@@ -245,15 +261,16 @@ export async function createPeriod(input: {
       ends_on: input.endsOn,
       week_number: input.weekNumber ?? null,
       theme: input.theme,
-      details: input.details,
-      rationale: input.rationale,
+      details: input.details ?? null,
+      rationale: input.rationale ?? null,
+      strategy_brief: input.strategyBrief,
       created_by_role: input.actor.role,
       created_by_id: input.actor.id ?? null,
     })
     .select("*")
     .single();
   if (error) return { ok: false, error: `create period failed: ${error.message}` };
-  return { ok: true, period: data as ContentPeriod };
+  return { ok: true, period: mapContentPeriod(data as Record<string, unknown>) };
 }
 
 export async function updatePeriod(input: {
@@ -268,13 +285,20 @@ export async function updatePeriod(input: {
       | "theme"
       | "details"
       | "rationale"
+      | "strategyBrief"
       | "sort_index"
     >
   >;
 }): Promise<{ ok: true; period: ContentPeriod } | { ok: false; error: string }> {
+  const { strategyBrief, ...periodPatch } = input.patch;
+  const dbPatch = {
+    ...periodPatch,
+    ...(strategyBrief !== undefined ? { strategy_brief: strategyBrief } : {}),
+    updated_at: new Date().toISOString(),
+  };
   const { data, error } = await supabase
     .from("content_periods")
-    .update({ ...input.patch, updated_at: new Date().toISOString() })
+    .update(dbPatch)
     .eq("id", input.periodId)
     .eq("firm_id", input.firmId)
     .select("*")
@@ -292,7 +316,7 @@ export async function updatePeriod(input: {
     return { ok: false, error: error.message };
   }
   if (!data) return { ok: false, error: "period not found for this firm" };
-  return { ok: true, period: data as ContentPeriod };
+  return { ok: true, period: mapContentPeriod(data as Record<string, unknown>) };
 }
 
 export async function deletePeriod(input: {
@@ -467,19 +491,43 @@ export interface DeliverableDetail {
   versions: DeliverableVersion[]; // newest first, assets signed
   comments: DeliverableComment[]; // chronological
   approvals: ApprovalRecord[]; // newest first
+  // Release-integrity item 1 (2026-07-12): true when the corresponding table
+  // read errored rather than genuinely returning zero rows. A caller that
+  // trusts an empty array without checking these flags cannot tell "nothing
+  // here" from "the read failed" -- the exact silent-failure class the Codex
+  // audit found breaking the DR-085 version-to-change-request link.
+  versionsError: boolean;
+  commentsError: boolean;
+  approvalsError: boolean;
 }
+
+// Release-integrity item 1: getDeliverableDetail now returns a 3-state
+// discriminated union instead of DeliverableDetail | null, so a Supabase
+// query error can no longer collapse into the same falsy shape as a
+// genuinely nonexistent deliverable. Callers MUST distinguish ok:false (a
+// read errored, fail closed, do not treat as not-found) from found:false
+// (the row genuinely does not exist, safe to 404).
+export type DeliverableDetailResult =
+  | { ok: true; found: true; detail: DeliverableDetail }
+  | { ok: true; found: false }
+  | { ok: false; error: string };
 
 export async function getDeliverableDetail(
   deliverableId: string,
-): Promise<DeliverableDetail | null> {
-  const { data: deliverable } = await supabase
+): Promise<DeliverableDetailResult> {
+  const { data: deliverable, error: deliverableErr } = await supabase
     .from("content_deliverables")
     .select("*")
     .eq("id", deliverableId)
     .maybeSingle();
-  if (!deliverable) return null;
+  if (deliverableErr) return { ok: false, error: deliverableErr.message };
+  if (!deliverable) return { ok: true, found: false };
 
-  const [{ data: versions }, { data: comments }, { data: approvals }] = await Promise.all([
+  const [
+    { data: versions, error: versionsErr },
+    { data: comments, error: commentsErr },
+    { data: approvals, error: approvalsErr },
+  ] = await Promise.all([
     supabase
       .from("deliverable_versions")
       .select("*")
@@ -502,10 +550,17 @@ export async function getDeliverableDetail(
   const signedApprovals = await signApprovalAttachments((approvals ?? []) as ApprovalRecord[]);
 
   return {
-    deliverable: deliverable as ContentDeliverable,
-    versions: signedVersions,
-    comments: signedComments,
-    approvals: signedApprovals,
+    ok: true,
+    found: true,
+    detail: {
+      deliverable: deliverable as ContentDeliverable,
+      versions: signedVersions,
+      comments: signedComments,
+      approvals: signedApprovals,
+      versionsError: !!versionsErr,
+      commentsError: !!commentsErr,
+      approvalsError: !!approvalsErr,
+    },
   };
 }
 

@@ -74,6 +74,20 @@
  *       run up the bill against a single firm while staying under a
  *       global-IP ceiling.
  *
+ *   designCheck        8 per 10 minutes
+ *     - /api/tools/website-design-check. Public. Each call launches a
+ *       real headless-browser render at two viewports plus two Anthropic
+ *       vision calls; same bucket size as seoCheck, whose own real crawl
+ *       cost this mirrors.
+ *
+ *   firmVoiceBuilder   20 per minute
+ *     - POST /api/tools/firm-voice-builder/turn. Public, same-origin, no
+ *       auth, no firmId scoping (standalone tool, not per-client-firm).
+ *       Each call is one Gemini generation. A real interview runs roughly
+ *       25+ turns over about 25 minutes, so 20/min/IP is generous for a
+ *       genuine session while still bounding a scripted loop's Gemini
+ *       spend. Identity is the IP alone.
+ *
  *   memo              60 per minute
  *     - /api/memo/[sessionId]. Read-only lookup by session UUID, no
  *       write cost. Two callers share this route: the widget polls it
@@ -100,6 +114,17 @@
  *       (one operator, occasional Discovery interviews), so the cap is
  *       purely an abuse backstop.
  *
+ *   startConversation  10 per 10 minutes
+ *     - POST /api/start-conversation. Public, same-origin, no auth (the
+ *       flow's own tool page embeds it, and static-site conversation.html
+ *       frames that page). Each successful call writes a caseload_prospects
+ *       row plus a consent-log row and sends a Resend brief to Adriano.
+ *       Fail-closed (see FAIL_CLOSED_BUCKETS below): unlike intake or
+ *       seoCheck, this route protects CaseLoad Select's OWN inbox from
+ *       being flooded, not a client firm's, so an unconfigured limiter
+ *       should deny rather than silently let scripted spam through to
+ *       Adriano's email.
+ *
  * Per-route bucket selection is done by the caller. Caller passes the
  * bucket name + the IP. We never trust the request body for IP
  * resolution; the helper reads x-forwarded-for and x-real-ip in that
@@ -125,9 +150,12 @@ export type RateLimitBucket =
   | "otpVerify"
   | "seoCheck"
   | "assist"
+  | "designCheck"
+  | "firmVoiceBuilder"
   | "memo"
   | "screenDemoReport"
-  | "discoveryReport";
+  | "discoveryReport"
+  | "startConversation";
 
 interface BucketConfig {
   limit: number;
@@ -146,9 +174,12 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   otpVerify:      { limit: 10, windowSeconds: 600 },   // 10 per 10 minutes
   seoCheck:       { limit: 8,  windowSeconds: 600 },   // 8 per 10 minutes (public, unauth only)
   assist:         { limit: 8,  windowSeconds: 60 },    // 8 per minute (public, unauth, per firmId:ip)
+  designCheck:    { limit: 8,  windowSeconds: 600 },   // 8 per 10 minutes (public, unauth only)
+  firmVoiceBuilder: { limit: 20, windowSeconds: 60 },  // 20 per minute (public, unauth, per ip)
   memo:              { limit: 60, windowSeconds: 60 },   // 60 per minute (read-only, widget + portal)
   screenDemoReport:  { limit: 10, windowSeconds: 3600 }, // 10 per hour (public marketing form)
   discoveryReport:   { limit: 20, windowSeconds: 3600 }, // 20 per hour (ChatGPT Action caller)
+  startConversation: { limit: 10, windowSeconds: 600 },  // 10 per 10 minutes (public, unauth, fail-closed)
 };
 
 /**
@@ -260,6 +291,17 @@ const FAIL_CLOSED_BUCKETS: ReadonlySet<RateLimitBucket> = new Set<RateLimitBucke
   "requestLink",
   "otpSend",
   "otpVerify",
+  // startConversation (2026-08-07): unlike intake/seoCheck, this route
+  // protects CaseLoad Select's OWN inbox, not a client firm's -- an
+  // unconfigured limiter must deny rather than let scripted spam through
+  // to Adriano's email. See the bucket's own doc comment above.
+  "startConversation",
+  // designCheck: public, unauthenticated, and each request costs two real
+  // headless-browser renders plus two Gemini vision calls. A fail-open
+  // limiter on this route means the 8-per-10-minute cap silently does not
+  // exist whenever UPSTASH_* is unset, on the single most expensive
+  // public endpoint in the app.
+  "designCheck",
 ]);
 
 function failClosedMode(): boolean {

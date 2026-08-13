@@ -52,50 +52,50 @@ const ROWS: Row[] = [
     expectedPath: "individual_approval",
   },
   {
-    name: "Scenario B: no individual approval, standing authorization active, requires_individual_review=false -> authorized via standing authorization",
-    input: { deliverableStatus: "draft", approvedVersionId: null, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: false, standingAuthorizationActive: true },
+    name: "Scenario B: no individual approval, in_review standing authorization active, requires_individual_review=false -> authorized via standing authorization",
+    input: { deliverableStatus: "in_review", approvedVersionId: null, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: false, standingAuthorizationActive: true },
     expectedKind: "standing_authorization",
     expectedAuthorized: true,
     expectedPath: "standing_authorization",
   },
   {
     name: "Scenario C: no individual approval, standing authorization active, but requires_individual_review=true -> blocked (the exception is absolute)",
-    input: { deliverableStatus: "draft", approvedVersionId: null, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: true, standingAuthorizationActive: true },
+    input: { deliverableStatus: "in_review", approvedVersionId: null, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: true, standingAuthorizationActive: true },
     expectedKind: "blocked_requires_individual_review",
     expectedAuthorized: false,
     expectedPath: null,
   },
   {
     name: "requires_individual_review blocks even when standing authorization is ALSO inactive",
-    input: { deliverableStatus: "draft", approvedVersionId: null, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: true, standingAuthorizationActive: false },
+    input: { deliverableStatus: "in_review", approvedVersionId: null, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: true, standingAuthorizationActive: false },
     expectedKind: "blocked_requires_individual_review",
     expectedAuthorized: false,
     expectedPath: null,
   },
   {
     name: "Scenario E: stale approval (approved_version_id references another version), standing authorization inactive -> blocked, never called approved",
-    input: { deliverableStatus: "approved", approvedVersionId: OTHER_VERSION_ID, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: false, standingAuthorizationActive: false },
+    input: { deliverableStatus: "in_review", approvedVersionId: OTHER_VERSION_ID, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: false, standingAuthorizationActive: false },
     expectedKind: "approved_version_mismatch",
     expectedAuthorized: false,
     expectedPath: null,
   },
   {
     name: "Scenario F: stale approval PLUS valid standing authorization -> authorized through standing authorization, NOT individual approval",
-    input: { deliverableStatus: "approved", approvedVersionId: OTHER_VERSION_ID, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: false, standingAuthorizationActive: true },
+    input: { deliverableStatus: "in_review", approvedVersionId: OTHER_VERSION_ID, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: false, standingAuthorizationActive: true },
     expectedKind: "standing_authorization",
     expectedAuthorized: true,
     expectedPath: "standing_authorization",
   },
   {
     name: "Stale approval + requires_individual_review=true + standing active -> still blocked (review overrides, and the stale approval never qualifies as Path A)",
-    input: { deliverableStatus: "approved", approvedVersionId: OTHER_VERSION_ID, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: true, standingAuthorizationActive: true },
+    input: { deliverableStatus: "in_review", approvedVersionId: OTHER_VERSION_ID, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: true, standingAuthorizationActive: true },
     expectedKind: "blocked_requires_individual_review",
     expectedAuthorized: false,
     expectedPath: null,
   },
   {
     name: "Scenario G: never individually approved, standing authorization inactive/revoked -> blocked",
-    input: { deliverableStatus: "draft", approvedVersionId: null, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: false, standingAuthorizationActive: false },
+    input: { deliverableStatus: "in_review", approvedVersionId: null, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: false, standingAuthorizationActive: false },
     expectedKind: "standing_authorization_inactive",
     expectedAuthorized: false,
     expectedPath: null,
@@ -112,7 +112,7 @@ const ROWS: Row[] = [
     // invariant, so its own reason text must stay accurate regardless.
     name: "approved_version_id matches the target version, but deliverableStatus is not \"approved\" -> blocked, reason must not claim an ID mismatch that isn't real",
     input: { deliverableStatus: "draft", approvedVersionId: TARGET_VERSION_ID, targetVersionId: TARGET_VERSION_ID, versionRequiresIndividualReview: false, standingAuthorizationActive: false },
-    expectedKind: "approved_version_mismatch",
+    expectedKind: "blocked_standing_status",
     expectedAuthorized: false,
     expectedPath: null,
   },
@@ -135,7 +135,7 @@ describe("isVersionReleaseAuthorized: full two-path decision-tree matrix", () =>
 
   it("reason text never describes a standing-authorized version as individually approved", () => {
     const result = isVersionReleaseAuthorized({
-      deliverableStatus: "draft",
+      deliverableStatus: "in_review",
       approvedVersionId: null,
       targetVersionId: TARGET_VERSION_ID,
       versionRequiresIndividualReview: false,
@@ -171,7 +171,7 @@ describe("isVersionReleaseAuthorized: full two-path decision-tree matrix", () =>
     expect(individualResult.reason).toMatch(/Release-authorized through individual version approval/);
 
     const standingResult = isVersionReleaseAuthorized({
-      deliverableStatus: "draft",
+      deliverableStatus: "in_review",
       approvedVersionId: null,
       targetVersionId: TARGET_VERSION_ID,
       versionRequiresIndividualReview: false,
@@ -188,7 +188,7 @@ describe("isVersionReleaseAuthorized: full two-path decision-tree matrix", () =>
       versionRequiresIndividualReview: false,
       standingAuthorizationActive: false,
     });
-    expect(result.kind).toBe("approved_version_mismatch");
+    expect(result.kind).toBe("blocked_standing_status");
     expect(result.authorized).toBe(false);
     expect(result.reason).not.toMatch(/does not match/);
     expect(result.reason).toMatch(/matches the evaluated version/);
@@ -206,5 +206,30 @@ describe("isVersionReleaseAuthorized: full two-path decision-tree matrix", () =>
     expect(result.kind).toBe("blocked_requires_individual_review");
     expect(result.reason).not.toMatch(/does not match/);
     expect(result.reason).toMatch(/matches the evaluated version/);
+  });
+
+  it.each(["draft", "changes_requested", "archived"])('standing authorization fails closed for %s', (deliverableStatus) => {
+    const result = isVersionReleaseAuthorized({
+      deliverableStatus,
+      approvedVersionId: null,
+      targetVersionId: TARGET_VERSION_ID,
+      versionRequiresIndividualReview: false,
+      standingAuthorizationActive: true,
+    });
+    expect(result.kind).toBe("blocked_standing_status");
+    expect(result.authorized).toBe(false);
+  });
+
+  it("an unresolved client change hold blocks either authorization path", () => {
+    const result = isVersionReleaseAuthorized({
+      deliverableStatus: "approved",
+      approvedVersionId: TARGET_VERSION_ID,
+      targetVersionId: TARGET_VERSION_ID,
+      versionRequiresIndividualReview: false,
+      standingAuthorizationActive: true,
+      hasUnresolvedClientChangeHold: true,
+    });
+    expect(result.kind).toBe("blocked_client_change_hold");
+    expect(result.authorized).toBe(false);
   });
 });

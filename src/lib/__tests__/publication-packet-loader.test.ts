@@ -77,6 +77,10 @@ vi.mock("@/lib/standing-publishing-authorization", () => ({
   getStandingAuthorizationState: () => Promise.resolve(state.standingAuthorization),
 }));
 
+vi.mock("@/lib/deliverable-client-change-holds", () => ({
+  loadUnresolvedClientChangeHoldDeliverableIds: () => Promise.resolve(new Set<string>()),
+}));
+
 import { loadPublicationPacketsForPeriod } from "../publication-packet-loader";
 
 function baseDeliverable(overrides: Row = {}): Row {
@@ -381,14 +385,14 @@ describe("loadPublicationPacketsForPeriod: period summary (mutually exclusive bu
 
 describe("loadPublicationPacketsForPeriod: standing authorization threading", () => {
   it("active standing authorization is threaded through to legal_authorized, matching isVersionReleaseAuthorized's own path B", async () => {
-    state.deliverables = [baseDeliverable({ status: "draft", approved_version_id: null })];
+    state.deliverables = [baseDeliverable({ status: "in_review", approved_version_id: null })];
     state.standingAuthorization = { active: true };
     const result = await loadPublicationPacketsForPeriod(PERIOD_ID, FIRM_ID, { siteOrigin: "https://drglaw.ca" });
     expect(result!.packets[0].legalAuthorized).toBe(true);
   });
 
   it("getStandingAuthorizationState returning null resolves to inactive, never assumed true", async () => {
-    state.deliverables = [baseDeliverable({ status: "draft", approved_version_id: null })];
+    state.deliverables = [baseDeliverable({ status: "in_review", approved_version_id: null })];
     state.standingAuthorization = null;
     const result = await loadPublicationPacketsForPeriod(PERIOD_ID, FIRM_ID, { siteOrigin: "https://drglaw.ca" });
     expect(result!.packets[0].legalAuthorized).toBe(false);

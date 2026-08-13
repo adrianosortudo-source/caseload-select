@@ -46,11 +46,18 @@ import { runEvidencePass } from '@/lib/screen-engine/slotEvidence';
 import { mergeLlmResults } from '@/lib/screen-engine/llm/extractor';
 import { buildReport } from '@/lib/screen-engine/report';
 import { computeBand } from '@/lib/screen-engine/band';
-import { getNextStep } from '@/lib/screen-engine/control';
+import { getNextStep, applyAnswer } from '@/lib/screen-engine/control';
 import { llmExtractServer } from '@/lib/screen-llm-server';
 import { renderBriefHtmlServer } from '@/lib/screen-brief-html';
 import type { EngineState, Band, SlotDefinition, LawyerReport } from '@/lib/screen-engine/types';
 import { evaluateContactGate } from '@/lib/screen-engine/contact-doctrine';
+import {
+  withFirstAskIntro,
+  describeSituationFirstAsk,
+  contactCaptureFirstAsk,
+} from '@/lib/channel-intake-intro';
+import { llmMapOptionReply } from '@/lib/llm-option-map';
+import { isValidOptionValue } from '@/lib/llm-option-map-pure';
 import { buildClosingMessage } from '@/lib/screen-engine/closing';
 import { persistUnconfirmedInquiry } from '@/lib/unconfirmed-inquiry';
 import {
@@ -155,24 +162,6 @@ function formatDiscoveryQuestion(
   const hint =
     i18n.prompts?.numbered_reply_hint || 'Reply with a number, or answer in your own words.';
   return `${base}\n\n${labels}\n\n${hint}`;
-}
-
-/**
- * Prepends the WP-3b expectation-setting line to the first outbound
- * message of a fresh session (2026-08-13, field case 2026-08-07): "This
- * takes about five minutes..." Frames the exchange as a bounded, worthwhile
- * step rather than an open-ended interrogation. `isResume` gates this to
- * exactly once per conversation — a resumed session already received it
- * on an earlier turn. Callers pass whichever message is about to become
- * the actual first send (contact-capture follow-up or the first Phase C
- * discovery question); only one of those fires per fresh-session call.
- */
-function withIntakeExpectation(text: string, isResume: boolean, i18n: I18nBundle): string {
-  if (isResume) return text;
-  const expectation =
-    i18n.prompts?.intake_expectation ||
-    "This takes about five minutes. A lawyer reviews what you share and reaches out directly if your matter fits the firm's practice.";
-  return `${expectation}\n\n${text}`;
 }
 
 // ── Sender metadata ─────────────────────────────────────────────────────
@@ -610,6 +599,61 @@ export async function processChannelInbound(
     state = applyFreeTextAnswerMapping(trimmed, state);
   }
 
+  // LLM option-mapping fallback (C3, 2026-08-07). Every deterministic
+  // adapter above (pending-slot digit/word-number/sentinel/fuzzy match,
+  // numeric mapping, free-text fuzzy match, free-text answer mapping)
+  // has now had a chance to resolve the reply. If the bot's last ask was
+  // a numbered (single_select) question and none of them resolved it,
+  // isUserGroundedFill is still false. Rather than falling straight to
+  // the "I didn't get your reply, use a number" clarifier — a broken
+  // promise once the C2 intro says "answer in your own words" — ask the
+  // LLM to map the lead's own wording onto one of the options offered.
+  //
+  // A mapped value earns 'answered' provenance via applyAnswer (not
+  // 'llm_inferred' slot-fill), because the user DID answer this specific
+  // question; the LLM only translates their wording onto the option list
+  // WE offered, which is a materially different and narrower claim than
+  // a free-form extraction guess. See llm-option-map-pure.ts for why the
+  // membership check before applyAnswer is mandatory: never feed an
+  // LLM-invented value into the engine.
+  //
+  // Ordering: must run BEFORE llmExtractServer (immediately below), not
+  // inside Phase C's pending-slot block further down. Phase C computes
+  // getNextStep(state) later in this same turn; the answer applied here
+  // needs to already be in `state` at that point so the NEXT question is
+  // selected correctly, not the one we just resolved.
+  let pendingLlmMapped = false;
+  if (isResume && !pendingConsumed && !nameCaptureConsumed) {
+    const pendingId = state.pendingAskedSlotId;
+    const pendingSlot = pendingId ? SLOT_REGISTRY.find((s) => s.id === pendingId) : undefined;
+    if (
+      pendingId &&
+      pendingSlot &&
+      pendingSlot.tier !== 'contact' &&
+      pendingSlot.input_type === 'single_select' &&
+      pendingSlot.options &&
+      pendingSlot.options.length > 0 &&
+      pendingSlot.applies_to.includes(state.matter_type as never) &&
+      !isUserGroundedFill(state, pendingId)
+    ) {
+      try {
+        const mapped = await llmMapOptionReply({
+          questionLabel: pendingSlot.question,
+          options: pendingSlot.options,
+          reply: trimmed,
+          language: state.language ?? 'en',
+        });
+        if (isValidOptionValue(mapped.value, pendingSlot.options)) {
+          state = applyAnswer(state, pendingId, mapped.value as string);
+          state = { ...state, pendingAskedSlotId: null };
+          pendingLlmMapped = true;
+        }
+      } catch (err) {
+        console.warn(`[channel-intake] llmMapOptionReply failed channel=${channel}:`, err);
+      }
+    }
+  }
+
   // LLM extraction: best-effort, never aborts. Runs on the new turn text
   // and merges into existing state. On a resume turn, the LLM sees just
   // the new text; on first turn it sees the full inbound. The doctrine
@@ -622,7 +666,12 @@ export async function processChannelInbound(
   // fixes-are-global doctrine) can see what extraction returned.
   const matterTypeBeforeLlm = state.matter_type;
   let llmMode: 'live' | 'disabled' | 'error' | 'degraded' | null = null;
-  if (state.matter_type !== 'out_of_scope' && !nameCaptureConsumed && !pendingConsumed) {
+  if (
+    state.matter_type !== 'out_of_scope' &&
+    !nameCaptureConsumed &&
+    !pendingConsumed &&
+    !pendingLlmMapped
+  ) {
     try {
       const llm = await llmExtractServer(trimmed, state);
       llmMode = llm.mode;
@@ -771,7 +820,10 @@ export async function processChannelInbound(
     // (the lead still moves to ops visibility either way).
     if (priorFollowUpCount >= MAX_FOLLOW_UPS) {
       try {
-        const exhaustedText = buildContactCaptureExhaustedMessage(gate.missing ?? 'both');
+        const exhaustedText = buildContactCaptureExhaustedMessage(
+          gate.missing ?? 'both',
+          (state.language ?? 'en') as SupportedLanguage,
+        );
         const exhaustedSend = await sendChannelMessage({
           firmId,
           sender,
@@ -807,12 +859,18 @@ export async function processChannelInbound(
       };
     }
 
-    // Send the follow-up question.
-    const followUpText = withIntakeExpectation(
-      buildContactCaptureFollowUp(gate.missing ?? 'both'),
-      isResume,
-      i18n,
-    );
+    // Send the follow-up question. First-ask intro (C2, 2026-08-07):
+    // on a fresh conversation (!isResume), frame the questioning before
+    // asking for contact — resume turns (attempt 2, 3...) keep the
+    // unmodified, opener-carrying copy from buildContactCaptureFollowUp.
+    // (DR-121's WP-3b expectation line was superseded by C2 at merge
+    // time: same intent, C2 landed on main first with PT coverage.)
+    const followUpText = isResume
+      ? buildContactCaptureFollowUp(gate.missing ?? 'both', (state.language ?? 'en') as SupportedLanguage)
+      : withFirstAskIntro(
+          (state.language ?? 'en') as SupportedLanguage,
+          contactCaptureFirstAsk(gate.missing ?? 'both', (state.language ?? 'en') as SupportedLanguage),
+        );
     const sendResult = await sendChannelMessage({
       firmId,
       sender,
@@ -847,11 +905,20 @@ export async function processChannelInbound(
 
     // Send succeeded. Persist state in channel_intake_sessions so the
     // NEXT inbound from this sender resumes mid-conversation.
+    //
+    // contactCaptureStarted MUST be set here (F1, 2026-08-06 field repro).
+    // Without it, control.ts:960's contact-doctrine branch never runs on
+    // the resume turn, so nameCaptureContext never lifts, so a bare-name
+    // reply like "adriano" fails the default (capitalised) bare-name regex
+    // and the gate fails again — Messenger looped 3x asking for the name
+    // it had already been given. Phase C (the discovery loop below) has
+    // set this flag correctly since it was introduced; Phase A never did.
     const newCount = priorFollowUpCount + 1;
+    const persistedState: EngineState = { ...state, contactCaptureStarted: true };
     if (sessionId) {
       await updateChannelSession({
         sessionId,
-        engineState: state,
+        engineState: persistedState,
         followUpCount: newCount,
       });
     } else {
@@ -859,7 +926,7 @@ export async function processChannelInbound(
         firmId,
         channel,
         senderId,
-        engineState: state,
+        engineState: persistedState,
         maxFollowUps: MAX_FOLLOW_UPS,
       });
     }
@@ -912,6 +979,104 @@ export async function processChannelInbound(
     //    candidate set so off-axis answers don't trigger early finalize.
     //  - out_of_scope and unknown are explicit exceptions; finalize allowed.
     const floorMet = meetsDiscoveryFloor(state);
+
+    // F2 (2026-08-06 field repro): turn-one guard for unclassified matters.
+    // EARLY_FINALIZE_MATTERS (discovery-floor.ts) treats 'unknown' as a
+    // legitimate reason to stop — there is nothing matter-specific to ask.
+    // That is correct once the lead has actually described their situation.
+    // It is wrong on turn one of a messaging channel, where the opening
+    // line is almost always a greeting, not a description. WhatsApp field
+    // repro 2026-08-06: "i want to speak to a lawyer" finalized immediately
+    // with four_axis all zero and zero questions asked.
+    //
+    // This is a bespoke one-shot ask, not a slot: selectNextSlot() returns
+    // null for matter_type === 'unknown' by design (selector.ts:678, no
+    // registry entry applies to an unclassified matter), so the normal
+    // slotToAsk machinery below cannot produce this question.
+    //
+    // CORRECTED 2026-08-07 (was wrong at ship time; see
+    // docs/BUILD_PLAN_meta_channel_intake_fixes_v1.md § F2 correction and
+    // docs/BUILD_PLAN_channel_intake_intro_optionmap_v1.md § 1 for the
+    // production evidence). The original comment here claimed the lead's
+    // reply to this question can never reclassify matter_type on resume,
+    // reasoning only from the regex layers: initialiseState runs once on
+    // turn 1, and runEvidencePass no-ops for 'unknown' (slotEvidence.ts:24)
+    // — both true, but incomplete. llmExtractServer + mergeLlmResults run
+    // earlier in THIS SAME function, on every resume turn (line ~581,
+    // well before this Phase C block), and mergeLlmResults promotes
+    // matter_type away from the 'unknown' lane explicitly ungated by
+    // design (screen-engine/llm/extractor.ts, DR-069 comment: "The
+    // 'unknown' lane is NOT gated by this option"). So when the lead's
+    // reply to this question is a real description, matter_type is
+    // usually ALREADY reclassified by the time this block runs, the
+    // condition below is false, and normal Phase C discovery fires in
+    // the SAME turn's response — confirmed live 2026-08-07, WhatsApp
+    // row screened_leads.6ff7d438-2eda-42b4-be43-758df2c89bb1: greeting
+    // -> this ask -> "i have a business and i want to formalize it" ->
+    // reclassified to business_setup_advisory -> 10 discovery questions
+    // -> band B brief in the same conversation.
+    //
+    // The path below (matter_type still 'unknown', so it finalizes) is
+    // real but narrower than originally documented: it fires only when
+    // LLM extraction is unavailable or errors this turn (no API key,
+    // rate limit, network failure — llmExtractServer degrades
+    // gracefully rather than blocking). That is deliberate graceful
+    // degradation, not a gap to close.
+    if (state.matter_type === 'unknown' && discoveryCount === 0) {
+      // First-ask intro (C2, 2026-08-07): gated on !isResume specifically,
+      // NOT on discoveryCount === 0 alone. Those are not equivalent — a
+      // session that failed the contact gate on turn 1 (Phase B never
+      // touches discoveryFollowUpCount) and reaches Phase C for the first
+      // time on turn 2 still has discoveryCount === 0 there, but turn 2 is
+      // a resume turn and must not repeat the intro.
+      const openingQuestion = isResume
+        ? i18n.widget_strings?.describe_situation ||
+          'Thanks for reaching out. Before a lawyer reviews this, could you describe in a sentence or two what your situation is about?'
+        : withFirstAskIntro(
+            (state.language ?? 'en') as SupportedLanguage,
+            describeSituationFirstAsk((state.language ?? 'en') as SupportedLanguage),
+          );
+      const sendResult = await sendChannelMessage({
+        firmId,
+        sender,
+        text: openingQuestion,
+      });
+      if (sendResult.sent) {
+        const persistedState: EngineState = {
+          ...state,
+          contactCaptureStarted: true,
+          discoveryFollowUpCount: discoveryCount + 1,
+        };
+        if (sessionId) {
+          await updateChannelSession({
+            sessionId,
+            engineState: persistedState,
+            followUpCount: priorFollowUpCount,
+          });
+        } else {
+          await createChannelSession({
+            firmId,
+            channel,
+            senderId,
+            engineState: persistedState,
+            maxFollowUps: MAX_FOLLOW_UPS,
+          });
+        }
+        console.log(
+          `[channel-intake] unknown-matter opening question sent firm=${firmId} channel=${channel}`,
+        );
+        return {
+          persisted: false,
+          reason: 'awaiting_situation_description',
+          followUpSent: true,
+        };
+      }
+      console.warn(
+        `[channel-intake] unknown-matter opening question send failed firm=${firmId} channel=${channel}: ${sendResult.reason ?? 'unknown'}; finalising with what we have`,
+      );
+      // Send failed: fall through to the existing floor/finalize logic
+      // below with what we have, same fallback discipline as Phase C.
+    }
 
     // Build the slot-to-ask in priority order:
     //   0. STICKY PENDING SLOT (#172 follow-up, 2026-06-09). If the bot
@@ -982,12 +1147,20 @@ export async function processChannelInbound(
       if (clarifyReask) {
         // Brand-safe clarifier, i18n-aware with English fallback. No
         // em-dash, no banned vocabulary, no time-relative promise.
+        //
+        // Copy softened 2026-08-07 (C3): by the time this fires, the C3
+        // LLM option-mapping fallback (above) has ALSO already failed to
+        // resolve the reply — every available path, deterministic and
+        // LLM, came up empty. Asking for a number at that point is an
+        // honest ask, not a contradiction of the C2 intro's "answer in
+        // your own words" — the intro's promise was kept; two independent
+        // attempts to honor it did not work for this particular reply.
         const clarifier =
           i18n.widget_strings?.didnt_catch ||
-          "Sorry, I didn't get your last reply. Could you confirm by replying with the number of the option that fits best?";
+          "Thanks, I want to make sure I record this correctly. Could you reply with the number of the option that fits best?";
         questionText = `${clarifier}\n\n${questionText}`;
       }
-      // WP-3c: the prior turn named more than one option for a
+      // WP-3c (DR-121): the prior turn named more than one option for a
       // single-pick question with no "All of the above" choice; only
       // the first was recorded. Reassure the lead nothing was dropped.
       // Mutually exclusive with clarifyReask (multiDigitAckNeeded only
@@ -999,11 +1172,17 @@ export async function processChannelInbound(
           'Got it, I recorded your first pick. You can add the rest in your own words anytime.';
         questionText = `${ack}\n\n${questionText}`;
       }
-      // WP-3b: on a genuinely fresh session this discovery question is
-      // the first-ever outbound to this sender (contact was already
-      // complete on turn 1, so Phase A/B never fired). clarifyReask can
-      // only be true on a resume turn, so this never doubles up with it.
-      questionText = withIntakeExpectation(questionText, isResume, i18n);
+      // First-ask intro (C2, 2026-08-07): !isResume specifically (see
+      // the two comments above at the Phase B and F2-guard sites for why
+      // this cannot be inferred from discoveryCount or any other counter
+      // alone). clarifyReask can only be true when pendingAskedSlotId was
+      // already set from a prior ask, which requires isResume, so the two
+      // conditions never overlap. multiDigitAckNeeded likewise requires a
+      // resume turn, so the intro and the multi-pick ack never co-occur.
+      // (DR-121's WP-3b expectation line was superseded by C2 here.)
+      if (!isResume) {
+        questionText = withFirstAskIntro(language, questionText);
+      }
       const sendResult = await sendChannelMessage({
         firmId,
         sender,
@@ -1245,7 +1424,7 @@ export async function finalizeChannelLead(
   // Finalise the multi-turn session if one was open. PASS the
   // screened_leads.id so the row is tagged as "this finalization
   // produced a real brief." The post-finalization secretary mode
-  // (DR-104) gates on screened_lead_id IS NOT NULL — without this
+  // (DR-110) gates on screened_lead_id IS NOT NULL — without this
   // link, the abandoned-session paths above would be indistinguishable
   // from the successful path, and a returning lead from an abandoned
   // session would falsely be told a lawyer is reviewing their matter.

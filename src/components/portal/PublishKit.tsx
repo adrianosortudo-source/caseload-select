@@ -12,20 +12,25 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import ChecklistPdfArtifactPanel from "@/components/portal/ChecklistPdfArtifactPanel";
 import {
   toAgentRecord,
   toAgentManifest,
   artifactControlState,
   copyColumnMessage,
+  linkedInArticlePasteEligibility,
   pieceMatchesFilter,
   filteredTotals,
   blockedPiecesAreFullyWithheld,
+  shouldShowWebsiteArtifactSlots,
+  websitePlacementArtifact,
   type PublishKitView,
   type PublishKitPiece,
   type ConstraintReading,
   type ArtifactControlState,
   type PublisherLane,
 } from "@/lib/publish-kit-pure";
+import { toLinkedInArticlePasteHtmlEnglishOnly } from "@/lib/linkedin-article-paste-pure";
 
 interface Props {
   view: PublishKitView;
@@ -115,6 +120,40 @@ async function copyToClipboard(text: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Writes BOTH text/html and text/plain to the clipboard via the modern
+ * ClipboardItem API, so a rich-text target (LinkedIn's Article editor) reads
+ * the formatted version while anything else pasted into still gets clean
+ * text. Additive to copyToClipboard, which stays exactly as it was and keeps
+ * serving every existing plain-text-only copy control (GBP posts, promoter
+ * posts, the Minute): this function calls it as its OWN fallback when
+ * ClipboardItem or navigator.clipboard.write is unavailable (an older
+ * browser, or a non-secure context), rather than duplicating that fallback
+ * logic.
+ */
+async function copyRichToClipboard(html: string, plainText: string): Promise<boolean> {
+  if (
+    typeof navigator !== "undefined" &&
+    navigator.clipboard &&
+    typeof navigator.clipboard.write === "function" &&
+    typeof window !== "undefined" &&
+    window.ClipboardItem
+  ) {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([plainText], { type: "text/plain" }),
+        }),
+      ]);
+      return true;
+    } catch {
+      // fall through to the plain-text fallback below
+    }
+  }
+  return copyToClipboard(plainText);
 }
 
 export default function PublishKit({ view, firmId }: Props) {
@@ -298,13 +337,20 @@ export default function PublishKit({ view, firmId }: Props) {
       {nothingMatches && <p className="text-sm text-black/50">Nothing matches the current filters.</p>}
 
       {visibleGroups.map((group) => (
-        <section key={group.date || "undated"} className="space-y-4">
+        <section key={group.key ?? group.date ?? "undated"} className="space-y-4">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-black/50 border-b border-border-brand pb-2">
-            {group.date ? formatDate(group.date) : "No publication date recorded"}
+            {group.label ?? (group.date ? formatDate(group.date) : "No publication date recorded")}
           </h2>
           <div className="space-y-4">
             {group.pieces.map((piece) => (
-              <PieceCard key={piece.id} piece={piece} firmId={firmId} onCopy={handleCopy} />
+              <PieceCard
+                key={piece.id}
+                piece={piece}
+                firmId={firmId}
+                onCopy={handleCopy}
+                onToast={showToast}
+                onRefresh={() => router.refresh()}
+              />
             ))}
           </div>
         </section>
@@ -405,10 +451,14 @@ function PieceCard({
   piece,
   firmId,
   onCopy,
+  onToast,
+  onRefresh,
 }: {
   piece: PublishKitPiece;
   firmId: string;
   onCopy: (text: string, label: string) => void;
+  onToast: (message: string) => void;
+  onRefresh: () => void;
 }) {
   function handleCopyRecord() {
     const record = toAgentRecord(piece);
@@ -440,6 +490,7 @@ function PieceCard({
         year: "numeric",
       })
     : null;
+  const isChecklistPdf = piece.role === "lead_magnet_pdf";
 
   return (
     <article id={`dlv-${piece.id}`} className="bg-white border border-border-brand scroll-mt-4">
@@ -498,7 +549,13 @@ function PieceCard({
         </div>
       </div>
 
-      <div className="grid md:grid-cols-[1fr_320px]">
+      <div
+        className={
+          piece.role === "article"
+            ? "grid md:grid-cols-[minmax(0,11fr)_minmax(0,7fr)_minmax(0,7fr)]"
+            : "grid md:grid-cols-[1fr_320px]"
+        }
+      >
         <div className="p-5 border-b md:border-b-0 md:border-r border-border-brand min-w-0">
           {piece.plainText ? (
             <>
@@ -533,6 +590,7 @@ function PieceCard({
                   ))}
                 </div>
               )}
+              <LinkedInArticlePasteControl piece={piece} onToast={onToast} />
             </>
           ) : piece.unapprovedDraftText ? (
             <>
@@ -600,10 +658,18 @@ function PieceCard({
           )}
         </div>
 
-        <div className="p-5 bg-parchment/40 min-w-0 space-y-4">
-          <span className="text-[10px] uppercase tracking-wider font-semibold text-black/40 block">
-            Artifacts
-          </span>
+        <div
+          className={
+            piece.role === "article"
+              ? "min-w-0 bg-white p-5 space-y-4 md:col-span-2"
+              : "p-5 bg-parchment/40 min-w-0 space-y-4"
+          }
+        >
+          {piece.role !== "article" && (
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-black/40 block">
+              Artifacts
+            </span>
+          )}
           {piece.versionAsset && (
             <ArtifactBlock
               label="Version asset"
@@ -624,13 +690,39 @@ function PieceCard({
               unapproved={piece.boundArtifactsAreUnapproved}
             />
           )}
+          {isChecklistPdf && <ChecklistPdfArtifactPanel piece={piece} firmId={firmId} onRefresh={onRefresh} />}
           {piece.boundArtifactsAreUnapproved && piece.artifacts.length > 0 && (
             <p className="text-[11px] text-black/50">
               These belong to the current version, which is not approved. They cannot be downloaded
               here.
             </p>
           )}
-          {piece.artifacts.map((artifact) => (
+          {shouldShowWebsiteArtifactSlots(piece) && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <WebsiteArtifactSlot
+                label="Article hero"
+                helper="Overlay text · article placement"
+                artifact={websitePlacementArtifact(piece, "article_hero")}
+                piece={piece}
+              />
+              <WebsiteArtifactSlot
+                label="Homepage CTA"
+                helper={
+                  websitePlacementArtifact(piece, "homepage_cta")?.assetRole === "website_article_hero"
+                    ? "Reuses article image · homepage placement"
+                    : "Homepage placement"
+                }
+                artifact={websitePlacementArtifact(piece, "homepage_cta")}
+                piece={piece}
+              />
+            </div>
+          )}
+          {(piece.role !== "article"
+            ? piece.artifacts.filter((artifact) => !(isChecklistPdf && artifact.artifactType === "pdf"))
+            : piece.destination === "firm_website"
+              ? piece.artifacts.filter((a) => a.artifactType !== "hero_image")
+              : piece.artifacts
+          ).map((artifact) => (
             <ArtifactBlock
               key={artifact.id}
               label={artifactTypeLabel(artifact.artifactType)}
@@ -651,7 +743,7 @@ function PieceCard({
               supersededAt={artifact.supersededAt}
             />
           ))}
-          {!piece.hasAnyArtifactToShow && (
+          {!piece.hasAnyArtifactToShow && !isChecklistPdf && (
             <p className="text-xs text-black/45">No artifacts registered for this piece yet.</p>
           )}
           {piece.otherVersionArtifacts.length > 0 && (
@@ -691,6 +783,15 @@ function PieceCard({
         </div>
       </div>
 
+      {piece.role === "article" && piece.artifacts.some((a) => a.artifactType === "hero_image" && !a.assetRole) && (
+        <LegacyWebsiteImageNotice
+          piece={piece}
+          firmId={firmId}
+          artifacts={piece.artifacts.filter((a) => a.artifactType === "hero_image" && !a.assetRole)}
+          onRefresh={onRefresh}
+        />
+      )}
+
       <div className="px-5 py-3 border-t border-border-brand bg-parchment flex items-center justify-between gap-3 flex-wrap text-[11px] text-black/50">
         <div className="space-y-0.5">
           {piece.unresolvedCommentCount > 0 && (
@@ -728,6 +829,263 @@ function PieceCard({
   );
 }
 
+// ─── LinkedIn Article formatted copy ───────────────────────────────────────────
+
+/**
+ * The formatted-copy control for a genuine LinkedIn Article piece (never a
+ * LinkedIn feed/promoter post -- see isLinkedInArticlePiece in
+ * publish-kit-pure.ts). Renders nothing when the piece is not a LinkedIn
+ * Article at all. Renders disabled and clearly labelled when the piece's
+ * locale is not confirmed English (linkedin-article-paste-pure.ts is
+ * English-only), rather than disappearing silently -- an operator who
+ * cannot see why a control is missing cannot act on it. Additive: this sits
+ * below the existing plain-text Copy row and does not touch it.
+ */
+function LinkedInArticlePasteControl({
+  piece,
+  onToast,
+}: {
+  piece: PublishKitPiece;
+  onToast: (message: string) => void;
+}) {
+  const eligibility = linkedInArticlePasteEligibility(piece);
+  if (eligibility === "not_applicable") return null;
+
+  // Only ever attempt the transform when eligibility is "eligible". This
+  // matters beyond efficiency: toLinkedInArticlePasteHtmlEnglishOnly treats
+  // an omitted/null locale as permissive (see that function's own doc
+  // comment), which would otherwise return ok:true for a piece whose locale
+  // is simply unset -- exactly the case linkedInArticlePasteEligibility
+  // deliberately buckets under "unsupported_locale". Gating result on
+  // eligibility keeps the disabled button, the warning text, and the
+  // preview's presence all agreeing with each other.
+  const result =
+    eligibility === "eligible"
+      ? toLinkedInArticlePasteHtmlEnglishOnly(piece.bodyHtml ?? "", { locale: piece.locale })
+      : null;
+  const enabled = eligibility === "eligible" && piece.mayPublish && result !== null && result.ok;
+
+  async function handleCopyFormatted() {
+    if (!result || !result.ok) {
+      onToast("This piece's locale is not English. Formatted LinkedIn copy is unavailable.");
+      return;
+    }
+    // The plain-text fallback is piece.plainText -- exactly what the "Copy
+    // text" button above already copies. That is a deliberate choice, not a
+    // shortcut: it is already the honest plain-text rendition of this whole
+    // piece, already computed, and already what an operator gets today when
+    // the rich clipboard path is unavailable, so the fallback degrades to
+    // already-tested, already-familiar behaviour instead of a new one.
+    const ok = await copyRichToClipboard(result.html, piece.plainText);
+    onToast(ok ? "Formatted article body copied" : "Clipboard blocked. Use the preview below to select and copy manually.");
+  }
+
+  async function handleCopyTitle() {
+    const ok = await copyToClipboard(piece.title);
+    onToast(ok ? "LinkedIn Article title copied" : "Clipboard blocked. Select and copy the title manually.");
+  }
+
+  const buttonLabel =
+    eligibility === "unsupported_locale"
+      ? "Formatted copy: English only"
+      : piece.mayPublish
+        ? "Copy formatted body"
+        : "Copy locked";
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border-brand">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+        <span className="text-[10px] uppercase tracking-wider font-semibold text-black/40">LinkedIn Article</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            disabled={!enabled}
+            onClick={handleCopyTitle}
+            className="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1.5 border border-navy text-navy bg-white hover:bg-parchment-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Copy title
+          </button>
+          <button
+            type="button"
+            disabled={!enabled}
+            onClick={handleCopyFormatted}
+            className="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1.5 border border-navy bg-navy text-white hover:bg-navy/90 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-black/20 disabled:border-black/20"
+          >
+            {buttonLabel}
+          </button>
+        </div>
+      </div>
+      {result?.ok && (
+        <div className="mb-2 border border-border-brand bg-white px-3 py-2">
+          <p className="text-[9px] uppercase tracking-wider font-semibold text-black/40 mb-1">Article title</p>
+          <p className="text-[12px] font-semibold text-navy">{piece.title}</p>
+        </div>
+      )}
+      {eligibility === "unsupported_locale" && (
+        <p className="text-[11px] text-black/50">
+          This piece&apos;s locale ({piece.locale ?? "not set"}) is not confirmed English. The LinkedIn Article
+          formatter only supports English content, so formatted copy is unavailable here. Use Copy text above
+          instead.
+        </p>
+      )}
+      {result?.ok && (
+        <details className="mt-2">
+          <summary className="text-[10px] uppercase tracking-wider font-semibold text-navy/70 cursor-pointer">
+            Preview formatted body
+          </summary>
+          <div
+            className="mt-2 bg-white border border-border-brand p-3 text-[13px] leading-relaxed text-black/80 max-h-72 overflow-y-auto [&_h2]:font-bold [&_h2]:text-navy [&_h2]:text-sm [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:font-bold [&_h3]:text-navy [&_h3]:text-[13px] [&_h3]:mt-3 [&_h3]:mb-1 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_a]:text-navy [&_a]:underline [&_em]:italic [&_blockquote]:bg-parchment-2 [&_blockquote]:px-3 [&_blockquote]:py-2 [&_blockquote]:my-2 [&_hr]:border-border-brand [&_hr]:my-3"
+            dangerouslySetInnerHTML={{ __html: result.html }}
+          />
+        </details>
+      )}
+    </div>
+  );
+}
+
+function WebsiteArtifactSlot({
+  label,
+  helper,
+  artifact,
+  piece,
+}: {
+  label: string;
+  helper: string;
+  artifact: PublishKitPiece["artifacts"][number] | null;
+  piece: PublishKitPiece;
+}) {
+  return (
+    <section className="border border-border-brand bg-white p-3 min-w-0" aria-label={label}>
+      <p className="text-[11px] font-bold text-navy">{label}</p>
+      <p className="text-[10px] text-black/45 mt-0.5">{helper}</p>
+      {artifact ? (
+        <div className="mt-2">
+          <ArtifactBlock
+            label={label}
+            filename={artifact.filename}
+            mime={artifact.mime}
+            sizeBytes={artifact.sizeBytes}
+            sha256={artifact.sha256}
+            signedUrl={artifact.signedUrl}
+            signedUrlExpiresAt={artifact.signedUrlExpiresAt}
+            storagePath={artifact.storagePath}
+            publicUrl={artifact.publicUrl}
+            validation={artifact.validation}
+            mayPublish={piece.mayPublish}
+            versionId={artifact.versionId}
+            locale={artifact.locale}
+            destination={artifact.destination}
+            unapproved={piece.boundArtifactsAreUnapproved}
+            supersededAt={artifact.supersededAt}
+            assetRole={artifact.assetRole}
+          />
+        </div>
+      ) : (
+        <p className="border border-dashed border-border-brand bg-parchment/30 px-3 py-5 mt-2 text-[11px] text-black/45">
+          No image registered for this placement.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function LegacyWebsiteImageNotice({
+  piece,
+  firmId,
+  artifacts,
+  onRefresh,
+}: {
+  piece: PublishKitPiece;
+  firmId: string;
+  artifacts: PublishKitPiece["artifacts"];
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="border border-gold-on-light/40 bg-gold-on-light/5 px-3 py-2.5 space-y-2">
+      <div>
+        <p className="text-[11px] font-semibold text-navy">Existing image needs placement</p>
+        <p className="text-[11px] text-black/55 mt-0.5">
+          This image predates the two website image roles. Assign it explicitly to one placement; the existing artifact record will not be changed.
+        </p>
+      </div>
+      {artifacts.map((artifact) => (
+        <LegacyWebsiteImageRow
+          key={artifact.id}
+          piece={piece}
+          firmId={firmId}
+          artifact={artifact}
+          onRefresh={onRefresh}
+        />
+      ))}
+    </div>
+  );
+}
+
+function LegacyWebsiteImageRow({
+  piece,
+  firmId,
+  artifact,
+  onRefresh,
+}: {
+  piece: PublishKitPiece;
+  firmId: string;
+  artifact: PublishKitPiece["artifacts"][number];
+  onRefresh: () => void;
+}) {
+  const [busy, setBusy] = useState<"website_article_hero_overlay" | "website_homepage_cta_textless" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function assign(assetRole: "website_article_hero_overlay" | "website_homepage_cta_textless") {
+    setBusy(assetRole);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/portal/${firmId}/deliverables/${piece.id}/artifacts/${artifact.id}/assign-role`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assetRole }),
+        },
+      );
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        setError(body?.error ?? "Could not assign image placement.");
+        return;
+      }
+      onRefresh();
+    } catch {
+      setError("Could not assign image placement.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 flex-wrap border-t border-gold-on-light/20 pt-2">
+      <p className="text-[11px] font-mono text-black/65 break-all">{artifact.filename ?? "Unnamed image"}</p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => assign("website_article_hero_overlay")}
+          className="text-[10px] font-semibold uppercase tracking-wider border border-navy px-2 py-1 text-navy hover:bg-navy hover:text-white disabled:opacity-40"
+        >
+          {busy === "website_article_hero_overlay" ? "Assigning…" : "Use as Article hero"}
+        </button>
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => assign("website_homepage_cta_textless")}
+          className="text-[10px] font-semibold uppercase tracking-wider border border-navy px-2 py-1 text-navy hover:bg-navy hover:text-white disabled:opacity-40"
+        >
+          {busy === "website_homepage_cta_textless" ? "Assigning…" : "Use as Homepage CTA"}
+        </button>
+        {error && <span className="text-[11px] text-red-fail">{error}</span>}
+      </div>
+    </div>
+  );
+}
+
 // ─── Artifact block ───────────────────────────────────────────────────────────
 
 function ArtifactBlock({
@@ -748,6 +1106,7 @@ function ArtifactBlock({
   versionId,
   locale,
   destination,
+  assetRole,
 }: {
   label: string;
   filename: string | null;
@@ -787,6 +1146,7 @@ function ArtifactBlock({
   versionId?: string | null;
   locale?: string | null;
   destination?: string | null;
+  assetRole?: string | null;
 }) {
   const controlState = artifactControlState({
     storagePath,
@@ -824,7 +1184,32 @@ function ArtifactBlock({
           </span>
         )}
       </div>
-      {filename && <p className="text-[11px] font-mono text-black/60 mt-1 break-all">{filename}</p>}
+      {filename && (
+        <p
+          className={`text-[11px] font-mono text-black/60 mt-1 ${
+            assetRole ? "truncate whitespace-nowrap" : "break-all"
+          }`}
+          title={filename}
+        >
+          {filename}
+        </p>
+      )}
+
+      {mime?.startsWith("image/") && canDownload && signedUrl && (
+        <a
+          href={signedUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="block mt-3 border border-border-brand bg-black/[0.025] focus:outline-none focus:ring-2 focus:ring-navy/40"
+        >
+          <img
+            src={signedUrl}
+            alt={filename ? `${label}: ${filename}` : label}
+            className="block w-full max-h-56 object-contain"
+          />
+          <span className="sr-only">Open full-size image preview</span>
+        </a>
+      )}
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 mt-2 text-[11px]">
         {mime && (
@@ -839,7 +1224,7 @@ function ArtifactBlock({
             <dd className="text-black/60">{formatByteCount(sizeBytes)}</dd>
           </>
         )}
-        {sha256 && (
+        {sha256 && !assetRole && (
           <>
             <dt className="text-black/40 uppercase tracking-wider">SHA-256</dt>
             <dd className="text-black/60 font-mono break-all">{sha256}</dd>
@@ -877,7 +1262,7 @@ function ArtifactBlock({
             {ARTIFACT_CONTROL_LABEL[controlState]}
           </button>
         )}
-        {canDownload && signedUrlExpiresAt && mounted && (
+        {canDownload && signedUrlExpiresAt && mounted && !assetRole && (
           <p className="text-[10px] text-black/40 mt-1">
             Link expires {new Date(signedUrlExpiresAt).toLocaleString("en-CA")}.
           </p>

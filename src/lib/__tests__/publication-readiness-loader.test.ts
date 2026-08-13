@@ -66,6 +66,14 @@ vi.mock("@/lib/supabase-admin", () => ({
   },
 }));
 
+vi.mock("@/lib/standing-publishing-authorization", () => ({
+  getStandingAuthorizationState: () => Promise.resolve(null),
+}));
+
+vi.mock("@/lib/deliverable-client-change-holds", () => ({
+  loadUnresolvedClientChangeHoldDeliverableIds: () => Promise.resolve(new Set<string>()),
+}));
+
 import { loadPlanPublicationReadiness, loadPeriodPublicationReadiness } from "@/lib/publication-readiness-loader";
 
 const FIRM_ID = "eec1d25e-a047-4827-8e4a-6eb96becca2b";

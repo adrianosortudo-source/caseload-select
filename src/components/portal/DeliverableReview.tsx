@@ -44,6 +44,13 @@ interface Detail {
   versions: DeliverableVersion[];
   comments: DeliverableComment[];
   approvals: ApprovalRecord[];
+  // Release-integrity item 1: true when the underlying table read errored
+  // rather than genuinely returning zero rows, so the review UI can tell a
+  // signed-off deliverable that failed to load its history apart from one
+  // that has no history yet.
+  versionsError?: boolean;
+  commentsError?: boolean;
+  approvalsError?: boolean;
 }
 
 function cssEscapeId(id: string): string {
@@ -78,6 +85,7 @@ export default function DeliverableReview({
   initialDetail,
   supportPreview = false,
   standingAuthEligible = false,
+  unresolvedHold = null,
 }: {
   firmId: string;
   viewerRole: "operator" | "lawyer";
@@ -88,6 +96,7 @@ export default function DeliverableReview({
   initialDetail: Detail;
   supportPreview?: boolean;
   standingAuthEligible?: boolean;
+  unresolvedHold?: { id: string; versionId: string } | null;
 }) {
   const [detail, setDetail] = useState<Detail>(initialDetail);
   const { deliverable, versions, comments, approvals } = detail;
@@ -130,6 +139,9 @@ export default function DeliverableReview({
         versions: json.versions,
         comments: json.comments,
         approvals: json.approvals,
+        versionsError: json.versionsError ?? false,
+        commentsError: json.commentsError ?? false,
+        approvalsError: json.approvalsError ?? false,
       });
     }
   }, [firmId, deliverableId]);
@@ -336,6 +348,7 @@ export default function DeliverableReview({
             status={deliverable.status}
             onSigned={refetch}
             supportPreview={supportPreview}
+            unresolvedHold={unresolvedHold}
           />
           <div className="space-y-3">
             <ApprovalHistory
@@ -343,6 +356,7 @@ export default function DeliverableReview({
               deliverableId={deliverableId}
               viewerRole={viewerRole}
               approvals={approvals}
+              approvalsError={detail.approvalsError ?? false}
               comments={comments}
               versions={versions}
               deliverable={deliverable}
@@ -396,13 +410,34 @@ export default function DeliverableReview({
           )}
 
           {shouldShowHeroImageControl(selectedVersion?.id ?? null, viewerRole) && (
-            <HeroImageControl
-              firmId={firmId}
-              deliverableId={deliverableId}
-              deliverableTitle={deliverable.title}
-              hasHero={Boolean(deliverable.hero_image_url)}
-              onSaved={refetch}
-            />
+            deliverable.deliverable_role === "article" ? (
+              <div className="grid gap-3 md:grid-cols-2" aria-label="Website image controls">
+                <HeroImageControl
+                  firmId={firmId}
+                  deliverableId={deliverableId}
+                  deliverableTitle={deliverable.title}
+                  hasHero={Boolean(deliverable.hero_image_url)}
+                  onSaved={refetch}
+                  assetRole="website_article_hero_overlay"
+                />
+                <HeroImageControl
+                  firmId={firmId}
+                  deliverableId={deliverableId}
+                  deliverableTitle={deliverable.title}
+                  hasHero={false}
+                  onSaved={refetch}
+                  assetRole="website_homepage_cta_textless"
+                />
+              </div>
+            ) : (
+              <HeroImageControl
+                firmId={firmId}
+                deliverableId={deliverableId}
+                deliverableTitle={deliverable.title}
+                hasHero={Boolean(deliverable.hero_image_url)}
+                onSaved={refetch}
+              />
+            )
           )}
 
           {selectedVersion && (
@@ -1432,6 +1467,7 @@ function SignOffPanel({
   status,
   onSigned,
   supportPreview = false,
+  unresolvedHold = null,
 }: {
   firmId: string;
   deliverableId: string;
@@ -1446,6 +1482,7 @@ function SignOffPanel({
   status: ContentDeliverable["status"];
   onSigned: () => Promise<void> | void;
   supportPreview?: boolean;
+  unresolvedHold?: { id: string; versionId: string } | null;
 }) {
   const [decision, setDecision] = useState<"approved" | "changes_requested">("approved");
   const [agreed, setAgreed] = useState(false);
@@ -1453,6 +1490,16 @@ function SignOffPanel({
   const [attachments, setAttachments] = useState<DeliverableAttachment[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolvingHold, setResolvingHold] = useState(false);
+  async function resolveHold() {
+    if (!unresolvedHold) return;
+    setResolvingHold(true); setError(null);
+    try {
+      const res = await fetch(`/api/portal/${firmId}/deliverables/${deliverableId}/change-holds/${unresolvedHold.id}/resolve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version_id: unresolvedHold.versionId }) });
+      const json = await res.json();
+      if (!res.ok || !json.ok) setError(json.error ?? "Could not resolve the requested changes hold."); else await onSigned();
+    } catch (err) { setError(err instanceof Error ? err.message : "Network error."); } finally { setResolvingHold(false); }
+  }
 
   if (viewerRole !== "lawyer") {
     return (
@@ -1503,6 +1550,12 @@ function SignOffPanel({
   return (
     <div className="bg-white border-2 border-navy/15 p-4">
       <h3 className="text-sm font-bold text-navy mb-1">Sign-off</h3>
+      {unresolvedHold && isCurrentVersion && (
+        <div className="mb-3 border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 space-y-2">
+          <p>Requested changes are holding publication. Resolving this hold does not approve this version.</p>
+          {viewerRole === "lawyer" && <button type="button" onClick={resolveHold} disabled={supportPreview || resolvingHold} className="border border-amber-800 px-2 py-1 font-semibold disabled:opacity-50">{resolvingHold ? "Resolving..." : "Mark requested changes resolved"}</button>}
+        </div>
+      )}
       {status === "approved" && (
         <p className="text-xs text-green-pass font-semibold mb-2">
           The current version is approved. Posting a new version reopens review.
@@ -1899,6 +1952,7 @@ function ApprovalHistory({
   deliverableId,
   viewerRole,
   approvals,
+  approvalsError,
   comments,
   versions,
   deliverable,
@@ -1910,6 +1964,7 @@ function ApprovalHistory({
   deliverableId: string;
   viewerRole: "operator" | "lawyer";
   approvals: ApprovalRecord[];
+  approvalsError: boolean;
   comments: DeliverableComment[];
   versions: DeliverableVersion[];
   deliverable: ContentDeliverable;
@@ -1919,7 +1974,20 @@ function ApprovalHistory({
 }) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
 
-  if (approvals.length === 0) return null;
+  // Release-integrity item 1: an empty approvals array now means either
+  // "no approval history yet" (approvalsError false) or "the history could
+  // not be loaded" (approvalsError true) -- these must not render the same
+  // way, since the latter could be hiding a real signed-off record.
+  if (approvals.length === 0) {
+    if (!approvalsError) return null;
+    return (
+      <div className="bg-white border border-border-brand p-4">
+        <p className="text-xs text-red-fail">
+          Approval history could not be loaded. Refresh to retry.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="bg-white border border-border-brand p-4">
       <h3 className="text-sm font-bold text-navy mb-3">Approval record</h3>

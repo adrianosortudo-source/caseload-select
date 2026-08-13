@@ -415,7 +415,7 @@ export default function DRGLawCaseStudyPage() {
           </h2>
           <div className="cs-cta-actions">
             <a
-              href="/next-steps"
+              href="/tools/start-a-conversation"
               className="cs-btn-primary"
             >
               Book a Strategy Call
