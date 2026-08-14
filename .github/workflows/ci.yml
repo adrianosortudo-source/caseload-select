@@ -96,6 +96,19 @@ on:
   workflow_dispatch:
 
 jobs:
+  build-asset-integrity:
+    name: Self-contained build assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Reject remote build assets and verify pinned bytes
+        run: node scripts/check-self-contained-build-assets.mjs
+
   typecheck:
     name: TypeScript typecheck
     runs-on: ubuntu-latest

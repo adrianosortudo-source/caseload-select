@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "caseload-build-assets-v1",
+  "scanRoots": ["src"],
+  "localFiles": [
+    {
+      "path": "public/fonts/Manrope-VF.ttf",
+      "sha256": "d0639be45d0af36e798172419d7bd173c4bd4f29e2b76cbb69db1d11bf8b0a40"
+    },
+    {
+      "path": "public/fonts/Oxanium-VF.ttf",
+      "sha256": "2ce01d946e1e1ffc8d7eecfffbda8623bedd63eaf811a20488c4b69af45babb0"
+    }
+  ],
+  "packages": [
+    {
+      "name": "@fontsource-variable/caveat",
+      "version": "5.3.0",
+      "integrity": "sha512-Q3mjghoYIlXgwqBPJKZ4q6f3zu921Gq7UU76r9Z+NAmhapHfX130GIFpOCYf8vt2SIcgCi9RHDT7anfJKg/kiA=="
+    },
+    {
+      "name": "@fontsource-variable/dm-sans",
+      "version": "5.3.0",
+      "integrity": "sha512-BpUG5bqePiDFMBM4ZtLSlPdAIOM990uB1dlXzIf4aw21yQR7BmykedLXXXMqGWsR18aMLOsbWccwJNh3ztTQaA=="
+    },
+    {
+      "name": "@fontsource-variable/source-serif-4",
+      "version": "5.3.0",
+      "integrity": "sha512-9vch9WqxjaaA+1o9Ur8pOgIGbCYLjRReOUel23A6lOpD1syptgjtkORevvNmldJ5kGXQL29onQUqI5Ltz0s3bQ=="
+    }
+  ],
+  "forbiddenSourcePatterns": [
+    "next/font/google",
+    "fonts.googleapis.com",
+    "fonts.gstatic.com"
+  ]
+}

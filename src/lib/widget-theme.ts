@@ -46,7 +46,7 @@ export interface WidgetTheme {
   };
   /**
    * If true, load the Source Serif 4 font family from Google Fonts at the
-   * page level. The widget page bumps fonts via next/font/google so the file
+   * page level. The root layout bundles the lockfile-pinned local font so the file
    * goes through Next.js's font pipeline (no FOIT, no third-party CDN at
    * runtime, fully CSP-clean). Set this per theme so other firms only pay
    * the bundle cost when their theme uses Source Serif.

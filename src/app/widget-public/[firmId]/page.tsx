@@ -7,12 +7,11 @@
  * Per-firm theme (2026-06-05):
  *   The firm's `intake_firms.branding.theme` is read here and applied as
  *   CSS variables on the widget root. Components read those vars via
- *   `var(--cls-*, <CaseLoad default>)`. Source Serif 4 is loaded via
- *   next/font/google only when the resolved theme asks for it, so firms
- *   on the default CaseLoad chrome do not pay the bundle cost.
+ *   `var(--cls-*, <CaseLoad default>)`. Source Serif 4 is bundled from a
+ *   lockfile-pinned local package and used only when the resolved theme asks
+ *   for its CSS variable.
  */
 
-import { Source_Serif_4 } from "next/font/google";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { ScreenEnginePublicWidget } from "@/components/intake-v2/ScreenEnginePublicWidget";
 import {
@@ -20,18 +19,6 @@ import {
   themeToCssVars,
   type FirmBranding,
 } from "@/lib/widget-theme";
-
-// Source Serif 4 is loaded once at the module level. next/font requires
-// font-import calls at module scope (not inside the handler). The font is
-// only actually rendered when the resolved theme references the
-// `--font-source-serif-4` CSS variable; firms on the default theme inherit
-// Manrope / DM Sans from the global CSS and never paint with this face.
-const sourceSerif = Source_Serif_4({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-source-serif-4",
-  display: "swap",
-});
 
 interface PageProps {
   params: Promise<{ firmId: string }>;
@@ -80,13 +67,8 @@ export default async function PublicWidgetPage({ params, searchParams }: PagePro
   const theme = resolveWidgetTheme(firm.branding);
   const themeStyle = themeToCssVars(theme);
 
-  // Apply the Source Serif font variable to the root only when the resolved
-  // theme actually uses it. Otherwise the variable stays unset and the
-  // widget reads the default fonts from its inline DM Sans / Manrope refs.
-  const rootClassName = theme.loadSourceSerif ? sourceSerif.variable : "";
-
   return (
-    <div className={rootClassName} style={themeStyle}>
+    <div style={themeStyle}>
       <ScreenEnginePublicWidget
         firmId={firmId}
         firmName={displayName}

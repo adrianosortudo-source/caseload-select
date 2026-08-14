@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import "@fontsource-variable/caveat";
+import "@fontsource-variable/dm-sans";
+import "@fontsource-variable/source-serif-4";
 import "./globals.css";
 import AdminShell from "@/components/AdminShell";
 
