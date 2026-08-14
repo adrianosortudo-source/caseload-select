@@ -12,6 +12,7 @@ import {
   readConstraints,
   publisherLane,
   resolveDestinationPath,
+  materializePublisherUrl,
   comparePieces,
   groupByPublishDate,
   toAgentRecord,
@@ -131,7 +132,7 @@ function makeBundle(deliverables: ContentExportDeliverable[]): ContentExportBund
   return {
     schema_version: "1.0",
     generated_at: "2026-07-01T00:00:00Z",
-    firm: { id: "firm-1", name: "Test Firm" },
+    firm: { id: "firm-1", name: "Test Firm", custom_domain: "drglaw.ca" },
     period: {
       id: "period-1",
       title: "Test period",
@@ -334,6 +335,24 @@ describe("resolveDestinationPath", () => {
   });
 });
 
+describe("materializePublisherUrl", () => {
+  it("turns a stored route into the full firm URL used by external publishers", () => {
+    expect(materializePublisherUrl("/resources/checklist", "drglaw.ca")).toBe(
+      "https://drglaw.ca/resources/checklist",
+    );
+  });
+
+  it("preserves an already absolute URL without substituting the firm domain", () => {
+    expect(materializePublisherUrl("https://example.com/article", "drglaw.ca")).toBe(
+      "https://example.com/article",
+    );
+  });
+
+  it("does not guess an origin when the firm has no configured custom domain", () => {
+    expect(materializePublisherUrl("/resources/checklist", null)).toBe("/resources/checklist");
+  });
+});
+
 describe("destination path end to end: view model and agent record", () => {
   it("a gbp_post with publication_path null and cta_target_path set produces a piece whose destinationPath is the CTA target", () => {
     const bundle = makeBundle([
@@ -345,7 +364,24 @@ describe("destination path end to end: view model and agent record", () => {
       }),
     ]);
     const piece = piecesOf(toPublishKitView(bundle)).find((p) => p.id === "d1");
+    expect(piece?.destinationPath).toBe("https://drglaw.ca/resources/checklist");
+  });
+
+  it("blocks publisher controls when a relative GBP target cannot be materialized from configured firm data", () => {
+    const bundle = makeBundle([
+      makeDeliverable({
+        id: "d1",
+        channel: "gbp_post",
+        publication_path: null,
+        cta_target_path: "/resources/checklist",
+        may_publish: true,
+      }),
+    ]);
+    bundle.firm.custom_domain = null;
+    const piece = piecesOf(toPublishKitView(bundle)).find((p) => p.id === "d1");
     expect(piece?.destinationPath).toBe("/resources/checklist");
+    expect(piece?.mayPublish).toBe(false);
+    expect(piece?.mayPublishReason).toMatch(/public website domain/);
   });
 
   it("toAgentRecord on that publishable piece returns the resolved path as destination, plus both raw columns", () => {

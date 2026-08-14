@@ -284,6 +284,34 @@ export function resolveDestinationPath(
   return publicationPath;
 }
 
+/**
+ * Materialize the link an operator will paste into an external publisher.
+ * Database routing stays path-based, but Google Business Profile, LinkedIn,
+ * and other external surfaces need an absolute URL. Never guess a firm's
+ * domain: when no configured custom domain exists, retain the path so the
+ * missing configuration remains visible instead of silently pointing at the
+ * wrong site.
+ */
+export function materializePublisherUrl(
+  destinationPath: string | null,
+  customDomain: string | null | undefined,
+): string | null {
+  if (!destinationPath) return null;
+  try {
+    return new URL(destinationPath).toString();
+  } catch {
+    // A relative route is expected here; continue only with a configured host.
+  }
+  const domain = customDomain?.trim();
+  if (!domain) return destinationPath;
+  const origin = /^https?:\/\//i.test(domain) ? domain : `https://${domain}`;
+  try {
+    return new URL(destinationPath, origin).toString();
+  } catch {
+    return destinationPath;
+  }
+}
+
 // ─── View model types ────────────────────────────────────────────────────────
 
 export interface PublishKitArtifact {
@@ -1135,8 +1163,27 @@ function dedupeArtifacts(
   return { kept, discardedCount: artifacts.length - kept.length };
 }
 
-function toPiece(deliverable: ContentExportDeliverable): PublishKitPiece {
+function toPiece(
+  deliverable: ContentExportDeliverable,
+  customDomain: string | null | undefined,
+): PublishKitPiece {
   const role = asDeliverableRole(deliverable.channel);
+  const rawDestinationPath = resolveDestinationPath(
+    role,
+    deliverable.publication_path,
+    deliverable.cta_target_path,
+  );
+  const lane = publisherLane(deliverable.publication_destination);
+  const destinationPath =
+    lane === "manual"
+      ? materializePublisherUrl(rawDestinationPath, customDomain)
+      : rawDestinationPath;
+  const publisherLinkReady =
+    lane !== "manual" || destinationPath === null || /^https?:\/\//i.test(destinationPath);
+  const mayPublish = deliverable.may_publish && publisherLinkReady;
+  const mayPublishReason = publisherLinkReady
+    ? deliverable.may_publish_reason
+    : "The firm has no configured public website domain, so the publisher-facing CTA URL cannot be materialized safely.";
   const {
     bodyHtml,
     versionNumber,
@@ -1199,7 +1246,7 @@ function toPiece(deliverable: ContentExportDeliverable): PublishKitPiece {
   // withheld even on an otherwise publishable piece -- retraction is not
   // "unapproved", it does not go away on approval.
   const boundArtifacts = dedupedBoundArtifacts.map((a) =>
-    !deliverable.may_publish || a.supersededAt ? stripAccess(a) : a,
+    !mayPublish || a.supersededAt ? stripAccess(a) : a,
   );
   const retractedCount = boundArtifacts.filter((a) => a.supersededAt).length;
   const retractedSlotWarnings =
@@ -1221,7 +1268,7 @@ function toPiece(deliverable: ContentExportDeliverable): PublishKitPiece {
   );
 
   const strippedVersionAsset =
-    !deliverable.may_publish && versionAsset
+    !mayPublish && versionAsset
       ? { ...versionAsset, signedUrl: null, signedUrlExpiresAt: null }
       : versionAsset;
   const hasAnyArtifactToShow =
@@ -1242,10 +1289,10 @@ function toPiece(deliverable: ContentExportDeliverable): PublishKitPiece {
     destination: deliverable.publication_destination,
     publicationPath: deliverable.publication_path,
     ctaTargetPath: deliverable.cta_target_path,
-    destinationPath: resolveDestinationPath(role, deliverable.publication_path, deliverable.cta_target_path),
-    lane: publisherLane(deliverable.publication_destination),
-    mayPublish: deliverable.may_publish,
-    mayPublishReason: deliverable.may_publish_reason,
+    destinationPath,
+    lane,
+    mayPublish,
+    mayPublishReason,
     individualReviewHold: deliverable.individual_review_hold
       ? {
           reason: deliverable.individual_review_hold.reason,
@@ -1277,7 +1324,9 @@ function toPiece(deliverable: ContentExportDeliverable): PublishKitPiece {
 
 /** Maps a raw bundle into the view model the Publish Kit UI renders. */
 export function toPublishKitView(bundle: ContentExportBundle): PublishKitView {
-  const pieces = bundle.deliverables.map(toPiece);
+  const pieces = bundle.deliverables.map((deliverable) =>
+    toPiece(deliverable, bundle.firm.custom_domain),
+  );
   const groups = groupByCanonicalFormat(pieces);
 
   const publishableCount = pieces.filter((p) => p.mayPublish).length;

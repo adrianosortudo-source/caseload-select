@@ -8,10 +8,11 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev:turbo": "next dev --turbopack",
-    "build": "node scripts/check-no-em-dash-marketing.mjs && node scripts/check-cron-contract.mjs && next build",
+    "build": "node scripts/check-self-contained-build-assets.mjs && node scripts/check-no-em-dash-marketing.mjs && node scripts/check-cron-contract.mjs && next build",
     "start": "next start",
     "lint": "eslint .",
     "check:em-dash-marketing": "node scripts/check-no-em-dash-marketing.mjs",
+    "check:build-assets": "node scripts/check-self-contained-build-assets.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "check:engine-sync": "bash scripts/check-engine-sync.sh",
@@ -25,6 +26,9 @@
     "drg:deploy": "tsx scripts/drg-deploy/cli.ts"
   },
   "dependencies": {
+    "@fontsource-variable/caveat": "5.3.0",
+    "@fontsource-variable/dm-sans": "5.3.0",
+    "@fontsource-variable/source-serif-4": "5.3.0",
     "@google/generative-ai": "^0.24.1",
     "@react-pdf/renderer": "^4.5.1",
     "@supabase/supabase-js": "^2.45.4",

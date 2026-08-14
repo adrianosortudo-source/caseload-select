@@ -266,7 +266,7 @@ export interface ContentExportArchivedDeliverable {
 export interface ContentExportBundle {
   schema_version: string;
   generated_at: string;
-  firm: { id: string; name: string | null };
+  firm: { id: string; name: string | null; custom_domain?: string | null };
   period: {
     id: string;
     title: string | null;
@@ -478,7 +478,7 @@ export async function buildContentExportBundle(
 
   const { data: firm } = await supabase
     .from("intake_firms")
-    .select("id, name")
+    .select("id, name, custom_domain")
     .eq("id", period.firm_id)
     .maybeSingle();
 
@@ -889,7 +889,11 @@ export async function buildContentExportBundle(
   const bundle: ContentExportBundle = {
     schema_version: CONTENT_EXPORT_SCHEMA_VERSION,
     generated_at: new Date().toISOString(),
-    firm: { id: period.firm_id, name: (firm?.name as string | undefined) ?? null },
+    firm: {
+      id: period.firm_id,
+      name: (firm?.name as string | undefined) ?? null,
+      custom_domain: (firm?.custom_domain as string | undefined) ?? null,
+    },
     period: {
       id: period.id,
       title: period.theme,

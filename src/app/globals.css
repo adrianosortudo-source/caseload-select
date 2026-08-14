@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --font-caveat: "Caveat Variable", cursive;
+  --font-dm-sans: "DM Sans Variable", system-ui, sans-serif;
+  --font-source-serif-4: "Source Serif 4 Variable", Georgia, serif;
+}
+
 html, body { height: 100%; background: #F4F3EF; color: #0D1520; }
 * { box-sizing: border-box; }
 

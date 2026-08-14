@@ -25,8 +25,8 @@
   --danger:       #C0392B;
 
   /* ── Type families ────────────────────────────────────────────────── */
-  --font-display: 'Oxanium', system-ui, sans-serif;
-  --font-body:    'Manrope', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: var(--font-oxanium), system-ui, sans-serif;
+  --font-body:    var(--font-manrope), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 
   /* ── Fluid type scale (clamp: min, fluid, max) ────────────────────── */
   --fs-hero:    clamp(34px, 5vw, 64px);
