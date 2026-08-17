@@ -10,6 +10,7 @@ import {
   type OperatorEmailResult,
 } from '@/lib/voice-callback-notify-pure';
 import { buildLlmDisabledAlertEmail, type LlmDisabledAlertArgs } from '@/lib/llm-health-alert';
+import { buildVoiceRecoverySlaEmail, type VoiceRecoverySlaEmailInput } from '@/lib/voice-recovery-sla';
 
 const FALLBACK_OPERATOR_EMAIL = 'adriano@caseloadselect.ca';
 
@@ -129,4 +130,18 @@ export async function notifyOperatorOfLlmDisabled(
   }
 
   return result;
+}
+
+/**
+ * Acknowledgement-SLA escalation. Unlike the inbound callback notice this is
+ * called by a cron sweep and deliberately has no DB side effect; the caller
+ * stamps the case only after this function confirms a dispatch.
+ */
+export async function notifyOperatorOfVoiceRecoverySla(
+  args: VoiceRecoverySlaEmailInput,
+): Promise<{ email: 'sent' | 'skipped'; idempotencyKey: string }> {
+  const email = buildVoiceRecoverySlaEmail(args);
+  const idempotencyKey = `voice-recovery-sla:${args.caseId}`;
+  const dispatch = await sendEmail(resolveOperatorEmail(), email.subject, email.html, { idempotencyKey });
+  return { email: dispatch.skipped ? 'skipped' : 'sent', idempotencyKey };
 }

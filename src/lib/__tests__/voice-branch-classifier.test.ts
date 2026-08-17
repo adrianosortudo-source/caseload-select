@@ -37,6 +37,20 @@ describe('voice branch classifier', () => {
     expect(d.urgencyTriggers).toContain('tomorrow');
   });
 
+  it('does not let bot speech create a false court-hearing urgency', () => {
+    const t = 'human: I cannot hear you clearly.\nbot: If this concerns a court hearing tomorrow, say so.\nbot: RECORD_BRANCH: OTHER';
+    const d = reconcileVoiceBranch({ transcript: t });
+    expect(d.urgency).toBe('normal');
+    expect(d.urgencyTriggers).toEqual([]);
+  });
+
+  it('does not treat declining SMS as declining legal-help qualification', () => {
+    const t = 'human: I need a lawyer for a shareholder dispute. Please do not text me.\nbot: RECORD_BRANCH: NEW_MATTER';
+    const d = reconcileVoiceBranch({ transcript: t });
+    expect(d.classifierBranch).toBe('new_matter');
+    expect(d.route).toBe('new_matter');
+  });
+
   it('routes vendor calls away from the lawyer lead queue', () => {
     const t = 'human: We sell SEO and lead generation services for law firms.\nbot: RECORD_BRANCH: OTHER';
     const d = reconcileVoiceBranch({ transcript: t });

@@ -16,6 +16,7 @@ export type VoiceFineBranch =
   | 'court_or_counsel'
   | 'vendor'
   | 'wrong_number'
+  | 'caller_declined'
   | 'unclear';
 
 export type VoiceCallbackBranch = Exclude<VoiceFineBranch, 'new_matter'>;
@@ -38,6 +39,21 @@ export interface VoiceBranchDecision {
   reason: string;
 }
 
+/**
+ * Routing and urgency are about the caller's situation, never the agent's
+ * scripted language. GHL transcripts normally label speakers; when they do,
+ * discard bot/agent lines before matching. If a provider gives us unlabeled
+ * text we keep it rather than silently losing a possible urgent request.
+ */
+export function callerSpeechOnly(transcript: string): string {
+  const lines = (transcript ?? '').split(/\r?\n/).filter(Boolean);
+  const callerLines = lines.filter((line) => /^(human|caller|user|client)\s*:/i.test(line));
+  if (callerLines.length === 0) return transcript ?? '';
+  return callerLines
+    .map((line) => line.replace(/^(human|caller|user|client)\s*:\s*/i, ''))
+    .join('\n');
+}
+
 const MARKER_RE = /\bRECORD_BRANCH\s*:\s*(NEW_MATTER|OTHER|UNCLEAR)\b/i;
 
 const URGENCY_PATTERNS: Array<{ label: string; re: RegExp }> = [
@@ -55,6 +71,10 @@ const URGENCY_PATTERNS: Array<{ label: string; re: RegExp }> = [
 ];
 
 const WRONG_NUMBER_RE = /\b(wrong number|wrong person|not who i meant|called by mistake|mistake)\b/i;
+// A refusal of further contact is a recovery disposition. Refusing SMS alone
+// is only a channel-consent decision and must never override a legal-help
+// classification.
+const CALLER_DECLINED_RE = /\b(do not call|don't call|do not contact|don't contact|stop calling|remove me)\b/i;
 
 const VENDOR_RE =
   /\b(vendor|sales|sell you|marketing services|seo|website services|lead generation|advertising|partnership opportunity|supplier|robocall)\b/i;
@@ -84,14 +104,15 @@ export function detectVoiceUrgency(transcript: string): {
   urgency: VoiceUrgency;
   triggers: string[];
 } {
-  const text = transcript ?? '';
+  const text = callerSpeechOnly(transcript);
   const triggers = URGENCY_PATTERNS.filter((p) => p.re.test(text)).map((p) => p.label);
   return { urgency: triggers.length > 0 ? 'urgent' : 'normal', triggers };
 }
 
 export function classifyVoiceBranchHeuristic(transcript: string): VoiceFineBranch {
-  const text = (transcript ?? '').replace(MARKER_RE, ' ');
+  const text = callerSpeechOnly(transcript).replace(MARKER_RE, ' ');
   if (!text.trim()) return 'unclear';
+  if (CALLER_DECLINED_RE.test(text)) return 'caller_declined';
   if (WRONG_NUMBER_RE.test(text)) return 'wrong_number';
   if (COURT_OR_COUNSEL_RE.test(text)) return 'court_or_counsel';
   if (VENDOR_RE.test(text)) return 'vendor';
