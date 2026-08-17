@@ -1,20 +1,19 @@
 /**
- * Voice intake call_id window dedup (launch audit H1, per DR-042).
+ * Voice intake call-event window dedup (launch audit H1, per DR-042).
  *
- * A GHL workflow re-fire posts the same call_id again; without the guard
+ * A GHL workflow re-fire posts the same ghl_call_event_id again; without the guard
  * the engine runs twice and produces a duplicate lead plus a second lawyer
  * notification. The guard is a 10-minute window, NOT an unconditional
- * call_id check, because GHL currently maps the CONTACT id into call_id
- * for DRG (same call_id on every call from one contact), so an
- * unconditional dedup would swallow a genuine second call hours later.
+ * event-id check. The legacy call_id field is the GHL CONTACT id for DRG
+ * and must never be used to identify a call.
  *
  * Coverage:
  *   - Re-fire inside 10 minutes: 200 { ok, dedup, lead_id }, no second
  *     screened_leads insert, no second lawyer notification.
- *   - Same call_id with the prior row outside the window: processes
+ *   - Same call-event id with the prior row outside the window: processes
  *     normally (new insert, notification fires).
- *   - Missing call_id: dedup bypassed entirely (no dedup queries).
- *   - Unresolved GHL placeholder call_id: dedup bypassed.
+ *   - Missing event id: a raw-body hash supplies deterministic retry identity.
+ *   - An unresolved legacy contact placeholder is not used as event identity.
  *   - Callback-branch re-fire inside the window: 200 { ok, dedup, id },
  *     no second voice_callback_requests insert, no operator notification.
  */
@@ -45,7 +44,7 @@ const queryLog: LoggedQuery[] = [];
 vi.mock('@/lib/supabase-admin', () => {
   const rowsForTable = (table: string): StagedRow[] => {
     if (table === 'screened_leads') return staged.screenedLeads;
-    if (table === 'voice_callback_requests') return staged.callbacks;
+    if (table === 'voice_callback_requests' || table === 'voice_recovery_cases') return staged.callbacks;
     return [];
   };
 
@@ -69,10 +68,9 @@ vi.mock('@/lib/supabase-admin', () => {
         }
         const match = rowsForTable(table).find((row) =>
           filters.every((f) => {
-            // The dedup query filters call_id through the slot_answers JSON
-            // path on screened_leads and the bare column on callbacks; both
-            // map onto the staged row's call_id field here.
-            const key = f.col.includes('call_id') ? 'call_id' : f.col;
+            // Screened leads keep event identity in voice_meta; recovery
+            // cases keep it in a dedicated column.
+            const key = f.col.includes('ghl_call_event_id') ? 'ghl_call_event_id' : f.col;
             const cell = row[key];
             if (f.op === 'eq') return cell === f.val;
             if (f.op === 'gte') return typeof cell === 'string' && cell >= String(f.val);
@@ -178,7 +176,7 @@ function minutesAgoIso(minutes: number): string {
 
 function dedupQueries(): LoggedQuery[] {
   return queryLog.filter((q) =>
-    q.filters.some((f) => f.col.includes('call_id')),
+    q.filters.some((f) => f.col.includes('call_event_id')),
   );
 }
 
@@ -200,7 +198,7 @@ describe('/api/voice-intake call_id window dedup', () => {
       id: 'prior-row-uuid',
       lead_id: 'L-prior',
       firm_id: FIRM_ID,
-      call_id: 'qBx9Y2cM4fgwpb8eeTqm',
+      ghl_call_event_id: 'call_evt_001',
       created_at: minutesAgoIso(2),
     });
     const res = await POST(
@@ -210,6 +208,7 @@ describe('/api/voice-intake call_id window dedup', () => {
         caller_name: 'Alex Caller',
         transcript: INTAKE_TRANSCRIPT,
         call_id: 'qBx9Y2cM4fgwpb8eeTqm',
+        ghl_call_event_id: 'call_evt_001',
       }) as never,
     );
     expect(res.status).toBe(200);
@@ -230,7 +229,7 @@ describe('/api/voice-intake call_id window dedup', () => {
       id: 'prior-row-uuid',
       lead_id: 'L-prior',
       firm_id: FIRM_ID,
-      call_id: 'qBx9Y2cM4fgwpb8eeTqm',
+      ghl_call_event_id: 'call_evt_002',
       created_at: minutesAgoIso(30),
     });
     const res = await POST(
@@ -240,6 +239,7 @@ describe('/api/voice-intake call_id window dedup', () => {
         caller_name: 'Alex Caller',
         transcript: INTAKE_TRANSCRIPT,
         call_id: 'qBx9Y2cM4fgwpb8eeTqm',
+        ghl_call_event_id: 'call_evt_002',
       }) as never,
     );
     expect(res.status).toBe(200);
@@ -252,25 +252,25 @@ describe('/api/voice-intake call_id window dedup', () => {
     expect(notifyLawyersOfNewLead).toHaveBeenCalledTimes(1);
   });
 
-  it('missing call_id bypasses dedup entirely and processes normally', async () => {
+  it('missing event id uses a raw-body hash and processes normally', async () => {
     const res = await POST(
       makeRequest({
         firmId: FIRM_ID,
         caller_phone: '+14165550143',
         caller_name: 'Alex Caller',
         transcript: INTAKE_TRANSCRIPT,
-        // call_id omitted
+        // call and contact ids omitted
       }) as never,
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { persisted?: boolean };
     expect(body.persisted).toBe(true);
 
-    expect(dedupQueries()).toHaveLength(0);
+    expect(dedupQueries()).toHaveLength(2);
     expect(captured.inserts.filter((c) => c.table === 'screened_leads')).toHaveLength(1);
   });
 
-  it('unresolved GHL placeholder call_id bypasses dedup', async () => {
+  it('unresolved legacy contact placeholder is not used as event identity', async () => {
     const res = await POST(
       makeRequest({
         firmId: FIRM_ID,
@@ -283,14 +283,14 @@ describe('/api/voice-intake call_id window dedup', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { persisted?: boolean };
     expect(body.persisted).toBe(true);
-    expect(dedupQueries()).toHaveLength(0);
+    expect(dedupQueries()).toHaveLength(2);
   });
 
   it('callback-branch re-fire inside the window dedupes against voice_callback_requests', async () => {
     staged.callbacks.push({
       id: 'prior-callback-uuid',
       firm_id: FIRM_ID,
-      call_id: 'qBx9Y2cM4fgwpb8eeTqm',
+      ghl_call_event_id: 'call_evt_callback_001',
       created_at: minutesAgoIso(3),
     });
     const res = await POST(
@@ -304,6 +304,7 @@ describe('/api/voice-intake call_id window dedup', () => {
           'bot: RECORD_BRANCH: OTHER',
         ].join('\n'),
         call_id: 'qBx9Y2cM4fgwpb8eeTqm',
+        ghl_call_event_id: 'call_evt_callback_001',
       }) as never,
     );
     expect(res.status).toBe(200);
@@ -328,6 +329,7 @@ describe('/api/voice-intake call_id window dedup', () => {
           'bot: RECORD_BRANCH: OTHER',
         ].join('\n'),
         call_id: 'callid_fresh_callback',
+        ghl_call_event_id: 'call_evt_callback_002',
       }) as never,
     );
     expect(res.status).toBe(200);
