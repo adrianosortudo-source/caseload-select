@@ -51,7 +51,7 @@ vi.mock('@/lib/supabase-admin', () => {
   const makeChain = (table: string) => {
     const filters: Array<{ op: string; col: string; val: unknown }> = [];
     const chain = {
-      select: (_cols: string) => chain,
+      select: () => chain,
       eq: (col: string, val: unknown) => {
         filters.push({ op: 'eq', col, val });
         return chain;
@@ -60,7 +60,7 @@ vi.mock('@/lib/supabase-admin', () => {
         filters.push({ op: 'gte', col, val });
         return chain;
       },
-      limit: (_n: number) => chain,
+      limit: () => chain,
       maybeSingle: () => {
         queryLog.push({ table, filters });
         if (table === 'intake_firms') {
@@ -83,7 +83,7 @@ vi.mock('@/lib/supabase-admin', () => {
       insert: (payload: Record<string, unknown>) => {
         captured.inserts.push({ table, payload });
         return {
-          select: (_cols: string) => ({
+          select: () => ({
             single: () =>
               Promise.resolve({
                 data: {
@@ -98,14 +98,30 @@ vi.mock('@/lib/supabase-admin', () => {
           }),
         };
       },
-      update: (_payload: Record<string, unknown>) => ({
+      update: () => ({
         eq: () => Promise.resolve({ data: null, error: null }),
       }),
     };
     return chain;
   };
   return {
-    supabaseAdmin: { from: (table: string) => makeChain(table) },
+    supabaseAdmin: {
+      from: (table: string) => makeChain(table),
+      rpc: (name: string) => ({
+        single: () => Promise.resolve({
+          data: name === 'claim_voice_call_event_processing'
+            ? {
+                claim_state: 'acquired',
+                lease_token: '11111111-2222-4333-8444-555555555555',
+                lease_expires_at: new Date(Date.now() + 120_000).toISOString(),
+                attempt_count: 1,
+                receipt_outcome: null,
+              }
+            : true,
+          error: null,
+        }),
+      }),
+    },
   };
 });
 
@@ -217,7 +233,11 @@ describe('/api/voice-intake call_id window dedup', () => {
     expect(body.dedup).toBe(true);
     expect(body.lead_id).toBe('L-prior');
 
-    expect(captured.inserts).toHaveLength(0);
+    // A migrated historical lead may predate the immutable event ledger. The
+    // retry backfills that event envelope but must not create a second
+    // operational lead/callback row.
+    expect(captured.inserts.filter((insert) => insert.table !== 'voice_call_events')).toHaveLength(0);
+    expect(captured.inserts.filter((insert) => insert.table === 'voice_call_events')).toHaveLength(1);
     expect(notifyLawyersOfNewLead).not.toHaveBeenCalled();
   });
 
@@ -313,7 +333,8 @@ describe('/api/voice-intake call_id window dedup', () => {
     expect(body.dedup).toBe(true);
     expect(body.id).toBe('prior-callback-uuid');
 
-    expect(captured.inserts).toHaveLength(0);
+    expect(captured.inserts.filter((insert) => insert.table !== 'voice_call_events')).toHaveLength(0);
+    expect(captured.inserts.filter((insert) => insert.table === 'voice_call_events')).toHaveLength(1);
     expect(notifyOperatorOfVoiceCallback).not.toHaveBeenCalled();
   });
 

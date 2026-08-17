@@ -10,6 +10,14 @@ export type VoiceRecoveryDisposition =
   | "transcript_partial";
 
 export type VoiceRecoveryStatus = "open" | "acknowledged" | "resolved";
+export type VoiceRecoveryReason =
+  | "unknown"
+  | "non_intake"
+  | "no_contact_provided"
+  | "technical_failure"
+  | "no_usable_transcript"
+  | "disconnected"
+  | "integration_error";
 export type VoiceRecoveryDisplayStatus =
   | "new"
   | "acknowledged"
@@ -23,6 +31,7 @@ export interface VoiceRecoveryCase {
   ghl_call_event_id: string | null;
   ghl_contact_id: string | null;
   disposition: VoiceRecoveryDisposition;
+  recovery_reason: VoiceRecoveryReason;
   status: VoiceRecoveryStatus;
   owner_name: string | null;
   sla_due_at: string | null;
@@ -105,6 +114,18 @@ export function recoveryDispositionLabel(disposition: VoiceRecoveryDisposition):
     incomplete: "Incomplete qualification",
     transcript_partial: "Partial transcript",
   }[disposition];
+}
+
+export function recoveryReasonLabel(reason: VoiceRecoveryReason): string {
+  return {
+    unknown: "Reason awaiting review",
+    non_intake: "Non-intake route",
+    no_contact_provided: "No verified contact path",
+    technical_failure: "Technical failure",
+    no_usable_transcript: "No usable transcript",
+    disconnected: "Call disconnected",
+    integration_error: "Integration error",
+  }[reason];
 }
 
 export function consentLabel(consent: boolean | null): string {

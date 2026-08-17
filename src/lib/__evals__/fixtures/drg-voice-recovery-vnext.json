@@ -1,0 +1,107 @@
+[
+  {
+    "id": "cooperative-new-legal-help",
+    "transcript": "bot: Are you already a client, looking for legal help for the first time, or calling about something else?\nhuman: I need legal help with a dispute with my business partner.\nbot: May I have your name?\nhuman: Maria Chen.\nbot: What's the best phone number to reach you?\nhuman: Six four seven, five five five, zero one two three.\nbot: Please give me a short description of what you would like legal help with.\nhuman: My partner locked me out of our company accounts.\nbot: What is the general scope or value involved, if you are comfortable sharing it?\nhuman: The company is worth around four hundred thousand dollars.\nbot: Is anything due, scheduled, or happening today, tomorrow, or soon?\nhuman: Nothing is due or scheduled soon.\nbot: What parties, prior steps, or proceedings are involved?\nhuman: There are two shareholders and no formal steps have been taken.\nbot: Are you ready to speak with the firm about next steps, or are you still gathering information?\nhuman: I am ready to speak with someone.\nbot: If we get disconnected or need more information, may DRG Law text you at the number you're calling from?\nhuman: Yes, you may text me.",
+    "expected_branch": "new_matter",
+    "expected_urgency": "normal",
+    "expected_sms_consent": "yes",
+    "expected_discovery": ["situation", "scope", "timing", "complexity", "readiness"],
+    "expected_recovery": false
+  },
+  {
+    "id": "owner-request-remains-ambiguous",
+    "transcript": "bot: Are you already a client, looking for legal help for the first time, or calling about something else?\nhuman: I need to speak with the owner.\nbot: Is this about getting legal help, an existing matter, or another business reason?\nhuman: I just need the owner.\nbot: To make sure the right person follows up, what would you like to speak with the firm about?\nhuman: I would rather discuss it with the owner.\nbot: May I have your name?\nhuman: I would rather not.\nbot: If we get disconnected or need more information, may DRG Law text you at the number you're calling from?\nhuman: No.",
+    "expected_branch": "unclear",
+    "expected_urgency": "normal",
+    "expected_sms_consent": "no",
+    "expected_discovery": [],
+    "expected_recovery": true
+  },
+  {
+    "id": "existing-client-concise-message",
+    "transcript": "bot: Are you already a client, looking for legal help for the first time, or calling about something else?\nhuman: I am an existing client calling about my file.\nbot: May I have your name?\nhuman: Daniel Pereira.\nbot: What's the best phone number to reach you?\nhuman: Use the number I am calling from.\nbot: What message would you like me to pass along?\nhuman: Please ask Damaris to call me about the document she requested.",
+    "expected_branch": "existing_client",
+    "expected_urgency": "normal",
+    "expected_sms_consent": "unknown",
+    "expected_discovery": [],
+    "expected_recovery": false
+  },
+  {
+    "id": "administrative-vendor-route",
+    "transcript": "bot: Are you already a client, looking for legal help for the first time, or calling about something else?\nhuman: I am a vendor calling about an invoice for office supplies.\nbot: May I have your name?\nhuman: Jordan Lee.\nbot: What organization are you calling from?\nhuman: North Supply.\nbot: What's the best phone number to reach you?\nhuman: Four one six, five five five, zero one nine nine.",
+    "expected_branch": "vendor",
+    "expected_urgency": "normal",
+    "expected_sms_consent": "unknown",
+    "expected_discovery": [],
+    "expected_recovery": false
+  },
+  {
+    "id": "caller-spoken-court-tomorrow",
+    "transcript": "bot: Are you looking for legal help for the first time?\nhuman: Yes, I am looking for legal help. I was served with papers and I have court tomorrow.\nbot: I am having trouble hearing you. Please repeat that.\nhuman: My hearing is tomorrow.",
+    "expected_branch": "new_matter",
+    "expected_urgency": "urgent",
+    "expected_sms_consent": "unknown",
+    "expected_discovery": ["situation", "timing"],
+    "expected_recovery": true
+  },
+  {
+    "id": "assistant-words-never-create-urgency",
+    "transcript": "bot: I am having trouble hearing you. Is there a hearing or court deadline tomorrow?\nhuman: No. I am calling about office hours.\nbot: May I text you the hours?\nhuman: No, do not text me.",
+    "expected_branch": "admin",
+    "expected_urgency": "normal",
+    "expected_sms_consent": "no",
+    "expected_discovery": [],
+    "expected_recovery": false
+  },
+  {
+    "id": "caller-declines-intake",
+    "transcript": "bot: What would you like legal help with?\nhuman: I do not want to explain it to an automated system. I want a person.\nbot: May I have your name?\nhuman: No.\nbot: May the firm call you back at the number you're calling from?\nhuman: Yes, a person can call me.\nbot: May DRG Law text you at that number?\nhuman: No.",
+    "expected_branch": "unclear",
+    "expected_urgency": "normal",
+    "expected_sms_consent": "no",
+    "expected_discovery": [],
+    "expected_recovery": true
+  },
+  {
+    "id": "caller-declines-recording",
+    "transcript": "bot: This call may be recorded to help DRG review and route your request. You may decline recording. Is that okay?\nhuman: No, I do not consent to recording.\nbot: Understood. I won't collect details about your matter on this call. May the firm call you back at the number you're calling from?\nhuman: Yes, a person may call me.",
+    "expected_branch": "unclear",
+    "expected_urgency": "normal",
+    "expected_sms_consent": "unknown",
+    "expected_discovery": [],
+    "expected_recovery": true
+  },
+  {
+    "id": "immediate-physical-danger",
+    "transcript": "bot: How can the firm help?\nhuman: Someone is breaking into my home right now and I am in immediate physical danger.\nbot: Call 911 or local emergency services now. I cannot give legal advice. If it is safe, may the firm arrange a human follow-up?\nhuman: I am calling 911 now.",
+    "expected_branch": "unclear",
+    "expected_urgency": "urgent",
+    "expected_sms_consent": "unknown",
+    "expected_discovery": [],
+    "expected_recovery": true,
+    "expected_safety_emergency": true
+  },
+  {
+    "id": "portuguese-new-help-policy",
+    "transcript": "bot: Esta chamada pode ser gravada para ajudar a DRG a analisar e encaminhar o seu pedido. Você pode recusar a gravação. Tudo bem?\nhuman: Sim. Preciso de ajuda jurídica com uma disputa entre sócios.\nbot: Posso anotar seu nome?\nhuman: Maria Silva.\nbot: Se precisarmos de mais informações, a DRG pode enviar uma mensagem de texto para este número?\nhuman: Sim, pode enviar.",
+    "expected_branch": "unclear",
+    "expected_urgency": "normal",
+    "expected_sms_consent": "unknown",
+    "expected_discovery": [],
+    "expected_recovery": true,
+    "semantic_assertion": "live_uat",
+    "policy_expected_route": "new_legal_help",
+    "policy_expected_sms_consent": "yes",
+    "expected_human_decision_boundary": true
+  },
+  {
+    "id": "noisy-call-retry-then-recovery",
+    "transcript": "bot: What would you like help with?\nhuman: [inaudible]\nbot: I could not hear that. Please repeat it once.\nhuman: [audio breaks up]\nbot: I still cannot hear you clearly. I will create a human follow-up using the contact information available.",
+    "expected_branch": "unclear",
+    "expected_urgency": "normal",
+    "expected_sms_consent": "unknown",
+    "expected_discovery": [],
+    "expected_recovery": true,
+    "expected_retry_count": 1
+  }
+]

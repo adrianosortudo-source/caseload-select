@@ -1,0 +1,120 @@
+{
+  "schema_version": "drg.voice-ai.hybrid-reception.v1",
+  "config_version": "3.0.0-test.3",
+  "status": "preproduction_test",
+  "updated_at": "2026-08-17",
+  "operating_model": {
+    "voice_ai_role": "primary_receptionist",
+    "human_decision_boundary": "Voice AI captures and routes evidence. The operator and lawyer decide.",
+    "backup_mode": false
+  },
+  "agent": {
+    "name": "DRG Law Reception - Recovery TEST",
+    "prompt_path": "config/ghl/drg-law-reception-recovery-vnext.prompt.txt",
+    "published": false,
+    "phone_assignment": null,
+    "routes": [
+      "new_legal_help",
+      "existing_client",
+      "admin_business",
+      "unknown_recovery"
+    ],
+    "new_lead_core_capture": [
+      "situation"
+    ],
+    "new_lead_discovery": [
+      "scope",
+      "timing",
+      "complexity",
+      "readiness"
+    ],
+    "recovery_exits": [
+      "intent_ambiguous_after_two_clarifiers",
+      "caller_declines_information",
+      "caller_requests_human",
+      "caller_distressed",
+      "matter_too_complex_for_concise_intake",
+      "audio_unclear_after_one_retry",
+      "call_interrupted_or_ending"
+    ],
+    "structured_actions": {
+      "call_intent": [
+        "new_legal_help",
+        "existing_client",
+        "admin_business",
+        "unknown_recovery"
+      ],
+      "service_type_fallback": "unknown",
+      "urgency_flag": [
+        "urgent",
+        "normal"
+      ],
+      "sms_consent": [
+        "yes",
+        "no",
+        "unknown"
+      ],
+      "call_outcome": [
+        "transferred",
+        "callback",
+        "nurture",
+        "booked",
+        "abandoned"
+      ]
+    },
+    "urgency_evidence": "caller_speech_only",
+    "spoken_markers": false,
+    "recording_disclosure": {
+      "purpose": "help DRG review and route the request",
+      "caller_may_decline": true,
+      "decline_route": "unknown_recovery",
+      "decline_behavior": "collect_no_substantive_details_and_create_human_follow_up",
+      "disable_recording_claim": false
+    },
+    "immediate_safety": {
+      "caller_speech_only": true,
+      "signals": [
+        "immediate_physical_danger",
+        "medical_emergency",
+        "crime_in_progress"
+      ],
+      "instruction": "direct_to_911_or_local_emergency_services",
+      "legal_advice": false,
+      "handoff": "minimum_recovery_only_if_safe"
+    }
+  },
+  "workflow": {
+    "name": "DRG Voice Recovery VNext - TEST",
+    "status": "draft",
+    "published": false,
+    "trigger": {
+      "type": "transcript_generated",
+      "agent_name": "DRG Law Reception - Recovery TEST",
+      "allow_reentry": true
+    },
+    "integration_mode": "preproduction_test",
+    "required_identifiers": [
+      "ghl_call_event_id",
+      "ghl_contact_id"
+    ],
+    "states": [
+      "qualified_legal",
+      "existing_client",
+      "admin_business",
+      "recovery_required",
+      "transcript_or_integration_exception"
+    ],
+    "recovery_sms": {
+      "requires_sms_consent": "yes",
+      "body": "Thanks for calling DRG Law. We could not capture enough information to route your request. Are you: 1) looking for legal help, 2) an existing client, or 3) calling about something else? Reply 1, 2 or 3. DRG Law. Reply STOP to opt out."
+    }
+  },
+  "release_guards": {
+    "assign_phone": false,
+    "publish_agent": false,
+    "publish_workflow": false,
+    "enable_workflow": false,
+    "touch_live_agent": false,
+    "touch_live_workflow": false
+  }
+}

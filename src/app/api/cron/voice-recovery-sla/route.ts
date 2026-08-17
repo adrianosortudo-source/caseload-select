@@ -10,8 +10,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isCronAuthorized } from '@/lib/cron-auth';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { notifyOperatorOfVoiceRecoverySla } from '@/lib/voice-callback-notify';
+import { notifyOperatorOfVoiceRecoverySla, resolveOperatorNotificationEmail } from '@/lib/voice-callback-notify';
 import { isVoiceRecoverySlaEscalationDue } from '@/lib/voice-recovery-sla';
+import { appendVoiceRecoveryAuditEvent, enqueueVoiceRecoveryDelivery, isVoiceDeliveryAttemptDue, recordVoiceDeliveryAttempt } from '@/lib/voice-recovery';
 
 const BATCH_LIMIT = 50;
 
@@ -70,6 +71,19 @@ export async function GET(req: NextRequest) {
       continue;
     }
     try {
+      const delivery = await enqueueVoiceRecoveryDelivery({
+        recoveryCaseId: row.id,
+        recipient: resolveOperatorNotificationEmail(),
+        idempotencyKey: `voice-recovery-sla:${row.id}`,
+        payload: { firm_id: row.firm_id, disposition: row.disposition, urgency: row.urgency, sla_due_at: row.sla_due_at },
+      });
+      if (!delivery.duplicate) {
+        await appendVoiceRecoveryAuditEvent({ recoveryCaseId: row.id, eventType: 'sla_escalation_queued', actorType: 'cron', detail: { delivery_id: delivery.row.id } });
+      }
+      if (!isVoiceDeliveryAttemptDue(delivery.row, now)) {
+        outcomes.push({ id: row.id, outcome: 'skipped' });
+        continue;
+      }
       const dispatch = await notifyOperatorOfVoiceRecoverySla({
         caseId: row.id,
         firmId: row.firm_id,
@@ -81,9 +95,11 @@ export async function GET(req: NextRequest) {
         triageUrl: recoveryQueueUrl(row.firm_id),
       });
       if (dispatch.email === 'skipped') {
+        await recordVoiceDeliveryAttempt({ row: delivery.row, delivered: false, error: 'email provider is not configured' });
         outcomes.push({ id: row.id, outcome: 'skipped' });
         continue;
       }
+      await recordVoiceDeliveryAttempt({ row: delivery.row, delivered: true, providerMessageId: dispatch.providerMessageId ?? null });
       // Guard all volatile state: an acknowledgement racing this sweep wins,
       // and the harmless Resend idempotency key protects a crash-after-send.
       const { error: stampError } = await supabase
@@ -99,6 +115,9 @@ export async function GET(req: NextRequest) {
         .eq('status', 'open')
         .is('acknowledged_at', null)
         .is('acknowledgement_sla_escalated_at', null);
+      if (!stampError) {
+        await appendVoiceRecoveryAuditEvent({ recoveryCaseId: row.id, eventType: 'sla_escalated', actorType: 'cron', detail: { delivery_id: delivery.row.id } });
+      }
       outcomes.push(stampError ? { id: row.id, outcome: 'failed', error: stampError.message } : { id: row.id, outcome: 'sent' });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -113,6 +132,7 @@ export async function GET(req: NextRequest) {
         .eq('status', 'open')
         .is('acknowledged_at', null)
         .is('acknowledgement_sla_escalated_at', null);
+      await appendVoiceRecoveryAuditEvent({ recoveryCaseId: row.id, eventType: 'sla_escalation_failed', actorType: 'cron', detail: { error: message.slice(0, 500) } }).catch((auditError) => console.error('[voice-recovery-sla] audit write failed:', auditError));
       outcomes.push({ id: row.id, outcome: 'failed', error: message });
     }
   }

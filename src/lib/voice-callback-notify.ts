@@ -24,7 +24,7 @@ export interface VoiceCallbackNotifyResult {
   errors: string[];
 }
 
-function resolveOperatorEmail(): string {
+export function resolveOperatorNotificationEmail(): string {
   return process.env.OPERATOR_NOTIFICATION_EMAIL || FALLBACK_OPERATOR_EMAIL;
 }
 
@@ -57,7 +57,7 @@ export async function notifyOperatorOfVoiceCallback(
   const email = buildVoiceCallbackEmail(args);
 
   try {
-    const dispatch = await sendEmail(resolveOperatorEmail(), email.subject, email.html);
+    const dispatch = await sendEmail(resolveOperatorNotificationEmail(), email.subject, email.html);
     result.email = dispatch.skipped ? 'skipped' : 'sent';
   } catch (err) {
     result.email = 'error';
@@ -98,7 +98,7 @@ export async function notifyOperatorOfUnconfirmedVoiceIntake(
   const email = buildUnconfirmedVoiceEmail(args);
 
   try {
-    const dispatch = await sendEmail(resolveOperatorEmail(), email.subject, email.html);
+    const dispatch = await sendEmail(resolveOperatorNotificationEmail(), email.subject, email.html);
     result.email = dispatch.skipped ? 'skipped' : 'sent';
   } catch (err) {
     result.email = 'error';
@@ -122,7 +122,7 @@ export async function notifyOperatorOfLlmDisabled(
   const email = buildLlmDisabledAlertEmail(args);
 
   try {
-    const dispatch = await sendEmail(resolveOperatorEmail(), email.subject, email.html);
+    const dispatch = await sendEmail(resolveOperatorNotificationEmail(), email.subject, email.html);
     result.email = dispatch.skipped ? 'skipped' : 'sent';
   } catch (err) {
     result.email = 'error';
@@ -139,9 +139,10 @@ export async function notifyOperatorOfLlmDisabled(
  */
 export async function notifyOperatorOfVoiceRecoverySla(
   args: VoiceRecoverySlaEmailInput,
-): Promise<{ email: 'sent' | 'skipped'; idempotencyKey: string }> {
+): Promise<{ email: 'sent' | 'skipped'; idempotencyKey: string; recipient: string; providerMessageId?: string }> {
   const email = buildVoiceRecoverySlaEmail(args);
   const idempotencyKey = `voice-recovery-sla:${args.caseId}`;
-  const dispatch = await sendEmail(resolveOperatorEmail(), email.subject, email.html, { idempotencyKey });
-  return { email: dispatch.skipped ? 'skipped' : 'sent', idempotencyKey };
+  const recipient = resolveOperatorNotificationEmail();
+  const dispatch = await sendEmail(recipient, email.subject, email.html, { idempotencyKey });
+  return { email: dispatch.skipped ? 'skipped' : 'sent', idempotencyKey, recipient, providerMessageId: dispatch.skipped ? undefined : dispatch.id };
 }

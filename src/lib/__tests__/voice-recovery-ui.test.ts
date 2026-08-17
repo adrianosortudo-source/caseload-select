@@ -8,6 +8,7 @@ import {
   isSlaOverdue,
   recoveryDisplayStatus,
   recoveryExcerpt,
+  recoveryReasonLabel,
   type VoiceRecoveryCase,
 } from "@/lib/voice-recovery-ui";
 
@@ -18,6 +19,7 @@ function makeCase(overrides: Partial<VoiceRecoveryCase> = {}): VoiceRecoveryCase
     ghl_call_event_id: "call-123",
     ghl_contact_id: "contact-123",
     disposition: "unclear",
+    recovery_reason: "unknown",
     status: "open",
     owner_name: null,
     sla_due_at: "2026-08-14T20:30:00.000Z",
@@ -90,6 +92,11 @@ describe("voice recovery status", () => {
     const item = makeCase({ last_follow_up_summary: "Human callback completed", raw_transcript: "Transcript" });
     expect(recoveryExcerpt(item)).toBe("Human callback completed");
     expect(recoveryExcerpt(makeCase({ message_excerpt: null, raw_transcript: "a".repeat(20) }), 10)).toBe("aaaaaaa...");
+  });
+
+  it("labels recovery causes without exposing storage keys", () => {
+    expect(recoveryReasonLabel("no_usable_transcript")).toBe("No usable transcript");
+    expect(recoveryReasonLabel("integration_error")).toBe("Integration error");
   });
 });
 

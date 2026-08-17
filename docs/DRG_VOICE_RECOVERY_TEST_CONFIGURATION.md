@@ -10,7 +10,15 @@ For DRG Law, Voice AI is the primary receptionist. It answers the public line di
 
 Name: `DRG Law Reception - Recovery TEST`
 
-### System prompt
+Canonical configuration:
+
+- Manifest: `config/ghl/drg-voice-recovery-vnext.manifest.json`
+- Paste-ready prompt: `config/ghl/drg-law-reception-recovery-vnext.prompt.txt`
+- Deterministic scenarios: `src/lib/__evals__/fixtures/drg-voice-recovery-vnext.json`
+
+The manifest is authoritative for schema version, config version, asset names, operating model, release guards, routes, discovery, consent, and workflow state. The paste-ready prompt is authoritative for the GHL agent instructions.
+
+### Superseded design snapshot (not canonical)
 
 ```text
 ROLE
@@ -127,12 +135,20 @@ The workflow remains Draft. It is not attached to the live phone path. Its custo
 
 The cloned workflow has been repaired to:
 
-- use the `CaseLoad Select · Core Chassis` pipeline instead of stale pipeline and stage identifiers;
+- use the `CaseLoad Select / Core Chassis` pipeline instead of stale pipeline and stage identifiers;
 - create the initial durable inquiry record and retain evidence even when qualification is incomplete;
 - assign urgent, callback, and missed-call recovery tasks to Damaris with an immediate due time;
 - direct operators to the CaseLoad Screen Voice Recovery queue;
 - send the recovery SMS only from the affirmative consent branch; and
 - keep the test workflow unpublished until scenario testing and approval are complete.
+
+### Authenticated GHL verification (2026-08-17)
+
+- `DRG Law Reception - Recovery TEST` is saved with `CONFIG VERSION: 3.0.0-test.3` and the canonical welcome disclosure.
+- The test agent has no phone number selected. `Answer calls directly` is selected because this is the primary-receptionist design; `Use as backup` is not selected.
+- `DRG Voice Recovery VNext - TEST` is saved as Draft with the publish switch off.
+- Its Voice AI trigger is labelled `Transcript Generated - Recovery TEST v3.0.0`.
+- No test asset was published, enabled, or connected to a live number during this configuration pass.
 
 ## Required GHL workflow states
 

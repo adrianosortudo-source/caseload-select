@@ -8,6 +8,7 @@ import {
   recoveryDispositionLabel,
   recoveryDisplayStatus,
   recoveryExcerpt,
+  recoveryReasonLabel,
   recoveryStatusLabel,
   type VoiceRecoveryCase,
   type VoiceRecoveryDisplayStatus,
@@ -16,6 +17,12 @@ import {
 
 type EditorMode = "follow_up" | "resolve" | "promote";
 type FilterStatus = "all" | VoiceRecoveryDisplayStatus;
+
+interface VoiceRecoveryHealth {
+  events: Array<{ id: string; receipt: unknown | null; retry_eligible: boolean }>;
+  unreconciled_count: number;
+  retry_eligible_count: number;
+}
 
 const STATUS_ORDER: VoiceRecoveryDisplayStatus[] = [
   "new",
@@ -27,6 +34,7 @@ const STATUS_ORDER: VoiceRecoveryDisplayStatus[] = [
 
 export default function VoiceRecoveryClient({ firmId }: { firmId: string }) {
   const [payload, setPayload] = useState<VoiceRecoveryResponse | null>(null);
+  const [health, setHealth] = useState<VoiceRecoveryHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -39,12 +47,18 @@ export default function VoiceRecoveryClient({ firmId }: { firmId: string }) {
     setError(null);
     try {
       const params = new URLSearchParams({ firm_id: firmId, limit: "100" });
-      const response = await fetch(`/api/admin/voice-recovery?${params.toString()}`, {
-        cache: "no-store",
-      });
+      const [response, healthResponse] = await Promise.all([
+        fetch(`/api/admin/voice-recovery?${params.toString()}`, { cache: "no-store" }),
+        fetch(`/api/admin/voice-recovery/reconciliation?firm_id=${encodeURIComponent(firmId)}`, { cache: "no-store" }),
+      ]);
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "Could not load voice recovery cases.");
       setPayload(body as VoiceRecoveryResponse);
+      if (healthResponse.ok) {
+        setHealth(await healthResponse.json() as VoiceRecoveryHealth);
+      } else {
+        setHealth(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load voice recovery cases.");
     } finally {
@@ -149,6 +163,18 @@ export default function VoiceRecoveryClient({ firmId }: { firmId: string }) {
             />
           ))}
         </div>
+        {health && (
+          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 border-t border-black/5 pt-3 text-[11px] text-black/50" aria-label="Voice event reconciliation status">
+            <span>{health.events.length} recent call events checked</span>
+            <span>{health.events.length - health.unreconciled_count} terminal receipts verified</span>
+            <span className={health.unreconciled_count > 0 ? "font-semibold text-amber-800" : "text-emerald-800"}>
+              {health.unreconciled_count} awaiting reconciliation
+            </span>
+            {health.retry_eligible_count > 0 && (
+              <span className="font-semibold text-red-700">{health.retry_eligible_count} safe to replay</span>
+            )}
+          </div>
+        )}
       </div>
 
       <div aria-live="polite" aria-atomic="true">
@@ -248,6 +274,11 @@ export function VoiceRecoveryCard({
             <span className="border border-black/10 bg-parchment-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-navy">
               {recoveryDispositionLabel(item.disposition)}
             </span>
+            {item.recovery_reason !== "unknown" && (
+              <span className="border border-black/10 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-black/55">
+                {recoveryReasonLabel(item.recovery_reason)}
+              </span>
+            )}
             {item.urgency && (
               <span className={`border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${urgencyClasses(item.urgency)}`}>
                 {item.urgency}

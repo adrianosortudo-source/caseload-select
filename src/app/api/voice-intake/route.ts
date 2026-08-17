@@ -92,7 +92,10 @@ import { shouldAlertLlmDisabled } from '@/lib/llm-health-alert';
 import { lintVoiceTranscript, summariseVoiceLint } from '@/lib/voice-transcript-lint';
 import {
   createVoiceRecoveryCase,
+  claimVoiceCallEventProcessing,
   extractVoiceMessagingConsent,
+  recordVoiceCallEvent,
+  recordVoiceCallReceipt,
   resolveVoiceCallEventId,
 } from '@/lib/voice-recovery';
 
@@ -118,6 +121,9 @@ interface VoiceIntakeBody {
   sms_consent?: boolean | string;
   event_timestamp?: string;
   integration_mode?: string;
+  workflow_version?: string;
+  prompt_version?: string;
+  schema_version?: string;
   firmId?: string;
 }
 
@@ -191,6 +197,15 @@ function parseWebhookConsent(value: boolean | string | undefined): boolean | nul
   if (normalized === 'true' || normalized === 'yes' || normalized === '1') return true;
   if (normalized === 'false' || normalized === 'no' || normalized === '0') return false;
   return null;
+}
+
+function recoveryReasonFromWebhook(body: VoiceIntakeBody, fallback: 'unknown' | 'non_intake' | 'no_contact_provided' | 'no_usable_transcript'):
+  'unknown' | 'non_intake' | 'no_contact_provided' | 'technical_failure' | 'no_usable_transcript' | 'disconnected' | 'integration_error' {
+  const value = String(body.call_outcome ?? '').trim().toLowerCase();
+  if (value === 'technical_failure') return 'technical_failure';
+  if (value === 'disconnected') return 'disconnected';
+  if (value === 'integration_error') return 'integration_error';
+  return fallback;
 }
 
 function seedVoiceState(state: EngineState, callerPhone: string | null, callerName: string | null): EngineState {
@@ -402,6 +417,52 @@ export async function POST(req: NextRequest) {
 
   const ghlContactId = (body.ghl_contact_id ?? body.contact_id ?? body.call_id ?? '').trim() || null;
   const ghlCallEventId = resolveVoiceCallEventId(body.ghl_call_event_id, rawBody);
+  // The immutable event ledger is the replay boundary. It is written only
+  // after the signature gate and firm lookup, never for quarantined payloads.
+  const callEvent = await recordVoiceCallEvent({
+    firmId: firmIdParam,
+    ghlCallEventId,
+    ghlContactId,
+    rawWebhookBody: rawBody,
+    payload: body as unknown as Record<string, unknown>,
+    webhookSignatureMode: verifyResult.mode,
+    integrationMode: body.integration_mode ?? null,
+    workflowVersion: body.workflow_version ?? null,
+    promptVersion: body.prompt_version ?? null,
+    schemaVersion: body.schema_version ?? null,
+  });
+  const processingClaim = await claimVoiceCallEventProcessing(callEvent.id);
+  if (processingClaim.claim_state === 'completed') {
+    return NextResponse.json(
+      {
+        ok: true,
+        dedup: true,
+        mode: 'duplicate_event',
+        voice_call_event_id: callEvent.id,
+        receipt_outcome: processingClaim.receipt_outcome,
+      },
+      { status: 200, headers: CORS_HEADERS },
+    );
+  }
+  if (processingClaim.claim_state === 'in_progress') {
+    return NextResponse.json(
+      {
+        ok: true,
+        dedup: true,
+        mode: 'event_in_progress',
+        voice_call_event_id: callEvent.id,
+        retry_after_seconds: Math.max(1, Math.ceil(((new Date(processingClaim.lease_expires_at ?? Date.now())).getTime() - Date.now()) / 1_000)),
+      },
+      { status: 202, headers: { ...CORS_HEADERS, 'Retry-After': '5' } },
+    );
+  }
+  const processingLeaseToken = processingClaim.lease_token;
+  if (!processingLeaseToken) {
+    return NextResponse.json(
+      { error: 'voice event processing claim did not include a lease token' },
+      { status: 500, headers: CORS_HEADERS },
+    );
+  }
   const contactId = ghlContactId ?? '';
   const firmRow = firm as {
     name?: string | null;
@@ -459,7 +520,17 @@ export async function POST(req: NextRequest) {
         recordingUrl: body.recording_url ?? null,
         messageExcerpt: 'No usable transcript was delivered by GHL.',
         evidence: { api_fetch: apiFetchTelemetry, reason: 'no_usable_transcript' },
+        voiceCallEventId: callEvent.id,
+        recoveryReason: recoveryReasonFromWebhook(body, 'no_usable_transcript'),
       });
+      const reason = recoveryReasonFromWebhook(body, 'no_usable_transcript');
+      const receiptOutcome = reason === 'technical_failure'
+        || reason === 'no_usable_transcript'
+        || reason === 'disconnected'
+        || reason === 'integration_error'
+        ? reason
+        : 'recovery_case';
+      await recordVoiceCallReceipt({ voiceCallEventId: callEvent.id, leaseToken: processingLeaseToken, outcome: receiptOutcome, recoveryCaseId: recovery.id, detail: { reason } });
       return NextResponse.json(
         { persisted: true, mode: 'recovery', recovery_case_id: recovery.id, duplicate: recovery.duplicate, reason: 'transcript_partial' },
         { status: 200, headers: CORS_HEADERS },
@@ -594,13 +665,15 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Multi-intent voice front desk (DR-054 candidate) ──────────────────
-  // The public voice line is not intake-only. The GHL agent emits a coarse
-  // RECORD_BRANCH marker, and the app independently classifies the transcript.
+  // The public voice line is not intake-only. Current GHL agents write a
+  // structured call intent; legacy agents may still emit RECORD_BRANCH. The
+  // app independently classifies caller speech and reconciles either signal.
   // Non-intake calls persist to voice_callback_requests, never screened_leads.
   const appBranch = await classifyVoiceBranchServer(normalizedTranscript);
   const branchDecision = reconcileVoiceBranch({
     transcript: normalizedTranscript,
     classifierBranch: appBranch.branch,
+    structuredCallIntent: body.call_intent,
     strictMissingMarker: process.env.VOICE_ROUTER_STRICT_MARKER === 'true',
   });
 
@@ -667,7 +740,10 @@ export async function POST(req: NextRequest) {
         messageExcerpt: callbackMessage,
         evidence: voiceMeta,
         alertStatus: 'pending',
+        voiceCallEventId: callEvent.id,
+        recoveryReason: recoveryReasonFromWebhook(body, 'non_intake'),
       });
+      await recordVoiceCallReceipt({ voiceCallEventId: callEvent.id, leaseToken: processingLeaseToken, outcome: 'recovery_case', recoveryCaseId: recovery.id, detail: { disposition: callbackBranch } });
       recoveryCaseId = recovery.id;
       if (recovery.duplicate) {
         return NextResponse.json(
@@ -944,7 +1020,10 @@ export async function POST(req: NextRequest) {
           ghl_event_timestamp: body.event_timestamp ?? null,
           ghl_integration_mode: body.integration_mode ?? null,
         },
+        voiceCallEventId: callEvent.id,
+        recoveryReason: recoveryReasonFromWebhook(body, 'no_contact_provided'),
       });
+      await recordVoiceCallReceipt({ voiceCallEventId: callEvent.id, leaseToken: processingLeaseToken, outcome: 'unconfirmed', recoveryCaseId: recovery.id, detail: { reason: 'no_contact_provided' } });
       recoveryCaseId = recovery.id;
       if (recovery.duplicate) {
         return NextResponse.json(
@@ -1158,6 +1237,14 @@ export async function POST(req: NextRequest) {
       { status: 500, headers: CORS_HEADERS },
     );
   }
+
+  await recordVoiceCallReceipt({
+    voiceCallEventId: callEvent.id,
+    leaseToken: processingLeaseToken,
+    outcome: 'screened_lead',
+    screenedLeadId: inserted.id,
+    detail: { lead_id: inserted.lead_id, status: inserted.status },
+  });
 
   // ── Lead notification email (best-effort) ──────────────────────────────
   // Doctrine (2026-05-15): "The engine sorts attention, the lawyer decides

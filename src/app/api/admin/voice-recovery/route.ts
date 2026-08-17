@@ -3,7 +3,7 @@ import { requireOperator } from '@/lib/admin-auth';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 
 const FIRM_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const CASE_FIELDS = 'id, firm_id, ghl_call_event_id, ghl_contact_id, disposition, status, urgency, owner_name, sla_due_at, acknowledged_at, acknowledged_by, acknowledgement_sla_escalated_at, acknowledgement_sla_escalation_attempts, acknowledgement_sla_escalation_error, caller_name, name_source, observed_caller_id, spoken_callback_number, callback_number_verified, sms_consent, whatsapp_consent, messaging_consent_provenance, messaging_consent_at, message_excerpt, raw_transcript, transcript_source, recording_url, evidence, alert_status, alert_sent_at, delivery_state, follow_up_state, follow_up_count, last_follow_up_at, last_follow_up_summary, promoted_screened_lead_id, created_at, updated_at';
+const CASE_FIELDS = 'id, firm_id, ghl_call_event_id, ghl_contact_id, disposition, recovery_reason, status, urgency, owner_name, sla_due_at, acknowledged_at, acknowledged_by, acknowledgement_sla_escalated_at, acknowledgement_sla_escalation_attempts, acknowledgement_sla_escalation_error, caller_name, name_source, observed_caller_id, spoken_callback_number, callback_number_verified, sms_consent, whatsapp_consent, messaging_consent_provenance, messaging_consent_at, message_excerpt, raw_transcript, transcript_source, recording_url, evidence, alert_status, alert_sent_at, delivery_state, follow_up_state, follow_up_count, last_follow_up_at, last_follow_up_summary, promoted_screened_lead_id, created_at, updated_at';
 
 /** Operator recovery queue. UI contract: `{ cases, counts }`, never a
  * callback-table-specific payload. */

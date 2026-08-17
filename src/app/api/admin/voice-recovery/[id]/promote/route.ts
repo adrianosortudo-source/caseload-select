@@ -7,6 +7,7 @@ import { evaluateContactGate } from '@/lib/screen-engine/contact-doctrine';
 import { clampAxis, computeInitialStatus } from '@/lib/intake-v2-derive';
 import { notifyLawyersOfNewLead } from '@/lib/lead-notify';
 import { waitUntil } from '@vercel/functions';
+import { appendVoiceRecoveryAuditEvent } from '@/lib/voice-recovery';
 
 interface RecoveryCase {
   id: string;
@@ -52,6 +53,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       .update({ promoted_screened_lead_id: previouslyInserted.id, status: 'resolved', follow_up_state: 'completed' })
       .eq('id', recovery.id)
       .is('promoted_screened_lead_id', null);
+    await appendVoiceRecoveryAuditEvent({ recoveryCaseId: recovery.id, eventType: 'reconciled', actorType: 'operator', actorId: session.lawyer_id ?? 'operator', detail: { repaired_promotion_link: previouslyInserted.id } });
     return NextResponse.json({ ok: true, action: 'promote', recovered_link: true, screened_lead_id: previouslyInserted.id, lead_id: previouslyInserted.lead_id, band: previouslyInserted.band });
   }
   if (!(recovery.raw_transcript ?? '').trim()) {
@@ -136,6 +138,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     // without duplicating it, so tell the caller exactly what remains.
     return NextResponse.json({ ok: false, error: `promotion link failed: ${linkError.message}`, retryable: true, screened_lead_id: inserted.id, lead_id: inserted.lead_id }, { status: 202 });
   }
+  await appendVoiceRecoveryAuditEvent({ recoveryCaseId: recovery.id, eventType: 'promoted', actorType: 'operator', actorId: session.lawyer_id ?? 'operator', detail: { screened_lead_id: inserted.id, lead_id: inserted.lead_id } });
   if (inserted.status === 'triaging' || inserted.status === 'declined') {
     waitUntil(notifyLawyersOfNewLead({
       firmId: recovery.firm_id, leadId: inserted.lead_id,
