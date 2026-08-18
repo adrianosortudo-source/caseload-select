@@ -76,6 +76,13 @@ export function loadAndValidateBundle(bundlePath: string, packageRoot: string): 
     if (sha256Bytes(piece.bodyHtml) !== piece.bodySha256) errors.push(`${piece.slotId}: body hash mismatch`);
     const source = safePath(packageRoot, piece.source.path);
     if (!existsSync(source) || !statSync(source).isFile() || sha256Bytes(readFileSync(source)) !== piece.source.sha256) errors.push(`${piece.slotId}: source hash mismatch`);
+    if (piece.formatFamily === "decision_tool") {
+      if (piece.contentKind !== "text") errors.push(`${piece.slotId}: Checklist must be a complete text deliverable, with its PDF attached separately`);
+      if (typeof piece.bodyHtml !== "string" || piece.bodyHtml.length < 5000) errors.push(`${piece.slotId}: Checklist review body is incomplete`);
+      for (const marker of ["<h2>", "<h3>", "<ul>", 'data-review-table="true"']) {
+        if (!piece.bodyHtml.includes(marker)) errors.push(`${piece.slotId}: Checklist review body is missing ${marker}`);
+      }
+    }
   }
   const approved = new Set((bundle.approvalEvidence ?? []).flatMap((item: any) => item.decision === "approved" ? item.scope : []));
   for (const approval of bundle.approvalEvidence ?? []) {

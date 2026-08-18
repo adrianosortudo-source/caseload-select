@@ -14,8 +14,10 @@ function fixture() {
   const sha = (value: Buffer | string) => createHash("sha256").update(value).digest("hex");
   const pieces = [...EXPECTED_SLOTS].sort().map((slot, index) => {
     const source = JSON.stringify({ slot }); writeFileSync(path.join(root, "sources", `${slot}.json`), source);
-    const bodyHtml = `<p>Reader-facing body for ${slot} with enough content.</p>`;
-    return { slotId: slot, deliverableId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, versionId: `10000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, formatFamily: slot.startsWith("gbp-") ? "google_business_profile_post" : slot.startsWith("checklist") ? "decision_tool" : "counsel_note", locale: slot.endsWith("-pt") ? "pt-BR" : "en-CA", destination: slot.startsWith("gbp-") ? "google_business_profile" : "firm_website", deliverableRole: slot.startsWith("gbp-") ? "gbp_post" : slot.startsWith("checklist") ? "lead_magnet_pdf" : "article", title: `Title for ${slot}`, description: `Description for ${slot}`, bodyHtml, source: { path: `sources/${slot}.json`, sha256: sha(source) }, bodySha256: sha(bodyHtml), contentKind: slot.startsWith("checklist") ? "pdf" : "text", publicationPath: null, ctaTargetPath: null };
+    const bodyHtml = slot.startsWith("checklist")
+      ? `<h2>How to use</h2><h3>Observable checks</h3><ul><li>Check</li></ul><div data-review-table="true">${"complete decision tool ".repeat(300)}</div>`
+      : `<p>Reader-facing body for ${slot} with enough content.</p>`;
+    return { slotId: slot, deliverableId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, versionId: `10000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, formatFamily: slot.startsWith("gbp-") ? "google_business_profile_post" : slot.startsWith("checklist") ? "decision_tool" : "counsel_note", locale: slot.endsWith("-pt") ? "pt-BR" : "en-CA", destination: slot.startsWith("gbp-") ? "google_business_profile" : "firm_website", deliverableRole: slot.startsWith("gbp-") ? "gbp_post" : slot.startsWith("checklist") ? "lead_magnet_pdf" : "article", title: `Title for ${slot}`, description: `Description for ${slot}`, bodyHtml, source: { path: `sources/${slot}.json`, sha256: sha(source) }, bodySha256: sha(bodyHtml), contentKind: "text", publicationPath: null, ctaTargetPath: null };
   });
   const assets = Array.from({ length: 9 }, (_, index) => {
     const bytes = Buffer.from(`asset-${index}`); writeFileSync(path.join(root, "assets", `${index}.png`), bytes);
