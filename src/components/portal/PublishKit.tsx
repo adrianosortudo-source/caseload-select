@@ -22,8 +22,7 @@ import {
   pieceMatchesFilter,
   filteredTotals,
   blockedPiecesAreFullyWithheld,
-  shouldShowWebsiteArtifactSlots,
-  websitePlacementArtifact,
+  websiteArticleHeroArtifact,
   type PublishKitView,
   type PublishKitPiece,
   type ConstraintReading,
@@ -491,6 +490,17 @@ function PieceCard({
       })
     : null;
   const isChecklistPdf = piece.role === "lead_magnet_pdf";
+  const visibleArtifacts =
+    piece.role !== "article"
+      ? piece.artifacts.filter(
+          (artifact) => !(isChecklistPdf && artifact.artifactType === "pdf"),
+        )
+      : piece.destination === "firm_website"
+        ? [
+            websiteArticleHeroArtifact(piece),
+            ...piece.artifacts.filter((artifact) => artifact.artifactType !== "hero_image"),
+          ].filter((artifact): artifact is PublishKitPiece["artifacts"][number] => artifact !== null)
+        : piece.artifacts;
 
   return (
     <article id={`dlv-${piece.id}`} className="bg-white border border-border-brand scroll-mt-4">
@@ -697,25 +707,14 @@ function PieceCard({
               here.
             </p>
           )}
-          {shouldShowWebsiteArtifactSlots(piece) && (
-            <div>
-              <WebsiteArtifactSlot
-                label="Article hero"
-                helper="One text-overlay hero reused across website placements"
-                artifact={websitePlacementArtifact(piece)}
-                piece={piece}
-              />
-            </div>
-          )}
-          {(piece.role !== "article"
-            ? piece.artifacts.filter((artifact) => !(isChecklistPdf && artifact.artifactType === "pdf"))
-            : piece.destination === "firm_website"
-              ? piece.artifacts.filter((a) => a.artifactType !== "hero_image")
-              : piece.artifacts
-          ).map((artifact) => (
+          {visibleArtifacts.map((artifact) => (
             <ArtifactBlock
               key={artifact.id}
-              label={artifactTypeLabel(artifact.artifactType)}
+              label={
+                piece.destination === "firm_website" && artifact.artifactType === "hero_image"
+                  ? "Article hero"
+                  : artifactTypeLabel(artifact.artifactType)
+              }
               filename={artifact.filename}
               mime={artifact.mime}
               sizeBytes={artifact.sizeBytes}
@@ -932,53 +931,6 @@ function LinkedInArticlePasteControl({
         </details>
       )}
     </div>
-  );
-}
-
-function WebsiteArtifactSlot({
-  label,
-  helper,
-  artifact,
-  piece,
-}: {
-  label: string;
-  helper: string;
-  artifact: PublishKitPiece["artifacts"][number] | null;
-  piece: PublishKitPiece;
-}) {
-  return (
-    <section className="border border-border-brand bg-white p-3 min-w-0" aria-label={label}>
-      <p className="text-[11px] font-bold text-navy">{label}</p>
-      <p className="text-[10px] text-black/45 mt-0.5">{helper}</p>
-      {artifact ? (
-        <div className="mt-2">
-          <ArtifactBlock
-            label={label}
-            filename={artifact.filename}
-            mime={artifact.mime}
-            sizeBytes={artifact.sizeBytes}
-            sha256={artifact.sha256}
-            signedUrl={artifact.signedUrl}
-            reviewSignedUrl={artifact.reviewSignedUrl}
-            signedUrlExpiresAt={artifact.signedUrlExpiresAt}
-            storagePath={artifact.storagePath}
-            publicUrl={artifact.publicUrl}
-            validation={artifact.validation}
-            mayPublish={piece.mayPublish}
-            versionId={artifact.versionId}
-            locale={artifact.locale}
-            destination={artifact.destination}
-            unapproved={piece.boundArtifactsAreUnapproved}
-            supersededAt={artifact.supersededAt}
-            assetRole={artifact.assetRole}
-          />
-        </div>
-      ) : (
-        <p className="border border-dashed border-border-brand bg-parchment/30 px-3 py-5 mt-2 text-[11px] text-black/45">
-          No image registered for this placement.
-        </p>
-      )}
-    </section>
   );
 }
 

@@ -24,8 +24,7 @@ import {
   pieceMatchesFilter,
   filteredTotals,
   blockedPiecesAreFullyWithheld,
-  shouldShowWebsiteArtifactSlots,
-  websitePlacementArtifact,
+  websiteArticleHeroArtifact,
   ROLE_COPY_CONSTRAINTS,
   type PublishKitPiece,
   type PublishKitView,
@@ -1971,13 +1970,7 @@ describe("totals", () => {
 
 const NO_FILTER: PublishKitFilter = { channel: null, lane: null };
 
-describe("website artifact placement compatibility", () => {
-  it("shows website slots only for firm-website articles, never native LinkedIn Articles", () => {
-    expect(shouldShowWebsiteArtifactSlots(makePiece({ role: "article", destination: "firm_website" }))).toBe(true);
-    expect(shouldShowWebsiteArtifactSlots(makePiece({ role: "article", destination: "linkedin_article" }))).toBe(false);
-    expect(shouldShowWebsiteArtifactSlots(makePiece({ role: "social_post", destination: "firm_website" }))).toBe(false);
-  });
-
+describe("single website article hero compatibility", () => {
   it.each([
     "website_article_hero_overlay",
     "website_article_hero",
@@ -1986,14 +1979,14 @@ describe("website artifact placement compatibility", () => {
   ] as const)("resolves the %s role into the single article-hero slot", (assetRole) => {
     const artifact = makeArtifact({ id: assetRole, asset_role: assetRole, artifact_type: "hero_image" });
     const view = toPublishKitView(makeBundle([makeDeliverable({ artifacts: [artifact] })]));
-    expect(websitePlacementArtifact(view.groups[0].pieces[0])?.id).toBe(assetRole);
+    expect(websiteArticleHeroArtifact(view.groups[0].pieces[0])?.id).toBe(assetRole);
   });
 
   it("prefers a canonical article hero over a historical homepage-role row", () => {
     const article = makeArtifact({ id: "article", asset_role: "website_article_hero", artifact_type: "hero_image" });
     const homepage = makeArtifact({ id: "homepage", asset_role: "website_homepage_cta", artifact_type: "hero_image" });
     const both = toPublishKitView(makeBundle([makeDeliverable({ artifacts: [article, homepage] })])).groups[0].pieces[0];
-    expect(websitePlacementArtifact(both)?.id).toBe("article");
+    expect(websiteArticleHeroArtifact(both)?.id).toBe("article");
   });
 });
 

@@ -698,22 +698,11 @@ const LEGACY_HOMEPAGE_HERO_ROLES = new Set([
 ]);
 
 /**
- * Website placement slots belong only to firm-website articles. Native
- * LinkedIn Articles also have role=article, but their cover is a social image
- * and must never render two empty website-placement boxes above it.
- */
-export function shouldShowWebsiteArtifactSlots(
-  piece: Pick<PublishKitPiece, "role" | "destination">,
-): boolean {
-  return piece.role === "article" && piece.destination === "firm_website";
-}
-
-/**
  * Resolves the one canonical text-overlay article hero. Historical homepage
  * role rows remain valid lineage and are accepted only as a fallback so old
  * packages do not render an empty slot.
  */
-export function websitePlacementArtifact(
+export function websiteArticleHeroArtifact(
   piece: Pick<PublishKitPiece, "artifacts">,
 ): PublishKitArtifact | null {
   return (
