@@ -247,6 +247,20 @@ beforeEach(() => {
 });
 
 describe("buildContentExportBundle: completeness", () => {
+  it("exports the public website origin separately from portal routing", async () => {
+    state.firms = [{
+      id: FIRM_ID,
+      name: "Test Firm",
+      custom_domain: "portal.test-firm.example",
+      public_website_origin: "https://drglaw.ca",
+    }];
+    const result = await buildContentExportBundle(PERIOD_ID);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.bundle.firm.custom_domain).toBe("portal.test-firm.example");
+    expect(result.bundle.firm.public_website_origin).toBe("https://drglaw.ca");
+  });
+
   it("returns every active deliverable, including one with no current version, none omitted", async () => {
     state.deliverables = [
       makeDeliverable({ id: "d1", current_version_id: "v1", approved_version_id: "v1", status: "approved" }),

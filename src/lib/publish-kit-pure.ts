@@ -288,13 +288,13 @@ export function resolveDestinationPath(
  * Materialize the link an operator will paste into an external publisher.
  * Database routing stays path-based, but Google Business Profile, LinkedIn,
  * and other external surfaces need an absolute URL. Never guess a firm's
- * domain: when no configured custom domain exists, retain the path so the
- * missing configuration remains visible instead of silently pointing at the
- * wrong site.
+ * origin or borrow its white-label portal domain: when no dedicated public
+ * website origin exists, retain the path so the missing configuration remains
+ * visible instead of silently pointing at the wrong site.
  */
 export function materializePublisherUrl(
   destinationPath: string | null,
-  customDomain: string | null | undefined,
+  publicWebsiteOrigin: string | null | undefined,
 ): string | null {
   if (!destinationPath) return null;
   try {
@@ -302,11 +302,14 @@ export function materializePublisherUrl(
   } catch {
     // A relative route is expected here; continue only with a configured host.
   }
-  const domain = customDomain?.trim();
-  if (!domain) return destinationPath;
-  const origin = /^https?:\/\//i.test(domain) ? domain : `https://${domain}`;
+  const configuredOrigin = publicWebsiteOrigin?.trim();
+  if (!configuredOrigin) return destinationPath;
   try {
-    return new URL(destinationPath, origin).toString();
+    const origin = new URL(configuredOrigin);
+    if (origin.protocol !== "https:" || origin.origin !== configuredOrigin.replace(/\/$/, "")) {
+      return destinationPath;
+    }
+    return new URL(destinationPath, `${origin.origin}/`).toString();
   } catch {
     return destinationPath;
   }
@@ -339,6 +342,12 @@ export interface PublishKitArtifact {
   mime: string | null;
   signedUrl: string | null;
   signedUrlExpiresAt: string | null;
+  /**
+   * Short-lived operator-review access for the artifact bound to the version
+   * under review. It is never copied into a publisher record and does not
+   * unlock download or publication controls.
+   */
+  reviewSignedUrl?: string | null;
   /** When this artifact row was created. See dedupeArtifacts. */
   createdAt: string;
   /**
@@ -679,12 +688,14 @@ export interface PublishKitFilter {
   lane: PublisherLane | null;
 }
 
-export type WebsiteArtifactPlacement = "article_hero" | "homepage_cta";
-
-const WEBSITE_ASSET_ROLES: Record<WebsiteArtifactPlacement, ReadonlySet<string>> = {
-  article_hero: new Set(["website_article_hero_overlay", "website_article_hero"]),
-  homepage_cta: new Set(["website_homepage_cta_textless", "website_homepage_cta"]),
-};
+const WEBSITE_ARTICLE_HERO_ROLES = new Set([
+  "website_article_hero_overlay",
+  "website_article_hero",
+]);
+const LEGACY_HOMEPAGE_HERO_ROLES = new Set([
+  "website_homepage_cta_textless",
+  "website_homepage_cta",
+]);
 
 /**
  * Website placement slots belong only to firm-website articles. Native
@@ -697,18 +708,23 @@ export function shouldShowWebsiteArtifactSlots(
   return piece.role === "article" && piece.destination === "firm_website";
 }
 
-/** Resolves both the legacy publication-artifact roles and manifest-package roles. */
+/**
+ * Resolves the one canonical text-overlay article hero. Historical homepage
+ * role rows remain valid lineage and are accepted only as a fallback so old
+ * packages do not render an empty slot.
+ */
 export function websitePlacementArtifact(
   piece: Pick<PublishKitPiece, "artifacts">,
-  placement: WebsiteArtifactPlacement,
 ): PublishKitArtifact | null {
-  const exact = piece.artifacts.find((artifact) => WEBSITE_ASSET_ROLES[placement].has(artifact.assetRole ?? ""));
-  if (exact || placement === "article_hero") return exact ?? null;
-  // Current weekly manifests may deliberately reuse one approved article
-  // image for the homepage feature instead of registering duplicate bytes in
-  // a second database row. Prefer a dedicated homepage artifact whenever one
-  // exists; otherwise show that same bound article image in both placements.
-  return piece.artifacts.find((artifact) => WEBSITE_ASSET_ROLES.article_hero.has(artifact.assetRole ?? "")) ?? null;
+  return (
+    piece.artifacts.find((artifact) =>
+      WEBSITE_ARTICLE_HERO_ROLES.has(artifact.assetRole ?? ""),
+    ) ??
+    piece.artifacts.find((artifact) =>
+      LEGACY_HOMEPAGE_HERO_ROLES.has(artifact.assetRole ?? ""),
+    ) ??
+    null
+  );
 }
 
 export function pieceMatchesFilter(piece: PublishKitPiece, filter: PublishKitFilter): boolean {
@@ -892,7 +908,11 @@ export function toAgentRecord(piece: PublishKitPiece): AgentRecord {
     destination: piece.destinationPath,
     publication_path: piece.publicationPath,
     cta_target_path: piece.ctaTargetPath,
-    artifacts: piece.artifacts,
+    artifacts: piece.artifacts.map((sourceArtifact) => {
+      const artifact = { ...sourceArtifact };
+      delete artifact.reviewSignedUrl;
+      return artifact;
+    }),
     version_asset: piece.versionAsset
       ? {
           name: piece.versionAsset.name,
@@ -1165,7 +1185,7 @@ function dedupeArtifacts(
 
 function toPiece(
   deliverable: ContentExportDeliverable,
-  customDomain: string | null | undefined,
+  publicWebsiteOrigin: string | null | undefined,
 ): PublishKitPiece {
   const role = asDeliverableRole(deliverable.channel);
   const rawDestinationPath = resolveDestinationPath(
@@ -1176,14 +1196,14 @@ function toPiece(
   const lane = publisherLane(deliverable.publication_destination);
   const destinationPath =
     lane === "manual"
-      ? materializePublisherUrl(rawDestinationPath, customDomain)
+      ? materializePublisherUrl(rawDestinationPath, publicWebsiteOrigin)
       : rawDestinationPath;
   const publisherLinkReady =
     lane !== "manual" || destinationPath === null || /^https?:\/\//i.test(destinationPath);
   const mayPublish = deliverable.may_publish && publisherLinkReady;
   const mayPublishReason = publisherLinkReady
     ? deliverable.may_publish_reason
-    : "The firm has no configured public website domain, so the publisher-facing CTA URL cannot be materialized safely.";
+    : "The firm has no configured public website origin, so the publisher-facing CTA URL cannot be materialized safely.";
   const {
     bodyHtml,
     versionNumber,
@@ -1236,18 +1256,17 @@ function toPiece(
           } filtered; one artifact is shown per slot, preferring an active row over a retracted one and, among equals, the most recently created.`,
         ]
       : [];
-  // Two independent reasons to withhold a working link from a bound artifact,
-  // applied together: the piece is not cleared to publish, OR this specific
-  // artifact has been retracted (a superseded row is historical evidence; a
-  // publication receipt referencing it is rejected at the database level).
-  // The strip is structural rather than a UI choice: PublishKit is a
-  // "use client" component, so every field on the view model is serialised
-  // into the page regardless of what JSX renders. A retracted artifact is
-  // withheld even on an otherwise publishable piece -- retraction is not
-  // "unapproved", it does not go away on approval.
-  const boundArtifacts = dedupedBoundArtifacts.map((a) =>
-    !mayPublish || a.supersededAt ? stripAccess(a) : a,
-  );
+  // Release access and private review access are separate contracts. A bound,
+  // active artifact may be rendered to the authenticated operator while the
+  // publish/download controls remain locked. Its ordinary signedUrl/publicUrl
+  // are still structurally stripped until mayPublish; reviewSignedUrl is
+  // omitted from publisher records and never assigned to other-version or
+  // retracted artifacts.
+  const boundArtifacts = dedupedBoundArtifacts.map((a) => {
+    const reviewSignedUrl = a.supersededAt ? null : a.signedUrl;
+    const releaseSafe = !mayPublish || a.supersededAt ? stripAccess(a) : a;
+    return { ...releaseSafe, reviewSignedUrl };
+  });
   const retractedCount = boundArtifacts.filter((a) => a.supersededAt).length;
   const retractedSlotWarnings =
     retractedCount > 0
@@ -1325,7 +1344,7 @@ function toPiece(
 /** Maps a raw bundle into the view model the Publish Kit UI renders. */
 export function toPublishKitView(bundle: ContentExportBundle): PublishKitView {
   const pieces = bundle.deliverables.map((deliverable) =>
-    toPiece(deliverable, bundle.firm.custom_domain),
+    toPiece(deliverable, bundle.firm.public_website_origin),
   );
   const groups = groupByCanonicalFormat(pieces);
 

@@ -698,21 +698,11 @@ function PieceCard({
             </p>
           )}
           {shouldShowWebsiteArtifactSlots(piece) && (
-            <div className="grid gap-3 md:grid-cols-2">
+            <div>
               <WebsiteArtifactSlot
                 label="Article hero"
-                helper="Overlay text · article placement"
-                artifact={websitePlacementArtifact(piece, "article_hero")}
-                piece={piece}
-              />
-              <WebsiteArtifactSlot
-                label="Homepage CTA"
-                helper={
-                  websitePlacementArtifact(piece, "homepage_cta")?.assetRole === "website_article_hero"
-                    ? "Reuses article image · homepage placement"
-                    : "Homepage placement"
-                }
-                artifact={websitePlacementArtifact(piece, "homepage_cta")}
+                helper="One text-overlay hero reused across website placements"
+                artifact={websitePlacementArtifact(piece)}
                 piece={piece}
               />
             </div>
@@ -731,6 +721,7 @@ function PieceCard({
               sizeBytes={artifact.sizeBytes}
               sha256={artifact.sha256}
               signedUrl={artifact.signedUrl}
+              reviewSignedUrl={artifact.reviewSignedUrl}
               signedUrlExpiresAt={artifact.signedUrlExpiresAt}
               storagePath={artifact.storagePath}
               publicUrl={artifact.publicUrl}
@@ -765,6 +756,7 @@ function PieceCard({
                     sizeBytes={artifact.sizeBytes}
                     sha256={artifact.sha256}
                     signedUrl={artifact.signedUrl}
+                    reviewSignedUrl={artifact.reviewSignedUrl}
                     signedUrlExpiresAt={artifact.signedUrlExpiresAt}
                     storagePath={artifact.storagePath}
                     publicUrl={artifact.publicUrl}
@@ -967,6 +959,7 @@ function WebsiteArtifactSlot({
             sizeBytes={artifact.sizeBytes}
             sha256={artifact.sha256}
             signedUrl={artifact.signedUrl}
+            reviewSignedUrl={artifact.reviewSignedUrl}
             signedUrlExpiresAt={artifact.signedUrlExpiresAt}
             storagePath={artifact.storagePath}
             publicUrl={artifact.publicUrl}
@@ -1005,7 +998,7 @@ function LegacyWebsiteImageNotice({
       <div>
         <p className="text-[11px] font-semibold text-navy">Existing image needs placement</p>
         <p className="text-[11px] text-black/55 mt-0.5">
-          This image predates the two website image roles. Assign it explicitly to one placement; the existing artifact record will not be changed.
+          This image predates the canonical article-hero role. Assign it without changing the existing artifact record.
         </p>
       </div>
       {artifacts.map((artifact) => (
@@ -1032,10 +1025,10 @@ function LegacyWebsiteImageRow({
   artifact: PublishKitPiece["artifacts"][number];
   onRefresh: () => void;
 }) {
-  const [busy, setBusy] = useState<"website_article_hero_overlay" | "website_homepage_cta_textless" | null>(null);
+  const [busy, setBusy] = useState<"website_article_hero_overlay" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function assign(assetRole: "website_article_hero_overlay" | "website_homepage_cta_textless") {
+  async function assign(assetRole: "website_article_hero_overlay") {
     setBusy(assetRole);
     setError(null);
     try {
@@ -1072,14 +1065,6 @@ function LegacyWebsiteImageRow({
         >
           {busy === "website_article_hero_overlay" ? "Assigning…" : "Use as Article hero"}
         </button>
-        <button
-          type="button"
-          disabled={busy !== null}
-          onClick={() => assign("website_homepage_cta_textless")}
-          className="text-[10px] font-semibold uppercase tracking-wider border border-navy px-2 py-1 text-navy hover:bg-navy hover:text-white disabled:opacity-40"
-        >
-          {busy === "website_homepage_cta_textless" ? "Assigning…" : "Use as Homepage CTA"}
-        </button>
         {error && <span className="text-[11px] text-red-fail">{error}</span>}
       </div>
     </div>
@@ -1095,6 +1080,7 @@ function ArtifactBlock({
   sizeBytes,
   sha256,
   signedUrl,
+  reviewSignedUrl,
   signedUrlExpiresAt,
   storagePath,
   publicUrl,
@@ -1114,6 +1100,7 @@ function ArtifactBlock({
   sizeBytes: number | null;
   sha256: string | null;
   signedUrl: string | null;
+  reviewSignedUrl?: string | null;
   signedUrlExpiresAt: string | null;
   storagePath: string | null;
   publicUrl: string | null;
@@ -1157,6 +1144,7 @@ function ArtifactBlock({
     signedUrl,
   });
   const canDownload = controlState === "download";
+  const previewUrl = canDownload ? signedUrl : reviewSignedUrl;
 
   // Only render the signed-url expiry and the validation date after
   // hydration: both are UTC instants, so formatting them during server
@@ -1195,21 +1183,33 @@ function ArtifactBlock({
         </p>
       )}
 
-      {mime?.startsWith("image/") && canDownload && signedUrl && (
-        <a
-          href={signedUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="block mt-3 border border-border-brand bg-black/[0.025] focus:outline-none focus:ring-2 focus:ring-navy/40"
-        >
-          <img
-            src={signedUrl}
-            alt={filename ? `${label}: ${filename}` : label}
-            className="block w-full max-h-56 object-contain"
-          />
-          <span className="sr-only">Open full-size image preview</span>
-        </a>
-      )}
+      {mime?.startsWith("image/") && previewUrl &&
+        (canDownload ? (
+          <a
+            href={previewUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="block mt-3 border border-border-brand bg-black/[0.025] focus:outline-none focus:ring-2 focus:ring-navy/40"
+          >
+            <img
+              src={previewUrl}
+              alt={filename ? `${label}: ${filename}` : label}
+              className="block w-full max-h-56 object-contain"
+            />
+            <span className="sr-only">Open full-size image preview</span>
+          </a>
+        ) : (
+          <div className="mt-3 border border-border-brand bg-black/[0.025]">
+            <img
+              src={previewUrl}
+              alt={filename ? `${label}: ${filename}` : label}
+              className="block w-full max-h-56 object-contain"
+            />
+            <p className="border-t border-border-brand px-2.5 py-1.5 text-[10px] uppercase tracking-wider text-black/50">
+              Review preview · release controls remain locked
+            </p>
+          </div>
+        ))}
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 mt-2 text-[11px]">
         {mime && (
