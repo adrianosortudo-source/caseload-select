@@ -1049,6 +1049,35 @@ export async function archiveDeliverable(input: {
   return { ok: true };
 }
 
+/**
+ * Operator-maintained record that a deliverable was actually published.
+ * This intentionally updates only the lightweight published_at axis. It does
+ * not approve content, change the review status, publish anything externally,
+ * or manufacture the destination-bound proof held in publication_receipts.
+ */
+export async function setDeliverablePublishedAt(input: {
+  deliverableId: string;
+  firmId: string;
+  publishedAt: string | null;
+}): Promise<
+  | { ok: true; publishedAt: string | null }
+  | { ok: false; error: string }
+> {
+  const { data, error } = await supabase
+    .from("content_deliverables")
+    .update({
+      published_at: input.publishedAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.deliverableId)
+    .eq("firm_id", input.firmId)
+    .select("published_at")
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "deliverable not found" };
+  return { ok: true, publishedAt: data.published_at as string | null };
+}
+
 // ─── Notifications ───────────────────────────────────────────────────────────
 
 async function enqueueDeliverableNotification(input: {

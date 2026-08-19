@@ -38,6 +38,7 @@ import PlacementsTrackingPanel from "./PlacementsTrackingPanel";
 import HeroImageControl from "./HeroImageControl";
 import { shouldShowHeroImageControl } from "./hero-image-control-pure";
 import { heroOverlayFor } from "./hero-overlay-pure";
+import ManualPublicationToggle from "./ManualPublicationToggle";
 
 interface Detail {
   deliverable: ContentDeliverable;
@@ -368,6 +369,15 @@ export default function DeliverableReview({
               }}
               onChanged={refetch}
               supportPreview={supportPreview}
+            />
+            <ManualPublicationToggle
+              firmId={firmId}
+              deliverableId={deliverableId}
+              viewerRole={viewerRole}
+              status={deliverable.status}
+              publishedAt={deliverable.published_at ?? null}
+              supportPreview={supportPreview}
+              onChanged={refetch}
             />
             <ArchiveControl
               firmId={firmId}
