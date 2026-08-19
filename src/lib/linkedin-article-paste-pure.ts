@@ -22,9 +22,9 @@
  * anchor text.
  *
  * The transform also converts the Five-Line Brief, headings, FAQs, and
- * numbered action blocks into conservative paragraph/strong/emphasis markup.
- * Live destination proof showed that LinkedIn flattens pasted h2/h3/list tags
- * and merges adjacent blockquotes, while it preserves these simpler tags.
+ * numbered action blocks into the tested LinkedIn paste model. The five brief
+ * lines use the discrete quote blocks established in the Week 3 operator kit;
+ * headings and numbered actions use destination-safe paragraph markup.
  *
  * ENGLISH ONLY. Every pattern below -- the Five-Line Brief labels,
  * "Frequently asked questions", the DR-082 disclaimer's opening words,
@@ -90,6 +90,19 @@ function extractHeadline(s: string): { headline: string; rest: string } {
 }
 
 // ─── Links ────────────────────────────────────────────────────────────────────
+
+/**
+ * Markdown links can survive the manifest import inside otherwise valid HTML
+ * paragraphs. Convert them before the older copy-safe link shapes so the
+ * LinkedIn clipboard payload always contains a real anchor and never exposes
+ * `[label](url)` to the publisher.
+ */
+function convertMarkdownLinks(s: string): string {
+  return s.replace(
+    /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    (_m: string, label: string, url: string) => `<a href="${url}">${label.trim()}</a>`,
+  );
+}
 
 /**
  * Trims a captured link label down to the phrase that actually names the
@@ -207,27 +220,46 @@ function decisionBoxAndNumberedLists(s: string): string {
 
 const BRIEF_LABELS = ["Risk", "Price", "Timeline", "Decision", "Next step"];
 
-/** Five-Line Brief -> one paragraph per line, with the label bold. */
+function renderFiveLineBrief(items: Array<[string, string]>): string {
+  return items
+    .map(([label, text]) => `<blockquote><p><strong>${label}:</strong> ${text.trim()}</p></blockquote>`)
+    .join("\n");
+}
+
+/**
+ * Parse both established storage shapes:
+ *
+ * - five separate `<p>Risk: ...</p>` paragraphs (Weeks 3 and 4)
+ * - one imported paragraph with `- Risk:<br>- Price: ...` (Week 6)
+ *
+ * The tested Week 3 LinkedIn model uses five discrete quote blocks. Restoring
+ * that model also keeps each line visually separate in LinkedIn's editor.
+ */
 function convertFiveLineBrief(s: string): string {
-  // The current production body keeps all five lines in one paragraph. Handle
-  // that form first so the Risk capture cannot swallow the remaining labels.
+  // Handle the combined import shape first so the Risk capture cannot swallow
+  // the remaining labels. The optional heading is storage metadata, not part
+  // of the five-line presentation, and is removed when the block is promoted.
   let out = s.replace(
-    /<p>\s*Risk:\s*([\s\S]*?)\s+Price:\s*([\s\S]*?)\s+Timeline:\s*([\s\S]*?)\s+Decision:\s*([\s\S]*?)\s+Next step:\s*([\s\S]*?)<\/p>/,
-    (_m, risk, price, timeline, decision, nextStep) =>
-      [
-        ["Risk", risk],
-        ["Price", price],
-        ["Timeline", timeline],
-        ["Decision", decision],
-        ["Next step", nextStep],
-      ]
-        .map(([label, text]) => `<p><strong>${label}:</strong> ${String(text).trim()}</p>`)
-        .join(""),
+    /(?:<p>\s*THE FIVE-LINE BRIEF\s*<\/p>\s*)?<p>((?:[^<]|<br\s*\/?>|<\/?strong>)*)<\/p>/gi,
+    (whole: string, inner: string) => {
+      const normalized = inner.replace(/<br\s*\/?>/gi, "\n").replace(/<\/?strong>/gi, "").trim();
+      const match = normalized.match(
+        /^\s*-?\s*Risk:\s*([\s\S]*?)\s+-?\s*Price:\s*([\s\S]*?)\s+-?\s*Timeline:\s*([\s\S]*?)\s+-?\s*Decision:\s*([\s\S]*?)\s+-?\s*Next step:\s*([\s\S]*?)\s*$/i,
+      );
+      if (!match) return whole;
+      return renderFiveLineBrief([
+        ["Risk", match[1]],
+        ["Price", match[2]],
+        ["Timeline", match[3]],
+        ["Decision", match[4]],
+        ["Next step", match[5]],
+      ]);
+    },
   );
   for (const label of BRIEF_LABELS) {
     out = out.replace(
       new RegExp(`<p>\\s*${label}:\\s*([\\s\\S]*?)<\\/p>`),
-      `<p><strong>${label}:</strong> $1</p>`,
+      `<blockquote><p><strong>${label}:</strong> $1</p></blockquote>`,
     );
   }
   return out;
@@ -328,6 +360,7 @@ export function toLinkedInArticleHtml(raw: string): LinkedInArticlePasteBody {
   const { headline, rest } = extractHeadline(s);
   s = rest;
 
+  s = convertMarkdownLinks(s);
   s = convertLabelledLinks(s);
   s = convertCitationLinks(s);
   s = convertBareLinks(s);

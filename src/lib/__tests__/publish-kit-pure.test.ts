@@ -19,6 +19,7 @@ import {
   toAgentManifest,
   toPublishKitView,
   copyColumnMessage,
+  containsForbiddenEmDash,
   isLinkedInArticlePiece,
   linkedInArticlePasteEligibility,
   pieceMatchesFilter,
@@ -239,6 +240,17 @@ describe("countWords", () => {
 
   it("does not count empty tokens created by repeated whitespace or newlines", () => {
     expect(countWords("one   two\n\nthree   ")).toBe(3);
+  });
+});
+
+describe("containsForbiddenEmDash", () => {
+  it("fails closed when any customer-facing field contains an em dash", () => {
+    expect(containsForbiddenEmDash("Clean title", "work together\u2014and why", null)).toBe(true);
+  });
+
+  it("allows commas, colons, semicolons, hyphens, and en dashes", () => {
+    expect(containsForbiddenEmDash("Clean title", "Risk, Price and Timeline: pre-waiver review - complete", "1\u20133"))
+      .toBe(false);
   });
 });
 

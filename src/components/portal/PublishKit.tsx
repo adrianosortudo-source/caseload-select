@@ -18,6 +18,7 @@ import {
   toAgentManifest,
   artifactControlState,
   copyColumnMessage,
+  containsForbiddenEmDash,
   linkedInArticlePasteEligibility,
   pieceMatchesFilter,
   filteredTotals,
@@ -123,14 +124,10 @@ async function copyToClipboard(text: string): Promise<boolean> {
 
 /**
  * Writes BOTH text/html and text/plain to the clipboard via the modern
- * ClipboardItem API, so a rich-text target (LinkedIn's Article editor) reads
- * the formatted version while anything else pasted into still gets clean
- * text. Additive to copyToClipboard, which stays exactly as it was and keeps
- * serving every existing plain-text-only copy control (GBP posts, promoter
- * posts, the Minute): this function calls it as its OWN fallback when
- * ClipboardItem or navigator.clipboard.write is unavailable (an older
- * browser, or a non-secure context), rather than duplicating that fallback
- * logic.
+ * ClipboardItem API, so LinkedIn's Article editor reads the formatted version.
+ * It deliberately does not fall back to writeText: that previously let a
+ * button labelled "Copy formatted body" copy plain text while reporting
+ * success, which left the publisher to rebuild links and formatting by hand.
  */
 async function copyRichToClipboard(html: string, plainText: string): Promise<boolean> {
   if (
@@ -149,10 +146,10 @@ async function copyRichToClipboard(html: string, plainText: string): Promise<boo
       ]);
       return true;
     } catch {
-      // fall through to the plain-text fallback below
+      return false;
     }
   }
-  return copyToClipboard(plainText);
+  return false;
 }
 
 export default function PublishKit({ view, firmId }: Props) {
@@ -489,6 +486,10 @@ function PieceCard({
         year: "numeric",
       })
     : null;
+  const linkedInPasteState = linkedInArticlePasteEligibility(piece);
+  const isLinkedInArticle = linkedInPasteState !== "not_applicable";
+  const hasForbiddenEmDash = containsForbiddenEmDash(piece.title, piece.plainText, piece.bodyHtml);
+  const textCopyAllowed = piece.mayPublish && !hasForbiddenEmDash;
   const isChecklistPdf = piece.role === "lead_magnet_pdf";
   const visibleArtifacts =
     piece.role !== "article"
@@ -567,29 +568,54 @@ function PieceCard({
         }
       >
         <div className="p-5 border-b md:border-b-0 md:border-r border-border-brand min-w-0">
+          {isLinkedInArticle && <LinkedInArticlePasteControl piece={piece} onToast={onToast} />}
           {piece.plainText ? (
             <>
               <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
-                <span className="text-[10px] uppercase tracking-wider font-semibold text-black/40">Copy</span>
+                <span className="text-[10px] uppercase tracking-wider font-semibold text-black/40">
+                  {isLinkedInArticle ? "Plain-text fallback" : "Copy"}
+                </span>
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    disabled={!piece.mayPublish}
+                    disabled={!textCopyAllowed}
                     onClick={() => onCopy(piece.plainText, "Text")}
-                    className="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1.5 border border-navy bg-navy text-white hover:bg-navy/90 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-black/20 disabled:border-black/20"
+                    className={
+                      isLinkedInArticle
+                        ? "text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1.5 border border-border-brand text-navy bg-white hover:bg-parchment-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                        : "text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1.5 border border-navy bg-navy text-white hover:bg-navy/90 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-black/20 disabled:border-black/20"
+                    }
                   >
-                    {piece.mayPublish ? "Copy text" : "Copy locked"}
+                    {hasForbiddenEmDash
+                      ? "Copy blocked: em dash"
+                      : piece.mayPublish
+                        ? isLinkedInArticle
+                          ? "Copy plain text"
+                          : "Copy text"
+                        : "Copy locked"}
                   </button>
                   <button
                     type="button"
-                    disabled={!piece.mayPublish}
+                    disabled={!textCopyAllowed}
                     onClick={handleDownloadTxt}
                     className="text-[11px] font-semibold uppercase tracking-wider px-2.5 py-1.5 border border-border-brand text-navy hover:bg-parchment-2 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    {piece.mayPublish ? "Download .txt" : "Download locked"}
+                    {hasForbiddenEmDash ? "Download blocked" : piece.mayPublish ? "Download .txt" : "Download locked"}
                   </button>
                 </div>
               </div>
+              {isLinkedInArticle && (
+                <p className="mb-2 text-[11px] leading-relaxed text-amber-800">
+                  Plain text does not preserve LinkedIn hyperlinks or the five-line brief. Use Copy formatted body above
+                  for publishing.
+                </p>
+              )}
+              {hasForbiddenEmDash && (
+                <p className="mb-2 text-[11px] font-semibold leading-relaxed text-red-800">
+                  Copy blocked because this version contains a forbidden em dash. Post a corrected version before
+                  publishing.
+                </p>
+              )}
               <div className="bg-off-white border border-border-brand p-3.5 text-[13px] leading-relaxed text-black/80 whitespace-pre-wrap select-text max-h-72 overflow-y-auto">
                 {piece.plainText}
               </div>
@@ -600,7 +626,6 @@ function PieceCard({
                   ))}
                 </div>
               )}
-              <LinkedInArticlePasteControl piece={piece} onToast={onToast} />
             </>
           ) : piece.unapprovedDraftText ? (
             <>
@@ -854,7 +879,9 @@ function LinkedInArticlePasteControl({
     eligibility === "eligible"
       ? toLinkedInArticlePasteHtmlEnglishOnly(piece.bodyHtml ?? "", { locale: piece.locale })
       : null;
-  const enabled = eligibility === "eligible" && piece.mayPublish && result !== null && result.ok;
+  const hasForbiddenEmDash = containsForbiddenEmDash(piece.title, piece.plainText, piece.bodyHtml);
+  const enabled =
+    eligibility === "eligible" && piece.mayPublish && !hasForbiddenEmDash && result !== null && result.ok;
 
   async function handleCopyFormatted() {
     if (!result || !result.ok) {
@@ -879,12 +906,14 @@ function LinkedInArticlePasteControl({
   const buttonLabel =
     eligibility === "unsupported_locale"
       ? "Formatted copy: English only"
+      : hasForbiddenEmDash
+        ? "Copy blocked: em dash"
       : piece.mayPublish
         ? "Copy formatted body"
         : "Copy locked";
 
   return (
-    <div className="mt-3 pt-3 border-t border-border-brand">
+    <div className="mb-4 pb-4 border-b border-border-brand">
       <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
         <span className="text-[10px] uppercase tracking-wider font-semibold text-black/40">LinkedIn Article</span>
         <div className="flex items-center gap-2 flex-wrap">
@@ -906,7 +935,7 @@ function LinkedInArticlePasteControl({
           </button>
         </div>
       </div>
-      {result?.ok && (
+      {result?.ok && !hasForbiddenEmDash && (
         <div className="mb-2 border border-border-brand bg-white px-3 py-2">
           <p className="text-[9px] uppercase tracking-wider font-semibold text-black/40 mb-1">Article title</p>
           <p className="text-[12px] font-semibold text-navy">{piece.title}</p>
@@ -919,7 +948,12 @@ function LinkedInArticlePasteControl({
           instead.
         </p>
       )}
-      {result?.ok && (
+      {hasForbiddenEmDash && (
+        <p className="text-[11px] font-semibold text-red-800">
+          This version contains a forbidden em dash. Formatted copy is disabled until a corrected version is posted.
+        </p>
+      )}
+      {result?.ok && !hasForbiddenEmDash && (
         <details className="mt-2">
           <summary className="text-[10px] uppercase tracking-wider font-semibold text-navy/70 cursor-pointer">
             Preview formatted body

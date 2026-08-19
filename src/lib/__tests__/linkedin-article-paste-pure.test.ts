@@ -22,6 +22,7 @@ import {
   HEADINGLESS_NUMBERED_LIST_BODY,
   TAG_OPENING_BODY,
   WEEK_FIVE_IMPORTED_BODY,
+  WEEK_SIX_IMPORTED_BODY,
 } from "@/lib/__fixtures__/linkedin-article-paste-bodies";
 
 function countOccurrences(haystack: string, needle: string): number {
@@ -124,24 +125,24 @@ describe("toLinkedInArticleHtml", () => {
   });
 
   describe("Five-Line Brief", () => {
-    it("keeps each labelled line in a separate bold-led paragraph, never a blockquote", () => {
+    it("restores the established five discrete quote blocks with bold labels", () => {
       const { html } = toLinkedInArticleHtml(FULL_ARTICLE_BODY);
       expect(html).toContain(
-        "<p><strong>Risk:</strong> A missed notice deadline can forfeit the right to renew entirely.</p>",
+        "<blockquote><p><strong>Risk:</strong> A missed notice deadline can forfeit the right to renew entirely.</p></blockquote>",
       );
       expect(html).toContain(
-        "<p><strong>Price:</strong> Renegotiated rent at renewal is rarely below market once a landlord senses leverage.</p>",
+        "<blockquote><p><strong>Price:</strong> Renegotiated rent at renewal is rarely below market once a landlord senses leverage.</p></blockquote>",
       );
       expect(html).toContain(
-        "<p><strong>Timeline:</strong> Most leases require 90 to 180 days written notice before the term ends.</p>",
+        "<blockquote><p><strong>Timeline:</strong> Most leases require 90 to 180 days written notice before the term ends.</p></blockquote>",
       );
       expect(html).toContain(
-        "<p><strong>Decision:</strong> Calendar the notice deadline the day the lease is signed, not the year before it matters.</p>",
+        "<blockquote><p><strong>Decision:</strong> Calendar the notice deadline the day the lease is signed, not the year before it matters.</p></blockquote>",
       );
       expect(html).toContain(
-        "<p><strong>Next step:</strong> Confirm the exact notice mechanism the lease requires, in writing.</p>",
+        "<blockquote><p><strong>Next step:</strong> Confirm the exact notice mechanism the lease requires, in writing.</p></blockquote>",
       );
-      expect(countOccurrences(html, "<blockquote>")).toBe(0);
+      expect(countOccurrences(html, "<blockquote>")).toBe(5);
     });
   });
 
@@ -201,11 +202,11 @@ describe("toLinkedInArticleHtml", () => {
   });
 
   describe("structural totals", () => {
-    it("avoids destination-fragile list and blockquote tags while retaining four dividers", () => {
+    it("avoids destination-fragile list tags while retaining five quote blocks and four dividers", () => {
       const { html } = toLinkedInArticleHtml(FULL_ARTICLE_BODY);
       expect(countOccurrences(html, "<ol>")).toBe(0);
       expect(countOccurrences(html, "<ul>")).toBe(0);
-      expect(countOccurrences(html, "<blockquote>")).toBe(0);
+      expect(countOccurrences(html, "<blockquote>")).toBe(5);
       // FAQ, Decision Box, disclaimer, and the closing "Related reading" line.
       expect(countOccurrences(html, "<hr>")).toBe(4);
     });
@@ -215,20 +216,41 @@ describe("toLinkedInArticleHtml", () => {
     it("separates the combined Brief and Decision Box and bolds plain-paragraph headings", () => {
       const { headline, html } = toLinkedInArticleHtml(WEEK_FIVE_IMPORTED_BODY);
       expect(headline).toBe("");
-      expect(countOccurrences(html, "<p><strong>Risk:</strong>")).toBe(1);
-      expect(countOccurrences(html, "<p><strong>Price:</strong>")).toBe(1);
-      expect(countOccurrences(html, "<p><strong>Timeline:</strong>")).toBe(1);
-      expect(countOccurrences(html, "<p><strong>Decision:</strong>")).toBe(1);
-      expect(countOccurrences(html, "<p><strong>Next step:</strong>")).toBe(1);
+      expect(countOccurrences(html, "<blockquote><p><strong>Risk:</strong>")).toBe(1);
+      expect(countOccurrences(html, "<blockquote><p><strong>Price:</strong>")).toBe(1);
+      expect(countOccurrences(html, "<blockquote><p><strong>Timeline:</strong>")).toBe(1);
+      expect(countOccurrences(html, "<blockquote><p><strong>Decision:</strong>")).toBe(1);
+      expect(countOccurrences(html, "<blockquote><p><strong>Next step:</strong>")).toBe(1);
       expect(html).toContain("<p><strong>What is the buyer actually deciding?</strong></p>");
       expect(html).toContain("<p><strong>1.</strong> Preserve every disclosure version.</p>");
       expect(html).toContain("<p><strong>2.</strong> Build Risk, Price, and Timeline summaries.</p>");
       expect(html).toContain("<p><strong>3.</strong> List unresolved questions.</p>");
       expect(html).toContain("<p><strong>What should I review?</strong></p>");
       expect(html).toContain("<p><strong>A qualified next step</strong></p>");
-      expect(html).not.toContain("<blockquote>");
+      expect(countOccurrences(html, "<blockquote>")).toBe(5);
       expect(html).not.toContain("<ol>");
       expect(html).not.toContain("<ul>");
+    });
+  });
+
+  describe("Week 6 production import shape", () => {
+    it("embeds every Markdown link and restores the five-line brief without its storage heading", () => {
+      const { html } = toLinkedInArticleHtml(WEEK_SIX_IMPORTED_BODY);
+      expect(html).toContain(
+        '<a href="https://drglaw.ca/journal/commercial-property-environmental-condition">explanation of the environmental condition</a>',
+      );
+      expect(html).toContain(
+        '<a href="https://drglaw.ca/journal/commercial-property-environmental-checklist">environmental decision Checklist</a>',
+      );
+      expect(html).toContain(
+        '<a href="https://www.ontario.ca/page/guide-completing-phase-one-environmental-site-assessments-under-ontario-regulation-15304">Guide for completing phase one environmental site assessments</a>',
+      );
+      expect(html).not.toContain("](");
+      expect(html).not.toContain("THE FIVE-LINE BRIEF");
+      expect(countOccurrences(html, "<blockquote>")).toBe(5);
+      expect(html).toContain(
+        "<blockquote><p><strong>Next step:</strong> Record what remains open.</p></blockquote>",
+      );
     });
   });
 });

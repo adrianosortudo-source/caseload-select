@@ -114,3 +114,17 @@ export const WEEK_FIVE_IMPORTED_BODY = `<p>Before signing, organize the actual t
 <p>Before commitment, with the actual records organized.</p>
 <p>A qualified next step</p>
 <p>Organize first, then ask for qualified review.</p>`;
+
+/**
+ * The Week 6 manifest import shape. The wrapper is HTML, but links remain in
+ * Markdown form and the five brief lines share one hyphen-led paragraph with
+ * br separators. This exact mismatch reached the live Publish Kit.
+ */
+export const WEEK_SIX_IMPORTED_BODY = `<p>QUESTION<br>Buying commercial property in Ontario?</p>
+<p>ANSWER</p>
+<p>The companion [explanation of the environmental condition](https://drglaw.ca/journal/commercial-property-environmental-condition) examines the timing mechanism.</p>
+<p>The [environmental decision Checklist](https://drglaw.ca/journal/commercial-property-environmental-checklist) connects findings with action.</p>
+<p>THE FIVE-LINE BRIEF</p>
+<p>- Risk: A report label does not resolve every gap.<br>- Price: Missing answers can change the bargain.<br>- Timeline: The condition needs enough decision time.<br>- Decision: Waiver follows a joined review.<br>- Next step: Record what remains open.</p>
+<p>WHAT AUTHORITY SUPPORTS THIS GUIDANCE?</p>
+<p>The central authority is Ontario's [Guide for completing phase one environmental site assessments](https://www.ontario.ca/page/guide-completing-phase-one-environmental-site-assessments-under-ontario-regulation-15304).</p>`;
