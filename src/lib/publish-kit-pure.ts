@@ -44,6 +44,14 @@ export const ROLE_COPY_CONSTRAINTS: Partial<Record<DeliverableRole, CopyConstrai
   social_post: { minWords: 40, maxWords: 80 },
 };
 
+/**
+ * DRG customer-facing copy may not contain an em dash. Keep this check pure
+ * so every Publish Kit copy surface can share the same fail-closed decision.
+ */
+export function containsForbiddenEmDash(...values: Array<string | null | undefined>): boolean {
+  return values.some((value) => value?.includes("\u2014") === true);
+}
+
 // Record<DeliverableRole, true>, not a plain array: adding a member to the
 // DeliverableRole union now fails the build until it is listed here too.
 // A plain array would silently accept a subset of the union with no error.
