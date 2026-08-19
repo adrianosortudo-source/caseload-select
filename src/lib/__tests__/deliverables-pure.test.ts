@@ -16,8 +16,36 @@ import {
   validateDeliverableAttachments,
   versionOptionLabel,
   normalizeClientNotificationChoice,
+  normalizeManualPublicationDate,
   parseWeekNumber,
 } from "@/lib/deliverables-pure";
+
+describe("normalizeManualPublicationDate", () => {
+  it("accepts a valid operator-recorded publication date", () => {
+    expect(normalizeManualPublicationDate(true, "2026-08-18")).toEqual({
+      ok: true,
+      publishedAt: "2026-08-18",
+    });
+  });
+
+  it("clears the record without requiring a date", () => {
+    expect(normalizeManualPublicationDate(false, undefined)).toEqual({
+      ok: true,
+      publishedAt: null,
+    });
+  });
+
+  it("rejects malformed and impossible calendar dates", () => {
+    expect(normalizeManualPublicationDate(true, "18-08-2026")).toEqual({
+      ok: false,
+      error: "published_at must be a date in YYYY-MM-DD format",
+    });
+    expect(normalizeManualPublicationDate(true, "2026-02-30")).toEqual({
+      ok: false,
+      error: "published_at must be a valid calendar date",
+    });
+  });
+});
 
 describe("normalizeClientNotificationChoice", () => {
   it("accepts the literal 'notify_now'", () => {

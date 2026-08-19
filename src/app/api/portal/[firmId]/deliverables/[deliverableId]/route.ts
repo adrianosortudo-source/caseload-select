@@ -1,6 +1,6 @@
 /**
  * GET   /api/portal/[firmId]/deliverables/[deliverableId]   detail (versions + comments + approvals)
- * PATCH /api/portal/[firmId]/deliverables/[deliverableId]   { action: "archive" }
+ * PATCH /api/portal/[firmId]/deliverables/[deliverableId]   archive, place, or record publication
  *
  * Operator or firm-lawyer session. The loaded deliverable's firm_id is checked
  * against the URL firmId (defense-in-depth per the broad cookie path).
@@ -9,9 +9,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDeliverableActor } from "@/lib/deliverables-auth";
 import { denyWriteIfPreview } from "@/lib/preview-guard";
+import { normalizeManualPublicationDate } from "@/lib/deliverables-pure";
 import {
   getDeliverableDetail,
   archiveDeliverable,
+  setDeliverablePublishedAt,
   setDeliverablePlacement,
 } from "@/lib/deliverables";
 
@@ -68,6 +70,27 @@ export async function PATCH(
     const result = await archiveDeliverable({ deliverableId, firmId });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
     return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === "set_publication_record") {
+    if (resolved.actor.role !== "operator") {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    const b = body as { published?: unknown; published_at?: unknown };
+    if (typeof b.published !== "boolean") {
+      return NextResponse.json({ error: "published must be true or false" }, { status: 400 });
+    }
+    const normalized = normalizeManualPublicationDate(b.published, b.published_at);
+    if (!normalized.ok) {
+      return NextResponse.json({ error: normalized.error }, { status: 400 });
+    }
+    const result = await setDeliverablePublishedAt({
+      deliverableId,
+      firmId,
+      publishedAt: normalized.publishedAt,
+    });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({ ok: true, published_at: result.publishedAt });
   }
 
   if (body.action === "place") {

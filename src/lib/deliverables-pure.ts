@@ -80,6 +80,30 @@ export function isPublished(publishedAt: string | null | undefined): boolean {
   return typeof publishedAt === "string" && publishedAt.trim().length > 0;
 }
 
+export type ManualPublicationDateResult =
+  | { ok: true; publishedAt: string | null }
+  | { ok: false; error: string };
+
+/**
+ * Normalise the operator's manual publication record. Clearing the switch is
+ * always represented by null. Marking a piece published requires a real
+ * calendar date in the same YYYY-MM-DD shape as content_deliverables.published_at.
+ */
+export function normalizeManualPublicationDate(
+  published: boolean,
+  value: unknown,
+): ManualPublicationDateResult {
+  if (!published) return { ok: true, publishedAt: null };
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return { ok: false, error: "published_at must be a date in YYYY-MM-DD format" };
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    return { ok: false, error: "published_at must be a valid calendar date" };
+  }
+  return { ok: true, publishedAt: value };
+}
+
 /**
  * DR-107: with the firm's standing publishing authorization enabled, an
  * in_review deliverable whose current version is not flagged
