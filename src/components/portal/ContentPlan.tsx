@@ -163,6 +163,7 @@ export default function ContentPlan({
 
       <ReviewOverview
         overview={overview}
+        periods={periods}
         isOperator={isOperator}
         firmId={firmId}
         settings={settings}
@@ -348,20 +349,32 @@ function daysUntil(iso: string): number {
   return Math.round((d.getTime() - t.getTime()) / 86400000);
 }
 
-function daysLabel(days: number): string {
-  if (days === 0) return "publishes today";
+function daysLabel(days: number, event: "review" | "publication"): string {
+  if (days === 0) return event === "review" ? "due today" : "publishes today";
   if (days < 0) return `${-days} day${-days === 1 ? "" : "s"} overdue`;
   return `in ${days} day${days === 1 ? "" : "s"}`;
 }
 
+function signalContext(
+  signal: NonNullable<PlanOverview["nextReview"]>,
+  periods: ContentPeriod[],
+): string {
+  const period = signal.period_id
+    ? periods.find((candidate) => candidate.id === signal.period_id)
+    : null;
+  return `${period ? periodLabel(period) : "Unscheduled"} · ${signal.format}`;
+}
+
 export function ReviewOverview({
   overview,
+  periods,
   isOperator,
   firmId,
   settings,
   onChanged,
 }: {
   overview: PlanOverview;
+  periods: ContentPeriod[];
   isOperator: boolean;
   firmId: string;
   settings: ContentPlanSettings | null;
@@ -378,18 +391,31 @@ export function ReviewOverview({
     draft,
     weeks,
     byFormat,
+    nextReview,
+    nextRevision,
     nextPublish,
+    unscheduledEmails,
   } = overview;
   if (total === 0) return null;
   const pct = Math.round((approved / total) * 100);
-  const waiting = pending + changes;
-
-  // Deadline: an operator-set "review by" wins; otherwise the soonest publish.
-  const deadlineDate = settings?.review_by ?? nextPublish?.date ?? null;
-  const deadlineLabel = settings?.review_by ? "Review by" : "Next to publish";
-  const days = deadlineDate ? daysUntil(deadlineDate) : null;
-  const urgency =
-    days === null ? "text-navy" : days <= 0 ? "text-red-fail" : days <= 2 ? "text-amber-800" : "text-navy";
+  const reviewDays = settings?.review_by ? daysUntil(settings.review_by) : null;
+  const reviewUrgency =
+    reviewDays === null
+      ? "text-navy"
+      : reviewDays <= 0
+        ? "text-red-fail"
+        : reviewDays <= 2
+          ? "text-amber-800"
+          : "text-navy";
+  const publicationDays = nextPublish ? daysUntil(nextPublish.date) : null;
+  const publicationUrgency =
+    publicationDays === null
+      ? "text-navy"
+      : publicationDays <= 0
+        ? "text-red-fail"
+        : publicationDays <= 2
+          ? "text-amber-800"
+          : "text-navy";
 
   const askLine =
     settings?.ask ??
@@ -399,32 +425,86 @@ export function ReviewOverview({
 
   return (
     <div className="bg-white border border-border-brand p-5 space-y-4">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <p className="text-xs uppercase tracking-wider font-semibold text-[color:var(--portal-accent)]">
-            Review overview
-          </p>
-          <h2 className="text-lg font-bold text-navy mt-0.5">
-            {waiting > 0
-              ? `${waiting} piece${waiting === 1 ? "" : "s"} need your review`
-              : "Everything is reviewed"}
-          </h2>
-          <p className="text-sm text-black/55 mt-0.5 max-w-xl whitespace-pre-line">{askLine}</p>
-        </div>
-        {deadlineDate && (
-          <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-black/40">
-              {deadlineLabel}
-            </p>
-            <p className={`text-sm font-semibold ${urgency}`}>{fmtDate(deadlineDate)}</p>
-            {days !== null && <p className={`text-xs ${urgency}`}>{daysLabel(days)}</p>}
-            {!settings?.review_by && nextPublish && (
-              <p className="text-[11px] text-muted mt-0.5 max-w-[230px] truncate">
-                {nextPublish.title}
-              </p>
+      <div>
+        <p className="text-xs uppercase tracking-wider font-semibold text-[color:var(--portal-accent)]">
+          Review overview
+        </p>
+        <h2 className="text-lg font-bold text-navy mt-0.5">Review and publication are tracked separately</h2>
+        <p className="text-sm text-black/55 mt-0.5 max-w-2xl whitespace-pre-line">{askLine}</p>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <section className="border border-border-brand bg-parchment-1/60 p-4" aria-labelledby="review-queue-heading">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.16em] font-semibold text-burgundy">Review queue</p>
+              <h3 id="review-queue-heading" className="mt-1 text-base font-bold text-navy">
+                {pending > 0
+                  ? `${pending} piece${pending === 1 ? "" : "s"} need firm review`
+                  : changes > 0
+                    ? `${changes} piece${changes === 1 ? "" : "s"} need revision`
+                    : "No review action is waiting"}
+              </h3>
+            </div>
+            {settings?.review_by && (
+              <div className="text-right flex-none">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-black/40">Review by</p>
+                <p className={`text-sm font-semibold ${reviewUrgency}`}>{fmtDate(settings.review_by)}</p>
+                {reviewDays !== null && <p className={`text-xs ${reviewUrgency}`}>{daysLabel(reviewDays, "review")}</p>}
+              </div>
             )}
           </div>
-        )}
+          {nextReview && (
+            <div className="mt-3 border-t border-border-brand/70 pt-3">
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-black/45">
+                {signalContext(nextReview, periods)}
+              </p>
+              <Link href={`/portal/${firmId}/deliverables/${nextReview.id}`} className="mt-1 block text-sm font-semibold leading-snug text-navy hover:underline">
+                {nextReview.title}
+              </Link>
+            </div>
+          )}
+          {nextRevision && (
+            <div className="mt-3 border-t border-border-brand/70 pt-3">
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-amber-800">
+                Changes requested · {signalContext(nextRevision, periods)}
+              </p>
+              <Link href={`/portal/${firmId}/deliverables/${nextRevision.id}`} className="mt-1 block text-sm font-semibold leading-snug text-navy hover:underline">
+                {nextRevision.title}
+              </Link>
+            </div>
+          )}
+        </section>
+
+        <section className="border border-border-brand bg-white p-4" aria-labelledby="publication-schedule-heading">
+          <p className="text-[10px] uppercase tracking-[0.16em] font-semibold text-burgundy">Publication schedule</p>
+          {nextPublish ? (
+            <>
+              <div className="mt-1 flex items-start justify-between gap-3">
+                <h3 id="publication-schedule-heading" className="text-base font-bold text-navy">Next confirmed publication</h3>
+                <div className="text-right flex-none">
+                  <p className={`text-sm font-semibold ${publicationUrgency}`}>{fmtDate(nextPublish.date)}</p>
+                  {publicationDays !== null && <p className={`text-xs ${publicationUrgency}`}>{daysLabel(publicationDays, "publication")}</p>}
+                </div>
+              </div>
+              <div className="mt-3 border-t border-border-brand/70 pt-3">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-black/45">
+                  {signalContext(nextPublish, periods)}
+                </p>
+                <Link href={`/portal/${firmId}/deliverables/${nextPublish.id}`} className="mt-1 block text-sm font-semibold leading-snug text-navy hover:underline">
+                  {nextPublish.title}
+                </Link>
+              </div>
+            </>
+          ) : (
+            <h3 id="publication-schedule-heading" className="mt-1 text-base font-bold text-navy">No confirmed publication is due</h3>
+          )}
+          {unscheduledEmails > 0 && (
+            <p className="mt-3 border-t border-border-brand/70 pt-3 text-[11px] leading-relaxed text-black/55">
+              {unscheduledEmails} unpublished email{unscheduledEmails === 1 ? " is" : "s are"} excluded from deadline warnings until a sending date is confirmed.
+            </p>
+          )}
+        </section>
       </div>
 
       <div>

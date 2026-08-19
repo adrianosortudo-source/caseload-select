@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { PlanOverview } from "@/lib/deliverables-pure";
+import type { ContentPeriod } from "@/lib/types";
 import { ReviewOverview } from "../ContentPlan";
 
 const EMPTY_OVERVIEW: PlanOverview = {
@@ -16,7 +17,10 @@ const EMPTY_OVERVIEW: PlanOverview = {
   draft: 0,
   weeks: 0,
   byFormat: [],
+  nextReview: null,
+  nextRevision: null,
   nextPublish: null,
+  unscheduledEmails: 0,
 };
 
 const ACTIVE_OVERVIEW: PlanOverview = {
@@ -27,12 +31,42 @@ const ACTIVE_OVERVIEW: PlanOverview = {
   preapproved: 2,
   weeks: 1,
   byFormat: [{ format: "Website articles", count: 4 }],
+  nextReview: {
+    id: "review-email",
+    title: "The renewal clause that shapes your next rent",
+    format: "Email",
+    period_id: "week-2",
+  },
+  nextPublish: {
+    id: "scheduled-article",
+    title: "The federal filing check",
+    format: "Website articles",
+    period_id: "week-4",
+    date: "2026-08-25",
+  },
+  unscheduledEmails: 1,
 };
+
+const PERIODS = [
+  {
+    id: "week-2",
+    week_number: 2,
+    starts_on: "2026-06-29",
+    ends_on: "2026-07-03",
+  },
+  {
+    id: "week-4",
+    week_number: 4,
+    starts_on: "2026-08-03",
+    ends_on: "2026-08-09",
+  },
+] as ContentPeriod[];
 
 function render(overview: PlanOverview) {
   return renderToStaticMarkup(
     createElement(ReviewOverview, {
       overview,
+      periods: PERIODS,
       isOperator: true,
       firmId: "eec1d25e-a047-4827-8e4a-6eb96becca2b",
       settings: null,
@@ -49,6 +83,13 @@ describe("Deliverables client-review boundary", () => {
     expect(render(EMPTY_OVERVIEW)).toBe("");
     const html = render(ACTIVE_OVERVIEW);
     expect(html).toContain("Review overview");
+    expect(html).toContain("Review queue");
+    expect(html).toContain("Publication schedule");
+    expect(html).toContain("Week 2 · Email");
+    expect(html).toContain("Week 4 · Website articles");
+    expect(html).toContain("The renewal clause that shapes your next rent");
+    expect(html).toContain("The federal filing check");
+    expect(html).toContain("excluded from deadline warnings until a sending date is confirmed");
     expect(html).toContain("pre-approved");
     expect(html).not.toContain("Publication readiness");
     expect(html).not.toContain("Unavailable");
