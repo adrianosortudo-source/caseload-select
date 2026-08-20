@@ -53,6 +53,9 @@ interface Manifest {
       native_voice_ai_end_call_action_available: boolean;
       web_call_simulator_requires_caller_or_manual_end: boolean;
       real_phone_hangup_uat_required: boolean;
+      real_phone_hangup_tested: boolean;
+      real_phone_hangup_passed: boolean;
+      last_phone_test_duration_seconds: number;
       hangup_claimed_verified: boolean;
     };
     spoken_markers: boolean;
@@ -257,19 +260,23 @@ describe('canonical DRG hybrid Voice AI manifest', () => {
       ignore_audio_after_closing_begins: true,
       repeat_count: 1,
       include_caller_name: false,
-      scripted_goodbye: false,
+      scripted_goodbye: true,
       post_closing_speech: false,
     });
     expect(manifest.agent.session_end_validation).toEqual({
       native_voice_ai_end_call_action_available: false,
       web_call_simulator_requires_caller_or_manual_end: true,
       real_phone_hangup_uat_required: true,
+      real_phone_hangup_tested: true,
+      real_phone_hangup_passed: false,
+      last_phone_test_duration_seconds: 143,
       hangup_claimed_verified: false,
     });
     expect(prompt).toMatch(/conversation is closed/i);
     expect(prompt).toMatch(/never answer with a second goodbye/i);
     expect(prompt).toContain('Thank you. DRG Law will review your information');
-    expect(prompt).not.toMatch(/review your information[^\n]+Goodbye/i);
+    expect(prompt).toMatch(/review your information[^\n]+Goodbye/i);
+    expect(prompt).toMatch(/Do not claim that you ended or disconnected the call/i);
   });
 
   it('never instructs the agent to speak machine markers', () => {

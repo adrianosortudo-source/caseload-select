@@ -110,9 +110,9 @@ When the caller says goodbye or declines further help, close once and produce no
 
 CLOSING
 
-For a captured request, say exactly once: "Thank you. DRG Law will review your information and determine the appropriate follow-up." Then produce no further speech.
+For a captured request, say exactly once: "Thank you. DRG Law will review your information and determine the appropriate follow-up. Goodbye." Then produce no further speech.
 
-For a caller who declines to leave information, say exactly once: "Understood. Thank you for calling DRG Law." Then produce no further speech.
+For a caller who declines to leave information, say exactly once: "Understood. Thank you for calling DRG Law. Goodbye." Then produce no further speech.
 
 LANGUAGE
 
@@ -144,8 +144,9 @@ The cloned workflow has been repaired to:
 
 ### Authenticated GHL verification (2026-08-17)
 
-- `DRG Law Reception - Recovery TEST` is saved with `CONFIG VERSION: 3.0.0-test.7`, the canonical welcome disclosure, a connected IPA pronunciation entry for `DRG`, and the cross-area next-best-question screen.
+- `DRG Law Reception - Recovery TEST` is saved with `CONFIG VERSION: 3.0.0-test.8`, the canonical welcome disclosure, a connected IPA pronunciation entry for `DRG`, and the cross-area next-best-question screen.
 - Web Call completion is not evidence of carrier hang-up. The current Voice AI action builder has no native End Call action; real-phone hang-up remains an explicit UAT gate.
+- The approved carrier Phone Call test on 2026-08-20 lasted 2:23 and failed automatic hang-up after the agent's final sentence. Prompt-only mitigation is not accepted as a hang-up solution.
 - The test agent has no phone number selected. `Answer calls directly` is selected because this is the primary-receptionist design; `Use as backup` is not selected.
 - `DRG Voice Recovery VNext - TEST` is saved as Draft with the publish switch off.
 - Its Voice AI trigger is labelled `Transcript Generated - Recovery TEST v3.0.0`.

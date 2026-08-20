@@ -1,6 +1,6 @@
 {
   "schema_version": "drg.voice-ai.hybrid-reception.v1",
-  "config_version": "3.0.0-test.7",
+  "config_version": "3.0.0-test.8",
   "status": "preproduction_test",
   "updated_at": "2026-08-20",
   "operating_model": {
@@ -87,13 +87,16 @@
       "ignore_audio_after_closing_begins": true,
       "repeat_count": 1,
       "include_caller_name": false,
-      "scripted_goodbye": false,
+      "scripted_goodbye": true,
       "post_closing_speech": false
     },
     "session_end_validation": {
       "native_voice_ai_end_call_action_available": false,
       "web_call_simulator_requires_caller_or_manual_end": true,
       "real_phone_hangup_uat_required": true,
+      "real_phone_hangup_tested": true,
+      "real_phone_hangup_passed": false,
+      "last_phone_test_duration_seconds": 143,
       "hangup_claimed_verified": false
     },
     "spoken_markers": false,
