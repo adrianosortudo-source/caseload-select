@@ -266,7 +266,14 @@ export interface ContentExportArchivedDeliverable {
 export interface ContentExportBundle {
   schema_version: string;
   generated_at: string;
-  firm: { id: string; name: string | null; custom_domain?: string | null };
+  firm: {
+    id: string;
+    name: string | null;
+    /** White-label portal host. Never use this as the firm's marketing site. */
+    custom_domain?: string | null;
+    /** Canonical HTTPS origin for publisher-facing links, without a path. */
+    public_website_origin?: string | null;
+  };
   period: {
     id: string;
     title: string | null;
@@ -476,11 +483,27 @@ export async function buildContentExportBundle(
   // expiry timestamp describes all of them rather than drifting per-call.
   const signedUrlExpiresAt = new Date(Date.now() + SIGNED_URL_TTL * 1000).toISOString();
 
-  const { data: firm } = await supabase
+  let { data: firm, error: firmError } = await supabase
     .from("intake_firms")
-    .select("id, name, custom_domain")
+    .select("id, name, custom_domain, public_website_origin")
     .eq("id", period.firm_id)
     .maybeSingle();
+
+  // Keep the app readable during the short deployment window before the
+  // additive migration reaches production. The fallback deliberately leaves
+  // public_website_origin null; it never substitutes the portal domain.
+  if (firmError && /public_website_origin/i.test(firmError.message)) {
+    const legacyFirm = await supabase
+      .from("intake_firms")
+      .select("id, name, custom_domain")
+      .eq("id", period.firm_id)
+      .maybeSingle();
+    firm = legacyFirm.data
+      ? { ...legacyFirm.data, public_website_origin: null }
+      : null;
+    firmError = legacyFirm.error;
+  }
+  if (firmError) return { ok: false, error: firmError.message };
 
   // Firm-level, so it is read ONCE for the whole bundle rather than per
   // deliverable. This is the second half of the release-authorization bar
@@ -893,6 +916,8 @@ export async function buildContentExportBundle(
       id: period.firm_id,
       name: (firm?.name as string | undefined) ?? null,
       custom_domain: (firm?.custom_domain as string | undefined) ?? null,
+      public_website_origin:
+        (firm?.public_website_origin as string | undefined) ?? null,
     },
     period: {
       id: period.id,

@@ -38,6 +38,7 @@ import PlacementsTrackingPanel from "./PlacementsTrackingPanel";
 import HeroImageControl from "./HeroImageControl";
 import { shouldShowHeroImageControl } from "./hero-image-control-pure";
 import { heroOverlayFor } from "./hero-overlay-pure";
+import ManualPublicationToggle from "./ManualPublicationToggle";
 
 interface Detail {
   deliverable: ContentDeliverable;
@@ -369,6 +370,15 @@ export default function DeliverableReview({
               onChanged={refetch}
               supportPreview={supportPreview}
             />
+            <ManualPublicationToggle
+              firmId={firmId}
+              deliverableId={deliverableId}
+              viewerRole={viewerRole}
+              status={deliverable.status}
+              publishedAt={deliverable.published_at ?? null}
+              supportPreview={supportPreview}
+              onChanged={refetch}
+            />
             <ArchiveControl
               firmId={firmId}
               deliverableId={deliverableId}
@@ -644,6 +654,24 @@ function ContentViewer({
             way you would in Google Docs. Click the hero or any inline image to
             comment on that image.
           </p>
+          {deliverable.deliverable_role === "lead_magnet_pdf" && version.signed_url ? (
+            <div className="border border-border-brand bg-white px-4 py-3">
+              <a
+                href={version.signed_url}
+                download={version.asset_name ?? undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-burgundy underline underline-offset-2"
+              >
+                {deliverable.locale === "pt-BR" ? "Baixar o Checklist (PDF)" : "Download the Checklist (PDF)"}
+              </a>
+              <p className="mt-1 text-xs text-black/55">
+                {deliverable.locale === "pt-BR"
+                  ? "O texto completo abaixo e este PDF pertencem à mesma versão em análise."
+                  : "The complete text below and this PDF belong to the same version under review."}
+              </p>
+            </div>
+          ) : null}
           <DRGArticleFrame
             title={deliverable.title}
             excerpt={deliverable.excerpt}

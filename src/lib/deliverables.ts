@@ -169,7 +169,9 @@ export async function getContentPlan(
   if (delivRes.error) throw new Error(`plan deliverables load failed: ${delivRes.error.message}`);
 
   const rawDeliverables = (delivRes.data ?? []) as Array<
-    Omit<PlanDeliverable, "requires_individual_review"> & { current_version_id: string | null }
+    Omit<PlanDeliverable, "requires_individual_review" | "scheduled_publish_date"> & {
+      current_version_id: string | null;
+    }
   >;
 
   // DR-107: batch-load the requires_individual_review flag for whichever
@@ -180,16 +182,43 @@ export async function getContentPlan(
   const currentVersionIds = [
     ...new Set(rawDeliverables.map((d) => d.current_version_id).filter((id): id is string => !!id)),
   ];
+  const deliverableIds = rawDeliverables.map((deliverable) => deliverable.id);
   const flagByVersionId = new Map<string, boolean>();
-  if (currentVersionIds.length > 0) {
-    const { data: versionFlags, error: flagsError } = await supabase
-      .from("deliverable_versions")
-      .select("id, requires_individual_review")
-      .in("id", currentVersionIds);
-    if (!flagsError) {
-      for (const v of versionFlags ?? []) {
-        flagByVersionId.set(v.id as string, !!v.requires_individual_review);
-      }
+  const emailScheduleByDeliverableId = new Map<string, string>();
+  const [versionFlagsRes, emailPlacementsRes] = await Promise.all([
+    currentVersionIds.length > 0
+      ? supabase
+          .from("deliverable_versions")
+          .select("id, requires_individual_review")
+          .in("id", currentVersionIds)
+      : Promise.resolve({ data: [], error: null }),
+    deliverableIds.length > 0
+      ? supabase
+          .from("content_placements")
+          .select("deliverable_id, scheduled_publish_date")
+          .in("deliverable_id", deliverableIds)
+          .eq("destination", "email_delivery")
+          .eq("state", "ready")
+          .not("scheduled_publish_date", "is", null)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (!versionFlagsRes.error) {
+    for (const version of versionFlagsRes.data ?? []) {
+      flagByVersionId.set(version.id as string, !!version.requires_individual_review);
+    }
+  }
+
+  // Fail closed for email timing. A generic editorial publish_date is not
+  // evidence that the sending workflow is scheduled. Only a ready
+  // email_delivery placement with its own date may enter deadline warnings.
+  if (!emailPlacementsRes.error) {
+    for (const placement of emailPlacementsRes.data ?? []) {
+      const deliverableId = placement.deliverable_id as string;
+      const date = placement.scheduled_publish_date as string | null;
+      if (!date) continue;
+      const current = emailScheduleByDeliverableId.get(deliverableId);
+      if (!current || date < current) emailScheduleByDeliverableId.set(deliverableId, date);
     }
   }
 
@@ -205,6 +234,7 @@ export async function getContentPlan(
     publication_destination: d.publication_destination,
     period_id: d.period_id,
     publish_date: d.publish_date,
+    scheduled_publish_date: emailScheduleByDeliverableId.get(d.id) ?? null,
     published_at: d.published_at,
     current_version_id: d.current_version_id,
     requires_individual_review: d.current_version_id
@@ -1047,6 +1077,35 @@ export async function archiveDeliverable(input: {
     .eq("firm_id", input.firmId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/**
+ * Operator-maintained record that a deliverable was actually published.
+ * This intentionally updates only the lightweight published_at axis. It does
+ * not approve content, change the review status, publish anything externally,
+ * or manufacture the destination-bound proof held in publication_receipts.
+ */
+export async function setDeliverablePublishedAt(input: {
+  deliverableId: string;
+  firmId: string;
+  publishedAt: string | null;
+}): Promise<
+  | { ok: true; publishedAt: string | null }
+  | { ok: false; error: string }
+> {
+  const { data, error } = await supabase
+    .from("content_deliverables")
+    .update({
+      published_at: input.publishedAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.deliverableId)
+    .eq("firm_id", input.firmId)
+    .select("published_at")
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "deliverable not found" };
+  return { ok: true, publishedAt: data.published_at as string | null };
 }
 
 // ─── Notifications ───────────────────────────────────────────────────────────

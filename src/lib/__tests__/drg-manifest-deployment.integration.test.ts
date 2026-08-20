@@ -50,7 +50,7 @@ describe.skipIf(!DB_URL)("DR-122 manifest deployment (real Postgres)", () => {
   };
 
   const pieces = SLOTS.map((slot) => {
-    const isPdf = slot.startsWith("checklist-");
+    const isChecklist = slot.startsWith("checklist-");
     const isGbp = slot.startsWith("gbp-");
     const isLinkedInPost = slot.startsWith("linkedin-post-");
     const isLinkedInArticle = slot.startsWith("linkedin-") && !isLinkedInPost;
@@ -58,13 +58,14 @@ describe.skipIf(!DB_URL)("DR-122 manifest deployment (real Postgres)", () => {
     const isLanding = slot.startsWith("lead-magnet-");
     return {
       slotId: slot, deliverableId: deliverableIds[slot], versionId: versionIds[slot],
-      formatFamily: isPdf ? "decision_tool" : isGbp ? "google_business_profile_post" : isLinkedInPost ? "linkedin_post" : isLinkedInArticle ? "linkedin_article" : isMinute ? "minute_drg" : isLanding ? "lead_magnet_landing_page" : slot.startsWith("clause-") ? "clause_in_the_margin" : "counsel_note",
+      formatFamily: isChecklist ? "decision_tool" : isGbp ? "google_business_profile_post" : isLinkedInPost ? "linkedin_post" : isLinkedInArticle ? "linkedin_article" : isMinute ? "minute_drg" : isLanding ? "lead_magnet_landing_page" : slot.startsWith("clause-") ? "clause_in_the_margin" : "counsel_note",
       locale: slot.endsWith("-pt") ? "pt-BR" : "en-CA",
       destination: isGbp ? "google_business_profile" : isLinkedInPost ? "linkedin" : isLinkedInArticle ? "linkedin_article" : isMinute ? "email" : "firm_website",
-      deliverableRole: isPdf ? "lead_magnet_pdf" : isGbp ? "gbp_post" : isLinkedInPost ? "social_post" : isMinute ? "email_newsletter" : isLanding ? "landing_page" : "article",
+      deliverableRole: isChecklist ? "lead_magnet_pdf" : isGbp ? "gbp_post" : isLinkedInPost ? "social_post" : isMinute ? "email_newsletter" : isLanding ? "landing_page" : "article",
       title: `Integration ${slot}`, description: `Integration description for ${slot}`,
-      bodyHtml: `<p>Integration body for ${slot}</p>`, bodySha256: sha(`<p>Integration body for ${slot}</p>`),
-      source: { path: `sources/${slot}.json`, sha256: sha(slot) }, contentKind: isPdf ? "pdf" : "text",
+      bodyHtml: isChecklist ? `<h2>Checklist</h2><h3>Observable checks</h3><ul><li>Check</li></ul><div data-review-table="true">${"complete decision tool ".repeat(300)}</div>` : `<p>Integration body for ${slot}</p>`,
+      bodySha256: sha(isChecklist ? `<h2>Checklist</h2><h3>Observable checks</h3><ul><li>Check</li></ul><div data-review-table="true">${"complete decision tool ".repeat(300)}</div>` : `<p>Integration body for ${slot}</p>`),
+      source: { path: `sources/${slot}.json`, sha256: sha(slot) }, contentKind: "text",
       publicationPath: null, ctaTargetPath: null,
     };
   });
@@ -124,6 +125,12 @@ describe.skipIf(!DB_URL)("DR-122 manifest deployment (real Postgres)", () => {
     expect(proof.rows[0].published_or_approved).toBe(0);
     expect(proof.rows[0].strategy_brief).toEqual(strategyBrief);
     expect(proof.rows[0].deployments).toBe(1);
+
+    const checklistVersion = await a.query(`select body_html, storage_path, asset_mime, asset_size_bytes from deliverable_versions where id=$1`, [versionIds["checklist-en"]]);
+    expect(checklistVersion.rows[0].body_html).toContain("complete decision tool");
+    expect(checklistVersion.rows[0].storage_path).toBe(assets[0].storagePath);
+    expect(checklistVersion.rows[0].asset_mime).toBe("application/pdf");
+    expect(checklistVersion.rows[0].asset_size_bytes).toBe(assets[0].byteSize);
 
     await expect(a.query(sql, [JSON.stringify(bundle), "f".repeat(64), canonicalSha, JSON.stringify(authorization), authorizationSha, JSON.stringify({})])).rejects.toThrow(/different bundle bytes or authorization content hash/);
   }, 30000);

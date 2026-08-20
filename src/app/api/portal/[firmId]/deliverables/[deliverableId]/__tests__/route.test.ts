@@ -2,8 +2,8 @@
  * Integration tests for the deliverable detail route
  * (GET + PATCH /api/portal/[firmId]/deliverables/[deliverableId]).
  *
- * GET returns the detail (auth + firm scope). PATCH archives on
- * { action: "archive" } and rejects unknown actions.
+ * GET returns the detail (auth + firm scope). PATCH archives, records manual
+ * publication state for operators, and rejects unknown actions.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -15,11 +15,18 @@ const DELIV = "22222222-2222-2222-2222-222222222222";
 
 type Actor = { role: string; id: string | null; name: string | null; email: string | null } | null;
 
-const state: { actor: Actor; detail: unknown; detailReadError: boolean; archived: boolean } = {
+const state: {
+  actor: Actor;
+  detail: unknown;
+  detailReadError: boolean;
+  archived: boolean;
+  publishedAt: string | null;
+} = {
   actor: null,
   detail: null,
   detailReadError: false,
   archived: false,
+  publishedAt: null,
 };
 
 vi.mock("@/lib/deliverables-auth", () => ({
@@ -40,11 +47,17 @@ vi.mock("@/lib/deliverables", () => ({
     state.archived = true;
     return Promise.resolve({ ok: true });
   },
+  setDeliverablePublishedAt: (input: { publishedAt: string | null }) => {
+    state.publishedAt = input.publishedAt;
+    return Promise.resolve({ ok: true, publishedAt: input.publishedAt });
+  },
+  setDeliverablePlacement: () => Promise.resolve({ ok: true }),
 }));
 
 import { GET, PATCH } from "../route";
 
 const LAWYER: Actor = { role: "lawyer", id: "law1", name: "Damaris", email: "d@firm.ca" };
+const OPERATOR: Actor = { role: "operator", id: "op1", name: "CaseLoad", email: "op@example.ca" };
 
 function makeDetail(firmId = FIRM) {
   return {
@@ -70,6 +83,7 @@ beforeEach(() => {
   state.detail = makeDetail();
   state.detailReadError = false;
   state.archived = false;
+  state.publishedAt = null;
 });
 
 describe("GET deliverable detail", () => {
@@ -105,6 +119,47 @@ describe("PATCH deliverable detail", () => {
     const res = await PATCH(req({ action: "archive" }), params());
     expect(res.status).toBe(200);
     expect(state.archived).toBe(true);
+  });
+
+  it("lets an operator record the actual publication date", async () => {
+    state.actor = OPERATOR;
+    const res = await PATCH(
+      req({ action: "set_publication_record", published: true, published_at: "2026-08-18" }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+    expect(state.publishedAt).toBe("2026-08-18");
+    expect(await res.json()).toMatchObject({ ok: true, published_at: "2026-08-18" });
+  });
+
+  it("lets an operator clear the manual publication record", async () => {
+    state.actor = OPERATOR;
+    state.publishedAt = "2026-08-18";
+    const res = await PATCH(
+      req({ action: "set_publication_record", published: false }),
+      params(),
+    );
+    expect(res.status).toBe(200);
+    expect(state.publishedAt).toBeNull();
+  });
+
+  it("rejects publication-state changes from a lawyer session", async () => {
+    const res = await PATCH(
+      req({ action: "set_publication_record", published: true, published_at: "2026-08-18" }),
+      params(),
+    );
+    expect(res.status).toBe(403);
+    expect(state.publishedAt).toBeNull();
+  });
+
+  it("rejects invalid publication dates", async () => {
+    state.actor = OPERATOR;
+    const res = await PATCH(
+      req({ action: "set_publication_record", published: true, published_at: "2026-02-30" }),
+      params(),
+    );
+    expect(res.status).toBe(400);
+    expect(state.publishedAt).toBeNull();
   });
 
   it("400 on an unknown action", async () => {

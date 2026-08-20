@@ -19,8 +19,12 @@ function item(p: Partial<PlanDeliverable>): PlanDeliverable {
     status: p.status ?? "in_review",
     content_kind: p.content_kind ?? "text",
     format: p.format ?? null,
+    locale: p.locale ?? null,
+    deliverable_role: p.deliverable_role ?? null,
+    publication_destination: p.publication_destination ?? null,
     period_id: p.period_id ?? null,
     publish_date: p.publish_date ?? null,
+    scheduled_publish_date: p.scheduled_publish_date ?? null,
     published_at: p.published_at ?? null,
     requires_individual_review: p.requires_individual_review ?? false,
   };
@@ -111,7 +115,7 @@ describe("planProgress", () => {
 });
 
 describe("computeOverview", () => {
-  it("tallies statuses, weeks, formats, and the soonest unapproved publish", () => {
+  it("tallies statuses, weeks, formats, and the soonest unpublished item", () => {
     const o = computeOverview([
       item({ id: "a", status: "approved", format: "Counsel Note", period_id: "p1", publish_date: "2026-06-24" }),
       item({ id: "b", status: "in_review", format: "Counsel Note", period_id: "p1", publish_date: "2026-06-26" }),
@@ -129,16 +133,115 @@ describe("computeOverview", () => {
       { format: "Lead Magnet", count: 1 },
       { format: null, count: 1 },
     ]);
-    // approved item (06-24) is excluded; soonest unapproved is b (06-26)
-    expect(o.nextPublish).toEqual({ date: "2026-06-26", title: "t" });
+    // Review and publication are independent axes. An approved but unpublished
+    // item still belongs in the publication schedule.
+    expect(o.nextReview).toEqual({
+      id: "b",
+      title: "t",
+      format: "Website articles",
+      period_id: "p1",
+    });
+    expect(o.nextRevision).toEqual({
+      id: "c",
+      title: "t",
+      format: "Checklists & downloadable resources",
+      period_id: "p2",
+    });
+    expect(o.nextPublish).toEqual({
+      id: "a",
+      date: "2026-06-24",
+      title: "t",
+      format: "Website articles",
+      period_id: "p1",
+    });
   });
 
-  it("has no nextPublish when every piece is approved or undated", () => {
+  it("has no nextPublish when every dated piece is already published and the rest are undated", () => {
     const o = computeOverview([
-      item({ id: "a", status: "approved", publish_date: "2026-06-24" }),
+      item({ id: "a", status: "approved", publish_date: "2026-06-24", published_at: "2026-06-24" }),
       item({ id: "b", status: "in_review", publish_date: null }),
     ]);
     expect(o.nextPublish).toBeNull();
+  });
+
+  it("keeps the review item separate from the scheduled publication item", () => {
+    const o = computeOverview(
+      [
+        item({
+          id: "review-email",
+          title: "Review the Minute",
+          format: "DRG Law Minute",
+          deliverable_role: "email_newsletter",
+          publication_destination: "email",
+          period_id: "p2",
+          publish_date: "2026-06-20",
+          requires_individual_review: true,
+        }),
+        item({
+          id: "scheduled-article",
+          title: "Publish the Counsel Note",
+          format: "Counsel Note",
+          deliverable_role: "article",
+          publication_destination: "firm_website",
+          period_id: "p4",
+          publish_date: "2026-08-04",
+        }),
+      ],
+      { standingAuthorizedDeliverableIds: new Set(["scheduled-article"]) },
+    );
+
+    expect(o.nextReview).toEqual({
+      id: "review-email",
+      title: "Review the Minute",
+      format: "Email",
+      period_id: "p2",
+    });
+    expect(o.nextPublish).toEqual({
+      id: "scheduled-article",
+      title: "Publish the Counsel Note",
+      format: "Website articles",
+      period_id: "p4",
+      date: "2026-08-04",
+    });
+  });
+
+  it("does not turn an editorial email date into an overdue sending warning", () => {
+    const o = computeOverview([
+      item({
+        id: "email",
+        title: "Minute",
+        format: "DRG Law Minute",
+        deliverable_role: "email_newsletter",
+        publication_destination: "email",
+        publish_date: "2026-08-04",
+      }),
+    ]);
+
+    expect(o.nextPublish).toBeNull();
+    expect(o.unscheduledEmails).toBe(1);
+  });
+
+  it("uses a confirmed email placement schedule instead of the editorial date", () => {
+    const o = computeOverview([
+      item({
+        id: "email",
+        title: "Minute",
+        format: "DRG Law Minute",
+        deliverable_role: "email_newsletter",
+        publication_destination: "email",
+        publish_date: "2026-08-04",
+        scheduled_publish_date: "2026-08-25",
+      }),
+    ]);
+
+    expect(o.nextPublish).toEqual({
+      id: "email",
+      title: "Minute",
+      format: "Email",
+      period_id: null,
+      date: "2026-08-25",
+    });
+    expect(o.unscheduledEmails).toBe(0);
   });
 
   it("DR-107: with standingAuthActive omitted, preapproved stays 0 and pending is byte-identical to before DR-107", () => {
@@ -253,7 +356,13 @@ describe("planProgress + computeOverview (published)", () => {
       item({ id: "shipped", status: "in_review", publish_date: "2026-07-01", published_at: "2026-07-01" }),
       item({ id: "due", status: "in_review", publish_date: "2026-08-01" }),
     ]);
-    expect(o.nextPublish).toEqual({ date: "2026-08-01", title: "t" });
+    expect(o.nextPublish).toEqual({
+      id: "due",
+      date: "2026-08-01",
+      title: "t",
+      format: "Other",
+      period_id: null,
+    });
   });
 });
 

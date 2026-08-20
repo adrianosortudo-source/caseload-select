@@ -80,6 +80,30 @@ export function isPublished(publishedAt: string | null | undefined): boolean {
   return typeof publishedAt === "string" && publishedAt.trim().length > 0;
 }
 
+export type ManualPublicationDateResult =
+  | { ok: true; publishedAt: string | null }
+  | { ok: false; error: string };
+
+/**
+ * Normalise the operator's manual publication record. Clearing the switch is
+ * always represented by null. Marking a piece published requires a real
+ * calendar date in the same YYYY-MM-DD shape as content_deliverables.published_at.
+ */
+export function normalizeManualPublicationDate(
+  published: boolean,
+  value: unknown,
+): ManualPublicationDateResult {
+  if (!published) return { ok: true, publishedAt: null };
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return { ok: false, error: "published_at must be a date in YYYY-MM-DD format" };
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    return { ok: false, error: "published_at must be a valid calendar date" };
+  }
+  return { ok: true, publishedAt: value };
+}
+
 /**
  * DR-107: with the firm's standing publishing authorization enabled, an
  * in_review deliverable whose current version is not flagged
@@ -456,6 +480,12 @@ export interface PlanDeliverable {
   publication_destination?: string | null;
   period_id: string | null;
   publish_date: string | null;
+  /**
+   * Confirmed operational schedule projected from a ready
+   * content_placements row. Email deadlines use this field instead of the
+   * editorial publish_date so an unscheduled draft cannot become "overdue".
+   */
+  scheduled_publish_date?: string | null;
   /** Date the operator recorded the piece as actually published. */
   published_at: string | null;
   current_version_id?: string | null;
@@ -696,13 +726,43 @@ export interface PlanOverview {
   draft: number;
   weeks: number; // distinct weeks that hold content
   byFormat: { format: string | null; count: number }[];
-  nextPublish: { date: string; title: string } | null; // soonest publish among not-yet-approved
+  nextReview: OverviewSignal | null;
+  nextRevision: OverviewSignal | null;
+  nextPublish: (OverviewSignal & { date: string }) | null;
+  unscheduledEmails: number;
+}
+
+export interface OverviewSignal {
+  id: string;
+  title: string;
+  format: CanonicalFormat;
+  period_id: string | null;
+}
+
+type DatedOverviewSignal = OverviewSignal & { sourceDate: string | null };
+
+function earlierSignal(
+  current: DatedOverviewSignal | null,
+  candidate: DatedOverviewSignal,
+): DatedOverviewSignal {
+  if (!current) return candidate;
+  const candidateDate = candidate.sourceDate;
+  const currentDate = current.sourceDate;
+  if (candidateDate && !currentDate) return candidate;
+  if (!candidateDate && currentDate) return current;
+  if (candidateDate && currentDate && candidateDate !== currentDate) {
+    return candidateDate < currentDate ? candidate : current;
+  }
+  const byTitle = candidate.title.localeCompare(current.title);
+  if (byTitle !== 0) return byTitle < 0 ? candidate : current;
+  return candidate.id < current.id ? candidate : current;
 }
 
 /**
  * Whole-plan summary for the review-overview panel. Live counts, a format
- * tally, and the soonest publish date among pieces not yet approved (the
- * working deadline: review before it goes out). DR-107: when the firm's
+ * tally, the next item that genuinely needs firm review, the next item that
+ * needs an operator revision, and the next confirmed publication schedule.
+ * DR-107: when the firm's
  * standing authorization is active, an in_review item not flagged
  * requires_individual_review counts as preapproved instead of pending. With
  * standingAuthActive false or omitted, behavior is byte-identical to before
@@ -711,8 +771,9 @@ export interface PlanOverview {
  * `published` is a second axis, not a fourth bucket: a published piece is
  * still counted under whichever status bucket it belongs to, so the existing
  * tallies are unchanged. It is excluded from nextPublish, which exists to
- * surface the next working deadline -- something already out the door is not
- * one.
+ * surface the next confirmed operational deadline. Email uses only a
+ * projected ready placement schedule; its editorial publish_date alone is
+ * not enough to claim that a sending workflow is scheduled.
  */
 export function computeOverview(
   items: PlanDeliverable[],
@@ -724,21 +785,55 @@ export function computeOverview(
   let published = 0;
   let changes = 0;
   let draft = 0;
+  let unscheduledEmails = 0;
   const weeks = new Set<string>();
-  let next: { date: string; title: string } | null = null;
+  let nextReview: DatedOverviewSignal | null = null;
+  let nextRevision: DatedOverviewSignal | null = null;
+  let nextPublish: (OverviewSignal & { date: string }) | null = null;
   for (const it of items) {
     if (it.status === "approved") approved++;
     else if (it.status === "in_review") {
-      if (opts?.standingAuthorizedDeliverableIds?.has(it.id) || (opts?.standingAuthActive && !it.requires_individual_review)) preapproved++;
-      else pending++;
-    } else if (it.status === "changes_requested") changes++;
-    else if (it.status === "draft") draft++;
+      if (opts?.standingAuthorizedDeliverableIds?.has(it.id) || (opts?.standingAuthActive && !it.requires_individual_review)) {
+        preapproved++;
+      } else {
+        pending++;
+        const candidate = {
+          id: it.id,
+          title: it.title,
+          format: canonicalFormat(it),
+          period_id: it.period_id,
+          sourceDate: it.publish_date,
+        };
+        nextReview = earlierSignal(nextReview, candidate);
+      }
+    } else if (it.status === "changes_requested") {
+      changes++;
+      const candidate = {
+        id: it.id,
+        title: it.title,
+        format: canonicalFormat(it),
+        period_id: it.period_id,
+        sourceDate: it.publish_date,
+      };
+      nextRevision = earlierSignal(nextRevision, candidate);
+    } else if (it.status === "draft") draft++;
     const itemPublished = it.status !== "archived" && isPublished(it.published_at);
     if (itemPublished) published++;
     if (it.period_id) weeks.add(it.period_id);
-    if (it.status !== "approved" && !itemPublished && it.publish_date) {
-      if (!next || it.publish_date < next.date) {
-        next = { date: it.publish_date, title: it.title };
+
+    if (!itemPublished) {
+      const email = canonicalFormat(it) === "Email";
+      const scheduledDate = email ? (it.scheduled_publish_date ?? null) : it.publish_date;
+      if (email && !scheduledDate) unscheduledEmails++;
+      if (scheduledDate) {
+        const candidate = {
+          id: it.id,
+          title: it.title,
+          format: canonicalFormat(it),
+          period_id: it.period_id,
+          date: scheduledDate,
+        };
+        if (!nextPublish || candidate.date < nextPublish.date) nextPublish = candidate;
       }
     }
   }
@@ -756,7 +851,24 @@ export function computeOverview(
     draft,
     weeks: weeks.size,
     byFormat,
-    nextPublish: next,
+    nextReview: nextReview
+      ? {
+          id: nextReview.id,
+          title: nextReview.title,
+          format: nextReview.format,
+          period_id: nextReview.period_id,
+        }
+      : null,
+    nextRevision: nextRevision
+      ? {
+          id: nextRevision.id,
+          title: nextRevision.title,
+          format: nextRevision.format,
+          period_id: nextRevision.period_id,
+        }
+      : null,
+    nextPublish,
+    unscheduledEmails,
   };
 }
 

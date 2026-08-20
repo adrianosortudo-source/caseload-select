@@ -19,13 +19,13 @@ import {
   toAgentManifest,
   toPublishKitView,
   copyColumnMessage,
+  containsForbiddenEmDash,
   isLinkedInArticlePiece,
   linkedInArticlePasteEligibility,
   pieceMatchesFilter,
   filteredTotals,
   blockedPiecesAreFullyWithheld,
-  shouldShowWebsiteArtifactSlots,
-  websitePlacementArtifact,
+  websiteArticleHeroArtifact,
   ROLE_COPY_CONSTRAINTS,
   type PublishKitPiece,
   type PublishKitView,
@@ -132,7 +132,12 @@ function makeBundle(deliverables: ContentExportDeliverable[]): ContentExportBund
   return {
     schema_version: "1.0",
     generated_at: "2026-07-01T00:00:00Z",
-    firm: { id: "firm-1", name: "Test Firm", custom_domain: "drglaw.ca" },
+    firm: {
+      id: "firm-1",
+      name: "Test Firm",
+      custom_domain: "portal.test-firm.example",
+      public_website_origin: "https://drglaw.ca",
+    },
     period: {
       id: "period-1",
       title: "Test period",
@@ -238,6 +243,17 @@ describe("countWords", () => {
   });
 });
 
+describe("containsForbiddenEmDash", () => {
+  it("fails closed when any customer-facing field contains an em dash", () => {
+    expect(containsForbiddenEmDash("Clean title", "work together\u2014and why", null)).toBe(true);
+  });
+
+  it("allows commas, colons, semicolons, hyphens, and en dashes", () => {
+    expect(containsForbiddenEmDash("Clean title", "Risk, Price and Timeline: pre-waiver review - complete", "1\u20133"))
+      .toBe(false);
+  });
+});
+
 // ─── readConstraints (cases 8-13) ─────────────────────────────────────────────
 
 describe("readConstraints", () => {
@@ -337,19 +353,31 @@ describe("resolveDestinationPath", () => {
 
 describe("materializePublisherUrl", () => {
   it("turns a stored route into the full firm URL used by external publishers", () => {
-    expect(materializePublisherUrl("/resources/checklist", "drglaw.ca")).toBe(
+    expect(materializePublisherUrl("/resources/checklist", "https://drglaw.ca")).toBe(
       "https://drglaw.ca/resources/checklist",
     );
   });
 
   it("preserves an already absolute URL without substituting the firm domain", () => {
-    expect(materializePublisherUrl("https://example.com/article", "drglaw.ca")).toBe(
+    expect(materializePublisherUrl("https://example.com/article", "https://drglaw.ca")).toBe(
       "https://example.com/article",
     );
   });
 
-  it("does not guess an origin when the firm has no configured custom domain", () => {
+  it("does not guess an origin when the firm has no configured public website origin", () => {
     expect(materializePublisherUrl("/resources/checklist", null)).toBe("/resources/checklist");
+  });
+
+  it("rejects a host-only value because the contract requires an explicit HTTPS origin", () => {
+    expect(materializePublisherUrl("/resources/checklist", "drglaw.ca")).toBe(
+      "/resources/checklist",
+    );
+  });
+
+  it("rejects origins carrying a path", () => {
+    expect(materializePublisherUrl("/resources/checklist", "https://drglaw.ca/journal")).toBe(
+      "/resources/checklist",
+    );
   });
 });
 
@@ -377,11 +405,28 @@ describe("destination path end to end: view model and agent record", () => {
         may_publish: true,
       }),
     ]);
-    bundle.firm.custom_domain = null;
+    bundle.firm.public_website_origin = null;
     const piece = piecesOf(toPublishKitView(bundle)).find((p) => p.id === "d1");
     expect(piece?.destinationPath).toBe("/resources/checklist");
     expect(piece?.mayPublish).toBe(false);
-    expect(piece?.mayPublishReason).toMatch(/public website domain/);
+    expect(piece?.mayPublishReason).toMatch(/public website origin/);
+  });
+
+  it("never treats the white-label portal custom_domain as the public marketing origin", () => {
+    const bundle = makeBundle([
+      makeDeliverable({
+        id: "d1",
+        channel: "gbp_post",
+        publication_path: null,
+        cta_target_path: "/resources/checklist",
+        may_publish: true,
+      }),
+    ]);
+    bundle.firm.custom_domain = "portal.drglaw.example";
+    bundle.firm.public_website_origin = null;
+    const piece = piecesOf(toPublishKitView(bundle)).find((p) => p.id === "d1");
+    expect(piece?.destinationPath).toBe("/resources/checklist");
+    expect(piece?.mayPublish).toBe(false);
   });
 
   it("toAgentRecord on that publishable piece returns the resolved path as destination, plus both raw columns", () => {
@@ -396,6 +441,32 @@ describe("destination path end to end: view model and agent record", () => {
     expect(record.destination).toBe("/resources/checklist");
     expect(record.publication_path).toBeNull();
     expect(record.cta_target_path).toBe("/resources/checklist");
+  });
+
+  it("never copies the operator-only review URL into a publisher record", () => {
+    const bundle = makeBundle([
+      makeDeliverable({
+        id: "d1",
+        may_publish: true,
+        current_version_id: "v1",
+        current_version: makeVersionBody({ id: "v1" }),
+        approved_version_id: "v1",
+        approved_version: makeVersionBody({ id: "v1" }),
+        artifacts: [
+          makeArtifact({
+            id: "a1",
+            version_id: "v1",
+            signed_url: "https://signed.example/a1.png",
+          }),
+        ],
+      }),
+    ]);
+    const piece = piecesOf(toPublishKitView(bundle)).find((p) => p.id === "d1");
+    if (!piece) throw new Error("expected piece");
+    const record = toAgentRecord(piece);
+    if (record.withheld) throw new Error("expected publishable record");
+    expect(record.artifacts[0].signedUrl).toBe("https://signed.example/a1.png");
+    expect(Object.hasOwn(record.artifacts[0], "reviewSignedUrl")).toBe(false);
   });
 });
 
@@ -1535,11 +1606,18 @@ describe("blocked piece with no approved version (the reachable blocked shape)",
     expect(piece?.boundArtifactsAreUnapproved).toBe(true);
   });
 
-  it("the bound current-version artifact still has signedUrl stripped (FU3-3's strip still applies)", () => {
+  it("the bound current-version artifact keeps review-only access while release access stays stripped", () => {
     const piece = piecesOf(toPublishKitView(blockedBundle())).find((p) => p.id === "d1");
     const artifact = piece?.artifacts.find((a) => a.id === "a-current");
     expect(artifact?.signedUrl).toBeNull();
     expect(artifact?.signedUrlExpiresAt).toBeNull();
+    expect(artifact?.reviewSignedUrl).toBe("https://signed.example/a-current.png");
+  });
+
+  it("never grants review access to an artifact from another version", () => {
+    const piece = piecesOf(toPublishKitView(blockedBundle())).find((p) => p.id === "d1");
+    const artifact = piece?.otherVersionArtifacts.find((a) => a.id === "a-other");
+    expect(artifact?.reviewSignedUrl).toBeUndefined();
   });
 
   it("an artifact bound to a genuinely different version is still in otherVersionArtifacts", () => {
@@ -1693,6 +1771,7 @@ describe("blocked pieces carry no working links", () => {
     const artifact = piece?.artifacts.find((a) => a.id === "a-approved");
     expect(artifact?.signedUrl).toBeNull();
     expect(artifact?.signedUrlExpiresAt).toBeNull();
+    expect(artifact?.reviewSignedUrl).toBe("https://signed.example/a-approved.png");
     expect(artifact?.storagePath).toBe("publication-artifacts/d1/a-approved.png");
     expect(artifact?.sha256).toBe("approved-sha");
   });
@@ -1903,31 +1982,23 @@ describe("totals", () => {
 
 const NO_FILTER: PublishKitFilter = { channel: null, lane: null };
 
-describe("website artifact placement compatibility", () => {
-  it("shows website slots only for firm-website articles, never native LinkedIn Articles", () => {
-    expect(shouldShowWebsiteArtifactSlots(makePiece({ role: "article", destination: "firm_website" }))).toBe(true);
-    expect(shouldShowWebsiteArtifactSlots(makePiece({ role: "article", destination: "linkedin_article" }))).toBe(false);
-    expect(shouldShowWebsiteArtifactSlots(makePiece({ role: "social_post", destination: "firm_website" }))).toBe(false);
-  });
-
+describe("single website article hero compatibility", () => {
   it.each([
-    ["website_article_hero_overlay", "article_hero"],
-    ["website_article_hero", "article_hero"],
-    ["website_homepage_cta_textless", "homepage_cta"],
-    ["website_homepage_cta", "homepage_cta"],
-  ] as const)("resolves the %s role into the %s slot", (assetRole, placement) => {
+    "website_article_hero_overlay",
+    "website_article_hero",
+    "website_homepage_cta_textless",
+    "website_homepage_cta",
+  ] as const)("resolves the %s role into the single article-hero slot", (assetRole) => {
     const artifact = makeArtifact({ id: assetRole, asset_role: assetRole, artifact_type: "hero_image" });
     const view = toPublishKitView(makeBundle([makeDeliverable({ artifacts: [artifact] })]));
-    expect(websitePlacementArtifact(view.groups[0].pieces[0], placement)?.id).toBe(assetRole);
+    expect(websiteArticleHeroArtifact(view.groups[0].pieces[0])?.id).toBe(assetRole);
   });
 
-  it("reuses the article hero for the homepage only when no dedicated homepage asset exists", () => {
+  it("prefers a canonical article hero over a historical homepage-role row", () => {
     const article = makeArtifact({ id: "article", asset_role: "website_article_hero", artifact_type: "hero_image" });
     const homepage = makeArtifact({ id: "homepage", asset_role: "website_homepage_cta", artifact_type: "hero_image" });
-    const articleOnly = toPublishKitView(makeBundle([makeDeliverable({ artifacts: [article] })])).groups[0].pieces[0];
     const both = toPublishKitView(makeBundle([makeDeliverable({ artifacts: [article, homepage] })])).groups[0].pieces[0];
-    expect(websitePlacementArtifact(articleOnly, "homepage_cta")?.id).toBe("article");
-    expect(websitePlacementArtifact(both, "homepage_cta")?.id).toBe("homepage");
+    expect(websiteArticleHeroArtifact(both)?.id).toBe("article");
   });
 });
 
