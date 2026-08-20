@@ -163,6 +163,13 @@ import {
   renderContentExportMarkdown,
   withholdBundleLinks,
 } from "@/lib/content-period-export";
+import { buildAuthoritativeDrgWebsiteRelease } from "@/lib/drg-authoritative-website-release";
+import { DRG_RELEASE_AUTHORIZATION_PIECE_IDS } from "@/lib/drg-release-authorization-envelope";
+
+const TEST_RELEASE_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIJ1hsZ3v/VpguoRK9JLsLMREScVpezJpGXA7rAMcrn9g\n-----END PRIVATE KEY-----\n";
+const PACKAGE_SHA = "a".repeat(64);
+const PIECE_SHA = "b".repeat(64);
+const SOURCE_SHA = "c".repeat(64);
 
 function makeDeliverable(overrides: Row = {}): Row {
   return {
@@ -224,6 +231,71 @@ function makeVersion(overrides: Row = {}): Row {
     created_at: "2026-07-01T00:00:00Z",
     ...overrides,
   };
+}
+
+function configureAuthoritativeDrgPackage(): void {
+  enableStandingAuth();
+  const website = new Map<string, { locale: "en-CA" | "pt-BR"; role: string; route: string; assetRole: string }>([
+    ["CN-EN", { locale: "en-CA", role: "article", route: "/journal/counsel-note", assetRole: "website_article_hero" }],
+    ["CN-PT", { locale: "pt-BR", role: "article", route: "/pt/journal/nota-do-advogado", assetRole: "website_article_hero" }],
+    ["CIM-EN", { locale: "en-CA", role: "article", route: "/journal/clause-in-the-margin", assetRole: "website_article_hero" }],
+    ["CIM-PT", { locale: "pt-BR", role: "article", route: "/pt/journal/clausula-comentada", assetRole: "website_article_hero" }],
+    ["CHECKLIST-LANDING-EN", { locale: "en-CA", role: "landing_page", route: "/resources/checklist", assetRole: "checklist_pdf" }],
+    ["CHECKLIST-LANDING-PT", { locale: "pt-BR", role: "landing_page", route: "/pt/recursos/checklist", assetRole: "checklist_pdf" }],
+  ]);
+  state.deliverables = DRG_RELEASE_AUTHORIZATION_PIECE_IDS.map((pieceId, index) => {
+    const site = website.get(pieceId);
+    return makeDeliverable({
+      id: `drg-${pieceId}`,
+      title: `Authoritative ${pieceId}`,
+      status: "in_review",
+      current_version_id: `drg-${pieceId}-v1`,
+      approved_version_id: null,
+      drg_piece_id: pieceId,
+      locale: site?.locale ?? "en-CA",
+      deliverable_role: site?.role ?? "social_post",
+      publication_destination: site ? "firm_website" : "linkedin",
+      publication_path: site?.route ?? null,
+      format: pieceId,
+      created_at: `2026-08-08T00:00:${String(index).padStart(2, "0")}Z`,
+    });
+  });
+  state.versions = DRG_RELEASE_AUTHORIZATION_PIECE_IDS.map((pieceId) => makeVersion({
+    id: `drg-${pieceId}-v1`,
+    deliverable_id: `drg-${pieceId}`,
+    body_html: `<p>Authoritative ${pieceId} body.</p>`,
+    drg_package_id: "drg-2026-w33",
+    drg_package_version: 1,
+    drg_package_sha256: PACKAGE_SHA,
+    drg_piece_sha256: PIECE_SHA,
+    drg_source_sha256: SOURCE_SHA,
+  }));
+  state.artifacts = [...website].map(([pieceId, site]) => ({
+    id: `artifact-${pieceId}`,
+    firm_id: FIRM_ID,
+    deliverable_id: `drg-${pieceId}`,
+    version_id: `drg-${pieceId}-v1`,
+    artifact_type: site.role === "landing_page" ? "pdf" : "hero_image",
+    locale: site.locale,
+    destination: "firm_website",
+    storage_bucket: "firm-files",
+    storage_path: `drg/${pieceId}.${site.role === "landing_page" ? "pdf" : "png"}`,
+    public_url: null,
+    sha256: PIECE_SHA,
+    size_bytes: 1024,
+    mime_type: site.role === "landing_page" ? "application/pdf" : "image/png",
+    created_at: "2026-08-08T00:00:00Z",
+    superseded_at: null,
+  }));
+  state.roleAssignments = [...website].map(([pieceId, site]) => ({
+    id: `assignment-${pieceId}`,
+    artifact_id: `artifact-${pieceId}`,
+    deliverable_id: `drg-${pieceId}`,
+    asset_role: site.assetRole,
+    locale: site.locale,
+    destination: "firm_website",
+    superseded_at: null,
+  }));
 }
 
 beforeEach(() => {
@@ -1801,5 +1873,47 @@ describe("buildContentExportBundle: individual_review_hold", () => {
     // The version is not owned by this deliverable, so neither the decision nor
     // its explanation may be taken from it.
     expect(result.bundle.deliverables[0].individual_review_hold).toBeNull();
+  });
+});
+
+describe("authoritative DRG website release issuance", () => {
+  it("issues both signatures through the production function without a caller-supplied package or evidence assertion", async () => {
+    configureAuthoritativeDrgPackage();
+    vi.stubEnv("NODE_ENV", "test");
+    process.env.DRG_RELEASE_AUTHORIZATION_SIGNING_KEY_ID = "drg-release-rfc8032-test-v1";
+    process.env.DRG_RELEASE_AUTHORIZATION_PRIVATE_KEY_PEM = TEST_RELEASE_PRIVATE_KEY;
+    const result = await buildAuthoritativeDrgWebsiteRelease(PERIOD_ID);
+    if (!result.ok) throw new Error(result.error);
+    vi.setSystemTime(new Date(Date.now() + 1_000));
+    const reissued = await buildAuthoritativeDrgWebsiteRelease(PERIOD_ID);
+    if (!reissued.ok) throw new Error(reissued.error);
+    expect(result.release.release_authorization_envelope.pieces).toHaveLength(16);
+    expect(result.release.pieces).toHaveLength(6);
+    expect(result.release.website_projection_authorization.release_envelope_sha256).toBe(result.release.release_authorization_envelope.envelope_sha256);
+    expect(reissued.release.package.package_sha256).toBe(result.release.package.package_sha256);
+    expect(reissued.release.website_projection_authorization.projection_sha256).toBe(result.release.website_projection_authorization.projection_sha256);
+    expect(reissued.release.release_authorization_envelope.envelope_sha256).not.toBe(result.release.release_authorization_envelope.envelope_sha256);
+    expect(reissued.release.release_authorization_envelope.signature.signature_base64).not.toBe(result.release.release_authorization_envelope.signature.signature_base64);
+    expect(result.release.pieces.map((piece) => piece.title)).toContain("Authoritative CN-EN");
+    expect(result.release.pieces.find((piece) => piece.piece_id === "CN-EN")?.body_html).toBe("<p>Authoritative CN-EN body.</p>");
+    vi.useRealTimers();
+  });
+
+  it("fails closed in the normal server path when no signing key is provisioned", async () => {
+    configureAuthoritativeDrgPackage();
+    const previousId = process.env.DRG_RELEASE_AUTHORIZATION_SIGNING_KEY_ID;
+    const previousKey = process.env.DRG_RELEASE_AUTHORIZATION_PRIVATE_KEY_PEM;
+    delete process.env.DRG_RELEASE_AUTHORIZATION_SIGNING_KEY_ID;
+    delete process.env.DRG_RELEASE_AUTHORIZATION_PRIVATE_KEY_PEM;
+    try {
+      const result = await buildAuthoritativeDrgWebsiteRelease(PERIOD_ID);
+      expect(result).toEqual(expect.objectContaining({ ok: false }));
+      if (!result.ok) expect(result.error).toContain("signer is not provisioned");
+    } finally {
+      if (previousId === undefined) delete process.env.DRG_RELEASE_AUTHORIZATION_SIGNING_KEY_ID;
+      else process.env.DRG_RELEASE_AUTHORIZATION_SIGNING_KEY_ID = previousId;
+      if (previousKey === undefined) delete process.env.DRG_RELEASE_AUTHORIZATION_PRIVATE_KEY_PEM;
+      else process.env.DRG_RELEASE_AUTHORIZATION_PRIVATE_KEY_PEM = previousKey;
+    }
   });
 });
