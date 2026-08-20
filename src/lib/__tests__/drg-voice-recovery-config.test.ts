@@ -30,9 +30,12 @@ interface Manifest {
     discovery_policy: {
       language: string;
       adaptive: boolean;
+      strategy: string;
       maximum_normal_follow_ups_after_situation: number;
       reuse_volunteered_information: boolean;
       skip_irrelevant_dimensions: boolean;
+      matter_specificity_before_generic_screening: boolean;
+      completion_test: string;
     };
     recovery_exits: string[];
     structured_actions: Record<string, unknown>;
@@ -43,6 +46,14 @@ interface Manifest {
       ignore_audio_after_closing_begins: boolean;
       repeat_count: number;
       include_caller_name: boolean;
+      scripted_goodbye: boolean;
+      post_closing_speech: boolean;
+    };
+    session_end_validation: {
+      native_voice_ai_end_call_action_available: boolean;
+      web_call_simulator_requires_caller_or_manual_end: boolean;
+      real_phone_hangup_uat_required: boolean;
+      hangup_claimed_verified: boolean;
     };
     spoken_markers: boolean;
     recording_disclosure: {
@@ -96,6 +107,15 @@ const prompt = fs.readFileSync(path.join(root, manifest.agent.prompt_path), 'utf
 const fixtures = JSON.parse(
   fs.readFileSync(path.join(root, 'src', 'lib', '__evals__', 'fixtures', 'drg-voice-recovery-vnext.json'), 'utf8'),
 ) as EvalFixture[];
+const coverageCases = JSON.parse(
+  fs.readFileSync(path.join(root, 'src', 'lib', '__evals__', 'fixtures', 'drg-voice-screening-coverage.json'), 'utf8'),
+) as Array<{
+  id: string;
+  caller_description: string;
+  highest_value_missing_item: string;
+  acceptable_next_question: string;
+  unacceptable_pattern: string;
+}>;
 
 function evaluateSmsConsent(transcript: string): 'yes' | 'no' | 'unknown' {
   const turns = parseVoiceTranscript(transcript);
@@ -157,26 +177,50 @@ describe('canonical DRG hybrid Voice AI manifest', () => {
   it('requires a plain-language adaptive screen for cooperative new legal-help callers', () => {
     expect(manifest.agent.new_lead_core_capture).toEqual(['situation']);
     expect(manifest.agent.new_lead_discovery).toEqual([
+      'specific_situation',
+      'current_stage',
+      'desired_legal_help',
       'timing',
-      'people_and_steps',
-      'stakes_when_relevant',
-      'desired_help',
+      'relevant_people_or_entities_when_useful',
+      'material_stakes_when_relevant',
     ]);
     expect(manifest.agent.discovery_policy).toEqual({
       language: 'plain',
       adaptive: true,
-      maximum_normal_follow_ups_after_situation: 3,
+      strategy: 'single_next_best_missing_question',
+      maximum_normal_follow_ups_after_situation: 4,
       reuse_volunteered_information: true,
       skip_irrelevant_dimensions: true,
+      matter_specificity_before_generic_screening: true,
+      completion_test: 'specific_situation_current_stage_desired_help_and_real_timing_are_human_readable',
     });
     expect(prompt).toContain('In one or two sentences, what would you like a lawyer to help you with?');
-    expect(prompt).toContain('Is there a court date, deadline, or anything happening in the next few days?');
-    expect(prompt).toContain('Who else is involved?');
-    expect(prompt).toContain('Have you signed or received any papers, or taken any steps already?');
-    expect(prompt).toContain('What would you like the lawyer to help you do?');
+    expect(prompt).toMatch(/single highest-value missing item/i);
+    expect(prompt).toMatch(/make a vague matter specific before asking generic screening questions/i);
+    expect(prompt).toMatch(/what the caller wants the lawyer to help them do/i);
+    expect(prompt).toMatch(/Could a human reading the handoff explain the specific situation/i);
     expect(prompt).toMatch(/Do not mechanically complete a checklist/i);
-    expect(prompt).toMatch(/Do not ask a generic value question for every matter/i);
+    expect(prompt).toMatch(/Do not automatically ask about deadlines, documents, people, or value/i);
     expect(prompt).toMatch(/Do not ask the new-matter screening dimensions/g);
+  });
+
+  it('defines cross-area next-best-question coverage instead of one matter-specific script', () => {
+    expect(coverageCases.map((item) => item.id)).toEqual([
+      'broad-business-formation',
+      'broad-property-request',
+      'employment-event',
+      'business-owner-dispute',
+      'estate-planning-request',
+      'court-papers-with-near-date',
+    ]);
+    expect(new Set(coverageCases.map((item) => item.highest_value_missing_item))).toEqual(
+      new Set(['specific_situation', 'current_stage', 'desired_legal_help', 'timing']),
+    );
+    for (const item of coverageCases) {
+      expect(item.caller_description.trim()).not.toBe('');
+      expect(item.acceptable_next_question.trim()).not.toBe('');
+      expect(item.unacceptable_pattern).toMatch(/generic|jargon|checklist|irrelevant|premature/i);
+    }
   });
 
   it('separates immediate safety emergencies from ordinary legal urgency', () => {
@@ -213,10 +257,19 @@ describe('canonical DRG hybrid Voice AI manifest', () => {
       ignore_audio_after_closing_begins: true,
       repeat_count: 1,
       include_caller_name: false,
+      scripted_goodbye: false,
+      post_closing_speech: false,
+    });
+    expect(manifest.agent.session_end_validation).toEqual({
+      native_voice_ai_end_call_action_available: false,
+      web_call_simulator_requires_caller_or_manual_end: true,
+      real_phone_hangup_uat_required: true,
+      hangup_claimed_verified: false,
     });
     expect(prompt).toMatch(/conversation is closed/i);
-    expect(prompt).toMatch(/Never restart, repeat, complete, or paraphrase the closing a second time/i);
-    expect(prompt).toContain('DRG Law will review your information');
+    expect(prompt).toMatch(/never answer with a second goodbye/i);
+    expect(prompt).toContain('Thank you. DRG Law will review your information');
+    expect(prompt).not.toMatch(/review your information[^\n]+Goodbye/i);
   });
 
   it('never instructs the agent to speak machine markers', () => {

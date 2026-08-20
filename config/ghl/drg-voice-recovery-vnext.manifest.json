@@ -1,6 +1,6 @@
 {
   "schema_version": "drg.voice-ai.hybrid-reception.v1",
-  "config_version": "3.0.0-test.5",
+  "config_version": "3.0.0-test.7",
   "status": "preproduction_test",
   "updated_at": "2026-08-20",
   "operating_model": {
@@ -23,17 +23,22 @@
       "situation"
     ],
     "new_lead_discovery": [
+      "specific_situation",
+      "current_stage",
+      "desired_legal_help",
       "timing",
-      "people_and_steps",
-      "stakes_when_relevant",
-      "desired_help"
+      "relevant_people_or_entities_when_useful",
+      "material_stakes_when_relevant"
     ],
     "discovery_policy": {
       "language": "plain",
       "adaptive": true,
-      "maximum_normal_follow_ups_after_situation": 3,
+      "strategy": "single_next_best_missing_question",
+      "maximum_normal_follow_ups_after_situation": 4,
       "reuse_volunteered_information": true,
-      "skip_irrelevant_dimensions": true
+      "skip_irrelevant_dimensions": true,
+      "matter_specificity_before_generic_screening": true,
+      "completion_test": "specific_situation_current_stage_desired_help_and_real_timing_are_human_readable"
     },
     "recovery_exits": [
       "intent_ambiguous_after_two_clarifiers",
@@ -81,7 +86,15 @@
       "single_uninterrupted_sentence": true,
       "ignore_audio_after_closing_begins": true,
       "repeat_count": 1,
-      "include_caller_name": false
+      "include_caller_name": false,
+      "scripted_goodbye": false,
+      "post_closing_speech": false
+    },
+    "session_end_validation": {
+      "native_voice_ai_end_call_action_available": false,
+      "web_call_simulator_requires_caller_or_manual_end": true,
+      "real_phone_hangup_uat_required": true,
+      "hangup_claimed_verified": false
     },
     "spoken_markers": false,
     "recording_disclosure": {
@@ -135,6 +148,7 @@
     "publish_workflow": false,
     "enable_workflow": false,
     "touch_live_agent": false,
-    "touch_live_workflow": false
+    "touch_live_workflow": false,
+    "real_phone_hangup_verified": false
   }
 }
