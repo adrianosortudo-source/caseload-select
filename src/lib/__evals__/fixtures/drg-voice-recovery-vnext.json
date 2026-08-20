@@ -54,6 +54,15 @@
     "expected_recovery": false
   },
   {
+    "id": "asap-with-no-deadline-is-normal",
+    "transcript": "bot: Is anything due, scheduled, or happening today, tomorrow, or soon?\nhuman: No. There is no deadline, hearing, court date, or anything due today or tomorrow.\nbot: Are you ready to speak with the firm about next steps, or are you still gathering information?\nhuman: I am ready and would like legal help to open my business and speak with a lawyer as soon as possible.",
+    "expected_branch": "new_matter",
+    "expected_urgency": "normal",
+    "expected_sms_consent": "unknown",
+    "expected_discovery": ["situation", "timing", "readiness"],
+    "expected_recovery": false
+  },
+  {
     "id": "caller-declines-intake",
     "transcript": "bot: What would you like legal help with?\nhuman: I do not want to explain it to an automated system. I want a person.\nbot: May I have your name?\nhuman: No.\nbot: May the firm call you back at the number you're calling from?\nhuman: Yes, a person can call me.\nbot: May DRG Law text you at that number?\nhuman: No.",
     "expected_branch": "unclear",

@@ -110,9 +110,9 @@ When the caller says goodbye or declines further help, close once and produce no
 
 CLOSING
 
-For a captured request, say: "Thank you. DRG Law will review the information and determine the appropriate follow-up. Goodbye."
+For a captured request, say exactly once: "DRG Law will review your information and determine the appropriate follow-up. Goodbye."
 
-For a caller who declines to leave information, say: "Understood. Thank you for calling DRG Law. Goodbye."
+For a caller who declines to leave information, say exactly once: "Understood. Thank you for calling DRG Law. Goodbye."
 
 LANGUAGE
 
@@ -144,7 +144,7 @@ The cloned workflow has been repaired to:
 
 ### Authenticated GHL verification (2026-08-17)
 
-- `DRG Law Reception - Recovery TEST` is saved with `CONFIG VERSION: 3.0.0-test.3` and the canonical welcome disclosure.
+- `DRG Law Reception - Recovery TEST` is saved with `CONFIG VERSION: 3.0.0-test.5`, the canonical welcome disclosure, a connected IPA pronunciation entry for `DRG`, and the plain-language adaptive screen.
 - The test agent has no phone number selected. `Answer calls directly` is selected because this is the primary-receptionist design; `Use as backup` is not selected.
 - `DRG Voice Recovery VNext - TEST` is saved as Draft with the publish switch off.
 - Its Voice AI trigger is labelled `Transcript Generated - Recovery TEST v3.0.0`.

@@ -27,9 +27,23 @@ interface Manifest {
     routes: string[];
     new_lead_core_capture: string[];
     new_lead_discovery: string[];
+    discovery_policy: {
+      language: string;
+      adaptive: boolean;
+      maximum_normal_follow_ups_after_situation: number;
+      reuse_volunteered_information: boolean;
+      skip_irrelevant_dimensions: boolean;
+    };
     recovery_exits: string[];
     structured_actions: Record<string, unknown>;
     urgency_evidence: string;
+    pronunciation_dictionary: Array<{ word: string; format: string; pronunciation: string }>;
+    closing_behavior: {
+      single_uninterrupted_sentence: boolean;
+      ignore_audio_after_closing_begins: boolean;
+      repeat_count: number;
+      include_caller_name: boolean;
+    };
     spoken_markers: boolean;
     recording_disclosure: {
       purpose: string;
@@ -140,15 +154,28 @@ describe('canonical DRG hybrid Voice AI manifest', () => {
     expect(prompt).toMatch(/human team decides/i);
   });
 
-  it('requires a core situation plus four screening dimensions for cooperative new legal-help callers', () => {
+  it('requires a plain-language adaptive screen for cooperative new legal-help callers', () => {
     expect(manifest.agent.new_lead_core_capture).toEqual(['situation']);
-    expect(manifest.agent.new_lead_discovery).toEqual(['scope', 'timing', 'complexity', 'readiness']);
-    for (const heading of ['Scope:', 'Timing:', 'Complexity:', 'Readiness:']) {
-      expect(prompt).toContain(heading);
-    }
-    expect(prompt).toMatch(/first capture the core situation/i);
-    expect(prompt).toMatch(/one separate question for each/i);
-    expect(prompt).toMatch(/Do not combine it with scope, timing, or readiness/i);
+    expect(manifest.agent.new_lead_discovery).toEqual([
+      'timing',
+      'people_and_steps',
+      'stakes_when_relevant',
+      'desired_help',
+    ]);
+    expect(manifest.agent.discovery_policy).toEqual({
+      language: 'plain',
+      adaptive: true,
+      maximum_normal_follow_ups_after_situation: 3,
+      reuse_volunteered_information: true,
+      skip_irrelevant_dimensions: true,
+    });
+    expect(prompt).toContain('In one or two sentences, what would you like a lawyer to help you with?');
+    expect(prompt).toContain('Is there a court date, deadline, or anything happening in the next few days?');
+    expect(prompt).toContain('Who else is involved?');
+    expect(prompt).toContain('Have you signed or received any papers, or taken any steps already?');
+    expect(prompt).toContain('What would you like the lawyer to help you do?');
+    expect(prompt).toMatch(/Do not mechanically complete a checklist/i);
+    expect(prompt).toMatch(/Do not ask a generic value question for every matter/i);
     expect(prompt).toMatch(/Do not ask the new-matter screening dimensions/g);
   });
 
@@ -173,6 +200,23 @@ describe('canonical DRG hybrid Voice AI manifest', () => {
     expect(prompt).toMatch(/Words spoken by the assistant never create urgency/i);
     expect(prompt).toMatch(/Use Update Call Intent silently/);
     expect(prompt).toMatch(/Use Update SMS Consent silently/);
+    expect(prompt).toMatch(/as soon as possible is readiness, not urgency/i);
+    expect(prompt).toMatch(/explicitly says there is no deadline/i);
+  });
+
+  it('pins brand pronunciation and a single non-restarting closing', () => {
+    expect(manifest.agent.pronunciation_dictionary).toEqual([
+      { word: 'DRG', format: 'IPA', pronunciation: '/di\u02d0\u0251\u0279d\u0292i\u02d0/' },
+    ]);
+    expect(manifest.agent.closing_behavior).toEqual({
+      single_uninterrupted_sentence: true,
+      ignore_audio_after_closing_begins: true,
+      repeat_count: 1,
+      include_caller_name: false,
+    });
+    expect(prompt).toMatch(/conversation is closed/i);
+    expect(prompt).toMatch(/Never restart, repeat, complete, or paraphrase the closing a second time/i);
+    expect(prompt).toContain('DRG Law will review your information');
   });
 
   it('never instructs the agent to speak machine markers', () => {
@@ -224,6 +268,7 @@ describe('deterministic hybrid reception scenarios', () => {
       'administrative-vendor-route',
       'caller-spoken-court-tomorrow',
       'assistant-words-never-create-urgency',
+      'asap-with-no-deadline-is-normal',
       'caller-declines-intake',
       'caller-declines-recording',
       'immediate-physical-danger',

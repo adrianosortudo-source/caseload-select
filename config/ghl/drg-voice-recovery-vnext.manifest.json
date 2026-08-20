@@ -1,8 +1,8 @@
 {
   "schema_version": "drg.voice-ai.hybrid-reception.v1",
-  "config_version": "3.0.0-test.3",
+  "config_version": "3.0.0-test.5",
   "status": "preproduction_test",
-  "updated_at": "2026-08-17",
+  "updated_at": "2026-08-20",
   "operating_model": {
     "voice_ai_role": "primary_receptionist",
     "human_decision_boundary": "Voice AI captures and routes evidence. The operator and lawyer decide.",
@@ -23,11 +23,18 @@
       "situation"
     ],
     "new_lead_discovery": [
-      "scope",
       "timing",
-      "complexity",
-      "readiness"
+      "people_and_steps",
+      "stakes_when_relevant",
+      "desired_help"
     ],
+    "discovery_policy": {
+      "language": "plain",
+      "adaptive": true,
+      "maximum_normal_follow_ups_after_situation": 3,
+      "reuse_volunteered_information": true,
+      "skip_irrelevant_dimensions": true
+    },
     "recovery_exits": [
       "intent_ambiguous_after_two_clarifiers",
       "caller_declines_information",
@@ -63,6 +70,19 @@
       ]
     },
     "urgency_evidence": "caller_speech_only",
+    "pronunciation_dictionary": [
+      {
+        "word": "DRG",
+        "format": "IPA",
+        "pronunciation": "/di\u02d0\u0251\u0279d\u0292i\u02d0/"
+      }
+    ],
+    "closing_behavior": {
+      "single_uninterrupted_sentence": true,
+      "ignore_audio_after_closing_begins": true,
+      "repeat_count": 1,
+      "include_caller_name": false
+    },
     "spoken_markers": false,
     "recording_disclosure": {
       "purpose": "help DRG review and route the request",
