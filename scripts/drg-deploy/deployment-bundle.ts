@@ -13,7 +13,11 @@ export const EXPECTED_SLOTS = new Set([
 ]);
 const HERO_SIGNED_URL_TTL_SECONDS = 10 * 365 * 24 * 60 * 60;
 const EXPECTED_TABLES = new Set(["content_periods", "content_deliverables", "deliverable_versions", "publishing_packages", "publishing_package_assets", "publishing_package_events", "drg_content_deployments"]);
-const AUTHORITY_SHA256 = "0ea34d352d875e030458e96fdd73b23053f32067477b250ac1895d378bbd6ed3";
+const TRUSTED_AUTHORITY_PAIRS = new Map([
+  ["DRG-LAW-CSB-4.26", "817dc22c9480a6a74051b7a36c1b616dc1eff7ef9d43265c15110167d58ece2c"],
+  // Retained for byte-identical replay/proof of bundles created before 4.26.
+  ["DRG-LAW-CSB-4.22", "0ea34d352d875e030458e96fdd73b23053f32067477b250ac1895d378bbd6ed3"],
+]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export type DeploymentBundle = Record<string, any>;
@@ -51,8 +55,8 @@ export function loadAndValidateBundle(bundlePath: string, packageRoot: string): 
   const errors: string[] = [];
   if (bundle.schemaVersion !== "drg-deployment-bundle-v1") errors.push("unsupported schemaVersion");
   if (bundle.publicationAuthorized !== false) errors.push("publicationAuthorized must be false");
-  if (bundle.authority?.releaseId !== "DRG-LAW-CSB-4.22") errors.push("wrong authority release");
-  if (bundle.authority?.sha256 !== AUTHORITY_SHA256) errors.push("wrong authority hash");
+  const trustedAuthoritySha256 = TRUSTED_AUTHORITY_PAIRS.get(bundle.authority?.releaseId);
+  if (!trustedAuthoritySha256 || bundle.authority?.sha256 !== trustedAuthoritySha256) errors.push("wrong authority release/hash pair");
   for (const field of ["deploymentReceiptId", "packageEventId", "operationId"]) {
     if (!UUID_RE.test(bundle[field] ?? "")) errors.push(`${field} must be a deterministic UUID`);
   }

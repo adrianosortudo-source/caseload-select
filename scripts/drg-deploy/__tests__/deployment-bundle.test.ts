@@ -31,6 +31,30 @@ function fixture() {
 }
 
 describe("DR-122 deployment bundle", () => {
+  it("accepts exact current and historical authority pairs but rejects mixed pins", () => {
+    const { root, bundle, bundlePath } = fixture();
+
+    expect(() => loadAndValidateBundle(bundlePath, root)).not.toThrow();
+
+    bundle.authority = {
+      releaseId: "DRG-LAW-CSB-4.26",
+      sha256: "817dc22c9480a6a74051b7a36c1b616dc1eff7ef9d43265c15110167d58ece2c",
+    };
+    writeFileSync(bundlePath, JSON.stringify(bundle));
+    expect(() => loadAndValidateBundle(bundlePath, root)).not.toThrow();
+
+    bundle.authority.sha256 = "0ea34d352d875e030458e96fdd73b23053f32067477b250ac1895d378bbd6ed3";
+    writeFileSync(bundlePath, JSON.stringify(bundle));
+    expect(() => loadAndValidateBundle(bundlePath, root)).toThrow(/wrong authority release\/hash pair/);
+
+    bundle.authority = {
+      releaseId: "DRG-LAW-CSB-4.22",
+      sha256: "817dc22c9480a6a74051b7a36c1b616dc1eff7ef9d43265c15110167d58ece2c",
+    };
+    writeFileSync(bundlePath, JSON.stringify(bundle));
+    expect(() => loadAndValidateBundle(bundlePath, root)).toThrow(/wrong authority release\/hash pair/);
+  });
+
   it("binds exact bytes and exact authorization", () => {
     const { root, bundle, bundlePath } = fixture();
     const loaded = loadAndValidateBundle(bundlePath, root);
