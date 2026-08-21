@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { getNextStep } from "../control";
-import { answerDemoState, buildDemoReport, startDemoState } from "../demo";
+import {
+  answerDemoState,
+  buildDemoReport,
+  startDemoState,
+} from "../../screen-demo";
 
 const FICTIONAL_INVOICE_DISPUTE =
   "Fictional scenario: I own a small Toronto design studio. A client has not paid a $28,000 invoice for completed work. The invoice was due two weeks ago, the client now disputes the scope, and I have the signed proposal, invoice, and email thread.";

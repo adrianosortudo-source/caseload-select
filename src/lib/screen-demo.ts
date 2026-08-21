@@ -1,10 +1,13 @@
-import { computeBand } from "./band";
-import { applyAnswer } from "./control";
-import { initialiseState } from "./extractor";
-import { buildReport } from "./report";
-import { getDecisionGap, computeCoreCompleteness } from "./selector";
-import { runEvidencePass } from "./slotEvidence";
-import type { EngineState, LawyerReport } from "./types";
+import { computeBand } from "./screen-engine/band";
+import { applyAnswer } from "./screen-engine/control";
+import { initialiseState } from "./screen-engine/extractor";
+import { buildReport } from "./screen-engine/report";
+import {
+  getDecisionGap,
+  computeCoreCompleteness,
+} from "./screen-engine/selector";
+import { runEvidencePass } from "./screen-engine/slotEvidence";
+import type { EngineState, LawyerReport } from "./screen-engine/types";
 
 /**
  * Local-only adapter for the Screen demonstration.

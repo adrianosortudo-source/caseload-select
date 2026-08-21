@@ -9,7 +9,7 @@ import {
   answerDemoState,
   buildDemoReport,
   startDemoState,
-} from "@/lib/screen-engine/demo";
+} from "@/lib/screen-demo";
 import { buildLeadSummary, getNextStep } from "@/lib/screen-engine/control";
 import { getI18n } from "@/lib/screen-engine/i18n/loader";
 import {
