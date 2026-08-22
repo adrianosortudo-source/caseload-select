@@ -86,7 +86,8 @@ export function verifyScreenFunnelContextToken(token: string, now = Date.now()):
   const exp = record.exp;
   if ((surface !== "marketing_demo" && surface !== "firm_widget") ||
     (firmId !== null && (typeof firmId !== "string" || !UUID_RE.test(firmId))) ||
-    !Number.isSafeInteger(iat) || !Number.isSafeInteger(exp) ||
+    typeof iat !== "number" || !Number.isSafeInteger(iat) ||
+    typeof exp !== "number" || !Number.isSafeInteger(exp) ||
     iat > now + CLOCK_SKEW_MS || exp <= now || exp - iat > TOKEN_TTL_MS) return null;
   if ((surface === "marketing_demo" && firmId !== null) ||
     (surface === "firm_widget" && firmId === null)) return null;
