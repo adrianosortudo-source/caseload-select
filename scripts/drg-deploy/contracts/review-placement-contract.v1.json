@@ -1,0 +1,30 @@
+{
+  "bundleSchemaVersion": "drg-deployment-bundle-v1",
+  "contentApprovalStatus": "pending",
+  "contractVersion": "drg-review-placement-contract-v1",
+  "decisionTool": {
+    "contentKind": "text",
+    "forbiddenCaseInsensitiveSubstrings": [
+      "<iframe"
+    ],
+    "forbiddenRawMarkdownPattern": "(?m)^\\s*(?:#{1,6}\\s+|[-*]\\s+|\\|.+\\|\\s*$)",
+    "guidedWorkbookMinimumCounts": {
+      "checkbox": 18,
+      "h2": 8,
+      "h3": 15,
+      "strong": 76,
+      "ul": 43
+    },
+    "legacyReviewTableMarker": "data-review-table=\"true\"",
+    "minBodyLength": 5000,
+    "requiredHtmlMarkers": [
+      "<h2>",
+      "<h3>",
+      "<ul>"
+    ]
+  },
+  "expectedPieceCount": 16,
+  "minimumAssetCount": 9,
+  "placementPurpose": "operator_review",
+  "publicationAuthorized": false
+}

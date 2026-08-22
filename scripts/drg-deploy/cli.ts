@@ -4,7 +4,8 @@ import path from "node:path";
 import { createSupabaseAdmin, loadDotEnv } from "../weekly-publish/lib/env";
 import {
   applyDeployment, loadAndValidateBundle, prepareDeployment,
-  proveDeployment, validateAuthorization,
+  loadBundleForExistingVerification, preflightDeploymentBundle, proveDeployment,
+  validateAuthorization, verifyExistingDeployment,
 } from "./deployment-bundle";
 
 function flag(name: string): string {
@@ -16,12 +17,23 @@ function flag(name: string): string {
 
 async function main() {
   const command = process.argv[2];
-  if (!["prepare", "gate", "apply", "prove", "run"].includes(command)) {
-    throw new Error("Usage: cli.ts <prepare|gate|apply|prove|run> --bundle <file> --root <weekly-run> --authorization <file>");
+  if (!["preflight", "verify-existing", "prepare", "gate", "apply", "prove", "run"].includes(command)) {
+    throw new Error("Usage: cli.ts <preflight|verify-existing|prepare|gate|apply|prove|run> --bundle <file> --root <weekly-run> [--authorization <file>]");
   }
   const root = path.resolve(flag("root"));
   if (!statSync(root).isDirectory()) throw new Error("--root must be a directory");
   const bundlePath = path.resolve(flag("bundle"));
+  if (command === "preflight") {
+    console.log(JSON.stringify(preflightDeploymentBundle(bundlePath, root), null, 2));
+    return;
+  }
+  if (command === "verify-existing") {
+    const existing = loadBundleForExistingVerification(bundlePath, root);
+    loadDotEnv(path.resolve(__dirname, "../../.env.local"));
+    const existingSupabase = createSupabaseAdmin();
+    console.log(JSON.stringify(await verifyExistingDeployment(existingSupabase, existing.bundle, existing.fileSha256, existing.canonicalSha256), null, 2));
+    return;
+  }
   const authorizationPath = path.resolve(flag("authorization"));
   const loaded = loadAndValidateBundle(bundlePath, root);
   const authorization = JSON.parse(readFileSync(authorizationPath, "utf8"));
