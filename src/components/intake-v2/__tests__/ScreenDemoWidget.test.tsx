@@ -48,4 +48,70 @@ describe("ScreenDemoWidget", () => {
     expect(fetch).not.toHaveBeenCalled();
     expect(screen.queryByText(/contact details/i)).toBeNull();
   });
+
+  it("continues reporting embedded height after the question shell becomes the lawyer report", async () => {
+    const originalParent = window.parent;
+    const postMessage = vi.fn();
+    Object.defineProperty(window, "parent", {
+      configurable: true,
+      value: { postMessage },
+    });
+    const scrollHeight = vi
+      .spyOn(HTMLElement.prototype, "scrollHeight", "get")
+      .mockImplementation(function () {
+        return this.textContent?.includes("What the lawyer receives")
+          ? 1371
+          : 461;
+      });
+
+    try {
+      render(<ScreenDemoWidget />);
+      fireEvent.click(
+        screen.getByRole("button", { name: "Run fictional Screen" }),
+      );
+
+      for (let question = 0; question < 8; question += 1) {
+        if (
+          screen.queryByRole("button", {
+            name: "See what the lawyer receives",
+          })
+        ) {
+          break;
+        }
+
+        const main = document.querySelector("main");
+        const previousQuestion = main?.querySelector("h2")?.textContent;
+        const option = main?.querySelector<HTMLButtonElement>("button");
+        expect(option).toBeTruthy();
+        fireEvent.click(option!);
+        await waitFor(() =>
+          expect(document.querySelector("main h2")?.textContent).not.toBe(
+            previousQuestion,
+          ),
+        );
+      }
+
+      fireEvent.click(
+        await screen.findByRole("button", {
+          name: "See what the lawyer receives",
+        }),
+      );
+      await screen.findByRole("heading", {
+        name: "What the lawyer receives",
+      });
+
+      await waitFor(() =>
+        expect(postMessage).toHaveBeenCalledWith(
+          { type: "caseload-widget-resize", height: 1371 },
+          "*",
+        ),
+      );
+    } finally {
+      scrollHeight.mockRestore();
+      Object.defineProperty(window, "parent", {
+        configurable: true,
+        value: originalParent,
+      });
+    }
+  });
 });

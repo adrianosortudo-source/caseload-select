@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { DecisionCard } from "./DecisionCard";
 import { Shell } from "./Shell";
 import { TextCard } from "./TextCard";
 import type { ScreenItem } from "./types";
+import { useEmbeddedWidgetResize } from "./useEmbeddedWidgetResize";
 import {
   answerDemoState,
   buildDemoReport,
@@ -92,6 +93,8 @@ export function ScreenDemoWidget() {
   const [state, setState] = useState<EngineState | null>(null);
   const [history, setHistory] = useState<EngineState[]>([]);
   const [report, setReport] = useState<LawyerReport | null>(null);
+  const reportRef = useRef<HTMLDivElement | null>(null);
+  const reportIsEmbedded = useEmbeddedWidgetResize(reportRef, report !== null);
 
   const next = state ? getNextStep(state) : null;
   const currentItem = useMemo(
@@ -126,7 +129,8 @@ export function ScreenDemoWidget() {
   if (report) {
     return (
       <div
-        className="min-h-screen bg-[#F4F3EF] px-5 py-8"
+        ref={reportRef}
+        className={`${reportIsEmbedded ? "" : "min-h-screen"} bg-[#F4F3EF] px-5 py-8`}
         style={{ fontFamily: "DM Sans, sans-serif" }}
       >
         <div className="mx-auto max-w-4xl space-y-5">

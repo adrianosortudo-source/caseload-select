@@ -26,10 +26,9 @@
  *    grows to fit — eliminates the iframe-internal scrollbar
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import type { ReactNode } from "react";
-
-const RESIZE_MESSAGE_TYPE = "caseload-widget-resize";
+import { useEmbeddedWidgetResize } from "./useEmbeddedWidgetResize";
 
 interface ShellProps {
   /** Total number of screens in the current round. Drives dot count. */
@@ -60,76 +59,7 @@ interface ShellProps {
 
 export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip, backLabel = "Back", skipLabel = "Skip", children, footer }: ShellProps) {
   const outerRef = useRef<HTMLDivElement | null>(null);
-
-  // Default false on first render to match SSR. Promote to true after mount
-  // and start the postMessage handshake.
-  const [isEmbedded, setIsEmbedded] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const embedded = window.parent !== window;
-    setIsEmbedded(embedded);
-    if (!embedded) return;
-
-    const outer = outerRef.current;
-    if (!outer) return;
-
-    let lastSent = 0;
-    function reportHeight() {
-      if (!outer) return;
-      // The outer div is the entire Shell content (header + main + footer).
-      // Its actual rendered height is exactly what the host iframe needs.
-      // Read scrollHeight to also catch any internal overflow (sticky footer
-      // edge cases, content larger than the flex layout expected).
-      const measured = Math.max(outer.scrollHeight, outer.offsetHeight, outer.getBoundingClientRect().height);
-      const height = Math.ceil(measured);
-      if (height === lastSent || height < 100) return;
-      lastSent = height;
-      window.parent.postMessage({ type: RESIZE_MESSAGE_TYPE, height }, "*");
-    }
-
-    // First measurement may capture the pre-re-render layout with
-    // min-h-screen still applied. ResizeObserver will catch the re-render.
-    reportHeight();
-
-    // Observe the outer div directly. When isEmbedded flips to true and
-    // min-h-screen is removed, the outer div shrinks/grows to its real
-    // content height. ResizeObserver fires for any size change.
-    const observer = new ResizeObserver(reportHeight);
-    observer.observe(outer);
-
-    // Catch shifts ResizeObserver may miss (font load, dynamic image load).
-    const fallback = window.setInterval(reportHeight, 300);
-
-    // Font load is the most common under-measurement window: the engine
-    // posts a height with system-fallback fonts (compact), then the brand
-    // face arrives and reflows the content taller by 8–16% — but
-    // ResizeObserver sometimes coalesces this into a single notification
-    // that fires AFTER our last report. document.fonts.ready resolves
-    // exactly when the brand face is available; force one report then.
-    if (typeof document !== "undefined" && "fonts" in document) {
-      void document.fonts.ready.then(() => {
-        // Two passes — one immediately, one after the next paint frame —
-        // so we catch both the synchronous metric change and any reflow
-        // that the browser schedules in response.
-        reportHeight();
-        window.requestAnimationFrame(reportHeight);
-      });
-    }
-
-    // Belt-and-suspenders: a final re-measurement 1.5s in. Late-loading
-    // resources (theme tokens that arrived via cascade, an image that
-    // unfolded, the iframe parent finishing its own layout pass) can
-    // shift content one more time after the initial settle. This catch
-    // is cheap and only runs once.
-    const lateSettle = window.setTimeout(reportHeight, 1500);
-
-    return () => {
-      observer.disconnect();
-      window.clearInterval(fallback);
-      window.clearTimeout(lateSettle);
-    };
-  }, []);
+  const isEmbedded = useEmbeddedWidgetResize(outerRef);
 
   // Outer chrome: min-h-screen ONLY in standalone, never when embedded.
   // When embedded the iframe is being sized to match this div, so we want
