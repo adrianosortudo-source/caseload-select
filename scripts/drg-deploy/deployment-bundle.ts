@@ -24,18 +24,47 @@ export type DeploymentBundle = Record<string, any>;
 export type ExecutionAuthorization = Record<string, any>;
 export type DeploymentHashes = { bundleFileSha256: string; bundleCanonicalSha256: string; authorizationSha256: string };
 
+const PLACEMENT_CONTRACT_PATH = path.resolve(__dirname, "contracts/review-placement-contract.v1.json");
+export const PINNED_PLACEMENT_CONTRACT_VERSION = "drg-review-placement-contract-v1";
+export const PINNED_PLACEMENT_CONTRACT_CANONICAL_SHA256 = "22dddb194ccafddd2c1c820cb84b7c7f4214d04851cacd19c17eafeab3fc8369";
+export const LEGACY_WEEK_7_EXISTING_VERIFICATION = Object.freeze({
+  deploymentKey: "drg-2026-w35-v14-operator-review",
+  fileSha256: "d70bda8c7ca32e0736bc820cd1c7fbf5c9a71bae45451740bdea9399deebb953",
+  canonicalSha256: "0f6ef5048612055945fbc1dc16054754b366de706cc733014448efa549f38104",
+});
+
+type ReviewPlacementContract = {
+  contractVersion: string;
+  bundleSchemaVersion: string;
+  placementPurpose: string;
+  contentApprovalStatus: string;
+  publicationAuthorized: boolean;
+  expectedPieceCount: number;
+  minimumAssetCount: number;
+  decisionTool: {
+    contentKind: string;
+    minBodyLength: number;
+    requiredHtmlMarkers: string[];
+    legacyReviewTableMarker: string;
+    guidedWorkbookMinimumCounts: Record<"h2" | "h3" | "ul" | "checkbox" | "strong", number>;
+    forbiddenCaseInsensitiveSubstrings: string[];
+    forbiddenRawMarkdownPattern: string;
+  };
+};
+
 export function sha256Bytes(bytes: Buffer | string): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-function hasCompleteDecisionToolStructure(body: string): boolean {
-  if (body.includes('data-review-table="true"')) return true;
+function hasCompleteDecisionToolStructure(body: string, contract: ReviewPlacementContract): boolean {
+  if (body.includes(contract.decisionTool.legacyReviewTableMarker)) return true;
   const count = (marker: string) => body.split(marker).length - 1;
-  return count("<h2>") >= 8
-    && count("<h3>") >= 15
-    && count("<ul>") >= 43
-    && count("☐") >= 18
-    && count("<strong>") >= 76;
+  const minimums = contract.decisionTool.guidedWorkbookMinimumCounts;
+  return count("<h2>") >= minimums.h2
+    && count("<h3>") >= minimums.h3
+    && count("<ul>") >= minimums.ul
+    && count("☐") >= minimums.checkbox
+    && count("<strong>") >= minimums.strong;
 }
 
 function sortValue(value: any): any {
@@ -50,6 +79,18 @@ export function canonicalJsonSha256(value: any): string {
   return sha256Bytes(JSON.stringify(sortValue(value)));
 }
 
+export function loadPinnedPlacementContract(): { contract: ReviewPlacementContract; canonicalSha256: string } {
+  const contract = JSON.parse(readFileSync(PLACEMENT_CONTRACT_PATH, "utf8")) as ReviewPlacementContract;
+  const canonicalSha256 = canonicalJsonSha256(contract);
+  if (contract.contractVersion !== PINNED_PLACEMENT_CONTRACT_VERSION) {
+    throw new Error(`local placement contract version is not pinned: ${contract.contractVersion ?? "missing"}`);
+  }
+  if (canonicalSha256 !== PINNED_PLACEMENT_CONTRACT_CANONICAL_SHA256) {
+    throw new Error(`local placement contract hash is not pinned: ${canonicalSha256}`);
+  }
+  return { contract, canonicalSha256 };
+}
+
 function safePath(root: string, relative: string): string {
   const resolvedRoot = path.resolve(root);
   const resolved = path.resolve(resolvedRoot, relative);
@@ -59,12 +100,32 @@ function safePath(root: string, relative: string): string {
   return resolved;
 }
 
-export function loadAndValidateBundle(bundlePath: string, packageRoot: string): { bundle: DeploymentBundle; fileSha256: string; canonicalSha256: string } {
+type BundleValidationOptions = { allowExactLegacyWeek7ExistingVerification?: boolean };
+
+export function isExactLegacyWeek7ExistingVerification(bundle: DeploymentBundle, fileSha256: string, canonicalSha256: string): boolean {
+  return bundle.deploymentKey === LEGACY_WEEK_7_EXISTING_VERIFICATION.deploymentKey
+    && fileSha256 === LEGACY_WEEK_7_EXISTING_VERIFICATION.fileSha256
+    && canonicalSha256 === LEGACY_WEEK_7_EXISTING_VERIFICATION.canonicalSha256;
+}
+
+function loadAndValidateBundleInternal(bundlePath: string, packageRoot: string, options: BundleValidationOptions = {}): { bundle: DeploymentBundle; fileSha256: string; canonicalSha256: string } {
   const raw = readFileSync(bundlePath);
   const bundle = JSON.parse(raw.toString("utf8"));
+  const fileSha256 = sha256Bytes(raw);
+  const canonicalSha256 = canonicalJsonSha256(bundle);
+  const placementContract = loadPinnedPlacementContract();
+  const contract = placementContract.contract;
+  const exactLegacyWeek7Verification = options.allowExactLegacyWeek7ExistingVerification === true
+    && isExactLegacyWeek7ExistingVerification(bundle, fileSha256, canonicalSha256);
   const errors: string[] = [];
-  if (bundle.schemaVersion !== "drg-deployment-bundle-v1") errors.push("unsupported schemaVersion");
-  if (bundle.publicationAuthorized !== false) errors.push("publicationAuthorized must be false");
+  if (!exactLegacyWeek7Verification && (bundle.placementContract?.contractVersion !== contract.contractVersion
+    || bundle.placementContract?.canonicalSha256 !== placementContract.canonicalSha256)) {
+    errors.push("bundle placement contract version/hash does not match the portal pin");
+  }
+  if (bundle.schemaVersion !== contract.bundleSchemaVersion) errors.push("unsupported schemaVersion");
+  if (bundle.placementPurpose !== contract.placementPurpose) errors.push(`placementPurpose must be ${contract.placementPurpose}`);
+  if (bundle.contentApprovalStatus !== contract.contentApprovalStatus) errors.push(`contentApprovalStatus must be ${contract.contentApprovalStatus}`);
+  if (bundle.publicationAuthorized !== contract.publicationAuthorized) errors.push(`publicationAuthorized must be ${contract.publicationAuthorized}`);
   const trustedAuthoritySha256 = TRUSTED_AUTHORITY_PAIRS.get(bundle.authority?.releaseId);
   if (!trustedAuthoritySha256 || bundle.authority?.sha256 !== trustedAuthoritySha256) errors.push("wrong authority release/hash pair");
   for (const field of ["deploymentReceiptId", "packageEventId", "operationId"]) {
@@ -73,8 +134,8 @@ export function loadAndValidateBundle(bundlePath: string, packageRoot: string): 
   const briefKeys = ["readerAndSituation", "workSupported", "whyThisWeek", "practicalAngle", "authorityAndEvidence", "websiteAndConversionRole"];
   if (!bundle.period?.strategyBrief || Object.keys(bundle.period.strategyBrief).sort().join("|") !== [...briefKeys].sort().join("|")) errors.push("period strategyBrief must contain the exact six strategic-record fields");
   if (JSON.stringify(bundle).includes("\uFFFD")) errors.push("Unicode replacement characters are forbidden");
-  if (!Array.isArray(bundle.pieces) || bundle.pieces.length !== 16) errors.push("exactly 16 pieces are required");
-  if (!Array.isArray(bundle.assets) || bundle.assets.length < 9) errors.push("at least 9 approved assets are required");
+  if (!Array.isArray(bundle.pieces) || bundle.pieces.length !== contract.expectedPieceCount) errors.push(`exactly ${contract.expectedPieceCount} pieces are required`);
+  if (!Array.isArray(bundle.assets) || bundle.assets.length < contract.minimumAssetCount) errors.push(`at least ${contract.minimumAssetCount} approved assets are required`);
   const slots = new Set((bundle.pieces ?? []).map((piece: any) => piece.slotId));
   if (slots.size !== 16 || [...EXPECTED_SLOTS].some((slot) => !slots.has(slot))) errors.push("piece registry does not match the canonical sixteen slots");
   const ids = (bundle.pieces ?? []).flatMap((piece: any) => [piece.deliverableId, piece.versionId]);
@@ -91,14 +152,18 @@ export function loadAndValidateBundle(bundlePath: string, packageRoot: string): 
     const source = safePath(packageRoot, piece.source.path);
     if (!existsSync(source) || !statSync(source).isFile() || sha256Bytes(readFileSync(source)) !== piece.source.sha256) errors.push(`${piece.slotId}: source hash mismatch`);
     if (piece.formatFamily === "decision_tool") {
-      if (piece.contentKind !== "text") errors.push(`${piece.slotId}: Checklist must be a complete text deliverable, with its PDF attached separately`);
-      if (typeof piece.bodyHtml !== "string" || piece.bodyHtml.length < 5000) errors.push(`${piece.slotId}: Checklist review body is incomplete`);
-      for (const marker of ["<h2>", "<h3>", "<ul>"]) {
+      if (piece.contentKind !== contract.decisionTool.contentKind) errors.push(`${piece.slotId}: Checklist must be a complete text deliverable, with its PDF attached separately`);
+      if (typeof piece.bodyHtml !== "string" || piece.bodyHtml.length < contract.decisionTool.minBodyLength) errors.push(`${piece.slotId}: Checklist review body is incomplete`);
+      for (const marker of contract.decisionTool.requiredHtmlMarkers) {
         if (!piece.bodyHtml.includes(marker)) errors.push(`${piece.slotId}: Checklist review body is missing ${marker}`);
       }
-      if (!hasCompleteDecisionToolStructure(piece.bodyHtml)) errors.push(`${piece.slotId}: Checklist review body is missing the legacy review table or guided-workbook decision structure`);
-      if (piece.bodyHtml.toLowerCase().includes("<iframe")) errors.push(`${piece.slotId}: iframe-backed Checklist review is forbidden`);
-      if (/^\s*(?:#{1,6}\s+|[-*]\s+|\|.+\|\s*$)/m.test(piece.bodyHtml)) errors.push(`${piece.slotId}: raw Markdown leaked into Checklist review HTML`);
+      if (!hasCompleteDecisionToolStructure(piece.bodyHtml, contract)) errors.push(`${piece.slotId}: Checklist review body is missing the legacy review table or guided-workbook decision structure`);
+      const lowerBody = piece.bodyHtml.toLowerCase();
+      for (const forbidden of contract.decisionTool.forbiddenCaseInsensitiveSubstrings) {
+        if (lowerBody.includes(forbidden.toLowerCase())) errors.push(`${piece.slotId}: forbidden Checklist review substring ${forbidden}`);
+      }
+      const rawMarkdownPattern = contract.decisionTool.forbiddenRawMarkdownPattern.replace(/^\(\?m\)/, "");
+      if (new RegExp(rawMarkdownPattern, "m").test(piece.bodyHtml)) errors.push(`${piece.slotId}: raw Markdown leaked into Checklist review HTML`);
     }
   }
   const approved = new Set((bundle.approvalEvidence ?? []).flatMap((item: any) => item.decision === "approved" ? item.scope : []));
@@ -130,7 +195,35 @@ export function loadAndValidateBundle(bundlePath: string, packageRoot: string): 
     if (!existsSync(source) || sha256Bytes(readFileSync(source)) !== binding.sha256) errors.push(index === 0 ? "source package hash mismatch" : "strategy brief source hash mismatch");
   }
   if (errors.length) throw new Error(errors.join("; "));
-  return { bundle, fileSha256: sha256Bytes(raw), canonicalSha256: canonicalJsonSha256(bundle) };
+  return { bundle, fileSha256, canonicalSha256 };
+}
+
+export function loadAndValidateBundle(bundlePath: string, packageRoot: string): { bundle: DeploymentBundle; fileSha256: string; canonicalSha256: string } {
+  return loadAndValidateBundleInternal(bundlePath, packageRoot);
+}
+
+export function loadBundleForExistingVerification(bundlePath: string, packageRoot: string): { bundle: DeploymentBundle; fileSha256: string; canonicalSha256: string } {
+  return loadAndValidateBundleInternal(bundlePath, packageRoot, { allowExactLegacyWeek7ExistingVerification: true });
+}
+
+export function preflightDeploymentBundle(bundlePath: string, packageRoot: string) {
+  const loaded = loadAndValidateBundle(bundlePath, packageRoot);
+  const placementContract = loadPinnedPlacementContract();
+  return {
+    status: "preflight_passed",
+    writesPerformed: 0,
+    bundleFileSha256: loaded.fileSha256,
+    bundleCanonicalSha256: loaded.canonicalSha256,
+    placementContract: {
+      contractVersion: placementContract.contract.contractVersion,
+      canonicalSha256: placementContract.canonicalSha256,
+    },
+    pieces: loaded.bundle.pieces.length,
+    assets: loaded.bundle.assets.length,
+    placementPurpose: loaded.bundle.placementPurpose,
+    contentApprovalStatus: loaded.bundle.contentApprovalStatus,
+    publicationAuthorized: loaded.bundle.publicationAuthorized,
+  };
 }
 
 export function touchedTargets(bundle: DeploymentBundle): { ids: Set<string>; records: Set<string>; plannedWrites: number } {
@@ -238,4 +331,65 @@ export async function proveDeployment(supabase: SupabaseClient, bundle: Deployme
   const observedShas = new Set((assets ?? []).map((asset: any) => asset.sha256));
   if ([...expectedShas].some((value) => !observedShas.has(value))) throw new Error("Publishing Kit asset proof is incomplete");
   return { status: "proved", writesPerformed: 0, deploymentId: deployment.id, periodId: period.id, deliverables: 16, distinctAssetHashes: observedShas.size, publicationAuthorized: false };
+}
+
+export async function verifyExistingDeployment(supabase: SupabaseClient, bundle: DeploymentBundle, bundleFileSha256: string, bundleCanonicalSha256: string) {
+  if (bundle.publicationAuthorized !== false) throw new Error("existing deployment verification requires publicationAuthorized=false");
+
+  const { data: deployment, error: deploymentError } = await supabase
+    .from("drg_content_deployments")
+    .select("id,bundle_sha256,bundle_canonical_sha256,period_id,package_id,receipt")
+    .eq("firm_id", bundle.firmId)
+    .eq("deployment_key", bundle.deploymentKey)
+    .maybeSingle();
+  if (deploymentError || !deployment) throw new Error(`deployment receipt missing: ${deploymentError?.message ?? "not found"}`);
+  if (deployment.bundle_sha256 !== bundleFileSha256) throw new Error("stored deployment bundle file hash mismatch");
+  if (deployment.bundle_canonical_sha256 !== bundleCanonicalSha256) throw new Error("stored deployment canonical hash mismatch");
+  if (deployment.period_id !== bundle.period.id || deployment.package_id !== bundle.publishingPackageId) throw new Error("stored deployment period/package binding mismatch");
+  if (deployment.receipt?.publication_authorized !== false) throw new Error("stored deployment receipt does not prove publicationAuthorized=false");
+
+  const { data: period, error: periodError } = await supabase
+    .from("content_periods")
+    .select("id,week_number")
+    .eq("id", bundle.period.id)
+    .maybeSingle();
+  if (periodError || !period || period.week_number !== bundle.operatorWeekNumber) throw new Error(`period proof failed: ${periodError?.message ?? "not found or mismatched"}`);
+
+  const { data: deliverables, error: deliverablesError } = await supabase
+    .from("content_deliverables")
+    .select("id,current_version_id,period_id,status,published_at")
+    .eq("period_id", bundle.period.id);
+  if (deliverablesError) throw new Error(`deliverables proof failed: ${deliverablesError.message}`);
+  const expectedVersions = new Map(bundle.pieces.map((piece: any) => [piece.deliverableId, piece.versionId]));
+  if ((deliverables ?? []).length !== expectedVersions.size || expectedVersions.size !== 16) throw new Error(`deliverables proof expected 16, found ${(deliverables ?? []).length}`);
+  for (const row of deliverables ?? []) {
+    if (expectedVersions.get(row.id) !== row.current_version_id || row.period_id !== bundle.period.id) throw new Error("deliverables proof does not match the exact bundle IDs and versions");
+    if (row.published_at || row.status === "approved") throw new Error("placement incorrectly claimed publication or approval");
+  }
+
+  const { data: assets, error: assetsError } = await supabase
+    .from("publishing_package_assets")
+    .select("sha256")
+    .eq("package_id", bundle.publishingPackageId);
+  if (assetsError) throw new Error(`Publishing Kit asset proof failed: ${assetsError.message}`);
+  const expectedAssetShas = new Set<string>(bundle.assets.map((asset: any) => asset.sha256));
+  const observedAssetShas = new Set<string>((assets ?? []).map((asset: any) => asset.sha256));
+  if (expectedAssetShas.size !== bundle.assets.length
+    || observedAssetShas.size !== expectedAssetShas.size
+    || [...expectedAssetShas].some((sha) => !observedAssetShas.has(sha))) {
+    throw new Error(`Publishing Kit asset proof expected ${expectedAssetShas.size} exact assets, found ${observedAssetShas.size}`);
+  }
+
+  return {
+    status: "existing_deployment_verified",
+    writes: 0,
+    replayWrites: 0,
+    deploymentId: deployment.id,
+    periodId: period.id,
+    deliverables: expectedVersions.size,
+    assets: expectedAssetShas.size,
+    bundleFileSha256,
+    bundleCanonicalSha256,
+    publicationAuthorized: false,
+  };
 }
