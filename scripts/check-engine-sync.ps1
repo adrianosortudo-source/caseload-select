@@ -50,8 +50,10 @@ Write-Host ""
 #               directly. Different responsibilities by design.
 $excludedFiles = @("persist.ts")
 
-# Skip __tests__ subdirectory (app-side test fixtures, never in sandbox engine).
-$excludedDirs = @("__tests__")
+# Skip test directories. The app uses __tests__; the sandbox uses tests.
+# Test contracts prove parity but are deliberately not part of the production
+# engine byte-sync boundary.
+$excludedDirs = @("__tests__", "tests")
 
 # Hash file contents with line-ending normalisation (LF). This way CRLF vs
 # LF drift does not register as a diff — both repos run the same logic
@@ -72,7 +74,7 @@ function Get-NormalizedHash {
 }
 
 # Collect every file under each tree, hash each (normalised), build a
-# relative-path => hash map. Excluded files and __tests__ are skipped.
+# relative-path => hash map. Excluded files and test directories are skipped.
 function Get-FileHashMap {
     param([string]$root, [string[]]$excludedFiles, [string[]]$excludedDirs)
     $map = @{}

@@ -61,9 +61,53 @@ const CLARIFY_AREA_VALUES: ReadonlySet<MatterType> = new Set(
 // "questionHistory.length" counts every slot the lead has answered after
 // the initial regex / LLM pass on the kickoff message. Slots filled
 // implicitly by extraction don't count.
-export const WEB_DISCOVERY_TARGET_MIN = 5;
-export const WEB_DISCOVERY_TARGET_MAX = 7;
-export const WEB_DISCOVERY_HARD_CAP = 8;
+/**
+ * The user-facing limits for the web intake experience.  Keep this small and
+ * declarative: widget surfaces may explain the policy, but the engine owns
+ * the values that determine when it asks or stops asking questions.
+ */
+export interface WebExperiencePolicy {
+  readonly version: 1;
+  readonly discovery: {
+    readonly targetMinimum: number;
+    readonly targetMaximum: number;
+    readonly hardCap: number;
+  };
+  readonly corporateRouting: {
+    readonly primaryCategoryCount: number;
+    readonly detailOptionCounts: {
+      readonly dispute: number;
+      readonly internal: number;
+      readonly support: number;
+    };
+  };
+}
+
+export const WEB_EXPERIENCE_POLICY = {
+  version: 1,
+  discovery: {
+    targetMinimum: 5,
+    targetMaximum: 7,
+    hardCap: 8,
+  },
+  corporateRouting: {
+    primaryCategoryCount: 4,
+    detailOptionCounts: {
+      dispute: 3,
+      internal: 2,
+      support: 2,
+    },
+  },
+} as const satisfies WebExperiencePolicy;
+
+export const WEB_EXPERIENCE_POLICY_VERSION = WEB_EXPERIENCE_POLICY.version;
+export const WEB_DISCOVERY_TARGET_MIN = WEB_EXPERIENCE_POLICY.discovery.targetMinimum;
+export const WEB_DISCOVERY_TARGET_MAX = WEB_EXPERIENCE_POLICY.discovery.targetMaximum;
+export const WEB_DISCOVERY_HARD_CAP = WEB_EXPERIENCE_POLICY.discovery.hardCap;
+export const WEB_CORPORATE_PRIMARY_CATEGORY_COUNT = WEB_EXPERIENCE_POLICY.corporateRouting.primaryCategoryCount;
+export const WEB_CORPORATE_DISPUTE_DETAIL_OPTION_COUNT = WEB_EXPERIENCE_POLICY.corporateRouting.detailOptionCounts.dispute;
+export const WEB_CORPORATE_INTERNAL_DETAIL_OPTION_COUNT = WEB_EXPERIENCE_POLICY.corporateRouting.detailOptionCounts.internal;
+export const WEB_CORPORATE_SUPPORT_DETAIL_OPTION_COUNT = WEB_EXPERIENCE_POLICY.corporateRouting.detailOptionCounts.support;
 
 const QUESTION_BUDGET_BY_CHANNEL: Partial<Record<NonNullable<EngineState['channel']>, number>> = {
   web: WEB_DISCOVERY_HARD_CAP,

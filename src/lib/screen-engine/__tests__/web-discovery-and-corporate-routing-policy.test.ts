@@ -1,15 +1,23 @@
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { initialiseState } from '../extractor';
 import {
   applyAnswer,
   applyClarifyChoice,
   getNextStep,
+  WEB_CORPORATE_DISPUTE_DETAIL_OPTION_COUNT,
+  WEB_CORPORATE_INTERNAL_DETAIL_OPTION_COUNT,
+  WEB_CORPORATE_PRIMARY_CATEGORY_COUNT,
+  WEB_CORPORATE_SUPPORT_DETAIL_OPTION_COUNT,
   WEB_DISCOVERY_HARD_CAP,
   WEB_DISCOVERY_TARGET_MAX,
   WEB_DISCOVERY_TARGET_MIN,
+  WEB_EXPERIENCE_POLICY,
+  WEB_EXPERIENCE_POLICY_VERSION,
 } from '../control';
 import type { EngineState, MatterType } from '../types';
 import { buildReport } from '../report';
+import { WEB_EXPERIENCE_POLICY_CONTRACT_FIXTURE } from './web-experience-policy.contract.fixture';
 
 function corporateRoutingState(): EngineState {
   return applyClarifyChoice(
@@ -17,6 +25,27 @@ function corporateRoutingState(): EngineState {
     'corporate_general',
   );
 }
+
+describe('web experience policy contract', () => {
+  it('matches the versioned and hashed fixture', () => {
+    const fixture = WEB_EXPERIENCE_POLICY_CONTRACT_FIXTURE;
+    expect(WEB_EXPERIENCE_POLICY_VERSION).toBe(fixture.version);
+    expect(WEB_EXPERIENCE_POLICY).toEqual(fixture.policy);
+    expect(JSON.stringify(WEB_EXPERIENCE_POLICY)).toBe(fixture.canonicalJson);
+    expect(createHash('sha256').update(fixture.canonicalJson).digest('hex')).toBe(fixture.sha256);
+  });
+
+  it('keeps the named policy constants bound to the typed policy', () => {
+    const policy = WEB_EXPERIENCE_POLICY;
+    expect(WEB_DISCOVERY_TARGET_MIN).toBe(policy.discovery.targetMinimum);
+    expect(WEB_DISCOVERY_TARGET_MAX).toBe(policy.discovery.targetMaximum);
+    expect(WEB_DISCOVERY_HARD_CAP).toBe(policy.discovery.hardCap);
+    expect(WEB_CORPORATE_PRIMARY_CATEGORY_COUNT).toBe(policy.corporateRouting.primaryCategoryCount);
+    expect(WEB_CORPORATE_DISPUTE_DETAIL_OPTION_COUNT).toBe(policy.corporateRouting.detailOptionCounts.dispute);
+    expect(WEB_CORPORATE_INTERNAL_DETAIL_OPTION_COUNT).toBe(policy.corporateRouting.detailOptionCounts.internal);
+    expect(WEB_CORPORATE_SUPPORT_DETAIL_OPTION_COUNT).toBe(policy.corporateRouting.detailOptionCounts.support);
+  });
+});
 
 describe('web discovery question policy', () => {
   it('publishes the 5–7 target and absolute maximum of 8', () => {
@@ -48,7 +77,7 @@ describe('progressive corporate routing policy', () => {
     const categoryStep = getNextStep(state);
 
     expect(categoryStep.slot?.id).toBe('corporate_help_category');
-    expect(categoryStep.slot?.options).toHaveLength(4);
+    expect(categoryStep.slot?.options).toHaveLength(WEB_CORPORATE_PRIMARY_CATEGORY_COUNT);
     expect(categoryStep.slot?.options?.some(option => option.value === 'Something else')).toBe(false);
 
     const dispute = applyAnswer(
@@ -58,7 +87,7 @@ describe('progressive corporate routing policy', () => {
     );
     const disputeStep = getNextStep(dispute);
     expect(disputeStep.slot?.id).toBe('corporate_dispute_problem_type');
-    expect(disputeStep.slot?.options).toHaveLength(3);
+    expect(disputeStep.slot?.options).toHaveLength(WEB_CORPORATE_DISPUTE_DETAIL_OPTION_COUNT);
 
     const internal = applyAnswer(
       state,
@@ -67,7 +96,7 @@ describe('progressive corporate routing policy', () => {
     );
     const internalStep = getNextStep(internal);
     expect(internalStep.slot?.id).toBe('corporate_internal_problem_type');
-    expect(internalStep.slot?.options).toHaveLength(2);
+    expect(internalStep.slot?.options).toHaveLength(WEB_CORPORATE_INTERNAL_DETAIL_OPTION_COUNT);
 
     const support = applyAnswer(
       state,
@@ -76,7 +105,7 @@ describe('progressive corporate routing policy', () => {
     );
     const supportStep = getNextStep(support);
     expect(supportStep.slot?.id).toBe('corporate_support_problem_type');
-    expect(supportStep.slot?.options).toHaveLength(2);
+    expect(supportStep.slot?.options).toHaveLength(WEB_CORPORATE_SUPPORT_DETAIL_OPTION_COUNT);
   });
 
   it.each([
