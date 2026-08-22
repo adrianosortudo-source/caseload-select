@@ -15,7 +15,7 @@ function fixture() {
   const pieces = [...EXPECTED_SLOTS].sort().map((slot, index) => {
     const source = JSON.stringify({ slot }); writeFileSync(path.join(root, "sources", `${slot}.json`), source);
     const bodyHtml = slot.startsWith("checklist")
-      ? `<h2>How to use</h2><h3>Observable checks</h3><ul><li>Check</li></ul><div data-review-table="true">${"complete decision tool ".repeat(300)}</div>`
+      ? `${"<h2>Workbook section</h2>".repeat(8)}${"<h3>Decision subsection</h3>".repeat(15)}${"<ul><li>☐ Check the record.</li></ul>".repeat(43)}${"<strong>Condition and bounded action.</strong>".repeat(76)}${"complete decision tool ".repeat(300)}`
       : `<p>Reader-facing body for ${slot} with enough content.</p>`;
     return { slotId: slot, deliverableId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, versionId: `10000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, formatFamily: slot.startsWith("gbp-") ? "google_business_profile_post" : slot.startsWith("checklist") ? "decision_tool" : "counsel_note", locale: slot.endsWith("-pt") ? "pt-BR" : "en-CA", destination: slot.startsWith("gbp-") ? "google_business_profile" : "firm_website", deliverableRole: slot.startsWith("gbp-") ? "gbp_post" : slot.startsWith("checklist") ? "lead_magnet_pdf" : "article", title: `Title for ${slot}`, description: `Description for ${slot}`, bodyHtml, source: { path: `sources/${slot}.json`, sha256: sha(source) }, bodySha256: sha(bodyHtml), contentKind: "text", publicationPath: null, ctaTargetPath: null };
   });
@@ -31,6 +31,30 @@ function fixture() {
 }
 
 describe("DR-122 deployment bundle", () => {
+  it("accepts exact current and historical authority pairs but rejects mixed pins", () => {
+    const { root, bundle, bundlePath } = fixture();
+
+    expect(() => loadAndValidateBundle(bundlePath, root)).not.toThrow();
+
+    bundle.authority = {
+      releaseId: "DRG-LAW-CSB-4.26",
+      sha256: "817dc22c9480a6a74051b7a36c1b616dc1eff7ef9d43265c15110167d58ece2c",
+    };
+    writeFileSync(bundlePath, JSON.stringify(bundle));
+    expect(() => loadAndValidateBundle(bundlePath, root)).not.toThrow();
+
+    bundle.authority.sha256 = "0ea34d352d875e030458e96fdd73b23053f32067477b250ac1895d378bbd6ed3";
+    writeFileSync(bundlePath, JSON.stringify(bundle));
+    expect(() => loadAndValidateBundle(bundlePath, root)).toThrow(/wrong authority release\/hash pair/);
+
+    bundle.authority = {
+      releaseId: "DRG-LAW-CSB-4.22",
+      sha256: "817dc22c9480a6a74051b7a36c1b616dc1eff7ef9d43265c15110167d58ece2c",
+    };
+    writeFileSync(bundlePath, JSON.stringify(bundle));
+    expect(() => loadAndValidateBundle(bundlePath, root)).toThrow(/wrong authority release\/hash pair/);
+  });
+
   it("binds exact bytes and exact authorization", () => {
     const { root, bundle, bundlePath } = fixture();
     const loaded = loadAndValidateBundle(bundlePath, root);
