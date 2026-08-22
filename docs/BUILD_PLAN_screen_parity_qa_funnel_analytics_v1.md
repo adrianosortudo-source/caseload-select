@@ -1,10 +1,14 @@
 # BUILD PLAN - Screen parity, QA matrix, and funnel analytics (v1)
 
-Date: 2026-08-22  
-Author: Codex, direction from Adriano  
-Status: DRAFT - implementation-ready  
-Primary repository: `D:\00_Work\01_CaseLoad_Select\05_Product\caseload-select-app`  
-Related repositories: `caseload-screen-sandbox`, `caseloadselect-site`  
+Date: 2026-08-22
+
+Author: Codex, direction from Adriano
+
+Status: DRAFT - implementation-ready
+
+Primary repository: `D:\00_Work\01_CaseLoad_Select\05_Product\caseload-select-app`
+
+Related repositories: `caseload-screen-sandbox`, `caseloadselect-site`
 
 ## 1. Outcome
 
