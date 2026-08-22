@@ -87,7 +87,7 @@ while IFS= read -r -d '' app_file; do
   if ! diff -q --strip-trailing-cr "$app_file" "$sb_file" > /dev/null 2>&1; then
     DRIFT+=("CONTENT DIFFERS: $rel")
   fi
-done < <(find "$APP_ENGINE" -type f \( -name "*.ts" -o -name "*.json" \) -not -path "*/__tests__/*" $EXCLUDE_PATTERN -print0)
+done < <(find "$APP_ENGINE" -type f \( -name "*.ts" -o -name "*.json" \) -not -path "*/__tests__/*" -not -path "*/tests/*" $EXCLUDE_PATTERN -print0)
 
 # Also flag files in sandbox that don't exist in app.
 while IFS= read -r -d '' sb_file; do
@@ -96,7 +96,7 @@ while IFS= read -r -d '' sb_file; do
   if [ ! -f "$app_file" ]; then
     DRIFT+=("MISSING IN APP: $rel")
   fi
-done < <(find "$SANDBOX_ENGINE" -type f \( -name "*.ts" -o -name "*.json" \) -not -path "*/__tests__/*" $EXCLUDE_PATTERN -print0)
+done < <(find "$SANDBOX_ENGINE" -type f \( -name "*.ts" -o -name "*.json" \) -not -path "*/__tests__/*" -not -path "*/tests/*" $EXCLUDE_PATTERN -print0)
 set -e
 
 if [ ${#DRIFT[@]} -eq 0 ]; then
