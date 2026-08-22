@@ -80,13 +80,17 @@ export function verifyScreenFunnelContextToken(token: string, now = Date.now()):
   const record = payload as Record<string, unknown>;
   const allowed = new Set(["surface", "firm_id", "iat", "exp"]);
   if (Object.keys(record).some((key) => !allowed.has(key))) return null;
-  if ((record.surface !== "marketing_demo" && record.surface !== "firm_widget") ||
-    (record.firm_id !== null && (typeof record.firm_id !== "string" || !UUID_RE.test(record.firm_id))) ||
-    !Number.isSafeInteger(record.iat) || !Number.isSafeInteger(record.exp) ||
-    record.iat > now + CLOCK_SKEW_MS || record.exp <= now || record.exp - record.iat > TOKEN_TTL_MS) return null;
-  if ((record.surface === "marketing_demo" && record.firm_id !== null) ||
-    (record.surface === "firm_widget" && record.firm_id === null)) return null;
-  return { surface: record.surface, firmId: record.firm_id };
+  const surface = record.surface;
+  const firmId = record.firm_id;
+  const iat = record.iat;
+  const exp = record.exp;
+  if ((surface !== "marketing_demo" && surface !== "firm_widget") ||
+    (firmId !== null && (typeof firmId !== "string" || !UUID_RE.test(firmId))) ||
+    !Number.isSafeInteger(iat) || !Number.isSafeInteger(exp) ||
+    iat > now + CLOCK_SKEW_MS || exp <= now || exp - iat > TOKEN_TTL_MS) return null;
+  if ((surface === "marketing_demo" && firmId !== null) ||
+    (surface === "firm_widget" && firmId === null)) return null;
+  return { surface, firmId };
 }
 
 /** Global endpoint switch. It stays false without the signing secret. */

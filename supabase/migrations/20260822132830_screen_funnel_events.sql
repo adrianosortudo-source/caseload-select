@@ -33,19 +33,19 @@ create table public.screen_funnel_events (
   elapsed_ms integer not null check (elapsed_ms between 0 and 7200000),
   received_at timestamptz not null default now(),
 
-  constraint screen_funnel_events_flow_sequence_key unique (flow_id, sequence),
-  constraint screen_funnel_events_surface_firm_check check (
+  constraint screen_funnel_20260822132830_flow_sequence_key unique (flow_id, sequence),
+  constraint screen_funnel_20260822132830_surface_firm_check check (
     (surface = 'marketing_demo' and firm_id is null)
     or (surface = 'firm_widget' and firm_id is not null)
   ),
-  constraint screen_funnel_events_terminal_surface_check check (
+  constraint screen_funnel_20260822132830_terminal_surface_check check (
     (event_name <> 'report_opened' or surface = 'marketing_demo')
     and (event_name not in ('contact_reached', 'lead_submitted') or surface = 'firm_widget')
   ),
-  constraint screen_funnel_events_answer_mode_check check (
+  constraint screen_funnel_20260822132830_answer_mode_check check (
     (event_name = 'question_answered') = (answer_mode is not null)
   ),
-  constraint screen_funnel_events_revisit_check check (
+  constraint screen_funnel_20260822132830_revisit_check check (
     not is_revisit or event_name = 'question_presented'
   )
 );

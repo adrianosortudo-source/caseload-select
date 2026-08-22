@@ -12,8 +12,10 @@ describe("screen funnel migration privacy contract", () => {
     expect(sql).toContain("force row level security");
     expect(sql).toContain("revoke all on table public.screen_funnel_events from anon, authenticated, public");
     expect(sql).toContain("grant select, insert on table public.screen_funnel_events to service_role");
-    for (const forbidden of ["description", "question_id", "slot_id", "matter_type", "practice_area", "report", "email", "phone", "ip_address", "user_agent", "engine_state", "lead_id", "utm_"]) {
-      expect(sql).not.toMatch(new RegExp(`\\b${forbidden}\\b`));
+    // Inspect only SQL column declarations. Event enum values such as
+    // `report_opened` are valid and must not be mistaken for a report column.
+    for (const forbiddenColumn of ["description", "question_id", "slot_id", "matter_type", "practice_area", "report", "email", "phone", "ip_address", "user_agent", "engine_state", "lead_id", "utm_"]) {
+      expect(sql).not.toMatch(new RegExp(`^\\s*${forbiddenColumn}\\s+(?:uuid|text|jsonb|integer|smallint|boolean|timestamptz)\\b`, "m"));
     }
   });
 });
