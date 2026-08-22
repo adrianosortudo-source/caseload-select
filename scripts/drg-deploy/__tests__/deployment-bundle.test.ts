@@ -15,7 +15,7 @@ function fixture() {
   const pieces = [...EXPECTED_SLOTS].sort().map((slot, index) => {
     const source = JSON.stringify({ slot }); writeFileSync(path.join(root, "sources", `${slot}.json`), source);
     const bodyHtml = slot.startsWith("checklist")
-      ? `<h2>How to use</h2><h3>Observable checks</h3><ul><li>Check</li></ul><div data-review-table="true">${"complete decision tool ".repeat(300)}</div>`
+      ? `${"<h2>Workbook section</h2>".repeat(8)}${"<h3>Decision subsection</h3>".repeat(15)}${"<ul><li>☐ Check the record.</li></ul>".repeat(43)}${"<strong>Condition and bounded action.</strong>".repeat(76)}${"complete decision tool ".repeat(300)}`
       : `<p>Reader-facing body for ${slot} with enough content.</p>`;
     return { slotId: slot, deliverableId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, versionId: `10000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, formatFamily: slot.startsWith("gbp-") ? "google_business_profile_post" : slot.startsWith("checklist") ? "decision_tool" : "counsel_note", locale: slot.endsWith("-pt") ? "pt-BR" : "en-CA", destination: slot.startsWith("gbp-") ? "google_business_profile" : "firm_website", deliverableRole: slot.startsWith("gbp-") ? "gbp_post" : slot.startsWith("checklist") ? "lead_magnet_pdf" : "article", title: `Title for ${slot}`, description: `Description for ${slot}`, bodyHtml, source: { path: `sources/${slot}.json`, sha256: sha(source) }, bodySha256: sha(bodyHtml), contentKind: "text", publicationPath: null, ctaTargetPath: null };
   });
