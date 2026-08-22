@@ -22,15 +22,15 @@ export function useEmbeddedWidgetResize<T extends HTMLElement>(
     setIsEmbedded(embedded);
     if (!embedded || !enabled) return;
 
-    const target = targetRef.current;
-    if (!target) return;
+    if (!targetRef.current) return;
+    const observedTarget = targetRef.current as T;
 
     let lastSent = 0;
     function reportHeight() {
       const measured = Math.max(
-        target.scrollHeight,
-        target.offsetHeight,
-        target.getBoundingClientRect().height,
+        observedTarget.scrollHeight,
+        observedTarget.offsetHeight,
+        observedTarget.getBoundingClientRect().height,
       );
       const height = Math.ceil(measured);
       if (height === lastSent || height < 100) return;
@@ -41,7 +41,7 @@ export function useEmbeddedWidgetResize<T extends HTMLElement>(
     reportHeight();
 
     const observer = new ResizeObserver(reportHeight);
-    observer.observe(target);
+    observer.observe(observedTarget);
 
     const fallback = window.setInterval(reportHeight, 300);
 

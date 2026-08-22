@@ -58,7 +58,7 @@ describe("ScreenDemoWidget", () => {
     });
     const scrollHeight = vi
       .spyOn(HTMLElement.prototype, "scrollHeight", "get")
-      .mockImplementation(function () {
+      .mockImplementation(function (this: HTMLElement) {
         return this.textContent?.includes("What the lawyer receives")
           ? 1371
           : 461;
