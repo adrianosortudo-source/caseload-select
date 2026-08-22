@@ -202,7 +202,7 @@ describe('structured clarify step (DR-112)', () => {
     const routed = applyClarifyChoice(state, 'corporate_general');
     expect(routed.practice_area).toBe('corporate');
     const step = getNextStep(routed);
-    expect(step.slot?.id).toBe('corporate_problem_type');
+    expect(step.slot?.id).toBe('corporate_help_category');
   });
 
   it('applyClarifyChoice(real_estate_general) sets practice_area=real_estate and routes to the real-estate routing question', () => {
@@ -235,17 +235,17 @@ describe('structured clarify step (DR-112)', () => {
     expect(routed).toEqual(state);
   });
 
-  it('does not mutate clarify-round accounting fields (menu choice is not a free-text retry)', () => {
-    // applyClarifyChoice only touches matter-type-derived fields + scoring.
-    // Any round-budget counter lives on the surface (widget clarifyAttempts
-    // state), not on EngineState, so there is nothing here to increment;
-    // this test pins that assumption by checking no unexpected top-level
-    // key beyond the classification + scoring fields changed.
+  it('counts the area choice once without mutating clarify-retry accounting', () => {
+    // The surface-owned clarifyAttempts counter is still untouched. The
+    // visitor's area choice does count toward the shared discovery budget,
+    // because it is a real routing question shown in the experience.
     const state = initialiseState('i want to speak to a lawyer');
     const routed = applyClarifyChoice(state, 'corporate_general');
     expect(routed.lead_id).toBe(state.lead_id);
     expect(routed.slots).toBe(state.slots);
     expect(routed.slot_meta).toBe(state.slot_meta);
-    expect(routed.questionHistory).toBe(state.questionHistory);
+    expect(routed.questionHistory).toEqual(['clarify_area']);
+    const routedAgain = applyClarifyChoice(routed, 'corporate_general');
+    expect(routedAgain.questionHistory).toEqual(['clarify_area']);
   });
 });

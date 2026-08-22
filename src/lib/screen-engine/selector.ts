@@ -1,6 +1,35 @@
 import type { EngineState, SlotDefinition, DecisionGap } from './types';
 import { SLOT_REGISTRY } from './slotRegistry';
 
+const CORPORATE_DETAIL_SLOT_BY_CATEGORY: Readonly<Record<string, string>> = {
+  'Money owed, supplier billing, or a broken agreement': 'corporate_dispute_problem_type',
+  'A partner, co-owner, or internal company concern': 'corporate_internal_problem_type',
+  'Contracts or ongoing legal support': 'corporate_support_problem_type',
+};
+const CORPORATE_DETAIL_SLOT_IDS = new Set(
+  Object.values(CORPORATE_DETAIL_SLOT_BY_CATEGORY),
+);
+
+/**
+ * Corporate routing is deliberately progressive. The compatibility slot
+ * corporate_problem_type remains in the registry for extraction, stored
+ * states, and reports, but interactive selection uses one four-choice
+ * category followed by only the relevant two- or three-choice detail slot.
+ */
+function slotApplicableToCorporateRouting(
+  state: EngineState,
+  slot: SlotDefinition,
+): boolean {
+  if (state.matter_type !== 'corporate_general') return true;
+  if (slot.id === 'corporate_problem_type') return false;
+
+  if (!CORPORATE_DETAIL_SLOT_IDS.has(slot.id)) return true;
+
+  const category = state.slots['corporate_help_category'];
+  return typeof category === 'string' &&
+    CORPORATE_DETAIL_SLOT_BY_CATEGORY[category] === slot.id;
+}
+
 // ─── Decision gap logic ────────────────────────────────────────────────────
 
 export function getDecisionGap(state: EngineState): DecisionGap {
@@ -734,6 +763,7 @@ export function selectNextSlot(state: EngineState): SlotDefinition | null {
     if (slot.tier === 'contact') return false;
     if (!slot.applies_to.includes(state.matter_type as never)) return false;
     if (!slotApplicableToSubtrack(state, slot)) return false;
+    if (!slotApplicableToCorporateRouting(state, slot)) return false;
     if (slotIsAnswered(state, slot)) return false;
     if (groupAlreadyAnswered(state, slot)) return false;
 
@@ -764,7 +794,9 @@ export function selectNextSlot(state: EngineState): SlotDefinition | null {
 
 export function computeCoreCompleteness(state: EngineState): number {
   const coreSlots = SLOT_REGISTRY.filter(
-    s => s.tier === 'core' && s.applies_to.includes(state.matter_type as never),
+    s => s.tier === 'core' &&
+      s.applies_to.includes(state.matter_type as never) &&
+      slotApplicableToCorporateRouting(state, s),
   );
   if (coreSlots.length === 0) return 0;
   // Provenance-aware: completeness reflects only what the USER answered

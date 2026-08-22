@@ -11,6 +11,10 @@
     "client_phone": "Qual é o melhor telefone para contato?",
     "client_email": "Qual e-mail o escritório deve usar para retornar?",
     "client_postal_code": "Qual é o seu código postal?",
+    "corporate_help_category": "Que tipo de ajuda jurídica a sua empresa precisa?",
+    "corporate_dispute_problem_type": "Qual opção descreve melhor o problema?",
+    "corporate_internal_problem_type": "O que está acontecendo dentro da empresa?",
+    "corporate_support_problem_type": "Que tipo de apoio jurídico você precisa?",
     "corporate_problem_type": "Qual descreve melhor o problema que você está enfrentando?",
     "company_involvement": "Qual é a sua relação com a empresa envolvida?",
     "advisory_path": "Você está abrindo um novo negócio ou comprando participação em uma empresa existente?",
@@ -148,6 +152,25 @@
     "ownership_percentage": "Qual percentual da empresa pertence a você, se souber?"
   },
   "slot_options": {
+    "corporate_help_category": {
+      "Money owed, supplier billing, or a broken agreement": "Dinheiro devido, cobrança de fornecedor ou acordo descumprido",
+      "A partner, co-owner, or internal company concern": "Uma preocupação com sócio, coproprietário ou questão interna da empresa",
+      "Starting, buying, or restructuring a business": "Abrir, comprar ou reestruturar um negócio",
+      "Contracts or ongoing legal support": "Contratos ou apoio jurídico contínuo"
+    },
+    "corporate_dispute_problem_type": {
+      "Someone owes my company money": "Alguém deve dinheiro para a minha empresa",
+      "A vendor or supplier has billed us incorrectly": "Um fornecedor cobrou a empresa incorretamente",
+      "A contract or agreement was not honoured": "Um contrato ou acordo não foi cumprido"
+    },
+    "corporate_internal_problem_type": {
+      "I have a dispute with a business partner or co-owner": "Tenho uma disputa com um sócio ou coproprietário",
+      "I am concerned about financial irregularities in the company": "Tenho preocupação com irregularidades financeiras na empresa"
+    },
+    "corporate_support_problem_type": {
+      "A contract I need drafted or reviewed before signing": "Preciso elaborar ou revisar um contrato antes de assinar",
+      "Ongoing legal support for an existing business": "Apoio jurídico contínuo para uma empresa em funcionamento"
+    },
     "corporate_problem_type": {
       "Someone owes my company money": "Alguém deve dinheiro para a minha empresa",
       "I have a dispute with a business partner or co-owner": "Tenho uma disputa com um sócio ou cosócio",
@@ -156,8 +179,7 @@
       "A contract or agreement was not honoured": "Um contrato ou acordo não foi cumprido",
       "Starting, buying, or restructuring a business": "Abrir, comprar ou reestruturar um negócio",
       "A contract I need drafted or reviewed before signing": "Um contrato que preciso redigir ou revisar antes de assinar",
-      "Ongoing legal support for an existing business": "Apoio jurídico contínuo para uma empresa em funcionamento",
-      "Something else": "Outra coisa"
+      "Ongoing legal support for an existing business": "Apoio jurídico contínuo para uma empresa em funcionamento"
     },
     "gca_engagement_shape": {
       "Ongoing on-call legal support": "Apoio jurídico contínuo, à disposição",
@@ -1117,7 +1139,7 @@
   "chips": {},
   "widget_strings": {
     "kickoff_heading": "Conte como um advogado pode ajudar você hoje.",
-    "kickoff_helper": "Algumas frases em linguagem simples já bastam. Inclua o que está acontecendo, qualquer prazo e os documentos que você tem.",
+    "kickoff_helper": "Algumas frases em linguagem simples já bastam. Inclua o que está acontecendo, qualquer prazo e os documentos que você tem. Depois disso, o Screen normalmente faz de 5 a 7 perguntas curtas e nunca mais de 8.",
     "kickoff_placeholder": "Estou prestes a assinar um aluguel comercial e quero saber quais riscos devo verificar antes de me comprometer.",
     "kickoff_submit": "Continuar revisão do caso",
     "kickoff_examples_label": "Você pode começar com:",

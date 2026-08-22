@@ -797,6 +797,10 @@ function buildBestNextQuestion(state: EngineState): string {
 // SLOT_REGISTRY must have an entry here, or the lawyer brief leaks the raw
 // snake_case id via the `SLOT_LABELS[id] ?? id` fallback.
 export const SLOT_LABELS: Record<string, string> = {
+  corporate_help_category: 'Business help category',
+  corporate_dispute_problem_type: 'Problem type',
+  corporate_internal_problem_type: 'Problem type',
+  corporate_support_problem_type: 'Problem type',
   advisory_path: 'Business path',
   co_owner_count: 'Co-owner count',
   advisory_concern: 'Primary concern',
@@ -956,10 +960,26 @@ export const SLOT_LABELS: Record<string, string> = {
   desired_outcome_estate_dispute: 'Desired outcome',
 };
 
+// These slots control progressive disclosure in the public experience. The
+// final route is mirrored into corporate_problem_type, so including the
+// scaffolding would double-count one visitor decision as two or three facts in
+// the lawyer report.
+const NON_REPORTABLE_ROUTING_SLOTS = new Set([
+  'corporate_help_category',
+  'corporate_dispute_problem_type',
+  'corporate_internal_problem_type',
+  'corporate_support_problem_type',
+]);
+
+function isReportableSlot(id: string): boolean {
+  return !NON_REPORTABLE_ROUTING_SLOTS.has(id);
+}
+
 function buildResolvedFacts(state: EngineState): Record<string, string> {
   const facts: Record<string, string> = {};
   for (const [id, val] of Object.entries(state.slots)) {
     if (!val) continue;
+    if (!isReportableSlot(id)) continue;
     if (!isConfirmed(state, id)) continue;
     const label = SLOT_LABELS[id] ?? id;
     facts[label] = val;
@@ -971,6 +991,7 @@ function buildResolvedFactsV2(state: EngineState): ResolvedFact[] {
   const out: ResolvedFact[] = [];
   for (const [id, val] of Object.entries(state.slots)) {
     if (!val) continue;
+    if (!isReportableSlot(id)) continue;
     const meta = state.slot_meta[id];
     if (!meta) continue;
     const label = SLOT_LABELS[id] ?? id;
@@ -1246,8 +1267,13 @@ function buildBandReasoningBullets(state: EngineState): string[] {
   if (state.raw.mentions_urgency) bullets.push('Lead\'s description signals urgency.');
 
   // Coverage tail: how confident the engine is in the data
-  const filled = Object.keys(state.slots).filter(k => state.slots[k]).length;
-  const inferredCount = Object.values(state.slot_meta).filter(m => m && m.source === 'inferred').length;
+  const reportableSlotIds = Object.keys(state.slots).filter(
+    id => state.slots[id] && isReportableSlot(id),
+  );
+  const filled = reportableSlotIds.length;
+  const inferredCount = reportableSlotIds.filter(
+    id => state.slot_meta[id]?.source === 'inferred',
+  ).length;
   if (filled > 0) {
     bullets.push(`${filled} facts captured (${inferredCount} inferred from text, ${filled - inferredCount} confirmed).`);
   }
@@ -1262,6 +1288,7 @@ function buildConfidenceCalibration(state: EngineState): string {
   let inferred = 0;
   for (const id of Object.keys(state.slots)) {
     if (!state.slots[id]) continue;
+    if (!isReportableSlot(id)) continue;
     const m = meta[id];
     if (!m) continue;
     if (m.source === 'explicit') stated++;
@@ -1274,7 +1301,7 @@ function buildConfidenceCalibration(state: EngineState): string {
   if (stated > 0) parts.push(`${stated} stated in description`);
   if (confirmed > 0) parts.push(`${confirmed} captured in follow-ups`);
   if (inferred > 0) parts.push(`${inferred} inferred from context`);
-  return `Brief built from ${total} facts: ${parts.join(', ')}.`;
+  return `Brief built from ${total} ${total === 1 ? 'fact' : 'facts'}: ${parts.join(', ')}.`;
 }
 
 function matterTypeLabel(mt: string): string {
@@ -1316,6 +1343,7 @@ function buildInferredSignals(state: EngineState): string[] {
   const signals: string[] = [];
   for (const [id, val] of Object.entries(state.slots)) {
     if (!val) continue;
+    if (!isReportableSlot(id)) continue;
     const meta = state.slot_meta[id];
     if (!meta || meta.source !== 'inferred') continue;
     const label = SLOT_LABELS[id] ?? id;

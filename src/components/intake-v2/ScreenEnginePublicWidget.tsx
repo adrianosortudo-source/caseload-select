@@ -9,7 +9,17 @@ import { initialiseState } from "@/lib/screen-engine/extractor";
 import { runEvidencePass } from "@/lib/screen-engine/slotEvidence";
 import { computeBand } from "@/lib/screen-engine/band";
 import { computeCoreCompleteness, getDecisionGap } from "@/lib/screen-engine/selector";
-import { applyAnswer, applyClarifyChoice, buildLeadSummary, getNextStep, markInsightShown, startContactCapture } from "@/lib/screen-engine/control";
+import {
+  applyAnswer,
+  applyClarifyChoice,
+  buildLeadSummary,
+  getNextStep,
+  markInsightShown,
+  startContactCapture,
+  WEB_DISCOVERY_HARD_CAP,
+  WEB_DISCOVERY_TARGET_MAX,
+  WEB_DISCOVERY_TARGET_MIN,
+} from "@/lib/screen-engine/control";
 import { getI18n, type I18nBundle } from "@/lib/screen-engine/i18n/loader";
 import { getOptionDisplayLabel, getOptionDescription, getQuestionDisplayText } from "@/lib/screen-engine/i18n/display";
 import type { SupportedLanguage } from "@/lib/screen-engine/types";
@@ -480,7 +490,7 @@ export function ScreenEnginePublicWidget({
             question: ws("kickoff_heading", "Tell us how a lawyer can help you today."),
             description: ws(
               "kickoff_helper",
-              "A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have.",
+              `A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have. After that, the Screen usually asks ${WEB_DISCOVERY_TARGET_MIN}–${WEB_DISCOVERY_TARGET_MAX} short questions and never more than ${WEB_DISCOVERY_HARD_CAP}.`,
             ),
             presentation: "text",
             placeholder: ws(
@@ -720,8 +730,8 @@ export function ScreenEnginePublicWidget({
   if (isReading) {
     return (
       <Shell
-        totalScreens={5}
-        currentScreen={Math.min(history.length, 4)}
+        totalScreens={WEB_DISCOVERY_HARD_CAP}
+        currentScreen={Math.min(state?.questionHistory.length ?? 0, WEB_DISCOVERY_HARD_CAP - 1)}
         roundLabel={roundLabel}
         onBack={back}
         backLabel={backLabel}
@@ -808,8 +818,8 @@ export function ScreenEnginePublicWidget({
 
     return (
       <Shell
-        totalScreens={5}
-        currentScreen={Math.min(history.length, 4)}
+        totalScreens={WEB_DISCOVERY_HARD_CAP}
+        currentScreen={Math.min(state?.questionHistory.length ?? 0, WEB_DISCOVERY_HARD_CAP - 1)}
         roundLabel={roundLabel}
         onBack={back}
         backLabel={backLabel}
@@ -836,8 +846,8 @@ export function ScreenEnginePublicWidget({
   if (!currentItem) {
     return (
       <Shell
-        totalScreens={5}
-        currentScreen={Math.min(history.length, 4)}
+        totalScreens={WEB_DISCOVERY_HARD_CAP}
+        currentScreen={Math.min(state?.questionHistory.length ?? 0, WEB_DISCOVERY_HARD_CAP - 1)}
         roundLabel={roundLabel}
         onBack={back}
         backLabel={backLabel}
@@ -871,8 +881,8 @@ export function ScreenEnginePublicWidget({
 
   return (
     <Shell
-      totalScreens={5}
-      currentScreen={Math.min(history.length, 4)}
+      totalScreens={WEB_DISCOVERY_HARD_CAP}
+      currentScreen={Math.min(state.questionHistory.length, WEB_DISCOVERY_HARD_CAP - 1)}
       roundLabel={roundLabel}
       onBack={back}
       onSkip={skip}

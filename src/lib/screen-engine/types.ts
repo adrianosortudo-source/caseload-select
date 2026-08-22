@@ -109,6 +109,7 @@ export type QuestionGroup =
   | 'delivery_proof'
   | 'access_proof'
   | 'generic'
+  | 'routing_category'
   | 'routing'
   | 'vendor'
   | 'irregularity'

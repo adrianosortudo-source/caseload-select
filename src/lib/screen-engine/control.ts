@@ -61,11 +61,21 @@ const CLARIFY_AREA_VALUES: ReadonlySet<MatterType> = new Set(
 // "questionHistory.length" counts every slot the lead has answered after
 // the initial regex / LLM pass on the kickoff message. Slots filled
 // implicitly by extraction don't count.
+export const WEB_DISCOVERY_TARGET_MIN = 5;
+export const WEB_DISCOVERY_TARGET_MAX = 7;
+export const WEB_DISCOVERY_HARD_CAP = 8;
+
 const QUESTION_BUDGET_BY_CHANNEL: Partial<Record<NonNullable<EngineState['channel']>, number>> = {
+  web: WEB_DISCOVERY_HARD_CAP,
   sms: 3,
   gbp: 5,
   voice: 8,
 };
+const CORPORATE_DETAIL_SLOT_IDS = new Set([
+  'corporate_dispute_problem_type',
+  'corporate_internal_problem_type',
+  'corporate_support_problem_type',
+]);
 
 function questionsAnswered(state: EngineState): number {
   return state.questionHistory.length;
@@ -1129,6 +1139,50 @@ export function applyAnswer(state: EngineState, slotId: string, value: string): 
     updated = deriveAdvisorySpecificTask(updated);
   }
 
+  // Progressive corporate routing (DR-125). corporate_problem_type remains
+  // the canonical compatibility field consumed by rerouting, reports, stored
+  // states, and older channel adapters. The public widget now asks one broad
+  // four-choice category and, when needed, one conditional detail question.
+  // Mirror the user's final routing answer into the canonical field without
+  // adding an invisible extra question to questionHistory.
+  if (CORPORATE_DETAIL_SLOT_IDS.has(slotId)) {
+    updated = {
+      ...updated,
+      slots: { ...updated.slots, corporate_problem_type: value },
+      slot_meta: {
+        ...updated.slot_meta,
+        corporate_problem_type: { source: 'answered', confidence: 1.0 },
+      },
+    };
+    updated = rerouteFromCorporateGeneral(updated, value);
+  }
+
+  if (slotId === 'corporate_help_category') {
+    if (value === 'Starting, buying, or restructuring a business') {
+      updated = {
+        ...updated,
+        slots: { ...updated.slots, corporate_problem_type: value },
+        slot_meta: {
+          ...updated.slot_meta,
+          corporate_problem_type: { source: 'answered', confidence: 1.0 },
+        },
+      };
+      updated = rerouteFromCorporateGeneral(updated, value);
+    } else if (value.startsWith('other:')) {
+      // A free-text escape is a valid routing answer even when it cannot be
+      // promoted to a specific matter pack. Mark the canonical gap resolved
+      // so the lead is not sent back through the category menu in a loop.
+      updated = {
+        ...updated,
+        slots: { ...updated.slots, corporate_problem_type: value },
+        slot_meta: {
+          ...updated.slot_meta,
+          corporate_problem_type: { source: 'answered', confidence: 1.0 },
+        },
+      };
+    }
+  }
+
   // Reroute corporate_general when problem type is answered
   if (slotId === 'corporate_problem_type') {
     updated = rerouteFromCorporateGeneral(updated, value);
@@ -1202,6 +1256,12 @@ export function applyClarifyChoice(state: EngineState, choice: MatterType): Engi
     ...state,
     ...classification,
     matter_type_provenance: 'user_routing_answer',
+    // The area choice is a real visitor decision and therefore consumes one
+    // position in every channel's discovery budget. This keeps the visible
+    // progress indicator and the hard question ceiling honest.
+    questionHistory: state.questionHistory.includes('clarify_area')
+      ? state.questionHistory
+      : [...state.questionHistory, 'clarify_area'],
   };
 
   updated = { ...updated, coreCompleteness: computeCoreCompleteness(updated) };
