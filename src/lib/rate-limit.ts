@@ -154,6 +154,7 @@ export type RateLimitBucket =
   | "firmVoiceBuilder"
   | "memo"
   | "screenDemoReport"
+  | "screenFunnel"
   | "discoveryReport"
   | "startConversation";
 
@@ -178,6 +179,7 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   firmVoiceBuilder: { limit: 20, windowSeconds: 60 },  // 20 per minute (public, unauth, per ip)
   memo:              { limit: 60, windowSeconds: 60 },   // 60 per minute (read-only, widget + portal)
   screenDemoReport:  { limit: 10, windowSeconds: 3600 }, // 10 per hour (public marketing form)
+  screenFunnel:      { limit: 120, windowSeconds: 600 }, // 120 per 10 minutes (content-free public telemetry)
   discoveryReport:   { limit: 20, windowSeconds: 3600 }, // 20 per hour (ChatGPT Action caller)
   startConversation: { limit: 10, windowSeconds: 600 },  // 10 per 10 minutes (public, unauth, fail-closed)
 };
