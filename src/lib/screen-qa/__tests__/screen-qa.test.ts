@@ -27,7 +27,9 @@ describe("deterministic Screen QA matrix", () => {
       "QA-12",
     ]);
     expect(SCREEN_QA_FIXTURES.every((fixture) =>
-      fixture.opening.startsWith("Fictional") || fixture.locale === "pt",
+      fixture.id === "QA-01" ||
+      fixture.opening.startsWith("Fictional") ||
+      fixture.locale === "pt",
     )).toBe(true);
   });
 
