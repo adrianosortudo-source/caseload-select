@@ -10,7 +10,13 @@ import {
   buildDemoReport,
   startDemoState,
 } from "@/lib/screen-demo";
-import { buildLeadSummary, getNextStep } from "@/lib/screen-engine/control";
+import {
+  buildLeadSummary,
+  getNextStep,
+  WEB_DISCOVERY_HARD_CAP,
+  WEB_DISCOVERY_TARGET_MAX,
+  WEB_DISCOVERY_TARGET_MIN,
+} from "@/lib/screen-engine/control";
 import { getI18n } from "@/lib/screen-engine/i18n/loader";
 import {
   getOptionDescription,
@@ -242,8 +248,7 @@ export function ScreenDemoWidget() {
             item={{
               id: "fictional-situation",
               question: "What is the fictional situation?",
-              description:
-                "The Screen will ask only the questions needed to prepare a demonstration brief.",
+              description: `The Screen usually asks ${WEB_DISCOVERY_TARGET_MIN}–${WEB_DISCOVERY_TARGET_MAX} short follow-up questions and never more than ${WEB_DISCOVERY_HARD_CAP} before preparing the demonstration brief.`,
               presentation: "text",
               placeholder: DEMO_SEED,
             }}
@@ -335,8 +340,8 @@ export function ScreenDemoWidget() {
 
   return (
     <Shell
-      totalScreens={5}
-      currentScreen={Math.min(history.length, 4)}
+      totalScreens={WEB_DISCOVERY_HARD_CAP}
+      currentScreen={Math.min(state.questionHistory.length, WEB_DISCOVERY_HARD_CAP - 1)}
       roundLabel="About the fictional case"
       onBack={back}
       onSkip={() => answer(currentItem.id, "Not sure")}

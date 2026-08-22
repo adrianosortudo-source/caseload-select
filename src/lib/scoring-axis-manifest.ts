@@ -396,8 +396,24 @@ export const AXIS_INPUT_MANIFEST: AxisInputManifest = {
         "label": "What is your relationship to the company involved?"
       },
       {
+        "slotId": "corporate_dispute_problem_type",
+        "label": "Which best describes the problem?"
+      },
+      {
+        "slotId": "corporate_help_category",
+        "label": "What kind of business help do you need?"
+      },
+      {
+        "slotId": "corporate_internal_problem_type",
+        "label": "What is happening inside the company?"
+      },
+      {
         "slotId": "corporate_problem_type",
         "label": "What best describes the problem you are facing?"
+      },
+      {
+        "slotId": "corporate_support_problem_type",
+        "label": "What kind of support do you need?"
       }
     ],
     "urgency": [],

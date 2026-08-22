@@ -1,5 +1,24 @@
 {
   "slot_options": {
+    "corporate_help_category": {
+      "Money owed, supplier billing, or a broken agreement": "Money owed, supplier billing, or a broken agreement",
+      "A partner, co-owner, or internal company concern": "A partner, co-owner, or internal company concern",
+      "Starting, buying, or restructuring a business": "Starting, buying, or restructuring a business",
+      "Contracts or ongoing legal support": "Contracts or ongoing legal support"
+    },
+    "corporate_dispute_problem_type": {
+      "Someone owes my company money": "Someone owes my company money",
+      "A vendor or supplier has billed us incorrectly": "A vendor or supplier has billed us incorrectly",
+      "A contract or agreement was not honoured": "A contract or agreement was not honoured"
+    },
+    "corporate_internal_problem_type": {
+      "I have a dispute with a business partner or co-owner": "I have a dispute with a business partner or co-owner",
+      "I am concerned about financial irregularities in the company": "I am concerned about financial irregularities in the company"
+    },
+    "corporate_support_problem_type": {
+      "A contract I need drafted or reviewed before signing": "A contract I need drafted or reviewed before signing",
+      "Ongoing legal support for an existing business": "Ongoing legal support for an existing business"
+    },
     "corporate_problem_type": {
       "Someone owes my company money": "Someone owes my company money",
       "I have a dispute with a business partner or co-owner": "I have a dispute with a business partner or co-owner",
@@ -8,8 +27,7 @@
       "A contract or agreement was not honoured": "A contract or agreement was not honoured",
       "Starting, buying, or restructuring a business": "Starting, buying, or restructuring a business",
       "A contract I need drafted or reviewed before signing": "A contract I need drafted or reviewed before signing",
-      "Ongoing legal support for an existing business": "Ongoing legal support for an existing business",
-      "Something else": "Something else"
+      "Ongoing legal support for an existing business": "Ongoing legal support for an existing business"
     },
     "gca_engagement_shape": {
       "Ongoing on-call legal support": "Ongoing on-call legal support",
