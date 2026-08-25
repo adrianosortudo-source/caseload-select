@@ -125,6 +125,15 @@
  *       should deny rather than silently let scripted spam through to
  *       Adriano's email.
  *
+ *   whyYourFirmReport  10 per hour
+ *     - POST /api/tools/why-your-firm/report. Public marketing tool, no
+ *       auth. Same shape and same cap as screenDemoReport: each call
+ *       renders a PDF and sends an email from the brand domain via Resend.
+ *       Fail-open, matching screenDemoReport's own posture rather than the
+ *       FAIL_CLOSED set below: the recipient is the visitor's own inbox,
+ *       not Adriano's, so an unconfigured limiter risks Resend spend, not
+ *       an inbox flood against the operator.
+ *
  * Per-route bucket selection is done by the caller. Caller passes the
  * bucket name + the IP. We never trust the request body for IP
  * resolution; the helper reads x-forwarded-for and x-real-ip in that
@@ -156,7 +165,8 @@ export type RateLimitBucket =
   | "screenDemoReport"
   | "screenFunnel"
   | "discoveryReport"
-  | "startConversation";
+  | "startConversation"
+  | "whyYourFirmReport";
 
 interface BucketConfig {
   limit: number;
@@ -182,6 +192,7 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   screenFunnel:      { limit: 120, windowSeconds: 600 }, // 120 per 10 minutes (content-free public telemetry)
   discoveryReport:   { limit: 20, windowSeconds: 3600 }, // 20 per hour (ChatGPT Action caller)
   startConversation: { limit: 10, windowSeconds: 600 },  // 10 per 10 minutes (public, unauth, fail-closed)
+  whyYourFirmReport: { limit: 10, windowSeconds: 3600 }, // 10 per hour (public marketing tool, fail-open)
 };
 
 /**

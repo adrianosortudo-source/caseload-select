@@ -25,10 +25,12 @@ const scriptSrc = process.env.NODE_ENV === "production"
  *    decision based on intake_firms.allowed_embed_origins).
  *
  * 3. /tools/seo-check, /screen-demo, /tools/firm-voice-builder,
- *    /tools/start-a-conversation, and /tools/website-design-check
- *    (2026-08-06, Tools embed decision; the fourth and fifth routes both
- *    added 2026-08-07, per BUILD_PLAN_start_conversation_flow_v1.md and the
- *    Website Design & Conversion Check ship respectively) — same CSP,
+ *    /tools/start-a-conversation, /tools/website-design-check, and
+ *    /tools/why-your-firm (2026-08-06, Tools embed decision; the fourth and
+ *    fifth routes both added 2026-08-07, per
+ *    BUILD_PLAN_start_conversation_flow_v1.md and the Website Design &
+ *    Conversion Check ship respectively; the sixth added 2026-08-24 per
+ *    CaseLoadSelect_WhyYourFirm_Build_Plan_v2.1.md Phase 2): same CSP,
  *    frame-ancestors scoped to CaseLoad Select's own marketing origins only
  *    (not '*' like /widget/*). These public tool pages are embedded inline
  *    on the Version3_CaseLoadSelect static site (tools.html and, for
@@ -41,12 +43,13 @@ const scriptSrc = process.env.NODE_ENV === "production"
  *    (BUILD_PLAN_firm_voice_builder_tool_v1.md S8); Adriano directed
  *    embedding it now regardless, 2026-08-06. /tools/start-a-conversation
  *    also ships noindex until launch (its own page.tsx metadata), same
- *    posture. http://localhost:3300 is also on this allow-list
- *    (2026-08-06): the Version3_CaseLoadSelect static site has no
- *    deployment target yet, so Adriano previews its pages via a local
- *    `serve` static server on that port. Low risk to add permanently: these
- *    five routes carry no auth, no session, and no per-visitor state to
- *    hijack by framing, so a malicious page framing them from localhost
+ *    posture. /tools/why-your-firm ships the same noindex-until-linked
+ *    posture as the other tools-embed routes. http://localhost:3300 is also
+ *    on this allow-list (2026-08-06): the Version3_CaseLoadSelect static
+ *    site has no deployment target yet, so Adriano previews its pages via a
+ *    local `serve` static server on that port. Low risk to add permanently:
+ *    these six routes carry no auth, no session, and no per-visitor state
+ *    to hijack by framing, so a malicious page framing them from localhost
  *    gains nothing a real visitor couldn't already do by visiting the URL
  *    directly. Remove once the static site has a real deployed origin and
  *    local-preview testing is no longer needed.
@@ -253,6 +256,15 @@ const nextConfig: NextConfig = {
         headers: toolsEmbedSecurityHeaders,
       },
       {
+        // Added 2026-08-24 (CaseLoadSelect_WhyYourFirm_Build_Plan_v2.1.md
+        // Phase 2): the Why Your Firm positioning wizard, a single route
+        // with no subpaths (the five-step flow is client-side state, not
+        // routing: no router.push/Link/window.location in the component
+        // tree). Same tier as the other five, framed on tools.html.
+        source: "/tools/why-your-firm",
+        headers: toolsEmbedSecurityHeaders,
+      },
+      {
         // Catch-all for EVERYTHING that is NOT a widget or a tools-embed
         // route. Negative lookahead is required here because Next.js
         // headers() MERGES headers from every matching rule rather than
@@ -261,7 +273,7 @@ const nextConfig: NextConfig = {
         // both their embeddable set AND the strict main-app set, and the
         // latter's X-Frame-Options: DENY would block iframe embedding.
         source:
-          "/((?!widget/|widget-public/|tools/seo-check|tools/firm-voice-builder|tools/start-a-conversation|tools/website-design-check|screen-demo).*)",
+          "/((?!widget/|widget-public/|tools/seo-check|tools/firm-voice-builder|tools/start-a-conversation|tools/website-design-check|tools/why-your-firm|screen-demo).*)",
         headers: mainSecurityHeaders,
       },
     ];
