@@ -56,17 +56,29 @@ export default function ResultsStep({ data, onBack }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [delivered, setDelivered] = useState<boolean | null>(null);
-  const [unlocked, setUnlocked] = useState(false);
+  // In no_gate mode the brief is unlocked from the first render: nothing is
+  // collected and no server call is made. Reaching this step IS completion,
+  // so wyf_complete fires here instead of on a gate submit that never happens.
+  const [unlocked, setUnlocked] = useState(GATE_MODE === "no_gate");
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const gateViewFiredRef = useRef(false);
+  const completeFiredRef = useRef(false);
 
-  const gateVisible = !unlocked;
+  const gateVisible = GATE_MODE !== "no_gate" && !unlocked;
   useEffect(() => {
     if (gateVisible && !gateViewFiredRef.current) {
       gateViewFiredRef.current = true;
       trackEvent(EVENTS.gateView, { gateMode: GATE_MODE });
     }
   }, [gateVisible]);
+
+  useEffect(() => {
+    if (GATE_MODE === "no_gate" && !completeFiredRef.current) {
+      completeFiredRef.current = true;
+      trackEvent(EVENTS.complete, { profileId: brief.profile?.id ?? null, gateMode: GATE_MODE });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function submitGate(e: React.FormEvent) {
     e.preventDefault();
@@ -189,11 +201,22 @@ export default function ResultsStep({ data, onBack }: Props) {
       {unlocked && (
         <div className="border-t border-border-brand pt-6 mt-2">
           {deliveredBanner}
+          {GATE_MODE === "no_gate" && (
+            <div className="flex justify-end mb-4 wyf-no-print">
+              <button
+                type="button"
+                className="btn-ghost text-sm"
+                onClick={() => window.print()}
+              >
+                Print or save as PDF
+              </button>
+            </div>
+          )}
           <BriefView brief={brief} />
         </div>
       )}
 
-      <button type="button" className="btn-ghost mt-6" onClick={onBack}>
+      <button type="button" className="btn-ghost mt-6 wyf-no-print" onClick={onBack}>
         {copy.tool.back}
       </button>
     </div>

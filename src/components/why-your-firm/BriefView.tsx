@@ -2,8 +2,14 @@
 
 /**
  * Inline rendering of the Firm Positioning Brief. Section order matches
- * brief-pdf.tsx exactly (build plan §3.10); the two must never drift, since
- * the PDF is presented as the same artifact, not a different summary of it.
+ * brief-pdf.tsx exactly (build plan §3.10); the two must never drift.
+ *
+ * In the shipping no_gate mode this view IS the artifact (Adriano,
+ * 2026-08-24: the brief is read on screen, and a lawyer who wants a copy
+ * uses the browser's own print-to-PDF). The print rules below exist so
+ * that path produces the brief alone: the wizard chrome, the step
+ * indicator, the tool header and the print button itself all drop out,
+ * and sections are kept off page breaks.
  */
 
 import { copy } from "@/lib/why-your-firm/compliance";
@@ -11,7 +17,16 @@ import type { BriefData } from "@/lib/why-your-firm/engine";
 
 export default function BriefView({ brief }: { brief: BriefData }) {
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 wyf-brief">
+      <style>{`
+        @media print {
+          .wyf-nav,
+          .wyf-no-print,
+          .wyf-step-chrome { display: none !important; }
+          .wyf-brief section { break-inside: avoid; page-break-inside: avoid; }
+          .wyf-brief { gap: 1.5rem; }
+        }
+      `}</style>
       {brief.alternatives.length > 0 && (
         <section>
           <p className="label mb-1">{copy.brief.sectionAlternatives}</p>

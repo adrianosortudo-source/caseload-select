@@ -5,7 +5,7 @@ import ToolHeader from "@/components/why-your-firm/ToolHeader";
 export const metadata: Metadata = {
   title: "Why Your Firm · CaseLoad Select",
   description:
-    "A free positioning tool for small Ontario law firms. Pick what makes your firm different, test each claim against the Law Society's advertising rules, and get a Firm Positioning Brief by email.",
+    "A positioning tool for small Ontario law firms. Pick what makes your firm different, test each claim against the Law Society's advertising rules, and read your Firm Positioning Brief on screen.",
   robots: { index: false, follow: false },
 };
 

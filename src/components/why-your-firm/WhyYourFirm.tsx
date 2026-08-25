@@ -19,6 +19,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { copy } from "@/lib/why-your-firm/compliance";
+import { GATE_MODE } from "@/lib/why-your-firm/config";
 import { watchEmbedHeight, announceStepChange } from "@/lib/why-your-firm/embed";
 import { trackEvent, EVENTS } from "@/lib/why-your-firm/analytics";
 import AlternativesStep from "./AlternativesStep";
@@ -204,7 +205,7 @@ export default function WhyYourFirm() {
         <p className="label mb-2">{copy.tool.eyebrow}</p>
         <h1 className="text-2xl font-display font-semibold text-navy mb-3">{copy.tool.name}</h1>
         <p className="text-sm text-body leading-relaxed mb-3">{copy.tool.intro}</p>
-        <p className="text-sm text-body leading-relaxed mb-3">{copy.tool.privacy}</p>
+        <p className="text-sm text-body leading-relaxed mb-3">{GATE_MODE === "no_gate" ? copy.tool.privacyNoGate : copy.tool.privacy}</p>
         <button type="button" className="btn-gold mt-2" onClick={startFresh}>
           {copy.tool.start}
         </button>
@@ -219,7 +220,7 @@ export default function WhyYourFirm() {
         <h2 className="text-lg font-display font-semibold text-navy mb-3">
           {copy.tool.resume}
         </h2>
-        <p className="text-sm text-body mb-5">{copy.tool.privacy}</p>
+        <p className="text-sm text-body mb-5">{GATE_MODE === "no_gate" ? copy.tool.privacyNoGate : copy.tool.privacy}</p>
         <div className="flex gap-2 justify-center">
           <button type="button" className="btn-gold" onClick={resumeSaved}>
             {copy.tool.resumeAction}
@@ -234,7 +235,7 @@ export default function WhyYourFirm() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="mb-5 sticky top-0 bg-parchment/95 backdrop-blur py-3 z-10">
+      <div className="mb-5 sticky top-0 bg-parchment/95 backdrop-blur py-3 z-10 wyf-step-chrome">
         <StepIndicator current={data.step} onSelect={goToStep} />
       </div>
 

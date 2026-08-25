@@ -305,9 +305,22 @@ export const copy = {
     /** Landing paragraph, shown above the first step */
     intro:
       "A client choosing a lawyer sees a row of firms saying the same things. This tool works out what your firm can say that the others cannot, checks each claim against the Law Society's advertising rules, and gives you a positioning brief you can hand to whoever writes your website.",
-    /** Second landing paragraph, privacy posture. Matches the Firm Voice Builder register. */
+    /**
+     * Second landing paragraph, privacy posture, for the GATED modes:
+     * accurate only when an email is collected and a PDF is sent. Dormant
+     * while GATE_MODE is no_gate; kept for the future public launch.
+     */
     privacy:
       "Your answers stay in this browser until you clear them. Nothing is stored on our servers. When you ask for the PDF, the brief is rendered, emailed to you, and not kept.",
+    /**
+     * The no_gate equivalent, and the one that ships today. Nothing is
+     * collected and no request is ever made, so the claim is stronger and
+     * simpler. Do not merge these two strings: a privacy claim that
+     * overstates by one clause is the kind of thing this whole tool exists
+     * to teach lawyers not to write.
+     */
+    privacyNoGate:
+      "Your answers stay in this browser until you clear them. Nothing is sent to our servers and nothing is stored. Use your browser's print option if you want a copy to keep.",
     start: "Start",
     resume: "You have a brief in progress in this browser.",
     resumeAction: "Pick up where you left off",
