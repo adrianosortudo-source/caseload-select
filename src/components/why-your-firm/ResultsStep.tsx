@@ -139,7 +139,7 @@ export default function ResultsStep({ data, onBack }: Props) {
   );
 
   const deliveredBanner = hasSubmitted && (
-    <div className={`border-l-2 pl-3 py-2 mb-6 ${delivered ? "border-green-pass" : "border-gold"}`}>
+    <div className={`border px-3 py-2 mb-6 ${delivered ? "border-green-pass" : "border-gold"}`}>
       <p className="text-sm font-semibold text-navy">
         {delivered ? copy.gate.delivered : copy.gate.failed}
       </p>

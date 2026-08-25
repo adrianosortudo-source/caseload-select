@@ -207,7 +207,7 @@ function CardPanel({
 function ComplianceNote({ rule }: { rule: { id: string; name: string; explanation: string; conversion: string | null; verdict: string } }) {
   const isBlocked = rule.verdict === "blocked";
   return (
-    <div className={`mb-3 border-l-2 pl-3 py-1 ${isBlocked ? "border-red-fail" : "border-gold"}`}>
+    <div className={`mb-3 border px-3 py-2 ${isBlocked ? "border-red-fail" : "border-gold"}`}>
       <p className={`text-[10px] font-display font-semibold uppercase tracking-wider ${isBlocked ? "text-red-fail" : "text-gold-on-light"}`}>
         {copy.step3.ruleCheckLabel}: {rule.name}
       </p>

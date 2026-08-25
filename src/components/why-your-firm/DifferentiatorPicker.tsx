@@ -210,7 +210,7 @@ function CategoryGroup({
                 <span className="block text-sm text-navy leading-snug">{renderClaim(card)}</span>
               </button>
               {showCrowdWarning && selected && card.crowdFlag && (
-                <div className="mt-1.5 ml-1 border-l-2 border-gold pl-3 py-1">
+                <div className="mt-1.5 border border-gold px-3 py-2">
                   <p className="text-[10px] font-display font-semibold uppercase tracking-wider text-gold-on-light">
                     {copy.step2.crowdWarning}
                   </p>

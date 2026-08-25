@@ -39,7 +39,7 @@ export default function BriefView({ brief }: { brief: BriefData }) {
           <>
             <div className="flex flex-col gap-2">
               {brief.survivors.map((j) => (
-                <div key={j.card.id} className="border-l-2 border-gold bg-off-white p-3">
+                <div key={j.card.id} className="border border-gold bg-off-white p-3">
                   <p className="text-[10px] font-display font-semibold uppercase tracking-wider text-gold-on-light mb-1">
                     {j.card.label}
                   </p>

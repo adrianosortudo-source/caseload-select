@@ -165,7 +165,7 @@ export default function StatementStep({ data, onPatch, onContinue, onBack }: Pro
             ))}
           </div>
 
-          <div className="border-l-2 border-navy pl-4 py-1 mb-3">
+          <div className="border border-navy px-4 py-3 mb-3">
             <p className="label mb-1">{copy.step4.livePreviewLabel}</p>
             <p className="text-base font-display font-semibold text-navy leading-snug">
               {statement || "..."}
@@ -173,7 +173,7 @@ export default function StatementStep({ data, onPatch, onContinue, onBack }: Pro
           </div>
 
           {compliance.rules.length > 0 && (
-            <div className="mb-3 border-l-2 border-red-fail pl-3 py-1">
+            <div className="mb-3 border border-red-fail px-3 py-2">
               {compliance.rules.map((rule) => (
                 <p key={rule.id} className="text-xs text-red-fail leading-relaxed">
                   {rule.name}: {rule.explanation}

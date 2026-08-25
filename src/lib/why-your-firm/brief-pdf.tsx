@@ -157,11 +157,14 @@ const s = StyleSheet.create({
   },
 
   // ── Differentiator cards ──────────────────────────────────────────
+  // Symmetric 1px border, never a left-accent bar: the brand rule (Brand Book
+  // 6.2 rule 10) bans left-edge accent borders on any panel or card. The
+  // legacy screen-demo PDF this template was modelled on predates the ruling;
+  // do not copy its borderLeft styles back in.
   cardBlock: {
     backgroundColor: COLORS.offWhite,
-    borderRadius: 3,
-    borderLeftWidth: 2,
-    borderLeftColor: COLORS.stone,
+    borderWidth: 1,
+    borderColor: COLORS.stone,
     padding: 10,
     marginBottom: 8,
   },
