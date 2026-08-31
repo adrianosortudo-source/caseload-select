@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   CLIENT_IMPORT_TEMPLATE_VERSION,
   parseClientImportCsv,
@@ -79,11 +79,13 @@ export default function SecureImportRoom({
   readOnly,
   enabled,
   maxRows,
+  trustGuide,
 }: {
   firmId: string;
   readOnly: boolean;
   enabled: boolean;
   maxRows: number;
+  trustGuide: ReactNode;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [fileHash, setFileHash] = useState("");
@@ -223,39 +225,41 @@ export default function SecureImportRoom({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="readable-prose space-y-6">
       <header>
         <p className="font-display text-[0.72rem] uppercase tracking-[0.14em] text-[color:var(--portal-accent)]">Clients / Secure import</p>
         <h1 className="mt-2 text-3xl font-extrabold text-navy">Secure Import Room</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-black/60">
-          Check and import your firm&apos;s relationship database without sending the original file to CaseLoad Select.
+        <p className="mt-2 text-sm leading-6 text-black/60">
+          Validate your firm&apos;s relationship database in this browser, then authorize a protected import into your firm&apos;s CRM.
         </p>
       </header>
 
       <div className="grid gap-px border border-black/10 bg-black/10 sm:grid-cols-3" aria-label="Import safeguards">
-        {["Original file stays in this browser", "No automatic messages", "Existing contacts are not overwritten"].map((item) => (
+        {["Raw file is never uploaded", "Messaging begins suppressed", "Existing contacts are not overwritten"].map((item) => (
           <div key={item} className="bg-white px-4 py-3 text-sm font-semibold text-navy">{item}</div>
         ))}
       </div>
 
       {readOnly && (
         <div className="border border-gold/40 bg-gold/10 px-4 py-3 text-sm text-navy">
-          Support preview is read-only. A firm lawyer must authorize and run the import.
+          <p>Support preview is read-only. An authorized firm lawyer or administrator must authorize and run the import.</p>
         </div>
       )}
       {!enabled && !readOnly && (
         <div className="border border-black/15 bg-white px-4 py-3 text-sm text-black/65">
-          Secure importing is installed but not activated for this firm. Contact CaseLoad Select to complete the location-level safety check.
+          <p>Secure importing is installed but not activated for this firm. Contact CaseLoad Select to complete the location-level safety check.</p>
         </div>
       )}
+
+      {trustGuide}
 
       <section className="border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="prepare-heading">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-black/45">Prepare</p>
-            <h2 id="prepare-heading" className="mt-1 text-xl font-bold text-navy">Use the relationship import template</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-black/60">
-              Include contact and relationship fields only. Do not include matter details, privileged notes, documents, or legal advice.
+            <h2 id="prepare-heading" className="mt-1 text-xl font-bold text-navy">Select the completed relationship import CSV</h2>
+            <p id="prepare-description" className="mt-2 text-sm leading-6 text-black/60">
+              The check happens in this browser. You will review the row count, suppression state and any corrections before authorization.
             </p>
           </div>
           <a href="/templates/caseload-select-relationship-import.csv" download className="text-sm font-bold text-navy underline underline-offset-4">
@@ -267,10 +271,14 @@ export default function SecureImportRoom({
           id="relationship-import-file"
           type="file"
           accept=".csv,text/csv"
+          aria-describedby="prepare-description import-file-requirements"
           disabled={controlsDisabled}
           onChange={(event) => void chooseFile(event.target.files?.[0] ?? null)}
           className="mt-2 block w-full border border-black/20 bg-parchment px-3 py-3 text-sm file:mr-4 file:border-0 file:bg-navy file:px-4 file:py-2 file:font-bold file:text-white disabled:opacity-50"
         />
+        <p id="import-file-requirements" className="mt-2 text-xs leading-5 text-black/65">
+          CSV only, up to 5 MB and {maxRows.toLocaleString()} contacts. Use the template headers exactly as shown above.
+        </p>
       </section>
 
       {(rows.length > 0 || issues.length > 0) && (
@@ -298,7 +306,7 @@ export default function SecureImportRoom({
           {rows.length > 0 && (
             <label className="mt-5 flex items-start gap-3 border border-black/10 bg-parchment p-4 text-sm leading-6 text-navy">
               <input type="checkbox" checked={attested} disabled={controlsDisabled} onChange={(event) => setAttested(event.target.checked)} className="mt-1" />
-              <span>
+              <span className="measure-readable">
                 I am authorized by this firm to import this relationship database. I understand that importing a contact does not authorize marketing or client communications.
               </span>
             </label>
@@ -325,16 +333,24 @@ export default function SecureImportRoom({
       )}
 
       {(status === "importing" || status === "results") && (
-        <section className="border border-black/10 bg-white p-5 sm:p-6" aria-live="polite">
+        <section className="border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="import-status-heading">
           <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-black/45">{status === "results" ? "Results" : "Import"}</p>
-          <h2 className="mt-1 text-xl font-bold text-navy">{status === "results" ? "Import receipt" : "Creating held contact records"}</h2>
-          <p className="mt-2 text-sm text-black/60">Processed {counts.processed} of {rows.length}. Batch {batchId || "preparing"}.</p>
+          <h2 id="import-status-heading" className="mt-1 text-xl font-bold text-navy">{status === "results" ? "Import receipt" : "Creating held contact records"}</h2>
+          <p className="mt-2 text-sm text-black/60" role="status" aria-live="polite" aria-atomic="true">
+            Processed {counts.processed} of {rows.length}. Batch {batchId || "preparing"}.
+          </p>
+          <progress
+            className="mt-3 h-2 w-full accent-navy"
+            aria-label="Import progress"
+            max={Math.max(rows.length, 1)}
+            value={Math.min(counts.processed, rows.length)}
+          />
           <div className="mt-4 grid grid-cols-2 gap-px bg-black/10 sm:grid-cols-5">
             <Summary label="Created" value={counts.created} />
             <Summary label="Existing, unchanged" value={counts.existing} />
             <Summary label="Held for review" value={counts.held} />
             <Summary label="Invalid / failed" value={counts.invalid + counts.failed} />
-            <Summary label="Reconcile" value={counts.reconcile} />
+            <Summary label="Require reconciliation" value={counts.reconcile} />
           </div>
           {resumeReady && status === "importing" && (
             <button type="button" onClick={() => void retryImport()} disabled={busy} className="mt-5 bg-navy px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
@@ -360,7 +376,10 @@ export default function SecureImportRoom({
 
 function Summary({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="bg-parchment px-4 py-3">
+    <div
+      className="bg-parchment px-4 py-3"
+      data-readable-measure-exception="compact import summary data"
+    >
       <p className="font-display text-[0.65rem] uppercase tracking-[0.12em] text-black/45">{label}</p>
       <p className="mt-1 text-lg font-extrabold text-navy">{value}</p>
     </div>

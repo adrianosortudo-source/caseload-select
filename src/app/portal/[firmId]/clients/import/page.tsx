@@ -1,4 +1,5 @@
 import SecureImportRoom from "@/components/portal/SecureImportRoom";
+import SecureImportTrustGuide from "@/components/portal/SecureImportTrustGuide";
 import { requirePortalViewer } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
@@ -15,5 +16,13 @@ export default async function SecureImportRoomPage({ params }: { params: Promise
     firm?.secure_client_import_live_writes_enabled === true &&
     process.env.CLIENT_IMPORT_LIVE_WRITES_ENABLED === "true";
   const maxRows = Math.min(Number(firm?.secure_client_import_max_rows ?? 2500), 5000);
-  return <SecureImportRoom firmId={firmId} readOnly={viewer.isOperator} enabled={enabled} maxRows={maxRows} />;
+  return (
+    <SecureImportRoom
+      firmId={firmId}
+      readOnly={viewer.isOperator}
+      enabled={enabled}
+      maxRows={maxRows}
+      trustGuide={<SecureImportTrustGuide />}
+    />
+  );
 }
