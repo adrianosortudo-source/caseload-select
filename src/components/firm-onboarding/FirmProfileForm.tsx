@@ -369,16 +369,16 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
         {form.client_list_path === "self_upload" ? (
           <div style={{ background: "#FBFAF6", border: "1px dashed #C4B49A", borderRadius: "4px", padding: "16px 18px" }}>
             <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.9rem", color: "#3F3C36", lineHeight: 1.6, marginBottom: "12px" }}>
-              Download the template, fill the Client List tab (one row per client), and follow the guide. We will send CRM access for the upload.
+              Download the CSV template and follow the guide. You will import the completed list in your CaseLoad Select portal once access is ready. The original file stays in your browser.
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "14px" }}>
               <a
-                href="/firm-onboarding-guides/client-list-template.xlsx"
+                href="/templates/caseload-select-relationship-import.csv"
                 target="_blank"
                 rel="noreferrer"
                 style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.9rem", color: "#1E2F58", textDecoration: "underline" }}
               >
-                Download the template (Excel)
+                Download the template (CSV)
               </a>
               <a
                 href="/firm-onboarding-guides/client-list.html"
@@ -396,7 +396,7 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
                 onChange={(e) => update("client_list_self_upload_confirmed", e.target.checked)}
               />
               <span style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.9rem", color: "#3F3C36" }}>
-                We will upload the completed list to the CRM ourselves.
+                We will import the completed list through our CaseLoad Select portal.
               </span>
             </label>
           </div>
@@ -415,7 +415,7 @@ export default function FirmProfileForm({ token, firmLabel }: Props) {
                 style={{ marginTop: "3px" }}
               />
               <span style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: "0.9rem", color: "#3F3C36", lineHeight: 1.6 }}>
-                I confirm the firm has a lawful basis under Canada&apos;s Anti-Spam Legislation (CASL) to email the clients on this list, or has recorded each client&apos;s consent basis (Express, Implied, or Unknown) so anyone without a valid basis is left out of every send. The firm remains the owner of this data.
+                I confirm the firm is authorized to provide or import this relationship data. Importing a contact does not authorize marketing or client communications; permission must be recorded separately and unknown or no-contact records remain suppressed. The firm remains the owner of this data.
               </span>
             </label>
           </div>
@@ -628,16 +628,16 @@ const CLIENT_LIST_PATH_OPTIONS: Array<{
 }> = [
   {
     value: "share_with_us",
-    label: "Share the list with CaseLoad Select",
+    label: "Ask CaseLoad Select to handle the file",
     description:
-      "Send whatever you already have. We clean it, format it, load it into your CRM, then delete our working copy. Nothing for you to prepare.",
-    recommended: true,
+      "Exception path: send the existing file for assisted cleanup and import under the documented retention process.",
   },
   {
     value: "self_upload",
-    label: "We will upload it ourselves",
+    label: "Import it securely in our portal",
     description:
-      "You fill our template and upload the list to the CRM with access we send you. Choose this only if the firm prefers not to hand the file over.",
+      "Use the CaseLoad Select template and import it yourself. The original CSV stays in your browser and no platform access is exposed.",
+    recommended: true,
   },
 ];
 

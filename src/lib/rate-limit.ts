@@ -156,7 +156,10 @@ export type RateLimitBucket =
   | "screenDemoReport"
   | "screenFunnel"
   | "discoveryReport"
-  | "startConversation";
+  | "startConversation"
+  | "clientImportAuthorize"
+  | "clientImportVerify"
+  | "clientImportRows";
 
 interface BucketConfig {
   limit: number;
@@ -182,6 +185,9 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   screenFunnel:      { limit: 120, windowSeconds: 600 }, // 120 per 10 minutes (content-free public telemetry)
   discoveryReport:   { limit: 20, windowSeconds: 3600 }, // 20 per hour (ChatGPT Action caller)
   startConversation: { limit: 10, windowSeconds: 600 },  // 10 per 10 minutes (public, unauth, fail-closed)
+  clientImportAuthorize: { limit: 5, windowSeconds: 600 }, // sensitive step-up email send
+  clientImportVerify: { limit: 10, windowSeconds: 600 },   // second layer behind 5-attempt challenge cap
+  clientImportRows: { limit: 60, windowSeconds: 60 },      // authenticated 25-row chunks
 };
 
 /**
@@ -304,6 +310,9 @@ const FAIL_CLOSED_BUCKETS: ReadonlySet<RateLimitBucket> = new Set<RateLimitBucke
   // exist whenever UPSTASH_* is unset, on the single most expensive
   // public endpoint in the app.
   "designCheck",
+  "clientImportAuthorize",
+  "clientImportVerify",
+  "clientImportRows",
 ]);
 
 function failClosedMode(): boolean {
