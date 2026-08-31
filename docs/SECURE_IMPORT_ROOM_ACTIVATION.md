@@ -25,3 +25,14 @@ The feature ships fail-closed. The migration does not activate any firm and the 
 Set `CLIENT_IMPORT_LIVE_WRITES_ENABLED=false`. This stops every new step-up, batch, and row request without changing existing contacts or audit records. For one firm only, set either firm activation flag to false.
 
 Do not delete or retry a `reconcile_required` row. Perform fresh exact email and phone lookups first; HighLevel does not document an idempotency key for contact creation, so a timed-out create may already exist.
+
+## DRG Law activation record — 2026-08-31
+
+- Migration `20260831154909_secure_import_room.sql` was applied from its pushed branch and recorded under the matching production migration version.
+- The three metadata-only import tables exist with forced RLS and no `anon`, `authenticated`, or `PUBLIC` table privileges.
+- DRG Law's location-scoped token returned HTTP 200 from the v3 exact-contact lookup; the fictional smoke-test identity returned zero matches.
+- DRG Law has no workflow filtered by the `Contact Created` trigger.
+- Production has Upstash configured plus dedicated `CLIENT_IMPORT_HMAC_SECRET`, `RATE_LIMIT_FAIL_CLOSED=true`, and `CLIENT_IMPORT_LIVE_WRITES_ENABLED=true` settings.
+- Both DRG Law firm gates are enabled with a 2,500-row firm limit.
+
+This record does not claim that any client database was imported. The first upload remains lawyer-operated, and every row is created with global DND and CaseLoad Select hold/batch tags.
