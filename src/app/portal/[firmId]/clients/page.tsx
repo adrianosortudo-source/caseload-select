@@ -17,6 +17,7 @@ import { requirePortalViewer } from '@/lib/portal-auth';
 import { listActiveMattersForFirm } from '@/lib/matter-stage';
 import { formatTimestamp } from '@/lib/firm-timezone';
 import type { ClientMatter, MatterStage } from '@/lib/types';
+import Link from 'next/link';
 
 const STAGE_ORDER: MatterStage[] = ['intake', 'retainer_pending', 'active', 'closing'];
 const STAGE_LABEL: Record<MatterStage, string> = {
@@ -36,7 +37,7 @@ export default async function LawyerClientsHomePage({ params }: PageProps) {
   // Operator-view contract (DR-076): admits operator read-only and fixes the
   // prior redirect to the non-existent /portal/[firmId]/login (a hard 404 that
   // also hit real lawyers arriving without a session).
-  await requirePortalViewer(firmId);
+  const viewer = await requirePortalViewer(firmId);
 
   const matters = await listActiveMattersForFirm(firmId, { limit: 200 });
 
@@ -50,7 +51,7 @@ export default async function LawyerClientsHomePage({ params }: PageProps) {
   for (const m of matters) grouped[m.matter_stage].push(m);
 
   return (
-    <main style={pageStyle}>
+    <div style={pageStyle}>
       <header style={{ marginBottom: 32 }}>
         <p style={eyebrowStyle}>Lawyer Triage · Active Clients</p>
         <h1 style={titleStyle}>Your active clients</h1>
@@ -58,6 +59,26 @@ export default async function LawyerClientsHomePage({ params }: PageProps) {
           {matters.length} matter{matters.length === 1 ? '' : 's'} in flight. Closed matters are in the History tab.
         </p>
       </header>
+
+      <section className="mb-8 border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="relationship-import-heading">
+        <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-[color:var(--portal-accent)]">Relationship database</p>
+        <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 id="relationship-import-heading" className="text-xl font-extrabold text-navy">Bring your existing contacts into CaseLoad Select</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-black/60">
+              Prepare and review the import here. The original CSV stays in your browser, possible duplicates are held for review, and no messages are sent.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-3">
+            <a href="/templates/caseload-select-relationship-import.csv" download className="border border-navy/20 px-4 py-2.5 text-sm font-bold text-navy hover:border-navy">
+              Download CSV template
+            </a>
+            <Link href={`/portal/${firmId}/clients/import`} className="bg-navy px-4 py-2.5 text-sm font-bold text-white">
+              {viewer.isOperator ? 'Inspect secure import room' : 'Open secure import room'}
+            </Link>
+          </div>
+        </div>
+      </section>
 
       {STAGE_ORDER.map((stage) => {
         const rows = grouped[stage];
@@ -89,7 +110,7 @@ export default async function LawyerClientsHomePage({ params }: PageProps) {
           No active clients yet. New matters appear here as soon as you take a Band A lead from the triage queue.
         </p>
       )}
-    </main>
+    </div>
   );
 }
 
