@@ -82,13 +82,13 @@ const SECURITY_LINKS = [
 
 export default function SecureImportTrustGuide() {
   return (
-    <div className="space-y-6">
+    <div className="readable-prose space-y-6">
       <section className="border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="data-path-heading">
         <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-black/65">How your data moves</p>
         <h2 id="data-path-heading" className="mt-1 max-w-3xl text-xl font-bold text-navy sm:text-2xl">
           Your spreadsheet is never handed to CaseLoad Select staff
         </h2>
-        <p className="mt-3 max-w-4xl text-sm leading-6 text-black/65">
+        <p className="mt-3 text-sm leading-6 text-black/65">
           The raw file stays under your control. CaseLoad Select staff do not receive it, download it or prepare it for you.
           After an authorized firm lawyer or administrator approves the import, our service temporarily processes only the
           normalized contact rows needed to complete that instruction. Those rows are forwarded to the firm&apos;s CRM and are
@@ -109,7 +109,7 @@ export default function SecureImportTrustGuide() {
 
         <div className="mt-5 bg-navy px-5 py-5 text-white sm:px-6">
           <p className="font-display text-[0.65rem] font-semibold uppercase tracking-[0.13em] text-gold">What the audit receipt keeps</p>
-          <p className="mt-2 max-w-4xl text-sm leading-6 text-white/85">
+          <p className="mt-2 text-sm leading-6 text-white/85">
             CaseLoad Select retains the authorizing user, request IP when available, the browser user-agent string, time, file
             size, row counts, a SHA-256 file fingerprint, one-way row fingerprints and CRM outcome IDs. It does not retain
             the CSV filename, client names, email addresses, phone numbers, practice areas or row contents, and it does not
@@ -123,7 +123,7 @@ export default function SecureImportTrustGuide() {
         <h2 id="standards-heading" className="mt-1 text-xl font-bold text-navy sm:text-2xl">
           Independently assessed controls, with the limits stated plainly
         </h2>
-        <p className="mt-3 max-w-4xl text-sm leading-6 text-black/65">
+        <p className="mt-3 text-sm leading-6 text-black/65">
           HighLevel provides the CRM infrastructure behind this branded room. LeadConnector is listed as a provider for
           communication and support services. HighLevel states that its product infrastructure is hosted in the United
           States on Google Cloud and Amazon Web Services.
@@ -169,10 +169,12 @@ export default function SecureImportTrustGuide() {
               </div>
             </div>
             <div className="mt-5 border border-gold/40 bg-gold/10 px-4 py-3 text-sm leading-6 text-navy">
+              <p>
               Do not include medical records, financial information, government identifiers, legal advice, documents or
               privileged matter facts. This room is not approved for protected health information. HighLevel is not HIPAA
               compliant by default; its paid HIPAA package requires a Business Associate Agreement and enablement for each
               applicable sub-account. This import room does not rely on that package.
+              </p>
             </div>
             <div className="mt-5 text-xs leading-5 text-black/65">
               <p>Source documents, checked August 31, 2026:</p>
@@ -203,7 +205,7 @@ export default function SecureImportTrustGuide() {
             <h2 id="template-preview-heading" className="mt-1 text-xl font-bold text-navy sm:text-2xl">
               Eight columns, contact and relationship facts only
             </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-black/60">
+            <p className="mt-2 text-sm leading-6 text-black/60">
               This preview uses fictional people. Only these eight columns are used. Keep the names exactly as shown and
               remove every other column before importing.
             </p>
@@ -217,7 +219,11 @@ export default function SecureImportTrustGuide() {
           </a>
         </div>
 
-        <figure className="mt-5 overflow-hidden border border-black/15 bg-parchment" aria-labelledby="csv-preview-caption">
+        <figure
+          className="mt-5 overflow-hidden border border-black/15 bg-parchment"
+          aria-labelledby="csv-preview-caption"
+          data-readable-measure-exception="eight-column CSV data table"
+        >
           <figcaption id="csv-preview-caption" className="flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-navy px-4 py-3 text-white">
             <span className="font-display text-[0.66rem] font-semibold uppercase tracking-[0.12em]">relationship-import.csv</span>
             <span className="text-xs text-white/65">Fictional example</span>

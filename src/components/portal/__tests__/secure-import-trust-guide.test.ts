@@ -10,6 +10,16 @@ describe("Secure Import Room trust guide", () => {
   const room = read("src", "components", "portal", "SecureImportRoom.tsx");
   const page = read("src", "app", "portal", "[firmId]", "clients", "import", "page.tsx");
 
+  it("opts both surfaces into the shared readable measure without narrowing data regions", () => {
+    expect(guide).toContain('className="readable-prose space-y-6"');
+    expect(room).toContain('className="readable-prose space-y-6"');
+    expect(room).toContain('className="measure-readable"');
+    expect(guide).toContain('data-readable-measure-exception="eight-column CSV data table"');
+    expect(room).toContain('data-readable-measure-exception="compact import summary data"');
+    expect(guide).not.toMatch(/<p className="[^"]*max-w-/);
+    expect(room).not.toMatch(/<p(?:\s+id="[^"]+")? className="[^"]*max-w-/);
+  });
+
   it("states the transient processing boundary instead of claiming a direct browser-to-CRM upload", () => {
     expect(guide).toMatch(/temporarily processes only the\s+normalized contact rows/);
     expect(guide).toContain("groups of up to 25 normalized contact rows");

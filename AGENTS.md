@@ -13,3 +13,11 @@ If you believe an emergency direct deploy is required, stop and ask the operator
 ## Worktrees
 
 Never commit in `D:/00_Work/01_CaseLoad_Select/05_Product/caseload-select-app` (the main checkout) if it holds another branch's uncommitted work. Create a fresh worktree from `origin/main` on the D: drive under the CaseLoad Select worktree area instead. Do not clone or create a worktree for this repository on C:.
+
+## Readable prose measure
+
+Paragraph copy inside wide portal components must use a maximum readable measure of `65ch`. Put `readable-prose` on the component root so semantic paragraphs inherit the shared rule, and use `measure-readable` for long prose carried by a non-paragraph element or for an inner paragraph inside a full-width notice.
+
+Do not bypass the shared measure with Tailwind `max-w-*` classes or inline `width`, `maxWidth`, or `maxInlineSize` styles on readable copy. Labels, tables, structured data, code and deliberately short lines may remain wide. When a semantic prose element genuinely needs an exception, add `data-readable-measure-exception="a concise reason"` to that element or an enclosing data region. The reason must be a non-empty string literal so the exception is reviewable.
+
+Run `npm run check:readable-measure` after changing a `readable-prose` surface or the shared measure styles.

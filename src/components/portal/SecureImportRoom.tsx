@@ -225,11 +225,11 @@ export default function SecureImportRoom({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="readable-prose space-y-6">
       <header>
         <p className="font-display text-[0.72rem] uppercase tracking-[0.14em] text-[color:var(--portal-accent)]">Clients / Secure import</p>
         <h1 className="mt-2 text-3xl font-extrabold text-navy">Secure Import Room</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-black/60">
+        <p className="mt-2 text-sm leading-6 text-black/60">
           Validate your firm&apos;s relationship database in this browser, then authorize a protected import into your firm&apos;s CRM.
         </p>
       </header>
@@ -242,12 +242,12 @@ export default function SecureImportRoom({
 
       {readOnly && (
         <div className="border border-gold/40 bg-gold/10 px-4 py-3 text-sm text-navy">
-          Support preview is read-only. An authorized firm lawyer or administrator must authorize and run the import.
+          <p>Support preview is read-only. An authorized firm lawyer or administrator must authorize and run the import.</p>
         </div>
       )}
       {!enabled && !readOnly && (
         <div className="border border-black/15 bg-white px-4 py-3 text-sm text-black/65">
-          Secure importing is installed but not activated for this firm. Contact CaseLoad Select to complete the location-level safety check.
+          <p>Secure importing is installed but not activated for this firm. Contact CaseLoad Select to complete the location-level safety check.</p>
         </div>
       )}
 
@@ -258,7 +258,7 @@ export default function SecureImportRoom({
           <div>
             <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-black/45">Prepare</p>
             <h2 id="prepare-heading" className="mt-1 text-xl font-bold text-navy">Select the completed relationship import CSV</h2>
-            <p id="prepare-description" className="mt-2 max-w-2xl text-sm leading-6 text-black/60">
+            <p id="prepare-description" className="mt-2 text-sm leading-6 text-black/60">
               The check happens in this browser. You will review the row count, suppression state and any corrections before authorization.
             </p>
           </div>
@@ -306,7 +306,7 @@ export default function SecureImportRoom({
           {rows.length > 0 && (
             <label className="mt-5 flex items-start gap-3 border border-black/10 bg-parchment p-4 text-sm leading-6 text-navy">
               <input type="checkbox" checked={attested} disabled={controlsDisabled} onChange={(event) => setAttested(event.target.checked)} className="mt-1" />
-              <span>
+              <span className="measure-readable">
                 I am authorized by this firm to import this relationship database. I understand that importing a contact does not authorize marketing or client communications.
               </span>
             </label>
@@ -376,7 +376,10 @@ export default function SecureImportRoom({
 
 function Summary({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="bg-parchment px-4 py-3">
+    <div
+      className="bg-parchment px-4 py-3"
+      data-readable-measure-exception="compact import summary data"
+    >
       <p className="font-display text-[0.65rem] uppercase tracking-[0.12em] text-black/45">{label}</p>
       <p className="mt-1 text-lg font-extrabold text-navy">{value}</p>
     </div>
